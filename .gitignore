@@ -1,0 +1,7 @@
+.conda/
+.nnscaler/
+.vscode/
+genmodel/__pycache__/
+genmodel/mgeners/
+__pycache__
+Verdict/gen_model/mgeners/
