@@ -1,0 +1,252 @@
+[
+  {
+    "category_name": "基础元素级一元运算 (Element-wise Unary)",
+    "operators": [
+      { "name": "Identity", "difficulty": "简单" },
+      { "name": "Abs", "difficulty": "简单" },
+      { "name": "Neg", "difficulty": "简单" },
+      { "name": "Not", "difficulty": "简单" },
+      { "name": "Ceil", "difficulty": "简单" },
+      { "name": "Floor", "difficulty": "简单" },
+      { "name": "Round", "difficulty": "简单" },
+      { "name": "Sign", "difficulty": "简单" },
+      { "name": "Reciprocal", "difficulty": "简单" },
+      { "name": "Exp", "difficulty": "简单" },
+      { "name": "Log", "difficulty": "简单" },
+      { "name": "Sqrt", "difficulty": "简单" },
+      { "name": "Sin", "difficulty": "简单" },
+      { "name": "Cos", "difficulty": "简单" },
+      { "name": "Tan", "difficulty": "简单" },
+      { "name": "Asin", "difficulty": "简单" },
+      { "name": "Acos", "difficulty": "简单" },
+      { "name": "Atan", "difficulty": "简单" },
+      { "name": "Sinh", "difficulty": "简单" },
+      { "name": "Cosh", "difficulty": "简单" },
+      { "name": "Tanh", "difficulty": "简单" },
+      { "name": "Asinh", "difficulty": "简单" },
+      { "name": "Acosh", "difficulty": "简单" },
+      { "name": "Atanh", "difficulty": "简单" },
+      { "name": "Erf", "difficulty": "简单" },
+      { "name": "Clip", "difficulty": "中等" },
+      { "name": "IsNaN", "difficulty": "中等" },
+      { "name": "IsInf", "difficulty": "中等" },
+      { "name": "Cast", "difficulty": "困难" },
+      { "name": "CastLike", "difficulty": "困难" }
+    ]
+  },
+  {
+    "category_name": "基础元素级二元运算 (Element-wise Binary)",
+    "operators": [
+      { "name": "Add", "difficulty": "简单" },
+      { "name": "Sub", "difficulty": "简单" },
+      { "name": "Mul", "difficulty": "简单" },
+      { "name": "Div", "difficulty": "简单" },
+      { "name": "Pow", "difficulty": "简单" },
+      { "name": "Min", "difficulty": "简单" },
+      { "name": "Max", "difficulty": "简单" },
+      { "name": "Sum", "difficulty": "简单" },
+      { "name": "Mean", "difficulty": "简单" },
+      { "name": "And", "difficulty": "中等" },
+      { "name": "Or", "difficulty": "中等" },
+      { "name": "Xor", "difficulty": "中等" },
+      { "name": "Equal", "difficulty": "中等" },
+      { "name": "Greater", "difficulty": "中等" },
+      { "name": "Less", "difficulty": "中等" },
+      { "name": "GreaterOrEqual", "difficulty": "中等" },
+      { "name": "LessOrEqual", "difficulty": "中等" },
+      { "name": "BitwiseAnd", "difficulty": "中等" },
+      { "name": "BitwiseOr", "difficulty": "中等" },
+      { "name": "BitwiseXor", "difficulty": "中等" },
+      { "name": "BitwiseNot", "difficulty": "中等" },
+      { "name": "BitShift", "difficulty": "中等" },
+      { "name": "Mod", "difficulty": "中等" },
+      { "name": "Where", "difficulty": "困难" }
+    ]
+  },
+  {
+    "category_name": "激活函数 (Activation Functions)",
+    "operators": [
+      { "name": "Relu", "difficulty": "简单" },
+      { "name": "Sigmoid", "difficulty": "简单" },
+      { "name": "Softplus", "difficulty": "简单" },
+      { "name": "Softsign", "difficulty": "简单" },
+      { "name": "LeakyRelu", "difficulty": "中等" },
+      { "name": "ThresholdedRelu", "difficulty": "中等" },
+      { "name": "Elu", "difficulty": "中等" },
+      { "name": "Celu", "difficulty": "中等" },
+      { "name": "Selu", "difficulty": "中等" },
+      { "name": "Shrink", "difficulty": "中等" },
+      { "name": "HardSigmoid", "difficulty": "中等" },
+      { "name": "Gelu", "difficulty": "困难" },
+      { "name": "Swish", "difficulty": "困难" },
+      { "name": "Mish", "difficulty": "困难" },
+      { "name": "HardSwish", "difficulty": "困难" },
+      { "name": "Hardmax", "difficulty": "困难" },
+      { "name": "Softmax", "difficulty": "困难" },
+      { "name": "LogSoftmax", "difficulty": "困难" },
+      { "name": "PRelu", "difficulty": "困难" }
+    ]
+  },
+  {
+    "category_name": "规约运算 (Reduction Operations)",
+    "operators": [
+      { "name": "ReduceMax", "difficulty": "简单" },
+      { "name": "ReduceMin", "difficulty": "简单" },
+      { "name": "ReduceSum", "difficulty": "简单" },
+      { "name": "ReduceMean", "difficulty": "简单" },
+      { "name": "ReduceProd", "difficulty": "简单" },
+      { "name": "ReduceSumSquare", "difficulty": "困难" },
+      { "name": "ReduceL1", "difficulty": "困难" },
+      { "name": "ReduceL2", "difficulty": "困难" },
+      { "name": "ReduceLogSum", "difficulty": "困难" },
+      { "name": "ReduceLogSumExp", "difficulty": "困难" },
+      { "name": "ArgMax", "difficulty": "困难" },
+      { "name": "ArgMin", "difficulty": "困难" }
+    ]
+  },
+  {
+    "category_name": "Tensor 形状与结构操作",
+    "operators": [
+      { "name": "Shape", "difficulty": "简单" },
+      { "name": "Size", "difficulty": "简单" },
+      { "name": "Flatten", "difficulty": "简单" },
+      { "name": "Squeeze", "difficulty": "简单" },
+      { "name": "Unsqueeze", "difficulty": "简单" },
+      { "name": "Transpose", "difficulty": "中等" },
+      { "name": "Concat", "difficulty": "中等" },
+      { "name": "Split", "difficulty": "中等" },
+      { "name": "Reshape", "difficulty": "中等" },
+      { "name": "Tile", "difficulty": "中等" },
+      { "name": "Expand", "difficulty": "中等" },
+      { "name": "Pad", "difficulty": "中等" },
+      { "name": "Trilu", "difficulty": "中等" },
+      { "name": "CenterCropPad", "difficulty": "中等" },
+      { "name": "Slice", "difficulty": "困难" },
+      { "name": "Gather", "difficulty": "困难" },
+      { "name": "Compress", "difficulty": "困难" },
+      { "name": "GatherElements", "difficulty": "困难" },
+      { "name": "ScatterElements", "difficulty": "困难" },
+      { "name": "DepthToSpace", "difficulty": "困难" },
+      { "name": "SpaceToDepth", "difficulty": "困难" },
+      { "name": "GatherND", "difficulty": "非常困难" },
+      { "name": "ScatterND", "difficulty": "非常困难" }
+    ]
+  },
+  {
+    "category_name": "矩阵运算 (Matrix Operations)",
+    "operators": [
+      { "name": "Det", "difficulty": "简单" },
+      { "name": "MatMul", "difficulty": "中等" },
+      { "name": "Gemm", "difficulty": "困难" },
+      { "name": "MatMulInteger", "difficulty": "困难" },
+      { "name": "QLinearMatMul", "difficulty": "困难" }
+    ]
+  },
+  {
+    "category_name": "归一化操作 (Normalization Operations)",
+    "operators": [
+      { "name": "LpNormalization", "difficulty": "简单" },
+      { "name": "InstanceNormalization", "difficulty": "中等" },
+      { "name": "GroupNormalization", "difficulty": "中等" },
+      { "name": "RMSNormalization", "difficulty": "中等" },
+      { "name": "LayerNormalization", "difficulty": "中等" },
+      { "name": "MeanVarianceNormalization", "difficulty": "中等" },
+      { "name": "LRN", "difficulty": "困难" },
+      { "name": "BatchNormalization", "difficulty": "困难" }
+    ]
+  },
+  {
+    "category_name": "卷积与池化操作 (Convolution & Pooling)",
+    "operators": [
+      { "name": "GlobalAveragePool", "difficulty": "简单" },
+      { "name": "GlobalMaxPool", "difficulty": "简单" },
+      { "name": "GlobalLpPool", "difficulty": "简单" },
+      { "name": "AveragePool", "difficulty": "中等" },
+      { "name": "MaxPool", "difficulty": "中等" },
+      { "name": "LpPool", "difficulty": "中等" },
+      { "name": "Conv", "difficulty": "困难" },
+      { "name": "ConvTranspose", "difficulty": "困难" },
+      { "name": "MaxUnpool", "difficulty": "困难" },
+      { "name": "ConvInteger", "difficulty": "困难" },
+      { "name": "QLinearConv", "difficulty": "困难" },
+      { "name": "MaxRoiPool", "difficulty": "非常困难" },
+      { "name": "RoiAlign", "difficulty": "非常困难" },
+      { "name": "Col2Im", "difficulty": "非常困难" },
+      { "name": "DeformConv", "difficulty": "非常困难" }
+    ]
+  },
+  {
+    "category_name": "循环神经网络操作 (Recurrent Neural Network)",
+    "operators": [
+      { "name": "RNN", "difficulty": "中等" },
+      { "name": "GRU", "difficulty": "困难" },
+      { "name": "LSTM", "difficulty": "非常困难" }
+    ]
+  },
+  {
+    "category_name": "序列操作 (Sequence Operations)",
+    "operators": [
+      { "name": "SequenceEmpty", "difficulty": "简单" },
+      { "name": "SequenceLength", "difficulty": "简单" },
+      { "name": "SequenceConstruct", "difficulty": "简单" },
+      { "name": "SequenceAt", "difficulty": "中等" },
+      { "name": "SequenceInsert", "difficulty": "中等" },
+      { "name": "SequenceErase", "difficulty": "中等" },
+      { "name": "ConcatFromSequence", "difficulty": "困难" },
+      { "name": "SplitToSequence", "difficulty": "困难" },
+      { "name": "SequenceMap", "difficulty": "非常困难" }
+    ]
+  },
+  {
+    "category_name": "专用与复杂操作 (Specialized & Complex)",
+    "operators": [
+      { "name": "Constant", "difficulty": "简单" },
+      { "name": "ConstantOfShape", "difficulty": "简单" },
+      { "name": "EyeLike", "difficulty": "简单" },
+      { "name": "OneHot", "difficulty": "简单" },
+      { "name": "TopK", "difficulty": "中等" },
+      { "name": "Unique", "difficulty": "中等" },
+      { "name": "RandomNormal", "difficulty": "中等" },
+      { "name": "RandomUniform", "difficulty": "中等" },
+      { "name": "RandomNormalLike", "difficulty": "中等" },
+      { "name": "RandomUniformLike", "difficulty": "中等" },
+      { "name": "Bernoulli", "difficulty": "中等" },
+      { "name": "Multinomial", "difficulty": "中等" },
+      { "name": "HannWindow", "difficulty": "中等" },
+      { "name": "HammingWindow", "difficulty": "中等" },
+      { "name": "BlackmanWindow", "difficulty": "中等" },
+      { "name": "NonMaxSuppression", "difficulty": "困难" },
+      { "name": "Einsum", "difficulty": "困难" },
+      { "name": "DFT", "difficulty": "困难" },
+      { "name": "STFT", "difficulty": "困难" },
+      { "name": "MelWeightMatrix", "difficulty": "困难" },
+      { "name": "AffineGrid", "difficulty": "困难" },
+      { "name": "GridSample", "difficulty": "困难" },
+      { "name": "ReverseSequence", "difficulty": "困难" },
+      { "name": "RotaryEmbedding", "difficulty": "困难" },
+      { "name": "SoftmaxCrossEntropyLoss", "difficulty": "困难" },
+      { "name": "NegativeLogLikelihoodLoss", "difficulty": "困难" },
+      { "name": "QuantizeLinear", "difficulty": "非常困难" },
+      { "name": "DequantizeLinear", "difficulty": "非常困难" },
+      { "name": "DynamicQuantizeLinear", "difficulty": "非常困难" },
+      { "name": "TfIdfVectorizer", "difficulty": "非常困难" },
+      { "name": "StringNormalizer", "difficulty": "非常困难" },
+      { "name": "StringConcat", "difficulty": "非常困难" },
+      { "name": "StringSplit", "difficulty": "非常困难" },
+      { "name": "RegexFullMatch", "difficulty": "非常困难" },
+      { "name": "ImageDecoder", "difficulty": "非常困难" },
+      { "name": "TensorScatter", "difficulty": "非常困难" }
+    ]
+  },
+  {
+    "category_name": "控制流 (Control Flow)",
+    "operators": [
+      { "name": "Optional", "difficulty": "困难" },
+      { "name": "OptionalGetElement", "difficulty": "困难" },
+      { "name": "OptionalHasElement", "difficulty": "困难" },
+      { "name": "If", "difficulty": "非常困难" },
+      { "name": "Loop", "difficulty": "最困难" },
+      { "name": "Scan", "difficulty": "最困难" }
+    ]
+  }
+]
