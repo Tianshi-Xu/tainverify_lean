@@ -1,7 +1,6 @@
 import Mathlib.Algebra.Group.Defs
-import Mathlib.Data.Int.Basic
 import Mathlib.Data.List.Basic
-import Mathlib.Data.Nat.Basic
+import Mathlib.Data.List.Flatten
 
 /-!
 Based on the graph summaries emitted by `Verdict/scripts/analyze_graph.sh`, the dp1-pp1-tp1
@@ -20,22 +19,18 @@ namespace List
 
 variable {α β : Type*}
 
-/-- Flatten a list of lists by concatenating all chunks. -/
-def join : List (List α) → List α
-  | [] => []
-  | chunk :: rest => chunk ++ join rest
-
-@[simp] lemma join_nil : (join ([] : List (List α)) : List α) = [] := rfl
-
-@[simp] lemma join_cons (chunk : List α) (rest : List (List α)) :
-    join (chunk :: rest) = chunk ++ join rest := rfl
-
-lemma join_map_map (chunks : List (List α)) (f : α → β) :
-    (chunks.map (List.map f)).join = (chunks.join).map f := by
+lemma flatten_map_map (chunks : List (List α)) (f : α → β) :
+    (chunks.map (List.map f)).flatten = (chunks.flatten).map f := by
   induction chunks with
-  | nil => simp [join]
+  | nil => simp
   | cons chunk rest ih =>
-      simp [join, ih, List.map_append]
+      dsimp [List.flatten]
+      calc
+      chunk.map f ++ (rest.map (List.map f)).flatten
+        = chunk.map f ++ (rest.flatten).map f := by
+          exact congrArg (fun l => chunk.map f ++ l) ih
+      _ = (chunk ++ rest.flatten).map f := by
+          exact (List.map_append (f := f) chunk rest.flatten).symm
 
 end List
 
@@ -99,14 +94,14 @@ structure ParallelPartition (data : List Sample) where
   tp : Nat := 2
   microBatch : Nat := 32
   shards : List (List Sample)
-  join_eq : shards.join = data
+  flatten_eq : shards.flatten = data
 
 /-- Computation flow for `dp2-pp2-tp2`: per-shard linear stack, AllGather, bookkeeping, sum, DP sync. -/
 def hybridEval (linear0 linear1 : Sample → Sample) (sumFn : Sample → Scalar)
     {data : List Sample} (partition : ParallelPartition data) : Scalar :=
   let stage0 := partition.shards.map (List.map linear0)
   let stage1 := stage0.map (List.map linear1)
-  reduceSum sumFn stage1.join
+  reduceSum sumFn stage1.flatten
 
 /-- Semantic realisation of `Workflows.dp1pp1tp1`: applies `sequentialEval`. -/
 def baselineWorkflowEval (linear0 linear1 : Sample → Sample) (sumFn : Sample → Scalar)
@@ -124,24 +119,24 @@ theorem graphEquivalence (linear0 linear1 : Sample → Sample) (sumFn : Sample �
     baselineWorkflowEval linear0 linear1 sumFn data =
       hybridWorkflowEval linear0 linear1 sumFn partition := by
   have hstage0 :
-      (partition.shards.map (List.map linear0)).join = data.map linear0 := by
-    simpa [partition.join_eq] using
-      (List.join_map_map (chunks := partition.shards) linear0)
+      (partition.shards.map (List.map linear0)).flatten = data.map linear0 := by
+    simpa [partition.flatten_eq] using
+      (List.flatten_map_map (chunks := partition.shards) linear0)
   have hstage1 :
-      ((partition.shards.map (List.map linear0)).map (List.map linear1)).join =
+      ((partition.shards.map (List.map linear0)).map (List.map linear1)).flatten =
         data.map (linear1 ∘ linear0) := by
     have :=
-      (List.join_map_map
+      (List.flatten_map_map
         (chunks := partition.shards.map (List.map linear0)) linear1)
     simpa [hstage0, List.map_map, Function.comp] using this
   have hstage1' :
-      ((partition.shards.map (List.map linear0)).map (List.map linear1)).join =
+      ((partition.shards.map (List.map linear0)).map (List.map linear1)).flatten =
         data.map (fun x => linear1 (linear0 x)) := by
     simpa [Function.comp] using hstage1
   have hsum :
       reduceSum sumFn (data.map (fun x => linear1 (linear0 x))) =
         reduceSum sumFn
-          ((partition.shards.map (List.map linear0)).map (List.map linear1)).join := by
+          ((partition.shards.map (List.map linear0)).map (List.map linear1)).flatten := by
     simpa using congrArg (reduceSum sumFn) hstage1'.symm
   have hfinal :
       baselineWorkflowEval linear0 linear1 sumFn data =
@@ -151,7 +146,7 @@ theorem graphEquivalence (linear0 linear1 : Sample → Sample) (sumFn : Sample �
           = reduceSum sumFn (data.map fun x => linear1 (linear0 x)) := by
             simp [baselineWorkflowEval, sequentialEval, reduceSum]
       _ = reduceSum sumFn
-            ((partition.shards.map (List.map linear0)).map (List.map linear1)).join := by
+        ((partition.shards.map (List.map linear0)).map (List.map linear1)).flatten := by
             simpa using hsum
       _ = hybridWorkflowEval linear0 linear1 sumFn partition := by
             simp [hybridWorkflowEval, hybridEval, reduceSum]
@@ -191,7 +186,7 @@ def sampleShards : List (List (List Nat)) :=
     (List.range microBatch).map fun j => sampleRow (shard * microBatch + j)
 
 /-- Synthetic 128×128 batch used for regression checks. -/
-def sampleDataset : List (List Nat) := sampleShards.join
+def sampleDataset : List (List Nat) := sampleShards.flatten
 
 /-- `dp2-pp2-tp2` partition that rejoins to `sampleDataset`. -/
 def samplePartition : ParallelPartition sampleDataset :=
@@ -200,7 +195,7 @@ def samplePartition : ParallelPartition sampleDataset :=
     tp := 2
     microBatch := microBatch
     shards := sampleShards
-    join_eq := rfl }
+    flatten_eq := rfl }
 
 /-- Element-wise dot product of two 128-wide rows. -/
 def dotProduct (xs ys : List Nat) : Nat :=
