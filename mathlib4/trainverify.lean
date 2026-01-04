@@ -1,10 +1,14 @@
 import trainverify.GraphEquiv
+import trainverify.Proof.EqualProof
+import trainverify.core.CollectiveSpec
 import trainverify.core.ExecPlan
 import trainverify.core.GraphSpec
 import trainverify.core.GraphWitness
 import trainverify.core.GraphWitnessPipeline
 import trainverify.core.Lemmas
 import trainverify.core.Model
+import trainverify.core.OpSoundness
+import trainverify.core.PlanLemmas
 import trainverify.core.Primitives
 import trainverify.core.Semantics
 import trainverify.equal

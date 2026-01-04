@@ -47,6 +47,7 @@ class NNScalerDFG(DFG):
         self._node2irstr: Dict[Node, str] = {}
         self._tid2lv: Dict[Tensor, LineageView] = {}
         self._shared_tensor_list: Dict[Hashable, List[Tensor]] = {}
+        self._node2placements: Dict[Node, List[DTag]] = {}
 
         # from nnscaler.execplan.execplan import IRCell
         # from nnscaler.ir.adapter.prim import IRAdapterPrim
@@ -100,6 +101,13 @@ class NNScalerDFG(DFG):
     @final
     def is_initialized(self, tensor: Tensor) -> bool:
         return tensor.tid in self._initialized_tid
+
+    # Compact mode helper: returns all rank placements for a logical node.
+    # For the regular expanded graph this defaults to just its own dtag.
+    def node_placements(self, node: Node) -> List[DTag]:
+        if node in self._node2placements:
+            return self._node2placements[node]
+        return [self._node2dtag[node]] if node in self._node2dtag else []
 
 
 def rank_to_dp(rank: int, W: World) -> int:

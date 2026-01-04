@@ -821,6 +821,7 @@ def _gencode(
         sgener = ScheduleCodeGen(execplan, compute_config.runtime_ngpus)
     for rank in range(compute_config.runtime_ngpus):
         fname = outdir / _GENCODE_FILE_TEMPLATE.format(rank)
+        ## here will generate the multi GPU idx code
         mgener.gen(rank,
             forward_args=forward_args,
             outfile=fname,

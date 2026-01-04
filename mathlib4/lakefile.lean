@@ -93,17 +93,12 @@ lean_lib Counterexamples where
 lean_lib docs where
   roots := #[`docs]
 
-lean_lib RulesetInit
+-- lean_lib RulesetInit
 lean_lib Proof
 
-lean_lib trainverify where
-  roots := #[`trainverify.attention_complex, `trainverify.attention_complex_2d, `trainverify.SIMDDefinition,
-    `trainverify.proof_def, `trainverify.proof_part1, `trainverify.proof_part2, `trainverify.proof_part3,
-    `trainverify.equal, `trainverify.equal_spec, `trainverify.GraphLemmas, `trainverify.RunNodeLemmas,
-    `trainverify.ShardSemantics, `trainverify.StoreRel, `trainverify.euqal_proof,`trainverify.core.GraphSpec,
-    `trainverify.core.Primitives, `trainverify.core.Model, `trainverify.core.Semantics, `trainverify.core.ExecPlan,
-    `trainverify.core.Lemmas, `trainverify.core.GraphWitness,
-    `trainverify.core.GraphWitnessPipeline]
+ where
+  roots := #[`trainverify.denote.Denote, `trainverify.denote.GeneratedData,
+    `trainverify.proof_def, `trainverify.proof_part1, `trainverify.proof_part2, `trainverify.proof_part3]
 
 /-!
 ## Executables provided by Mathlib

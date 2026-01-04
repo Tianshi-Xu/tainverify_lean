@@ -277,6 +277,16 @@ class StageParallelVerifier:
         loginfo("🚩 Finish loading graphs.")
         return Gs, Gp
 
+    def get_graph_compact(self):
+        """Load graphs without expanding nodes by rank when backend supports it."""
+        loginfo("⏩ Loading compact graphs.")
+        load_fn = getattr(self.graph_backend, "load_graph_compact", self.graph_backend.load_graph)
+        Gs = load_fn(self.Gs_path, self.Ws_path, WType.S)
+        Gp = load_fn(self.Gp_path, self.Wp_path, WType.P)
+        self.Wp = Gp.W
+        loginfo("🚩 Finish loading graphs.")
+        return Gs, Gp
+
 def _worker(stage_idx: int) -> bool:
     stage: Stage = _GLOBAL_STAGES[stage_idx]
     # if stage.id >-1: return True

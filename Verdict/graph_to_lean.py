@@ -1,867 +1,803 @@
-"""Load NNScaler graphs and emit a Lean4 interpreter that replays the graph.
+"""Generate a Lean spec using denotational (mathematical) graph descriptions.
 
-This version constructs Lean data structures for every node/tensor pulled from
-the serialized SM/PM graphs, then interprets them (with predefined semantics
-for DATALOADER, FW/BW linear, sum, chunk, all-reduce, all-gather). No manual
-graph sketching: changing the input pickle files changes the generated Lean
-program.
+This is a *new* implementation (the old store/fuel execution based spec generator
+was removed by the user).
+
+What this generator emits:
+
+- A denotational graph declaration for SM and PM graphs (`GraphDecl`).
+- A small set of *coarse* lineage goals for observable output tensors:
+  for each aligned leaf output `ts`, pick one correspondence `ts ↦ [(rank, tp_tid)]`.
+
+Notes / design choices:
+
+- We only generate goals for *outputs* (aligned leaves). We do NOT emit goals for
+  intermediate tensors.
+- “Coarse” lineage means we keep only (ts tid, per-rank tp tid) pairs.
+  We deliberately avoid computing slice-maps.
+- The produced Lean spec is independent of the old repeated store traversal semantics.
+  Semantics is a single topological fold in `trainverify.denote.Denote`.
+
+Run (must be in conda env verdict):
+
+  conda run -n verdict python Verdict/graph_to_lean.py \
+	--sm-pkl <single.pkl> --pm-pkl <tp.pkl> \
+	--out mathlib4/trainverify/denote/GeneratedData.lean
 """
 
 from __future__ import annotations
 
-from collections import defaultdict, Counter
+import argparse
 from dataclasses import dataclass
 from pathlib import Path
-import argparse
-import sys
-from textwrap import dedent
-from typing import Dict, List, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_SM_GRAPH = "./genmodel/mgeners/mlp_mgener_dp1_pp1_tp1_nm1_gbs128_dim128_ly1.pkl"
-DEFAULT_PM_GRAPH = "./genmodel/mgeners/mlp_mgener_dp1_pp1_tp8_nm1_gbs128_dim128_ly1.pkl"
-DEFAULT_OUT_CONCRETE = ROOT / "mathlib4" / "trainverify" / "equal.lean"
-DEFAULT_OUT_SPEC = ROOT / "mathlib4" / "trainverify" / "equal_spec.lean"
 
-
-@dataclass
-class TensorMeta:
-    tid: int
-    shape: Tuple[int, ...]
-    initialized: bool
-
-
-@dataclass
-class NodeMeta:
-    op: str
-    kwargs: Dict
-    inputs: List[int]
-    outputs: List[int]
+DEFAULT_SM_GRAPH = ROOT / "genmodel" / "mgeners" / "mlp_mgener_dp1_pp1_tp1_nm1_gbs128_dim128_ly1.pkl"
+DEFAULT_PM_GRAPH = ROOT / "genmodel" / "mgeners" / "mlp_mgener_dp1_pp1_tp8_nm1_gbs128_dim128_ly1.pkl"
+DEFAULT_OUT = ROOT / "mathlib4" / "trainverify" / "denote" / "GeneratedData.lean"
 
 
 def parse_args() -> argparse.Namespace:
-  parser = argparse.ArgumentParser(
-    description="Emit Lean specs for SM/PM graphs with optional overrides.")
-  parser.add_argument(
-    "--sm-pkl",
-    dest="sm_pkl",
-    default=DEFAULT_SM_GRAPH,
-    help="Path to the single-model (baseline) graph pickle.")
-  parser.add_argument(
-    "--pm-pkl",
-    dest="pm_pkl",
-    default=DEFAULT_PM_GRAPH,
-    help="Path to the parallel-model graph pickle.")
-  parser.add_argument(
-    "--obs-tid",
-    dest="obs_tid",
-    type=int,
-    default=None,
-    help="Override the observable tensor id; defaults to the smallest shared tid.")
-  parser.add_argument(
-    "--out-concrete",
-    dest="out_concrete",
-    default=str(DEFAULT_OUT_CONCRETE),
-    help="Lean file path for the concrete interpreter (default: equal.lean).")
-  parser.add_argument(
-    "--out-spec",
-    dest="out_spec",
-    default=str(DEFAULT_OUT_SPEC),
-    help="Lean file path for the spec (default: equal_spec.lean).")
-  return parser.parse_args()
+	p = argparse.ArgumentParser(description="Generate Lean spec (denotational) + coarse lineage goals")
+	p.add_argument("--sm-pkl", default=str(DEFAULT_SM_GRAPH), help="Path to SM graph pickle")
+	p.add_argument("--pm-pkl", default=str(DEFAULT_PM_GRAPH), help="Path to PM graph pickle")
+	p.add_argument(
+		"--out",
+		default=str(DEFAULT_OUT),
+		help="Output Lean file path (e.g. mathlib4/trainverify/denote/GeneratedData.lean)",
+	)
+	p.add_argument(
+		"--module",
+		default="trainverify.denote.GeneratedData",
+		help="Lean module name used in the generated file header comment",
+	)
+	p.add_argument(
+		"--emit-spec-template",
+		action="store_true",
+		help="Also emit a proof template file (GeneratedSpec.lean) with sorry-filled theorem stubs.",
+	)
+	p.add_argument(
+		"--spec-out",
+		default=str(ROOT / "mathlib4" / "trainverify" / "denote" / "GeneratedSpec.lean"),
+		help="Output path for the spec/proof template file.",
+	)
+	p.add_argument(
+		"--overwrite-spec",
+		action="store_true",
+		help="Overwrite --spec-out if it already exists.",
+	)
+	p.add_argument(
+		"--max-goals",
+		type=int,
+		default=0,
+		help="If >0, emit at most this many output goals (stable order by tid).",
+	)
+	return p.parse_args()
 
 
-def load_graphs_from_disk(sm_path: str, pm_path: str):
-  sys.path.extend([str(ROOT), str(ROOT / "genmodel"), str(ROOT / "Verdict")])
-  from analyze_graph import load_graphs, prepare  # type: ignore
-  from verdict.config import Config  # type: ignore
+def load_verifier(sm_path: str, pm_path: str):
+	import sys
 
-  Config.update_from_args([])
-  prepare(Config)
+	sys.path.extend([str(ROOT), str(ROOT / "genmodel"), str(ROOT / "Verdict")])
 
-  return load_graphs(sm_path, pm_path)
+	from verdict.config import Config  # type: ignore
+	from verdict.verifier import StageParallelVerifier  # type: ignore
+	from nnscaler_backend import nnScalerGraphBackend  # type: ignore
+	from z3_backend import z3Backend  # type: ignore
+	from analyze_graph import prepare  # type: ignore
 
+	Config.update_from_args([])
+	prepare(Config)
 
-def extract(graph) -> Tuple[List[NodeMeta], Dict[int, TensorMeta]]:
-  tensors: Dict[int, TensorMeta] = {}
-  nodes: List[NodeMeta] = []
-  for node in graph.nodes():
-    op = str(graph.node_opname(node))
-    kwargs = dict(graph.node_kwargs(node))
-    ins: List[int] = []
-    outs: List[int] = []
-    for t in graph.node_inputs(node):
-      tensors[t.tid] = TensorMeta(t.tid, graph.tensor_shape(t), graph.is_initialized(t))
-      ins.append(t.tid)
-    for t in graph.node_outputs(node):
-      tensors[t.tid] = TensorMeta(t.tid, graph.tensor_shape(t), graph.is_initialized(t))
-      outs.append(t.tid)
-    nodes.append(NodeMeta(op=op, kwargs=kwargs, inputs=ins, outputs=outs))
-  return nodes, tensors
+	return StageParallelVerifier(
+		Gs_path=str(sm_path),
+		Ws_path=None,
+		Gp_path=str(pm_path),
+		Wp_path=None,
+		graph_backend=nnScalerGraphBackend,
+		symbolic_backend=z3Backend,
+	)
 
 
-def lean_list_int(xs: List[int]) -> str:
-    return "[" + ", ".join(str(x) for x in xs) + "]"
+def infer_coarse_lineages_from_expanded(GsE: Any, GpE: Any) -> List[Any]:
+	# Align original ops and emit Ts==Tps for each input/output.
+	from nnscaler_backend import build_lineage as bl  # type: ignore
+
+	Gs_alignable_ops = [n for n in GsE.nodes() if bl._is_original_op(GsE.node_opname(n))]
+	Gp_alignable_ops = [n for n in GpE.nodes() if bl._is_original_op(GpE.node_opname(n))]
+	return bl._infer_lineages_from_alignable_ops(Gs_alignable_ops, Gp_alignable_ops, GsE, GpE)
 
 
-def lean_shape(shape: Tuple[int, ...]) -> str:
-    return lean_list_int(list(shape))
+def _build_producer_index(G: Any) -> Dict[int, List[int]]:
+	prod: Dict[int, List[int]] = {}
+	for i, n in enumerate(G.nodes()):
+		for t in G.node_outputs(n):
+			prod.setdefault(int(t.tid), []).append(i)
+	return prod
 
 
-def render_nat_list_pairs(pairs: List[Tuple[int, List[int]]]) -> str:
-    if not pairs:
-        return "[]"
-    parts = []
-    for tid, related in pairs:
-        parts.append(f"({tid}, {lean_list_int(related)})")
-    return "[" + ", ".join(parts) + "]"
+def _build_consumer_index(G: Any) -> Dict[int, List[int]]:
+	cons: Dict[int, List[int]] = {}
+	for i, n in enumerate(G.nodes()):
+		for t in G.node_inputs(n):
+			cons.setdefault(int(t.tid), []).append(i)
+	return cons
 
 
-def emit_tensors(name: str, tensors: Dict[int, TensorMeta]) -> str:
-  items = []
-  for tid, meta in sorted(tensors.items()):
-    items.append(f"({tid}, {lean_shape(meta.shape)}, {'true' if meta.initialized else 'false'})")
-  body = "[" + ", ".join(items) + "]"
-  return f"def {name} : List (Nat × List Nat × Bool) := {body}\n"
+def leaf_output_tids(G: Any) -> List[int]:
+	"""Leaf/output tensors in the dataflow sense (produced but never consumed)."""
+	prod = _build_producer_index(G)
+	cons = _build_consumer_index(G)
+	leaves = [tid for tid in prod.keys() if tid not in cons or not cons[tid]]
+	return sorted(set(int(x) for x in leaves))
 
 
-def node_literal(n: NodeMeta) -> str:
-  op = op_ctor(n.op, n.kwargs)
-  ins = lean_list_int(n.inputs)
-  outs = lean_list_int(n.outputs)
-  return f"⟨{op}, {ins}, {outs}⟩"
+def backward_closure_tids(G: Any, root_tids: Iterable[int]) -> List[int]:
+	prod = _build_producer_index(G)
+	seen: set[int] = {int(t) for t in root_tids}
+	frontier: set[int] = set(seen)
+	while frontier:
+		nxt: set[int] = set()
+		for tid in list(frontier):
+			for node_idx in prod.get(int(tid), []):
+				node = G.nodes()[node_idx]
+				for t_in in G.node_inputs(node):
+					t_id = int(t_in.tid)
+					if t_id not in seen:
+						seen.add(t_id)
+						nxt.add(t_id)
+		frontier = nxt
+	return sorted(seen)
 
 
-def op_kind(op: str, kwargs: Dict) -> Tuple[str, Dict[str, int]]:
-  if "DATALOADER" in op:
-    return "dataloader", {}
-  if "FW_linear" in op:
-    return "fw_linear", {}
-  if "BW_linear" in op:
-    return "bw_linear", {}
-  if "FW_sum" in op:
-    return "fw_sum", {}
-  if "BW_sum" in op:
-    return "bw_sum", {}
-  if "ChunkPrim" in op:
-    dim = int(kwargs.get("dim", 1))
-    idx = int(kwargs.get("__collective_idx", 0)) if "__collective_idx" in kwargs else 0
-    return "chunk", {"dim": dim, "idx": idx}
-  if "AllGatherPrim" in op:
-    dim = int(kwargs.get("dim", 0))
-    return "all_gather", {"dim": dim}
-  if "AllReducePrim" in op:
-    return "all_reduce", {}
-  return "unknown", {}
+def _safe_str_op(op: Any) -> str:
+	# OpName types often have a friendly string repr.
+	try:
+		return str(op)
+	except Exception:
+		return repr(op)
 
 
-def op_ctor(op: str, kwargs: Dict) -> str:
-  kind, meta = op_kind(op, kwargs)
-  if kind == "dataloader":
-    return "Op.dataloader"
-  if kind == "fw_linear":
-    return "Op.fwLinear"
-  if kind == "bw_linear":
-    return "Op.bwLinear"
-  if kind == "fw_sum":
-    return "Op.fwSum"
-  if kind == "bw_sum":
-    return "Op.bwSum"
-  if kind == "chunk":
-    return f"Op.chunk {meta['dim']} {meta['idx']}"
-  if kind == "all_gather":
-    return f"Op.allGather {meta['dim']}"
-  if kind == "all_reduce":
-    return "Op.allReduce"
-  return "Op.unknown"
+def _node_rank(node: Any) -> int:
+	return int(getattr(node, "rank", 0) or 0)
 
 
-def emit_nodes(name: str, nodes: List[NodeMeta]) -> str:
-  parts = [node_literal(n) for n in nodes]
-  body = "[" + ",\n  ".join(parts) + "]"
-  return f"def {name} : List Node := {body}\n"
+@dataclass(frozen=True)
+class SelectedLineage:
+	ts: int
+	tps: List[Tuple[int, int]]  # (rank, tid)
 
 
-def emit_store_presence_def(name: str, data: List[List[int]]) -> str:
-  body_parts = [lean_list_int(lst) for lst in data]
-  body = "[" + ", ".join(body_parts) + "]"
-  return f"def {name} : List (List Nat) := {body}\n"
+def pick_one_lineage_for_ts(lineages: Sequence[Any], ts_tid: int) -> Optional[SelectedLineage]:
+	candidates: List[SelectedLineage] = []
+	for l in lineages:
+		Ts = getattr(l, "Ts")
+		if int(Ts.tid) != int(ts_tid):
+			continue
+		Tps = list(getattr(l, "Tps"))
+		pairs = sorted({(int(tp.rank), int(tp.tid)) for tp in Tps})
+		candidates.append(SelectedLineage(ts=int(ts_tid), tps=pairs))
+
+	if not candidates:
+		return None
+
+	# Prefer the lineage with most ranks covered; tie-break by lexicographic order.
+	candidates.sort(key=lambda c: (-len(c.tps), c.tps))
+	return candidates[0]
 
 
-def exec_plan_literal(nodes: List[NodeMeta], deps: List[Tuple[int, List[int]]]) -> str:
-  dep_map: Dict[int, List[int]] = {idx: dep_list for idx, dep_list in deps}
-  entries = []
-  for idx, node in enumerate(nodes):
-    dep_list = dep_map.get(idx, [])
-    entries.append(f"⟨{idx}, {node_literal(node)}, {lean_list_int(dep_list)}⟩")
-  return "[" + ",\n  ".join(entries) + "]"
+def compress_if_replicated(lineage: SelectedLineage) -> SelectedLineage:
+	"""If all pieces point to the same PM tid, keep only one piece.
 
-
-def emit_progress_lemmas(prefix: str, nodes: List[NodeMeta], deps: List[Tuple[int, List[int]]], shapes_name: str, inits_name: str) -> str:
-  dep_map: Dict[int, List[int]] = {idx: dep_list for idx, dep_list in deps}
-  lemmas: List[str] = []
-  for idx, node in enumerate(nodes):
-    dep_list = dep_map.get(idx, [])
-    lemma_name = f"{prefix}NodeProgress_{idx}"
-    doc = f"/-- Progress lemma for {prefix.upper()} node {idx}; deps = {dep_list}. -/"
-    node_term = node_literal(node)
-    inputs_expr = lean_list_int(node.inputs)
-    outputs_expr = lean_list_int(node.outputs)
-    kind, meta = op_kind(node.op, node.kwargs)
-
-    assumptions: List[Tuple[str, str]] = []
-    helper_call: str
-
-    if kind == "dataloader":
-      if not node.outputs:
-        raise ValueError(f"Dataloader node {idx} must have at least one output")
-      head = node.outputs[0]
-      rest_expr = lean_list_int(node.outputs[1:])
-      assumptions.append(("hmiss", f"outputsExist {outputs_expr} st = false"))
-      helper_call = (
-        f"nodeProgress_dataloader (env := env) (shapes := {shapes_name}) "
-        f"(inits := {inits_name}) (out := {head}) (restOuts := {rest_expr}) "
-        "(st := st) hmiss"
-      )
-    elif kind == "chunk":
-      dim = meta.get("dim", 0)
-      idx_param = meta.get("idx", 0)
-      assumptions.append(("hready", f"inputsReady {inits_name} {inputs_expr} st = true"))
-      assumptions.append(("hmiss", f"outputsExist {outputs_expr} st = false"))
-      helper_call = (
-        f"nodeProgress_chunk (env := env) (shapes := {shapes_name}) "
-        f"(inits := {inits_name}) (dim := {dim}) (idx := {idx_param}) "
-        f"(ins := {inputs_expr}) (outs := {outputs_expr}) (st := st) hready hmiss"
-      )
-    elif kind == "all_gather":
-      dim = meta.get("dim", 0)
-      assumptions.append(("hready", f"inputsReady {inits_name} {inputs_expr} st = true"))
-      assumptions.append(("hmiss", f"outputsExist {outputs_expr} st = false"))
-      helper_call = (
-        f"nodeProgress_allGather (env := env) (shapes := {shapes_name}) "
-        f"(inits := {inits_name}) (dim := {dim}) (ins := {inputs_expr}) "
-        f"(outs := {outputs_expr}) (st := st) hready hmiss"
-      )
-    else:
-      helper_map = {
-        "fw_linear": "nodeProgress_fwLinear",
-        "bw_linear": "nodeProgress_bwLinear",
-        "fw_sum": "nodeProgress_fwSum",
-        "bw_sum": "nodeProgress_bwSum",
-        "all_reduce": "nodeProgress_allReduce",
-      }
-      if kind not in helper_map:
-        raise ValueError(f"Unsupported op {node.op} for NodeProgress automation")
-      helper_name = helper_map[kind]
-      assumptions.append(("hready", f"inputsReady {inits_name} {inputs_expr} st = true"))
-      assumptions.append(("hmiss", f"outputsExist {outputs_expr} st = false"))
-      helper_call = (
-        f"{helper_name} (env := env) (shapes := {shapes_name}) "
-        f"(inits := {inits_name}) (ins := {inputs_expr}) (outs := {outputs_expr}) "
-        "(st := st) hready hmiss"
-      )
-
-    binder_str = "".join(f"\n    ({name} : {expr})" for name, expr in assumptions)
-    proof = f"  simpa using\n    {helper_call}"
-    lemma = f"""
-{doc}
-lemma {lemma_name} {{α : Type}} [Semiring α] (env : Env α) (st : Store α){binder_str} :
-  NodeProgress env {shapes_name} {inits_name} {node_term} st := by
-{proof}
+This avoids constructing a meaningless "allGather of identical full tensors" for replicated inputs.
 """
-    lemmas.append(lemma.strip("\n"))
-  return "\n\n".join(lemmas)
+	if not lineage.tps:
+		return lineage
+	tp_tids = {int(t) for (_r, t) in lineage.tps}
+	if len(tp_tids) == 1:
+		(r0, t0) = sorted(lineage.tps)[0]
+		return SelectedLineage(ts=lineage.ts, tps=[(int(r0), int(t0))])
+	return lineage
 
 
-def compute_tensor_relations(nodes: List[NodeMeta]) -> Tuple[Dict[int, List[int]], Dict[int, List[int]], List[Tuple[int, List[int]]]]:
-    producers: Dict[int, List[int]] = defaultdict(list)
-    for idx, node in enumerate(nodes):
-        for tid in node.outputs:
-            producers[tid].append(idx)
-
-    consumers: Dict[int, List[int]] = defaultdict(list)
-    for idx, node in enumerate(nodes):
-        for tid in node.inputs:
-            consumers[tid].append(idx)
-
-    deps: List[Tuple[int, List[int]]] = []
-    for idx, node in enumerate(nodes):
-        dep_set = set()
-        for tid in node.inputs:
-            for prod in producers.get(tid, []):
-                dep_set.add(prod)
-        deps.append((idx, sorted(dep_set)))
-
-    producers_sorted = {tid: sorted(idxs) for tid, idxs in producers.items()}
-    consumers_sorted = {tid: sorted(idxs) for tid, idxs in consumers.items()}
-    return producers_sorted, consumers_sorted, deps
+def escape_lean_string(s: str) -> str:
+	return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def enforce_unique_writes(nodes: List[NodeMeta], tensors: Dict[int, TensorMeta]) -> Tuple[List[NodeMeta], Dict[int, TensorMeta]]:
-  """Rename tensor ids so that every write produces a fresh id, while reserving the
-  canonical id for the final writer. Inputs are rewritten to always reference the
-  latest version, yielding an SSA-like graph where GraphWitness assumptions hold."""
-
-  write_counts: Counter[int] = Counter()
-  for node in nodes:
-    for tid in node.outputs:
-      write_counts[tid] += 1
-
-  if not tensors:
-    return nodes, tensors
-
-  next_tid = max(tensors.keys()) + 1
-  current_version: Dict[int, int] = {tid: tid for tid in tensors.keys()}
-  new_tensors = dict(tensors)
-  new_nodes: List[NodeMeta] = []
-
-  for node in nodes:
-    new_inputs = [current_version.get(tid, tid) for tid in node.inputs]
-    new_outputs: List[int] = []
-    for tid in node.outputs:
-      remaining = write_counts[tid]
-      if remaining <= 0:
-        raise ValueError(f"Tensor {tid} has no remaining producers")
-      if remaining == 1:
-        assigned = tid
-      else:
-        assigned = next_tid
-        next_tid += 1
-        meta = tensors[tid]
-        new_tensors[assigned] = TensorMeta(assigned, meta.shape, meta.initialized)
-      write_counts[tid] -= 1
-      current_version[tid] = assigned
-      new_outputs.append(assigned)
-    new_nodes.append(NodeMeta(op=node.op, kwargs=node.kwargs, inputs=new_inputs, outputs=new_outputs))
-
-  return new_nodes, new_tensors
+def lean_list_nat(xs: Sequence[int]) -> str:
+	if not xs:
+		return "[]"
+	return "[" + ", ".join(str(int(x)) for x in xs) + "]"
 
 
-def simulate_store_presence(nodes: List[NodeMeta], init_tids: List[int]) -> Tuple[List[List[int]], List[List[int]]]:
-  """Compute the tensor ids present in the store immediately before and after
-  each node executes, assuming SSA form and that initial tensors become
-  available once first accessed."""
+def lean_list_pairs(pairs: Sequence[Tuple[int, int]]) -> str:
+	# List (Rank × Tid)
+	if not pairs:
+		return "[]"
+	return "[" + ", ".join(f"({int(r)}, {int(t)})" for r, t in pairs) + "]"
 
-  init_set = set(init_tids)
-  present: Dict[int, None] = {}
-  before: List[List[int]] = []
-  after: List[List[int]] = []
 
-  for node in nodes:
-    before.append(sorted(present.keys()))
-    for tid in node.inputs:
-      if tid in init_set and tid not in present:
-        present[tid] = None
-    for tid in node.outputs:
-      if tid in present:
-        raise ValueError(f"Tensor {tid} already present before node output; plan not SSA")
-      present[tid] = None
-    after.append(sorted(present.keys()))
+def _shape_init_from_graph_by_tid(G: Any, tid: int) -> Tuple[Optional[List[int]], Optional[bool]]:
+	tensors = list(G.tensors())
+	t_any = next((t for t in tensors if int(getattr(t, "tid", -1)) == int(tid)), None)
+	if t_any is None:
+		return None, None
+	try:
+		shp = [int(x) for x in list(G.tensor_shape(t_any))]
+	except Exception:
+		shp = None
+	try:
+		init = bool(G.is_initialized(t_any))
+	except Exception:
+		init = None
+	return shp, init
 
-  return before, after
+
+def _init_tids_from_kept_nodes(G: Any, kept_nodes: Sequence[Any]) -> List[int]:
+	"""Infer boundary tids that must come from the initial store.
+
+	We treat tensors as *initial* if they appear as an input to some kept node,
+	but are not produced as an output by any kept node. This is intentionally
+	graph-structural and does not depend on `is_initialized` (because we may drop
+	DATALOADER nodes and want their outputs to become initial assumptions).
+	"""
+	produced: set[int] = set()
+	consumed: set[int] = set()
+	for n in kept_nodes:
+		for t in G.node_outputs(n):
+			produced.add(int(t.tid))
+		for t in G.node_inputs(n):
+			consumed.add(int(t.tid))
+	init_tids = sorted(consumed - produced)
+	return init_tids
+
+
+def _emit_init_env(
+	lines: List[str], *, name: str, G: Any, kept_nodes: Sequence[Any], prefer_shapes: Optional[Dict[int, List[int]]] = None
+) -> None:
+	init_tids = _init_tids_from_kept_nodes(G, kept_nodes)
+	pairs: List[Tuple[int, List[int]]] = []
+	for tid in init_tids:
+		if prefer_shapes is not None and int(tid) in prefer_shapes:
+			shp = list(prefer_shapes[int(tid)])
+		else:
+			shp, _init = _shape_init_from_graph_by_tid(G, tid)
+		if shp is None:
+			continue
+		pairs.append((int(tid), [int(x) for x in shp]))
+
+	lines.append(f"def {name}InitShapes : List (Tid × Shape) := [")
+	for (tid, shp) in pairs:
+		lines.append(f"  ({tid}, [{', '.join(str(int(x)) for x in shp)}]),")
+	lines.append("]")
+	lines.append("")
+	lines.append(f"def {name}InitEnv : ShapeEnv := shapeEnvOfList {name}InitShapes")
+	lines.append("")
+
+
+def emit_lean_spec(
+	*,
+	out_path: Path,
+	spec_out_path: Optional[Path],
+	emit_spec_template: bool,
+	overwrite_spec: bool,
+	module_name: str,
+	sm_nodes: List[Any],
+	pm_nodes: List[Any],
+	sm_graph: Any,
+	pm_graph: Any,
+	init_goals: List[SelectedLineage],
+	goals: List[SelectedLineage],
+) -> None:
+	lines: List[str] = []
+	# NOTE: In Lean, `import` must come before any commands. A module doc comment
+	# `/-! ... -/` counts as a command, so we use a plain block comment here.
+	lines.append(f"/- Auto-generated by Verdict/graph_to_lean.py")
+	lines.append(f"    Module: {module_name}")
+	lines.append(f"-/")
+	lines.append("import trainverify.denote.Denote")
+	lines.append("")
+	lines.append("open TrainVerify.Denote")
+	lines.append("")
+	lines.append("namespace TrainVerify.Denote.Generated")
+	lines.append("")
+
+	def _emit_graph(name: str, nodes: List[Any], G: Any) -> None:
+		lines.append(f"def {name} : GraphDecl := by")
+		# numRanks: SM is 1, PM is inferred from max rank + 1.
+		if name == "sm":
+			num_ranks = 1
+		else:
+			num_ranks = max((_node_rank(n) for n in nodes), default=0) + 1
+		lines.append(f"  refine {{ numRanks := {num_ranks}, nodes := ?_ }}")
+		lines.append("  exact [")
+		for n in nodes:
+			op = escape_lean_string(_safe_str_op(G.node_opname(n)))
+			ins = [int(t.tid) for t in G.node_inputs(n)]
+			outs = [int(t.tid) for t in G.node_outputs(n)]
+			rank = _node_rank(n)
+
+			def _is_consecutive(xs: List[int]) -> tuple[bool, int, int]:
+				if not xs:
+					return (False, 0, 0)
+				for i in range(1, len(xs)):
+					if xs[i] != xs[0] + i:
+						return (False, 0, 0)
+				return (True, xs[0], len(xs))
+
+			def _lean_list_nat_expr(xs: List[int]) -> str:
+				ok, base, n = _is_consecutive(xs)
+				# Emit a symbolic range/map when it is clearly a consecutive interval.
+				if ok and n >= 4:
+					return f"((List.range {n}).map (fun r => {base} + r))"
+				return lean_list_nat(xs)
+
+			lines.append(
+				f"    {{ rank := {rank}, op := \"{op}\", ins := {_lean_list_nat_expr(ins)}, outs := {_lean_list_nat_expr(outs)} }},"
+			)
+		lines.append("  ]")
+		lines.append("")
+
+	_emit_graph("sm", sm_nodes, sm_graph)
+	_emit_graph("pm", pm_nodes, pm_graph)
+
+	# When a boundary tid exists in both SM and PM, it is usually a shared input (e.g. activations,
+	# labels, loss-grad). Prefer the SM shape for those tids to avoid backend-specific ambiguities
+	# in the PM tensor registry.
+	# This is crucial for the decidable `graphShapesCheck` gate.
+	_sm_prefer: Dict[int, List[int]] = {}
+	# We derive the preference map from the SM-side inferred boundary tids.
+	for tid in _init_tids_from_kept_nodes(sm_graph, sm_nodes):
+		shp, _init = _shape_init_from_graph_by_tid(sm_graph, tid)
+		if shp is not None:
+			_sm_prefer[int(tid)] = [int(x) for x in shp]
+
+	_emit_init_env(lines, name="sm", G=sm_graph, kept_nodes=sm_nodes)
+	_emit_init_env(lines, name="pm", G=pm_graph, kept_nodes=pm_nodes, prefer_shapes=_sm_prefer)
+
+	def _emit_goal_def(def_name: str, g: SelectedLineage, *, for_init: bool) -> None:
+		ts_shape = _shape_init_from_graph_by_tid(sm_graph, g.ts)[0] or []
+		tp_shapes: List[List[int]] = []
+		# Same preference logic as init env: if a tp tid is a shared boundary tid, prefer SM shape.
+		_sm_prefer_local: Dict[int, List[int]] = {}
+		for tid, shp in _sm_prefer.items():
+			_sm_prefer_local[int(tid)] = list(shp)
+		for (_r, tp_tid) in g.tps:
+			if int(tp_tid) in _sm_prefer_local:
+				tp_shapes.append(list(_sm_prefer_local[int(tp_tid)]))
+			else:
+				shp, _init = _shape_init_from_graph_by_tid(pm_graph, tp_tid)
+				tp_shapes.append(shp or [])
+
+		# NOTE: Keep `tps` and `tpShapes` as concrete lists.
+		# Reason: `reconstruct` performs `match` on the tensor list; if `tps` is symbolic
+		# (e.g. `List.range.map`), Lean cannot reduce the match and simp becomes unusable.
+		tps_expr = "[" + ", ".join(f"{{ rank := {r}, tid := {t} }}" for r, t in g.tps) + "]"
+		tp_shapes_expr = "[" + ", ".join("[" + ", ".join(str(int(x)) for x in shp) + "]" for shp in tp_shapes) + "]"
+
+		lines.append(f"def {def_name} : LineageGoal :=")
+		lines.append(
+			"  { ts := "
+			+ str(g.ts)
+			+ ", tsShape := "
+			+ ("[" + ", ".join(str(int(x)) for x in ts_shape) + "]")
+			+ ", tps := "
+			+ tps_expr
+			+ ", tpShapes := "
+			+ tp_shapes_expr
+			+ " }"
+		)
+		lines.append("")
+
+	# Initial-alignment goals: boundary inputs/params that must match between SM and PM.
+	init_def_names: List[str] = []
+	for g in init_goals:
+		def_name = f"initGoal_{g.ts}"
+		init_def_names.append(def_name)
+		_emit_goal_def(def_name, g, for_init=True)
+
+	lines.append("def initGoals : List LineageGoal := [" + ", ".join(init_def_names) + "]")
+	lines.append("")
+
+	# Goals: one per observable output.
+	lines.append("def obsTids : List Nat := [" + ", ".join(str(g.ts) for g in goals) + "]")
+	lines.append("")
+	goal_def_names: List[str] = []
+	for g in goals:
+		def_name = f"goal_{g.ts}"
+		goal_def_names.append(def_name)
+		_emit_goal_def(def_name, g, for_init=False)
+
+	lines.append("def goals : List LineageGoal := [" + ", ".join(goal_def_names) + "]")
+	lines.append("")
+
+	# Proposition aliases (no proofs): manual proofs should live in a separate, non-generated file.
+	# Also emit a *decidable* shape-level check that can be discharged automatically.
+	lines.append("-- Auto shape/dimension checks (decidable, fail-fast)\n")
+	lines.append("def smShapeCheck : Except String (List (Tid × Shape)) :=")
+	lines.append("  TrainVerify.Denote.graphShapesCheck sm smInitShapes")
+	lines.append("")
+	lines.append("def pmShapeCheck : Except String (List (Tid × Shape)) :=")
+	lines.append("  TrainVerify.Denote.graphShapesCheck pm pmInitShapes")
+	lines.append("")
+	lines.append("theorem smShapeCheck_ok : smShapeCheck.isOk := by")
+	lines.append("  native_decide")
+	lines.append("")
+	lines.append("theorem smShapeCheck_exists : ∃ m, smShapeCheck = Except.ok m := by")
+	lines.append("  exact (TrainVerify.Denote.Except.isOk_iff_exists smShapeCheck).1 smShapeCheck_ok")
+	lines.append("")
+	lines.append("theorem pmShapeCheck_ok : pmShapeCheck.isOk := by")
+	lines.append("  native_decide")
+	lines.append("")
+	lines.append("theorem pmShapeCheck_exists : ∃ m, pmShapeCheck = Except.ok m := by")
+	lines.append("  exact (TrainVerify.Denote.Except.isOk_iff_exists pmShapeCheck).1 pmShapeCheck_ok")
+	lines.append("")
+
+	# Small unfold lemma for SM denotation (SM graphs are typically tiny and single-rank).
+	# This avoids repeatedly rewriting foldl by hand in proofs.
+	if len(sm_nodes) <= 24:
+		lines.append("theorem sm_denoteGraph_unfold (init : Store) :")
+		lines.append("    denoteGraph sm init =")
+		# Build a nested applyNode chain with the concrete node decls.
+		def _node_lit(n: Any, G: Any) -> str:
+			op = escape_lean_string(_safe_str_op(G.node_opname(n)))
+			ins = [int(t.tid) for t in G.node_inputs(n)]
+			outs = [int(t.tid) for t in G.node_outputs(n)]
+			rank = _node_rank(n)
+			return (
+				"{ "
+				+ f"rank := {rank}, op := \"{op}\", ins := {lean_list_nat(ins)}, outs := {lean_list_nat(outs)}"
+				+ " }"
+			)
+
+		sm_node_lits = [_node_lit(n, sm_graph) for n in sm_nodes]
+		expr = "init"
+		for lit in sm_node_lits:
+			expr = f"applyNode sm ({expr}) ({lit})"
+		lines.append(f"      {expr} := by")
+		# `simp [denoteGraph]` computes the fold over the concrete node list.
+		lines.append("  simp [sm, denoteGraph]")
+		lines.append("")
+
+	# NOTE: Fully unfolding PM denotation into nested `applyNode` chains quickly becomes enormous
+	# and is usually counterproductive. We only emit the full unfold lemma for very small PM graphs.
+	if len(pm_nodes) <= 24:
+		lines.append("theorem pm_denoteGraph_unfold (init : Store) :")
+		lines.append("    denoteGraph pm init =")
+		pm_node_lits = [_node_lit(n, pm_graph) for n in pm_nodes]
+		expr = "init"
+		for lit in pm_node_lits:
+			expr = f"applyNode pm ({expr}) ({lit})"
+		lines.append(f"      {expr} := by")
+		lines.append("  simp [pm, denoteGraph_nodes_cons, denoteGraph_nodes_nil]")
+		lines.append("")
+
+	# For scalar-style goals (tsShape=[1]) it is useful to expose a PM *prefix* and show that
+	# later nodes do not overwrite the per-rank scalar shards used by reconstruct.
+	# This avoids generating / using a gigantic full-PM unfold.
+	def _is_scalar_goal(g: SelectedLineage) -> bool:
+		# SelectedLineage does not carry shapes; infer via SM graph registry.
+		try:
+			sh_ts, _ = _shape_init_from_graph_by_tid(sm_graph, int(g.ts))
+			return sh_ts == [1] and len(list(getattr(g, "tps", []))) >= 2
+		except Exception:
+			return False
+
+	scalar_goals = [g for g in goals if _is_scalar_goal(g)]
+	if scalar_goals:
+		g0 = scalar_goals[0]
+		target_tids = {int(tid) for (_r, tid) in list(g0.tps)}
+		# find the last PM node that writes any target tid
+		last_idx = -1
+		for i, n in enumerate(pm_nodes):
+			outs_i = {int(t.tid) for t in pm_graph.node_outputs(n)}
+			if outs_i.intersection(target_tids):
+				last_idx = i
+		if last_idx >= 0 and last_idx + 1 < len(pm_nodes):
+			prefix_nodes = pm_nodes[: last_idx + 1]
+			suffix_nodes = pm_nodes[last_idx + 1 :]
+			prefix_name = f"pm_prefix_goal_{int(g0.ts)}"
+			suffix_name = f"pm_suffix_goal_{int(g0.ts)}"
+			pm_num_ranks = max((_node_rank(n) for n in pm_nodes), default=0) + 1
+			# Emit explicit prefix/suffix graphs.
+			lines.append(f"def {prefix_name} : GraphDecl := by")
+			lines.append(f"  refine {{ numRanks := {pm_num_ranks}, nodes := ?_ }}")
+			lines.append("  exact [")
+			for n in prefix_nodes:
+				lines.append(f"    {_node_lit(n, pm_graph)},")
+			lines.append("  ]")
+			lines.append("")
+			lines.append(f"def {suffix_name} : GraphDecl := by")
+			lines.append(f"  refine {{ numRanks := {pm_num_ranks}, nodes := ?_ }}")
+			lines.append("  exact [")
+			for n in suffix_nodes:
+				lines.append(f"    {_node_lit(n, pm_graph)},")
+			lines.append("  ]")
+			lines.append("")
+			# Split lemma: pm nodes = prefix ++ suffix
+			lines.append(f"theorem pm_split_goal_{int(g0.ts)} (init : Store) :")
+			lines.append(
+				f"    denoteGraph pm init = denoteGraph {suffix_name} (denoteGraph {prefix_name} init) := by"
+			)
+			lines.append("  -- purely definitional fold over concatenated node lists")
+			lines.append("  -- use the generic append lemma with an empty graph (same numRanks)")
+			lines.append(
+				f"  simpa [pm, {prefix_name}, {suffix_name}] using (denoteGraph_nodes_append"
+				f"    (g := {{ numRanks := pm.numRanks, nodes := [] }})"
+				f"    (xs := {prefix_name}.nodes) (ys := {suffix_name}.nodes) init)"
+			)
+			lines.append("")
+			# Pointwise lemmas for each target tid: suffix does not overwrite it
+			for tid in sorted(target_tids):
+				lines.append(f"theorem pm_tid_{tid}_eq_prefix_goal_{int(g0.ts)} (init : Store) :")
+				lines.append(
+					f"    (denoteGraph pm init) {tid} = (denoteGraph {prefix_name} init) {tid} := by"
+				)
+				lines.append(f"  have hsplit := pm_split_goal_{int(g0.ts)} init")
+				lines.append(f"  -- show suffix does not write tid={tid} (computable) and use preservation lemma")
+				lines.append(
+					f"  have hpres : (denoteGraph {suffix_name} (denoteGraph {prefix_name} init)) {tid} ="
+					f"      (denoteGraph {prefix_name} init) {tid} := by"
+				)
+				lines.append(f"    have hno : ∀ n ∈ {suffix_name}.nodes, {tid} ∉ n.outs := by native_decide")
+				lines.append(
+					f"    simpa using (denoteGraph_tid_eq_of_forall_not_mem_outs {suffix_name} {suffix_name}.nodes"
+					f"      (denoteGraph {prefix_name} init) {tid} hno)"
+				)
+				lines.append(f"  -- rewrite using the split")
+				lines.append(f"  simpa [hsplit] using hpres")
+				lines.append("")
+
+	for def_name in goal_def_names:
+		lines.append(f"def {def_name}_stmt : Prop :=")
+		lines.append(f"  CoarseLineageHoldsWithInit sm pm {def_name} smInitEnv pmInitEnv initGoals")
+		lines.append("")
+
+	lines.append("def all_goals_stmt : Prop :=")
+	lines.append("  ∀ g ∈ goals, CoarseLineageHoldsWithInit sm pm g smInitEnv pmInitEnv initGoals")
+	lines.append("")
+
+	lines.append("end TrainVerify.Denote.Generated")
+	lines.append("")
+
+	out_path.parent.mkdir(parents=True, exist_ok=True)
+	out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+	if emit_spec_template and spec_out_path is not None:
+		if spec_out_path.exists() and not overwrite_spec:
+			print(f"Spec template exists, not overwriting: {spec_out_path}")
+			return
+
+		# Proof template lives in a separate namespace/module, and intentionally uses `sorry`.
+		spec_lines: List[str] = []
+		spec_lines.append("/-")
+		spec_lines.append("Auto-generated proof template for the denotational spec.")
+		spec_lines.append("")
+		spec_lines.append("- This file is meant to be edited by humans.")
+		spec_lines.append("- It is generated only when --emit-spec-template is passed.")
+		spec_lines.append("- Proofs are left as `sorry` stubs initially.")
+		spec_lines.append("-/")
+		spec_lines.append("import trainverify.denote.GeneratedData")
+		spec_lines.append("")
+		spec_lines.append("open TrainVerify.Denote")
+		spec_lines.append("open TrainVerify.Denote.Generated")
+		spec_lines.append("")
+		spec_lines.append("namespace TrainVerify.Denote.GeneratedSpec")
+		spec_lines.append("")
+		spec_lines.append("/-!\n## Shape gate\n\nThese are computable checks (proved by native_decide in GeneratedData).\n-/")
+		spec_lines.append("theorem sm_shape_ok : smShapeCheck.isOk := by")
+		spec_lines.append("  simpa using smShapeCheck_ok")
+		spec_lines.append("")
+		spec_lines.append("theorem pm_shape_ok : pmShapeCheck.isOk := by")
+		spec_lines.append("  simpa using pmShapeCheck_ok")
+		spec_lines.append("")
+
+		# One theorem stub per goal.
+		for g in goals:
+			name = f"prove_goal_{g.ts}"
+			spec_lines.append(f"theorem {name} : goal_{g.ts}_stmt := by")
+			spec_lines.append("  classical")
+			spec_lines.append("  -- Shape gate (computable, proved in GeneratedData via native_decide):")
+			spec_lines.append("  have _hSm : smShapeCheck.isOk := sm_shape_ok")
+			spec_lines.append("  have _hPm : pmShapeCheck.isOk := pm_shape_ok")
+			spec_lines.append("")
+			spec_lines.append("  -- Expand the statement into concrete obligations.")
+			spec_lines.append(f"  unfold goal_{g.ts}_stmt CoarseLineageHoldsWithInit")
+			spec_lines.append("  intro initSM initPM hSmInitShapes hPmInitShapes hInitGoals")
+			spec_lines.append("")
+			spec_lines.append("  -- Common next steps (uncomment as needed):")
+			spec_lines.append("  -- simp [InitGoalsHold, InitGoalHolds] at hInitGoals")
+			spec_lines.append("  -- simp [denoteGraph_nodes_cons, denoteGraph_nodes_nil]")
+			spec_lines.append("  -- simp [valAt_of_fin]")
+			spec_lines.append("  -- simp [applyNode, storeSet]  -- or use storeSet_eq_of_find?_some/none")
+			spec_lines.append("  sorry")
+			spec_lines.append("")
+
+		spec_lines.append("theorem prove_all_goals : all_goals_stmt := by")
+		spec_lines.append("  -- After proving each prove_goal_*, you can finish by cases on membership in goals.")
+		spec_lines.append("  sorry")
+		spec_lines.append("")
+		spec_lines.append("end TrainVerify.Denote.GeneratedSpec")
+		spec_lines.append("")
+
+		spec_out_path.parent.mkdir(parents=True, exist_ok=True)
+		spec_out_path.write_text("\n".join(spec_lines) + "\n", encoding="utf-8")
 
 
 def main() -> None:
-    args = parse_args()
-    g_single, g_parallel = load_graphs_from_disk(args.sm_pkl, args.pm_pkl)
-    sm_nodes, sm_tensors_raw = extract(g_single)
-    pm_nodes, pm_tensors = extract(g_parallel)
-    sm_nodes, sm_tensors_raw = enforce_unique_writes(sm_nodes, sm_tensors_raw)
-    pm_nodes, pm_tensors = enforce_unique_writes(pm_nodes, pm_tensors)
-    sm_producers, sm_consumers, sm_deps = compute_tensor_relations(sm_nodes)
-    pm_producers, pm_consumers, pm_deps = compute_tensor_relations(pm_nodes)
-
-    # Align shapes of tensors shared across SM/PM so comparisons operate on the
-    # same geometry (keep SM initialization flags intact).
-    sm_tensors: Dict[int, TensorMeta] = {}
-    for tid, meta in sm_tensors_raw.items():
-        if tid in pm_tensors:
-            pm_shape = pm_tensors[tid].shape
-            sm_tensors[tid] = TensorMeta(meta.tid, pm_shape, meta.initialized)
-        else:
-            sm_tensors[tid] = meta
-
-    # choose a shared observable tensor ID present in both graphs; default to smallest common tid
-    common_tids = sorted(set(sm_tensors.keys()) & set(pm_tensors.keys()))
-    obs_tid = args.obs_tid if args.obs_tid is not None else (common_tids[0] if common_tids else 0)
-
-    # identify SM full weight and PM sharded weights (initialized matrices)
-    sm_weight_tid = min([tid for tid, meta in sm_tensors.items() if meta.initialized and len(meta.shape) == 2] or [0])
-    pm_inits = [(tid, meta.shape) for tid, meta in pm_tensors.items() if meta.initialized and len(meta.shape) == 2]
-    shard_width = min([s[1] for _, s in pm_inits] or [1])
-    pm_weight_tids = [tid for tid, shape in pm_inits if shape[1] == shard_width]
-    pm_weight_tids.sort()
-    pm_chunk = shard_width
-
-    shared_tids = sorted(set(sm_tensors.keys()) & set(pm_tensors.keys()))
-    sm_only_tids = sorted(set(sm_tensors.keys()) - set(pm_tensors.keys()))
-    pm_only_tids = sorted(set(pm_tensors.keys()) - set(sm_tensors.keys()))
-    sm_init_tids = sorted(tid for tid, meta in sm_tensors.items() if meta.initialized)
-    pm_init_tids = sorted(tid for tid, meta in pm_tensors.items() if meta.initialized)
-    shared_init_tids = sorted(set(sm_init_tids) & set(pm_init_tids))
-    pm_shard_count = len(pm_weight_tids)
-
-    sm_store_before, sm_store_after = simulate_store_presence(sm_nodes, sm_init_tids)
-    pm_store_before, pm_store_after = simulate_store_presence(pm_nodes, pm_init_tids)
-
-    def mapping_literal(mapping: Dict[int, List[int]]) -> str:
-        pairs = sorted((tid, ids) for tid, ids in mapping.items())
-        return render_nat_list_pairs(pairs)
-
-    def deps_literal(deps: List[Tuple[int, List[int]]]) -> str:
-        ordered = sorted(deps, key=lambda item: item[0])
-        return render_nat_list_pairs(ordered)
-
-    template_concrete = """
-import Std
-
-open Std
-
-abbrev Matrix := List (List Float)
-
-inductive Op where
-  | dataloader
-  | fwLinear
-  | bwLinear
-  | fwSum
-  | bwSum
-  | chunk (dim : Nat) (idx : Nat)
-  | allReduce
-  | allGather (dim : Nat)
-  | unknown
-deriving Repr
-
-structure Node where
-  op : Op
-  inputs : List Nat
-  outputs : List Nat
-deriving Repr
-
-def toMap (xs : List (Nat × α)) : Std.HashMap Nat α :=
-  xs.foldl (fun m (k,v) => m.insert k v) {}
-
-__TENSORS_SM__
-__TENSORS_PM__
-__NODES_SM__
-__NODES_PM__
-
-def smWeightTid : Nat := __SM_W_TID__
-def pmWeightTids : List (Nat × Nat) := __PM_W_TIDS__  -- (tid, shardIdx)
-def pmChunk : Nat := __PM_CHUNK__
-
--- deterministic pseudo-random (lightweight): value = scaled(seed + i + j)
-def randFloat (state : Nat) : Float :=
-  let v := (state % 1000).toFloat / 1000.0
-  v * 2.0 - 1.0
-
-def makeMatrix (rows cols seed : Nat) : Matrix :=
-  List.range rows |>.map (fun i =>
-    List.range cols |>.map (fun j => randFloat (seed + i + j)))
-
-def zerosLike (shape : List Nat) : Matrix :=
-  match shape with
-  | [r, c] => List.replicate r (List.replicate c 0.0)
-  | [r]    => [List.replicate r 0.0]
-  | _      => []
-
-def shapeMap (xs : List (Nat × List Nat × Bool)) : Std.HashMap Nat (List Nat) :=
-  xs.foldl (fun m (k, s, _) => m.insert k s) {}
-
-def initMap (xs : List (Nat × List Nat × Bool)) : Std.HashMap Nat Bool :=
-  xs.foldl (fun m (k, _, b) => m.insert k b) {}
-
-abbrev Store := Std.HashMap Nat Matrix
-
-def getTensor (shapes : Std.HashMap Nat (List Nat)) (inits : Std.HashMap Nat Bool)
-    (tid : Nat) (st : Store) : Matrix × Store :=
-  match st.find? tid with
-  | some v => (v, st)
-  | none =>
-    let shp := shapes.findD tid []
-    let init := inits.findD tid false
-    let seed := tid + 17
-    -- shared base weight for SM and PM shards
-    let baseShape := shapes.findD smWeightTid []
-    let shardCols := pmChunk * pmWeightTids.length
-    let rows := match baseShape with
-      | [r, _] => r
-      | _ =>
-        match pmWeightTids.head? with
-        | some (t, _) =>
-            match shapes.findD t [] with
-            | [r, _] => r
-            | _ => 0
-        | none => 0
-    let cols := match baseShape with
-      | [_ , c] => c
-      | _ => shardCols
-    let baseWeight : Matrix := makeMatrix rows cols 123
-    let shardFromBase (idx : Nat) : Matrix := baseWeight.map (fun r => (r.drop (idx * pmChunk)).take pmChunk)
-    let v := if init && shp.length = 2 then
-      if tid = smWeightTid then baseWeight
-      else match pmWeightTids.find? (fun (t, _) => t = tid) with
-        | some (_, idx) => shardFromBase idx
-        | none => makeMatrix (shp.get! 0) (shp.get! 1) seed
-      else zerosLike shp
-    (v, st.insert tid v)
-
-def transpose (m : Matrix) : Matrix :=
-  match m with
-  | [] => []
-  | row :: _ =>
-    let cols := row.length
-    List.range cols |>.map (fun j => m.map (fun r => r.getD j 0.0))
-
-def dot (a b : List Float) : Float :=
-  List.zipWith (· * ·) a b |> List.foldl (· + ·) 0.0
-
-def matmul (a b : Matrix) : Matrix :=
-  let bt := transpose b
-  a.map (fun row => bt.map (dot row))
-
-def sumAll (m : Matrix) : Float :=
-  m.foldl (fun acc row => acc + row.foldl (· + ·) 0.0) 0.0
-
-def sumRows (m : Matrix) : List Float :=
-  m.foldl (fun acc row => if acc.length = 0 then row else List.zipWith (· + ·) acc row) []
-
-def onesLike (shape : List Nat) : Matrix :=
-  match shape with
-  | [r, c] => List.replicate r (List.replicate c 1.0)
-  | [r]    => [List.replicate r 1.0]
-  | _      => []
-
-def sliceCols (m : Matrix) (start count : Nat) : Matrix :=
-  m.map (fun r => (r.drop start).take count)
-
-def sliceRows (m : Matrix) (start count : Nat) : Matrix :=
-  (m.drop start).take count
-
-def concatCols (ms : List Matrix) : Matrix :=
-  match ms with
-  | [] => []
-  | _ =>
-    let rows := ms.head!.length
-    List.range rows |>.map (fun i => ms.foldl (fun acc m => acc ++ m.get! i) [])
-
-def concatRows (ms : List Matrix) : Matrix := ms.foldl (· ++ ·) []
-
-def chunkBy (m : Matrix) (dim start count : Nat) : Matrix :=
-  if dim = 0 then sliceRows m start count else sliceCols m start count
-
-def gatherBy (dim : Nat) (parts : List Matrix) : Matrix :=
-  if dim = 0 then concatRows parts else concatCols parts
-
-def allReduce (ms : List Matrix) : Matrix :=
-  match ms with
-  | [] => []
-  | m0 :: rest => rest.foldl (fun acc m => List.zipWith (fun r1 r2 => List.zipWith (· + ·) r1 r2) acc m) m0
-
-def headTailN (n : Nat) (xs : List α) : List α :=
-  if xs.length ≤ n then xs else xs.take n ++ xs.drop (xs.length - n)
-
-def preview (rows cols : Nat) (m : Matrix) : Matrix :=
-  let rsel := headTailN rows m
-  rsel.map (fun row => headTailN cols row)
-
-def outputsExist (tids : List Nat) (st : Store) : Bool := tids.all (fun t => st.contains t)
-
-def inputsReady (inits : Std.HashMap Nat Bool) (tids : List Nat) (st : Store) : Bool :=
-  tids.all (fun t => st.contains t || inits.findD t false)
-
-def runNode (shapes : Std.HashMap Nat (List Nat)) (inits : Std.HashMap Nat Bool)
-    (n : Node) (st : Store) : Store :=
-  if outputsExist n.outputs st then st else
-  match n.op with
-  | Op.dataloader =>
-      let shp := shapes.findD n.outputs.head! []
-      let seed := n.outputs.head! + 7
-      let v := if shp.length = 2 then makeMatrix (shp.get! 0) (shp.get! 1) seed else zerosLike shp
-      st.insert n.outputs.head! v
-  | Op.fwLinear =>
-        if ¬ inputsReady inits n.inputs st then st else
-      let (x, st) := getTensor shapes inits (n.inputs.get! 0) st
-      let (w, st) := getTensor shapes inits (n.inputs.get! 1) st
-      let y := matmul x (transpose w)
-      st.insert (n.outputs.get! 0) y
-  | Op.fwSum =>
-        if ¬ inputsReady inits n.inputs st then st else
-      let (x, st) := getTensor shapes inits (n.inputs.get! 0) st
-      let s := sumAll x
-      st.insert (n.outputs.get! 0) [[s]]
-  | Op.bwSum =>
-        if ¬ inputsReady inits n.inputs st then st else
-      let (g, st) := getTensor shapes inits (n.inputs.get! 0) st
-      let (x, st) := getTensor shapes inits (n.inputs.get! 1) st
-      let scalar := match g.head? with | some row => row.headD 1.0 | none => 1.0
-      let gx := x.map (fun row => row.map (fun _ => scalar))
-      st.insert (n.outputs.get! 0) gx
-  | Op.bwLinear =>
-        if ¬ inputsReady inits n.inputs st then st else
-      let (go, st) := getTensor shapes inits (n.inputs.get! 0) st
-      let (x, st) := getTensor shapes inits (n.inputs.get! 1) st
-      let (w, st) := getTensor shapes inits (n.inputs.get! 2) st
-      let gx := matmul go w
-      let gw := matmul (transpose x) go
-      let st := st.insert (n.outputs.get! 0) gx
-      st.insert (n.outputs.get! 1) gw
-  | Op.chunk dim idx =>
-        if ¬ inputsReady inits n.inputs st then st else
-      let (x, st) := getTensor shapes inits (n.inputs.get! 0) st
-      let shpOut := shapes.findD (n.outputs.get! 0) []
-      let size := if shpOut.length = 2 then (if dim = 0 then shpOut.get! 0 else shpOut.get! 1) else 0
-      let start := idx * size
-      let part := chunkBy x dim start size
-      st.insert (n.outputs.get! 0) part
-  | Op.allGather dim =>
-        if ¬ inputsReady inits n.inputs st then st else
-      let (parts, st) := n.inputs.foldl (fun (ps, st) tid =>
-        let (t, st) := getTensor shapes inits tid st
-        (ps ++ [t], st)) ([], st)
-      let y := gatherBy dim parts
-      st.insert (n.outputs.get! 0) y
-  | Op.allReduce =>
-        if ¬ inputsReady inits n.inputs st then st else
-      let (parts, st) := n.inputs.foldl (fun (ps, st) tid =>
-        let (t, st) := getTensor shapes inits tid st
-        (ps ++ [t], st)) ([], st)
-      let y := allReduce parts
-      st.insert (n.outputs.get! 0) y
-  | Op.unknown => st
-
-def runGraph (nodes : List Node) (shapes : Std.HashMap Nat (List Nat)) (inits : Std.HashMap Nat Bool) : Store :=
-  let rec loop (st : Store) (fuel : Nat) : Store :=
-    if fuel = 0 then st else
-    let (st', progressed) := nodes.foldl (fun (st, prog) n =>
-      let stNew := runNode shapes inits n st
-      let prog' := prog || (¬ outputsExist n.outputs st) && outputsExist n.outputs stNew
-      (stNew, prog')) (st, false)
-    if progressed then loop st' (fuel - 1) else st'
-  loop {} (5 * nodes.length + 5)
-
-def smShapes := shapeMap tensorShapesSM
-def smInits  := initMap tensorShapesSM
-def pmShapes := shapeMap tensorShapesPM
-def pmInits  := initMap tensorShapesPM
-
-def smStore := runGraph smNodes smShapes smInits
-def pmStore := runGraph pmNodes pmShapes pmInits
-
-def smOut : Matrix := smStore.findD __OBS_TID__ []
-def pmOut : Matrix := pmStore.findD __OBS_TID__ []
-
-def same : Bool := smOut == pmOut
-
-#eval same
-#eval preview 10 10 smOut
-#eval preview 10 10 pmOut
-"""
-
-    template_spec = """
-    import trainverify.core.GraphSpec
-    import trainverify.core.GraphWitness
-    import trainverify.core.GraphWitnessPipeline
-    import trainverify.core.Lemmas
-
-    open Std TrainVerify GraphWitnessPipeline
-
-    namespace TrainVerify.EqualSpec
-
-    universe u
-
-    __TENSORS_SM__
-    __TENSORS_PM__
-    __NODES_SM__
-    __NODES_PM__
-
-    def smSpec : GraphSpec :=
-      { tensors := tensorShapesSM
-      , nodes := smNodes
-      , obsTid := __OBS_TID__
-      , fuel := __SM_FUEL__ }
-
-    def pmSpec : GraphSpec :=
-      { tensors := tensorShapesPM
-      , nodes := pmNodes
-      , obsTid := __OBS_TID__
-      , fuel := __PM_FUEL__ }
-
-    def sharedTensorIds : List Nat := __SHARED_TIDS__
-    def smOnlyTensorIds : List Nat := __SM_ONLY_TIDS__
-    def pmOnlyTensorIds : List Nat := __PM_ONLY_TIDS__
-    def smInitTensorIds : List Nat := __SM_INIT_TIDS__
-    def pmInitTensorIds : List Nat := __PM_INIT_TIDS__
-    def sharedInitTensorIds : List Nat := __SHARED_INIT_TIDS__
-
-    def pmShardCount : Nat := __PM_SHARD_COUNT__
-
-    __SM_STORE_BEFORE__
-    __SM_STORE_AFTER__
-    __PM_STORE_BEFORE__
-    __PM_STORE_AFTER__
-
-    def smTensorProducers : List (Nat × List Nat) := __SM_TENSOR_PRODUCERS__
-    def smTensorConsumers : List (Nat × List Nat) := __SM_TENSOR_CONSUMERS__
-    def smNodeDependencies : List (Nat × List Nat) := __SM_NODE_DEPS__
-    def pmTensorProducers : List (Nat × List Nat) := __PM_TENSOR_PRODUCERS__
-    def pmTensorConsumers : List (Nat × List Nat) := __PM_TENSOR_CONSUMERS__
-    def pmNodeDependencies : List (Nat × List Nat) := __PM_NODE_DEPS__
-
-    def smExecPlan : List ExecPlanEntry := __SM_EXEC_PLAN__
-    def pmExecPlan : List ExecPlanEntry := __PM_EXEC_PLAN__
-
-    def smExecState {α : Type u} : ExecPlanState α :=
-      GraphWitnessPipeline.mkState (α := α) smExecPlan
-
-    def pmExecState {α : Type u} : ExecPlanState α :=
-      GraphWitnessPipeline.mkState (α := α) pmExecPlan
-
-    __SM_PROGRESS_LEMMAS__
-
-    __PM_PROGRESS_LEMMAS__
-
-    def smShapes : ShapeMap := smSpec.shapeMap
-    def pmShapes : ShapeMap := pmSpec.shapeMap
-    def smInits : InitMap := smSpec.initMap
-    def pmInits : InitMap := pmSpec.initMap
-
-    lemma obsTid_mem_shared : smSpec.obsTid ∈ sharedTensorIds := by
-      decide
-
-    lemma obsTid_eq : smSpec.obsTid = pmSpec.obsTid := rfl
-
-    variable {α : Type} [Semiring α]
-
-    def smRuntime (env : Env α) : Runtime α := smSpec.runtime env
-    def pmRuntime (env : Env α) : Runtime α := pmSpec.runtime env
-
-    def smStore (env : Env α) : Store α := smSpec.store env
-    def pmStore (env : Env α) : Store α := pmSpec.store env
-
-    def smOut (env : Env α) : Mat α := smSpec.output env
-    def pmOut (env : Env α) : Mat α := pmSpec.output env
-
-    def graphsAgree (env : Env α) : Prop := smOut env = pmOut env
-
-    lemma smGraphWitness (env : Env α) :
-        GraphExecWitness env smShapes smInits (smExecState (α := α)) := by
-      intro idx
-      sorry
-
-    lemma pmGraphWitness (env : Env α) :
-        GraphExecWitness env pmShapes pmInits (pmExecState (α := α)) := by
-      intro idx
-      sorry
-
-    def smExecPlanWitness (env : Env α) :
-        GraphWitnessPipeline.ExecPlanWitness env smShapes smInits :=
-      { state := smExecState (α := α)
-      , witness := smGraphWitness env }
-
-    def pmExecPlanWitness (env : Env α) :
-        GraphWitnessPipeline.ExecPlanWitness env pmShapes pmInits :=
-      { state := pmExecState (α := α)
-      , witness := pmGraphWitness env }
-
-    def execWitnessPair (env : Env α) :
-        GraphWitnessPipeline.WitnessPair env smShapes smInits pmShapes pmInits :=
-      { sm := smExecPlanWitness env
-      , pm := pmExecPlanWitness env }
-
-    lemma sharedTensorEquality (env : Env α) :
-        ∀ tid, tid ∈ sharedTensorIds →
-          (ExecPlanState.finalStore (smExecState (α := α))
-              (Runtime.mkStandard env smShapes smInits)).getD tid [] =
-          (ExecPlanState.finalStore (pmExecState (α := α))
-              (Runtime.mkStandard env pmShapes pmInits)).getD tid [] := by
-      intro tid hmem
-      sorry
-
-    lemma smFinalStore_eq_output (env : Env α) :
-        (ExecPlanState.finalStore (smExecState (α := α))
-            (Runtime.mkStandard env smShapes smInits)).getD smSpec.obsTid [] = smOut env := by
-      sorry
-
-    lemma pmFinalStore_eq_output (env : Env α) :
-        (ExecPlanState.finalStore (pmExecState (α := α))
-            (Runtime.mkStandard env pmShapes pmInits)).getD pmSpec.obsTid [] = pmOut env := by
-      sorry
-
-    lemma smFuel_sufficient : smSpec.fuelSufficient := by
-      dsimp [GraphSpec.fuelSufficient, GraphSpec.minFuel, smSpec]
-      exact Nat.le_of_eq rfl
-
-    lemma pmFuel_sufficient : pmSpec.fuelSufficient := by
-      dsimp [GraphSpec.fuelSufficient, GraphSpec.minFuel, pmSpec]
-      exact Nat.le_of_eq rfl
-
-    theorem graphsAgree_result {α : Type} [Semiring α] (env : Env α) : graphsAgree env := by
-      classical
-      let pair := execWitnessPair (α := α) env
-      have hshared := sharedTensorEquality (α := α) env
-      have hObs : smSpec.obsTid ∈ sharedTensorIds := obsTid_mem_shared
-      have hSm := smFinalStore_eq_output (α := α) env
-      have hPm := by
-        simpa [obsTid_eq] using
-          pmFinalStore_eq_output (α := α) env
-      exact
-        GraphWitnessPipeline.WitnessPair.outputsAgree pair sharedTensorIds smSpec.obsTid
-          hshared hObs hSm hPm
-
-    end TrainVerify.EqualSpec
-    """
-
-    lean_concrete = template_concrete.replace("__TENSORS_SM__", emit_tensors("tensorShapesSM", sm_tensors))
-    lean_concrete = lean_concrete.replace("__TENSORS_PM__", emit_tensors("tensorShapesPM", pm_tensors))
-    lean_concrete = lean_concrete.replace("__NODES_SM__", emit_nodes("smNodes", sm_nodes))
-    lean_concrete = lean_concrete.replace("__NODES_PM__", emit_nodes("pmNodes", pm_nodes))
-    lean_concrete = lean_concrete.replace("__OBS_TID__", str(obs_tid))
-    lean_concrete = lean_concrete.replace("__SM_W_TID__", str(sm_weight_tid))
-    pm_w_pairs = "[" + ", ".join(f"({tid}, {idx})" for idx, tid in enumerate(pm_weight_tids)) + "]"
-    lean_concrete = lean_concrete.replace("__PM_W_TIDS__", pm_w_pairs)
-    lean_concrete = lean_concrete.replace("__PM_CHUNK__", str(pm_chunk))
-
-    lean_spec = template_spec.replace("__TENSORS_SM__", emit_tensors("tensorShapesSM", sm_tensors))
-    lean_spec = lean_spec.replace("__TENSORS_PM__", emit_tensors("tensorShapesPM", pm_tensors))
-    lean_spec = lean_spec.replace("__NODES_SM__", emit_nodes("smNodes", sm_nodes))
-    lean_spec = lean_spec.replace("__NODES_PM__", emit_nodes("pmNodes", pm_nodes))
-    sm_fuel = 5 * len(sm_nodes) + 5
-    pm_fuel = 5 * len(pm_nodes) + 5
-
-    lean_spec = lean_spec.replace("__OBS_TID__", str(obs_tid))
-    lean_spec = lean_spec.replace("__SM_FUEL__", str(sm_fuel))
-    lean_spec = lean_spec.replace("__PM_FUEL__", str(pm_fuel))
-    lean_spec = lean_spec.replace("__SHARED_TIDS__", lean_list_int(shared_tids))
-    lean_spec = lean_spec.replace("__SM_ONLY_TIDS__", lean_list_int(sm_only_tids))
-    lean_spec = lean_spec.replace("__PM_ONLY_TIDS__", lean_list_int(pm_only_tids))
-    lean_spec = lean_spec.replace("__SM_INIT_TIDS__", lean_list_int(sm_init_tids))
-    lean_spec = lean_spec.replace("__PM_INIT_TIDS__", lean_list_int(pm_init_tids))
-    lean_spec = lean_spec.replace("__SHARED_INIT_TIDS__", lean_list_int(shared_init_tids))
-    lean_spec = lean_spec.replace("__PM_SHARD_COUNT__", str(pm_shard_count))
-    lean_spec = lean_spec.replace("__SM_STORE_BEFORE__", emit_store_presence_def("smStoreTidsBefore", sm_store_before))
-    lean_spec = lean_spec.replace("__SM_STORE_AFTER__", emit_store_presence_def("smStoreTidsAfter", sm_store_after))
-    lean_spec = lean_spec.replace("__PM_STORE_BEFORE__", emit_store_presence_def("pmStoreTidsBefore", pm_store_before))
-    lean_spec = lean_spec.replace("__PM_STORE_AFTER__", emit_store_presence_def("pmStoreTidsAfter", pm_store_after))
-    lean_spec = lean_spec.replace("__SM_TENSOR_PRODUCERS__", mapping_literal(sm_producers))
-    lean_spec = lean_spec.replace("__SM_TENSOR_CONSUMERS__", mapping_literal(sm_consumers))
-    lean_spec = lean_spec.replace("__SM_NODE_DEPS__", deps_literal(sm_deps))
-    lean_spec = lean_spec.replace("__PM_TENSOR_PRODUCERS__", mapping_literal(pm_producers))
-    lean_spec = lean_spec.replace("__PM_TENSOR_CONSUMERS__", mapping_literal(pm_consumers))
-    lean_spec = lean_spec.replace("__PM_NODE_DEPS__", deps_literal(pm_deps))
-    lean_spec = lean_spec.replace("__SM_EXEC_PLAN__", exec_plan_literal(sm_nodes, sm_deps))
-    lean_spec = lean_spec.replace("__PM_EXEC_PLAN__", exec_plan_literal(pm_nodes, pm_deps))
-    sm_progress = emit_progress_lemmas("sm", sm_nodes, sm_deps, "smShapes", "smInits")
-    pm_progress = emit_progress_lemmas("pm", pm_nodes, pm_deps, "pmShapes", "pmInits")
-    lean_spec = lean_spec.replace("__SM_PROGRESS_LEMMAS__", sm_progress)
-    lean_spec = lean_spec.replace("__PM_PROGRESS_LEMMAS__", pm_progress)
-
-    out_concrete = Path(args.out_concrete)
-    out_spec = Path(args.out_spec)
-    out_concrete.write_text(dedent(lean_concrete))
-    out_spec.write_text(dedent(lean_spec))
-    print(f"Wrote Lean concrete graph to {out_concrete}")
-    print(f"Wrote Lean symbolic spec graph to {out_spec}")
+	args = parse_args()
+	out_path = Path(args.out)
+	spec_out_path = Path(args.spec_out)
+
+	v = load_verifier(args.sm_pkl, args.pm_pkl)
+	GsE, GpE = v.get_graph()  # expanded
+	GsC, _GpC = v.get_graph_compact()  # compact (stable for leaf detection)
+
+	coarse = infer_coarse_lineages_from_expanded(GsE, GpE)
+	by_ts: Dict[int, List[Any]] = {}
+	for l in coarse:
+		Ts = getattr(l, "Ts")
+		by_ts.setdefault(int(Ts.tid), []).append(l)
+
+	# Observable outputs: aligned leaves by default.
+	candidates = leaf_output_tids(GsC)
+	obs_tids = [tid for tid in candidates if tid in by_ts]
+	if args.max_goals and args.max_goals > 0:
+		obs_tids = obs_tids[: int(args.max_goals)]
+
+	selected: List[SelectedLineage] = []
+	for ts in obs_tids:
+		chosen = pick_one_lineage_for_ts(by_ts.get(int(ts), []), ts)
+		if chosen is not None:
+			selected.append(chosen)
+
+	selected.sort(key=lambda g: g.ts)
+
+	# Restrict graph declarations to the subgraph needed for the selected goals.
+	sm_needed_tids = backward_closure_tids(GsC, [g.ts for g in selected])
+	pm_roots = [tp_tid for g in selected for (_, tp_tid) in g.tps]
+	pm_needed_tids = backward_closure_tids(GpE, pm_roots)
+
+	def _filter_nodes(G: Any, needed_tids: set[int]) -> List[Any]:
+		kept: List[Any] = []
+		for n in G.nodes():
+			outs = [int(t.tid) for t in G.node_outputs(n)]
+			# Skip DATALOADER in denotational semantics: treat those tensors as coming from init store.
+			opname = _safe_str_op(G.node_opname(n))
+			if "DATALOADER" in opname:
+				continue
+			if any(tid in needed_tids for tid in outs):
+				kept.append(n)
+		return kept
+
+	def _dedup_shared_collectives(G: Any, nodes: List[Any]) -> List[Any]:
+		"""Drop redundant per-rank copies of shared-output collectives.
+
+		Many backends represent AllReduce/AllGather as one node per rank, but with the same
+		(output) tid because the result is identical across ranks. In our denotational store
+		model (keyed only by tid), keeping all of them would introduce multiple writes to the
+		same tid and complicate proofs.
+
+		We keep a single representative (lowest rank) for each collective identified by
+		(op, inputs, outputs).
+		"""
+		groups: Dict[tuple[str, tuple[int, ...], tuple[int, ...]], List[Any]] = {}
+		for n in nodes:
+			op = _safe_str_op(G.node_opname(n))
+			if ("AllReducePrim" not in op) and ("AllGatherPrim" not in op):
+				continue
+			ins = tuple(int(t.tid) for t in G.node_inputs(n))
+			outs = tuple(int(t.tid) for t in G.node_outputs(n))
+			groups.setdefault((op, ins, outs), []).append(n)
+
+		chosen: set[Any] = set()
+		for (_k, ns) in groups.items():
+			# Prefer the smallest rank.
+			rep = min(ns, key=_node_rank)
+			chosen.add(rep)
+
+		out: List[Any] = []
+		for n in nodes:
+			op = _safe_str_op(G.node_opname(n))
+			if ("AllReducePrim" in op) or ("AllGatherPrim" in op):
+				if n in chosen:
+					out.append(n)
+			else:
+				out.append(n)
+		return out
+
+	def _toposort_nodes(G: Any, nodes: List[Any]) -> List[Any]:
+		"""Stable topo-sort of nodes across ranks by tid dependencies."""
+		if len(nodes) <= 1:
+			return nodes
+
+		# Map tid -> producing node indices (can be >1 in imperfect graphs).
+		producers: Dict[int, List[int]] = {}
+		for i, n in enumerate(nodes):
+			for t in G.node_outputs(n):
+				producers.setdefault(int(t.tid), []).append(i)
+
+		deps: List[set[int]] = [set() for _ in nodes]
+		for i, n in enumerate(nodes):
+			for t in G.node_inputs(n):
+				for j in producers.get(int(t.tid), []):
+					if j != i:
+						deps[i].add(j)
+
+		indeg = [len(deps_i) for deps_i in deps]
+		# Stable queue: pick nodes with indeg=0 in original order.
+		queue: List[int] = [i for i, d in enumerate(indeg) if d == 0]
+		out_idx: List[int] = []
+		while queue:
+			i = queue.pop(0)
+			out_idx.append(i)
+			for k in range(len(nodes)):
+				if i in deps[k]:
+					deps[k].remove(i)
+					indeg[k] -= 1
+					if indeg[k] == 0:
+						queue.append(k)
+
+		# If cycle/unknown deps remain, fall back to original order.
+		if len(out_idx) != len(nodes):
+			return nodes
+		return [nodes[i] for i in out_idx]
+
+	sm_nodes = _filter_nodes(GsE, set(sm_needed_tids))
+	pm_nodes = _filter_nodes(GpE, set(pm_needed_tids))
+
+	# Ensure the denotational fold is a true topological fold across ranks.
+	sm_nodes = _toposort_nodes(GsE, sm_nodes)
+	pm_nodes = _toposort_nodes(GpE, _dedup_shared_collectives(GpE, pm_nodes))
+
+	# Init/boundary tids for the kept subgraph (SM side). We'll generate init-alignment goals
+	# only for those that the aligner can match.
+	sm_init_tids = _init_tids_from_kept_nodes(GsE, sm_nodes)
+
+	init_selected: List[SelectedLineage] = []
+	for tid in sm_init_tids:
+		chosen = pick_one_lineage_for_ts(by_ts.get(int(tid), []), int(tid))
+		if chosen is None:
+			continue
+		init_selected.append(compress_if_replicated(chosen))
+	init_selected.sort(key=lambda g: g.ts)
+
+	emit_lean_spec(
+		out_path=out_path,
+		spec_out_path=spec_out_path,
+		emit_spec_template=bool(args.emit_spec_template),
+		overwrite_spec=bool(args.overwrite_spec),
+		module_name=str(args.module),
+		sm_nodes=sm_nodes,
+		pm_nodes=pm_nodes,
+		sm_graph=GsE,
+		pm_graph=GpE,
+		init_goals=init_selected,
+		goals=selected,
+	)
+
+	print(f"Wrote Lean spec to: {out_path}")
+	print(f"#goals: {len(selected)}  (obs tids: {', '.join(str(g.ts) for g in selected)})")
+	print(f"#init-goals: {len(init_selected)}  (matched init tids: {', '.join(str(g.ts) for g in init_selected)})")
+
+	# Lightweight check: report SM-side boundary tids and whether backend marks them initialized.
+	print("Init tid report (SM kept-subgraph boundary):")
+	for tid in sm_init_tids:
+		shp, init_flag = _shape_init_from_graph_by_tid(GsE, int(tid))
+		cons_ops = []
+		for n in sm_nodes:
+			try:
+				ins = [int(t.tid) for t in GsE.node_inputs(n)]
+			except Exception:
+				ins = []
+			if int(tid) in ins:
+				cons_ops.append(_safe_str_op(GsE.node_opname(n)))
+		print(f"  tid={tid} shape={shp} is_initialized={init_flag} consumers={cons_ops}")
 
 
 if __name__ == "__main__":
-    main()
+	main()
+

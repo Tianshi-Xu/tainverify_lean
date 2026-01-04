@@ -648,6 +648,14 @@ def _prepare_rank_cells(W: World, mg: ModuleCodeGen, rank: int) -> List[Cell]:
     return cells
 
 
+def _cell_compact_key(cell: Cell) -> Tuple[int, int, str]:
+    """Key used to merge the same logical node across ranks.
+    cid and mb come from SSA assignment; irname is stable per op type.
+    Rank is intentionally excluded to avoid node explosion.
+    """
+    return (cell.node.cid, cell.mb, cell.node.irname)
+
+
 def _fuse_collective_inputs(cells: List[Cell]):
     shared_tensor_list: Dict[Hashable, List[Tensor]] = {}
     tensor_indmap: Dict[Tensor, Any] = {}
@@ -766,4 +774,47 @@ def build_graph(W: World, mg: ModuleCodeGen, G_path: str) -> NNScalerDFG:
     tid2lv_updates = _inverse_prop_multiref_valmap(cells, dfg._tid2lv)
     dfg._tid2lv.update(tid2lv_updates)
     dfg._shared_tensor_list = shared_tensor_list
+    return dfg
+
+
+def build_graph_compact(W: World, mg: ModuleCodeGen, G_path: str) -> NNScalerDFG:
+    """Build a compact DFG: keep one logical node per op and attach per-rank placements.
+
+    The regular builder expands nodes by rank; this variant uses rank 0's cells
+    as the structural backbone and aggregates DTags for all ranks into
+    `dfg.node_placements(node)`.
+    """
+
+    # 1) Build backbone from rank 0 only (structure representative).
+    base_cells = _prepare_rank_cells(W, mg, 0)
+    dfg = NNScalerDFG(W)
+    dfg._path = G_path
+    _emit_graph(dfg, base_cells)
+
+    # map compact key to backbone node
+    key2node: Dict[Tuple[int, int, str], Node] = {}
+    for cell, node in zip(base_cells, dfg.nodes()):
+        key2node[_cell_compact_key(cell)] = node
+
+    # 2) Collect placements for all ranks.
+    placements: Dict[Node, List[DTag]] = {n: [] for n in dfg.nodes()}
+    for rank in range(W.runtime_ndevs):
+        rank_cells = _prepare_rank_cells(W, mg, rank)
+        for cell in rank_cells:
+            key = _cell_compact_key(cell)
+            node = key2node.get(key)
+            if node is None:
+                continue  # skip unmatched (should not happen for well-formed plans)
+            placements[node].append(
+                DTag(
+                    rank,
+                    rank_to_dp(rank, W),
+                    rank_to_tp(rank, W),
+                    rank_to_pp(rank, W),
+                    cell.mb,
+                )
+            )
+
+    dfg._node2placements = placements
+    # Keep primary dtag as rank0 for backward compatibility.
     return dfg

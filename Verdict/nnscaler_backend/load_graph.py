@@ -12,7 +12,7 @@ from nnscaler.codegen.module.module import ModuleCodeGen
 from verdict.graph import World, WType, DFG
 from verdict.utils import unique
 
-from nnscaler_backend.build_graph import build_graph
+from nnscaler_backend.build_graph import build_graph, build_graph_compact
 
 
 def load_graph(G_path: str, W_path: str, wtype: WType | str) -> DFG:
@@ -41,6 +41,35 @@ def load_graph(G_path: str, W_path: str, wtype: WType | str) -> DFG:
 
     _sanity_check_world(world)
     return build_graph(world, mg, G_path)
+
+
+def load_graph_compact(G_path: str, W_path: str, wtype: WType | str) -> DFG:
+    """Load graph without expanding nodes by rank.
+
+    Returns a DFG whose node count matches the logical graph, with per-rank
+    placement information stored in `node_placements`.
+    """
+    if isinstance(wtype, str):
+        wtype = WType(wtype)
+
+    with open(G_path, "rb") as fp:
+        mg: ModuleCodeGen = pickle.load(fp)
+    mg_spec = {
+        "wtype": wtype,
+        "plan_ndevs": len(mg.devices),
+        "runtime_ndevs": mg.runtime_ndevs,
+    }
+
+    W_path: str | Path = W_path or Path(G_path).with_suffix(".json")
+    if W_path.exists():
+        with open(W_path, "r") as fp:
+            world_spec: Dict = json.load(fp)
+            world: World = World(**mg_spec, **world_spec)
+    else:
+        world: World = _load_world_from_gpath(G_path, mg_spec)
+
+    _sanity_check_world(world)
+    return build_graph_compact(world, mg, G_path)
 
 
 def _load_world_from_gpath(G_path: str, mg_spec: Dict) -> World:

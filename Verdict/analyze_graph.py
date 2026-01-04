@@ -44,10 +44,15 @@ def dump_graph_structure(graph: DFG, name: str):
         inputs = graph.node_inputs(node)
         outputs = graph.node_outputs(node)
         dtag = graph.node_dtag(node)
+        placements = graph.node_placements(node) if hasattr(graph, "node_placements") else [dtag]
         
         print(f"\n[Node {i}] {node}")
         print(f"  OpName: {opname}")
         print(f"  DTag: {dtag}")
+        if placements:
+            print("  Placements:")
+            for p in placements:
+                print(f"    - rank={p.rank}, dp={p.dp}, tp={p.tp}, pp={p.pp}, mb={p.mb}")
         
         if kwargs:
             print(f"  Kwargs: {pformat(kwargs)}")
@@ -98,17 +103,29 @@ def main():
     parser.add_argument("--pm", type=str, 
                         default="./genmodel/mgeners/llama3adptMegE_mgener_dp2_pp2_tp8_nm1_gbs64_ly1_h32_hi4096_sq128.pkl",
                         help="Path to the Parallel Model (PM) graph pickle file")
+    parser.add_argument("--compact", action="store_true", help="Load graphs without expanding by ranks")
     
     args, config_args = parser.parse_known_args()
-    args.sm = "./genmodel/mgeners/mlp_mgener_dp1_pp1_tp1_nm1_gbs1024_dim1024_ly1.pkl"
+    args.sm = "./genmodel/mgeners/mlp_mgener_dp1_pp1_tp1_nm1_gbs128_dim128_ly1.pkl"
     # args.pm = "./genmodel/mgeners/mlp_mgener_dp2_pp2_tp2_nm2_gbs1024_dim1024_ly1.pkl"
-    args.pm = "./genmodel/mgeners/mlp_mgener_dp1_pp1_tp8_nm1_gbs1024_dim1024_ly1.pkl"
+    args.pm = "./genmodel/mgeners/mlp_mgener_dp1_pp1_tp8_nm1_gbs128_dim128_ly1.pkl"
     # Initialize Config
     Config.update_from_args(config_args)
     prepare(Config)
 
     try:
-        graph_single, graph_parallel = load_graphs(args.sm, args.pm)
+        if args.compact:
+            v = StageParallelVerifier(
+                Gs_path=args.sm,
+                Ws_path=None,
+                Gp_path=args.pm,
+                Wp_path=None,
+                graph_backend=nnScalerGraphBackend,
+                symbolic_backend=z3Backend,
+            )
+            graph_single, graph_parallel = v.get_graph_compact()
+        else:
+            graph_single, graph_parallel = load_graphs(args.sm, args.pm)
         
         # Dump details for Single Model
         dump_graph_structure(graph_single, "Single Model (SM)")
