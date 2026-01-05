@@ -371,6 +371,22 @@ def emit_lean_spec(
 			else:
 				shp, _init = _shape_init_from_graph_by_tid(pm_graph, tp_tid)
 				tp_shapes.append(shp or [])
+		
+		# Validation: check if the shapes are consistent for reconstruction
+		num_pieces = len(g.tps)
+		if num_pieces > 1 and ts_shape and ts_shape != [1] and tp_shapes and tp_shapes[0]:
+			# For allGather-style reconstruction, expect: tp_shape = ts_shape[:-1] + [ts_shape[-1] // num_pieces]
+			if len(ts_shape) >= 1:
+				expected_tp_shape = list(ts_shape[:-1]) + [ts_shape[-1] // num_pieces] if ts_shape[-1] % num_pieces == 0 else None
+				actual_tp_shape = tp_shapes[0]
+				if expected_tp_shape and actual_tp_shape != expected_tp_shape:
+					print(f"WARNING: Shape mismatch for ts={g.ts}")
+					print(f"  ts_shape: {ts_shape}")
+					print(f"  num_pieces: {num_pieces}")
+					print(f"  expected tp_shape (for allGather): {expected_tp_shape}")
+					print(f"  actual tp_shape in PM graph: {actual_tp_shape}")
+					print(f"  tp_tids: {[tid for (_r, tid) in g.tps]}")
+					print(f"  This may indicate: (1) lineage inference error, (2) PM graph issue, or (3) non-standard parallelization")
 
 		# NOTE: Keep `tps` and `tpShapes` as concrete lists.
 		# Reason: `reconstruct` performs `match` on the tensor list; if `tps` is symbolic

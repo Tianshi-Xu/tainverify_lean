@@ -73,14 +73,14 @@ def pm : GraphDecl := by
 
 def smInitShapes : List (Tid × Shape) := [
   (16, [128, 128]),
-  (20, [4, 128]),
+  (20, [128, 128]),
   (25, [1]),
 ]
 
 def smInitEnv : ShapeEnv := shapeEnvOfList smInitShapes
 
 def pmInitShapes : List (Tid × Shape) := [
-  (20, [4, 128]),
+  (20, [128, 128]),
   (25, [1]),
   (34, [128, 16]),
   (35, [128, 16]),
@@ -98,7 +98,7 @@ def initGoal_16 : LineageGoal :=
   { ts := 16, tsShape := [128, 128], tps := [{ rank := 0, tid := 34 }, { rank := 1, tid := 35 }, { rank := 2, tid := 36 }, { rank := 3, tid := 37 }, { rank := 4, tid := 38 }, { rank := 5, tid := 39 }, { rank := 6, tid := 40 }, { rank := 7, tid := 41 }], tpShapes := [[128, 16], [128, 16], [128, 16], [128, 16], [128, 16], [128, 16], [128, 16], [128, 16]] }
 
 def initGoal_20 : LineageGoal :=
-  { ts := 20, tsShape := [4, 128], tps := [{ rank := 0, tid := 20 }], tpShapes := [[4, 128]] }
+  { ts := 20, tsShape := [128, 128], tps := [{ rank := 0, tid := 20 }], tpShapes := [[128, 128]] }
 
 def initGoal_25 : LineageGoal :=
   { ts := 25, tsShape := [1], tps := [{ rank := 0, tid := 25 }], tpShapes := [[1]] }
@@ -111,7 +111,7 @@ def goal_15 : LineageGoal :=
   { ts := 15, tsShape := [1], tps := [{ rank := 0, tid := 90 }, { rank := 1, tid := 91 }, { rank := 2, tid := 92 }, { rank := 3, tid := 93 }, { rank := 4, tid := 94 }, { rank := 5, tid := 95 }, { rank := 6, tid := 96 }, { rank := 7, tid := 97 }], tpShapes := [[1], [1], [1], [1], [1], [1], [1], [1]] }
 
 def goal_21 : LineageGoal :=
-  { ts := 21, tsShape := [4, 128], tps := [{ rank := 0, tid := 66 }, { rank := 1, tid := 68 }, { rank := 2, tid := 70 }, { rank := 3, tid := 72 }, { rank := 4, tid := 74 }, { rank := 5, tid := 76 }, { rank := 6, tid := 78 }, { rank := 7, tid := 80 }], tpShapes := [[128, 16], [128, 16], [128, 16], [128, 16], [128, 16], [128, 16], [128, 16], [128, 16]] }
+  { ts := 21, tsShape := [128, 128], tps := [{ rank := 0, tid := 66 }, { rank := 1, tid := 68 }, { rank := 2, tid := 70 }, { rank := 3, tid := 72 }, { rank := 4, tid := 74 }, { rank := 5, tid := 76 }, { rank := 6, tid := 78 }, { rank := 7, tid := 80 }], tpShapes := [[128, 16], [128, 16], [128, 16], [128, 16], [128, 16], [128, 16], [128, 16], [128, 16]] }
 
 def goal_23 : LineageGoal :=
   { ts := 23, tsShape := [128, 128], tps := [{ rank := 0, tid := 67 }, { rank := 1, tid := 69 }, { rank := 2, tid := 71 }, { rank := 3, tid := 73 }, { rank := 4, tid := 75 }, { rank := 5, tid := 77 }, { rank := 6, tid := 79 }, { rank := 7, tid := 81 }], tpShapes := [[128, 16], [128, 16], [128, 16], [128, 16], [128, 16], [128, 16], [128, 16], [128, 16]] }

@@ -10,7 +10,8 @@ PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
         --dp_size 1 \
         --pp_size 1 \
         --tp_size 1 \
-        --gbs 128 
+        --gbs 128 \
+        --mbs 128 
 
 PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
     --nproc_per_node=1  \
