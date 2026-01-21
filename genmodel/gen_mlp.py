@@ -32,7 +32,7 @@ PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
         --layers 1 \
         --dp_size 1 \
         --pp_size 1 \
-        --tp_size 8 \
+        --tp_size 4 \
         --gbs 128 \
         --mbs 128
 
