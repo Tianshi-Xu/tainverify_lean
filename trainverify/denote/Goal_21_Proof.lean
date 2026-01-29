@@ -25,6 +25,21 @@ Outline:
 - Then use `BW_linear` lemma to conclude for `tid=21`.
 -/
 
+-- Precomputed facts about pm_goal_21 to avoid repeated simp calls
+theorem pm_goal_21_numRanks_eq : pm_goal_21.numRanks = 4 := rfl
+theorem pm_goal_21_numRanks_pos : 0 < pm_goal_21.numRanks := by decide
+
+-- Helper: shape rewrite for pm_goal_21 with numRanks=4
+theorem pm_goal_21_128_eq_4_times_32 : 128 = pm_goal_21.numRanks * 32 := rfl
+theorem pm_goal_21_32_eq_128_div_4 : 32 = 128 / pm_goal_21.numRanks := rfl
+
+-- Helper lemma for chunkPrim shape calculations
+theorem pm_goal_21_chunkPrim_shape (t : Tensor) (r : Nat) (ht : t.shape = [128, 128]) :
+    (chunkPrim pm_goal_21.numRanks r t).shape = [128, 32] := by
+  have hsh : t.shape = [128, pm_goal_21.numRanks * 32] := by
+    rw [pm_goal_21_128_eq_4_times_32] at ht; exact ht
+  exact chunkPrim_shape' pm_goal_21.numRanks r 128 32 t hsh pm_goal_21_numRanks_pos
+
 -- Prefix/suffix node lists for pm_goal_21 to keep proofs small.
 abbrev pm21_n26 : NodeDecl :=
   { rank := 0, op := "OpName.ChunkPrim", ins := [20], outs := [26] }
@@ -614,25 +629,24 @@ lemma pm21_prefix_pre_tid70 (initPM : Store) :
     intro n hn
     simp [pm21_n71, pm21_n72, pm21_n73] at hn
     rcases hn with rfl | rfl | rfl <;> simp [pm21_n71, pm21_n72, pm21_n73]
-  have h70 : (applyNode pm_goal_21 s1 pm21_n70) 70 = bw_sum (s1 25) (s1 54) := by
-    simpa [pm21_n70] using (applyNode_bw_sum_out pm_goal_21 s1 0 25 54 70)
-  have h25 : s1 25 = initPM 25 := by
-    simpa [s1] using pm21_pre1_tid25 initPM
+  have h70 : (applyNode pm_goal_21 s1 pm21_n70) 70 = bw_sum (s1 25) (s1 54) :=
+    applyNode_bw_sum_out pm_goal_21 s1 0 25 54 70
+  have h25 : s1 25 = initPM 25 := pm21_pre1_tid25 initPM
   have h54 : s1 54 =
       chunkPrim pm_goal_21.numRanks 0
-        (allReducePrim pm_goal_21.numRanks 0 [initPM 34, initPM 35, initPM 36, initPM 37]) := by
-    simpa [s1] using pm21_pre1_tid54 initPM
+        (allReducePrim pm_goal_21.numRanks 0 [initPM 34, initPM 35, initPM 36, initPM 37]) :=
+    pm21_pre1_tid54 initPM
   calc
     (denoteGraph { pm_goal_21 with nodes := pm21_prefix_pre } initPM) 70
         = (denoteGraph { pm_goal_21 with nodes := pm21_pre2 } s1) 70 := by
-          simp [hsplit, s1]
+          simp only [hsplit, s1]
     _ = (applyNode pm_goal_21 s1 pm21_n70) 70 := by
           rw [hpre2]
           exact hpres
     _ = bw_sum (initPM 25)
           (chunkPrim pm_goal_21.numRanks 0
             (allReducePrim pm_goal_21.numRanks 0 [initPM 34, initPM 35, initPM 36, initPM 37])) := by
-            simp [h70, h25, h54]
+            simp only [h70, h25, h54]
 
 lemma pm21_prefix_pre_tid71 (initPM : Store) :
     (denoteGraph { pm_goal_21 with nodes := pm21_prefix_pre } initPM) 71 =
@@ -661,32 +675,30 @@ lemma pm21_prefix_pre_tid71 (initPM : Store) :
     rcases hn with rfl | rfl <;> simp [pm21_n72, pm21_n73]
   have h71 :
       (applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) 71 =
-        bw_sum ((applyNode pm_goal_21 s1 pm21_n70) 25) ((applyNode pm_goal_21 s1 pm21_n70) 55) := by
-    simpa [pm21_n71] using
-      (applyNode_bw_sum_out pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) 1 25 55 71)
+        bw_sum ((applyNode pm_goal_21 s1 pm21_n70) 25) ((applyNode pm_goal_21 s1 pm21_n70) 55) :=
+    applyNode_bw_sum_out pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) 1 25 55 71
   have h25 : (applyNode pm_goal_21 s1 pm21_n70) 25 = s1 25 := by
     apply applyNode_eq_of_not_mem_outs (g := pm_goal_21) (s := s1) (n := pm21_n70) (tid := 25)
     simp
   have h55 : (applyNode pm_goal_21 s1 pm21_n70) 55 = s1 55 := by
     apply applyNode_eq_of_not_mem_outs (g := pm_goal_21) (s := s1) (n := pm21_n70) (tid := 55)
     simp
-  have hs1_25 : s1 25 = initPM 25 := by
-    simpa [s1] using pm21_pre1_tid25 initPM
+  have hs1_25 : s1 25 = initPM 25 := pm21_pre1_tid25 initPM
   have hs1_55 : s1 55 =
       chunkPrim pm_goal_21.numRanks 1
-        (allReducePrim pm_goal_21.numRanks 0 [initPM 34, initPM 35, initPM 36, initPM 37]) := by
-    simpa [s1] using pm21_pre1_tid55 initPM
+        (allReducePrim pm_goal_21.numRanks 0 [initPM 34, initPM 35, initPM 36, initPM 37]) :=
+    pm21_pre1_tid55 initPM
   calc
     (denoteGraph { pm_goal_21 with nodes := pm21_prefix_pre } initPM) 71
       = (denoteGraph { pm_goal_21 with nodes := pm21_pre2 } s1) 71 := by
-          simpa [hsplit]
+          simp only [hsplit]
     _ = (applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) 71 := by
           rw [hpre2]
           exact hpres
     _ = bw_sum (initPM 25)
           (chunkPrim pm_goal_21.numRanks 1
             (allReducePrim pm_goal_21.numRanks 0 [initPM 34, initPM 35, initPM 36, initPM 37])) := by
-            simp [h71, h25, h55, hs1_25, hs1_55]
+            simp only [h71, h25, h55, hs1_25, hs1_55]
 
 lemma pm21_prefix_pre_tid72 (initPM : Store) :
     (denoteGraph { pm_goal_21 with nodes := pm21_prefix_pre } initPM) 72 =
@@ -721,10 +733,9 @@ lemma pm21_prefix_pre_tid72 (initPM : Store) :
       (applyNode pm_goal_21
         (applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) pm21_n72) 72 =
         bw_sum ((applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) 25)
-          ((applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) 56) := by
-    simpa [pm21_n72] using
-      (applyNode_bw_sum_out pm_goal_21
-        (applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) 2 25 56 72)
+          ((applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) 56) :=
+    applyNode_bw_sum_out pm_goal_21
+        (applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) 2 25 56 72
   have h25a : (applyNode pm_goal_21 s1 pm21_n70) 25 = s1 25 := by
     apply applyNode_eq_of_not_mem_outs (g := pm_goal_21) (s := s1) (n := pm21_n70) (tid := 25)
     simp
@@ -732,7 +743,7 @@ lemma pm21_prefix_pre_tid72 (initPM : Store) :
     have h := applyNode_eq_of_not_mem_outs (g := pm_goal_21)
       (s := applyNode pm_goal_21 s1 pm21_n70) (n := pm21_n71) (tid := 25)
       (by simp)
-    simpa [h25a] using h
+    rw [h, h25a]
   have h56a : (applyNode pm_goal_21 s1 pm21_n70) 56 = s1 56 := by
     apply applyNode_eq_of_not_mem_outs (g := pm_goal_21) (s := s1) (n := pm21_n70) (tid := 56)
     simp
@@ -740,17 +751,16 @@ lemma pm21_prefix_pre_tid72 (initPM : Store) :
     have h := applyNode_eq_of_not_mem_outs (g := pm_goal_21)
       (s := applyNode pm_goal_21 s1 pm21_n70) (n := pm21_n71) (tid := 56)
       (by simp)
-    simpa [h56a] using h
-  have hs1_25 : s1 25 = initPM 25 := by
-    simpa [s1] using pm21_pre1_tid25 initPM
+    rw [h, h56a]
+  have hs1_25 : s1 25 = initPM 25 := pm21_pre1_tid25 initPM
   have hs1_56 : s1 56 =
       chunkPrim pm_goal_21.numRanks 2
-        (allReducePrim pm_goal_21.numRanks 0 [initPM 34, initPM 35, initPM 36, initPM 37]) := by
-    simpa [s1] using pm21_pre1_tid56 initPM
+        (allReducePrim pm_goal_21.numRanks 0 [initPM 34, initPM 35, initPM 36, initPM 37]) :=
+    pm21_pre1_tid56 initPM
   calc
     (denoteGraph { pm_goal_21 with nodes := pm21_prefix_pre } initPM) 72
       = (denoteGraph { pm_goal_21 with nodes := pm21_pre2 } s1) 72 := by
-        simpa [hsplit]
+        simp only [hsplit]
     _ = (applyNode pm_goal_21
           (applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) pm21_n72) 72 := by
             rw [hpre2]
@@ -758,7 +768,7 @@ lemma pm21_prefix_pre_tid72 (initPM : Store) :
     _ = bw_sum (initPM 25)
           (chunkPrim pm_goal_21.numRanks 2
             (allReducePrim pm_goal_21.numRanks 0 [initPM 34, initPM 35, initPM 36, initPM 37])) := by
-            simp [h72, h25, h56, hs1_25, hs1_56]
+            simp only [h72, h25, h56, hs1_25, hs1_56]
 
 lemma pm21_prefix_pre_tid73 (initPM : Store) :
     (denoteGraph { pm_goal_21 with nodes := pm21_prefix_pre } initPM) 73 =
@@ -783,12 +793,11 @@ lemma pm21_prefix_pre_tid73 (initPM : Store) :
           (applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) pm21_n72)
         pm21_n73) 73 =
         bw_sum ((applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) 25)
-          ((applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) 57) := by
-    simpa [pm21_n73] using
-      (applyNode_bw_sum_out pm_goal_21
+          ((applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) 57) :=
+    applyNode_bw_sum_out pm_goal_21
         (applyNode pm_goal_21
           (applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) pm21_n72)
-        3 25 57 73)
+        3 25 57 73
   have h25a : (applyNode pm_goal_21 s1 pm21_n70) 25 = s1 25 := by
     apply applyNode_eq_of_not_mem_outs (g := pm_goal_21) (s := s1) (n := pm21_n70) (tid := 25)
     simp
@@ -796,7 +805,7 @@ lemma pm21_prefix_pre_tid73 (initPM : Store) :
     have h := applyNode_eq_of_not_mem_outs (g := pm_goal_21)
       (s := applyNode pm_goal_21 s1 pm21_n70) (n := pm21_n71) (tid := 25)
       (by simp)
-    simpa [h25a] using h
+    rw [h, h25a]
   have h57a : (applyNode pm_goal_21 s1 pm21_n70) 57 = s1 57 := by
     apply applyNode_eq_of_not_mem_outs (g := pm_goal_21) (s := s1) (n := pm21_n70) (tid := 57)
     simp
@@ -804,26 +813,25 @@ lemma pm21_prefix_pre_tid73 (initPM : Store) :
     have h := applyNode_eq_of_not_mem_outs (g := pm_goal_21)
       (s := applyNode pm_goal_21 s1 pm21_n70) (n := pm21_n71) (tid := 57)
       (by simp)
-    simpa [h57a] using h
-  have hs1_25 : s1 25 = initPM 25 := by
-    simpa [s1] using pm21_pre1_tid25 initPM
+    rw [h, h57a]
+  have hs1_25 : s1 25 = initPM 25 := pm21_pre1_tid25 initPM
   have hs1_57 : s1 57 =
       chunkPrim pm_goal_21.numRanks 3
-        (allReducePrim pm_goal_21.numRanks 0 [initPM 34, initPM 35, initPM 36, initPM 37]) := by
-    simpa [s1] using pm21_pre1_tid57 initPM
+        (allReducePrim pm_goal_21.numRanks 0 [initPM 34, initPM 35, initPM 36, initPM 37]) :=
+    pm21_pre1_tid57 initPM
   calc
     (denoteGraph { pm_goal_21 with nodes := pm21_prefix_pre } initPM) 73
       = (denoteGraph { pm_goal_21 with nodes := pm21_pre2 } s1) 73 := by
-        simpa [hsplit]
+        simp only [hsplit]
     _ = (applyNode pm_goal_21
           (applyNode pm_goal_21
             (applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) pm21_n72)
           pm21_n73) 73 := by
-            simpa [hpre2]
+            rw [hpre2]
     _ = bw_sum (initPM 25)
           (chunkPrim pm_goal_21.numRanks 3
             (allReducePrim pm_goal_21.numRanks 0 [initPM 34, initPM 35, initPM 36, initPM 37])) := by
-            simp [h73, h25, h57, hs1_25, hs1_57]
+            simp only [h73, h25, h57, hs1_25, hs1_57]
 
 lemma sm21_tid24 (initSM : Store) :
     (denoteGraph sm_goal_21 initSM) 24 = bw_sum (initSM 25) (initSM 17) := by
@@ -835,7 +843,8 @@ lemma sm21_tid21 (initSM : Store) :
       (bw_linear (denoteGraph sm_goal_21 initSM 24) (initSM 20) (initSM 16)).1 := by
   simp [sm_goal_21, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 800000 in
+-- Large proof with many rewrite steps for tid24 equality between SM and PM graphs
 theorem goal_21_tid24_eq
     (initSM initPM : Store)
     (hSmInit : StoreShapesHold initSM sm_goal_21InitEnv)
@@ -901,24 +910,19 @@ theorem goal_21_tid24_eq
   have hpm24'' : (denoteGraph pm_goal_21 initPM) 24 =
       bw_sum (initPM 25)
         (allGatherPrim pm_goal_21.numRanks 0 xs17) := by
-    have hparts : 0 < pm_goal_21.numRanks := by simp [pm_goal_21]
+    have hparts : 0 < pm_goal_21.numRanks := pm_goal_21_numRanks_pos
     have hhead :
         (xs17.head?.map (fun t => t.shape)).getD [] = [128, 32] := by
-      have hchunk : (chunkPrim pm_goal_21.numRanks 0 (denoteGraph pm_goal_21 initPM 17)).shape = [128, 32] := by
-        simpa [pm_goal_21] using
-          (chunkPrim_shape' pm_goal_21.numRanks 0 128 32 (denoteGraph pm_goal_21 initPM 17)
-            (by simpa [pm_goal_21] using hshape17_pm) hparts)
+      have hchunk : (chunkPrim pm_goal_21.numRanks 0 (denoteGraph pm_goal_21 initPM 17)).shape = [128, 32] :=
+        pm_goal_21_chunkPrim_shape _ 0 hshape17_pm
       simp [xs17, hchunk]
     have hxs_shape : ∀ x ∈ xs17, x.shape = [128, 32] := by
       intro x hx
-      have hparts : 0 < pm_goal_21.numRanks := by simp [pm_goal_21]
       simp [xs17] at hx
       rcases hx with rfl | rfl | rfl | rfl <;>
-        simpa [pm_goal_21] using
-          (chunkPrim_shape' pm_goal_21.numRanks _ 128 32 (denoteGraph pm_goal_21 initPM 17)
-            (by simpa [pm_goal_21] using hshape17_pm) hparts)
+        exact pm_goal_21_chunkPrim_shape _ _ hshape17_pm
     have hlen : xs17.length = pm_goal_21.numRanks := by
-      simp [xs17, pm_goal_21]
+      simp only [xs17, List.length_cons, List.length_nil, pm_goal_21_numRanks_eq]
     have hshard : 0 < 32 := by decide
     have hlemma := allGatherPrim_bw_sum_eq_bw_sum_allGather
       (numParts := pm_goal_21.numRanks) (o := 128) (shard := 32)
@@ -943,14 +947,12 @@ theorem goal_21_tid24_eq
     -- bw_sum preserves shape
     have hhead :
         (xs17.head?.map (fun t => t.shape)).getD [] = [128, 32] := by
-      have hparts : 0 < pm_goal_21.numRanks := by simp [pm_goal_21]
-      have hchunk : (chunkPrim pm_goal_21.numRanks 0 (denoteGraph pm_goal_21 initPM 17)).shape = [128, 32] := by
-        simpa [pm_goal_21] using
-          (chunkPrim_shape' pm_goal_21.numRanks 0 128 32 (denoteGraph pm_goal_21 initPM 17)
-            (by simpa [pm_goal_21] using hshape17_pm) hparts)
+      have hchunk : (chunkPrim pm_goal_21.numRanks 0 (denoteGraph pm_goal_21 initPM 17)).shape = [128, 32] :=
+        pm_goal_21_chunkPrim_shape _ 0 hshape17_pm
       simp [xs17, hchunk]
     have hshape_ag : (allGatherPrim pm_goal_21.numRanks 0 xs17).shape = [128, 128] := by
-      simpa [pm_goal_21] using (allGatherPrim_shape pm_goal_21.numRanks 128 32 _ hhead)
+      have h := allGatherPrim_shape pm_goal_21.numRanks 128 32 _ hhead
+      rw [pm_goal_21_numRanks_eq] at h ⊢; exact h
     simp [bw_sum_shape, hshape_ag]
   have hshape_eq : (bw_sum (initSM 25) (initSM 17)).shape =
       (bw_sum (initPM 25) (allGatherPrim pm_goal_21.numRanks 0 xs17)).shape := by
@@ -958,25 +960,25 @@ theorem goal_21_tid24_eq
   apply Tensor.ext hshape_eq
   intro idx hidx
   have hidxL : idx < prodShape (initSM 17).shape := by
-    simpa using (by
-      have : (bw_sum (initSM 25) (initSM 17)).shape = (initSM 17).shape := by simp
-      simpa [this] using hidx)
+    have h1 : (bw_sum (initSM 25) (initSM 17)).shape = (initSM 17).shape := bw_sum_shape _ _
+    rw [← h1]; exact hidx
   have hidxR : idx < prodShape (allGatherPrim pm_goal_21.numRanks 0 xs17).shape := by
-    have hidx' : idx < prodShape (bw_sum (initPM 25) (allGatherPrim pm_goal_21.numRanks 0 xs17)).shape := by
-      simpa [hshape_eq] using hidx
-    simpa [bw_sum_shape] using hidx'
+    have h1 : (bw_sum (initPM 25) (allGatherPrim pm_goal_21.numRanks 0 xs17)).shape =
+        (allGatherPrim pm_goal_21.numRanks 0 xs17).shape := bw_sum_shape _ _
+    rw [← h1, ← hshape_eq]; exact hidx
   have hval_sm := bw_sum_valAt_of_lt (initSM 25) (initSM 17) idx hidxL
   have hval_pm := bw_sum_valAt_of_lt (initPM 25) (allGatherPrim pm_goal_21.numRanks 0 xs17) idx hidxR
   calc
     valAt (bw_sum (initSM 25) (initSM 17)) idx
         = valAt (initSM 25) 0 := hval_sm
-    _ = valAt (initPM 25) 0 := by simp [h25eq]
+    _ = valAt (initPM 25) 0 := by rw [h25eq]
     _ = valAt (bw_sum (initPM 25) (allGatherPrim pm_goal_21.numRanks 0 xs17)) idx := by
           symm; exact hval_pm
 
 -- goal_21_proof will use goal_21_tid24_eq and a bw_linear shard/allGather lemma next.
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 800000 in
+-- Large proof combining tid24_eq with bw_linear shard/allGather lemmas
 theorem goal_21_proof : goal_21_stmt_cut := by
   -- Outline per file header.
   intro initSM initPM hSmInit hPmInit hInitGoals
@@ -1082,36 +1084,18 @@ theorem goal_21_proof : goal_21_stmt_cut := by
         have hshape24sm : (denoteGraph sm_goal_21 initSM 24).shape = [128, 128] := by
           simp [hsm24, bw_sum_shape, hshape17]
         simpa [h24eq] using hshape24sm
+      have hx20 : (initPM 20).shape = [128, 128] := by
+        have henv : pm_goal_21InitEnv 20 = some [128, 128] := by
+          simp [pm_goal_21InitEnv, pm_goal_21InitShapes, shapeEnvOfList]
+        exact hPmInit 20 [128, 128] henv
       have hshape26 : (denoteGraph pm_goal_21 initPM 26).shape = [128, 32] := by
-        have hx20 : (initPM 20).shape = [128, 128] := by
-          have henv : pm_goal_21InitEnv 20 = some [128, 128] := by
-            simp [pm_goal_21InitEnv, pm_goal_21InitShapes, shapeEnvOfList]
-          exact hPmInit 20 [128, 128] henv
-        have hparts : 0 < pm_goal_21.numRanks := by simp [pm_goal_21]
-        simpa [hpm26, pm_goal_21] using
-          (chunkPrim_shape' pm_goal_21.numRanks 0 128 32 (initPM 20)
-            (by simpa [pm_goal_21] using hx20) hparts)
+        rw [hpm26]; exact pm_goal_21_chunkPrim_shape _ 0 hx20
       have hshape27 : (denoteGraph pm_goal_21 initPM 27).shape = [128, 32] := by
-        have hx20 : (initPM 20).shape = [128, 128] := by
-          simpa [initGoal_20] using hInit20.1
-        have hparts : 0 < pm_goal_21.numRanks := by simp [pm_goal_21]
-        simpa [hpm27, pm_goal_21] using
-          (chunkPrim_shape' pm_goal_21.numRanks 1 128 32 (initPM 20)
-            (by simpa [pm_goal_21] using hx20) hparts)
+        rw [hpm27]; exact pm_goal_21_chunkPrim_shape _ 1 hx20
       have hshape28 : (denoteGraph pm_goal_21 initPM 28).shape = [128, 32] := by
-        have hx20 : (initPM 20).shape = [128, 128] := by
-          simpa [initGoal_20] using hInit20.1
-        have hparts : 0 < pm_goal_21.numRanks := by simp [pm_goal_21]
-        simpa [hpm28, pm_goal_21] using
-          (chunkPrim_shape' pm_goal_21.numRanks 2 128 32 (initPM 20)
-            (by simpa [pm_goal_21] using hx20) hparts)
+        rw [hpm28]; exact pm_goal_21_chunkPrim_shape _ 2 hx20
       have hshape29 : (denoteGraph pm_goal_21 initPM 29).shape = [128, 32] := by
-        have hx20 : (initPM 20).shape = [128, 128] := by
-          simpa [initGoal_20] using hInit20.1
-        have hparts : 0 < pm_goal_21.numRanks := by simp [pm_goal_21]
-        simpa [hpm29, pm_goal_21] using
-          (chunkPrim_shape' pm_goal_21.numRanks 3 128 32 (initPM 20)
-            (by simpa [pm_goal_21] using hx20) hparts)
+        rw [hpm29]; exact pm_goal_21_chunkPrim_shape _ 3 hx20
       have hshape30 : (initPM 30).shape = [128, 32] := by
         have hsh : (List.map (fun t => t.shape) [initPM 30, initPM 31, initPM 32, initPM 33]) =
             [[128, 32], [128, 32], [128, 32], [128, 32]] := by
@@ -1157,14 +1141,35 @@ theorem goal_21_proof : goal_21_stmt_cut := by
         simpa [hpm52] using h
       simp [h46, h48, h50, h52]
     · -- value equality
+      -- tid 46 shape
+      have hshape24pm : (denoteGraph pm_goal_21 initPM 24).shape = [128, 128] := by
+        have henv : sm_goal_21InitEnv 17 = some [128, 128] := by
+          simp [sm_goal_21InitEnv, sm_goal_21InitShapes, shapeEnvOfList]
+        have hshape17 : (initSM 17).shape = [128, 128] := hSmInit 17 [128, 128] henv
+        have hsm24 : (denoteGraph sm_goal_21 initSM) 24 = bw_sum (initSM 25) (initSM 17) := by
+          simpa using (sm21_tid24 initSM)
+        have hshape24sm : (denoteGraph sm_goal_21 initSM 24).shape = [128, 128] := by
+          simp [hsm24, bw_sum_shape, hshape17]
+        simpa [h24eq] using hshape24sm
+      have hshape30 : (initPM 30).shape = [128, 32] := by
+        have hsh : (List.map (fun t => t.shape) [initPM 30, initPM 31, initPM 32, initPM 33]) =
+            [[128, 32], [128, 32], [128, 32], [128, 32]] := by
+          simpa [initGoal_16] using hInit16.2.1
+        simpa using congrArg List.head? hsh
+      have hshape26v : (denoteGraph pm_goal_21 initPM 26).shape = [128, 32] := by
+        have hx20v : (initPM 20).shape = [128, 128] := by
+          have henv : pm_goal_21InitEnv 20 = some [128, 128] := by
+            simp [pm_goal_21InitEnv, pm_goal_21InitShapes, shapeEnvOfList]
+          exact hPmInit 20 [128, 128] henv
+        rw [hpm26]; exact pm_goal_21_chunkPrim_shape _ 0 hx20v
+      have hshape46 : (denoteGraph pm_goal_21 initPM 46).shape = [128, 32] := by
+        have hbl := bw_linear_fst_shape 128 32 128
+          (denoteGraph pm_goal_21 initPM 24) (denoteGraph pm_goal_21 initPM 26) (initPM 30)
+          (by simpa [hshape24pm]) (by simpa [hshape26v]) (by simpa [hshape30])
+        simpa [hpm46] using hbl
       -- reconstruct is allGather (non-scalar)
-      have hnon : (initPM 30).shape ≠ [1] := by
-        have hshape30 : (initPM 30).shape = [128, 32] := by
-          have hsh : (List.map (fun t => t.shape) [initPM 30, initPM 31, initPM 32, initPM 33]) =
-              [[128, 32], [128, 32], [128, 32], [128, 32]] := by
-            simpa [initGoal_16] using hInit16.2.1
-          simpa using congrArg List.head? hsh
-        intro h1; rw [hshape30] at h1; cases h1
+      have hnon46 : (denoteGraph pm_goal_21 initPM 46).shape ≠ [1] := by
+        intro h1; rw [hshape46] at h1; cases h1
       have hrec21 : reconstruct pm_goal_21.numRanks 0
           [denoteGraph pm_goal_21 initPM 46,
            denoteGraph pm_goal_21 initPM 48,
@@ -1175,7 +1180,7 @@ theorem goal_21_proof : goal_21_stmt_cut := by
            denoteGraph pm_goal_21 initPM 48,
            denoteGraph pm_goal_21 initPM 50,
            denoteGraph pm_goal_21 initPM 52] := by
-        exact reconstruct_cons_cons_nonscalar _ _ _ _ _ hnon
+        exact reconstruct_cons_cons_nonscalar _ _ _ _ _ hnon46
       -- apply bw_linear allGather lemma
       have hws_len : ([initPM 30, initPM 31, initPM 32, initPM 33] : List Tensor).length = pm_goal_21.numRanks := by
         simp [pm_goal_21]
@@ -1184,10 +1189,13 @@ theorem goal_21_proof : goal_21_stmt_cut := by
         have hsh : (List.map (fun t => t.shape) [initPM 30, initPM 31, initPM 32, initPM 33]) =
             [[128, 32], [128, 32], [128, 32], [128, 32]] := by
           simpa [initGoal_16] using hInit16.2.1
-        simp at hw
-        rcases hw with rfl | rfl | rfl | rfl <;>
-          have := hsh <;> simp at this
-      have hparts : 0 < pm_goal_21.numRanks := by simp [pm_goal_21]
+        simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hw
+        rcases hw with rfl | rfl | rfl | rfl
+        · simp at hsh; exact hsh.1
+        · simp at hsh; exact hsh.2.1
+        · simp at hsh; exact hsh.2.2.1
+        · simp at hsh; exact hsh.2.2.2
+      have hparts : 0 < pm_goal_21.numRanks := pm_goal_21_numRanks_pos
       have hshard : 0 < 32 := by decide
       have hbw := bw_linear_fst_allGather_eq_allGather_bw_linear_chunk
         (numParts := pm_goal_21.numRanks) (b := 128) (i := 128) (o := 128) (shard := 32)
@@ -1203,8 +1211,11 @@ theorem goal_21_proof : goal_21_stmt_cut := by
           have hshape24sm : (denoteGraph sm_goal_21 initSM 24).shape = [128, 128] := by
             simpa [hsm24, bw_sum_shape, hshape17]
           simpa [h24eq] using hshape24sm)
-        (hx := by simpa [hrec20] using hInit20.1)
-        (hi := by simp [pm_goal_21])
+        (hx := by
+          have henv : pm_goal_21InitEnv 20 = some [128, 128] := by
+            simp [pm_goal_21InitEnv, pm_goal_21InitShapes, shapeEnvOfList]
+          exact hPmInit 20 [128, 128] henv)
+        (hi := pm_goal_21_128_eq_4_times_32)
         (hws_len := hws_len)
         (hws_shapes := hws_shapes)
         (hparts := hparts)
@@ -1214,40 +1225,57 @@ theorem goal_21_proof : goal_21_stmt_cut := by
           (bw_linear (denoteGraph pm_goal_21 initPM 24) (initPM 20)
             (allGatherPrim pm_goal_21.numRanks 0 [initPM 30, initPM 31, initPM 32, initPM 33])).1 := by
         simpa [hsm21, h24eq, hrec20, hrec16']
-      have hpm21' : allGatherPrim pm_goal_21.numRanks 0
+      -- Prove the two lists are equal by showing each element is equal
+      have hpm21' :
           [denoteGraph pm_goal_21 initPM 46,
            denoteGraph pm_goal_21 initPM 48,
            denoteGraph pm_goal_21 initPM 50,
            denoteGraph pm_goal_21 initPM 52] =
-          allGatherPrim pm_goal_21.numRanks 0
-            (List.ofFn (fun r : Fin pm_goal_21.numRanks =>
+          (List.ofFn (fun r : Fin pm_goal_21.numRanks =>
               (bw_linear (denoteGraph pm_goal_21 initPM 24)
                 (chunkPrim pm_goal_21.numRanks r.val (initPM 20))
-                ([initPM 30, initPM 31, initPM 32, initPM 33].get ⟨r.val, by simpa [pm_goal_21] using r.isLt⟩)).1)) := by
-        -- expand List.ofFn
-        simp [pm_goal_21, hpm26, hpm27, hpm28, hpm29, hpm46, hpm48, hpm50, hpm52]
-      -- finish
-      calc
-        (denoteGraph sm_goal_21 initSM) 21
-            = (bw_linear (denoteGraph pm_goal_21 initPM 24) (initPM 20)
-                (allGatherPrim pm_goal_21.numRanks 0 [initPM 30, initPM 31, initPM 32, initPM 33])).1 := hsm21'
-        _ = allGatherPrim pm_goal_21.numRanks 0
-              (List.ofFn (fun r : Fin pm_goal_21.numRanks =>
-                (bw_linear (denoteGraph pm_goal_21 initPM 24)
-                  (chunkPrim pm_goal_21.numRanks r.val (initPM 20))
-                  ([initPM 30, initPM 31, initPM 32, initPM 33].get ⟨r.val, by simpa [pm_goal_21] using r.isLt⟩)).1)) := by
-            exact hbw
-        _ = allGatherPrim pm_goal_21.numRanks 0
-              [denoteGraph pm_goal_21 initPM 46,
-               denoteGraph pm_goal_21 initPM 48,
-               denoteGraph pm_goal_21 initPM 50,
-               denoteGraph pm_goal_21 initPM 52] := by
-            symm; exact hpm21'
-        _ = reconstruct pm_goal_21.numRanks 0
-              [denoteGraph pm_goal_21 initPM 46,
-               denoteGraph pm_goal_21 initPM 48,
-               denoteGraph pm_goal_21 initPM 50,
-               denoteGraph pm_goal_21 initPM 52] := by
-            simpa [hrec21]
+                ([initPM 30, initPM 31, initPM 32, initPM 33].get ⟨r.val, by simp only [List.length_cons, List.length_nil, pm_goal_21_numRanks_eq]; exact r.isLt⟩)).1)) := by
+        -- expand List.ofFn directly
+        have h0 : (denoteGraph pm_goal_21 initPM 46) =
+            (bw_linear (denoteGraph pm_goal_21 initPM 24)
+              (chunkPrim pm_goal_21.numRanks 0 (initPM 20))
+              (initPM 30)).1 := by rw [hpm46, hpm26]
+        have h1 : (denoteGraph pm_goal_21 initPM 48) =
+            (bw_linear (denoteGraph pm_goal_21 initPM 24)
+              (chunkPrim pm_goal_21.numRanks 1 (initPM 20))
+              (initPM 31)).1 := by rw [hpm48, hpm27]
+        have h2 : (denoteGraph pm_goal_21 initPM 50) =
+            (bw_linear (denoteGraph pm_goal_21 initPM 24)
+              (chunkPrim pm_goal_21.numRanks 2 (initPM 20))
+              (initPM 32)).1 := by rw [hpm50, hpm28]
+        have h3 : (denoteGraph pm_goal_21 initPM 52) =
+            (bw_linear (denoteGraph pm_goal_21 initPM 24)
+              (chunkPrim pm_goal_21.numRanks 3 (initPM 20))
+              (initPM 33)).1 := by rw [hpm52, hpm29]
+        rw [h0, h1, h2, h3]
+        rfl
+      -- finish: chain equalities without calc to avoid elaboration overhead
+      have step1 : (denoteGraph sm_goal_21 initSM) 21 =
+          (bw_linear (denoteGraph pm_goal_21 initPM 24) (initPM 20)
+            (allGatherPrim pm_goal_21.numRanks 0 [initPM 30, initPM 31, initPM 32, initPM 33])).1 := hsm21'
+      have step2 : (bw_linear (denoteGraph pm_goal_21 initPM 24) (initPM 20)
+            (allGatherPrim pm_goal_21.numRanks 0 [initPM 30, initPM 31, initPM 32, initPM 33])).1 =
+          allGatherPrim pm_goal_21.numRanks 0
+            [denoteGraph pm_goal_21 initPM 46,
+             denoteGraph pm_goal_21 initPM 48,
+             denoteGraph pm_goal_21 initPM 50,
+             denoteGraph pm_goal_21 initPM 52] := by
+        rw [hbw, ← hpm21']
+      have step3 : allGatherPrim pm_goal_21.numRanks 0
+            [denoteGraph pm_goal_21 initPM 46,
+             denoteGraph pm_goal_21 initPM 48,
+             denoteGraph pm_goal_21 initPM 50,
+             denoteGraph pm_goal_21 initPM 52] =
+          reconstruct pm_goal_21.numRanks 0
+            [denoteGraph pm_goal_21 initPM 46,
+             denoteGraph pm_goal_21 initPM 48,
+             denoteGraph pm_goal_21 initPM 50,
+             denoteGraph pm_goal_21 initPM 52] := hrec21.symm
+      exact step1.trans (step2.trans step3)
 
 end TrainVerify.Denote.ManualProofs
