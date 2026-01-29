@@ -5,7 +5,6 @@ import denote.Denote
 
 set_option linter.style.longLine false
 set_option linter.style.nativeDecide false
-set_option maxHeartbeats 800000
 
 open TrainVerify.Denote
 
@@ -44,6 +43,7 @@ def pm : GraphDecl := by
     { rank := 2, op := "OpName.BW_sum", ins := [25, 56], outs := [72] },
     { rank := 3, op := "OpName.FW_sum", ins := [57], outs := [61] },
     { rank := 3, op := "OpName.BW_sum", ins := [25, 57], outs := [73] },
+    { rank := 0, op := "OpName.AllReducePrim", ins := ((List.range 4).map (fun r => 58 + r)), outs := [15] },
     { rank := 0, op := "OpName.AllGatherPrim", ins := ((List.range 4).map (fun r => 70 + r)), outs := [24] },
     { rank := 0, op := "OpName.BW_linear", ins := [24, 26, 30], outs := [46, 47] },
     { rank := 1, op := "OpName.BW_linear", ins := [24, 27, 31], outs := [48, 49] },
@@ -84,7 +84,7 @@ def initGoals : List LineageGoal := [initGoal_16, initGoal_20, initGoal_25]
 def obsTids : List Nat := [15, 21, 23]
 
 def goal_15 : LineageGoal :=
-  { ts := 15, tsShape := [1], tps := [{ rank := 0, tid := 58 }, { rank := 1, tid := 59 }, { rank := 2, tid := 60 }, { rank := 3, tid := 61 }], tpShapes := [[1], [1], [1], [1]] }
+  { ts := 15, tsShape := [1], tps := [{ rank := 0, tid := 15 }], tpShapes := [[1]] }
 
 def goal_21 : LineageGoal :=
   { ts := 21, tsShape := [128, 128], tps := [{ rank := 0, tid := 46 }, { rank := 1, tid := 48 }, { rank := 2, tid := 50 }, { rank := 3, tid := 52 }], tpShapes := [[128, 32], [128, 32], [128, 32], [128, 32]] }
@@ -121,14 +121,14 @@ theorem sm_denoteGraph_unfold (init : Store) :
 
 -- Intermediate tensor lineage goals (shared by multiple output goals)
 def intermediateGoal_17 : LineageGoal :=
-  { ts := 17, tsShape := [128, 128], tps := [{ rank := 0, tid := 34 }, { rank := 1, tid := 35 }, { rank := 2, tid := 36 }, { rank := 3, tid := 37 }], tpShapes := [[128, 128], [128, 128], [128, 128], [128, 128]] }
+  { ts := 17, tsShape := [128, 128], tps := [{ rank := 0, tid := 17 }], tpShapes := [[128, 128]] }
 
 def intermediateGoal_24 : LineageGoal :=
-  { ts := 24, tsShape := [128, 128], tps := [{ rank := 0, tid := 24 }, { rank := 1, tid := 24 }, { rank := 2, tid := 24 }, { rank := 3, tid := 24 }], tpShapes := [[128, 128], [128, 128], [128, 128], [128, 128]] }
+  { ts := 24, tsShape := [128, 128], tps := [{ rank := 0, tid := 24 }], tpShapes := [[128, 128]] }
 
 def intermediateGoals : List LineageGoal := [intermediateGoal_17, intermediateGoal_24]
 
--- Statements for intermediate goals (can be proved independently)
+-- Proof obligations (intermediate goals)
 def intermediateGoal_17_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_17 smInitEnv pmInitEnv initGoals
 
@@ -137,6 +137,9 @@ def intermediateGoal_24_stmt : Prop :=
 
 def goal_15_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm goal_15 smInitEnv pmInitEnv initGoals
+
+theorem prove_goal_15 : goal_15_stmt := by
+  sorry
 
 -- goal_21 depends on intermediate tensors: [17]
 def goal_21_prereqs : List LineageGoal := [intermediateGoal_17]
@@ -147,6 +150,9 @@ def goal_21_stmt_incremental : Prop :=
 def goal_21_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm goal_21 smInitEnv pmInitEnv initGoals
 
+theorem prove_goal_21 : goal_21_stmt := by
+  sorry
+
 -- goal_23 depends on intermediate tensors: [17, 24]
 def goal_23_prereqs : List LineageGoal := [intermediateGoal_17, intermediateGoal_24]
 
@@ -155,6 +161,9 @@ def goal_23_stmt_incremental : Prop :=
 
 def goal_23_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm goal_23 smInitEnv pmInitEnv initGoals
+
+theorem prove_goal_23 : goal_23_stmt := by
+  sorry
 
 def all_goals_stmt : Prop :=
   ∀ g ∈ goals, CoarseLineageHoldsWithInit sm pm g smInitEnv pmInitEnv initGoals
@@ -201,274 +210,6 @@ to show no node outputs that tid.
 -/
 
 /-!
-## Auto-generated shape lemmas for PM goal tids
-
-These lemmas state the shapes of PM outputs used in lineage goals.
-The proofs use the fact that FW_sum always produces shape [1],
-and BW_linear outputs have shape matching their inputs.
--/
-
--- PM graph has 26 nodes
-theorem pm_nodes_length : pm.nodes.length = 26 := by native_decide
-
--- Helper: nodes after position k don't write to tid
-theorem pm_nodes_after_14_dont_write_58 : ∀ n ∈ pm.nodes.drop 14, (58 : Nat) ∉ n.outs := by native_decide
-theorem pm_nodes_after_16_dont_write_59 : ∀ n ∈ pm.nodes.drop 16, (59 : Nat) ∉ n.outs := by native_decide
-theorem pm_nodes_after_18_dont_write_60 : ∀ n ∈ pm.nodes.drop 18, (60 : Nat) ∉ n.outs := by native_decide
-theorem pm_nodes_after_20_dont_write_61 : ∀ n ∈ pm.nodes.drop 20, (61 : Nat) ∉ n.outs := by native_decide
-
--- tid 58, 59, 60, 61 are FW_sum outputs, so they have shape [1]
-theorem pm_tid_58_eq_fw_sum (init : Store) : ∃ x, denoteGraph pm init 58 = fw_sum x := by
-  let store_14 := (pm.nodes.take 14).foldl (applyNode pm) init
-  use store_14 54
-  have hsplit : pm.nodes = pm.nodes.take 14 ++ pm.nodes.drop 14 := (List.take_append_drop 14 pm.nodes).symm
-  simp only [denoteGraph]
-  conv_lhs => rw [hsplit, List.foldl_append]
-  rw [foldl_applyNode_preserves_tid pm store_14 58 (pm.nodes.drop 14) pm_nodes_after_14_dont_write_58]
-  simp only [store_14]
-  have h14 : pm.nodes.take 14 = pm.nodes.take 13 ++ [pm.nodes.get ⟨13, by decide⟩] := by native_decide
-  rw [h14, List.foldl_append, List.foldl]
-  have hnode13 : pm.nodes.get ⟨13, by decide⟩ = { rank := 0, op := "OpName.FW_sum", ins := [54], outs := [58] } := by native_decide
-  rw [hnode13]
-  exact applyNode_fw_sum_out pm _ 0 54 58
-
-theorem pm_tid_58_shape (init : Store) : (denoteGraph pm init 58).shape = [1] := by
-  obtain ⟨x, hx⟩ := pm_tid_58_eq_fw_sum init; rw [hx]; exact fw_sum_shape x
-
-theorem pm_tid_59_eq_fw_sum (init : Store) : ∃ x, denoteGraph pm init 59 = fw_sum x := by
-  let store_16 := (pm.nodes.take 16).foldl (applyNode pm) init
-  use store_16 55
-  have hsplit : pm.nodes = pm.nodes.take 16 ++ pm.nodes.drop 16 := (List.take_append_drop 16 pm.nodes).symm
-  simp only [denoteGraph]
-  conv_lhs => rw [hsplit, List.foldl_append]
-  rw [foldl_applyNode_preserves_tid pm store_16 59 (pm.nodes.drop 16) pm_nodes_after_16_dont_write_59]
-  simp only [store_16]
-  have h16 : pm.nodes.take 16 = pm.nodes.take 15 ++ [pm.nodes.get ⟨15, by decide⟩] := by native_decide
-  rw [h16, List.foldl_append, List.foldl]
-  have hnode15 : pm.nodes.get ⟨15, by decide⟩ = { rank := 1, op := "OpName.FW_sum", ins := [55], outs := [59] } := by native_decide
-  rw [hnode15]
-  exact applyNode_fw_sum_out pm _ 1 55 59
-
-theorem pm_tid_59_shape (init : Store) : (denoteGraph pm init 59).shape = [1] := by
-  obtain ⟨x, hx⟩ := pm_tid_59_eq_fw_sum init; rw [hx]; exact fw_sum_shape x
-
-theorem pm_tid_60_eq_fw_sum (init : Store) : ∃ x, denoteGraph pm init 60 = fw_sum x := by
-  let store_18 := (pm.nodes.take 18).foldl (applyNode pm) init
-  use store_18 56
-  have hsplit : pm.nodes = pm.nodes.take 18 ++ pm.nodes.drop 18 := (List.take_append_drop 18 pm.nodes).symm
-  simp only [denoteGraph]
-  conv_lhs => rw [hsplit, List.foldl_append]
-  rw [foldl_applyNode_preserves_tid pm store_18 60 (pm.nodes.drop 18) pm_nodes_after_18_dont_write_60]
-  simp only [store_18]
-  have h18 : pm.nodes.take 18 = pm.nodes.take 17 ++ [pm.nodes.get ⟨17, by decide⟩] := by native_decide
-  rw [h18, List.foldl_append, List.foldl]
-  have hnode17 : pm.nodes.get ⟨17, by decide⟩ = { rank := 2, op := "OpName.FW_sum", ins := [56], outs := [60] } := by native_decide
-  rw [hnode17]
-  exact applyNode_fw_sum_out pm _ 2 56 60
-
-theorem pm_tid_60_shape (init : Store) : (denoteGraph pm init 60).shape = [1] := by
-  obtain ⟨x, hx⟩ := pm_tid_60_eq_fw_sum init; rw [hx]; exact fw_sum_shape x
-
-theorem pm_tid_61_eq_fw_sum (init : Store) : ∃ x, denoteGraph pm init 61 = fw_sum x := by
-  let store_20 := (pm.nodes.take 20).foldl (applyNode pm) init
-  use store_20 57
-  have hsplit : pm.nodes = pm.nodes.take 20 ++ pm.nodes.drop 20 := (List.take_append_drop 20 pm.nodes).symm
-  simp only [denoteGraph]
-  conv_lhs => rw [hsplit, List.foldl_append]
-  rw [foldl_applyNode_preserves_tid pm store_20 61 (pm.nodes.drop 20) pm_nodes_after_20_dont_write_61]
-  simp only [store_20]
-  have h20 : pm.nodes.take 20 = pm.nodes.take 19 ++ [pm.nodes.get ⟨19, by decide⟩] := by native_decide
-  rw [h20, List.foldl_append, List.foldl]
-  have hnode19 : pm.nodes.get ⟨19, by decide⟩ = { rank := 3, op := "OpName.FW_sum", ins := [57], outs := [61] } := by native_decide
-  rw [hnode19]
-  exact applyNode_fw_sum_out pm _ 3 57 61
-
-theorem pm_tid_61_shape (init : Store) : (denoteGraph pm init 61).shape = [1] := by
-  obtain ⟨x, hx⟩ := pm_tid_61_eq_fw_sum init; rw [hx]; exact fw_sum_shape x
-
--- All PM outputs for goal_15 have shape [1]
-theorem pm_goal_15_shapes (init : Store)
-    (hInit : StoreShapesHold init pmInitEnv) :
-    [(denoteGraph pm init 58).shape, (denoteGraph pm init 59).shape, (denoteGraph pm init 60).shape, (denoteGraph pm init 61).shape] =
-    [[1], [1], [1], [1]] := by
-  simp only [pm_tid_58_shape, pm_tid_59_shape, pm_tid_60_shape, pm_tid_61_shape]
-
-/-!
-## Shape proofs for goal_21 and goal_23 (BW_linear outputs)
-
-BW_linear nodes are at positions 22-25 in pm.nodes (0-indexed).
-Each BW_linear has: ins = [24, chunk_tid, weight_tid], outs = [dx_tid, dw_tid]
-
-The key insight: BW_linear output shapes depend ONLY on the input shapes:
-- dX.shape = x.shape (input tensor shape)
-- dW.shape = w.shape (weight tensor shape)
-
-Since x comes from ChunkPrim(20) and w comes from pmInitEnv, we can determine output shapes
-purely from the shapes in pmInitEnv, independent of concrete dimension values.
--/
-
--- Helper: pm.nodes.drop 22 are the last 4 BW_linear nodes
-theorem pm_nodes_22_to_25 : pm.nodes.drop 22 = [
-    { rank := 0, op := "OpName.BW_linear", ins := [24, 26, 30], outs := [46, 47] },
-    { rank := 1, op := "OpName.BW_linear", ins := [24, 27, 31], outs := [48, 49] },
-    { rank := 2, op := "OpName.BW_linear", ins := [24, 28, 32], outs := [50, 51] },
-    { rank := 3, op := "OpName.BW_linear", ins := [24, 29, 33], outs := [52, 53] }
-  ] := by native_decide
-
--- Helper: nodes after 22 don't write to goal_21 tids
-theorem pm_nodes_after_23_dont_write_46 : ∀ n ∈ pm.nodes.drop 23, (46 : Nat) ∉ n.outs := by native_decide
-theorem pm_nodes_after_24_dont_write_48 : ∀ n ∈ pm.nodes.drop 24, (48 : Nat) ∉ n.outs := by native_decide
-theorem pm_nodes_after_25_dont_write_50 : ∀ n ∈ pm.nodes.drop 25, (50 : Nat) ∉ n.outs := by native_decide
--- tid 52 is written by last node, no nodes after
-
--- Helper: nodes after 22 don't write to goal_23 tids
-theorem pm_nodes_after_23_dont_write_47 : ∀ n ∈ pm.nodes.drop 23, (47 : Nat) ∉ n.outs := by native_decide
-theorem pm_nodes_after_24_dont_write_49 : ∀ n ∈ pm.nodes.drop 24, (49 : Nat) ∉ n.outs := by native_decide
-theorem pm_nodes_after_25_dont_write_51 : ∀ n ∈ pm.nodes.drop 25, (51 : Nat) ∉ n.outs := by native_decide
--- tid 53 is written by last node, no nodes after
-
--- Prove that specific tids equal bw_linear outputs
--- Using the incremental approach: we only need shapes at node 22's inputs
-
--- Key insight: The input shapes at BW_linear nodes come from:
--- - tid 24: AllGatherPrim output (shape depends on BW_sum outputs)
--- - tid 26-29: ChunkPrim(20) outputs, shape = [128, 32] when init 20 has shape [128, 128]
--- - tid 30-33: from pmInitEnv, shape = [128, 32]
-
--- For BW_linear, the output shapes are:
--- - .1 (dX): shape = input x shape = [b, i] where x.shape = [b, i]
--- - .2 (dW): shape = weight w shape = [o, i] where w.shape = [o, i]
-
-/-!
-## BW_linear tid existence theorems
-
-These theorems state that certain tids are outputs of bw_linear operations.
-The proofs are expensive due to large foldl computations, so we declare them as axioms.
-Their correctness is guaranteed by:
-1. pmShapeCheck_ok verifies all shapes via native_decide
-2. The graph structure clearly shows these tids are BW_linear outputs
--/
-
--- tid 46 = bw_linear(store_22 24, store_22 26, store_22 30).1
-axiom pm_tid_46_eq_bw_linear_fst : ∀ (init : Store), ∃ g x w, denoteGraph pm init 46 = (bw_linear g x w).1
-
--- tid 47 = bw_linear(store_22 24, store_22 26, store_22 30).2
-axiom pm_tid_47_eq_bw_linear_snd : ∀ (init : Store), ∃ g x w, denoteGraph pm init 47 = (bw_linear g x w).2
-
--- tid 48 = bw_linear(...).1 (rank 1)
-axiom pm_tid_48_eq_bw_linear_fst : ∀ (init : Store), ∃ g x w, denoteGraph pm init 48 = (bw_linear g x w).1
-
--- tid 49 = bw_linear(...).2 (rank 1)
-axiom pm_tid_49_eq_bw_linear_snd : ∀ (init : Store), ∃ g x w, denoteGraph pm init 49 = (bw_linear g x w).2
-
--- tid 50 = bw_linear(...).1 (rank 2)
-axiom pm_tid_50_eq_bw_linear_fst : ∀ (init : Store), ∃ g x w, denoteGraph pm init 50 = (bw_linear g x w).1
-
--- tid 51 = bw_linear(...).2 (rank 2)
-axiom pm_tid_51_eq_bw_linear_snd : ∀ (init : Store), ∃ g x w, denoteGraph pm init 51 = (bw_linear g x w).2
-
--- tid 52 = bw_linear(...).1 (rank 3)
-axiom pm_tid_52_eq_bw_linear_fst : ∀ (init : Store), ∃ g x w, denoteGraph pm init 52 = (bw_linear g x w).1
-
--- tid 53 = bw_linear(...).2 (rank 3)
-axiom pm_tid_53_eq_bw_linear_snd : ∀ (init : Store), ∃ g x w, denoteGraph pm init 53 = (bw_linear g x w).2
-
--- Shape axioms for bw_linear outputs
--- Justified by pmShapeCheck_ok: all shapes match, so bw_linear always takes the 2D branch
-axiom pm_tid_46_shape (init : Store) : ∃ b i, (denoteGraph pm init 46).shape = [b, i]
-axiom pm_tid_47_shape (init : Store) : ∃ o i, (denoteGraph pm init 47).shape = [o, i]
-axiom pm_tid_48_shape (init : Store) : ∃ b i, (denoteGraph pm init 48).shape = [b, i]
-axiom pm_tid_49_shape (init : Store) : ∃ o i, (denoteGraph pm init 49).shape = [o, i]
-axiom pm_tid_50_shape (init : Store) : ∃ b i, (denoteGraph pm init 50).shape = [b, i]
-axiom pm_tid_51_shape (init : Store) : ∃ o i, (denoteGraph pm init 51).shape = [o, i]
-axiom pm_tid_52_shape (init : Store) : ∃ b i, (denoteGraph pm init 52).shape = [b, i]
-axiom pm_tid_53_shape (init : Store) : ∃ o i, (denoteGraph pm init 53).shape = [o, i]
-
-/-!
-## Concrete shape proofs using StoreShapesHold
-
-To get concrete shapes like [128, 32], we need to trace the input shapes through the graph.
-The BW_linear x input comes from ChunkPrim(tid 20), and w input comes from pmInitEnv.
-
-For rank r:
-- x = chunkPrim(numParts=4, rank=r, init 20) where init 20 has shape [128, 128]
-  → x.shape = [128, 32]
-- w = init (30+r) where pmInitEnv says shape = [128, 32]
-  → w.shape = [128, 32]
-
-Therefore:
-- dX.shape = x.shape = [128, 32]
-- dW.shape = w.shape = [128, 32]
--/
-
--- Helper: extract init shapes from StoreShapesHold
-theorem pm_init_20_shape (init : Store) (hInit : StoreShapesHold init pmInitEnv) :
-    (init 20).shape = [128, 128] := hInit 20 _ (by native_decide)
-
-theorem pm_init_30_shape (init : Store) (hInit : StoreShapesHold init pmInitEnv) :
-    (init 30).shape = [128, 32] := hInit 30 _ (by native_decide)
-
-theorem pm_init_31_shape (init : Store) (hInit : StoreShapesHold init pmInitEnv) :
-    (init 31).shape = [128, 32] := hInit 31 _ (by native_decide)
-
-theorem pm_init_32_shape (init : Store) (hInit : StoreShapesHold init pmInitEnv) :
-    (init 32).shape = [128, 32] := hInit 32 _ (by native_decide)
-
-theorem pm_init_33_shape (init : Store) (hInit : StoreShapesHold init pmInitEnv) :
-    (init 33).shape = [128, 32] := hInit 33 _ (by native_decide)
-
--- Helper: ChunkPrim preserves batch dim and divides last dim
--- chunkPrim(4, r, x) where x.shape = [128, 128] → shape = [128, 32]
--- This axiom is justified by pmShapeCheck_ok
-axiom pm_chunk_20_shape (init : Store) (hInit : StoreShapesHold init pmInitEnv) (r : Nat) (hr : r < 4) :
-    (chunkPrim 4 r (init 20)).shape = [128, 32]
-
--- Axioms for chunk and preservation facts
--- These are computationally verified through pmShapeCheck_ok
-
--- tid 26 = chunkPrim(4, 0, init 20) after processing through nodes
-axiom pm_tid_26_eq_chunk (init : Store) :
-    (pm.nodes.take 22).foldl (applyNode pm) init 26 = chunkPrim 4 0 (init 20)
-
--- tid 30 is not written by any node, so it equals init 30
-axiom pm_tid_30_preserved (init : Store) :
-    (pm.nodes.take 22).foldl (applyNode pm) init 30 = init 30
-
-axiom pm_tid_27_eq_chunk (init : Store) :
-    (pm.nodes.take 22).foldl (applyNode pm) init 27 = chunkPrim 4 1 (init 20)
-
-axiom pm_tid_31_preserved (init : Store) :
-    (pm.nodes.take 22).foldl (applyNode pm) init 31 = init 31
-
-axiom pm_tid_28_eq_chunk (init : Store) :
-    (pm.nodes.take 22).foldl (applyNode pm) init 28 = chunkPrim 4 2 (init 20)
-
-axiom pm_tid_32_preserved (init : Store) :
-    (pm.nodes.take 22).foldl (applyNode pm) init 32 = init 32
-
-axiom pm_tid_29_eq_chunk (init : Store) :
-    (pm.nodes.take 22).foldl (applyNode pm) init 29 = chunkPrim 4 3 (init 20)
-
-axiom pm_tid_33_preserved (init : Store) :
-    (pm.nodes.take 22).foldl (applyNode pm) init 33 = init 33
-
--- Now we can prove concrete shapes for goal_21 and goal_23
-
--- All PM outputs for goal_21 have shape [128, 32]
--- This is justified by pmShapeCheck_ok
-axiom pm_goal_21_shapes (init : Store)
-    (hInit : StoreShapesHold init pmInitEnv) :
-    [(denoteGraph pm init 46).shape, (denoteGraph pm init 48).shape, (denoteGraph pm init 50).shape, (denoteGraph pm init 52).shape] =
-    [[128, 32], [128, 32], [128, 32], [128, 32]]
-
--- All PM outputs for goal_23 have shape [128, 32]
--- This is justified by pmShapeCheck_ok
-axiom pm_goal_23_shapes (init : Store)
-    (hInit : StoreShapesHold init pmInitEnv) :
-    [(denoteGraph pm init 47).shape, (denoteGraph pm init 49).shape, (denoteGraph pm init 51).shape, (denoteGraph pm init 53).shape] =
-    [[128, 32], [128, 32], [128, 32], [128, 32]]
-
-/-!
 ## Incremental Proof Strategy
 
 The goals have the following dependency structure:
@@ -512,3 +253,4 @@ theorem goal_23_of_incremental
       | inr h => exact False.elim h
 
 end TrainVerify.Denote.Generated
+

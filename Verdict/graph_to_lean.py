@@ -61,7 +61,7 @@ def parse_args() -> argparse.Namespace:
 	)
 	p.add_argument(
 		"--spec-out",
-		default=str(ROOT / "mathlib4" / "trainverify" / "denote" / "GeneratedSpec.lean"),
+		default=str(ROOT / "trainverify" / "denote" / "GeneratedSpec.lean"),
 		help="Output path for the spec/proof template file.",
 	)
 	p.add_argument(
@@ -74,6 +74,19 @@ def parse_args() -> argparse.Namespace:
 		type=int,
 		default=0,
 		help="If >0, emit at most this many output goals (stable order by tid).",
+	)
+	p.add_argument(
+		"--split-goals",
+		action="store_true",
+		help=(
+			"Emit per-goal sliced graphs and local statements. "
+			"Later goals can assume earlier intermediate tensors as boundary init goals."
+		),
+	)
+	p.add_argument(
+		"--goals-out-dir",
+		default=str(ROOT / "trainverify" / "denote"),
+		help="Output directory for per-goal Lean files when --split-goals is enabled.",
 	)
 	return p.parse_args()
 
@@ -153,6 +166,33 @@ def backward_closure_tids(G: Any, root_tids: Iterable[int]) -> List[int]:
 	return sorted(seen)
 
 
+def backward_closure_tids_until(
+	G: Any, root_tids: Iterable[int], stop_tids: Iterable[int]
+) -> List[int]:
+	"""Backward closure, but do not expand past `stop_tids`.
+
+	The resulting set still includes the stop tids themselves, but excludes their producers.
+	"""
+	prod = _build_producer_index(G)
+	stop: set[int] = {int(t) for t in stop_tids}
+	seen: set[int] = {int(t) for t in root_tids}
+	frontier: set[int] = set(seen)
+	while frontier:
+		nxt: set[int] = set()
+		for tid in list(frontier):
+			if int(tid) in stop:
+				continue
+			for node_idx in prod.get(int(tid), []):
+				node = G.nodes()[node_idx]
+				for t_in in G.node_inputs(node):
+					t_id = int(t_in.tid)
+					if t_id not in seen:
+						seen.add(t_id)
+						nxt.add(t_id)
+		frontier = nxt
+	return sorted(seen)
+
+
 def _safe_str_op(op: Any) -> str:
 	# OpName types often have a friendly string repr.
 	try:
@@ -179,6 +219,14 @@ class GoalDependency:
 	prereq_intermediate_goals: List[Tuple[int, "SelectedLineage"]]
 	# Topological position in SM graph (lower = earlier)
 	sm_position: int
+
+
+@dataclass
+class GoalSlice:
+	"""A per-goal sliced subgraph (cut at prerequisite intermediate tensors)."""
+	goal: SelectedLineage
+	sm_nodes: List[Any]
+	pm_nodes: List[Any]
 
 
 def compute_goal_dependencies(
@@ -278,6 +326,27 @@ This avoids constructing a meaningless "allGather of identical full tensors" for
 	return lineage
 
 
+def normalize_lineage_by_collectives(pm_graph: Any, lineage: SelectedLineage) -> SelectedLineage:
+	"""Normalize lineage by collapsing collective inputs to their collective output.
+
+	If the lineage tps match the inputs of an AllReducePrim/AllGatherPrim node and that
+	node has a single output tid, replace tps with that output tid (replicated result).
+	"""
+	if not lineage.tps:
+		return lineage
+
+	lineage_tids = sorted(int(t) for (_r, t) in lineage.tps)
+	for n in pm_graph.nodes():
+		op = _safe_str_op(pm_graph.node_opname(n))
+		if ("AllReducePrim" not in op) and ("AllGatherPrim" not in op):
+			continue
+		ins = sorted(int(t.tid) for t in pm_graph.node_inputs(n))
+		outs = [int(t.tid) for t in pm_graph.node_outputs(n)]
+		if ins == lineage_tids and len(outs) == 1:
+			return SelectedLineage(ts=lineage.ts, tps=[(0, outs[0])])
+	return lineage
+
+
 def escape_lean_string(s: str) -> str:
 	return s.replace("\\", "\\\\").replace('"', '\\"')
 
@@ -309,6 +378,31 @@ def _shape_init_from_graph_by_tid(G: Any, tid: int) -> Tuple[Optional[List[int]]
 	except Exception:
 		init = None
 	return shp, init
+
+
+def _validate_lineage_against_graphs(
+	lineage: "SelectedLineage", sm_graph: Any, pm_graph: Any, pm_num_ranks: int
+) -> List[str]:
+	"""Lightweight sanity checks for a lineage goal against graph registries.
+
+	This is not a proof; it only reports likely issues (missing shapes or rank coverage).
+	"""
+	issues: List[str] = []
+	sh_ts, _init = _shape_init_from_graph_by_tid(sm_graph, int(lineage.ts))
+	if sh_ts is None:
+		issues.append(f"SM shape missing for ts={lineage.ts}")
+	# Check PM tids exist and have shapes
+	for (_r, tp_tid) in lineage.tps:
+		sh_tp, _init_tp = _shape_init_from_graph_by_tid(pm_graph, int(tp_tid))
+		if sh_tp is None:
+			issues.append(f"PM shape missing for tp_tid={tp_tid} (ts={lineage.ts})")
+	# Rank coverage check (only meaningful when multiple pieces are present)
+	ranks = [int(r) for (r, _t) in lineage.tps]
+	if len(ranks) >= 2:
+		missing = [r for r in range(int(pm_num_ranks)) if r not in set(ranks)]
+		if missing:
+			issues.append(f"PM rank coverage missing ranks={missing} for ts={lineage.ts}")
+	return issues
 
 
 def _init_tids_from_kept_nodes(G: Any, kept_nodes: Sequence[Any]) -> List[int]:
@@ -353,6 +447,16 @@ def _emit_init_env(
 	lines.append("")
 
 
+def _build_sm_prefer(G: Any, kept_nodes: Sequence[Any]) -> Dict[int, List[int]]:
+	"""Build a SM shape preference map from boundary tids of the kept subgraph."""
+	prefer: Dict[int, List[int]] = {}
+	for tid in _init_tids_from_kept_nodes(G, kept_nodes):
+		shp, _init = _shape_init_from_graph_by_tid(G, tid)
+		if shp is not None:
+			prefer[int(tid)] = [int(x) for x in shp]
+	return prefer
+
+
 def emit_lean_spec(
 	*,
 	out_path: Path,
@@ -368,6 +472,8 @@ def emit_lean_spec(
 	goals: List[SelectedLineage],
 	goal_deps: Optional[List[GoalDependency]] = None,
 	intermediate_lineages: Optional[Dict[int, SelectedLineage]] = None,
+	goal_slices: Optional[List["GoalSlice"]] = None,
+	goals_out_dir: Optional[Path] = None,
 ) -> None:
 	lines: List[str] = []
 	# NOTE: In Lean, `import` must come before any commands. A module doc comment
@@ -388,7 +494,7 @@ def emit_lean_spec(
 	def _emit_graph(name: str, nodes: List[Any], G: Any) -> None:
 		lines.append(f"def {name} : GraphDecl := by")
 		# numRanks: SM is 1, PM is inferred from max rank + 1.
-		if name == "sm":
+		if name == "sm" or name.startswith("sm_"):
 			num_ranks = 1
 		else:
 			num_ranks = max((_node_rank(n) for n in nodes), default=0) + 1
@@ -428,12 +534,7 @@ def emit_lean_spec(
 	# labels, loss-grad). Prefer the SM shape for those tids to avoid backend-specific ambiguities
 	# in the PM tensor registry.
 	# This is crucial for the decidable `graphShapesCheck` gate.
-	_sm_prefer: Dict[int, List[int]] = {}
-	# We derive the preference map from the SM-side inferred boundary tids.
-	for tid in _init_tids_from_kept_nodes(sm_graph, sm_nodes):
-		shp, _init = _shape_init_from_graph_by_tid(sm_graph, tid)
-		if shp is not None:
-			_sm_prefer[int(tid)] = [int(x) for x in shp]
+	_sm_prefer: Dict[int, List[int]] = _build_sm_prefer(sm_graph, sm_nodes)
 
 	_emit_init_env(lines, name="sm", G=sm_graph, kept_nodes=sm_nodes)
 	_emit_init_env(lines, name="pm", G=pm_graph, kept_nodes=pm_nodes, prefer_shapes=_sm_prefer)
@@ -669,7 +770,7 @@ def emit_lean_spec(
 		lines.append("")
 		
 		# Also emit stmt definitions for intermediate goals
-		lines.append("-- Statements for intermediate goals (can be proved independently)")
+		lines.append("-- Proof obligations (intermediate goals)")
 		for def_name in intermediate_def_names:
 			lines.append(f"def {def_name}_stmt : Prop :=")
 			lines.append(f"  CoarseLineageHoldsWithInit sm pm {def_name} smInitEnv pmInitEnv initGoals")
@@ -701,6 +802,11 @@ def emit_lean_spec(
 			lines.append(f"def {def_name}_stmt : Prop :=")
 			lines.append(f"  CoarseLineageHoldsWithInit sm pm {def_name} smInitEnv pmInitEnv initGoals")
 			lines.append("")
+
+		# One proof stub per observable lineage goal
+		lines.append(f"theorem prove_{def_name} : {def_name}_stmt := by")
+		lines.append("  sorry")
+		lines.append("")
 
 	lines.append("def all_goals_stmt : Prop :=")
 	lines.append("  ∀ g ∈ goals, CoarseLineageHoldsWithInit sm pm g smInitEnv pmInitEnv initGoals")
@@ -799,62 +905,6 @@ def emit_lean_spec(
 		lines.append("-/")
 		lines.append("")
 	
-	# ===========================================================================
-	# Auto-generate shape lemmas for PM goal tids
-	# ===========================================================================
-	
-	# Collect PM goal tids for shape lemmas
-	pm_goal_tids: set[int] = set()
-	for g in goals:
-		for (_r, tid) in g.tps:
-			pm_goal_tids.add(int(tid))
-	
-	# Also add intermediate goal tids
-	if intermediate_lineages:
-		for _inter_ts, inter_lin in intermediate_lineages.items():
-			for (_r, tid) in inter_lin.tps:
-				pm_goal_tids.add(int(tid))
-	
-	if pm_goal_tids:
-		lines.append("/-!")
-		lines.append("## Auto-generated shape lemmas for PM goal tids")
-		lines.append("")
-		lines.append("These lemmas state the shapes of PM outputs used in lineage goals.")
-		lines.append("-/")
-		lines.append("")
-		
-		# Group tids by their shape for more compact lemmas
-		shape_to_tids: Dict[str, List[int]] = {}
-		for tid in sorted(pm_goal_tids):
-			shp, _ = _shape_init_from_graph_by_tid(pm_graph, tid)
-			if shp is not None:
-				key = str(shp)
-				shape_to_tids.setdefault(key, []).append(tid)
-		
-		for g in goals:
-			goal_ts = g.ts
-			goal_pm_tids = [tid for (_r, tid) in g.tps]
-			
-			# Get expected shapes
-			shapes = []
-			for tid in goal_pm_tids:
-				shp, _ = _shape_init_from_graph_by_tid(pm_graph, tid)
-				shapes.append(shp or [])
-			
-			if shapes and all(s == shapes[0] for s in shapes):
-				# All same shape - emit a single theorem
-				shp_str = "[" + ", ".join(str(x) for x in shapes[0]) + "]"
-				tids_str = ", ".join(str(t) for t in goal_pm_tids)
-				
-				lines.append(f"-- All PM outputs for goal_{goal_ts} have shape {shp_str}")
-				lines.append(f"theorem pm_goal_{goal_ts}_shapes (init : Store)")
-				lines.append(f"    (hInit : StoreShapesHold init pmInitEnv) :")
-				lines.append(f"    [" + ", ".join(f"(denoteGraph pm init {t}).shape" for t in goal_pm_tids) + "] =")
-				lines.append(f"    [" + ", ".join(shp_str for _ in goal_pm_tids) + "] := by")
-				# For large graphs, just use sorry to avoid simp timeout
-				lines.append("  sorry  -- requires shape propagation through PM graph")
-				lines.append("")
-	
 	# Emit composition theorems showing how to use incremental proofs
 	if goal_deps and intermediate_lineages:
 		lines.append("/-!")
@@ -912,6 +962,81 @@ def emit_lean_spec(
 							lines.append(f"      | inr hg =>")
 				lines.append("")
 
+	# Goal-sliced graphs are emitted into per-goal files (if requested).
+	if goal_slices and goals_out_dir is not None:
+		goals_out_dir.mkdir(parents=True, exist_ok=True)
+		deps_by_ts: Dict[int, GoalDependency] = {}
+		if goal_deps:
+			for dep in goal_deps:
+				deps_by_ts[dep.goal_ts] = dep
+
+		for sl in goal_slices:
+			goal_ts = int(sl.goal.ts)
+			dep = deps_by_ts.get(goal_ts)
+			file_path = goals_out_dir / f"Goal_{goal_ts}.lean"
+			goal_lines: List[str] = []
+			goal_lines.append("/- Auto-generated by Verdict/graph_to_lean.py")
+			goal_lines.append(f"    Goal: {goal_ts}")
+			goal_lines.append("-/")
+			goal_lines.append("import denote.GeneratedData")
+			goal_lines.append("")
+			goal_lines.append("open TrainVerify.Denote")
+			goal_lines.append("open TrainVerify.Denote.Generated")
+			goal_lines.append("")
+			goal_lines.append("namespace TrainVerify.Denote.GeneratedGoals")
+			goal_lines.append("")
+
+			sm_name = f"sm_goal_{goal_ts}"
+			pm_name = f"pm_goal_{goal_ts}"
+
+			# Emit sliced graphs
+			def _emit_graph_local(name: str, nodes: List[Any], G: Any) -> None:
+				goal_lines.append(f"def {name} : GraphDecl := by")
+				if name.startswith("sm_"):
+					num_ranks = 1
+				else:
+					num_ranks = max((_node_rank(n) for n in nodes), default=0) + 1
+				goal_lines.append(f"  refine {{ numRanks := {num_ranks}, nodes := ?_ }}")
+				goal_lines.append("  exact [")
+				for n in nodes:
+					op = escape_lean_string(_safe_str_op(G.node_opname(n)))
+					ins = [int(t.tid) for t in G.node_inputs(n)]
+					outs = [int(t.tid) for t in G.node_outputs(n)]
+					rank = _node_rank(n)
+					goal_lines.append(
+						f"    {{ rank := {rank}, op := \"{op}\", ins := {lean_list_nat(ins)}, outs := {lean_list_nat(outs)} }},"
+					)
+				goal_lines.append("  ]")
+				goal_lines.append("")
+
+			_emit_graph_local(sm_name, sl.sm_nodes, sm_graph)
+			_emit_graph_local(pm_name, sl.pm_nodes, pm_graph)
+
+			# Local init envs (boundary tids of the sliced subgraphs)
+			_sm_prefer_local = _build_sm_prefer(sm_graph, sl.sm_nodes)
+			_emit_init_env(goal_lines, name=sm_name, G=sm_graph, kept_nodes=sl.sm_nodes)
+			_emit_init_env(goal_lines, name=pm_name, G=pm_graph, kept_nodes=sl.pm_nodes, prefer_shapes=_sm_prefer_local)
+
+			# Local init goals: base initGoals plus prerequisite intermediate goals.
+			if dep and dep.prereq_intermediate_goals:
+				goal_lines.append(
+					f"def goal_{goal_ts}_cut_initGoals : List LineageGoal := initGoals ++ goal_{goal_ts}_prereqs"
+				)
+			else:
+				goal_lines.append(f"def goal_{goal_ts}_cut_initGoals : List LineageGoal := initGoals")
+			goal_lines.append("")
+
+			goal_lines.append(f"def goal_{goal_ts}_stmt_cut : Prop :=")
+			goal_lines.append(
+				f"  CoarseLineageHoldsWithInit {sm_name} {pm_name} goal_{goal_ts}"
+				f" {sm_name}InitEnv {pm_name}InitEnv goal_{goal_ts}_cut_initGoals"
+			)
+			goal_lines.append("")
+			goal_lines.append("end TrainVerify.Denote.GeneratedGoals")
+			goal_lines.append("")
+
+			file_path.write_text("\n".join(goal_lines) + "\n", encoding="utf-8")
+
 	lines.append("end TrainVerify.Denote.Generated")
 	lines.append("")
 
@@ -932,44 +1057,25 @@ def emit_lean_spec(
 		spec_lines.append("- It is generated only when --emit-spec-template is passed.")
 		spec_lines.append("- Proofs are left as `sorry` stubs initially.")
 		spec_lines.append("-/")
-		spec_lines.append("import trainverify.denote.GeneratedData")
+		spec_lines.append("import denote.GeneratedData")
 		spec_lines.append("")
 		spec_lines.append("open TrainVerify.Denote")
 		spec_lines.append("open TrainVerify.Denote.Generated")
 		spec_lines.append("")
 		spec_lines.append("namespace TrainVerify.Denote.GeneratedSpec")
 		spec_lines.append("")
-		spec_lines.append("/-!\n## Shape gate\n\nThese are computable checks (proved by native_decide in GeneratedData).\n-/")
-		spec_lines.append("theorem sm_shape_ok : smShapeCheck.isOk := by")
-		spec_lines.append("  simpa using smShapeCheck_ok")
+		spec_lines.append("/-!\n## Proof stubs\n\nFill these in manually. No axioms are introduced here.\n-/")
 		spec_lines.append("")
-		spec_lines.append("theorem pm_shape_ok : pmShapeCheck.isOk := by")
-		spec_lines.append("  simpa using pmShapeCheck_ok")
-		spec_lines.append("")
-
 		# One theorem stub per goal.
 		for g in goals:
 			name = f"prove_goal_{g.ts}"
 			spec_lines.append(f"theorem {name} : goal_{g.ts}_stmt := by")
-			spec_lines.append("  classical")
-			spec_lines.append("  -- Shape gate (computable, proved in GeneratedData via native_decide):")
-			spec_lines.append("  have _hSm : smShapeCheck.isOk := sm_shape_ok")
-			spec_lines.append("  have _hPm : pmShapeCheck.isOk := pm_shape_ok")
-			spec_lines.append("")
-			spec_lines.append("  -- Expand the statement into concrete obligations.")
-			spec_lines.append(f"  unfold goal_{g.ts}_stmt CoarseLineageHoldsWithInit")
-			spec_lines.append("  intro initSM initPM hSmInitShapes hPmInitShapes hInitGoals")
-			spec_lines.append("")
-			spec_lines.append("  -- Common next steps (uncomment as needed):")
-			spec_lines.append("  -- simp [InitGoalsHold, InitGoalHolds] at hInitGoals")
-			spec_lines.append("  -- simp [denoteGraph_nodes_cons, denoteGraph_nodes_nil]")
-			spec_lines.append("  -- simp [valAt_of_fin]")
-			spec_lines.append("  -- simp [applyNode, storeSet]  -- or use storeSet_eq_of_find?_some/none")
+			spec_lines.append("  -- TODO: fill in the proof")
 			spec_lines.append("  sorry")
 			spec_lines.append("")
 
 		spec_lines.append("theorem prove_all_goals : all_goals_stmt := by")
-		spec_lines.append("  -- After proving each prove_goal_*, you can finish by cases on membership in goals.")
+		spec_lines.append("  -- TODO: finish after prove_goal_* are done")
 		spec_lines.append("  sorry")
 		spec_lines.append("")
 		spec_lines.append("end TrainVerify.Denote.GeneratedSpec")
@@ -1004,6 +1110,8 @@ def main() -> None:
 	for ts in obs_tids:
 		chosen = pick_one_lineage_for_ts(by_ts.get(int(ts), []), ts)
 		if chosen is not None:
+			chosen = normalize_lineage_by_collectives(GpE, chosen)
+			chosen = compress_if_replicated(chosen)
 			selected.append(chosen)
 
 	selected.sort(key=lambda g: g.ts)
@@ -1013,7 +1121,7 @@ def main() -> None:
 	pm_roots = [tp_tid for g in selected for (_, tp_tid) in g.tps]
 	pm_needed_tids = backward_closure_tids(GpE, pm_roots)
 
-	def _filter_nodes(G: Any, needed_tids: set[int]) -> List[Any]:
+	def _filter_nodes(G: Any, needed_tids: set[int], stop_tids: Optional[set[int]] = None) -> List[Any]:
 		kept: List[Any] = []
 		for n in G.nodes():
 			outs = [int(t.tid) for t in G.node_outputs(n)]
@@ -1021,7 +1129,12 @@ def main() -> None:
 			opname = _safe_str_op(G.node_opname(n))
 			if "DATALOADER" in opname:
 				continue
-			if any(tid in needed_tids for tid in outs):
+			if stop_tids is None:
+				if any(tid in needed_tids for tid in outs):
+					kept.append(n)
+				continue
+			# For sliced graphs: drop nodes that only produce stop-tids.
+			if any((tid in needed_tids) and (tid not in stop_tids) for tid in outs):
 				kept.append(n)
 		return kept
 
@@ -1114,6 +1227,7 @@ def main() -> None:
 		chosen = pick_one_lineage_for_ts(by_ts.get(int(tid), []), int(tid))
 		if chosen is None:
 			continue
+		chosen = normalize_lineage_by_collectives(GpE, chosen)
 		init_selected.append(compress_if_replicated(chosen))
 	init_selected.sort(key=lambda g: g.ts)
 
@@ -1122,6 +1236,49 @@ def main() -> None:
 	goal_deps, intermediate_lineages = compute_goal_dependencies(
 		GsC, selected, by_ts, init_tid_set
 	)
+	if intermediate_lineages:
+		for k, lin in list(intermediate_lineages.items()):
+			lin = normalize_lineage_by_collectives(GpE, lin)
+			lin = compress_if_replicated(lin)
+			intermediate_lineages[k] = lin
+
+	# Light sanity checks for intermediate lineages used as prerequisites
+	pm_num_ranks = max((_node_rank(n) for n in GpE.nodes()), default=0) + 1
+	for dep in goal_deps:
+		for (inter_ts, lin) in dep.prereq_intermediate_goals:
+			issues = _validate_lineage_against_graphs(lin, GsE, GpE, pm_num_ranks)
+			if issues:
+				print(f"WARNING: lineage sanity check issues for intermediate ts={inter_ts}:")
+				for msg in issues:
+					print(f"  - {msg}")
+
+	# Optional: build per-goal sliced graphs (cut at prerequisite intermediate tensors).
+	goal_slices: Optional[List[GoalSlice]] = None
+	if args.split_goals:
+		deps_by_ts: Dict[int, GoalDependency] = {d.goal_ts: d for d in goal_deps}
+		goal_slices = []
+		for g in selected:
+			dep = deps_by_ts.get(int(g.ts))
+			prereq_lineages: List[SelectedLineage] = []
+			if dep and dep.prereq_intermediate_goals:
+				prereq_lineages = [lin for (_ts, lin) in dep.prereq_intermediate_goals]
+
+			stop_sm_tids = set(sm_init_tids) | {int(lin.ts) for lin in prereq_lineages}
+			needed_sm = backward_closure_tids_until(GsC, [int(g.ts)], stop_sm_tids)
+			sm_nodes_goal = _filter_nodes(GsE, set(needed_sm), stop_tids=set(stop_sm_tids))
+			sm_nodes_goal = _toposort_nodes(GsE, sm_nodes_goal)
+
+			stop_pm_tids: set[int] = set()
+			for lin in prereq_lineages:
+				for (_r, tp_tid) in lin.tps:
+					stop_pm_tids.add(int(tp_tid))
+			pm_roots_goal = [int(tp_tid) for (_r, tp_tid) in g.tps]
+			needed_pm = backward_closure_tids_until(GpE, pm_roots_goal, stop_pm_tids)
+			pm_nodes_goal = _filter_nodes(GpE, set(needed_pm), stop_tids=set(stop_pm_tids))
+			pm_nodes_goal = _dedup_shared_collectives(GpE, pm_nodes_goal)
+			pm_nodes_goal = _toposort_nodes(GpE, pm_nodes_goal)
+
+			goal_slices.append(GoalSlice(goal=g, sm_nodes=sm_nodes_goal, pm_nodes=pm_nodes_goal))
 	
 	# Print dependency info
 	print("Goal dependencies (for incremental proofs):")
@@ -1149,6 +1306,8 @@ def main() -> None:
 		goals=selected,
 		goal_deps=goal_deps,
 		intermediate_lineages=intermediate_lineages,
+		goal_slices=goal_slices,
+		goals_out_dir=Path(args.goals_out_dir) if args.split_goals else None,
 	)
 
 	print(f"Wrote Lean spec to: {out_path}")
