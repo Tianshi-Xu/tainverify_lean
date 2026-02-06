@@ -12,9 +12,20 @@ PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
         --dp_size 1 \
         --pp_size 1 \
         --tp_size 1 \
-        --gbs 16 \
-        --mbs 16 
+        --gbs 128 \
+        --mbs 128 
 
+PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
+    --nproc_per_node=1  \
+    genmodel/gen_llama3.py --policy tp \
+        --layers 1 \
+        --hidden 4096\
+        --heads 32\
+        --dp_size 1 \
+        --pp_size 1 \
+        --tp_size 4 \
+        --gbs 128 \
+        --mbs 128
 """
 import sys
 sys.setrecursionlimit(10000)
@@ -24,7 +35,7 @@ import shutil
 import torch
 
 import nnscaler
-import examples.vision.swin.policy.gallery as gallery
+# import nnscaler.examples.vision.swin.policy.gallery as gallery
 from nnscaler.parallel import parallelize, ComputeConfig
 
 from genmodel.model.llama3 import Transformer, ModelArgs
@@ -70,9 +81,6 @@ model_args.n_heads = args.heads
 model_args.max_seq_len = args.seqlen
 
 nnscaler.init()
-if torch.distributed.get_world_size() != args.dp_size * args.pp_size * args.tp_size:
-    raise ValueError(
-        'world size should be equal to dp_size * pp_size * tp_size')
 if args.gbs % args.mbs != 0:
     raise ValueError(
         'global batch size should be divisible by micro batch size')
@@ -89,15 +97,12 @@ position_ids = 0
 dummy_input = {"tokens": input_ids, "start_pos": position_ids}
 # get policy
 policy_name = 'pas_' + args.policy
-if policy_name in gallery.__dict__:
-    policy = gallery.__dict__[policy_name]
-else:
-    policy = args.policy  # use the builtin policies
+policy = args.policy  # use the builtin policies
 
 # compute_config
 compute_config = ComputeConfig(
     plan_ngpus=args.pp_size * args.tp_size,
-    runtime_ngpus=torch.distributed.get_world_size(),
+    runtime_ngpus=args.dp_size * args.tp_size * args.pp_size,   
     use_zero=args.zero,
     use_end2end=True,
     constant_folding=True,

@@ -4,110 +4,65 @@
 """
 PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
     --nproc_per_node=1  \
-    genmodel/gen_mlp.py --policy dp \
+    genmodel/gen_attn.py --policy dp \
         --dim 128 \
-        --layers 2 \
+        --num_heads 8 \
+        --layers 1 \
+        --seq_len 64 \
         --dp_size 1 \
         --pp_size 1 \
         --tp_size 1 \
-        --gbs 128 \
-        --mbs 128 
+        --gbs 16 \
+        --mbs 16 
 
 PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
     --nproc_per_node=1  \
-    genmodel/gen_mlp.py --policy hybrid \
+    genmodel/gen_attn.py --policy hybrid \
         --dim 1024 \
+        --num_heads 16 \
         --layers 1 \
+        --seq_len 128 \
         --dp_size 2 \
         --pp_size 2 \
         --tp_size 2 \
         --gbs 1024 \
         --mbs 256
 
-
 PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
     --nproc_per_node=1  \
-    genmodel/gen_mlp.py --policy tp \
+    genmodel/gen_attn.py --policy tp \
         --dim 128 \
-        --layers 1 \
+        --num_heads 8 \
+        --layers 2 \
+        --seq_len 64 \
         --dp_size 1 \
         --pp_size 1 \
         --tp_size 4 \
-        --gbs 128 \
-        --mbs 128
-
-PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
-    --nproc_per_node=8  \
-    genmodel/gen_mlp.py --policy hybrid \
-        --dim 1024 \
-        --layers 10 \
-        --dp_size 2  \
-        --pp_size 2 \
-        --tp_size 2 \
-        --gbs 1024 \
-        --mbs 256
-
-        
-PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
-    --nproc_per_node=1  \
-    genmodel/gen_mlp.py --policy dp \
-        --dim 1024 \
-        --layers 10 \
-        --dp_size 1  \
-        --pp_size 1 \
-        --tp_size 1 \
-        --gbs 1024 \
-        --mbs 1024
-
-
-PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
-    --nproc_per_node=8  \
-    genmodel/gen_mlp.py --policy hybrid \
-        --dim 1024 \
-        --layers 2 \
-        --dp_size 2  \
-        --pp_size 2 \
-        --tp_size 2 \
-        --gbs 16 \
-        --mbs 4
-
-PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
-    --nproc_per_node=1  \
-    genmodel/gen_mlp.py --policy dp \
-        --dim 1024 \
-        --layers 1 \
-        --dp_size 1  \
-        --pp_size 1 \
-        --tp_size 1 \
-        --gbs 16 \
-        --mbs 16
-
-PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
-    --nproc_per_node=3  \
-    genmodel/gen_mlp.py --policy tp \
-        --layers 2 \
-        --dp_size 1 \
-        --pp_size 1 \
-        --tp_size 3 \
-        --gbs 16 \
-        --mbs 16
-
-PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
-    --nproc_per_node=4  \
-    genmodel/gen_mlp.py --policy hybrid \
-        --layers 2 \
-        --dp_size 1 \
-        --pp_size 2 \
-        --tp_size 2 \
         --gbs 16 \
         --mbs 16
 
 PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
     --nproc_per_node=2  \
-    genmodel/gen_mlp.py --policy tp \
+    genmodel/gen_attn.py --policy tp \
+        --dim 128 \
+        --num_heads 8 \
         --layers 2 \
+        --seq_len 64 \
         --dp_size 1 \
         --pp_size 1 \
+        --tp_size 2 \
+        --gbs 16 \
+        --mbs 16
+
+PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
+    --nproc_per_node=4  \
+    genmodel/gen_attn.py --policy hybrid \
+        --dim 256 \
+        --num_heads 8 \
+        --layers 2 \
+        --seq_len 64 \
+        --dp_size 1 \
+        --pp_size 2 \
         --tp_size 2 \
         --gbs 16 \
         --mbs 16
@@ -118,14 +73,16 @@ import torch
 import nnscaler
 from nnscaler.parallel import parallelize, ComputeConfig
 
-from model.mlp import MLP
+from model.attn import Attention
 
 
 import argparse
-parser = argparse.ArgumentParser(description='MLP example')
+parser = argparse.ArgumentParser(description='Attention example')
 parser.add_argument('--policy', type=str, help='policy choice, starting with "PAS"')
 parser.add_argument('--dim', type=int, default=1024, help='model hidden size')
-parser.add_argument('--layers', type=int, default=16, help='number of linear layers')
+parser.add_argument('--num_heads', type=int, default=8, help='number of attention heads')
+parser.add_argument('--layers', type=int, default=1, help='number of attention layers')
+parser.add_argument('--seq_len', type=int, default=128, help='sequence length')
 parser.add_argument('--gbs', type=int, default=4, help='global batch size')
 parser.add_argument('--mbs', type=int, default=4, help='micro batch size')
 parser.add_argument('--fp16', action='store_true', default=False, help='use fp16 for the training')
@@ -142,13 +99,13 @@ if args.gbs % args.mbs != 0:
 
 
 # model
-model = MLP(dim=args.dim, nlayers=args.layers)
+model = Attention(dim=args.dim, num_heads=args.num_heads, nlayers=args.layers)
 
 # dummy_input
 def dummy_data():
     return torch.randn(
-        args.mbs, args.dim, device=torch.cuda.current_device())
-dummy_input = {"data": dummy_data()}
+        args.mbs, args.seq_len, args.dim, device=torch.cuda.current_device())
+dummy_input = {"x": dummy_data()}
 
 # get policy
 policy_name = 'pas_' + args.policy
@@ -175,6 +132,8 @@ compute_config=ComputeConfig(
     },
     user_config={
         'mbs': args.mbs,
+        'seq_len': args.seq_len,
+        'num_heads': args.num_heads,
     }
 )
 
@@ -188,12 +147,6 @@ pmodel = parallelize(
     gen_savedir='./.nnscaler',
     reuse="override",
     load_module=False,
-    # instance_name: Optional[str] = None,
-    # load_module: bool = True,
-    # module_dtype:  Optional[torch.dtype] = None,
-    # module_fn: Optional[Callable[[], torch.nn.Module]] = None,
-    # init_module_params: bool = True,
-    # broadcast_strategy: Union[str, BroadcastGenFilesStrategy] = 'none',
 )
 
 
@@ -206,8 +159,10 @@ gbs = args.gbs
 mbs = args.mbs
 dim = args.dim
 layers = args.layers
+seq_len = args.seq_len
+num_heads = args.num_heads
 nm = gbs//dp//mbs if args.policy in ["hybrid", "pp"] else 1
-fname = f"mlp_mgener_dp{args.dp_size}_pp{args.pp_size}_tp{args.tp_size}_nm{nm}_gbs{gbs}_dim{dim}_ly{layers}"
+fname = f"attn_mgener_dp{dp}_pp{pp}_tp{tp}_nm{nm}_gbs{gbs}_dim{dim}_seq{seq_len}_nh{num_heads}_ly{layers}"
 
 file = "mgener.pkl"
 dst = f"genmodel/mgeners/{fname}.pkl"

@@ -84,6 +84,22 @@ def parse_args() -> argparse.Namespace:
 		),
 	)
 	p.add_argument(
+		"--include-intermediate-goals",
+		action="store_true",
+		help=(
+			"Also treat intermediate tensors (not just leaf outputs) as separate goals. "
+			"This produces smaller per-goal graphs but more goals overall."
+		),
+	)
+	p.add_argument(
+		"--use-tid-goal-ids",
+		action="store_true",
+		help=(
+			"Use tensor IDs for Goal file names instead of sequential IDs (1, 2, 3, ...). "
+			"By default, sequential numbering is used for readability."
+		),
+	)
+	p.add_argument(
 		"--goals-out-dir",
 		default=str(ROOT / "trainverify" / "denote"),
 		help="Output directory for per-goal Lean files when --split-goals is enabled.",
@@ -364,6 +380,21 @@ def lean_list_pairs(pairs: Sequence[Tuple[int, int]]) -> str:
 	return "[" + ", ".join(f"({int(r)}, {int(t)})" for r, t in pairs) + "]"
 
 
+def _all_tensor_shapes_from_graph(G: Any) -> Dict[int, List[int]]:
+	"""Get shapes for ALL tensors in the graph (not just initial ones)."""
+	shapes: Dict[int, List[int]] = {}
+	for t in G.tensors():
+		tid = getattr(t, "tid", None)
+		if tid is None:
+			continue
+		try:
+			shp = [int(x) for x in list(G.tensor_shape(t))]
+			shapes[int(tid)] = shp
+		except Exception:
+			pass
+	return shapes
+
+
 def _shape_init_from_graph_by_tid(G: Any, tid: int) -> Tuple[Optional[List[int]], Optional[bool]]:
 	tensors = list(G.tensors())
 	t_any = next((t for t in tensors if int(getattr(t, "tid", -1)) == int(tid)), None)
@@ -425,18 +456,30 @@ def _init_tids_from_kept_nodes(G: Any, kept_nodes: Sequence[Any]) -> List[int]:
 
 
 def _emit_init_env(
-	lines: List[str], *, name: str, G: Any, kept_nodes: Sequence[Any], prefer_shapes: Optional[Dict[int, List[int]]] = None
+	lines: List[str], *, name: str, G: Any, kept_nodes: Sequence[Any], prefer_shapes: Optional[Dict[int, List[int]]] = None,
+	emit_all_shapes: bool = False
 ) -> None:
-	init_tids = _init_tids_from_kept_nodes(G, kept_nodes)
-	pairs: List[Tuple[int, List[int]]] = []
-	for tid in init_tids:
-		if prefer_shapes is not None and int(tid) in prefer_shapes:
-			shp = list(prefer_shapes[int(tid)])
-		else:
-			shp, _init = _shape_init_from_graph_by_tid(G, tid)
-		if shp is None:
-			continue
-		pairs.append((int(tid), [int(x) for x in shp]))
+	"""Emit initial tensor shapes for shape checking.
+	
+	If emit_all_shapes is True, emit shapes for ALL tensors (not just initial ones).
+	This is needed for operations like view/reshape where output shape cannot be
+	inferred from input shape alone.
+	"""
+	if emit_all_shapes:
+		# Get all tensor shapes from the graph
+		all_shapes = _all_tensor_shapes_from_graph(G)
+		pairs: List[Tuple[int, List[int]]] = sorted(all_shapes.items())
+	else:
+		init_tids = _init_tids_from_kept_nodes(G, kept_nodes)
+		pairs = []
+		for tid in init_tids:
+			if prefer_shapes is not None and int(tid) in prefer_shapes:
+				shp = list(prefer_shapes[int(tid)])
+			else:
+				shp, _init = _shape_init_from_graph_by_tid(G, tid)
+			if shp is None:
+				continue
+			pairs.append((int(tid), [int(x) for x in shp]))
 
 	lines.append(f"def {name}InitShapes : List (Tid × Shape) := [")
 	for (tid, shp) in pairs:
@@ -474,7 +517,20 @@ def emit_lean_spec(
 	intermediate_lineages: Optional[Dict[int, SelectedLineage]] = None,
 	goal_slices: Optional[List["GoalSlice"]] = None,
 	goals_out_dir: Optional[Path] = None,
+	use_tid_goal_ids: bool = False,
 ) -> None:
+	# Build mapping from goal ts to sequential id (1-based) by default
+	goal_ts_to_seq_id: Dict[int, int] = {}
+	if not use_tid_goal_ids:
+		for i, g in enumerate(goals, start=1):
+			goal_ts_to_seq_id[int(g.ts)] = i
+	
+	def _goal_id(ts: int) -> str:
+		"""Return goal identifier: sequential id by default, else tensor id."""
+		if (not use_tid_goal_ids) and ts in goal_ts_to_seq_id:
+			return str(goal_ts_to_seq_id[ts])
+		return str(ts)
+	
 	lines: List[str] = []
 	# NOTE: In Lean, `import` must come before any commands. A module doc comment
 	# `/-! ... -/` counts as a command, so we use a plain block comment here.
@@ -492,6 +548,29 @@ def emit_lean_spec(
 	lines.append("")
 
 	def _emit_graph(name: str, nodes: List[Any], G: Any) -> None:
+		"""Emit a GraphDecl definition.
+		
+		Special handling for CROSS_DP_WRED: since this is an inplace reduction where
+		all ranks share the same inputs and each outputs one of those inputs,
+		we emit a single node with all inputs and all outputs.
+		"""
+		# Build mapping for CROSS_DP_WRED: group by sorted inputs
+		wred_groups: Dict[tuple[int, ...], List[Any]] = {}
+		for n in nodes:
+			op = _safe_str_op(G.node_opname(n))
+			if "CROSS_DP_WRED" not in op:
+				continue
+			ins = tuple(sorted(int(t.tid) for t in G.node_inputs(n)))
+			wred_groups.setdefault(ins, []).append(n)
+		
+		# Collect all outputs for each WRED group
+		wred_all_outs: Dict[tuple[int, ...], List[int]] = {}
+		for ins, ns in wred_groups.items():
+			all_outs = []
+			for n in ns:
+				all_outs.extend(int(t.tid) for t in G.node_outputs(n))
+			wred_all_outs[ins] = sorted(set(all_outs))
+		
 		lines.append(f"def {name} : GraphDecl := by")
 		# numRanks: SM is 1, PM is inferred from max rank + 1.
 		if name == "sm" or name.startswith("sm_"):
@@ -500,11 +579,23 @@ def emit_lean_spec(
 			num_ranks = max((_node_rank(n) for n in nodes), default=0) + 1
 		lines.append(f"  refine {{ numRanks := {num_ranks}, nodes := ?_ }}")
 		lines.append("  exact [")
+		
+		seen_wred: set[tuple[int, ...]] = set()
 		for n in nodes:
-			op = escape_lean_string(_safe_str_op(G.node_opname(n)))
+			op_str = _safe_str_op(G.node_opname(n))
+			op = escape_lean_string(op_str)
 			ins = [int(t.tid) for t in G.node_inputs(n)]
 			outs = [int(t.tid) for t in G.node_outputs(n)]
 			rank = _node_rank(n)
+			
+			# Special handling for CROSS_DP_WRED
+			if "CROSS_DP_WRED" in op_str:
+				ins_key = tuple(sorted(ins))
+				if ins_key in seen_wred:
+					continue  # Skip duplicate WRED nodes
+				seen_wred.add(ins_key)
+				# Use all outputs from all ranks
+				outs = wred_all_outs.get(ins_key, outs)
 
 			def _is_consecutive(xs: List[int]) -> tuple[bool, int, int]:
 				if not xs:
@@ -536,8 +627,11 @@ def emit_lean_spec(
 	# This is crucial for the decidable `graphShapesCheck` gate.
 	_sm_prefer: Dict[int, List[int]] = _build_sm_prefer(sm_graph, sm_nodes)
 
-	_emit_init_env(lines, name="sm", G=sm_graph, kept_nodes=sm_nodes)
-	_emit_init_env(lines, name="pm", G=pm_graph, kept_nodes=pm_nodes, prefer_shapes=_sm_prefer)
+	# emit_all_shapes=True: Output shapes for ALL tensors, not just initial ones.
+	# This is needed because operations like view/reshape have output shapes that
+	# cannot be inferred from input shapes alone.
+	_emit_init_env(lines, name="sm", G=sm_graph, kept_nodes=sm_nodes, emit_all_shapes=True)
+	_emit_init_env(lines, name="pm", G=pm_graph, kept_nodes=pm_nodes, prefer_shapes=_sm_prefer, emit_all_shapes=True)
 
 	def _emit_goal_def(def_name: str, g: SelectedLineage, *, for_init: bool) -> None:
 		ts_shape = _shape_init_from_graph_by_tid(sm_graph, g.ts)[0] or []
@@ -604,7 +698,8 @@ def emit_lean_spec(
 	lines.append("")
 	goal_def_names: List[str] = []
 	for g in goals:
-		def_name = f"goal_{g.ts}"
+		gid = _goal_id(g.ts)
+		def_name = f"goal_{gid}"
 		goal_def_names.append(def_name)
 		_emit_goal_def(def_name, g, for_init=False)
 
@@ -776,8 +871,10 @@ def emit_lean_spec(
 			lines.append(f"  CoarseLineageHoldsWithInit sm pm {def_name} smInitEnv pmInitEnv initGoals")
 			lines.append("")
 
-	for def_name in goal_def_names:
-		goal_ts = int(def_name.split("_")[1])  # Extract ts from "goal_XXX"
+	for i, g in enumerate(goals):
+		goal_ts = int(g.ts)
+		gid = _goal_id(goal_ts)
+		def_name = f"goal_{gid}"
 		dep = deps_by_ts.get(goal_ts)
 		
 		# Check if this goal has prerequisites
@@ -785,7 +882,7 @@ def emit_lean_spec(
 			prereq_goal_names = [f"intermediateGoal_{inter_ts}" for (inter_ts, _) in dep.prereq_intermediate_goals]
 			prereq_list = "[" + ", ".join(prereq_goal_names) + "]"
 			
-			lines.append(f"-- goal_{goal_ts} depends on intermediate tensors: {[ts for (ts, _) in dep.prereq_intermediate_goals]}")
+			lines.append(f"-- goal_{gid} (tid={goal_ts}) depends on intermediate tensors: {[ts for (ts, _) in dep.prereq_intermediate_goals]}")
 			lines.append(f"def {def_name}_prereqs : List LineageGoal := {prereq_list}")
 			lines.append("")
 			
@@ -803,10 +900,11 @@ def emit_lean_spec(
 			lines.append(f"  CoarseLineageHoldsWithInit sm pm {def_name} smInitEnv pmInitEnv initGoals")
 			lines.append("")
 
-		# One proof stub per observable lineage goal
-		lines.append(f"theorem prove_{def_name} : {def_name}_stmt := by")
-		lines.append("  sorry")
-		lines.append("")
+		# One proof stub per observable lineage goal (only emit sorry if not using split-goals)
+		if goal_slices is None:
+			lines.append(f"theorem prove_{def_name} : {def_name}_stmt := by")
+			lines.append("  sorry")
+			lines.append("")
 
 	lines.append("def all_goals_stmt : Prop :=")
 	lines.append("  ∀ g ∈ goals, CoarseLineageHoldsWithInit sm pm g smInitEnv pmInitEnv initGoals")
@@ -912,11 +1010,12 @@ def emit_lean_spec(
 		lines.append("")
 		lines.append("The goals have the following dependency structure:")
 		for dep in goal_deps:
+			gid = _goal_id(dep.goal_ts)
 			if dep.prereq_intermediate_goals:
 				prereq_tids = [ts for (ts, _) in dep.prereq_intermediate_goals]
-				lines.append(f"- goal_{dep.goal_ts} depends on intermediate tensors: {prereq_tids}")
+				lines.append(f"- goal_{gid} (tid={dep.goal_ts}) depends on intermediate tensors: {prereq_tids}")
 			else:
-				lines.append(f"- goal_{dep.goal_ts} has no prerequisites (base case)")
+				lines.append(f"- goal_{gid} (tid={dep.goal_ts}) has no prerequisites (base case)")
 		lines.append("")
 		lines.append("To prove `goal_X_stmt` from `goal_X_stmt_incremental`, use")
 		lines.append("`CoarseLineageHoldsWithInit_of_incremental` with proofs of the prerequisite")
@@ -928,18 +1027,19 @@ def emit_lean_spec(
 		for dep in goal_deps:
 			if dep.prereq_intermediate_goals:
 				goal_ts = dep.goal_ts
+				gid = _goal_id(goal_ts)
 				prereq_goal_names = [f"intermediateGoal_{inter_ts}" for (inter_ts, _) in dep.prereq_intermediate_goals]
 				
-				lines.append(f"theorem goal_{goal_ts}_of_incremental")
-				lines.append(f"    (hincr : goal_{goal_ts}_stmt_incremental)")
+				lines.append(f"theorem goal_{gid}_of_incremental")
+				lines.append(f"    (hincr : goal_{gid}_stmt_incremental)")
 				for pg in prereq_goal_names:
 					lines.append(f"    (h{pg} : {pg}_stmt)")
-				lines.append(f"    : goal_{goal_ts}_stmt := by")
-				lines.append(f"  unfold goal_{goal_ts}_stmt goal_{goal_ts}_stmt_incremental at *")
+				lines.append(f"    : goal_{gid}_stmt := by")
+				lines.append(f"  unfold goal_{gid}_stmt goal_{gid}_stmt_incremental at *")
 				lines.append(f"  apply CoarseLineageHoldsWithInit_of_incremental")
 				lines.append(f"  · exact hincr")
 				lines.append(f"  · intro g hg")
-				lines.append(f"    simp only [goal_{goal_ts}_prereqs, List.mem_cons, List.mem_nil_iff] at hg")
+				lines.append(f"    simp only [goal_{gid}_prereqs, List.mem_cons, List.mem_nil_iff] at hg")
 				
 				# Generate pattern match for each prerequisite
 				if len(prereq_goal_names) == 1:
@@ -970,13 +1070,14 @@ def emit_lean_spec(
 			for dep in goal_deps:
 				deps_by_ts[dep.goal_ts] = dep
 
-		for sl in goal_slices:
+		for i, sl in enumerate(goal_slices):
 			goal_ts = int(sl.goal.ts)
+			gid = _goal_id(goal_ts)
 			dep = deps_by_ts.get(goal_ts)
-			file_path = goals_out_dir / f"Goal_{goal_ts}.lean"
+			file_path = goals_out_dir / f"Goal_{gid}.lean"
 			goal_lines: List[str] = []
 			goal_lines.append("/- Auto-generated by Verdict/graph_to_lean.py")
-			goal_lines.append(f"    Goal: {goal_ts}")
+			goal_lines.append(f"    Goal: {gid} (tensor id: {goal_ts})")
 			goal_lines.append("-/")
 			goal_lines.append("import denote.GeneratedData")
 			goal_lines.append("")
@@ -986,8 +1087,8 @@ def emit_lean_spec(
 			goal_lines.append("namespace TrainVerify.Denote.GeneratedGoals")
 			goal_lines.append("")
 
-			sm_name = f"sm_goal_{goal_ts}"
-			pm_name = f"pm_goal_{goal_ts}"
+			sm_name = f"sm_goal_{gid}"
+			pm_name = f"pm_goal_{gid}"
 
 			# Emit sliced graphs
 			def _emit_graph_local(name: str, nodes: List[Any], G: Any) -> None:
@@ -1020,18 +1121,24 @@ def emit_lean_spec(
 			# Local init goals: base initGoals plus prerequisite intermediate goals.
 			if dep and dep.prereq_intermediate_goals:
 				goal_lines.append(
-					f"def goal_{goal_ts}_cut_initGoals : List LineageGoal := initGoals ++ goal_{goal_ts}_prereqs"
+					f"def goal_{gid}_cut_initGoals : List LineageGoal := initGoals ++ goal_{gid}_prereqs"
 				)
 			else:
-				goal_lines.append(f"def goal_{goal_ts}_cut_initGoals : List LineageGoal := initGoals")
+				goal_lines.append(f"def goal_{gid}_cut_initGoals : List LineageGoal := initGoals")
 			goal_lines.append("")
 
-			goal_lines.append(f"def goal_{goal_ts}_stmt_cut : Prop :=")
+			goal_lines.append(f"def goal_{gid}_stmt_cut : Prop :=")
 			goal_lines.append(
-				f"  CoarseLineageHoldsWithInit {sm_name} {pm_name} goal_{goal_ts}"
-				f" {sm_name}InitEnv {pm_name}InitEnv goal_{goal_ts}_cut_initGoals"
+				f"  CoarseLineageHoldsWithInit {sm_name} {pm_name} goal_{gid}"
+				f" {sm_name}InitEnv {pm_name}InitEnv goal_{gid}_cut_initGoals"
 			)
 			goal_lines.append("")
+
+			# Add sorry-filled proof stub for the cut (sliced) version only
+			goal_lines.append(f"theorem prove_goal_{gid}_cut : goal_{gid}_stmt_cut := by")
+			goal_lines.append("  sorry")
+			goal_lines.append("")
+
 			goal_lines.append("end TrainVerify.Denote.GeneratedGoals")
 			goal_lines.append("")
 
@@ -1100,8 +1207,24 @@ def main() -> None:
 		Ts = getattr(l, "Ts")
 		by_ts.setdefault(int(Ts.tid), []).append(l)
 
+	# Compute init tids early so we can exclude them from goals
+	# (init tids are assumptions, not things to prove)
+	# We need sm_nodes first, so we do a preliminary backward closure from all by_ts keys
+	all_lineage_tids = sorted(by_ts.keys())
+	_preliminary_sm_needed = backward_closure_tids(GsC, all_lineage_tids)
+	_preliminary_sm_nodes = [n for n in GsE.nodes() if any(
+		int(t.tid) in set(_preliminary_sm_needed) for t in GsE.node_outputs(n)
+	) and "DATALOADER" not in _safe_str_op(GsE.node_opname(n))]
+	sm_init_tids_preliminary = set(_init_tids_from_kept_nodes(GsE, _preliminary_sm_nodes))
+
 	# Observable outputs: aligned leaves by default.
-	candidates = leaf_output_tids(GsC)
+	# If --include-intermediate-goals, also include all intermediate tensors with lineages,
+	# but exclude init tids (they are assumptions, not goals to prove).
+	if args.include_intermediate_goals:
+		# Use all tensors that have lineage (not just leaves), excluding init tids
+		candidates = sorted([tid for tid in by_ts.keys() if tid not in sm_init_tids_preliminary])
+	else:
+		candidates = leaf_output_tids(GsC)
 	obs_tids = [tid for tid in candidates if tid in by_ts]
 	if args.max_goals and args.max_goals > 0:
 		obs_tids = obs_tids[: int(args.max_goals)]
@@ -1148,11 +1271,22 @@ def main() -> None:
 
 		We keep a single representative (lowest rank) for each collective identified by
 		(op, inputs, outputs).
+		
+		CROSS_DP_WRED is a special case: all ranks share the same inputs but each outputs
+		a different tid. We group by (op, sorted(inputs)) and keep only rank 0's node,
+		but modify its outputs to include all tids from all ranks.
 		"""
+		def _is_collective(op: str) -> bool:
+			return ("AllReducePrim" in op) or ("AllGatherPrim" in op)
+		
+		def _is_cross_dp_wred(op: str) -> bool:
+			return "CROSS_DP_WRED" in op
+		
+		# Standard collectives: group by (op, ins, outs)
 		groups: Dict[tuple[str, tuple[int, ...], tuple[int, ...]], List[Any]] = {}
 		for n in nodes:
 			op = _safe_str_op(G.node_opname(n))
-			if ("AllReducePrim" not in op) and ("AllGatherPrim" not in op):
+			if not _is_collective(op):
 				continue
 			ins = tuple(int(t.tid) for t in G.node_inputs(n))
 			outs = tuple(int(t.tid) for t in G.node_outputs(n))
@@ -1160,15 +1294,31 @@ def main() -> None:
 
 		chosen: set[Any] = set()
 		for (_k, ns) in groups.items():
-			# Prefer the smallest rank.
 			rep = min(ns, key=_node_rank)
 			chosen.add(rep)
+
+		# CROSS_DP_WRED: group by (op, sorted(ins)), keep rank 0
+		wred_groups: Dict[tuple[str, tuple[int, ...]], List[Any]] = {}
+		for n in nodes:
+			op = _safe_str_op(G.node_opname(n))
+			if not _is_cross_dp_wred(op):
+				continue
+			ins = tuple(sorted(int(t.tid) for t in G.node_inputs(n)))
+			wred_groups.setdefault((op, ins), []).append(n)
+		
+		wred_chosen: set[Any] = set()
+		for (_k, ns) in wred_groups.items():
+			rep = min(ns, key=_node_rank)
+			wred_chosen.add(rep)
 
 		out: List[Any] = []
 		for n in nodes:
 			op = _safe_str_op(G.node_opname(n))
-			if ("AllReducePrim" in op) or ("AllGatherPrim" in op):
+			if _is_collective(op):
 				if n in chosen:
+					out.append(n)
+			elif _is_cross_dp_wred(op):
+				if n in wred_chosen:
 					out.append(n)
 			else:
 				out.append(n)
@@ -1308,6 +1458,7 @@ def main() -> None:
 		intermediate_lineages=intermediate_lineages,
 		goal_slices=goal_slices,
 		goals_out_dir=Path(args.goals_out_dir) if args.split_goals else None,
+		use_tid_goal_ids=bool(args.use_tid_goal_ids),
 	)
 
 	print(f"Wrote Lean spec to: {out_path}")

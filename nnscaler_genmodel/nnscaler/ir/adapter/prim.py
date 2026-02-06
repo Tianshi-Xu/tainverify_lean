@@ -507,7 +507,7 @@ class AllReduceAllReducePrim(AllReducePrim):
         self.signature = 'nnscaler.runtime.adapter.nn.allreduce_allreduce'
 
     def __repr__(self) -> str:
-        return f"{self.outputs} = nn.allreduce_allreduce[{self.device}]({self.inputs()}"
+        return f"{self.outputs()} = nn.allreduce_allreduce[{self.device}]({self.inputs()})"
 
 
 class ReduceScatterAllGatherPrim(ReduceScatterPrim):

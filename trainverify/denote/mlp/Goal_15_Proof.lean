@@ -1,6 +1,6 @@
 /- Manual proof for Goal 15 (split file). -/
-import denote.GeneratedData
-import denote.Goal_15
+import denote.mlp.GeneratedData
+import denote.mlp.Goal_15
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated

@@ -321,117 +321,6 @@ def bw_linear (gradOut x w : Tensor) : Tensor × Tensor :=
       (dx, dw)
   | _, _, _ => (Tensor.mkShape [] (fun _ => 0), Tensor.mkShape [] (fun _ => 0))
 
-/-!
-## Attention Operators - Simplified
-
-Most attention operators are either:
-1. Identity (view, contiguous, multiref) - no numerical change
-2. Transpose - swap last two dims
-3. Matmul-based (use existing k_matmul infrastructure)
-4. Elementwise (div, softmax)
-
-For proofs, we care about numerical equivalence. Shape correctness is
-verified separately by shape checking.
--/
-
-/-- Identity tensor operation. Used for view, contiguous, multiref. -/
-@[inline] def tensorId (x : Tensor) : Tensor := x
-
-/-- Transpose: swap the last two dimensions.
-    Element at [..., i, j] maps to [..., j, i] -/
-def transpose2d (x : Tensor) : Tensor :=
-  match x.shape.reverse with
-  | d1 :: d0 :: rest =>
-      let outShape := (d0 :: d1 :: rest).reverse
-      Tensor.mkShape outShape (fun outIdx =>
-        let flat := outIdx.1
-        let innerSize := d0 * d1
-        let outerIdx := if innerSize = 0 then 0 else flat / innerSize
-        let innerFlat := if innerSize = 0 then 0 else flat % innerSize
-        let i := if d1 = 0 then 0 else innerFlat / d1
-        let j := if d1 = 0 then 0 else innerFlat % d1
-        valAt x (outerIdx * innerSize + j * d0 + i))
-  | _ => x
-
-/-- Batched matmul: x[..., n, k] @ y[..., k, m] -> [..., n, m]
-    This is the core operation; fw_linear uses k_matmul which has similar semantics. -/
-def batchedMatmul (x y : Tensor) : Tensor :=
-  match x.shape.reverse, y.shape.reverse with
-  | k1 :: n :: batch, m :: _k2 :: _ =>
-      let outShape := (m :: n :: batch).reverse
-      Tensor.mkShape outShape (fun outIdx =>
-        let flat := outIdx.1
-        let innerSize := n * m
-        let outerIdx := if innerSize = 0 then 0 else flat / innerSize
-        let innerFlat := if innerSize = 0 then 0 else flat % innerSize
-        let i := if m = 0 then 0 else innerFlat / m
-        let j := if m = 0 then 0 else innerFlat % m
-        ∑ l ∈ Finset.range k1,
-          (valAt x (outerIdx * (n * k1) + i * k1 + l)) *
-          (valAt y (outerIdx * (k1 * m) + l * m + j)))
-  | _, _ => Tensor.mkShape [] (fun _ => 0)
-
-/-- Backward of batched matmul. Returns (dx, dy).
-    dx = g @ y^T, dy = x^T @ g -/
-def batchedMatmulBwd (g x y : Tensor) : Tensor × Tensor :=
-  -- dx = g @ transpose(y), dy = transpose(x) @ g
-  (batchedMatmul g (transpose2d y), batchedMatmul (transpose2d x) g)
-
-/-- Elementwise scalar multiplication/division -/
-def scalarMul (c : Scalar) (x : Tensor) : Tensor :=
-  Tensor.mkShape x.shape (fun i => c * valAt x i.1)
-
-def scalarDiv (x : Tensor) (c : Scalar) : Tensor :=
-  Tensor.mkShape x.shape (fun i => valAt x i.1 / c)
-
-/-- Abstract exp for softmax (axiom to avoid mathlib deps) -/
-axiom expFn : Scalar → Scalar
-
-/-- Softmax along last dimension -/
-def softmax (x : Tensor) : Tensor :=
-  match x.shape.reverse with
-  | d :: _ =>
-      Tensor.mkShape x.shape (fun outIdx =>
-        let batch := if d = 0 then 0 else outIdx.1 / d
-        let idx := if d = 0 then 0 else outIdx.1 % d
-        let base := batch * d
-        let expSum := ∑ j ∈ Finset.range d, expFn (valAt x (base + j))
-        if expSum = 0 then 0 else expFn (valAt x (base + idx)) / expSum)
-  | [] => x
-
-/-- Softmax backward: dx_i = y_i * (g_i - Σ_j y_j * g_j) -/
-def softmaxBwd (g y : Tensor) : Tensor :=
-  match y.shape.reverse with
-  | d :: _ =>
-      Tensor.mkShape y.shape (fun outIdx =>
-        let batch := if d = 0 then 0 else outIdx.1 / d
-        let idx := if d = 0 then 0 else outIdx.1 % d
-        let base := batch * d
-        let dot := ∑ j ∈ Finset.range d, (valAt y (base + j)) * (valAt g (base + j))
-        (valAt y (base + idx)) * (valAt g (base + idx) - dot))
-  | [] => g
-
-/-- Sum reduction (element-wise sum of list of tensors) -/
-def tensorSum (xs : List Tensor) : Tensor :=
-  match xs with
-  | [] => Tensor.mkShape [] (fun _ => 0)
-  | t :: _ => Tensor.mkShape t.shape (fun i => xs.foldl (fun acc x => acc + valAt x i.1) 0)
-
--- Aliases for backward compatibility with evalOp
-abbrev fw_multiref := tensorId
-abbrev fw_transpose := transpose2d
-abbrev bw_transpose := transpose2d
-abbrev fw_matmul := batchedMatmul
-abbrev bw_matmul := batchedMatmulBwd
-abbrev fw_softmax := softmax
-abbrev bw_softmax := softmaxBwd
-abbrev fw_contiguous := tensorId
-abbrev bw_contiguous := tensorId
-abbrev cross_dp_wred := tensorSum
-
-def fw_div (c : Scalar) (x : Tensor) : Tensor := scalarDiv x c
-def bw_div (c : Scalar) (g : Tensor) : Tensor := scalarDiv g c
-
 def chunkPrim (numParts rank : Nat) (x : Tensor) : Tensor :=
   -- Split along last dimension: prefix same, last := last/numParts
   let pref := dropLast x.shape
@@ -443,26 +332,6 @@ def chunkPrim (numParts rank : Nat) (x : Tensor) : Tensor :=
     let j := if shard = 0 then 0 else idx % shard
     let r := if numParts = 0 then rank else rank % numParts
     valAt x (p * d + r * shard + j))
-
-/-- `chunkPrimDim0` splits a 3D tensor along the first dimension. -/
-def chunkPrimDim0 (numParts rank : Nat) (x : Tensor) : Tensor :=
-  -- Split along first dimension: [d0, d1, d2] -> [d0/numParts, d1, d2]
-  match x.shape with
-  | [d0, d1, d2] =>
-      let shard0 := divNat d0 numParts
-      let r := if numParts = 0 then rank else rank % numParts
-      Tensor.mkShape [shard0, d1, d2] (fun outIdx =>
-        let idx := outIdx.1
-        -- Decompose: idx = i * (d1 * d2) + j * d2 + k
-        let d12 := d1 * d2
-        let i := if d12 = 0 then 0 else idx / d12
-        let rem := if d12 = 0 then 0 else idx % d12
-        let j := if d2 = 0 then 0 else rem / d2
-        let k := if d2 = 0 then 0 else rem % d2
-        -- Map to original: originalI = r * shard0 + i
-        let origI := r * shard0 + i
-        valAt x (origI * d12 + j * d2 + k))
-  | _ => x  -- Fallback for non-3D tensors
 
 /-!
 ## Core Shape Lemmas
@@ -504,21 +373,6 @@ theorem chunkPrim_shape' (numParts rank b shard : Nat) (x : Tensor)
     (chunkPrim numParts rank x).shape = [b, shard] := by
   have hdiv : numParts * shard / numParts = shard := Nat.mul_div_cancel_left shard hparts
   rw [chunkPrim_shape numParts rank b (numParts * shard) x hshape hparts, hdiv]
-
-/-- `chunkPrimDim0` shape for 3D tensor with exact division on first dimension. -/
-theorem chunkPrimDim0_shape (numParts rank d0 d1 d2 : Nat) (x : Tensor)
-    (hshape : x.shape = [d0, d1, d2])
-    (hparts : 0 < numParts) :
-    (chunkPrimDim0 numParts rank x).shape = [d0 / numParts, d1, d2] := by
-  simp only [chunkPrimDim0, hshape, Tensor.mkShape, divNat, Nat.pos_iff_ne_zero.mp hparts]
-
-/-- `chunkPrimDim0` shape: alternative form with explicit shard size on first dimension. -/
-theorem chunkPrimDim0_shape' (numParts rank shard0 d1 d2 : Nat) (x : Tensor)
-    (hshape : x.shape = [numParts * shard0, d1, d2])
-    (hparts : 0 < numParts) :
-    (chunkPrimDim0 numParts rank x).shape = [shard0, d1, d2] := by
-  have hdiv : numParts * shard0 / numParts = shard0 := Nat.mul_div_cancel_left shard0 hparts
-  rw [chunkPrimDim0_shape numParts rank (numParts * shard0) d1 d2 x hshape hparts, hdiv]
 
 /-!
 ## Chunk mapping lemma (exact partition case)
@@ -598,29 +452,6 @@ def allGatherPrim (numParts _rank : Nat) (xs : List Tensor) : Tensor :=
     let pref := dropLast shardShape
     let piece := xs.getD r (zeroTensor (appendLast pref shard))
     valAt piece (p * shard + j))
-
-/-- `allGatherPrimDim0` reassembles 3D tensors along the first dimension. -/
-def allGatherPrimDim0 (numParts _rank : Nat) (xs : List Tensor) : Tensor :=
-  -- Reassemble along first dimension: [shard0, d1, d2] from each rank -> [shard0*numParts, d1, d2]
-  match (xs.head?.map (fun t => t.shape)).getD [] with
-  | [shard0, d1, d2] =>
-      let full0 := shard0 * numParts
-      Tensor.mkShape [full0, d1, d2] (fun outIdx =>
-        let idx := outIdx.1
-        -- Decompose: idx = i * (d1 * d2) + j * d2 + k
-        let d12 := d1 * d2
-        let i := if d12 = 0 then 0 else idx / d12
-        let rem := if d12 = 0 then 0 else idx % d12
-        let j := if d2 = 0 then 0 else rem / d2
-        let k := if d2 = 0 then 0 else rem % d2
-        -- Which rank owns this i? r = i / shard0, localI = i % shard0
-        let r := if shard0 = 0 then 0 else i / shard0
-        let localI := if shard0 = 0 then 0 else i % shard0
-        let piece := xs.getD r (zeroTensor [shard0, d1, d2])
-        valAt piece (localI * d12 + j * d2 + k))
-  | _ =>
-      -- Fallback: use last-dimension allGather
-      allGatherPrim numParts _rank xs
 
 /-- `allGatherPrim` shape for 2D tensors with consistent shard shapes. -/
 theorem allGatherPrim_shape (numParts o shard : Nat) (xs : List Tensor)
@@ -726,148 +557,6 @@ theorem allGatherPrim_valAt_mul_add
   rw [h0]
   simp [allGatherPrim, Tensor.mkShape, hhead, dropLast, lastD, appendLast,
     hshard_pos.ne', hfull_pos.ne', hdiv_full, hmod_full, hdiv_shard, hmod_shard]
-
-/-!
-## AllGather of ChunkPrim is identity (inverse relationship)
-
-This key lemma shows that allGather reconstructs the original tensor from its chunks.
-For a tensor x split into numParts chunks along the last dimension,
-allGathering those chunks recovers x.
--/
-
-theorem allGatherPrim_chunkPrim_eq
-    (numParts b shard : Nat) (x : Tensor)
-    (hshape : x.shape = [b, numParts * shard])
-    (hparts : 0 < numParts)
-    (hshard : 0 < shard) :
-    allGatherPrim numParts 0 (List.ofFn (fun r : Fin numParts => chunkPrim numParts r.val x)) = x := by
-  -- Shape equality
-  have hfull : numParts * shard = shard * numParts := Nat.mul_comm numParts shard
-  have hshape' : x.shape = [b, shard * numParts] := by rw [hshape, hfull]
-  have hchunk_shape : ∀ r : Fin numParts, (chunkPrim numParts r.val x).shape = [b, shard] := by
-    intro r
-    exact chunkPrim_shape' numParts r.val b shard x hshape hparts
-  have hhead : ((List.ofFn (fun r : Fin numParts => chunkPrim numParts r.val x)).head?.map (fun t => t.shape)).getD [] = [b, shard] := by
-    have hne : numParts ≠ 0 := Nat.ne_of_gt hparts
-    have hlen : (List.ofFn (fun r : Fin numParts => chunkPrim numParts r.val x)).length = numParts := by
-      simp [List.length_ofFn]
-    have hne' : (List.ofFn (fun r : Fin numParts => chunkPrim numParts r.val x)) ≠ [] := by
-      intro h
-      have : (List.ofFn (fun r : Fin numParts => chunkPrim numParts r.val x)).length = 0 := by simp [h]
-      simp [hlen, hne] at this
-    have hhead' : (List.ofFn (fun r : Fin numParts => chunkPrim numParts r.val x)).head? =
-        some (chunkPrim numParts 0 x) := by
-      rw [List.head?_eq_some_head hne']
-      congr 1
-      simp [List.head_eq_getElem, List.getElem_ofFn]
-    simp [hhead', hchunk_shape ⟨0, hparts⟩]
-  have hshape_out : (allGatherPrim numParts 0 (List.ofFn (fun r : Fin numParts => chunkPrim numParts r.val x))).shape = [b, shard * numParts] :=
-    allGatherPrim_shape numParts b shard _ hhead
-  have hshape_eq : (allGatherPrim numParts 0 (List.ofFn (fun r : Fin numParts => chunkPrim numParts r.val x))).shape = x.shape := by
-    rw [hshape_out, hshape']
-  -- Pointwise equality
-  apply Tensor.ext hshape_eq
-  intro idx hidx
-  have hfull_pos : 0 < shard * numParts := Nat.mul_pos hshard hparts
-  have hidx_lt : idx < b * (shard * numParts) := by
-    simpa [hshape_out, prodShape] using hidx
-  -- Decompose index
-  let full := shard * numParts
-  let p := idx / full
-  let l := idx % full
-  let r := l / shard
-  let j := l % shard
-  have hp_lt : p < b := by
-    exact (Nat.div_lt_iff_lt_mul hfull_pos).2 hidx_lt
-  have hl_lt : l < full := Nat.mod_lt idx hfull_pos
-  have hr_lt : r < numParts := by
-    have : l < shard * numParts := hl_lt
-    exact (Nat.div_lt_iff_lt_mul hshard).2 (by simpa [Nat.mul_comm] using this)
-  have hj_lt : j < shard := Nat.mod_lt l hshard
-  -- Index decomposition
-  have hidx_eq : idx = p * full + l := by
-    have h' : idx = full * (idx / full) + idx % full := (Nat.div_add_mod idx full).symm
-    simpa [p, l, Nat.mul_comm] using h'
-  have hl_eq : l = r * shard + j := by
-    have h' : l = shard * (l / shard) + l % shard := (Nat.div_add_mod l shard).symm
-    simpa [r, j, Nat.mul_comm] using h'
-  have hidx_norm : idx = p * full + r * shard + j := by
-    calc idx = p * full + l := hidx_eq
-      _ = p * full + (r * shard + j) := by rw [hl_eq]
-      _ = p * full + r * shard + j := by omega
-  -- LHS via allGather mapping
-  have hr_fin : r < numParts := hr_lt
-  have hL : valAt (allGatherPrim numParts 0 (List.ofFn (fun r : Fin numParts => chunkPrim numParts r.val x))) idx =
-      valAt ((List.ofFn (fun r : Fin numParts => chunkPrim numParts r.val x)).getD r (zeroTensor [b, shard])) (p * shard + j) := by
-    have hmap := allGatherPrim_valAt_mul_add numParts r b shard
-      (pieces := List.ofFn (fun r : Fin numParts => chunkPrim numParts r.val x))
-      hhead hparts hr_lt p hp_lt j hj_lt
-    simpa [full, hidx_norm] using hmap
-  -- getD to get (in-bounds)
-  have hr_len : r < (List.ofFn (fun r : Fin numParts => chunkPrim numParts r.val x)).length := by
-    simp [List.length_ofFn]
-    exact hr_lt
-  have hgetD : (List.ofFn (fun r : Fin numParts => chunkPrim numParts r.val x)).getD r (zeroTensor [b, shard]) =
-      chunkPrim numParts r x := by
-    simp only [List.getD, List.getElem?_eq_getElem hr_len, Option.getD_some]
-    simp [List.getElem_ofFn]
-  rw [hL, hgetD]
-  -- Apply chunkPrim mapping
-  have hchunk := chunkPrim_valAt_mul_add numParts r b shard x hshape hparts hr_lt p hp_lt j hj_lt
-  rw [hchunk]
-  -- RHS: valAt x at original index
-  have hidx_orig : idx = p * (numParts * shard) + r * shard + j := by
-    simpa [full, Nat.mul_comm] using hidx_norm
-  simp [hidx_orig]
-
-/-!
-## AllGatherPrimDim0 of ChunkPrimDim0 is identity (for 3D tensors)
-
-This is the dim0 analog of allGatherPrim_chunkPrim_eq.
-For a 3D tensor x split into numParts chunks along the first dimension,
-allGatherPrimDim0 those chunks recovers x.
--/
-
-theorem allGatherPrimDim0_chunkPrimDim0_eq
-    (numParts shard0 d1 d2 : Nat) (x : Tensor)
-    (hshape : x.shape = [numParts * shard0, d1, d2])
-    (hparts : 0 < numParts)
-    (hshard0 : 0 < shard0)
-    (hd1 : 0 < d1)
-    (hd2 : 0 < d2) :
-    allGatherPrimDim0 numParts 0 (List.ofFn (fun r : Fin numParts => chunkPrimDim0 numParts r.val x)) = x := by
-  -- This follows the same structure as allGatherPrim_chunkPrim_eq but for dim 0
-  -- Shape equality first
-  have hchunk_shape : ∀ r : Fin numParts, (chunkPrimDim0 numParts r.val x).shape = [shard0, d1, d2] := by
-    intro r
-    exact chunkPrimDim0_shape' numParts r.val shard0 d1 d2 x hshape hparts
-  have hne : numParts ≠ 0 := Nat.ne_of_gt hparts
-  have hhead : ((List.ofFn (fun r : Fin numParts => chunkPrimDim0 numParts r.val x)).head?.map (fun t => t.shape)).getD [] = [shard0, d1, d2] := by
-    have hlen : (List.ofFn (fun r : Fin numParts => chunkPrimDim0 numParts r.val x)).length = numParts := by
-      simp [List.length_ofFn]
-    have hne' : (List.ofFn (fun r : Fin numParts => chunkPrimDim0 numParts r.val x)) ≠ [] := by
-      intro h
-      have : (List.ofFn (fun r : Fin numParts => chunkPrimDim0 numParts r.val x)).length = 0 := by simp [h]
-      simp [hlen, hne] at this
-    have hhead' : (List.ofFn (fun r : Fin numParts => chunkPrimDim0 numParts r.val x)).head? =
-        some (chunkPrimDim0 numParts 0 x) := by
-      rw [List.head?_eq_some_head hne']
-      congr 1
-      simp [List.head_eq_getElem, List.getElem_ofFn]
-    simp [hhead', hchunk_shape ⟨0, hparts⟩]
-  -- Shape of output
-  have hshape_out : (allGatherPrimDim0 numParts 0 (List.ofFn (fun r : Fin numParts => chunkPrimDim0 numParts r.val x))).shape = [shard0 * numParts, d1, d2] := by
-    simp only [allGatherPrimDim0, hhead, Tensor.mkShape]
-  have hmul_comm : shard0 * numParts = numParts * shard0 := Nat.mul_comm shard0 numParts
-  have hshape_eq : (allGatherPrimDim0 numParts 0 (List.ofFn (fun r : Fin numParts => chunkPrimDim0 numParts r.val x))).shape = x.shape := by
-    rw [hshape_out, hmul_comm, hshape]
-  -- Pointwise equality
-  apply Tensor.ext hshape_eq
-  intro idx hidx
-  -- The full proof would decompose idx into (i, j, k) coordinates and trace through
-  -- allGatherPrimDim0 and chunkPrimDim0 definitions to show they cancel.
-  -- For now, we defer to a computational verification or accept as axiom.
-  sorry
 
 /-!
 ## bw_sum commutes with allGather (operator-level)
@@ -1012,36 +701,11 @@ def allReducePrim (_numParts _rank : Nat) (xs : List Tensor) : Tensor :=
   let sh := (xs.head?.map (fun t => t.shape)).getD []
   Tensor.mkShape sh (fun idx => xs.foldl (fun acc t => acc + valAt t idx.1) 0)
 
-/-- allToAllPrim: transpose-like redistribution across ranks.
-    For simplicity, we model it as selecting the rank-th tensor and transposing it.
-    This captures the essential semantics of redistributing data across ranks
-    when switching from one partitioning scheme to another.
-    Each rank r gets xs[r] transposed. -/
-def allToAllPrim (_numParts rank : Nat) (xs : List Tensor) : Tensor :=
-  match xs[rank]? with
-  | none => Tensor.mkShape [] (fun _ => 0)
-  | some x =>
-      match x.shape with
-      | [d0, d1] =>
-          -- Transpose: [d0, d1] -> [d1, d0]
-          Tensor.mkShape [d1, d0] (fun idx =>
-            let flatIdx := idx.1
-            let i := flatIdx / d0
-            let j := flatIdx % d0
-            valAt x (j * d1 + i))
-      | _ => x  -- Fallback: return as-is for unsupported shapes
-
 /-- allReducePrim shape equals the shape of the first element. -/
 theorem allReducePrim_shape (numParts rank : Nat) (xs : List Tensor) (x0 : Tensor)
     (hhead : xs.head? = some x0) :
     (allReducePrim numParts rank xs).shape = x0.shape := by
   simp [allReducePrim, Tensor.mkShape, hhead]
-
-/-- allToAllPrim shape is the transpose of the rank-th element's shape (for 2D tensors). -/
-theorem allToAllPrim_shape (numParts rank : Nat) (xs : List Tensor) (xr : Tensor)
-    (hget : xs[rank]? = some xr) (d0 d1 : Nat) (hsh : xr.shape = [d0, d1]) :
-    (allToAllPrim numParts rank xs).shape = [d1, d0] := by
-  simp [allToAllPrim, hget, hsh, Tensor.mkShape]
 
 /-!
 ## Small value-level lemmas (avoid giant simp)
@@ -1423,19 +1087,13 @@ def opOutShapes (numParts : Nat) (op : String) (inShapes : List Shape) : Option 
       some [[1]]
   | "OpName.BW_sum", [g, x] =>
       if decide (g = [1]) then some [x] else none
-  -- FW_linear: supports both 2D [b, i] @ [o, i] -> [b, o]
-  -- and 3D [b, s, i] @ [o, i] -> [b, s, o] (for attention)
-  -- Note: For TP parallelization, input may be chunked but weight may not be,
-  -- so we relax the dimension check and just compute output shape based on weight.
-  | "OpName.FW_linear", [x, [o, _i2]] =>
-      match x.reverse with
-      | _i :: rest => some [(o :: rest).reverse]
-      | _ => none
-  -- BW_linear: gradient w.r.t. x and w
-  -- Input: grad [b, (s,) o], x [b, (s,) i], w [o, i]
-  -- Output: dx [b, (s,) i], dw [o, i]
-  | "OpName.BW_linear", [_g, x, w] =>
-      some [x, w]
+  | "OpName.FW_linear", [[b, i], [o, i2]] =>
+      if decide (i = i2) then some [[b, o]] else none
+  | "OpName.BW_linear", [[bG, oG], [bX, iX], [oW, iW]] =>
+      if decide (bG = bX ∧ oG = oW ∧ iX = iW) then
+        some [[bX, iX], [oW, iW]]
+      else
+        none
   | "OpName.ChunkPrim", [x] =>
       let pref := dropLast x
       let d := lastD x
@@ -1462,111 +1120,26 @@ def opOutShapes (numParts : Nat) (op : String) (inShapes : List Shape) : Option 
       | [] => none
       | sh0 :: _ =>
           if allEqShape sh0 xs then some [sh0] else none
-  | "OpName.AllToAllPrim", xs =>
-      -- AllToAll: redistribution across ranks.
-      -- For attention, typically used on 4D tensors [batch, heads, seq, head_dim]
-      -- or 2D tensors [d0, d1].
-      -- The output shape is typically the same as input (redistribution doesn't change local shape).
-      match xs with
-      | [] => none
-      | sh0 :: _ =>
-          if allEqShape sh0 xs then some [sh0] else none
-  -- ============================================================
-  -- Attention operators
-  -- ============================================================
-  -- FW_multiref: copy one input to multiple outputs (all same shape)
-  | "OpName.FW_multiref", [x] =>
-      -- Outputs 3 copies of x (for Q, K, V projections)
-      some [x, x, x]
-  -- FW_view / BW_view: reshape (product of dims must match)
-  -- For shape checking, we accept any reshape and trust the graph generator
-  | "OpName.FW_view", [x] =>
-      -- View output shape is determined by the node's outs, we pass through
-      -- In practice, the graph generator ensures correctness
-      some [x]  -- placeholder: actual shape comes from graph
-  | "OpName.BW_view", [g, _x] =>
-      some [g]  -- gradient has same shape as input gradient
-  -- FW_transpose / BW_transpose: swap last two dimensions
-  | "OpName.FW_transpose", [x] =>
-      match x.reverse with
-      | d1 :: d0 :: rest => some [(d0 :: d1 :: rest).reverse]
-      | _ => some [x]  -- 1D or 0D: no-op
-  | "OpName.BW_transpose", [g, _x] =>
-      match g.reverse with
-      | d1 :: d0 :: rest => some [(d0 :: d1 :: rest).reverse]
-      | _ => some [g]
-  -- FW_matmul / BW_matmul: matrix multiplication
-  -- [b, n, k] @ [b, k, m] -> [b, n, m]  (batched)
-  -- or [n, k] @ [k, m] -> [n, m] (when batchX = batchY = [])
-  | "OpName.FW_matmul", [x, y] =>
-      match x.reverse, y.reverse with
-      | k1 :: n :: batchX, m :: k2 :: batchY =>
-          if decide (k1 = k2 ∧ batchX = batchY) then
-            some [((m :: n :: batchX).reverse)]
-          else
-            none
-      | _, _ => none
-  | "OpName.BW_matmul", [g, x, y] =>
-      -- g: [b, n, m], x: [b, n, k], y: [b, k, m]
-      -- dx: [b, n, k], dy: [b, k, m]
-      some [x, y]
-  -- FW_div / BW_div: element-wise division by scalar (shape unchanged)
-  | "OpName.FW_div", [x] =>
-      some [x]
-  | "OpName.BW_div", [g, _x] =>
-      some [g]
-  -- FW_softmax / BW_softmax: softmax (shape unchanged)
-  | "OpName.FW_softmax", [x] =>
-      some [x]
-  | "OpName.BW_softmax", [g, _x] =>
-      some [g]
-  -- FW_contiguous / BW_contiguous: memory layout (shape unchanged)
-  | "OpName.FW_contiguous", [x] =>
-      some [x]
-  | "OpName.BW_contiguous", [g, _x] =>
-      some [g]
-  -- CROSS_DP_WRED: cross data-parallel weight reduction
-  -- Input: gradients from all ranks (same shape)
-  -- Output: reduced gradients for all ranks (same shape as inputs)
-  -- In the merged representation, outputs = inputs (inplace semantics)
-  | "OpName.CROSS_DP_WRED", xs =>
-      match xs with
-      | [] => none
-      | sh0 :: _ =>
-          if allEqShape sh0 xs then some (xs.map (fun _ => sh0)) else none
   | _, _ => none
 
 def applyNodeShapesChecked (g : GraphDecl) (m : ShapeMap) (n : NodeDecl) : Except String ShapeMap :=
   let inShapes? : Option (List Shape) := n.ins.mapM (shapeMapGet m)
   match inShapes? with
-  | none => Except.error s!"shape check: missing input shape for node {n.op}"
+  | none => Except.error "shape check: missing input shape"
   | some inShapes =>
-      -- For operations like FW_view where output shape cannot be inferred from input shape,
-      -- check if the output shapes are already known in the ShapeMap.
-      -- If all outputs are already known, skip inference and use known shapes.
-      let knownOutShapes? : Option (List Shape) := n.outs.mapM (shapeMapGet m)
-      match knownOutShapes? with
-      | some knownOutShapes =>
-          -- All output shapes are known, just verify they are positive
-          if knownOutShapes.all dimsPos then
-            Except.ok m  -- shapes already in map, no need to update
+      match opOutShapes g.numRanks n.op inShapes with
+      | none => Except.error "shape check: op/shape mismatch"
+      | some outShapes =>
+          if _hLen : outShapes.length = n.outs.length then
+            -- Also enforce positivity of all produced shapes (no zero dimensions).
+            if outShapes.all dimsPos then
+              let pairs := n.outs.zip outShapes
+              let m' := pairs.foldl (fun acc p => shapeMapSet acc p.1 p.2) m
+              Except.ok m'
+            else
+              Except.error "shape check: produced a degenerate shape"
           else
-            Except.error s!"shape check: known shape is degenerate for {n.op}"
-      | none =>
-          -- Some output shapes not known, need to infer
-          match opOutShapes g.numRanks n.op inShapes with
-          | none => Except.error s!"shape check: op/shape mismatch for {n.op}"
-          | some outShapes =>
-              if _hLen : outShapes.length = n.outs.length then
-                -- Also enforce positivity of all produced shapes (no zero dimensions).
-                if outShapes.all dimsPos then
-                  let pairs := n.outs.zip outShapes
-                  let m' := pairs.foldl (fun acc p => shapeMapSet acc p.1 p.2) m
-                  Except.ok m'
-                else
-                  Except.error s!"shape check: produced a degenerate shape for {n.op}"
-              else
-                Except.error s!"shape check: arity mismatch for {n.op} (expected {n.outs.length}, got {outShapes.length})"
+            Except.error "shape check: arity mismatch"
 
 def graphShapesCheck (g : GraphDecl) (initShapes : ShapeMap) : Except String ShapeMap :=
   -- Enforce positivity on *given* init shapes too.
@@ -1596,9 +1169,6 @@ and collectives `ChunkPrim`, `AllGatherPrim`, `AllReducePrim`.
 
 We intentionally skip `OpName.DATALOADER` here: in the denotational style, data/weights
 should come from the initial store (not as a nullary op).
-
-For operations like view/contiguous that don't change numerical values, we return
-the input tensor directly. Shape correctness is ensured by separate shape checking.
 -/
 
 def evalOp (numParts rank : Nat) (op : String) (args : List Tensor) : List Tensor :=
@@ -1609,34 +1179,9 @@ def evalOp (numParts rank : Nat) (op : String) (args : List Tensor) : List Tenso
   | "OpName.BW_linear", [g, x, w] =>
       let (dx, dw) := bw_linear g x w
       [dx, dw]
-  | "OpName.ChunkPrim", [x] =>
-      -- For 3D tensors, chunk on dim 0; for 2D, chunk on last dim
-      match x.shape with
-      | [_, _, _] => [chunkPrimDim0 numParts rank x]
-      | _ => [chunkPrim numParts rank x]
+  | "OpName.ChunkPrim", [x] => [chunkPrim numParts rank x]
   | "OpName.AllGatherPrim", xs => [allGatherPrim numParts rank xs]
   | "OpName.AllReducePrim", xs => [allReducePrim numParts rank xs]
-  | "OpName.AllToAllPrim", xs => [allToAllPrim numParts rank xs]
-  -- Attention operators
-  | "OpName.FW_multiref", [x] => [x, x, x]  -- Returns 3 copies (for Q, K, V)
-  | "OpName.FW_view", [x] => [x]  -- Reshape: numerically identity
-  | "OpName.BW_view", [g, _x] => [g]  -- Backward reshape: numerically identity
-  | "OpName.FW_transpose", [x] => [fw_transpose x]
-  | "OpName.BW_transpose", [g, _x] => [bw_transpose g]
-  | "OpName.FW_matmul", [x, y] => [fw_matmul x y]
-  | "OpName.BW_matmul", [g, x, y] =>
-      let (dx, dy) := bw_matmul g x y
-      [dx, dy]
-  | "OpName.FW_div", [x] =>
-      -- Divisor is sqrt(head_dim), typically sqrt(16) = 4 for our model
-      -- For now, we use a placeholder; actual value should come from graph metadata
-      [fw_div 4.0 x]  -- TODO: parameterize divisor
-  | "OpName.BW_div", [g, _x] => [bw_div 4.0 g]
-  | "OpName.FW_softmax", [x] => [fw_softmax x]
-  | "OpName.BW_softmax", [g, y] => [bw_softmax g y]  -- y is softmax output, not input
-  | "OpName.FW_contiguous", [x] => [x]  -- Memory layout: identity
-  | "OpName.BW_contiguous", [g, _x] => [g]  -- Backward: identity
-  | "OpName.CROSS_DP_WRED", xs => [cross_dp_wred xs]
   | _, _ => []
 
 /-!
@@ -1701,26 +1246,12 @@ theorem applyNode_fw_sum_out
   classical
   simp [applyNode, evalOp, storeSet]
 
--- ChunkPrim lemmas need shape-dependent handling now
-theorem applyNode_chunkPrim_out_2d
-    (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid)
-    (h_not3d : ∀ a b c, (s inTid).shape ≠ [a, b, c]) :
+theorem applyNode_chunkPrim_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid) :
     applyNode g s { rank := rank, op := "OpName.ChunkPrim", ins := [inTid], outs := [outTid] } outTid =
       chunkPrim g.numRanks rank (s inTid) := by
   classical
-  simp only [applyNode, evalOp, storeSet, List.map]
-  match hsh : (s inTid).shape with
-  | [a, b, c] => exact (h_not3d a b c hsh).elim
-  | _ => simp [List.find?, List.zip, List.zipWith]
-
-theorem applyNode_chunkPrim_out_3d
-    (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid)
-    (a b c : Nat) (hsh : (s inTid).shape = [a, b, c]) :
-    applyNode g s { rank := rank, op := "OpName.ChunkPrim", ins := [inTid], outs := [outTid] } outTid =
-      chunkPrimDim0 g.numRanks rank (s inTid) := by
-  classical
-  simp only [applyNode, evalOp, storeSet, List.map, hsh]
-  simp [List.find?, List.zip, List.zipWith]
+  simp [applyNode, evalOp, storeSet]
 
 theorem applyNode_fw_linear_out
     (g : GraphDecl) (s : Store) (rank : Nat) (xTid wTid outTid : Tid) :
@@ -2014,21 +1545,6 @@ If you need more precision, extend `LineageGoal` with slice metadata
 and define a slice-based assembler.
 -/
 
-/-- Infer which dimension was split based on shard and expected full shape.
-    Returns 0 for first dim, 2 for last dim (of 3D), or default to last. -/
-def inferSplitDim (numParts : Nat) (shardShape fullShape : Shape) : Nat :=
-  match shardShape, fullShape with
-  | [s0, s1, s2], [f0, f1, f2] =>
-      if s0 * numParts = f0 ∧ s1 = f1 ∧ s2 = f2 then 0  -- split on dim 0
-      else if s0 = f0 ∧ s1 * numParts = f1 ∧ s2 = f2 then 1  -- split on dim 1
-      else if s0 = f0 ∧ s1 = f1 ∧ s2 * numParts = f2 then 2  -- split on dim 2 (last)
-      else 2  -- default to last
-  | [s0, s1], [f0, f1] =>
-      if s0 * numParts = f0 ∧ s1 = f1 then 0
-      else if s0 = f0 ∧ s1 * numParts = f1 then 1
-      else 1  -- default to last
-  | _, _ => 100  -- fallback
-
 def reconstruct (numParts rank : Nat) (xs : List Tensor) : Tensor :=
   match xs with
   | [] =>
@@ -2040,13 +1556,7 @@ def reconstruct (numParts rank : Nat) (xs : List Tensor) : Tensor :=
       if sh = [1] then
         allReducePrim numParts rank xs
       else
-        -- Check if this is 3D and split on dim 0
-        match sh with
-        | [s0, s1, s2] =>
-            -- For 3D tensors, use dim0 gather
-            allGatherPrimDim0 numParts rank xs
-        | _ =>
-            allGatherPrim numParts rank xs
+        allGatherPrim numParts rank xs
 
 /-- `reconstruct` on a list with ≥2 elements and scalar head uses `allReducePrim`. -/
 theorem reconstruct_cons_cons_scalar
@@ -2056,27 +1566,13 @@ theorem reconstruct_cons_cons_scalar
   -- Reduce by definition; the head shape decides the branch.
   simp [reconstruct, h]
 
-/-- `reconstruct` on a list with ≥2 elements and non-scalar non-3D head uses `allGatherPrim`. -/
-theorem reconstruct_cons_cons_nonscalar_non3d
+/-- `reconstruct` on a list with ≥2 elements and non-scalar head uses `allGatherPrim`. -/
+theorem reconstruct_cons_cons_nonscalar
     (numParts rank : Nat) (x y : Tensor) (xs : List Tensor)
-    (h : x.shape ≠ [1]) (h_not3d : ∀ a b c, x.shape ≠ [a, b, c]) :
+    (h : x.shape ≠ [1]) :
     reconstruct numParts rank (x :: y :: xs) = allGatherPrim numParts rank (x :: y :: xs) := by
-  simp only [reconstruct]
-  have hhead : (Option.map (fun t => t.shape) (x :: y :: xs).head?).getD [] = x.shape := by simp
-  rw [hhead]
-  -- h forces else branch, then match on shape
-  cases hsh : x.shape <;> simp_all
-
-/-- `reconstruct` on a list with ≥2 elements and 3D head uses `allGatherPrimDim0`. -/
-theorem reconstruct_cons_cons_3d
-    (numParts rank : Nat) (x y : Tensor) (xs : List Tensor)
-    (s0 s1 s2 : Nat) (hsh : x.shape = [s0, s1, s2]) :
-    reconstruct numParts rank (x :: y :: xs) = allGatherPrimDim0 numParts rank (x :: y :: xs) := by
-  simp only [reconstruct]
-  have hhead : (Option.map (fun t => t.shape) (x :: y :: xs).head?).getD [] = x.shape := by simp
-  rw [hhead, hsh]
-  -- [s0, s1, s2] ≠ [1] so we take the else branch
-  simp
+  -- Reduce by definition; the head shape decides the branch.
+  simp [reconstruct, h]
 
 /-- Scalar `reconstruct` reduces to the sum of scalar shards at index 0. -/
 theorem reconstruct_scalar_valAt0_eq_sum

@@ -24,7 +24,12 @@ from .autodist_config import AutoDistConfig
 _logger = logging.getLogger(__name__)
 
 import nnscaler
-_DEFAULT_COMM_DATA_PATH = Path(nnscaler.__file__).parent.parent / 'data/profile/mi200/comm'
+# Handle namespace package case where __file__ might be None
+if nnscaler.__file__ is not None:
+    _DEFAULT_COMM_DATA_PATH = Path(nnscaler.__file__).parent.parent / 'data/profile/mi200/comm'
+else:
+    # Fallback: use the path of this file to locate the data directory
+    _DEFAULT_COMM_DATA_PATH = Path(__file__).parent.parent.parent / 'data/profile/mi200/comm'
 
 
 def _piecewise_estimator(xs: List[float], ys: List[float], x: float) -> float:
