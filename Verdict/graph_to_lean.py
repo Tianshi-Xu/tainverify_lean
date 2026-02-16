@@ -22,7 +22,7 @@ Run (must be in conda env verdict):
 
   conda run -n verdict python Verdict/graph_to_lean.py \
 	--sm-pkl <single.pkl> --pm-pkl <tp.pkl> \
-	--out mathlib4/trainverify/denote/GeneratedData.lean
+	--out trainverify/denote/GeneratedData.lean
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def parse_args() -> argparse.Namespace:
 	p.add_argument(
 		"--out",
 		default=str(DEFAULT_OUT),
-		help="Output Lean file path (e.g. mathlib4/trainverify/denote/GeneratedData.lean)",
+		help="Output Lean file path (e.g. trainverify/denote/GeneratedData.lean)",
 	)
 	p.add_argument(
 		"--module",

@@ -1,6 +1,7 @@
 .conda/
 .nnscaler/
 .vscode/
+.lake/
 genmodel/__pycache__/
 genmodel/mgeners/
 __pycache__
