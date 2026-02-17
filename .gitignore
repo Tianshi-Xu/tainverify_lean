@@ -2,6 +2,7 @@
 .nnscaler/
 .vscode/
 .lake/
+.cursor/
 genmodel/__pycache__/
 genmodel/mgeners/
 __pycache__
