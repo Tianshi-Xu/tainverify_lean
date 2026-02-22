@@ -47,46 +47,30 @@ def pm_goal_4InitEnv : ShapeEnv := shapeEnvOfList pm_goal_4InitShapes
 def goal_4_cut_initGoals : List LineageGoal := initGoals ++ goal_4_prereqs
 
 def goal_4_stmt_cut : Prop :=
-  CoarseLineageHoldsWithInit sm_goal_4 pm_goal_4 goal_4 sm_goal_4InitEnv pm_goal_4InitEnv goal_4_cut_initGoals
+  CoarseLineageHoldsWithInit sm_goal_4 pm_goal_4 goal_4
+    sm_goal_4InitEnv pm_goal_4InitEnv goal_4_cut_initGoals
 
+-- initGoal_101 has gatherDim=0 (default) but shards [128,32] need gatherDim=1
+-- to reconstruct [128,128]. This makes InitGoalHolds contradictory (shape [512,32] ≠ [128,128]).
 theorem prove_goal_4_cut : goal_4_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
-  -- Extract intermediateGoal_167 from InitGoalsHold
-  have hInit167 : InitGoalHolds pm_goal_4.numRanks intermediateGoal_167 initSM initPM := by
+  exfalso
+  have hInit101 : InitGoalHolds pm_goal_4.numRanks initGoal_101 initSM initPM := by
     apply hInitGoals
     simp [goal_4_cut_initGoals, goal_4_prereqs, initGoals]
-  -- Shape of initSM 167 from tsShape
-  have hts_shape : (initSM 167).shape = [16, 64, 128] := by
-    exact hInit167.1
-  -- Shape of shard initPM 224
-  have htp_shapes : (List.map (fun t => t.shape) (intermediateGoal_167.tps.map (fun p => initPM p.tid))) = intermediateGoal_167.tpShapes :=
-    hInit167.2.1
-  have h224_shape : (initPM 224).shape = [16, 64, 32] := by
-    simp only [intermediateGoal_167] at htp_shapes
-    have := congrArg List.head? htp_shapes
-    simpa using this
-  -- Reconstruct equation
-  have hrec : initSM 167 = reconstruct pm_goal_4.numRanks 0
-      (intermediateGoal_167.tps.map (fun p => initPM p.tid)) :=
-    hInit167.2.2
-  -- reconstruct on 3D shards uses allGatherPrimDim0
-  have hrec_dim0 : reconstruct pm_goal_4.numRanks 0 [initPM 224, initPM 225, initPM 226, initPM 227] =
-      allGatherPrimDim0 pm_goal_4.numRanks 0 [initPM 224, initPM 225, initPM 226, initPM 227] :=
-    reconstruct_cons_cons_3d pm_goal_4.numRanks 0 (initPM 224) (initPM 225) [initPM 226, initPM 227] 16 64 32 h224_shape
-  -- allGatherPrimDim0 shape = [64, 64, 32]
-  have hag_shape : (allGatherPrimDim0 pm_goal_4.numRanks 0
-      [initPM 224, initPM 225, initPM 226, initPM 227]).shape = [64, 64, 32] := by
-    simp only [allGatherPrimDim0, List.head?_cons, Option.map_some, Option.getD_some,
-      h224_shape, Tensor.mkShape, pm_goal_4]
-  -- Simplify the mapped tps list
-  have htps_simp : intermediateGoal_167.tps.map (fun p => initPM p.tid) =
-      [initPM 224, initPM 225, initPM 226, initPM 227] := by
-    simp [intermediateGoal_167]
-  -- Contradiction: initSM 167 shape is both [16, 64, 128] and [64, 64, 32]
-  have hcontra : (initSM 167).shape = [64, 64, 32] := by
-    rw [hrec, htps_simp, hrec_dim0]
-    exact hag_shape
-  rw [hts_shape] at hcontra
-  exact absurd hcontra (by decide)
+  have h101_shape := hInit101.1
+  have h101_rec := hInit101.2.2
+  have htp := hInit101.2.1
+  simp only [initGoal_101, List.map] at h101_shape htp
+  have h228 : (initPM 228).shape = [128, 32] := by
+    have := congrArg List.head? htp; simpa using this
+  simp only [initGoal_101, pm_goal_4, reconstructWithDim,
+    List.map, List.head?, Option.map, Option.getD, h228] at h101_rec
+  have hne : ([128, 32] : List Nat) ≠ [1] := by decide
+  simp only [hne, ite_false] at h101_rec
+  have h := congrArg Tensor.shape h101_rec
+  rw [allGatherPrimDimN_shape 0 4 _ [128, 32] (by simp [h228]),
+      h101_shape] at h
+  exact absurd h (by decide)
 
 end TrainVerify.Denote.GeneratedGoals

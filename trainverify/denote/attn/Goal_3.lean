@@ -44,9 +44,127 @@ def pm_goal_3InitEnv : ShapeEnv := shapeEnvOfList pm_goal_3InitShapes
 def goal_3_cut_initGoals : List LineageGoal := initGoals ++ goal_3_prereqs
 
 def goal_3_stmt_cut : Prop :=
-  CoarseLineageHoldsWithInit sm_goal_3 pm_goal_3 goal_3 sm_goal_3InitEnv pm_goal_3InitEnv goal_3_cut_initGoals
+  CoarseLineageHoldsWithInit sm_goal_3 pm_goal_3 goal_3
+    sm_goal_3InitEnv pm_goal_3InitEnv goal_3_cut_initGoals
 
+set_option maxHeartbeats 400000 in
+-- fw_linear distributes over dim-0 allGather (3D attention tensors)
+set_option linter.unusedSimpArgs false in
 theorem prove_goal_3_cut : goal_3_stmt_cut := by
-  sorry
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  have hInit99 : InitGoalHolds pm_goal_3.numRanks initGoal_99 initSM initPM := by
+    apply hInitGoals; simp [goal_3_cut_initGoals, goal_3_prereqs, initGoals]
+  have hInit163 : InitGoalHolds pm_goal_3.numRanks intermediateGoal_163 initSM initPM := by
+    apply hInitGoals; simp [goal_3_cut_initGoals, goal_3_prereqs, initGoals]
+  have h99_eq : initSM 99 = initPM 99 := by
+    have hrec := hInit99.2.2
+    simp only [initGoal_99, reconstructWithDim, pm_goal_3, List.map, Piece.tid] at hrec
+    exact hrec
+  have h99_shape : (initSM 99).shape = [128, 128] := hInit99.1
+  have h163_rec : initSM 163 = reconstructWithDim 0 pm_goal_3.numRanks 0
+      [initPM 196, initPM 197, initPM 198, initPM 199] := by
+    have hrec := hInit163.2.2
+    simp only [intermediateGoal_163, pm_goal_3, List.map, Piece.tid] at hrec
+    exact hrec
+  have h163_shape : (initSM 163).shape = [16, 64, 128] := hInit163.1
+  have htp_shapes := hInit163.2.1
+  simp only [intermediateGoal_163, List.map] at htp_shapes
+  have h196_shape : (initPM 196).shape = [4, 64, 128] := by
+    have := congrArg List.head? htp_shapes; simpa using this
+  have h197_shape : (initPM 197).shape = [4, 64, 128] := by
+    have := congrArg List.tail htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h198_shape : (initPM 198).shape = [4, 64, 128] := by
+    have := congrArg (List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h199_shape : (initPM 199).shape = [4, 64, 128] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have hsm : (denoteGraph sm_goal_3 initSM) 100 = fw_linear (initSM 163) (initSM 99) := by
+    simp [sm_goal_3, denoteGraph, applyNode_fw_linear_out]
+  have hpm : (denoteGraph pm_goal_3 initPM) 100 =
+      allGatherPrimDim0 pm_goal_3.numRanks 0
+        [fw_linear (initPM 196) (initPM 99),
+         fw_linear (initPM 197) (initPM 99),
+         fw_linear (initPM 198) (initPM 99),
+         fw_linear (initPM 199) (initPM 99)] := by
+    have hstep : (denoteGraph pm_goal_3 initPM) 100 =
+        (applyNode pm_goal_3
+          (applyNode pm_goal_3
+            (applyNode pm_goal_3
+              (applyNode pm_goal_3
+                (applyNode pm_goal_3 initPM
+                  { rank := 0, op := "OpName.FW_linear", ins := [196, 99], outs := [200] })
+                { rank := 1, op := "OpName.FW_linear", ins := [197, 99], outs := [201] })
+              { rank := 2, op := "OpName.FW_linear", ins := [198, 99], outs := [202] })
+            { rank := 3, op := "OpName.FW_linear", ins := [199, 99], outs := [203] })
+          { rank := 0, op := "OpName.AllGatherPrim",
+            ins := [200, 201, 202, 203], outs := [100] })
+        100 := by
+      simp [pm_goal_3, denoteGraph, List.foldl]
+    rw [hstep]
+    have h3d : ∃ a b c, ((([200, 201, 202, 203] : List Tid).map
+        (applyNode pm_goal_3
+          (applyNode pm_goal_3
+            (applyNode pm_goal_3
+              (applyNode pm_goal_3 initPM
+                { rank := 0, op := "OpName.FW_linear", ins := [196, 99], outs := [200] })
+              { rank := 1, op := "OpName.FW_linear", ins := [197, 99], outs := [201] })
+            { rank := 2, op := "OpName.FW_linear", ins := [198, 99], outs := [202] })
+          { rank := 3, op := "OpName.FW_linear", ins := [199, 99], outs := [203] })).head?.map
+        (fun t => t.shape)).getD [] = [a, b, c] := by
+      refine ⟨4, 64, 128, ?_⟩
+      simp only [List.map, List.head?, Option.map, Option.getD]
+      simp only [applyNode, evalOp, storeSet, List.zip, List.zipWith, List.find?,
+        BEq.beq, Nat.beq_eq, ↓reduceIte]
+      exact fw_linear_3d_shape 4 64 128 128 _ _ h196_shape (by rw [← h99_eq]; exact h99_shape)
+    rw [applyNode_allGatherPrim_dim0_out _ _ _ _ _ h3d]
+    simp [applyNode, evalOp, storeSet]
+  have h163_dimN : initSM 163 = allGatherPrimDimN 0 pm_goal_3.numRanks 0
+      [initPM 196, initPM 197, initPM 198, initPM 199] := by
+    rw [h163_rec]
+    simp [reconstructWithDim, h196_shape]
+  have hdistr : fw_linear (initSM 163) (initSM 99) =
+      allGatherPrimDim0 pm_goal_3.numRanks 0
+        [fw_linear (initPM 196) (initPM 99),
+         fw_linear (initPM 197) (initPM 99),
+         fw_linear (initPM 198) (initPM 99),
+         fw_linear (initPM 199) (initPM 99)] := by
+    conv_lhs => rw [h163_dimN, h99_eq]
+    have := fw_linear_3d_allGatherPrimDimN0_comm
+      (numParts := 4) (b0 := 4) (s := 64) (i := 128) (o := 128)
+      (xs := [initPM 196, initPM 197, initPM 198, initPM 199])
+      (w := initPM 99)
+      (hw := by rw [← h99_eq]; exact h99_shape)
+      (hxs_head := by simp [h196_shape])
+      (hxs_shape := by
+        intro x hx
+        simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+        rcases hx with rfl | rfl | rfl | rfl <;> assumption)
+      (hxs_len := by simp) (hparts := by omega) (hb0 := by omega) (hs := by omega)
+      (hi := by omega) (ho := by omega)
+    simpa using this
+  dsimp only [goal_3_stmt_cut, CoarseLineageHoldsWithInit, goal_3] at *
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]
+    exact fw_linear_3d_shape 16 64 128 128 _ _ h163_shape h99_shape
+  · simp only [List.map, Piece.tid]
+    rw [hpm]
+    have h99_pm_shape : (initPM 99).shape = [128, 128] := by rw [← h99_eq]; exact h99_shape
+    have hfw_head_shape : (fw_linear (initPM 196) (initPM 99)).shape = [4, 64, 128] :=
+      fw_linear_3d_shape 4 64 128 128 _ _ h196_shape h99_pm_shape
+    have hpm_shape : (allGatherPrimDim0 pm_goal_3.numRanks 0
+        [fw_linear (initPM 196) (initPM 99), fw_linear (initPM 197) (initPM 99),
+         fw_linear (initPM 198) (initPM 99), fw_linear (initPM 199) (initPM 99)]).shape =
+        [16, 64, 128] := by
+      have := allGatherPrimDim0_shape_3d pm_goal_3.numRanks 4 64 128
+        [fw_linear (initPM 196) (initPM 99), fw_linear (initPM 197) (initPM 99),
+         fw_linear (initPM 198) (initPM 99), fw_linear (initPM 199) (initPM 99)]
+        (by simp only [List.head?, Option.map, Option.getD]; exact hfw_head_shape)
+      simp only [pm_goal_3] at this; exact this
+    simp [hpm_shape]
+  · simp only [List.map, Piece.tid]
+    rw [hsm, hdistr, ← hpm]
+    simp [reconstructWithDim]
 
 end TrainVerify.Denote.GeneratedGoals

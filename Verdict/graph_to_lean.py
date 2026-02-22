@@ -633,6 +633,21 @@ def emit_lean_spec(
 	_emit_init_env(lines, name="sm", G=sm_graph, kept_nodes=sm_nodes, emit_all_shapes=True)
 	_emit_init_env(lines, name="pm", G=pm_graph, kept_nodes=pm_nodes, prefer_shapes=_sm_prefer, emit_all_shapes=True)
 
+	def _infer_gather_dim(ts_shape: List[int], tp_shape: List[int], num_pieces: int) -> int:
+		"""Infer which dimension was split by comparing SM and PM shard shapes.
+		
+		Returns the dimension index where ts_shape[dim] == tp_shape[dim] * num_pieces
+		and all other dimensions match. Defaults to 0 if no match is found.
+		"""
+		if len(ts_shape) != len(tp_shape):
+			return 0
+		for dim in range(len(ts_shape)):
+			if tp_shape[dim] * num_pieces == ts_shape[dim]:
+				# Check all other dimensions match
+				if all(ts_shape[d] == tp_shape[d] for d in range(len(ts_shape)) if d != dim):
+					return dim
+		return 0
+
 	def _emit_goal_def(def_name: str, g: SelectedLineage, *, for_init: bool) -> None:
 		ts_shape = _shape_init_from_graph_by_tid(sm_graph, g.ts)[0] or []
 		tp_shapes: List[List[int]] = []
@@ -647,27 +662,34 @@ def emit_lean_spec(
 				shp, _init = _shape_init_from_graph_by_tid(pm_graph, tp_tid)
 				tp_shapes.append(shp or [])
 		
-		# Validation: check if the shapes are consistent for reconstruction
+		# Infer gather dimension and validate shapes
 		num_pieces = len(g.tps)
+		gather_dim = 0
 		if num_pieces > 1 and ts_shape and ts_shape != [1] and tp_shapes and tp_shapes[0]:
-			# For allGather-style reconstruction, expect: tp_shape = ts_shape[:-1] + [ts_shape[-1] // num_pieces]
-			if len(ts_shape) >= 1:
-				expected_tp_shape = list(ts_shape[:-1]) + [ts_shape[-1] // num_pieces] if ts_shape[-1] % num_pieces == 0 else None
-				actual_tp_shape = tp_shapes[0]
-				if expected_tp_shape and actual_tp_shape != expected_tp_shape:
+			actual_tp_shape = tp_shapes[0]
+			gather_dim = _infer_gather_dim(ts_shape, actual_tp_shape, num_pieces)
+			# Validate: check that the inferred dimension is consistent
+			if len(ts_shape) == len(actual_tp_shape):
+				expected_tp = list(ts_shape)
+				if gather_dim < len(expected_tp) and expected_tp[gather_dim] % num_pieces == 0:
+					expected_tp[gather_dim] = expected_tp[gather_dim] // num_pieces
+				if actual_tp_shape != expected_tp:
 					print(f"WARNING: Shape mismatch for ts={g.ts}")
 					print(f"  ts_shape: {ts_shape}")
 					print(f"  num_pieces: {num_pieces}")
-					print(f"  expected tp_shape (for allGather): {expected_tp_shape}")
+					print(f"  inferred gatherDim: {gather_dim}")
+					print(f"  expected tp_shape: {expected_tp}")
 					print(f"  actual tp_shape in PM graph: {actual_tp_shape}")
 					print(f"  tp_tids: {[tid for (_r, tid) in g.tps]}")
-					print(f"  This may indicate: (1) lineage inference error, (2) PM graph issue, or (3) non-standard parallelization")
 
 		# NOTE: Keep `tps` and `tpShapes` as concrete lists.
 		# Reason: `reconstruct` performs `match` on the tensor list; if `tps` is symbolic
 		# (e.g. `List.range.map`), Lean cannot reduce the match and simp becomes unusable.
 		tps_expr = "[" + ", ".join(f"{{ rank := {r}, tid := {t} }}" for r, t in g.tps) + "]"
 		tp_shapes_expr = "[" + ", ".join("[" + ", ".join(str(int(x)) for x in shp) + "]" for shp in tp_shapes) + "]"
+
+		# Only emit gatherDim when it's non-default (non-zero) to keep output clean
+		gather_dim_expr = f", gatherDim := {gather_dim}" if gather_dim != 0 else ""
 
 		lines.append(f"def {def_name} : LineageGoal :=")
 		lines.append(
@@ -679,6 +701,7 @@ def emit_lean_spec(
 			+ tps_expr
 			+ ", tpShapes := "
 			+ tp_shapes_expr
+			+ gather_dim_expr
 			+ " }"
 		)
 		lines.append("")

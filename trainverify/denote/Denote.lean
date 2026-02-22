@@ -74,6 +74,7 @@ structure LineageGoal where
   tsShape : Shape
   tps : List Piece
   tpShapes : List Shape
+  gatherDim : Nat := 0
   deriving Repr, DecidableEq
 
 /-!
@@ -636,6 +637,36 @@ def allGatherPrimDim0 (numParts _rank : Nat) (xs : List Tensor) : Tensor :=
       -- Fallback: use last-dimension allGather
       allGatherPrim numParts _rank xs
 
+/-- General allGather on an arbitrary dimension.
+    Reassembles shards by concatenating along dimension `gatherDim`.
+    The output shape equals the shard shape with dimension `gatherDim` multiplied by `numParts`. -/
+def allGatherPrimDimN (gatherDim numParts _rank : Nat) (xs : List Tensor) : Tensor :=
+  let shardShape := (xs.head?.map (fun t => t.shape)).getD []
+  let dimSize := shardShape.getD gatherDim 0
+  let fullDimSize := dimSize * numParts
+  let outShape := shardShape.set gatherDim fullDimSize
+  let postStride := (shardShape.drop (gatherDim + 1)).foldl (· * ·) 1
+  let dimStride := dimSize * postStride
+  let fullDimStride := fullDimSize * postStride
+  Tensor.mkShape outShape (fun outIdx =>
+    let idx := outIdx.1
+    let preIdx := if fullDimStride = 0 then 0 else idx / fullDimStride
+    let remainder := if fullDimStride = 0 then 0 else idx % fullDimStride
+    let jFull := if postStride = 0 then 0 else remainder / postStride
+    let k := if postStride = 0 then 0 else remainder % postStride
+    let r := if dimSize = 0 then 0 else jFull / dimSize
+    let jLocal := if dimSize = 0 then 0 else jFull % dimSize
+    let piece := xs.getD r (zeroTensor shardShape)
+    valAt piece (preIdx * dimStride + jLocal * postStride + k))
+
+/-- `allGatherPrimDimN` shape theorem. -/
+theorem allGatherPrimDimN_shape (gatherDim numParts : Nat) (xs : List Tensor)
+    (shardShape : Shape)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = shardShape) :
+    (allGatherPrimDimN gatherDim numParts 0 xs).shape =
+      shardShape.set gatherDim (shardShape.getD gatherDim 0 * numParts) := by
+  simp only [allGatherPrimDimN, Tensor.mkShape, hhead]
+
 /-- `allGatherPrim` shape for 2D tensors with consistent shard shapes. -/
 theorem allGatherPrim_shape (numParts o shard : Nat) (xs : List Tensor)
     (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [o, shard]) :
@@ -878,10 +909,110 @@ theorem allGatherPrimDim0_chunkPrimDim0_eq
   -- Pointwise equality
   apply Tensor.ext hshape_eq
   intro idx hidx
-  -- The full proof would decompose idx into (i, j, k) coordinates and trace through
-  -- allGatherPrimDim0 and chunkPrimDim0 definitions to show they cancel.
-  -- For now, we defer to a computational verification or accept as axiom.
-  sorry
+  have hd12_pos : 0 < d1 * d2 := Nat.mul_pos hd1 hd2
+  have hd12_ne : d1 * d2 ≠ 0 := Nat.ne_of_gt hd12_pos
+  have hd2_ne : (d2 : Nat) ≠ 0 := by omega
+  have hs0_ne : (shard0 : Nat) ≠ 0 := by omega
+  have hne_np : (numParts : Nat) ≠ 0 := by omega
+  rw [hshape_out] at hidx
+  -- Unfold allGatherPrimDim0 on LHS
+  conv_lhs => simp only [allGatherPrimDim0, hhead]
+  rw [valAt_of_lt _ _ hidx]
+  simp only [Tensor.mkShape, hd12_ne, hd2_ne, hs0_ne, ↓reduceIte]
+  -- Bounds
+  have hidx_simp : idx < shard0 * numParts * d1 * d2 := by
+    simp only [prodShape, List.foldl, Nat.one_mul] at hidx
+    have h1 : shard0 * numParts * d1 * d2 = (shard0 * numParts) * (d1 * d2) := by ring
+    have h2 := Nat.mul_assoc (shard0 * numParts) d1 d2
+    omega
+  have hi_lt : idx / (d1 * d2) < shard0 * numParts := by
+    have : idx < (d1 * d2) * (shard0 * numParts) := by
+      calc idx < shard0 * numParts * d1 * d2 := hidx_simp
+        _ = (d1 * d2) * (shard0 * numParts) := by ring
+    exact Nat.div_lt_of_lt_mul this
+  have hr_lt : idx / (d1 * d2) / shard0 < numParts :=
+    Nat.div_lt_of_lt_mul hi_lt
+  have hr_len : idx / (d1 * d2) / shard0 <
+      (List.ofFn (fun r : Fin numParts => chunkPrimDim0 numParts (↑r) x)).length := by
+    simp [List.length_ofFn]; exact hr_lt
+  -- Replace getD with chunkPrimDim0
+  rw [show (List.ofFn (fun r : Fin numParts => chunkPrimDim0 numParts (↑r) x)).getD
+      (idx / (d1 * d2) / shard0) (zeroTensor [shard0, d1, d2]) =
+      chunkPrimDim0 numParts (idx / (d1 * d2) / shard0) x from by
+    unfold List.getD
+    rw [List.getElem?_eq_getElem hr_len, Option.getD_some]
+    simp [List.getElem_ofFn]]
+  -- Unfold chunkPrimDim0, simplifying divNat, if guards, and Tensor.mkShape in one step
+  have hdiv_eq : numParts * shard0 / numParts = shard0 := Nat.mul_div_cancel_left shard0 hparts
+  simp only [chunkPrimDim0, hshape, divNat, hdiv_eq, hne_np, hd12_ne, hd2_ne, ↓reduceIte, Tensor.mkShape]
+  -- Inner valAt bound
+  have hlocalI_lt : idx / (d1 * d2) % shard0 < shard0 := Nat.mod_lt _ hshard0
+  have hrem_lt : idx % (d1 * d2) / d2 * d2 + idx % (d1 * d2) % d2 < d1 * d2 := by
+    have h := Nat.div_add_mod (idx % (d1 * d2)) d2; rw [Nat.mul_comm] at h
+    have := Nat.mod_lt idx hd12_pos; omega
+  have hinner_bound : idx / (d1 * d2) % shard0 * (d1 * d2) + idx % (d1 * d2) / d2 * d2 +
+      idx % (d1 * d2) % d2 < prodShape [shard0, d1, d2] := by
+    simp only [prodShape, List.foldl, Nat.one_mul]
+    calc idx / (d1 * d2) % shard0 * (d1 * d2) + idx % (d1 * d2) / d2 * d2 + idx % (d1 * d2) % d2
+        = idx / (d1 * d2) % shard0 * (d1 * d2) + (idx % (d1 * d2) / d2 * d2 + idx % (d1 * d2) % d2) := by omega
+      _ < idx / (d1 * d2) % shard0 * (d1 * d2) + (d1 * d2) := by omega
+      _ = (idx / (d1 * d2) % shard0 + 1) * (d1 * d2) := by ring
+      _ ≤ shard0 * (d1 * d2) := Nat.mul_le_mul_right (d1 * d2) hlocalI_lt
+      _ = shard0 * d1 * d2 := by ring
+  rw [valAt_of_lt _ _ (show _ < prodShape [numParts * shard0 / numParts, d1, d2] by
+    rw [hdiv_eq]; exact hinner_bound)]
+  simp only [Tensor.mkShape, hd12_ne, hd2_ne, ↓reduceIte]
+  -- Inner index decomposition
+  have hdiv_d12 : (idx / (d1 * d2) % shard0 * (d1 * d2) + idx % (d1 * d2) / d2 * d2 +
+      idx % (d1 * d2) % d2) / (d1 * d2) = idx / (d1 * d2) % shard0 := by
+    rw [show idx / (d1 * d2) % shard0 * (d1 * d2) + idx % (d1 * d2) / d2 * d2 +
+        idx % (d1 * d2) % d2 =
+        (idx % (d1 * d2) / d2 * d2 + idx % (d1 * d2) % d2) +
+        idx / (d1 * d2) % shard0 * (d1 * d2) from by ring]
+    rw [Nat.add_mul_div_right _ _ hd12_pos]
+    have : (idx % (d1 * d2) / d2 * d2 + idx % (d1 * d2) % d2) / (d1 * d2) = 0 :=
+      Nat.div_eq_of_lt hrem_lt
+    omega
+  have hmod_d12 : (idx / (d1 * d2) % shard0 * (d1 * d2) + idx % (d1 * d2) / d2 * d2 +
+      idx % (d1 * d2) % d2) % (d1 * d2) =
+      idx % (d1 * d2) / d2 * d2 + idx % (d1 * d2) % d2 := by
+    rw [show idx / (d1 * d2) % shard0 * (d1 * d2) + idx % (d1 * d2) / d2 * d2 +
+        idx % (d1 * d2) % d2 =
+        (idx % (d1 * d2) / d2 * d2 + idx % (d1 * d2) % d2) +
+        idx / (d1 * d2) % shard0 * (d1 * d2) from by ring]
+    rw [Nat.add_mul_mod_self_right]
+    exact Nat.mod_eq_of_lt hrem_lt
+  have hdiv_d2 : (idx % (d1 * d2) / d2 * d2 + idx % (d1 * d2) % d2) / d2 =
+      idx % (d1 * d2) / d2 := by
+    rw [show idx % (d1 * d2) / d2 * d2 + idx % (d1 * d2) % d2 =
+        idx % (d1 * d2) % d2 + idx % (d1 * d2) / d2 * d2 from by ring]
+    rw [Nat.add_mul_div_right _ _ hd2]
+    have : idx % (d1 * d2) % d2 / d2 = 0 := Nat.div_eq_of_lt (Nat.mod_lt _ hd2)
+    omega
+  have hmod_d2 : (idx % (d1 * d2) / d2 * d2 + idx % (d1 * d2) % d2) % d2 =
+      idx % (d1 * d2) % d2 := by
+    rw [show idx % (d1 * d2) / d2 * d2 + idx % (d1 * d2) % d2 =
+        idx % (d1 * d2) % d2 + idx % (d1 * d2) / d2 * d2 from by ring]
+    rw [Nat.add_mul_mod_self_right]
+    exact Nat.mod_eq_of_lt (Nat.mod_lt _ hd2)
+  simp only [hdiv_d12, hmod_d12, hdiv_d2, hmod_d2]
+  have hr_mod : idx / (d1 * d2) / shard0 % numParts = idx / (d1 * d2) / shard0 :=
+    Nat.mod_eq_of_lt hr_lt
+  simp only [hr_mod]
+  -- Final: (r * shard0 + localI) * d12 + j * d2 + k = idx
+  congr 1
+  have h1 : idx / (d1 * d2) / shard0 * shard0 + idx / (d1 * d2) % shard0 = idx / (d1 * d2) := by
+    have h := Nat.div_add_mod (idx / (d1 * d2)) shard0; rw [Nat.mul_comm] at h; omega
+  have h2 : idx / (d1 * d2) * (d1 * d2) + idx % (d1 * d2) = idx := by
+    have h := Nat.div_add_mod idx (d1 * d2); rw [Nat.mul_comm] at h; omega
+  have h3 : idx % (d1 * d2) / d2 * d2 + idx % (d1 * d2) % d2 = idx % (d1 * d2) := by
+    have h := Nat.div_add_mod (idx % (d1 * d2)) d2; rw [Nat.mul_comm] at h; omega
+  calc (idx / (d1 * d2) / shard0 * shard0 + idx / (d1 * d2) % shard0) * (d1 * d2) +
+        idx % (d1 * d2) / d2 * d2 + idx % (d1 * d2) % d2
+      = idx / (d1 * d2) * (d1 * d2) + (idx % (d1 * d2) / d2 * d2 + idx % (d1 * d2) % d2) := by
+        rw [h1]; omega
+    _ = idx / (d1 * d2) * (d1 * d2) + idx % (d1 * d2) := by rw [h3]
+    _ = idx := h2
 
 /-!
 ## bw_sum commutes with allGather (operator-level)
@@ -1406,6 +1537,253 @@ theorem fw_sum_eq_allReduce_fw_sum_chunkPrim
   rw [hR']
   rw [hR'']
 
+/-- `allToAllPrim` on 3D tensors returns the rank-th input unchanged. -/
+theorem allToAllPrim_3d (numParts rank : Nat) (xs : List Tensor) (xr : Tensor)
+    (hget : xs[rank]? = some xr) (a b c : Nat) (hsh : xr.shape = [a, b, c]) :
+    allToAllPrim numParts rank xs = xr := by
+  simp only [allToAllPrim, hget, hsh]
+
+/-- Helper: foldl (· * ·) distributes initial value. -/
+private theorem foldl_mul_init (a : Nat) (xs : List Nat) :
+    xs.foldl (· * ·) a = a * xs.foldl (· * ·) 1 := by
+  induction xs generalizing a with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.foldl]
+    rw [ih (a * x), ih (1 * x)]
+    ring
+
+private lemma prodShape_cons (a : Nat) (bs : List Nat) :
+    prodShape (a :: bs) = a * prodShape bs := by
+  simp only [prodShape, List.foldl]
+  rw [foldl_mul_init]
+  simp
+
+/-- Helper: prodShape of a list.set equals the original prodShape
+    with one factor replaced. -/
+private theorem prodShape_set_mul (sh : Shape) (g : Nat) (hg : g < sh.length)
+    (n : Nat) (hn : 0 < n) :
+    prodShape (sh.set g (sh.getD g 0 * n)) = n * prodShape sh := by
+  induction sh generalizing g with
+  | nil => simp at hg
+  | cons d ds ih =>
+    cases g with
+    | zero =>
+      have hgd : (d :: ds).getD 0 0 = d := by simp [List.getD]
+      simp only [List.set, hgd]
+      rw [prodShape_cons, prodShape_cons]; ring
+    | succ g' =>
+      simp only [List.length_cons] at hg
+      have hg' : g' < ds.length := by omega
+      have hgd : (d :: ds).getD (g' + 1) 0 = ds.getD g' 0 := by simp [List.getD]
+      simp only [List.set, hgd]
+      rw [prodShape_cons, prodShape_cons, ih g' hg']; ring
+
+/-- Helper: prodShape split at position g. -/
+private theorem prodShape_split (sh : Shape) (g : Nat) (hg : g < sh.length) :
+    prodShape sh = (sh.take g).foldl (· * ·) 1 * sh.getD g 0 *
+      (sh.drop (g + 1)).foldl (· * ·) 1 := by
+  induction sh generalizing g with
+  | nil => simp at hg
+  | cons d ds ih =>
+    cases g with
+    | zero =>
+      have hgd : (d :: ds).getD 0 0 = d := by simp [List.getD]
+      simp only [List.take, List.drop, hgd, List.foldl]
+      rw [prodShape_cons]; simp [prodShape]
+    | succ g' =>
+      simp only [List.length_cons] at hg
+      have hg' : g' < ds.length := by omega
+      rw [prodShape_cons, ih g' hg']
+      simp only [List.take, List.drop]
+      have hgd : (d :: ds).getD (g' + 1) 0 = ds.getD g' 0 := by simp [List.getD]
+      rw [hgd]
+      simp only [List.foldl]
+      rw [foldl_mul_init (1 * d)]; ring
+
+private lemma list_map_sum_eq_range_sum {α β : Type*} [AddCommMonoid β]
+    (l : List α) (f : α → β) (d : α) :
+    (l.map f).sum = ∑ i ∈ Finset.range l.length, f (l.getD i d) := by
+  induction l with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.map, List.sum_cons, List.length_cons]
+    rw [Finset.sum_range_succ', ih]
+    have h0 : (x :: xs).getD 0 d = x := by simp [List.getD]
+    have hsucc : ∀ i, (x :: xs).getD (i + 1) d = xs.getD i d := by
+      intro i; simp [List.getD]
+    simp only [h0, hsucc]
+    rw [add_comm]
+
+set_option maxHeartbeats 1600000 in
+/-- `fw_sum` distributes over `allGatherPrimDimN`: the sum of the gathered tensor
+    equals the `allReducePrim` of the individual sums. -/
+theorem fw_sum_allGatherPrimDimN_eq_allReducePrim_fw_sum
+    (gatherDim numParts : Nat) (xs : List Tensor)
+    (hlen : xs.length = numParts) (hparts : 0 < numParts)
+    (shardShape : Shape)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = shardShape)
+    (hshape : ∀ x ∈ xs, x.shape = shardShape)
+    (hgatherDim : gatherDim < shardShape.length)
+    (hdimPos : 0 < shardShape.getD gatherDim 0)
+    (hpostPos : 0 < (shardShape.drop (gatherDim + 1)).foldl (· * ·) 1) :
+    fw_sum (allGatherPrimDimN gatherDim numParts 0 xs) =
+      allReducePrim numParts 0 (xs.map fw_sum) := by
+  classical
+  set dimSize := shardShape.getD gatherDim 0 with hdimSize_def
+  set postStride := (shardShape.drop (gatherDim + 1)).foldl (· * ·) 1 with hpostStride_def
+  set dimStride := dimSize * postStride with hdimStride_def
+  set fullDimSize := dimSize * numParts with hfullDimSize_def
+  set fullDimStride := fullDimSize * postStride with hfullDimStride_def
+  set outShape := shardShape.set gatherDim fullDimSize with houtShape_def
+  set preDim := (shardShape.take gatherDim).foldl (· * ·) 1 with hpreDim_def
+  have hds_pos : 0 < dimStride := Nat.mul_pos hdimPos hpostPos
+  have hfds_pos : 0 < fullDimStride := by
+    rw [hfullDimStride_def, hfullDimSize_def]
+    exact Nat.mul_pos (Nat.mul_pos hdimPos hparts) hpostPos
+  have hfds_eq : fullDimStride = numParts * dimStride := by
+    rw [hfullDimStride_def, hfullDimSize_def, hdimStride_def]; ring
+  have hne_fds : fullDimStride ≠ 0 := Nat.ne_of_gt hfds_pos
+  have hne_ps : postStride ≠ 0 := Nat.ne_of_gt hpostPos
+  have hne_ds : dimSize ≠ 0 := Nat.ne_of_gt hdimPos
+  -- prodShape decomposition
+  have hprod_shard : prodShape shardShape = preDim * dimStride := by
+    rw [hpreDim_def, hdimStride_def, hdimSize_def, hpostStride_def]
+    rw [prodShape_split shardShape gatherDim hgatherDim]
+    ring
+  have hprod_out : prodShape outShape = preDim * fullDimStride := by
+    have h1 : fullDimSize = shardShape.getD gatherDim 0 * numParts := by
+      rw [hfullDimSize_def, hdimSize_def]
+    rw [houtShape_def, h1, prodShape_set_mul shardShape gatherDim hgatherDim numParts hparts]
+    rw [hprod_shard, hfds_eq]; ring
+  -- Shape proofs
+  have hgather_shape : (allGatherPrimDimN gatherDim numParts 0 xs).shape = outShape :=
+    allGatherPrimDimN_shape gatherDim numParts xs shardShape hhead
+  have hfw_shape : (fw_sum (allGatherPrimDimN gatherDim numParts 0 xs)).shape = [1] :=
+    fw_sum_shape _
+  have har_shape : (allReducePrim numParts 0 (xs.map fw_sum)).shape = [1] := by
+    cases hxs : xs with
+    | nil => simp [hxs] at hlen; omega
+    | cons x0 xs' =>
+      have := allReducePrim_shape numParts 0 (List.map fw_sum (x0 :: xs')) (fw_sum x0) rfl
+      simpa [fw_sum_shape] using this
+  -- Apply Tensor.ext
+  apply Tensor.ext (by rw [hfw_shape, har_shape])
+  intro idx hidx
+  have hidx0 : idx = 0 := by
+    have : idx < 1 := by simpa [hfw_shape] using hidx
+    omega
+  subst hidx0
+  -- LHS: fw_sum at 0
+  rw [fw_sum_valAt0_eq_sum_range_valAt, hgather_shape, hprod_out]
+  -- RHS: allReducePrim at 0
+  rw [allReducePrim_valAt0_of_pos numParts 0 _ (by simp [har_shape]),
+      List.foldl_add_eq_sum, List.map_map]
+  -- Convert RHS list sum to Finset.range sum
+  rw [list_map_sum_eq_range_sum _ _ (zeroTensor shardShape)]
+  simp only [List.length_map, hlen, Function.comp_def]
+  -- Expand fw_sum valAt 0
+  simp_rw [fw_sum_valAt0_eq_sum_range_valAt]
+  -- Normalize shard shapes
+  have hshape_all : ∀ r, (xs.getD r (zeroTensor shardShape)).shape = shardShape := by
+    intro r
+    by_cases hr : r < xs.length
+    · simp [List.getD, List.getElem?_eq_getElem hr, hshape _ (List.getElem_mem hr)]
+    · have hr' : xs.length ≤ r := Nat.not_lt.mp hr
+      simp [List.getD, List.getElem?_eq_none hr', zeroTensor, Tensor.mkShape]
+  simp_rw [hshape_all, hprod_shard]
+  -- LHS: ∑_{i < preDim * fullDimStride} valAt gather i
+  -- RHS: ∑_{r < numParts} ∑_{j < preDim * dimStride} valAt xs[r] j
+  -- Decompose LHS: split preDim * fullDimStride = preDim * (numParts * dimStride)
+  rw [Finset.sum_range_mul_eq_sum_sum (n := preDim) (m := fullDimStride)]
+  simp_rw [hfds_eq]
+  conv_lhs =>
+    arg 2; ext batch
+    rw [Finset.sum_range_mul_eq_sum_sum (n := numParts) (m := dimStride)]
+  -- Now LHS: ∑_{batch < preDim} ∑_{r < numParts} ∑_{l < dimStride}
+  --            valAt gather (batch * fullDimStride + r * dimStride + l)
+  -- RHS: ∑_{r < numParts} ∑_{j < preDim * dimStride} valAt xs[r] j
+  -- Step: Show each LHS term = valAt xs[r] (batch * dimStride + l)
+  have hval_eq : ∀ (batch : Nat) (_ : batch < preDim) (r : Nat) (_ : r < numParts)
+      (l : Nat) (_ : l < dimStride),
+      valAt (allGatherPrimDimN gatherDim numParts 0 xs)
+        (batch * (numParts * dimStride) + r * dimStride + l) =
+      valAt (xs.getD r (zeroTensor shardShape)) (batch * dimStride + l) := by
+    intro batch hbatch r hr l hl
+    have hidx_bound : batch * (numParts * dimStride) + r * dimStride + l <
+        prodShape outShape := by
+      rw [hprod_out, hfds_eq]
+      calc batch * (numParts * dimStride) + r * dimStride + l
+          < batch * (numParts * dimStride) + r * dimStride + dimStride := by omega
+        _ = batch * (numParts * dimStride) + (r + 1) * dimStride := by ring
+        _ ≤ batch * (numParts * dimStride) + numParts * dimStride := by
+            apply Nat.add_le_add_left; exact Nat.mul_le_mul_right _ (by omega)
+        _ = (batch + 1) * (numParts * dimStride) := by ring
+        _ ≤ preDim * (numParts * dimStride) := by
+            exact Nat.mul_le_mul_right _ (by omega)
+    rw [valAt_of_lt _ _ (by rw [hgather_shape]; exact hidx_bound)]
+    simp only [allGatherPrimDimN, Tensor.mkShape, hhead]
+    -- Simplify the if-then-else guards
+    simp only [← hdimSize_def, ← hpostStride_def, ← hdimStride_def,
+               ← hfullDimSize_def, ← hfullDimStride_def,
+               hne_fds, hne_ps, hne_ds, ↓reduceIte]
+    -- Arithmetic: decompose the index
+    have hrem_bound : r * dimStride + l < fullDimStride := by
+      rw [hfds_eq]; calc r * dimStride + l
+          < r * dimStride + dimStride := by omega
+        _ = (r + 1) * dimStride := by ring
+        _ ≤ numParts * dimStride := Nat.mul_le_mul_right _ (by omega)
+    have hmod_idx : (batch * (numParts * dimStride) + r * dimStride + l) % fullDimStride =
+        r * dimStride + l := by
+      rw [show batch * (numParts * dimStride) + r * dimStride + l =
+          fullDimStride * batch + (r * dimStride + l) from by rw [hfds_eq]; ring]
+      rw [Nat.mul_add_mod, Nat.mod_eq_of_lt hrem_bound]
+    have hdiv_idx : (batch * (numParts * dimStride) + r * dimStride + l) / fullDimStride =
+        batch := by
+      rw [show batch * (numParts * dimStride) + r * dimStride + l =
+          fullDimStride * batch + (r * dimStride + l) from by rw [hfds_eq]; ring]
+      rw [Nat.mul_add_div hfds_pos, Nat.div_eq_of_lt hrem_bound, Nat.add_zero]
+    have hl_div_ps : l / postStride < dimSize :=
+      Nat.div_lt_of_lt_mul (by rw [Nat.mul_comm, ← hdimStride_def]; exact hl)
+    have hjfull : (r * dimStride + l) / postStride = r * dimSize + l / postStride := by
+      rw [hdimStride_def,
+          show r * (dimSize * postStride) + l = postStride * (r * dimSize) + l from by ring]
+      exact Nat.mul_add_div hpostPos (r * dimSize) l
+    have hk : (r * dimStride + l) % postStride = l % postStride := by
+      rw [hdimStride_def,
+          show r * (dimSize * postStride) + l = postStride * (r * dimSize) + l from by ring]
+      exact Nat.mul_add_mod postStride (r * dimSize) l
+    have hr_eq : (r * dimSize + l / postStride) / dimSize = r := by
+      rw [show r * dimSize = dimSize * r from by ring]
+      rw [Nat.mul_add_div hdimPos, Nat.div_eq_of_lt hl_div_ps, Nat.add_zero]
+    have hjlocal : (r * dimSize + l / postStride) % dimSize = l / postStride := by
+      rw [show r * dimSize = dimSize * r from by ring]
+      rw [Nat.mul_add_mod, Nat.mod_eq_of_lt hl_div_ps]
+    rw [hmod_idx, hjfull, hr_eq, hdiv_idx, hk, hjlocal]
+    congr 1
+    have := Nat.div_add_mod l postStride
+    rw [Nat.mul_comm (l / postStride) postStride]
+    omega
+  -- Apply hval_eq pointwise via Finset.sum_congr
+  have hlhs_rw : ∑ batch ∈ Finset.range preDim,
+      ∑ r ∈ Finset.range numParts,
+        ∑ l ∈ Finset.range dimStride,
+          valAt (allGatherPrimDimN gatherDim numParts 0 xs)
+            (batch * (numParts * dimStride) + (r * dimStride + l)) =
+      ∑ batch ∈ Finset.range preDim,
+        ∑ r ∈ Finset.range numParts,
+          ∑ l ∈ Finset.range dimStride,
+            valAt (xs.getD r (zeroTensor shardShape)) (batch * dimStride + l) := by
+    refine Finset.sum_congr rfl fun batch hb => Finset.sum_congr rfl fun r hr =>
+      Finset.sum_congr rfl fun l hl => ?_
+    have hassoc : batch * (numParts * dimStride) + (r * dimStride + l) =
+        batch * (numParts * dimStride) + r * dimStride + l := by omega
+    rw [hassoc]
+    exact hval_eq batch (Finset.mem_range.mp hb) r (Finset.mem_range.mp hr)
+        l (Finset.mem_range.mp hl)
+  rw [hlhs_rw, Finset.sum_comm]
+  refine Finset.sum_congr rfl fun r _ => ?_
+  rw [← Finset.sum_range_mul_eq_sum_sum (n := preDim) (m := dimStride)]
 
 /-!
 ## Pure shape-level dimension checking (auto-generatable)
@@ -2093,6 +2471,41 @@ def reconstruct (numParts rank : Nat) (xs : List Tensor) : Tensor :=
             allGatherPrimDim0 numParts rank xs
         | _ =>
             allGatherPrim numParts rank xs
+
+/-- Dimension-aware reconstruction: uses `allGatherPrimDimN` with an explicit gather dimension. -/
+def reconstructWithDim (gatherDim numParts rank : Nat) (xs : List Tensor) : Tensor :=
+  match xs with
+  | [] => Tensor.mkShape [] (fun _ => 0)
+  | [x] => x
+  | _ =>
+      let sh := (xs.head?.map (fun t => t.shape)).getD []
+      if sh = [1] then
+        allReducePrim numParts rank xs
+      else
+        allGatherPrimDimN gatherDim numParts rank xs
+
+/-- `reconstructWithDim` on a singleton list returns that element. -/
+theorem reconstructWithDim_singleton (gatherDim numParts rank : Nat) (x : Tensor) :
+    reconstructWithDim gatherDim numParts rank [x] = x := rfl
+
+/-- `reconstructWithDim` on a list with ≥2 scalar elements uses `allReducePrim`. -/
+theorem reconstructWithDim_cons_cons_scalar
+    (gatherDim numParts rank : Nat) (x y : Tensor) (xs : List Tensor)
+    (h : x.shape = [1]) :
+    reconstructWithDim gatherDim numParts rank (x :: y :: xs) =
+      allReducePrim numParts rank (x :: y :: xs) := by
+  simp [reconstructWithDim, h]
+
+/-- `reconstructWithDim` on a list with ≥2 non-scalar elements uses `allGatherPrimDimN`. -/
+theorem reconstructWithDim_cons_cons_nonscalar
+    (gatherDim numParts rank : Nat) (x y : Tensor) (xs : List Tensor)
+    (h : x.shape ≠ [1]) :
+    reconstructWithDim gatherDim numParts rank (x :: y :: xs) =
+      allGatherPrimDimN gatherDim numParts rank (x :: y :: xs) := by
+  simp only [reconstructWithDim]
+  have hhead : (Option.map (fun t => t.shape) (x :: y :: xs).head?).getD [] = x.shape := by simp
+  rw [hhead]
+  simp [h]
 
 /-- `reconstruct` on a list with ≥2 elements and scalar head uses `allReducePrim`. -/
 theorem reconstruct_cons_cons_scalar
@@ -2972,6 +3385,70 @@ theorem allGatherPrimDim0_shape_3d (numParts b0 s d : Nat)
     (allGatherPrimDim0 numParts 0 xs).shape = [b0 * numParts, s, d] := by
   simp only [allGatherPrimDim0, hhead, Tensor.mkShape]
 
+private theorem div_of_mul_add_lt (a b c : Nat) (hb : 0 < b) (hc : c < b) :
+    (a * b + c) / b = a := by
+  rw [show a * b = b * a from Nat.mul_comm a b]
+  rw [Nat.mul_add_div (m_pos := hb)]
+  simp [Nat.div_eq_of_lt hc]
+
+private theorem mod_of_mul_add_lt (a b c : Nat) (_hb : 0 < b) (hc : c < b) :
+    (a * b + c) % b = c :=
+  Nat.mul_add_mod_of_lt hc
+
+private lemma tensor_mkShape_shape_congr (s1 s2 : Shape) (hs : s1 = s2)
+    (f : Fin (prodShape s1) → Scalar) :
+    Tensor.mkShape s1 f = Tensor.mkShape s2 (fun i => f ⟨i.1, hs ▸ i.2⟩) := by
+  subst hs; rfl
+
+theorem allGatherPrimDimN_0_eq_dim0 (numParts rank : Nat)
+    (xs : List Tensor)
+    (hhead : ∃ a b c, (xs.head?.map (fun t => t.shape)).getD [] = [a, b, c]) :
+    allGatherPrimDimN 0 numParts rank xs = allGatherPrimDim0 numParts rank xs := by
+  obtain ⟨a, b, c, hshape⟩ := hhead
+  -- First, convert both sides to Tensor.mkShape with the same shape [a * numParts, b, c]
+  have hshape_comp : ((xs.head?.map (fun t => t.shape)).getD []).set 0
+      (((xs.head?.map (fun t => t.shape)).getD [])[0]?.getD 0 * numParts) =
+      [a * numParts, b, c] := by
+    simp [hshape, List.set, List.getElem?_cons_zero, List.getD]
+  -- Unfold allGatherPrimDimN and normalize shape
+  unfold allGatherPrimDimN
+  simp only [hshape, List.getElem?_cons_zero, Option.getD_some, List.getD,
+    List.set, List.drop, List.foldl, Nat.one_mul]
+  rw [tensor_mkShape_shape_congr _ _ hshape_comp]
+  -- Now LHS is Tensor.mkShape [a * numParts, b, c] (fun i => ...DimN body using i.1...)
+  -- Unfold allGatherPrimDim0
+  unfold allGatherPrimDim0
+  simp only [hshape]
+  -- Now RHS is Tensor.mkShape [a * numParts, b, c] (fun i => ...Dim0 body using i.1...)
+  -- Both have the same shape, so just compare the value functions
+  congr 1
+  funext ⟨idx, hidx⟩
+  simp only [prodShape, List.foldl] at hidx
+  by_cases ha : a = 0
+  · simp [ha] at hidx
+  by_cases hb : b = 0
+  · simp [hb] at hidx
+  by_cases hc : c = 0
+  · simp [hc] at hidx
+  have hbc' : 0 < b * c := Nat.mul_pos (Nat.pos_of_ne_zero hb) (Nat.pos_of_ne_zero hc)
+  by_cases hnp : numParts = 0
+  · simp [hnp] at hidx
+  have hnp' : 0 < numParts := Nat.pos_of_ne_zero hnp
+  have hidx' : idx < a * numParts * (b * c) := by
+    calc idx < 1 * (a * numParts) * b * c := hidx
+         _ = a * numParts * (b * c) := by ring
+  have habcnp : 0 < a * numParts * (b * c) :=
+    Nat.mul_pos (Nat.mul_pos (Nat.pos_of_ne_zero ha) hnp') hbc'
+  simp only [show a * numParts * (b * c) ≠ 0 from by omega,
+    show a ≠ 0 from ha, show b * c ≠ 0 from by omega,
+    show c ≠ 0 from hc, ↓reduceIte, if_false]
+  rw [Nat.mod_eq_of_lt hidx', Nat.div_eq_of_lt hidx']
+  simp only [Nat.zero_mul, Nat.zero_add]
+  congr 1
+  have h1 := Nat.div_add_mod (idx % (b * c)) c
+  rw [Nat.mul_comm] at h1
+  omega
+
 theorem fw_linear_3d_allGatherPrimDim0_comm
     (numParts b0 s i o : Nat)
     (xs : List Tensor) (w : Tensor)
@@ -2982,145 +3459,217 @@ theorem fw_linear_3d_allGatherPrimDim0_comm
     (hparts : 0 < numParts) (hb0 : 0 < b0) (hs : 0 < s) (hi : 0 < i) (ho : 0 < o) :
     fw_linear (allGatherPrimDim0 numParts 0 xs) w =
     allGatherPrimDim0 numParts 0 (xs.map (fun x => fw_linear x w)) := by
-  -- LHS shape
+  -- Proof by Tensor extensionality: both sides compute the same function on 3D indices.
+  -- The key insight: fw_linear processes each (batch, seq) position independently,
+  -- so it distributes over dim-0 concatenation (allGatherPrimDim0).
+  -- Shape equality
   have hgather_shape : (allGatherPrimDim0 numParts 0 xs).shape = [b0 * numParts, s, i] :=
     allGatherPrimDim0_shape_3d numParts b0 s i xs hxs_head
-  have hLHS_shape : (fw_linear (allGatherPrimDim0 numParts 0 xs) w).shape = [b0 * numParts, s, o] :=
-    fw_linear_3d_shape _ _ _ _ _ _ hgather_shape hw
-  -- RHS: head shape of mapped list
-  have hmap_head : (xs.map (fun x => fw_linear x w)).head?.map (fun t => t.shape) =
-      xs.head?.map (fun x => (fw_linear x w).shape) := by
-    cases xs with
-    | nil => simp
-    | cons x0 rest => simp
-  have hfw_head_shape : ∀ x ∈ xs, (fw_linear x w).shape = [b0, s, o] :=
-    fun x hx => fw_linear_3d_shape b0 s i o x w (hxs_shape x hx) hw
   have hmap_head_val : ((xs.map (fun x => fw_linear x w)).head?.map (fun t => t.shape)).getD [] = [b0, s, o] := by
-    cases hxs : xs with
+    cases xs with
     | nil => simp at hxs_len; omega
     | cons x0 rest =>
       simp only [List.map, List.head?_cons, Option.map_some, Option.getD_some]
-      exact hfw_head_shape x0 (by simp)
+      exact fw_linear_3d_shape b0 s i o x0 w (hxs_shape x0 (List.mem_cons_self ..)) hw
+  have hLHS_shape : (fw_linear (allGatherPrimDim0 numParts 0 xs) w).shape = [b0 * numParts, s, o] :=
+    fw_linear_3d_shape _ _ _ _ _ _ hgather_shape hw
   have hRHS_shape : (allGatherPrimDim0 numParts 0 (xs.map (fun x => fw_linear x w))).shape = [b0 * numParts, s, o] :=
     allGatherPrimDim0_shape_3d numParts b0 s o _ hmap_head_val
-  -- Ext
-  have hshape_eq : (fw_linear (allGatherPrimDim0 numParts 0 xs) w).shape =
-      (allGatherPrimDim0 numParts 0 (xs.map (fun x => fw_linear x w))).shape := by
-    rw [hLHS_shape, hRHS_shape]
-  apply Tensor.ext hshape_eq
+  -- Value equality at each index
+  apply Tensor.ext (by rw [hLHS_shape, hRHS_shape])
   intro idx hidx
-  -- Index decomposition
+  rw [hLHS_shape] at hidx
+  simp only [prodShape, List.foldl, Nat.one_mul] at hidx
   have hso_pos : 0 < s * o := Nat.mul_pos hs ho
+  have hso_ne : s * o ≠ 0 := Nat.ne_of_gt hso_pos
+  have ho_ne : (o : Nat) ≠ 0 := by omega
   have hsi_pos : 0 < s * i := Nat.mul_pos hs hi
-  have hprod_lhs : prodShape [b0 * numParts, s, o] = b0 * numParts * (s * o) := by
-    simp [prodShape]; ring
-  have hidx_bound : idx < b0 * numParts * (s * o) := by
-    rw [← hprod_lhs]; rw [hLHS_shape] at hidx; exact hidx
-  let row := idx / (s * o)
-  let rem := idx % (s * o)
-  let seq := rem / o
-  let col := rem % o
-  have hrow_bound : row < b0 * numParts := Nat.div_lt_of_lt_mul hidx_bound
-  have hrem_bound : rem < s * o := Nat.mod_lt _ hso_pos
-  have hseq_bound : seq < s := Nat.div_lt_of_lt_mul (by rw [Nat.mul_comm]; exact hrem_bound)
-  have hcol_bound : col < o := Nat.mod_lt _ ho
-  let r := row / b0
-  let localI := row % b0
-  have hr_bound : r < numParts := by
-    have : row < b0 * numParts := hrow_bound
-    exact Nat.div_lt_of_lt_mul (by rwa [Nat.mul_comm])
-  have hlocalI_bound : localI < b0 := Nat.mod_lt _ hb0
-  -- LHS: unfold fw_linear on the gathered tensor
-  -- fw_linear matches [b0*numParts, s, i] × [o, i] → [b0*numParts, s, o]
-  have hLHS_val : valAt (fw_linear (allGatherPrimDim0 numParts 0 xs) w) idx =
-      ∑ j ∈ Finset.range i,
-        valAt (allGatherPrimDim0 numParts 0 xs) ((row * s + seq) * i + j) *
-        valAt w (col * i + j) := by
-    simp only [fw_linear, hgather_shape, hw, Tensor.mkShape]
-    rw [valAt_of_lt]
-    · simp only []
-      have hso_ne : s * o ≠ 0 := by omega
-      have ho_ne : o ≠ 0 := by omega
-      simp only [hso_ne, ↓reduceIte, ho_ne]
-    · rw [hprod_lhs]; exact hidx_bound
-  -- RHS: unfold allGatherPrimDim0 on the mapped list
-  have hRHS_val : valAt (allGatherPrimDim0 numParts 0 (xs.map (fun x => fw_linear x w))) idx =
-      valAt ((xs.map (fun x => fw_linear x w)).getD r (zeroTensor [b0, s, o]))
-        (localI * (s * o) + seq * o + col) := by
-    simp only [allGatherPrimDim0, hmap_head_val, Tensor.mkShape]
-    rw [valAt_of_lt]
-    · simp only []
-      have hso_ne : s * o ≠ 0 := by omega
-      have ho_ne : o ≠ 0 := by omega
-      have hb0_ne : b0 ≠ 0 := by omega
-      simp only [hso_ne, ↓reduceIte, ho_ne, hb0_ne]
-    · simp [prodShape]; nlinarith [hrow_bound, hrem_bound]
-  -- RHS continued: unfold the getD and fw_linear
-  have hgetD_map : (xs.map (fun x => fw_linear x w)).getD r (zeroTensor [b0, s, o]) =
-      fw_linear (xs.getD r (zeroTensor [b0, s, i])) w := by
-    have hr_lt : r < xs.length := by omega
-    rw [List.getD_eq_getElem (h := by simp; omega)]
-    rw [List.getD_eq_getElem (h := hr_lt)]
-    simp
-  have hpiece_shape : (xs.getD r (zeroTensor [b0, s, i])).shape = [b0, s, i] := by
-    have hr_lt : r < xs.length := by omega
-    rw [List.getD_eq_getElem (h := hr_lt)]
-    exact hxs_shape _ (List.getElem_mem _)
-  have hRHS_val2 : valAt ((xs.map (fun x => fw_linear x w)).getD r (zeroTensor [b0, s, o]))
-      (localI * (s * o) + seq * o + col) =
-      ∑ j ∈ Finset.range i,
-        valAt (xs.getD r (zeroTensor [b0, s, i])) ((localI * s + seq) * i + j) *
-        valAt w (col * i + j) := by
-    rw [hgetD_map]
-    simp only [fw_linear, hpiece_shape, hw, Tensor.mkShape]
-    rw [valAt_of_lt]
-    · simp only []
-      have hso_ne : s * o ≠ 0 := by omega
-      have ho_ne : o ≠ 0 := by omega
-      simp only [hso_ne, ↓reduceIte, ho_ne]
-      congr 1
-      · show localI * (s * o) + seq * o + col = localI * (s * o) + (seq * o + col)
-        omega
-    · simp [prodShape]; nlinarith [hlocalI_bound, hseq_bound, hcol_bound]
-  -- Now show LHS summand = RHS summand by reducing allGatherPrimDim0 valAt
-  rw [hLHS_val, hRHS_val, hRHS_val2]
+  have hsi_ne : s * i ≠ 0 := Nat.ne_of_gt hsi_pos
+  have hi_ne : (i : Nat) ≠ 0 := by omega
+  have hb0_ne : (b0 : Nat) ≠ 0 := by omega
+  have hidx_rearr : idx < (s * o) * (b0 * numParts) := by
+    calc idx < b0 * numParts * s * o := hidx
+         _ = (b0 * numParts) * (s * o) := Nat.mul_assoc _ _ _
+         _ = (s * o) * (b0 * numParts) := Nat.mul_comm _ _
+  set row := idx / (s * o)
+  set rso := idx % (s * o)
+  set seq := rso / o
+  set col := rso % o
+  set rk := row / b0
+  set lB := row % b0
+  have hrow_lt : row < b0 * numParts := Nat.div_lt_of_lt_mul hidx_rearr
+  have hrk_lt : rk < numParts := by
+    show row / b0 < numParts; exact Nat.div_lt_of_lt_mul hrow_lt
+  have hrk_lt_len : rk < xs.length := by show row / b0 < xs.length; omega
+  have hlB_lt : lB < b0 := by show row % b0 < b0; exact Nat.mod_lt _ hb0
+  have hseq_lt : seq < s := by
+    show idx % (s * o) / o < s
+    apply Nat.div_lt_of_lt_mul; rw [Nat.mul_comm o s]; exact Nat.mod_lt _ hso_pos
+  have hcol_lt : col < o := by show idx % (s * o) % o < o; exact Nat.mod_lt _ ho
+  -- Unfold LHS: fw_linear uses hgather_shape, hw to match the 3D branch
+  conv_lhs => simp only [fw_linear, hgather_shape, hw]
+  -- Unfold RHS: allGatherPrimDim0 uses hmap_head_val to match the [b0,s,o] branch
+  conv_rhs => simp only [allGatherPrimDim0, hmap_head_val]
+  -- Both sides are Tensor.mkShape [b0*numParts, s, o] f applied to idx
+  have hprod : idx < prodShape [b0 * numParts, s, o] := by
+    simp [prodShape, List.foldl]; exact hidx
+  rw [valAt_of_lt _ _ hprod, valAt_of_lt _ _ hprod]
+  simp only [Tensor.mkShape]
+  -- Simplify if-then-else guards
+  simp only [hso_ne, ho_ne, hb0_ne, ↓reduceIte]
+  -- Now LHS = ∑ j, valAt (allGatherPrimDim0 ...) ((row*s+seq)*i+j) * valAt w (col*i+j)
+  -- RHS = valAt ((xs.map fwl).getD rk (zeroTensor [b0,s,o])) (lB*(s*o)+seq*o+col)
+  -- === Handle the RHS ===
+  -- Replace (xs.map fw_linear).getD rk with fw_linear (xs[rk])
+  have hpiece_shape : (xs[idx / (s * o) / b0]'hrk_lt_len).shape = [b0, s, i] :=
+    hxs_shape _ (List.getElem_mem ..)
+  rw [show (List.map (fun x => fw_linear x w) xs).getD (idx / (s * o) / b0) (zeroTensor [b0, s, o]) =
+      fw_linear (xs[idx / (s * o) / b0]'hrk_lt_len) w from by
+    unfold List.getD
+    rw [List.getElem?_map, getElem?_pos xs _ hrk_lt_len]
+    simp]
+  -- Unfold fw_linear on the piece
+  conv_rhs => simp only [fw_linear, hpiece_shape, hw]
+  -- Simplify valAt of Tensor.mkShape on RHS
+  have hrhs_bound : idx / (s * o) % b0 * (s * o) + idx % (s * o) / o * o + idx % (s * o) % o <
+      prodShape [b0, s, o] := by
+    simp only [prodShape, List.foldl, Nat.one_mul]
+    have h_rest_eq : idx % (s * o) / o * o + idx % (s * o) % o = idx % (s * o) := by
+      have h := Nat.div_add_mod (idx % (s * o)) o; rw [Nat.mul_comm] at h; exact h
+    have h_rest_lt : idx % (s * o) < s * o := Nat.mod_lt _ hso_pos
+    have h_lB_lt : idx / (s * o) % b0 < b0 := Nat.mod_lt _ hb0
+    calc idx / (s * o) % b0 * (s * o) + idx % (s * o) / o * o + idx % (s * o) % o
+        = idx / (s * o) % b0 * (s * o) + idx % (s * o) := by omega
+      _ < idx / (s * o) % b0 * (s * o) + s * o := by omega
+      _ = (idx / (s * o) % b0 + 1) * (s * o) := by ring
+      _ ≤ b0 * (s * o) := Nat.mul_le_mul_right (s * o) h_lB_lt
+      _ = (b0 * s) * o := by ring
+  rw [valAt_of_lt _ _ hrhs_bound]
+  simp only [Tensor.mkShape, hso_ne, ho_ne, ↓reduceIte]
+  -- RHS index decomposition:
+  -- (lB*(s*o) + seq*o + col) / (s*o) = lB
+  -- (lB*(s*o) + seq*o + col) % (s*o) = seq*o + col
+  -- (seq*o + col) / o = seq, (seq*o + col) % o = col
+  have hrest_lt : idx % (s * o) / o * o + idx % (s * o) % o < s * o := by
+    have h := Nat.div_add_mod (idx % (s * o)) o; rw [Nat.mul_comm] at h
+    have := Nat.mod_lt idx hso_pos; omega
+  have hdiv_so : (idx / (s * o) % b0 * (s * o) + idx % (s * o) / o * o + idx % (s * o) % o) / (s * o) =
+      idx / (s * o) % b0 := by
+    rw [show idx / (s * o) % b0 * (s * o) + idx % (s * o) / o * o + idx % (s * o) % o =
+        (idx % (s * o) / o * o + idx % (s * o) % o) + idx / (s * o) % b0 * (s * o) from by ring]
+    rw [Nat.add_mul_div_right _ _ hso_pos]
+    have : (idx % (s * o) / o * o + idx % (s * o) % o) / (s * o) = 0 :=
+      Nat.div_eq_of_lt (by omega)
+    omega
+  have hmod_so_rhs : (idx / (s * o) % b0 * (s * o) + idx % (s * o) / o * o + idx % (s * o) % o) % (s * o) =
+      idx % (s * o) / o * o + idx % (s * o) % o := by
+    rw [show idx / (s * o) % b0 * (s * o) + idx % (s * o) / o * o + idx % (s * o) % o =
+        (idx % (s * o) / o * o + idx % (s * o) % o) + idx / (s * o) % b0 * (s * o) from by ring]
+    rw [Nat.add_mul_mod_self_right]
+    exact Nat.mod_eq_of_lt (by omega)
+  have hdiv_o : (idx % (s * o) / o * o + idx % (s * o) % o) / o =
+      idx % (s * o) / o := by
+    rw [show idx % (s * o) / o * o + idx % (s * o) % o =
+        idx % (s * o) % o + idx % (s * o) / o * o from by ring]
+    rw [Nat.add_mul_div_right _ _ ho]
+    have : idx % (s * o) % o / o = 0 := Nat.div_eq_of_lt (Nat.mod_lt _ ho)
+    omega
+  have hmod_o : (idx % (s * o) / o * o + idx % (s * o) % o) % o =
+      idx % (s * o) % o := by
+    rw [show idx % (s * o) / o * o + idx % (s * o) % o =
+        idx % (s * o) % o + idx % (s * o) / o * o from by ring]
+    rw [Nat.add_mul_mod_self_right]
+    exact Nat.mod_eq_of_lt (Nat.mod_lt _ ho)
+  simp only [hdiv_so, hmod_so_rhs, hdiv_o, hmod_o]
+  -- Now RHS is: ∑ j ∈ range i, valAt (xs[rk]) ((lB*s+seq)*i+j) * valAt w (col*i+j)
+  -- === Handle the LHS ===
+  -- Unfold allGatherPrimDim0 in the LHS
+  conv_lhs => simp only [allGatherPrimDim0, hxs_head]
+  -- Simplify if-then-else guards in the allGatherPrimDim0 body
+  simp only [Tensor.mkShape, hsi_ne, hi_ne, hb0_ne, ↓reduceIte]
+  -- Now need to show the sum with allGatherPrimDim0 values = the sum with piece values
+  -- Both are ∑ j ∈ range i, ... * valAt w (col*i+j)
+  -- For each j, the allGatherPrimDim0 access valAt (Tensor.mkShape [b0*numParts, s, i] ...) ((row*s+seq)*i+j)
+  -- needs to be shown equal to valAt (xs[rk]) ((lB*s+seq)*i+j)
+  -- This requires: ((row*s+seq)*i+j) < prodShape [b0*numParts, s, i]
+  -- and the index decomposition: (row*s+seq)*i+j / (s*i) = row, etc.
+  apply Finset.sum_congr rfl
+  intro j hj
+  have hj_lt : j < i := Finset.mem_range.mp hj
   congr 1
-  ext ⟨j, hj_mem⟩
-  simp only [Finset.mem_range] at hj_mem
+  -- Need: valAt of the gather tensor = valAt of the piece
+  -- The gather tensor is Tensor.mkShape [b0*numParts, s, i] fGather
+  -- Access index: (row*s+seq)*i+j
+  have hgather_idx_lt : (idx / (s * o) * s + idx % (s * o) / o) * i + j < prodShape [b0 * numParts, s, i] := by
+    simp [prodShape, List.foldl]
+    have h1 : idx % (s * o) / o * i + j < s * i := by
+      calc idx % (s * o) / o * i + j
+          < idx % (s * o) / o * i + i := by omega
+        _ = (idx % (s * o) / o + 1) * i := by ring
+        _ ≤ s * i := Nat.mul_le_mul_right i hseq_lt
+    calc (idx / (s * o) * s + idx % (s * o) / o) * i + j
+        = idx % (s * o) / o * i + j + idx / (s * o) * (s * i) := by ring
+      _ < s * i + idx / (s * o) * (s * i) := by omega
+      _ = (idx / (s * o) + 1) * (s * i) := by ring
+      _ ≤ (b0 * numParts) * (s * i) := Nat.mul_le_mul_right (s * i) hrow_lt
+      _ = b0 * numParts * s * i := by ring
+  rw [valAt_of_lt _ _ hgather_idx_lt]
+  simp only [Tensor.mkShape, hsi_ne, hi_ne, hb0_ne, ↓reduceIte]
+  -- Index decomposition for (row*s+seq)*i+j:
+  -- (row*s+seq)*i+j / (s*i) = row (since seq*i+j < s*i)
+  -- (row*s+seq)*i+j % (s*i) = seq*i+j
+  -- (seq*i+j) / i = seq (since j < i)
+  -- (seq*i+j) % i = j
+  have hseqi_lt : idx % (s * o) / o * i + j < s * i := by
+    calc idx % (s * o) / o * i + j
+        < idx % (s * o) / o * i + i := by omega
+      _ = (idx % (s * o) / o + 1) * i := by ring
+      _ ≤ s * i := Nat.mul_le_mul_right i hseq_lt
+  have hdiv_si : ((idx / (s * o) * s + idx % (s * o) / o) * i + j) / (s * i) = idx / (s * o) := by
+    rw [show (idx / (s * o) * s + idx % (s * o) / o) * i + j =
+        (idx % (s * o) / o * i + j) + idx / (s * o) * (s * i) from by ring]
+    rw [Nat.add_mul_div_right _ _ hsi_pos]
+    have : (idx % (s * o) / o * i + j) / (s * i) = 0 := Nat.div_eq_of_lt (by omega)
+    omega
+  have hmod_si : ((idx / (s * o) * s + idx % (s * o) / o) * i + j) % (s * i) =
+      idx % (s * o) / o * i + j := by
+    rw [show (idx / (s * o) * s + idx % (s * o) / o) * i + j =
+        (idx % (s * o) / o * i + j) + idx / (s * o) * (s * i) from by ring]
+    rw [Nat.add_mul_mod_self_right]
+    exact Nat.mod_eq_of_lt (by omega)
+  have hdiv_i : (idx % (s * o) / o * i + j) / i = idx % (s * o) / o := by
+    rw [show idx % (s * o) / o * i + j = j + idx % (s * o) / o * i from by ring]
+    rw [Nat.add_mul_div_right _ _ hi]
+    have : j / i = 0 := Nat.div_eq_of_lt hj_lt
+    omega
+  have hmod_i : (idx % (s * o) / o * i + j) % i = j := by
+    rw [show idx % (s * o) / o * i + j = j + idx % (s * o) / o * i from by ring]
+    rw [Nat.add_mul_mod_self_right]
+    exact Nat.mod_eq_of_lt hj_lt
+  simp only [hdiv_si, hmod_si, hdiv_i, hmod_i]
+  -- Now LHS summand = valAt (xs.getD rk (zeroTensor [b0,s,i])) (lB*(s*i)+seq*i+j)
+  -- RHS summand = valAt (xs[rk]) ((lB*s+seq)*i+j)
+  -- These are equal since xs.getD rk d = xs[rk] and lB*(s*i)+seq*i+j = (lB*s+seq)*i+j
   congr 1
-  -- Show: valAt(allGatherPrimDim0(xs), (row*s + seq)*i + j) =
-  --       valAt(xs.getD r _, (localI*s + seq)*i + j)
-  simp only [allGatherPrimDim0, hxs_head, Tensor.mkShape]
-  have hinner_idx : (row * s + seq) * i + j < prodShape [b0 * numParts, s, i] := by
-    simp [prodShape]; nlinarith [hrow_bound, hseq_bound]
-  rw [valAt_of_lt (h := hinner_idx)]
-  simp only []
-  have hsi_ne : s * i ≠ 0 := by omega
-  have hi_ne : i ≠ 0 := by omega
-  have hb0_ne : b0 ≠ 0 := by omega
-  simp only [hsi_ne, ↓reduceIte, hi_ne, hb0_ne]
-  -- Show index arithmetic agrees
-  -- (row * s + seq) * i + j decomposition:
-  -- div by s*i gives row (since seq*i + j < s*i)
-  -- mod by s*i gives seq*i + j
-  -- (seq*i + j) / i gives seq (since j < i)
-  -- (seq*i + j) % i gives j
-  have hseq_i_j_lt : seq * i + j < s * i := by nlinarith
-  have h_div_si : ((row * s + seq) * i + j) / (s * i) = row := by
-    have : (row * s + seq) * i + j = row * (s * i) + (seq * i + j) := by ring
-    rw [this, Nat.mul_add_div _ _ (by omega : 0 < s * i) hseq_i_j_lt]
-  have h_mod_si : ((row * s + seq) * i + j) % (s * i) = seq * i + j := by
-    have : (row * s + seq) * i + j = row * (s * i) + (seq * i + j) := by ring
-    rw [this, Nat.mul_add_mod _ _ (by omega : 0 < s * i) hseq_i_j_lt]
-  have h_div_i : (seq * i + j) / i = seq :=
-    Nat.mul_add_div _ _ hi (by omega : j < i) hj_mem
-  have h_mod_i : (seq * i + j) % i = j :=
-    Nat.mul_add_mod _ _ hi (by omega : j < i) hj_mem
-  rw [h_div_si, h_mod_si, h_div_i, h_mod_i]
-  -- Now both sides reference xs.getD (row/b0) with index (row%b0 * (s*i) + seq*i + j)
-  congr 1
-  -- localI * (s*i) + seq * i + j = (localI * s + seq) * i + j
-  ring
+  · rw [show xs.getD (idx / (s * o) / b0) (zeroTensor [b0, s, i]) =
+        xs[idx / (s * o) / b0] from by
+      unfold List.getD
+      rw [List.getElem?_eq_getElem hrk_lt_len]; rfl]
+  · ring
+
+theorem fw_linear_3d_allGatherPrimDimN0_comm
+    (numParts b0 s i o : Nat)
+    (xs : List Tensor) (w : Tensor)
+    (hw : w.shape = [o, i])
+    (hxs_head : (xs.head?.map (fun t => t.shape)).getD [] = [b0, s, i])
+    (hxs_shape : ∀ x ∈ xs, x.shape = [b0, s, i])
+    (hxs_len : xs.length = numParts)
+    (hparts : 0 < numParts) (hb0 : 0 < b0) (hs : 0 < s) (hi : 0 < i) (ho : 0 < o) :
+    fw_linear (allGatherPrimDimN 0 numParts 0 xs) w =
+    allGatherPrimDim0 numParts 0 (xs.map (fun x => fw_linear x w)) := by
+  rw [allGatherPrimDimN_0_eq_dim0 _ _ _ ⟨b0, s, i, hxs_head⟩]
+  exact fw_linear_3d_allGatherPrimDim0_comm numParts b0 s i o xs w hw hxs_head hxs_shape hxs_len
+    hparts hb0 hs hi ho
 
 theorem fw_linear_allGather_eq_allReduce_fw_linear_chunk
     (numParts b i o shard : Nat) (x : Tensor) (ws : List Tensor)
@@ -3178,7 +3727,7 @@ def InitGoalHolds (numParts : Nat) (goal : LineageGoal) (initSM initPM : Store) 
   let tps := goal.tps.map (fun p => initPM p.tid)
   ts.shape = goal.tsShape ∧
     (tps.map (fun t => t.shape)) = goal.tpShapes ∧
-    ts = reconstruct numParts 0 tps
+    ts = reconstructWithDim goal.gatherDim numParts 0 tps
 
 def InitGoalsHold (numParts : Nat) (goals : List LineageGoal) (initSM initPM : Store) : Prop :=
   ∀ g ∈ goals, InitGoalHolds numParts g initSM initPM
@@ -3200,7 +3749,7 @@ def CoarseLineageHolds (sm pm : GraphDecl) (goal : LineageGoal) : Prop :=
     let tps := goal.tps.map (fun p => pmStore p.tid)
     ts.shape = goal.tsShape ∧
       (tps.map (fun t => t.shape)) = goal.tpShapes ∧
-      ts = reconstruct pm.numRanks 0 tps
+      ts = reconstructWithDim goal.gatherDim pm.numRanks 0 tps
 
 /-!
 `CoarseLineageHolds` as written above is intentionally “shape-free” on inputs, hence too strong
@@ -3221,7 +3770,7 @@ def CoarseLineageHoldsWith (sm pm : GraphDecl) (goal : LineageGoal)
     let tps := goal.tps.map (fun p => pmStore p.tid)
     ts.shape = goal.tsShape ∧
       (tps.map (fun t => t.shape)) = goal.tpShapes ∧
-      ts = reconstruct pm.numRanks 0 tps
+      ts = reconstructWithDim goal.gatherDim pm.numRanks 0 tps
 
 def CoarseLineageHoldsWithInit (sm pm : GraphDecl) (goal : LineageGoal)
     (smInit pmInit : ShapeEnv) (initGoals : List LineageGoal) : Prop :=
@@ -3235,7 +3784,7 @@ def CoarseLineageHoldsWithInit (sm pm : GraphDecl) (goal : LineageGoal)
     let tps := goal.tps.map (fun p => pmStore p.tid)
     ts.shape = goal.tsShape ∧
       (tps.map (fun t => t.shape)) = goal.tpShapes ∧
-      ts = reconstruct pm.numRanks 0 tps
+      ts = reconstructWithDim goal.gatherDim pm.numRanks 0 tps
 
 /-!
 ## Incremental lineage goals with intermediate prerequisites
@@ -3253,7 +3802,7 @@ def IntermediateGoalHolds (numParts : Nat) (goal : LineageGoal) (smStore pmStore
   let tps := goal.tps.map (fun p => pmStore p.tid)
   ts.shape = goal.tsShape ∧
     (tps.map (fun t => t.shape)) = goal.tpShapes ∧
-    ts = reconstruct numParts 0 tps
+    ts = reconstructWithDim goal.gatherDim numParts 0 tps
 
 def IntermediateGoalsHold (numParts : Nat) (goals : List LineageGoal)
     (smStore pmStore : Store) : Prop :=
@@ -3278,7 +3827,7 @@ def CoarseLineageHoldsWithIntermediates (sm pm : GraphDecl) (goal : LineageGoal)
     let tps := goal.tps.map (fun p => pmStore p.tid)
     ts.shape = goal.tsShape ∧
       (tps.map (fun t => t.shape)) = goal.tpShapes ∧
-      ts = reconstruct pm.numRanks 0 tps
+      ts = reconstructWithDim goal.gatherDim pm.numRanks 0 tps
 
 /-- If we prove the full statement for a goal, the incremental version follows. -/
 theorem CoarseLineageHoldsWithIntermediates_of_full

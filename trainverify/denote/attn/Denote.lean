@@ -2012,6 +2012,7 @@ Unlike dX, dW does NOT depend on the weight matrix w.
 -/
 
 set_option maxHeartbeats 0 in
+-- Extensive index arithmetic across allGather and bw_linear requires many heartbeats
 theorem bw_linear_snd_allGather_eq_allGather_bw_linear_chunk
     (numParts b i o shard : Nat) (g x : Tensor) (ws : List Tensor)
     (hg : g.shape = [b, o])

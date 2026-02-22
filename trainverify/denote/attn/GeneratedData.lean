@@ -890,19 +890,19 @@ def intermediateGoal_103 : LineageGoal :=
   { ts := 103, tsShape := [16, 64, 8, 16], tps := [{ rank := 0, tid := 103 }], tpShapes := [[16, 64, 8, 16]] }
 
 def intermediateGoal_104 : LineageGoal :=
-  { ts := 104, tsShape := [16, 8, 64, 16], tps := [{ rank := 0, tid := 256 }, { rank := 1, tid := 257 }, { rank := 2, tid := 258 }, { rank := 3, tid := 259 }], tpShapes := [[16, 8, 64, 4], [16, 8, 64, 4], [16, 8, 64, 4], [16, 8, 64, 4]] }
+  { ts := 104, tsShape := [16, 8, 64, 16], tps := [{ rank := 0, tid := 256 }, { rank := 1, tid := 257 }, { rank := 2, tid := 258 }, { rank := 3, tid := 259 }], tpShapes := [[16, 8, 64, 4], [16, 8, 64, 4], [16, 8, 64, 4], [16, 8, 64, 4]], gatherDim := 3 }
 
 def intermediateGoal_105 : LineageGoal :=
   { ts := 105, tsShape := [16, 64, 8, 16], tps := [{ rank := 0, tid := 105 }], tpShapes := [[16, 64, 8, 16]] }
 
 def intermediateGoal_106 : LineageGoal :=
-  { ts := 106, tsShape := [16, 8, 64, 16], tps := [{ rank := 0, tid := 280 }, { rank := 1, tid := 281 }, { rank := 2, tid := 282 }, { rank := 3, tid := 283 }], tpShapes := [[16, 2, 64, 16], [16, 2, 64, 16], [16, 2, 64, 16], [16, 2, 64, 16]] }
+  { ts := 106, tsShape := [16, 8, 64, 16], tps := [{ rank := 0, tid := 280 }, { rank := 1, tid := 281 }, { rank := 2, tid := 282 }, { rank := 3, tid := 283 }], tpShapes := [[16, 2, 64, 16], [16, 2, 64, 16], [16, 2, 64, 16], [16, 2, 64, 16]], gatherDim := 1 }
 
 def intermediateGoal_107 : LineageGoal :=
   { ts := 107, tsShape := [16, 64, 8, 16], tps := [{ rank := 0, tid := 107 }], tpShapes := [[16, 64, 8, 16]] }
 
 def intermediateGoal_108 : LineageGoal :=
-  { ts := 108, tsShape := [16, 8, 64, 16], tps := [{ rank := 0, tid := 304 }, { rank := 1, tid := 305 }, { rank := 2, tid := 306 }, { rank := 3, tid := 307 }], tpShapes := [[16, 2, 64, 16], [16, 2, 64, 16], [16, 2, 64, 16], [16, 2, 64, 16]] }
+  { ts := 108, tsShape := [16, 8, 64, 16], tps := [{ rank := 0, tid := 304 }, { rank := 1, tid := 305 }, { rank := 2, tid := 306 }, { rank := 3, tid := 307 }], tpShapes := [[16, 2, 64, 16], [16, 2, 64, 16], [16, 2, 64, 16], [16, 2, 64, 16]], gatherDim := 1 }
 
 def intermediateGoal_109 : LineageGoal :=
   { ts := 109, tsShape := [16, 8, 16, 64], tps := [{ rank := 0, tid := 328 }, { rank := 1, tid := 329 }, { rank := 2, tid := 330 }, { rank := 3, tid := 331 }], tpShapes := [[4, 8, 16, 64], [4, 8, 16, 64], [4, 8, 16, 64], [4, 8, 16, 64]] }
@@ -911,16 +911,16 @@ def intermediateGoal_110 : LineageGoal :=
   { ts := 110, tsShape := [16, 8, 64, 64], tps := [{ rank := 0, tid := 352 }, { rank := 1, tid := 353 }, { rank := 2, tid := 354 }, { rank := 3, tid := 355 }], tpShapes := [[4, 8, 64, 64], [4, 8, 64, 64], [4, 8, 64, 64], [4, 8, 64, 64]] }
 
 def intermediateGoal_111 : LineageGoal :=
-  { ts := 111, tsShape := [16, 8, 64, 64], tps := [{ rank := 0, tid := 376 }, { rank := 1, tid := 377 }, { rank := 2, tid := 378 }, { rank := 3, tid := 379 }], tpShapes := [[16, 8, 64, 16], [16, 8, 64, 16], [16, 8, 64, 16], [16, 8, 64, 16]] }
+  { ts := 111, tsShape := [16, 8, 64, 64], tps := [{ rank := 0, tid := 376 }, { rank := 1, tid := 377 }, { rank := 2, tid := 378 }, { rank := 3, tid := 379 }], tpShapes := [[16, 8, 64, 16], [16, 8, 64, 16], [16, 8, 64, 16], [16, 8, 64, 16]], gatherDim := 3 }
 
 def intermediateGoal_112 : LineageGoal :=
-  { ts := 112, tsShape := [16, 8, 64, 64], tps := [{ rank := 0, tid := 400 }, { rank := 1, tid := 401 }, { rank := 2, tid := 402 }, { rank := 3, tid := 403 }], tpShapes := [[16, 2, 64, 64], [16, 2, 64, 64], [16, 2, 64, 64], [16, 2, 64, 64]] }
+  { ts := 112, tsShape := [16, 8, 64, 64], tps := [{ rank := 0, tid := 400 }, { rank := 1, tid := 401 }, { rank := 2, tid := 402 }, { rank := 3, tid := 403 }], tpShapes := [[16, 2, 64, 64], [16, 2, 64, 64], [16, 2, 64, 64], [16, 2, 64, 64]], gatherDim := 1 }
 
 def intermediateGoal_113 : LineageGoal :=
   { ts := 113, tsShape := [16, 8, 64, 16], tps := [{ rank := 0, tid := 113 }], tpShapes := [[16, 8, 64, 16]] }
 
 def intermediateGoal_114 : LineageGoal :=
-  { ts := 114, tsShape := [16, 64, 8, 16], tps := [{ rank := 0, tid := 452 }, { rank := 1, tid := 453 }, { rank := 2, tid := 454 }, { rank := 3, tid := 455 }], tpShapes := [[16, 64, 8, 4], [16, 64, 8, 4], [16, 64, 8, 4], [16, 64, 8, 4]] }
+  { ts := 114, tsShape := [16, 64, 8, 16], tps := [{ rank := 0, tid := 452 }, { rank := 1, tid := 453 }, { rank := 2, tid := 454 }, { rank := 3, tid := 455 }], tpShapes := [[16, 64, 8, 4], [16, 64, 8, 4], [16, 64, 8, 4], [16, 64, 8, 4]], gatherDim := 3 }
 
 def intermediateGoal_115 : LineageGoal :=
   { ts := 115, tsShape := [16, 64, 8, 16], tps := [{ rank := 0, tid := 115 }], tpShapes := [[16, 64, 8, 16]] }
@@ -929,7 +929,7 @@ def intermediateGoal_116 : LineageGoal :=
   { ts := 116, tsShape := [16, 64, 128], tps := [{ rank := 0, tid := 116 }], tpShapes := [[16, 64, 128]] }
 
 def intermediateGoal_118 : LineageGoal :=
-  { ts := 118, tsShape := [16, 64, 128], tps := [{ rank := 0, tid := 500 }, { rank := 1, tid := 501 }, { rank := 2, tid := 502 }, { rank := 3, tid := 503 }], tpShapes := [[16, 16, 128], [16, 16, 128], [16, 16, 128], [16, 16, 128]] }
+  { ts := 118, tsShape := [16, 64, 128], tps := [{ rank := 0, tid := 500 }, { rank := 1, tid := 501 }, { rank := 2, tid := 502 }, { rank := 3, tid := 503 }], tpShapes := [[16, 16, 128], [16, 16, 128], [16, 16, 128], [16, 16, 128]], gatherDim := 1 }
 
 def intermediateGoal_125 : LineageGoal :=
   { ts := 125, tsShape := [16, 64, 128], tps := [{ rank := 0, tid := 125 }], tpShapes := [[16, 64, 128]] }
@@ -944,19 +944,19 @@ def intermediateGoal_130 : LineageGoal :=
   { ts := 130, tsShape := [16, 64, 8, 16], tps := [{ rank := 0, tid := 130 }], tpShapes := [[16, 64, 8, 16]] }
 
 def intermediateGoal_131 : LineageGoal :=
-  { ts := 131, tsShape := [16, 8, 64, 16], tps := [{ rank := 0, tid := 269 }, { rank := 1, tid := 271 }, { rank := 2, tid := 273 }, { rank := 3, tid := 275 }], tpShapes := [[16, 8, 64, 4], [16, 8, 64, 4], [16, 8, 64, 4], [16, 8, 64, 4]] }
+  { ts := 131, tsShape := [16, 8, 64, 16], tps := [{ rank := 0, tid := 269 }, { rank := 1, tid := 271 }, { rank := 2, tid := 273 }, { rank := 3, tid := 275 }], tpShapes := [[16, 8, 64, 4], [16, 8, 64, 4], [16, 8, 64, 4], [16, 8, 64, 4]], gatherDim := 3 }
 
 def intermediateGoal_132 : LineageGoal :=
   { ts := 132, tsShape := [16, 64, 8, 16], tps := [{ rank := 0, tid := 132 }], tpShapes := [[16, 64, 8, 16]] }
 
 def intermediateGoal_133 : LineageGoal :=
-  { ts := 133, tsShape := [16, 8, 64, 16], tps := [{ rank := 0, tid := 293 }, { rank := 1, tid := 295 }, { rank := 2, tid := 297 }, { rank := 3, tid := 299 }], tpShapes := [[16, 2, 64, 16], [16, 2, 64, 16], [16, 2, 64, 16], [16, 2, 64, 16]] }
+  { ts := 133, tsShape := [16, 8, 64, 16], tps := [{ rank := 0, tid := 293 }, { rank := 1, tid := 295 }, { rank := 2, tid := 297 }, { rank := 3, tid := 299 }], tpShapes := [[16, 2, 64, 16], [16, 2, 64, 16], [16, 2, 64, 16], [16, 2, 64, 16]], gatherDim := 1 }
 
 def intermediateGoal_134 : LineageGoal :=
   { ts := 134, tsShape := [16, 64, 8, 16], tps := [{ rank := 0, tid := 134 }], tpShapes := [[16, 64, 8, 16]] }
 
 def intermediateGoal_135 : LineageGoal :=
-  { ts := 135, tsShape := [16, 8, 64, 16], tps := [{ rank := 0, tid := 317 }, { rank := 1, tid := 319 }, { rank := 2, tid := 321 }, { rank := 3, tid := 323 }], tpShapes := [[16, 2, 64, 16], [16, 2, 64, 16], [16, 2, 64, 16], [16, 2, 64, 16]] }
+  { ts := 135, tsShape := [16, 8, 64, 16], tps := [{ rank := 0, tid := 317 }, { rank := 1, tid := 319 }, { rank := 2, tid := 321 }, { rank := 3, tid := 323 }], tpShapes := [[16, 2, 64, 16], [16, 2, 64, 16], [16, 2, 64, 16], [16, 2, 64, 16]], gatherDim := 1 }
 
 def intermediateGoal_136 : LineageGoal :=
   { ts := 136, tsShape := [16, 8, 16, 64], tps := [{ rank := 0, tid := 341 }, { rank := 1, tid := 343 }, { rank := 2, tid := 345 }, { rank := 3, tid := 347 }], tpShapes := [[4, 8, 16, 64], [4, 8, 16, 64], [4, 8, 16, 64], [4, 8, 16, 64]] }
@@ -965,16 +965,16 @@ def intermediateGoal_137 : LineageGoal :=
   { ts := 137, tsShape := [16, 8, 64, 64], tps := [{ rank := 0, tid := 365 }, { rank := 1, tid := 367 }, { rank := 2, tid := 369 }, { rank := 3, tid := 371 }], tpShapes := [[4, 8, 64, 64], [4, 8, 64, 64], [4, 8, 64, 64], [4, 8, 64, 64]] }
 
 def intermediateGoal_138 : LineageGoal :=
-  { ts := 138, tsShape := [16, 8, 64, 64], tps := [{ rank := 0, tid := 389 }, { rank := 1, tid := 391 }, { rank := 2, tid := 393 }, { rank := 3, tid := 395 }], tpShapes := [[16, 8, 64, 16], [16, 8, 64, 16], [16, 8, 64, 16], [16, 8, 64, 16]] }
+  { ts := 138, tsShape := [16, 8, 64, 64], tps := [{ rank := 0, tid := 389 }, { rank := 1, tid := 391 }, { rank := 2, tid := 393 }, { rank := 3, tid := 395 }], tpShapes := [[16, 8, 64, 16], [16, 8, 64, 16], [16, 8, 64, 16], [16, 8, 64, 16]], gatherDim := 3 }
 
 def intermediateGoal_139 : LineageGoal :=
-  { ts := 139, tsShape := [16, 8, 64, 64], tps := [{ rank := 0, tid := 413 }, { rank := 1, tid := 415 }, { rank := 2, tid := 417 }, { rank := 3, tid := 419 }], tpShapes := [[16, 2, 64, 64], [16, 2, 64, 64], [16, 2, 64, 64], [16, 2, 64, 64]] }
+  { ts := 139, tsShape := [16, 8, 64, 64], tps := [{ rank := 0, tid := 413 }, { rank := 1, tid := 415 }, { rank := 2, tid := 417 }, { rank := 3, tid := 419 }], tpShapes := [[16, 2, 64, 64], [16, 2, 64, 64], [16, 2, 64, 64], [16, 2, 64, 64]], gatherDim := 1 }
 
 def intermediateGoal_140 : LineageGoal :=
   { ts := 140, tsShape := [16, 8, 64, 16], tps := [{ rank := 0, tid := 140 }], tpShapes := [[16, 8, 64, 16]] }
 
 def intermediateGoal_141 : LineageGoal :=
-  { ts := 141, tsShape := [16, 64, 8, 16], tps := [{ rank := 0, tid := 465 }, { rank := 1, tid := 467 }, { rank := 2, tid := 469 }, { rank := 3, tid := 471 }], tpShapes := [[16, 64, 8, 4], [16, 64, 8, 4], [16, 64, 8, 4], [16, 64, 8, 4]] }
+  { ts := 141, tsShape := [16, 64, 8, 16], tps := [{ rank := 0, tid := 465 }, { rank := 1, tid := 467 }, { rank := 2, tid := 469 }, { rank := 3, tid := 471 }], tpShapes := [[16, 64, 8, 4], [16, 64, 8, 4], [16, 64, 8, 4], [16, 64, 8, 4]], gatherDim := 3 }
 
 def intermediateGoal_142 : LineageGoal :=
   { ts := 142, tsShape := [16, 64, 8, 16], tps := [{ rank := 0, tid := 142 }], tpShapes := [[16, 64, 8, 16]] }
@@ -983,7 +983,7 @@ def intermediateGoal_143 : LineageGoal :=
   { ts := 143, tsShape := [16, 64, 128], tps := [{ rank := 0, tid := 143 }], tpShapes := [[16, 64, 128]] }
 
 def intermediateGoal_145 : LineageGoal :=
-  { ts := 145, tsShape := [16, 64, 128], tps := [{ rank := 0, tid := 514 }, { rank := 1, tid := 517 }, { rank := 2, tid := 520 }, { rank := 3, tid := 523 }], tpShapes := [[16, 16, 128], [16, 16, 128], [16, 16, 128], [16, 16, 128]] }
+  { ts := 145, tsShape := [16, 64, 128], tps := [{ rank := 0, tid := 514 }, { rank := 1, tid := 517 }, { rank := 2, tid := 520 }, { rank := 3, tid := 523 }], tpShapes := [[16, 16, 128], [16, 16, 128], [16, 16, 128], [16, 16, 128]], gatherDim := 1 }
 
 def intermediateGoal_159 : LineageGoal :=
   { ts := 159, tsShape := [16, 64, 128], tps := [{ rank := 0, tid := 168 }, { rank := 1, tid := 169 }, { rank := 2, tid := 170 }, { rank := 3, tid := 171 }], tpShapes := [[4, 64, 128], [4, 64, 128], [4, 64, 128], [4, 64, 128]] }
@@ -992,7 +992,7 @@ def intermediateGoal_163 : LineageGoal :=
   { ts := 163, tsShape := [16, 64, 128], tps := [{ rank := 0, tid := 196 }, { rank := 1, tid := 197 }, { rank := 2, tid := 198 }, { rank := 3, tid := 199 }], tpShapes := [[4, 64, 128], [4, 64, 128], [4, 64, 128], [4, 64, 128]] }
 
 def intermediateGoal_167 : LineageGoal :=
-  { ts := 167, tsShape := [16, 64, 128], tps := [{ rank := 0, tid := 224 }, { rank := 1, tid := 225 }, { rank := 2, tid := 226 }, { rank := 3, tid := 227 }], tpShapes := [[16, 64, 32], [16, 64, 32], [16, 64, 32], [16, 64, 32]] }
+  { ts := 167, tsShape := [16, 64, 128], tps := [{ rank := 0, tid := 224 }, { rank := 1, tid := 225 }, { rank := 2, tid := 226 }, { rank := 3, tid := 227 }], tpShapes := [[16, 64, 32], [16, 64, 32], [16, 64, 32], [16, 64, 32]], gatherDim := 2 }
 
 def intermediateGoals : List LineageGoal := [intermediateGoal_98, intermediateGoal_100, intermediateGoal_102, intermediateGoal_103, intermediateGoal_104, intermediateGoal_105, intermediateGoal_106, intermediateGoal_107, intermediateGoal_108, intermediateGoal_109, intermediateGoal_110, intermediateGoal_111, intermediateGoal_112, intermediateGoal_113, intermediateGoal_114, intermediateGoal_115, intermediateGoal_116, intermediateGoal_118, intermediateGoal_125, intermediateGoal_127, intermediateGoal_129, intermediateGoal_130, intermediateGoal_131, intermediateGoal_132, intermediateGoal_133, intermediateGoal_134, intermediateGoal_135, intermediateGoal_136, intermediateGoal_137, intermediateGoal_138, intermediateGoal_139, intermediateGoal_140, intermediateGoal_141, intermediateGoal_142, intermediateGoal_143, intermediateGoal_145, intermediateGoal_159, intermediateGoal_163, intermediateGoal_167]
 
