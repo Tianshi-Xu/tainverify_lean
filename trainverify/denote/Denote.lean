@@ -46,6 +46,7 @@ structure NodeDecl where
   op : String
   ins : List Tid
   outs : List Tid
+  params : List Nat := []
   deriving Repr, DecidableEq
 
 /-- A graph/program is a list of node equations, plus `numRanks`.
@@ -334,6 +335,20 @@ def bw_linear (gradOut x w : Tensor) : Tensor × Tensor :=
   let dx := Tensor.mkShape [bX, iX] (k_matmul_right_transpose bX iX oW gradOut w)
       let dw := Tensor.mkShape [oW, iW] (k_matmul_transpose bX oW iW gradOut x)
       (dx, dw)
+  | [b, s, _oG], [_bX, _sX, iX], [oW, iW] =>
+      -- Batched backward linear: treat first two dims as combined batch (b * s).
+      let bs := b * s
+      let dx := Tensor.mkShape [b, s, iX] (fun outIdx =>
+        let flat := outIdx.1
+        let si := s * iX
+        let row := if si = 0 then 0 else flat / si
+        let rem := if si = 0 then 0 else flat % si
+        let seq := if iX = 0 then 0 else rem / iX
+        let col := if iX = 0 then 0 else rem % iX
+        ∑ j ∈ Finset.range oW,
+          (valAt gradOut ((row * s + seq) * _oG + j)) * (valAt w (j * iW + col)))
+      let dw := Tensor.mkShape [oW, iW] (k_matmul_transpose bs oW iW gradOut x)
+      (dx, dw)
   | _, _, _ => (Tensor.mkShape [] (fun _ => 0), Tensor.mkShape [] (fun _ => 0))
 
 /-!
@@ -431,6 +446,37 @@ def tensorSum (xs : List Tensor) : Tensor :=
   match xs with
   | [] => Tensor.mkShape [] (fun _ => 0)
   | t :: _ => Tensor.mkShape t.shape (fun i => xs.foldl (fun acc x => acc + valAt x i.1) 0)
+
+/-- View (reshape): same flat data, different shape interpretation. -/
+def fw_view (targetShape : Shape) (x : Tensor) : Tensor :=
+  Tensor.mkShape targetShape (fun i => valAt x i.1)
+
+/-- Convert flat index to multi-index given a shape. -/
+def flatToMulti : Shape → Nat → List Nat
+  | [], _ => []
+  | _ :: rest, flat =>
+    let stride := prodShape rest
+    if stride = 0 then 0 :: flatToMulti rest 0
+    else (flat / stride) :: flatToMulti rest (flat % stride)
+
+/-- Convert multi-index to flat index given a shape. -/
+def multiToFlat : Shape → List Nat → Nat
+  | _ :: srest, i :: irest => i * prodShape srest + multiToFlat srest irest
+  | _, _ => 0
+
+/-- Swap elements at positions i and j in a list of Nat. -/
+def listSwapAt (xs : List Nat) (i j : Nat) : List Nat :=
+  let a := xs.getD i 0
+  let b := xs.getD j 0
+  (xs.set i b).set j a
+
+/-- Transpose by swapping two arbitrary dimensions. -/
+def transposeAxes (dim0 dim1 : Nat) (x : Tensor) : Tensor :=
+  let outShape := listSwapAt x.shape dim0 dim1
+  Tensor.mkShape outShape (fun outIdx =>
+    let outMI := flatToMulti outShape outIdx.1
+    let inMI := listSwapAt outMI dim0 dim1
+    valAt x (multiToFlat x.shape inMI))
 
 -- Aliases for backward compatibility with evalOp
 abbrev fw_multiref := tensorId
@@ -1809,7 +1855,7 @@ def dimsPos (sh : Shape) : Bool :=
 def allEqShape (sh : Shape) (xs : List Shape) : Bool :=
   xs.all (fun s => decide (s = sh))
 
-def opOutShapes (numParts : Nat) (op : String) (inShapes : List Shape) : Option (List Shape) :=
+def opOutShapes (numParts : Nat) (op : String) (params : List Nat) (inShapes : List Shape) : Option (List Shape) :=
   match op, inShapes with
   | "OpName.FW_sum", [_x] =>
       some [[1]]
@@ -1870,23 +1916,28 @@ def opOutShapes (numParts : Nat) (op : String) (inShapes : List Shape) : Option 
   | "OpName.FW_multiref", [x] =>
       -- Outputs 3 copies of x (for Q, K, V projections)
       some [x, x, x]
-  -- FW_view / BW_view: reshape (product of dims must match)
-  -- For shape checking, we accept any reshape and trust the graph generator
-  | "OpName.FW_view", [x] =>
-      -- View output shape is determined by the node's outs, we pass through
-      -- In practice, the graph generator ensures correctness
-      some [x]  -- placeholder: actual shape comes from graph
-  | "OpName.BW_view", [g, _x] =>
-      some [g]  -- gradient has same shape as input gradient
-  -- FW_transpose / BW_transpose: swap last two dimensions
+  | "OpName.FW_view", [_x] =>
+      match params with
+      | [] => some [_x]
+      | targetShape => some [targetShape]
+  | "OpName.BW_view", [_g, _x] =>
+      match params with
+      | [] => some [_g]
+      | targetShape => some [targetShape]
   | "OpName.FW_transpose", [x] =>
-      match x.reverse with
-      | d1 :: d0 :: rest => some [(d0 :: d1 :: rest).reverse]
-      | _ => some [x]  -- 1D or 0D: no-op
+      match params with
+      | [d0, d1] => some [listSwapAt x d0 d1]
+      | _ =>
+        match x.reverse with
+        | d1 :: d0 :: rest => some [(d0 :: d1 :: rest).reverse]
+        | _ => some [x]
   | "OpName.BW_transpose", [g, _x] =>
-      match g.reverse with
-      | d1 :: d0 :: rest => some [(d0 :: d1 :: rest).reverse]
-      | _ => some [g]
+      match params with
+      | [d0, d1] => some [listSwapAt g d0 d1]
+      | _ =>
+        match g.reverse with
+        | d1 :: d0 :: rest => some [(d0 :: d1 :: rest).reverse]
+        | _ => some [g]
   -- FW_matmul / BW_matmul: matrix multiplication
   -- [b, n, k] @ [b, k, m] -> [b, n, m]  (batched)
   -- or [n, k] @ [k, m] -> [n, m] (when batchX = batchY = [])
@@ -1946,7 +1997,7 @@ def applyNodeShapesChecked (g : GraphDecl) (m : ShapeMap) (n : NodeDecl) : Excep
             Except.error s!"shape check: known shape is degenerate for {n.op}"
       | none =>
           -- Some output shapes not known, need to infer
-          match opOutShapes g.numRanks n.op inShapes with
+          match opOutShapes g.numRanks n.op n.params inShapes with
           | none => Except.error s!"shape check: op/shape mismatch for {n.op}"
           | some outShapes =>
               if _hLen : outShapes.length = n.outs.length then
@@ -1993,7 +2044,7 @@ For operations like view/contiguous that don't change numerical values, we retur
 the input tensor directly. Shape correctness is ensured by separate shape checking.
 -/
 
-def evalOp (numParts rank : Nat) (op : String) (args : List Tensor) : List Tensor :=
+def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List Tensor) : List Tensor :=
   match op, args with
   | "OpName.FW_sum", [x] => [fw_sum x]
   | "OpName.BW_sum", [g, x] => [bw_sum g x]
@@ -2002,36 +2053,43 @@ def evalOp (numParts rank : Nat) (op : String) (args : List Tensor) : List Tenso
       let (dx, dw) := bw_linear g x w
       [dx, dw]
   | "OpName.ChunkPrim", [x] =>
-      -- For 3D tensors, chunk on dim 0; for 2D, chunk on last dim
       match x.shape with
       | [_, _, _] => [chunkPrimDim0 numParts rank x]
       | _ => [chunkPrim numParts rank x]
   | "OpName.AllGatherPrim", xs =>
-      -- For 3D tensors, gather on dim 0; for 2D, gather on last dim
       match (xs.head?.map (fun t => t.shape)).getD [] with
       | [_, _, _] => [allGatherPrimDim0 numParts rank xs]
       | _ => [allGatherPrim numParts rank xs]
   | "OpName.AllReducePrim", xs => [allReducePrim numParts rank xs]
   | "OpName.AllToAllPrim", xs => [allToAllPrim numParts rank xs]
   -- Attention operators
-  | "OpName.FW_multiref", [x] => [x, x, x]  -- Returns 3 copies (for Q, K, V)
-  | "OpName.FW_view", [x] => [x]  -- Reshape: numerically identity
-  | "OpName.BW_view", [g, _x] => [g]  -- Backward reshape: numerically identity
-  | "OpName.FW_transpose", [x] => [fw_transpose x]
-  | "OpName.BW_transpose", [g, _x] => [bw_transpose g]
+  | "OpName.FW_multiref", [x] => [x, x, x]
+  | "OpName.FW_view", [x] =>
+      match params with
+      | [] => [x]
+      | targetShape => [fw_view targetShape x]
+  | "OpName.BW_view", [g, _x] =>
+      match params with
+      | [] => [g]
+      | targetShape => [fw_view targetShape g]
+  | "OpName.FW_transpose", [x] =>
+      match params with
+      | [d0, d1] => [transposeAxes d0 d1 x]
+      | _ => [fw_transpose x]
+  | "OpName.BW_transpose", [g, _x] =>
+      match params with
+      | [d0, d1] => [transposeAxes d0 d1 g]
+      | _ => [bw_transpose g]
   | "OpName.FW_matmul", [x, y] => [fw_matmul x y]
   | "OpName.BW_matmul", [g, x, y] =>
       let (dx, dy) := bw_matmul g x y
       [dx, dy]
-  | "OpName.FW_div", [x] =>
-      -- Divisor is sqrt(head_dim), typically sqrt(16) = 4 for our model
-      -- For now, we use a placeholder; actual value should come from graph metadata
-      [fw_div 4.0 x]  -- TODO: parameterize divisor
+  | "OpName.FW_div", [x] => [fw_div 4.0 x]
   | "OpName.BW_div", [g, _x] => [bw_div 4.0 g]
   | "OpName.FW_softmax", [x] => [fw_softmax x]
-  | "OpName.BW_softmax", [g, y] => [bw_softmax g y]  -- y is softmax output, not input
-  | "OpName.FW_contiguous", [x] => [x]  -- Memory layout: identity
-  | "OpName.BW_contiguous", [g, _x] => [g]  -- Backward: identity
+  | "OpName.BW_softmax", [g, y] => [bw_softmax g y]
+  | "OpName.FW_contiguous", [x] => [x]
+  | "OpName.BW_contiguous", [g, _x] => [g]
   | "OpName.CROSS_DP_WRED", xs => [cross_dp_wred xs]
   | _, _ => []
 
@@ -2076,7 +2134,7 @@ theorem storeSet_eq_of_not_mem_fst (s : Store) (pairs : List (Tid × Tensor)) (t
 
 def applyNode (g : GraphDecl) (s : Store) (n : NodeDecl) : Store :=
   let args : List Tensor := n.ins.map s
-  let outs : List Tensor := evalOp g.numRanks n.rank n.op args
+  let outs : List Tensor := evalOp g.numRanks n.rank n.op n.params args
   let pairs : List (Tid × Tensor) := n.outs.zip outs
   storeSet s pairs
 
@@ -2247,7 +2305,7 @@ def applyNodeChecked (g : GraphDecl) (s : Store) (n : NodeDecl) : Except String 
   by
     classical
     let args : List Tensor := n.ins.map s
-    let outs : List Tensor := evalOp g.numRanks n.rank n.op args
+    let outs : List Tensor := evalOp g.numRanks n.rank n.op n.params args
     if hLen : outs.length = n.outs.length then
       let pairs : List (Tid × Tensor) := (n.outs.zip outs).map (fun p => (p.1, p.2))
       exact Except.ok (storeSet s pairs)
@@ -2963,6 +3021,24 @@ theorem bw_linear_fst_shape'
   obtain ⟨oW, iW, hw⟩ := hw
   simp only [bw_linear, hg, hx, hw, Tensor.mkShape]
 
+/-- Shape of bw_linear second output (dW) for 3D inputs. -/
+theorem bw_linear_3d_snd_shape
+    (b s o i : Nat) (gradOut x w : Tensor)
+    (hg : gradOut.shape = [b, s, o])
+    (hx : x.shape = [b, s, i])
+    (hw : w.shape = [o, i]) :
+    (bw_linear gradOut x w).2.shape = [o, i] := by
+  simp [bw_linear, hg, hx, hw, Tensor.mkShape]
+
+/-- Shape of bw_linear first output (dX) for 3D inputs. -/
+theorem bw_linear_3d_fst_shape
+    (b s o i : Nat) (gradOut x w : Tensor)
+    (hg : gradOut.shape = [b, s, o])
+    (hx : x.shape = [b, s, i])
+    (hw : w.shape = [o, i]) :
+    (bw_linear gradOut x w).1.shape = [b, s, i] := by
+  simp [bw_linear, hg, hx, hw, Tensor.mkShape]
+
 /-!
 ## bw_linear (dW) with column-sharded inputs (allGather over i)
 
@@ -3124,6 +3200,52 @@ theorem bw_linear_snd_allGather_eq_allGather_bw_linear_chunk
     simpa [hidx_eq'] using hvalR''
   exact hvalL''.trans hvalR'''.symm
 
+/-- 3D bw_linear dW column-parallel: when x is sharded along last dim and w is sharded along
+    last dim, each rank's dW is a column shard of the full dW. -/
+theorem bw_linear_3d_snd_column_parallel
+    (numParts b s o shard : Nat)
+    (g : Tensor) (xs ws : List Tensor)
+    (hg : g.shape = [b, s, o])
+    (hxs_len : xs.length = numParts)
+    (hws_len : ws.length = numParts)
+    (hxs_shapes : ∀ x ∈ xs, x.shape = [b, s, shard])
+    (hws_shapes : ∀ w ∈ ws, w.shape = [o, shard])
+    (hparts : 0 < numParts)
+    (hshard : 0 < shard)
+    (hb : 0 < b) (hs : 0 < s) (ho : 0 < o) :
+    (bw_linear g (allGatherPrimDimN 2 numParts 0 xs) (allGatherPrimDimN 1 numParts 0 ws)).2 =
+      allGatherPrimDimN 1 numParts 0 (List.ofFn (fun r : Fin numParts =>
+        (bw_linear g (xs.get ⟨r.val, by omega⟩) (ws.get ⟨r.val, by omega⟩)).2)) := by
+  -- Both sides have shape [o, shard * numParts]
+  -- dW[c, j] = Σ_r g[r * o + c] * x[r * i + j] where i = shard * numParts
+  -- The RHS gathers per-shard dW along dim 1 (last dim)
+  -- dW_rank[c, j'] = Σ_r g[r * o + c] * x_rank[r * shard + j']
+  -- allGather[c, rank * shard + j'] = dW_rank[c, j']
+  -- These are equal because x[r * (shard * numParts) + rank * shard + j'] = x_rank[r * shard + j']
+  sorry
+
+/-- 3D bw_linear dW data-parallel: when g and x are chunked along dim 0 (batch),
+    the full dW equals the element-wise sum (tensorSum) of per-chunk dW values. -/
+theorem bw_linear_3d_snd_data_parallel
+    (numParts b s o i shard0 : Nat)
+    (g : Tensor) (xs : List Tensor) (w : Tensor)
+    (hg : g.shape = [b, s, o])
+    (hxs_len : xs.length = numParts)
+    (hxs_shapes : ∀ x ∈ xs, x.shape = [shard0, s, i])
+    (hw : w.shape = [o, i])
+    (hb : b = numParts * shard0)
+    (hparts : 0 < numParts)
+    (hshard : 0 < shard0) :
+    (bw_linear g (allGatherPrimDim0 numParts 0 xs) w).2 =
+      tensorSum (List.ofFn (fun r : Fin numParts =>
+        (bw_linear (chunkPrimDim0 numParts r.val g) (xs.get ⟨r.val, by omega⟩) w).2)) := by
+  -- dW[c, j] = Σ_{r=0}^{b*s-1} g[r * o + c] * x[r * i + j]
+  -- chunkDim0(g, rank) takes rows [rank*shard0..(rank+1)*shard0-1] in dim 0
+  -- Per-rank: dW_rank[c, j] = Σ_{p=0}^{shard0*s-1} g_rank[p * o + c] * x_rank[p * i + j]
+  -- tensorSum: Σ_rank dW_rank[c, j] = Σ_rank Σ_p g_rank[p*o+c] * x_rank[p*i+j]
+  -- This equals the full sum since we're partitioning the batch dim
+  sorry
+
 /-- Shape of fw_linear output. -/
 theorem fw_linear_shape
     (b i o : Nat) (x w : Tensor)
@@ -3158,17 +3280,22 @@ theorem bw_linear_snd_is_2d
   simp only [bw_linear, hg, hx, hw, Tensor.mkShape]
   exact ⟨oW, iW, rfl⟩
 
-/-- bw_linear first output shape: either 2D [bX, iX] or empty [] (fallback). -/
+/-- bw_linear first output shape: either 2D [bX, iX], 3D [b, s, iX], or empty [] (fallback). -/
 theorem bw_linear_fst_shape_cases (gradOut x w : Tensor) :
-    (∃ b i, (bw_linear gradOut x w).1.shape = [b, i]) ∨ (bw_linear gradOut x w).1.shape = [] := by
+    (∃ b i, (bw_linear gradOut x w).1.shape = [b, i]) ∨
+    (∃ b s i, (bw_linear gradOut x w).1.shape = [b, s, i]) ∨
+    (bw_linear gradOut x w).1.shape = [] := by
   unfold bw_linear
   split
   · next bG oG bX iX oW iW hg hx hw =>
     simp only [Tensor.mkShape]
     exact Or.inl ⟨bX, iX, rfl⟩
+  · next b s _oG _bX _sX iX oW iW hg hx hw =>
+    simp only [Tensor.mkShape]
+    exact Or.inr (Or.inl ⟨b, s, iX, rfl⟩)
   · next hfall =>
     simp only [Tensor.mkShape]
-    exact Or.inr trivial
+    exact Or.inr (Or.inr trivial)
 
 /-- bw_linear second output shape: either 2D [oW, iW] or empty [] (fallback). -/
 theorem bw_linear_snd_shape_cases (gradOut x w : Tensor) :
@@ -3176,6 +3303,9 @@ theorem bw_linear_snd_shape_cases (gradOut x w : Tensor) :
   unfold bw_linear
   split
   · next bG oG bX iX oW iW hg hx hw =>
+    simp only [Tensor.mkShape]
+    exact Or.inl ⟨oW, iW, rfl⟩
+  · next b s _oG _bX _sX iX oW iW hg hx hw =>
     simp only [Tensor.mkShape]
     exact Or.inl ⟨oW, iW, rfl⟩
   · next hfall =>

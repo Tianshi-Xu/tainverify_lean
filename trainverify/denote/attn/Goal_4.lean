@@ -2,9 +2,11 @@
     Goal: 4 (tensor id: 102)
 -/
 import denote.attn.GeneratedData
+import denote.attn.Common
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
+open TrainVerify.Denote.Common
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -50,27 +52,52 @@ def goal_4_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_4 pm_goal_4 goal_4
     sm_goal_4InitEnv pm_goal_4InitEnv goal_4_cut_initGoals
 
--- initGoal_101 has gatherDim=0 (default) but shards [128,32] need gatherDim=1
--- to reconstruct [128,128]. This makes InitGoalHolds contradictory (shape [512,32] ≠ [128,128]).
+set_option maxHeartbeats 800000 in
+set_option linter.unusedSimpArgs false in
 theorem prove_goal_4_cut : goal_4_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
-  exfalso
+  -- Extract init alignments using Common helpers
   have hInit101 : InitGoalHolds pm_goal_4.numRanks initGoal_101 initSM initPM := by
-    apply hInitGoals
-    simp [goal_4_cut_initGoals, goal_4_prereqs, initGoals]
-  have h101_shape := hInit101.1
-  have h101_rec := hInit101.2.2
-  have htp := hInit101.2.1
-  simp only [initGoal_101, List.map] at h101_shape htp
-  have h228 : (initPM 228).shape = [128, 32] := by
-    have := congrArg List.head? htp; simpa using this
-  simp only [initGoal_101, pm_goal_4, reconstructWithDim,
-    List.map, List.head?, Option.map, Option.getD, h228] at h101_rec
-  have hne : ([128, 32] : List Nat) ≠ [1] := by decide
-  simp only [hne, ite_false] at h101_rec
-  have h := congrArg Tensor.shape h101_rec
-  rw [allGatherPrimDimN_shape 0 4 _ [128, 32] (by simp [h228]),
-      h101_shape] at h
-  exact absurd h (by decide)
+    apply hInitGoals; simp [goal_4_cut_initGoals, goal_4_prereqs, initGoals]
+  have hInit167 : InitGoalHolds pm_goal_4.numRanks intermediateGoal_167 initSM initPM := by
+    apply hInitGoals; simp [goal_4_cut_initGoals, goal_4_prereqs, initGoals]
+  have ⟨h101_shape, h228_shape, h229_shape, h230_shape, h231_shape, h101_rec⟩ :=
+    initGoalHolds_sharded4 pm_goal_4.numRanks initGoal_101
+      101 228 229 230 231 [128, 128] [128, 32] initSM initPM hInit101
+      rfl rfl rfl rfl
+  have ⟨h167_shape, h224_shape, h225_shape, h226_shape, h227_shape, h167_rec⟩ :=
+    initGoalHolds_sharded4 pm_goal_4.numRanks intermediateGoal_167
+      167 224 225 226 227 [16, 64, 128] [16, 64, 32] initSM initPM hInit167
+      rfl rfl rfl rfl
+  -- SM store
+  have hsm : (denoteGraph sm_goal_4 initSM) 102 = fw_linear (initSM 167) (initSM 101) := by
+    simp [sm_goal_4, denoteGraph, applyNode_fw_linear_out]
+  -- PM store
+  have hpm : (denoteGraph pm_goal_4 initPM) 102 =
+      allReducePrim 4 0
+        [fw_linear (initPM 224) (initPM 228),
+         fw_linear (initPM 225) (initPM 229),
+         fw_linear (initPM 226) (initPM 230),
+         fw_linear (initPM 227) (initPM 231)] := by
+    simp [pm_goal_4, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  -- Apply the general coarse lineage theorem
+  dsimp only [goal_4_stmt_cut, CoarseLineageHoldsWithInit, goal_4] at *
+  simp only [List.map, Piece.tid]
+  have h101_rec' : initSM 101 = reconstructWithDim 1 pm_goal_4.numRanks 0
+      [initPM 228, initPM 229, initPM 230, initPM 231] := by
+    rw [h101_rec]; simp [initGoal_101, pm_goal_4, reconstructWithDim, h228_shape]
+  have h167_rec' : initSM 167 = reconstructWithDim 2 pm_goal_4.numRanks 0
+      [initPM 224, initPM 225, initPM 226, initPM 227] := by
+    rw [h167_rec]; simp [intermediateGoal_167, pm_goal_4, reconstructWithDim, h224_shape]
+  exact fw_linear_allReduce_coarse
+    pm_goal_4.numRanks 16 64 32 128
+    (denoteGraph sm_goal_4 initSM) (denoteGraph pm_goal_4 initPM) 102
+    initSM initPM 167 101 224 225 226 227 228 229 230 231
+    hsm hpm h167_rec' h101_rec'
+    h167_shape h101_shape
+    h224_shape h225_shape h226_shape h227_shape
+    h228_shape h229_shape h230_shape h231_shape
+    (by simp [pm_goal_4]) (by simp [pm_goal_4])
+    (by omega) (by omega) (by omega) (by omega) (by simp [pm_goal_4])
 
 end TrainVerify.Denote.GeneratedGoals

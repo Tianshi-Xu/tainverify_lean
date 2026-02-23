@@ -2,9 +2,11 @@
     Goal: 2 (tensor id: 98)
 -/
 import denote.attn.GeneratedData
+import denote.attn.Common
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
+open TrainVerify.Denote.Common
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -48,55 +50,30 @@ def goal_2_stmt_cut : Prop :=
     sm_goal_2InitEnv pm_goal_2InitEnv goal_2_cut_initGoals
 
 set_option maxHeartbeats 400000 in
--- fw_linear distributes over dim-0 allGather (3D attention tensors)
 set_option linter.unusedSimpArgs false in
 theorem prove_goal_2_cut : goal_2_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
-  -- Extract init alignments
+  -- Extract init alignments using Common helpers
   have hInit97 : InitGoalHolds pm_goal_2.numRanks initGoal_97 initSM initPM := by
     apply hInitGoals; simp [goal_2_cut_initGoals, goal_2_prereqs, initGoals]
   have hInit159 : InitGoalHolds pm_goal_2.numRanks intermediateGoal_159 initSM initPM := by
     apply hInitGoals; simp [goal_2_cut_initGoals, goal_2_prereqs, initGoals]
-  -- initGoal_97: single tp → initSM 97 = initPM 97
-  have h97_eq : initSM 97 = initPM 97 := by
-    have hrec := hInit97.2.2
-    simp only [initGoal_97, reconstructWithDim, pm_goal_2, List.map, Piece.tid] at hrec
-    exact hrec
-  have h97_shape : (initSM 97).shape = [128, 128] := hInit97.1
-  -- intermediateGoal_159: initSM 159 = reconstructWithDim 0 4 0 [initPM 168..171]
-  have h159_rec : initSM 159 = reconstructWithDim 0 pm_goal_2.numRanks 0
-      [initPM 168, initPM 169, initPM 170, initPM 171] := by
-    have hrec := hInit159.2.2
-    simp only [intermediateGoal_159, pm_goal_2, List.map, Piece.tid] at hrec
-    exact hrec
-  have h159_shape : (initSM 159).shape = [16, 64, 128] := hInit159.1
-  -- Shape of each shard
-  have htp_shapes := hInit159.2.1
-  simp only [intermediateGoal_159, List.map] at htp_shapes
-  have h168_shape : (initPM 168).shape = [4, 64, 128] := by
-    have := congrArg List.head? htp_shapes; simpa using this
-  have h169_shape : (initPM 169).shape = [4, 64, 128] := by
-    have := congrArg List.tail htp_shapes
-    have := congrArg List.head? this; simpa using this
-  have h170_shape : (initPM 170).shape = [4, 64, 128] := by
-    have := congrArg (List.tail ∘ List.tail) htp_shapes
-    have := congrArg List.head? this; simpa using this
-  have h171_shape : (initPM 171).shape = [4, 64, 128] := by
-    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp_shapes
-    have := congrArg List.head? this; simpa using this
-  -- SM store: smStore 98 = fw_linear(initSM 159, initSM 97)
+  have ⟨h97_shape, h97_eq⟩ := initGoalHolds_replicated pm_goal_2.numRanks
+    initGoal_97 97 [128, 128] initSM initPM hInit97 rfl rfl rfl
+  have ⟨h159_shape, h168_shape, h169_shape, h170_shape, h171_shape, h159_rec⟩ :=
+    initGoalHolds_sharded4 pm_goal_2.numRanks intermediateGoal_159
+      159 168 169 170 171 [16, 64, 128] [4, 64, 128] initSM initPM hInit159
+      rfl rfl rfl rfl
+  -- SM store
   have hsm : (denoteGraph sm_goal_2 initSM) 98 = fw_linear (initSM 159) (initSM 97) := by
     simp [sm_goal_2, denoteGraph, applyNode_fw_linear_out]
-  -- PM store: pmStore 98 via denoteGraph of pm_goal_2
-  -- Step 1: fold the 4 FW_linear nodes into an intermediate store
-  -- Step 2: apply AllGatherPrim to the intermediate store
+  -- PM store
   have hpm : (denoteGraph pm_goal_2 initPM) 98 =
       allGatherPrimDim0 pm_goal_2.numRanks 0
         [fw_linear (initPM 168) (initPM 97),
          fw_linear (initPM 169) (initPM 97),
          fw_linear (initPM 170) (initPM 97),
          fw_linear (initPM 171) (initPM 97)] := by
-    -- Unfold the graph into individual node applications
     have hstep : (denoteGraph pm_goal_2 initPM) 98 =
         (applyNode pm_goal_2
           (applyNode pm_goal_2
@@ -133,61 +110,16 @@ theorem prove_goal_2_cut : goal_2_stmt_cut := by
       exact fw_linear_3d_shape 4 64 128 128 _ _
         h168_shape (by rw [← h97_eq]; exact h97_shape)
     rw [applyNode_allGatherPrim_dim0_out _ _ _ _ _ h3d]
-    -- Simplify the input list: map the intermediate store over [172,173,174,175]
     simp [applyNode, evalOp, storeSet]
-  -- reconstructWithDim 0 on 4 tensors with [4,64,128] shape = allGatherPrimDimN 0
-  have h159_dimN : initSM 159 = allGatherPrimDimN 0 pm_goal_2.numRanks 0
-      [initPM 168, initPM 169, initPM 170, initPM 171] := by
-    rw [h159_rec]
-    simp [reconstructWithDim, h168_shape]
-  -- Use distributivity
-  have hdistr : fw_linear (initSM 159) (initSM 97) =
-      allGatherPrimDim0 pm_goal_2.numRanks 0
-        [fw_linear (initPM 168) (initPM 97),
-         fw_linear (initPM 169) (initPM 97),
-         fw_linear (initPM 170) (initPM 97),
-         fw_linear (initPM 171) (initPM 97)] := by
-    conv_lhs => rw [h159_dimN, h97_eq]
-    have := fw_linear_3d_allGatherPrimDimN0_comm
-      (numParts := 4) (b0 := 4) (s := 64) (i := 128) (o := 128)
-      (xs := [initPM 168, initPM 169, initPM 170, initPM 171])
-      (w := initPM 97)
-      (hw := by rw [← h97_eq]; exact h97_shape)
-      (hxs_head := by simp [h168_shape])
-      (hxs_shape := by
-        intro x hx
-        simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
-        rcases hx with rfl | rfl | rfl | rfl <;> assumption)
-      (hxs_len := by simp) (hparts := by omega)
-      (hb0 := by omega) (hs := by omega)
-      (hi := by omega) (ho := by omega)
-    simpa using this
-  -- Unfold let bindings in the goal
+  -- Apply the general coarse lineage theorem
   dsimp only [goal_2_stmt_cut, CoarseLineageHoldsWithInit, goal_2] at *
-  -- Prove the three conjuncts
-  refine ⟨?_, ?_, ?_⟩
-  · -- SM shape: [16, 64, 128]
-    rw [hsm]
-    exact fw_linear_3d_shape 16 64 128 128 _ _ h159_shape h97_shape
-  · -- PM tps shapes: [[16, 64, 128]]
-    simp only [List.map, Piece.tid]
-    rw [hpm]
-    have h97_pm_shape : (initPM 97).shape = [128, 128] := by rw [← h97_eq]; exact h97_shape
-    have hfw_head_shape : (fw_linear (initPM 168) (initPM 97)).shape = [4, 64, 128] :=
-      fw_linear_3d_shape 4 64 128 128 _ _ h168_shape h97_pm_shape
-    have hpm_shape : (allGatherPrimDim0 pm_goal_2.numRanks 0
-        [fw_linear (initPM 168) (initPM 97), fw_linear (initPM 169) (initPM 97),
-         fw_linear (initPM 170) (initPM 97), fw_linear (initPM 171) (initPM 97)]).shape =
-        [16, 64, 128] := by
-      have := allGatherPrimDim0_shape_3d pm_goal_2.numRanks 4 64 128
-        [fw_linear (initPM 168) (initPM 97), fw_linear (initPM 169) (initPM 97),
-         fw_linear (initPM 170) (initPM 97), fw_linear (initPM 171) (initPM 97)]
-        (by simp only [List.head?, Option.map, Option.getD]; exact hfw_head_shape)
-      simp only [pm_goal_2] at this; exact this
-    simp [hpm_shape]
-  · -- Value equality
-    simp only [List.map, Piece.tid]
-    rw [hsm, hdistr, ← hpm]
-    simp [reconstructWithDim]
+  simp only [List.map, Piece.tid]
+  exact fw_linear_allGatherDim0_coarse
+    pm_goal_2.numRanks 4 64 128 128
+    (denoteGraph sm_goal_2 initSM) (denoteGraph pm_goal_2 initPM) 98
+    initSM initPM 159 97 168 169 170 171
+    hsm hpm h159_rec h97_eq h97_shape h159_shape
+    h168_shape h169_shape h170_shape h171_shape
+    (by simp [pm_goal_2]) (by omega) (by omega) (by omega) (by omega) (by simp [pm_goal_2])
 
 end TrainVerify.Denote.GeneratedGoals

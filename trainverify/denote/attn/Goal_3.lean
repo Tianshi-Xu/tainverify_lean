@@ -2,9 +2,11 @@
     Goal: 3 (tensor id: 100)
 -/
 import denote.attn.GeneratedData
+import denote.attn.Common
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
+open TrainVerify.Denote.Common
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -48,40 +50,24 @@ def goal_3_stmt_cut : Prop :=
     sm_goal_3InitEnv pm_goal_3InitEnv goal_3_cut_initGoals
 
 set_option maxHeartbeats 400000 in
--- fw_linear distributes over dim-0 allGather (3D attention tensors)
 set_option linter.unusedSimpArgs false in
 theorem prove_goal_3_cut : goal_3_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignments using Common helpers
   have hInit99 : InitGoalHolds pm_goal_3.numRanks initGoal_99 initSM initPM := by
     apply hInitGoals; simp [goal_3_cut_initGoals, goal_3_prereqs, initGoals]
   have hInit163 : InitGoalHolds pm_goal_3.numRanks intermediateGoal_163 initSM initPM := by
     apply hInitGoals; simp [goal_3_cut_initGoals, goal_3_prereqs, initGoals]
-  have h99_eq : initSM 99 = initPM 99 := by
-    have hrec := hInit99.2.2
-    simp only [initGoal_99, reconstructWithDim, pm_goal_3, List.map, Piece.tid] at hrec
-    exact hrec
-  have h99_shape : (initSM 99).shape = [128, 128] := hInit99.1
-  have h163_rec : initSM 163 = reconstructWithDim 0 pm_goal_3.numRanks 0
-      [initPM 196, initPM 197, initPM 198, initPM 199] := by
-    have hrec := hInit163.2.2
-    simp only [intermediateGoal_163, pm_goal_3, List.map, Piece.tid] at hrec
-    exact hrec
-  have h163_shape : (initSM 163).shape = [16, 64, 128] := hInit163.1
-  have htp_shapes := hInit163.2.1
-  simp only [intermediateGoal_163, List.map] at htp_shapes
-  have h196_shape : (initPM 196).shape = [4, 64, 128] := by
-    have := congrArg List.head? htp_shapes; simpa using this
-  have h197_shape : (initPM 197).shape = [4, 64, 128] := by
-    have := congrArg List.tail htp_shapes
-    have := congrArg List.head? this; simpa using this
-  have h198_shape : (initPM 198).shape = [4, 64, 128] := by
-    have := congrArg (List.tail ∘ List.tail) htp_shapes
-    have := congrArg List.head? this; simpa using this
-  have h199_shape : (initPM 199).shape = [4, 64, 128] := by
-    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp_shapes
-    have := congrArg List.head? this; simpa using this
+  have ⟨h99_shape, h99_eq⟩ := initGoalHolds_replicated pm_goal_3.numRanks
+    initGoal_99 99 [128, 128] initSM initPM hInit99 rfl rfl rfl
+  have ⟨h163_shape, h196_shape, h197_shape, h198_shape, h199_shape, h163_rec⟩ :=
+    initGoalHolds_sharded4 pm_goal_3.numRanks intermediateGoal_163
+      163 196 197 198 199 [16, 64, 128] [4, 64, 128] initSM initPM hInit163
+      rfl rfl rfl rfl
+  -- SM store
   have hsm : (denoteGraph sm_goal_3 initSM) 100 = fw_linear (initSM 163) (initSM 99) := by
     simp [sm_goal_3, denoteGraph, applyNode_fw_linear_out]
+  -- PM store
   have hpm : (denoteGraph pm_goal_3 initPM) 100 =
       allGatherPrimDim0 pm_goal_3.numRanks 0
         [fw_linear (initPM 196) (initPM 99),
@@ -120,51 +106,15 @@ theorem prove_goal_3_cut : goal_3_stmt_cut := by
       exact fw_linear_3d_shape 4 64 128 128 _ _ h196_shape (by rw [← h99_eq]; exact h99_shape)
     rw [applyNode_allGatherPrim_dim0_out _ _ _ _ _ h3d]
     simp [applyNode, evalOp, storeSet]
-  have h163_dimN : initSM 163 = allGatherPrimDimN 0 pm_goal_3.numRanks 0
-      [initPM 196, initPM 197, initPM 198, initPM 199] := by
-    rw [h163_rec]
-    simp [reconstructWithDim, h196_shape]
-  have hdistr : fw_linear (initSM 163) (initSM 99) =
-      allGatherPrimDim0 pm_goal_3.numRanks 0
-        [fw_linear (initPM 196) (initPM 99),
-         fw_linear (initPM 197) (initPM 99),
-         fw_linear (initPM 198) (initPM 99),
-         fw_linear (initPM 199) (initPM 99)] := by
-    conv_lhs => rw [h163_dimN, h99_eq]
-    have := fw_linear_3d_allGatherPrimDimN0_comm
-      (numParts := 4) (b0 := 4) (s := 64) (i := 128) (o := 128)
-      (xs := [initPM 196, initPM 197, initPM 198, initPM 199])
-      (w := initPM 99)
-      (hw := by rw [← h99_eq]; exact h99_shape)
-      (hxs_head := by simp [h196_shape])
-      (hxs_shape := by
-        intro x hx
-        simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
-        rcases hx with rfl | rfl | rfl | rfl <;> assumption)
-      (hxs_len := by simp) (hparts := by omega) (hb0 := by omega) (hs := by omega)
-      (hi := by omega) (ho := by omega)
-    simpa using this
+  -- Apply the general coarse lineage theorem
   dsimp only [goal_3_stmt_cut, CoarseLineageHoldsWithInit, goal_3] at *
-  refine ⟨?_, ?_, ?_⟩
-  · rw [hsm]
-    exact fw_linear_3d_shape 16 64 128 128 _ _ h163_shape h99_shape
-  · simp only [List.map, Piece.tid]
-    rw [hpm]
-    have h99_pm_shape : (initPM 99).shape = [128, 128] := by rw [← h99_eq]; exact h99_shape
-    have hfw_head_shape : (fw_linear (initPM 196) (initPM 99)).shape = [4, 64, 128] :=
-      fw_linear_3d_shape 4 64 128 128 _ _ h196_shape h99_pm_shape
-    have hpm_shape : (allGatherPrimDim0 pm_goal_3.numRanks 0
-        [fw_linear (initPM 196) (initPM 99), fw_linear (initPM 197) (initPM 99),
-         fw_linear (initPM 198) (initPM 99), fw_linear (initPM 199) (initPM 99)]).shape =
-        [16, 64, 128] := by
-      have := allGatherPrimDim0_shape_3d pm_goal_3.numRanks 4 64 128
-        [fw_linear (initPM 196) (initPM 99), fw_linear (initPM 197) (initPM 99),
-         fw_linear (initPM 198) (initPM 99), fw_linear (initPM 199) (initPM 99)]
-        (by simp only [List.head?, Option.map, Option.getD]; exact hfw_head_shape)
-      simp only [pm_goal_3] at this; exact this
-    simp [hpm_shape]
-  · simp only [List.map, Piece.tid]
-    rw [hsm, hdistr, ← hpm]
-    simp [reconstructWithDim]
+  simp only [List.map, Piece.tid]
+  exact fw_linear_allGatherDim0_coarse
+    pm_goal_3.numRanks 4 64 128 128
+    (denoteGraph sm_goal_3 initSM) (denoteGraph pm_goal_3 initPM) 100
+    initSM initPM 163 99 196 197 198 199
+    hsm hpm h163_rec h99_eq h99_shape h163_shape
+    h196_shape h197_shape h198_shape h199_shape
+    (by simp [pm_goal_3]) (by omega) (by omega) (by omega) (by omega) (by simp [pm_goal_3])
 
 end TrainVerify.Denote.GeneratedGoals
