@@ -52,7 +52,6 @@ def goal_4_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_4 pm_goal_4 goal_4
     sm_goal_4InitEnv pm_goal_4InitEnv goal_4_cut_initGoals
 
-set_option maxHeartbeats 800000 in
 set_option linter.unusedSimpArgs false in
 theorem prove_goal_4_cut : goal_4_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals

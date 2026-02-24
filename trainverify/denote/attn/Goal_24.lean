@@ -74,6 +74,7 @@ theorem prove_goal_24_cut : goal_24_stmt_cut := by
       rfl rfl rfl rfl
   have ⟨h129_shape, h129_eq⟩ := initGoalHolds_replicated pm_goal_24.numRanks
     intermediateGoal_129 129 [16, 64, 128] initSM initPM hInit129 rfl rfl rfl
+  have h129_pm_shape : (initPM 129).shape = [16, 64, 128] := by rw [← h129_eq]; exact h129_shape
   -- SM store
   have hsm : (denoteGraph sm_goal_24 initSM) 128 =
       (bw_linear (initSM 129) (initSM 167) (initSM 101)).2 := by
@@ -110,36 +111,30 @@ theorem prove_goal_24_cut : goal_24_stmt_cut := by
          (bw_linear (initPM 129) (initPM 226) (initPM 230)).2,
          (bw_linear (initPM 129) (initPM 227) (initPM 231)).2] := by
     rw [h129_eq, h167_rec', h101_rec']
-    simp only [pm_goal_24, reconstructWithDim, h224_shape]
+    simp only [pm_goal_24, reconstructWithDim, h224_shape, h228_shape,
+      List.head?, Option.map, Option.getD]
     exact bw_linear_3d_snd_column_parallel 4 16 64 128 32
       (initPM 129) [initPM 224, initPM 225, initPM 226, initPM 227]
       [initPM 228, initPM 229, initPM 230, initPM 231]
-      h129_shape
+      h129_pm_shape
       (by simp) (by simp)
-      (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl | rfl <;> assumption)
-      (by intro w hw; simp at hw; rcases hw with rfl | rfl | rfl | rfl <;> assumption)
+      (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl | rfl | rfl <;> assumption)
+      (by intro w hw; simp only [List.mem_cons, List.not_mem_nil, or_false] at hw; rcases hw with rfl | rfl | rfl | rfl <;> assumption)
       (by omega) (by omega) (by omega) (by omega) (by omega)
   refine ⟨?_, ?_, ?_⟩
   · -- Shape of SM output
     exact bw_linear_3d_snd_shape 16 64 128 128 (initSM 129) (initSM 167) (initSM 101)
       h129_shape h167_shape h101_shape
   · -- Shape of PM outputs
-    simp only [List.map]
-    constructor
-    · exact bw_linear_3d_snd_shape 16 64 128 32 (initPM 129) (initPM 224) (initPM 228)
-        h129_shape h224_shape h228_shape
-    constructor
-    · exact bw_linear_3d_snd_shape 16 64 128 32 (initPM 129) (initPM 225) (initPM 229)
-        h129_shape h225_shape h229_shape
-    constructor
-    · exact bw_linear_3d_snd_shape 16 64 128 32 (initPM 129) (initPM 226) (initPM 230)
-        h129_shape h226_shape h230_shape
-    · exact bw_linear_3d_snd_shape 16 64 128 32 (initPM 129) (initPM 227) (initPM 231)
-        h129_shape h227_shape h231_shape
+    simp only [List.cons.injEq]
+    exact ⟨bw_linear_3d_snd_shape 16 64 128 32 _ _ _ h129_pm_shape h224_shape h228_shape,
+           bw_linear_3d_snd_shape 16 64 128 32 _ _ _ h129_pm_shape h225_shape h229_shape,
+           bw_linear_3d_snd_shape 16 64 128 32 _ _ _ h129_pm_shape h226_shape h230_shape,
+           bw_linear_3d_snd_shape 16 64 128 32 _ _ _ h129_pm_shape h227_shape h231_shape, trivial⟩
   · -- Value equality
     rw [hdistr]
     have hdw0_shape : (bw_linear (initPM 129) (initPM 224) (initPM 228)).2.shape = [128, 32] :=
-      bw_linear_3d_snd_shape 16 64 128 32 _ _ _ h129_shape h224_shape h228_shape
-    simp [reconstructWithDim, hdw0_shape]
+      bw_linear_3d_snd_shape 16 64 128 32 _ _ _ h129_pm_shape h224_shape h228_shape
+    simp [reconstructWithDim, hdw0_shape, pm_goal_24]
 
 end TrainVerify.Denote.GeneratedGoals
