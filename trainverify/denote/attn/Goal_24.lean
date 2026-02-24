@@ -52,7 +52,7 @@ def goal_24_cut_initGoals : List LineageGoal := initGoals ++ goal_24_prereqs
 def goal_24_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_24 pm_goal_24 goal_24 sm_goal_24InitEnv pm_goal_24InitEnv goal_24_cut_initGoals
 
-set_option maxHeartbeats 800000 in
+-- set_option maxHeartbeats 800000 in
 set_option linter.unusedSimpArgs false in
 theorem prove_goal_24_cut : goal_24_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
@@ -143,4 +143,3 @@ theorem prove_goal_24_cut : goal_24_stmt_cut := by
     simp [reconstructWithDim, hdw0_shape]
 
 end TrainVerify.Denote.GeneratedGoals
-

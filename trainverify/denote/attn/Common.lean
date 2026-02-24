@@ -284,7 +284,6 @@ This theorem handles the common pattern where:
 Used by attn/Goal_2 (tid 98) and attn/Goal_3 (tid 100).
 -/
 
-set_option maxHeartbeats 400000 in
 theorem fw_linear_allGatherDim0_coarse
     (numRanks b0 s i o : Nat)
     (smStore pmStore : Store) (outTid : Tid)
@@ -461,7 +460,6 @@ private theorem allGatherPrimDimN_2_valAt
     Nat.div_one, Nat.mod_one, Nat.add_zero, Nat.mul_one,
     hdiv, hmod, hdivS, hmodS]
 
-set_option maxHeartbeats 1600000 in
 theorem fw_linear_3d_column_parallel
     (numParts b s shard o : Nat)
     (xs : List Tensor) (ws : List Tensor)
@@ -605,7 +603,6 @@ theorem fw_linear_3d_column_parallel
     simp only [List.getD, List.getElem?_eq_getElem hn_xs, List.getElem?_eq_getElem hn_ws,
       Option.getD_some]
 
-set_option maxHeartbeats 800000 in
 theorem fw_linear_allReduce_coarse
     (numRanks b s shard o : Nat)
     (smStore pmStore : Store) (outTid : Tid)
@@ -684,8 +681,46 @@ theorem fw_linear_allReduce_coarse
     simp [reconstructWithDim]
 
 
-set_option maxRecDepth 4096 in
-set_option maxHeartbeats 25600000 in
+private lemma tccg3_lhs_bound (idx : Nat) (hidx : idx < 131072) :
+    idx / 8192 * 8192 + (idx % 1024 / 16 * 128 + (idx % 8192 / 1024 * 16 + idx % 16)) < 131072 := by
+  omega
+
+private lemma tccg3_fi_bound (idx : Nat) (hidx : idx < 131072) :
+    idx / 16 * 4 + idx % 4 < 32768 := by omega
+
+private lemma tccg3_ci_bound (idx : Nat) (hidx : idx < 131072) :
+    (idx / 16 * 4 + idx % 4) / 2048 * 2048 +
+    ((idx / 16 * 4 + idx % 4) % 256 / 4 * 32 +
+    ((idx / 16 * 4 + idx % 4) % 2048 / 256 * 4 + idx % 4)) < 32768 := by
+  have hfi : idx / 16 * 4 + idx % 4 < 32768 := by omega
+  have : (idx / 16 * 4 + idx % 4) / 2048 ≤ 15 := by omega
+  have : (idx / 16 * 4 + idx % 4) % 256 / 4 ≤ 63 := by omega
+  have : (idx / 16 * 4 + idx % 4) % 2048 / 256 ≤ 7 := by omega
+  have : idx % 4 ≤ 3 := by omega
+  omega
+
+private lemma tccg3_idx_eq (idx : Nat) (hidx : idx < 131072) :
+    idx / 8192 * 8192 + (idx % 1024 / 16 * 128 + (idx % 8192 / 1024 * 16 + idx % 16)) =
+    ((idx / 16 * 4 + idx % 4) / 2048 * 2048 +
+      ((idx / 16 * 4 + idx % 4) % 256 / 4 * 32 +
+      ((idx / 16 * 4 + idx % 4) % 2048 / 256 * 4 + idx % 4))) / 4 * 16 +
+    (idx % 16) / 4 * 4 +
+    ((idx / 16 * 4 + idx % 4) / 2048 * 2048 +
+      ((idx / 16 * 4 + idx % 4) % 256 / 4 * 32 +
+      ((idx / 16 * 4 + idx % 4) % 2048 / 256 * 4 + idx % 4))) % 4 := by
+  have := tccg3_ci_bound idx hidx
+  have h1 : (idx / 16 * 4 + idx % 4) / 2048 = idx / 8192 := by omega
+  have h2 : (idx / 16 * 4 + idx % 4) % 256 / 4 = idx % 1024 / 16 := by omega
+  have h3 : (idx / 16 * 4 + idx % 4) % 2048 / 256 = idx % 8192 / 1024 := by omega
+  have h4 : (idx / 16 * 4 + idx % 4) % 4 = idx % 4 := by omega
+  simp only [h1, h2, h3, h4]
+  have h5 : (idx / 8192 * 2048 + (idx % 1024 / 16 * 32 + (idx % 8192 / 1024 * 4 + idx % 4))) / 4 =
+      idx / 8192 * 512 + idx % 1024 / 16 * 8 + idx % 8192 / 1024 := by omega
+  have h6 : (idx / 8192 * 2048 + (idx % 1024 / 16 * 32 + (idx % 8192 / 1024 * 4 + idx % 4))) % 4 =
+      idx % 4 := by omega
+  simp only [h5, h6]
+  omega
+
 theorem transposeAxes_12_chunkPrim_gather3
     (x : Tensor) (hshape : x.shape = [16, 64, 8, 16]) :
     transposeAxes 1 2 x = allGatherPrimDimN 3 4 0
@@ -825,6 +860,13 @@ theorem transposeAxes_12_chunkPrim_gather3
                h_16d4, h_0m4, h_1m4, h_2m4, h_3m4,
                Nat.zero_mul, Nat.mul_zero, Nat.add_zero, Nat.zero_add,
                Nat.mul_one, Nat.one_mul]
-    split_ifs <;> first | rfl | (congr 1; ext; omega) | omega
+    conv_lhs => rw [dif_pos (tccg3_lhs_bound idx hidx')]
+    conv_rhs => rw [dif_pos (tccg3_fi_bound idx hidx')]
+    conv_rhs => rw [dif_pos (tccg3_ci_bound idx hidx')]
+    conv_rhs => rw [dif_pos (by have := tccg3_ci_bound idx hidx'; omega)]
+    refine congr_arg x.val (Fin.ext ?_)
+    have key := tccg3_idx_eq idx hidx'
+    rw [h] at key
+    exact key
 
 end TrainVerify.Denote.Common

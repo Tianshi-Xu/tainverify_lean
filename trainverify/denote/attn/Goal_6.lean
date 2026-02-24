@@ -46,7 +46,6 @@ def goal_6_cut_initGoals : List LineageGoal := initGoals ++ goal_6_prereqs
 def goal_6_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_6 pm_goal_6 goal_6 sm_goal_6InitEnv pm_goal_6InitEnv goal_6_cut_initGoals
 
-set_option maxHeartbeats 1600000 in
 set_option linter.unusedSimpArgs false in
 set_option linter.style.longLine false in
 theorem prove_goal_6_cut : goal_6_stmt_cut := by
