@@ -105,7 +105,7 @@ theorem prove_goal_13_cut : goal_13_stmt_cut := by
     simp only [fw_div]
     rw [h110_ag]
     -- reconstructWithDim for non-[1] shapes = allGatherPrimDimN
-    show scalarDiv (allGatherPrimDimN 0 4 0 [initPM 352, initPM 353, initPM 354, initPM 355]) 4.0 =
+    change scalarDiv (allGatherPrimDimN 0 4 0 [initPM 352, initPM 353, initPM 354, initPM 355]) 4.0 =
       reconstructWithDim 0 4 0 [scalarDiv (initPM 352) 4.0, scalarDiv (initPM 353) 4.0,
         scalarDiv (initPM 354) 4.0, scalarDiv (initPM 355) 4.0]
     rw [show reconstructWithDim 0 4 0 [scalarDiv (initPM 352) 4.0, scalarDiv (initPM 353) 4.0,

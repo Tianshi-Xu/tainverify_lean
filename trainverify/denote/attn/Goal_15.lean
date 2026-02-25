@@ -62,7 +62,8 @@ def pm_goal_15InitEnv : ShapeEnv := shapeEnvOfList pm_goal_15InitShapes
 def goal_15_cut_initGoals : List LineageGoal := initGoals ++ goal_15_prereqs
 
 def goal_15_stmt_cut : Prop :=
-  CoarseLineageHoldsWithInit sm_goal_15 pm_goal_15 goal_15 sm_goal_15InitEnv pm_goal_15InitEnv goal_15_cut_initGoals
+  CoarseLineageHoldsWithInit sm_goal_15 pm_goal_15 goal_15
+    sm_goal_15InitEnv pm_goal_15InitEnv goal_15_cut_initGoals
 
 -- ===== Helper lemmas =====
 
@@ -118,7 +119,7 @@ private theorem valAt_gather1_16_2_64_16
   unfold allGatherPrimDimN
   rw [hhead]
   simp [valAt, Tensor.mkShape, h_ps, h2x4, h2x1024, h8x1024, h64x16x1, h1x64,
-    List.set, List.getD, List.drop, List.foldl, List.length,
+    List.getD, List.drop, List.foldl, List.length,
     List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
     dif_pos hidx]
 
@@ -144,7 +145,7 @@ private theorem valAt_chunk1_16_8_64_16
 set_option linter.style.longLine false in
 set_option linter.unusedSimpArgs false in
 private theorem valAt_batchedMatmul_64_16
-    (x y : Tensor) (d1 : Nat) (hd1 : 0 < d1)
+    (x y : Tensor) (d1 : Nat) (_hd1 : 0 < d1)
     (hx : x.shape = [16, d1, 64, 64]) (hy : y.shape = [16, d1, 64, 16])
     (idx : Nat) (hidx : idx < 16 * d1 * 64 * 16) :
     valAt (batchedMatmul x y) idx =
@@ -211,8 +212,8 @@ private theorem batchedMatmul_gather1_distrib
   have hr_cases : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
   rcases hr_cases with hr | hr | hr | hr <;> (
     simp only [hr, List.getD,
-      List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-      Option.getD_some, Option.getD_none]
+      List.getElem?_cons_zero, List.getElem?_cons_succ,
+      Option.getD_some]
     rw [valAt_batchedMatmul_64_16 _ _ 2 (by omega) (by assumption) (hchunk_shape _) localIdx hlocalIdx_lt]
     apply Finset.sum_congr rfl; intro l hl
     simp only [Finset.mem_range] at hl
@@ -222,8 +223,8 @@ private theorem batchedMatmul_gather1_distrib
     have h_piece : (idx / 1024 * 4096 + idx % 1024 / 16 * 64 + l) % 32768 / 4096 / 2 = r := by
       omega
     simp only [h_piece, hr, List.getD,
-      List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-      Option.getD_some, Option.getD_none]
+      List.getElem?_cons_zero, List.getElem?_cons_succ,
+      Option.getD_some]
     -- Rewrite RHS: valAt(chunk(Y)) → valAt(Y)
     rw [valAt_chunk1_16_8_64_16 Y hY _ _ (by omega)]
     -- Both sides: valAt A_r (idx_a) * valAt Y (idx_y) = valAt A_r (idx_a') * valAt Y (idx_y')

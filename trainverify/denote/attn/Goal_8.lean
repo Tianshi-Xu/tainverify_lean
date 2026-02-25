@@ -44,7 +44,8 @@ def pm_goal_8InitEnv : ShapeEnv := shapeEnvOfList pm_goal_8InitShapes
 def goal_8_cut_initGoals : List LineageGoal := initGoals ++ goal_8_prereqs
 
 def goal_8_stmt_cut : Prop :=
-  CoarseLineageHoldsWithInit sm_goal_8 pm_goal_8 goal_8 sm_goal_8InitEnv pm_goal_8InitEnv goal_8_cut_initGoals
+  CoarseLineageHoldsWithInit sm_goal_8 pm_goal_8 goal_8
+    sm_goal_8InitEnv pm_goal_8InitEnv goal_8_cut_initGoals
 
 set_option linter.unusedSimpArgs false in
 set_option linter.style.longLine false in

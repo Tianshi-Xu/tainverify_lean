@@ -70,7 +70,7 @@ private theorem batchedMatmul_4d_shape (x y : Tensor) (d0 d1 n k m : Nat)
 
 /-! ## Helper A: valAt of allGatherPrimDimN 0 4 for shard shape [4,8,64,64] -/
 -- allGatherPrimDimN valAt for [4,8,64,64] requires simp on complex gather expression
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 1600000 in -- simp on large gather index arithmetic
 private lemma valAt_allGather_out
     (xs : List Tensor) (idx : Nat)
     (hhead : (xs.head?.map (·.shape)).getD [] = [4, 8, 64, 64])
@@ -93,7 +93,7 @@ private lemma valAt_allGather_out
 
 /-! ## Helper B: valAt of allGatherPrimDimN 0 4 for shard shape [4,8,16,64] -/
 -- allGatherPrimDimN valAt for [4,8,16,64] requires simp on gather expression
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 1600000 in -- simp on large gather index arithmetic
 private lemma valAt_allGather_Y
     (xs : List Tensor) (g : Nat)
     (hhead : (xs.head?.map (·.shape)).getD [] = [4, 8, 16, 64])
@@ -116,7 +116,7 @@ private lemma valAt_allGather_Y
 
 /-! ## Helper C: valAt of chunkPrimDimN 0 4 for shape [16,8,64,16] -/
 -- chunkPrimDimN valAt requires unfolding and simp on index arithmetic
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 1600000 in -- simp on chunk index arithmetic
 private lemma valAt_chunk_dim0_X (x : Tensor) (r idx : Nat)
     (hshape : x.shape = [16, 8, 64, 16])
     (hr : r < 4) (hidx : idx < 32768) :
@@ -157,7 +157,7 @@ private lemma valAt_chunk_dim0_X (x : Tensor) (r idx : Nat)
 
 /-! ## Helper D: valAt of batchedMatmul -/
 -- batchedMatmul valAt requires unfolding match + List.reverse + simp
-set_option maxHeartbeats 8000000 in
+set_option maxHeartbeats 8000000 in -- unfolding batchedMatmul with large shapes
 private lemma valAt_batchedMatmul_16 (x y : Tensor) (idx : Nat)
     (hx : x.shape = [16, 8, 64, 16]) (hy : y.shape = [16, 8, 16, 64])
     (hidx : idx < 524288) :
@@ -174,7 +174,7 @@ private lemma valAt_batchedMatmul_16 (x y : Tensor) (idx : Nat)
   simp [valAt, Tensor.mkShape, prodShape, dif_pos hidx]
 
 -- batchedMatmul valAt for chunk shapes [4,8,64,16] × [4,8,16,64]
-set_option maxHeartbeats 8000000 in
+set_option maxHeartbeats 8000000 in -- unfolding batchedMatmul with chunk shapes
 private lemma valAt_batchedMatmul_4 (x y : Tensor) (idx : Nat)
     (hx : x.shape = [4, 8, 64, 16]) (hy : y.shape = [4, 8, 16, 64])
     (hidx : idx < 131072) :
@@ -201,7 +201,7 @@ independent subproblems.
 -/
 
 -- distribution proof requires Tensor.ext over 524288 indices with 4-way case split
-set_option maxHeartbeats 8000000 in
+set_option maxHeartbeats 8000000 in -- Tensor.ext with 4-way case split
 private theorem batchedMatmul_gatherDim0_dist
     (X B0 B1 B2 B3 : Tensor)
     (hX : X.shape = [16, 8, 64, 16])
@@ -289,7 +289,7 @@ private theorem batchedMatmul_gatherDim0_dist
 /-! ## Main theorem -/
 
 -- main theorem unfolds SM/PM graphs and applies distribution lemma
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 1600000 in -- graph unfolding + distribution lemma
 theorem prove_goal_12_cut : goal_12_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   -- Extract prerequisites using initGoalHolds_sharded4

@@ -71,7 +71,7 @@ private theorem allGatherPrimDimN_gd1_np4_valAt
   unfold allGatherPrimDimN
   rw [hhead]
   simp [valAt, Tensor.mkShape, h_ps, h2x4, h2x4096, h8x4096, h64x64x1, h1x64,
-    List.set, List.getD, List.drop, List.foldl, List.length,
+    List.getD, List.drop, List.foldl, List.length,
     List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
     dif_pos hidx]
 
@@ -90,7 +90,7 @@ private theorem chunkPrimDimN_dim1_np4_valAt
   unfold chunkPrimDimN
   rw [hx]
   simp [valAt, Tensor.mkShape, h_ps_chunk, h8div4, h2x4096, h8x4096, h64x64x1, h1x64,
-    List.set, List.getD, List.drop, List.foldl, List.length,
+    List.getD, List.drop, List.foldl, List.length,
     List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
     dif_pos hidx]
 
@@ -106,12 +106,18 @@ private theorem softmax_valAt_batch_eq_64 (x y : Tensor) (idx mapped_idx : Nat)
   -- Extract shape.reverse info
   have ⟨rest_x, hxr⟩ : ∃ rest, x.shape.reverse = 64 :: rest := by
     cases h : x.shape.reverse with
-    | nil => rw [h] at hx_rev; simp [List.head?] at hx_rev
-    | cons d rest => rw [h] at hx_rev; simp [List.head?] at hx_rev; exact ⟨rest, by subst hx_rev; rfl⟩
+    | nil => rw [h] at hx_rev; exact absurd hx_rev nofun
+    | cons d rest =>
+      rw [h] at hx_rev
+      simp only [List.head?, Option.some.injEq] at hx_rev
+      subst hx_rev; exact ⟨rest, rfl⟩
   have ⟨rest_y, hyr⟩ : ∃ rest, y.shape.reverse = 64 :: rest := by
     cases h : y.shape.reverse with
-    | nil => rw [h] at hy_rev; simp [List.head?] at hy_rev
-    | cons d rest => rw [h] at hy_rev; simp [List.head?] at hy_rev; exact ⟨rest, by subst hy_rev; rfl⟩
+    | nil => rw [h] at hy_rev; exact absurd hy_rev nofun
+    | cons d rest =>
+      rw [h] at hy_rev
+      simp only [List.head?, Option.some.injEq] at hy_rev
+      subst hy_rev; exact ⟨rest, rfl⟩
   -- Unfold softmax with known shape.reverse, then reduce valAt of mkShape
   simp only [softmax, hxr, hyr]
   simp only [valAt, Tensor.mkShape, show (64 : Nat) ≠ 0 from by omega, ↓reduceIte]
@@ -129,7 +135,7 @@ private theorem allToAll_14_shape (rank : Nat) (xs : List Tensor)
     (allToAllPrimWithDims 4 rank xs 3 1).shape = [16, 2, 64, 64] := by
   simp only [allToAllPrimWithDims]
   have hag := allGatherPrimDimN_shape 3 4 xs [16, 8, 64, 16] hhead
-  simp only [List.getD, List.set, List.drop, List.foldl] at hag
+  simp only [List.getD, List.set] at hag
   exact chunkPrimDimN_shape 1 4 rank _ _ hag (by omega)
 
 set_option linter.style.longLine false in
@@ -243,7 +249,7 @@ theorem prove_goal_14_cut : goal_14_stmt_cut := by
       simp [List.head?, Option.map, hcs]
     apply Tensor.ext
     · rw [allGatherPrimDimN_shape 1 4 _ _ hhead_c]
-      simp [List.set, List.getD]; exact hsm_shape.symm
+      simp only [List.set, List.getD]; exact hsm_shape.symm
     · intro idx hidx
       rw [allGatherPrimDimN_shape 1 4 _ _ hhead_c] at hidx
       simp only [List.set, List.getD] at hidx

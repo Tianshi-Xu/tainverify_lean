@@ -58,7 +58,8 @@ def pm_goal_1InitEnv : ShapeEnv := shapeEnvOfList pm_goal_1InitShapes
 def goal_1_cut_initGoals : List LineageGoal := initGoals
 
 def goal_1_stmt_cut : Prop :=
-  CoarseLineageHoldsWithInit sm_goal_1 pm_goal_1 goal_1 sm_goal_1InitEnv pm_goal_1InitEnv goal_1_cut_initGoals
+  CoarseLineageHoldsWithInit sm_goal_1 pm_goal_1 goal_1
+    sm_goal_1InitEnv pm_goal_1InitEnv goal_1_cut_initGoals
 
 theorem prove_goal_1_cut : goal_1_stmt_cut := by
   sorry

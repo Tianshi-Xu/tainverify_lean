@@ -58,6 +58,7 @@ def pm_goal_15InitEnv : ShapeEnv := shapeEnvOfList pm_goal_15InitShapes
 def goal_15_cut_initGoals : List LineageGoal := initGoals
 
 def goal_15_stmt_cut : Prop :=
-  CoarseLineageHoldsWithInit sm_goal_15 pm_goal_15 goal_15 sm_goal_15InitEnv pm_goal_15InitEnv goal_15_cut_initGoals
+  CoarseLineageHoldsWithInit sm_goal_15 pm_goal_15 goal_15
+    sm_goal_15InitEnv pm_goal_15InitEnv goal_15_cut_initGoals
 
 end TrainVerify.Denote.GeneratedGoals

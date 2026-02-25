@@ -40,6 +40,7 @@ def pm_goal_5InitEnv : ShapeEnv := shapeEnvOfList pm_goal_5InitShapes
 
 def goal_5_cut_initGoals : List LineageGoal := initGoals ++ goal_5_prereqs
 
+set_option linter.style.longLine false in
 def goal_5_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_5 pm_goal_5 goal_5 sm_goal_5InitEnv pm_goal_5InitEnv goal_5_cut_initGoals
 

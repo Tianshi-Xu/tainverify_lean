@@ -16,6 +16,7 @@ def sm_goal_11 : GraphDecl := by
     { rank := 0, op := "OpName.FW_transpose", ins := [106], outs := [109], params := [2, 3] },
   ]
 
+set_option linter.style.longLine false in
 def pm_goal_11 : GraphDecl := by
   refine { numRanks := 4, nodes := ?_ }
   exact [
@@ -46,6 +47,7 @@ def pm_goal_11InitEnv : ShapeEnv := shapeEnvOfList pm_goal_11InitShapes
 
 def goal_11_cut_initGoals : List LineageGoal := initGoals ++ goal_11_prereqs
 
+set_option linter.style.longLine false in
 def goal_11_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_11 pm_goal_11 goal_11 sm_goal_11InitEnv pm_goal_11InitEnv goal_11_cut_initGoals
 
