@@ -49,8 +49,6 @@ def goal_1_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_1 pm_goal_1 goal_1
     sm_goal_1InitEnv pm_goal_1InitEnv goal_1_cut_initGoals
 
-set_option linter.unusedSimpArgs false in
-set_option maxHeartbeats 800000 in
 -- fw_sum distributes over allGatherPrimDimN via allReducePrim
 theorem prove_goal_1_cut : goal_1_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
@@ -61,7 +59,7 @@ theorem prove_goal_1_cut : goal_1_stmt_cut := by
   have h118_rec : initSM 118 = reconstructWithDim 1 pm_goal_1.numRanks 0
       [initPM 500, initPM 501, initPM 502, initPM 503] := by
     have hrec := hInit118.2.2
-    simp only [intermediateGoal_118, pm_goal_1, List.map, Piece.tid] at hrec
+    simp only [intermediateGoal_118, pm_goal_1, List.map] at hrec
     exact hrec
   have h118_shape : (initSM 118).shape = [16, 64, 128] := hInit118.1
   -- Extract PM shard shapes
@@ -120,7 +118,7 @@ theorem prove_goal_1_cut : goal_1_stmt_cut := by
   · -- SM shape: [1]
     rw [hsm]; exact fw_sum_shape (initSM 118)
   · -- PM tps shapes: [[1]]
-    simp only [List.map, Piece.tid]
+    simp only [List.map]
     rw [hpm]
     have : (allReducePrim 4 0 [fw_sum (initPM 500), fw_sum (initPM 501),
         fw_sum (initPM 502), fw_sum (initPM 503)]).shape = [1] := by
@@ -132,9 +130,8 @@ theorem prove_goal_1_cut : goal_1_stmt_cut := by
       simpa [fw_sum_shape] using this
     simp [this]
   · -- Value equality: smStore 96 = reconstructWithDim 0 4 0 [pmStore 96]
-    simp only [List.map, Piece.tid]
+    simp only [List.map]
     rw [hsm, hkey, ← hpm]
     simp [reconstructWithDim]
 
 end TrainVerify.Denote.GeneratedGoals
-

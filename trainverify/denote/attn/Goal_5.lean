@@ -44,7 +44,6 @@ set_option linter.style.longLine false in
 def goal_5_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_5 pm_goal_5 goal_5 sm_goal_5InitEnv pm_goal_5InitEnv goal_5_cut_initGoals
 
-set_option linter.unusedSimpArgs false in
 theorem prove_goal_5_cut : goal_5_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   have hInit98 : InitGoalHolds pm_goal_5.numRanks intermediateGoal_98 initSM initPM := by
@@ -56,7 +55,7 @@ theorem prove_goal_5_cut : goal_5_stmt_cut := by
   have hpm : (denoteGraph pm_goal_5 initPM) 103 = fw_view [16, 64, 8, 16] (initPM 98) := by
     simp [pm_goal_5, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   dsimp only [goal_5_stmt_cut, CoarseLineageHoldsWithInit, goal_5] at *
-  simp only [List.map, Piece.tid]
+  simp only [List.map]
   rw [hsm, hpm, h98_eq]
   refine ⟨?_, ?_, ?_⟩
   · simp [fw_view, Tensor.mkShape]

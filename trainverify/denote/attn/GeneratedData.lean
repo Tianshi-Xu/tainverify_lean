@@ -768,7 +768,7 @@ def goal_18 : LineageGoal :=
   { ts := 116, tsShape := [16, 64, 128], tps := [{ rank := 0, tid := 116 }], tpShapes := [[16, 64, 128]] }
 
 def goal_19 : LineageGoal :=
-  { ts := 118, tsShape := [16, 64, 128], tps := [{ rank := 0, tid := 500 }, { rank := 1, tid := 501 }, { rank := 2, tid := 502 }, { rank := 3, tid := 503 }], tpShapes := [[16, 16, 128], [16, 16, 128], [16, 16, 128], [16, 16, 128]] }
+  { ts := 118, tsShape := [16, 64, 128], tps := [{ rank := 0, tid := 500 }, { rank := 1, tid := 501 }, { rank := 2, tid := 502 }, { rank := 3, tid := 503 }], tpShapes := [[16, 16, 128], [16, 16, 128], [16, 16, 128], [16, 16, 128]], gatherDim := 1 }
 
 def goal_20 : LineageGoal :=
   { ts := 124, tsShape := [128, 128], tps := [{ rank := 0, tid := 185 }], tpShapes := [[128, 128]] }

@@ -143,7 +143,6 @@ private theorem valAt_chunk1_16_8_64_16
     List.getElem?_cons_succ, Option.getD_some, dif_pos hidx]
 -- valAt of batchedMatmul for shapes [16, d1, 64, 64] × [16, d1, 64, 16]
 set_option linter.style.longLine false in
-set_option linter.unusedSimpArgs false in
 private theorem valAt_batchedMatmul_64_16
     (x y : Tensor) (d1 : Nat) (_hd1 : 0 < d1)
     (hx : x.shape = [16, d1, 64, 64]) (hy : y.shape = [16, d1, 64, 16])
@@ -157,7 +156,7 @@ private theorem valAt_batchedMatmul_64_16
   have hidx' : idx < 16 * d1 * 1024 := by omega
   unfold batchedMatmul
   rw [hx, hy]
-  simp only [List.reverse, List.reverseAux, List.append]
+  simp only [List.reverse, List.reverseAux]
   simp only [valAt, Tensor.mkShape, hps]
   rw [dif_pos hidx']
   simp only [show (64 : Nat) * 16 ≠ 0 from by omega, ↓reduceIte,
@@ -234,8 +233,6 @@ private theorem batchedMatmul_gather1_distrib
 -- ===== Main theorem =====
 
 set_option linter.style.longLine false in
-set_option linter.unusedSimpArgs false in
-set_option linter.unusedVariables false in
 theorem prove_goal_15_cut : goal_15_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   -- Extract prerequisites
@@ -247,11 +244,11 @@ theorem prove_goal_15_cut : goal_15_stmt_cut := by
   have h112_rec : initSM 112 = reconstructWithDim 1 pm_goal_15.numRanks 0
       [initPM 400, initPM 401, initPM 402, initPM 403] := by
     have hrec := hInit112.2.2
-    simp only [intermediateGoal_112, pm_goal_15, List.map, Piece.tid] at hrec; exact hrec
+    simp only [intermediateGoal_112, pm_goal_15, List.map] at hrec; exact hrec
   have h108_rec : initSM 108 = reconstructWithDim 3 pm_goal_15.numRanks 0
       [initPM 304, initPM 305, initPM 306, initPM 307] := by
     have hrec := hInit108.2.2
-    simp only [intermediateGoal_108, pm_goal_15, List.map, Piece.tid] at hrec; exact hrec
+    simp only [intermediateGoal_108, pm_goal_15, List.map] at hrec; exact hrec
   -- Shapes
   have h112_shape : (initSM 112).shape = [16, 8, 64, 64] := hInit112.1
   have h108_shape : (initSM 108).shape = [16, 8, 64, 16] := hInit108.1
@@ -308,7 +305,7 @@ theorem prove_goal_15_cut : goal_15_stmt_cut := by
     intro r; rw [h108_dimN]; rfl
   -- Simplify the goal structure
   dsimp only [goal_15_stmt_cut, CoarseLineageHoldsWithInit, goal_15] at *
-  simp only [List.map, Piece.tid]
+  simp only [List.map]
   rw [hsm, hpm428, hpm429, hpm430, hpm431, hata_eq 0, hata_eq 1, hata_eq 2, hata_eq 3]
   -- Shape goals
   have hsm_shape : (batchedMatmul (initSM 112) (initSM 108)).shape = [16, 8, 64, 16] :=
@@ -327,7 +324,7 @@ theorem prove_goal_15_cut : goal_15_stmt_cut := by
     -- Convert reconstructWithDim to allGatherPrimDimN
     have hpiece0_shape := batchedMatmul_4d_shape _ _ 16 2 64 64 16 h400_shape (hchunk_shape 0)
     conv_rhs => unfold reconstructWithDim
-    simp only [List.head?, Option.map, hpiece0_shape, show [16, 2, 64, 16] ≠ [1] from by decide, ↓reduceIte]
+    simp only [List.head?, Option.map, hpiece0_shape]
     exact batchedMatmul_gather1_distrib (initPM 400) (initPM 401) (initPM 402) (initPM 403)
       (initSM 108) h400_shape h401_shape h402_shape h403_shape h108_shape
 

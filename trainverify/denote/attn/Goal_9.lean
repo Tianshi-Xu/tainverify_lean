@@ -43,7 +43,6 @@ set_option linter.style.longLine false in
 def goal_9_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_9 pm_goal_9 goal_9 sm_goal_9InitEnv pm_goal_9InitEnv goal_9_cut_initGoals
 
-set_option linter.unusedSimpArgs false in
 theorem prove_goal_9_cut : goal_9_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   have hInit102 : InitGoalHolds pm_goal_9.numRanks intermediateGoal_102 initSM initPM := by
@@ -55,7 +54,7 @@ theorem prove_goal_9_cut : goal_9_stmt_cut := by
   have hpm : (denoteGraph pm_goal_9 initPM) 107 = fw_view [16, 64, 8, 16] (initPM 102) := by
     simp [pm_goal_9, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   dsimp only [goal_9_stmt_cut, CoarseLineageHoldsWithInit, goal_9] at *
-  simp only [List.map, Piece.tid]
+  simp only [List.map]
   rw [hsm, hpm, h102_eq]
   refine ⟨?_, ?_, ?_⟩
   · simp [fw_view, Tensor.mkShape]
@@ -63,4 +62,3 @@ theorem prove_goal_9_cut : goal_9_stmt_cut := by
   · simp [reconstructWithDim]
 
 end TrainVerify.Denote.GeneratedGoals
-

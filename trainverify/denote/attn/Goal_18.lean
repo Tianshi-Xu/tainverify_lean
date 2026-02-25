@@ -42,7 +42,6 @@ def goal_18_cut_initGoals : List LineageGoal := initGoals ++ goal_18_prereqs
 def goal_18_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_18 pm_goal_18 goal_18 sm_goal_18InitEnv pm_goal_18InitEnv goal_18_cut_initGoals
 
-set_option linter.unusedSimpArgs false in
 theorem prove_goal_18_cut : goal_18_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   have hInit115 : InitGoalHolds pm_goal_18.numRanks intermediateGoal_115 initSM initPM := by
@@ -54,7 +53,7 @@ theorem prove_goal_18_cut : goal_18_stmt_cut := by
   have hpm : (denoteGraph pm_goal_18 initPM) 116 = fw_view [16, 64, 128] (initPM 115) := by
     simp [pm_goal_18, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   dsimp only [goal_18_stmt_cut, CoarseLineageHoldsWithInit, goal_18] at *
-  simp only [List.map, Piece.tid]
+  simp only [List.map]
   rw [hsm, hpm, h115_eq]
   refine ⟨?_, ?_, ?_⟩
   · simp [fw_view, Tensor.mkShape]
@@ -62,4 +61,3 @@ theorem prove_goal_18_cut : goal_18_stmt_cut := by
   · simp [reconstructWithDim]
 
 end TrainVerify.Denote.GeneratedGoals
-

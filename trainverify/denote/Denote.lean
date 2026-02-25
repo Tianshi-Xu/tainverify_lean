@@ -2101,9 +2101,12 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       let (dx, dw) := bw_linear g x w
       [dx, dw]
   | "OpName.ChunkPrim", [x] =>
-      match x.shape with
-      | [_, _, _] => [chunkPrimDim0 numParts rank x]
-      | _ => [chunkPrim numParts rank x]
+      match params with
+      | [dim] => [chunkPrimDimN dim numParts rank x]
+      | _ =>
+        match x.shape with
+        | [_, _, _] => [chunkPrimDim0 numParts rank x]
+        | _ => [chunkPrim numParts rank x]
   | "OpName.AllGatherPrim", xs =>
       match (xs.head?.map (fun t => t.shape)).getD [] with
       | [_, _, _] => [allGatherPrimDim0 numParts rank xs]
@@ -2226,6 +2229,13 @@ theorem applyNode_chunkPrim_out_3d
   classical
   simp only [applyNode, evalOp, storeSet, List.map, hsh]
   simp [List.find?, List.zip, List.zipWith]
+
+theorem applyNode_chunkPrimDimN_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid) (dim : Nat) :
+    applyNode g s { rank := rank, op := "OpName.ChunkPrim", ins := [inTid], outs := [outTid], params := [dim] } outTid =
+      chunkPrimDimN dim g.numRanks rank (s inTid) := by
+  classical
+  simp [applyNode, evalOp, storeSet]
 
 theorem applyNode_fw_linear_out
     (g : GraphDecl) (s : Store) (rank : Nat) (xTid wTid outTid : Tid) :

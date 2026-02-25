@@ -47,7 +47,6 @@ def goal_6_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_6 pm_goal_6 goal_6
     sm_goal_6InitEnv pm_goal_6InitEnv goal_6_cut_initGoals
 
-set_option linter.unusedSimpArgs false in
 set_option linter.style.longLine false in
 theorem prove_goal_6_cut : goal_6_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
@@ -72,7 +71,7 @@ theorem prove_goal_6_cut : goal_6_stmt_cut := by
       transposeAxes 1 2 (chunkPrim 4 3 (initPM 103)) := by
     simp [pm_goal_6, denoteGraph, List.foldl, applyNode, evalOp, storeSet, hpm103_shape]
   dsimp only [goal_6_stmt_cut, CoarseLineageHoldsWithInit, goal_6] at *
-  simp only [List.map, Piece.tid]
+  simp only [List.map]
   rw [hsm, hpm256, hpm257, hpm258, hpm259, h103_eq]
   set x := initPM 103
   have hxsh : x.shape = [16, 64, 8, 16] := by rw [← h103_eq]; exact h103_shape

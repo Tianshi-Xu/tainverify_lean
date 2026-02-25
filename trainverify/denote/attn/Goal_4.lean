@@ -52,7 +52,6 @@ def goal_4_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_4 pm_goal_4 goal_4
     sm_goal_4InitEnv pm_goal_4InitEnv goal_4_cut_initGoals
 
-set_option linter.unusedSimpArgs false in
 theorem prove_goal_4_cut : goal_4_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   -- Extract init alignments using Common helpers
@@ -81,7 +80,7 @@ theorem prove_goal_4_cut : goal_4_stmt_cut := by
     simp [pm_goal_4, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   -- Apply the general coarse lineage theorem
   dsimp only [goal_4_stmt_cut, CoarseLineageHoldsWithInit, goal_4] at *
-  simp only [List.map, Piece.tid]
+  simp only [List.map]
   have h101_rec' : initSM 101 = reconstructWithDim 1 pm_goal_4.numRanks 0
       [initPM 228, initPM 229, initPM 230, initPM 231] := by
     rw [h101_rec]; simp [initGoal_101, pm_goal_4, reconstructWithDim, h228_shape]

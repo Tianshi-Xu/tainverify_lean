@@ -49,7 +49,6 @@ def goal_2_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_2 pm_goal_2 goal_2
     sm_goal_2InitEnv pm_goal_2InitEnv goal_2_cut_initGoals
 
-set_option linter.unusedSimpArgs false in
 theorem prove_goal_2_cut : goal_2_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   -- Extract init alignments using Common helpers
@@ -103,16 +102,14 @@ theorem prove_goal_2_cut : goal_2_stmt_cut := by
         (fun t => t.shape)).getD [] = [a, b, c] := by
       refine ⟨4, 64, 128, ?_⟩
       simp only [List.map, List.head?, Option.map, Option.getD]
-      simp only [applyNode, evalOp, storeSet, List.zip,
-        List.zipWith, List.find?, BEq.beq, Nat.beq_eq,
-        ↓reduceIte]
+      simp only [applyNode, evalOp, storeSet, List.zip]
       exact fw_linear_3d_shape 4 64 128 128 _ _
         h168_shape (by rw [← h97_eq]; exact h97_shape)
     rw [applyNode_allGatherPrim_dim0_out _ _ _ _ _ h3d]
     simp [applyNode, evalOp, storeSet]
   -- Apply the general coarse lineage theorem
   dsimp only [goal_2_stmt_cut, CoarseLineageHoldsWithInit, goal_2] at *
-  simp only [List.map, Piece.tid]
+  simp only [List.map]
   exact fw_linear_allGatherDim0_coarse
     pm_goal_2.numRanks 4 64 128 128
     (denoteGraph sm_goal_2 initSM) (denoteGraph pm_goal_2 initPM) 98

@@ -47,7 +47,6 @@ def goal_10_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_10 pm_goal_10 goal_10
     sm_goal_10InitEnv pm_goal_10InitEnv goal_10_cut_initGoals
 
-set_option linter.unusedSimpArgs false in
 set_option linter.style.longLine false in
 theorem prove_goal_10_cut : goal_10_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
@@ -72,7 +71,7 @@ theorem prove_goal_10_cut : goal_10_stmt_cut := by
       transposeAxes 1 2 (chunkPrim 4 3 (initPM 107)) := by
     simp [pm_goal_10, denoteGraph, List.foldl, applyNode, evalOp, storeSet, hpm107_shape]
   dsimp only [goal_10_stmt_cut, CoarseLineageHoldsWithInit, goal_10] at *
-  simp only [List.map, Piece.tid]
+  simp only [List.map]
   rw [hsm, hpm304, hpm305, hpm306, hpm307, h107_eq]
   set x := initPM 107
   have hxsh : x.shape = [16, 64, 8, 16] := by rw [← h107_eq]; exact h107_shape
@@ -101,4 +100,3 @@ theorem prove_goal_10_cut : goal_10_stmt_cut := by
     exact transposeAxes_12_chunkPrim_gather3 x hxsh
 
 end TrainVerify.Denote.GeneratedGoals
-

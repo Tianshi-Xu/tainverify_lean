@@ -139,8 +139,6 @@ private theorem allToAll_14_shape (rank : Nat) (xs : List Tensor)
   exact chunkPrimDimN_shape 1 4 rank _ _ hag (by omega)
 
 set_option linter.style.longLine false in
-set_option linter.unusedSimpArgs false in
-set_option linter.unusedVariables false in
 theorem prove_goal_14_cut : goal_14_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   have hInit111 : InitGoalHolds pm_goal_14.numRanks intermediateGoal_111 initSM initPM := by
@@ -148,7 +146,7 @@ theorem prove_goal_14_cut : goal_14_stmt_cut := by
   have h111_rec : initSM 111 = reconstructWithDim 3 pm_goal_14.numRanks 0
       [initPM 376, initPM 377, initPM 378, initPM 379] := by
     have hrec := hInit111.2.2
-    simp only [intermediateGoal_111, pm_goal_14, List.map, Piece.tid] at hrec; exact hrec
+    simp only [intermediateGoal_111, pm_goal_14, List.map] at hrec; exact hrec
   have h111_shape : (initSM 111).shape = [16, 8, 64, 64] := hInit111.1
   have htp_shapes := hInit111.2.1
   simp only [intermediateGoal_111, List.map] at htp_shapes
@@ -181,7 +179,7 @@ theorem prove_goal_14_cut : goal_14_stmt_cut := by
       softmax (allToAllPrimWithDims 4 3 [initPM 376, initPM 377, initPM 378, initPM 379] 3 1) := by
     simp [pm_goal_14, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   dsimp only [goal_14_stmt_cut, CoarseLineageHoldsWithInit, goal_14] at *
-  simp only [List.map, Piece.tid]
+  simp only [List.map]
   rw [hsm, hpm400, hpm401, hpm402, hpm403]
   -- allToAll = chunkPrimDimN 1 ∘ allGatherPrimDimN 3; initSM 111 = allGatherPrimDimN 3 4 0 xs
   have h111_dimN : initSM 111 = allGatherPrimDimN 3 pm_goal_14.numRanks 0
@@ -266,8 +264,7 @@ theorem prove_goal_14_cut : goal_14_stmt_cut := by
       have hr_cases : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
       rcases hr_cases with hr | hr | hr | hr <;> (
         simp only [hr, List.getD,
-          List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-          Option.getD_some, Option.getD_none]
+          List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
         rw [chunkPrimDimN_dim1_np4_valAt (softmax T) hsm_shape _ localIdx hli_lt]
         congr 1; omega)
   refine ⟨hsm_shape, ?_, ?_⟩
@@ -279,4 +276,3 @@ theorem prove_goal_14_cut : goal_14_stmt_cut := by
     exact gather_chunk_id.symm
 
 end TrainVerify.Denote.GeneratedGoals
-

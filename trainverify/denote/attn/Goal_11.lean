@@ -51,7 +51,6 @@ set_option linter.style.longLine false in
 def goal_11_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_11 pm_goal_11 goal_11 sm_goal_11InitEnv pm_goal_11InitEnv goal_11_cut_initGoals
 
-set_option linter.unusedSimpArgs false in
 set_option linter.style.longLine false in
 theorem prove_goal_11_cut : goal_11_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
@@ -92,7 +91,7 @@ theorem prove_goal_11_cut : goal_11_stmt_cut := by
   rw [hata_eq 2] at hpm330; rw [hata_eq 3] at hpm331
   -- Unfold goal
   dsimp only [goal_11_stmt_cut, CoarseLineageHoldsWithInit, goal_11] at *
-  simp only [List.map, Piece.tid]
+  simp only [List.map]
   rw [hsm, hpm328, hpm329, hpm330, hpm331]
   set full := initSM 106
   have hfull_shape : full.shape = [16, 8, 64, 16] := h106_sm_shape
@@ -119,4 +118,3 @@ theorem prove_goal_11_cut : goal_11_stmt_cut := by
     exact transposeAxes_23_chunkPrimDimN0_gather0 full hfull_shape
 
 end TrainVerify.Denote.GeneratedGoals
-
