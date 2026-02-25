@@ -713,6 +713,55 @@ theorem allGatherPrimDimN_shape (gatherDim numParts : Nat) (xs : List Tensor)
       shardShape.set gatherDim (shardShape.getD gatherDim 0 * numParts) := by
   simp only [allGatherPrimDimN, Tensor.mkShape, hhead]
 
+/-- Chunk a tensor along an arbitrary dimension `chunkDim`.
+    This is the inverse of `allGatherPrimDimN`: it selects the rank-th shard
+    by dividing `chunkDim` by `numParts`. -/
+def chunkPrimDimN (chunkDim numParts rank : Nat) (x : Tensor) : Tensor :=
+  let sh := x.shape
+  let dimSize := sh.getD chunkDim 0
+  let shardSize := if numParts = 0 then 0 else dimSize / numParts
+  let outShape := sh.set chunkDim shardSize
+  let postStride := (sh.drop (chunkDim + 1)).foldl (· * ·) 1
+  let dimStride := dimSize * postStride
+  let shardDimStride := shardSize * postStride
+  let r := if numParts = 0 then rank else rank % numParts
+  Tensor.mkShape outShape (fun outIdx =>
+    let idx := outIdx.1
+    let preIdx := if shardDimStride = 0 then 0 else idx / shardDimStride
+    let remainder := if shardDimStride = 0 then 0 else idx % shardDimStride
+    let jLocal := if postStride = 0 then 0 else remainder / postStride
+    let k := if postStride = 0 then 0 else remainder % postStride
+    let jFull := r * shardSize + jLocal
+    valAt x (preIdx * dimStride + jFull * postStride + k))
+
+/-- `chunkPrimDimN` shape theorem. -/
+theorem chunkPrimDimN_shape (chunkDim numParts rank : Nat) (x : Tensor)
+    (sh : Shape) (hsh : x.shape = sh)
+    (hnz : numParts ≠ 0) :
+    (chunkPrimDimN chunkDim numParts rank x).shape =
+      sh.set chunkDim (sh.getD chunkDim 0 / numParts) := by
+  simp only [chunkPrimDimN, Tensor.mkShape, hsh, hnz, ite_false]
+
+/-- AllToAll with explicit split/gather dimensions.
+    Gathers all inputs along `idim`, then chunks the result along `odim`. -/
+def allToAllPrimWithDims (numParts rank : Nat) (xs : List Tensor)
+    (idim odim : Nat) : Tensor :=
+  chunkPrimDimN odim numParts rank (allGatherPrimDimN idim numParts 0 xs)
+
+/-- `allToAllPrimWithDims` shape theorem. -/
+theorem allToAllPrimWithDims_shape (numParts rank : Nat) (xs : List Tensor)
+    (idim odim : Nat)
+    (shardShape : Shape)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = shardShape)
+    (hnz : numParts ≠ 0) :
+    (allToAllPrimWithDims numParts rank xs idim odim).shape =
+      (shardShape.set idim (shardShape.getD idim 0 * numParts)).set odim
+        ((shardShape.set idim (shardShape.getD idim 0 * numParts)).getD odim 0 /
+          numParts) := by
+  simp only [allToAllPrimWithDims]
+  exact chunkPrimDimN_shape odim numParts rank _
+    _ (allGatherPrimDimN_shape idim numParts xs shardShape hhead) hnz
+
 /-- `allGatherPrim` shape for 2D tensors with consistent shard shapes. -/
 theorem allGatherPrim_shape (numParts o shard : Nat) (xs : List Tensor)
     (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [o, shard]) :
@@ -2060,7 +2109,10 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       | [_, _, _] => [allGatherPrimDim0 numParts rank xs]
       | _ => [allGatherPrim numParts rank xs]
   | "OpName.AllReducePrim", xs => [allReducePrim numParts rank xs]
-  | "OpName.AllToAllPrim", xs => [allToAllPrim numParts rank xs]
+  | "OpName.AllToAllPrim", xs =>
+      match params with
+      | [idim, odim] => [allToAllPrimWithDims numParts rank xs idim odim]
+      | _ => [allToAllPrim numParts rank xs]
   -- Attention operators
   | "OpName.FW_multiref", [x] => [x, x, x]
   | "OpName.FW_view", [x] =>
