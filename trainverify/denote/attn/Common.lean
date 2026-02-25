@@ -881,7 +881,6 @@ theorem scalarDiv_shape (t : Tensor) (c : Scalar) :
   simp [scalarDiv, Tensor.mkShape]
 
 -- Helper: valAt of allGatherPrimDimN 0 4 0 with shape [4,8,64,64]
-set_option maxHeartbeats 40000000 in
 private lemma allGatherPrimDimN_gd0_np4_valAt
     (xs : List Tensor) (idx : Nat)
     (hhead : (xs.head?.map (·.shape)).getD [] = [4, 8, 64, 64])
@@ -962,7 +961,6 @@ Used by Goal_11.
 -/
 
 -- Helper A: valAt of chunkPrimDimN 0 4 for shape [16, 8, 64, 16]
-set_option maxHeartbeats 4000000 in
 private lemma valAt_chunkPrimDimN_0_4 (x : Tensor) (r idx : Nat)
     (hshape : x.shape = [16, 8, 64, 16]) (hr : r < 4) (hidx : idx < 32768) :
     valAt (chunkPrimDimN 0 4 r x) idx = valAt x (r * 32768 + idx) := by
@@ -1001,7 +999,6 @@ private lemma valAt_chunkPrimDimN_0_4 (x : Tensor) (r idx : Nat)
   rw [heq, valAt_of_lt _ _ (by rw [hps]; exact hfi_bound)]
 
 -- Helper B1: valAt of transposeAxes 2 3 for shape [16, 8, 64, 16]
-set_option maxHeartbeats 4000000 in
 private lemma valAt_transposeAxes_23_16_8_64_16 (x : Tensor) (idx : Nat)
     (hshape : x.shape = [16, 8, 64, 16]) (hidx : idx < 131072) :
     valAt (transposeAxes 2 3 x) idx =
@@ -1052,7 +1049,6 @@ private lemma valAt_transposeAxes_23_16_8_64_16 (x : Tensor) (idx : Nat)
   simp only [Nat.add_assoc]
 
 -- Helper B2: valAt of transposeAxes 2 3 for shape [4, 8, 64, 16]
-set_option maxHeartbeats 4000000 in
 private lemma valAt_transposeAxes_23_4_8_64_16 (x : Tensor) (idx : Nat)
     (hshape : x.shape = [4, 8, 64, 16]) (hidx : idx < 32768) :
     valAt (transposeAxes 2 3 x) idx =
@@ -1103,7 +1099,6 @@ private lemma valAt_transposeAxes_23_4_8_64_16 (x : Tensor) (idx : Nat)
   simp only [Nat.add_assoc]
 
 -- Helper C: valAt of allGatherPrimDimN 0 4 for piece shape [4, 8, 16, 64]
-set_option maxHeartbeats 4000000 in
 private lemma valAt_allGatherPrimDimN_0_4_32768
     (xs : List Tensor) (idx : Nat)
     (hhead : (xs.head?.map (·.shape)).getD [] = [4, 8, 16, 64])
@@ -1139,7 +1134,6 @@ private theorem ta23_cd0_main_eq (idx : Nat) (_hidx : idx < 131072) :
   have := Nat.div_add_mod idx 32768
   omega
 
-set_option maxHeartbeats 8000000 in
 -- transposeAxes 2 3 commutes with dim-0 chunk/gather for shape [16, 8, 64, 16]
 theorem transposeAxes_23_chunkPrimDimN0_gather0
     (x : Tensor) (hshape : x.shape = [16, 8, 64, 16]) :

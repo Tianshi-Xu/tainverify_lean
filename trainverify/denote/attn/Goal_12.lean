@@ -15,9 +15,6 @@ namespace TrainVerify.Denote.GeneratedGoals
 
 set_option linter.style.longLine false
 set_option linter.flexible false
-set_option linter.unusedSimpArgs false
-set_option linter.unnecessarySimpa false
-set_option linter.unnecessarySeqFocus false
 
 def sm_goal_12 : GraphDecl := by
   refine { numRanks := 1, nodes := ?_ }
@@ -86,10 +83,8 @@ private lemma valAt_allGather_out
   have hdv : idx / 524288 = 0 := Nat.div_eq_of_lt hidx
   unfold allGatherPrimDimN
   rw [hhead]
-  simp [valAt, Tensor.mkShape, h_ps_out,
-    List.set, List.getD, List.drop, List.foldl, List.length,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    h4x4, h4x32768, h16x32768, hmm, hdv, dif_pos hidx]
+  simp [valAt, Tensor.mkShape, h_ps_out, List.getD, List.drop, List.foldl,
+    List.length, List.getElem?_cons_zero, h4x4, h4x32768, h16x32768, hmm, hdv, dif_pos hidx]
 
 /-! ## Helper B: valAt of allGatherPrimDimN 0 4 for shard shape [4,8,16,64] -/
 -- allGatherPrimDimN valAt for [4,8,16,64] requires simp on gather expression
@@ -109,10 +104,8 @@ private lemma valAt_allGather_Y
   have hdv : g / 131072 = 0 := Nat.div_eq_of_lt hg
   unfold allGatherPrimDimN
   rw [hhead]
-  simp [valAt, Tensor.mkShape, h_ps_out,
-    List.set, List.getD, List.drop, List.foldl, List.length,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    h4x4, h4x8192, h16x8192, hmm, hdv, dif_pos hg]
+  simp [valAt, Tensor.mkShape, h_ps_out, List.getD, List.drop, List.foldl, List.length,
+    List.getElem?_cons_zero, h4x4, h4x8192, h16x8192, hmm, hdv, dif_pos hg]
 
 /-! ## Helper C: valAt of chunkPrimDimN 0 4 for shape [16,8,64,16] -/
 -- chunkPrimDimN valAt requires unfolding and simp on index arithmetic
@@ -131,11 +124,7 @@ private lemma valAt_chunk_dim0_X (x : Tensor) (r idx : Nat)
   rw [valAt_of_lt _ _ (by rw [hps_chunk]; exact hidx)]
   rw [valAt_of_lt _ _ (by rw [hps]; exact hfi_bound)]
   unfold chunkPrimDimN Tensor.mkShape
-  simp only [hshape, List.set, List.getD,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD_some, Option.getD_none,
-    List.take, List.drop, List.foldl, List.length,
-    Nat.sub_zero]
+  simp only [hshape, List.getD, List.getElem?_cons_zero, Option.getD_some, List.drop, List.foldl]
   have : (16 : Nat) / 4 = 4 := by norm_num
   have : (4 : Nat) * (8 * 64 * 16) = 32768 := by norm_num
   have : (16 : Nat) * (8 * 64 * 16) = 131072 := by norm_num
@@ -145,12 +134,10 @@ private lemma valAt_chunk_dim0_X (x : Tensor) (r idx : Nat)
   have hne_32768 : (32768 : Nat) ≠ 0 := by omega
   have hne_131072 : (131072 : Nat) ≠ 0 := by omega
   have h_4x8192 : (4 : Nat) * 8192 = 32768 := by norm_num
-  simp only [*, Nat.mul_one, Nat.one_mul, Nat.add_zero, Nat.zero_add,
-    Nat.zero_mul, Nat.mul_zero,
-    dif_pos hfi_bound, if_neg, if_pos, ite_false, ite_true]
+  simp only [*, Nat.one_mul, ite_false]
   have h0 : idx / 32768 = 0 := Nat.div_eq_of_lt hidx
   have hm : idx % 32768 = idx := Nat.mod_eq_of_lt hidx
-  simp only [h0, hm, Nat.zero_mul, Nat.zero_add, Nat.mul_zero]
+  simp only [h0, hm, Nat.zero_mul, Nat.zero_add]
   rw [show r % 4 = r from Nat.mod_eq_of_lt hr]
   have heq : (r * 4 + idx / 8192) * 8192 + idx % 8192 = r * 32768 + idx := by omega
   rw [heq, valAt_of_lt _ _ (by rw [hps]; exact hfi_bound)]
@@ -255,8 +242,7 @@ private theorem batchedMatmul_gatherDim0_dist
   have hr_cases : idx / 32768 / 4 = 0 ∨ idx / 32768 / 4 = 1 ∨ idx / 32768 / 4 = 2 ∨ idx / 32768 / 4 = 3 := by omega
   rcases hr_cases with hr | hr | hr | hr <;> {
     simp only [hr, List.getD,
-      List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-      Option.getD_some, Option.getD_none]
+      List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
     -- RHS: unfold batchedMatmul of chunk and B_r
     rw [valAt_batchedMatmul_4 _ _
       ((idx / 32768 % 4) * 32768 + idx % 32768)
@@ -278,9 +264,7 @@ private theorem batchedMatmul_gatherDim0_dist
     rw [hYmm]
     have hYpiece : (idx / 4096 * 1024 + l * 64 + idx % 64) / 8192 / 4 = idx / 32768 / 4 := by omega
     rw [hYpiece, hr]
-    simp only [List.getD,
-      List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-      Option.getD_some, Option.getD_none]
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
     -- Both sides: valAt X (a) * valAt B_r (b)
     -- Show the indices match using congrArg (avoids congr recursion on dif)
     exact congrArg₂ HMul.hMul (congrArg (valAt X) (by omega)) (congrArg (valAt _) (by omega))
@@ -339,7 +323,7 @@ theorem prove_goal_12_cut : goal_12_stmt_cut := by
   rw [hata_eq 2] at hpm354; rw [hata_eq 3] at hpm355
   -- Unfold the goal
   dsimp only [goal_12_stmt_cut, CoarseLineageHoldsWithInit, goal_12] at *
-  simp only [List.map, Piece.tid]
+  simp only [List.map]
   rw [hsm, hpm352, hpm353, hpm354, hpm355]
   -- The reconstruction for the output
   have hcX : ∀ r, (chunkPrimDimN 0 4 r (initSM 104)).shape = [4, 8, 64, 16] := by
