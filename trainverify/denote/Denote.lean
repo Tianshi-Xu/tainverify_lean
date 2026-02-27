@@ -2108,9 +2108,12 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
         | [_, _, _] => [chunkPrimDim0 numParts rank x]
         | _ => [chunkPrim numParts rank x]
   | "OpName.AllGatherPrim", xs =>
-      match (xs.head?.map (fun t => t.shape)).getD [] with
-      | [_, _, _] => [allGatherPrimDim0 numParts rank xs]
-      | _ => [allGatherPrim numParts rank xs]
+      match params with
+      | [dim] => [allGatherPrimDimN dim numParts rank xs]
+      | _ =>
+        match (xs.head?.map (fun t => t.shape)).getD [] with
+        | [_, _, _] => [allGatherPrimDim0 numParts rank xs]
+        | _ => [allGatherPrim numParts rank xs]
   | "OpName.AllReducePrim", xs => [allReducePrim numParts rank xs]
   | "OpName.AllToAllPrim", xs =>
       match params with
