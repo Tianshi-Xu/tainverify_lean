@@ -1252,24 +1252,15 @@ def allReducePrim (_numParts _rank : Nat) (xs : List Tensor) : Tensor :=
   let sh := (xs.head?.map (fun t => t.shape)).getD []
   Tensor.mkShape sh (fun idx => xs.foldl (fun acc t => acc + valAt t idx.1) 0)
 
-/-- allToAllPrim: transpose-like redistribution across ranks.
-    For simplicity, we model it as selecting the rank-th tensor and transposing it.
-    This captures the essential semantics of redistributing data across ranks
-    when switching from one partitioning scheme to another.
-    Each rank r gets xs[r] transposed. -/
-def allToAllPrim (_numParts rank : Nat) (xs : List Tensor) : Tensor :=
-  match xs[rank]? with
-  | none => Tensor.mkShape [] (fun _ => 0)
-  | some x =>
-      match x.shape with
-      | [d0, d1] =>
-          -- Transpose: [d0, d1] -> [d1, d0]
-          Tensor.mkShape [d1, d0] (fun idx =>
-            let flatIdx := idx.1
-            let i := flatIdx / d0
-            let j := flatIdx % d0
-            valAt x (j * d1 + i))
-      | _ => x  -- Fallback: return as-is for unsupported shapes
+/-- allToAllPrim: redistribution across ranks.
+    Semantically equivalent to: gather all shards along dimension 0,
+    then chunk along the last dimension. This is the default when
+    no explicit idim/odim are provided. -/
+def allToAllPrim (numParts rank : Nat) (xs : List Tensor) : Tensor :=
+  let lastDim := (xs.head?.map (fun t => t.shape.length)).getD 0
+  let idim := 0
+  let odim := if lastDim = 0 then 0 else lastDim - 1
+  allToAllPrimWithDims numParts rank xs idim odim
 
 /-- allReducePrim shape equals the shape of the first element. -/
 theorem allReducePrim_shape (numParts rank : Nat) (xs : List Tensor) (x0 : Tensor)
@@ -1277,11 +1268,12 @@ theorem allReducePrim_shape (numParts rank : Nat) (xs : List Tensor) (x0 : Tenso
     (allReducePrim numParts rank xs).shape = x0.shape := by
   simp [allReducePrim, Tensor.mkShape, hhead]
 
-/-- allToAllPrim shape is the transpose of the rank-th element's shape (for 2D tensors). -/
-theorem allToAllPrim_shape (numParts rank : Nat) (xs : List Tensor) (xr : Tensor)
-    (hget : xs[rank]? = some xr) (d0 d1 : Nat) (hsh : xr.shape = [d0, d1]) :
-    (allToAllPrim numParts rank xs).shape = [d1, d0] := by
-  simp [allToAllPrim, hget, hsh, Tensor.mkShape]
+/-- allToAllPrim unfolds to allToAllPrimWithDims with default dimensions. -/
+theorem allToAllPrim_unfold (numParts rank : Nat) (xs : List Tensor) :
+    allToAllPrim numParts rank xs =
+      (let lastDim := (xs.head?.map (fun t => t.shape.length)).getD 0
+       allToAllPrimWithDims numParts rank xs 0 (if lastDim = 0 then 0 else lastDim - 1)) := by
+  rfl
 
 /-!
 ## Small value-level lemmas (avoid giant simp)
@@ -1632,12 +1624,6 @@ theorem fw_sum_eq_allReduce_fw_sum_chunkPrim
   rw [hR']
   rw [hR'']
 
-/-- `allToAllPrim` on 3D tensors returns the rank-th input unchanged. -/
-theorem allToAllPrim_3d (numParts rank : Nat) (xs : List Tensor) (xr : Tensor)
-    (hget : xs[rank]? = some xr) (a b c : Nat) (hsh : xr.shape = [a, b, c]) :
-    allToAllPrim numParts rank xs = xr := by
-  simp only [allToAllPrim, hget, hsh]
-
 /-- Helper: foldl (· * ·) distributes initial value. -/
 private theorem foldl_mul_init (a : Nat) (xs : List Nat) :
     xs.foldl (· * ·) a = a * xs.foldl (· * ·) 1 := by
@@ -1923,22 +1909,22 @@ def opOutShapes (numParts : Nat) (op : String) (params : List Nat) (inShapes : L
   | "OpName.BW_linear", [_g, x, w] =>
       some [x, w]
   | "OpName.ChunkPrim", [x] =>
-      let pref := dropLast x
-      let d := lastD x
+      let dim := match params with | [d] => d | _ => x.length - 1
+      let d := x.getD dim 0
       if decide (0 < numParts ∧ numParts ≤ d) then
         let shard := divNat d numParts
-        if decide (0 < shard) then some [appendLast pref shard] else none
+        if decide (0 < shard) then some [x.set dim shard] else none
       else
         none
   | "OpName.AllGatherPrim", xs =>
       match xs with
       | [] => none
       | sh0 :: _ =>
-          let pref := dropLast sh0
-          let shard := lastD sh0
+          let dim := match params with | [d] => d | _ => sh0.length - 1
+          let shard := sh0.getD dim 0
           if decide (0 < numParts) then
             if decide (xs.length = numParts) && allEqShape sh0 xs && decide (0 < shard) then
-              some [appendLast pref (shard * numParts)]
+              some [sh0.set dim (shard * numParts)]
             else
               none
           else
@@ -1949,21 +1935,24 @@ def opOutShapes (numParts : Nat) (op : String) (params : List Nat) (inShapes : L
       | sh0 :: _ =>
           if allEqShape sh0 xs then some [sh0] else none
   | "OpName.AllToAllPrim", xs =>
-      -- AllToAll: redistribution across ranks.
-      -- For attention, typically used on 4D tensors [batch, heads, seq, head_dim]
-      -- or 2D tensors [d0, d1].
-      -- The output shape is typically the same as input (redistribution doesn't change local shape).
       match xs with
       | [] => none
       | sh0 :: _ =>
-          if allEqShape sh0 xs then some [sh0] else none
+          if ¬ allEqShape sh0 xs then none
+          else
+            match params with
+            | [idim, odim] =>
+                let gathered := sh0.set idim (sh0.getD idim 0 * numParts)
+                let final := gathered.set odim (gathered.getD odim 0 / numParts)
+                some [final]
+            | _ => some [sh0]
   -- ============================================================
   -- Attention operators
   -- ============================================================
   -- FW_multiref: copy one input to multiple outputs (all same shape)
   | "OpName.FW_multiref", [x] =>
-      -- Outputs 3 copies of x (for Q, K, V projections)
-      some [x, x, x]
+      let n := params.head?.getD 3
+      some (List.replicate n x)
   | "OpName.FW_view", [_x] =>
       match params with
       | [] => some [_x]
@@ -2103,24 +2092,20 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
   | "OpName.ChunkPrim", [x] =>
       match params with
       | [dim] => [chunkPrimDimN dim numParts rank x]
-      | _ =>
-        match x.shape with
-        | [_, _, _] => [chunkPrimDim0 numParts rank x]
-        | _ => [chunkPrim numParts rank x]
+      | _ => [chunkPrimDimN (x.shape.length - 1) numParts rank x]
   | "OpName.AllGatherPrim", xs =>
       match params with
       | [dim] => [allGatherPrimDimN dim numParts rank xs]
-      | _ =>
-        match (xs.head?.map (fun t => t.shape)).getD [] with
-        | [_, _, _] => [allGatherPrimDim0 numParts rank xs]
-        | _ => [allGatherPrim numParts rank xs]
+      | _ => [allGatherPrimDimN ((xs.head?.map (fun t => t.shape.length)).getD 1 - 1) numParts rank xs]
   | "OpName.AllReducePrim", xs => [allReducePrim numParts rank xs]
   | "OpName.AllToAllPrim", xs =>
       match params with
       | [idim, odim] => [allToAllPrimWithDims numParts rank xs idim odim]
       | _ => [allToAllPrim numParts rank xs]
   -- Attention operators
-  | "OpName.FW_multiref", [x] => [x, x, x]
+  | "OpName.FW_multiref", [x] =>
+      let n := params.head?.getD 3
+      List.replicate n x
   | "OpName.FW_view", [x] =>
       match params with
       | [] => [x]
@@ -2141,8 +2126,12 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
   | "OpName.BW_matmul", [g, x, y] =>
       let (dx, dy) := bw_matmul g x y
       [dx, dy]
-  | "OpName.FW_div", [x] => [fw_div 4.0 x]
-  | "OpName.BW_div", [g, _x] => [bw_div 4.0 g]
+  | "OpName.FW_div", [x] =>
+      let c : Scalar := (params.head?.getD 1 : Nat)
+      [fw_div c x]
+  | "OpName.BW_div", [g, _x] =>
+      let c : Scalar := (params.head?.getD 1 : Nat)
+      [bw_div c g]
   | "OpName.FW_softmax", [x] => [fw_softmax x]
   | "OpName.BW_softmax", [g, y] => [bw_softmax g y]
   | "OpName.FW_contiguous", [x] => [x]
@@ -2212,31 +2201,17 @@ theorem applyNode_fw_sum_out
   classical
   simp [applyNode, evalOp, storeSet]
 
--- ChunkPrim lemmas need shape-dependent handling now
-theorem applyNode_chunkPrim_out_2d
-    (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid)
-    (h_not3d : ∀ a b c, (s inTid).shape ≠ [a, b, c]) :
-    applyNode g s { rank := rank, op := "OpName.ChunkPrim", ins := [inTid], outs := [outTid] } outTid =
-      chunkPrim g.numRanks rank (s inTid) := by
-  classical
-  simp only [applyNode, evalOp, storeSet, List.map]
-  match hsh : (s inTid).shape with
-  | [a, b, c] => exact (h_not3d a b c hsh).elim
-  | _ => simp [List.find?, List.zip, List.zipWith]
-
-theorem applyNode_chunkPrim_out_3d
-    (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid)
-    (a b c : Nat) (hsh : (s inTid).shape = [a, b, c]) :
-    applyNode g s { rank := rank, op := "OpName.ChunkPrim", ins := [inTid], outs := [outTid] } outTid =
-      chunkPrimDim0 g.numRanks rank (s inTid) := by
-  classical
-  simp only [applyNode, evalOp, storeSet, List.map, hsh]
-  simp [List.find?, List.zip, List.zipWith]
-
 theorem applyNode_chunkPrimDimN_out
     (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid) (dim : Nat) :
     applyNode g s { rank := rank, op := "OpName.ChunkPrim", ins := [inTid], outs := [outTid], params := [dim] } outTid =
       chunkPrimDimN dim g.numRanks rank (s inTid) := by
+  classical
+  simp [applyNode, evalOp, storeSet]
+
+theorem applyNode_chunkPrim_default_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.ChunkPrim", ins := [inTid], outs := [outTid] } outTid =
+      chunkPrimDimN ((s inTid).shape.length - 1) g.numRanks rank (s inTid) := by
   classical
   simp [applyNode, evalOp, storeSet]
 
@@ -2262,41 +2237,19 @@ theorem applyNode_bw_sum_out
   classical
   simp [applyNode, evalOp, storeSet]
 
-/-- applyNode for allGatherPrim with singleton output (non-3D case). -/
-theorem applyNode_allGatherPrim_out
-    (g : GraphDecl) (s : Store) (rank : Nat) (ins : List Tid) (outTid : Tid)
-    (h_not3d : ∀ a b c, ((ins.map s).head?.map (fun t => t.shape)).getD [] ≠ [a, b, c]) :
-    applyNode g s { rank := rank, op := "OpName.AllGatherPrim", ins := ins, outs := [outTid] } outTid =
-      allGatherPrim g.numRanks rank (ins.map s) := by
+theorem applyNode_allGatherPrimDimN_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (ins : List Tid) (outTid : Tid) (dim : Nat) :
+    applyNode g s { rank := rank, op := "OpName.AllGatherPrim", ins := ins, outs := [outTid], params := [dim] } outTid =
+      allGatherPrimDimN dim g.numRanks rank (ins.map s) := by
   classical
-  change (storeSet s (List.zip [outTid]
-    (match (((ins.map s).head?.map (fun t => t.shape)).getD []) with
-     | [_, _, _] => [allGatherPrimDim0 g.numRanks rank (ins.map s)]
-     | _ => [allGatherPrim g.numRanks rank (ins.map s)])) outTid) =
-    allGatherPrim g.numRanks rank (ins.map s)
-  generalize ((ins.map s).head?.map (fun t => t.shape)).getD [] = sh at h_not3d ⊢
-  match sh with
-  | [] => simp [storeSet]
-  | [_] => simp [storeSet]
-  | [_, _] => simp [storeSet]
-  | [a, b, c] => exact absurd rfl (h_not3d a b c)
-  | _ :: _ :: _ :: _ :: _ => simp [storeSet]
+  simp [applyNode, evalOp, storeSet]
 
-/-- applyNode for allGatherPrim with singleton output (3D case, uses dim0 gather). -/
-theorem applyNode_allGatherPrim_dim0_out
-    (g : GraphDecl) (s : Store) (rank : Nat) (ins : List Tid) (outTid : Tid)
-    (h_3d : ∃ a b c, ((ins.map s).head?.map (fun t => t.shape)).getD [] = [a, b, c]) :
+theorem applyNode_allGatherPrim_default_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (ins : List Tid) (outTid : Tid) :
     applyNode g s { rank := rank, op := "OpName.AllGatherPrim", ins := ins, outs := [outTid] } outTid =
-      allGatherPrimDim0 g.numRanks rank (ins.map s) := by
+      allGatherPrimDimN (((ins.map s).head?.map (fun t => t.shape.length)).getD 1 - 1) g.numRanks rank (ins.map s) := by
   classical
-  obtain ⟨a, b, c, h3d⟩ := h_3d
-  change (storeSet s (List.zip [outTid]
-    (match (((ins.map s).head?.map (fun t => t.shape)).getD []) with
-     | [_, _, _] => [allGatherPrimDim0 g.numRanks rank (ins.map s)]
-     | _ => [allGatherPrim g.numRanks rank (ins.map s)])) outTid) =
-    allGatherPrimDim0 g.numRanks rank (ins.map s)
-  rw [h3d]
-  simp [storeSet]
+  simp [applyNode, evalOp, storeSet]
 
 /-- applyNode for bw_linear first output (dx). -/
 theorem applyNode_bw_linear_fst_out

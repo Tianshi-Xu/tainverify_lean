@@ -35,8 +35,8 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
 
-DEFAULT_SM_GRAPH = ROOT / "genmodel" / "mgeners" / "mlp_mgener_dp1_pp1_tp1_nm1_gbs128_dim128_ly1.pkl"
-DEFAULT_PM_GRAPH = ROOT / "genmodel" / "mgeners" / "mlp_mgener_dp1_pp1_tp4_nm1_gbs128_dim128_ly1.pkl"
+DEFAULT_SM_GRAPH = ROOT / "genmodel" / "mgeners" / "attn_mgener_dp1_pp1_tp1_nm1_gbs16_dim128_seq64_nh8_ly1.pkl"
+DEFAULT_PM_GRAPH = ROOT / "genmodel" / "mgeners" / "attn_mgener_dp1_pp1_tp4_nm1_gbs16_dim128_seq64_nh8_ly1.pkl"
 DEFAULT_OUT = ROOT / "trainverify" / "denote" / "GeneratedData.lean"
 
 
@@ -221,8 +221,46 @@ def _node_rank(node: Any) -> int:
 	return int(getattr(node, "rank", 0) or 0)
 
 
-def _get_node_params(G: Any, n: Any) -> Optional[List[int]]:
-	"""Extract Lean params for ops that need them (view, transpose)."""
+def _infer_chunk_dim(in_shape: List[int], out_shape: List[int], num_parts: int) -> Optional[int]:
+	"""Infer which dimension was chunked by comparing input/output shapes."""
+	if len(in_shape) != len(out_shape):
+		return None
+	candidates = []
+	for i, (si, so) in enumerate(zip(in_shape, out_shape)):
+		if si != so:
+			if num_parts > 0 and si == so * num_parts:
+				candidates.append(i)
+			else:
+				return None
+	return candidates[0] if len(candidates) == 1 else None
+
+
+def _infer_gather_dim(shard_shape: List[int], full_shape: List[int], num_parts: int) -> Optional[int]:
+	"""Infer which dimension was gathered by comparing shard/full shapes."""
+	if len(shard_shape) != len(full_shape):
+		return None
+	candidates = []
+	for i, (ss, sf) in enumerate(zip(shard_shape, full_shape)):
+		if ss != sf:
+			if num_parts > 0 and sf == ss * num_parts:
+				candidates.append(i)
+			else:
+				return None
+	return candidates[0] if len(candidates) == 1 else None
+
+
+def _get_node_params(G: Any, n: Any, num_parts: int = 0) -> Optional[List[int]]:
+	"""Extract Lean params for ops that need them.
+
+	Supported ops and their params encoding:
+	  - FW_view / BW_view: target shape (list of dims)
+	  - FW_transpose / BW_transpose: [dim0, dim1]
+	  - FW_div / BW_div: [divisor_int] from __consts (integer part)
+	  - AllToAllPrim: [idim, odim]
+	  - FW_multiref: [num_outputs]
+	  - ChunkPrim: [chunk_dim]
+	  - AllGatherPrim: [gather_dim]
+	"""
 	op = _safe_str_op(G.node_opname(n))
 	if "FW_view" in op or "BW_view" in op:
 		outs = G.node_outputs(n)
@@ -231,7 +269,53 @@ def _get_node_params(G: Any, n: Any) -> Optional[List[int]]:
 	elif "FW_transpose" in op or "BW_transpose" in op:
 		kwargs = G.node_kwargs(n)
 		if "dim0" in kwargs and "dim1" in kwargs:
-			return [int(kwargs["dim0"]), int(kwargs["dim1"])]
+			d0, d1 = int(kwargs["dim0"]), int(kwargs["dim1"])
+			ins = G.node_inputs(n)
+			if ins:
+				ndim = len(list(G.tensor_shape(ins[0])))
+				if d0 < 0:
+					d0 = ndim + d0
+				if d1 < 0:
+					d1 = ndim + d1
+			return [d0, d1]
+	elif "FW_div" in op or "BW_div" in op:
+		kwargs = G.node_kwargs(n)
+		consts = kwargs.get("__consts", [])
+		if consts:
+			return [int(consts[0])]
+	elif "AllToAllPrim" in op:
+		kwargs = G.node_kwargs(n)
+		if "idim" in kwargs and "odim" in kwargs:
+			idim, odim = int(kwargs["idim"]), int(kwargs["odim"])
+			ins = G.node_inputs(n)
+			if ins:
+				ndim = len(list(G.tensor_shape(ins[0])))
+				if idim < 0:
+					idim = ndim + idim
+				if odim < 0:
+					odim = ndim + odim
+			return [idim, odim]
+	elif "FW_multiref" in op:
+		outs = G.node_outputs(n)
+		return [len(outs)]
+	elif "ChunkPrim" in op:
+		ins = G.node_inputs(n)
+		outs = G.node_outputs(n)
+		if ins and outs and num_parts > 0:
+			in_shape = list(int(d) for d in G.tensor_shape(ins[0]))
+			out_shape = list(int(d) for d in G.tensor_shape(outs[0]))
+			dim = _infer_chunk_dim(in_shape, out_shape, num_parts)
+			if dim is not None:
+				return [dim]
+	elif "AllGatherPrim" in op:
+		ins = G.node_inputs(n)
+		outs = G.node_outputs(n)
+		if ins and outs and num_parts > 0:
+			shard_shape = list(int(d) for d in G.tensor_shape(ins[0]))
+			full_shape = list(int(d) for d in G.tensor_shape(outs[0]))
+			dim = _infer_gather_dim(shard_shape, full_shape, num_parts)
+			if dim is not None:
+				return [dim]
 	return None
 
 
@@ -561,7 +645,7 @@ def emit_lean_spec(
 	lines.append("namespace TrainVerify.Denote.Generated")
 	lines.append("")
 
-	def _emit_graph(name: str, nodes: List[Any], G: Any) -> None:
+	def _emit_graph(name: str, nodes: List[Any], G: Any, num_parts: int = 1) -> None:
 		"""Emit a GraphDecl definition.
 		
 		Special handling for CROSS_DP_WRED: since this is an inplace reduction where
@@ -626,7 +710,7 @@ def emit_lean_spec(
 					return f"((List.range {n}).map (fun r => {base} + r))"
 				return lean_list_nat(xs)
 
-			node_params = _get_node_params(G, n)
+			node_params = _get_node_params(G, n, num_parts=num_parts)
 			params_str = f", params := {lean_list_nat(node_params)}" if node_params else ""
 			lines.append(
 				f"    {{ rank := {rank}, op := \"{op}\", ins := {_lean_list_nat_expr(ins)}, outs := {_lean_list_nat_expr(outs)}{params_str} }},"
@@ -634,8 +718,10 @@ def emit_lean_spec(
 		lines.append("  ]")
 		lines.append("")
 
-	_emit_graph("sm", sm_nodes, sm_graph)
-	_emit_graph("pm", pm_nodes, pm_graph)
+	pm_num_ranks = max((_node_rank(n) for n in pm_nodes), default=0) + 1
+
+	_emit_graph("sm", sm_nodes, sm_graph, num_parts=1)
+	_emit_graph("pm", pm_nodes, pm_graph, num_parts=pm_num_ranks)
 
 	# When a boundary tid exists in both SM and PM, it is usually a shared input (e.g. activations,
 	# labels, loss-grad). Prefer the SM shape for those tids to avoid backend-specific ambiguities
@@ -773,12 +859,12 @@ def emit_lean_spec(
 		lines.append("theorem sm_denoteGraph_unfold (init : Store) :")
 		lines.append("    denoteGraph sm init =")
 		# Build a nested applyNode chain with the concrete node decls.
-		def _node_lit(n: Any, G: Any) -> str:
+		def _node_lit(n: Any, G: Any, num_parts: int = 1) -> str:
 			op = escape_lean_string(_safe_str_op(G.node_opname(n)))
 			ins = [int(t.tid) for t in G.node_inputs(n)]
 			outs = [int(t.tid) for t in G.node_outputs(n)]
 			rank = _node_rank(n)
-			node_params = _get_node_params(G, n)
+			node_params = _get_node_params(G, n, num_parts=num_parts)
 			params_str = f", params := {lean_list_nat(node_params)}" if node_params else ""
 			return (
 				"{ "
@@ -894,23 +980,33 @@ def emit_lean_spec(
 		for dep in goal_deps:
 			deps_by_ts[dep.goal_ts] = dep
 	
-	# Emit intermediate lineage goal definitions (for shared intermediate tensors)
+	# Build set of goal tids for dedup with intermediates
+	goal_tid_set: set[int] = {int(g.ts) for g in goals}
+
+	# Helper: resolve a prereq tid to its Lean definition name.
+	# If the tid is already a goal, reference goal_X; otherwise intermediateGoal_tid.
+	def _prereq_def_name(inter_ts: int) -> str:
+		if inter_ts in goal_tid_set:
+			return f"goal_{_goal_id(inter_ts)}"
+		return f"intermediateGoal_{inter_ts}"
+
+	# Emit intermediate lineage goal definitions ONLY for tids not already goals
 	intermediate_def_names: List[str] = []
 	if intermediate_lineages:
-		lines.append("-- Intermediate tensor lineage goals (shared by multiple output goals)")
-		for inter_ts, inter_lin in sorted(intermediate_lineages.items()):
-			def_name = f"intermediateGoal_{inter_ts}"
-			intermediate_def_names.append(def_name)
-			_emit_goal_def(def_name, inter_lin, for_init=False)
-		lines.append(f"def intermediateGoals : List LineageGoal := [{', '.join(intermediate_def_names)}]")
-		lines.append("")
-		
-		# Also emit stmt definitions for intermediate goals
-		lines.append("-- Proof obligations (intermediate goals)")
-		for def_name in intermediate_def_names:
-			lines.append(f"def {def_name}_stmt : Prop :=")
-			lines.append(f"  CoarseLineageHoldsWithInit sm pm {def_name} smInitEnv pmInitEnv initGoals")
+		non_goal_intermediates = {ts: lin for ts, lin in intermediate_lineages.items()
+		                         if int(ts) not in goal_tid_set}
+		if non_goal_intermediates:
+			lines.append("-- Intermediate tensor lineage goals (not already regular goals)")
+			for inter_ts, inter_lin in sorted(non_goal_intermediates.items()):
+				def_name = f"intermediateGoal_{inter_ts}"
+				intermediate_def_names.append(def_name)
+				_emit_goal_def(def_name, inter_lin, for_init=False)
 			lines.append("")
+			lines.append("-- Proof obligations (intermediate goals)")
+			for def_name in intermediate_def_names:
+				lines.append(f"def {def_name}_stmt : Prop :=")
+				lines.append(f"  CoarseLineageHoldsWithInit sm pm {def_name} smInitEnv pmInitEnv initGoals")
+				lines.append("")
 
 	for i, g in enumerate(goals):
 		goal_ts = int(g.ts)
@@ -918,21 +1014,14 @@ def emit_lean_spec(
 		def_name = f"goal_{gid}"
 		dep = deps_by_ts.get(goal_ts)
 		
-		# Check if this goal has prerequisites
 		if dep and dep.prereq_intermediate_goals:
-			prereq_goal_names = [f"intermediateGoal_{inter_ts}" for (inter_ts, _) in dep.prereq_intermediate_goals]
-			prereq_list = "[" + ", ".join(prereq_goal_names) + "]"
+			prereq_names = [_prereq_def_name(int(inter_ts)) for (inter_ts, _) in dep.prereq_intermediate_goals]
+			prereq_list = "[" + ", ".join(prereq_names) + "]"
 			
-			lines.append(f"-- goal_{gid} (tid={goal_ts}) depends on intermediate tensors: {[ts for (ts, _) in dep.prereq_intermediate_goals]}")
+			lines.append(f"-- goal_{gid} (tid={goal_ts}) depends on: {[ts for (ts, _) in dep.prereq_intermediate_goals]}")
 			lines.append(f"def {def_name}_prereqs : List LineageGoal := {prereq_list}")
 			lines.append("")
 			
-			# Generate incremental statement: assuming prereqs hold, prove this goal
-			lines.append(f"def {def_name}_stmt_incremental : Prop :=")
-			lines.append(f"  CoarseLineageHoldsWithIntermediates sm pm {def_name} smInitEnv pmInitEnv initGoals {def_name}_prereqs")
-			lines.append("")
-			
-			# Also keep the original full statement for reference
 			lines.append(f"def {def_name}_stmt : Prop :=")
 			lines.append(f"  CoarseLineageHoldsWithInit sm pm {def_name} smInitEnv pmInitEnv initGoals")
 			lines.append("")
@@ -941,7 +1030,6 @@ def emit_lean_spec(
 			lines.append(f"  CoarseLineageHoldsWithInit sm pm {def_name} smInitEnv pmInitEnv initGoals")
 			lines.append("")
 
-		# One proof stub per observable lineage goal (only emit sorry if not using split-goals)
 		if goal_slices is None:
 			lines.append(f"theorem prove_{def_name} : {def_name}_stmt := by")
 			lines.append("  sorry")
@@ -1044,64 +1132,25 @@ def emit_lean_spec(
 		lines.append("-/")
 		lines.append("")
 	
-	# Emit composition theorems showing how to use incremental proofs
-	if goal_deps and intermediate_lineages:
+	# Emit dependency structure documentation
+	if goal_deps:
 		lines.append("/-!")
-		lines.append("## Incremental Proof Strategy")
+		lines.append("## Goal Dependency Structure")
 		lines.append("")
-		lines.append("The goals have the following dependency structure:")
 		for dep in goal_deps:
 			gid = _goal_id(dep.goal_ts)
 			if dep.prereq_intermediate_goals:
-				prereq_tids = [ts for (ts, _) in dep.prereq_intermediate_goals]
-				lines.append(f"- goal_{gid} (tid={dep.goal_ts}) depends on intermediate tensors: {prereq_tids}")
+				prereq_ids = [_goal_id(int(ts)) for (ts, _) in dep.prereq_intermediate_goals
+				              if int(ts) in goal_tid_set]
+				if prereq_ids:
+					lines.append(f"- goal_{gid} (tid={dep.goal_ts}) depends on goals: [{', '.join(prereq_ids)}]")
+				else:
+					prereq_tids = [ts for (ts, _) in dep.prereq_intermediate_goals]
+					lines.append(f"- goal_{gid} (tid={dep.goal_ts}) depends on: {prereq_tids}")
 			else:
 				lines.append(f"- goal_{gid} (tid={dep.goal_ts}) has no prerequisites (base case)")
-		lines.append("")
-		lines.append("To prove `goal_X_stmt` from `goal_X_stmt_incremental`, use")
-		lines.append("`CoarseLineageHoldsWithInit_of_incremental` with proofs of the prerequisite")
-		lines.append("intermediate goals.")
 		lines.append("-/")
 		lines.append("")
-		
-		# Generate composition theorems for each goal with prerequisites
-		for dep in goal_deps:
-			if dep.prereq_intermediate_goals:
-				goal_ts = dep.goal_ts
-				gid = _goal_id(goal_ts)
-				prereq_goal_names = [f"intermediateGoal_{inter_ts}" for (inter_ts, _) in dep.prereq_intermediate_goals]
-				
-				lines.append(f"theorem goal_{gid}_of_incremental")
-				lines.append(f"    (hincr : goal_{gid}_stmt_incremental)")
-				for pg in prereq_goal_names:
-					lines.append(f"    (h{pg} : {pg}_stmt)")
-				lines.append(f"    : goal_{gid}_stmt := by")
-				lines.append(f"  unfold goal_{gid}_stmt goal_{gid}_stmt_incremental at *")
-				lines.append(f"  apply CoarseLineageHoldsWithInit_of_incremental")
-				lines.append(f"  · exact hincr")
-				lines.append(f"  · intro g hg")
-				lines.append(f"    simp only [goal_{gid}_prereqs, List.mem_cons, List.mem_nil_iff] at hg")
-				
-				# Generate pattern match for each prerequisite
-				if len(prereq_goal_names) == 1:
-					lines.append(f"    cases hg with")
-					lines.append(f"    | inl h => subst h; exact h{prereq_goal_names[0]}")
-					lines.append(f"    | inr h => exact False.elim h")
-				else:
-					for i, pg in enumerate(prereq_goal_names):
-						if i == 0:
-							lines.append(f"    cases hg with")
-							lines.append(f"    | inl h => subst h; exact h{pg}")
-							lines.append(f"    | inr hg =>")
-						elif i == len(prereq_goal_names) - 1:
-							lines.append(f"      cases hg with")
-							lines.append(f"      | inl h => subst h; exact h{pg}")
-							lines.append(f"      | inr h => exact False.elim h")
-						else:
-							lines.append(f"      cases hg with")
-							lines.append(f"      | inl h => subst h; exact h{pg}")
-							lines.append(f"      | inr hg =>")
-				lines.append("")
 
 	# Goal-sliced graphs are emitted into per-goal files (if requested).
 	if goal_slices and goals_out_dir is not None:
@@ -1141,6 +1190,7 @@ def emit_lean_spec(
 					num_ranks = 1
 				else:
 					num_ranks = max((_node_rank(n) for n in nodes), default=0) + 1
+				local_num_parts = num_ranks
 				goal_lines.append(f"  refine {{ numRanks := {num_ranks}, nodes := ?_ }}")
 				goal_lines.append("  exact [")
 				for n in nodes:
@@ -1148,7 +1198,7 @@ def emit_lean_spec(
 					ins = [int(t.tid) for t in G.node_inputs(n)]
 					outs = [int(t.tid) for t in G.node_outputs(n)]
 					rank = _node_rank(n)
-					node_params = _get_node_params(G, n)
+					node_params = _get_node_params(G, n, num_parts=local_num_parts)
 					params_str = f", params := {lean_list_nat(node_params)}" if node_params else ""
 					goal_lines.append(
 						f"    {{ rank := {rank}, op := \"{op}\", ins := {lean_list_nat(ins)}, outs := {lean_list_nat(outs)}{params_str} }},"
@@ -1264,10 +1314,10 @@ def main() -> None:
 	sm_init_tids_preliminary = set(_init_tids_from_kept_nodes(GsE, _preliminary_sm_nodes))
 
 	# Observable outputs: aligned leaves by default.
-	# If --include-intermediate-goals, also include all intermediate tensors with lineages,
-	# but exclude init tids (they are assumptions, not goals to prove).
-	if args.include_intermediate_goals:
-		# Use all tensors that have lineage (not just leaves), excluding init tids
+	# If --include-intermediate-goals or --split-goals, include all intermediate tensors
+	# with lineages (not just leaf outputs), excluding init tids.
+	# --split-goals implies intermediate goals because we need fine-grained subgraph cuts.
+	if args.include_intermediate_goals or args.split_goals:
 		candidates = sorted([tid for tid in by_ts.keys() if tid not in sm_init_tids_preliminary])
 	else:
 		candidates = leaf_output_tids(GsC)

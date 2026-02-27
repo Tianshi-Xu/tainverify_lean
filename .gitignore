@@ -4,6 +4,6 @@
 .lake/
 .cursor/
 genmodel/__pycache__/
-genmodel/mgeners/
+genmodel/mgeners/*
 __pycache__
 Verdict/gen_model/mgeners//.lake

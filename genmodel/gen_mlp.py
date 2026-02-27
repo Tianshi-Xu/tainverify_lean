@@ -214,5 +214,5 @@ dst = f"genmodel/mgeners/{fname}.pkl"
 try:
     shutil.move(file, dst)
     print("MGENER:", dst)
-except:
-    pass
+except Exception as e:
+    print(e)
