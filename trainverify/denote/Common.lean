@@ -1190,4 +1190,45 @@ theorem transposeAxes_23_chunkPrimDimN0_gather0
       have h4 : idx % 32768 % 1024 = idx % 1024 := by omega
       omega)
 
+/-- `chunkPrimDimN 3` on a 4D tensor equals `chunkPrim` (both chunk the last dim).
+    Concrete version for numParts = 4 and shape [16, 64, 8, 16]. -/
+theorem chunkPrimDimN_3_eq_chunkPrim_16_64_8_16
+    (rank : Nat) (x : Tensor) (hsh : x.shape = [16, 64, 8, 16]) :
+    chunkPrimDimN 3 4 rank x = chunkPrim 4 rank x := by
+  apply Tensor.ext
+  · simp [chunkPrimDimN, chunkPrim, Tensor.mkShape, hsh,
+          List.set, List.getD, List.drop, dropLast, lastD, appendLast, divNat]
+  · intro idx hidx
+    have hsh_dimN : (chunkPrimDimN 3 4 rank x).shape = [16, 64, 8, 4] := by
+      simp [chunkPrimDimN, Tensor.mkShape, hsh, List.set, List.getD]
+    have hsh_prim : (chunkPrim 4 rank x).shape = [16, 64, 8, 4] := by
+      simp [chunkPrim, Tensor.mkShape, hsh, dropLast, lastD, appendLast, divNat]
+    rw [hsh_dimN] at hidx
+    have hidx32k : idx < 32768 := by simpa [prodShape] using hidx
+    rw [valAt_of_lt _ _ (by rw [hsh_dimN]; simpa [prodShape]),
+        valAt_of_lt _ _ (by rw [hsh_prim]; simpa [prodShape])]
+    unfold chunkPrimDimN chunkPrim Tensor.mkShape
+    simp only [hsh, List.set, List.getD, List.drop, List.foldl,
+               dropLast, lastD, appendLast, divNat,
+               show ¬(4 : Nat) = 0 from by omega,
+               show ¬(1 : Nat) = 0 from by omega,
+               ite_false]
+    -- Reduce stuck list index operations
+    have h1 : ([16, 64, 8, 16] : List Nat)[3]?.getD 0 = 16 := by decide
+    have h2 : ([16, 64, 8, 16] : List Nat).getLastD 0 = 16 := by decide
+    simp only [h1, h2, show (16 : Nat) / 4 = 4 from by omega, show ¬(4 : Nat) = 0 from by omega,
+               ite_false, Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero]
+    congr 1; omega
+
+/-- Wrapper for `transposeAxes_12_chunkPrim_gather3` using `chunkPrimDimN 3`. -/
+theorem transposeAxes_12_chunkPrimDimN3_gather3
+    (x : Tensor) (hshape : x.shape = [16, 64, 8, 16]) :
+    transposeAxes 1 2 x = allGatherPrimDimN 3 4 0
+      [transposeAxes 1 2 (chunkPrimDimN 3 4 0 x),
+       transposeAxes 1 2 (chunkPrimDimN 3 4 1 x),
+       transposeAxes 1 2 (chunkPrimDimN 3 4 2 x),
+       transposeAxes 1 2 (chunkPrimDimN 3 4 3 x)] := by
+  simp only [chunkPrimDimN_3_eq_chunkPrim_16_64_8_16 _ x hshape]
+  exact transposeAxes_12_chunkPrim_gather3 x hshape
+
 end TrainVerify.Denote.Common

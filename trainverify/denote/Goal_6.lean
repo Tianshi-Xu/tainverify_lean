@@ -60,16 +60,16 @@ theorem prove_goal_6_cut : goal_6_stmt_cut := by
   have hsm : (denoteGraph sm_goal_6 initSM) 104 = transposeAxes 1 2 (initSM 103) := by
     simp [sm_goal_6, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   have hpm256 : (denoteGraph pm_goal_6 initPM) 256 =
-      transposeAxes 1 2 (chunkPrim 4 0 (initPM 103)) := by
+      transposeAxes 1 2 (chunkPrimDimN 3 4 0 (initPM 103)) := by
     simp [pm_goal_6, denoteGraph, List.foldl, applyNode, evalOp, storeSet, hpm103_shape]
   have hpm257 : (denoteGraph pm_goal_6 initPM) 257 =
-      transposeAxes 1 2 (chunkPrim 4 1 (initPM 103)) := by
+      transposeAxes 1 2 (chunkPrimDimN 3 4 1 (initPM 103)) := by
     simp [pm_goal_6, denoteGraph, List.foldl, applyNode, evalOp, storeSet, hpm103_shape]
   have hpm258 : (denoteGraph pm_goal_6 initPM) 258 =
-      transposeAxes 1 2 (chunkPrim 4 2 (initPM 103)) := by
+      transposeAxes 1 2 (chunkPrimDimN 3 4 2 (initPM 103)) := by
     simp [pm_goal_6, denoteGraph, List.foldl, applyNode, evalOp, storeSet, hpm103_shape]
   have hpm259 : (denoteGraph pm_goal_6 initPM) 259 =
-      transposeAxes 1 2 (chunkPrim 4 3 (initPM 103)) := by
+      transposeAxes 1 2 (chunkPrimDimN 3 4 3 (initPM 103)) := by
     simp [pm_goal_6, denoteGraph, List.foldl, applyNode, evalOp, storeSet, hpm103_shape]
   dsimp only [goal_6_stmt_cut, CoarseLineageHoldsWithInit, goal_6] at *
   simp only [List.map]
@@ -78,27 +78,27 @@ theorem prove_goal_6_cut : goal_6_stmt_cut := by
   have hxsh : x.shape = [16, 64, 8, 16] := by rw [← h103_eq]; exact h103_shape
   refine ⟨?_, ?_, ?_⟩
   · simp [transposeAxes, listSwapAt, Tensor.mkShape, hxsh]
-  · simp [transposeAxes, chunkPrim, listSwapAt, Tensor.mkShape, hxsh,
-          appendLast, dropLast, divNat, lastD]
-  · have hpiece0_shape : (transposeAxes 1 2 (chunkPrim 4 0 x)).shape = [16, 8, 64, 4] := by
-      simp [transposeAxes, chunkPrim, Tensor.mkShape, listSwapAt, hxsh,
-            appendLast, dropLast, divNat, lastD]
+  · simp [transposeAxes, chunkPrimDimN, listSwapAt, Tensor.mkShape, hxsh,
+          List.set, List.getD, List.drop]
+  · have hpiece0_shape : (transposeAxes 1 2 (chunkPrimDimN 3 4 0 x)).shape = [16, 8, 64, 4] := by
+      simp [transposeAxes, chunkPrimDimN, Tensor.mkShape, listSwapAt, hxsh,
+            List.set, List.getD, List.drop]
     have hrecon : reconstructWithDim 3 4 0
-        [transposeAxes 1 2 (chunkPrim 4 0 x),
-         transposeAxes 1 2 (chunkPrim 4 1 x),
-         transposeAxes 1 2 (chunkPrim 4 2 x),
-         transposeAxes 1 2 (chunkPrim 4 3 x)] =
+        [transposeAxes 1 2 (chunkPrimDimN 3 4 0 x),
+         transposeAxes 1 2 (chunkPrimDimN 3 4 1 x),
+         transposeAxes 1 2 (chunkPrimDimN 3 4 2 x),
+         transposeAxes 1 2 (chunkPrimDimN 3 4 3 x)] =
       allGatherPrimDimN 3 4 0
-        [transposeAxes 1 2 (chunkPrim 4 0 x),
-         transposeAxes 1 2 (chunkPrim 4 1 x),
-         transposeAxes 1 2 (chunkPrim 4 2 x),
-         transposeAxes 1 2 (chunkPrim 4 3 x)] := by
+        [transposeAxes 1 2 (chunkPrimDimN 3 4 0 x),
+         transposeAxes 1 2 (chunkPrimDimN 3 4 1 x),
+         transposeAxes 1 2 (chunkPrimDimN 3 4 2 x),
+         transposeAxes 1 2 (chunkPrimDimN 3 4 3 x)] := by
       unfold reconstructWithDim
       simp only [List.head?, Option.map, Option.getD, hpiece0_shape]
       rfl
     simp only [show pm_goal_6.numRanks = 4 from rfl]
     rw [hrecon]
-    exact transposeAxes_12_chunkPrim_gather3 x hxsh
+    exact transposeAxes_12_chunkPrimDimN3_gather3 x hxsh
 
 end TrainVerify.Denote.GeneratedGoals
 

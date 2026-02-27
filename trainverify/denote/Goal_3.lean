@@ -82,7 +82,7 @@ theorem prove_goal_3_cut : goal_3_stmt_cut := by
               { rank := 2, op := "OpName.FW_linear", ins := [198, 99], outs := [202] })
             { rank := 3, op := "OpName.FW_linear", ins := [199, 99], outs := [203] })
           { rank := 0, op := "OpName.AllGatherPrim",
-            ins := [200, 201, 202, 203], outs := [100] })
+            ins := [200, 201, 202, 203], outs := [100], params := [0] })
         100 := by
       simp [pm_goal_3, denoteGraph, List.foldl]
     rw [hstep]
@@ -100,7 +100,8 @@ theorem prove_goal_3_cut : goal_3_stmt_cut := by
       simp only [List.map, List.head?, Option.map, Option.getD]
       simp only [applyNode, evalOp, storeSet, List.zip]
       exact fw_linear_3d_shape 4 64 128 128 _ _ h196_shape (by rw [← h99_eq]; exact h99_shape)
-    rw [applyNode_allGatherPrim_dim0_out _ _ _ _ _ h3d]
+    rw [applyNode_allGatherPrimDimN_out,
+        allGatherPrimDimN_0_eq_dim0 _ _ _ h3d]
     simp [applyNode, evalOp, storeSet]
   -- Apply the general coarse lineage theorem
   dsimp only [goal_3_stmt_cut, CoarseLineageHoldsWithInit, goal_3] at *

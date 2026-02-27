@@ -285,22 +285,15 @@ theorem prove_goal_26_cut : goal_26_stmt_cut := by
     simp [sm_goal_26, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   -- PM store evaluation
   have hpm : (denoteGraph pm_goal_26 initPM) 130 =
-      allGatherPrim 4 0 [transposeAxes 1 2 (initPM 269), transposeAxes 1 2 (initPM 271),
+      allGatherPrimDimN 3 4 0 [transposeAxes 1 2 (initPM 269), transposeAxes 1 2 (initPM 271),
                           transposeAxes 1 2 (initPM 273), transposeAxes 1 2 (initPM 275)] := by
     simp [pm_goal_26, denoteGraph, List.foldl, applyNode, evalOp, storeSet,
-      h103_pm_shape, transposeAxes, Tensor.mkShape, listSwapAt, h269_shape, h271_shape, h273_shape, h275_shape]
-  -- allGatherPrim = allGatherPrimDimN 3 for last dim
-  have hag_eq : allGatherPrim 4 0
-      [transposeAxes 1 2 (initPM 269), transposeAxes 1 2 (initPM 271),
-       transposeAxes 1 2 (initPM 273), transposeAxes 1 2 (initPM 275)] =
-      allGatherPrimDimN 3 4 0
-      [transposeAxes 1 2 (initPM 269), transposeAxes 1 2 (initPM 271),
-       transposeAxes 1 2 (initPM 273), transposeAxes 1 2 (initPM 275)] :=
-    allGatherPrim_eq_dimN3_16_64_8_4 _ (by simp [List.head?, Option.map, transposeAxes, Tensor.mkShape, listSwapAt, h269_shape])
+      h103_pm_shape, transposeAxes, Tensor.mkShape, listSwapAt, h269_shape, h271_shape, h273_shape, h275_shape,
+      chunkPrimDimN, List.set, List.getD, List.drop]
   -- Unfold goal
   dsimp only [goal_26_stmt_cut, CoarseLineageHoldsWithInit, goal_26] at *
   simp only [List.map]
-  rw [hsm, hpm, hag_eq, h131_ag]
+  rw [hsm, hpm, h131_ag]
   -- Apply commutativity: transposeAxes 1 2 commutes with allGatherPrimDimN 3
   rw [transposeAxes_12_allGatherPrimDimN_3_comm _ _ _ _ h269_shape h271_shape h273_shape h275_shape]
   refine ⟨?_, ?_, ?_⟩

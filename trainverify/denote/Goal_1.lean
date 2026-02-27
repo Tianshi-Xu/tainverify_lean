@@ -87,8 +87,7 @@ theorem prove_goal_1_cut : goal_1_stmt_cut := by
   have hpm : (denoteGraph pm_goal_1 initPM) 96 =
       allReducePrim 4 0 [fw_sum (initPM 500), fw_sum (initPM 501),
                           fw_sum (initPM 502), fw_sum (initPM 503)] := by
-    simp [pm_goal_1, denoteGraph, applyNode, evalOp, storeSet,
-          allToAllPrim, h500_shape, h501_shape, h502_shape, h503_shape]
+    simp [pm_goal_1, denoteGraph, applyNode, evalOp, storeSet]
   -- reconstructWithDim 1 on 4 tensors with [16,16,128] shape = allGatherPrimDimN 1
   have h118_dimN : initSM 118 = allGatherPrimDimN 1 pm_goal_1.numRanks 0
       [initPM 500, initPM 501, initPM 502, initPM 503] := by
@@ -136,4 +135,3 @@ theorem prove_goal_1_cut : goal_1_stmt_cut := by
     simp [reconstructWithDim]
 
 end TrainVerify.Denote.GeneratedGoals
-

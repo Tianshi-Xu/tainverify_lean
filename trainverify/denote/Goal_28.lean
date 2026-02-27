@@ -299,8 +299,7 @@ theorem prove_goal_28_cut : goal_28_stmt_cut := by
   have hpm : (denoteGraph pm_goal_28 initPM) 132 =
       allGatherPrimDimN 2 4 0 [transposeAxes 1 2 (initPM 293), transposeAxes 1 2 (initPM 295),
                                 transposeAxes 1 2 (initPM 297), transposeAxes 1 2 (initPM 299)] := by
-    simp [pm_goal_28, denoteGraph, List.foldl, applyNode, evalOp, storeSet,
-      h105_pm_shape]
+    simp [pm_goal_28, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   -- Unfold goal
   dsimp only [goal_28_stmt_cut, CoarseLineageHoldsWithInit, goal_28] at *
   simp only [List.map]
@@ -317,4 +316,3 @@ theorem prove_goal_28_cut : goal_28_stmt_cut := by
     rw [reconstructWithDim_singleton]
 
 end TrainVerify.Denote.GeneratedGoals
-
