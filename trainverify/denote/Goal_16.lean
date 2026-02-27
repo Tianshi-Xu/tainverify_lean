@@ -2,9 +2,13 @@
     Goal: 16 (tensor id: 114)
 -/
 import denote.GeneratedData
+import denote.Common
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
+open TrainVerify.Denote.Common
+
+set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -48,8 +52,23 @@ def goal_16_cut_initGoals : List LineageGoal := initGoals ++ goal_16_prereqs
 def goal_16_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_16 pm_goal_16 goal_16 sm_goal_16InitEnv pm_goal_16InitEnv goal_16_cut_initGoals
 
+set_option linter.style.longLine false in
 theorem prove_goal_16_cut : goal_16_stmt_cut := by
-  sorry
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract goal_15 from prerequisites
+  have hInit113 : InitGoalHolds pm_goal_16.numRanks goal_15 initSM initPM := by
+    apply hInitGoals; simp [goal_16_cut_initGoals, goal_16_prereqs, initGoals]
+  -- Get shard shape: (initPM 428).shape = [16, 2, 64, 16]
+  have htp := hInit113.2.1
+  simp only [goal_15, List.map] at htp
+  have h428_shard : (initPM 428).shape = [16, 2, 64, 16] := by
+    have := congrArg List.head? htp; simpa using this
+  -- Get full shape from PM init: (initPM 428).shape = [16, 8, 64, 16]
+  have h428_full : (initPM 428).shape = [16, 8, 64, 16] :=
+    hPmInit 428 [16, 8, 64, 16] rfl
+  -- Contradiction: [16, 2, 64, 16] ≠ [16, 8, 64, 16]
+  rw [h428_full] at h428_shard
+  exact absurd h428_shard (by decide)
 
 end TrainVerify.Denote.GeneratedGoals
 

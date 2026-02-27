@@ -2,9 +2,11 @@
     Goal: 1 (tensor id: 96)
 -/
 import denote.GeneratedData
+import denote.Common
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
+open TrainVerify.Denote.Common
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -48,8 +50,90 @@ def goal_1_cut_initGoals : List LineageGoal := initGoals ++ goal_1_prereqs
 def goal_1_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_1 pm_goal_1 goal_1 sm_goal_1InitEnv pm_goal_1InitEnv goal_1_cut_initGoals
 
+-- fw_sum distributes over allGatherPrimDimN via allReducePrim
 theorem prove_goal_1_cut : goal_1_stmt_cut := by
-  sorry
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_19
+  have hInit118 : InitGoalHolds pm_goal_1.numRanks goal_19 initSM initPM := by
+    apply hInitGoals; simp [goal_1_cut_initGoals, goal_1_prereqs, initGoals]
+  -- goal_19: initSM 118 = reconstructWithDim 1 4 0 [initPM 500..503]
+  have h118_rec : initSM 118 = reconstructWithDim 1 pm_goal_1.numRanks 0
+      [initPM 500, initPM 501, initPM 502, initPM 503] := by
+    have hrec := hInit118.2.2
+    simp only [goal_19, pm_goal_1, List.map] at hrec
+    exact hrec
+  have h118_shape : (initSM 118).shape = [16, 64, 128] := hInit118.1
+  -- Extract PM shard shapes
+  have htp_shapes := hInit118.2.1
+  simp only [goal_19, List.map] at htp_shapes
+  have h500_shape : (initPM 500).shape = [16, 16, 128] := by
+    have := congrArg List.head? htp_shapes; simpa using this
+  have h501_shape : (initPM 501).shape = [16, 16, 128] := by
+    have := congrArg List.tail htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h502_shape : (initPM 502).shape = [16, 16, 128] := by
+    have := congrArg (List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h503_shape : (initPM 503).shape = [16, 16, 128] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  -- SM store: smStore 96 = fw_sum(initSM 118)
+  have hsm : (denoteGraph sm_goal_1 initSM) 96 = fw_sum (initSM 118) := by
+    simp [sm_goal_1, denoteGraph, applyNode_fw_sum_out]
+  -- PM store: trace through the graph
+  -- Step 1: AllToAllPrim nodes (identity on 3D tensors)
+  -- Step 2: FW_sum nodes
+  -- Step 3: AllReducePrim node
+  have hpm : (denoteGraph pm_goal_1 initPM) 96 =
+      allReducePrim 4 0 [fw_sum (initPM 500), fw_sum (initPM 501),
+                          fw_sum (initPM 502), fw_sum (initPM 503)] := by
+    simp [pm_goal_1, denoteGraph, applyNode, evalOp, storeSet,
+          allToAllPrim, h500_shape, h501_shape, h502_shape, h503_shape]
+  -- reconstructWithDim 1 on 4 tensors with [16,16,128] shape = allGatherPrimDimN 1
+  have h118_dimN : initSM 118 = allGatherPrimDimN 1 pm_goal_1.numRanks 0
+      [initPM 500, initPM 501, initPM 502, initPM 503] := by
+    rw [h118_rec]
+    simp [reconstructWithDim, h500_shape]
+  -- Key equation: fw_sum of gathered = allReduce of individual fw_sums
+  have hkey : fw_sum (initSM 118) =
+      allReducePrim 4 0 [fw_sum (initPM 500), fw_sum (initPM 501),
+                          fw_sum (initPM 502), fw_sum (initPM 503)] := by
+    rw [h118_dimN]
+    have := fw_sum_allGatherPrimDimN_eq_allReducePrim_fw_sum
+      (gatherDim := 1) (numParts := 4)
+      (xs := [initPM 500, initPM 501, initPM 502, initPM 503])
+      (hlen := by simp) (hparts := by omega)
+      (shardShape := [16, 16, 128])
+      (hhead := by simp [h500_shape])
+      (hshape := by
+        intro x hx
+        simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+        rcases hx with rfl | rfl | rfl | rfl <;> assumption)
+      (hgatherDim := by decide)
+      (hdimPos := by decide)
+      (hpostPos := by decide)
+    simpa [pm_goal_1, List.map] using this
+  -- Prove the three conjuncts
+  dsimp only [goal_1_stmt_cut, CoarseLineageHoldsWithInit, goal_1] at *
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM shape: [1]
+    rw [hsm]; exact fw_sum_shape (initSM 118)
+  · -- PM tps shapes: [[1]]
+    simp only [List.map]
+    rw [hpm]
+    have : (allReducePrim 4 0 [fw_sum (initPM 500), fw_sum (initPM 501),
+        fw_sum (initPM 502), fw_sum (initPM 503)]).shape = [1] := by
+      have hhead : [fw_sum (initPM 500), fw_sum (initPM 501),
+          fw_sum (initPM 502), fw_sum (initPM 503)].head? = some (fw_sum (initPM 500)) := rfl
+      have := allReducePrim_shape 4 0
+          [fw_sum (initPM 500), fw_sum (initPM 501), fw_sum (initPM 502), fw_sum (initPM 503)]
+          (fw_sum (initPM 500)) hhead
+      simpa [fw_sum_shape] using this
+    simp [this]
+  · -- Value equality: smStore 96 = reconstructWithDim 0 4 0 [pmStore 96]
+    simp only [List.map]
+    rw [hsm, hkey, ← hpm]
+    simp [reconstructWithDim]
 
 end TrainVerify.Denote.GeneratedGoals
 

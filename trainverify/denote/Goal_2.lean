@@ -2,9 +2,11 @@
     Goal: 2 (tensor id: 98)
 -/
 import denote.GeneratedData
+import denote.Common
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
+open TrainVerify.Denote.Common
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -47,7 +49,73 @@ def goal_2_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_2 pm_goal_2 goal_2 sm_goal_2InitEnv pm_goal_2InitEnv goal_2_cut_initGoals
 
 theorem prove_goal_2_cut : goal_2_stmt_cut := by
-  sorry
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignments using Common helpers
+  have hInit97 : InitGoalHolds pm_goal_2.numRanks initGoal_97 initSM initPM := by
+    apply hInitGoals; simp [goal_2_cut_initGoals, goal_2_prereqs, initGoals]
+  have hInit159 : InitGoalHolds pm_goal_2.numRanks goal_42 initSM initPM := by
+    apply hInitGoals; simp [goal_2_cut_initGoals, goal_2_prereqs, initGoals]
+  have ⟨h97_shape, h97_eq⟩ := initGoalHolds_replicated pm_goal_2.numRanks
+    initGoal_97 97 [128, 128] initSM initPM hInit97 rfl rfl rfl
+  have ⟨h159_shape, h168_shape, h169_shape, h170_shape, h171_shape, h159_rec⟩ :=
+    initGoalHolds_sharded4 pm_goal_2.numRanks goal_42
+      159 168 169 170 171 [16, 64, 128] [4, 64, 128] initSM initPM hInit159
+      rfl rfl rfl rfl
+  -- SM store
+  have hsm : (denoteGraph sm_goal_2 initSM) 98 = fw_linear (initSM 159) (initSM 97) := by
+    simp [sm_goal_2, denoteGraph, applyNode_fw_linear_out]
+  -- PM store
+  have hpm : (denoteGraph pm_goal_2 initPM) 98 =
+      allGatherPrimDim0 pm_goal_2.numRanks 0
+        [fw_linear (initPM 168) (initPM 97),
+         fw_linear (initPM 169) (initPM 97),
+         fw_linear (initPM 170) (initPM 97),
+         fw_linear (initPM 171) (initPM 97)] := by
+    have hstep : (denoteGraph pm_goal_2 initPM) 98 =
+        (applyNode pm_goal_2
+          (applyNode pm_goal_2
+            (applyNode pm_goal_2
+              (applyNode pm_goal_2
+                (applyNode pm_goal_2 initPM
+                  { rank := 0, op := "OpName.FW_linear", ins := [168, 97], outs := [172] })
+                { rank := 1, op := "OpName.FW_linear", ins := [169, 97], outs := [173] })
+              { rank := 2, op := "OpName.FW_linear", ins := [170, 97], outs := [174] })
+            { rank := 3, op := "OpName.FW_linear", ins := [171, 97], outs := [175] })
+          { rank := 0, op := "OpName.AllGatherPrim",
+            ins := [172, 173, 174, 175], outs := [98] }) 98 := by
+      simp [pm_goal_2, denoteGraph, List.foldl]
+    rw [hstep]
+    have h3d : ∃ a b c, ((([172, 173, 174, 175] : List Tid).map
+        (applyNode pm_goal_2
+          (applyNode pm_goal_2
+            (applyNode pm_goal_2
+              (applyNode pm_goal_2 initPM
+                { rank := 0, op := "OpName.FW_linear",
+                  ins := [168, 97], outs := [172] })
+              { rank := 1, op := "OpName.FW_linear",
+                ins := [169, 97], outs := [173] })
+            { rank := 2, op := "OpName.FW_linear",
+              ins := [170, 97], outs := [174] })
+          { rank := 3, op := "OpName.FW_linear",
+            ins := [171, 97], outs := [175] })).head?.map
+        (fun t => t.shape)).getD [] = [a, b, c] := by
+      refine ⟨4, 64, 128, ?_⟩
+      simp only [List.map, List.head?, Option.map, Option.getD]
+      simp only [applyNode, evalOp, storeSet, List.zip]
+      exact fw_linear_3d_shape 4 64 128 128 _ _
+        h168_shape (by rw [← h97_eq]; exact h97_shape)
+    rw [applyNode_allGatherPrim_dim0_out _ _ _ _ _ h3d]
+    simp [applyNode, evalOp, storeSet]
+  -- Apply the general coarse lineage theorem
+  dsimp only [goal_2_stmt_cut, CoarseLineageHoldsWithInit, goal_2] at *
+  simp only [List.map]
+  exact fw_linear_allGatherDim0_coarse
+    pm_goal_2.numRanks 4 64 128 128
+    (denoteGraph sm_goal_2 initSM) (denoteGraph pm_goal_2 initPM) 98
+    initSM initPM 159 97 168 169 170 171
+    hsm hpm h159_rec h97_eq h97_shape h159_shape
+    h168_shape h169_shape h170_shape h171_shape
+    (by simp [pm_goal_2]) (by omega) (by omega) (by omega) (by omega) (by simp [pm_goal_2])
 
 end TrainVerify.Denote.GeneratedGoals
 

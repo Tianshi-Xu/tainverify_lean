@@ -2,9 +2,13 @@
     Goal: 24 (tensor id: 128)
 -/
 import denote.GeneratedData
+import denote.Common
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
+open TrainVerify.Denote.Common
+
+set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -51,7 +55,87 @@ def goal_24_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_24 pm_goal_24 goal_24 sm_goal_24InitEnv pm_goal_24InitEnv goal_24_cut_initGoals
 
 theorem prove_goal_24_cut : goal_24_stmt_cut := by
-  sorry
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignments
+  have hInit101 : InitGoalHolds pm_goal_24.numRanks initGoal_101 initSM initPM := by
+    apply hInitGoals; simp [goal_24_cut_initGoals, goal_24_prereqs, initGoals]
+  have hInit129 : InitGoalHolds pm_goal_24.numRanks goal_25 initSM initPM := by
+    apply hInitGoals; simp [goal_24_cut_initGoals, goal_24_prereqs, initGoals]
+  have hInit167 : InitGoalHolds pm_goal_24.numRanks goal_46 initSM initPM := by
+    apply hInitGoals; simp [goal_24_cut_initGoals, goal_24_prereqs, initGoals]
+  -- Extract shapes from init goals
+  have ⟨h101_shape, h228_shape, h229_shape, h230_shape, h231_shape, h101_rec⟩ :=
+    initGoalHolds_sharded4 pm_goal_24.numRanks initGoal_101
+      101 228 229 230 231 [128, 128] [128, 32] initSM initPM hInit101
+      rfl rfl rfl rfl
+  have ⟨h167_shape, h224_shape, h225_shape, h226_shape, h227_shape, h167_rec⟩ :=
+    initGoalHolds_sharded4 pm_goal_24.numRanks goal_46
+      167 224 225 226 227 [16, 64, 128] [16, 64, 32] initSM initPM hInit167
+      rfl rfl rfl rfl
+  have ⟨h129_shape, h129_eq⟩ := initGoalHolds_replicated pm_goal_24.numRanks
+    goal_25 129 [16, 64, 128] initSM initPM hInit129 rfl rfl rfl
+  have h129_pm_shape : (initPM 129).shape = [16, 64, 128] := by rw [← h129_eq]; exact h129_shape
+  -- SM store
+  have hsm : (denoteGraph sm_goal_24 initSM) 128 =
+      (bw_linear (initSM 129) (initSM 167) (initSM 101)).2 := by
+    simp [sm_goal_24, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  -- PM store: each rank computes bw_linear(129, x_r, w_r)
+  have hpm245 : (denoteGraph pm_goal_24 initPM) 245 =
+      (bw_linear (initPM 129) (initPM 224) (initPM 228)).2 := by
+    simp [pm_goal_24, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  have hpm247 : (denoteGraph pm_goal_24 initPM) 247 =
+      (bw_linear (initPM 129) (initPM 225) (initPM 229)).2 := by
+    simp [pm_goal_24, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  have hpm249 : (denoteGraph pm_goal_24 initPM) 249 =
+      (bw_linear (initPM 129) (initPM 226) (initPM 230)).2 := by
+    simp [pm_goal_24, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  have hpm251 : (denoteGraph pm_goal_24 initPM) 251 =
+      (bw_linear (initPM 129) (initPM 227) (initPM 231)).2 := by
+    simp [pm_goal_24, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  -- Unfold the goal
+  dsimp only [goal_24_stmt_cut, CoarseLineageHoldsWithInit, goal_24] at *
+  simp only [List.map]
+  rw [hsm, hpm245, hpm247, hpm249, hpm251]
+  -- Use the column-parallel distribution: bw_linear on gathered inputs = gather of per-shard bw_linears
+  have h101_rec' : initSM 101 = reconstructWithDim 1 pm_goal_24.numRanks 0
+      [initPM 228, initPM 229, initPM 230, initPM 231] := by
+    rw [h101_rec]; simp [initGoal_101, pm_goal_24, reconstructWithDim, h228_shape]
+  have h167_rec' : initSM 167 = reconstructWithDim 2 pm_goal_24.numRanks 0
+      [initPM 224, initPM 225, initPM 226, initPM 227] := by
+    rw [h167_rec]; simp [goal_46, pm_goal_24, reconstructWithDim, h224_shape]
+  -- The column-parallel distribution theorem gives us the value equality
+  have hdistr : (bw_linear (initSM 129) (initSM 167) (initSM 101)).2 =
+      allGatherPrimDimN 1 4 0
+        [(bw_linear (initPM 129) (initPM 224) (initPM 228)).2,
+         (bw_linear (initPM 129) (initPM 225) (initPM 229)).2,
+         (bw_linear (initPM 129) (initPM 226) (initPM 230)).2,
+         (bw_linear (initPM 129) (initPM 227) (initPM 231)).2] := by
+    rw [h129_eq, h167_rec', h101_rec']
+    simp only [pm_goal_24, reconstructWithDim, h224_shape, h228_shape,
+      List.head?, Option.map, Option.getD]
+    exact bw_linear_3d_snd_column_parallel 4 16 64 128 32
+      (initPM 129) [initPM 224, initPM 225, initPM 226, initPM 227]
+      [initPM 228, initPM 229, initPM 230, initPM 231]
+      h129_pm_shape
+      (by simp) (by simp)
+      (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl | rfl | rfl <;> assumption)
+      (by intro w hw; simp only [List.mem_cons, List.not_mem_nil, or_false] at hw; rcases hw with rfl | rfl | rfl | rfl <;> assumption)
+      (by omega) (by omega) (by omega) (by omega) (by omega)
+  refine ⟨?_, ?_, ?_⟩
+  · -- Shape of SM output
+    exact bw_linear_3d_snd_shape 16 64 128 128 (initSM 129) (initSM 167) (initSM 101)
+      h129_shape h167_shape h101_shape
+  · -- Shape of PM outputs
+    simp only [List.cons.injEq]
+    exact ⟨bw_linear_3d_snd_shape 16 64 128 32 _ _ _ h129_pm_shape h224_shape h228_shape,
+           bw_linear_3d_snd_shape 16 64 128 32 _ _ _ h129_pm_shape h225_shape h229_shape,
+           bw_linear_3d_snd_shape 16 64 128 32 _ _ _ h129_pm_shape h226_shape h230_shape,
+           bw_linear_3d_snd_shape 16 64 128 32 _ _ _ h129_pm_shape h227_shape h231_shape, trivial⟩
+  · -- Value equality
+    rw [hdistr]
+    have hdw0_shape : (bw_linear (initPM 129) (initPM 224) (initPM 228)).2.shape = [128, 32] :=
+      bw_linear_3d_snd_shape 16 64 128 32 _ _ _ h129_pm_shape h224_shape h228_shape
+    simp [reconstructWithDim, hdw0_shape, pm_goal_24]
 
 end TrainVerify.Denote.GeneratedGoals
 

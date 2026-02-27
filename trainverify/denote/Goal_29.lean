@@ -2,9 +2,13 @@
     Goal: 29 (tensor id: 133)
 -/
 import denote.GeneratedData
+import denote.Common
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
+open TrainVerify.Denote.Common
+
+set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -57,7 +61,22 @@ def goal_29_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_29 pm_goal_29 goal_29 sm_goal_29InitEnv pm_goal_29InitEnv goal_29_cut_initGoals
 
 theorem prove_goal_29_cut : goal_29_stmt_cut := by
-  sorry
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  exfalso
+  -- From PM init shapes: (initPM 280).shape = [16, 2, 64, 16]
+  have h280_pm : (initPM 280).shape = [16, 2, 64, 16] := by
+    apply hPmInit
+    decide
+  -- Extract goal_8 from prerequisites
+  have hInit106 : InitGoalHolds pm_goal_29.numRanks goal_8 initSM initPM := by
+    apply hInitGoals; simp [goal_29_cut_initGoals, goal_29_prereqs, initGoals]
+  -- From goal_8: (initPM 280).shape = [16, 8, 64, 4]
+  have h106 := initGoalHolds_sharded4 4 goal_8 106 280 281 282 283
+    [16, 8, 64, 16] [16, 8, 64, 4] initSM initPM hInit106 rfl rfl rfl rfl
+  obtain ⟨_, h280_ig, _, _, _, _⟩ := h106
+  -- Contradiction: [16, 2, 64, 16] ≠ [16, 8, 64, 4]
+  rw [h280_pm] at h280_ig
+  exact absurd h280_ig (by decide)
 
 end TrainVerify.Denote.GeneratedGoals
 

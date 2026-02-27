@@ -2,9 +2,11 @@
     Goal: 21 (tensor id: 125)
 -/
 import denote.GeneratedData
+import denote.Common
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
+open TrainVerify.Denote.Common
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -43,7 +45,22 @@ def goal_21_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_21 pm_goal_21 goal_21 sm_goal_21InitEnv pm_goal_21InitEnv goal_21_cut_initGoals
 
 theorem prove_goal_21_cut : goal_21_stmt_cut := by
-  sorry
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  have hInit130 : InitGoalHolds pm_goal_21.numRanks goal_26 initSM initPM := by
+    apply hInitGoals; simp [goal_21_cut_initGoals, goal_21_prereqs, initGoals]
+  have ⟨h130_shape, h130_eq⟩ := initGoalHolds_replicated pm_goal_21.numRanks
+    goal_26 130 [16, 64, 8, 16] initSM initPM hInit130 rfl rfl rfl
+  have hsm : (denoteGraph sm_goal_21 initSM) 125 = fw_view [16, 64, 128] (initSM 130) := by
+    simp [sm_goal_21, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  have hpm : (denoteGraph pm_goal_21 initPM) 125 = fw_view [16, 64, 128] (initPM 130) := by
+    simp [pm_goal_21, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  dsimp only [goal_21_stmt_cut, CoarseLineageHoldsWithInit, goal_21] at *
+  simp only [List.map]
+  rw [hsm, hpm, h130_eq]
+  refine ⟨?_, ?_, ?_⟩
+  · simp [fw_view, Tensor.mkShape]
+  · simp [fw_view, Tensor.mkShape]
+  · simp [reconstructWithDim]
 
 end TrainVerify.Denote.GeneratedGoals
 
