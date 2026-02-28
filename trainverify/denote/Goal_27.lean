@@ -29,10 +29,10 @@ def pm_goal_27 : GraphDecl := by
     { rank := 1, op := "OpName.BW_matmul", ins := [367, 349, 329], outs := [366, 343] },
     { rank := 2, op := "OpName.BW_matmul", ins := [369, 350, 330], outs := [368, 345] },
     { rank := 3, op := "OpName.BW_matmul", ins := [371, 351, 331], outs := [370, 347] },
-    { rank := 0, op := "OpName.AllToAllPrim", ins := [364, 366, 368, 370], outs := [269], params := [3, 0] },
-    { rank := 1, op := "OpName.AllToAllPrim", ins := [364, 366, 368, 370], outs := [271], params := [3, 0] },
-    { rank := 2, op := "OpName.AllToAllPrim", ins := [364, 366, 368, 370], outs := [273], params := [3, 0] },
-    { rank := 3, op := "OpName.AllToAllPrim", ins := [364, 366, 368, 370], outs := [275], params := [3, 0] },
+    { rank := 0, op := "OpName.AllToAllPrim", ins := [364, 366, 368, 370], outs := [269], params := [0, 3] },
+    { rank := 1, op := "OpName.AllToAllPrim", ins := [364, 366, 368, 370], outs := [271], params := [0, 3] },
+    { rank := 2, op := "OpName.AllToAllPrim", ins := [364, 366, 368, 370], outs := [273], params := [0, 3] },
+    { rank := 3, op := "OpName.AllToAllPrim", ins := [364, 366, 368, 370], outs := [275], params := [0, 3] },
   ]
 
 def sm_goal_27InitShapes : List (Tid × Shape) := [
@@ -233,14 +233,14 @@ private lemma valAt_td_4_8_16_64 (y : Tensor) (a : Nat) (idx : Nat)
     (hy : y.shape = [a, 8, 16, 64])
     (hidx : idx < a * 8192) :
     valAt (transpose2d y) idx =
-    valAt y (idx / 1024 * 1024 + (idx % 1024 % 64) * 16 + idx % 1024 / 64) := by
+    valAt y (idx / 1024 * 1024 + (idx % 1024 % 16) * 64 + idx % 1024 / 16) := by
   unfold transpose2d; rw [hy]
   simp only [List.reverse, List.reverseAux, List.append]
   simp only [valAt, Tensor.mkShape]
   have hps : prodShape [a, 8, 64, 16] = a * 8192 := by simp [prodShape]; ring
   simp only [hps, dif_pos hidx]
   simp only [show (16 : Nat) * 64 ≠ 0 from by omega, ite_false,
-    show (64 : Nat) ≠ 0 from by omega,
+    show (16 : Nat) ≠ 0 from by omega,
     show (16 : Nat) * 64 = 1024 from by norm_num]
 
 /-! ## Part 5: Gather-chunk dim 3 roundtrip -/
@@ -294,21 +294,15 @@ private theorem td_gd0_comm (y0 y1 y2 y3 : Tensor)
       rw [transpose2d_4d_shape _ 16 8 16 64 hag_shape] at hidx; simp [prodShape] at hidx; omega
     -- LHS: apply transpose2d valAt, then allGatherPrimDimN valAt
     rw [valAt_td_4_8_16_64 _ 16 idx hag_shape hidx']
-    have h_r1 : idx % 1024 % 64 < 64 := Nat.mod_lt _ (by omega)
-    have h_r2 : idx % 1024 / 64 < 16 := by omega
+    have h_r1 : idx % 1024 % 16 < 16 := Nat.mod_lt _ (by omega)
+    have h_r2 : idx % 1024 / 16 < 64 := by omega
     have h_d : idx / 1024 ≤ 127 := by omega
-    have haddr_lt : idx / 1024 * 1024 + idx % 1024 % 64 * 16 + idx % 1024 / 64 < 131072 := by omega
+    have haddr_lt : idx / 1024 * 1024 + idx % 1024 % 16 * 64 + idx % 1024 / 16 < 131072 := by omega
     rw [valAt_gd0_4_8_16_64 _ _ hhead_in haddr_lt]
     -- RHS: apply allGatherPrimDimN valAt
     rw [valAt_gd0_4_8_64_16 _ idx hhead_out hidx']
-    -- RHS has: valAt (td_ys.getD (idx%131072/8192/4) default) ((idx/8192%4)*8192 + idx%8192)
-    -- Need to apply transpose2d valAt on RHS piece
-    -- Helper: for any piece p, valAt (td_ys.getD p default) inner = valAt (ys.getD p default) (td_addr inner)
-    set addr := idx / 1024 * 1024 + idx % 1024 % 64 * 16 + idx % 1024 / 64 with haddr_def
-    -- Prove addr / 8192 = idx / 8192 (key for piece equality)
-    have h_rem1 : idx % 1024 % 64 ≤ 63 := by omega
-    have h_rem2 : idx % 1024 / 64 ≤ 15 := by omega
-    have h_rem_total : idx % 1024 % 64 * 16 + idx % 1024 / 64 ≤ 1023 := by omega
+    set addr := idx / 1024 * 1024 + idx % 1024 % 16 * 64 + idx % 1024 / 16 with haddr_def
+    have h_rem_total : idx % 1024 % 16 * 64 + idx % 1024 / 16 ≤ 1023 := by omega
     have h_addr_quo : addr / 1024 = idx / 1024 := by omega
     have h_addr_div8192 : addr / 8192 = idx / 8192 := by
       have : addr / 8192 = addr / 1024 / 8 := by omega
@@ -317,23 +311,16 @@ private theorem td_gd0_comm (y0 y1 y2 y3 : Tensor)
     have h_addr_lt_131072 : addr < 131072 := haddr_lt
     have h_piece_eq : addr % 131072 / 8192 / 4 = idx % 131072 / 8192 / 4 := by
       rw [Nat.mod_eq_of_lt h_addr_lt_131072, Nat.mod_eq_of_lt hidx', h_addr_div8192]
-    -- LHS inner: (addr/8192%4)*8192 + addr%8192
-    -- RHS inner: (idx/8192%4)*8192 + idx%8192
-    -- After applying td on RHS, inner becomes:
-    -- ((idx/8192%4)*8192+idx%8192)/1024*1024 + ... (the td_addr transform)
-    -- And this equals LHS inner (by arithmetic)
-    -- Case split on piece
     set p := idx % 131072 / 8192 / 4 with hp_def
     have hp_lt : p < 4 := by omega
     have hp_range : p = 0 ∨ p = 1 ∨ p = 2 ∨ p = 3 := by omega
     have h_inner_bound : (idx / 8192 % 4) * 8192 + idx % 8192 < 4 * 8192 := by omega
-    -- Key intermediate results for the inner address equality
     set inner := (idx / 8192 % 4) * 8192 + idx % 8192 with h_inner_def
     have h_inner_mod1024 : inner % 1024 = idx % 1024 := by omega
     have h_inner_div1024 : inner / 1024 = (idx / 8192 % 4) * 8 + idx / 1024 % 8 := by omega
-    have h_addr_mod8192 : addr % 8192 = (idx / 1024 % 8) * 1024 + (idx % 1024 % 64) * 16 + idx % 1024 / 64 := by omega
+    have h_addr_mod8192 : addr % 8192 = (idx / 1024 % 8) * 1024 + (idx % 1024 % 16) * 64 + idx % 1024 / 16 := by omega
     have h_addr_inner : (addr / 8192 % 4) * 8192 + addr % 8192 =
-        inner / 1024 * 1024 + (inner % 1024 % 64) * 16 + inner % 1024 / 64 := by
+        inner / 1024 * 1024 + (inner % 1024 % 16) * 64 + inner % 1024 / 16 := by
       rw [h_addr_div8192, h_addr_mod8192, h_inner_div1024, h_inner_mod1024]; ring
     rw [← h_piece_eq]
     rcases hp_range with h | h | h | h
@@ -534,7 +521,7 @@ theorem prove_goal_27_cut : goal_27_stmt_cut := by
   -- allToAllPrimWithDims = chunkPrimDimN ∘ allGatherPrimDimN (by definition)
   -- PM_r = chunkPrimDimN 3 4 r (allGatherPrimDimN 0 4 0 bm_list)
   -- Unfold the goal
-  dsimp only [goal_27_stmt_cut, CoarseLineageHoldsWithInit, goal_27_fixed, goal_27] at *
+  dsimp only [goal_27_stmt_cut, CoarseLineageHoldsWithInit, goal_27] at *
   simp only [List.map]
   rw [hsm, hsm', hpm269, hpm271, hpm273, hpm275]
   -- Compute shapes of per-rank BM results

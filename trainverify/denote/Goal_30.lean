@@ -54,6 +54,231 @@ def goal_30_cut_initGoals : List LineageGoal := initGoals ++ goal_30_prereqs
 def goal_30_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_30 pm_goal_30 goal_30 sm_goal_30InitEnv pm_goal_30InitEnv goal_30_cut_initGoals
 
+/-! ## Helper lemmas for commutativity: transposeAxes 1 2 ∘ allGatherPrimDimN 1 = allGatherPrimDimN 2 ∘ transposeAxes 1 2 -/
+
+-- valAt of transposeAxes 1 2 for input shape [16, 8, 64, 16] (output [16, 64, 8, 16])
+private lemma valAt_ta12_16_8_64_16 (x : Tensor) (idx : Nat)
+    (hshape : x.shape = [16, 8, 64, 16]) (hidx : idx < 131072) :
+    valAt (transposeAxes 1 2 x) idx =
+    valAt x (idx / 8192 * 8192 + idx % 128 / 16 * 1024 +
+             idx % 8192 / 128 * 16 + idx % 16) := by
+  have hinner : idx / 8192 * 8192 + idx % 128 / 16 * 1024 +
+      idx % 8192 / 128 * 16 + idx % 16 < 131072 := by omega
+  have hout_shape : (transposeAxes 1 2 x).shape = [16, 64, 8, 16] := by
+    simp [transposeAxes, Tensor.mkShape, listSwapAt, hshape]
+  have hps_out : prodShape (transposeAxes 1 2 x).shape = 131072 := by
+    rw [hout_shape]; simp [prodShape]
+  have hps_in : prodShape x.shape = 131072 := by simp [hshape, prodShape]
+  rw [valAt_of_lt _ _ (by rw [hps_out]; exact hidx),
+      valAt_of_lt _ _ (by rw [hps_in]; exact hinner)]
+  unfold transposeAxes Tensor.mkShape
+  simp only [hshape, listSwapAt, flatToMulti, valAt, List.getD, List.set,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  have hmm1 : ∀ n, n % 8192 % 128 = n % 128 := fun n => by omega
+  simp only [show prodShape [64, 8, 16] = 8192 from by simp [prodShape],
+    show prodShape [8, 16] = 128 from by simp [prodShape],
+    show prodShape [16] = 16 from by simp [prodShape],
+    show prodShape ([] : List Nat) = 1 from by simp [prodShape],
+    (show (16 : Nat) ≠ 0 by omega), (show (1 : Nat) ≠ 0 by omega),
+    Nat.div_one, ite_false, hmm1]
+  have hinner' : idx / 8192 * 8192 + (idx % 128 / 16 * 1024 +
+      (idx % 8192 / 128 * 16 + idx % 16)) < 131072 := by omega
+  simp [multiToFlat, prodShape, dif_pos hinner']
+  simp only [Nat.add_assoc]
+
+-- valAt of allGatherPrimDimN 1 4 0 for shard shape [16, 2, 64, 16]
+private lemma valAt_ag1_16_2_64_16 (xs : List Tensor) (idx : Nat)
+    (hhead : (xs.head?.map (·.shape)).getD [] = [16, 2, 64, 16])
+    (hidx : idx < 131072) :
+    valAt (allGatherPrimDimN 1 4 0 xs) idx =
+    valAt (xs.getD (idx % 8192 / 2048) (zeroTensor [16, 2, 64, 16]))
+      (idx / 8192 * 2048 + (idx % 8192 / 1024 % 2) * 1024 + idx % 1024) := by
+  have hshape_out : (allGatherPrimDimN 1 4 0 xs).shape = [16, 8, 64, 16] := by
+    simp [allGatherPrimDimN, Tensor.mkShape, hhead]
+  have hlt_prod : idx < prodShape (allGatherPrimDimN 1 4 0 xs).shape := by
+    simp only [hshape_out, prodShape, List.foldl, Nat.one_mul]; omega
+  rw [valAt_of_lt _ _ hlt_prod]
+  simp only [allGatherPrimDimN, Tensor.mkShape, hhead,
+    List.getD, List.drop, List.foldl,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  simp only [show (1 : Nat) * 64 = 64 from by norm_num,
+    show (64 : Nat) * 16 = 1024 from by norm_num,
+    show (2 : Nat) * 4 = 8 from by norm_num,
+    show (8 : Nat) * 1024 = 8192 from by norm_num,
+    show (2 : Nat) * 1024 = 2048 from by norm_num,
+    (show (8192 : Nat) ≠ 0 by omega), (show (1024 : Nat) ≠ 0 by omega),
+    (show (2 : Nat) ≠ 0 by omega),
+    ite_false]
+  simp only [show ∀ n, n % 8192 / 1024 / 2 = n % 8192 / 2048 from fun n => by omega,
+    show ∀ n, n % 8192 % 1024 = n % 1024 from fun n => by omega]
+
+-- valAt of allGatherPrimDimN 2 4 0 for shard shape [16, 64, 2, 16]
+private lemma valAt_ag2_16_64_2_16 (xs : List Tensor) (idx : Nat)
+    (hhead : (xs.head?.map (·.shape)).getD [] = [16, 64, 2, 16])
+    (hidx : idx < 131072) :
+    valAt (allGatherPrimDimN 2 4 0 xs) idx =
+    valAt (xs.getD (idx % 128 / 32) (zeroTensor [16, 64, 2, 16]))
+      (idx / 128 * 32 + (idx % 128 / 16 % 2) * 16 + idx % 16) := by
+  have hshape_out : (allGatherPrimDimN 2 4 0 xs).shape = [16, 64, 8, 16] := by
+    simp [allGatherPrimDimN, Tensor.mkShape, hhead]
+  have hlt_prod : idx < prodShape (allGatherPrimDimN 2 4 0 xs).shape := by
+    simp only [hshape_out, prodShape, List.foldl, Nat.one_mul]; omega
+  rw [valAt_of_lt _ _ hlt_prod]
+  simp only [allGatherPrimDimN, Tensor.mkShape, hhead,
+    List.getD, List.drop, List.foldl,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  simp only [show (1 : Nat) * 16 = 16 from by norm_num,
+    show (2 : Nat) * 4 = 8 from by norm_num,
+    show (8 : Nat) * 16 = 128 from by norm_num,
+    show (2 : Nat) * 16 = 32 from by norm_num,
+    (show (128 : Nat) ≠ 0 by omega), (show (16 : Nat) ≠ 0 by omega),
+    (show (2 : Nat) ≠ 0 by omega),
+    ite_false]
+  simp only [show ∀ n, n % 128 / 16 / 2 = n % 128 / 32 from fun n => by omega,
+    show ∀ n, n % 128 % 16 = n % 16 from fun n => by omega]
+
+-- valAt of transposeAxes 1 2 for input shape [16, 2, 64, 16] (output [16, 64, 2, 16])
+private lemma valAt_ta12_16_2_64_16 (x : Tensor) (fi : Nat)
+    (hshape : x.shape = [16, 2, 64, 16]) (hfi : fi < 32768) :
+    valAt (transposeAxes 1 2 x) fi =
+    valAt x (fi / 2048 * 2048 + fi % 32 / 16 * 1024 +
+             fi % 2048 / 32 * 16 + fi % 16) := by
+  have hinner : fi / 2048 * 2048 + fi % 32 / 16 * 1024 +
+      fi % 2048 / 32 * 16 + fi % 16 < 32768 := by omega
+  have hout_shape : (transposeAxes 1 2 x).shape = [16, 64, 2, 16] := by
+    simp [transposeAxes, Tensor.mkShape, listSwapAt, hshape]
+  have hps_out : prodShape (transposeAxes 1 2 x).shape = 32768 := by
+    rw [hout_shape]; simp [prodShape]
+  have hps_in : prodShape x.shape = 32768 := by simp [hshape, prodShape]
+  rw [valAt_of_lt _ _ (by rw [hps_out]; exact hfi),
+      valAt_of_lt _ _ (by rw [hps_in]; exact hinner)]
+  unfold transposeAxes Tensor.mkShape
+  simp only [hshape, listSwapAt, flatToMulti, valAt, List.getD, List.set,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  have hmm1 : ∀ n, n % 2048 % 32 = n % 32 := fun n => by omega
+  simp only [show prodShape [64, 2, 16] = 2048 from by simp [prodShape],
+    show prodShape [2, 16] = 32 from by simp [prodShape],
+    show prodShape [16] = 16 from by simp [prodShape],
+    show prodShape ([] : List Nat) = 1 from by simp [prodShape],
+    (show (16 : Nat) ≠ 0 by omega), (show (1 : Nat) ≠ 0 by omega),
+    Nat.div_one, ite_false, hmm1]
+  have hinner' : fi / 2048 * 2048 + (fi % 32 / 16 * 1024 +
+      (fi % 2048 / 32 * 16 + fi % 16)) < 32768 := by omega
+  simp [multiToFlat, prodShape, dif_pos hinner']
+  simp only [Nat.add_assoc]
+
+/-! ### Extracted arithmetic lemmas -/
+
+private lemma g30_swap_bound (idx : Nat) (_ : idx < 131072) :
+    idx / 8192 * 8192 + idx % 128 / 16 * 1024 +
+    idx % 8192 / 128 * 16 + idx % 16 < 131072 := by omega
+
+private lemma g30_rhs_fi_bound (idx : Nat) (_ : idx < 131072) :
+    idx / 128 * 32 + (idx % 128 / 16 % 2) * 16 + idx % 16 < 32768 := by omega
+
+private lemma g30_piece_eq (idx : Nat) (_ : idx < 131072) :
+    (idx / 8192 * 8192 + idx % 128 / 16 * 1024 +
+     idx % 8192 / 128 * 16 + idx % 16) % 8192 / 2048 = idx % 128 / 32 := by
+  have : idx % 128 / 16 * 1024 + idx % 8192 / 128 * 16 + idx % 16 < 8192 := by omega
+  have : idx % 8192 / 128 * 16 + idx % 16 < 1024 := by omega
+  simp only [Nat.add_assoc]; omega
+
+private lemma g30_val_eq_a (idx : Nat) (_ : idx < 131072) :
+    (idx / 8192 * 8192 + idx % 128 / 16 * 1024 +
+     idx % 8192 / 128 * 16 + idx % 16) / 8192 =
+    idx / 8192 := by
+  have : idx % 128 / 16 * 1024 + idx % 8192 / 128 * 16 + idx % 16 < 8192 := by omega
+  simp only [Nat.add_assoc]; omega
+
+private lemma g30_val_eq_b (idx : Nat) (_ : idx < 131072) :
+    (idx / 8192 * 8192 + idx % 128 / 16 * 1024 +
+     idx % 8192 / 128 * 16 + idx % 16) % 8192 / 1024 % 2 =
+    idx % 128 / 16 % 2 := by
+  have h1 : idx % 128 / 16 * 1024 + idx % 8192 / 128 * 16 + idx % 16 < 8192 := by omega
+  have h2 : idx % 8192 / 128 * 16 + idx % 16 < 1024 := by omega
+  have h3 : (idx / 8192 * 8192 + (idx % 128 / 16 * 1024 + (idx % 8192 / 128 * 16 + idx % 16))) % 8192 =
+      idx % 128 / 16 * 1024 + (idx % 8192 / 128 * 16 + idx % 16) := by omega
+  simp only [Nat.add_assoc, h3]
+  have h4 : (idx % 128 / 16 * 1024 + (idx % 8192 / 128 * 16 + idx % 16)) / 1024 =
+      idx % 128 / 16 := by omega
+  rw [h4]
+
+private lemma g30_val_eq_c (idx : Nat) (_ : idx < 131072) :
+    (idx / 8192 * 8192 + idx % 128 / 16 * 1024 +
+     idx % 8192 / 128 * 16 + idx % 16) % 1024 = idx % 8192 / 128 * 16 + idx % 16 := by
+  have h1 : idx % 128 / 16 * 1024 + idx % 8192 / 128 * 16 + idx % 16 < 8192 := by omega
+  have h2 : idx % 8192 / 128 * 16 + idx % 16 < 1024 := by omega
+  have h3 : (idx / 8192 * 8192 + (idx % 128 / 16 * 1024 + (idx % 8192 / 128 * 16 + idx % 16))) % 8192 =
+      idx % 128 / 16 * 1024 + (idx % 8192 / 128 * 16 + idx % 16) := by omega
+  simp only [Nat.add_assoc, h3]; omega
+
+private lemma g30_fi_decomp_a (idx : Nat) (_ : idx < 131072) :
+    (idx / 128 * 32 + (idx % 128 / 16 % 2) * 16 + idx % 16) / 2048 =
+    idx / 8192 := by omega
+
+private lemma g30_fi_decomp_b (idx : Nat) (_ : idx < 131072) :
+    (idx / 128 * 32 + (idx % 128 / 16 % 2) * 16 + idx % 16) % 32 / 16 =
+    idx % 128 / 16 % 2 := by omega
+
+private lemma g30_fi_decomp_c (idx : Nat) (_ : idx < 131072) :
+    (idx / 128 * 32 + (idx % 128 / 16 % 2) * 16 + idx % 16) % 2048 / 32 =
+    idx % 8192 / 128 := by omega
+
+private lemma g30_fi_decomp_d (idx : Nat) (_ : idx < 131072) :
+    (idx / 128 * 32 + (idx % 128 / 16 % 2) * 16 + idx % 16) % 16 =
+    idx % 16 := by omega
+
+/-! ### Commutativity: transposeAxes 1 2 ∘ allGatherPrimDimN 1 = allGatherPrimDimN 2 ∘ transposeAxes 1 2 -/
+
+private theorem transposeAxes_12_agDimN1_to_2_comm
+    (c0 c1 c2 c3 : Tensor)
+    (h0 : c0.shape = [16, 2, 64, 16])
+    (h1 : c1.shape = [16, 2, 64, 16])
+    (h2 : c2.shape = [16, 2, 64, 16])
+    (h3 : c3.shape = [16, 2, 64, 16]) :
+    transposeAxes 1 2 (allGatherPrimDimN 1 4 0 [c0, c1, c2, c3]) =
+    allGatherPrimDimN 2 4 0 [transposeAxes 1 2 c0, transposeAxes 1 2 c1,
+                              transposeAxes 1 2 c2, transposeAxes 1 2 c3] := by
+  have hhead_in : (([c0, c1, c2, c3].head?.map (fun t => t.shape)).getD []) = [16, 2, 64, 16] := by
+    simp [List.head?, Option.map, h0]
+  have hLHS_gathered_shape : (allGatherPrimDimN 1 4 0 [c0, c1, c2, c3]).shape = [16, 8, 64, 16] := by
+    rw [allGatherPrimDimN_shape 1 4 [c0, c1, c2, c3] [16, 2, 64, 16] hhead_in]
+    simp [List.getD, List.set]
+  have hLHS_shape : (transposeAxes 1 2 (allGatherPrimDimN 1 4 0 [c0, c1, c2, c3])).shape = [16, 64, 8, 16] := by
+    simp [transposeAxes, Tensor.mkShape, listSwapAt, hLHS_gathered_shape]
+  have ht_shape : ∀ t, t.shape = [16, 2, 64, 16] → (transposeAxes 1 2 t).shape = [16, 64, 2, 16] := by
+    intro t ht; simp [transposeAxes, Tensor.mkShape, listSwapAt, ht]
+  have hhead_out : (([transposeAxes 1 2 c0, transposeAxes 1 2 c1, transposeAxes 1 2 c2, transposeAxes 1 2 c3].head?.map (fun t => t.shape)).getD []) = [16, 64, 2, 16] := by
+    simp [List.head?, Option.map, ht_shape c0 h0]
+  have hRHS_shape : (allGatherPrimDimN 2 4 0 [transposeAxes 1 2 c0, transposeAxes 1 2 c1, transposeAxes 1 2 c2, transposeAxes 1 2 c3]).shape = [16, 64, 8, 16] := by
+    rw [allGatherPrimDimN_shape 2 4 _ [16, 64, 2, 16] hhead_out]
+    simp [List.getD, List.set]
+  apply Tensor.ext (by rw [hLHS_shape, hRHS_shape])
+  intro idx hidx
+  replace hidx : idx < 131072 := by
+    rw [hLHS_shape] at hidx; simpa [prodShape] using hidx
+  -- LHS: transpose ∘ gather
+  rw [valAt_ta12_16_8_64_16 _ idx hLHS_gathered_shape hidx]
+  rw [valAt_ag1_16_2_64_16 _ _ hhead_in (g30_swap_bound idx hidx)]
+  -- RHS: gather ∘ transpose
+  rw [valAt_ag2_16_64_2_16 _ idx hhead_out hidx]
+  -- Piece index equality
+  rw [g30_piece_eq idx hidx]
+  -- Case-split on piece index
+  have hr_cases : idx % 128 / 32 = 0 ∨ idx % 128 / 32 = 1 ∨
+      idx % 128 / 32 = 2 ∨ idx % 128 / 32 = 3 := by omega
+  rcases hr_cases with h | h | h | h <;>
+  · simp only [h, List.getD,
+      List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    rw [valAt_ta12_16_2_64_16 _ _ (by first | exact h0 | exact h1 | exact h2 | exact h3)
+        (g30_rhs_fi_bound idx hidx)]
+    exact congr_arg (valAt _) (by
+      rw [g30_val_eq_a idx hidx, g30_val_eq_b idx hidx, g30_val_eq_c idx hidx,
+          g30_fi_decomp_a idx hidx, g30_fi_decomp_b idx hidx,
+          g30_fi_decomp_c idx hidx, g30_fi_decomp_d idx hidx]; ring)
+
+/-! ## Main proof -/
+
 set_option linter.style.longLine false in
 theorem prove_goal_30_cut : goal_30_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals

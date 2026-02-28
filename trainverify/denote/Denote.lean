@@ -378,9 +378,9 @@ def transpose2d (x : Tensor) : Tensor :=
         let innerSize := d0 * d1
         let outerIdx := if innerSize = 0 then 0 else flat / innerSize
         let innerFlat := if innerSize = 0 then 0 else flat % innerSize
-        let i := if d1 = 0 then 0 else innerFlat / d1
-        let j := if d1 = 0 then 0 else innerFlat % d1
-        valAt x (outerIdx * innerSize + j * d0 + i))
+        let i := if d0 = 0 then 0 else innerFlat / d0
+        let j := if d0 = 0 then 0 else innerFlat % d0
+        valAt x (outerIdx * innerSize + j * d1 + i))
   | _ => x
 
 /-- Batched matmul: x[..., n, k] @ y[..., k, m] -> [..., n, m]

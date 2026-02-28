@@ -3,10 +3,12 @@
 -/
 import denote.GeneratedData
 import denote.Common
+import denote.Goal_8
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.Common
+open TrainVerify.Denote.GeneratedGoals
 
 set_option linter.style.longLine false
 
@@ -60,17 +62,17 @@ theorem prove_goal_10_cut : goal_10_stmt_cut := by
   have hsm : (denoteGraph sm_goal_10 initSM) 108 = transposeAxes 1 2 (initSM 107) := by
     simp [sm_goal_10, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   have hpm304 : (denoteGraph pm_goal_10 initPM) 304 =
-      transposeAxes 1 2 (chunkPrim 4 0 (initPM 107)) := by
-    simp [pm_goal_10, denoteGraph, List.foldl, applyNode, evalOp, storeSet, hpm107_shape]
+      transposeAxes 1 2 (chunkPrimDimN 2 4 0 (initPM 107)) := by
+    simp [pm_goal_10, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   have hpm305 : (denoteGraph pm_goal_10 initPM) 305 =
-      transposeAxes 1 2 (chunkPrim 4 1 (initPM 107)) := by
-    simp [pm_goal_10, denoteGraph, List.foldl, applyNode, evalOp, storeSet, hpm107_shape]
+      transposeAxes 1 2 (chunkPrimDimN 2 4 1 (initPM 107)) := by
+    simp [pm_goal_10, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   have hpm306 : (denoteGraph pm_goal_10 initPM) 306 =
-      transposeAxes 1 2 (chunkPrim 4 2 (initPM 107)) := by
-    simp [pm_goal_10, denoteGraph, List.foldl, applyNode, evalOp, storeSet, hpm107_shape]
+      transposeAxes 1 2 (chunkPrimDimN 2 4 2 (initPM 107)) := by
+    simp [pm_goal_10, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   have hpm307 : (denoteGraph pm_goal_10 initPM) 307 =
-      transposeAxes 1 2 (chunkPrim 4 3 (initPM 107)) := by
-    simp [pm_goal_10, denoteGraph, List.foldl, applyNode, evalOp, storeSet, hpm107_shape]
+      transposeAxes 1 2 (chunkPrimDimN 2 4 3 (initPM 107)) := by
+    simp [pm_goal_10, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   dsimp only [goal_10_stmt_cut, CoarseLineageHoldsWithInit, goal_10] at *
   simp only [List.map]
   rw [hsm, hpm304, hpm305, hpm306, hpm307, h107_eq]
@@ -78,27 +80,24 @@ theorem prove_goal_10_cut : goal_10_stmt_cut := by
   have hxsh : x.shape = [16, 64, 8, 16] := by rw [← h107_eq]; exact h107_shape
   refine ⟨?_, ?_, ?_⟩
   · simp [transposeAxes, listSwapAt, Tensor.mkShape, hxsh]
-  · simp [transposeAxes, chunkPrim, listSwapAt, Tensor.mkShape, hxsh,
-          appendLast, dropLast, divNat, lastD]
-  · have hpiece0_shape : (transposeAxes 1 2 (chunkPrim 4 0 x)).shape = [16, 8, 64, 4] := by
-      simp [transposeAxes, chunkPrim, Tensor.mkShape, listSwapAt, hxsh,
-            appendLast, dropLast, divNat, lastD]
-    have hrecon : reconstructWithDim 3 4 0
-        [transposeAxes 1 2 (chunkPrim 4 0 x),
-         transposeAxes 1 2 (chunkPrim 4 1 x),
-         transposeAxes 1 2 (chunkPrim 4 2 x),
-         transposeAxes 1 2 (chunkPrim 4 3 x)] =
-      allGatherPrimDimN 3 4 0
-        [transposeAxes 1 2 (chunkPrim 4 0 x),
-         transposeAxes 1 2 (chunkPrim 4 1 x),
-         transposeAxes 1 2 (chunkPrim 4 2 x),
-         transposeAxes 1 2 (chunkPrim 4 3 x)] := by
-      unfold reconstructWithDim
-      simp only [List.head?, Option.map, Option.getD, hpiece0_shape]
-      rfl
+  · simp [transposeAxes, chunkPrimDimN, listSwapAt, Tensor.mkShape, hxsh]
+  · have hpiece0_shape : (transposeAxes 1 2 (chunkPrimDimN 2 4 0 x)).shape = [16, 2, 64, 16] := by
+      simp [transposeAxes, chunkPrimDimN, Tensor.mkShape, listSwapAt, hxsh]
+    have hrecon : reconstructWithDim 1 4 0
+        [transposeAxes 1 2 (chunkPrimDimN 2 4 0 x),
+         transposeAxes 1 2 (chunkPrimDimN 2 4 1 x),
+         transposeAxes 1 2 (chunkPrimDimN 2 4 2 x),
+         transposeAxes 1 2 (chunkPrimDimN 2 4 3 x)] =
+      allGatherPrimDimN 1 4 0
+        [transposeAxes 1 2 (chunkPrimDimN 2 4 0 x),
+         transposeAxes 1 2 (chunkPrimDimN 2 4 1 x),
+         transposeAxes 1 2 (chunkPrimDimN 2 4 2 x),
+         transposeAxes 1 2 (chunkPrimDimN 2 4 3 x)] := by
+      apply reconstructWithDim_cons_cons_nonscalar
+      rw [hpiece0_shape]; decide
     simp only [show pm_goal_10.numRanks = 4 from rfl]
     rw [hrecon]
-    exact transposeAxes_12_chunkPrim_gather3 x hxsh
+    exact transposeAxes_12_chunkPrimDimN2_gather1 x hxsh
 
 end TrainVerify.Denote.GeneratedGoals
 

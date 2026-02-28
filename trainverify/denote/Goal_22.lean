@@ -56,6 +56,46 @@ def goal_22_cut_initGoals : List LineageGoal := initGoals ++ goal_22_prereqs
 def goal_22_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_22 pm_goal_22 goal_22 sm_goal_22InitEnv pm_goal_22InitEnv goal_22_cut_initGoals
 
+/-! ### Bridge: chunkPrimDimN 0 = chunkPrimDim0 for shape [16, 64, 128] -/
+
+private lemma valAt_chunkDimN0 (x : Tensor) (r idx : Nat)
+    (hshape : x.shape = [16, 64, 128]) (hidx : idx < 32768) :
+    valAt (chunkPrimDimN 0 4 r x) idx =
+    valAt x ((r % 4) * 32768 + idx) := by
+  unfold chunkPrimDimN; rw [hshape]
+  simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+    Option.getD, List.drop, List.foldl, List.set]
+  norm_num
+  conv_lhs => rw [show (if (4 : Nat) = 0 then (0 : Nat) else 16 / 4) = 4 from by decide]
+  simp only [valAt, Tensor.mkShape,
+    show prodShape [4, 64, 128] = 32768 from by simp [prodShape]]
+  rw [dif_pos hidx]
+  exact congrArg (valAt x) (by omega)
+
+private lemma valAt_chunkDim0 (x : Tensor) (r idx : Nat)
+    (hshape : x.shape = [16, 64, 128]) (hidx : idx < 32768) :
+    valAt (chunkPrimDim0 4 r x) idx =
+    valAt x ((r % 4) * 32768 + idx) := by
+  unfold chunkPrimDim0; rw [hshape]
+  simp only [divNat, Tensor.mkShape]
+  norm_num
+  simp only [valAt, Tensor.mkShape,
+    show prodShape [4, 64, 128] = 32768 from by simp [prodShape]]
+  rw [dif_pos hidx]
+  exact congrArg (valAt x) (by omega)
+
+private lemma chunkPrimDimN_0_eq_chunkPrimDim0 (r : Nat) (x : Tensor)
+    (hshape : x.shape = [16, 64, 128]) :
+    chunkPrimDimN 0 4 r x = chunkPrimDim0 4 r x := by
+  have hs1 : (chunkPrimDimN 0 4 r x).shape = [4, 64, 128] := by
+    rw [chunkPrimDimN_shape 0 4 r _ _ hshape (by omega)]; simp [List.set, List.getD]
+  have hs2 : (chunkPrimDim0 4 r x).shape = [4, 64, 128] :=
+    chunkPrimDim0_shape' 4 r 4 64 128 x (by rw [hshape]) (by omega)
+  apply Tensor.ext (by rw [hs1, hs2])
+  intro idx hidx
+  have hidx' : idx < 32768 := by rw [hs1] at hidx; simp [prodShape] at hidx; omega
+  rw [valAt_chunkDimN0 x r idx hshape hidx', valAt_chunkDim0 x r idx hshape hidx']
+
 theorem prove_goal_22_cut : goal_22_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   -- Extract init alignments
@@ -83,13 +123,14 @@ theorem prove_goal_22_cut : goal_22_stmt_cut := by
   -- PM store
   have hpm : (denoteGraph pm_goal_22 initPM) 213 =
       cross_dp_wred [
-        (bw_linear (chunkPrimDim0 4 0 (initPM 127)) (initPM 196) (initPM 99)).2,
-        (bw_linear (chunkPrimDim0 4 1 (initPM 127)) (initPM 197) (initPM 99)).2,
-        (bw_linear (chunkPrimDim0 4 2 (initPM 127)) (initPM 198) (initPM 99)).2,
-        (bw_linear (chunkPrimDim0 4 3 (initPM 127)) (initPM 199) (initPM 99)).2
+        (bw_linear (chunkPrimDimN 0 4 0 (initPM 127)) (initPM 196) (initPM 99)).2,
+        (bw_linear (chunkPrimDimN 0 4 1 (initPM 127)) (initPM 197) (initPM 99)).2,
+        (bw_linear (chunkPrimDimN 0 4 2 (initPM 127)) (initPM 198) (initPM 99)).2,
+        (bw_linear (chunkPrimDimN 0 4 3 (initPM 127)) (initPM 199) (initPM 99)).2
       ] := by
-    simp [pm_goal_22, denoteGraph, List.foldl, applyNode, evalOp, storeSet, h127_pm_shape,
-      cross_dp_wred]
+    simp [pm_goal_22, denoteGraph, List.foldl, applyNode, evalOp, storeSet, cross_dp_wred]
+  -- Convert chunkPrimDimN 0 to chunkPrimDim0
+  simp only [chunkPrimDimN_0_eq_chunkPrimDim0 _ _ h127_pm_shape] at hpm
   -- Unfold the goal
   dsimp only [goal_22_stmt_cut, CoarseLineageHoldsWithInit, goal_22] at *
   simp only [List.map]

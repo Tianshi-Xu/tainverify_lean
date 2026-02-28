@@ -51,71 +51,160 @@ def goal_13_cut_initGoals : List LineageGoal := initGoals ++ goal_13_prereqs
 def goal_13_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_13 pm_goal_13 goal_13 sm_goal_13InitEnv pm_goal_13InitEnv goal_13_cut_initGoals
 
+/-! ## Helper lemmas for Goal 13: gather-chunk dim 3 + scalarDiv commutation -/
+
+private lemma valAt_ag3_np4 (xs : List Tensor) (idx : Nat)
+    (hhead : (xs.head?.map (·.shape)).getD [] = [16, 8, 64, 16])
+    (hidx : idx < 524288) :
+    valAt (allGatherPrimDimN 3 4 0 xs) idx =
+    valAt (xs.getD (idx % 64 / 16) (zeroTensor [16, 8, 64, 16]))
+      (idx / 64 * 16 + idx % 16) := by
+  have hshape_out : (allGatherPrimDimN 3 4 0 xs).shape = [16, 8, 64, 64] := by
+    simp [allGatherPrimDimN, Tensor.mkShape, hhead]
+  have hlt_prod : idx < prodShape (allGatherPrimDimN 3 4 0 xs).shape := by
+    simp only [hshape_out, prodShape, List.foldl, Nat.one_mul]; omega
+  rw [valAt_of_lt _ _ hlt_prod]
+  simp only [allGatherPrimDimN, Tensor.mkShape, hhead,
+    List.getD, List.drop, List.foldl,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  simp only [show (16 : Nat) * 4 = 64 from by norm_num,
+    show (64 : Nat) * 1 = 64 from by norm_num,
+    show (16 : Nat) * 1 = 16 from by norm_num,
+    (show (64 : Nat) ≠ 0 by omega), (show (1 : Nat) ≠ 0 by omega),
+    (show (16 : Nat) ≠ 0 by omega),
+    ite_false]
+  simp only [show ∀ n, n % 64 / 1 / 16 = n % 64 / 16 from fun n => by omega,
+    show ∀ n, n / 64 * 16 + (n % 64 / 1) % 16 * 1 + n % 64 % 1 =
+      n / 64 * 16 + n % 16 from fun n => by omega]
+
+private lemma valAt_chunk3_np4 (x : Tensor) (r idx : Nat)
+    (hshape : x.shape = [16, 8, 64, 64]) (hidx : idx < 131072) :
+    valAt (chunkPrimDimN 3 4 r x) idx =
+    valAt x (idx / 16 * 64 + (r % 4) * 16 + idx % 16) := by
+  unfold chunkPrimDimN; rw [hshape]
+  simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+    Option.getD, List.drop, List.foldl, List.set]
+  norm_num
+  conv_lhs => rw [show (if (4 : Nat) = 0 then (0 : Nat) else 64 / 4) = 16 from by decide]
+  simp only [valAt, Tensor.mkShape,
+    show prodShape [16, 8, 64, 16] = 131072 from by simp [prodShape]]
+  rw [dif_pos hidx]
+  exact congrArg (valAt x) (by omega)
+
+private theorem gather_chunk_dim3 (x : Tensor) (hshape : x.shape = [16, 8, 64, 64]) :
+    allGatherPrimDimN 3 4 0 [chunkPrimDimN 3 4 0 x, chunkPrimDimN 3 4 1 x,
+      chunkPrimDimN 3 4 2 x, chunkPrimDimN 3 4 3 x] = x := by
+  have hchunk_shape : ∀ r, (chunkPrimDimN 3 4 r x).shape = [16, 8, 64, 16] := by
+    intro r; rw [chunkPrimDimN_shape 3 4 r _ _ hshape (by omega)]; simp [List.set, List.getD]
+  have hhead : (([chunkPrimDimN 3 4 0 x, chunkPrimDimN 3 4 1 x,
+      chunkPrimDimN 3 4 2 x, chunkPrimDimN 3 4 3 x].head?.map (·.shape)).getD []) =
+      [16, 8, 64, 16] := by
+    simp [List.head?, Option.map, hchunk_shape 0]
+  apply Tensor.ext
+  · rw [allGatherPrimDimN_shape 3 4 _ _ hhead]; simp [List.set, List.getD, hshape]
+  · intro idx hidx
+    have hidx' : idx < 524288 := by
+      rw [allGatherPrimDimN_shape 3 4 _ _ hhead] at hidx
+      simp [List.set, List.getD, prodShape] at hidx; omega
+    rw [valAt_ag3_np4 _ idx hhead hidx']
+    set p := idx % 64 / 16 with hp_def
+    have hp_range : p = 0 ∨ p = 1 ∨ p = 2 ∨ p = 3 := by omega
+    rcases hp_range with h | h | h | h <;>
+      simp only [h, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+        Option.getD] <;>
+      rw [valAt_chunk3_np4 x _ _ hshape (by omega)] <;>
+      exact congrArg (valAt x) (by omega)
+
+private theorem scalarDiv_ag3_comm (x0 x1 x2 x3 : Tensor) (c : Scalar)
+    (h0 : x0.shape = [16, 8, 64, 16]) :
+    scalarDiv (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3]) c =
+    allGatherPrimDimN 3 4 0 [scalarDiv x0 c, scalarDiv x1 c,
+      scalarDiv x2 c, scalarDiv x3 c] := by
+  have hhead_x : (([x0, x1, x2, x3].head?.map (·.shape)).getD []) = [16, 8, 64, 16] := by
+    simp [List.head?, Option.map, h0]
+  have hhead_sd : (([scalarDiv x0 c, scalarDiv x1 c, scalarDiv x2 c,
+      scalarDiv x3 c].head?.map (·.shape)).getD []) = [16, 8, 64, 16] := by
+    simp [List.head?, Option.map, scalarDiv, Tensor.mkShape, h0]
+  have hLHS_shape : (scalarDiv (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3]) c).shape =
+      [16, 8, 64, 64] := by
+    simp [scalarDiv, Tensor.mkShape]
+    rw [allGatherPrimDimN_shape 3 4 _ _ hhead_x]; simp [List.set, List.getD]
+  have hRHS_shape : (allGatherPrimDimN 3 4 0 [scalarDiv x0 c, scalarDiv x1 c,
+      scalarDiv x2 c, scalarDiv x3 c]).shape = [16, 8, 64, 64] := by
+    rw [allGatherPrimDimN_shape 3 4 _ _ hhead_sd]; simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hLHS_shape, hRHS_shape])
+  intro idx hidx
+  rw [hLHS_shape] at hidx
+  have hidx' : idx < 524288 := by simpa [prodShape] using hidx
+  rw [valAt_scalarDiv]
+  rw [valAt_ag3_np4 _ _ hhead_x hidx']
+  rw [valAt_ag3_np4 _ _ hhead_sd hidx']
+  have hr_cases : idx % 64 / 16 = 0 ∨ idx % 64 / 16 = 1 ∨
+      idx % 64 / 16 = 2 ∨ idx % 64 / 16 = 3 := by omega
+  rcases hr_cases with h | h | h | h <;>
+  · simp only [h, List.getD,
+      List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+      Option.getD_some, Option.getD_none]
+    exact (valAt_scalarDiv _ c _).symm
+
 set_option linter.style.longLine false in
 theorem prove_goal_13_cut : goal_13_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
-  -- Extract goal_12 from prereqs
   have hInit110 : InitGoalHolds pm_goal_13.numRanks goal_12 initSM initPM := by
     apply hInitGoals; simp [goal_13_cut_initGoals, goal_13_prereqs, initGoals]
-  have h110_rec : initSM 110 = reconstructWithDim 0 pm_goal_13.numRanks 0
-      [initPM 352, initPM 353, initPM 354, initPM 355] := by
-    have hrec := hInit110.2.2
-    simp only [goal_12, pm_goal_13, List.map] at hrec
-    exact hrec
-  have h110_shape : (initSM 110).shape = [16, 8, 64, 64] := by
-    have := hInit110.1; simp only [goal_12] at this; exact this
-  -- Extract shard shapes from lineage
-  have htp_shapes := hInit110.2.1
-  simp only [goal_12, List.map] at htp_shapes
-  have h352 : (initPM 352).shape = [4, 8, 64, 64] := by
-    have := congrArg List.head? htp_shapes; simpa using this
-  have h353 : (initPM 353).shape = [4, 8, 64, 64] := by
-    have := congrArg List.tail htp_shapes
-    have := congrArg List.head? this; simpa using this
-  have h354 : (initPM 354).shape = [4, 8, 64, 64] := by
-    have := congrArg (List.tail ∘ List.tail) htp_shapes
-    have := congrArg List.head? this; simpa using this
-  have h355 : (initPM 355).shape = [4, 8, 64, 64] := by
-    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp_shapes
-    have := congrArg List.head? this; simpa using this
-  -- SM: scalarDiv (initSM 110) 4.0
-  have hsm : (denoteGraph sm_goal_13 initSM) 111 = fw_div 4.0 (initSM 110) := by
+  have h110 := initGoalHolds_sharded4 4 goal_12 110 352 353 354 355
+    [16, 8, 64, 64] [4, 8, 64, 64] initSM initPM hInit110 rfl rfl rfl rfl
+  obtain ⟨h110_shape, h352_shape, h353_shape, h354_shape, h355_shape, h110_rec⟩ := h110
+  have hsm : (denoteGraph sm_goal_13 initSM) 111 = fw_div 4 (initSM 110) := by
     simp [sm_goal_13, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
-  -- PM: AllToAllPrim is identity on 4D, then FW_div
-  have hpm376 : (denoteGraph pm_goal_13 initPM) 376 = fw_div 4.0 (initPM 352) := by
-    simp [pm_goal_13, denoteGraph, List.foldl, applyNode, evalOp, storeSet, allToAllPrim, h352]
-  have hpm377 : (denoteGraph pm_goal_13 initPM) 377 = fw_div 4.0 (initPM 353) := by
-    simp [pm_goal_13, denoteGraph, List.foldl, applyNode, evalOp, storeSet, allToAllPrim, h353]
-  have hpm378 : (denoteGraph pm_goal_13 initPM) 378 = fw_div 4.0 (initPM 354) := by
-    simp [pm_goal_13, denoteGraph, List.foldl, applyNode, evalOp, storeSet, allToAllPrim, h354]
-  have hpm379 : (denoteGraph pm_goal_13 initPM) 379 = fw_div 4.0 (initPM 355) := by
-    simp [pm_goal_13, denoteGraph, List.foldl, applyNode, evalOp, storeSet, allToAllPrim, h355]
-  -- Unfold goal statement
-  simp only [goal_13, List.map]
-  rw [hsm, hpm376, hpm377, hpm378, hpm379]
-  -- Relate initSM 110 to allGatherPrimDimN
   have h110_ag : initSM 110 = allGatherPrimDimN 0 4 0
       [initPM 352, initPM 353, initPM 354, initPM 355] := by
-    rw [h110_rec]; simp [reconstructWithDim, pm_goal_13, h352]
+    rw [h110_rec]; apply reconstructWithDim_cons_cons_nonscalar
+    rw [h352_shape]; decide
+  have hata : ∀ r, allToAllPrimWithDims 4 r
+      [initPM 352, initPM 353, initPM 354, initPM 355] 0 3 =
+      chunkPrimDimN 3 4 r (initSM 110) := by
+    intro r; unfold allToAllPrimWithDims; rw [← h110_ag]
+  have hpm376 : (denoteGraph pm_goal_13 initPM) 376 =
+      fw_div 4 (chunkPrimDimN 3 4 0 (initSM 110)) := by
+    simp [pm_goal_13, denoteGraph, List.foldl, applyNode, evalOp, storeSet,
+      allToAllPrimWithDims, ← h110_ag]
+  have hpm377 : (denoteGraph pm_goal_13 initPM) 377 =
+      fw_div 4 (chunkPrimDimN 3 4 1 (initSM 110)) := by
+    simp [pm_goal_13, denoteGraph, List.foldl, applyNode, evalOp, storeSet,
+      allToAllPrimWithDims, ← h110_ag]
+  have hpm378 : (denoteGraph pm_goal_13 initPM) 378 =
+      fw_div 4 (chunkPrimDimN 3 4 2 (initSM 110)) := by
+    simp [pm_goal_13, denoteGraph, List.foldl, applyNode, evalOp, storeSet,
+      allToAllPrimWithDims, ← h110_ag]
+  have hpm379 : (denoteGraph pm_goal_13 initPM) 379 =
+      fw_div 4 (chunkPrimDimN 3 4 3 (initSM 110)) := by
+    simp [pm_goal_13, denoteGraph, List.foldl, applyNode, evalOp, storeSet,
+      allToAllPrimWithDims, ← h110_ag]
+  simp only [goal_13, List.map]
+  rw [hsm, hpm376, hpm377, hpm378, hpm379]
+  set x := initSM 110
+  have hxsh : x.shape = [16, 8, 64, 64] := h110_shape
   refine ⟨?_, ?_, ?_⟩
-  · -- Shape: fw_div preserves shape
-    simp [fw_div, scalarDiv, Tensor.mkShape, h110_shape]
-  · -- tp shapes: fw_div preserves shard shapes
-    simp [fw_div, scalarDiv, Tensor.mkShape, h352, h353, h354, h355]
-  · -- Value: scalarDiv commutes with allGatherPrimDimN
-    simp only [fw_div]
-    rw [h110_ag]
-    -- reconstructWithDim for non-[1] shapes = allGatherPrimDimN
-    change scalarDiv (allGatherPrimDimN 0 4 0 [initPM 352, initPM 353, initPM 354, initPM 355]) 4.0 =
-      reconstructWithDim 0 4 0 [scalarDiv (initPM 352) 4.0, scalarDiv (initPM 353) 4.0,
-        scalarDiv (initPM 354) 4.0, scalarDiv (initPM 355) 4.0]
-    rw [show reconstructWithDim 0 4 0 [scalarDiv (initPM 352) 4.0, scalarDiv (initPM 353) 4.0,
-        scalarDiv (initPM 354) 4.0, scalarDiv (initPM 355) 4.0] =
-      allGatherPrimDimN 0 4 0 [scalarDiv (initPM 352) 4.0, scalarDiv (initPM 353) 4.0,
-        scalarDiv (initPM 354) 4.0, scalarDiv (initPM 355) 4.0] from by
-      unfold reconstructWithDim
-      simp [List.head?, Option.map, scalarDiv_shape, h352]]
-    exact scalarDiv_allGatherPrimDimN_0_comm _ _ _ _ 4.0 h352
+  · simp [fw_div, scalarDiv, Tensor.mkShape, hxsh]
+  · simp [fw_div, scalarDiv, chunkPrimDimN, Tensor.mkShape, hxsh]
+  · simp only [fw_div]
+    have hchunk_shape : ∀ r, (chunkPrimDimN 3 4 r x).shape = [16, 8, 64, 16] := by
+      intro r; rw [chunkPrimDimN_shape 3 4 r _ _ hxsh (by omega)]; simp [List.set, List.getD]
+    have hpiece0_shape : (scalarDiv (chunkPrimDimN 3 4 0 x) 4).shape = [16, 8, 64, 16] := by
+      simp [scalarDiv, Tensor.mkShape, hchunk_shape 0]
+    have hrecon : reconstructWithDim 3 4 0
+        [scalarDiv (chunkPrimDimN 3 4 0 x) 4, scalarDiv (chunkPrimDimN 3 4 1 x) 4,
+         scalarDiv (chunkPrimDimN 3 4 2 x) 4, scalarDiv (chunkPrimDimN 3 4 3 x) 4] =
+      allGatherPrimDimN 3 4 0
+        [scalarDiv (chunkPrimDimN 3 4 0 x) 4, scalarDiv (chunkPrimDimN 3 4 1 x) 4,
+         scalarDiv (chunkPrimDimN 3 4 2 x) 4, scalarDiv (chunkPrimDimN 3 4 3 x) 4] := by
+      apply reconstructWithDim_cons_cons_nonscalar
+      rw [hpiece0_shape]; decide
+    simp only [show pm_goal_13.numRanks = 4 from rfl]
+    rw [hrecon]
+    conv_lhs => rw [← gather_chunk_dim3 x hxsh]
+    exact scalarDiv_ag3_comm _ _ _ _ 4 (hchunk_shape 0)
 
 end TrainVerify.Denote.GeneratedGoals
 

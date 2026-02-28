@@ -29,10 +29,10 @@ def pm_goal_29 : GraphDecl := by
     { rank := 1, op := "OpName.BW_transpose", ins := [343, 325], outs := [342], params := [2, 3] },
     { rank := 2, op := "OpName.BW_transpose", ins := [345, 326], outs := [344], params := [2, 3] },
     { rank := 3, op := "OpName.BW_transpose", ins := [347, 327], outs := [346], params := [2, 3] },
-    { rank := 0, op := "OpName.AllToAllPrim", ins := [340, 342, 344, 346], outs := [293], params := [1, 0] },
-    { rank := 1, op := "OpName.AllToAllPrim", ins := [340, 342, 344, 346], outs := [295], params := [1, 0] },
-    { rank := 2, op := "OpName.AllToAllPrim", ins := [340, 342, 344, 346], outs := [297], params := [1, 0] },
-    { rank := 3, op := "OpName.AllToAllPrim", ins := [340, 342, 344, 346], outs := [299], params := [1, 0] },
+    { rank := 0, op := "OpName.AllToAllPrim", ins := [340, 342, 344, 346], outs := [293], params := [0, 1] },
+    { rank := 1, op := "OpName.AllToAllPrim", ins := [340, 342, 344, 346], outs := [295], params := [0, 1] },
+    { rank := 2, op := "OpName.AllToAllPrim", ins := [340, 342, 344, 346], outs := [297], params := [0, 1] },
+    { rank := 3, op := "OpName.AllToAllPrim", ins := [340, 342, 344, 346], outs := [299], params := [0, 1] },
   ]
 
 def sm_goal_29InitShapes : List (Tid × Shape) := [
@@ -60,23 +60,376 @@ def goal_29_cut_initGoals : List LineageGoal := initGoals ++ goal_29_prereqs
 def goal_29_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_29 pm_goal_29 goal_29 sm_goal_29InitEnv pm_goal_29InitEnv goal_29_cut_initGoals
 
+set_option linter.flexible false
+set_option linter.unusedSimpArgs false
+
+/-! ### Helper lemmas -/
+
+-- valAt of allGatherPrimDimN 0 with element shape [4, 8, 16, 64]
+private lemma valAt_gd0_4_8_16_64 (xs : List Tensor) (idx : Nat)
+    (hhead : (xs.head?.map (·.shape)).getD [] = [4, 8, 16, 64])
+    (hidx : idx < 131072) :
+    valAt (allGatherPrimDimN 0 4 0 xs) idx =
+    valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 8, 16, 64]))
+      ((idx / 8192 % 4) * 8192 + idx % 8192) := by
+  unfold allGatherPrimDimN; rw [hhead]
+  simp [valAt, Tensor.mkShape, List.set, List.getD, List.drop, List.foldl,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+    show (4 : Nat) * 4 = 16 from by norm_num,
+    show (4 : Nat) * 8192 = 32768 from by norm_num,
+    show (16 : Nat) * 8192 = 131072 from by norm_num,
+    show prodShape [16, 8, 16, 64] = 131072 from by simp [prodShape],
+    Nat.mod_eq_of_lt hidx, Nat.div_eq_of_lt hidx, dif_pos hidx]
+
+-- valAt of allGatherPrimDimN 0 with element shape [4, 8, 64, 16]
+private lemma valAt_gd0_4_8_64_16 (xs : List Tensor) (idx : Nat)
+    (hhead : (xs.head?.map (·.shape)).getD [] = [4, 8, 64, 16])
+    (hidx : idx < 131072) :
+    valAt (allGatherPrimDimN 0 4 0 xs) idx =
+    valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 8, 64, 16]))
+      ((idx / 8192 % 4) * 8192 + idx % 8192) := by
+  unfold allGatherPrimDimN; rw [hhead]
+  simp [valAt, Tensor.mkShape, List.set, List.getD, List.drop, List.foldl,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+    show (4 : Nat) * 4 = 16 from by norm_num,
+    show (4 : Nat) * 8192 = 32768 from by norm_num,
+    show (16 : Nat) * 8192 = 131072 from by norm_num,
+    show prodShape [16, 8, 64, 16] = 131072 from by simp [prodShape],
+    Nat.mod_eq_of_lt hidx, Nat.div_eq_of_lt hidx, dif_pos hidx]
+
+-- valAt of transposeAxes 2 3 for shape [4, 8, 16, 64]
+private lemma valAt_ta23_4_8_16_64 (x : Tensor) (idx : Nat)
+    (hshape : x.shape = [4, 8, 16, 64]) (hidx : idx < 32768) :
+    valAt (transposeAxes 2 3 x) idx =
+    valAt x (idx / 8192 * 8192 + idx % 8192 / 1024 * 1024 + idx % 16 * 64 + idx % 1024 / 16) := by
+  have hinner : idx / 8192 * 8192 + idx % 8192 / 1024 * 1024 + idx % 16 * 64 + idx % 1024 / 16 < 32768 := by omega
+  have hps_in : prodShape x.shape = 32768 := by simp [hshape, prodShape]
+  have hout_shape : (transposeAxes 2 3 x).shape = [4, 8, 64, 16] := by
+    simp [transposeAxes, Tensor.mkShape, listSwapAt, hshape]
+  have hps_out : prodShape (transposeAxes 2 3 x).shape = 32768 := by
+    rw [hout_shape]; simp [prodShape]
+  rw [valAt_of_lt _ _ (by rw [hps_out]; exact hidx),
+      valAt_of_lt _ _ (by rw [hps_in]; exact hinner)]
+  unfold transposeAxes Tensor.mkShape
+  simp only [hshape, listSwapAt, flatToMulti, multiToFlat, valAt,
+    List.getD, List.set, List.length, Nat.sub_zero,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+    Option.getD_some, Option.getD_none,
+    Nat.mul_one, Nat.add_zero, Nat.div_one, Nat.mod_one,
+    if_neg, if_pos, ite_false, ite_true, dite_true, dite_false]
+  have ps1 := show prodShape [8, 16, 64] = 8192 from by simp [prodShape]
+  have ps2 := show prodShape [16, 64] = 1024 from by simp [prodShape]
+  have ps3 := show prodShape [64] = 64 from by simp [prodShape]
+  have ps4 := show prodShape ([] : List Nat) = 1 from by simp [prodShape]
+  have ps5 := show prodShape [8, 64, 16] = 8192 from by simp [prodShape]
+  have ps6 := show prodShape [64, 16] = 1024 from by simp [prodShape]
+  have ps7 := show prodShape [16] = 16 from by simp [prodShape]
+  simp only [ps1, ps2, ps3, ps4, ps5, ps6, ps7,
+    show (8192 : Nat) ≠ 0 from by omega, show (1024 : Nat) ≠ 0 from by omega,
+    show (64 : Nat) ≠ 0 from by omega, show (16 : Nat) ≠ 0 from by omega,
+    show (1 : Nat) ≠ 0 from by omega,
+    Nat.mul_one, Nat.add_zero, Nat.div_one, Nat.mod_one,
+    if_neg, if_pos, ite_false, ite_true]
+  have hmm1 : ∀ n, n % 8192 % 1024 = n % 1024 := fun n => by omega
+  have hmm2 : ∀ n, n % 8192 % 1024 % 16 = n % 16 := fun n => by omega
+  have hinner' : idx / 8192 * 8192 + (idx % 8192 / 1024 * 1024 + (idx % 16 * 64 + idx % 1024 / 16)) < 32768 := by omega
+  simp [hmm1, hmm2, ps1, ps2, ps3, ps4, ps5, ps6, ps7,
+    show prodShape [4, 8, 16, 64] = 32768 from by simp [prodShape],
+    List.set, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+    Option.getD_some, Option.getD_none,
+    multiToFlat, flatToMulti, prodShape,
+    Nat.mul_one, Nat.add_zero, Nat.div_one, Nat.mod_one,
+    if_neg, if_pos, ite_false, ite_true,
+    dif_pos hinner']
+  simp only [Nat.add_assoc]
+
+-- valAt of transposeAxes 2 3 for shape [16, 8, 16, 64]
+private lemma valAt_ta23_16_8_16_64 (x : Tensor) (idx : Nat)
+    (hshape : x.shape = [16, 8, 16, 64]) (hidx : idx < 131072) :
+    valAt (transposeAxes 2 3 x) idx =
+    valAt x (idx / 8192 * 8192 + idx % 8192 / 1024 * 1024 + idx % 16 * 64 + idx % 1024 / 16) := by
+  have hinner : idx / 8192 * 8192 + idx % 8192 / 1024 * 1024 + idx % 16 * 64 + idx % 1024 / 16 < 131072 := by omega
+  have hps_in : prodShape x.shape = 131072 := by simp [hshape, prodShape]
+  have hout_shape : (transposeAxes 2 3 x).shape = [16, 8, 64, 16] := by
+    simp [transposeAxes, Tensor.mkShape, listSwapAt, hshape]
+  have hps_out : prodShape (transposeAxes 2 3 x).shape = 131072 := by
+    rw [hout_shape]; simp [prodShape]
+  rw [valAt_of_lt _ _ (by rw [hps_out]; exact hidx),
+      valAt_of_lt _ _ (by rw [hps_in]; exact hinner)]
+  unfold transposeAxes Tensor.mkShape
+  simp only [hshape, listSwapAt, flatToMulti, multiToFlat, valAt,
+    List.getD, List.set, List.length, Nat.sub_zero,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+    Option.getD_some, Option.getD_none,
+    Nat.mul_one, Nat.add_zero, Nat.div_one, Nat.mod_one,
+    if_neg, if_pos, ite_false, ite_true, dite_true, dite_false]
+  have ps1 := show prodShape [8, 16, 64] = 8192 from by simp [prodShape]
+  have ps2 := show prodShape [16, 64] = 1024 from by simp [prodShape]
+  have ps3 := show prodShape [64] = 64 from by simp [prodShape]
+  have ps4 := show prodShape ([] : List Nat) = 1 from by simp [prodShape]
+  have ps5 := show prodShape [8, 64, 16] = 8192 from by simp [prodShape]
+  have ps6 := show prodShape [64, 16] = 1024 from by simp [prodShape]
+  have ps7 := show prodShape [16] = 16 from by simp [prodShape]
+  simp only [ps1, ps2, ps3, ps4, ps5, ps6, ps7,
+    show (8192 : Nat) ≠ 0 from by omega, show (1024 : Nat) ≠ 0 from by omega,
+    show (64 : Nat) ≠ 0 from by omega, show (16 : Nat) ≠ 0 from by omega,
+    show (1 : Nat) ≠ 0 from by omega,
+    Nat.mul_one, Nat.add_zero, Nat.div_one, Nat.mod_one,
+    if_neg, if_pos, ite_false, ite_true]
+  have hmm1 : ∀ n, n % 8192 % 1024 = n % 1024 := fun n => by omega
+  have hmm2 : ∀ n, n % 8192 % 1024 % 16 = n % 16 := fun n => by omega
+  have hinner' : idx / 8192 * 8192 + (idx % 8192 / 1024 * 1024 + (idx % 16 * 64 + idx % 1024 / 16)) < 131072 := by omega
+  simp [hmm1, hmm2, ps1, ps2, ps3, ps4, ps5, ps6, ps7,
+    show prodShape [16, 8, 16, 64] = 131072 from by simp [prodShape],
+    List.set, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+    Option.getD_some, Option.getD_none,
+    multiToFlat, flatToMulti, prodShape,
+    Nat.mul_one, Nat.add_zero, Nat.div_one, Nat.mod_one,
+    if_neg, if_pos, ite_false, ite_true,
+    dif_pos hinner']
+  simp only [Nat.add_assoc]
+
+-- Helper: addr components for ta23_gd0_comm
+private lemma ta23_addr_div (idx : Nat) :
+    (idx / 8192 * 8192 + idx % 8192 / 1024 * 1024 + idx % 16 * 64 + idx % 1024 / 16) / 8192 = idx / 8192 := by omega
+
+private lemma ta23_addr_piece (idx : Nat) (hidx : idx < 131072) :
+    (idx / 8192 * 8192 + idx % 8192 / 1024 * 1024 + idx % 16 * 64 + idx % 1024 / 16) % 131072 / 8192 / 4 = idx % 131072 / 8192 / 4 := by
+  have h1 : idx / 8192 * 8192 + idx % 8192 / 1024 * 1024 + idx % 16 * 64 + idx % 1024 / 16 < 131072 := by omega
+  rw [Nat.mod_eq_of_lt h1, Nat.mod_eq_of_lt hidx, ta23_addr_div idx]
+
+private lemma ta23_addr_mod (idx : Nat) :
+    (idx / 8192 * 8192 + idx % 8192 / 1024 * 1024 + idx % 16 * 64 + idx % 1024 / 16) % 8192 =
+    idx % 8192 / 1024 * 1024 + idx % 16 * 64 + idx % 1024 / 16 := by omega
+
+private lemma ta23_inner_div (idx : Nat) :
+    ((idx / 8192 % 4) * 8192 + idx % 8192) / 8192 = idx / 8192 % 4 := by omega
+
+private lemma ta23_inner_mod (idx : Nat) :
+    ((idx / 8192 % 4) * 8192 + idx % 8192) % 8192 = idx % 8192 := by omega
+
+private lemma ta23_inner_mod1024 (idx : Nat) :
+    ((idx / 8192 % 4) * 8192 + idx % 8192) % 1024 = idx % 1024 := by omega
+
+private lemma ta23_inner_mod16 (idx : Nat) :
+    ((idx / 8192 % 4) * 8192 + idx % 8192) % 16 = idx % 16 := by omega
+
+-- transposeAxes 2 3 commutes with allGatherPrimDimN 0 for element shape [4, 8, 16, 64]
+private theorem ta23_gd0_comm (y0 y1 y2 y3 : Tensor)
+    (hy0 : y0.shape = [4, 8, 16, 64]) (hy1 : y1.shape = [4, 8, 16, 64])
+    (hy2 : y2.shape = [4, 8, 16, 64]) (hy3 : y3.shape = [4, 8, 16, 64]) :
+    transposeAxes 2 3 (allGatherPrimDimN 0 4 0 [y0, y1, y2, y3]) =
+    allGatherPrimDimN 0 4 0 [transposeAxes 2 3 y0, transposeAxes 2 3 y1,
+      transposeAxes 2 3 y2, transposeAxes 2 3 y3] := by
+  have hhead_in : (([y0, y1, y2, y3].head?.map (·.shape)).getD []) = [4, 8, 16, 64] := by
+    simp [List.head?, Option.map, hy0]
+  have hta_shape : ∀ y, y.shape = [4, 8, 16, 64] → (transposeAxes 2 3 y).shape = [4, 8, 64, 16] := by
+    intro y hy; simp [transposeAxes, Tensor.mkShape, listSwapAt, hy]
+  have hhead_out : (([transposeAxes 2 3 y0, transposeAxes 2 3 y1,
+      transposeAxes 2 3 y2, transposeAxes 2 3 y3].head?.map (·.shape)).getD []) = [4, 8, 64, 16] := by
+    simp [List.head?, Option.map, hta_shape y0 hy0]
+  have hag_shape : (allGatherPrimDimN 0 4 0 [y0, y1, y2, y3]).shape = [16, 8, 16, 64] := by
+    rw [allGatherPrimDimN_shape 0 4 _ _ hhead_in]; simp [List.set, List.getD]
+  have hLHS_shape : (transposeAxes 2 3 (allGatherPrimDimN 0 4 0 [y0, y1, y2, y3])).shape = [16, 8, 64, 16] := by
+    simp [transposeAxes, Tensor.mkShape, listSwapAt, hag_shape]
+  have hRHS_shape : (allGatherPrimDimN 0 4 0 [transposeAxes 2 3 y0, transposeAxes 2 3 y1,
+      transposeAxes 2 3 y2, transposeAxes 2 3 y3]).shape = [16, 8, 64, 16] := by
+    rw [allGatherPrimDimN_shape 0 4 _ _ hhead_out]; simp [List.set, List.getD]
+  have hLHS_ps : prodShape (transposeAxes 2 3 (allGatherPrimDimN 0 4 0 [y0, y1, y2, y3])).shape = 131072 := by
+    rw [hLHS_shape]; simp [prodShape]
+  apply Tensor.ext (by rw [hLHS_shape, hRHS_shape])
+  intro idx hidx
+  have hidx' : idx < 131072 := by rw [hLHS_ps] at hidx; exact hidx
+  -- LHS: transposeAxes 2 3 ∘ allGatherPrimDimN 0 → valAt_ta23_16_8_16_64 then valAt_gd0_4_8_16_64
+  rw [valAt_ta23_16_8_16_64 _ idx hag_shape hidx']
+  rw [valAt_gd0_4_8_16_64 _ _ hhead_in (by omega)]
+  rw [ta23_addr_piece idx hidx', ta23_addr_div idx, ta23_addr_mod idx]
+  -- RHS: allGatherPrimDimN 0 ∘ transposeAxes 2 3 → valAt_gd0_4_8_64_16
+  rw [valAt_gd0_4_8_64_16 _ idx hhead_out hidx']
+  -- Case split on piece index
+  set p := idx % 131072 / 8192 / 4 with hp_def
+  have hp_range : p = 0 ∨ p = 1 ∨ p = 2 ∨ p = 3 := by omega
+  have h_inner_bound : (idx / 8192 % 4) * 8192 + idx % 8192 < 32768 := by omega
+  rcases hp_range with h | h | h | h <;> {
+    simp only [h, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+      List.getElem?_nil, Option.getD_some, Option.getD_none]
+    rw [valAt_ta23_4_8_16_64 _ _ (by assumption) h_inner_bound]
+    simp only [ta23_inner_div idx, ta23_inner_mod idx,
+      ta23_inner_mod1024 idx, ta23_inner_mod16 idx]
+    exact congrArg (valAt _) (by omega)
+  }
+
+-- valAt of chunkPrimDimN 1 4 r for shape [16, 8, 64, 16]
+private lemma valAt_chunk1 (x : Tensor) (r idx : Nat)
+    (hshape : x.shape = [16, 8, 64, 16]) (hidx : idx < 32768) :
+    valAt (chunkPrimDimN 1 4 r x) idx =
+    valAt x ((idx / 2048) * 8192 + (r % 4 * 2 + idx % 2048 / 1024) * 1024 + idx % 1024) := by
+  have hinner : (idx / 2048) * 8192 + (r % 4 * 2 + idx % 2048 / 1024) * 1024 + idx % 1024 < 131072 := by omega
+  have hps_in : prodShape x.shape = 131072 := by simp [hshape, prodShape]
+  have hchunk_shape : (chunkPrimDimN 1 4 r x).shape = [16, 2, 64, 16] := by
+    rw [chunkPrimDimN_shape 1 4 r _ _ hshape (by omega)]; simp [List.set, List.getD]
+  have hps_out : prodShape (chunkPrimDimN 1 4 r x).shape = 32768 := by
+    rw [hchunk_shape]; simp [prodShape]
+  rw [valAt_of_lt _ _ (by rw [hps_out]; exact hidx),
+      valAt_of_lt _ _ (by rw [hps_in]; exact hinner)]
+  unfold chunkPrimDimN Tensor.mkShape valAt
+  simp only [hshape, List.set, List.getD,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+    Option.getD_some, Option.getD_none, List.drop, List.foldl,
+    Nat.mul_one, Nat.add_zero, Nat.sub_zero,
+    show (4 : Nat) ≠ 0 from by omega,
+    show (2048 : Nat) ≠ 0 from by omega,
+    ite_false, ite_true]
+  norm_num
+  simp only [show (2 : Nat) * (1 * 64 * 16) = 2048 from by norm_num,
+    show (8 : Nat) * (1 * 64 * 16) = 8192 from by norm_num,
+    show (1 : Nat) * 64 * 16 ≠ 0 from by omega,
+    show prodShape [16, 2, 64, 16] = 32768 from by simp [prodShape],
+    show prodShape [16, 8, 64, 16] = 131072 from by simp [prodShape],
+    ite_false, ite_true, dif_pos hidx, dif_pos hinner]
+
+-- valAt of allGatherPrimDimN 1 with element shape [16, 2, 64, 16]
+private lemma valAt_gather1 (xs : List Tensor) (idx : Nat)
+    (hhead : (xs.head?.map (·.shape)).getD [] = [16, 2, 64, 16])
+    (hidx : idx < 131072) :
+    valAt (allGatherPrimDimN 1 4 0 xs) idx =
+    valAt (xs.getD (idx % 8192 / 1024 / 2) (zeroTensor [16, 2, 64, 16]))
+      ((idx / 8192) * 2048 + (idx % 8192 / 1024 % 2) * 1024 + idx % 1024) := by
+  unfold allGatherPrimDimN; rw [hhead]
+  simp [valAt, Tensor.mkShape, List.set, List.getD, List.drop, List.foldl,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+    show (2 : Nat) * 4 = 8 from by norm_num,
+    show (2 : Nat) * 1024 = 2048 from by norm_num,
+    show (8 : Nat) * 1024 = 8192 from by norm_num,
+    show prodShape [16, 8, 64, 16] = 131072 from by simp [prodShape],
+    Nat.mod_eq_of_lt hidx, Nat.div_eq_of_lt hidx, dif_pos hidx]
+
+-- Gather-chunk roundtrip for dim 1 on shape [16, 8, 64, 16]
+private theorem gather_chunk_dim1 (T : Tensor)
+    (hT : T.shape = [16, 8, 64, 16]) :
+    allGatherPrimDimN 1 4 0 [chunkPrimDimN 1 4 0 T, chunkPrimDimN 1 4 1 T,
+      chunkPrimDimN 1 4 2 T, chunkPrimDimN 1 4 3 T] = T := by
+  have hchunk_shape : ∀ r, (chunkPrimDimN 1 4 r T).shape = [16, 2, 64, 16] := by
+    intro r; rw [chunkPrimDimN_shape 1 4 r _ _ hT (by omega)]; simp [List.set, List.getD]
+  have hhead : (([chunkPrimDimN 1 4 0 T, chunkPrimDimN 1 4 1 T,
+      chunkPrimDimN 1 4 2 T, chunkPrimDimN 1 4 3 T].head?.map (·.shape)).getD []) =
+      [16, 2, 64, 16] := by
+    simp [List.head?, Option.map, hchunk_shape 0]
+  apply Tensor.ext
+  · rw [allGatherPrimDimN_shape 1 4 _ _ hhead]; simp [List.set, List.getD, hT]
+  · intro idx hidx
+    have hidx' : idx < 131072 := by
+      rw [allGatherPrimDimN_shape 1 4 _ _ hhead] at hidx
+      simp [List.set, List.getD, prodShape] at hidx; omega
+    rw [valAt_gather1 _ idx hhead hidx']
+    set p := idx % 8192 / 1024 / 2 with hp_def
+    have hp_range : p = 0 ∨ p = 1 ∨ p = 2 ∨ p = 3 := by omega
+    rcases hp_range with h | h | h | h <;>
+      simp only [h, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+        Option.getD] <;>
+      rw [valAt_chunk1 T _ _ hT (by omega)] <;>
+      exact congrArg (valAt T) (by omega)
+
+/-! ### Main proof -/
+
+set_option linter.style.longLine false in
 theorem prove_goal_29_cut : goal_29_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
-  exfalso
-  -- From PM init shapes: (initPM 280).shape = [16, 2, 64, 16]
-  have h280_pm : (initPM 280).shape = [16, 2, 64, 16] := by
-    apply hPmInit
-    decide
-  -- Extract goal_8 from prerequisites
+  -- Extract prerequisites
   have hInit106 : InitGoalHolds pm_goal_29.numRanks goal_8 initSM initPM := by
     apply hInitGoals; simp [goal_29_cut_initGoals, goal_29_prereqs, initGoals]
-  -- From goal_8: (initPM 280).shape = [16, 8, 64, 4]
   have h106 := initGoalHolds_sharded4 4 goal_8 106 280 281 282 283
-    [16, 8, 64, 16] [16, 8, 64, 4] initSM initPM hInit106 rfl rfl rfl rfl
-  obtain ⟨_, h280_ig, _, _, _, _⟩ := h106
-  -- Contradiction: [16, 2, 64, 16] ≠ [16, 8, 64, 4]
-  rw [h280_pm] at h280_ig
-  exact absurd h280_ig (by decide)
+    [16, 8, 64, 16] [16, 2, 64, 16] initSM initPM hInit106 rfl rfl rfl rfl
+  obtain ⟨h106_sm_shape, h280_shape, h281_shape, h282_shape, h283_shape, h106_rec⟩ := h106
+  have hInit136 : InitGoalHolds pm_goal_29.numRanks goal_32 initSM initPM := by
+    apply hInitGoals; simp [goal_29_cut_initGoals, goal_29_prereqs, initGoals]
+  have h136 := initGoalHolds_sharded4 4 goal_32 136 341 343 345 347
+    [16, 8, 16, 64] [4, 8, 16, 64] initSM initPM hInit136 rfl rfl rfl rfl
+  obtain ⟨h136_sm_shape, h341_shape, h343_shape, h345_shape, h347_shape, h136_rec⟩ := h136
+  -- SM: BW_transpose(136, 106) → transposeAxes 2 3 (initSM 136)
+  have hsm : (denoteGraph sm_goal_29 initSM) 133 = transposeAxes 2 3 (initSM 136) := by
+    simp [sm_goal_29, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  -- PM: evaluate graph → allToAllPrimWithDims 4 r [transposeAxes 2 3 (initPM 341), ...] 0 1
+  have hpm293 : (denoteGraph pm_goal_29 initPM) 293 =
+      allToAllPrimWithDims 4 0 [transposeAxes 2 3 (initPM 341), transposeAxes 2 3 (initPM 343),
+        transposeAxes 2 3 (initPM 345), transposeAxes 2 3 (initPM 347)] 0 1 := by
+    simp [pm_goal_29, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  have hpm295 : (denoteGraph pm_goal_29 initPM) 295 =
+      allToAllPrimWithDims 4 1 [transposeAxes 2 3 (initPM 341), transposeAxes 2 3 (initPM 343),
+        transposeAxes 2 3 (initPM 345), transposeAxes 2 3 (initPM 347)] 0 1 := by
+    simp [pm_goal_29, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  have hpm297 : (denoteGraph pm_goal_29 initPM) 297 =
+      allToAllPrimWithDims 4 2 [transposeAxes 2 3 (initPM 341), transposeAxes 2 3 (initPM 343),
+        transposeAxes 2 3 (initPM 345), transposeAxes 2 3 (initPM 347)] 0 1 := by
+    simp [pm_goal_29, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  have hpm299 : (denoteGraph pm_goal_29 initPM) 299 =
+      allToAllPrimWithDims 4 3 [transposeAxes 2 3 (initPM 341), transposeAxes 2 3 (initPM 343),
+        transposeAxes 2 3 (initPM 345), transposeAxes 2 3 (initPM 347)] 0 1 := by
+    simp [pm_goal_29, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  -- Abbreviate the transposed PM tensors
+  set bw_td_list := [transposeAxes 2 3 (initPM 341), transposeAxes 2 3 (initPM 343),
+    transposeAxes 2 3 (initPM 345), transposeAxes 2 3 (initPM 347)]
+  -- allToAllPrimWithDims 4 r xs 0 1 = chunkPrimDimN 1 4 r (allGatherPrimDimN 0 4 0 xs)
+  have hata_eq : ∀ r, allToAllPrimWithDims 4 r bw_td_list 0 1 =
+      chunkPrimDimN 1 4 r (allGatherPrimDimN 0 4 0 bw_td_list) := fun _ => rfl
+  -- Head shape for bw_td_list elements
+  have hta_shape : ∀ y, y.shape = [4, 8, 16, 64] → (transposeAxes 2 3 y).shape = [4, 8, 64, 16] := by
+    intro y hy; simp [transposeAxes, Tensor.mkShape, listSwapAt, hy]
+  have hhead_td : ((bw_td_list.head?.map (·.shape)).getD []) = [4, 8, 64, 16] := by
+    simp [bw_td_list, List.head?, Option.map, hta_shape _ h341_shape]
+  -- Gathered shape
+  have hgathered_shape : (allGatherPrimDimN 0 4 0 bw_td_list).shape = [16, 8, 64, 16] := by
+    rw [allGatherPrimDimN_shape 0 4 _ _ hhead_td]; simp [List.set, List.getD]
+  -- Reconstruct → allGatherPrimDimN 1 via reconstructWithDim_cons_cons_nonscalar
+  have hata0_shape : (allToAllPrimWithDims 4 0 bw_td_list 0 1).shape = [16, 2, 64, 16] := by
+    rw [allToAllPrimWithDims_shape 4 0 bw_td_list 0 1 _ hhead_td (by omega)]
+    simp [List.set, List.getD]
+  -- Unfold goal
+  dsimp only [goal_29_stmt_cut, CoarseLineageHoldsWithInit, goal_29] at *
+  simp only [List.map]
+  rw [hsm, hpm293, hpm295, hpm297, hpm299]
+  simp only [show pm_goal_29.numRanks = 4 from rfl]
+  -- Shape proofs
+  have hsm_shape : (transposeAxes 2 3 (initSM 136)).shape = [16, 8, 64, 16] := by
+    simp [transposeAxes, Tensor.mkShape, listSwapAt, h136_sm_shape]
+  have hata_shapes : ∀ r, (allToAllPrimWithDims 4 r bw_td_list 0 1).shape = [16, 2, 64, 16] := by
+    intro r; rw [allToAllPrimWithDims_shape 4 r bw_td_list 0 1 _ hhead_td (by omega)]
+    simp [List.set, List.getD]
+  -- Reconstruction
+  have hrecon : reconstructWithDim 1 4 0
+      [allToAllPrimWithDims 4 0 bw_td_list 0 1,
+       allToAllPrimWithDims 4 1 bw_td_list 0 1,
+       allToAllPrimWithDims 4 2 bw_td_list 0 1,
+       allToAllPrimWithDims 4 3 bw_td_list 0 1] =
+    allGatherPrimDimN 1 4 0
+      [chunkPrimDimN 1 4 0 (allGatherPrimDimN 0 4 0 bw_td_list),
+       chunkPrimDimN 1 4 1 (allGatherPrimDimN 0 4 0 bw_td_list),
+       chunkPrimDimN 1 4 2 (allGatherPrimDimN 0 4 0 bw_td_list),
+       chunkPrimDimN 1 4 3 (allGatherPrimDimN 0 4 0 bw_td_list)] := by
+    simp only [hata_eq]
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [chunkPrimDimN_shape 1 4 0 _ _ hgathered_shape (by omega)]
+    simp [List.set, List.getD]
+  -- Gather-chunk roundtrip on dim 1
+  have hroundtrip : allGatherPrimDimN 1 4 0
+      [chunkPrimDimN 1 4 0 (allGatherPrimDimN 0 4 0 bw_td_list),
+       chunkPrimDimN 1 4 1 (allGatherPrimDimN 0 4 0 bw_td_list),
+       chunkPrimDimN 1 4 2 (allGatherPrimDimN 0 4 0 bw_td_list),
+       chunkPrimDimN 1 4 3 (allGatherPrimDimN 0 4 0 bw_td_list)] =
+    allGatherPrimDimN 0 4 0 bw_td_list :=
+    gather_chunk_dim1 _ hgathered_shape
+  -- Commutativity: transposeAxes 2 3 commutes with allGatherPrimDimN 0
+  have h136_ag : initSM 136 = allGatherPrimDimN 0 4 0
+      [initPM 341, initPM 343, initPM 345, initPM 347] := by
+    rw [h136_rec]; apply reconstructWithDim_cons_cons_nonscalar
+    rw [h341_shape]; decide
+  have hcomm : allGatherPrimDimN 0 4 0 bw_td_list =
+      transposeAxes 2 3 (allGatherPrimDimN 0 4 0 [initPM 341, initPM 343, initPM 345, initPM 347]) :=
+    (ta23_gd0_comm _ _ _ _ h341_shape h343_shape h345_shape h347_shape).symm
+  rw [hrecon, hroundtrip, hcomm, ← h136_ag]
+  refine ⟨hsm_shape, ?_, ?_⟩
+  · simp only [hata_shapes]
+  · rfl
 
 end TrainVerify.Denote.GeneratedGoals
 

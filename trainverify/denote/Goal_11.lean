@@ -58,33 +58,33 @@ theorem prove_goal_11_cut : goal_11_stmt_cut := by
   have hInit106 : InitGoalHolds pm_goal_11.numRanks goal_8 initSM initPM := by
     apply hInitGoals; simp [goal_11_cut_initGoals, goal_11_prereqs, initGoals]
   have h106 := initGoalHolds_sharded4 4 goal_8 106 280 281 282 283
-    [16, 8, 64, 16] [16, 8, 64, 4] initSM initPM hInit106 rfl rfl rfl rfl
+    [16, 8, 64, 16] [16, 2, 64, 16] initSM initPM hInit106 rfl rfl rfl rfl
   obtain ⟨h106_sm_shape, h280_shape, h281_shape, h282_shape, h283_shape, h106_rec⟩ := h106
   -- SM: transposeAxes 2 3 on tensor 106
   have hsm : (denoteGraph sm_goal_11 initSM) 109 = transposeAxes 2 3 (initSM 106) := by
     simp [sm_goal_11, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   -- PM: allToAllPrimWithDims(3,0) then transposeAxes 2 3 for each rank
   have hpm328 : (denoteGraph pm_goal_11 initPM) 328 =
-      transposeAxes 2 3 (allToAllPrimWithDims 4 0 [initPM 280, initPM 281, initPM 282, initPM 283] 3 0) := by
+      transposeAxes 2 3 (allToAllPrimWithDims 4 0 [initPM 280, initPM 281, initPM 282, initPM 283] 1 0) := by
     simp [pm_goal_11, denoteGraph, List.foldl, applyNode, evalOp, storeSet, allToAllPrimWithDims]
   have hpm329 : (denoteGraph pm_goal_11 initPM) 329 =
-      transposeAxes 2 3 (allToAllPrimWithDims 4 1 [initPM 280, initPM 281, initPM 282, initPM 283] 3 0) := by
+      transposeAxes 2 3 (allToAllPrimWithDims 4 1 [initPM 280, initPM 281, initPM 282, initPM 283] 1 0) := by
     simp [pm_goal_11, denoteGraph, List.foldl, applyNode, evalOp, storeSet, allToAllPrimWithDims]
   have hpm330 : (denoteGraph pm_goal_11 initPM) 330 =
-      transposeAxes 2 3 (allToAllPrimWithDims 4 2 [initPM 280, initPM 281, initPM 282, initPM 283] 3 0) := by
+      transposeAxes 2 3 (allToAllPrimWithDims 4 2 [initPM 280, initPM 281, initPM 282, initPM 283] 1 0) := by
     simp [pm_goal_11, denoteGraph, List.foldl, applyNode, evalOp, storeSet, allToAllPrimWithDims]
   have hpm331 : (denoteGraph pm_goal_11 initPM) 331 =
-      transposeAxes 2 3 (allToAllPrimWithDims 4 3 [initPM 280, initPM 281, initPM 282, initPM 283] 3 0) := by
+      transposeAxes 2 3 (allToAllPrimWithDims 4 3 [initPM 280, initPM 281, initPM 282, initPM 283] 1 0) := by
     simp [pm_goal_11, denoteGraph, List.foldl, applyNode, evalOp, storeSet, allToAllPrimWithDims]
   -- Relate allToAllPrimWithDims to chunkPrimDimN of the full tensor
-  have h106_ag : initSM 106 = allGatherPrimDimN 3 4 0
+  have h106_ag : initSM 106 = allGatherPrimDimN 1 4 0
       [initPM 280, initPM 281, initPM 282, initPM 283] := by
     rw [h106_rec]
     apply reconstructWithDim_cons_cons_nonscalar
     rw [h280_shape]; decide
   -- allToAllPrimWithDims 4 r xs 3 0 = chunkPrimDimN 0 4 r (allGatherPrimDimN 3 4 0 xs)
   -- = chunkPrimDimN 0 4 r (initSM 106)
-  have hata_eq : ∀ r, allToAllPrimWithDims 4 r [initPM 280, initPM 281, initPM 282, initPM 283] 3 0 =
+  have hata_eq : ∀ r, allToAllPrimWithDims 4 r [initPM 280, initPM 281, initPM 282, initPM 283] 1 0 =
       chunkPrimDimN 0 4 r (initSM 106) := by
     intro r; rw [h106_ag]; rfl
   rw [hata_eq 0] at hpm328; rw [hata_eq 1] at hpm329
@@ -110,9 +110,8 @@ theorem prove_goal_11_cut : goal_11_stmt_cut := by
          transposeAxes 2 3 (chunkPrimDimN 0 4 1 full),
          transposeAxes 2 3 (chunkPrimDimN 0 4 2 full),
          transposeAxes 2 3 (chunkPrimDimN 0 4 3 full)] := by
-      unfold reconstructWithDim
-      simp only [List.head?, Option.map, Option.getD, hpiece0_shape]
-      rfl
+      apply reconstructWithDim_cons_cons_nonscalar
+      rw [hpiece0_shape]; decide
     simp only [show pm_goal_11.numRanks = 4 from rfl]
     rw [hrecon]
     exact transposeAxes_23_chunkPrimDimN0_gather0 full hfull_shape

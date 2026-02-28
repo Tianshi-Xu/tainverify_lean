@@ -50,6 +50,63 @@ def goal_1_cut_initGoals : List LineageGoal := initGoals ++ goal_1_prereqs
 def goal_1_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_1 pm_goal_1 goal_1 sm_goal_1InitEnv pm_goal_1InitEnv goal_1_cut_initGoals
 
+/-! ## Helper lemmas for gather-chunk roundtrip on dim 0 with shape [16, 64, 128] -/
+
+private lemma valAt_gd0_4_64_128 (xs : List Tensor) (idx : Nat)
+    (hhead : (xs.head?.map (·.shape)).getD [] = [4, 64, 128])
+    (hidx : idx < 131072) :
+    valAt (allGatherPrimDimN 0 4 0 xs) idx =
+    valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 64, 128]))
+      ((idx / 8192 % 4) * 8192 + idx % 8192) := by
+  unfold allGatherPrimDimN; rw [hhead]
+  simp [valAt, Tensor.mkShape, List.set, List.getD, List.drop, List.foldl,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+    show (4 : Nat) * 4 = 16 from by norm_num,
+    show (4 : Nat) * 8192 = 32768 from by norm_num,
+    show (16 : Nat) * 8192 = 131072 from by norm_num,
+    show prodShape [16, 64, 128] = 131072 from by simp [prodShape],
+    Nat.mod_eq_of_lt hidx, Nat.div_eq_of_lt hidx, dif_pos hidx]
+
+private lemma valAt_chunk0 (x : Tensor) (r idx : Nat)
+    (hshape : x.shape = [16, 64, 128]) (hidx : idx < 32768) :
+    valAt (chunkPrimDimN 0 4 r x) idx =
+    valAt x ((r % 4) * 32768 + idx) := by
+  unfold chunkPrimDimN; rw [hshape]
+  simp only [List.getD, List.getElem?_cons_zero, List.getElem?_nil,
+    Option.getD, List.drop, List.foldl, List.set]
+  norm_num
+  conv_lhs => rw [show (if (4 : Nat) = 0 then (0 : Nat) else 16 / 4) = 4 from by decide]
+  simp only [valAt, Tensor.mkShape,
+    show prodShape [4, 64, 128] = 32768 from by simp [prodShape]]
+  rw [dif_pos hidx]
+  exact congrArg (valAt x) (by omega)
+
+private theorem gather_chunk_dim0 (T : Tensor)
+    (hT : T.shape = [16, 64, 128]) :
+    allGatherPrimDimN 0 4 0 [chunkPrimDimN 0 4 0 T, chunkPrimDimN 0 4 1 T,
+      chunkPrimDimN 0 4 2 T, chunkPrimDimN 0 4 3 T] = T := by
+  have hchunk_shape : ∀ r, (chunkPrimDimN 0 4 r T).shape = [4, 64, 128] := by
+    intro r; rw [chunkPrimDimN_shape 0 4 r _ _ hT (by omega)]; simp [List.set, List.getD]
+  have hhead : (([chunkPrimDimN 0 4 0 T, chunkPrimDimN 0 4 1 T,
+      chunkPrimDimN 0 4 2 T, chunkPrimDimN 0 4 3 T].head?.map (·.shape)).getD []) =
+      [4, 64, 128] := by
+    simp [List.head?, Option.map, hchunk_shape 0]
+  apply Tensor.ext
+  · rw [allGatherPrimDimN_shape 0 4 _ _ hhead]; simp [List.set, List.getD, hT]
+  · intro idx hidx
+    have hidx' : idx < 131072 := by
+      rw [allGatherPrimDimN_shape 0 4 _ _ hhead] at hidx
+      simp [List.set, List.getD, prodShape] at hidx; omega
+    rw [valAt_gd0_4_64_128 _ idx hhead hidx']
+    set p := idx % 131072 / 8192 / 4 with hp_def
+    have hp_lt : p < 4 := by omega
+    have hp_range : p = 0 ∨ p = 1 ∨ p = 2 ∨ p = 3 := by omega
+    rcases hp_range with h | h | h | h <;>
+      simp only [h, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+        Option.getD] <;>
+      rw [valAt_chunk0 T _ _ hT (by omega)] <;>
+      exact congrArg (valAt T) (by omega)
+
 -- fw_sum distributes over allGatherPrimDimN via allReducePrim
 theorem prove_goal_1_cut : goal_1_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
@@ -80,34 +137,60 @@ theorem prove_goal_1_cut : goal_1_stmt_cut := by
   -- SM store: smStore 96 = fw_sum(initSM 118)
   have hsm : (denoteGraph sm_goal_1 initSM) 96 = fw_sum (initSM 118) := by
     simp [sm_goal_1, denoteGraph, applyNode_fw_sum_out]
-  -- PM store: trace through the graph
-  -- Step 1: AllToAllPrim nodes (identity on 3D tensors)
-  -- Step 2: FW_sum nodes
-  -- Step 3: AllReducePrim node
+  -- PM store: AllToAllPrim with params [1,0] → allToAllPrimWithDims
   have hpm : (denoteGraph pm_goal_1 initPM) 96 =
-      allReducePrim 4 0 [fw_sum (initPM 500), fw_sum (initPM 501),
-                          fw_sum (initPM 502), fw_sum (initPM 503)] := by
+      allReducePrim 4 0
+        [fw_sum (allToAllPrimWithDims 4 0
+            [initPM 500, initPM 501, initPM 502, initPM 503] 1 0),
+         fw_sum (allToAllPrimWithDims 4 1
+            [initPM 500, initPM 501, initPM 502, initPM 503] 1 0),
+         fw_sum (allToAllPrimWithDims 4 2
+            [initPM 500, initPM 501, initPM 502, initPM 503] 1 0),
+         fw_sum (allToAllPrimWithDims 4 3
+            [initPM 500, initPM 501, initPM 502, initPM 503] 1 0)] := by
     simp [pm_goal_1, denoteGraph, applyNode, evalOp, storeSet]
   -- reconstructWithDim 1 on 4 tensors with [16,16,128] shape = allGatherPrimDimN 1
-  have h118_dimN : initSM 118 = allGatherPrimDimN 1 pm_goal_1.numRanks 0
+  have h118_dimN : initSM 118 = allGatherPrimDimN 1 4 0
       [initPM 500, initPM 501, initPM 502, initPM 503] := by
     rw [h118_rec]
-    simp [reconstructWithDim, h500_shape]
-  -- Key equation: fw_sum of gathered = allReduce of individual fw_sums
-  have hkey : fw_sum (initSM 118) =
-      allReducePrim 4 0 [fw_sum (initPM 500), fw_sum (initPM 501),
-                          fw_sum (initPM 502), fw_sum (initPM 503)] := by
-    rw [h118_dimN]
+    simp [reconstructWithDim, h500_shape, pm_goal_1]
+  -- allToAllPrimWithDims 4 r xs 1 0 = chunkPrimDimN 0 4 r (initSM 118)
+  have hata_eq : ∀ r, allToAllPrimWithDims 4 r
+      [initPM 500, initPM 501, initPM 502, initPM 503] 1 0 =
+      chunkPrimDimN 0 4 r (initSM 118) := by
+    intro r
+    change chunkPrimDimN 0 4 r (allGatherPrimDimN 1 4 0
+        [initPM 500, initPM 501, initPM 502, initPM 503]) =
+      chunkPrimDimN 0 4 r (initSM 118)
+    rw [← h118_dimN]
+  rw [hata_eq 0, hata_eq 1, hata_eq 2, hata_eq 3] at hpm
+  -- Gather-chunk roundtrip: T = allGatherPrimDimN 0 4 0 [chunks]
+  have hroundtrip : initSM 118 = allGatherPrimDimN 0 4 0
+      [chunkPrimDimN 0 4 0 (initSM 118), chunkPrimDimN 0 4 1 (initSM 118),
+       chunkPrimDimN 0 4 2 (initSM 118), chunkPrimDimN 0 4 3 (initSM 118)] :=
+    (gather_chunk_dim0 _ h118_shape).symm
+  -- Chunk shapes
+  have hchunk_shape : ∀ r, (chunkPrimDimN 0 4 r (initSM 118)).shape = [4, 64, 128] := by
+    intro r; rw [chunkPrimDimN_shape 0 4 r _ _ h118_shape (by omega)]
+    simp [List.set, List.getD]
+  -- Key equation: fw_sum of T = allReduce of fw_sum of dim-0 chunks
+  have hkey : fw_sum (initSM 118) = allReducePrim 4 0
+      [fw_sum (chunkPrimDimN 0 4 0 (initSM 118)),
+       fw_sum (chunkPrimDimN 0 4 1 (initSM 118)),
+       fw_sum (chunkPrimDimN 0 4 2 (initSM 118)),
+       fw_sum (chunkPrimDimN 0 4 3 (initSM 118))] := by
+    conv_lhs => rw [hroundtrip]
     have := fw_sum_allGatherPrimDimN_eq_allReducePrim_fw_sum
-      (gatherDim := 1) (numParts := 4)
-      (xs := [initPM 500, initPM 501, initPM 502, initPM 503])
+      (gatherDim := 0) (numParts := 4)
+      (xs := [chunkPrimDimN 0 4 0 (initSM 118), chunkPrimDimN 0 4 1 (initSM 118),
+              chunkPrimDimN 0 4 2 (initSM 118), chunkPrimDimN 0 4 3 (initSM 118)])
       (hlen := by simp) (hparts := by omega)
-      (shardShape := [16, 16, 128])
-      (hhead := by simp [h500_shape])
+      (shardShape := [4, 64, 128])
+      (hhead := by simp [hchunk_shape 0])
       (hshape := by
         intro x hx
         simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
-        rcases hx with rfl | rfl | rfl | rfl <;> assumption)
+        rcases hx with rfl | rfl | rfl | rfl <;> exact hchunk_shape _)
       (hgatherDim := by decide)
       (hdimPos := by decide)
       (hpostPos := by decide)
@@ -120,13 +203,22 @@ theorem prove_goal_1_cut : goal_1_stmt_cut := by
   · -- PM tps shapes: [[1]]
     simp only [List.map]
     rw [hpm]
-    have : (allReducePrim 4 0 [fw_sum (initPM 500), fw_sum (initPM 501),
-        fw_sum (initPM 502), fw_sum (initPM 503)]).shape = [1] := by
-      have hhead : [fw_sum (initPM 500), fw_sum (initPM 501),
-          fw_sum (initPM 502), fw_sum (initPM 503)].head? = some (fw_sum (initPM 500)) := rfl
+    have : (allReducePrim 4 0
+        [fw_sum (chunkPrimDimN 0 4 0 (initSM 118)),
+         fw_sum (chunkPrimDimN 0 4 1 (initSM 118)),
+         fw_sum (chunkPrimDimN 0 4 2 (initSM 118)),
+         fw_sum (chunkPrimDimN 0 4 3 (initSM 118))]).shape = [1] := by
+      have hhead : [fw_sum (chunkPrimDimN 0 4 0 (initSM 118)),
+          fw_sum (chunkPrimDimN 0 4 1 (initSM 118)),
+          fw_sum (chunkPrimDimN 0 4 2 (initSM 118)),
+          fw_sum (chunkPrimDimN 0 4 3 (initSM 118))].head? =
+          some (fw_sum (chunkPrimDimN 0 4 0 (initSM 118))) := rfl
       have := allReducePrim_shape 4 0
-          [fw_sum (initPM 500), fw_sum (initPM 501), fw_sum (initPM 502), fw_sum (initPM 503)]
-          (fw_sum (initPM 500)) hhead
+          [fw_sum (chunkPrimDimN 0 4 0 (initSM 118)),
+           fw_sum (chunkPrimDimN 0 4 1 (initSM 118)),
+           fw_sum (chunkPrimDimN 0 4 2 (initSM 118)),
+           fw_sum (chunkPrimDimN 0 4 3 (initSM 118))]
+          (fw_sum (chunkPrimDimN 0 4 0 (initSM 118))) hhead
       simpa [fw_sum_shape] using this
     simp [this]
   · -- Value equality: smStore 96 = reconstructWithDim 0 4 0 [pmStore 96]
