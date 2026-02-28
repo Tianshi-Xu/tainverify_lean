@@ -225,26 +225,22 @@ private lemma valAt_chunk2_64_64 (x : Tensor) (r idx : Nat)
     List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
     Option.getD, List.drop, List.foldl, List.set, List.length]
   norm_num
-  simp only [show (64 : Nat) * 64 = 4096 from by norm_num,
-    show (16 : Nat) * 64 = 1024 from by norm_num,
-    (show (1024 : Nat) ≠ 0 by omega), (show (64 : Nat) ≠ 0 by omega),
-    ite_false]
-  simp only [show ∀ n, n % 1024 % 64 = n % 64 from fun n => by omega,
-    Nat.add_assoc]
 
 -- chunkPrimDimN 3 4 r on [16,8,64,64] → [16,8,64,16]
 private lemma valAt_chunk3_64_64 (x : Tensor) (r idx : Nat)
     (hshape : x.shape = [16, 8, 64, 64]) (hidx : idx < 131072) :
     valAt (chunkPrimDimN 3 4 r x) idx =
     valAt x (idx / 16 * 64 + r % 4 * 16 + idx % 16) := by
-  unfold chunkPrimDimN; rw [hshape]
-  simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD, List.drop, List.foldl, List.set, List.length, Nat.add_eq]
+  have hout_shape : (chunkPrimDimN 3 4 r x).shape = [16, 8, 64, 16] := by
+    rw [chunkPrimDimN_shape 3 4 r _ _ hshape (by omega)]; simp [List.set, List.getD]
+  have hlt_prod : idx < prodShape (chunkPrimDimN 3 4 r x).shape := by
+    simp only [hout_shape, prodShape, List.foldl, Nat.one_mul]; omega
+  rw [valAt_of_lt _ _ hlt_prod]
+  simp only [chunkPrimDimN, Tensor.mkShape, hshape,
+    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+    Option.getD, List.drop, List.foldl, List.set, List.length]
   norm_num
-  conv_lhs => rw [show (if (4 : Nat) = 0 then (0 : Nat) else 64 / 4) = 16 from by decide]
-  simp only [valAt, Tensor.mkShape, show prodShape [16, 8, 64, 16] = 131072 from by simp [prodShape]]
-  rw [dif_pos hidx]
-  simp only [Nat.add_assoc]
+  simp only [Nat.mod_one, Nat.add_zero, Nat.add_assoc]
 
 -- chunkPrimDimN 1 4 r on [16,8,64,16] → [16,2,64,16]
 private lemma valAt_chunk1 (x : Tensor) (r idx : Nat)
@@ -260,13 +256,6 @@ private lemma valAt_chunk1 (x : Tensor) (r idx : Nat)
     List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
     Option.getD, List.drop, List.foldl, List.set, List.length]
   norm_num
-  simp only [show (8 : Nat) * (1 * 64 * 16) = 8192 from by norm_num,
-    show (2 : Nat) * (1 * 64 * 16) = 2048 from by norm_num,
-    show (1 : Nat) * 64 * 16 = 1024 from by norm_num,
-    (show (2048 : Nat) ≠ 0 by omega), (show (1024 : Nat) ≠ 0 by omega),
-    ite_false]
-  simp only [show ∀ n, n % 2048 % 1024 = n % 1024 from fun n => by omega,
-    Nat.add_assoc]
 
 /-! ## Part 4: valAt helper for transpose2d -/
 
@@ -285,17 +274,17 @@ private lemma valAt_td_16_8_64_64 (x : Tensor) (idx : Nat)
     show (64 : Nat) * 64 = 4096 from by norm_num]
 
 -- transpose2d on [16,8,64,16]: d1=16, d0=64, innerSize=64*16=1024
--- valAt output: outerIdx * 1024 + (innerFlat % 16) * 64 + innerFlat / 16
+-- valAt output: outerIdx * 1024 + (innerFlat % 64) * 16 + innerFlat / 64
 private lemma valAt_td_16_8_64_16 (x : Tensor) (idx : Nat)
     (hshape : x.shape = [16, 8, 64, 16]) (hidx : idx < 131072) :
     valAt (transpose2d x) idx =
-    valAt x (idx / 1024 * 1024 + (idx % 1024 % 16) * 64 + idx % 1024 / 16) := by
+    valAt x (idx / 1024 * 1024 + (idx % 1024 % 64) * 16 + idx % 1024 / 64) := by
   unfold transpose2d; rw [hshape]
   simp only [List.reverse, List.reverseAux, List.append, valAt, Tensor.mkShape]
   have hps : prodShape [16, 8, 16, 64] = 131072 := by simp [prodShape]
   rw [dif_pos (by rw [hps]; exact hidx)]
   simp only [show (64 : Nat) * 16 ≠ 0 from by omega, ite_false,
-    show (16 : Nat) ≠ 0 from by omega,
+    show (64 : Nat) ≠ 0 from by omega,
     show (64 : Nat) * 16 = 1024 from by norm_num]
 
 /-! ## Part 5: transpose2d commutes with chunkPrimDimN 3 → chunkPrimDimN 2 -/
@@ -304,15 +293,25 @@ private lemma valAt_td_16_8_64_16 (x : Tensor) (idx : Nat)
 private lemma g31_td_chunk_idx_eq (idx r : Nat) (_ : idx < 131072) :
     -- LHS: td(chunk3(X))
     -- chunk3 gives: (·/16 * 64 + r%4*16 + ·%16)
-    -- td on that gives: (·/1024 * 1024 + (·%1024%16)*64 + ·%1024/16) composed with chunk3 expr
-    (idx / 1024 * 1024 + idx % 1024 % 16 * 64 + idx % 1024 / 16) / 16 * 64 +
-    r % 4 * 16 + ((idx / 1024 * 1024 + idx % 1024 % 16 * 64 + idx % 1024 / 16) % 16) =
+    -- td on that gives: (·/1024 * 1024 + (·%1024%64)*16 + ·%1024/64) composed with chunk3 expr
+    (idx / 1024 * 1024 + (idx % 1024 % 64) * 16 + idx % 1024 / 64) / 16 * 64 +
+    r % 4 * 16 + ((idx / 1024 * 1024 + (idx % 1024 % 64) * 16 + idx % 1024 / 64) % 16) =
     -- RHS: chunk2(td(X))
     -- td gives: (·/4096 * 4096 + (·%4096%64)*64 + ·%4096/64)
     -- chunk2 on that gives: (·/1024 * 4096 + (r%4*16 + ·%1024/64)*64 + ·%64) composed with td expr
     (idx / 1024 * 4096 + (r % 4 * 16 + idx % 1024 / 64) * 64 + idx % 64) / 4096 * 4096 +
     ((idx / 1024 * 4096 + (r % 4 * 16 + idx % 1024 / 64) * 64 + idx % 64) % 4096 % 64) * 64 +
     (idx / 1024 * 4096 + (r % 4 * 16 + idx % 1024 / 64) * 64 + idx % 64) % 4096 / 64 := by
+  -- Decompose: introduce named subexpressions and simplify div/mod individually
+  set j := idx / 1024 * 1024 + (idx % 1024 % 64) * 16 + idx % 1024 / 64
+  set k := idx / 1024 * 4096 + (r % 4 * 16 + idx % 1024 / 64) * 64 + idx % 64
+  have hj_div : j / 16 = idx / 1024 * 64 + idx % 1024 % 64 := by omega
+  have hj_mod : j % 16 = idx % 1024 / 64 := by omega
+  have hk_div : k / 4096 = idx / 1024 := by omega
+  have hk_mod_mod : k % 4096 % 64 = idx % 64 := by omega
+  have hk_mod_div : k % 4096 / 64 = r % 4 * 16 + idx % 1024 / 64 := by omega
+  rw [hj_div, hj_mod, hk_div, hk_mod_mod, hk_mod_div]
+  have h_eqmod : idx % 1024 % 64 = idx % 64 := by omega
   omega
 
 private theorem td_chunk3_eq_chunk2_td (X : Tensor) (r : Nat)
@@ -392,6 +391,7 @@ private theorem gather_chunk_dim1 (T : Tensor)
 
 /-! ## Part 8: batchedMatmul distributes over dim-2 chunks -/
 
+set_option maxRecDepth 4096 in
 private theorem bm_chunk2_dist
     (X : Tensor) (Y : Tensor)
     (hX : X.shape = [16, 8, 64, 64]) (hY : Y.shape = [16, 8, 64, 16]) :
@@ -428,7 +428,7 @@ private theorem bm_chunk2_dist
   have h_bm_idx_lt : idx / 1024 * 256 + (idx % 1024 / 16 % 16) * 16 + idx % 16 < 32768 := by omega
   rcases hp_range with hp | hp | hp | hp <;> {
     simp only [hp, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD]
-    rw [valAt_bm_chunk _ Y _ (by first | exact hchunk_shape 0 | exact hchunk_shape 1 | exact hchunk_shape 2 | exact hchunk_shape 3) hY h_bm_idx_lt]
+    rw [valAt_bm_chunk _ Y _ (hchunk_shape _) hY h_bm_idx_lt]
     apply Finset.sum_congr rfl
     intro l hl
     have hl64 : l < 64 := Finset.mem_range.mp hl
