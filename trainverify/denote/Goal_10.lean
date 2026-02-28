@@ -10,7 +10,6 @@ open TrainVerify.Denote.Generated
 open TrainVerify.Denote.Common
 open TrainVerify.Denote.GeneratedGoals
 
-set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -50,7 +49,6 @@ def goal_10_cut_initGoals : List LineageGoal := initGoals ++ goal_10_prereqs
 def goal_10_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_10 pm_goal_10 goal_10 sm_goal_10InitEnv pm_goal_10InitEnv goal_10_cut_initGoals
 
-set_option linter.style.longLine false in
 theorem prove_goal_10_cut : goal_10_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   have hInit107 : InitGoalHolds pm_goal_10.numRanks goal_9 initSM initPM := by
@@ -100,4 +98,3 @@ theorem prove_goal_10_cut : goal_10_stmt_cut := by
     exact transposeAxes_12_chunkPrimDimN2_gather1 x hxsh
 
 end TrainVerify.Denote.GeneratedGoals
-

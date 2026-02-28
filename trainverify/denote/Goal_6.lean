@@ -8,7 +8,6 @@ open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.Common
 
-set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -48,7 +47,6 @@ def goal_6_cut_initGoals : List LineageGoal := initGoals ++ goal_6_prereqs
 def goal_6_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_6 pm_goal_6 goal_6 sm_goal_6InitEnv pm_goal_6InitEnv goal_6_cut_initGoals
 
-set_option linter.style.longLine false in
 theorem prove_goal_6_cut : goal_6_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   have hInit103 : InitGoalHolds pm_goal_6.numRanks goal_5 initSM initPM := by
@@ -61,16 +59,16 @@ theorem prove_goal_6_cut : goal_6_stmt_cut := by
     simp [sm_goal_6, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   have hpm256 : (denoteGraph pm_goal_6 initPM) 256 =
       transposeAxes 1 2 (chunkPrimDimN 3 4 0 (initPM 103)) := by
-    simp [pm_goal_6, denoteGraph, List.foldl, applyNode, evalOp, storeSet, hpm103_shape]
+    simp [pm_goal_6, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   have hpm257 : (denoteGraph pm_goal_6 initPM) 257 =
       transposeAxes 1 2 (chunkPrimDimN 3 4 1 (initPM 103)) := by
-    simp [pm_goal_6, denoteGraph, List.foldl, applyNode, evalOp, storeSet, hpm103_shape]
+    simp [pm_goal_6, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   have hpm258 : (denoteGraph pm_goal_6 initPM) 258 =
       transposeAxes 1 2 (chunkPrimDimN 3 4 2 (initPM 103)) := by
-    simp [pm_goal_6, denoteGraph, List.foldl, applyNode, evalOp, storeSet, hpm103_shape]
+    simp [pm_goal_6, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   have hpm259 : (denoteGraph pm_goal_6 initPM) 259 =
       transposeAxes 1 2 (chunkPrimDimN 3 4 3 (initPM 103)) := by
-    simp [pm_goal_6, denoteGraph, List.foldl, applyNode, evalOp, storeSet, hpm103_shape]
+    simp [pm_goal_6, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   dsimp only [goal_6_stmt_cut, CoarseLineageHoldsWithInit, goal_6] at *
   simp only [List.map]
   rw [hsm, hpm256, hpm257, hpm258, hpm259, h103_eq]
@@ -101,4 +99,3 @@ theorem prove_goal_6_cut : goal_6_stmt_cut := by
     exact transposeAxes_12_chunkPrimDimN3_gather3 x hxsh
 
 end TrainVerify.Denote.GeneratedGoals
-

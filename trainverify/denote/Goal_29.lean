@@ -8,7 +8,6 @@ open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.Common
 
-set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -300,7 +299,6 @@ private theorem gather_chunk_dim1 (T : Tensor)
 
 /-! ### Main proof -/
 
-set_option linter.style.longLine false in
 theorem prove_goal_29_cut : goal_29_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   -- Extract prerequisites

@@ -10,7 +10,6 @@ open TrainVerify.Denote.GeneratedGoals
 namespace TrainVerify.Denote.ManualProofs
 
 set_option linter.flexible false
-set_option linter.style.longLine false
 set_option linter.unnecessarySimpa false
 set_option linter.unnecessarySeqFocus false
 

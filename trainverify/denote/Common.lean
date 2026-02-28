@@ -12,7 +12,6 @@ open TrainVerify.Denote.Generated
 namespace TrainVerify.Denote.Common
 
 set_option linter.flexible false
-set_option linter.style.longLine false
 
 /-!
 ## Shared node declarations

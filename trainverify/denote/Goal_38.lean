@@ -8,7 +8,6 @@ open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.Common
 
-set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -65,4 +64,3 @@ theorem prove_goal_38_cut : goal_38_stmt_cut := by
   · simp [reconstructWithDim]
 
 end TrainVerify.Denote.GeneratedGoals
-

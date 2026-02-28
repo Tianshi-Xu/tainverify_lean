@@ -8,7 +8,6 @@ open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.Common
 
-set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -175,7 +174,6 @@ private theorem fw_linear_chunkDim1_gather_eq
         omega
     · congr 1; omega)
 
-set_option linter.style.longLine false in
 theorem prove_goal_19_cut : goal_19_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   have hInit116 : InitGoalHolds pm_goal_19.numRanks goal_18 initSM initPM := by
@@ -225,4 +223,3 @@ theorem prove_goal_19_cut : goal_19_stmt_cut := by
     exact fw_linear_chunkDim1_gather_eq x w hpm116 hpm117
 
 end TrainVerify.Denote.GeneratedGoals
-

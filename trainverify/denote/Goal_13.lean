@@ -8,7 +8,6 @@ open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.Common
 
-set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -68,7 +67,6 @@ private lemma valAt_ag3_np4 (xs : List Tensor) (idx : Nat)
     List.getD, List.drop, List.foldl,
     List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
   simp only [show (16 : Nat) * 4 = 64 from by norm_num,
-    show (64 : Nat) * 1 = 64 from by norm_num,
     show (16 : Nat) * 1 = 16 from by norm_num,
     (show (64 : Nat) ≠ 0 by omega), (show (1 : Nat) ≠ 0 by omega),
     (show (16 : Nat) ≠ 0 by omega),
@@ -82,7 +80,7 @@ private lemma valAt_chunk3_np4 (x : Tensor) (r idx : Nat)
     valAt (chunkPrimDimN 3 4 r x) idx =
     valAt x (idx / 16 * 64 + (r % 4) * 16 + idx % 16) := by
   unfold chunkPrimDimN; rw [hshape]
-  simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+  simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
     Option.getD, List.drop, List.foldl, List.set]
   norm_num
   conv_lhs => rw [show (if (4 : Nat) = 0 then (0 : Nat) else 64 / 4) = 16 from by decide]
@@ -127,7 +125,7 @@ private theorem scalarDiv_ag3_comm (x0 x1 x2 x3 : Tensor) (c : Scalar)
     simp [List.head?, Option.map, scalarDiv, Tensor.mkShape, h0]
   have hLHS_shape : (scalarDiv (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3]) c).shape =
       [16, 8, 64, 64] := by
-    simp [scalarDiv, Tensor.mkShape]
+    simp only [scalarDiv, Tensor.mkShape, Fin.is_lt, valAt_of_lt, Fin.eta]
     rw [allGatherPrimDimN_shape 3 4 _ _ hhead_x]; simp [List.set, List.getD]
   have hRHS_shape : (allGatherPrimDimN 3 4 0 [scalarDiv x0 c, scalarDiv x1 c,
       scalarDiv x2 c, scalarDiv x3 c]).shape = [16, 8, 64, 64] := by
@@ -143,11 +141,9 @@ private theorem scalarDiv_ag3_comm (x0 x1 x2 x3 : Tensor) (c : Scalar)
       idx % 64 / 16 = 2 ∨ idx % 64 / 16 = 3 := by omega
   rcases hr_cases with h | h | h | h <;>
   · simp only [h, List.getD,
-      List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-      Option.getD_some, Option.getD_none]
+      List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
     exact (valAt_scalarDiv _ c _).symm
 
-set_option linter.style.longLine false in
 theorem prove_goal_13_cut : goal_13_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   have hInit110 : InitGoalHolds pm_goal_13.numRanks goal_12 initSM initPM := by
@@ -207,4 +203,3 @@ theorem prove_goal_13_cut : goal_13_stmt_cut := by
     exact scalarDiv_ag3_comm _ _ _ _ 4 (hchunk_shape 0)
 
 end TrainVerify.Denote.GeneratedGoals
-

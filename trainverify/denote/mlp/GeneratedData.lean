@@ -3,7 +3,6 @@
 -/
 import denote.mlp.Denote
 
-set_option linter.style.longLine false
 set_option linter.style.nativeDecide false
 
 open TrainVerify.Denote

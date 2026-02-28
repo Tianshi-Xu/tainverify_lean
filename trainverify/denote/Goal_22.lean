@@ -8,7 +8,6 @@ open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.Common
 
-set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -63,7 +62,7 @@ private lemma valAt_chunkDimN0 (x : Tensor) (r idx : Nat)
     valAt (chunkPrimDimN 0 4 r x) idx =
     valAt x ((r % 4) * 32768 + idx) := by
   unfold chunkPrimDimN; rw [hshape]
-  simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+  simp only [List.getD, List.getElem?_cons_zero,
     Option.getD, List.drop, List.foldl, List.set]
   norm_num
   conv_lhs => rw [show (if (4 : Nat) = 0 then (0 : Nat) else 16 / 4) = 4 from by decide]
@@ -79,7 +78,7 @@ private lemma valAt_chunkDim0 (x : Tensor) (r idx : Nat)
   unfold chunkPrimDim0; rw [hshape]
   simp only [divNat, Tensor.mkShape]
   norm_num
-  simp only [valAt, Tensor.mkShape,
+  simp only [valAt,
     show prodShape [4, 64, 128] = 32768 from by simp [prodShape]]
   rw [dif_pos hidx]
   exact congrArg (valAt x) (by omega)
@@ -175,4 +174,3 @@ theorem prove_goal_22_cut : goal_22_stmt_cut := by
     simp [cross_dp_wred]
 
 end TrainVerify.Denote.GeneratedGoals
-

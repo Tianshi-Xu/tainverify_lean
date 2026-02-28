@@ -8,7 +8,6 @@ open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.Common
 
-set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -320,7 +319,6 @@ theorem transposeAxes_12_chunkPrimDimN2_gather1
 
 /-! ## Main proof -/
 
-set_option linter.style.longLine false in
 theorem prove_goal_8_cut : goal_8_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   have hInit105 : InitGoalHolds pm_goal_8.numRanks goal_7 initSM initPM := by
@@ -370,4 +368,3 @@ theorem prove_goal_8_cut : goal_8_stmt_cut := by
     exact transposeAxes_12_chunkPrimDimN2_gather1 x hxsh
 
 end TrainVerify.Denote.GeneratedGoals
-

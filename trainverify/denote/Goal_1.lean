@@ -59,20 +59,22 @@ private lemma valAt_gd0_4_64_128 (xs : List Tensor) (idx : Nat)
     valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 64, 128]))
       ((idx / 8192 % 4) * 8192 + idx % 8192) := by
   unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, List.set, List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    show (4 : Nat) * 4 = 16 from by norm_num,
-    show (4 : Nat) * 8192 = 32768 from by norm_num,
-    show (16 : Nat) * 8192 = 131072 from by norm_num,
-    show prodShape [16, 64, 128] = 131072 from by simp [prodShape],
-    Nat.mod_eq_of_lt hidx, Nat.div_eq_of_lt hidx, dif_pos hidx]
+  simp only [valAt, Tensor.mkShape, List.getD, List.getElem?_cons_zero, Option.getD_some,
+    Nat.reduceMul, List.set_cons_zero, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.ofNat_pos, getElem?_pos, List.getElem_cons_zero, show (4 : Nat) * 4 = 16 from by norm_num,
+    List.drop, List.foldl_cons, List.foldl, one_mul,
+    show (16 : Nat) * 8192 = 131072 from by norm_num, OfNat.ofNat_ne_zero, ↓reduceIte,
+    show (4 : Nat) * 8192 = 32768 from by norm_num, Nat.reduceDvd, Nat.mod_mod_of_dvd, ↓dreduceIte,
+    List.drop_succ_cons, List.drop_zero, List.foldl_nil,
+    show prodShape [16, 64, 128] = 131072 from by simp [prodShape], Lean.Elab.WF.paramLet,
+    zero_mul, Nat.div_eq_of_lt hidx, Nat.mod_eq_of_lt hidx, dif_pos hidx]
 
 private lemma valAt_chunk0 (x : Tensor) (r idx : Nat)
     (hshape : x.shape = [16, 64, 128]) (hidx : idx < 32768) :
     valAt (chunkPrimDimN 0 4 r x) idx =
     valAt x ((r % 4) * 32768 + idx) := by
   unfold chunkPrimDimN; rw [hshape]
-  simp only [List.getD, List.getElem?_cons_zero, List.getElem?_nil,
+  simp only [List.getD, List.getElem?_cons_zero,
     Option.getD, List.drop, List.foldl, List.set]
   norm_num
   conv_lhs => rw [show (if (4 : Nat) = 0 then (0 : Nat) else 16 / 4) = 4 from by decide]

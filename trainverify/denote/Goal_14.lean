@@ -8,7 +8,6 @@ open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.Common
 
-set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -131,7 +130,6 @@ private theorem softmax_valAt_batch_eq_64 (x y : Tensor) (idx mapped_idx : Nat)
   rw [hval, hsum]
 
 -- The 4D AllToAll output shape for [16,8,64,16] with params [3,1]
-set_option linter.style.longLine false in
 theorem prove_goal_14_cut : goal_14_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   have hInit111 : InitGoalHolds pm_goal_14.numRanks goal_13 initSM initPM := by
@@ -269,4 +267,3 @@ theorem prove_goal_14_cut : goal_14_stmt_cut := by
     exact gather_chunk_id.symm
 
 end TrainVerify.Denote.GeneratedGoals
-

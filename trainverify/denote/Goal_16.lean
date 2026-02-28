@@ -8,7 +8,6 @@ open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.Common
 
-set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -68,7 +67,7 @@ private lemma g16_ci_bound (idx : Nat) (hidx : idx < 131072) :
   have : idx % 4 ≤ 3 := by omega
   omega
 
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 1600000 in --
 private lemma g16_idx_eq (idx : Nat) (hidx : idx < 131072) :
     idx / 8192 * 8192 + (idx % 128 / 16 * 1024 + (idx % 8192 / 128 * 16 + idx % 16)) =
     ((idx / 16 * 4 + idx % 4) / 2048 * 2048 +
@@ -87,7 +86,7 @@ private lemma g16_idx_eq (idx : Nat) (hidx : idx < 131072) :
     have hs2 : ((idx % 8192 / 16) * 4 + idx % 4) / 32 = idx % 8192 / 16 / 8 := by omega
     rw [hs2]; omega
   have h4 : (idx / 16 * 4 + idx % 4) % 4 = idx % 4 := by omega
-  simp only [h1, h2, h3, h4]
+  simp only [h1, h2, h3]
   have h5 : (idx / 8192 * 2048 + (idx % 128 / 16 * 256 + (idx % 8192 / 128 * 4 + idx % 4))) / 4 =
       idx / 8192 * 512 + idx % 128 / 16 * 64 + idx % 8192 / 128 := by omega
   have h6 : (idx / 8192 * 2048 + (idx % 128 / 16 * 256 + (idx % 8192 / 128 * 4 + idx % 4))) % 4 =
@@ -113,8 +112,7 @@ private theorem chunkPrimDimN_3_eq_chunkPrim_16_8_64_16
     rw [valAt_of_lt _ _ (by rw [hsh_dimN]; simpa [prodShape]),
         valAt_of_lt _ _ (by rw [hsh_prim]; simpa [prodShape])]
     unfold chunkPrimDimN chunkPrim Tensor.mkShape
-    simp only [hsh, List.set, List.getD, List.drop, List.foldl,
-               dropLast, lastD, appendLast, divNat,
+    simp only [hsh, List.getD, List.drop, List.foldl, lastD, divNat,
                show ¬(4 : Nat) = 0 from by omega,
                show ¬(1 : Nat) = 0 from by omega,
                ite_false]
@@ -274,7 +272,6 @@ private theorem transposeAxes_12_chunkPrimDimN3_16_8_64_16
 
 /-! ## Main proof -/
 
-set_option linter.style.longLine false in
 theorem prove_goal_16_cut : goal_16_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   have hInit113 : InitGoalHolds pm_goal_16.numRanks goal_15 initSM initPM := by

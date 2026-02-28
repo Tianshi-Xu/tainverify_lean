@@ -9,7 +9,6 @@ import Mathlib.Tactic.Ring
 
 namespace TrainVerify.Denote
 
-set_option linter.style.longLine false
 set_option linter.flexible false
 set_option linter.style.emptyLine false
 

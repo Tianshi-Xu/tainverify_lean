@@ -8,7 +8,6 @@ open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.Common
 
-set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -51,7 +50,6 @@ def goal_11_cut_initGoals : List LineageGoal := initGoals ++ goal_11_prereqs
 def goal_11_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_11 pm_goal_11 goal_11 sm_goal_11InitEnv pm_goal_11InitEnv goal_11_cut_initGoals
 
-set_option linter.style.longLine false in
 theorem prove_goal_11_cut : goal_11_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   -- Extract goal_8 from prereqs
@@ -117,4 +115,3 @@ theorem prove_goal_11_cut : goal_11_stmt_cut := by
     exact transposeAxes_23_chunkPrimDimN0_gather0 full hfull_shape
 
 end TrainVerify.Denote.GeneratedGoals
-

@@ -8,7 +8,6 @@ open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.Common
 
-set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -108,7 +107,6 @@ private theorem gather_chunk_dim0 (T : Tensor)
       rw [valAt_chunk0_4d T _ _ hT (by omega)] <;>
       exact congrArg (valAt T) (by omega)
 
-set_option linter.style.longLine false in
 theorem prove_goal_17_cut : goal_17_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   -- Extract goal_16 from prereqs

@@ -8,7 +8,6 @@ open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.Common
 
-set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -177,7 +176,6 @@ private lemma valAt_ag3_4_sh16_64_8_4 (xs : List Tensor) (fi : Nat)
     show (4 : Nat) * 4 = 16 from by norm_num]
 
 /-! ### Main commutativity: transposeAxes 1 2 commutes with allGatherPrimDimN 3 -/
-set_option linter.style.longLine false in
 private theorem transposeAxes_12_allGatherPrimDimN_3_comm
     (g0 g1 g2 g3 : Tensor)
     (h0 : g0.shape = [16, 8, 64, 4])
@@ -248,7 +246,6 @@ private theorem transposeAxes_12_allGatherPrimDimN_3_comm
           h_ii_mod2048_div32, h_ii_mod4]
       ring)
 
-set_option linter.style.longLine false in
 theorem prove_goal_26_cut : goal_26_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   -- Extract prerequisite goals
@@ -296,4 +293,3 @@ theorem prove_goal_26_cut : goal_26_stmt_cut := by
     rw [reconstructWithDim_singleton]
 
 end TrainVerify.Denote.GeneratedGoals
-

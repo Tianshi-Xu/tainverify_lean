@@ -11,7 +11,6 @@ open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.Common
 
-set_option linter.style.longLine false
 set_option linter.flexible false
 set_option linter.style.multiGoal false
 

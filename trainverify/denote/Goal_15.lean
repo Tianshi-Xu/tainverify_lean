@@ -8,7 +8,6 @@ open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.Common
 
-set_option linter.style.longLine false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -157,7 +156,7 @@ private theorem sum_range_64_split (f : Nat → Scalar) :
 -- where A=[16,8,64,64], B=[16,8,64,16], splitting contraction dim K=64 into 4×16
 -- congr on deeply nested sums needs extra recursion depth; split-K needs extra heartbeats
 set_option maxRecDepth 4096 in
-set_option maxHeartbeats 800000 in
+set_option maxHeartbeats 800000 in --
 private theorem batchedMatmul_splitK
     (A B : Tensor)
     (hA : A.shape = [16, 8, 64, 64]) (hB : B.shape = [16, 8, 64, 16]) :
