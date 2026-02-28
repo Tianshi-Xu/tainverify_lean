@@ -15,7 +15,6 @@ open TrainVerify.Denote.Common
 
 set_option linter.style.longLine false
 set_option linter.flexible false
-set_option linter.unusedSimpArgs false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -79,11 +78,10 @@ private lemma valAt_chunk1_8_64_64 (x : Tensor) (r idx : Nat)
     simp only [hout_shape, prodShape, List.foldl, Nat.one_mul]; omega
   rw [valAt_of_lt _ _ hlt_prod]
   simp only [chunkPrimDimN, Tensor.mkShape, hshape,
-    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD, List.drop, List.foldl, List.set, List.length]
+    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD, List.drop, List.foldl]
   norm_num
   simp only [show ∀ n, n % 8192 / 4096 = (n / 4096) % 2 from fun n => by omega,
-    show ∀ n, n % 8192 % 4096 = n % 4096 from fun n => by omega,
     Nat.add_assoc]
 
 /-! ## Part 2: valAt helper for chunkPrimDimN 3 on [16,8,64,64] -/
@@ -98,8 +96,8 @@ private lemma valAt_chunk3_8_64_64 (x : Tensor) (r idx : Nat)
     simp only [hout_shape, prodShape, List.foldl, Nat.one_mul]; omega
   rw [valAt_of_lt _ _ hlt_prod]
   simp only [chunkPrimDimN, Tensor.mkShape, hshape,
-    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD, List.drop, List.foldl, List.set, List.length]
+    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD, List.drop, List.foldl]
   norm_num
   simp only [Nat.mod_one, Nat.add_zero, Nat.add_assoc]
 
@@ -121,13 +119,10 @@ private lemma valAt_ag3_16_8_64_16 (xs : List Tensor) (idx : Nat)
     List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
   simp only [show (1 : Nat) * 16 = 16 from by norm_num,
     show (16 : Nat) * 4 = 64 from by norm_num,
-    show (64 : Nat) * 1 = 64 from by norm_num,
-    show (16 : Nat) * 1 = 16 from by norm_num,
     (show (64 : Nat) ≠ 0 by omega), (show (16 : Nat) ≠ 0 by omega),
     (show (1 : Nat) ≠ 0 by omega),
     ite_false, Nat.mod_one, Nat.add_zero, Nat.div_one, Nat.mul_one]
-  simp only [show ∀ n, n % 64 / 16 / 16 = n % 64 / 16 / 16 from fun n => rfl,
-    show ∀ n, n % 64 % 16 = n % 16 from fun n => by omega]
+  simp only [show ∀ n, n % 64 % 16 = n % 16 from fun n => by omega]
 
 private lemma valAt_ag1_16_2_64_64 (xs : List Tensor) (idx : Nat)
     (hhead : (xs.head?.map (·.shape)).getD [] = [16, 2, 64, 64])
@@ -162,7 +157,7 @@ private lemma valAt_bw_softmax_16_8 (g y : Tensor) (idx : Nat)
     valAt y idx * (valAt g idx -
       ∑ j ∈ Finset.range 64, valAt y (idx / 64 * 64 + j) * valAt g (idx / 64 * 64 + j)) := by
   unfold bw_softmax softmaxBwd; rw [hy]
-  simp only [List.reverse, List.reverseAux, List.append, Tensor.mkShape]
+  simp only [List.reverse, List.reverseAux, Tensor.mkShape]
   rw [valAt_of_lt _ _ (by simp [prodShape]; omega)]
   dsimp only []
   simp only [show (64 : Nat) ≠ 0 from by omega, ite_false]
@@ -174,7 +169,7 @@ private lemma valAt_bw_softmax_16_2 (g y : Tensor) (idx : Nat)
     valAt y idx * (valAt g idx -
       ∑ j ∈ Finset.range 64, valAt y (idx / 64 * 64 + j) * valAt g (idx / 64 * 64 + j)) := by
   unfold bw_softmax softmaxBwd; rw [hy]
-  simp only [List.reverse, List.reverseAux, List.append, Tensor.mkShape]
+  simp only [List.reverse, List.reverseAux, Tensor.mkShape]
   rw [valAt_of_lt _ _ (by simp [prodShape]; omega)]
   dsimp only []
   simp only [show (64 : Nat) ≠ 0 from by omega, ite_false]
@@ -190,7 +185,6 @@ private lemma chunk1_base_eq (r idx j : Nat) (_ : idx < 131072) (_ : j < 64) :
     (idx / 8192 * 32768 + (r % 4 * 2 + (idx / 4096) % 2) * 4096 + idx % 4096) / 64 * 64 + j := by
   omega
 
-set_option maxHeartbeats 800000 in
 private theorem softmaxBwd_chunk1_comm (G Y : Tensor) (r : Nat)
     (hG : G.shape = [16, 8, 64, 64]) (hY : Y.shape = [16, 8, 64, 64]) :
     bw_softmax (chunkPrimDimN 1 4 r G) (chunkPrimDimN 1 4 r Y) =
@@ -232,8 +226,6 @@ private theorem softmaxBwd_chunk1_comm (G Y : Tensor) (r : Nat)
       chunk1_base_eq r idx j hidx' hj64]
 
 /-! ## Part 6: Chunk-of-gather roundtrip (dim 1) -/
-
-set_option maxHeartbeats 400000 in
 private lemma chunk1_of_gather1 (xs : List Tensor) (r : Nat)
     (hhead : (xs.head?.map (·.shape)).getD [] = [16, 2, 64, 64])
     (hr : r < 4)
@@ -305,8 +297,6 @@ private theorem gather_chunk_dim1 (T : Tensor)
       exact congrArg (valAt T) (by omega)
 
 /-! ## Part 8: Main proof -/
-
-set_option maxHeartbeats 1600000 in
 theorem prove_goal_34_cut : goal_34_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   -- Extract prerequisites
@@ -453,4 +443,3 @@ theorem prove_goal_34_cut : goal_34_stmt_cut := by
   · rfl
 
 end TrainVerify.Denote.GeneratedGoals
-

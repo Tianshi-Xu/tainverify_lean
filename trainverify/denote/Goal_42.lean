@@ -10,7 +10,6 @@ open TrainVerify.Denote.Common
 
 set_option linter.style.longLine false
 set_option linter.flexible false
-set_option linter.unusedSimpArgs false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -59,8 +58,7 @@ private lemma valAt_gd0_4_64_128 (xs : List Tensor) (idx : Nat)
     valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 64, 128]))
       ((idx / 8192 % 4) * 8192 + idx % 8192) := by
   unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, List.set, List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+  simp [valAt, Tensor.mkShape, List.getD, List.drop, List.foldl, List.getElem?_cons_zero,
     show (4 : Nat) * 4 = 16 from by norm_num,
     show (4 : Nat) * 8192 = 32768 from by norm_num,
     show (16 : Nat) * 8192 = 131072 from by norm_num,
@@ -72,7 +70,7 @@ private lemma valAt_chunk0 (x : Tensor) (r idx : Nat)
     valAt (chunkPrimDimN 0 4 r x) idx =
     valAt x ((r % 4) * 32768 + idx) := by
   unfold chunkPrimDimN; rw [hshape]
-  simp only [List.getD, List.getElem?_cons_zero, List.getElem?_nil,
+  simp only [List.getD, List.getElem?_cons_zero,
     Option.getD, List.drop, List.foldl, List.set]
   norm_num
   conv_lhs => rw [show (if (4 : Nat) = 0 then (0 : Nat) else 16 / 4) = 4 from by decide]
@@ -155,4 +153,3 @@ theorem prove_goal_42_cut : goal_42_stmt_cut := by
   exact ⟨by rw [← h121_eq]; exact h121_shape, by simp [hchunk_shape], rfl⟩
 
 end TrainVerify.Denote.GeneratedGoals
-

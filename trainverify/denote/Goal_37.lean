@@ -10,7 +10,6 @@ open TrainVerify.Denote.Common
 
 set_option linter.style.longLine false
 set_option linter.flexible false
-set_option linter.unusedSimpArgs false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -74,8 +73,8 @@ private lemma valAt_gd0_4_64_8_16 (xs : List Tensor) (idx : Nat)
   have hmm : idx % 131072 = idx := Nat.mod_eq_of_lt hidx
   have hdv : idx / 131072 = 0 := Nat.div_eq_of_lt hidx
   unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, List.set, List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+  simp [valAt, Tensor.mkShape, List.getD, List.drop, List.foldl,
+    List.getElem?_cons_zero,
     show (4 : Nat) * 4 = 16 from by norm_num,
     show (4 : Nat) * 8192 = 32768 from by norm_num,
     show (16 : Nat) * 8192 = 131072 from by norm_num,
@@ -91,11 +90,7 @@ private lemma valAt_chunk0_16_64_8_16 (x : Tensor) (r idx : Nat)
   rw [valAt_of_lt _ _ (by rw [hps_chunk]; exact hidx)]
   rw [valAt_of_lt _ _ (by rw [hps]; exact hfi_bound)]
   unfold chunkPrimDimN Tensor.mkShape
-  simp only [hshape, List.set, List.getD,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD_some, Option.getD_none,
-    List.take, List.drop, List.foldl,
-    Nat.sub_zero]
+  simp only [hshape, List.getD, List.getElem?_cons_zero, Option.getD_some, List.drop, List.foldl]
   have : (16 : Nat) / 4 = 4 := by norm_num
   have : (64 : Nat) * 8 * 16 = 8192 := by norm_num
   have : (4 : Nat) * (64 * 8 * 16) = 32768 := by norm_num
@@ -105,12 +100,10 @@ private lemma valAt_chunk0_16_64_8_16 (x : Tensor) (r idx : Nat)
   have hne_8192 : (8192 : Nat) ≠ 0 := by omega
   have hne_32768 : (32768 : Nat) ≠ 0 := by omega
   have hne_131072 : (131072 : Nat) ≠ 0 := by omega
-  simp only [*, Nat.mul_one, Nat.one_mul, Nat.add_zero, Nat.zero_add,
-    Nat.zero_mul, Nat.mul_zero,
-    dif_pos hfi_bound, if_neg, if_pos, ite_false, ite_true]
+  simp only [*, Nat.one_mul, ite_false]
   have h0 : idx / 32768 = 0 := Nat.div_eq_of_lt hidx
   have hm : idx % 32768 = idx := Nat.mod_eq_of_lt hidx
-  simp only [h0, hm, Nat.zero_mul, Nat.zero_add, Nat.mul_zero]
+  simp only [h0, hm, Nat.zero_mul, Nat.zero_add]
   rw [show r % 4 = r from Nat.mod_eq_of_lt hr]
   have heq : (r * 4 + idx / 8192) * 8192 + idx % 8192 = r * 32768 + idx := by omega
   rw [heq, valAt_of_lt _ _ (by rw [hps]; exact hfi_bound)]
@@ -130,7 +123,6 @@ private lemma valAt_gd3_16_64_8_4 (xs : List Tensor) (idx : Nat)
     List.getD, List.drop, List.foldl,
     List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
   simp only [show (4 : Nat) * 4 = 16 from by norm_num,
-    show (16 : Nat) * 1 = 16 from by norm_num,
     show (4 : Nat) * 1 = 4 from by norm_num,
     (show (16 : Nat) ≠ 0 by omega), (show (1 : Nat) ≠ 0 by omega),
     (show (4 : Nat) ≠ 0 by omega),
@@ -149,21 +141,15 @@ private lemma valAt_chunk3_16_64_8_16 (x : Tensor) (r idx : Nat)
   rw [valAt_of_lt _ _ (by rw [hps_chunk]; exact hidx)]
   rw [valAt_of_lt _ _ (by rw [hps]; exact hfi_bound)]
   unfold chunkPrimDimN Tensor.mkShape
-  simp only [hshape, List.set, List.getD,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD_some, Option.getD_none,
-    List.take, List.drop, List.foldl,
-    Nat.sub_zero]
+  simp only [hshape, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl]
   have : (16 : Nat) / 4 = 4 := by norm_num
   have : (1 : Nat) * 1 = 1 := by norm_num
   have hne_1 : (1 : Nat) ≠ 0 := by omega
   have hne_4 : (4 : Nat) ≠ 0 := by omega
   have h0 : idx / 4 / 8192 = 0 := by omega
   have hm : idx % 4 % 1 = 0 := by omega
-  simp only [*, Nat.mul_one, Nat.one_mul, Nat.add_zero, Nat.zero_add,
-    Nat.zero_mul, Nat.mul_zero,
-    dif_pos hfi_bound, if_neg, if_pos, ite_false, ite_true,
-    Nat.div_one, Nat.mod_one]
+  simp only [*, Nat.mul_one, Nat.add_zero, ite_false, Nat.div_one]
   rw [show r % 4 = r from Nat.mod_eq_of_lt hr]
   simp only [Nat.add_assoc]
   rw [valAt_of_lt _ _ (by rw [hps]; omega)]
@@ -291,4 +277,3 @@ theorem prove_goal_37_cut : goal_37_stmt_cut := by
   · exact (gather_chunk_dim3 (initSM 142) h142_shape).symm
 
 end TrainVerify.Denote.GeneratedGoals
-

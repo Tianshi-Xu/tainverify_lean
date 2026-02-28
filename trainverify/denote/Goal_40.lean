@@ -245,8 +245,7 @@ private theorem bw_linear_3d_snd_dim1_distr
     intro g; simp [Finset.sum_range_succ]
   rw [hfour]
   -- Match each pair: LHS double sum = RHS single sum
-  set_option linter.style.multiGoal false in
-  congr 1; congr 1; congr 1
+  iterate 3 congr 1
   all_goals {
     conv_rhs => rw [show (256 : Nat) = 16 * 16 from by norm_num,
       Finset.sum_range_mul_eq_sum_sum 16 16]

@@ -10,7 +10,6 @@ open TrainVerify.Denote.Common
 
 set_option linter.style.longLine false
 set_option linter.flexible false
-set_option linter.unusedSimpArgs false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -134,8 +133,8 @@ private lemma valAt_gd0_4_8_16_64 (xs : List Tensor) (idx : Nat)
   have hmm : idx % 131072 = idx := Nat.mod_eq_of_lt hidx
   have hdv : idx / 131072 = 0 := Nat.div_eq_of_lt hidx
   unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, h_ps_out, List.set, List.getD, List.drop, List.foldl,
-    List.length, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+  simp [valAt, Tensor.mkShape, h_ps_out, List.getD, List.drop, List.foldl,
+    List.length, List.getElem?_cons_zero,
     h4x4, h4x8192, h16x8192, hmm, hdv, dif_pos hidx]
 
 private lemma valAt_gd0_4_8_64_64 (xs : List Tensor) (idx : Nat)
@@ -151,8 +150,8 @@ private lemma valAt_gd0_4_8_64_64 (xs : List Tensor) (idx : Nat)
   have hmm : idx % 524288 = idx := Nat.mod_eq_of_lt hidx
   have hdv : idx / 524288 = 0 := Nat.div_eq_of_lt hidx
   unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, h_ps_out, List.set, List.getD, List.drop, List.foldl,
-    List.length, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+  simp [valAt, Tensor.mkShape, h_ps_out, List.getD, List.drop, List.foldl,
+    List.length, List.getElem?_cons_zero,
     h4x4, h4x32768, h16x32768, hmm, hdv, dif_pos hidx]
 
 /-! ## Part 3: chunkPrimDimN 0 and transpose2d valAt helpers -/
@@ -170,11 +169,8 @@ private lemma valAt_chunk0 (x : Tensor) (r idx : Nat)
   rw [valAt_of_lt _ _ (by rw [hps_chunk]; exact hidx)]
   rw [valAt_of_lt _ _ (by rw [hps]; exact hfi_bound)]
   unfold chunkPrimDimN Tensor.mkShape
-  simp only [hshape, List.set, List.getD,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD_some, Option.getD_none,
-    List.take, List.drop, List.foldl, List.length,
-    Nat.sub_zero]
+  simp only [hshape, List.getD, List.getElem?_cons_zero,
+    Option.getD_some, List.drop, List.foldl]
   have : (16 : Nat) / 4 = 4 := by norm_num
   have : (4 : Nat) * (8 * 64 * 16) = 32768 := by norm_num
   have : (16 : Nat) * (8 * 64 * 16) = 131072 := by norm_num
@@ -184,12 +180,10 @@ private lemma valAt_chunk0 (x : Tensor) (r idx : Nat)
   have hne_32768 : (32768 : Nat) ≠ 0 := by omega
   have hne_131072 : (131072 : Nat) ≠ 0 := by omega
   have h_4x8192 : (4 : Nat) * 8192 = 32768 := by norm_num
-  simp only [*, Nat.mul_one, Nat.one_mul, Nat.add_zero, Nat.zero_add,
-    Nat.zero_mul, Nat.mul_zero,
-    dif_pos hfi_bound, if_neg, if_pos, ite_false, ite_true]
+  simp only [*, Nat.one_mul, ite_false]
   have h0 : idx / 32768 = 0 := Nat.div_eq_of_lt hidx
   have hm : idx % 32768 = idx := Nat.mod_eq_of_lt hidx
-  simp only [h0, hm, Nat.zero_mul, Nat.zero_add, Nat.mul_zero]
+  simp only [h0, hm, Nat.zero_mul, Nat.zero_add]
   rw [show r % 4 = r from Nat.mod_eq_of_lt hr]
   have heq : (r * 4 + idx / 8192) * 8192 + idx % 8192 = r * 32768 + idx := by omega
   rw [heq, valAt_of_lt _ _ (by rw [hps]; exact hfi_bound)]
@@ -200,7 +194,7 @@ private lemma valAt_td_a_8_64_16 (y : Tensor) (a : Nat) (idx : Nat)
     valAt (transpose2d y) idx =
     valAt y (idx / 1024 * 1024 + (idx % 1024 % 64) * 16 + idx % 1024 / 64) := by
   unfold transpose2d; rw [hy]
-  simp only [List.reverse, List.reverseAux, List.append]
+  simp only [List.reverse, List.reverseAux]
   simp only [valAt, Tensor.mkShape]
   have hps : prodShape [a, 8, 16, 64] = a * 8192 := by simp [prodShape]; ring
   simp only [hps, dif_pos hidx]
@@ -383,16 +377,16 @@ theorem prove_goal_32_cut : goal_32_stmt_cut := by
   -- PM computation
   have hpm341 : (denoteGraph pm_goal_32 initPM) 341 =
       batchedMatmul (transpose2d (allToAllPrimWithDims 4 0 [initPM 256, initPM 257, initPM 258, initPM 259] 3 0)) (initPM 365) := by
-    simp [pm_goal_32, denoteGraph, List.foldl, applyNode, evalOp, storeSet, bw_matmul, batchedMatmulBwd]
+    simp [pm_goal_32, denoteGraph, List.foldl, applyNode, evalOp, storeSet, batchedMatmulBwd]
   have hpm343 : (denoteGraph pm_goal_32 initPM) 343 =
       batchedMatmul (transpose2d (allToAllPrimWithDims 4 1 [initPM 256, initPM 257, initPM 258, initPM 259] 3 0)) (initPM 367) := by
-    simp [pm_goal_32, denoteGraph, List.foldl, applyNode, evalOp, storeSet, bw_matmul, batchedMatmulBwd]
+    simp [pm_goal_32, denoteGraph, List.foldl, applyNode, evalOp, storeSet, batchedMatmulBwd]
   have hpm345 : (denoteGraph pm_goal_32 initPM) 345 =
       batchedMatmul (transpose2d (allToAllPrimWithDims 4 2 [initPM 256, initPM 257, initPM 258, initPM 259] 3 0)) (initPM 369) := by
-    simp [pm_goal_32, denoteGraph, List.foldl, applyNode, evalOp, storeSet, bw_matmul, batchedMatmulBwd]
+    simp [pm_goal_32, denoteGraph, List.foldl, applyNode, evalOp, storeSet, batchedMatmulBwd]
   have hpm347 : (denoteGraph pm_goal_32 initPM) 347 =
       batchedMatmul (transpose2d (allToAllPrimWithDims 4 3 [initPM 256, initPM 257, initPM 258, initPM 259] 3 0)) (initPM 371) := by
-    simp [pm_goal_32, denoteGraph, List.foldl, applyNode, evalOp, storeSet, bw_matmul, batchedMatmulBwd]
+    simp [pm_goal_32, denoteGraph, List.foldl, applyNode, evalOp, storeSet, batchedMatmulBwd]
   -- Rewrite allToAllPrimWithDims to chunkPrimDimN
   rw [hata 0] at hpm341; rw [hata 1] at hpm343; rw [hata 2] at hpm345; rw [hata 3] at hpm347
   -- Unfold the goal

@@ -210,7 +210,7 @@ private lemma g30_val_eq_c (idx : Nat) (_ : idx < 131072) :
   have h2 : idx % 8192 / 128 * 16 + idx % 16 < 1024 := by omega
   have h3 : (idx / 8192 * 8192 + (idx % 128 / 16 * 1024 + (idx % 8192 / 128 * 16 + idx % 16))) % 8192 =
       idx % 128 / 16 * 1024 + (idx % 8192 / 128 * 16 + idx % 16) := by omega
-  simp only [Nat.add_assoc, h3]; omega
+  simp only [Nat.add_assoc]; omega
 
 private lemma g30_fi_decomp_a (idx : Nat) (_ : idx < 131072) :
     (idx / 128 * 32 + (idx % 128 / 16 % 2) * 16 + idx % 16) / 2048 =
@@ -308,7 +308,7 @@ theorem prove_goal_30_cut : goal_30_stmt_cut := by
       allGatherPrimDimN 2 4 0 [transposeAxes 1 2 (initPM 317), transposeAxes 1 2 (initPM 319),
                                 transposeAxes 1 2 (initPM 321), transposeAxes 1 2 (initPM 323)] := by
     simp [pm_goal_30, denoteGraph, List.foldl, applyNode, evalOp, storeSet,
-      h107_pm_shape, transposeAxes, Tensor.mkShape, listSwapAt, h317_shape, h319_shape, h321_shape, h323_shape]
+      transposeAxes, Tensor.mkShape, listSwapAt, h317_shape, h319_shape, h321_shape, h323_shape]
   -- Unfold goal
   dsimp only [goal_30_stmt_cut, CoarseLineageHoldsWithInit, goal_30] at *
   simp only [List.map]
@@ -326,4 +326,3 @@ theorem prove_goal_30_cut : goal_30_stmt_cut := by
     rw [reconstructWithDim_singleton]
 
 end TrainVerify.Denote.GeneratedGoals
-

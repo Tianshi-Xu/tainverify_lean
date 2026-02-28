@@ -131,14 +131,6 @@ private theorem softmax_valAt_batch_eq_64 (x y : Tensor) (idx mapped_idx : Nat)
   rw [hval, hsum]
 
 -- The 4D AllToAll output shape for [16,8,64,16] with params [3,1]
-private theorem allToAll_14_shape (rank : Nat) (xs : List Tensor)
-    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [16, 8, 64, 16]) :
-    (allToAllPrimWithDims 4 rank xs 3 1).shape = [16, 2, 64, 64] := by
-  simp only [allToAllPrimWithDims]
-  have hag := allGatherPrimDimN_shape 3 4 xs [16, 8, 64, 16] hhead
-  simp only [List.getD, List.set] at hag
-  exact chunkPrimDimN_shape 1 4 rank _ _ hag (by omega)
-
 set_option linter.style.longLine false in
 theorem prove_goal_14_cut : goal_14_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals

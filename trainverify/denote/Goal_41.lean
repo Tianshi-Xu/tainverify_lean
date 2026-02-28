@@ -12,7 +12,6 @@ open TrainVerify.Denote.Common
 
 set_option linter.style.longLine false
 set_option linter.flexible false
-set_option linter.unusedSimpArgs false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -81,13 +80,12 @@ private lemma valAt_gd1_16_16_128 (xs : List Tensor) (idx : Nat)
     valAt (xs.getD (idx % 8192 / 128 / 16) (zeroTensor [16, 16, 128]))
       (idx / 8192 * 2048 + (idx % 8192 / 128) % 16 * 128 + idx % 128) := by
   unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, List.set, List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+  simp [valAt, Tensor.mkShape, List.getD, List.drop, List.foldl,
+    List.getElem?_cons_zero, List.getElem?_cons_succ,
     show (16 : Nat) * 4 = 64 from by norm_num,
     show (16 : Nat) * 128 = 2048 from by norm_num,
     show (64 : Nat) * 128 = 8192 from by norm_num,
-    show prodShape [16, 64, 128] = 131072 from by simp [prodShape],
-    Nat.mod_eq_of_lt hidx, Nat.div_eq_of_lt hidx, dif_pos hidx]
+    show prodShape [16, 64, 128] = 131072 from by simp [prodShape], dif_pos hidx]
 
 private lemma valAt_chunk1 (x : Tensor) (r idx : Nat)
     (hshape : x.shape = [16, 64, 128]) (hr : r < 4) (hidx : idx < 32768) :
@@ -101,18 +99,16 @@ private lemma valAt_chunk1 (x : Tensor) (r idx : Nat)
     rw [hchunk_shape]; exact hps2
   rw [valAt_of_lt _ _ (by rw [hps_chunk]; exact hidx)]
   unfold chunkPrimDimN Tensor.mkShape
-  simp only [hshape, List.set, List.getD,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD_some, Option.getD_none,
-    List.take, List.drop, List.foldl, List.length]
+  simp only [hshape, List.getD,
+    List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl]
   have : (64 : Nat) / 4 = 16 := by norm_num
   have : (16 : Nat) * 128 = 2048 := by norm_num
   have : (64 : Nat) * 128 = 8192 := by norm_num
   have hne_4 : (4 : Nat) ≠ 0 := by omega
   have hne_128 : (128 : Nat) ≠ 0 := by omega
   have hne_2048 : (2048 : Nat) ≠ 0 := by omega
-  simp only [*, Nat.mul_one, Nat.one_mul, Nat.add_zero, Nat.zero_add,
-    ite_false, ite_true, Nat.mod_eq_of_lt hr,
+  simp only [*, Nat.one_mul, ite_false, Nat.mod_eq_of_lt hr,
     show ∀ n, n % 2048 % 128 = n % 128 from fun n => by omega]
 
 private theorem gather_chunk_dim1 (x : Tensor) (hx : x.shape = [16, 64, 128]) :
@@ -153,15 +149,12 @@ private lemma valAt_gd0_4_64_128 (xs : List Tensor) (idx : Nat)
   have hmm : idx % 131072 = idx := Nat.mod_eq_of_lt hidx
   have hdv : idx / 131072 = 0 := Nat.div_eq_of_lt hidx
   unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, h_ps_out, List.set, List.getD, List.drop, List.foldl,
-    List.length, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+  simp [valAt, Tensor.mkShape, h_ps_out, List.getD, List.drop, List.foldl,
+    List.length, List.getElem?_cons_zero,
     h4x4, h4x8192, h16x8192, hmm, hdv, dif_pos hidx]
 
 /-! ## Main theorem -/
-
 -- PM graph has 12 nodes; denoteGraph simp needs extra heartbeats
-set_option maxHeartbeats 400000 in
-
 theorem prove_goal_41_cut : goal_41_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   -- Extract prerequisite: initGoal_146 (g = same in SM/PM)
@@ -293,4 +286,3 @@ theorem prove_goal_41_cut : goal_41_stmt_cut := by
   · exact (gather_chunk_dim1 _ hbw_shape).symm
 
 end TrainVerify.Denote.GeneratedGoals
-

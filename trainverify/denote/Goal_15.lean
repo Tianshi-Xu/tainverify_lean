@@ -136,19 +136,6 @@ private theorem valAt_chunkDim2 (B : Tensor) (hB : B.shape = [16, 8, 64, 16])
   rw [dif_pos hj]
 
 -- Index arithmetic: chunk3 valAt matches split-K shift
-private theorem splitK_idx_A (idx l r : Nat) (_hidx : idx < 131072) (hl : l < 16) (hr : r < 4) :
-    (idx / 1024 * 1024 + idx % 1024 / 16 * 16 + l) / 16 * 64 + r % 4 * 16 +
-    (idx / 1024 * 1024 + idx % 1024 / 16 * 16 + l) % 16 =
-    idx / 1024 * 4096 + idx % 1024 / 16 * 64 + (r * 16 + l) := by omega
-
--- Index arithmetic: chunk2 valAt matches split-K shift
-private theorem splitK_idx_B (idx l r : Nat) (_hidx : idx < 131072) (hl : l < 16) (hr : r < 4) :
-    (idx / 1024 * 256 + l * 16 + idx % 16) / 256 * 1024 +
-    (r % 4 * 16 + (idx / 1024 * 256 + l * 16 + idx % 16) % 256 / 16) * 16 +
-    (idx / 1024 * 256 + l * 16 + idx % 16) % 16 =
-    idx / 1024 * 1024 + (r * 16 + l) * 16 + idx % 16 := by omega
-
--- Split range 64 sum into 4 groups of 16
 private theorem sum_range_64_split (f : Nat → Scalar) :
     ∑ l ∈ Finset.range 64, f l =
     (∑ l ∈ Finset.range 16, f l) +

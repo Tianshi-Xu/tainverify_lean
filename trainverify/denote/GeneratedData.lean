@@ -867,16 +867,9 @@ def pmShapeCheck : Except String (List (Tid × Shape)) :=
 theorem smShapeCheck_ok : smShapeCheck.isOk := by
   native_decide
 
-theorem smShapeCheck_exists : ∃ m, smShapeCheck = Except.ok m := by
-  exact (TrainVerify.Denote.Except.isOk_iff_exists smShapeCheck).1 smShapeCheck_ok
-
 theorem pmShapeCheck_ok : pmShapeCheck.isOk := by
   native_decide
 
-theorem pmShapeCheck_exists : ∃ m, pmShapeCheck = Except.ok m := by
-  exact (TrainVerify.Denote.Except.isOk_iff_exists pmShapeCheck).1 pmShapeCheck_ok
-
--- goal_1 (tid=96) depends on: [98, 100, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 118, 159, 163, 167]
 def goal_1_prereqs : List LineageGoal := [goal_2, goal_3, goal_4, goal_5, goal_6, goal_7, goal_8, goal_9, goal_10, goal_11, goal_12, goal_13, goal_14, goal_15, goal_16, goal_17, goal_18, goal_19, goal_42, goal_44, goal_46]
 
 def goal_1_stmt : Prop :=

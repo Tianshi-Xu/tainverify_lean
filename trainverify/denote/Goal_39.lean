@@ -63,14 +63,11 @@ def goal_39_stmt_cut : Prop :=
 /-! ### Index arithmetic helpers -/
 
 private lemma mod_8192_mod_128 (n : Nat) : n % 8192 % 128 = n % 128 := by omega
-private lemma mod_2048_mod_128 (n : Nat) : n % 2048 % 128 = n % 128 := by omega
-
--- (idx/8192*64 + idx%8192/128)*128 + j reduces to idx - idx%128 + j
 private lemma gAddr_eq (idx j : Nat) :
     (idx / 8192 * 64 + idx % 8192 / 128) * 128 + j = idx / 128 * 128 + j := by omega
 
 -- The piece index for gAddr in allGather matches the piece index for idx
-private lemma gAddr_piece (idx j : Nat) (hj : j < 128) (hidx : idx < 131072) :
+private lemma gAddr_piece (idx j : Nat) (hj : j < 128) :
     (idx / 128 * 128 + j) % 8192 / 2048 = idx % 8192 / 2048 := by omega
 
 -- gAddr < 131072
@@ -78,7 +75,7 @@ private lemma gAddr_bound (idx j : Nat) (hj : j < 128) (hidx : idx < 131072) :
     idx / 128 * 128 + j < 131072 := by omega
 
 -- The local index for gAddr in allGather matches what we need
-private lemma gAddr_local_eq (idx j : Nat) (hj : j < 128) (hidx : idx < 131072) :
+private lemma gAddr_local_eq (idx j : Nat) (hj : j < 128) :
     (idx / 128 * 128 + j) / 8192 * 2048 + (idx / 128 * 128 + j) % 2048 =
     idx / 8192 * 2048 + idx % 2048 / 128 * 128 + j := by
   have := Nat.div_add_mod idx 128
@@ -88,11 +85,11 @@ private lemma gAddr_local_eq (idx j : Nat) (hj : j < 128) (hidx : idx < 131072) 
   omega
 
 -- localIdx / 2048 = idx / 8192
-private lemma localIdx_div (idx : Nat) (hidx : idx < 131072) :
+private lemma localIdx_div (idx : Nat) :
     (idx / 8192 * 2048 + idx % 2048) / 2048 = idx / 8192 := by omega
 
 -- localIdx % 2048 = idx % 2048
-private lemma localIdx_mod (idx : Nat) (hidx : idx < 131072) :
+private lemma localIdx_mod (idx : Nat) :
     (idx / 8192 * 2048 + idx % 2048) % 2048 = idx % 2048 := by omega
 
 -- localIdx bound
@@ -117,22 +114,17 @@ private lemma valAt_ag1_16_16_128 (xs : List Tensor) (addr : Nat)
     List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
     (show (8192 : Nat) ≠ 0 by omega), (show (128 : Nat) ≠ 0 by omega),
     (show (16 : Nat) ≠ 0 by omega), ite_false,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero,
     show ∀ n, n % 8192 % 128 = n % 128 from fun n => by omega,
     show ∀ n, n % 8192 / 128 / 16 = n % 8192 / 2048 from fun n => by omega,
     show ∀ n, n % 8192 / 128 % 16 = n % 2048 / 128 from fun n => by omega,
     show (16 : Nat) * 4 = 64 from by norm_num,
     show (1 : Nat) * 128 = 128 from by norm_num,
-    show (128 : Nat) * 1 = 128 from by norm_num,
     show (16 : Nat) * 128 = 2048 from by norm_num,
     show (64 : Nat) * 128 = 8192 from by norm_num,
-    show (2048 : Nat) * 1 = 2048 from by norm_num,
     show ∀ a n, a + n % 2048 / 128 * 128 + n % 128 = a + n % 2048 from fun a n => by
       have := Nat.div_add_mod (n % 2048) 128; omega]
 
 /-! ### valAt helper for bw_linear 3D first output -/
-
-set_option maxHeartbeats 1600000 in
 private lemma valAt_bwl_3d_fst (g x w : Tensor) (b s : Nat) (idx : Nat)
     (hg : g.shape = [b, s, 128]) (hx : x.shape = [b, s, 128]) (hw : w.shape = [128, 128])
     (hidx : idx < b * s * 128) (hs_pos : 0 < s) :
@@ -154,8 +146,6 @@ private lemma valAt_bwl_3d_fst (g x w : Tensor) (b s : Nat) (idx : Nat)
     (show s * 128 ≠ 0 from by omega), (show (128 : Nat) ≠ 0 from by omega)]
 
 /-! ### Distribution lemma -/
-
-set_option maxHeartbeats 3200000 in
 private theorem bw_linear_3d_fst_gather_dim1
     (g0 g1 g2 g3 x w : Tensor)
     (hg0 : g0.shape = [16, 16, 128]) (hg1 : g1.shape = [16, 16, 128])
@@ -188,7 +178,7 @@ private theorem bw_linear_3d_fst_gather_dim1
       (bw_linear g1 (chunkPrimDimN 1 4 1 x) w).1,
       (bw_linear g2 (chunkPrimDimN 1 4 2 x) w).1,
       (bw_linear g3 (chunkPrimDimN 1 4 3 x) w).1]).shape = [16, 64, 128] := by
-    simp [allGatherPrimDimN, Tensor.mkShape, hRHS_head, hdX0_shape]
+    simp [allGatherPrimDimN, Tensor.mkShape, hdX0_shape]
   have hgg_head : ([g0, g1, g2, g3].head?.map (·.shape)).getD [] = [16, 16, 128] := by
     simp [hg0]
   -- Tensor extensionality
@@ -203,7 +193,7 @@ private theorem bw_linear_3d_fst_gather_dim1
   -- Case split on piece index r = idx%8192/2048 ∈ {0,1,2,3}
   have hr_cases : idx % 8192 / 2048 = 0 ∨ idx % 8192 / 2048 = 1 ∨ idx % 8192 / 2048 = 2 ∨ idx % 8192 / 2048 = 3 := by omega
   rcases hr_cases with hr | hr | hr | hr <;> {
-    simp only [hr, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil, Option.getD]
+    simp only [hr, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD]
     -- RHS is now valAt (bw_linear g_r (chunk_r x) w).1 localIdx
     -- Unfold bw_linear on the piece with s=16
     rw [valAt_bwl_3d_fst _ _ _ 16 16 _ (by assumption) (hchunk_r _) hw (localIdx_bound idx hidx') (by omega)]
@@ -215,23 +205,21 @@ private theorem bw_linear_3d_fst_gather_dim1
     · -- g-value equality: valAt gg (gAddr) = valAt g_r (localGAddr)
       rw [gAddr_eq]
       rw [valAt_ag1_16_16_128 [g0, g1, g2, g3] _ hgg_head (gAddr_bound idx j hj' hidx')]
-      simp only [gAddr_piece idx j hj' hidx', hr,
-        List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil, Option.getD]
+      simp only [gAddr_piece idx j hj', hr,
+        List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD]
       congr 1
-      rw [gAddr_local_eq idx j hj' hidx']
-      simp only [localIdx_div idx hidx', localIdx_mod idx hidx']
+      rw [gAddr_local_eq idx j hj']
+      simp only [localIdx_div idx, localIdx_mod idx]
       omega
     · -- w-value equality
       simp only [show (64 : Nat) * 128 = 8192 from by norm_num,
         show (16 : Nat) * 128 = 2048 from by norm_num,
         mod_8192_mod_128]
-      rw [localIdx_mod idx hidx']
+      rw [localIdx_mod idx]
       congr 1; omega
   }
 
 /-! ### Main proof -/
-
-set_option maxHeartbeats 1600000 in
 theorem prove_goal_39_cut : goal_39_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   -- Extract prereqs

@@ -13,7 +13,6 @@ open TrainVerify.Denote.Common
 
 set_option linter.style.longLine false
 set_option linter.flexible false
-set_option linter.unusedSimpArgs false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -77,11 +76,8 @@ private lemma valAt_chunk0_16_64_128 (x : Tensor) (r idx : Nat)
   rw [valAt_of_lt _ _ (by rw [hps_chunk]; exact hidx)]
   rw [valAt_of_lt _ _ (by rw [hps]; exact hfi_bound)]
   unfold chunkPrimDimN Tensor.mkShape
-  simp only [hshape, List.set, List.getD,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD_some, Option.getD_none,
-    List.take, List.drop, List.foldl,
-    Nat.sub_zero]
+  simp only [hshape, List.getD, List.getElem?_cons_zero,
+    Option.getD_some, List.drop, List.foldl]
   have : (16 : Nat) / 4 = 4 := by norm_num
   have : (64 : Nat) * 128 = 8192 := by norm_num
   have : (4 : Nat) * 8192 = 32768 := by norm_num
@@ -91,12 +87,10 @@ private lemma valAt_chunk0_16_64_128 (x : Tensor) (r idx : Nat)
   have hne_8192 : (8192 : Nat) ≠ 0 := by omega
   have hne_32768 : (32768 : Nat) ≠ 0 := by omega
   have hne_131072 : (131072 : Nat) ≠ 0 := by omega
-  simp only [*, Nat.mul_one, Nat.one_mul, Nat.add_zero, Nat.zero_add,
-    Nat.zero_mul, Nat.mul_zero,
-    dif_pos hfi_bound, if_neg, if_pos, ite_false, ite_true]
+  simp only [*, Nat.one_mul, ite_false]
   have h0 : idx / 32768 = 0 := Nat.div_eq_of_lt hidx
   have hm : idx % 32768 = idx := Nat.mod_eq_of_lt hidx
-  simp only [h0, hm, Nat.zero_mul, Nat.zero_add, Nat.mul_zero]
+  simp only [h0, hm, Nat.zero_mul, Nat.zero_add]
   rw [show r % 4 = r from Nat.mod_eq_of_lt hr]
   have heq : (r * 4 + idx / 8192) * 8192 + idx % 8192 = r * 32768 + idx := by omega
   rw [heq, valAt_of_lt _ _ (by rw [hps]; exact hfi_bound)]
@@ -115,8 +109,8 @@ private lemma valAt_gd0_4_64_128 (xs : List Tensor) (idx : Nat)
   have hmm : idx % 131072 = idx := Nat.mod_eq_of_lt hidx
   have hdv : idx / 131072 = 0 := Nat.div_eq_of_lt hidx
   unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, h_ps_out, List.set, List.getD, List.drop, List.foldl,
-    List.length, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+  simp [valAt, Tensor.mkShape, h_ps_out, List.getD, List.drop, List.foldl,
+    List.length, List.getElem?_cons_zero,
     h4x4, h4x8192, h16x8192, hmm, hdv, dif_pos hidx]
 
 /-! ## Distribution lemma -/
@@ -195,8 +189,7 @@ private theorem bw_linear_3d_fst_dim0_distr
   -- Case split on piece index
   have hp_range : idx / 32768 = 0 ∨ idx / 32768 = 1 ∨ idx / 32768 = 2 ∨ idx / 32768 = 3 := by omega
   rcases hp_range with h | h | h | h <;> {
-    simp only [h, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
-      List.getElem?_nil, Option.getD_some]
+    simp only [h, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
     rw [hbw_piece _ _
         (by first | exact hchunk_r 0)
         (by first | exact hx0 | exact hx1 | exact hx2 | exact hx3),

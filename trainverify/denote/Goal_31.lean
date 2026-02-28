@@ -15,7 +15,6 @@ open TrainVerify.Denote.Common
 
 set_option linter.style.longLine false
 set_option linter.flexible false
-set_option linter.unusedSimpArgs false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -128,7 +127,6 @@ private lemma valAt_bm_chunk (g t : Tensor) (idx : Nat)
   simp only [show (16 : Nat) * 16 ≠ 0 from by omega, ite_false,
     show (16 : Nat) ≠ 0 from by omega,
     show (16 : Nat) * 64 = 1024 from by norm_num,
-    show (64 : Nat) * 16 = 1024 from by norm_num,
     show (16 : Nat) * 16 = 256 from by norm_num]
   simp_rw [show idx % (16 * 16) % 16 = idx % 16 from by omega]
 
@@ -174,7 +172,6 @@ private lemma valAt_ag2_16_8_16_64 (xs : List Tensor) (idx : Nat)
     List.getD, List.drop, List.foldl,
     List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
   simp only [show (1 : Nat) * 64 = 64 from by norm_num,
-    show (16 : Nat) * 4 = 64 from by norm_num,
     show (64 : Nat) * 64 = 4096 from by norm_num,
     show (16 : Nat) * 64 = 1024 from by norm_num,
     (show (4096 : Nat) ≠ 0 by omega), (show (64 : Nat) ≠ 0 by omega),
@@ -222,8 +219,8 @@ private lemma valAt_chunk2_64_64 (x : Tensor) (r idx : Nat)
     simp only [hout_shape, prodShape, List.foldl, Nat.one_mul]; omega
   rw [valAt_of_lt _ _ hlt_prod]
   simp only [chunkPrimDimN, Tensor.mkShape, hshape,
-    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD, List.drop, List.foldl, List.set, List.length]
+    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD, List.drop, List.foldl]
   norm_num
 
 -- chunkPrimDimN 3 4 r on [16,8,64,64] → [16,8,64,16]
@@ -237,8 +234,8 @@ private lemma valAt_chunk3_64_64 (x : Tensor) (r idx : Nat)
     simp only [hout_shape, prodShape, List.foldl, Nat.one_mul]; omega
   rw [valAt_of_lt _ _ hlt_prod]
   simp only [chunkPrimDimN, Tensor.mkShape, hshape,
-    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD, List.drop, List.foldl, List.set, List.length]
+    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD, List.drop, List.foldl]
   norm_num
   simp only [Nat.mod_one, Nat.add_zero, Nat.add_assoc]
 
@@ -253,8 +250,8 @@ private lemma valAt_chunk1 (x : Tensor) (r idx : Nat)
     simp only [hout_shape, prodShape, List.foldl, Nat.one_mul]; omega
   rw [valAt_of_lt _ _ hlt_prod]
   simp only [chunkPrimDimN, Tensor.mkShape, hshape,
-    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD, List.drop, List.foldl, List.set, List.length]
+    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD, List.drop, List.foldl]
   norm_num
 
 /-! ## Part 4: valAt helper for transpose2d -/
@@ -266,7 +263,7 @@ private lemma valAt_td_16_8_64_64 (x : Tensor) (idx : Nat)
     valAt (transpose2d x) idx =
     valAt x (idx / 4096 * 4096 + (idx % 4096 % 64) * 64 + idx % 4096 / 64) := by
   unfold transpose2d; rw [hshape]
-  simp only [List.reverse, List.reverseAux, List.append, valAt, Tensor.mkShape]
+  simp only [List.reverse, List.reverseAux, valAt, Tensor.mkShape]
   have hps : prodShape [16, 8, 64, 64] = 524288 := by simp [prodShape]
   rw [dif_pos (by rw [hps]; exact hidx)]
   simp only [show (64 : Nat) * 64 ≠ 0 from by omega, ite_false,
@@ -280,7 +277,7 @@ private lemma valAt_td_16_8_64_16 (x : Tensor) (idx : Nat)
     valAt (transpose2d x) idx =
     valAt x (idx / 1024 * 1024 + (idx % 1024 % 64) * 16 + idx % 1024 / 64) := by
   unfold transpose2d; rw [hshape]
-  simp only [List.reverse, List.reverseAux, List.append, valAt, Tensor.mkShape]
+  simp only [List.reverse, List.reverseAux, valAt, Tensor.mkShape]
   have hps : prodShape [16, 8, 16, 64] = 131072 := by simp [prodShape]
   rw [dif_pos (by rw [hps]; exact hidx)]
   simp only [show (64 : Nat) * 16 ≠ 0 from by omega, ite_false,
@@ -337,31 +334,6 @@ private theorem td_chunk3_eq_chunk2_td (X : Tensor) (r : Nat)
   rw [valAt_chunk2_64_64 (transpose2d X) r idx htd_shape hidx']
   rw [valAt_td_16_8_64_64 X _ hX (by omega)]
   exact congrArg (valAt X) (g31_td_chunk_idx_eq idx r hidx')
-
-/-! ## Part 6: Gather-chunk dim 2 roundtrip on [16,8,64,64] -/
-
-private theorem gather_chunk_dim2_64_64 (T : Tensor)
-    (hT : T.shape = [16, 8, 64, 64]) :
-    allGatherPrimDimN 2 4 0 [chunkPrimDimN 2 4 0 T, chunkPrimDimN 2 4 1 T,
-      chunkPrimDimN 2 4 2 T, chunkPrimDimN 2 4 3 T] = T := by
-  have hchunk_shape : ∀ r, (chunkPrimDimN 2 4 r T).shape = [16, 8, 16, 64] := by
-    intro r; rw [chunkPrimDimN_shape 2 4 r _ _ hT (by omega)]; simp [List.set, List.getD]
-  have hhead : (([chunkPrimDimN 2 4 0 T, chunkPrimDimN 2 4 1 T,
-      chunkPrimDimN 2 4 2 T, chunkPrimDimN 2 4 3 T].head?.map (·.shape)).getD []) = [16, 8, 16, 64] := by
-    simp [List.head?, Option.map, hchunk_shape 0]
-  apply Tensor.ext
-  · rw [allGatherPrimDimN_shape 2 4 _ _ hhead]; simp [List.set, List.getD, hT]
-  · intro idx hidx
-    have hidx' : idx < 524288 := by
-      rw [allGatherPrimDimN_shape 2 4 _ _ hhead] at hidx
-      simp [List.set, List.getD, prodShape] at hidx; omega
-    rw [valAt_ag2_16_8_16_64 _ idx hhead hidx']
-    set p := idx % 4096 / 1024 with hp_def
-    have hp_range : p = 0 ∨ p = 1 ∨ p = 2 ∨ p = 3 := by omega
-    rcases hp_range with h | h | h | h <;>
-      simp only [h, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD] <;>
-      rw [valAt_chunk2_64_64 T _ _ hT (by omega)] <;>
-      exact congrArg (valAt T) (by omega)
 
 /-! ## Part 7: Gather-chunk dim 1 roundtrip on [16,8,64,16] -/
 
@@ -472,35 +444,35 @@ theorem prove_goal_31_cut : goal_31_stmt_cut := by
     simp [sm_goal_31, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
   have hsm' : (bw_matmul (initSM 140) (initSM 112) (initSM 108)).2 =
       batchedMatmul (transpose2d (initSM 112)) (initSM 140) := rfl
-  -- PM evaluation: each rank computes allToAllPrimWithDims, then bw_matmul, then allToAllPrimWithDims
+  -- PM evaluation: each rank computes allToAllPrimWithDims, then allToAllPrimWithDims
   have hpm317 : (denoteGraph pm_goal_31 initPM) 317 =
       allToAllPrimWithDims 4 0 [batchedMatmul (transpose2d (allToAllPrimWithDims 4 0 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140),
         batchedMatmul (transpose2d (allToAllPrimWithDims 4 1 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140),
         batchedMatmul (transpose2d (allToAllPrimWithDims 4 2 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140),
         batchedMatmul (transpose2d (allToAllPrimWithDims 4 3 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140)] 2 1 := by
     simp [pm_goal_31, denoteGraph, List.foldl, applyNode, evalOp, storeSet,
-      allToAllPrimWithDims, bw_matmul, batchedMatmulBwd]
+      allToAllPrimWithDims, batchedMatmulBwd]
   have hpm319 : (denoteGraph pm_goal_31 initPM) 319 =
       allToAllPrimWithDims 4 1 [batchedMatmul (transpose2d (allToAllPrimWithDims 4 0 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140),
         batchedMatmul (transpose2d (allToAllPrimWithDims 4 1 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140),
         batchedMatmul (transpose2d (allToAllPrimWithDims 4 2 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140),
         batchedMatmul (transpose2d (allToAllPrimWithDims 4 3 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140)] 2 1 := by
     simp [pm_goal_31, denoteGraph, List.foldl, applyNode, evalOp, storeSet,
-      allToAllPrimWithDims, bw_matmul, batchedMatmulBwd]
+      allToAllPrimWithDims, batchedMatmulBwd]
   have hpm321 : (denoteGraph pm_goal_31 initPM) 321 =
       allToAllPrimWithDims 4 2 [batchedMatmul (transpose2d (allToAllPrimWithDims 4 0 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140),
         batchedMatmul (transpose2d (allToAllPrimWithDims 4 1 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140),
         batchedMatmul (transpose2d (allToAllPrimWithDims 4 2 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140),
         batchedMatmul (transpose2d (allToAllPrimWithDims 4 3 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140)] 2 1 := by
     simp [pm_goal_31, denoteGraph, List.foldl, applyNode, evalOp, storeSet,
-      allToAllPrimWithDims, bw_matmul, batchedMatmulBwd]
+      allToAllPrimWithDims, batchedMatmulBwd]
   have hpm323 : (denoteGraph pm_goal_31 initPM) 323 =
       allToAllPrimWithDims 4 3 [batchedMatmul (transpose2d (allToAllPrimWithDims 4 0 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140),
         batchedMatmul (transpose2d (allToAllPrimWithDims 4 1 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140),
         batchedMatmul (transpose2d (allToAllPrimWithDims 4 2 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140),
         batchedMatmul (transpose2d (allToAllPrimWithDims 4 3 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140)] 2 1 := by
     simp [pm_goal_31, denoteGraph, List.foldl, applyNode, evalOp, storeSet,
-      allToAllPrimWithDims, bw_matmul, batchedMatmulBwd]
+      allToAllPrimWithDims, batchedMatmulBwd]
   -- Abbreviate the dy list
   set dy_list := [batchedMatmul (transpose2d (allToAllPrimWithDims 4 0 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140),
     batchedMatmul (transpose2d (allToAllPrimWithDims 4 1 [initPM 400, initPM 401, initPM 402, initPM 403] 1 3)) (initPM 140),
@@ -583,4 +555,3 @@ theorem prove_goal_31_cut : goal_31_stmt_cut := by
   · rfl
 
 end TrainVerify.Denote.GeneratedGoals
-

@@ -11,7 +11,6 @@ namespace TrainVerify.Denote.ManualProofs
 
 set_option linter.flexible false
 set_option linter.style.longLine false
-set_option linter.unusedSimpArgs false
 set_option linter.unnecessarySimpa false
 set_option linter.unnecessarySeqFocus false
 
@@ -135,10 +134,13 @@ lemma pm21_pre1a_tid17 (initPM : Store) :
         n = pm21_n27 ∨ n = pm21_n28 ∨ n = pm21_n29 ∨ n ∈ [] := by
       simpa only [List.mem_cons] using hn
     rcases hn' with rfl | rfl | rfl | hnil
-    · simp [pm21_n27]
-    · simp [pm21_n28]
-    · simp [pm21_n29]
-    · simp at hnil
+    · simp only [List.mem_cons, OfNat.ofNat_eq_ofNat, Nat.reduceEqDiff, List.not_mem_nil, or_self,
+      not_false_eq_true]
+    · simp only [List.mem_cons, OfNat.ofNat_eq_ofNat, Nat.reduceEqDiff, List.not_mem_nil, or_self,
+      not_false_eq_true]
+    · simp only [List.mem_cons, OfNat.ofNat_eq_ofNat, Nat.reduceEqDiff, List.not_mem_nil, or_self,
+      not_false_eq_true]
+    · simp only [List.not_mem_nil] at hnil
   have hpair :
       (denoteGraph { pm_goal_21 with nodes := [pm21_n26, pm21_n17] } initPM) 17 =
         allReducePrim pm_goal_21.numRanks 0 [initPM 34, initPM 35, initPM 36, initPM 37] := by
@@ -148,37 +150,6 @@ lemma pm21_pre1a_tid17 (initPM : Store) :
         = (denoteGraph { pm_goal_21 with nodes := [pm21_n26, pm21_n17] } initPM) 17 := by
             simpa [hsplit] using hpres
     _ = _ := hpair
-
-lemma pm21_pre1_tid17 (initPM : Store) :
-    (denoteGraph { pm_goal_21 with nodes := pm21_pre1 } initPM) 17 =
-      allReducePrim pm_goal_21.numRanks 0 [initPM 34, initPM 35, initPM 36, initPM 37] := by
-  have hsplit : denoteGraph { pm_goal_21 with nodes := pm21_pre1 } initPM =
-      denoteGraph { pm_goal_21 with nodes := pm21_pre1b }
-        (denoteGraph { pm_goal_21 with nodes := pm21_pre1a } initPM) := by
-    simp [pm21_pre1, pm21_pre1a, pm21_pre1b]
-  have hpres :
-      (denoteGraph { pm_goal_21 with nodes := pm21_pre1b }
-          (denoteGraph { pm_goal_21 with nodes := pm21_pre1a } initPM)) 17 =
-        (denoteGraph { pm_goal_21 with nodes := pm21_pre1a } initPM) 17 := by
-    apply denoteGraph_tid_eq_of_forall_not_mem_outs (g := pm_goal_21)
-      (nodes := pm21_pre1b)
-      (init := denoteGraph { pm_goal_21 with nodes := pm21_pre1a } initPM)
-      (tid := 17)
-    intro n hn
-    have hn' :
-        n = pm21_n54 ∨ n = pm21_n55 ∨ n = pm21_n56 ∨ n = pm21_n57 ∨ n ∈ [] := by
-      simpa only [pm21_pre1b, List.mem_cons] using hn
-    rcases hn' with rfl | rfl | rfl | rfl | hnil
-    · simp [pm21_n54]
-    · simp [pm21_n55]
-    · simp [pm21_n56]
-    · simp [pm21_n57]
-    · simp at hnil
-  calc
-    (denoteGraph { pm_goal_21 with nodes := pm21_pre1 } initPM) 17
-        = (denoteGraph { pm_goal_21 with nodes := pm21_pre1a } initPM) 17 := by
-            simpa [hsplit] using hpres
-    _ = _ := pm21_pre1a_tid17 initPM
 
 lemma pm21_pre1_tid54 (initPM : Store) :
     (denoteGraph { pm_goal_21 with nodes := pm21_pre1 } initPM) 54 =
@@ -409,7 +380,8 @@ lemma pm21_pre1_tid25 (initPM : Store) :
   intro n hn
   simp [pm21_pre1, pm21_pre1a, pm21_pre1b] at hn
   rcases hn with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-    simp [pm21_n26, pm21_n17, pm21_n27, pm21_n28, pm21_n29, pm21_n54, pm21_n55, pm21_n56, pm21_n57]
+    simp only [List.mem_cons, OfNat.ofNat_eq_ofNat, Nat.reduceEqDiff, List.not_mem_nil, or_self,
+      not_false_eq_true]
 
 lemma pm21_prefix_tid24 (initPM : Store) :
     (denoteGraph { pm_goal_21 with nodes := pm21_prefix } initPM) 24 =
@@ -450,7 +422,8 @@ lemma pm21_prefix_pre_tid70 (initPM : Store) :
       (init := applyNode pm_goal_21 s1 pm21_n70) (tid := 70)
     intro n hn
     simp [pm21_n71, pm21_n72, pm21_n73] at hn
-    rcases hn with rfl | rfl | rfl <;> simp [pm21_n71, pm21_n72, pm21_n73]
+    rcases hn with rfl | rfl | rfl <;> simp only [List.mem_cons, OfNat.ofNat_eq_ofNat,
+      Nat.reduceEqDiff, List.not_mem_nil, or_self, not_false_eq_true]
   have h70 : (applyNode pm_goal_21 s1 pm21_n70) 70 = bw_sum (s1 25) (s1 54) :=
     applyNode_bw_sum_out pm_goal_21 s1 0 25 54 70
   have h25 : s1 25 = initPM 25 := pm21_pre1_tid25 initPM
@@ -494,7 +467,8 @@ lemma pm21_prefix_pre_tid71 (initPM : Store) :
       (init := applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) (tid := 71)
     intro n hn
     simp [pm21_n72, pm21_n73] at hn
-    rcases hn with rfl | rfl <;> simp [pm21_n72, pm21_n73]
+    rcases hn with rfl | rfl <;> simp only [List.mem_cons, OfNat.ofNat_eq_ofNat, Nat.reduceEqDiff,
+      List.not_mem_nil, or_self, not_false_eq_true]
   have h71 :
       (applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) 71 =
         bw_sum ((applyNode pm_goal_21 s1 pm21_n70) 25) ((applyNode pm_goal_21 s1 pm21_n70) 55) :=
@@ -550,7 +524,8 @@ lemma pm21_prefix_pre_tid72 (initPM : Store) :
         (applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) pm21_n72) (tid := 72)
     intro n hn
     simp [pm21_n73] at hn
-    rcases hn with rfl <;> simp [pm21_n73]
+    rcases hn with rfl <;> simp only [List.mem_cons, OfNat.ofNat_eq_ofNat, Nat.reduceEqDiff,
+      List.not_mem_nil, or_self, not_false_eq_true]
   have h72 :
       (applyNode pm_goal_21
         (applyNode pm_goal_21 (applyNode pm_goal_21 s1 pm21_n70) pm21_n71) pm21_n72) 72 =

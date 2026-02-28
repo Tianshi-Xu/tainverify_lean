@@ -11,7 +11,6 @@ namespace TrainVerify.Denote.ManualProofs
 
 set_option linter.flexible false
 set_option linter.style.longLine false
-set_option linter.unusedSimpArgs false
 set_option linter.unnecessarySimpa false
 set_option linter.unnecessarySeqFocus false
 
@@ -41,7 +40,6 @@ lemma pm23_split (initPM : Store) :
   simpa [pm_goal_23, chunk_prefix, bw_linear_suffix] using
     (denoteGraph_nodes_append pm_goal_23 chunk_prefix bw_linear_suffix initPM)
 
-set_option maxHeartbeats 400000 in
 theorem goal_23_proof : goal_23_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   dsimp [goal_23_stmt_cut, CoarseLineageHoldsWithInit, goal_23]

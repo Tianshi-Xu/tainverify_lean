@@ -13,9 +13,8 @@ namespace TrainVerify.Denote.Common
 
 set_option linter.flexible false
 set_option linter.style.longLine false
-set_option linter.unusedSimpArgs false
-set_option linter.unnecessarySimpa false
-set_option linter.unnecessarySeqFocus false
+-- set_option linter.unnecessarySimpa false
+-- set_option linter.unnecessarySeqFocus false
 
 -- Weight shard shapes as a single map equality (avoids repeating simpa)
 lemma initGoal_16_shard_shapes_map (numParts : Nat) (initSM initPM : Store)
@@ -63,7 +62,7 @@ lemma initGoal_16_ws_shapes (numParts : Nat) (initSM initPM : Store)
   have h32 := initGoal_16_shape_32 numParts initSM initPM hInit16
   have h33 := initGoal_16_shape_33 numParts initSM initPM hInit16
   intro w hw
-  simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hw
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hw
   rcases hw with rfl | rfl | rfl | rfl <;> assumption
 
 -- Reconstruct equality from initGoal_16
@@ -158,7 +157,7 @@ lemma bw_linear_suffix_preserves (g : GraphDecl) (s : Store) (tid : Tid)
   intro n hn
   simp only [bw_linear_suffix, List.mem_cons, List.mem_nil_iff, or_false] at hn
   rcases hn with rfl | rfl | rfl | rfl <;>
-    simp only [NodeDecl.mk.injEq, List.mem_cons, List.mem_nil_iff, or_false, not_or] <;>
+    simp only [List.mem_cons, List.mem_nil_iff, or_false, not_or] <;>
     exact ⟨‹_›, ‹_›⟩
 
 -- Specific tid preservation lemmas (for convenience)
@@ -198,30 +197,6 @@ lemma bw_linear_suffix_preserves_29 (g : GraphDecl) (s : Store) :
     (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) (by decide) (by decide)
 
-lemma bw_linear_suffix_preserves_30 (g : GraphDecl) (s : Store) :
-    (denoteGraph { g with nodes := bw_linear_suffix } s) 30 = s 30 :=
-  bw_linear_suffix_preserves g s 30
-    (by decide) (by decide) (by decide) (by decide)
-    (by decide) (by decide) (by decide) (by decide)
-
-lemma bw_linear_suffix_preserves_31 (g : GraphDecl) (s : Store) :
-    (denoteGraph { g with nodes := bw_linear_suffix } s) 31 = s 31 :=
-  bw_linear_suffix_preserves g s 31
-    (by decide) (by decide) (by decide) (by decide)
-    (by decide) (by decide) (by decide) (by decide)
-
-lemma bw_linear_suffix_preserves_32 (g : GraphDecl) (s : Store) :
-    (denoteGraph { g with nodes := bw_linear_suffix } s) 32 = s 32 :=
-  bw_linear_suffix_preserves g s 32
-    (by decide) (by decide) (by decide) (by decide)
-    (by decide) (by decide) (by decide) (by decide)
-
-lemma bw_linear_suffix_preserves_33 (g : GraphDecl) (s : Store) :
-    (denoteGraph { g with nodes := bw_linear_suffix } s) 33 = s 33 :=
-  bw_linear_suffix_preserves g s 33
-    (by decide) (by decide) (by decide) (by decide)
-    (by decide) (by decide) (by decide) (by decide)
-
 /-!
 ## BW_linear suffix output lemmas
 
@@ -231,42 +206,42 @@ Show what tids 46..53 compute (dX = .1, dW = .2 of bw_linear).
 lemma bw_linear_suffix_tid46 (g : GraphDecl) (s : Store) :
     (denoteGraph { g with nodes := bw_linear_suffix } s) 46 =
       (bw_linear (s 24) (s 26) (s 30)).1 := by
-  simp [bw_linear_suffix, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  simp [denoteGraph, List.foldl, applyNode, evalOp, storeSet]
 
 lemma bw_linear_suffix_tid47 (g : GraphDecl) (s : Store) :
     (denoteGraph { g with nodes := bw_linear_suffix } s) 47 =
       (bw_linear (s 24) (s 26) (s 30)).2 := by
-  simp [bw_linear_suffix, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  simp [denoteGraph, List.foldl, applyNode, evalOp, storeSet]
 
 lemma bw_linear_suffix_tid48 (g : GraphDecl) (s : Store) :
     (denoteGraph { g with nodes := bw_linear_suffix } s) 48 =
       (bw_linear (s 24) (s 27) (s 31)).1 := by
-  simp [bw_linear_suffix, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  simp [denoteGraph, List.foldl, applyNode, evalOp, storeSet]
 
 lemma bw_linear_suffix_tid49 (g : GraphDecl) (s : Store) :
     (denoteGraph { g with nodes := bw_linear_suffix } s) 49 =
       (bw_linear (s 24) (s 27) (s 31)).2 := by
-  simp [bw_linear_suffix, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  simp [denoteGraph, List.foldl, applyNode, evalOp, storeSet]
 
 lemma bw_linear_suffix_tid50 (g : GraphDecl) (s : Store) :
     (denoteGraph { g with nodes := bw_linear_suffix } s) 50 =
       (bw_linear (s 24) (s 28) (s 32)).1 := by
-  simp [bw_linear_suffix, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  simp [denoteGraph, List.foldl, applyNode, evalOp, storeSet]
 
 lemma bw_linear_suffix_tid51 (g : GraphDecl) (s : Store) :
     (denoteGraph { g with nodes := bw_linear_suffix } s) 51 =
       (bw_linear (s 24) (s 28) (s 32)).2 := by
-  simp [bw_linear_suffix, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  simp [denoteGraph, List.foldl, applyNode, evalOp, storeSet]
 
 lemma bw_linear_suffix_tid52 (g : GraphDecl) (s : Store) :
     (denoteGraph { g with nodes := bw_linear_suffix } s) 52 =
       (bw_linear (s 24) (s 29) (s 33)).1 := by
-  simp [bw_linear_suffix, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  simp [denoteGraph, List.foldl, applyNode, evalOp, storeSet]
 
 lemma bw_linear_suffix_tid53 (g : GraphDecl) (s : Store) :
     (denoteGraph { g with nodes := bw_linear_suffix } s) 53 =
       (bw_linear (s 24) (s 29) (s 33)).2 := by
-  simp [bw_linear_suffix, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  simp [denoteGraph, List.foldl, applyNode, evalOp, storeSet]
 
 /-!
 ## ChunkPrim prefix lemmas
@@ -283,29 +258,29 @@ lemma chunk_prefix_preserves (g : GraphDecl) (s : Store) (tid : Tid)
   intro n hn
   simp only [chunk_prefix, List.mem_cons, List.mem_nil_iff, or_false] at hn
   rcases hn with rfl | rfl | rfl | rfl <;>
-    simp only [NodeDecl.mk.injEq, List.mem_cons, List.mem_nil_iff, or_false, List.mem_singleton] <;>
+    simp only [List.mem_cons, List.mem_nil_iff, or_false] <;>
     assumption
 
 -- Chunk prefix outputs
 lemma chunk_prefix_tid26 (g : GraphDecl) (s : Store) :
     (denoteGraph { g with nodes := chunk_prefix } s) 26 =
       chunkPrim g.numRanks 0 (s 20) := by
-  simp [chunk_prefix, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  simp [denoteGraph, List.foldl, applyNode, evalOp, storeSet]
 
 lemma chunk_prefix_tid27 (g : GraphDecl) (s : Store) :
     (denoteGraph { g with nodes := chunk_prefix } s) 27 =
       chunkPrim g.numRanks 1 (s 20) := by
-  simp [chunk_prefix, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  simp [denoteGraph, List.foldl, applyNode, evalOp, storeSet]
 
 lemma chunk_prefix_tid28 (g : GraphDecl) (s : Store) :
     (denoteGraph { g with nodes := chunk_prefix } s) 28 =
       chunkPrim g.numRanks 2 (s 20) := by
-  simp [chunk_prefix, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  simp [denoteGraph, List.foldl, applyNode, evalOp, storeSet]
 
 lemma chunk_prefix_tid29 (g : GraphDecl) (s : Store) :
     (denoteGraph { g with nodes := chunk_prefix } s) 29 =
       chunkPrim g.numRanks 3 (s 20) := by
-  simp [chunk_prefix, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  simp [denoteGraph, List.foldl, applyNode, evalOp, storeSet]
 
 -- Chunk prefix preserves specific tids needed by Goals 21/23
 lemma chunk_prefix_preserves_24 (g : GraphDecl) (s : Store) :
@@ -343,8 +318,6 @@ lemma numRanks_4_128_eq_mul_32 (numRanks : Nat) (hn : numRanks = 4) :
     128 = numRanks * 32 := by omega
 
 -- Generic positivity: any numRanks = 4 implies 0 < numRanks
-lemma numRanks_pos_of_eq_4 {n : Nat} (h : n = 4) : 0 < n := by omega
-
 /-!
 ## Reconstruct non-scalar for BW outputs
 
@@ -355,24 +328,6 @@ lemma reconstruct_4_nonscalar (numRanks : Nat) (a b c d : Tensor)
     (hnon : a.shape ≠ [1]) :
     reconstruct numRanks 0 [a, b, c, d] = allGatherPrim numRanks 0 [a, b, c, d] :=
   reconstruct_cons_cons_nonscalar numRanks 0 a b [c, d] hnon
-
-/-!
-## Graph split helper
-
-When a graph's nodes split as `prefix ++ suffix`, and the suffix preserves a tid
-that the prefix writes to some value, the full graph also writes that value.
--/
-
-lemma denoteGraph_tid_of_split (g : GraphDecl) (prefix_ suffix_ : List NodeDecl)
-    (s : Store) (tid : Tid) {val : Tensor}
-    (hsplit : denoteGraph g s = denoteGraph { g with nodes := suffix_ }
-        (denoteGraph { g with nodes := prefix_ } s))
-    (hpres : (denoteGraph { g with nodes := suffix_ }
-        (denoteGraph { g with nodes := prefix_ } s)) tid =
-        (denoteGraph { g with nodes := prefix_ } s) tid)
-    (hpre : (denoteGraph { g with nodes := prefix_ } s) tid = val) :
-    (denoteGraph g s) tid = val := by
-  rw [hsplit, hpres, hpre]
 
 /-!
 ## Generic 4-rank ChunkPrim sequence
@@ -390,22 +345,6 @@ abbrev chunkPrim_4_nodes (in_tid o0 o1 o2 o3 : Tid) : List NodeDecl :=
     { rank := 3, op := "OpName.ChunkPrim", ins := [in_tid], outs := [o3] } ]
 
 -- Existing chunk_prefix is an instance of chunkPrim_4_nodes
-lemma chunk_prefix_eq : chunk_prefix = chunkPrim_4_nodes 20 26 27 28 29 := rfl
-
--- Generic preservation: chunkPrim_4_nodes preserves any tid not in its outputs
-lemma chunkPrim_4_nodes_preserves (g : GraphDecl) (s : Store)
-    (in_tid o0 o1 o2 o3 tid : Tid)
-    (h0 : tid ≠ o0) (h1 : tid ≠ o1) (h2 : tid ≠ o2) (h3 : tid ≠ o3) :
-    (denoteGraph { g with nodes := chunkPrim_4_nodes in_tid o0 o1 o2 o3 } s) tid = s tid := by
-  apply denoteGraph_tid_eq_of_forall_not_mem_outs (g := g)
-    (nodes := chunkPrim_4_nodes in_tid o0 o1 o2 o3) (init := s) (tid := tid)
-  intro n hn
-  simp only [chunkPrim_4_nodes, List.mem_cons, List.mem_nil_iff, or_false] at hn
-  rcases hn with rfl | rfl | rfl | rfl <;>
-    simp only [NodeDecl.mk.injEq, List.mem_cons, List.mem_nil_iff, or_false, List.mem_singleton] <;>
-    assumption
-
--- Generic output lemma for rank 0
 lemma chunkPrim_4_nodes_output_0 (g : GraphDecl) (s : Store)
     (in_tid o0 o1 o2 o3 : Tid)
     (h01 : o0 ≠ o1) (h02 : o0 ≠ o2) (h03 : o0 ≠ o3) :
@@ -431,7 +370,7 @@ lemma chunkPrim_4_nodes_output_0 (g : GraphDecl) (s : Store)
       chunkPrim g.numRanks 0 (s in_tid) := by
     simp only [denoteGraph_nodes_cons, denoteGraph_nodes_nil]
     exact applyNode_chunkPrim_out g s 0 in_tid o0
-  simp only [chunkPrim_4_nodes, List.cons_append, List.nil_append] at hsplit
+  simp only [List.cons_append, List.nil_append] at hsplit
   rw [hsplit, hpres, hout]
 
 -- Generic output lemma for rank 1
@@ -463,7 +402,7 @@ lemma chunkPrim_4_nodes_output_1 (g : GraphDecl) (s : Store)
     rw [applyNode_chunkPrim_out g _ 1 in_tid o1]
     congr 1
     exact applyNode_eq_of_not_mem_outs g s _ in_tid (by simp [hin0])
-  simp only [chunkPrim_4_nodes, List.cons_append, List.nil_append] at hsplit
+  simp only [List.cons_append, List.nil_append] at hsplit
   rw [hsplit, hpres, hout]
 
 -- Generic output lemma for rank 2
@@ -486,7 +425,7 @@ lemma chunkPrim_4_nodes_output_2 (g : GraphDecl) (s : Store)
     (tid := o2) (by
       intro n hn
       simp only [List.mem_cons, List.mem_nil_iff, or_false] at hn
-      rcases hn with rfl <;> simp [h23])
+      rcases hn with rfl; simp [h23])
   have hout : (denoteGraph { g with nodes :=
       [{ rank := 0, op := "OpName.ChunkPrim", ins := [in_tid], outs := [o0] },
        { rank := 1, op := "OpName.ChunkPrim", ins := [in_tid], outs := [o1] },
@@ -502,7 +441,7 @@ lemma chunkPrim_4_nodes_output_2 (g : GraphDecl) (s : Store)
         intro n hn
         simp only [List.mem_cons, List.mem_nil_iff, or_false] at hn
         rcases hn with rfl | rfl <;> simp [hin0, hin1])
-  simp only [chunkPrim_4_nodes, List.cons_append, List.nil_append] at hsplit
+  simp only [List.cons_append, List.nil_append] at hsplit
   rw [hsplit, hpres, hout]
 
 -- Generic output lemma for rank 3
@@ -526,18 +465,4 @@ lemma chunkPrim_4_nodes_output_3 (g : GraphDecl) (s : Store)
   exact hpres
 
 -- Combined output lemma: all 4 outputs at once
-lemma chunkPrim_4_nodes_outputs (g : GraphDecl) (s : Store)
-    (in_tid o0 o1 o2 o3 : Tid)
-    (h01 : o0 ≠ o1) (h02 : o0 ≠ o2) (h03 : o0 ≠ o3)
-    (h12 : o1 ≠ o2) (h13 : o1 ≠ o3) (h23 : o2 ≠ o3)
-    (hin0 : in_tid ≠ o0) (hin1 : in_tid ≠ o1) (hin2 : in_tid ≠ o2) :
-    (denoteGraph { g with nodes := chunkPrim_4_nodes in_tid o0 o1 o2 o3 } s) o0 = chunkPrim g.numRanks 0 (s in_tid) ∧
-    (denoteGraph { g with nodes := chunkPrim_4_nodes in_tid o0 o1 o2 o3 } s) o1 = chunkPrim g.numRanks 1 (s in_tid) ∧
-    (denoteGraph { g with nodes := chunkPrim_4_nodes in_tid o0 o1 o2 o3 } s) o2 = chunkPrim g.numRanks 2 (s in_tid) ∧
-    (denoteGraph { g with nodes := chunkPrim_4_nodes in_tid o0 o1 o2 o3 } s) o3 = chunkPrim g.numRanks 3 (s in_tid) :=
-  ⟨chunkPrim_4_nodes_output_0 g s in_tid o0 o1 o2 o3 h01 h02 h03,
-   chunkPrim_4_nodes_output_1 g s in_tid o0 o1 o2 o3 h12 h13 hin0,
-   chunkPrim_4_nodes_output_2 g s in_tid o0 o1 o2 o3 h23 hin0 hin1,
-   chunkPrim_4_nodes_output_3 g s in_tid o0 o1 o2 o3 hin0 hin1 hin2⟩
-
 end TrainVerify.Denote.Common

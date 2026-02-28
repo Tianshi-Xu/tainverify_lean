@@ -56,17 +56,6 @@ def goal_26_stmt_cut : Prop :=
 
 /-! ### Helper: allGatherPrim = allGatherPrimDimN 3 for head shape [16, 64, 8, 4] -/
 set_option linter.flexible false in
-private lemma allGatherPrim_eq_dimN3_16_64_8_4 (xs : List Tensor)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [16, 64, 8, 4]) :
-    allGatherPrim 4 0 xs = allGatherPrimDimN 3 4 0 xs := by
-  conv_lhs => unfold allGatherPrim; rw [hhead]
-  conv_rhs => unfold allGatherPrimDimN; rw [hhead]
-  simp [lastD, dropLast, appendLast, List.getD, List.drop,
-    Nat.div_one, Nat.mod_one]
-  have h1 : ([16, 64, 8, 4] : List Nat).getLastD 0 * 4 = 16 := by decide
-  have h2 : (([4] : List Nat)[0]?.getD 0 : Nat) * 4 = 16 := by decide
-  rw [h1, h2]
-
 /-! ### Helper A: valAt of transposeAxes 1 2 for shape [16,8,64,16] -/
 private lemma valAt_ta12_16_8_64_16 (x : Tensor) (idx : Nat)
     (hshape : x.shape = [16, 8, 64, 16]) (hidx : idx < 131072) :

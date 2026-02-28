@@ -105,14 +105,8 @@ def pmShapeCheck : Except String (List (Tid × Shape)) :=
 theorem smShapeCheck_ok : smShapeCheck.isOk := by
   native_decide
 
-theorem smShapeCheck_exists : ∃ m, smShapeCheck = Except.ok m := by
-  exact (TrainVerify.Denote.Except.isOk_iff_exists smShapeCheck).1 smShapeCheck_ok
-
 theorem pmShapeCheck_ok : pmShapeCheck.isOk := by
   native_decide
-
-theorem pmShapeCheck_exists : ∃ m, pmShapeCheck = Except.ok m := by
-  exact (TrainVerify.Denote.Except.isOk_iff_exists pmShapeCheck).1 pmShapeCheck_ok
 
 theorem sm_denoteGraph_unfold (init : Store) :
     denoteGraph sm init =
@@ -161,37 +155,6 @@ def all_goals_stmt : Prop :=
   ∀ g ∈ goals, CoarseLineageHoldsWithInit sm pm g smInitEnv pmInitEnv initGoals
 
 /-!
-## Auto-generated SM tid computation lemmas
-
-These lemmas show what each SM tid computes in terms of the init store.
--/
-
-theorem sm_tid_15_eq (init : Store) :
-    (denoteGraph sm init) 15 = fw_sum (denoteGraph sm init 17) := by
-  simp only [sm_denoteGraph_unfold, applyNode, evalOp, storeSet, List.map, List.zip]
-  rfl
-
-theorem sm_tid_17_eq (init : Store) :
-    (denoteGraph sm init) 17 = fw_linear (init 20) (init 16) := by
-  simp only [sm_denoteGraph_unfold, applyNode, evalOp, storeSet, List.map, List.zip]
-  rfl
-
-theorem sm_tid_21_eq (init : Store) :
-    (denoteGraph sm init) 21 = (bw_linear (denoteGraph sm init 24) (init 20) (init 16)).1 := by
-  simp only [sm_denoteGraph_unfold, applyNode, evalOp, storeSet, List.map, List.zip]
-  rfl
-
-theorem sm_tid_23_eq (init : Store) :
-    (denoteGraph sm init) 23 = (bw_linear (denoteGraph sm init 24) (init 20) (init 16)).2 := by
-  simp only [sm_denoteGraph_unfold, applyNode, evalOp, storeSet, List.map, List.zip]
-  rfl
-
-theorem sm_tid_24_eq (init : Store) :
-    (denoteGraph sm init) 24 = bw_sum (init 25) (denoteGraph sm init 17) := by
-  simp only [sm_denoteGraph_unfold, applyNode, evalOp, storeSet, List.map, List.zip]
-  rfl
-
-/-!
 ## PM init tids
 
 The following tids are PM init tids (not written by any PM node): [20, 25, 30, 31, 32, 33]
@@ -200,48 +163,5 @@ To prove `(denoteGraph pm init) tid = init tid` for an init tid,
 use `denoteGraph_tid_eq_of_forall_not_mem_outs` with `native_decide`
 to show no node outputs that tid.
 -/
-
-/-!
-## Incremental Proof Strategy
-
-The goals have the following dependency structure:
-- goal_15 has no prerequisites (base case)
-- goal_21 depends on intermediate tensors: [17]
-- goal_23 depends on intermediate tensors: [17, 24]
-
-To prove `goal_X_stmt` from `goal_X_stmt_incremental`, use
-`CoarseLineageHoldsWithInit_of_incremental` with proofs of the prerequisite
-intermediate goals.
--/
-
-theorem goal_21_of_incremental
-    (hincr : goal_21_stmt_incremental)
-    (hintermediateGoal_17 : intermediateGoal_17_stmt)
-    : goal_21_stmt := by
-  unfold goal_21_stmt goal_21_stmt_incremental at *
-  apply CoarseLineageHoldsWithInit_of_incremental
-  · exact hincr
-  · intro g hg
-    simp only [goal_21_prereqs, List.mem_cons, List.mem_nil_iff] at hg
-    cases hg with
-    | inl h => subst h; exact hintermediateGoal_17
-    | inr h => exact False.elim h
-
-theorem goal_23_of_incremental
-    (hincr : goal_23_stmt_incremental)
-    (hintermediateGoal_17 : intermediateGoal_17_stmt)
-    (hintermediateGoal_24 : intermediateGoal_24_stmt)
-    : goal_23_stmt := by
-  unfold goal_23_stmt goal_23_stmt_incremental at *
-  apply CoarseLineageHoldsWithInit_of_incremental
-  · exact hincr
-  · intro g hg
-    simp only [goal_23_prereqs, List.mem_cons, List.mem_nil_iff] at hg
-    cases hg with
-    | inl h => subst h; exact hintermediateGoal_17
-    | inr hg =>
-      cases hg with
-      | inl h => subst h; exact hintermediateGoal_24
-      | inr h => exact False.elim h
 
 end TrainVerify.Denote.Generated

@@ -175,10 +175,6 @@ theorem prodShape_cons (d : Nat) (sh : Shape) :
       -- Apply the lemma that states the foldl operation with initial value d * 1 is equal to the foldl operation with initial value 1, then multiplied by d. This follows directly from the definition of foldl.
       apply h_foldl_mul
 
-theorem prodShape_two (m n : Nat) : prodShape [m, n] = m * n := by
-  -- By definition of `prodShape`, we have `prodShape [m, n] = m * n`.
-  simp [prodShape]
-
 theorem prodShape_eq_reconstruct (sh : Shape) (h : sh ≠ []) :
     prodShape [prodShape (dropLast sh), lastD sh] = prodShape sh := by
       -- By definition of `prodShape`, we can split the list into the first part and the last element.

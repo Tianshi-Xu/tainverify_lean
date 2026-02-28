@@ -13,7 +13,6 @@ open TrainVerify.Denote.Common
 
 set_option linter.style.longLine false
 set_option linter.flexible false
-set_option linter.unusedSimpArgs false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -76,8 +75,8 @@ private lemma valAt_chunk3_64_8_16 (x : Tensor) (r idx : Nat)
     simp only [hout_shape, prodShape, List.foldl, Nat.one_mul]; omega
   rw [valAt_of_lt _ _ hlt_prod]
   simp only [chunkPrimDimN, Tensor.mkShape, hshape,
-    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD, List.drop, List.foldl, List.set, List.length]
+    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD, List.drop, List.foldl]
   norm_num
   simp only [Nat.mod_one, Nat.add_zero, Nat.add_assoc]
 
@@ -124,8 +123,6 @@ private lemma chunk3_of_gather3 (xs : List Tensor) (r : Nat)
     exact congrArg₂ valAt (by congr 1; omega) (by omega)
 
 /-! ## Part 3: Main proof -/
-
-set_option maxHeartbeats 1600000 in
 theorem prove_goal_36_cut : goal_36_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   -- Extract prereq for tensor 141 (sharded dim 3)
@@ -185,4 +182,3 @@ theorem prove_goal_36_cut : goal_36_stmt_cut := by
   exact ⟨hout_shape, by simp [hout_shape], by simp [reconstructWithDim]⟩
 
 end TrainVerify.Denote.GeneratedGoals
-

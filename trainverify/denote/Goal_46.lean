@@ -13,7 +13,6 @@ open TrainVerify.Denote.Common
 
 set_option linter.style.longLine false
 set_option linter.flexible false
-set_option linter.unusedSimpArgs false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -75,18 +74,15 @@ private lemma valAt_gd2_16_64_32 (xs : List Tensor) (idx : Nat)
     show (32 : Nat) ≠ 0 from by omega,
     show (1 : Nat) ≠ 0 from by omega,
     ite_false,
-    show ∀ n, n % 128 / 32 / 4 = 0 from fun n => by omega,
-    show ∀ n, n % 128 / 32 % 4 = n % 128 / 32 from fun n => by omega,
     show ∀ n, n % 128 % 32 = n % 32 from fun n => by omega,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero,
-    Nat.zero_add]
+    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero]
 
 private lemma valAt_chunk2 (x : Tensor) (r idx : Nat)
     (hshape : x.shape = [16, 64, 128]) (hidx : idx < 32768) :
     valAt (chunkPrimDimN 2 4 r x) idx =
     valAt x (idx / 32 * 128 + (r % 4) * 32 + idx % 32) := by
   simp only [chunkPrimDimN, hshape, List.getD, List.getElem?_cons_zero,
-    List.getElem?_cons_succ, List.getElem?_nil,
+    List.getElem?_cons_succ,
     Option.getD, List.drop, List.foldl, List.set,
     valAt, Tensor.mkShape,
     show prodShape [16, 64, 32] = 32768 from by simp [prodShape],
@@ -94,11 +90,10 @@ private lemma valAt_chunk2 (x : Tensor) (r idx : Nat)
     show (128 : Nat) / 4 = 32 from by norm_num,
     show (1 : Nat) * 32 = 32 from by norm_num,
     show (128 : Nat) * 1 = 128 from by norm_num,
-    show (32 : Nat) * 1 = 32 from by norm_num,
     show (4 : Nat) ≠ 0 from by omega,
     show (32 : Nat) ≠ 0 from by omega,
     show (1 : Nat) ≠ 0 from by omega,
-    ite_false, Nat.mul_one, Nat.one_mul, Nat.div_one, Nat.mod_one,
+    ite_false, Nat.mul_one, Nat.div_one, Nat.mod_one,
     Nat.add_zero, Nat.add_assoc]
   rw [dif_pos hidx]
 
@@ -177,4 +172,3 @@ theorem prove_goal_46_cut : goal_46_stmt_cut := by
   exact ⟨by rw [← h121_eq]; exact h121_shape, by simp [hchunk_shape], rfl⟩
 
 end TrainVerify.Denote.GeneratedGoals
-

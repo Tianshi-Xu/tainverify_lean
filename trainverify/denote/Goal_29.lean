@@ -61,7 +61,6 @@ def goal_29_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_29 pm_goal_29 goal_29 sm_goal_29InitEnv pm_goal_29InitEnv goal_29_cut_initGoals
 
 set_option linter.flexible false
-set_option linter.unusedSimpArgs false
 
 /-! ### Helper lemmas -/
 
@@ -73,8 +72,7 @@ private lemma valAt_gd0_4_8_16_64 (xs : List Tensor) (idx : Nat)
     valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 8, 16, 64]))
       ((idx / 8192 % 4) * 8192 + idx % 8192) := by
   unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, List.set, List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+  simp [valAt, Tensor.mkShape, List.getD, List.drop, List.foldl, List.getElem?_cons_zero,
     show (4 : Nat) * 4 = 16 from by norm_num,
     show (4 : Nat) * 8192 = 32768 from by norm_num,
     show (16 : Nat) * 8192 = 131072 from by norm_num,
@@ -89,8 +87,8 @@ private lemma valAt_gd0_4_8_64_16 (xs : List Tensor) (idx : Nat)
     valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 8, 64, 16]))
       ((idx / 8192 % 4) * 8192 + idx % 8192) := by
   unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, List.set, List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+  simp [valAt, Tensor.mkShape, List.getD, List.drop, List.foldl,
+    List.getElem?_cons_zero,
     show (4 : Nat) * 4 = 16 from by norm_num,
     show (4 : Nat) * 8192 = 32768 from by norm_num,
     show (16 : Nat) * 8192 = 131072 from by norm_num,
@@ -111,12 +109,8 @@ private lemma valAt_ta23_4_8_16_64 (x : Tensor) (idx : Nat)
   rw [valAt_of_lt _ _ (by rw [hps_out]; exact hidx),
       valAt_of_lt _ _ (by rw [hps_in]; exact hinner)]
   unfold transposeAxes Tensor.mkShape
-  simp only [hshape, listSwapAt, flatToMulti, multiToFlat, valAt,
-    List.getD, List.set, List.length, Nat.sub_zero,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD_some, Option.getD_none,
-    Nat.mul_one, Nat.add_zero, Nat.div_one, Nat.mod_one,
-    if_neg, if_pos, ite_false, ite_true, dite_true, dite_false]
+  simp only [hshape, listSwapAt, flatToMulti, valAt, List.getD, List.set,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
   have ps1 := show prodShape [8, 16, 64] = 8192 from by simp [prodShape]
   have ps2 := show prodShape [16, 64] = 1024 from by simp [prodShape]
   have ps3 := show prodShape [64] = 64 from by simp [prodShape]
@@ -124,23 +118,15 @@ private lemma valAt_ta23_4_8_16_64 (x : Tensor) (idx : Nat)
   have ps5 := show prodShape [8, 64, 16] = 8192 from by simp [prodShape]
   have ps6 := show prodShape [64, 16] = 1024 from by simp [prodShape]
   have ps7 := show prodShape [16] = 16 from by simp [prodShape]
-  simp only [ps1, ps2, ps3, ps4, ps5, ps6, ps7,
+  simp only [ps4, ps5, ps6, ps7,
     show (8192 : Nat) ≠ 0 from by omega, show (1024 : Nat) ≠ 0 from by omega,
-    show (64 : Nat) ≠ 0 from by omega, show (16 : Nat) ≠ 0 from by omega,
+    show (16 : Nat) ≠ 0 from by omega,
     show (1 : Nat) ≠ 0 from by omega,
-    Nat.mul_one, Nat.add_zero, Nat.div_one, Nat.mod_one,
-    if_neg, if_pos, ite_false, ite_true]
+    Nat.div_one, ite_false]
   have hmm1 : ∀ n, n % 8192 % 1024 = n % 1024 := fun n => by omega
   have hmm2 : ∀ n, n % 8192 % 1024 % 16 = n % 16 := fun n => by omega
   have hinner' : idx / 8192 * 8192 + (idx % 8192 / 1024 * 1024 + (idx % 16 * 64 + idx % 1024 / 16)) < 32768 := by omega
-  simp [hmm1, hmm2, ps1, ps2, ps3, ps4, ps5, ps6, ps7,
-    show prodShape [4, 8, 16, 64] = 32768 from by simp [prodShape],
-    List.set, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD_some, Option.getD_none,
-    multiToFlat, flatToMulti, prodShape,
-    Nat.mul_one, Nat.add_zero, Nat.div_one, Nat.mod_one,
-    if_neg, if_pos, ite_false, ite_true,
-    dif_pos hinner']
+  simp [hmm1, List.set, Option.getD_some, multiToFlat, prodShape, dif_pos hinner']
   simp only [Nat.add_assoc]
 
 -- valAt of transposeAxes 2 3 for shape [16, 8, 16, 64]
@@ -157,12 +143,8 @@ private lemma valAt_ta23_16_8_16_64 (x : Tensor) (idx : Nat)
   rw [valAt_of_lt _ _ (by rw [hps_out]; exact hidx),
       valAt_of_lt _ _ (by rw [hps_in]; exact hinner)]
   unfold transposeAxes Tensor.mkShape
-  simp only [hshape, listSwapAt, flatToMulti, multiToFlat, valAt,
-    List.getD, List.set, List.length, Nat.sub_zero,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD_some, Option.getD_none,
-    Nat.mul_one, Nat.add_zero, Nat.div_one, Nat.mod_one,
-    if_neg, if_pos, ite_false, ite_true, dite_true, dite_false]
+  simp only [hshape, listSwapAt, flatToMulti, valAt, List.getD, List.set,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
   have ps1 := show prodShape [8, 16, 64] = 8192 from by simp [prodShape]
   have ps2 := show prodShape [16, 64] = 1024 from by simp [prodShape]
   have ps3 := show prodShape [64] = 64 from by simp [prodShape]
@@ -170,23 +152,15 @@ private lemma valAt_ta23_16_8_16_64 (x : Tensor) (idx : Nat)
   have ps5 := show prodShape [8, 64, 16] = 8192 from by simp [prodShape]
   have ps6 := show prodShape [64, 16] = 1024 from by simp [prodShape]
   have ps7 := show prodShape [16] = 16 from by simp [prodShape]
-  simp only [ps1, ps2, ps3, ps4, ps5, ps6, ps7,
+  simp only [ps4, ps5, ps6, ps7,
     show (8192 : Nat) ≠ 0 from by omega, show (1024 : Nat) ≠ 0 from by omega,
-    show (64 : Nat) ≠ 0 from by omega, show (16 : Nat) ≠ 0 from by omega,
+    show (16 : Nat) ≠ 0 from by omega,
     show (1 : Nat) ≠ 0 from by omega,
-    Nat.mul_one, Nat.add_zero, Nat.div_one, Nat.mod_one,
-    if_neg, if_pos, ite_false, ite_true]
+    Nat.div_one, ite_false]
   have hmm1 : ∀ n, n % 8192 % 1024 = n % 1024 := fun n => by omega
   have hmm2 : ∀ n, n % 8192 % 1024 % 16 = n % 16 := fun n => by omega
   have hinner' : idx / 8192 * 8192 + (idx % 8192 / 1024 * 1024 + (idx % 16 * 64 + idx % 1024 / 16)) < 131072 := by omega
-  simp [hmm1, hmm2, ps1, ps2, ps3, ps4, ps5, ps6, ps7,
-    show prodShape [16, 8, 16, 64] = 131072 from by simp [prodShape],
-    List.set, List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD_some, Option.getD_none,
-    multiToFlat, flatToMulti, prodShape,
-    Nat.mul_one, Nat.add_zero, Nat.div_one, Nat.mod_one,
-    if_neg, if_pos, ite_false, ite_true,
-    dif_pos hinner']
+  simp [hmm1, List.set,  Option.getD_some, multiToFlat,  prodShape, dif_pos hinner']
   simp only [Nat.add_assoc]
 
 -- Helper: addr components for ta23_gd0_comm
@@ -251,8 +225,7 @@ private theorem ta23_gd0_comm (y0 y1 y2 y3 : Tensor)
   have hp_range : p = 0 ∨ p = 1 ∨ p = 2 ∨ p = 3 := by omega
   have h_inner_bound : (idx / 8192 % 4) * 8192 + idx % 8192 < 32768 := by omega
   rcases hp_range with h | h | h | h <;> {
-    simp only [h, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
-      List.getElem?_nil, Option.getD_some, Option.getD_none]
+    simp only [h, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
     rw [valAt_ta23_4_8_16_64 _ _ (by assumption) h_inner_bound]
     simp only [ta23_inner_div idx, ta23_inner_mod idx,
       ta23_inner_mod1024 idx, ta23_inner_mod16 idx]
@@ -273,20 +246,15 @@ private lemma valAt_chunk1 (x : Tensor) (r idx : Nat)
   rw [valAt_of_lt _ _ (by rw [hps_out]; exact hidx),
       valAt_of_lt _ _ (by rw [hps_in]; exact hinner)]
   unfold chunkPrimDimN Tensor.mkShape valAt
-  simp only [hshape, List.set, List.getD,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
-    Option.getD_some, Option.getD_none, List.drop, List.foldl,
-    Nat.mul_one, Nat.add_zero, Nat.sub_zero,
+  simp only [hshape, List.getD,
+    List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl,
     show (4 : Nat) ≠ 0 from by omega,
     show (2048 : Nat) ≠ 0 from by omega,
-    ite_false, ite_true]
+    ite_false]
   norm_num
-  simp only [show (2 : Nat) * (1 * 64 * 16) = 2048 from by norm_num,
-    show (8 : Nat) * (1 * 64 * 16) = 8192 from by norm_num,
-    show (1 : Nat) * 64 * 16 ≠ 0 from by omega,
-    show prodShape [16, 2, 64, 16] = 32768 from by simp [prodShape],
-    show prodShape [16, 8, 64, 16] = 131072 from by simp [prodShape],
-    ite_false, ite_true, dif_pos hidx, dif_pos hinner]
+  simp only [show prodShape [16, 8, 64, 16] = 131072 from by simp [prodShape],
+    dif_pos hinner]
 
 -- valAt of allGatherPrimDimN 1 with element shape [16, 2, 64, 16]
 private lemma valAt_gather1 (xs : List Tensor) (idx : Nat)
@@ -296,13 +264,13 @@ private lemma valAt_gather1 (xs : List Tensor) (idx : Nat)
     valAt (xs.getD (idx % 8192 / 1024 / 2) (zeroTensor [16, 2, 64, 16]))
       ((idx / 8192) * 2048 + (idx % 8192 / 1024 % 2) * 1024 + idx % 1024) := by
   unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, List.set, List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+  simp [valAt, Tensor.mkShape, List.getD, List.drop, List.foldl,
+    List.getElem?_cons_zero, List.getElem?_cons_succ,
     show (2 : Nat) * 4 = 8 from by norm_num,
     show (2 : Nat) * 1024 = 2048 from by norm_num,
     show (8 : Nat) * 1024 = 8192 from by norm_num,
     show prodShape [16, 8, 64, 16] = 131072 from by simp [prodShape],
-    Nat.mod_eq_of_lt hidx, Nat.div_eq_of_lt hidx, dif_pos hidx]
+    dif_pos hidx]
 
 -- Gather-chunk roundtrip for dim 1 on shape [16, 8, 64, 16]
 private theorem gather_chunk_dim1 (T : Tensor)
@@ -432,4 +400,3 @@ theorem prove_goal_29_cut : goal_29_stmt_cut := by
   · rfl
 
 end TrainVerify.Denote.GeneratedGoals
-

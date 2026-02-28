@@ -13,7 +13,6 @@ open TrainVerify.Denote.Common
 
 set_option linter.style.longLine false
 set_option linter.flexible false
-set_option linter.unusedSimpArgs false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -70,8 +69,8 @@ private lemma valAt_gd0_4_64_128 (xs : List Tensor) (idx : Nat)
     valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 64, 128]))
       ((idx / 8192 % 4) * 8192 + idx % 8192) := by
   unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, List.set, List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+  simp [valAt, Tensor.mkShape, List.getD, List.drop, List.foldl,
+    List.getElem?_cons_zero,
     show (4 : Nat) * 4 = 16 from by norm_num,
     show (4 : Nat) * 8192 = 32768 from by norm_num,
     show (16 : Nat) * 8192 = 131072 from by norm_num,
@@ -83,7 +82,7 @@ private lemma valAt_chunk0 (x : Tensor) (r idx : Nat)
     valAt (chunkPrimDimN 0 4 r x) idx =
     valAt x ((r % 4) * 32768 + idx) := by
   unfold chunkPrimDimN; rw [hshape]
-  simp only [List.getD, List.getElem?_cons_zero, List.getElem?_nil,
+  simp only [List.getD, List.getElem?_cons_zero,
     Option.getD, List.drop, List.foldl, List.set]
   norm_num
   conv_lhs => rw [show (if (4 : Nat) = 0 then (0 : Nat) else 16 / 4) = 4 from by decide]
@@ -92,7 +91,6 @@ private lemma valAt_chunk0 (x : Tensor) (r idx : Nat)
   rw [dif_pos hidx]
   exact congrArg (valAt x) (by omega)
 
-set_option maxHeartbeats 1600000 in
 private lemma valAt_bwl_3d_fst (g x w : Tensor) (b s : Nat) (idx : Nat)
     (hg : g.shape = [b, s, 128]) (hx : x.shape = [b, s, 128]) (hw : w.shape = [128, 128])
     (hidx : idx < b * s * 128) (hs_pos : 0 < s) :
@@ -116,7 +114,6 @@ private lemma valAt_bwl_3d_fst (g x w : Tensor) (b s : Nat) (idx : Nat)
 /-! ## Distribution lemma: dX distributes over dim-0 chunking -/
 
 -- dX = g @ w distributes over dim-0 chunking of g
-set_option maxHeartbeats 3200000 in
 private theorem bw_linear_3d_fst_dim0_distr
     (g x x0 x1 x2 x3 w : Tensor)
     (hg : g.shape = [16, 64, 128])
@@ -161,7 +158,7 @@ private theorem bw_linear_3d_fst_dim0_distr
   have hlocal_bound : (idx / 8192 % 4) * 8192 + idx % 8192 < 32768 := by omega
   rcases hp_range with hp | hp | hp | hp <;> {
     simp only [hp, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
-      List.getElem?_nil, Option.getD]
+      Option.getD]
     -- Apply valAt_bwl_3d_fst for the chunk piece (b=4, s=64)
     rw [valAt_bwl_3d_fst _ _ w 4 64 _ (hchunk_shape _) (by assumption) hw (by omega) (by omega)]
     -- Both sides are ∑ j < 128. Show term equality.
@@ -176,7 +173,6 @@ private theorem bw_linear_3d_fst_dim0_distr
 /-! ## Main proof -/
 
 -- graph evaluation + reconstruction
-set_option maxHeartbeats 800000 in
 theorem prove_goal_45_cut : goal_45_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   -- Extract prereqs
@@ -239,4 +235,3 @@ theorem prove_goal_45_cut : goal_45_stmt_cut := by
   exact ⟨hresult_shape, by simp [hresult_shape], by simp [reconstructWithDim]⟩
 
 end TrainVerify.Denote.GeneratedGoals
-

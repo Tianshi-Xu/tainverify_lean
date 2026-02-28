@@ -63,7 +63,6 @@ def goal_47_stmt_cut : Prop :=
 /-! ## Helper lemmas -/
 
 -- valAt of bw_linear .1 for SM: g=[16,64,128], x=[16,64,128], w=[128,128]
-set_option maxHeartbeats 1600000 in
 private lemma valAt_bwl_3d_fst_128 (g x w : Tensor) (idx : Nat)
     (hg : g.shape = [16, 64, 128]) (hx : x.shape = [16, 64, 128]) (hw : w.shape = [128, 128])
     (hidx : idx < 131072) :
@@ -85,7 +84,6 @@ private lemma valAt_bwl_3d_fst_128 (g x w : Tensor) (idx : Nat)
     (show (64 : Nat) * 128 ≠ 0 from by omega), (show (128 : Nat) ≠ 0 from by omega)]
 
 -- valAt of bw_linear .1 for PM: g=[16,64,128], x=[16,64,32], w=[128,32]
-set_option maxHeartbeats 1600000 in
 private lemma valAt_bwl_3d_fst_32 (g x w : Tensor) (idx : Nat)
     (hg : g.shape = [16, 64, 128]) (hx : x.shape = [16, 64, 32]) (hw : w.shape = [128, 32])
     (hidx : idx < 32768) :
@@ -127,11 +125,8 @@ private lemma valAt_gd2_16_64_32 (xs : List Tensor) (idx : Nat)
     show (32 : Nat) ≠ 0 from by omega,
     show (1 : Nat) ≠ 0 from by omega,
     ite_false,
-    show ∀ n, n % 128 / 32 / 4 = 0 from fun n => by omega,
-    show ∀ n, n % 128 / 32 % 4 = n % 128 / 32 from fun n => by omega,
     show ∀ n, n % 128 % 32 = n % 32 from fun n => by omega,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero,
-    Nat.zero_add]
+    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero]
 
 -- allGatherPrimDimN 1 on [128, 32] → [128, 128]
 private lemma valAt_gd1_128_32 (ws : List Tensor) (idx : Nat)
@@ -154,29 +149,11 @@ private lemma valAt_gd1_128_32 (ws : List Tensor) (idx : Nat)
     show (32 : Nat) ≠ 0 from by omega,
     show (1 : Nat) ≠ 0 from by omega,
     ite_false,
-    show ∀ n, n % 128 / 32 / 4 = 0 from fun n => by omega,
-    show ∀ n, n % 128 / 32 % 4 = n % 128 / 32 from fun n => by omega,
     show ∀ n, n % 128 % 32 = n % 32 from fun n => by omega,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero,
-    Nat.zero_add]
+    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero]
 
 -- Bridge: valAt of gathered weight at compound index = valAt of piece
-private lemma w_valAt_piece (w0 w1 w2 w3 w : Tensor) (j r col : Nat)
-    (hw0 : w0.shape = [128, 32])
-    (hgather : allGatherPrimDimN 1 4 0 [w0, w1, w2, w3] = w)
-    (hj : j < 128) (hr : r < 4) (hcol : col < 32) :
-    valAt w (j * 128 + r * 32 + col) =
-    valAt ([w0, w1, w2, w3].getD r (zeroTensor [128, 32])) (j * 32 + col) := by
-  conv_lhs => rw [← hgather]
-  have hhead : ([w0, w1, w2, w3].head?.map (·.shape)).getD [] = [128, 32] := by simp [hw0]
-  rw [valAt_gd1_128_32 _ _ hhead (by omega)]
-  have h1 : (j * 128 + r * 32 + col) % 128 / 32 = r := by omega
-  have h2 : (j * 128 + r * 32 + col) / 128 * 32 + (j * 128 + r * 32 + col) % 32 = j * 32 + col := by omega
-  simp only [h1, h2]
-
 /-! ## Distribution theorem -/
-
-set_option maxHeartbeats 3200000 in
 private theorem bw_linear_3d_fst_colchunk_distr
     (g x x0 x1 x2 x3 w w0 w1 w2 w3 : Tensor)
     (hg : g.shape = [16, 64, 128])
@@ -237,8 +214,6 @@ private theorem bw_linear_3d_fst_colchunk_distr
   }
 
 /-! ## Main proof -/
-
-set_option maxHeartbeats 800000 in
 theorem prove_goal_47_cut : goal_47_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   -- Extract prereqs
@@ -310,4 +285,3 @@ theorem prove_goal_47_cut : goal_47_stmt_cut := by
   exact ⟨hresult_shape, by simp [hresult_shape], by simp [reconstructWithDim]⟩
 
 end TrainVerify.Denote.GeneratedGoals
-
