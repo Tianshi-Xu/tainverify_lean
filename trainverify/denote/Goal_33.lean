@@ -60,62 +60,6 @@ def goal_33_cut_initGoals : List LineageGoal := initGoals ++ goal_33_prereqs
 def goal_33_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_33 pm_goal_33 goal_33 sm_goal_33InitEnv pm_goal_33InitEnv goal_33_cut_initGoals
 
-/-! ## Helper lemmas -/
-
-private lemma valAt_ag3_np4 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [16, 8, 64, 16])
-    (hidx : idx < 524288) :
-    valAt (allGatherPrimDimN 3 4 0 xs) idx =
-    valAt (xs.getD (idx % 64 / 16) (zeroTensor [16, 8, 64, 16]))
-      (idx / 64 * 16 + idx % 16) := by
-  have hshape_out : (allGatherPrimDimN 3 4 0 xs).shape = [16, 8, 64, 64] := by
-    simp [allGatherPrimDimN, Tensor.mkShape, hhead]
-  have hlt_prod : idx < prodShape (allGatherPrimDimN 3 4 0 xs).shape := by
-    simp only [hshape_out, prodShape, List.foldl, Nat.one_mul]; omega
-  rw [valAt_of_lt _ _ hlt_prod]
-  simp only [allGatherPrimDimN, Tensor.mkShape, hhead,
-    List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
-  simp only [show (16 : Nat) * 4 = 64 from by norm_num,
-    show (16 : Nat) * 1 = 16 from by norm_num,
-    (show (64 : Nat) ≠ 0 by omega), (show (1 : Nat) ≠ 0 by omega),
-    (show (16 : Nat) ≠ 0 by omega),
-    ite_false]
-  simp only [show ∀ n, n % 64 / 1 / 16 = n % 64 / 16 from fun n => by omega,
-    show ∀ n, n / 64 * 16 + (n % 64 / 1) % 16 * 1 + n % 64 % 1 =
-      n / 64 * 16 + n % 16 from fun n => by omega]
-
-private theorem scalarDiv_ag3_comm (x0 x1 x2 x3 : Tensor) (c : Scalar)
-    (h0 : x0.shape = [16, 8, 64, 16]) :
-    scalarDiv (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3]) c =
-    allGatherPrimDimN 3 4 0 [scalarDiv x0 c, scalarDiv x1 c,
-      scalarDiv x2 c, scalarDiv x3 c] := by
-  have hhead_x : (([x0, x1, x2, x3].head?.map (·.shape)).getD []) = [16, 8, 64, 16] := by
-    simp [List.head?, Option.map, h0]
-  have hhead_sd : (([scalarDiv x0 c, scalarDiv x1 c, scalarDiv x2 c,
-      scalarDiv x3 c].head?.map (·.shape)).getD []) = [16, 8, 64, 16] := by
-    simp [List.head?, Option.map, scalarDiv, Tensor.mkShape, h0]
-  have hLHS_shape : (scalarDiv (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3]) c).shape =
-      [16, 8, 64, 64] := by
-    simp [scalarDiv, Tensor.mkShape]
-    rw [allGatherPrimDimN_shape 3 4 _ _ hhead_x]; simp [List.set, List.getD]
-  have hRHS_shape : (allGatherPrimDimN 3 4 0 [scalarDiv x0 c, scalarDiv x1 c,
-      scalarDiv x2 c, scalarDiv x3 c]).shape = [16, 8, 64, 64] := by
-    rw [allGatherPrimDimN_shape 3 4 _ _ hhead_sd]; simp [List.set, List.getD]
-  apply Tensor.ext (by rw [hLHS_shape, hRHS_shape])
-  intro idx hidx
-  rw [hLHS_shape] at hidx
-  have hidx' : idx < 524288 := by simpa [prodShape] using hidx
-  rw [valAt_scalarDiv]
-  rw [valAt_ag3_np4 _ _ hhead_x hidx']
-  rw [valAt_ag3_np4 _ _ hhead_sd hidx']
-  have hr_cases : idx % 64 / 16 = 0 ∨ idx % 64 / 16 = 1 ∨
-      idx % 64 / 16 = 2 ∨ idx % 64 / 16 = 3 := by omega
-  rcases hr_cases with h | h | h | h <;>
-  · simp only [h, List.getD,
-      List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
-    exact (valAt_scalarDiv _ c _).symm
-
 private lemma valAt_gd0_4_8_64_64 (xs : List Tensor) (idx : Nat)
     (hhead : (xs.head?.map (·.shape)).getD [] = [4, 8, 64, 64])
     (hidx : idx < 524288) :

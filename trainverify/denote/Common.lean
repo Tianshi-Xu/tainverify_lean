@@ -839,25 +839,6 @@ theorem valAt_scalarDiv (t : Tensor) (c : Scalar) (k : Nat) :
   unfold scalarDiv valAt Tensor.mkShape
   split <;> simp_all [zero_div]
 
--- scalarDiv preserves shape
-private lemma allGatherPrimDimN_gd0_np4_valAt
-    (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [4, 8, 64, 64])
-    (hidx : idx < 524288) :
-    valAt (allGatherPrimDimN 0 4 0 xs) idx =
-    valAt (xs.getD (idx % 524288 / 32768 / 4) (zeroTensor [4, 8, 64, 64]))
-      ((idx / 32768 % 4) * 32768 + idx % 32768) := by
-  have h4x4 : (4 : Nat) * 4 = 16 := by norm_num
-  have h4x32768 : (4 : Nat) * 32768 = 131072 := by norm_num
-  have h16x32768 : (16 : Nat) * 32768 = 524288 := by norm_num
-  have h_ps_out : prodShape [16, 8, 64, 64] = 524288 := by simp [prodShape]
-  have hmm_524288 : idx % 524288 = idx := Nat.mod_eq_of_lt hidx
-  have hdiv_524288 : idx / 524288 = 0 := Nat.div_eq_of_lt hidx
-  unfold allGatherPrimDimN
-  rw [hhead]
-  simp [valAt, Tensor.mkShape, h_ps_out, List.getD, List.drop, List.foldl, List.length,
-    List.getElem?_cons_zero, h4x4, h4x32768, h16x32768, hmm_524288, hdiv_524288, dif_pos hidx]
-
 -- scalarDiv commutes with allGatherPrimDimN (gatherDim=0, numParts=4, shape [4,8,64,64])
 /-!
 ## Part 7: transposeAxes 2 3 commutes with chunkPrimDimN 0 / allGatherPrimDimN 0
@@ -1101,5 +1082,99 @@ theorem transposeAxes_12_chunkPrimDimN3_gather3
        transposeAxes 1 2 (chunkPrimDimN 3 4 3 x)] := by
   simp only [chunkPrimDimN_3_eq_chunkPrim_16_64_8_16 _ x hshape]
   exact transposeAxes_12_chunkPrim_gather3 x hshape
+
+/-! ## Gather-chunk dim3 roundtrip for shape [16, 8, 64, 64] -/
+
+lemma valAt_ag3_np4 (xs : List Tensor) (idx : Nat)
+    (hhead : (xs.head?.map (·.shape)).getD [] = [16, 8, 64, 16])
+    (hidx : idx < 524288) :
+    valAt (allGatherPrimDimN 3 4 0 xs) idx =
+    valAt (xs.getD (idx % 64 / 16) (zeroTensor [16, 8, 64, 16]))
+      (idx / 64 * 16 + idx % 16) := by
+  have hshape_out : (allGatherPrimDimN 3 4 0 xs).shape = [16, 8, 64, 64] := by
+    simp [allGatherPrimDimN, Tensor.mkShape, hhead]
+  have hlt_prod : idx < prodShape (allGatherPrimDimN 3 4 0 xs).shape := by
+    simp only [hshape_out, prodShape, List.foldl, Nat.one_mul]; omega
+  rw [valAt_of_lt _ _ hlt_prod]
+  simp only [allGatherPrimDimN, Tensor.mkShape, hhead,
+    List.getD, List.drop, List.foldl,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  simp only [show (16 : Nat) * 4 = 64 from by norm_num,
+    show (16 : Nat) * 1 = 16 from by norm_num,
+    (show (64 : Nat) ≠ 0 by omega), (show (1 : Nat) ≠ 0 by omega),
+    (show (16 : Nat) ≠ 0 by omega),
+    ite_false]
+  simp only [show ∀ n, n % 64 / 1 / 16 = n % 64 / 16 from fun n => by omega,
+    show ∀ n, n / 64 * 16 + (n % 64 / 1) % 16 * 1 + n % 64 % 1 =
+      n / 64 * 16 + n % 16 from fun n => by omega]
+
+lemma valAt_chunk3_np4 (x : Tensor) (r idx : Nat)
+    (hshape : x.shape = [16, 8, 64, 64]) (hidx : idx < 131072) :
+    valAt (chunkPrimDimN 3 4 r x) idx =
+    valAt x (idx / 16 * 64 + (r % 4) * 16 + idx % 16) := by
+  unfold chunkPrimDimN; rw [hshape]
+  simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD, List.drop, List.foldl, List.set]
+  norm_num
+  conv_lhs => rw [show (if (4 : Nat) = 0 then (0 : Nat) else 64 / 4) = 16 from by decide]
+  simp only [valAt, Tensor.mkShape,
+    show prodShape [16, 8, 64, 16] = 131072 from by simp [prodShape]]
+  rw [dif_pos hidx]
+  exact congrArg (valAt x) (by omega)
+
+theorem gather_chunk_dim3 (x : Tensor) (hshape : x.shape = [16, 8, 64, 64]) :
+    allGatherPrimDimN 3 4 0 [chunkPrimDimN 3 4 0 x, chunkPrimDimN 3 4 1 x,
+      chunkPrimDimN 3 4 2 x, chunkPrimDimN 3 4 3 x] = x := by
+  have hchunk_shape : ∀ r, (chunkPrimDimN 3 4 r x).shape = [16, 8, 64, 16] := by
+    intro r; rw [chunkPrimDimN_shape 3 4 r _ _ hshape (by omega)]; simp [List.set, List.getD]
+  have hhead : (([chunkPrimDimN 3 4 0 x, chunkPrimDimN 3 4 1 x,
+      chunkPrimDimN 3 4 2 x, chunkPrimDimN 3 4 3 x].head?.map (·.shape)).getD []) =
+      [16, 8, 64, 16] := by
+    simp [List.head?, Option.map, hchunk_shape 0]
+  apply Tensor.ext
+  · rw [allGatherPrimDimN_shape 3 4 _ _ hhead]; simp [List.set, List.getD, hshape]
+  · intro idx hidx
+    have hidx' : idx < 524288 := by
+      rw [allGatherPrimDimN_shape 3 4 _ _ hhead] at hidx
+      simp [List.set, List.getD, prodShape] at hidx; omega
+    rw [valAt_ag3_np4 _ idx hhead hidx']
+    set p := idx % 64 / 16 with hp_def
+    have hp_range : p = 0 ∨ p = 1 ∨ p = 2 ∨ p = 3 := by omega
+    rcases hp_range with h | h | h | h <;>
+      simp only [h, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+        Option.getD] <;>
+      rw [valAt_chunk3_np4 x _ _ hshape (by omega)] <;>
+      exact congrArg (valAt x) (by omega)
+
+theorem scalarDiv_ag3_comm (x0 x1 x2 x3 : Tensor) (c : Scalar)
+    (h0 : x0.shape = [16, 8, 64, 16]) :
+    scalarDiv (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3]) c =
+    allGatherPrimDimN 3 4 0 [scalarDiv x0 c, scalarDiv x1 c,
+      scalarDiv x2 c, scalarDiv x3 c] := by
+  have hhead_x : (([x0, x1, x2, x3].head?.map (·.shape)).getD []) = [16, 8, 64, 16] := by
+    simp [List.head?, Option.map, h0]
+  have hhead_sd : (([scalarDiv x0 c, scalarDiv x1 c, scalarDiv x2 c,
+      scalarDiv x3 c].head?.map (·.shape)).getD []) = [16, 8, 64, 16] := by
+    simp [List.head?, Option.map, scalarDiv, Tensor.mkShape, h0]
+  have hLHS_shape : (scalarDiv (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3]) c).shape =
+      [16, 8, 64, 64] := by
+    simp only [scalarDiv, Tensor.mkShape, Fin.is_lt, valAt_of_lt, Fin.eta]
+    rw [allGatherPrimDimN_shape 3 4 _ _ hhead_x]; simp [List.set, List.getD]
+  have hRHS_shape : (allGatherPrimDimN 3 4 0 [scalarDiv x0 c, scalarDiv x1 c,
+      scalarDiv x2 c, scalarDiv x3 c]).shape = [16, 8, 64, 64] := by
+    rw [allGatherPrimDimN_shape 3 4 _ _ hhead_sd]; simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hLHS_shape, hRHS_shape])
+  intro idx hidx
+  rw [hLHS_shape] at hidx
+  have hidx' : idx < 524288 := by simpa [prodShape] using hidx
+  rw [valAt_scalarDiv]
+  rw [valAt_ag3_np4 _ _ hhead_x hidx']
+  rw [valAt_ag3_np4 _ _ hhead_sd hidx']
+  have hr_cases : idx % 64 / 16 = 0 ∨ idx % 64 / 16 = 1 ∨
+      idx % 64 / 16 = 2 ∨ idx % 64 / 16 = 3 := by omega
+  rcases hr_cases with h | h | h | h <;>
+  · simp only [h, List.getD,
+      List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    exact (valAt_scalarDiv _ c _).symm
 
 end TrainVerify.Denote.Common

@@ -155,30 +155,6 @@ private lemma valAt_ag2_16_8_16_16 (xs : List Tensor) (idx : Nat)
   simp only [show ∀ n, n % 1024 / 16 / 16 = n % 1024 / 256 from fun n => by omega,
     show ∀ n, n % 1024 % 16 = n % 16 from fun n => by omega]
 
--- allGatherPrimDimN 2 with shard shape [16,8,16,64] → [16,8,64,64]
-private lemma valAt_ag2_16_8_16_64 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [16, 8, 16, 64])
-    (hidx : idx < 524288) :
-    valAt (allGatherPrimDimN 2 4 0 xs) idx =
-    valAt (xs.getD (idx % 4096 / 1024) (zeroTensor [16, 8, 16, 64]))
-      (idx / 4096 * 1024 + (idx % 4096 / 64 % 16) * 64 + idx % 64) := by
-  have hshape_out : (allGatherPrimDimN 2 4 0 xs).shape = [16, 8, 64, 64] := by
-    simp [allGatherPrimDimN, Tensor.mkShape, hhead]
-  have hlt_prod : idx < prodShape (allGatherPrimDimN 2 4 0 xs).shape := by
-    simp only [hshape_out, prodShape, List.foldl, Nat.one_mul]; omega
-  rw [valAt_of_lt _ _ hlt_prod]
-  simp only [allGatherPrimDimN, Tensor.mkShape, hhead,
-    List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
-  simp only [show (1 : Nat) * 64 = 64 from by norm_num,
-    show (64 : Nat) * 64 = 4096 from by norm_num,
-    show (16 : Nat) * 64 = 1024 from by norm_num,
-    (show (4096 : Nat) ≠ 0 by omega), (show (64 : Nat) ≠ 0 by omega),
-    (show (16 : Nat) ≠ 0 by omega),
-    ite_false]
-  simp only [show ∀ n, n % 4096 / 64 / 16 = n % 4096 / 1024 from fun n => by omega,
-    show ∀ n, n % 4096 % 64 = n % 64 from fun n => by omega]
-
 -- allGatherPrimDimN 1 with shard shape [16,2,64,16] → [16,8,64,16]
 private lemma valAt_ag1_16_2_64_16 (xs : List Tensor) (idx : Nat)
     (hhead : (xs.head?.map (·.shape)).getD [] = [16, 2, 64, 16])

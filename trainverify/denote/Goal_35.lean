@@ -131,30 +131,6 @@ private lemma valAt_bm_sm (A B : Tensor) (idx : Nat)
 
 /-! ## Part 2: valAt helpers for allGatherPrimDimN -/
 
--- allGatherPrimDimN 3 with shard shape [16,8,64,16] → [16,8,64,64]
-private lemma valAt_ag3_np4 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [16, 8, 64, 16])
-    (hidx : idx < 524288) :
-    valAt (allGatherPrimDimN 3 4 0 xs) idx =
-    valAt (xs.getD (idx % 64 / 16) (zeroTensor [16, 8, 64, 16]))
-      (idx / 64 * 16 + idx % 16) := by
-  have hshape_out : (allGatherPrimDimN 3 4 0 xs).shape = [16, 8, 64, 64] := by
-    simp [allGatherPrimDimN, Tensor.mkShape, hhead]
-  have hlt_prod : idx < prodShape (allGatherPrimDimN 3 4 0 xs).shape := by
-    simp only [hshape_out, prodShape, List.foldl, Nat.one_mul]; omega
-  rw [valAt_of_lt _ _ hlt_prod]
-  simp only [allGatherPrimDimN, Tensor.mkShape, hhead,
-    List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
-  simp only [show (16 : Nat) * 4 = 64 from by norm_num,
-    show (16 : Nat) * 1 = 16 from by norm_num,
-    (show (64 : Nat) ≠ 0 by omega), (show (1 : Nat) ≠ 0 by omega),
-    (show (16 : Nat) ≠ 0 by omega),
-    ite_false]
-  simp only [show ∀ n, n % 64 / 1 / 16 = n % 64 / 16 from fun n => by omega,
-    show ∀ n, n / 64 * 16 + (n % 64 / 1) % 16 * 1 + n % 64 % 1 =
-      n / 64 * 16 + n % 16 from fun n => by omega]
-
 -- allGatherPrimDimN 1 with shard shape [16,2,64,64] → [16,8,64,64]
 private lemma valAt_ag1_np4 (xs : List Tensor) (idx : Nat)
     (hhead : (xs.head?.map (·.shape)).getD [] = [16, 2, 64, 64])
@@ -204,22 +180,6 @@ private lemma valAt_chunk3_16_64 (x : Tensor) (r idx : Nat)
     valAt (chunkPrimDimN 3 4 r x) idx =
     valAt x (idx / 16 * 64 + r % 4 * 16 + idx % 16) := by
   have hout_shape : (chunkPrimDimN 3 4 r x).shape = [16, 8, 16, 16] := by
-    rw [chunkPrimDimN_shape 3 4 r _ _ hshape (by omega)]; simp [List.set, List.getD]
-  have hlt_prod : idx < prodShape (chunkPrimDimN 3 4 r x).shape := by
-    simp only [hout_shape, prodShape, List.foldl, Nat.one_mul]; omega
-  rw [valAt_of_lt _ _ hlt_prod]
-  simp only [chunkPrimDimN, Tensor.mkShape, hshape,
-    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
-    Option.getD, List.drop, List.foldl]
-  norm_num
-  simp only [Nat.mod_one, Nat.add_zero, Nat.add_assoc]
-
--- chunkPrimDimN 3 4 r on [16,8,64,64] → [16,8,64,16]
-private lemma valAt_chunk3_64_64 (x : Tensor) (r idx : Nat)
-    (hshape : x.shape = [16, 8, 64, 64]) (hidx : idx < 131072) :
-    valAt (chunkPrimDimN 3 4 r x) idx =
-    valAt x (idx / 16 * 64 + r % 4 * 16 + idx % 16) := by
-  have hout_shape : (chunkPrimDimN 3 4 r x).shape = [16, 8, 64, 16] := by
     rw [chunkPrimDimN_shape 3 4 r _ _ hshape (by omega)]; simp [List.set, List.getD]
   have hlt_prod : idx < prodShape (chunkPrimDimN 3 4 r x).shape := by
     simp only [hout_shape, prodShape, List.foldl, Nat.one_mul]; omega
@@ -398,33 +358,7 @@ private theorem bm_g_chunk3_dist
       exact congrArg (valAt B) (g35_bm_B_idx_eq idx l _ hidx' hl16 (hp_def.symm.trans hp))
   }
 
-/-! ## Part 7: Gather-chunk dim 3 roundtrip on [16,8,64,64] -/
-
-private theorem gather_chunk_dim3 (T : Tensor)
-    (hT : T.shape = [16, 8, 64, 64]) :
-    allGatherPrimDimN 3 4 0 [chunkPrimDimN 3 4 0 T, chunkPrimDimN 3 4 1 T,
-      chunkPrimDimN 3 4 2 T, chunkPrimDimN 3 4 3 T] = T := by
-  have hchunk_shape : ∀ r, (chunkPrimDimN 3 4 r T).shape = [16, 8, 64, 16] := by
-    intro r; rw [chunkPrimDimN_shape 3 4 r _ _ hT (by omega)]; simp [List.set, List.getD]
-  have hhead : (([chunkPrimDimN 3 4 0 T, chunkPrimDimN 3 4 1 T,
-      chunkPrimDimN 3 4 2 T, chunkPrimDimN 3 4 3 T].head?.map (·.shape)).getD []) =
-      [16, 8, 64, 16] := by
-    simp [List.head?, Option.map, hchunk_shape 0]
-  apply Tensor.ext
-  · rw [allGatherPrimDimN_shape 3 4 _ _ hhead]; simp [List.set, List.getD, hT]
-  · intro idx hidx
-    have hidx' : idx < 524288 := by
-      rw [allGatherPrimDimN_shape 3 4 _ _ hhead] at hidx
-      simp [List.set, List.getD, prodShape] at hidx; omega
-    rw [valAt_ag3_np4 _ idx hhead hidx']
-    set p := idx % 64 / 16 with hp_def
-    have hp_range : p = 0 ∨ p = 1 ∨ p = 2 ∨ p = 3 := by omega
-    rcases hp_range with h | h | h | h <;>
-      simp only [h, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD] <;>
-      rw [valAt_chunk3_64_64 T _ _ hT (by omega)] <;>
-      exact congrArg (valAt T) (by omega)
-
-/-! ## Part 8: Gather-chunk dim 1 roundtrip on [16,8,64,64] -/
+/-! ## Part 7: Gather-chunk dim 1 roundtrip on [16,8,64,64] -/
 
 private theorem gather_chunk_dim1_64_64 (T : Tensor)
     (hT : T.shape = [16, 8, 64, 64]) :
@@ -450,7 +384,7 @@ private theorem gather_chunk_dim1_64_64 (T : Tensor)
       rw [valAt_chunk1_64_64 T _ _ hT (by omega)] <;>
       exact congrArg (valAt T) (by omega)
 
-/-! ## Part 9: Main proof -/
+/-! ## Part 8: Main proof -/
 
 theorem prove_goal_35_cut : goal_35_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
