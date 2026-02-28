@@ -2,9 +2,15 @@
     Goal: 42 (tensor id: 159)
 -/
 import denote.GeneratedData
+import denote.Common
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
+open TrainVerify.Denote.Common
+
+set_option linter.style.longLine false
+set_option linter.flexible false
+set_option linter.unusedSimpArgs false
 
 namespace TrainVerify.Denote.GeneratedGoals
 
@@ -44,8 +50,109 @@ def goal_42_cut_initGoals : List LineageGoal := initGoals
 def goal_42_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_42 pm_goal_42 goal_42 sm_goal_42InitEnv pm_goal_42InitEnv goal_42_cut_initGoals
 
+/-! ## Helper lemmas for gather-chunk roundtrip on dim 0 with shape [16, 64, 128] -/
+
+private lemma valAt_gd0_4_64_128 (xs : List Tensor) (idx : Nat)
+    (hhead : (xs.head?.map (·.shape)).getD [] = [4, 64, 128])
+    (hidx : idx < 131072) :
+    valAt (allGatherPrimDimN 0 4 0 xs) idx =
+    valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 64, 128]))
+      ((idx / 8192 % 4) * 8192 + idx % 8192) := by
+  unfold allGatherPrimDimN; rw [hhead]
+  simp [valAt, Tensor.mkShape, List.set, List.getD, List.drop, List.foldl,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, List.getElem?_nil,
+    show (4 : Nat) * 4 = 16 from by norm_num,
+    show (4 : Nat) * 8192 = 32768 from by norm_num,
+    show (16 : Nat) * 8192 = 131072 from by norm_num,
+    show prodShape [16, 64, 128] = 131072 from by simp [prodShape],
+    Nat.mod_eq_of_lt hidx, Nat.div_eq_of_lt hidx, dif_pos hidx]
+
+private lemma valAt_chunk0 (x : Tensor) (r idx : Nat)
+    (hshape : x.shape = [16, 64, 128]) (hidx : idx < 32768) :
+    valAt (chunkPrimDimN 0 4 r x) idx =
+    valAt x ((r % 4) * 32768 + idx) := by
+  unfold chunkPrimDimN; rw [hshape]
+  simp only [List.getD, List.getElem?_cons_zero, List.getElem?_nil,
+    Option.getD, List.drop, List.foldl, List.set]
+  norm_num
+  conv_lhs => rw [show (if (4 : Nat) = 0 then (0 : Nat) else 16 / 4) = 4 from by decide]
+  simp only [valAt, Tensor.mkShape,
+    show prodShape [4, 64, 128] = 32768 from by simp [prodShape]]
+  rw [dif_pos hidx]
+  exact congrArg (valAt x) (by omega)
+
+private theorem gather_chunk_dim0 (T : Tensor)
+    (hT : T.shape = [16, 64, 128]) :
+    allGatherPrimDimN 0 4 0 [chunkPrimDimN 0 4 0 T, chunkPrimDimN 0 4 1 T,
+      chunkPrimDimN 0 4 2 T, chunkPrimDimN 0 4 3 T] = T := by
+  have hchunk_shape : ∀ r, (chunkPrimDimN 0 4 r T).shape = [4, 64, 128] := by
+    intro r; rw [chunkPrimDimN_shape 0 4 r _ _ hT (by omega)]; simp [List.set, List.getD]
+  have hhead : (([chunkPrimDimN 0 4 0 T, chunkPrimDimN 0 4 1 T,
+      chunkPrimDimN 0 4 2 T, chunkPrimDimN 0 4 3 T].head?.map (·.shape)).getD []) =
+      [4, 64, 128] := by
+    simp [List.head?, Option.map, hchunk_shape 0]
+  apply Tensor.ext
+  · rw [allGatherPrimDimN_shape 0 4 _ _ hhead]; simp [List.set, List.getD, hT]
+  · intro idx hidx
+    have hidx' : idx < 131072 := by
+      rw [allGatherPrimDimN_shape 0 4 _ _ hhead] at hidx
+      simp [List.set, List.getD, prodShape] at hidx; omega
+    rw [valAt_gd0_4_64_128 _ idx hhead hidx']
+    set p := idx % 131072 / 8192 / 4 with hp_def
+    have hp_range : p = 0 ∨ p = 1 ∨ p = 2 ∨ p = 3 := by omega
+    rcases hp_range with h | h | h | h <;>
+      simp only [h, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+        Option.getD] <;>
+      rw [valAt_chunk0 T _ _ hT (by omega)] <;>
+      exact congrArg (valAt T) (by omega)
+
+/-! ## Main proof -/
+
 theorem prove_goal_42_cut : goal_42_stmt_cut := by
-  sorry
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract initGoal_121: tensor 121 is replicated (same in SM and PM)
+  have hInit121 : InitGoalHolds pm_goal_42.numRanks initGoal_121 initSM initPM := by
+    apply hInitGoals; simp [goal_42_cut_initGoals, initGoals]
+  have ⟨h121_shape, h121_eq⟩ := initGoalHolds_replicated 4 initGoal_121 121
+    [16, 64, 128] initSM initPM hInit121 rfl rfl rfl
+  have h121_pm_shape : (initPM 121).shape = [16, 64, 128] := by rw [← h121_eq]; exact h121_shape
+  -- SM evaluation: smStore 159 = initSM 121
+  have hsm : (denoteGraph sm_goal_42 initSM) 159 = initSM 121 := by
+    simp [sm_goal_42, denoteGraph, applyNode, evalOp, storeSet]
+  -- PM evaluation: pmStore 168-171 = chunkPrimDimN 0 4 r (initPM 121)
+  have hpm168 : (denoteGraph pm_goal_42 initPM) 168 = chunkPrimDimN 0 4 0 (initPM 121) := by
+    simp [pm_goal_42, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  have hpm169 : (denoteGraph pm_goal_42 initPM) 169 = chunkPrimDimN 0 4 1 (initPM 121) := by
+    simp [pm_goal_42, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  have hpm170 : (denoteGraph pm_goal_42 initPM) 170 = chunkPrimDimN 0 4 2 (initPM 121) := by
+    simp [pm_goal_42, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  have hpm171 : (denoteGraph pm_goal_42 initPM) 171 = chunkPrimDimN 0 4 3 (initPM 121) := by
+    simp [pm_goal_42, denoteGraph, List.foldl, applyNode, evalOp, storeSet]
+  -- Chunk shapes
+  have hchunk_shape : ∀ r, (chunkPrimDimN 0 4 r (initPM 121)).shape = [4, 64, 128] := by
+    intro r; rw [chunkPrimDimN_shape 0 4 r _ _ h121_pm_shape (by omega)]
+    simp [List.set, List.getD]
+  -- Reconstruction = allGatherPrimDimN
+  have hrecon : reconstructWithDim 0 4 0
+      [chunkPrimDimN 0 4 0 (initPM 121), chunkPrimDimN 0 4 1 (initPM 121),
+       chunkPrimDimN 0 4 2 (initPM 121), chunkPrimDimN 0 4 3 (initPM 121)] =
+      allGatherPrimDimN 0 4 0
+      [chunkPrimDimN 0 4 0 (initPM 121), chunkPrimDimN 0 4 1 (initPM 121),
+       chunkPrimDimN 0 4 2 (initPM 121), chunkPrimDimN 0 4 3 (initPM 121)] := by
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [hchunk_shape]; decide
+  -- Gather-chunk roundtrip
+  have hroundtrip : allGatherPrimDimN 0 4 0
+      [chunkPrimDimN 0 4 0 (initPM 121), chunkPrimDimN 0 4 1 (initPM 121),
+       chunkPrimDimN 0 4 2 (initPM 121), chunkPrimDimN 0 4 3 (initPM 121)] = initPM 121 :=
+    gather_chunk_dim0 (initPM 121) h121_pm_shape
+  -- Prove three conjuncts
+  dsimp only [goal_42_stmt_cut, CoarseLineageHoldsWithInit, goal_42]
+  simp only [List.map]
+  rw [hsm, hpm168, hpm169, hpm170, hpm171]
+  simp only [show pm_goal_42.numRanks = 4 from rfl]
+  rw [hrecon, hroundtrip, h121_eq]
+  exact ⟨by rw [← h121_eq]; exact h121_shape, by simp [hchunk_shape], rfl⟩
 
 end TrainVerify.Denote.GeneratedGoals
 
