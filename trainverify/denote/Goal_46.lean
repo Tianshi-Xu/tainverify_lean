@@ -53,29 +53,6 @@ def goal_46_stmt_cut : Prop :=
 
 /-! ## Helper lemmas for gather-chunk roundtrip on dim 2 with shape [16, 64, 128] -/
 
-private lemma valAt_gd2_16_64_32 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [16, 64, 32])
-    (hidx : idx < 131072) :
-    valAt (allGatherPrimDimN 2 4 0 xs) idx =
-    valAt (xs.getD (idx % 128 / 32) (zeroTensor [16, 64, 32]))
-      (idx / 128 * 32 + idx % 32) := by
-  have hshape_out : (allGatherPrimDimN 2 4 0 xs).shape = [16, 64, 128] := by
-    simp [allGatherPrimDimN, Tensor.mkShape, hhead]
-  have hlt : idx < prodShape (allGatherPrimDimN 2 4 0 xs).shape := by
-    simp only [hshape_out, prodShape, List.foldl, Nat.one_mul]; omega
-  rw [valAt_of_lt _ _ hlt]
-  simp only [allGatherPrimDimN, Tensor.mkShape, hhead,
-    List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    show (32 : Nat) * 4 = 128 from by norm_num,
-    show (1 : Nat) * 32 = 32 from by norm_num,
-    show (128 : Nat) ≠ 0 from by omega,
-    show (32 : Nat) ≠ 0 from by omega,
-    show (1 : Nat) ≠ 0 from by omega,
-    ite_false,
-    show ∀ n, n % 128 % 32 = n % 32 from fun n => by omega,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero]
-
 private lemma valAt_chunk2 (x : Tensor) (r idx : Nat)
     (hshape : x.shape = [16, 64, 128]) (hidx : idx < 32768) :
     valAt (chunkPrimDimN 2 4 r x) idx =

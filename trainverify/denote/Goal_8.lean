@@ -49,30 +49,6 @@ def goal_8_stmt_cut : Prop :=
 
 /-! ## Helper lemmas for gather-chunk roundtrip on dim 2 with shape [16, 64, 8, 16] -/
 
-private lemma valAt_ag2_16_64_2_16 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [16, 64, 2, 16])
-    (hidx : idx < 131072) :
-    valAt (allGatherPrimDimN 2 4 0 xs) idx =
-    valAt (xs.getD (idx % 128 / 32) (zeroTensor [16, 64, 2, 16]))
-      (idx / 128 * 32 + (idx % 128 / 16 % 2) * 16 + idx % 16) := by
-  have hshape_out : (allGatherPrimDimN 2 4 0 xs).shape = [16, 64, 8, 16] := by
-    simp [allGatherPrimDimN, Tensor.mkShape, hhead]
-  have hlt_prod : idx < prodShape (allGatherPrimDimN 2 4 0 xs).shape := by
-    simp only [hshape_out, prodShape, List.foldl, Nat.one_mul]; omega
-  rw [valAt_of_lt _ _ hlt_prod]
-  simp only [allGatherPrimDimN, Tensor.mkShape, hhead,
-    List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
-  simp only [show (1 : Nat) * 16 = 16 from by norm_num,
-    show (2 : Nat) * 4 = 8 from by norm_num,
-    show (8 : Nat) * 16 = 128 from by norm_num,
-    show (2 : Nat) * 16 = 32 from by norm_num,
-    (show (128 : Nat) ≠ 0 by omega), (show (16 : Nat) ≠ 0 by omega),
-    (show (2 : Nat) ≠ 0 by omega),
-    ite_false]
-  simp only [show ∀ n, n % 128 / 16 / 2 = n % 128 / 32 from fun n => by omega,
-    show ∀ n, n % 128 % 16 = n % 16 from fun n => by omega]
-
 private lemma valAt_chunkDimN2 (x : Tensor) (r idx : Nat)
     (hshape : x.shape = [16, 64, 8, 16]) (hidx : idx < 32768) :
     valAt (chunkPrimDimN 2 4 r x) idx =
@@ -178,31 +154,6 @@ private lemma valAt_ta12_16_64_2_16 (x : Tensor) (fi : Nat)
   simp only [Nat.add_assoc]
 
 -- valAt of allGatherPrimDimN 1 4 0 for shard shape [16, 2, 64, 16]
-private lemma valAt_ag1_16_2_64_16 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [16, 2, 64, 16])
-    (hidx : idx < 131072) :
-    valAt (allGatherPrimDimN 1 4 0 xs) idx =
-    valAt (xs.getD (idx % 8192 / 2048) (zeroTensor [16, 2, 64, 16]))
-      (idx / 8192 * 2048 + (idx % 8192 / 1024 % 2) * 1024 + idx % 1024) := by
-  have hshape_out : (allGatherPrimDimN 1 4 0 xs).shape = [16, 8, 64, 16] := by
-    simp [allGatherPrimDimN, Tensor.mkShape, hhead]
-  have hlt_prod : idx < prodShape (allGatherPrimDimN 1 4 0 xs).shape := by
-    simp only [hshape_out, prodShape, List.foldl, Nat.one_mul]; omega
-  rw [valAt_of_lt _ _ hlt_prod]
-  simp only [allGatherPrimDimN, Tensor.mkShape, hhead,
-    List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
-  simp only [show (1 : Nat) * 64 = 64 from by norm_num,
-    show (64 : Nat) * 16 = 1024 from by norm_num,
-    show (2 : Nat) * 4 = 8 from by norm_num,
-    show (8 : Nat) * 1024 = 8192 from by norm_num,
-    show (2 : Nat) * 1024 = 2048 from by norm_num,
-    (show (8192 : Nat) ≠ 0 by omega), (show (1024 : Nat) ≠ 0 by omega),
-    (show (2 : Nat) ≠ 0 by omega),
-    ite_false]
-  simp only [show ∀ n, n % 8192 / 1024 / 2 = n % 8192 / 2048 from fun n => by omega,
-    show ∀ n, n % 8192 % 1024 = n % 1024 from fun n => by omega]
-
 /-! ### Extracted arithmetic lemmas for commutativity -/
 
 private lemma g8_swap_bound (idx : Nat) (_ : idx < 131072) :

@@ -94,24 +94,6 @@ private lemma valAt_chunk0_16_64_128 (x : Tensor) (r idx : Nat)
   have heq : (r * 4 + idx / 8192) * 8192 + idx % 8192 = r * 32768 + idx := by omega
   rw [heq, valAt_of_lt _ _ (by rw [hps]; exact hfi_bound)]
 
-/-- valAt of allGatherPrimDimN 0 with piece shape [4, 64, 128] -/
-private lemma valAt_gd0_4_64_128 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [4, 64, 128])
-    (hidx : idx < 131072) :
-    valAt (allGatherPrimDimN 0 4 0 xs) idx =
-    valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 64, 128]))
-      ((idx / 8192 % 4) * 8192 + idx % 8192) := by
-  have h4x4 : (4 : Nat) * 4 = 16 := by norm_num
-  have h4x8192 : (4 : Nat) * 8192 = 32768 := by norm_num
-  have h16x8192 : (16 : Nat) * 8192 = 131072 := by norm_num
-  have h_ps_out : prodShape [16, 64, 128] = 131072 := by simp [prodShape]
-  have hmm : idx % 131072 = idx := Nat.mod_eq_of_lt hidx
-  have hdv : idx / 131072 = 0 := Nat.div_eq_of_lt hidx
-  unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, h_ps_out, List.getD, List.drop, List.foldl,
-    List.length, List.getElem?_cons_zero,
-    h4x4, h4x8192, h16x8192, hmm, hdv, dif_pos hidx]
-
 /-! ## Distribution lemma -/
 
 set_option maxHeartbeats 400000 in

@@ -73,16 +73,6 @@ def goal_35_stmt_cut : Prop :=
 
 /-! ## Shape helpers -/
 
-private theorem batchedMatmul_4d_shape (x y : Tensor) (d0 d1 n k m : Nat)
-    (hx : x.shape = [d0, d1, n, k]) (hy : y.shape = [d0, d1, k, m]) :
-    (batchedMatmul x y).shape = [d0, d1, n, m] := by
-  unfold batchedMatmul; rw [hx, hy]; simp [Tensor.mkShape]
-
-private theorem transpose2d_4d_shape (x : Tensor) (d0 d1 d2 d3 : Nat)
-    (hx : x.shape = [d0, d1, d2, d3]) :
-    (transpose2d x).shape = [d0, d1, d3, d2] := by
-  unfold transpose2d; rw [hx]; simp [Tensor.mkShape]
-
 /-! ## Part 1: valAt helpers for batchedMatmul -/
 
 -- batchedMatmul [16,8,64,16] @ [16,8,16,16] → [16,8,64,16]
@@ -221,18 +211,6 @@ private lemma valAt_td_16_8_16_16 (x : Tensor) (idx : Nat)
     show (16 : Nat) * 16 = 256 from by norm_num]
 
 -- transpose2d on [16,8,64,16]: d1=16, d0=64, innerSize=1024
-private lemma valAt_td_16_8_64_16 (x : Tensor) (idx : Nat)
-    (hshape : x.shape = [16, 8, 64, 16]) (hidx : idx < 131072) :
-    valAt (transpose2d x) idx =
-    valAt x (idx / 1024 * 1024 + (idx % 1024 % 64) * 16 + idx % 1024 / 64) := by
-  unfold transpose2d; rw [hshape]
-  simp only [List.reverse, List.reverseAux, valAt, Tensor.mkShape]
-  have hps : prodShape [16, 8, 16, 64] = 131072 := by simp [prodShape]
-  rw [dif_pos (by rw [hps]; exact hidx)]
-  simp only [show (64 : Nat) * 16 ≠ 0 from by omega, ite_false,
-    show (64 : Nat) ≠ 0 from by omega,
-    show (64 : Nat) * 16 = 1024 from by norm_num]
-
 /-! ## Part 5: transpose2d commutes with chunkPrimDimN 2 → chunkPrimDimN 3 -/
 
 -- Extracted index equality for td_chunk2 ↔ chunk3_td commutativity

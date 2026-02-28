@@ -54,67 +54,7 @@ def goal_28_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_28 pm_goal_28 goal_28 sm_goal_28InitEnv pm_goal_28InitEnv goal_28_cut_initGoals
 
 /-! ### Helper A: valAt of transposeAxes 1 2 for shape [16, 8, 64, 16] -/
-private lemma valAt_ta12_16_8_64_16 (x : Tensor) (idx : Nat)
-    (hshape : x.shape = [16, 8, 64, 16]) (hidx : idx < 131072) :
-    valAt (transposeAxes 1 2 x) idx =
-    valAt x (idx / 8192 * 8192 + idx % 128 / 16 * 1024 +
-             idx % 8192 / 128 * 16 + idx % 16) := by
-  have hinner : idx / 8192 * 8192 + idx % 128 / 16 * 1024 +
-      idx % 8192 / 128 * 16 + idx % 16 < 131072 := by omega
-  have hps_in : prodShape x.shape = 131072 := by simp [hshape, prodShape]
-  have hout_shape : (transposeAxes 1 2 x).shape = [16, 64, 8, 16] := by
-    simp [transposeAxes, Tensor.mkShape, listSwapAt, hshape]
-  have hps_out : prodShape (transposeAxes 1 2 x).shape = 131072 := by
-    rw [hout_shape]; simp [prodShape]
-  rw [valAt_of_lt _ _ (by rw [hps_out]; exact hidx),
-      valAt_of_lt _ _ (by rw [hps_in]; exact hinner)]
-  unfold transposeAxes Tensor.mkShape
-  simp only [hshape, listSwapAt, flatToMulti, valAt, List.getD, List.set,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
-  have ps1 := show prodShape [8, 64, 16] = 8192 from by simp [prodShape]
-  have ps2 := show prodShape [64, 16] = 1024 from by simp [prodShape]
-  have ps3 := show prodShape [16] = 16 from by simp [prodShape]
-  have ps4 := show prodShape ([] : List Nat) = 1 from by simp [prodShape]
-  simp only [ps3, ps4,
-    (show (16 : Nat) ≠ 0 by omega), (show (1 : Nat) ≠ 0 by omega),
-    Nat.div_one, ite_false]
-  have hmm1 : ∀ n, n % 8192 % 128 = n % 128 := fun n => by omega
-  have hinner' : idx / 8192 * 8192 + (idx % 128 / 16 * 1024 +
-      (idx % 8192 / 128 * 16 + idx % 16)) < 131072 := by omega
-  simp [hmm1, List.set, Option.getD_some, multiToFlat, prodShape, dif_pos hinner']
-  simp only [Nat.add_assoc]
-
 /-! ### Helper B: valAt of transposeAxes 1 2 for shape [16, 2, 64, 16] -/
-private lemma valAt_ta12_16_2_64_16 (x : Tensor) (fi : Nat)
-    (hshape : x.shape = [16, 2, 64, 16]) (hfi : fi < 32768) :
-    valAt (transposeAxes 1 2 x) fi =
-    valAt x (fi / 2048 * 2048 + fi % 32 / 16 * 1024 +
-             fi % 2048 / 32 * 16 + fi % 16) := by
-  have hinner : fi / 2048 * 2048 + fi % 32 / 16 * 1024 +
-      fi % 2048 / 32 * 16 + fi % 16 < 32768 := by omega
-  have hps_in : prodShape x.shape = 32768 := by simp [hshape, prodShape]
-  have hout_shape : (transposeAxes 1 2 x).shape = [16, 64, 2, 16] := by
-    simp [transposeAxes, Tensor.mkShape, listSwapAt, hshape]
-  have hps_out : prodShape (transposeAxes 1 2 x).shape = 32768 := by
-    rw [hout_shape]; simp [prodShape]
-  rw [valAt_of_lt _ _ (by rw [hps_out]; exact hfi),
-      valAt_of_lt _ _ (by rw [hps_in]; exact hinner)]
-  unfold transposeAxes Tensor.mkShape
-  simp only [hshape, listSwapAt, flatToMulti, valAt, List.getD, List.set,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
-  have ps1 := show prodShape [2, 64, 16] = 2048 from by simp [prodShape]
-  have ps2 := show prodShape [64, 16] = 1024 from by simp [prodShape]
-  have ps3 := show prodShape [16] = 16 from by simp [prodShape]
-  have ps4 := show prodShape ([] : List Nat) = 1 from by simp [prodShape]
-  simp only [ps3, ps4,
-    (show (16 : Nat) ≠ 0 by omega), (show (1 : Nat) ≠ 0 by omega),
-    Nat.div_one, ite_false]
-  have hmm1 : ∀ n, n % 2048 % 32 = n % 32 := fun n => by omega
-  have hinner' : fi / 2048 * 2048 + (fi % 32 / 16 * 1024 +
-      (fi % 2048 / 32 * 16 + fi % 16)) < 32768 := by omega
-  simp [hmm1, List.set, Option.getD_some, multiToFlat, prodShape, dif_pos hinner']
-  simp only [Nat.add_assoc]
-
 /-! ### Helper C: valAt of allGatherPrimDimN 1 4 0 for shard shape [16, 2, 64, 16] -/
 private lemma valAt_ag1_4_sh16_2_64_16 (xs : List Tensor) (idx : Nat)
     (hhead : (xs.head?.map (·.shape)).getD [] = [16, 2, 64, 16])

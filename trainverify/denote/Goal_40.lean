@@ -61,32 +61,6 @@ def goal_40_stmt_cut : Prop :=
 
 /-! ### valAt helper for allGatherPrimDimN 1 on shape [16, 16, 128] -/
 
-private lemma valAt_ag1_16_16_128 (xs : List Tensor) (addr : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [16, 16, 128])
-    (haddr : addr < 131072) :
-    valAt (allGatherPrimDimN 1 4 0 xs) addr =
-    valAt (xs.getD (addr % 8192 / 2048) (zeroTensor [16, 16, 128]))
-      (addr / 8192 * 2048 + addr % 2048) := by
-  have hshape : (allGatherPrimDimN 1 4 0 xs).shape = [16, 64, 128] := by
-    simp [allGatherPrimDimN, Tensor.mkShape, hhead]
-  have hlt : addr < prodShape (allGatherPrimDimN 1 4 0 xs).shape := by
-    simp only [hshape, prodShape, List.foldl, Nat.one_mul]; omega
-  rw [valAt_of_lt _ _ hlt]
-  simp only [allGatherPrimDimN, Tensor.mkShape, hhead,
-    List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    (show (8192 : Nat) ≠ 0 by omega), (show (128 : Nat) ≠ 0 by omega),
-    (show (16 : Nat) ≠ 0 by omega), ite_false,
-    show ∀ n, n % 8192 % 128 = n % 128 from fun n => by omega,
-    show ∀ n, n % 8192 / 128 / 16 = n % 8192 / 2048 from fun n => by omega,
-    show ∀ n, n % 8192 / 128 % 16 = n % 2048 / 128 from fun n => by omega,
-    show (16 : Nat) * 4 = 64 from by norm_num,
-    show (1 : Nat) * 128 = 128 from by norm_num,
-    show (16 : Nat) * 128 = 2048 from by norm_num,
-    show (64 : Nat) * 128 = 8192 from by norm_num,
-    show ∀ a n, a + n % 2048 / 128 * 128 + n % 128 = a + n % 2048 from fun a n => by
-      have := Nat.div_add_mod (n % 2048) 128; omega]
-
 /-! ### valAt helper for chunkPrimDimN 1 on shape [16, 64, 128] -/
 
 private lemma valAt_chunk1_16_64_128 (x : Tensor) (r idx : Nat)

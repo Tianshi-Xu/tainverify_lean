@@ -104,30 +104,6 @@ private lemma valAt_bwl_3d_fst_32 (g x w : Tensor) (idx : Nat)
     (show (64 : Nat) * 32 ≠ 0 from by omega), (show (32 : Nat) ≠ 0 from by omega)]
 
 -- allGatherPrimDimN 2 on [16, 64, 32] → [16, 64, 128]
-private lemma valAt_gd2_16_64_32 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [16, 64, 32])
-    (hidx : idx < 131072) :
-    valAt (allGatherPrimDimN 2 4 0 xs) idx =
-    valAt (xs.getD (idx % 128 / 32) (zeroTensor [16, 64, 32]))
-      (idx / 128 * 32 + idx % 32) := by
-  have hshape_out : (allGatherPrimDimN 2 4 0 xs).shape = [16, 64, 128] := by
-    simp [allGatherPrimDimN, Tensor.mkShape, hhead]
-  have hlt : idx < prodShape (allGatherPrimDimN 2 4 0 xs).shape := by
-    simp only [hshape_out, prodShape, List.foldl, Nat.one_mul]; omega
-  rw [valAt_of_lt _ _ hlt]
-  simp only [allGatherPrimDimN, Tensor.mkShape, hhead,
-    List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    show (32 : Nat) * 4 = 128 from by norm_num,
-    show (1 : Nat) * 32 = 32 from by norm_num,
-    show (128 : Nat) ≠ 0 from by omega,
-    show (32 : Nat) ≠ 0 from by omega,
-    show (1 : Nat) ≠ 0 from by omega,
-    ite_false,
-    show ∀ n, n % 128 % 32 = n % 32 from fun n => by omega,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero]
-
--- allGatherPrimDimN 1 on [128, 32] → [128, 128]
 private lemma valAt_gd1_128_32 (ws : List Tensor) (idx : Nat)
     (hhead : (ws.head?.map (·.shape)).getD [] = [128, 32])
     (hidx : idx < 16384) :

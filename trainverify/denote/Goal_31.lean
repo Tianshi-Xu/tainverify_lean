@@ -73,16 +73,6 @@ def goal_31_stmt_cut : Prop :=
 
 /-! ## Shape helpers -/
 
-private theorem batchedMatmul_4d_shape (x y : Tensor) (d0 d1 n k m : Nat)
-    (hx : x.shape = [d0, d1, n, k]) (hy : y.shape = [d0, d1, k, m]) :
-    (batchedMatmul x y).shape = [d0, d1, n, m] := by
-  unfold batchedMatmul; rw [hx, hy]; simp [Tensor.mkShape]
-
-private theorem transpose2d_4d_shape (x : Tensor) (d0 d1 d2 d3 : Nat)
-    (hx : x.shape = [d0, d1, d2, d3]) :
-    (transpose2d x).shape = [d0, d1, d3, d2] := by
-  unfold transpose2d; rw [hx]; simp [Tensor.mkShape]
-
 /-! ## Part 1: valAt helpers for batchedMatmul -/
 
 -- batchedMatmul [16,8,64,64] @ [16,8,64,16] → [16,8,64,16]
@@ -156,31 +146,6 @@ private lemma valAt_ag2_16_8_16_16 (xs : List Tensor) (idx : Nat)
     show ∀ n, n % 1024 % 16 = n % 16 from fun n => by omega]
 
 -- allGatherPrimDimN 1 with shard shape [16,2,64,16] → [16,8,64,16]
-private lemma valAt_ag1_16_2_64_16 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [16, 2, 64, 16])
-    (hidx : idx < 131072) :
-    valAt (allGatherPrimDimN 1 4 0 xs) idx =
-    valAt (xs.getD (idx % 8192 / 2048) (zeroTensor [16, 2, 64, 16]))
-      (idx / 8192 * 2048 + (idx % 8192 / 1024 % 2) * 1024 + idx % 1024) := by
-  have hshape_out : (allGatherPrimDimN 1 4 0 xs).shape = [16, 8, 64, 16] := by
-    simp [allGatherPrimDimN, Tensor.mkShape, hhead]
-  have hlt_prod : idx < prodShape (allGatherPrimDimN 1 4 0 xs).shape := by
-    simp only [hshape_out, prodShape, List.foldl, Nat.one_mul]; omega
-  rw [valAt_of_lt _ _ hlt_prod]
-  simp only [allGatherPrimDimN, Tensor.mkShape, hhead,
-    List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
-  simp only [show (1 : Nat) * 64 = 64 from by norm_num,
-    show (64 : Nat) * 16 = 1024 from by norm_num,
-    show (2 : Nat) * 4 = 8 from by norm_num,
-    show (8 : Nat) * 1024 = 8192 from by norm_num,
-    show (2 : Nat) * 1024 = 2048 from by norm_num,
-    (show (8192 : Nat) ≠ 0 by omega), (show (1024 : Nat) ≠ 0 by omega),
-    (show (2 : Nat) ≠ 0 by omega),
-    ite_false]
-  simp only [show ∀ n, n % 8192 / 1024 / 2 = n % 8192 / 2048 from fun n => by omega,
-    show ∀ n, n % 8192 % 1024 = n % 1024 from fun n => by omega]
-
 /-! ## Part 3: valAt helpers for chunkPrimDimN -/
 
 -- chunkPrimDimN 2 4 r on [16,8,64,64] → [16,8,16,64]
@@ -214,21 +179,6 @@ private lemma valAt_chunk3_64_64 (x : Tensor) (r idx : Nat)
   norm_num
   simp only [Nat.mod_one, Nat.add_zero, Nat.add_assoc]
 
--- chunkPrimDimN 1 4 r on [16,8,64,16] → [16,2,64,16]
-private lemma valAt_chunk1 (x : Tensor) (r idx : Nat)
-    (hshape : x.shape = [16, 8, 64, 16]) (hidx : idx < 32768) :
-    valAt (chunkPrimDimN 1 4 r x) idx =
-    valAt x ((idx / 2048) * 8192 + (r % 4 * 2 + idx % 2048 / 1024) * 1024 + idx % 1024) := by
-  have hout_shape : (chunkPrimDimN 1 4 r x).shape = [16, 2, 64, 16] := by
-    rw [chunkPrimDimN_shape 1 4 r _ _ hshape (by omega)]; simp [List.set, List.getD]
-  have hlt_prod : idx < prodShape (chunkPrimDimN 1 4 r x).shape := by
-    simp only [hout_shape, prodShape, List.foldl, Nat.one_mul]; omega
-  rw [valAt_of_lt _ _ hlt_prod]
-  simp only [chunkPrimDimN, Tensor.mkShape, hshape,
-    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
-    Option.getD, List.drop, List.foldl]
-  norm_num
-
 /-! ## Part 4: valAt helper for transpose2d -/
 
 -- transpose2d on [16,8,64,64]: d1=64, d0=64, innerSize=64*64=4096
@@ -247,18 +197,6 @@ private lemma valAt_td_16_8_64_64 (x : Tensor) (idx : Nat)
 
 -- transpose2d on [16,8,64,16]: d1=16, d0=64, innerSize=64*16=1024
 -- valAt output: outerIdx * 1024 + (innerFlat % 64) * 16 + innerFlat / 64
-private lemma valAt_td_16_8_64_16 (x : Tensor) (idx : Nat)
-    (hshape : x.shape = [16, 8, 64, 16]) (hidx : idx < 131072) :
-    valAt (transpose2d x) idx =
-    valAt x (idx / 1024 * 1024 + (idx % 1024 % 64) * 16 + idx % 1024 / 64) := by
-  unfold transpose2d; rw [hshape]
-  simp only [List.reverse, List.reverseAux, valAt, Tensor.mkShape]
-  have hps : prodShape [16, 8, 16, 64] = 131072 := by simp [prodShape]
-  rw [dif_pos (by rw [hps]; exact hidx)]
-  simp only [show (64 : Nat) * 16 ≠ 0 from by omega, ite_false,
-    show (64 : Nat) ≠ 0 from by omega,
-    show (64 : Nat) * 16 = 1024 from by norm_num]
-
 /-! ## Part 5: transpose2d commutes with chunkPrimDimN 3 → chunkPrimDimN 2 -/
 
 -- Extracted arithmetic lemmas for td_chunk3 commutativity
@@ -309,32 +247,6 @@ private theorem td_chunk3_eq_chunk2_td (X : Tensor) (r : Nat)
   rw [valAt_chunk2_64_64 (transpose2d X) r idx htd_shape hidx']
   rw [valAt_td_16_8_64_64 X _ hX (by omega)]
   exact congrArg (valAt X) (g31_td_chunk_idx_eq idx r hidx')
-
-/-! ## Part 7: Gather-chunk dim 1 roundtrip on [16,8,64,16] -/
-
-private theorem gather_chunk_dim1 (T : Tensor)
-    (hT : T.shape = [16, 8, 64, 16]) :
-    allGatherPrimDimN 1 4 0 [chunkPrimDimN 1 4 0 T, chunkPrimDimN 1 4 1 T,
-      chunkPrimDimN 1 4 2 T, chunkPrimDimN 1 4 3 T] = T := by
-  have hchunk_shape : ∀ r, (chunkPrimDimN 1 4 r T).shape = [16, 2, 64, 16] := by
-    intro r; rw [chunkPrimDimN_shape 1 4 r _ _ hT (by omega)]; simp [List.set, List.getD]
-  have hhead : (([chunkPrimDimN 1 4 0 T, chunkPrimDimN 1 4 1 T,
-      chunkPrimDimN 1 4 2 T, chunkPrimDimN 1 4 3 T].head?.map (·.shape)).getD []) =
-      [16, 2, 64, 16] := by
-    simp [List.head?, Option.map, hchunk_shape 0]
-  apply Tensor.ext
-  · rw [allGatherPrimDimN_shape 1 4 _ _ hhead]; simp [List.set, List.getD, hT]
-  · intro idx hidx
-    have hidx' : idx < 131072 := by
-      rw [allGatherPrimDimN_shape 1 4 _ _ hhead] at hidx
-      simp [List.set, List.getD, prodShape] at hidx; omega
-    rw [valAt_ag1_16_2_64_16 _ idx hhead hidx']
-    set p := idx % 8192 / 2048 with hp_def
-    have hp_range : p = 0 ∨ p = 1 ∨ p = 2 ∨ p = 3 := by omega
-    rcases hp_range with h | h | h | h <;>
-      simp only [h, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD] <;>
-      rw [valAt_chunk1 T _ _ hT (by omega)] <;>
-      exact congrArg (valAt T) (by omega)
 
 /-! ## Part 8: batchedMatmul distributes over dim-2 chunks -/
 

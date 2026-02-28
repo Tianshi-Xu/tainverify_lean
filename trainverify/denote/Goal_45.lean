@@ -59,57 +59,6 @@ def goal_45_cut_initGoals : List LineageGoal := initGoals ++ goal_45_prereqs
 def goal_45_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_45 pm_goal_45 goal_45 sm_goal_45InitEnv pm_goal_45InitEnv goal_45_cut_initGoals
 
-/-! ## Helper lemmas -/
-
-private lemma valAt_gd0_4_64_128 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [4, 64, 128])
-    (hidx : idx < 131072) :
-    valAt (allGatherPrimDimN 0 4 0 xs) idx =
-    valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 64, 128]))
-      ((idx / 8192 % 4) * 8192 + idx % 8192) := by
-  unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero,
-    show (4 : Nat) * 4 = 16 from by norm_num,
-    show (4 : Nat) * 8192 = 32768 from by norm_num,
-    show (16 : Nat) * 8192 = 131072 from by norm_num,
-    show prodShape [16, 64, 128] = 131072 from by simp [prodShape],
-    Nat.mod_eq_of_lt hidx, Nat.div_eq_of_lt hidx, dif_pos hidx]
-
-private lemma valAt_chunk0 (x : Tensor) (r idx : Nat)
-    (hshape : x.shape = [16, 64, 128]) (hidx : idx < 32768) :
-    valAt (chunkPrimDimN 0 4 r x) idx =
-    valAt x ((r % 4) * 32768 + idx) := by
-  unfold chunkPrimDimN; rw [hshape]
-  simp only [List.getD, List.getElem?_cons_zero,
-    Option.getD, List.drop, List.foldl, List.set]
-  norm_num
-  conv_lhs => rw [show (if (4 : Nat) = 0 then (0 : Nat) else 16 / 4) = 4 from by decide]
-  simp only [valAt, Tensor.mkShape,
-    show prodShape [4, 64, 128] = 32768 from by simp [prodShape]]
-  rw [dif_pos hidx]
-  exact congrArg (valAt x) (by omega)
-
-private lemma valAt_bwl_3d_fst (g x w : Tensor) (b s : Nat) (idx : Nat)
-    (hg : g.shape = [b, s, 128]) (hx : x.shape = [b, s, 128]) (hw : w.shape = [128, 128])
-    (hidx : idx < b * s * 128) (hs_pos : 0 < s) :
-    valAt (bw_linear g x w).1 idx =
-    ∑ j ∈ Finset.range 128,
-      valAt g ((idx / (s * 128) * s + idx % (s * 128) / 128) * 128 + j) *
-      valAt w (j * 128 + idx % (s * 128) % 128) := by
-  have hbwl : bw_linear g x w =
-      (Tensor.mkShape [b, s, 128] (fun outIdx =>
-        let si := s * 128
-        ∑ j ∈ Finset.range 128,
-          valAt g (((if si = 0 then 0 else outIdx.1 / si) * s +
-            (if (128:Nat) = 0 then 0 else (if si = 0 then 0 else outIdx.1 % si) / 128)) * 128 + j) *
-          valAt w (j * 128 + (if (128:Nat) = 0 then 0 else (if si = 0 then 0 else outIdx.1 % si) % 128))),
-       Tensor.mkShape [128, 128] (k_matmul_transpose (b * s) 128 128 g x)) := by
-    simp [bw_linear, hg, hx, hw, Tensor.mkShape]
-  rw [hbwl]
-  simp [valAt, Tensor.mkShape, prodShape, List.foldl, hidx,
-    (show s * 128 ≠ 0 from by omega), (show (128 : Nat) ≠ 0 from by omega)]
-
 /-! ## Distribution lemma: dX distributes over dim-0 chunking -/
 
 -- dX = g @ w distributes over dim-0 chunking of g

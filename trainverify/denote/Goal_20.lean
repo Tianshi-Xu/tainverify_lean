@@ -56,44 +56,6 @@ def goal_20_stmt_cut : Prop :=
 
 /-! ### Bridge: chunkPrimDimN 0 = chunkPrimDim0 for shape [16, 64, 128] -/
 
-private lemma valAt_chunkDimN0 (x : Tensor) (r idx : Nat)
-    (hshape : x.shape = [16, 64, 128]) (hidx : idx < 32768) :
-    valAt (chunkPrimDimN 0 4 r x) idx =
-    valAt x ((r % 4) * 32768 + idx) := by
-  unfold chunkPrimDimN; rw [hshape]
-  simp only [List.getD, List.getElem?_cons_zero,
-    Option.getD, List.drop, List.foldl, List.set]
-  norm_num
-  conv_lhs => rw [show (if (4 : Nat) = 0 then (0 : Nat) else 16 / 4) = 4 from by decide]
-  simp only [valAt, Tensor.mkShape,
-    show prodShape [4, 64, 128] = 32768 from by simp [prodShape]]
-  rw [dif_pos hidx]
-  exact congrArg (valAt x) (by omega)
-
-private lemma valAt_chunkDim0 (x : Tensor) (r idx : Nat)
-    (hshape : x.shape = [16, 64, 128]) (hidx : idx < 32768) :
-    valAt (chunkPrimDim0 4 r x) idx =
-    valAt x ((r % 4) * 32768 + idx) := by
-  unfold chunkPrimDim0; rw [hshape]
-  simp only [divNat, Tensor.mkShape]
-  norm_num
-  simp only [valAt,
-    show prodShape [4, 64, 128] = 32768 from by simp [prodShape]]
-  rw [dif_pos hidx]
-  exact congrArg (valAt x) (by omega)
-
-private lemma chunkPrimDimN_0_eq_chunkPrimDim0 (r : Nat) (x : Tensor)
-    (hshape : x.shape = [16, 64, 128]) :
-    chunkPrimDimN 0 4 r x = chunkPrimDim0 4 r x := by
-  have hs1 : (chunkPrimDimN 0 4 r x).shape = [4, 64, 128] := by
-    rw [chunkPrimDimN_shape 0 4 r _ _ hshape (by omega)]; simp [List.set, List.getD]
-  have hs2 : (chunkPrimDim0 4 r x).shape = [4, 64, 128] :=
-    chunkPrimDim0_shape' 4 r 4 64 128 x (by rw [hshape]) (by omega)
-  apply Tensor.ext (by rw [hs1, hs2])
-  intro idx hidx
-  have hidx' : idx < 32768 := by rw [hs1] at hidx; simp [prodShape] at hidx; omega
-  rw [valAt_chunkDimN0 x r idx hshape hidx', valAt_chunkDim0 x r idx hshape hidx']
-
 theorem prove_goal_20_cut : goal_20_stmt_cut := by
   intro initSM initPM hSmInit hPmInit hInitGoals
   -- Extract init alignments

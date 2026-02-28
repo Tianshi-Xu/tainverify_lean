@@ -64,37 +64,7 @@ set_option linter.flexible false
 /-! ### Helper lemmas -/
 
 -- valAt of allGatherPrimDimN 0 with element shape [4, 8, 16, 64]
-private lemma valAt_gd0_4_8_16_64 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [4, 8, 16, 64])
-    (hidx : idx < 131072) :
-    valAt (allGatherPrimDimN 0 4 0 xs) idx =
-    valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 8, 16, 64]))
-      ((idx / 8192 % 4) * 8192 + idx % 8192) := by
-  unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, List.getD, List.drop, List.foldl, List.getElem?_cons_zero,
-    show (4 : Nat) * 4 = 16 from by norm_num,
-    show (4 : Nat) * 8192 = 32768 from by norm_num,
-    show (16 : Nat) * 8192 = 131072 from by norm_num,
-    show prodShape [16, 8, 16, 64] = 131072 from by simp [prodShape],
-    Nat.mod_eq_of_lt hidx, Nat.div_eq_of_lt hidx, dif_pos hidx]
-
 -- valAt of allGatherPrimDimN 0 with element shape [4, 8, 64, 16]
-private lemma valAt_gd0_4_8_64_16 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [4, 8, 64, 16])
-    (hidx : idx < 131072) :
-    valAt (allGatherPrimDimN 0 4 0 xs) idx =
-    valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 8, 64, 16]))
-      ((idx / 8192 % 4) * 8192 + idx % 8192) := by
-  unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero,
-    show (4 : Nat) * 4 = 16 from by norm_num,
-    show (4 : Nat) * 8192 = 32768 from by norm_num,
-    show (16 : Nat) * 8192 = 131072 from by norm_num,
-    show prodShape [16, 8, 64, 16] = 131072 from by simp [prodShape],
-    Nat.mod_eq_of_lt hidx, Nat.div_eq_of_lt hidx, dif_pos hidx]
-
--- valAt of transposeAxes 2 3 for shape [4, 8, 16, 64]
 private lemma valAt_ta23_4_8_16_64 (x : Tensor) (idx : Nat)
     (hshape : x.shape = [4, 8, 16, 64]) (hidx : idx < 32768) :
     valAt (transposeAxes 2 3 x) idx =
@@ -230,72 +200,6 @@ private theorem ta23_gd0_comm (y0 y1 y2 y3 : Tensor)
       ta23_inner_mod1024 idx, ta23_inner_mod16 idx]
     exact congrArg (valAt _) (by omega)
   }
-
--- valAt of chunkPrimDimN 1 4 r for shape [16, 8, 64, 16]
-private lemma valAt_chunk1 (x : Tensor) (r idx : Nat)
-    (hshape : x.shape = [16, 8, 64, 16]) (hidx : idx < 32768) :
-    valAt (chunkPrimDimN 1 4 r x) idx =
-    valAt x ((idx / 2048) * 8192 + (r % 4 * 2 + idx % 2048 / 1024) * 1024 + idx % 1024) := by
-  have hinner : (idx / 2048) * 8192 + (r % 4 * 2 + idx % 2048 / 1024) * 1024 + idx % 1024 < 131072 := by omega
-  have hps_in : prodShape x.shape = 131072 := by simp [hshape, prodShape]
-  have hchunk_shape : (chunkPrimDimN 1 4 r x).shape = [16, 2, 64, 16] := by
-    rw [chunkPrimDimN_shape 1 4 r _ _ hshape (by omega)]; simp [List.set, List.getD]
-  have hps_out : prodShape (chunkPrimDimN 1 4 r x).shape = 32768 := by
-    rw [hchunk_shape]; simp [prodShape]
-  rw [valAt_of_lt _ _ (by rw [hps_out]; exact hidx),
-      valAt_of_lt _ _ (by rw [hps_in]; exact hinner)]
-  unfold chunkPrimDimN Tensor.mkShape valAt
-  simp only [hshape, List.getD,
-    List.getElem?_cons_zero, List.getElem?_cons_succ,
-    Option.getD_some, List.drop, List.foldl,
-    show (4 : Nat) ≠ 0 from by omega,
-    show (2048 : Nat) ≠ 0 from by omega,
-    ite_false]
-  norm_num
-  simp only [show prodShape [16, 8, 64, 16] = 131072 from by simp [prodShape],
-    dif_pos hinner]
-
--- valAt of allGatherPrimDimN 1 with element shape [16, 2, 64, 16]
-private lemma valAt_gather1 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [16, 2, 64, 16])
-    (hidx : idx < 131072) :
-    valAt (allGatherPrimDimN 1 4 0 xs) idx =
-    valAt (xs.getD (idx % 8192 / 1024 / 2) (zeroTensor [16, 2, 64, 16]))
-      ((idx / 8192) * 2048 + (idx % 8192 / 1024 % 2) * 1024 + idx % 1024) := by
-  unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero, List.getElem?_cons_succ,
-    show (2 : Nat) * 4 = 8 from by norm_num,
-    show (2 : Nat) * 1024 = 2048 from by norm_num,
-    show (8 : Nat) * 1024 = 8192 from by norm_num,
-    show prodShape [16, 8, 64, 16] = 131072 from by simp [prodShape],
-    dif_pos hidx]
-
--- Gather-chunk roundtrip for dim 1 on shape [16, 8, 64, 16]
-private theorem gather_chunk_dim1 (T : Tensor)
-    (hT : T.shape = [16, 8, 64, 16]) :
-    allGatherPrimDimN 1 4 0 [chunkPrimDimN 1 4 0 T, chunkPrimDimN 1 4 1 T,
-      chunkPrimDimN 1 4 2 T, chunkPrimDimN 1 4 3 T] = T := by
-  have hchunk_shape : ∀ r, (chunkPrimDimN 1 4 r T).shape = [16, 2, 64, 16] := by
-    intro r; rw [chunkPrimDimN_shape 1 4 r _ _ hT (by omega)]; simp [List.set, List.getD]
-  have hhead : (([chunkPrimDimN 1 4 0 T, chunkPrimDimN 1 4 1 T,
-      chunkPrimDimN 1 4 2 T, chunkPrimDimN 1 4 3 T].head?.map (·.shape)).getD []) =
-      [16, 2, 64, 16] := by
-    simp [List.head?, Option.map, hchunk_shape 0]
-  apply Tensor.ext
-  · rw [allGatherPrimDimN_shape 1 4 _ _ hhead]; simp [List.set, List.getD, hT]
-  · intro idx hidx
-    have hidx' : idx < 131072 := by
-      rw [allGatherPrimDimN_shape 1 4 _ _ hhead] at hidx
-      simp [List.set, List.getD, prodShape] at hidx; omega
-    rw [valAt_gather1 _ idx hhead hidx']
-    set p := idx % 8192 / 1024 / 2 with hp_def
-    have hp_range : p = 0 ∨ p = 1 ∨ p = 2 ∨ p = 3 := by omega
-    rcases hp_range with h | h | h | h <;>
-      simp only [h, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
-        Option.getD] <;>
-      rw [valAt_chunk1 T _ _ hT (by omega)] <;>
-      exact congrArg (valAt T) (by omega)
 
 /-! ### Main proof -/
 

@@ -64,16 +64,6 @@ def goal_27_cut_initGoals : List LineageGoal := initGoals ++ goal_27_prereqs
 def goal_27_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_27 pm_goal_27 goal_27 sm_goal_27InitEnv pm_goal_27InitEnv goal_27_cut_initGoals
 
-private theorem batchedMatmul_4d_shape (x y : Tensor) (d0 d1 n k m : Nat)
-    (hx : x.shape = [d0, d1, n, k]) (hy : y.shape = [d0, d1, k, m]) :
-    (batchedMatmul x y).shape = [d0, d1, n, m] := by
-  unfold batchedMatmul; rw [hx, hy]; simp [Tensor.mkShape]
-
-private theorem transpose2d_4d_shape (x : Tensor) (d0 d1 d2 d3 : Nat)
-    (hx : x.shape = [d0, d1, d2, d3]) :
-    (transpose2d x).shape = [d0, d1, d3, d2] := by
-  unfold transpose2d; rw [hx]; simp [Tensor.mkShape]
-
 set_option linter.flexible false
 
 /-! ## Part 1: valAt helpers for batchedMatmul -/
@@ -121,57 +111,6 @@ private lemma valAt_bm_16 (g t : Tensor) (idx : Nat)
   simp_rw [show idx % (64 * 16) % 16 = idx % 16 from by omega]
 
 /-! ## Part 2: valAt helpers for allGatherPrimDimN 0 -/
-
-private lemma valAt_gd0_4_8_64_64 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [4, 8, 64, 64])
-    (hidx : idx < 524288) :
-    valAt (allGatherPrimDimN 0 4 0 xs) idx =
-    valAt (xs.getD (idx % 524288 / 32768 / 4) (zeroTensor [4, 8, 64, 64]))
-      ((idx / 32768 % 4) * 32768 + idx % 32768) := by
-  have h4x4 : (4 : Nat) * 4 = 16 := by norm_num
-  have h4x32768 : (4 : Nat) * 32768 = 131072 := by norm_num
-  have h16x32768 : (16 : Nat) * 32768 = 524288 := by norm_num
-  have h_ps_out : prodShape [16, 8, 64, 64] = 524288 := by simp [prodShape]
-  have hmm : idx % 524288 = idx := Nat.mod_eq_of_lt hidx
-  have hdv : idx / 524288 = 0 := Nat.div_eq_of_lt hidx
-  unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, h_ps_out, List.getD, List.drop, List.foldl,
-    List.length, List.getElem?_cons_zero,
-    h4x4, h4x32768, h16x32768, hmm, hdv, dif_pos hidx]
-
-private lemma valAt_gd0_4_8_64_16 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [4, 8, 64, 16])
-    (hidx : idx < 131072) :
-    valAt (allGatherPrimDimN 0 4 0 xs) idx =
-    valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 8, 64, 16]))
-      ((idx / 8192 % 4) * 8192 + idx % 8192) := by
-  have h4x4 : (4 : Nat) * 4 = 16 := by norm_num
-  have h4x8192 : (4 : Nat) * 8192 = 32768 := by norm_num
-  have h16x8192 : (16 : Nat) * 8192 = 131072 := by norm_num
-  have h_ps_out : prodShape [16, 8, 64, 16] = 131072 := by simp [prodShape]
-  have hmm : idx % 131072 = idx := Nat.mod_eq_of_lt hidx
-  have hdv : idx / 131072 = 0 := Nat.div_eq_of_lt hidx
-  unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, h_ps_out, List.getD, List.drop, List.foldl,
-    List.length, List.getElem?_cons_zero,
-    h4x4, h4x8192, h16x8192, hmm, hdv, dif_pos hidx]
-
-private lemma valAt_gd0_4_8_16_64 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [4, 8, 16, 64])
-    (hidx : idx < 131072) :
-    valAt (allGatherPrimDimN 0 4 0 xs) idx =
-    valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 8, 16, 64]))
-      ((idx / 8192 % 4) * 8192 + idx % 8192) := by
-  have h4x4 : (4 : Nat) * 4 = 16 := by norm_num
-  have h4x8192 : (4 : Nat) * 8192 = 32768 := by norm_num
-  have h16x8192 : (16 : Nat) * 8192 = 131072 := by norm_num
-  have h_ps_out : prodShape [16, 8, 16, 64] = 131072 := by simp [prodShape]
-  have hmm : idx % 131072 = idx := Nat.mod_eq_of_lt hidx
-  have hdv : idx / 131072 = 0 := Nat.div_eq_of_lt hidx
-  unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, h_ps_out, List.getD, List.drop, List.foldl,
-    List.length, List.getElem?_cons_zero,
-    h4x4, h4x8192, h16x8192, hmm, hdv, dif_pos hidx]
 
 /-! ## Part 3: valAt helpers for dim 3 operations -/
 

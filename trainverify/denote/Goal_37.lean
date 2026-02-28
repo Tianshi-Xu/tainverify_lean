@@ -63,22 +63,6 @@ def goal_37_stmt_cut : Prop :=
 
 /-! ## Helper lemmas -/
 
-private lemma valAt_gd0_4_64_8_16 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [4, 64, 8, 16])
-    (hidx : idx < 131072) :
-    valAt (allGatherPrimDimN 0 4 0 xs) idx =
-    valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 64, 8, 16]))
-      ((idx / 8192 % 4) * 8192 + idx % 8192) := by
-  have hmm : idx % 131072 = idx := Nat.mod_eq_of_lt hidx
-  have hdv : idx / 131072 = 0 := Nat.div_eq_of_lt hidx
-  unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, List.getD, List.drop, List.foldl,
-    List.getElem?_cons_zero,
-    show (4 : Nat) * 4 = 16 from by norm_num,
-    show (4 : Nat) * 8192 = 32768 from by norm_num,
-    show (16 : Nat) * 8192 = 131072 from by norm_num,
-    prodShape, hmm, hdv, dif_pos hidx]
-
 private lemma valAt_chunk0_16_64_8_16 (x : Tensor) (r idx : Nat)
     (hshape : x.shape = [16, 64, 8, 16]) (hr : r < 4) (hidx : idx < 32768) :
     valAt (chunkPrimDimN 0 4 r x) idx = valAt x (r * 32768 + idx) := by

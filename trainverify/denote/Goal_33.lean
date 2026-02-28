@@ -60,23 +60,6 @@ def goal_33_cut_initGoals : List LineageGoal := initGoals ++ goal_33_prereqs
 def goal_33_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_33 pm_goal_33 goal_33 sm_goal_33InitEnv pm_goal_33InitEnv goal_33_cut_initGoals
 
-private lemma valAt_gd0_4_8_64_64 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [4, 8, 64, 64])
-    (hidx : idx < 524288) :
-    valAt (allGatherPrimDimN 0 4 0 xs) idx =
-    valAt (xs.getD (idx % 524288 / 32768 / 4) (zeroTensor [4, 8, 64, 64]))
-      ((idx / 32768 % 4) * 32768 + idx % 32768) := by
-  have h4x4 : (4 : Nat) * 4 = 16 := by norm_num
-  have h4x32768 : (4 : Nat) * 32768 = 131072 := by norm_num
-  have h16x32768 : (16 : Nat) * 32768 = 524288 := by norm_num
-  have h_ps_out : prodShape [16, 8, 64, 64] = 524288 := by simp [prodShape]
-  have hmm : idx % 524288 = idx := Nat.mod_eq_of_lt hidx
-  have hdv : idx / 524288 = 0 := Nat.div_eq_of_lt hidx
-  unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, h_ps_out, List.getD, List.drop, List.foldl,
-    List.length, List.getElem?_cons_zero,
-    h4x4, h4x32768, h16x32768, hmm, hdv, dif_pos hidx]
-
 private lemma valAt_chunk0_v2 (x : Tensor) (r idx : Nat)
     (hshape : x.shape = [16, 8, 64, 64]) (hr : r < 4) (hidx : idx < 131072) :
     valAt (chunkPrimDimN 0 4 r x) idx = valAt x (r * 131072 + idx) := by

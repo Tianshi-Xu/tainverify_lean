@@ -48,61 +48,6 @@ def goal_42_cut_initGoals : List LineageGoal := initGoals
 def goal_42_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_42 pm_goal_42 goal_42 sm_goal_42InitEnv pm_goal_42InitEnv goal_42_cut_initGoals
 
-/-! ## Helper lemmas for gather-chunk roundtrip on dim 0 with shape [16, 64, 128] -/
-
-private lemma valAt_gd0_4_64_128 (xs : List Tensor) (idx : Nat)
-    (hhead : (xs.head?.map (·.shape)).getD [] = [4, 64, 128])
-    (hidx : idx < 131072) :
-    valAt (allGatherPrimDimN 0 4 0 xs) idx =
-    valAt (xs.getD (idx % 131072 / 8192 / 4) (zeroTensor [4, 64, 128]))
-      ((idx / 8192 % 4) * 8192 + idx % 8192) := by
-  unfold allGatherPrimDimN; rw [hhead]
-  simp [valAt, Tensor.mkShape, List.getD, List.drop, List.foldl, List.getElem?_cons_zero,
-    show (4 : Nat) * 4 = 16 from by norm_num,
-    show (4 : Nat) * 8192 = 32768 from by norm_num,
-    show (16 : Nat) * 8192 = 131072 from by norm_num,
-    show prodShape [16, 64, 128] = 131072 from by simp [prodShape],
-    Nat.mod_eq_of_lt hidx, Nat.div_eq_of_lt hidx, dif_pos hidx]
-
-private lemma valAt_chunk0 (x : Tensor) (r idx : Nat)
-    (hshape : x.shape = [16, 64, 128]) (hidx : idx < 32768) :
-    valAt (chunkPrimDimN 0 4 r x) idx =
-    valAt x ((r % 4) * 32768 + idx) := by
-  unfold chunkPrimDimN; rw [hshape]
-  simp only [List.getD, List.getElem?_cons_zero,
-    Option.getD, List.drop, List.foldl, List.set]
-  norm_num
-  conv_lhs => rw [show (if (4 : Nat) = 0 then (0 : Nat) else 16 / 4) = 4 from by decide]
-  simp only [valAt, Tensor.mkShape,
-    show prodShape [4, 64, 128] = 32768 from by simp [prodShape]]
-  rw [dif_pos hidx]
-  exact congrArg (valAt x) (by omega)
-
-private theorem gather_chunk_dim0 (T : Tensor)
-    (hT : T.shape = [16, 64, 128]) :
-    allGatherPrimDimN 0 4 0 [chunkPrimDimN 0 4 0 T, chunkPrimDimN 0 4 1 T,
-      chunkPrimDimN 0 4 2 T, chunkPrimDimN 0 4 3 T] = T := by
-  have hchunk_shape : ∀ r, (chunkPrimDimN 0 4 r T).shape = [4, 64, 128] := by
-    intro r; rw [chunkPrimDimN_shape 0 4 r _ _ hT (by omega)]; simp [List.set, List.getD]
-  have hhead : (([chunkPrimDimN 0 4 0 T, chunkPrimDimN 0 4 1 T,
-      chunkPrimDimN 0 4 2 T, chunkPrimDimN 0 4 3 T].head?.map (·.shape)).getD []) =
-      [4, 64, 128] := by
-    simp [List.head?, Option.map, hchunk_shape 0]
-  apply Tensor.ext
-  · rw [allGatherPrimDimN_shape 0 4 _ _ hhead]; simp [List.set, List.getD, hT]
-  · intro idx hidx
-    have hidx' : idx < 131072 := by
-      rw [allGatherPrimDimN_shape 0 4 _ _ hhead] at hidx
-      simp [List.set, List.getD, prodShape] at hidx; omega
-    rw [valAt_gd0_4_64_128 _ idx hhead hidx']
-    set p := idx % 131072 / 8192 / 4 with hp_def
-    have hp_range : p = 0 ∨ p = 1 ∨ p = 2 ∨ p = 3 := by omega
-    rcases hp_range with h | h | h | h <;>
-      simp only [h, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
-        Option.getD] <;>
-      rw [valAt_chunk0 T _ _ hT (by omega)] <;>
-      exact congrArg (valAt T) (by omega)
-
 /-! ## Main proof -/
 
 theorem prove_goal_42_cut : goal_42_stmt_cut := by

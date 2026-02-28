@@ -63,13 +63,6 @@ def goal_15_stmt_cut : Prop :=
 -- ===== Helper lemmas =====
 
 -- batchedMatmul shape for 4D tensors
-private theorem batchedMatmul_4d_shape (x y : Tensor) (d0 d1 n k m : Nat)
-    (hx : x.shape = [d0, d1, n, k]) (hy : y.shape = [d0, d1, k, m]) :
-    (batchedMatmul x y).shape = [d0, d1, n, m] := by
-  unfold batchedMatmul
-  rw [hx, hy]
-  simp [Tensor.mkShape]
-
 -- valAt of batchedMatmul for shapes [16, d1, 64, K] × [16, d1, K, 16] → [16, d1, 64, 16]
 private theorem valAt_batchedMatmul_K (K : Nat) (_hK : 0 < K)
     (x y : Tensor) (d1 : Nat) (_hd1 : 0 < d1)

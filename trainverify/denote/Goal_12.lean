@@ -56,11 +56,6 @@ def goal_12_cut_initGoals : List LineageGoal := initGoals ++ goal_12_prereqs
 def goal_12_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_12 pm_goal_12 goal_12 sm_goal_12InitEnv pm_goal_12InitEnv goal_12_cut_initGoals
 
-private theorem batchedMatmul_4d_shape (x y : Tensor) (d0 d1 n k m : Nat)
-    (hx : x.shape = [d0, d1, n, k]) (hy : y.shape = [d0, d1, k, m]) :
-    (batchedMatmul x y).shape = [d0, d1, n, m] := by
-  unfold batchedMatmul; rw [hx, hy]; simp [Tensor.mkShape]
-
 /-! ## Helper A: valAt of allGatherPrimDimN 0 4 for shard shape [4,8,64,64] -/
 -- allGatherPrimDimN valAt for [4,8,64,64] requires simp on complex gather expression
 set_option maxHeartbeats 1600000 in -- simp on large gather index arithmetic
