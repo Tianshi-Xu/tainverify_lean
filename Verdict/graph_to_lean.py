@@ -1674,6 +1674,61 @@ def emit_lean_spec(
 					"\n".join(seg_inst_lines) + "\n", encoding="utf-8"
 				)
 
+		used_fallback_patterns: Dict[int, List[str]] = {}
+		if goal_slices:
+			for sl in goal_slices:
+				gid = _goal_id(int(sl.goal.ts))
+				if gid in segment_goal_sources:
+					continue
+				pid = pattern_by_key[_pattern_key(sl)]
+				used_fallback_patterns.setdefault(pid, []).append(gid)
+
+		obligation_lines: List[str] = []
+		obligation_lines.append("/- Auto-generated human proof obligation index.")
+		obligation_lines.append("")
+		obligation_lines.append("This is the intended entry point for human proof work.")
+		obligation_lines.append("Files imported here contain the reusable theorems whose bodies still need proofs.")
+		obligation_lines.append("Instance files such as `Instances.lean` and `SegmentInstances.lean` only project")
+		obligation_lines.append("these reusable proofs to concrete goals; they are not intended proof targets.")
+		obligation_lines.append("")
+		if segment_pattern_count > 0:
+			obligation_lines.append("Segment proof obligations:")
+			for sid in range(1, segment_pattern_count + 1):
+				obligation_lines.append(
+					f"  - SegmentPattern_{sid}.lean: prove_segment_pattern_{sid}"
+				)
+		else:
+			obligation_lines.append("Segment proof obligations: none")
+		obligation_lines.append("")
+		if used_fallback_patterns:
+			obligation_lines.append("Fallback pattern proof obligations:")
+			for pid in sorted(used_fallback_patterns):
+				members = ", ".join(used_fallback_patterns[pid])
+				obligation_lines.append(
+					f"  - Pattern_{pid}.lean: prove_pattern_{pid}  -- concrete goals: {members}"
+				)
+		else:
+			obligation_lines.append("Fallback pattern proof obligations: none")
+		obligation_lines.append("-/")
+		for sid in range(1, segment_pattern_count + 1):
+			obligation_lines.append(f"import {parent_module}.SegmentPattern_{sid}")
+		for pid in sorted(used_fallback_patterns):
+			obligation_lines.append(f"import {parent_module}.Pattern_{pid}")
+		obligation_lines.append("")
+		obligation_lines.append("namespace TrainVerify.Denote.GeneratedProofObligations")
+		obligation_lines.append("")
+		obligation_lines.append(f"def humanSegmentProofCount : Nat := {segment_pattern_count}")
+		obligation_lines.append(f"def humanFallbackPatternProofCount : Nat := {len(used_fallback_patterns)}")
+		obligation_lines.append(
+			f"def humanProofObligationCount : Nat := {segment_pattern_count + len(used_fallback_patterns)}"
+		)
+		obligation_lines.append("")
+		obligation_lines.append("end TrainVerify.Denote.GeneratedProofObligations")
+		obligation_lines.append("")
+		(goals_out_dir / "ProofObligations.lean").write_text(
+			"\n".join(obligation_lines) + "\n", encoding="utf-8"
+		)
+
 		main_lines: List[str] = []
 		main_lines.append("/- Auto-generated main composition skeleton.")
 		main_lines.append("   This file is the place where segment/pattern proofs are composed")

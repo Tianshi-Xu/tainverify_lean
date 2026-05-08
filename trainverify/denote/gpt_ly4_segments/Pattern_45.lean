@@ -1,0 +1,27 @@
+/- Auto-generated pattern proof file.
+   Pattern: 45
+   Hash: e00b0161c106a61d
+   Goals: 76, 78, 101, 103
+-/
+import denote.gpt_ly4_segments.GeneratedData
+
+open TrainVerify.Denote
+open TrainVerify.Denote.Generated
+
+namespace TrainVerify.Denote.GeneratedPatterns
+
+def pattern_45_goalIds : List Nat := [76, 78, 101, 103]
+inductive pattern_45_target : Prop → Prop
+  | goal_76 : pattern_45_target goal_76_stmt
+  | goal_78 : pattern_45_target goal_78_stmt
+  | goal_101 : pattern_45_target goal_101_stmt
+  | goal_103 : pattern_45_target goal_103_stmt
+
+def pattern_45_stmt : Prop :=
+  ∀ {target : Prop}, pattern_45_target target → target
+theorem prove_pattern_45 : pattern_45_stmt := by
+  -- TODO: prove this alpha-equivalence pattern once; all member goals instantiate it automatically.
+  sorry
+
+end TrainVerify.Denote.GeneratedPatterns
+
