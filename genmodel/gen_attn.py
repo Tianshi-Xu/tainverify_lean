@@ -17,6 +17,19 @@ PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
 
 PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
     --nproc_per_node=1  \
+    genmodel/gen_attn.py --policy tp \
+        --dim 128 \
+        --num_heads 8 \
+        --layers 1 \
+        --seq_len 64 \
+        --dp_size 1 \
+        --pp_size 1 \
+        --tp_size 4 \
+        --gbs 16 \
+        --mbs 16 
+
+PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
+    --nproc_per_node=1  \
     genmodel/gen_attn.py --policy hybrid \
         --dim 1024 \
         --num_heads 16 \

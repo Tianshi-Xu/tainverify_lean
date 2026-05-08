@@ -1476,6 +1476,43 @@ class SILU(SymbolicOperator):
         return [g * grad], []
 
 
+class GELU(SymbolicOperator):
+    def z3_fw_shape_pass(
+        self,
+        inshapes: List[SymbShape],
+        org_inshapes: List[Shape],
+        kwargs: Dict,
+        G: DFG,
+        ctx: z3.Context,
+    ) -> Tuple[List[SymbShape], List[SymbExpr]]:
+        return _identity_shape_pass(inshapes)
+
+    def z3_fw_op_pass(
+        self,
+        node: Node,
+        insts: List[SymbTensor],
+        shapes: Dict[Tensor, Shape],
+        kwargs: Dict,
+        G: DFG,
+        ctx: z3.Context,
+    ) -> Tuple[List[SymbTensor], List[SymbExpr]]:
+        # GELU is elementwise and shape-preserving. For lineage/shape reasoning
+        # we keep it uninterpreted at value level by forwarding the symbolic tensor.
+        return insts, []
+
+    def z3_bw_op_pass(
+        self,
+        node: Node,
+        insts: List[SymbTensor],
+        mirror_insts: List[SymbTensor],
+        shapes: Dict[Tensor, Shape],
+        kwargs: Dict,
+        G: DFG,
+        ctx: z3.Context,
+    ) -> Tuple[List[SymbTensor], List[SymbExpr]]:
+        return insts, []
+
+
 class SUM(SymbolicOperator):
     def z3_fw_shape_pass(
         self,

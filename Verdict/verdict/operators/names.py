@@ -90,6 +90,9 @@ class OpName(Enum):
 
     FW_silu = ("silu", True)
     BW_silu = ("silu", False)
+
+    FW_gelu = ("gelu", True)
+    BW_gelu = ("gelu", False)
     
     FW_nns_moe_gate = ("gate_fw", True)
     BW_nns_moe_gate = ("gate_fw", False)

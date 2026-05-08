@@ -1,0 +1,4422 @@
+/- Auto-generated segment pattern instances.
+   Each theorem projects one concrete goal from a segment conjunction.
+-/
+import denote.gpt2_small_ly12_segments.SegmentPatterns
+import denote.gpt2_small_ly12_segments.Goal_1
+import denote.gpt2_small_ly12_segments.Goal_2
+import denote.gpt2_small_ly12_segments.Goal_3
+import denote.gpt2_small_ly12_segments.Goal_4
+import denote.gpt2_small_ly12_segments.Goal_5
+import denote.gpt2_small_ly12_segments.Goal_6
+import denote.gpt2_small_ly12_segments.Goal_7
+import denote.gpt2_small_ly12_segments.Goal_8
+import denote.gpt2_small_ly12_segments.Goal_9
+import denote.gpt2_small_ly12_segments.Goal_10
+import denote.gpt2_small_ly12_segments.Goal_11
+import denote.gpt2_small_ly12_segments.Goal_12
+import denote.gpt2_small_ly12_segments.Goal_13
+import denote.gpt2_small_ly12_segments.Goal_14
+import denote.gpt2_small_ly12_segments.Goal_15
+import denote.gpt2_small_ly12_segments.Goal_16
+import denote.gpt2_small_ly12_segments.Goal_17
+import denote.gpt2_small_ly12_segments.Goal_18
+import denote.gpt2_small_ly12_segments.Goal_19
+import denote.gpt2_small_ly12_segments.Goal_20
+import denote.gpt2_small_ly12_segments.Goal_21
+import denote.gpt2_small_ly12_segments.Goal_22
+import denote.gpt2_small_ly12_segments.Goal_23
+import denote.gpt2_small_ly12_segments.Goal_24
+import denote.gpt2_small_ly12_segments.Goal_25
+import denote.gpt2_small_ly12_segments.Goal_26
+import denote.gpt2_small_ly12_segments.Goal_27
+import denote.gpt2_small_ly12_segments.Goal_28
+import denote.gpt2_small_ly12_segments.Goal_29
+import denote.gpt2_small_ly12_segments.Goal_30
+import denote.gpt2_small_ly12_segments.Goal_31
+import denote.gpt2_small_ly12_segments.Goal_32
+import denote.gpt2_small_ly12_segments.Goal_33
+import denote.gpt2_small_ly12_segments.Goal_34
+import denote.gpt2_small_ly12_segments.Goal_35
+import denote.gpt2_small_ly12_segments.Goal_36
+import denote.gpt2_small_ly12_segments.Goal_37
+import denote.gpt2_small_ly12_segments.Goal_38
+import denote.gpt2_small_ly12_segments.Goal_39
+import denote.gpt2_small_ly12_segments.Goal_40
+import denote.gpt2_small_ly12_segments.Goal_41
+import denote.gpt2_small_ly12_segments.Goal_42
+import denote.gpt2_small_ly12_segments.Goal_43
+import denote.gpt2_small_ly12_segments.Goal_44
+import denote.gpt2_small_ly12_segments.Goal_45
+import denote.gpt2_small_ly12_segments.Goal_46
+import denote.gpt2_small_ly12_segments.Goal_47
+import denote.gpt2_small_ly12_segments.Goal_48
+import denote.gpt2_small_ly12_segments.Goal_49
+import denote.gpt2_small_ly12_segments.Goal_50
+import denote.gpt2_small_ly12_segments.Goal_51
+import denote.gpt2_small_ly12_segments.Goal_52
+import denote.gpt2_small_ly12_segments.Goal_53
+import denote.gpt2_small_ly12_segments.Goal_54
+import denote.gpt2_small_ly12_segments.Goal_55
+import denote.gpt2_small_ly12_segments.Goal_56
+import denote.gpt2_small_ly12_segments.Goal_57
+import denote.gpt2_small_ly12_segments.Goal_58
+import denote.gpt2_small_ly12_segments.Goal_59
+import denote.gpt2_small_ly12_segments.Goal_60
+import denote.gpt2_small_ly12_segments.Goal_61
+import denote.gpt2_small_ly12_segments.Goal_62
+import denote.gpt2_small_ly12_segments.Goal_63
+import denote.gpt2_small_ly12_segments.Goal_64
+import denote.gpt2_small_ly12_segments.Goal_65
+import denote.gpt2_small_ly12_segments.Goal_66
+import denote.gpt2_small_ly12_segments.Goal_67
+import denote.gpt2_small_ly12_segments.Goal_68
+import denote.gpt2_small_ly12_segments.Goal_69
+import denote.gpt2_small_ly12_segments.Goal_70
+import denote.gpt2_small_ly12_segments.Goal_71
+import denote.gpt2_small_ly12_segments.Goal_72
+import denote.gpt2_small_ly12_segments.Goal_73
+import denote.gpt2_small_ly12_segments.Goal_74
+import denote.gpt2_small_ly12_segments.Goal_75
+import denote.gpt2_small_ly12_segments.Goal_76
+import denote.gpt2_small_ly12_segments.Goal_77
+import denote.gpt2_small_ly12_segments.Goal_78
+import denote.gpt2_small_ly12_segments.Goal_79
+import denote.gpt2_small_ly12_segments.Goal_80
+import denote.gpt2_small_ly12_segments.Goal_81
+import denote.gpt2_small_ly12_segments.Goal_82
+import denote.gpt2_small_ly12_segments.Goal_83
+import denote.gpt2_small_ly12_segments.Goal_84
+import denote.gpt2_small_ly12_segments.Goal_85
+import denote.gpt2_small_ly12_segments.Goal_86
+import denote.gpt2_small_ly12_segments.Goal_87
+import denote.gpt2_small_ly12_segments.Goal_88
+import denote.gpt2_small_ly12_segments.Goal_89
+import denote.gpt2_small_ly12_segments.Goal_90
+import denote.gpt2_small_ly12_segments.Goal_91
+import denote.gpt2_small_ly12_segments.Goal_92
+import denote.gpt2_small_ly12_segments.Goal_93
+import denote.gpt2_small_ly12_segments.Goal_94
+import denote.gpt2_small_ly12_segments.Goal_95
+import denote.gpt2_small_ly12_segments.Goal_96
+import denote.gpt2_small_ly12_segments.Goal_97
+import denote.gpt2_small_ly12_segments.Goal_98
+import denote.gpt2_small_ly12_segments.Goal_99
+import denote.gpt2_small_ly12_segments.Goal_100
+import denote.gpt2_small_ly12_segments.Goal_101
+import denote.gpt2_small_ly12_segments.Goal_102
+import denote.gpt2_small_ly12_segments.Goal_103
+import denote.gpt2_small_ly12_segments.Goal_104
+import denote.gpt2_small_ly12_segments.Goal_105
+import denote.gpt2_small_ly12_segments.Goal_106
+import denote.gpt2_small_ly12_segments.Goal_107
+import denote.gpt2_small_ly12_segments.Goal_108
+import denote.gpt2_small_ly12_segments.Goal_109
+import denote.gpt2_small_ly12_segments.Goal_110
+import denote.gpt2_small_ly12_segments.Goal_111
+import denote.gpt2_small_ly12_segments.Goal_112
+import denote.gpt2_small_ly12_segments.Goal_113
+import denote.gpt2_small_ly12_segments.Goal_114
+import denote.gpt2_small_ly12_segments.Goal_115
+import denote.gpt2_small_ly12_segments.Goal_116
+import denote.gpt2_small_ly12_segments.Goal_117
+import denote.gpt2_small_ly12_segments.Goal_118
+import denote.gpt2_small_ly12_segments.Goal_119
+import denote.gpt2_small_ly12_segments.Goal_120
+import denote.gpt2_small_ly12_segments.Goal_121
+import denote.gpt2_small_ly12_segments.Goal_122
+import denote.gpt2_small_ly12_segments.Goal_123
+import denote.gpt2_small_ly12_segments.Goal_124
+import denote.gpt2_small_ly12_segments.Goal_125
+import denote.gpt2_small_ly12_segments.Goal_126
+import denote.gpt2_small_ly12_segments.Goal_127
+import denote.gpt2_small_ly12_segments.Goal_128
+import denote.gpt2_small_ly12_segments.Goal_129
+import denote.gpt2_small_ly12_segments.Goal_130
+import denote.gpt2_small_ly12_segments.Goal_131
+import denote.gpt2_small_ly12_segments.Goal_132
+import denote.gpt2_small_ly12_segments.Goal_133
+import denote.gpt2_small_ly12_segments.Goal_134
+import denote.gpt2_small_ly12_segments.Goal_135
+import denote.gpt2_small_ly12_segments.Goal_136
+import denote.gpt2_small_ly12_segments.Goal_137
+import denote.gpt2_small_ly12_segments.Goal_138
+import denote.gpt2_small_ly12_segments.Goal_139
+import denote.gpt2_small_ly12_segments.Goal_140
+import denote.gpt2_small_ly12_segments.Goal_141
+import denote.gpt2_small_ly12_segments.Goal_142
+import denote.gpt2_small_ly12_segments.Goal_143
+import denote.gpt2_small_ly12_segments.Goal_144
+import denote.gpt2_small_ly12_segments.Goal_145
+import denote.gpt2_small_ly12_segments.Goal_146
+import denote.gpt2_small_ly12_segments.Goal_147
+import denote.gpt2_small_ly12_segments.Goal_148
+import denote.gpt2_small_ly12_segments.Goal_149
+import denote.gpt2_small_ly12_segments.Goal_150
+import denote.gpt2_small_ly12_segments.Goal_151
+import denote.gpt2_small_ly12_segments.Goal_152
+import denote.gpt2_small_ly12_segments.Goal_153
+import denote.gpt2_small_ly12_segments.Goal_154
+import denote.gpt2_small_ly12_segments.Goal_155
+import denote.gpt2_small_ly12_segments.Goal_156
+import denote.gpt2_small_ly12_segments.Goal_157
+import denote.gpt2_small_ly12_segments.Goal_158
+import denote.gpt2_small_ly12_segments.Goal_159
+import denote.gpt2_small_ly12_segments.Goal_160
+import denote.gpt2_small_ly12_segments.Goal_161
+import denote.gpt2_small_ly12_segments.Goal_162
+import denote.gpt2_small_ly12_segments.Goal_163
+import denote.gpt2_small_ly12_segments.Goal_164
+import denote.gpt2_small_ly12_segments.Goal_165
+import denote.gpt2_small_ly12_segments.Goal_166
+import denote.gpt2_small_ly12_segments.Goal_167
+import denote.gpt2_small_ly12_segments.Goal_168
+import denote.gpt2_small_ly12_segments.Goal_169
+import denote.gpt2_small_ly12_segments.Goal_170
+import denote.gpt2_small_ly12_segments.Goal_171
+import denote.gpt2_small_ly12_segments.Goal_172
+import denote.gpt2_small_ly12_segments.Goal_173
+import denote.gpt2_small_ly12_segments.Goal_174
+import denote.gpt2_small_ly12_segments.Goal_175
+import denote.gpt2_small_ly12_segments.Goal_176
+import denote.gpt2_small_ly12_segments.Goal_177
+import denote.gpt2_small_ly12_segments.Goal_178
+import denote.gpt2_small_ly12_segments.Goal_179
+import denote.gpt2_small_ly12_segments.Goal_180
+import denote.gpt2_small_ly12_segments.Goal_181
+import denote.gpt2_small_ly12_segments.Goal_182
+import denote.gpt2_small_ly12_segments.Goal_183
+import denote.gpt2_small_ly12_segments.Goal_184
+import denote.gpt2_small_ly12_segments.Goal_185
+import denote.gpt2_small_ly12_segments.Goal_186
+import denote.gpt2_small_ly12_segments.Goal_187
+import denote.gpt2_small_ly12_segments.Goal_188
+import denote.gpt2_small_ly12_segments.Goal_189
+import denote.gpt2_small_ly12_segments.Goal_190
+import denote.gpt2_small_ly12_segments.Goal_191
+import denote.gpt2_small_ly12_segments.Goal_192
+import denote.gpt2_small_ly12_segments.Goal_193
+import denote.gpt2_small_ly12_segments.Goal_194
+import denote.gpt2_small_ly12_segments.Goal_195
+import denote.gpt2_small_ly12_segments.Goal_196
+import denote.gpt2_small_ly12_segments.Goal_197
+import denote.gpt2_small_ly12_segments.Goal_198
+import denote.gpt2_small_ly12_segments.Goal_199
+import denote.gpt2_small_ly12_segments.Goal_200
+import denote.gpt2_small_ly12_segments.Goal_201
+import denote.gpt2_small_ly12_segments.Goal_202
+import denote.gpt2_small_ly12_segments.Goal_203
+import denote.gpt2_small_ly12_segments.Goal_204
+import denote.gpt2_small_ly12_segments.Goal_205
+import denote.gpt2_small_ly12_segments.Goal_206
+import denote.gpt2_small_ly12_segments.Goal_207
+import denote.gpt2_small_ly12_segments.Goal_208
+import denote.gpt2_small_ly12_segments.Goal_209
+import denote.gpt2_small_ly12_segments.Goal_210
+import denote.gpt2_small_ly12_segments.Goal_211
+import denote.gpt2_small_ly12_segments.Goal_212
+import denote.gpt2_small_ly12_segments.Goal_213
+import denote.gpt2_small_ly12_segments.Goal_214
+import denote.gpt2_small_ly12_segments.Goal_215
+import denote.gpt2_small_ly12_segments.Goal_216
+import denote.gpt2_small_ly12_segments.Goal_217
+import denote.gpt2_small_ly12_segments.Goal_218
+import denote.gpt2_small_ly12_segments.Goal_219
+import denote.gpt2_small_ly12_segments.Goal_220
+import denote.gpt2_small_ly12_segments.Goal_221
+import denote.gpt2_small_ly12_segments.Goal_222
+import denote.gpt2_small_ly12_segments.Goal_223
+import denote.gpt2_small_ly12_segments.Goal_224
+import denote.gpt2_small_ly12_segments.Goal_225
+import denote.gpt2_small_ly12_segments.Goal_226
+import denote.gpt2_small_ly12_segments.Goal_227
+import denote.gpt2_small_ly12_segments.Goal_228
+import denote.gpt2_small_ly12_segments.Goal_229
+import denote.gpt2_small_ly12_segments.Goal_230
+import denote.gpt2_small_ly12_segments.Goal_231
+import denote.gpt2_small_ly12_segments.Goal_232
+import denote.gpt2_small_ly12_segments.Goal_233
+import denote.gpt2_small_ly12_segments.Goal_234
+import denote.gpt2_small_ly12_segments.Goal_235
+import denote.gpt2_small_ly12_segments.Goal_236
+import denote.gpt2_small_ly12_segments.Goal_237
+import denote.gpt2_small_ly12_segments.Goal_238
+import denote.gpt2_small_ly12_segments.Goal_239
+import denote.gpt2_small_ly12_segments.Goal_240
+import denote.gpt2_small_ly12_segments.Goal_241
+import denote.gpt2_small_ly12_segments.Goal_242
+import denote.gpt2_small_ly12_segments.Goal_243
+import denote.gpt2_small_ly12_segments.Goal_244
+import denote.gpt2_small_ly12_segments.Goal_245
+import denote.gpt2_small_ly12_segments.Goal_246
+import denote.gpt2_small_ly12_segments.Goal_247
+import denote.gpt2_small_ly12_segments.Goal_248
+import denote.gpt2_small_ly12_segments.Goal_249
+import denote.gpt2_small_ly12_segments.Goal_250
+import denote.gpt2_small_ly12_segments.Goal_251
+import denote.gpt2_small_ly12_segments.Goal_252
+import denote.gpt2_small_ly12_segments.Goal_253
+import denote.gpt2_small_ly12_segments.Goal_254
+import denote.gpt2_small_ly12_segments.Goal_255
+import denote.gpt2_small_ly12_segments.Goal_256
+import denote.gpt2_small_ly12_segments.Goal_257
+import denote.gpt2_small_ly12_segments.Goal_258
+import denote.gpt2_small_ly12_segments.Goal_259
+import denote.gpt2_small_ly12_segments.Goal_260
+import denote.gpt2_small_ly12_segments.Goal_261
+import denote.gpt2_small_ly12_segments.Goal_262
+import denote.gpt2_small_ly12_segments.Goal_263
+import denote.gpt2_small_ly12_segments.Goal_264
+import denote.gpt2_small_ly12_segments.Goal_265
+import denote.gpt2_small_ly12_segments.Goal_266
+import denote.gpt2_small_ly12_segments.Goal_267
+import denote.gpt2_small_ly12_segments.Goal_268
+import denote.gpt2_small_ly12_segments.Goal_269
+import denote.gpt2_small_ly12_segments.Goal_270
+import denote.gpt2_small_ly12_segments.Goal_271
+import denote.gpt2_small_ly12_segments.Goal_272
+import denote.gpt2_small_ly12_segments.Goal_273
+import denote.gpt2_small_ly12_segments.Goal_274
+import denote.gpt2_small_ly12_segments.Goal_275
+import denote.gpt2_small_ly12_segments.Goal_276
+import denote.gpt2_small_ly12_segments.Goal_277
+import denote.gpt2_small_ly12_segments.Goal_278
+import denote.gpt2_small_ly12_segments.Goal_279
+import denote.gpt2_small_ly12_segments.Goal_280
+import denote.gpt2_small_ly12_segments.Goal_281
+import denote.gpt2_small_ly12_segments.Goal_282
+import denote.gpt2_small_ly12_segments.Goal_283
+import denote.gpt2_small_ly12_segments.Goal_284
+import denote.gpt2_small_ly12_segments.Goal_285
+import denote.gpt2_small_ly12_segments.Goal_286
+import denote.gpt2_small_ly12_segments.Goal_287
+import denote.gpt2_small_ly12_segments.Goal_288
+import denote.gpt2_small_ly12_segments.Goal_289
+import denote.gpt2_small_ly12_segments.Goal_290
+import denote.gpt2_small_ly12_segments.Goal_291
+import denote.gpt2_small_ly12_segments.Goal_292
+import denote.gpt2_small_ly12_segments.Goal_293
+import denote.gpt2_small_ly12_segments.Goal_294
+import denote.gpt2_small_ly12_segments.Goal_295
+import denote.gpt2_small_ly12_segments.Goal_296
+import denote.gpt2_small_ly12_segments.Goal_297
+import denote.gpt2_small_ly12_segments.Goal_298
+import denote.gpt2_small_ly12_segments.Goal_299
+import denote.gpt2_small_ly12_segments.Goal_300
+import denote.gpt2_small_ly12_segments.Goal_301
+import denote.gpt2_small_ly12_segments.Goal_302
+import denote.gpt2_small_ly12_segments.Goal_303
+import denote.gpt2_small_ly12_segments.Goal_304
+import denote.gpt2_small_ly12_segments.Goal_305
+import denote.gpt2_small_ly12_segments.Goal_306
+import denote.gpt2_small_ly12_segments.Goal_307
+import denote.gpt2_small_ly12_segments.Goal_308
+import denote.gpt2_small_ly12_segments.Goal_309
+import denote.gpt2_small_ly12_segments.Goal_310
+import denote.gpt2_small_ly12_segments.Goal_311
+import denote.gpt2_small_ly12_segments.Goal_312
+import denote.gpt2_small_ly12_segments.Goal_313
+import denote.gpt2_small_ly12_segments.Goal_314
+import denote.gpt2_small_ly12_segments.Goal_315
+import denote.gpt2_small_ly12_segments.Goal_316
+import denote.gpt2_small_ly12_segments.Goal_317
+import denote.gpt2_small_ly12_segments.Goal_318
+import denote.gpt2_small_ly12_segments.Goal_319
+import denote.gpt2_small_ly12_segments.Goal_320
+import denote.gpt2_small_ly12_segments.Goal_321
+import denote.gpt2_small_ly12_segments.Goal_322
+import denote.gpt2_small_ly12_segments.Goal_323
+import denote.gpt2_small_ly12_segments.Goal_324
+import denote.gpt2_small_ly12_segments.Goal_325
+import denote.gpt2_small_ly12_segments.Goal_326
+import denote.gpt2_small_ly12_segments.Goal_327
+import denote.gpt2_small_ly12_segments.Goal_328
+import denote.gpt2_small_ly12_segments.Goal_329
+import denote.gpt2_small_ly12_segments.Goal_330
+import denote.gpt2_small_ly12_segments.Goal_331
+import denote.gpt2_small_ly12_segments.Goal_332
+import denote.gpt2_small_ly12_segments.Goal_333
+import denote.gpt2_small_ly12_segments.Goal_334
+import denote.gpt2_small_ly12_segments.Goal_335
+import denote.gpt2_small_ly12_segments.Goal_336
+import denote.gpt2_small_ly12_segments.Goal_337
+import denote.gpt2_small_ly12_segments.Goal_338
+import denote.gpt2_small_ly12_segments.Goal_339
+import denote.gpt2_small_ly12_segments.Goal_340
+import denote.gpt2_small_ly12_segments.Goal_341
+import denote.gpt2_small_ly12_segments.Goal_342
+import denote.gpt2_small_ly12_segments.Goal_343
+import denote.gpt2_small_ly12_segments.Goal_344
+import denote.gpt2_small_ly12_segments.Goal_345
+import denote.gpt2_small_ly12_segments.Goal_346
+import denote.gpt2_small_ly12_segments.Goal_347
+import denote.gpt2_small_ly12_segments.Goal_348
+import denote.gpt2_small_ly12_segments.Goal_349
+import denote.gpt2_small_ly12_segments.Goal_350
+import denote.gpt2_small_ly12_segments.Goal_351
+import denote.gpt2_small_ly12_segments.Goal_352
+import denote.gpt2_small_ly12_segments.Goal_353
+import denote.gpt2_small_ly12_segments.Goal_354
+import denote.gpt2_small_ly12_segments.Goal_355
+import denote.gpt2_small_ly12_segments.Goal_356
+import denote.gpt2_small_ly12_segments.Goal_357
+import denote.gpt2_small_ly12_segments.Goal_358
+import denote.gpt2_small_ly12_segments.Goal_359
+import denote.gpt2_small_ly12_segments.Goal_360
+import denote.gpt2_small_ly12_segments.Goal_361
+import denote.gpt2_small_ly12_segments.Goal_362
+import denote.gpt2_small_ly12_segments.Goal_363
+import denote.gpt2_small_ly12_segments.Goal_364
+import denote.gpt2_small_ly12_segments.Goal_365
+import denote.gpt2_small_ly12_segments.Goal_366
+import denote.gpt2_small_ly12_segments.Goal_367
+import denote.gpt2_small_ly12_segments.Goal_368
+import denote.gpt2_small_ly12_segments.Goal_369
+import denote.gpt2_small_ly12_segments.Goal_370
+import denote.gpt2_small_ly12_segments.Goal_371
+import denote.gpt2_small_ly12_segments.Goal_372
+import denote.gpt2_small_ly12_segments.Goal_373
+import denote.gpt2_small_ly12_segments.Goal_374
+import denote.gpt2_small_ly12_segments.Goal_375
+import denote.gpt2_small_ly12_segments.Goal_376
+import denote.gpt2_small_ly12_segments.Goal_377
+import denote.gpt2_small_ly12_segments.Goal_378
+import denote.gpt2_small_ly12_segments.Goal_379
+import denote.gpt2_small_ly12_segments.Goal_380
+import denote.gpt2_small_ly12_segments.Goal_381
+import denote.gpt2_small_ly12_segments.Goal_382
+import denote.gpt2_small_ly12_segments.Goal_383
+import denote.gpt2_small_ly12_segments.Goal_384
+import denote.gpt2_small_ly12_segments.Goal_385
+import denote.gpt2_small_ly12_segments.Goal_386
+import denote.gpt2_small_ly12_segments.Goal_387
+import denote.gpt2_small_ly12_segments.Goal_388
+import denote.gpt2_small_ly12_segments.Goal_389
+import denote.gpt2_small_ly12_segments.Goal_390
+import denote.gpt2_small_ly12_segments.Goal_391
+import denote.gpt2_small_ly12_segments.Goal_392
+import denote.gpt2_small_ly12_segments.Goal_393
+import denote.gpt2_small_ly12_segments.Goal_394
+import denote.gpt2_small_ly12_segments.Goal_395
+import denote.gpt2_small_ly12_segments.Goal_396
+import denote.gpt2_small_ly12_segments.Goal_397
+import denote.gpt2_small_ly12_segments.Goal_398
+import denote.gpt2_small_ly12_segments.Goal_399
+import denote.gpt2_small_ly12_segments.Goal_400
+import denote.gpt2_small_ly12_segments.Goal_401
+import denote.gpt2_small_ly12_segments.Goal_402
+import denote.gpt2_small_ly12_segments.Goal_403
+import denote.gpt2_small_ly12_segments.Goal_404
+import denote.gpt2_small_ly12_segments.Goal_405
+import denote.gpt2_small_ly12_segments.Goal_406
+import denote.gpt2_small_ly12_segments.Goal_407
+import denote.gpt2_small_ly12_segments.Goal_408
+import denote.gpt2_small_ly12_segments.Goal_409
+import denote.gpt2_small_ly12_segments.Goal_410
+import denote.gpt2_small_ly12_segments.Goal_411
+import denote.gpt2_small_ly12_segments.Goal_412
+import denote.gpt2_small_ly12_segments.Goal_413
+import denote.gpt2_small_ly12_segments.Goal_414
+import denote.gpt2_small_ly12_segments.Goal_415
+import denote.gpt2_small_ly12_segments.Goal_416
+import denote.gpt2_small_ly12_segments.Goal_417
+import denote.gpt2_small_ly12_segments.Goal_418
+import denote.gpt2_small_ly12_segments.Goal_419
+import denote.gpt2_small_ly12_segments.Goal_420
+import denote.gpt2_small_ly12_segments.Goal_421
+import denote.gpt2_small_ly12_segments.Goal_422
+import denote.gpt2_small_ly12_segments.Goal_423
+import denote.gpt2_small_ly12_segments.Goal_424
+import denote.gpt2_small_ly12_segments.Goal_425
+import denote.gpt2_small_ly12_segments.Goal_426
+import denote.gpt2_small_ly12_segments.Goal_427
+import denote.gpt2_small_ly12_segments.Goal_428
+import denote.gpt2_small_ly12_segments.Goal_429
+import denote.gpt2_small_ly12_segments.Goal_430
+import denote.gpt2_small_ly12_segments.Goal_431
+import denote.gpt2_small_ly12_segments.Goal_432
+import denote.gpt2_small_ly12_segments.Goal_433
+import denote.gpt2_small_ly12_segments.Goal_434
+import denote.gpt2_small_ly12_segments.Goal_435
+import denote.gpt2_small_ly12_segments.Goal_436
+import denote.gpt2_small_ly12_segments.Goal_437
+import denote.gpt2_small_ly12_segments.Goal_438
+import denote.gpt2_small_ly12_segments.Goal_439
+import denote.gpt2_small_ly12_segments.Goal_440
+import denote.gpt2_small_ly12_segments.Goal_441
+import denote.gpt2_small_ly12_segments.Goal_442
+import denote.gpt2_small_ly12_segments.Goal_443
+import denote.gpt2_small_ly12_segments.Goal_444
+import denote.gpt2_small_ly12_segments.Goal_445
+import denote.gpt2_small_ly12_segments.Goal_446
+import denote.gpt2_small_ly12_segments.Goal_447
+import denote.gpt2_small_ly12_segments.Goal_448
+import denote.gpt2_small_ly12_segments.Goal_449
+import denote.gpt2_small_ly12_segments.Goal_450
+import denote.gpt2_small_ly12_segments.Goal_451
+import denote.gpt2_small_ly12_segments.Goal_452
+import denote.gpt2_small_ly12_segments.Goal_453
+import denote.gpt2_small_ly12_segments.Goal_454
+import denote.gpt2_small_ly12_segments.Goal_455
+import denote.gpt2_small_ly12_segments.Goal_456
+import denote.gpt2_small_ly12_segments.Goal_457
+import denote.gpt2_small_ly12_segments.Goal_458
+import denote.gpt2_small_ly12_segments.Goal_459
+import denote.gpt2_small_ly12_segments.Goal_460
+import denote.gpt2_small_ly12_segments.Goal_461
+import denote.gpt2_small_ly12_segments.Goal_462
+import denote.gpt2_small_ly12_segments.Goal_463
+import denote.gpt2_small_ly12_segments.Goal_464
+import denote.gpt2_small_ly12_segments.Goal_465
+import denote.gpt2_small_ly12_segments.Goal_466
+import denote.gpt2_small_ly12_segments.Goal_467
+import denote.gpt2_small_ly12_segments.Goal_468
+import denote.gpt2_small_ly12_segments.Goal_469
+import denote.gpt2_small_ly12_segments.Goal_470
+import denote.gpt2_small_ly12_segments.Goal_471
+import denote.gpt2_small_ly12_segments.Goal_472
+import denote.gpt2_small_ly12_segments.Goal_473
+import denote.gpt2_small_ly12_segments.Goal_474
+import denote.gpt2_small_ly12_segments.Goal_475
+import denote.gpt2_small_ly12_segments.Goal_476
+import denote.gpt2_small_ly12_segments.Goal_477
+import denote.gpt2_small_ly12_segments.Goal_478
+import denote.gpt2_small_ly12_segments.Goal_479
+import denote.gpt2_small_ly12_segments.Goal_480
+import denote.gpt2_small_ly12_segments.Goal_481
+import denote.gpt2_small_ly12_segments.Goal_482
+import denote.gpt2_small_ly12_segments.Goal_483
+import denote.gpt2_small_ly12_segments.Goal_484
+import denote.gpt2_small_ly12_segments.Goal_485
+import denote.gpt2_small_ly12_segments.Goal_486
+import denote.gpt2_small_ly12_segments.Goal_487
+import denote.gpt2_small_ly12_segments.Goal_488
+import denote.gpt2_small_ly12_segments.Goal_489
+import denote.gpt2_small_ly12_segments.Goal_490
+import denote.gpt2_small_ly12_segments.Goal_491
+import denote.gpt2_small_ly12_segments.Goal_492
+import denote.gpt2_small_ly12_segments.Goal_493
+import denote.gpt2_small_ly12_segments.Goal_494
+import denote.gpt2_small_ly12_segments.Goal_495
+import denote.gpt2_small_ly12_segments.Goal_496
+import denote.gpt2_small_ly12_segments.Goal_497
+import denote.gpt2_small_ly12_segments.Goal_498
+import denote.gpt2_small_ly12_segments.Goal_499
+import denote.gpt2_small_ly12_segments.Goal_500
+import denote.gpt2_small_ly12_segments.Goal_501
+import denote.gpt2_small_ly12_segments.Goal_502
+import denote.gpt2_small_ly12_segments.Goal_503
+import denote.gpt2_small_ly12_segments.Goal_504
+import denote.gpt2_small_ly12_segments.Goal_505
+import denote.gpt2_small_ly12_segments.Goal_506
+import denote.gpt2_small_ly12_segments.Goal_507
+import denote.gpt2_small_ly12_segments.Goal_508
+import denote.gpt2_small_ly12_segments.Goal_509
+import denote.gpt2_small_ly12_segments.Goal_510
+import denote.gpt2_small_ly12_segments.Goal_511
+import denote.gpt2_small_ly12_segments.Goal_512
+import denote.gpt2_small_ly12_segments.Goal_513
+import denote.gpt2_small_ly12_segments.Goal_514
+import denote.gpt2_small_ly12_segments.Goal_515
+import denote.gpt2_small_ly12_segments.Goal_516
+import denote.gpt2_small_ly12_segments.Goal_517
+import denote.gpt2_small_ly12_segments.Goal_518
+import denote.gpt2_small_ly12_segments.Goal_519
+import denote.gpt2_small_ly12_segments.Goal_520
+import denote.gpt2_small_ly12_segments.Goal_521
+import denote.gpt2_small_ly12_segments.Goal_522
+import denote.gpt2_small_ly12_segments.Goal_523
+import denote.gpt2_small_ly12_segments.Goal_524
+import denote.gpt2_small_ly12_segments.Goal_525
+import denote.gpt2_small_ly12_segments.Goal_526
+import denote.gpt2_small_ly12_segments.Goal_527
+import denote.gpt2_small_ly12_segments.Goal_528
+import denote.gpt2_small_ly12_segments.Goal_529
+import denote.gpt2_small_ly12_segments.Goal_530
+import denote.gpt2_small_ly12_segments.Goal_531
+import denote.gpt2_small_ly12_segments.Goal_532
+import denote.gpt2_small_ly12_segments.Goal_533
+import denote.gpt2_small_ly12_segments.Goal_534
+import denote.gpt2_small_ly12_segments.Goal_535
+import denote.gpt2_small_ly12_segments.Goal_536
+import denote.gpt2_small_ly12_segments.Goal_537
+import denote.gpt2_small_ly12_segments.Goal_538
+import denote.gpt2_small_ly12_segments.Goal_539
+import denote.gpt2_small_ly12_segments.Goal_540
+import denote.gpt2_small_ly12_segments.Goal_541
+import denote.gpt2_small_ly12_segments.Goal_542
+import denote.gpt2_small_ly12_segments.Goal_543
+import denote.gpt2_small_ly12_segments.Goal_544
+import denote.gpt2_small_ly12_segments.Goal_545
+import denote.gpt2_small_ly12_segments.Goal_546
+import denote.gpt2_small_ly12_segments.Goal_547
+import denote.gpt2_small_ly12_segments.Goal_548
+import denote.gpt2_small_ly12_segments.Goal_549
+import denote.gpt2_small_ly12_segments.Goal_550
+import denote.gpt2_small_ly12_segments.Goal_551
+import denote.gpt2_small_ly12_segments.Goal_552
+import denote.gpt2_small_ly12_segments.Goal_553
+import denote.gpt2_small_ly12_segments.Goal_554
+import denote.gpt2_small_ly12_segments.Goal_555
+import denote.gpt2_small_ly12_segments.Goal_556
+import denote.gpt2_small_ly12_segments.Goal_557
+import denote.gpt2_small_ly12_segments.Goal_558
+import denote.gpt2_small_ly12_segments.Goal_559
+import denote.gpt2_small_ly12_segments.Goal_560
+import denote.gpt2_small_ly12_segments.Goal_561
+import denote.gpt2_small_ly12_segments.Goal_562
+import denote.gpt2_small_ly12_segments.Goal_563
+import denote.gpt2_small_ly12_segments.Goal_564
+import denote.gpt2_small_ly12_segments.Goal_565
+import denote.gpt2_small_ly12_segments.Goal_566
+import denote.gpt2_small_ly12_segments.Goal_567
+import denote.gpt2_small_ly12_segments.Goal_568
+import denote.gpt2_small_ly12_segments.Goal_569
+import denote.gpt2_small_ly12_segments.Goal_570
+import denote.gpt2_small_ly12_segments.Goal_571
+import denote.gpt2_small_ly12_segments.Goal_572
+import denote.gpt2_small_ly12_segments.Goal_573
+import denote.gpt2_small_ly12_segments.Goal_574
+import denote.gpt2_small_ly12_segments.Goal_575
+import denote.gpt2_small_ly12_segments.Goal_576
+import denote.gpt2_small_ly12_segments.Goal_577
+import denote.gpt2_small_ly12_segments.Goal_578
+import denote.gpt2_small_ly12_segments.Goal_579
+import denote.gpt2_small_ly12_segments.Goal_580
+import denote.gpt2_small_ly12_segments.Goal_581
+import denote.gpt2_small_ly12_segments.Goal_582
+import denote.gpt2_small_ly12_segments.Goal_583
+import denote.gpt2_small_ly12_segments.Goal_584
+import denote.gpt2_small_ly12_segments.Goal_585
+import denote.gpt2_small_ly12_segments.Goal_586
+import denote.gpt2_small_ly12_segments.Goal_587
+import denote.gpt2_small_ly12_segments.Goal_588
+import denote.gpt2_small_ly12_segments.Goal_589
+import denote.gpt2_small_ly12_segments.Goal_590
+import denote.gpt2_small_ly12_segments.Goal_591
+import denote.gpt2_small_ly12_segments.Goal_592
+import denote.gpt2_small_ly12_segments.Goal_593
+import denote.gpt2_small_ly12_segments.Goal_594
+import denote.gpt2_small_ly12_segments.Goal_595
+import denote.gpt2_small_ly12_segments.Goal_596
+import denote.gpt2_small_ly12_segments.Goal_597
+import denote.gpt2_small_ly12_segments.Goal_598
+import denote.gpt2_small_ly12_segments.Goal_599
+import denote.gpt2_small_ly12_segments.Goal_600
+import denote.gpt2_small_ly12_segments.Goal_601
+import denote.gpt2_small_ly12_segments.Goal_602
+import denote.gpt2_small_ly12_segments.Goal_603
+import denote.gpt2_small_ly12_segments.Goal_604
+import denote.gpt2_small_ly12_segments.Goal_605
+import denote.gpt2_small_ly12_segments.Goal_606
+import denote.gpt2_small_ly12_segments.Goal_607
+import denote.gpt2_small_ly12_segments.Goal_608
+import denote.gpt2_small_ly12_segments.Goal_609
+import denote.gpt2_small_ly12_segments.Goal_610
+import denote.gpt2_small_ly12_segments.Goal_611
+import denote.gpt2_small_ly12_segments.Goal_612
+import denote.gpt2_small_ly12_segments.Goal_613
+import denote.gpt2_small_ly12_segments.Goal_614
+import denote.gpt2_small_ly12_segments.Goal_615
+import denote.gpt2_small_ly12_segments.Goal_616
+import denote.gpt2_small_ly12_segments.Goal_617
+import denote.gpt2_small_ly12_segments.Goal_618
+import denote.gpt2_small_ly12_segments.Goal_619
+import denote.gpt2_small_ly12_segments.Goal_620
+import denote.gpt2_small_ly12_segments.Goal_621
+import denote.gpt2_small_ly12_segments.Goal_622
+import denote.gpt2_small_ly12_segments.Goal_623
+import denote.gpt2_small_ly12_segments.Goal_624
+import denote.gpt2_small_ly12_segments.Goal_625
+import denote.gpt2_small_ly12_segments.Goal_626
+import denote.gpt2_small_ly12_segments.Goal_627
+import denote.gpt2_small_ly12_segments.Goal_628
+import denote.gpt2_small_ly12_segments.Goal_629
+import denote.gpt2_small_ly12_segments.Goal_630
+import denote.gpt2_small_ly12_segments.Goal_631
+import denote.gpt2_small_ly12_segments.Goal_632
+import denote.gpt2_small_ly12_segments.Goal_633
+import denote.gpt2_small_ly12_segments.Goal_634
+import denote.gpt2_small_ly12_segments.Goal_635
+import denote.gpt2_small_ly12_segments.Goal_636
+import denote.gpt2_small_ly12_segments.Goal_637
+import denote.gpt2_small_ly12_segments.Goal_638
+import denote.gpt2_small_ly12_segments.Goal_639
+import denote.gpt2_small_ly12_segments.Goal_640
+import denote.gpt2_small_ly12_segments.Goal_641
+import denote.gpt2_small_ly12_segments.Goal_642
+import denote.gpt2_small_ly12_segments.Goal_643
+import denote.gpt2_small_ly12_segments.Goal_644
+import denote.gpt2_small_ly12_segments.Goal_645
+import denote.gpt2_small_ly12_segments.Goal_646
+import denote.gpt2_small_ly12_segments.Goal_647
+import denote.gpt2_small_ly12_segments.Goal_648
+import denote.gpt2_small_ly12_segments.Goal_649
+import denote.gpt2_small_ly12_segments.Goal_650
+import denote.gpt2_small_ly12_segments.Goal_651
+import denote.gpt2_small_ly12_segments.Goal_652
+import denote.gpt2_small_ly12_segments.Goal_653
+import denote.gpt2_small_ly12_segments.Goal_654
+import denote.gpt2_small_ly12_segments.Goal_655
+import denote.gpt2_small_ly12_segments.Goal_656
+import denote.gpt2_small_ly12_segments.Goal_657
+import denote.gpt2_small_ly12_segments.Goal_658
+import denote.gpt2_small_ly12_segments.Goal_659
+import denote.gpt2_small_ly12_segments.Goal_660
+import denote.gpt2_small_ly12_segments.Goal_661
+import denote.gpt2_small_ly12_segments.Goal_662
+import denote.gpt2_small_ly12_segments.Goal_663
+import denote.gpt2_small_ly12_segments.Goal_664
+import denote.gpt2_small_ly12_segments.Goal_665
+import denote.gpt2_small_ly12_segments.Goal_666
+import denote.gpt2_small_ly12_segments.Goal_667
+import denote.gpt2_small_ly12_segments.Goal_668
+import denote.gpt2_small_ly12_segments.Goal_669
+import denote.gpt2_small_ly12_segments.Goal_670
+import denote.gpt2_small_ly12_segments.Goal_671
+import denote.gpt2_small_ly12_segments.Goal_672
+import denote.gpt2_small_ly12_segments.Goal_673
+import denote.gpt2_small_ly12_segments.Goal_674
+import denote.gpt2_small_ly12_segments.Goal_675
+import denote.gpt2_small_ly12_segments.Goal_676
+import denote.gpt2_small_ly12_segments.Goal_677
+import denote.gpt2_small_ly12_segments.Goal_678
+import denote.gpt2_small_ly12_segments.Goal_679
+import denote.gpt2_small_ly12_segments.Goal_680
+import denote.gpt2_small_ly12_segments.Goal_681
+import denote.gpt2_small_ly12_segments.Goal_682
+import denote.gpt2_small_ly12_segments.Goal_683
+import denote.gpt2_small_ly12_segments.Goal_684
+import denote.gpt2_small_ly12_segments.Goal_685
+import denote.gpt2_small_ly12_segments.Goal_686
+import denote.gpt2_small_ly12_segments.Goal_687
+import denote.gpt2_small_ly12_segments.Goal_688
+import denote.gpt2_small_ly12_segments.Goal_689
+import denote.gpt2_small_ly12_segments.Goal_690
+import denote.gpt2_small_ly12_segments.Goal_691
+import denote.gpt2_small_ly12_segments.Goal_692
+import denote.gpt2_small_ly12_segments.Goal_693
+import denote.gpt2_small_ly12_segments.Goal_694
+import denote.gpt2_small_ly12_segments.Goal_695
+import denote.gpt2_small_ly12_segments.Goal_696
+import denote.gpt2_small_ly12_segments.Goal_697
+import denote.gpt2_small_ly12_segments.Goal_698
+import denote.gpt2_small_ly12_segments.Goal_699
+import denote.gpt2_small_ly12_segments.Goal_700
+import denote.gpt2_small_ly12_segments.Goal_701
+import denote.gpt2_small_ly12_segments.Goal_702
+import denote.gpt2_small_ly12_segments.Goal_703
+import denote.gpt2_small_ly12_segments.Goal_704
+import denote.gpt2_small_ly12_segments.Goal_705
+import denote.gpt2_small_ly12_segments.Goal_706
+import denote.gpt2_small_ly12_segments.Goal_707
+import denote.gpt2_small_ly12_segments.Goal_708
+import denote.gpt2_small_ly12_segments.Goal_709
+import denote.gpt2_small_ly12_segments.Goal_710
+import denote.gpt2_small_ly12_segments.Goal_711
+import denote.gpt2_small_ly12_segments.Goal_712
+import denote.gpt2_small_ly12_segments.Goal_713
+import denote.gpt2_small_ly12_segments.Goal_714
+import denote.gpt2_small_ly12_segments.Goal_715
+import denote.gpt2_small_ly12_segments.Goal_716
+import denote.gpt2_small_ly12_segments.Goal_717
+import denote.gpt2_small_ly12_segments.Goal_718
+import denote.gpt2_small_ly12_segments.Goal_719
+import denote.gpt2_small_ly12_segments.Goal_720
+import denote.gpt2_small_ly12_segments.Goal_721
+import denote.gpt2_small_ly12_segments.Goal_722
+import denote.gpt2_small_ly12_segments.Goal_723
+import denote.gpt2_small_ly12_segments.Goal_724
+import denote.gpt2_small_ly12_segments.Goal_725
+import denote.gpt2_small_ly12_segments.Goal_726
+import denote.gpt2_small_ly12_segments.Goal_727
+import denote.gpt2_small_ly12_segments.Goal_728
+import denote.gpt2_small_ly12_segments.Goal_729
+import denote.gpt2_small_ly12_segments.Goal_730
+import denote.gpt2_small_ly12_segments.Goal_731
+import denote.gpt2_small_ly12_segments.Goal_732
+import denote.gpt2_small_ly12_segments.Goal_733
+import denote.gpt2_small_ly12_segments.Goal_734
+import denote.gpt2_small_ly12_segments.Goal_735
+import denote.gpt2_small_ly12_segments.Goal_736
+import denote.gpt2_small_ly12_segments.Goal_737
+import denote.gpt2_small_ly12_segments.Goal_738
+import denote.gpt2_small_ly12_segments.Goal_739
+import denote.gpt2_small_ly12_segments.Goal_740
+import denote.gpt2_small_ly12_segments.Goal_741
+import denote.gpt2_small_ly12_segments.Goal_742
+import denote.gpt2_small_ly12_segments.Goal_743
+import denote.gpt2_small_ly12_segments.Goal_744
+import denote.gpt2_small_ly12_segments.Goal_745
+import denote.gpt2_small_ly12_segments.Goal_746
+import denote.gpt2_small_ly12_segments.Goal_747
+import denote.gpt2_small_ly12_segments.Goal_748
+import denote.gpt2_small_ly12_segments.Goal_749
+import denote.gpt2_small_ly12_segments.Goal_750
+import denote.gpt2_small_ly12_segments.Goal_751
+import denote.gpt2_small_ly12_segments.Goal_752
+import denote.gpt2_small_ly12_segments.Goal_753
+import denote.gpt2_small_ly12_segments.Goal_754
+import denote.gpt2_small_ly12_segments.Goal_755
+import denote.gpt2_small_ly12_segments.Goal_756
+import denote.gpt2_small_ly12_segments.Goal_757
+import denote.gpt2_small_ly12_segments.Goal_758
+import denote.gpt2_small_ly12_segments.Goal_759
+import denote.gpt2_small_ly12_segments.Goal_760
+import denote.gpt2_small_ly12_segments.Goal_761
+import denote.gpt2_small_ly12_segments.Goal_762
+import denote.gpt2_small_ly12_segments.Goal_763
+import denote.gpt2_small_ly12_segments.Goal_764
+import denote.gpt2_small_ly12_segments.Goal_765
+import denote.gpt2_small_ly12_segments.Goal_766
+import denote.gpt2_small_ly12_segments.Goal_767
+import denote.gpt2_small_ly12_segments.Goal_768
+import denote.gpt2_small_ly12_segments.Goal_769
+import denote.gpt2_small_ly12_segments.Goal_770
+import denote.gpt2_small_ly12_segments.Goal_771
+import denote.gpt2_small_ly12_segments.Goal_772
+import denote.gpt2_small_ly12_segments.Goal_773
+import denote.gpt2_small_ly12_segments.Goal_774
+import denote.gpt2_small_ly12_segments.Goal_775
+import denote.gpt2_small_ly12_segments.Goal_776
+import denote.gpt2_small_ly12_segments.Goal_777
+import denote.gpt2_small_ly12_segments.Goal_778
+import denote.gpt2_small_ly12_segments.Goal_779
+import denote.gpt2_small_ly12_segments.Goal_780
+import denote.gpt2_small_ly12_segments.Goal_781
+import denote.gpt2_small_ly12_segments.Goal_782
+import denote.gpt2_small_ly12_segments.Goal_783
+import denote.gpt2_small_ly12_segments.Goal_784
+import denote.gpt2_small_ly12_segments.Goal_785
+import denote.gpt2_small_ly12_segments.Goal_786
+import denote.gpt2_small_ly12_segments.Goal_787
+import denote.gpt2_small_ly12_segments.Goal_788
+import denote.gpt2_small_ly12_segments.Goal_789
+import denote.gpt2_small_ly12_segments.Goal_790
+import denote.gpt2_small_ly12_segments.Goal_791
+import denote.gpt2_small_ly12_segments.Goal_792
+import denote.gpt2_small_ly12_segments.Goal_793
+import denote.gpt2_small_ly12_segments.Goal_794
+import denote.gpt2_small_ly12_segments.Goal_795
+import denote.gpt2_small_ly12_segments.Goal_796
+import denote.gpt2_small_ly12_segments.Goal_797
+import denote.gpt2_small_ly12_segments.Goal_798
+import denote.gpt2_small_ly12_segments.Goal_799
+import denote.gpt2_small_ly12_segments.Goal_800
+import denote.gpt2_small_ly12_segments.Goal_801
+import denote.gpt2_small_ly12_segments.Goal_802
+import denote.gpt2_small_ly12_segments.Goal_803
+import denote.gpt2_small_ly12_segments.Goal_804
+import denote.gpt2_small_ly12_segments.Goal_805
+import denote.gpt2_small_ly12_segments.Goal_806
+import denote.gpt2_small_ly12_segments.Goal_807
+import denote.gpt2_small_ly12_segments.Goal_808
+import denote.gpt2_small_ly12_segments.Goal_809
+import denote.gpt2_small_ly12_segments.Goal_810
+import denote.gpt2_small_ly12_segments.Goal_811
+import denote.gpt2_small_ly12_segments.Goal_812
+import denote.gpt2_small_ly12_segments.Goal_813
+import denote.gpt2_small_ly12_segments.Goal_814
+import denote.gpt2_small_ly12_segments.Goal_815
+import denote.gpt2_small_ly12_segments.Goal_816
+import denote.gpt2_small_ly12_segments.Goal_817
+import denote.gpt2_small_ly12_segments.Goal_818
+import denote.gpt2_small_ly12_segments.Goal_819
+import denote.gpt2_small_ly12_segments.Goal_820
+import denote.gpt2_small_ly12_segments.Goal_821
+import denote.gpt2_small_ly12_segments.Goal_822
+import denote.gpt2_small_ly12_segments.Goal_823
+import denote.gpt2_small_ly12_segments.Goal_824
+import denote.gpt2_small_ly12_segments.Goal_825
+import denote.gpt2_small_ly12_segments.Goal_826
+import denote.gpt2_small_ly12_segments.Goal_827
+import denote.gpt2_small_ly12_segments.Goal_828
+import denote.gpt2_small_ly12_segments.Goal_829
+import denote.gpt2_small_ly12_segments.Goal_830
+import denote.gpt2_small_ly12_segments.Goal_831
+import denote.gpt2_small_ly12_segments.Goal_832
+import denote.gpt2_small_ly12_segments.Goal_833
+import denote.gpt2_small_ly12_segments.Goal_834
+import denote.gpt2_small_ly12_segments.Goal_835
+import denote.gpt2_small_ly12_segments.Goal_836
+import denote.gpt2_small_ly12_segments.Goal_837
+import denote.gpt2_small_ly12_segments.Goal_838
+import denote.gpt2_small_ly12_segments.Goal_839
+import denote.gpt2_small_ly12_segments.Goal_840
+import denote.gpt2_small_ly12_segments.Goal_841
+import denote.gpt2_small_ly12_segments.Goal_842
+import denote.gpt2_small_ly12_segments.Goal_843
+import denote.gpt2_small_ly12_segments.Goal_844
+import denote.gpt2_small_ly12_segments.Goal_845
+import denote.gpt2_small_ly12_segments.Goal_846
+import denote.gpt2_small_ly12_segments.Goal_847
+import denote.gpt2_small_ly12_segments.Goal_848
+import denote.gpt2_small_ly12_segments.Goal_849
+import denote.gpt2_small_ly12_segments.Goal_850
+import denote.gpt2_small_ly12_segments.Goal_851
+import denote.gpt2_small_ly12_segments.Goal_852
+import denote.gpt2_small_ly12_segments.Goal_853
+import denote.gpt2_small_ly12_segments.Goal_854
+import denote.gpt2_small_ly12_segments.Goal_855
+import denote.gpt2_small_ly12_segments.Goal_856
+import denote.gpt2_small_ly12_segments.Goal_857
+import denote.gpt2_small_ly12_segments.Goal_858
+import denote.gpt2_small_ly12_segments.Goal_859
+import denote.gpt2_small_ly12_segments.Goal_860
+import denote.gpt2_small_ly12_segments.Goal_861
+import denote.gpt2_small_ly12_segments.Goal_862
+import denote.gpt2_small_ly12_segments.Goal_863
+import denote.gpt2_small_ly12_segments.Goal_864
+import denote.gpt2_small_ly12_segments.Goal_865
+import denote.gpt2_small_ly12_segments.Goal_866
+import denote.gpt2_small_ly12_segments.Goal_867
+import denote.gpt2_small_ly12_segments.Goal_868
+import denote.gpt2_small_ly12_segments.Goal_869
+import denote.gpt2_small_ly12_segments.Goal_870
+import denote.gpt2_small_ly12_segments.Goal_871
+import denote.gpt2_small_ly12_segments.Goal_872
+import denote.gpt2_small_ly12_segments.Goal_873
+import denote.gpt2_small_ly12_segments.Goal_874
+import denote.gpt2_small_ly12_segments.Goal_875
+import denote.gpt2_small_ly12_segments.Goal_876
+import denote.gpt2_small_ly12_segments.Goal_877
+import denote.gpt2_small_ly12_segments.Goal_878
+import denote.gpt2_small_ly12_segments.Goal_879
+import denote.gpt2_small_ly12_segments.Goal_880
+import denote.gpt2_small_ly12_segments.Goal_881
+import denote.gpt2_small_ly12_segments.Goal_882
+import denote.gpt2_small_ly12_segments.Goal_883
+import denote.gpt2_small_ly12_segments.Goal_884
+import denote.gpt2_small_ly12_segments.Goal_885
+import denote.gpt2_small_ly12_segments.Goal_886
+import denote.gpt2_small_ly12_segments.Goal_887
+import denote.gpt2_small_ly12_segments.Goal_888
+import denote.gpt2_small_ly12_segments.Goal_889
+import denote.gpt2_small_ly12_segments.Goal_890
+import denote.gpt2_small_ly12_segments.Goal_891
+import denote.gpt2_small_ly12_segments.Goal_892
+import denote.gpt2_small_ly12_segments.Goal_893
+import denote.gpt2_small_ly12_segments.Goal_894
+import denote.gpt2_small_ly12_segments.Goal_895
+import denote.gpt2_small_ly12_segments.Goal_896
+import denote.gpt2_small_ly12_segments.Goal_897
+import denote.gpt2_small_ly12_segments.Goal_898
+import denote.gpt2_small_ly12_segments.Goal_899
+import denote.gpt2_small_ly12_segments.Goal_900
+import denote.gpt2_small_ly12_segments.Goal_901
+import denote.gpt2_small_ly12_segments.Goal_902
+import denote.gpt2_small_ly12_segments.Goal_903
+import denote.gpt2_small_ly12_segments.Goal_904
+
+open TrainVerify.Denote
+open TrainVerify.Denote.Generated
+open TrainVerify.Denote.GeneratedGoals
+open TrainVerify.Denote.GeneratedSegmentPatterns
+
+namespace TrainVerify.Denote.GeneratedSegmentInstances
+
+theorem prove_goal_4_from_segment_1_1 : goal_4_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_1
+  exact h.left
+
+theorem prove_goal_5_from_segment_1_1 : goal_5_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_1
+  exact h.right.left
+
+theorem prove_goal_6_from_segment_1_1 : goal_6_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_1
+  exact h.right.right.left
+
+theorem prove_goal_7_from_segment_1_1 : goal_7_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_1
+  exact h.right.right.right.left
+
+theorem prove_goal_8_from_segment_1_1 : goal_8_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_1
+  exact h.right.right.right.right.left
+
+theorem prove_goal_9_from_segment_1_1 : goal_9_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_1
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_10_from_segment_1_1 : goal_10_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_1
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_11_from_segment_1_1 : goal_11_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_1
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_29_from_segment_1_2 : goal_29_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_2
+  exact h.left
+
+theorem prove_goal_30_from_segment_1_2 : goal_30_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_2
+  exact h.right.left
+
+theorem prove_goal_31_from_segment_1_2 : goal_31_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_2
+  exact h.right.right.left
+
+theorem prove_goal_32_from_segment_1_2 : goal_32_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_2
+  exact h.right.right.right.left
+
+theorem prove_goal_33_from_segment_1_2 : goal_33_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_2
+  exact h.right.right.right.right.left
+
+theorem prove_goal_34_from_segment_1_2 : goal_34_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_2
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_35_from_segment_1_2 : goal_35_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_2
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_36_from_segment_1_2 : goal_36_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_2
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_54_from_segment_1_3 : goal_54_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_3
+  exact h.left
+
+theorem prove_goal_55_from_segment_1_3 : goal_55_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_3
+  exact h.right.left
+
+theorem prove_goal_56_from_segment_1_3 : goal_56_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_3
+  exact h.right.right.left
+
+theorem prove_goal_57_from_segment_1_3 : goal_57_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_3
+  exact h.right.right.right.left
+
+theorem prove_goal_58_from_segment_1_3 : goal_58_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_3
+  exact h.right.right.right.right.left
+
+theorem prove_goal_59_from_segment_1_3 : goal_59_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_3
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_60_from_segment_1_3 : goal_60_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_3
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_61_from_segment_1_3 : goal_61_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_3
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_79_from_segment_1_4 : goal_79_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_4
+  exact h.left
+
+theorem prove_goal_80_from_segment_1_4 : goal_80_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_4
+  exact h.right.left
+
+theorem prove_goal_81_from_segment_1_4 : goal_81_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_4
+  exact h.right.right.left
+
+theorem prove_goal_82_from_segment_1_4 : goal_82_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_4
+  exact h.right.right.right.left
+
+theorem prove_goal_83_from_segment_1_4 : goal_83_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_4
+  exact h.right.right.right.right.left
+
+theorem prove_goal_84_from_segment_1_4 : goal_84_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_4
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_85_from_segment_1_4 : goal_85_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_4
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_86_from_segment_1_4 : goal_86_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_4
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_104_from_segment_1_5 : goal_104_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_5
+  exact h.left
+
+theorem prove_goal_105_from_segment_1_5 : goal_105_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_5
+  exact h.right.left
+
+theorem prove_goal_106_from_segment_1_5 : goal_106_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_5
+  exact h.right.right.left
+
+theorem prove_goal_107_from_segment_1_5 : goal_107_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_5
+  exact h.right.right.right.left
+
+theorem prove_goal_108_from_segment_1_5 : goal_108_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_5
+  exact h.right.right.right.right.left
+
+theorem prove_goal_109_from_segment_1_5 : goal_109_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_5
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_110_from_segment_1_5 : goal_110_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_5
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_111_from_segment_1_5 : goal_111_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_5
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_129_from_segment_1_6 : goal_129_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_6
+  exact h.left
+
+theorem prove_goal_130_from_segment_1_6 : goal_130_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_6
+  exact h.right.left
+
+theorem prove_goal_131_from_segment_1_6 : goal_131_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_6
+  exact h.right.right.left
+
+theorem prove_goal_132_from_segment_1_6 : goal_132_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_6
+  exact h.right.right.right.left
+
+theorem prove_goal_133_from_segment_1_6 : goal_133_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_6
+  exact h.right.right.right.right.left
+
+theorem prove_goal_134_from_segment_1_6 : goal_134_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_6
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_135_from_segment_1_6 : goal_135_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_6
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_136_from_segment_1_6 : goal_136_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_6
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_154_from_segment_1_7 : goal_154_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_7
+  exact h.left
+
+theorem prove_goal_155_from_segment_1_7 : goal_155_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_7
+  exact h.right.left
+
+theorem prove_goal_156_from_segment_1_7 : goal_156_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_7
+  exact h.right.right.left
+
+theorem prove_goal_157_from_segment_1_7 : goal_157_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_7
+  exact h.right.right.right.left
+
+theorem prove_goal_158_from_segment_1_7 : goal_158_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_7
+  exact h.right.right.right.right.left
+
+theorem prove_goal_159_from_segment_1_7 : goal_159_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_7
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_160_from_segment_1_7 : goal_160_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_7
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_161_from_segment_1_7 : goal_161_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_7
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_179_from_segment_1_8 : goal_179_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_8
+  exact h.left
+
+theorem prove_goal_180_from_segment_1_8 : goal_180_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_8
+  exact h.right.left
+
+theorem prove_goal_181_from_segment_1_8 : goal_181_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_8
+  exact h.right.right.left
+
+theorem prove_goal_182_from_segment_1_8 : goal_182_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_8
+  exact h.right.right.right.left
+
+theorem prove_goal_183_from_segment_1_8 : goal_183_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_8
+  exact h.right.right.right.right.left
+
+theorem prove_goal_184_from_segment_1_8 : goal_184_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_8
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_185_from_segment_1_8 : goal_185_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_8
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_186_from_segment_1_8 : goal_186_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_8
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_204_from_segment_1_9 : goal_204_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_9
+  exact h.left
+
+theorem prove_goal_205_from_segment_1_9 : goal_205_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_9
+  exact h.right.left
+
+theorem prove_goal_206_from_segment_1_9 : goal_206_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_9
+  exact h.right.right.left
+
+theorem prove_goal_207_from_segment_1_9 : goal_207_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_9
+  exact h.right.right.right.left
+
+theorem prove_goal_208_from_segment_1_9 : goal_208_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_9
+  exact h.right.right.right.right.left
+
+theorem prove_goal_209_from_segment_1_9 : goal_209_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_9
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_210_from_segment_1_9 : goal_210_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_9
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_211_from_segment_1_9 : goal_211_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_9
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_229_from_segment_1_10 : goal_229_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_10
+  exact h.left
+
+theorem prove_goal_230_from_segment_1_10 : goal_230_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_10
+  exact h.right.left
+
+theorem prove_goal_231_from_segment_1_10 : goal_231_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_10
+  exact h.right.right.left
+
+theorem prove_goal_232_from_segment_1_10 : goal_232_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_10
+  exact h.right.right.right.left
+
+theorem prove_goal_233_from_segment_1_10 : goal_233_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_10
+  exact h.right.right.right.right.left
+
+theorem prove_goal_234_from_segment_1_10 : goal_234_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_10
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_235_from_segment_1_10 : goal_235_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_10
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_236_from_segment_1_10 : goal_236_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_10
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_254_from_segment_1_11 : goal_254_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_11
+  exact h.left
+
+theorem prove_goal_255_from_segment_1_11 : goal_255_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_11
+  exact h.right.left
+
+theorem prove_goal_256_from_segment_1_11 : goal_256_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_11
+  exact h.right.right.left
+
+theorem prove_goal_257_from_segment_1_11 : goal_257_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_11
+  exact h.right.right.right.left
+
+theorem prove_goal_258_from_segment_1_11 : goal_258_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_11
+  exact h.right.right.right.right.left
+
+theorem prove_goal_259_from_segment_1_11 : goal_259_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_11
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_260_from_segment_1_11 : goal_260_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_11
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_261_from_segment_1_11 : goal_261_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_11
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_279_from_segment_1_12 : goal_279_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_12
+  exact h.left
+
+theorem prove_goal_280_from_segment_1_12 : goal_280_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_12
+  exact h.right.left
+
+theorem prove_goal_281_from_segment_1_12 : goal_281_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_12
+  exact h.right.right.left
+
+theorem prove_goal_282_from_segment_1_12 : goal_282_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_12
+  exact h.right.right.right.left
+
+theorem prove_goal_283_from_segment_1_12 : goal_283_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_12
+  exact h.right.right.right.right.left
+
+theorem prove_goal_284_from_segment_1_12 : goal_284_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_12
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_285_from_segment_1_12 : goal_285_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_12
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_286_from_segment_1_12 : goal_286_stmt := by
+  have h := prove_segment_pattern_1 segment_pattern_1_target.inst_12
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_12_from_segment_2_1 : goal_12_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_1
+  exact h.left
+
+theorem prove_goal_13_from_segment_2_1 : goal_13_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_1
+  exact h.right.left
+
+theorem prove_goal_14_from_segment_2_1 : goal_14_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_1
+  exact h.right.right.left
+
+theorem prove_goal_15_from_segment_2_1 : goal_15_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_1
+  exact h.right.right.right.left
+
+theorem prove_goal_16_from_segment_2_1 : goal_16_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_1
+  exact h.right.right.right.right.left
+
+theorem prove_goal_17_from_segment_2_1 : goal_17_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_1
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_18_from_segment_2_1 : goal_18_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_1
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_19_from_segment_2_1 : goal_19_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_1
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_37_from_segment_2_2 : goal_37_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_2
+  exact h.left
+
+theorem prove_goal_38_from_segment_2_2 : goal_38_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_2
+  exact h.right.left
+
+theorem prove_goal_39_from_segment_2_2 : goal_39_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_2
+  exact h.right.right.left
+
+theorem prove_goal_40_from_segment_2_2 : goal_40_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_2
+  exact h.right.right.right.left
+
+theorem prove_goal_41_from_segment_2_2 : goal_41_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_2
+  exact h.right.right.right.right.left
+
+theorem prove_goal_42_from_segment_2_2 : goal_42_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_2
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_43_from_segment_2_2 : goal_43_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_2
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_44_from_segment_2_2 : goal_44_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_2
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_62_from_segment_2_3 : goal_62_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_3
+  exact h.left
+
+theorem prove_goal_63_from_segment_2_3 : goal_63_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_3
+  exact h.right.left
+
+theorem prove_goal_64_from_segment_2_3 : goal_64_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_3
+  exact h.right.right.left
+
+theorem prove_goal_65_from_segment_2_3 : goal_65_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_3
+  exact h.right.right.right.left
+
+theorem prove_goal_66_from_segment_2_3 : goal_66_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_3
+  exact h.right.right.right.right.left
+
+theorem prove_goal_67_from_segment_2_3 : goal_67_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_3
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_68_from_segment_2_3 : goal_68_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_3
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_69_from_segment_2_3 : goal_69_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_3
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_87_from_segment_2_4 : goal_87_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_4
+  exact h.left
+
+theorem prove_goal_88_from_segment_2_4 : goal_88_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_4
+  exact h.right.left
+
+theorem prove_goal_89_from_segment_2_4 : goal_89_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_4
+  exact h.right.right.left
+
+theorem prove_goal_90_from_segment_2_4 : goal_90_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_4
+  exact h.right.right.right.left
+
+theorem prove_goal_91_from_segment_2_4 : goal_91_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_4
+  exact h.right.right.right.right.left
+
+theorem prove_goal_92_from_segment_2_4 : goal_92_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_4
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_93_from_segment_2_4 : goal_93_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_4
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_94_from_segment_2_4 : goal_94_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_4
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_112_from_segment_2_5 : goal_112_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_5
+  exact h.left
+
+theorem prove_goal_113_from_segment_2_5 : goal_113_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_5
+  exact h.right.left
+
+theorem prove_goal_114_from_segment_2_5 : goal_114_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_5
+  exact h.right.right.left
+
+theorem prove_goal_115_from_segment_2_5 : goal_115_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_5
+  exact h.right.right.right.left
+
+theorem prove_goal_116_from_segment_2_5 : goal_116_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_5
+  exact h.right.right.right.right.left
+
+theorem prove_goal_117_from_segment_2_5 : goal_117_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_5
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_118_from_segment_2_5 : goal_118_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_5
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_119_from_segment_2_5 : goal_119_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_5
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_137_from_segment_2_6 : goal_137_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_6
+  exact h.left
+
+theorem prove_goal_138_from_segment_2_6 : goal_138_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_6
+  exact h.right.left
+
+theorem prove_goal_139_from_segment_2_6 : goal_139_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_6
+  exact h.right.right.left
+
+theorem prove_goal_140_from_segment_2_6 : goal_140_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_6
+  exact h.right.right.right.left
+
+theorem prove_goal_141_from_segment_2_6 : goal_141_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_6
+  exact h.right.right.right.right.left
+
+theorem prove_goal_142_from_segment_2_6 : goal_142_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_6
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_143_from_segment_2_6 : goal_143_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_6
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_144_from_segment_2_6 : goal_144_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_6
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_162_from_segment_2_7 : goal_162_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_7
+  exact h.left
+
+theorem prove_goal_163_from_segment_2_7 : goal_163_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_7
+  exact h.right.left
+
+theorem prove_goal_164_from_segment_2_7 : goal_164_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_7
+  exact h.right.right.left
+
+theorem prove_goal_165_from_segment_2_7 : goal_165_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_7
+  exact h.right.right.right.left
+
+theorem prove_goal_166_from_segment_2_7 : goal_166_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_7
+  exact h.right.right.right.right.left
+
+theorem prove_goal_167_from_segment_2_7 : goal_167_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_7
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_168_from_segment_2_7 : goal_168_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_7
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_169_from_segment_2_7 : goal_169_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_7
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_187_from_segment_2_8 : goal_187_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_8
+  exact h.left
+
+theorem prove_goal_188_from_segment_2_8 : goal_188_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_8
+  exact h.right.left
+
+theorem prove_goal_189_from_segment_2_8 : goal_189_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_8
+  exact h.right.right.left
+
+theorem prove_goal_190_from_segment_2_8 : goal_190_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_8
+  exact h.right.right.right.left
+
+theorem prove_goal_191_from_segment_2_8 : goal_191_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_8
+  exact h.right.right.right.right.left
+
+theorem prove_goal_192_from_segment_2_8 : goal_192_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_8
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_193_from_segment_2_8 : goal_193_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_8
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_194_from_segment_2_8 : goal_194_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_8
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_212_from_segment_2_9 : goal_212_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_9
+  exact h.left
+
+theorem prove_goal_213_from_segment_2_9 : goal_213_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_9
+  exact h.right.left
+
+theorem prove_goal_214_from_segment_2_9 : goal_214_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_9
+  exact h.right.right.left
+
+theorem prove_goal_215_from_segment_2_9 : goal_215_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_9
+  exact h.right.right.right.left
+
+theorem prove_goal_216_from_segment_2_9 : goal_216_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_9
+  exact h.right.right.right.right.left
+
+theorem prove_goal_217_from_segment_2_9 : goal_217_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_9
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_218_from_segment_2_9 : goal_218_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_9
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_219_from_segment_2_9 : goal_219_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_9
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_237_from_segment_2_10 : goal_237_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_10
+  exact h.left
+
+theorem prove_goal_238_from_segment_2_10 : goal_238_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_10
+  exact h.right.left
+
+theorem prove_goal_239_from_segment_2_10 : goal_239_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_10
+  exact h.right.right.left
+
+theorem prove_goal_240_from_segment_2_10 : goal_240_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_10
+  exact h.right.right.right.left
+
+theorem prove_goal_241_from_segment_2_10 : goal_241_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_10
+  exact h.right.right.right.right.left
+
+theorem prove_goal_242_from_segment_2_10 : goal_242_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_10
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_243_from_segment_2_10 : goal_243_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_10
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_244_from_segment_2_10 : goal_244_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_10
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_262_from_segment_2_11 : goal_262_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_11
+  exact h.left
+
+theorem prove_goal_263_from_segment_2_11 : goal_263_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_11
+  exact h.right.left
+
+theorem prove_goal_264_from_segment_2_11 : goal_264_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_11
+  exact h.right.right.left
+
+theorem prove_goal_265_from_segment_2_11 : goal_265_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_11
+  exact h.right.right.right.left
+
+theorem prove_goal_266_from_segment_2_11 : goal_266_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_11
+  exact h.right.right.right.right.left
+
+theorem prove_goal_267_from_segment_2_11 : goal_267_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_11
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_268_from_segment_2_11 : goal_268_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_11
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_269_from_segment_2_11 : goal_269_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_11
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_287_from_segment_2_12 : goal_287_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_12
+  exact h.left
+
+theorem prove_goal_288_from_segment_2_12 : goal_288_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_12
+  exact h.right.left
+
+theorem prove_goal_289_from_segment_2_12 : goal_289_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_12
+  exact h.right.right.left
+
+theorem prove_goal_290_from_segment_2_12 : goal_290_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_12
+  exact h.right.right.right.left
+
+theorem prove_goal_291_from_segment_2_12 : goal_291_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_12
+  exact h.right.right.right.right.left
+
+theorem prove_goal_292_from_segment_2_12 : goal_292_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_12
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_293_from_segment_2_12 : goal_293_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_12
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_294_from_segment_2_12 : goal_294_stmt := by
+  have h := prove_segment_pattern_2 segment_pattern_2_target.inst_12
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_20_from_segment_3_1 : goal_20_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_1
+  exact h.left
+
+theorem prove_goal_21_from_segment_3_1 : goal_21_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_1
+  exact h.right.left
+
+theorem prove_goal_22_from_segment_3_1 : goal_22_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_1
+  exact h.right.right.left
+
+theorem prove_goal_23_from_segment_3_1 : goal_23_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_1
+  exact h.right.right.right.left
+
+theorem prove_goal_24_from_segment_3_1 : goal_24_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_1
+  exact h.right.right.right.right.left
+
+theorem prove_goal_25_from_segment_3_1 : goal_25_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_1
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_26_from_segment_3_1 : goal_26_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_1
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_27_from_segment_3_1 : goal_27_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_1
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_45_from_segment_3_2 : goal_45_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_2
+  exact h.left
+
+theorem prove_goal_46_from_segment_3_2 : goal_46_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_2
+  exact h.right.left
+
+theorem prove_goal_47_from_segment_3_2 : goal_47_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_2
+  exact h.right.right.left
+
+theorem prove_goal_48_from_segment_3_2 : goal_48_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_2
+  exact h.right.right.right.left
+
+theorem prove_goal_49_from_segment_3_2 : goal_49_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_2
+  exact h.right.right.right.right.left
+
+theorem prove_goal_50_from_segment_3_2 : goal_50_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_2
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_51_from_segment_3_2 : goal_51_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_2
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_52_from_segment_3_2 : goal_52_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_2
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_70_from_segment_3_3 : goal_70_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_3
+  exact h.left
+
+theorem prove_goal_71_from_segment_3_3 : goal_71_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_3
+  exact h.right.left
+
+theorem prove_goal_72_from_segment_3_3 : goal_72_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_3
+  exact h.right.right.left
+
+theorem prove_goal_73_from_segment_3_3 : goal_73_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_3
+  exact h.right.right.right.left
+
+theorem prove_goal_74_from_segment_3_3 : goal_74_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_3
+  exact h.right.right.right.right.left
+
+theorem prove_goal_75_from_segment_3_3 : goal_75_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_3
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_76_from_segment_3_3 : goal_76_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_3
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_77_from_segment_3_3 : goal_77_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_3
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_95_from_segment_3_4 : goal_95_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_4
+  exact h.left
+
+theorem prove_goal_96_from_segment_3_4 : goal_96_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_4
+  exact h.right.left
+
+theorem prove_goal_97_from_segment_3_4 : goal_97_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_4
+  exact h.right.right.left
+
+theorem prove_goal_98_from_segment_3_4 : goal_98_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_4
+  exact h.right.right.right.left
+
+theorem prove_goal_99_from_segment_3_4 : goal_99_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_4
+  exact h.right.right.right.right.left
+
+theorem prove_goal_100_from_segment_3_4 : goal_100_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_4
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_101_from_segment_3_4 : goal_101_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_4
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_102_from_segment_3_4 : goal_102_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_4
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_120_from_segment_3_5 : goal_120_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_5
+  exact h.left
+
+theorem prove_goal_121_from_segment_3_5 : goal_121_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_5
+  exact h.right.left
+
+theorem prove_goal_122_from_segment_3_5 : goal_122_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_5
+  exact h.right.right.left
+
+theorem prove_goal_123_from_segment_3_5 : goal_123_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_5
+  exact h.right.right.right.left
+
+theorem prove_goal_124_from_segment_3_5 : goal_124_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_5
+  exact h.right.right.right.right.left
+
+theorem prove_goal_125_from_segment_3_5 : goal_125_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_5
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_126_from_segment_3_5 : goal_126_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_5
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_127_from_segment_3_5 : goal_127_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_5
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_145_from_segment_3_6 : goal_145_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_6
+  exact h.left
+
+theorem prove_goal_146_from_segment_3_6 : goal_146_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_6
+  exact h.right.left
+
+theorem prove_goal_147_from_segment_3_6 : goal_147_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_6
+  exact h.right.right.left
+
+theorem prove_goal_148_from_segment_3_6 : goal_148_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_6
+  exact h.right.right.right.left
+
+theorem prove_goal_149_from_segment_3_6 : goal_149_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_6
+  exact h.right.right.right.right.left
+
+theorem prove_goal_150_from_segment_3_6 : goal_150_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_6
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_151_from_segment_3_6 : goal_151_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_6
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_152_from_segment_3_6 : goal_152_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_6
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_170_from_segment_3_7 : goal_170_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_7
+  exact h.left
+
+theorem prove_goal_171_from_segment_3_7 : goal_171_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_7
+  exact h.right.left
+
+theorem prove_goal_172_from_segment_3_7 : goal_172_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_7
+  exact h.right.right.left
+
+theorem prove_goal_173_from_segment_3_7 : goal_173_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_7
+  exact h.right.right.right.left
+
+theorem prove_goal_174_from_segment_3_7 : goal_174_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_7
+  exact h.right.right.right.right.left
+
+theorem prove_goal_175_from_segment_3_7 : goal_175_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_7
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_176_from_segment_3_7 : goal_176_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_7
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_177_from_segment_3_7 : goal_177_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_7
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_195_from_segment_3_8 : goal_195_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_8
+  exact h.left
+
+theorem prove_goal_196_from_segment_3_8 : goal_196_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_8
+  exact h.right.left
+
+theorem prove_goal_197_from_segment_3_8 : goal_197_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_8
+  exact h.right.right.left
+
+theorem prove_goal_198_from_segment_3_8 : goal_198_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_8
+  exact h.right.right.right.left
+
+theorem prove_goal_199_from_segment_3_8 : goal_199_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_8
+  exact h.right.right.right.right.left
+
+theorem prove_goal_200_from_segment_3_8 : goal_200_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_8
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_201_from_segment_3_8 : goal_201_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_8
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_202_from_segment_3_8 : goal_202_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_8
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_220_from_segment_3_9 : goal_220_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_9
+  exact h.left
+
+theorem prove_goal_221_from_segment_3_9 : goal_221_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_9
+  exact h.right.left
+
+theorem prove_goal_222_from_segment_3_9 : goal_222_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_9
+  exact h.right.right.left
+
+theorem prove_goal_223_from_segment_3_9 : goal_223_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_9
+  exact h.right.right.right.left
+
+theorem prove_goal_224_from_segment_3_9 : goal_224_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_9
+  exact h.right.right.right.right.left
+
+theorem prove_goal_225_from_segment_3_9 : goal_225_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_9
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_226_from_segment_3_9 : goal_226_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_9
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_227_from_segment_3_9 : goal_227_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_9
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_245_from_segment_3_10 : goal_245_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_10
+  exact h.left
+
+theorem prove_goal_246_from_segment_3_10 : goal_246_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_10
+  exact h.right.left
+
+theorem prove_goal_247_from_segment_3_10 : goal_247_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_10
+  exact h.right.right.left
+
+theorem prove_goal_248_from_segment_3_10 : goal_248_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_10
+  exact h.right.right.right.left
+
+theorem prove_goal_249_from_segment_3_10 : goal_249_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_10
+  exact h.right.right.right.right.left
+
+theorem prove_goal_250_from_segment_3_10 : goal_250_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_10
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_251_from_segment_3_10 : goal_251_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_10
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_252_from_segment_3_10 : goal_252_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_10
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_270_from_segment_3_11 : goal_270_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_11
+  exact h.left
+
+theorem prove_goal_271_from_segment_3_11 : goal_271_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_11
+  exact h.right.left
+
+theorem prove_goal_272_from_segment_3_11 : goal_272_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_11
+  exact h.right.right.left
+
+theorem prove_goal_273_from_segment_3_11 : goal_273_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_11
+  exact h.right.right.right.left
+
+theorem prove_goal_274_from_segment_3_11 : goal_274_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_11
+  exact h.right.right.right.right.left
+
+theorem prove_goal_275_from_segment_3_11 : goal_275_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_11
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_276_from_segment_3_11 : goal_276_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_11
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_277_from_segment_3_11 : goal_277_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_11
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_295_from_segment_3_12 : goal_295_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_12
+  exact h.left
+
+theorem prove_goal_296_from_segment_3_12 : goal_296_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_12
+  exact h.right.left
+
+theorem prove_goal_297_from_segment_3_12 : goal_297_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_12
+  exact h.right.right.left
+
+theorem prove_goal_298_from_segment_3_12 : goal_298_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_12
+  exact h.right.right.right.left
+
+theorem prove_goal_299_from_segment_3_12 : goal_299_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_12
+  exact h.right.right.right.right.left
+
+theorem prove_goal_300_from_segment_3_12 : goal_300_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_12
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_301_from_segment_3_12 : goal_301_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_12
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_302_from_segment_3_12 : goal_302_stmt := by
+  have h := prove_segment_pattern_3 segment_pattern_3_target.inst_12
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_310_from_segment_4_1 : goal_310_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_1
+  exact h.left
+
+theorem prove_goal_311_from_segment_4_1 : goal_311_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_1
+  exact h.right.left
+
+theorem prove_goal_312_from_segment_4_1 : goal_312_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_1
+  exact h.right.right.left
+
+theorem prove_goal_313_from_segment_4_1 : goal_313_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_1
+  exact h.right.right.right.left
+
+theorem prove_goal_314_from_segment_4_1 : goal_314_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_1
+  exact h.right.right.right.right.left
+
+theorem prove_goal_315_from_segment_4_1 : goal_315_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_1
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_316_from_segment_4_1 : goal_316_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_1
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_317_from_segment_4_1 : goal_317_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_1
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_345_from_segment_4_2 : goal_345_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_2
+  exact h.left
+
+theorem prove_goal_346_from_segment_4_2 : goal_346_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_2
+  exact h.right.left
+
+theorem prove_goal_347_from_segment_4_2 : goal_347_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_2
+  exact h.right.right.left
+
+theorem prove_goal_348_from_segment_4_2 : goal_348_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_2
+  exact h.right.right.right.left
+
+theorem prove_goal_349_from_segment_4_2 : goal_349_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_2
+  exact h.right.right.right.right.left
+
+theorem prove_goal_350_from_segment_4_2 : goal_350_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_2
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_351_from_segment_4_2 : goal_351_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_2
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_352_from_segment_4_2 : goal_352_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_2
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_380_from_segment_4_3 : goal_380_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_3
+  exact h.left
+
+theorem prove_goal_381_from_segment_4_3 : goal_381_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_3
+  exact h.right.left
+
+theorem prove_goal_382_from_segment_4_3 : goal_382_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_3
+  exact h.right.right.left
+
+theorem prove_goal_383_from_segment_4_3 : goal_383_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_3
+  exact h.right.right.right.left
+
+theorem prove_goal_384_from_segment_4_3 : goal_384_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_3
+  exact h.right.right.right.right.left
+
+theorem prove_goal_385_from_segment_4_3 : goal_385_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_3
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_386_from_segment_4_3 : goal_386_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_3
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_387_from_segment_4_3 : goal_387_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_3
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_415_from_segment_4_4 : goal_415_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_4
+  exact h.left
+
+theorem prove_goal_416_from_segment_4_4 : goal_416_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_4
+  exact h.right.left
+
+theorem prove_goal_417_from_segment_4_4 : goal_417_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_4
+  exact h.right.right.left
+
+theorem prove_goal_418_from_segment_4_4 : goal_418_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_4
+  exact h.right.right.right.left
+
+theorem prove_goal_419_from_segment_4_4 : goal_419_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_4
+  exact h.right.right.right.right.left
+
+theorem prove_goal_420_from_segment_4_4 : goal_420_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_4
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_421_from_segment_4_4 : goal_421_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_4
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_422_from_segment_4_4 : goal_422_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_4
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_450_from_segment_4_5 : goal_450_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_5
+  exact h.left
+
+theorem prove_goal_451_from_segment_4_5 : goal_451_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_5
+  exact h.right.left
+
+theorem prove_goal_452_from_segment_4_5 : goal_452_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_5
+  exact h.right.right.left
+
+theorem prove_goal_453_from_segment_4_5 : goal_453_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_5
+  exact h.right.right.right.left
+
+theorem prove_goal_454_from_segment_4_5 : goal_454_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_5
+  exact h.right.right.right.right.left
+
+theorem prove_goal_455_from_segment_4_5 : goal_455_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_5
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_456_from_segment_4_5 : goal_456_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_5
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_457_from_segment_4_5 : goal_457_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_5
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_485_from_segment_4_6 : goal_485_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_6
+  exact h.left
+
+theorem prove_goal_486_from_segment_4_6 : goal_486_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_6
+  exact h.right.left
+
+theorem prove_goal_487_from_segment_4_6 : goal_487_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_6
+  exact h.right.right.left
+
+theorem prove_goal_488_from_segment_4_6 : goal_488_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_6
+  exact h.right.right.right.left
+
+theorem prove_goal_489_from_segment_4_6 : goal_489_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_6
+  exact h.right.right.right.right.left
+
+theorem prove_goal_490_from_segment_4_6 : goal_490_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_6
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_491_from_segment_4_6 : goal_491_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_6
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_492_from_segment_4_6 : goal_492_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_6
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_520_from_segment_4_7 : goal_520_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_7
+  exact h.left
+
+theorem prove_goal_521_from_segment_4_7 : goal_521_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_7
+  exact h.right.left
+
+theorem prove_goal_522_from_segment_4_7 : goal_522_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_7
+  exact h.right.right.left
+
+theorem prove_goal_523_from_segment_4_7 : goal_523_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_7
+  exact h.right.right.right.left
+
+theorem prove_goal_524_from_segment_4_7 : goal_524_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_7
+  exact h.right.right.right.right.left
+
+theorem prove_goal_525_from_segment_4_7 : goal_525_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_7
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_526_from_segment_4_7 : goal_526_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_7
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_527_from_segment_4_7 : goal_527_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_7
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_555_from_segment_4_8 : goal_555_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_8
+  exact h.left
+
+theorem prove_goal_556_from_segment_4_8 : goal_556_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_8
+  exact h.right.left
+
+theorem prove_goal_557_from_segment_4_8 : goal_557_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_8
+  exact h.right.right.left
+
+theorem prove_goal_558_from_segment_4_8 : goal_558_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_8
+  exact h.right.right.right.left
+
+theorem prove_goal_559_from_segment_4_8 : goal_559_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_8
+  exact h.right.right.right.right.left
+
+theorem prove_goal_560_from_segment_4_8 : goal_560_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_8
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_561_from_segment_4_8 : goal_561_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_8
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_562_from_segment_4_8 : goal_562_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_8
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_590_from_segment_4_9 : goal_590_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_9
+  exact h.left
+
+theorem prove_goal_591_from_segment_4_9 : goal_591_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_9
+  exact h.right.left
+
+theorem prove_goal_592_from_segment_4_9 : goal_592_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_9
+  exact h.right.right.left
+
+theorem prove_goal_593_from_segment_4_9 : goal_593_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_9
+  exact h.right.right.right.left
+
+theorem prove_goal_594_from_segment_4_9 : goal_594_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_9
+  exact h.right.right.right.right.left
+
+theorem prove_goal_595_from_segment_4_9 : goal_595_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_9
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_596_from_segment_4_9 : goal_596_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_9
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_597_from_segment_4_9 : goal_597_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_9
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_625_from_segment_4_10 : goal_625_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_10
+  exact h.left
+
+theorem prove_goal_626_from_segment_4_10 : goal_626_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_10
+  exact h.right.left
+
+theorem prove_goal_627_from_segment_4_10 : goal_627_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_10
+  exact h.right.right.left
+
+theorem prove_goal_628_from_segment_4_10 : goal_628_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_10
+  exact h.right.right.right.left
+
+theorem prove_goal_629_from_segment_4_10 : goal_629_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_10
+  exact h.right.right.right.right.left
+
+theorem prove_goal_630_from_segment_4_10 : goal_630_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_10
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_631_from_segment_4_10 : goal_631_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_10
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_632_from_segment_4_10 : goal_632_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_10
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_660_from_segment_4_11 : goal_660_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_11
+  exact h.left
+
+theorem prove_goal_661_from_segment_4_11 : goal_661_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_11
+  exact h.right.left
+
+theorem prove_goal_662_from_segment_4_11 : goal_662_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_11
+  exact h.right.right.left
+
+theorem prove_goal_663_from_segment_4_11 : goal_663_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_11
+  exact h.right.right.right.left
+
+theorem prove_goal_664_from_segment_4_11 : goal_664_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_11
+  exact h.right.right.right.right.left
+
+theorem prove_goal_665_from_segment_4_11 : goal_665_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_11
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_666_from_segment_4_11 : goal_666_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_11
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_667_from_segment_4_11 : goal_667_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_11
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_695_from_segment_4_12 : goal_695_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_12
+  exact h.left
+
+theorem prove_goal_696_from_segment_4_12 : goal_696_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_12
+  exact h.right.left
+
+theorem prove_goal_697_from_segment_4_12 : goal_697_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_12
+  exact h.right.right.left
+
+theorem prove_goal_698_from_segment_4_12 : goal_698_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_12
+  exact h.right.right.right.left
+
+theorem prove_goal_699_from_segment_4_12 : goal_699_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_12
+  exact h.right.right.right.right.left
+
+theorem prove_goal_700_from_segment_4_12 : goal_700_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_12
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_701_from_segment_4_12 : goal_701_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_12
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_702_from_segment_4_12 : goal_702_stmt := by
+  have h := prove_segment_pattern_4 segment_pattern_4_target.inst_12
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_318_from_segment_5_1 : goal_318_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_1
+  exact h.left
+
+theorem prove_goal_319_from_segment_5_1 : goal_319_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_1
+  exact h.right.left
+
+theorem prove_goal_320_from_segment_5_1 : goal_320_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_1
+  exact h.right.right.left
+
+theorem prove_goal_321_from_segment_5_1 : goal_321_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_1
+  exact h.right.right.right.left
+
+theorem prove_goal_322_from_segment_5_1 : goal_322_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_1
+  exact h.right.right.right.right.left
+
+theorem prove_goal_323_from_segment_5_1 : goal_323_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_1
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_324_from_segment_5_1 : goal_324_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_1
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_325_from_segment_5_1 : goal_325_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_1
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_353_from_segment_5_2 : goal_353_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_2
+  exact h.left
+
+theorem prove_goal_354_from_segment_5_2 : goal_354_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_2
+  exact h.right.left
+
+theorem prove_goal_355_from_segment_5_2 : goal_355_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_2
+  exact h.right.right.left
+
+theorem prove_goal_356_from_segment_5_2 : goal_356_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_2
+  exact h.right.right.right.left
+
+theorem prove_goal_357_from_segment_5_2 : goal_357_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_2
+  exact h.right.right.right.right.left
+
+theorem prove_goal_358_from_segment_5_2 : goal_358_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_2
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_359_from_segment_5_2 : goal_359_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_2
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_360_from_segment_5_2 : goal_360_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_2
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_388_from_segment_5_3 : goal_388_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_3
+  exact h.left
+
+theorem prove_goal_389_from_segment_5_3 : goal_389_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_3
+  exact h.right.left
+
+theorem prove_goal_390_from_segment_5_3 : goal_390_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_3
+  exact h.right.right.left
+
+theorem prove_goal_391_from_segment_5_3 : goal_391_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_3
+  exact h.right.right.right.left
+
+theorem prove_goal_392_from_segment_5_3 : goal_392_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_3
+  exact h.right.right.right.right.left
+
+theorem prove_goal_393_from_segment_5_3 : goal_393_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_3
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_394_from_segment_5_3 : goal_394_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_3
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_395_from_segment_5_3 : goal_395_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_3
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_423_from_segment_5_4 : goal_423_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_4
+  exact h.left
+
+theorem prove_goal_424_from_segment_5_4 : goal_424_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_4
+  exact h.right.left
+
+theorem prove_goal_425_from_segment_5_4 : goal_425_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_4
+  exact h.right.right.left
+
+theorem prove_goal_426_from_segment_5_4 : goal_426_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_4
+  exact h.right.right.right.left
+
+theorem prove_goal_427_from_segment_5_4 : goal_427_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_4
+  exact h.right.right.right.right.left
+
+theorem prove_goal_428_from_segment_5_4 : goal_428_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_4
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_429_from_segment_5_4 : goal_429_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_4
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_430_from_segment_5_4 : goal_430_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_4
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_458_from_segment_5_5 : goal_458_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_5
+  exact h.left
+
+theorem prove_goal_459_from_segment_5_5 : goal_459_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_5
+  exact h.right.left
+
+theorem prove_goal_460_from_segment_5_5 : goal_460_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_5
+  exact h.right.right.left
+
+theorem prove_goal_461_from_segment_5_5 : goal_461_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_5
+  exact h.right.right.right.left
+
+theorem prove_goal_462_from_segment_5_5 : goal_462_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_5
+  exact h.right.right.right.right.left
+
+theorem prove_goal_463_from_segment_5_5 : goal_463_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_5
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_464_from_segment_5_5 : goal_464_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_5
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_465_from_segment_5_5 : goal_465_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_5
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_493_from_segment_5_6 : goal_493_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_6
+  exact h.left
+
+theorem prove_goal_494_from_segment_5_6 : goal_494_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_6
+  exact h.right.left
+
+theorem prove_goal_495_from_segment_5_6 : goal_495_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_6
+  exact h.right.right.left
+
+theorem prove_goal_496_from_segment_5_6 : goal_496_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_6
+  exact h.right.right.right.left
+
+theorem prove_goal_497_from_segment_5_6 : goal_497_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_6
+  exact h.right.right.right.right.left
+
+theorem prove_goal_498_from_segment_5_6 : goal_498_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_6
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_499_from_segment_5_6 : goal_499_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_6
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_500_from_segment_5_6 : goal_500_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_6
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_528_from_segment_5_7 : goal_528_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_7
+  exact h.left
+
+theorem prove_goal_529_from_segment_5_7 : goal_529_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_7
+  exact h.right.left
+
+theorem prove_goal_530_from_segment_5_7 : goal_530_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_7
+  exact h.right.right.left
+
+theorem prove_goal_531_from_segment_5_7 : goal_531_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_7
+  exact h.right.right.right.left
+
+theorem prove_goal_532_from_segment_5_7 : goal_532_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_7
+  exact h.right.right.right.right.left
+
+theorem prove_goal_533_from_segment_5_7 : goal_533_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_7
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_534_from_segment_5_7 : goal_534_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_7
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_535_from_segment_5_7 : goal_535_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_7
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_563_from_segment_5_8 : goal_563_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_8
+  exact h.left
+
+theorem prove_goal_564_from_segment_5_8 : goal_564_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_8
+  exact h.right.left
+
+theorem prove_goal_565_from_segment_5_8 : goal_565_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_8
+  exact h.right.right.left
+
+theorem prove_goal_566_from_segment_5_8 : goal_566_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_8
+  exact h.right.right.right.left
+
+theorem prove_goal_567_from_segment_5_8 : goal_567_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_8
+  exact h.right.right.right.right.left
+
+theorem prove_goal_568_from_segment_5_8 : goal_568_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_8
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_569_from_segment_5_8 : goal_569_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_8
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_570_from_segment_5_8 : goal_570_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_8
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_598_from_segment_5_9 : goal_598_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_9
+  exact h.left
+
+theorem prove_goal_599_from_segment_5_9 : goal_599_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_9
+  exact h.right.left
+
+theorem prove_goal_600_from_segment_5_9 : goal_600_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_9
+  exact h.right.right.left
+
+theorem prove_goal_601_from_segment_5_9 : goal_601_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_9
+  exact h.right.right.right.left
+
+theorem prove_goal_602_from_segment_5_9 : goal_602_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_9
+  exact h.right.right.right.right.left
+
+theorem prove_goal_603_from_segment_5_9 : goal_603_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_9
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_604_from_segment_5_9 : goal_604_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_9
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_605_from_segment_5_9 : goal_605_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_9
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_633_from_segment_5_10 : goal_633_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_10
+  exact h.left
+
+theorem prove_goal_634_from_segment_5_10 : goal_634_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_10
+  exact h.right.left
+
+theorem prove_goal_635_from_segment_5_10 : goal_635_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_10
+  exact h.right.right.left
+
+theorem prove_goal_636_from_segment_5_10 : goal_636_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_10
+  exact h.right.right.right.left
+
+theorem prove_goal_637_from_segment_5_10 : goal_637_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_10
+  exact h.right.right.right.right.left
+
+theorem prove_goal_638_from_segment_5_10 : goal_638_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_10
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_639_from_segment_5_10 : goal_639_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_10
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_640_from_segment_5_10 : goal_640_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_10
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_668_from_segment_5_11 : goal_668_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_11
+  exact h.left
+
+theorem prove_goal_669_from_segment_5_11 : goal_669_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_11
+  exact h.right.left
+
+theorem prove_goal_670_from_segment_5_11 : goal_670_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_11
+  exact h.right.right.left
+
+theorem prove_goal_671_from_segment_5_11 : goal_671_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_11
+  exact h.right.right.right.left
+
+theorem prove_goal_672_from_segment_5_11 : goal_672_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_11
+  exact h.right.right.right.right.left
+
+theorem prove_goal_673_from_segment_5_11 : goal_673_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_11
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_674_from_segment_5_11 : goal_674_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_11
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_675_from_segment_5_11 : goal_675_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_11
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_703_from_segment_5_12 : goal_703_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_12
+  exact h.left
+
+theorem prove_goal_704_from_segment_5_12 : goal_704_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_12
+  exact h.right.left
+
+theorem prove_goal_705_from_segment_5_12 : goal_705_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_12
+  exact h.right.right.left
+
+theorem prove_goal_706_from_segment_5_12 : goal_706_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_12
+  exact h.right.right.right.left
+
+theorem prove_goal_707_from_segment_5_12 : goal_707_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_12
+  exact h.right.right.right.right.left
+
+theorem prove_goal_708_from_segment_5_12 : goal_708_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_12
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_709_from_segment_5_12 : goal_709_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_12
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_710_from_segment_5_12 : goal_710_stmt := by
+  have h := prove_segment_pattern_5 segment_pattern_5_target.inst_12
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_326_from_segment_6_1 : goal_326_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_1
+  exact h.left
+
+theorem prove_goal_327_from_segment_6_1 : goal_327_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_1
+  exact h.right.left
+
+theorem prove_goal_328_from_segment_6_1 : goal_328_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_1
+  exact h.right.right.left
+
+theorem prove_goal_329_from_segment_6_1 : goal_329_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_1
+  exact h.right.right.right.left
+
+theorem prove_goal_330_from_segment_6_1 : goal_330_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_1
+  exact h.right.right.right.right.left
+
+theorem prove_goal_331_from_segment_6_1 : goal_331_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_1
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_332_from_segment_6_1 : goal_332_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_1
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_333_from_segment_6_1 : goal_333_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_1
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_361_from_segment_6_2 : goal_361_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_2
+  exact h.left
+
+theorem prove_goal_362_from_segment_6_2 : goal_362_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_2
+  exact h.right.left
+
+theorem prove_goal_363_from_segment_6_2 : goal_363_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_2
+  exact h.right.right.left
+
+theorem prove_goal_364_from_segment_6_2 : goal_364_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_2
+  exact h.right.right.right.left
+
+theorem prove_goal_365_from_segment_6_2 : goal_365_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_2
+  exact h.right.right.right.right.left
+
+theorem prove_goal_366_from_segment_6_2 : goal_366_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_2
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_367_from_segment_6_2 : goal_367_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_2
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_368_from_segment_6_2 : goal_368_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_2
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_396_from_segment_6_3 : goal_396_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_3
+  exact h.left
+
+theorem prove_goal_397_from_segment_6_3 : goal_397_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_3
+  exact h.right.left
+
+theorem prove_goal_398_from_segment_6_3 : goal_398_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_3
+  exact h.right.right.left
+
+theorem prove_goal_399_from_segment_6_3 : goal_399_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_3
+  exact h.right.right.right.left
+
+theorem prove_goal_400_from_segment_6_3 : goal_400_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_3
+  exact h.right.right.right.right.left
+
+theorem prove_goal_401_from_segment_6_3 : goal_401_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_3
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_402_from_segment_6_3 : goal_402_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_3
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_403_from_segment_6_3 : goal_403_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_3
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_431_from_segment_6_4 : goal_431_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_4
+  exact h.left
+
+theorem prove_goal_432_from_segment_6_4 : goal_432_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_4
+  exact h.right.left
+
+theorem prove_goal_433_from_segment_6_4 : goal_433_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_4
+  exact h.right.right.left
+
+theorem prove_goal_434_from_segment_6_4 : goal_434_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_4
+  exact h.right.right.right.left
+
+theorem prove_goal_435_from_segment_6_4 : goal_435_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_4
+  exact h.right.right.right.right.left
+
+theorem prove_goal_436_from_segment_6_4 : goal_436_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_4
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_437_from_segment_6_4 : goal_437_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_4
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_438_from_segment_6_4 : goal_438_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_4
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_466_from_segment_6_5 : goal_466_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_5
+  exact h.left
+
+theorem prove_goal_467_from_segment_6_5 : goal_467_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_5
+  exact h.right.left
+
+theorem prove_goal_468_from_segment_6_5 : goal_468_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_5
+  exact h.right.right.left
+
+theorem prove_goal_469_from_segment_6_5 : goal_469_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_5
+  exact h.right.right.right.left
+
+theorem prove_goal_470_from_segment_6_5 : goal_470_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_5
+  exact h.right.right.right.right.left
+
+theorem prove_goal_471_from_segment_6_5 : goal_471_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_5
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_472_from_segment_6_5 : goal_472_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_5
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_473_from_segment_6_5 : goal_473_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_5
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_501_from_segment_6_6 : goal_501_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_6
+  exact h.left
+
+theorem prove_goal_502_from_segment_6_6 : goal_502_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_6
+  exact h.right.left
+
+theorem prove_goal_503_from_segment_6_6 : goal_503_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_6
+  exact h.right.right.left
+
+theorem prove_goal_504_from_segment_6_6 : goal_504_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_6
+  exact h.right.right.right.left
+
+theorem prove_goal_505_from_segment_6_6 : goal_505_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_6
+  exact h.right.right.right.right.left
+
+theorem prove_goal_506_from_segment_6_6 : goal_506_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_6
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_507_from_segment_6_6 : goal_507_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_6
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_508_from_segment_6_6 : goal_508_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_6
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_536_from_segment_6_7 : goal_536_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_7
+  exact h.left
+
+theorem prove_goal_537_from_segment_6_7 : goal_537_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_7
+  exact h.right.left
+
+theorem prove_goal_538_from_segment_6_7 : goal_538_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_7
+  exact h.right.right.left
+
+theorem prove_goal_539_from_segment_6_7 : goal_539_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_7
+  exact h.right.right.right.left
+
+theorem prove_goal_540_from_segment_6_7 : goal_540_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_7
+  exact h.right.right.right.right.left
+
+theorem prove_goal_541_from_segment_6_7 : goal_541_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_7
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_542_from_segment_6_7 : goal_542_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_7
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_543_from_segment_6_7 : goal_543_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_7
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_571_from_segment_6_8 : goal_571_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_8
+  exact h.left
+
+theorem prove_goal_572_from_segment_6_8 : goal_572_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_8
+  exact h.right.left
+
+theorem prove_goal_573_from_segment_6_8 : goal_573_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_8
+  exact h.right.right.left
+
+theorem prove_goal_574_from_segment_6_8 : goal_574_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_8
+  exact h.right.right.right.left
+
+theorem prove_goal_575_from_segment_6_8 : goal_575_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_8
+  exact h.right.right.right.right.left
+
+theorem prove_goal_576_from_segment_6_8 : goal_576_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_8
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_577_from_segment_6_8 : goal_577_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_8
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_578_from_segment_6_8 : goal_578_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_8
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_606_from_segment_6_9 : goal_606_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_9
+  exact h.left
+
+theorem prove_goal_607_from_segment_6_9 : goal_607_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_9
+  exact h.right.left
+
+theorem prove_goal_608_from_segment_6_9 : goal_608_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_9
+  exact h.right.right.left
+
+theorem prove_goal_609_from_segment_6_9 : goal_609_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_9
+  exact h.right.right.right.left
+
+theorem prove_goal_610_from_segment_6_9 : goal_610_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_9
+  exact h.right.right.right.right.left
+
+theorem prove_goal_611_from_segment_6_9 : goal_611_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_9
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_612_from_segment_6_9 : goal_612_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_9
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_613_from_segment_6_9 : goal_613_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_9
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_641_from_segment_6_10 : goal_641_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_10
+  exact h.left
+
+theorem prove_goal_642_from_segment_6_10 : goal_642_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_10
+  exact h.right.left
+
+theorem prove_goal_643_from_segment_6_10 : goal_643_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_10
+  exact h.right.right.left
+
+theorem prove_goal_644_from_segment_6_10 : goal_644_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_10
+  exact h.right.right.right.left
+
+theorem prove_goal_645_from_segment_6_10 : goal_645_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_10
+  exact h.right.right.right.right.left
+
+theorem prove_goal_646_from_segment_6_10 : goal_646_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_10
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_647_from_segment_6_10 : goal_647_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_10
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_648_from_segment_6_10 : goal_648_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_10
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_676_from_segment_6_11 : goal_676_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_11
+  exact h.left
+
+theorem prove_goal_677_from_segment_6_11 : goal_677_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_11
+  exact h.right.left
+
+theorem prove_goal_678_from_segment_6_11 : goal_678_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_11
+  exact h.right.right.left
+
+theorem prove_goal_679_from_segment_6_11 : goal_679_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_11
+  exact h.right.right.right.left
+
+theorem prove_goal_680_from_segment_6_11 : goal_680_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_11
+  exact h.right.right.right.right.left
+
+theorem prove_goal_681_from_segment_6_11 : goal_681_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_11
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_682_from_segment_6_11 : goal_682_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_11
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_683_from_segment_6_11 : goal_683_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_11
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_711_from_segment_6_12 : goal_711_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_12
+  exact h.left
+
+theorem prove_goal_712_from_segment_6_12 : goal_712_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_12
+  exact h.right.left
+
+theorem prove_goal_713_from_segment_6_12 : goal_713_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_12
+  exact h.right.right.left
+
+theorem prove_goal_714_from_segment_6_12 : goal_714_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_12
+  exact h.right.right.right.left
+
+theorem prove_goal_715_from_segment_6_12 : goal_715_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_12
+  exact h.right.right.right.right.left
+
+theorem prove_goal_716_from_segment_6_12 : goal_716_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_12
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_717_from_segment_6_12 : goal_717_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_12
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_718_from_segment_6_12 : goal_718_stmt := by
+  have h := prove_segment_pattern_6 segment_pattern_6_target.inst_12
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_334_from_segment_7_1 : goal_334_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_1
+  exact h.left
+
+theorem prove_goal_335_from_segment_7_1 : goal_335_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_1
+  exact h.right.left
+
+theorem prove_goal_336_from_segment_7_1 : goal_336_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_1
+  exact h.right.right.left
+
+theorem prove_goal_337_from_segment_7_1 : goal_337_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_1
+  exact h.right.right.right.left
+
+theorem prove_goal_338_from_segment_7_1 : goal_338_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_1
+  exact h.right.right.right.right.left
+
+theorem prove_goal_339_from_segment_7_1 : goal_339_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_1
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_340_from_segment_7_1 : goal_340_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_1
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_341_from_segment_7_1 : goal_341_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_1
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_369_from_segment_7_2 : goal_369_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_2
+  exact h.left
+
+theorem prove_goal_370_from_segment_7_2 : goal_370_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_2
+  exact h.right.left
+
+theorem prove_goal_371_from_segment_7_2 : goal_371_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_2
+  exact h.right.right.left
+
+theorem prove_goal_372_from_segment_7_2 : goal_372_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_2
+  exact h.right.right.right.left
+
+theorem prove_goal_373_from_segment_7_2 : goal_373_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_2
+  exact h.right.right.right.right.left
+
+theorem prove_goal_374_from_segment_7_2 : goal_374_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_2
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_375_from_segment_7_2 : goal_375_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_2
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_376_from_segment_7_2 : goal_376_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_2
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_404_from_segment_7_3 : goal_404_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_3
+  exact h.left
+
+theorem prove_goal_405_from_segment_7_3 : goal_405_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_3
+  exact h.right.left
+
+theorem prove_goal_406_from_segment_7_3 : goal_406_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_3
+  exact h.right.right.left
+
+theorem prove_goal_407_from_segment_7_3 : goal_407_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_3
+  exact h.right.right.right.left
+
+theorem prove_goal_408_from_segment_7_3 : goal_408_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_3
+  exact h.right.right.right.right.left
+
+theorem prove_goal_409_from_segment_7_3 : goal_409_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_3
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_410_from_segment_7_3 : goal_410_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_3
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_411_from_segment_7_3 : goal_411_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_3
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_439_from_segment_7_4 : goal_439_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_4
+  exact h.left
+
+theorem prove_goal_440_from_segment_7_4 : goal_440_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_4
+  exact h.right.left
+
+theorem prove_goal_441_from_segment_7_4 : goal_441_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_4
+  exact h.right.right.left
+
+theorem prove_goal_442_from_segment_7_4 : goal_442_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_4
+  exact h.right.right.right.left
+
+theorem prove_goal_443_from_segment_7_4 : goal_443_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_4
+  exact h.right.right.right.right.left
+
+theorem prove_goal_444_from_segment_7_4 : goal_444_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_4
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_445_from_segment_7_4 : goal_445_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_4
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_446_from_segment_7_4 : goal_446_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_4
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_474_from_segment_7_5 : goal_474_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_5
+  exact h.left
+
+theorem prove_goal_475_from_segment_7_5 : goal_475_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_5
+  exact h.right.left
+
+theorem prove_goal_476_from_segment_7_5 : goal_476_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_5
+  exact h.right.right.left
+
+theorem prove_goal_477_from_segment_7_5 : goal_477_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_5
+  exact h.right.right.right.left
+
+theorem prove_goal_478_from_segment_7_5 : goal_478_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_5
+  exact h.right.right.right.right.left
+
+theorem prove_goal_479_from_segment_7_5 : goal_479_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_5
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_480_from_segment_7_5 : goal_480_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_5
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_481_from_segment_7_5 : goal_481_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_5
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_509_from_segment_7_6 : goal_509_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_6
+  exact h.left
+
+theorem prove_goal_510_from_segment_7_6 : goal_510_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_6
+  exact h.right.left
+
+theorem prove_goal_511_from_segment_7_6 : goal_511_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_6
+  exact h.right.right.left
+
+theorem prove_goal_512_from_segment_7_6 : goal_512_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_6
+  exact h.right.right.right.left
+
+theorem prove_goal_513_from_segment_7_6 : goal_513_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_6
+  exact h.right.right.right.right.left
+
+theorem prove_goal_514_from_segment_7_6 : goal_514_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_6
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_515_from_segment_7_6 : goal_515_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_6
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_516_from_segment_7_6 : goal_516_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_6
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_544_from_segment_7_7 : goal_544_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_7
+  exact h.left
+
+theorem prove_goal_545_from_segment_7_7 : goal_545_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_7
+  exact h.right.left
+
+theorem prove_goal_546_from_segment_7_7 : goal_546_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_7
+  exact h.right.right.left
+
+theorem prove_goal_547_from_segment_7_7 : goal_547_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_7
+  exact h.right.right.right.left
+
+theorem prove_goal_548_from_segment_7_7 : goal_548_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_7
+  exact h.right.right.right.right.left
+
+theorem prove_goal_549_from_segment_7_7 : goal_549_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_7
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_550_from_segment_7_7 : goal_550_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_7
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_551_from_segment_7_7 : goal_551_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_7
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_579_from_segment_7_8 : goal_579_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_8
+  exact h.left
+
+theorem prove_goal_580_from_segment_7_8 : goal_580_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_8
+  exact h.right.left
+
+theorem prove_goal_581_from_segment_7_8 : goal_581_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_8
+  exact h.right.right.left
+
+theorem prove_goal_582_from_segment_7_8 : goal_582_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_8
+  exact h.right.right.right.left
+
+theorem prove_goal_583_from_segment_7_8 : goal_583_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_8
+  exact h.right.right.right.right.left
+
+theorem prove_goal_584_from_segment_7_8 : goal_584_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_8
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_585_from_segment_7_8 : goal_585_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_8
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_586_from_segment_7_8 : goal_586_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_8
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_614_from_segment_7_9 : goal_614_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_9
+  exact h.left
+
+theorem prove_goal_615_from_segment_7_9 : goal_615_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_9
+  exact h.right.left
+
+theorem prove_goal_616_from_segment_7_9 : goal_616_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_9
+  exact h.right.right.left
+
+theorem prove_goal_617_from_segment_7_9 : goal_617_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_9
+  exact h.right.right.right.left
+
+theorem prove_goal_618_from_segment_7_9 : goal_618_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_9
+  exact h.right.right.right.right.left
+
+theorem prove_goal_619_from_segment_7_9 : goal_619_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_9
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_620_from_segment_7_9 : goal_620_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_9
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_621_from_segment_7_9 : goal_621_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_9
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_649_from_segment_7_10 : goal_649_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_10
+  exact h.left
+
+theorem prove_goal_650_from_segment_7_10 : goal_650_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_10
+  exact h.right.left
+
+theorem prove_goal_651_from_segment_7_10 : goal_651_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_10
+  exact h.right.right.left
+
+theorem prove_goal_652_from_segment_7_10 : goal_652_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_10
+  exact h.right.right.right.left
+
+theorem prove_goal_653_from_segment_7_10 : goal_653_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_10
+  exact h.right.right.right.right.left
+
+theorem prove_goal_654_from_segment_7_10 : goal_654_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_10
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_655_from_segment_7_10 : goal_655_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_10
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_656_from_segment_7_10 : goal_656_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_10
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_684_from_segment_7_11 : goal_684_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_11
+  exact h.left
+
+theorem prove_goal_685_from_segment_7_11 : goal_685_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_11
+  exact h.right.left
+
+theorem prove_goal_686_from_segment_7_11 : goal_686_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_11
+  exact h.right.right.left
+
+theorem prove_goal_687_from_segment_7_11 : goal_687_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_11
+  exact h.right.right.right.left
+
+theorem prove_goal_688_from_segment_7_11 : goal_688_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_11
+  exact h.right.right.right.right.left
+
+theorem prove_goal_689_from_segment_7_11 : goal_689_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_11
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_690_from_segment_7_11 : goal_690_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_11
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_691_from_segment_7_11 : goal_691_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_11
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_719_from_segment_7_12 : goal_719_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_12
+  exact h.left
+
+theorem prove_goal_720_from_segment_7_12 : goal_720_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_12
+  exact h.right.left
+
+theorem prove_goal_721_from_segment_7_12 : goal_721_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_12
+  exact h.right.right.left
+
+theorem prove_goal_722_from_segment_7_12 : goal_722_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_12
+  exact h.right.right.right.left
+
+theorem prove_goal_723_from_segment_7_12 : goal_723_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_12
+  exact h.right.right.right.right.left
+
+theorem prove_goal_724_from_segment_7_12 : goal_724_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_12
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_725_from_segment_7_12 : goal_725_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_12
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_726_from_segment_7_12 : goal_726_stmt := by
+  have h := prove_segment_pattern_7 segment_pattern_7_target.inst_12
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_342_from_segment_8_1 : goal_342_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_1
+  exact h.left
+
+theorem prove_goal_343_from_segment_8_1 : goal_343_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_1
+  exact h.right.left
+
+theorem prove_goal_344_from_segment_8_1 : goal_344_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_1
+  exact h.right.right
+
+theorem prove_goal_377_from_segment_8_2 : goal_377_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_2
+  exact h.left
+
+theorem prove_goal_378_from_segment_8_2 : goal_378_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_2
+  exact h.right.left
+
+theorem prove_goal_379_from_segment_8_2 : goal_379_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_2
+  exact h.right.right
+
+theorem prove_goal_412_from_segment_8_3 : goal_412_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_3
+  exact h.left
+
+theorem prove_goal_413_from_segment_8_3 : goal_413_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_3
+  exact h.right.left
+
+theorem prove_goal_414_from_segment_8_3 : goal_414_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_3
+  exact h.right.right
+
+theorem prove_goal_447_from_segment_8_4 : goal_447_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_4
+  exact h.left
+
+theorem prove_goal_448_from_segment_8_4 : goal_448_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_4
+  exact h.right.left
+
+theorem prove_goal_449_from_segment_8_4 : goal_449_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_4
+  exact h.right.right
+
+theorem prove_goal_482_from_segment_8_5 : goal_482_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_5
+  exact h.left
+
+theorem prove_goal_483_from_segment_8_5 : goal_483_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_5
+  exact h.right.left
+
+theorem prove_goal_484_from_segment_8_5 : goal_484_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_5
+  exact h.right.right
+
+theorem prove_goal_517_from_segment_8_6 : goal_517_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_6
+  exact h.left
+
+theorem prove_goal_518_from_segment_8_6 : goal_518_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_6
+  exact h.right.left
+
+theorem prove_goal_519_from_segment_8_6 : goal_519_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_6
+  exact h.right.right
+
+theorem prove_goal_552_from_segment_8_7 : goal_552_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_7
+  exact h.left
+
+theorem prove_goal_553_from_segment_8_7 : goal_553_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_7
+  exact h.right.left
+
+theorem prove_goal_554_from_segment_8_7 : goal_554_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_7
+  exact h.right.right
+
+theorem prove_goal_587_from_segment_8_8 : goal_587_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_8
+  exact h.left
+
+theorem prove_goal_588_from_segment_8_8 : goal_588_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_8
+  exact h.right.left
+
+theorem prove_goal_589_from_segment_8_8 : goal_589_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_8
+  exact h.right.right
+
+theorem prove_goal_622_from_segment_8_9 : goal_622_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_9
+  exact h.left
+
+theorem prove_goal_623_from_segment_8_9 : goal_623_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_9
+  exact h.right.left
+
+theorem prove_goal_624_from_segment_8_9 : goal_624_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_9
+  exact h.right.right
+
+theorem prove_goal_657_from_segment_8_10 : goal_657_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_10
+  exact h.left
+
+theorem prove_goal_658_from_segment_8_10 : goal_658_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_10
+  exact h.right.left
+
+theorem prove_goal_659_from_segment_8_10 : goal_659_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_10
+  exact h.right.right
+
+theorem prove_goal_692_from_segment_8_11 : goal_692_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_11
+  exact h.left
+
+theorem prove_goal_693_from_segment_8_11 : goal_693_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_11
+  exact h.right.left
+
+theorem prove_goal_694_from_segment_8_11 : goal_694_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_11
+  exact h.right.right
+
+theorem prove_goal_727_from_segment_8_12 : goal_727_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_12
+  exact h.left
+
+theorem prove_goal_728_from_segment_8_12 : goal_728_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_12
+  exact h.right.left
+
+theorem prove_goal_729_from_segment_8_12 : goal_729_stmt := by
+  have h := prove_segment_pattern_8 segment_pattern_8_target.inst_12
+  exact h.right.right
+
+theorem prove_goal_737_from_segment_9_1 : goal_737_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_1
+  exact h.left
+
+theorem prove_goal_738_from_segment_9_1 : goal_738_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_1
+  exact h.right.left
+
+theorem prove_goal_739_from_segment_9_1 : goal_739_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_1
+  exact h.right.right.left
+
+theorem prove_goal_740_from_segment_9_1 : goal_740_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_1
+  exact h.right.right.right.left
+
+theorem prove_goal_741_from_segment_9_1 : goal_741_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_1
+  exact h.right.right.right.right.left
+
+theorem prove_goal_742_from_segment_9_1 : goal_742_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_1
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_743_from_segment_9_1 : goal_743_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_1
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_744_from_segment_9_1 : goal_744_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_1
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_751_from_segment_9_2 : goal_751_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_2
+  exact h.left
+
+theorem prove_goal_752_from_segment_9_2 : goal_752_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_2
+  exact h.right.left
+
+theorem prove_goal_753_from_segment_9_2 : goal_753_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_2
+  exact h.right.right.left
+
+theorem prove_goal_754_from_segment_9_2 : goal_754_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_2
+  exact h.right.right.right.left
+
+theorem prove_goal_755_from_segment_9_2 : goal_755_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_2
+  exact h.right.right.right.right.left
+
+theorem prove_goal_756_from_segment_9_2 : goal_756_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_2
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_757_from_segment_9_2 : goal_757_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_2
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_758_from_segment_9_2 : goal_758_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_2
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_765_from_segment_9_3 : goal_765_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_3
+  exact h.left
+
+theorem prove_goal_766_from_segment_9_3 : goal_766_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_3
+  exact h.right.left
+
+theorem prove_goal_767_from_segment_9_3 : goal_767_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_3
+  exact h.right.right.left
+
+theorem prove_goal_768_from_segment_9_3 : goal_768_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_3
+  exact h.right.right.right.left
+
+theorem prove_goal_769_from_segment_9_3 : goal_769_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_3
+  exact h.right.right.right.right.left
+
+theorem prove_goal_770_from_segment_9_3 : goal_770_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_3
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_771_from_segment_9_3 : goal_771_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_3
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_772_from_segment_9_3 : goal_772_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_3
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_779_from_segment_9_4 : goal_779_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_4
+  exact h.left
+
+theorem prove_goal_780_from_segment_9_4 : goal_780_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_4
+  exact h.right.left
+
+theorem prove_goal_781_from_segment_9_4 : goal_781_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_4
+  exact h.right.right.left
+
+theorem prove_goal_782_from_segment_9_4 : goal_782_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_4
+  exact h.right.right.right.left
+
+theorem prove_goal_783_from_segment_9_4 : goal_783_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_4
+  exact h.right.right.right.right.left
+
+theorem prove_goal_784_from_segment_9_4 : goal_784_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_4
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_785_from_segment_9_4 : goal_785_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_4
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_786_from_segment_9_4 : goal_786_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_4
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_793_from_segment_9_5 : goal_793_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_5
+  exact h.left
+
+theorem prove_goal_794_from_segment_9_5 : goal_794_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_5
+  exact h.right.left
+
+theorem prove_goal_795_from_segment_9_5 : goal_795_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_5
+  exact h.right.right.left
+
+theorem prove_goal_796_from_segment_9_5 : goal_796_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_5
+  exact h.right.right.right.left
+
+theorem prove_goal_797_from_segment_9_5 : goal_797_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_5
+  exact h.right.right.right.right.left
+
+theorem prove_goal_798_from_segment_9_5 : goal_798_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_5
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_799_from_segment_9_5 : goal_799_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_5
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_800_from_segment_9_5 : goal_800_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_5
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_807_from_segment_9_6 : goal_807_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_6
+  exact h.left
+
+theorem prove_goal_808_from_segment_9_6 : goal_808_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_6
+  exact h.right.left
+
+theorem prove_goal_809_from_segment_9_6 : goal_809_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_6
+  exact h.right.right.left
+
+theorem prove_goal_810_from_segment_9_6 : goal_810_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_6
+  exact h.right.right.right.left
+
+theorem prove_goal_811_from_segment_9_6 : goal_811_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_6
+  exact h.right.right.right.right.left
+
+theorem prove_goal_812_from_segment_9_6 : goal_812_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_6
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_813_from_segment_9_6 : goal_813_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_6
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_814_from_segment_9_6 : goal_814_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_6
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_821_from_segment_9_7 : goal_821_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_7
+  exact h.left
+
+theorem prove_goal_822_from_segment_9_7 : goal_822_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_7
+  exact h.right.left
+
+theorem prove_goal_823_from_segment_9_7 : goal_823_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_7
+  exact h.right.right.left
+
+theorem prove_goal_824_from_segment_9_7 : goal_824_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_7
+  exact h.right.right.right.left
+
+theorem prove_goal_825_from_segment_9_7 : goal_825_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_7
+  exact h.right.right.right.right.left
+
+theorem prove_goal_826_from_segment_9_7 : goal_826_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_7
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_827_from_segment_9_7 : goal_827_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_7
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_828_from_segment_9_7 : goal_828_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_7
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_835_from_segment_9_8 : goal_835_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_8
+  exact h.left
+
+theorem prove_goal_836_from_segment_9_8 : goal_836_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_8
+  exact h.right.left
+
+theorem prove_goal_837_from_segment_9_8 : goal_837_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_8
+  exact h.right.right.left
+
+theorem prove_goal_838_from_segment_9_8 : goal_838_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_8
+  exact h.right.right.right.left
+
+theorem prove_goal_839_from_segment_9_8 : goal_839_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_8
+  exact h.right.right.right.right.left
+
+theorem prove_goal_840_from_segment_9_8 : goal_840_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_8
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_841_from_segment_9_8 : goal_841_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_8
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_842_from_segment_9_8 : goal_842_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_8
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_849_from_segment_9_9 : goal_849_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_9
+  exact h.left
+
+theorem prove_goal_850_from_segment_9_9 : goal_850_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_9
+  exact h.right.left
+
+theorem prove_goal_851_from_segment_9_9 : goal_851_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_9
+  exact h.right.right.left
+
+theorem prove_goal_852_from_segment_9_9 : goal_852_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_9
+  exact h.right.right.right.left
+
+theorem prove_goal_853_from_segment_9_9 : goal_853_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_9
+  exact h.right.right.right.right.left
+
+theorem prove_goal_854_from_segment_9_9 : goal_854_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_9
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_855_from_segment_9_9 : goal_855_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_9
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_856_from_segment_9_9 : goal_856_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_9
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_863_from_segment_9_10 : goal_863_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_10
+  exact h.left
+
+theorem prove_goal_864_from_segment_9_10 : goal_864_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_10
+  exact h.right.left
+
+theorem prove_goal_865_from_segment_9_10 : goal_865_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_10
+  exact h.right.right.left
+
+theorem prove_goal_866_from_segment_9_10 : goal_866_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_10
+  exact h.right.right.right.left
+
+theorem prove_goal_867_from_segment_9_10 : goal_867_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_10
+  exact h.right.right.right.right.left
+
+theorem prove_goal_868_from_segment_9_10 : goal_868_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_10
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_869_from_segment_9_10 : goal_869_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_10
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_870_from_segment_9_10 : goal_870_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_10
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_877_from_segment_9_11 : goal_877_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_11
+  exact h.left
+
+theorem prove_goal_878_from_segment_9_11 : goal_878_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_11
+  exact h.right.left
+
+theorem prove_goal_879_from_segment_9_11 : goal_879_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_11
+  exact h.right.right.left
+
+theorem prove_goal_880_from_segment_9_11 : goal_880_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_11
+  exact h.right.right.right.left
+
+theorem prove_goal_881_from_segment_9_11 : goal_881_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_11
+  exact h.right.right.right.right.left
+
+theorem prove_goal_882_from_segment_9_11 : goal_882_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_11
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_883_from_segment_9_11 : goal_883_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_11
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_884_from_segment_9_11 : goal_884_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_11
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_891_from_segment_9_12 : goal_891_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_12
+  exact h.left
+
+theorem prove_goal_892_from_segment_9_12 : goal_892_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_12
+  exact h.right.left
+
+theorem prove_goal_893_from_segment_9_12 : goal_893_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_12
+  exact h.right.right.left
+
+theorem prove_goal_894_from_segment_9_12 : goal_894_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_12
+  exact h.right.right.right.left
+
+theorem prove_goal_895_from_segment_9_12 : goal_895_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_12
+  exact h.right.right.right.right.left
+
+theorem prove_goal_896_from_segment_9_12 : goal_896_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_12
+  exact h.right.right.right.right.right.left
+
+theorem prove_goal_897_from_segment_9_12 : goal_897_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_12
+  exact h.right.right.right.right.right.right.left
+
+theorem prove_goal_898_from_segment_9_12 : goal_898_stmt := by
+  have h := prove_segment_pattern_9 segment_pattern_9_target.inst_12
+  exact h.right.right.right.right.right.right.right
+
+theorem prove_goal_745_from_segment_10_1 : goal_745_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_1
+  exact h.left
+
+theorem prove_goal_746_from_segment_10_1 : goal_746_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_1
+  exact h.right.left
+
+theorem prove_goal_747_from_segment_10_1 : goal_747_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_1
+  exact h.right.right.left
+
+theorem prove_goal_748_from_segment_10_1 : goal_748_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_1
+  exact h.right.right.right.left
+
+theorem prove_goal_749_from_segment_10_1 : goal_749_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_1
+  exact h.right.right.right.right.left
+
+theorem prove_goal_750_from_segment_10_1 : goal_750_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_1
+  exact h.right.right.right.right.right
+
+theorem prove_goal_759_from_segment_10_2 : goal_759_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_2
+  exact h.left
+
+theorem prove_goal_760_from_segment_10_2 : goal_760_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_2
+  exact h.right.left
+
+theorem prove_goal_761_from_segment_10_2 : goal_761_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_2
+  exact h.right.right.left
+
+theorem prove_goal_762_from_segment_10_2 : goal_762_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_2
+  exact h.right.right.right.left
+
+theorem prove_goal_763_from_segment_10_2 : goal_763_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_2
+  exact h.right.right.right.right.left
+
+theorem prove_goal_764_from_segment_10_2 : goal_764_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_2
+  exact h.right.right.right.right.right
+
+theorem prove_goal_773_from_segment_10_3 : goal_773_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_3
+  exact h.left
+
+theorem prove_goal_774_from_segment_10_3 : goal_774_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_3
+  exact h.right.left
+
+theorem prove_goal_775_from_segment_10_3 : goal_775_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_3
+  exact h.right.right.left
+
+theorem prove_goal_776_from_segment_10_3 : goal_776_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_3
+  exact h.right.right.right.left
+
+theorem prove_goal_777_from_segment_10_3 : goal_777_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_3
+  exact h.right.right.right.right.left
+
+theorem prove_goal_778_from_segment_10_3 : goal_778_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_3
+  exact h.right.right.right.right.right
+
+theorem prove_goal_787_from_segment_10_4 : goal_787_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_4
+  exact h.left
+
+theorem prove_goal_788_from_segment_10_4 : goal_788_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_4
+  exact h.right.left
+
+theorem prove_goal_789_from_segment_10_4 : goal_789_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_4
+  exact h.right.right.left
+
+theorem prove_goal_790_from_segment_10_4 : goal_790_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_4
+  exact h.right.right.right.left
+
+theorem prove_goal_791_from_segment_10_4 : goal_791_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_4
+  exact h.right.right.right.right.left
+
+theorem prove_goal_792_from_segment_10_4 : goal_792_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_4
+  exact h.right.right.right.right.right
+
+theorem prove_goal_801_from_segment_10_5 : goal_801_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_5
+  exact h.left
+
+theorem prove_goal_802_from_segment_10_5 : goal_802_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_5
+  exact h.right.left
+
+theorem prove_goal_803_from_segment_10_5 : goal_803_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_5
+  exact h.right.right.left
+
+theorem prove_goal_804_from_segment_10_5 : goal_804_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_5
+  exact h.right.right.right.left
+
+theorem prove_goal_805_from_segment_10_5 : goal_805_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_5
+  exact h.right.right.right.right.left
+
+theorem prove_goal_806_from_segment_10_5 : goal_806_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_5
+  exact h.right.right.right.right.right
+
+theorem prove_goal_815_from_segment_10_6 : goal_815_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_6
+  exact h.left
+
+theorem prove_goal_816_from_segment_10_6 : goal_816_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_6
+  exact h.right.left
+
+theorem prove_goal_817_from_segment_10_6 : goal_817_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_6
+  exact h.right.right.left
+
+theorem prove_goal_818_from_segment_10_6 : goal_818_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_6
+  exact h.right.right.right.left
+
+theorem prove_goal_819_from_segment_10_6 : goal_819_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_6
+  exact h.right.right.right.right.left
+
+theorem prove_goal_820_from_segment_10_6 : goal_820_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_6
+  exact h.right.right.right.right.right
+
+theorem prove_goal_829_from_segment_10_7 : goal_829_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_7
+  exact h.left
+
+theorem prove_goal_830_from_segment_10_7 : goal_830_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_7
+  exact h.right.left
+
+theorem prove_goal_831_from_segment_10_7 : goal_831_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_7
+  exact h.right.right.left
+
+theorem prove_goal_832_from_segment_10_7 : goal_832_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_7
+  exact h.right.right.right.left
+
+theorem prove_goal_833_from_segment_10_7 : goal_833_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_7
+  exact h.right.right.right.right.left
+
+theorem prove_goal_834_from_segment_10_7 : goal_834_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_7
+  exact h.right.right.right.right.right
+
+theorem prove_goal_843_from_segment_10_8 : goal_843_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_8
+  exact h.left
+
+theorem prove_goal_844_from_segment_10_8 : goal_844_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_8
+  exact h.right.left
+
+theorem prove_goal_845_from_segment_10_8 : goal_845_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_8
+  exact h.right.right.left
+
+theorem prove_goal_846_from_segment_10_8 : goal_846_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_8
+  exact h.right.right.right.left
+
+theorem prove_goal_847_from_segment_10_8 : goal_847_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_8
+  exact h.right.right.right.right.left
+
+theorem prove_goal_848_from_segment_10_8 : goal_848_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_8
+  exact h.right.right.right.right.right
+
+theorem prove_goal_857_from_segment_10_9 : goal_857_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_9
+  exact h.left
+
+theorem prove_goal_858_from_segment_10_9 : goal_858_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_9
+  exact h.right.left
+
+theorem prove_goal_859_from_segment_10_9 : goal_859_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_9
+  exact h.right.right.left
+
+theorem prove_goal_860_from_segment_10_9 : goal_860_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_9
+  exact h.right.right.right.left
+
+theorem prove_goal_861_from_segment_10_9 : goal_861_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_9
+  exact h.right.right.right.right.left
+
+theorem prove_goal_862_from_segment_10_9 : goal_862_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_9
+  exact h.right.right.right.right.right
+
+theorem prove_goal_871_from_segment_10_10 : goal_871_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_10
+  exact h.left
+
+theorem prove_goal_872_from_segment_10_10 : goal_872_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_10
+  exact h.right.left
+
+theorem prove_goal_873_from_segment_10_10 : goal_873_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_10
+  exact h.right.right.left
+
+theorem prove_goal_874_from_segment_10_10 : goal_874_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_10
+  exact h.right.right.right.left
+
+theorem prove_goal_875_from_segment_10_10 : goal_875_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_10
+  exact h.right.right.right.right.left
+
+theorem prove_goal_876_from_segment_10_10 : goal_876_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_10
+  exact h.right.right.right.right.right
+
+theorem prove_goal_885_from_segment_10_11 : goal_885_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_11
+  exact h.left
+
+theorem prove_goal_886_from_segment_10_11 : goal_886_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_11
+  exact h.right.left
+
+theorem prove_goal_887_from_segment_10_11 : goal_887_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_11
+  exact h.right.right.left
+
+theorem prove_goal_888_from_segment_10_11 : goal_888_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_11
+  exact h.right.right.right.left
+
+theorem prove_goal_889_from_segment_10_11 : goal_889_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_11
+  exact h.right.right.right.right.left
+
+theorem prove_goal_890_from_segment_10_11 : goal_890_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_11
+  exact h.right.right.right.right.right
+
+theorem prove_goal_899_from_segment_10_12 : goal_899_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_12
+  exact h.left
+
+theorem prove_goal_900_from_segment_10_12 : goal_900_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_12
+  exact h.right.left
+
+theorem prove_goal_901_from_segment_10_12 : goal_901_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_12
+  exact h.right.right.left
+
+theorem prove_goal_902_from_segment_10_12 : goal_902_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_12
+  exact h.right.right.right.left
+
+theorem prove_goal_903_from_segment_10_12 : goal_903_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_12
+  exact h.right.right.right.right.left
+
+theorem prove_goal_904_from_segment_10_12 : goal_904_stmt := by
+  have h := prove_segment_pattern_10 segment_pattern_10_target.inst_12
+  exact h.right.right.right.right.right
+
+end TrainVerify.Denote.GeneratedSegmentInstances
+

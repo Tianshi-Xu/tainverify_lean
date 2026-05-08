@@ -3,104 +3,39 @@
 
 """
 
-PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
-    --nproc_per_node=1  \
+GPT-2 small style, single GPU:
+
+PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 \
+/data/home/xts/miniconda3/envs/verdict/bin/torchrun \
+    --nproc_per_node=1 \
     genmodel/gen_gpt.py --policy dp \
-        --layers 1 \
-        --hidden 1024\
-        --heads 2\
+        --layers 12 \
+        --hidden 768 \
+        --heads 12 \
         --dp_size 1 \
         --pp_size 1 \
         --tp_size 1 \
-        --gbs 16 \
-        --mbs 16
+        --gbs 1 \
+        --mbs 1 \
+        --seqlen 1024 \
+        --vocab_size 50257
 
-PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
-    --nproc_per_node=8  \
-    genmodel/gen_gpt.py --policy hybrid \
-        --layers 1 \
-        --hidden 1024\
-        --heads 2\
-        --dp_size 2  \
-        --pp_size 2 \
-        --tp_size 2 \
-        --gbs 16 \
-        --mbs 4
+GPT-2 small style, tensor parallel size 4:
 
-PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
-    --nproc_per_node=2  \
-    genmodel/gen_gpt.py --policy pp \
-        --layers 1 \
-        --hidden 1024\
-        --heads 2\
-        --dp_size 1  \
-        --pp_size 2 \
-        --tp_size 1 \
-        --gbs 16 \
-        --mbs 16
-
-PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
-    --nproc_per_node=2  \
-    genmodel/gen_gpt.py --policy dp \
-        --layers 1 \
-        --hidden 1024\
-        --heads 2\
-        --dp_size 2  \
-        --pp_size 1 \
-        --tp_size 1 \
-        --gbs 16 \
-        --mbs 8
-
-PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
-    --nproc_per_node=8  \
-    genmodel/gen_gpt.py --policy hybrid \
-        --layers 2 \
-        --hidden 1024\
-        --heads 16\
-        --dp_size 2  \
-        --pp_size 2 \
-        --tp_size 2 \
-        --gbs 16 \
-        --mbs 4
-
-PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
-    --nproc_per_node=1  \
-    genmodel/gen_gpt.py --policy dp \
-        --layers 40 \
-        --hidden 1024\
-        --heads 16\
-        --dp_size 1  \
-        --pp_size 1 \
-        --tp_size 1 \
-        --gbs 16 \
-        --mbs 16
-
-PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
-    --nproc_per_node=2  \
+PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 \
+/data/home/xts/miniconda3/envs/verdict/bin/torchrun \
+    --nproc_per_node=1 \
     genmodel/gen_gpt.py --policy tp \
-        --layers 2 \
-        --hidden 1024\
-        --heads 2\
-        --dp_size 1  \
+        --layers 12 \
+        --hidden 768 \
+        --heads 12 \
+        --dp_size 1 \
         --pp_size 1 \
-        --tp_size 8 \
-        --gbs 16 \
-        --mbs 16 \
-        --seqlen 1024
-        
-PYTHONPATH=.:$PYTHONPATH OMP_NUM_THREADS=4 torchrun  \
-    --nnodes=2 \
-    --nproc_per_node=8  \
-    genmodel/gen_gpt.py --policy hybrid \
-        --layers 1 \
-        --hidden 1024\
-        --heads 2\
-        --dp_size 2  \
-        --pp_size 1 \
-        --tp_size 8 \
-        --gbs 16 \
-        --mbs 16 \
-        --seqlen 1024
+        --tp_size 4 \
+        --gbs 1 \
+        --mbs 1 \
+        --seqlen 1024 \
+        --vocab_size 50257
 """
 import sys
 sys.setrecursionlimit(10000)
@@ -110,10 +45,9 @@ import shutil
 import torch
 
 import nnscaler
-import examples.vision.swin.policy.gallery as gallery
 from nnscaler.parallel import parallelize, ComputeConfig
 
-from genmodel.model.gpt import GPT, Config, dummy_data
+from model.gpt import GPT, Config, dummy_data
 
 import argparse
 parser = argparse.ArgumentParser(description='MLP example')
@@ -139,13 +73,11 @@ parser.add_argument('--hidden', type=int, default=1024, help='hidden size')
 parser.add_argument('--heads', type=int, default=16,
                     help='number of attention heads')
 parser.add_argument('--seqlen', type=int, default=2048, help='sequence length')
+parser.add_argument('--vocab_size', type=int, default=51200, help='vocabulary size')
 args = parser.parse_args()
 
 
 nnscaler.init()
-if torch.distributed.get_world_size() != args.dp_size * args.pp_size * args.tp_size:
-    raise ValueError(
-        'world size should be equal to dp_size * pp_size * tp_size')
 if args.gbs % args.mbs != 0:
     raise ValueError(
         'global batch size should be divisible by micro batch size')
@@ -157,7 +89,7 @@ config = Config(
     layers=args.layers,
     heads=args.heads,
     ffn_hidden_dim=4*args.hidden,
-    num_embeddings=51200,
+    num_embeddings=args.vocab_size,
     seqlen=args.seqlen,
 )
 model = GPT(config)
@@ -169,15 +101,12 @@ dummy_input = {"input_ids": input_ids, "position_ids": position_ids}
 
 # get policy
 policy_name = 'pas_' + args.policy
-if policy_name in gallery.__dict__:
-    policy = gallery.__dict__[policy_name]
-else:
-    policy = args.policy  # use the builtin policies
+policy = args.policy  # use the builtin policies
 
 # compute_config
 compute_config = ComputeConfig(
     plan_ngpus=args.pp_size * args.tp_size,
-    runtime_ngpus=torch.distributed.get_world_size(),
+    runtime_ngpus=args.dp_size * args.tp_size * args.pp_size,
     use_zero=args.zero,
     use_end2end=True,
     constant_folding=True,
@@ -210,6 +139,7 @@ pmodel = parallelize(
     compute_config=compute_config,
     gen_savedir='./.nnscaler',
     reuse="override",
+    load_module=False,
     # instance_name: Optional[str] = None,
     # load_module: bool = True,
     # module_dtype:  Optional[torch.dtype] = None,
@@ -224,13 +154,14 @@ pp = args.pp_size
 tp = args.tp_size
 gbs = args.gbs
 mbs = args.mbs
-dim = args.dim
+dim = args.hidden
 layers = args.layers
 hidden = args.hidden
 heads = args.heads
 seqlen = args.seqlen
+vocab_size = args.vocab_size
 nm = gbs//dp//mbs if args.policy in ["hybrid", "pp"] else 1
-fname = f"gpt_mgener_dp{args.dp_size}_pp{args.pp_size}_tp{args.tp_size}_nm{nm}_gbs{gbs}_dim{dim}_ly{layers}_h{heads}_hi{hidden}_sq{seqlen}"
+fname = f"gpt_mgener_dp{args.dp_size}_pp{args.pp_size}_tp{args.tp_size}_nm{nm}_gbs{gbs}_dim{dim}_ly{layers}_h{heads}_hi{hidden}_sq{seqlen}_voc{vocab_size}"
 
 file = "mgener.pkl"
 dst = f"genmodel/mgeners/{fname}.pkl"

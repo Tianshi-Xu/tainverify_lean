@@ -2,10 +2,10 @@
 #  Licensed under the MIT License.
 
 import torch
+import torch.nn.functional as F
 from dataclasses import dataclass
-
-
-from examples.nlp.blocks.transformer import TransformerLayer
+from torch import nn
+import math
 
 
 @dataclass
@@ -42,7 +42,72 @@ def build_gpt_config(name: str) -> Config:
         hidden, layers, heads = 12288, 96, 96
     else:
         assert False, f'unrecognized name: {name}'
-    return Config(hidden, layers, heads, hidden, 4 * hidden)
+    return Config(
+        hidden=hidden,
+        layers=layers,
+        heads=heads,
+        ffn_hidden_dim=4 * hidden,
+    )
+
+
+class SelfAttention(torch.nn.Module):
+    def __init__(self, cfg: Config):
+        super().__init__()
+        assert cfg.hidden % cfg.heads == 0, "hidden must be divisible by heads"
+        self.hidden = cfg.hidden
+        self.heads = cfg.heads
+        self.head_dim = cfg.hidden // cfg.heads
+        self.scale = math.sqrt(self.head_dim)
+
+        self.q_proj = nn.Linear(cfg.hidden, cfg.hidden, bias=False)
+        self.k_proj = nn.Linear(cfg.hidden, cfg.hidden, bias=False)
+        self.v_proj = nn.Linear(cfg.hidden, cfg.hidden, bias=False)
+        self.o_proj = nn.Linear(cfg.hidden, cfg.hidden, bias=False)
+
+    def forward(self, x: torch.Tensor):
+        batch_size, seq_len, _ = x.shape
+
+        q = self.q_proj(x)
+        k = self.k_proj(x)
+        v = self.v_proj(x)
+
+        q = q.view(batch_size, seq_len, self.heads, self.head_dim).transpose(1, 2)
+        k = k.view(batch_size, seq_len, self.heads, self.head_dim).transpose(1, 2)
+        v = v.view(batch_size, seq_len, self.heads, self.head_dim).transpose(1, 2)
+
+        attn_scores = torch.matmul(q, k.transpose(-2, -1)) / self.scale
+        attn_weights = torch.softmax(attn_scores, dim=-1)
+        attn_output = torch.matmul(attn_weights, v)
+        attn_output = (
+            attn_output.transpose(1, 2)
+            .contiguous()
+            .view(batch_size, seq_len, self.hidden)
+        )
+        return self.o_proj(attn_output)
+
+
+class FeedForward(torch.nn.Module):
+    def __init__(self, cfg: Config):
+        super().__init__()
+        self.fc1 = nn.Linear(cfg.hidden, cfg.ffn_hidden_dim, bias=False)
+        self.fc2 = nn.Linear(cfg.ffn_hidden_dim, cfg.hidden, bias=False)
+
+    def forward(self, x: torch.Tensor):
+        return self.fc2(F.gelu(self.fc1(x)))
+
+
+class GPTBlock(torch.nn.Module):
+    def __init__(self, cfg: Config):
+        super().__init__()
+        self.attn_norm = nn.LayerNorm(cfg.hidden)
+        self.attn = SelfAttention(cfg)
+        self.ffn_norm = nn.LayerNorm(cfg.hidden)
+        self.ffn = FeedForward(cfg)
+
+    def forward(self, x: torch.Tensor):
+        x = x + self.attn(self.attn_norm(x))
+        x = x + self.ffn(self.ffn_norm(x))
+        return x
 
 
 class GPT(torch.nn.Module):
@@ -52,16 +117,14 @@ class GPT(torch.nn.Module):
 
         # self.embed = torch.nn.Embedding(cfg.num_embeddings, cfg.hidden)
         self.embedw = torch.nn.Parameter(torch.empty(cfg.num_embeddings, cfg.hidden))
+        torch.nn.init.normal_(self.embedw, mean=0.0, std=0.02)
         self.position = torch.nn.Embedding(cfg.seqlen, cfg.hidden)
-        self.embed_dropout = torch.nn.Dropout()
+        # Keep the exported graph deterministic for Lean denotation/proofs.
+        self.embed_dropout = torch.nn.Identity()
+        self.lm_head = nn.Linear(cfg.hidden, cfg.num_embeddings, bias=False)
 
         self.layers = torch.nn.ModuleList(
-            [TransformerLayer(
-                cfg.hidden, cfg.heads,
-                cfg.hidden, cfg.ffn_hidden_dim,
-                cfg.dropout, cfg.attn_dropout, cfg.activation_dropout,
-                use_cross_attention=False,
-            ) for _ in range(cfg.layers)]
+            [GPTBlock(cfg) for _ in range(cfg.layers)]
         )
         self.final_layernorm = torch.nn.LayerNorm(cfg.hidden)
 
@@ -75,14 +138,13 @@ class GPT(torch.nn.Module):
         pos_embed = self.position(position_ids)
         embed = embed + pos_embed
         embed = self.embed_dropout(embed)
-        enc = embed.transpose(0, 1)
+        enc = embed
 
         for layer in self.layers:
             enc = layer(enc)
         enc = self.final_layernorm(enc)
 
-        # logits = torch.nn.functional.linear(enc, self.embed.weight)
-        logits = torch.nn.functional.linear(enc, self.embedw)
+        logits = self.lm_head(enc)
         # simplified
         loss = torch.sum(logits)
         return loss
@@ -102,5 +164,3 @@ def dummy_data(batch_size: int, cfg: Config):
     ).repeat(batch_size, 1).view(batch_size, cfg.seqlen,)
 
     return input_ids, position_ids
-
-
