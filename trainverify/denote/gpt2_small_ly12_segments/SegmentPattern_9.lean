@@ -2,6 +2,7 @@
    Segment pattern: 9
    Goals per instance: 8
    Instances: 12
+   Representative op scale: instances=12, goals/instance=8, ops/instance: SM=8, PM=49, ops=[OpName.FW_multiref, OpName.BW_layernorm, OpName.BW_add, OpName.AllReducePrim, OpName.ChunkPrim, OpName.AllGatherPrim, OpName.BW_linear]
 -/
 import denote.gpt2_small_ly12_segments.GeneratedData
 

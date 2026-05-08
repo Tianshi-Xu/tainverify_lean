@@ -1552,6 +1552,34 @@ def emit_lean_spec(
 
 		segment_goal_sources: Dict[str, str] = {}
 		segment_pattern_count = 0
+		segment_pattern_stats: Dict[int, str] = {}
+		goal_slice_by_id: Dict[str, GoalSlice] = {
+			_goal_id(int(sl.goal.ts)): sl for sl in goal_slices
+		}
+
+		def _op_summary_for_goal_ids(goal_ids_for_summary: List[str]) -> Tuple[int, int, str]:
+			sm_count = 0
+			pm_count = 0
+			ops: List[str] = []
+			for gid in goal_ids_for_summary:
+				sl = goal_slice_by_id.get(gid)
+				if sl is None:
+					continue
+				sm_count += len(sl.sm_nodes)
+				pm_count += len(sl.pm_nodes)
+				for n in sl.sm_nodes:
+					op = _safe_str_op(sm_graph.node_opname(n))
+					if op and op not in ops:
+						ops.append(op)
+				for n in sl.pm_nodes:
+					op = _safe_str_op(pm_graph.node_opname(n))
+					if op and op not in ops:
+						ops.append(op)
+			op_text = ", ".join(ops[:8])
+			if len(ops) > 8:
+				op_text += ", ..."
+			return sm_count, pm_count, op_text
+
 		if emit_segment_patterns and goal_slices:
 			for old in goals_out_dir.glob("SegmentPattern_*.lean"):
 				old.unlink()
@@ -1580,11 +1608,17 @@ def emit_lean_spec(
 
 			for sid, instances in enumerate(segment_patterns, start=1):
 				segment_pattern_count += 1
+				sm_ops, pm_ops, op_text = _op_summary_for_goal_ids(instances[0])
+				segment_pattern_stats[sid] = (
+					f"instances={len(instances)}, goals/instance={len(instances[0])}, "
+					f"ops/instance: SM={sm_ops}, PM={pm_ops}, ops=[{op_text}]"
+				)
 				sp_lines: List[str] = []
 				sp_lines.append("/- Auto-generated segment pattern proof file.")
 				sp_lines.append(f"   Segment pattern: {sid}")
 				sp_lines.append(f"   Goals per instance: {len(instances[0])}")
 				sp_lines.append(f"   Instances: {len(instances)}")
+				sp_lines.append(f"   Representative op scale: {segment_pattern_stats[sid]}")
 				sp_lines.append("-/")
 				sp_lines.append(f"import {module_name}")
 				sp_lines.append("")
@@ -1694,8 +1728,10 @@ def emit_lean_spec(
 		if segment_pattern_count > 0:
 			obligation_lines.append("Segment proof obligations:")
 			for sid in range(1, segment_pattern_count + 1):
+				stats = segment_pattern_stats.get(sid, "")
 				obligation_lines.append(
 					f"  - SegmentPattern_{sid}.lean: prove_segment_pattern_{sid}"
+					+ (f"  -- {stats}" if stats else "")
 				)
 		else:
 			obligation_lines.append("Segment proof obligations: none")
@@ -1704,8 +1740,14 @@ def emit_lean_spec(
 			obligation_lines.append("Fallback pattern proof obligations:")
 			for pid in sorted(used_fallback_patterns):
 				members = ", ".join(used_fallback_patterns[pid])
+				sm_ops, pm_ops, op_text = _op_summary_for_goal_ids([used_fallback_patterns[pid][0]])
+				stats = (
+					f"instances={len(used_fallback_patterns[pid])}, "
+					f"ops/instance: SM={sm_ops}, PM={pm_ops}, ops=[{op_text}]"
+				)
 				obligation_lines.append(
-					f"  - Pattern_{pid}.lean: prove_pattern_{pid}  -- concrete goals: {members}"
+					f"  - Pattern_{pid}.lean: prove_pattern_{pid}"
+					f"  -- {stats}; concrete goals: {members}"
 				)
 		else:
 			obligation_lines.append("Fallback pattern proof obligations: none")
