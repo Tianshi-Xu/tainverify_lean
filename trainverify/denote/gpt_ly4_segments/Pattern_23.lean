@@ -17,8 +17,9 @@ inductive pattern_23_target : Prop → Prop
 def pattern_23_stmt : Prop :=
   ∀ {target : Prop}, pattern_23_target target → target
 theorem prove_pattern_23 : pattern_23_stmt := by
-  -- TODO: prove this alpha-equivalence pattern once; all member goals instantiate it automatically.
-  sorry
+  intro target h
+  cases h with
+  | goal_28 => sorry  -- not covered by any SegmentPattern
 
 end TrainVerify.Denote.GeneratedPatterns
 
