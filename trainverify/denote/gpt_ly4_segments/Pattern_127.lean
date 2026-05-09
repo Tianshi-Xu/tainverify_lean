@@ -4,9 +4,12 @@
    Goals: 257, 267, 271, 281
 -/
 import denote.gpt_ly4_segments.GeneratedData
+import denote.gpt_ly4_segments.SegmentPattern_9
+import denote.gpt_ly4_segments.SegmentPattern_10
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
+open TrainVerify.Denote.GeneratedSegmentPatterns
 
 namespace TrainVerify.Denote.GeneratedPatterns
 
@@ -20,38 +23,20 @@ inductive pattern_127_target : Prop → Prop
 def pattern_127_stmt : Prop :=
   ∀ {target : Prop}, pattern_127_target target → target
 
-/-! ## P127 bridging structure
-
-P127 owns four FW_multiref → AllToAllPrim composition goals (257, 267, 271, 281),
-each of shape `[1, 8, 32]` reconstructed from four rank-local
-`[1, 2, 32]` shards along `gatherDim := 1`. The four cases share the same
-operational form: a SM-side `FW_multiref` that replicates one tid, and a PM-side
-chain `FW_multiref → AllToAllPrim` whose four outputs are gathered.
-
-We expose each case as a separate `private` sub-proof so future work can
-fill them in independently. Case bodies are placeholders awaiting
-`applyNode_fw_multiref_out` / `applyNode_allToAllPrim_out` helpers in
-`denote/Denote.lean` (not yet available). -/
-
-private theorem prove_pattern_127_case_257 : goal_257_stmt := by
-  sorry
-
-private theorem prove_pattern_127_case_267 : goal_267_stmt := by
-  sorry
-
-private theorem prove_pattern_127_case_271 : goal_271_stmt := by
-  sorry
-
-private theorem prove_pattern_127_case_281 : goal_281_stmt := by
-  sorry
-
 theorem prove_pattern_127 : pattern_127_stmt := by
   intro target h
-  cases h
-  · exact prove_pattern_127_case_257
-  · exact prove_pattern_127_case_267
-  · exact prove_pattern_127_case_271
-  · exact prove_pattern_127_case_281
+  cases h with
+  | goal_257 =>
+      have hs := prove_segment_pattern_9 segment_pattern_9_target.inst_1
+      exact hs.left
+  | goal_267 =>
+      have hs := prove_segment_pattern_10 segment_pattern_10_target.inst_1
+      exact hs.right.right.left
+  | goal_271 =>
+      have hs := prove_segment_pattern_9 segment_pattern_9_target.inst_2
+      exact hs.left
+  | goal_281 =>
+      have hs := prove_segment_pattern_10 segment_pattern_10_target.inst_2
+      exact hs.right.right.left
 
 end TrainVerify.Denote.GeneratedPatterns
-
