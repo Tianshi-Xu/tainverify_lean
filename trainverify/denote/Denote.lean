@@ -522,6 +522,29 @@ def fw_embedding (ids weight : Tensor) : Tensor :=
     let row := scalarToNat (valAt ids idFlat)
     valAt weight (row * hidden + h))
 
+/-- Vocab-parallel embedding lookup with an explicit row offset.
+
+For shard `weight` covering vocab rows `[offset, offset + weight.shape[0])`,
+return the corresponding embedding row when `row` is in range, and 0 otherwise.
+
+This models a single shard of a vocab-parallel embedding: each rank holds
+`weight = W_r` with `weight.shape[0] = vocab_shard`, and the per-rank lookup
+returns `W_r[row - offset, h]` only when `offset ≤ row < offset + vocab_shard`.
+Summing across ranks (via `allReducePrim`) recovers the full embedding lookup.
+
+When `offset = 0`, this coincides with `fw_embedding` for in-range ids and
+agrees on the out-of-range case (both return 0), so it is backward compatible. -/
+def fw_embedding_offset (offset : Nat) (ids weight : Tensor) : Tensor :=
+  let hidden := lastD weight.shape
+  let vocabShard := (weight.shape.head?).getD 0
+  Tensor.mkShape (ids.shape ++ [hidden]) (fun outIdx =>
+    let h := outIdx.1 % hidden
+    let idFlat := outIdx.1 / hidden
+    let row := scalarToNat (valAt ids idFlat)
+    if offset ≤ row ∧ row < offset + vocabShard then
+      valAt weight ((row - offset) * hidden + h)
+    else 0)
+
 def bw_embedding (g ids weight : Tensor) : Tensor :=
   let hidden := lastD weight.shape
   Tensor.mkShape weight.shape (fun wIdx =>
@@ -2026,7 +2049,10 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
   | "OpName.BW_contiguous", [g, _x] => [g]
   | "OpName.CROSS_DP_WRED", xs => [cross_dp_wred xs]
   -- GPT-style operators
-  | "OpName.FW_embedding", [ids, weight] => [fw_embedding ids weight]
+  | "OpName.FW_embedding", [ids, weight] =>
+      match params with
+      | [] => [fw_embedding ids weight]
+      | offset :: _ => [fw_embedding_offset offset ids weight]
   | "OpName.BW_embedding", [g, ids, weight] => [bw_embedding g ids weight]
   | "OpName.FW_layernorm", [x, weight, bias] => [fw_layernorm x weight bias]
   | "OpName.BW_layernorm", [g, x, weight, bias] =>
@@ -2138,6 +2164,409 @@ axiom applyNode_bw_linear_snd_out
     applyNode g s { rank := rank, op := "OpName.BW_linear", ins := [gTid, xTid, wTid], outs := [dxTid, dwTid] } dwTid =
       (bw_linear (s gTid) (s xTid) (s wTid)).2
 
+/-- Unfolding lemma for `evalOp` on `FW_embedding` with empty params. -/
+theorem evalOp_fw_embedding_empty (numParts rank : Nat) (ids w : Tensor) :
+    evalOp numParts rank "OpName.FW_embedding" [] [ids, w] = [fw_embedding ids w] := by
+  rfl
+
+/-- Unfolding lemma for `evalOp` on `FW_embedding` with `params := [offset]`. -/
+theorem evalOp_fw_embedding_offset (numParts rank offset : Nat) (ids w : Tensor) :
+    evalOp numParts rank "OpName.FW_embedding" [offset] [ids, w] =
+      [fw_embedding_offset offset ids w] := by
+  rfl
+
+/-- Unfolding lemma for `evalOp` on `AllReducePrim`. -/
+theorem evalOp_allReducePrim (numParts rank : Nat) (params : List Nat) (xs : List Tensor) :
+    evalOp numParts rank "OpName.AllReducePrim" params xs =
+      [allReducePrim numParts rank xs] := by
+  rfl
+
+/-- `applyNode` for `FW_embedding` with empty params (legacy semantics). -/
+theorem applyNode_fw_embedding_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (idsTid wTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_embedding", ins := [idsTid, wTid], outs := [outTid] } outTid =
+      fw_embedding (s idsTid) (s wTid) := by
+  unfold applyNode
+  rw [show ([idsTid, wTid] : List Tid).map s = [s idsTid, s wTid] from rfl,
+      evalOp_fw_embedding_empty]
+  change storeSet s [(outTid, fw_embedding (s idsTid) (s wTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `applyNode` for `FW_embedding` with `params := [offset]` (vocab-parallel semantics). -/
+theorem applyNode_fw_embedding_offset_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (offset : Nat) (idsTid wTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_embedding", ins := [idsTid, wTid], outs := [outTid], params := [offset] } outTid =
+      fw_embedding_offset offset (s idsTid) (s wTid) := by
+  unfold applyNode
+  rw [show ([idsTid, wTid] : List Tid).map s = [s idsTid, s wTid] from rfl,
+      evalOp_fw_embedding_offset]
+  change storeSet s [(outTid, fw_embedding_offset offset (s idsTid) (s wTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `applyNode` for `AllReducePrim` with singleton output. -/
+theorem applyNode_allReducePrim_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (ins : List Tid) (outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.AllReducePrim", ins := ins, outs := [outTid] } outTid =
+      allReducePrim g.numRanks rank (ins.map s) := by
+  unfold applyNode
+  rw [evalOp_allReducePrim]
+  change storeSet s [(outTid, allReducePrim g.numRanks rank (ins.map s))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-!
+## Bridging lemmas for vocab-parallel embedding
+
+When the SM weight is the vstack of the per-rank PM weights (`allGatherPrimDimN 0`),
+the SM `fw_embedding` equals the AllReduce of the per-rank `fw_embedding_offset`s.
+This is the core algebraic identity for vocab-parallel embedding under the
+masking/offset semantics provided by `fw_embedding_offset`.
+-/
+
+/-- Value of `allGatherPrimDimN 0 numParts 0 Ws` at index `(r*shard + i)*hidden + j`,
+when the shards have shape `[shard, hidden]` and `r < numParts`, `i < shard`, `j < hidden`. -/
+theorem allGatherPrimDimN0_valAt
+    (numParts shard hidden : Nat) (Ws : List Tensor)
+    (hparts : 0 < numParts) (hshard : 0 < shard) (hhid : 0 < hidden)
+    (hhead : (Ws.head?.map (fun t => t.shape)).getD [] = [shard, hidden])
+    (hWs_shape : ∀ r (_ : r < numParts),
+        (Ws.getD r (zeroTensor [shard, hidden])).shape = [shard, hidden])
+    (r : Nat) (hr : r < numParts) (i : Nat) (hi : i < shard) (j : Nat) (hj : j < hidden) :
+    valAt (allGatherPrimDimN 0 numParts 0 Ws) ((r * shard + i) * hidden + j) =
+      valAt (Ws.getD r (zeroTensor [shard, hidden])) (i * hidden + j) := by
+  -- Bound the index in the output shape.
+  have hidx_lt_full : (r * shard + i) * hidden + j < (shard * numParts) * hidden := by
+    have h1 : r * shard + i < shard * numParts := by
+      have hsi : r * shard + i < (r + 1) * shard := by
+        calc r * shard + i < r * shard + shard := by omega
+          _ = (r + 1) * shard := by ring
+      have hle : (r + 1) * shard ≤ numParts * shard := Nat.mul_le_mul_right _ hr
+      calc r * shard + i < (r + 1) * shard := hsi
+        _ ≤ numParts * shard := hle
+        _ = shard * numParts := by ring
+    calc (r * shard + i) * hidden + j
+        < (r * shard + i) * hidden + hidden := by omega
+      _ = (r * shard + i + 1) * hidden := by ring
+      _ ≤ (shard * numParts) * hidden := Nat.mul_le_mul_right _ h1
+  have hshape_out : (allGatherPrimDimN 0 numParts 0 Ws).shape = [shard * numParts, hidden] := by
+    have := allGatherPrimDimN_shape 0 numParts Ws [shard, hidden] hhead
+    simpa using this
+  have hidx_lt_prod : (r * shard + i) * hidden + j <
+      prodShape (allGatherPrimDimN 0 numParts 0 Ws).shape := by
+    rw [hshape_out]
+    simpa [prodShape] using hidx_lt_full
+  have hfds_pos : 0 < shard * numParts * hidden := by
+    have h1 : 0 < shard * numParts := Nat.mul_pos hshard hparts
+    exact Nat.mul_pos h1 hhid
+  have hfds_ne : (shard * numParts * hidden) ≠ 0 := Nat.ne_of_gt hfds_pos
+  have hps_ne : hidden ≠ 0 := Nat.ne_of_gt hhid
+  have hshard_ne : shard ≠ 0 := Nat.ne_of_gt hshard
+  have hidx_lt_fds : (r * shard + i) * hidden + j < shard * numParts * hidden := by
+    calc (r * shard + i) * hidden + j
+        < (shard * numParts) * hidden := hidx_lt_full
+      _ = shard * numParts * hidden := by ring
+  have hdiv_fds : ((r * shard + i) * hidden + j) / (shard * numParts * hidden) = 0 :=
+    Nat.div_eq_of_lt hidx_lt_fds
+  have hmod_fds : ((r * shard + i) * hidden + j) % (shard * numParts * hidden) =
+      (r * shard + i) * hidden + j :=
+    Nat.mod_eq_of_lt hidx_lt_fds
+  have hdiv_hidden : ((r * shard + i) * hidden + j) / hidden = r * shard + i := by
+    rw [show (r * shard + i) * hidden + j = j + hidden * (r * shard + i) from by ring,
+        Nat.add_mul_div_left _ _ hhid, Nat.div_eq_of_lt hj, Nat.zero_add]
+  have hmod_hidden : ((r * shard + i) * hidden + j) % hidden = j := by
+    rw [show (r * shard + i) * hidden + j = j + hidden * (r * shard + i) from by ring,
+        Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hj]
+  have hdiv_shard : (r * shard + i) / shard = r := by
+    rw [show r * shard + i = i + shard * r from by ring,
+        Nat.add_mul_div_left _ _ hshard, Nat.div_eq_of_lt hi, Nat.zero_add]
+  have hmod_shard : (r * shard + i) % shard = i := by
+    rw [show r * shard + i = i + shard * r from by ring,
+        Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hi]
+  -- Unfold the value of `allGatherPrimDimN` at the chosen index.
+  have h0 : valAt (allGatherPrimDimN 0 numParts 0 Ws) ((r * shard + i) * hidden + j) =
+      (allGatherPrimDimN 0 numParts 0 Ws).val ⟨(r * shard + i) * hidden + j, hidx_lt_prod⟩ := by
+    simp [valAt, hidx_lt_prod]
+  rw [h0]
+  -- Pre-compute the list operations on [shard, hidden].
+  have hgetD0 : (([shard, hidden] : List Nat).getD 0 0) = shard := rfl
+  have hdrop1 : List.foldl (fun (a b : Nat) => a * b) 1
+      (List.drop (0 + 1) ([shard, hidden] : List Nat)) = hidden := by
+    simp [List.drop, List.foldl]
+  -- Pre-compute the shape of Ws.getD r.
+  have hWr_shape : (Ws.getD r (zeroTensor [shard, hidden])).shape = [shard, hidden] :=
+    hWs_shape r hr
+  have hWr_prod : prodShape (Ws.getD r (zeroTensor [shard, hidden])).shape = shard * hidden := by
+    rw [hWr_shape]; simp [prodShape]
+  have hidx_lt_Wr : i * hidden + j < prodShape (Ws.getD r (zeroTensor [shard, hidden])).shape := by
+    rw [hWr_prod]
+    calc i * hidden + j
+        < i * hidden + hidden := by omega
+      _ = (i + 1) * hidden := by ring
+      _ ≤ shard * hidden := Nat.mul_le_mul_right _ hi
+  -- Unfold and simplify the kernel.
+  simp only [allGatherPrimDimN, Tensor.mkShape, hhead, hgetD0, hdrop1,
+    if_neg hshard_ne, if_neg hps_ne, if_neg hfds_ne]
+  rw [hmod_fds, hdiv_fds, hdiv_hidden, hmod_hidden, hdiv_shard, hmod_shard]
+  simp only [Nat.zero_mul, Nat.zero_add, valAt, hidx_lt_Wr, dif_pos]
+
+/-- Value of `fw_embedding ids fullW` at output index `outIdx` is the full lookup
+    when row is in vocab range, else 0. -/
+theorem fw_embedding_valAt
+    (ids fullW : Tensor) (outIdx : Nat) :
+    valAt (fw_embedding ids fullW) outIdx =
+      if h : outIdx < prodShape (ids.shape ++ [lastD fullW.shape]) then
+        valAt fullW
+          ((scalarToNat (valAt ids (outIdx / lastD fullW.shape))) * lastD fullW.shape +
+            outIdx % lastD fullW.shape)
+      else 0 := by
+  by_cases hh : outIdx < prodShape (ids.shape ++ [lastD fullW.shape])
+  · simp [valAt, fw_embedding, Tensor.mkShape, hh]
+  · simp [valAt, fw_embedding, Tensor.mkShape, hh]
+
+/-- Value of `fw_embedding_offset offset ids weight` at output index `outIdx`. -/
+theorem fw_embedding_offset_valAt
+    (offset : Nat) (ids weight : Tensor) (outIdx : Nat) :
+    valAt (fw_embedding_offset offset ids weight) outIdx =
+      if h : outIdx < prodShape (ids.shape ++ [lastD weight.shape]) then
+        let hidden := lastD weight.shape
+        let vocabShard := (weight.shape.head?).getD 0
+        let row := scalarToNat (valAt ids (outIdx / hidden))
+        let hh := outIdx % hidden
+        if offset ≤ row ∧ row < offset + vocabShard then
+          valAt weight ((row - offset) * hidden + hh)
+        else 0
+      else 0 := by
+  by_cases hh : outIdx < prodShape (ids.shape ++ [lastD weight.shape])
+  · simp [valAt, fw_embedding_offset, Tensor.mkShape, hh]
+  · simp [valAt, fw_embedding_offset, Tensor.mkShape, hh]
+
+/-- The shape of `fw_embedding_offset` is `ids.shape ++ [hidden]`. -/
+theorem fw_embedding_offset_shape (offset : Nat) (ids weight : Tensor) :
+    (fw_embedding_offset offset ids weight).shape = ids.shape ++ [lastD weight.shape] := by
+  simp [fw_embedding_offset, Tensor.mkShape]
+
+/-- The shape of `fw_embedding` is `ids.shape ++ [hidden]`. -/
+theorem fw_embedding_shape (ids weight : Tensor) :
+    (fw_embedding ids weight).shape = ids.shape ++ [lastD weight.shape] := by
+  simp [fw_embedding, Tensor.mkShape]
+
+/-- Sum of `valAt` over a list of tensors, expressed via `List.foldl`. -/
+theorem allReducePrim_valAt
+    (numParts rank : Nat) (xs : List Tensor) (idx : Nat) (x0 : Tensor)
+    (hhead : xs.head? = some x0)
+    (hidx : idx < prodShape x0.shape) :
+    valAt (allReducePrim numParts rank xs) idx = xs.foldl (fun acc t => acc + valAt t idx) 0 := by
+  have hshape : (allReducePrim numParts rank xs).shape = x0.shape :=
+    allReducePrim_shape numParts rank xs x0 hhead
+  have hidx' : idx < prodShape (allReducePrim numParts rank xs).shape := by
+    rw [hshape]; exact hidx
+  have hL : valAt (allReducePrim numParts rank xs) idx =
+      (allReducePrim numParts rank xs).val ⟨idx, hidx'⟩ := by
+    simp [valAt, hidx']
+  rw [hL]
+  simp [allReducePrim, Tensor.mkShape]
+
+/-- Bridging lemma: under vocab-parallel sharding (vstack of weights along dim 0),
+    `fw_embedding` of the full weight equals the `allReducePrim` of the per-rank
+    `fw_embedding_offset`s. -/
+theorem fw_embedding_eq_allReduce_offset_shards
+    (numParts shard hidden : Nat)
+    (hparts : 0 < numParts) (hshard : 0 < shard) (hhid : 0 < hidden)
+    (ids : Tensor) (Ws : List Tensor)
+    (hlen : Ws.length = numParts)
+    (hWs_head : (Ws.head?.map (fun t => t.shape)).getD [] = [shard, hidden])
+    (hWs_shape : ∀ r (_ : r < numParts),
+        (Ws.getD r (zeroTensor [shard, hidden])).shape = [shard, hidden]) :
+    fw_embedding ids (allGatherPrimDimN 0 numParts 0 Ws) =
+      allReducePrim numParts 0
+        (List.ofFn (fun r : Fin numParts =>
+          fw_embedding_offset (r.val * shard) ids
+            (Ws.getD r.val (zeroTensor [shard, hidden])))) := by
+  -- Notation for the full tensor and the RHS list.
+  set fullW : Tensor := allGatherPrimDimN 0 numParts 0 Ws with hfullW
+  set rhsList : List Tensor :=
+    List.ofFn (fun r : Fin numParts =>
+      fw_embedding_offset (r.val * shard) ids
+        (Ws.getD r.val (zeroTensor [shard, hidden]))) with hrhsList
+  -- Shape of fullW.
+  have hfullW_shape : fullW.shape = [shard * numParts, hidden] := by
+    have := allGatherPrimDimN_shape 0 numParts Ws [shard, hidden] hWs_head
+    simpa using this
+  have hlastD_full : lastD fullW.shape = hidden := by
+    rw [hfullW_shape]; rfl
+  -- Per-element shape of rhsList.
+  have hrhs_elem_shape : ∀ r : Fin numParts,
+      (fw_embedding_offset (r.val * shard) ids
+        (Ws.getD r.val (zeroTensor [shard, hidden]))).shape = ids.shape ++ [hidden] := by
+    intro r
+    rw [fw_embedding_offset_shape, hWs_shape r.val r.isLt]; rfl
+  -- Head of rhsList exists since numParts > 0.
+  have hrhs_head : ∃ x0, rhsList.head? = some x0 ∧ x0.shape = ids.shape ++ [hidden] := by
+    cases hp : numParts with
+    | zero => exact absurd hp (Nat.ne_of_gt hparts)
+    | succ k =>
+      have hheadVal :
+          (List.ofFn (fun r : Fin (k + 1) =>
+            fw_embedding_offset (r.val * shard) ids
+              (Ws.getD r.val (zeroTensor [shard, hidden]))) : List Tensor).head? =
+          some (fw_embedding_offset (0 * shard) ids
+              (Ws.getD 0 (zeroTensor [shard, hidden]))) := by
+        simp [List.ofFn_succ]
+      refine ⟨fw_embedding_offset (0 * shard) ids
+          (Ws.getD 0 (zeroTensor [shard, hidden])), ?_, ?_⟩
+      · rw [hrhsList]; subst hp; exact hheadVal
+      · rw [fw_embedding_offset_shape]
+        have h0' : (0 : Nat) < numParts := by rw [hp]; omega
+        rw [hWs_shape 0 h0']; rfl
+  obtain ⟨x0, hx0_head, hx0_shape⟩ := hrhs_head
+  -- Shape of allReducePrim rhsList.
+  have hrhs_shape : (allReducePrim numParts 0 rhsList).shape = ids.shape ++ [hidden] := by
+    rw [allReducePrim_shape numParts 0 rhsList x0 hx0_head]
+    exact hx0_shape
+  -- Shape of LHS.
+  have hlhs_shape : (fw_embedding ids fullW).shape = ids.shape ++ [hidden] := by
+    rw [fw_embedding_shape, hlastD_full]
+  -- Apply Tensor.ext.
+  apply Tensor.ext
+  · rw [hlhs_shape, hrhs_shape]
+  -- Per-index equality.
+  intro outIdx hout
+  have hbound : outIdx < prodShape (ids.shape ++ [hidden]) := by
+    rwa [hlhs_shape] at hout
+  -- LHS value via fw_embedding_valAt.
+  rw [fw_embedding_valAt]
+  have hlhsCond : outIdx < prodShape (ids.shape ++ [lastD fullW.shape]) := by
+    rwa [hlastD_full]
+  rw [dif_pos hlhsCond]
+  rw [hlastD_full]
+  -- RHS value via allReducePrim_valAt.
+  rw [allReducePrim_valAt numParts 0 rhsList outIdx x0 hx0_head (by rw [hx0_shape]; exact hbound)]
+  set h : Nat := outIdx % hidden with hh_def
+  set idFlat : Nat := outIdx / hidden with hidFlat_def
+  set row : Nat := scalarToNat (valAt ids idFlat) with hrow_def
+  have hh_lt : h < hidden := Nat.mod_lt _ hhid
+  -- Per-element value of rhsList.
+  have hr_val : ∀ r : Fin numParts,
+      valAt (fw_embedding_offset (r.val * shard) ids
+        (Ws.getD r.val (zeroTensor [shard, hidden]))) outIdx =
+      (if r.val * shard ≤ row ∧ row < r.val * shard + shard then
+        valAt (Ws.getD r.val (zeroTensor [shard, hidden]))
+          ((row - r.val * shard) * hidden + h)
+      else 0) := by
+    intro r
+    rw [fw_embedding_offset_valAt]
+    have hcond : outIdx < prodShape (ids.shape ++
+        [lastD (Ws.getD r.val (zeroTensor [shard, hidden])).shape]) := by
+      rw [hWs_shape r.val r.isLt]; exact hbound
+    rw [dif_pos hcond]
+    have hlastD_W : lastD (Ws.getD r.val (zeroTensor [shard, hidden])).shape = hidden := by
+      rw [hWs_shape r.val r.isLt]; rfl
+    have hhead_W : ((Ws.getD r.val (zeroTensor [shard, hidden])).shape.head?).getD 0 = shard := by
+      rw [hWs_shape r.val r.isLt]; rfl
+    simp only [hlastD_W, hhead_W]
+    -- Now both sides use outIdx/hidden, outIdx%hidden vs idFlat, h.
+    -- These are equal by the let-bindings.
+    rfl
+  -- Convert foldl over rhsList to a Finset sum.
+  have hRSumLHS : rhsList.foldl (fun acc t => acc + valAt t outIdx) 0 =
+      ∑ r : Fin numParts, (if r.val * shard ≤ row ∧ row < r.val * shard + shard then
+        valAt (Ws.getD r.val (zeroTensor [shard, hidden]))
+          ((row - r.val * shard) * hidden + h)
+      else 0) := by
+    rw [hrhsList, List.foldl_add_eq_sum, List.map_ofFn]
+    have hsum_ofFn : ∀ (f : Fin numParts → Scalar),
+        (List.ofFn f).sum = ∑ i : Fin numParts, f i := fun f => Fin.sum_ofFn f
+    rw [hsum_ofFn]
+    simp only [Function.comp_apply]
+    apply Finset.sum_congr rfl
+    intro r _
+    exact hr_val r
+  rw [hRSumLHS]
+  -- Case analysis on row vs numParts*shard.
+  by_cases hrow : row < numParts * shard
+  · -- In range: there is a unique r0 = row/shard with the indicator true.
+    set r0 : Nat := row / shard with hr0_def
+    have hr0_lt : r0 < numParts := by
+      rw [hr0_def]
+      exact Nat.div_lt_of_lt_mul (by rw [Nat.mul_comm]; exact hrow)
+    have hrow_ge : r0 * shard ≤ row := Nat.div_mul_le_self row shard
+    have hrow_lt_succ : row < r0 * shard + shard := by
+      have hmod_lt : row % shard < shard := Nat.mod_lt _ hshard
+      have hrow_split : row = r0 * shard + row % shard := by
+        rw [hr0_def, Nat.mul_comm]
+        exact (Nat.div_add_mod row shard).symm
+      rw [hrow_split]
+      exact Nat.add_lt_add_left hmod_lt _
+    -- Sum collapses to a single term.
+    have hsum_collapse :
+        (∑ r : Fin numParts,
+          (if r.val * shard ≤ row ∧ row < r.val * shard + shard then
+            valAt (Ws.getD r.val (zeroTensor [shard, hidden]))
+              ((row - r.val * shard) * hidden + h)
+          else 0)) =
+        valAt (Ws.getD r0 (zeroTensor [shard, hidden]))
+          ((row - r0 * shard) * hidden + h) := by
+      rw [Finset.sum_eq_single (⟨r0, hr0_lt⟩ : Fin numParts)]
+      · simp [hrow_ge, hrow_lt_succ]
+      · intro r _ hne
+        have hnot : ¬(r.val * shard ≤ row ∧ row < r.val * shard + shard) := by
+          intro ⟨hge, hlt⟩
+          have hrv_eq : r.val = r0 := by
+            have h2 : row < (r.val + 1) * shard := by
+              have heq : r.val * shard + shard = (r.val + 1) * shard := by ring
+              rw [← heq]; exact hlt
+            -- Nat.div_eq_of_lt_le takes (lo : k * n ≤ m) (hi : m < (k+1) * n).
+            have hd : row / shard = r.val := Nat.div_eq_of_lt_le hge h2
+            rw [hr0_def]; omega
+          apply hne
+          exact Fin.ext hrv_eq
+        simp [hnot]
+      · intro h0
+        exact absurd (Finset.mem_univ _) h0
+    rw [hsum_collapse]
+    -- LHS: valAt fullW (row * hidden + h)
+    -- We use allGatherPrimDimN0_valAt with i = row - r0*shard, j = h.
+    have hi_lt : row - r0 * shard < shard := by omega
+    have h_aux : (r0 * shard + (row - r0 * shard)) * hidden + h = row * hidden + h := by
+      have : r0 * shard + (row - r0 * shard) = row := by omega
+      rw [this]
+    have hag := allGatherPrimDimN0_valAt numParts shard hidden Ws hparts hshard hhid hWs_head
+      hWs_shape r0 hr0_lt (row - r0 * shard) hi_lt h hh_lt
+    rw [h_aux] at hag
+    rw [← hfullW] at hag
+    rw [hag]
+  · -- Out of range: sum = 0, LHS valAt fullW = 0 (out of bounds).
+    push_neg at hrow
+    have hsum_zero :
+        (∑ r : Fin numParts,
+          (if r.val * shard ≤ row ∧ row < r.val * shard + shard then
+            valAt (Ws.getD r.val (zeroTensor [shard, hidden]))
+              ((row - r.val * shard) * hidden + h)
+          else 0)) = 0 := by
+      apply Finset.sum_eq_zero
+      intro r _
+      have hnot : ¬(r.val * shard ≤ row ∧ row < r.val * shard + shard) := by
+        intro ⟨_, hlt⟩
+        have h1 : r.val * shard + shard = (r.val + 1) * shard := by ring
+        rw [h1] at hlt
+        have hle : (r.val + 1) * shard ≤ numParts * shard := Nat.mul_le_mul_right _ r.isLt
+        have hcontra : row < numParts * shard := lt_of_lt_of_le hlt hle
+        omega
+      simp [hnot]
+    rw [hsum_zero]
+    -- LHS = valAt fullW (row * hidden + h), out of bounds.
+    have hoob : ¬ (row * hidden + h < prodShape fullW.shape) := by
+      rw [hfullW_shape]
+      have hps : prodShape ([shard * numParts, hidden] : Shape) = shard * numParts * hidden := by
+        simp [prodShape]
+      rw [hps]
+      have h1 : numParts * shard ≤ row := hrow
+      have h2 : numParts * shard * hidden ≤ row * hidden := Nat.mul_le_mul_right _ h1
+      have h3 : numParts * shard * hidden = shard * numParts * hidden := by ring
+      omega
+    simp [valAt, hoob]
 /-!
 ## Dimension consistency (well-formedness)
 
@@ -2343,6 +2772,35 @@ theorem denoteGraph_tid_eq_of_forall_not_mem_outs (g : GraphDecl) (nodes : List 
   have hfn₃ : applyNode { g with nodes := ys } = applyNode g :=
     applyNode_congr_numRanks _ _ rfl
   simp [denoteGraph, hfn₁, hfn₂, hfn₃, List.foldl_append]
+
+/-- Split-and-skip helper: when the suffix of `g.nodes` doesn't write `tid`, the value at `tid` in
+    `denoteGraph g init` only depends on the prefix. `prefix ++ suffix` must equal `g.nodes`. -/
+theorem denoteGraph_tid_eq_of_suffix_no_writes
+    (g : GraphDecl) (init : Store) (tid : Tid)
+    (pre suf : List NodeDecl) (hsplit : g.nodes = pre ++ suf)
+    (hno : ∀ n ∈ suf, tid ∉ n.outs) :
+    denoteGraph g init tid = denoteGraph { g with nodes := pre } init tid := by
+  -- Replace `g` with the structure-update form using `hsplit`.
+  have hg_eq : g = { g with nodes := pre ++ suf } := by
+    cases g with
+    | mk nr nodes =>
+      subst hsplit
+      rfl
+  conv_lhs => rw [hg_eq, denoteGraph_nodes_append]
+  exact denoteGraph_tid_eq_of_forall_not_mem_outs g suf _ tid hno
+
+/-- Apply `denoteGraph_nodes_cons` while tolerating the `{ numRanks := n, nodes := X }` form
+    (i.e. structure literals where `g` is not explicit). -/
+theorem denoteGraph_cons_eq (g : GraphDecl) (n : NodeDecl) (ns : List NodeDecl) (init : Store) :
+    denoteGraph { numRanks := g.numRanks, nodes := n :: ns } init =
+      denoteGraph { numRanks := g.numRanks, nodes := ns } (applyNode g init n) := by
+  have h1 : ({ numRanks := g.numRanks, nodes := n :: ns } : GraphDecl) =
+      { g with nodes := n :: ns } := by
+    cases g; rfl
+  have h2 : ({ numRanks := g.numRanks, nodes := ns } : GraphDecl) =
+      { g with nodes := ns } := by
+    cases g; rfl
+  rw [h1, h2, denoteGraph_nodes_cons]
 
 /-!
 ## Reconstruction for coarse lineage goals

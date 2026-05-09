@@ -255,13 +255,13 @@ def sm : GraphDecl := by
 def pm : GraphDecl := by
   refine { numRanks := 4, nodes := ?_ }
   exact [
-    { rank := 0, op := "OpName.FW_embedding", ins := [714, 1065], outs := [1069] },
+    { rank := 0, op := "OpName.FW_embedding", ins := [714, 1065], outs := [1069], params := [0] },
     { rank := 0, op := "OpName.ChunkPrim", ins := [716], outs := [1085], params := [1] },
-    { rank := 1, op := "OpName.FW_embedding", ins := [714, 1066], outs := [1070] },
+    { rank := 1, op := "OpName.FW_embedding", ins := [714, 1066], outs := [1070], params := [32] },
     { rank := 1, op := "OpName.ChunkPrim", ins := [716], outs := [1086], params := [1] },
-    { rank := 2, op := "OpName.FW_embedding", ins := [714, 1067], outs := [1071] },
+    { rank := 2, op := "OpName.FW_embedding", ins := [714, 1067], outs := [1071], params := [64] },
     { rank := 2, op := "OpName.ChunkPrim", ins := [716], outs := [1087], params := [1] },
-    { rank := 3, op := "OpName.FW_embedding", ins := [714, 1068], outs := [1072] },
+    { rank := 3, op := "OpName.FW_embedding", ins := [714, 1068], outs := [1072], params := [96] },
     { rank := 3, op := "OpName.ChunkPrim", ins := [716], outs := [1088], params := [1] },
     { rank := 0, op := "OpName.FW_embedding", ins := [1085, 565], outs := [1089] },
     { rank := 1, op := "OpName.FW_embedding", ins := [1086, 565], outs := [1090] },
