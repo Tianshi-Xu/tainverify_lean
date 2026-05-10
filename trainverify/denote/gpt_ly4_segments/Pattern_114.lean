@@ -4,9 +4,12 @@
    Goals: 211, 214, 246, 249
 -/
 import denote.gpt_ly4_segments.GeneratedData
+import denote.gpt_ly4_segments.SegmentPattern_7
+import denote.gpt_ly4_segments.SegmentPattern_8
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
+open TrainVerify.Denote.GeneratedSegmentPatterns
 
 namespace TrainVerify.Denote.GeneratedPatterns
 
@@ -20,8 +23,20 @@ inductive pattern_114_target : Prop → Prop
 def pattern_114_stmt : Prop :=
   ∀ {target : Prop}, pattern_114_target target → target
 theorem prove_pattern_114 : pattern_114_stmt := by
-  -- TODO: prove this alpha-equivalence pattern once; all member goals instantiate it automatically.
-  sorry
+  intro target h
+  cases h with
+  | goal_211 =>
+      have hs := prove_segment_pattern_7 segment_pattern_7_target.inst_3
+      exact hs.right.right.right.right.right.right.right
+  | goal_214 =>
+      have hs := prove_segment_pattern_8 segment_pattern_8_target.inst_3
+      exact hs.right.right
+  | goal_246 =>
+      have hs := prove_segment_pattern_7 segment_pattern_7_target.inst_4
+      exact hs.right.right.right.right.right.right.right
+  | goal_249 =>
+      have hs := prove_segment_pattern_8 segment_pattern_8_target.inst_4
+      exact hs.right.right
 
 end TrainVerify.Denote.GeneratedPatterns
 
