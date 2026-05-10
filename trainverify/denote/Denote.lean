@@ -4862,5 +4862,332 @@ theorem all_goals_stmt_of_forall
     (h : ∀ g ∈ goals, CoarseLineageHoldsWithInit sm pm g smInit pmInit initGoals) :
     ∀ g ∈ goals, CoarseLineageHoldsWithInit sm pm g smInit pmInit initGoals := h
 
+/-! ## Matmul helpers for sequence/tensor-parallel patterns -/
+
+/-- Unfolding lemma for binary `FW_matmul`. -/
+theorem evalOp_fw_matmul (numParts rank : Nat) (x y : Tensor) :
+    evalOp numParts rank "OpName.FW_matmul" [] [x, y] = [fw_matmul x y] := by
+  rfl
+
+/-- `applyNode` for binary `FW_matmul` with singleton output. -/
+theorem applyNode_fw_matmul_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid yTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_matmul", ins := [xTid, yTid], outs := [outTid] } outTid =
+      fw_matmul (s xTid) (s yTid) := by
+  unfold applyNode
+  rw [show ([xTid, yTid] : List Tid).map s = [s xTid, s yTid] from rfl,
+      evalOp_fw_matmul]
+  change storeSet s [(outTid, fw_matmul (s xTid) (s yTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `applyNode` for binary `FW_matmul` with empty params explicit. -/
+theorem applyNode_fw_matmul_out_empty_params
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid yTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_matmul", ins := [xTid, yTid], outs := [outTid], params := [] } outTid =
+      fw_matmul (s xTid) (s yTid) :=
+  applyNode_fw_matmul_out g s rank xTid yTid outTid
+
+/-- Shape preservation for `fw_matmul` on rank-4 tensors of shape `[1, 4, 8, 8]`. -/
+theorem fw_matmul_shape_1_4_8_8 (x y : Tensor)
+    (hx : x.shape = [1, 4, 8, 8]) (hy : y.shape = [1, 4, 8, 8]) :
+    (fw_matmul x y).shape = [1, 4, 8, 8] := by
+  unfold fw_matmul batchedMatmul
+  simp only [hx, hy, List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append,
+    Tensor.mkShape]
+
+/-- Shape preservation for `fw_matmul` on rank-4 tensors of shape `[1, 1, 8, 8]`. -/
+theorem fw_matmul_shape_1_1_8_8 (x y : Tensor)
+    (hx : x.shape = [1, 1, 8, 8]) (hy : y.shape = [1, 1, 8, 8]) :
+    (fw_matmul x y).shape = [1, 1, 8, 8] := by
+  unfold fw_matmul batchedMatmul
+  simp only [hx, hy, List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append,
+    Tensor.mkShape]
+
+/-- valAt of `chunkPrimDimN 1 4 r x` for shape `[1, 4, 8, 8]`: chunk along dim 1 (batch axis),
+    where each chunk has shape `[1, 1, 8, 8]`. The local flat index `loc < 64` corresponds to
+    global flat `r * 64 + loc` in the original tensor. -/
+theorem chunk_dim1_4_1_4_8_8_valAt (x : Tensor) (r loc : Nat)
+    (hx : x.shape = [1, 4, 8, 8]) (hr : r < 4) (hloc : loc < 64) :
+    valAt (chunkPrimDimN 1 4 r x) loc = valAt x (r * 64 + loc) := by
+  have hchunk_shape : (chunkPrimDimN 1 4 r x).shape = [1, 1, 8, 8] := by
+    rw [chunkPrimDimN_shape 1 4 r _ _ hx (by omega)]
+    simp [List.set, List.getD]
+  have hloc_shape : loc < prodShape (chunkPrimDimN 1 4 r x).shape := by
+    rw [hchunk_shape]; simp [prodShape]; exact hloc
+  rw [valAt_of_lt _ _ hloc_shape]
+  unfold chunkPrimDimN Tensor.mkShape
+  simp only [hx, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl,
+    show (4 : Nat) ≠ 0 by omega, show (8 : Nat) ≠ 0 by omega,
+    show (1 : Nat) ≠ 0 by omega, ite_false,
+    show (4 / 4 * (1 * 8 * 8) : Nat) ≠ 0 by decide,
+    show (1 * 8 * 8 : Nat) ≠ 0 by decide]
+  congr 1
+  omega
+
+/-- valAt of `allGatherPrimDimN 1 4 0 [p0, p1, p2, p3]` for shards of shape `[1, 1, 8, 8]`:
+    gather along dim 1 (batch axis) gives shape `[1, 4, 8, 8]`. Global flat `idx < 256`
+    selects piece `idx / 64` at local flat `idx % 64`. -/
+theorem allGather_dim1_4_1_1_8_8_valAt (p0 p1 p2 p3 : Tensor) (idx : Nat)
+    (h0 : p0.shape = [1, 1, 8, 8]) (h1 : p1.shape = [1, 1, 8, 8])
+    (h2 : p2.shape = [1, 1, 8, 8]) (h3 : p3.shape = [1, 1, 8, 8])
+    (hidx : idx < 256) :
+    valAt (allGatherPrimDimN 1 4 0 [p0, p1, p2, p3]) idx =
+    valAt ([p0, p1, p2, p3].getD (idx / 64) (zeroTensor [1, 1, 8, 8])) (idx % 64) := by
+  have hhead : (([p0, p1, p2, p3] : List Tensor).head?.map (·.shape)).getD [] = [1, 1, 8, 8] := by
+    simp [h0]
+  have hgather_shape : (allGatherPrimDimN 1 4 0 [p0, p1, p2, p3]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hhead]; simp [List.set, List.getD]
+  have hidx_shape : idx < prodShape (allGatherPrimDimN 1 4 0 [p0, p1, p2, p3]).shape := by
+    rw [hgather_shape]; simp [prodShape]; exact hidx
+  rw [valAt_of_lt _ _ hidx_shape]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl,
+    show (1 : Nat) ≠ 0 by omega, show (8 : Nat) ≠ 0 by omega,
+    show (4 : Nat) ≠ 0 by omega, ite_false,
+    show (1 * (8 * (8 * 1)) * 4 : Nat) ≠ 0 by decide,
+    show (8 * (8 * 1) : Nat) ≠ 0 by decide,
+    show (1 * 4 : Nat) = 4 by decide,
+    show (1 * 4 * (8 * (8 * 1)) : Nat) = 256 by decide]
+  have hpre : idx / 256 = 0 := by omega
+  have hrem : idx % 256 = idx := by omega
+  rw [hpre, hrem]
+  have hjFull_lt : idx / (8 * (8 * 1)) < 4 := by
+    have : (8 : Nat) * (8 * 1) = 64 := by decide
+    rw [this]; omega
+  have hjFull_div : idx / (8 * (8 * 1)) / 1 = idx / 64 := by
+    have : (8 : Nat) * (8 * 1) = 64 := by decide
+    rw [this]; omega
+  have hjLocal : idx / (8 * (8 * 1)) % 1 = 0 := by omega
+  rw [hjFull_div, hjLocal]
+  -- piece selection
+  have hpiece : ([p0, p1, p2, p3] : List Tensor).getD (idx / 64)
+      (zeroTensor [1, 1, 8, 8]) =
+      ([p0, p1, p2, p3] : List Tensor).getD (idx / 64) (zeroTensor [1, 1, 8, 8]) := rfl
+  -- index arithmetic
+  congr 1
+  omega
+
+/-! ## Matmul valAt helpers and split bridging lemma (for pattern_28 family) -/
+
+/-- valAt of `fw_matmul a b` at flat `idx < 256` for inputs of shape `[1, 4, 8, 8]`.
+    The output also has shape `[1, 4, 8, 8]`. -/
+private theorem fw_matmul_valAt_1_4_8_8 (a b : Tensor) (idx : Nat)
+    (ha : a.shape = [1, 4, 8, 8]) (hb : b.shape = [1, 4, 8, 8]) (hidx : idx < 256) :
+    valAt (fw_matmul a b) idx =
+      ∑ l ∈ Finset.range 8,
+        valAt a (idx / 64 * 64 + idx % 64 / 8 * 8 + l) *
+          valAt b (idx / 64 * 64 + l * 8 + idx % 8) := by
+  have key : fw_matmul a b = Tensor.mkShape [1, 4, 8, 8] (fun outIdx =>
+      ∑ l ∈ Finset.range 8,
+        valAt a (outIdx.1 / (8 * 8) * (8 * 8) +
+                  outIdx.1 % (8 * 8) / 8 * 8 + l) *
+          valAt b (outIdx.1 / (8 * 8) * (8 * 8) + l * 8 +
+                    outIdx.1 % (8 * 8) % 8)) := by
+    unfold fw_matmul batchedMatmul
+    rw [ha, hb]
+    rfl
+  rw [key]
+  have hout : (Tensor.mkShape [1, 4, 8, 8] (fun outIdx : Fin (prodShape [1,4,8,8]) =>
+      ∑ l ∈ Finset.range 8,
+        valAt a (outIdx.1 / (8 * 8) * (8 * 8) +
+                  outIdx.1 % (8 * 8) / 8 * 8 + l) *
+          valAt b (outIdx.1 / (8 * 8) * (8 * 8) + l * 8 +
+                    outIdx.1 % (8 * 8) % 8))).shape = [1, 4, 8, 8] := by
+    simp [Tensor.mkShape]
+  have hidx' : idx < prodShape ([1,4,8,8] : Shape) := by simp [prodShape]; omega
+  rw [valAt_of_lt _ _ (by simp [Tensor.mkShape]; exact hidx')]
+  show ∑ l ∈ Finset.range 8,
+        valAt a (idx / (8 * 8) * (8 * 8) + idx % (8 * 8) / 8 * 8 + l) *
+          valAt b (idx / (8 * 8) * (8 * 8) + l * 8 + idx % (8 * 8) % 8) = _
+  apply Finset.sum_congr rfl
+  intro l _
+  congr 2 <;> omega
+
+/-- valAt of `fw_matmul a b` at flat `loc < 64` for inputs of shape `[1, 1, 8, 8]`.
+    The output also has shape `[1, 1, 8, 8]`. -/
+private theorem fw_matmul_valAt_1_1_8_8 (a b : Tensor) (loc : Nat)
+    (ha : a.shape = [1, 1, 8, 8]) (hb : b.shape = [1, 1, 8, 8]) (hloc : loc < 64) :
+    valAt (fw_matmul a b) loc =
+      ∑ l ∈ Finset.range 8,
+        valAt a (loc / 8 * 8 + l) * valAt b (l * 8 + loc % 8) := by
+  have key : fw_matmul a b = Tensor.mkShape [1, 1, 8, 8] (fun outIdx =>
+      ∑ l ∈ Finset.range 8,
+        valAt a (outIdx.1 / (8 * 8) * (8 * 8) +
+                  outIdx.1 % (8 * 8) / 8 * 8 + l) *
+          valAt b (outIdx.1 / (8 * 8) * (8 * 8) + l * 8 +
+                    outIdx.1 % (8 * 8) % 8)) := by
+    unfold fw_matmul batchedMatmul
+    rw [ha, hb]
+    rfl
+  rw [key]
+  have hloc' : loc < prodShape ([1,1,8,8] : Shape) := by simp [prodShape]; omega
+  rw [valAt_of_lt _ _ (by simp [Tensor.mkShape]; exact hloc')]
+  show ∑ l ∈ Finset.range 8,
+        valAt a (loc / (8 * 8) * (8 * 8) + loc % (8 * 8) / 8 * 8 + l) *
+          valAt b (loc / (8 * 8) * (8 * 8) + l * 8 + loc % (8 * 8) % 8) = _
+  apply Finset.sum_congr rfl
+  intro l _
+  congr 2 <;> omega
+
+/-- The matmul-over-batched-input bridging lemma for shape `[1, 4, 8, 8]` split along dim 1
+    into 4 chunks of shape `[1, 1, 8, 8]`. Since matmul is independent across the leading
+    batch dimensions, chunking dim 1 commutes with matmul. -/
+theorem fw_matmul_split_dim1_4_1_4_8_8 (a b : Tensor)
+    (ha : a.shape = [1, 4, 8, 8]) (hb : b.shape = [1, 4, 8, 8]) :
+    fw_matmul a b =
+      allGatherPrimDimN 1 4 0
+        [fw_matmul (chunkPrimDimN 1 4 0 a) (chunkPrimDimN 1 4 0 b),
+         fw_matmul (chunkPrimDimN 1 4 1 a) (chunkPrimDimN 1 4 1 b),
+         fw_matmul (chunkPrimDimN 1 4 2 a) (chunkPrimDimN 1 4 2 b),
+         fw_matmul (chunkPrimDimN 1 4 3 a) (chunkPrimDimN 1 4 3 b)] := by
+  -- Common chunk shape facts
+  have hchunk_a : ∀ r, r < 4 → (chunkPrimDimN 1 4 r a).shape = [1, 1, 8, 8] := by
+    intro r hr
+    rw [chunkPrimDimN_shape 1 4 r _ _ ha (by omega)]
+    simp [List.set, List.getD]
+  have hchunk_b : ∀ r, r < 4 → (chunkPrimDimN 1 4 r b).shape = [1, 1, 8, 8] := by
+    intro r hr
+    rw [chunkPrimDimN_shape 1 4 r _ _ hb (by omega)]
+    simp [List.set, List.getD]
+  have hpiece_shape : ∀ r, r < 4 →
+      (fw_matmul (chunkPrimDimN 1 4 r a) (chunkPrimDimN 1 4 r b)).shape = [1, 1, 8, 8] := by
+    intro r hr
+    exact fw_matmul_shape_1_1_8_8 _ _ (hchunk_a r hr) (hchunk_b r hr)
+  have hp0 := hpiece_shape 0 (by decide)
+  have hp1 := hpiece_shape 1 (by decide)
+  have hp2 := hpiece_shape 2 (by decide)
+  have hp3 := hpiece_shape 3 (by decide)
+  have hlhs_shape : (fw_matmul a b).shape = [1, 4, 8, 8] :=
+    fw_matmul_shape_1_4_8_8 a b ha hb
+  have hrhs_shape : (allGatherPrimDimN 1 4 0
+      [fw_matmul (chunkPrimDimN 1 4 0 a) (chunkPrimDimN 1 4 0 b),
+       fw_matmul (chunkPrimDimN 1 4 1 a) (chunkPrimDimN 1 4 1 b),
+       fw_matmul (chunkPrimDimN 1 4 2 a) (chunkPrimDimN 1 4 2 b),
+       fw_matmul (chunkPrimDimN 1 4 3 a) (chunkPrimDimN 1 4 3 b)]).shape = [1, 4, 8, 8] := by
+    have hhead : (([fw_matmul (chunkPrimDimN 1 4 0 a) (chunkPrimDimN 1 4 0 b),
+                    fw_matmul (chunkPrimDimN 1 4 1 a) (chunkPrimDimN 1 4 1 b),
+                    fw_matmul (chunkPrimDimN 1 4 2 a) (chunkPrimDimN 1 4 2 b),
+                    fw_matmul (chunkPrimDimN 1 4 3 a) (chunkPrimDimN 1 4 3 b)] : List Tensor).head?.map
+                  (·.shape)).getD [] = [1, 1, 8, 8] := by
+      simp [hp0]
+    rw [allGatherPrimDimN_shape 1 4 _ _ hhead]
+    simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  -- Use the matmul valAt unfolding for LHS
+  rw [fw_matmul_valAt_1_4_8_8 a b idx ha hb hidx256]
+  -- Now unfold the RHS gather
+  have hidx_rhs : idx < 256 := hidx256
+  rw [allGather_dim1_4_1_1_8_8_valAt _ _ _ _ idx hp0 hp1 hp2 hp3 hidx_rhs]
+  -- Determine which piece we land in
+  have hr_lt : idx / 64 < 4 := by omega
+  set r := idx / 64 with hr_def
+  set loc := idx % 64 with hloc_def
+  have hloc_lt : loc < 64 := by subst loc; omega
+  have hr_cases : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+  -- The piece is fw_matmul (chunk_a_r) (chunk_b_r); unfold its valAt
+  -- For each r, we need to rewrite the getD selection
+  have hvalpiece : ∀ rr, rr < 4 →
+      valAt (fw_matmul (chunkPrimDimN 1 4 rr a) (chunkPrimDimN 1 4 rr b)) loc =
+        ∑ l ∈ Finset.range 8,
+          valAt a (rr * 64 + loc / 8 * 8 + l) *
+          valAt b (rr * 64 + l * 8 + loc % 8) := by
+    intro rr hrr
+    rw [fw_matmul_valAt_1_1_8_8 _ _ loc (hchunk_a rr hrr) (hchunk_b rr hrr) hloc_lt]
+    apply Finset.sum_congr rfl
+    intro l hl
+    have hl_lt : l < 8 := by simpa using hl
+    have hi_lt : loc / 8 < 8 := by omega
+    have hj_lt : loc % 8 < 8 := by omega
+    have h1 : loc / 8 * 8 + l < 64 := by omega
+    have h2 : l * 8 + loc % 8 < 64 := by omega
+    rw [chunk_dim1_4_1_4_8_8_valAt a rr (loc / 8 * 8 + l) ha hrr h1]
+    rw [chunk_dim1_4_1_4_8_8_valAt b rr (l * 8 + loc % 8) hb hrr h2]
+    congr 1
+    · congr 1; omega
+    · congr 1; omega
+  -- And we want: ∑_l valAt a (idx/64*64 + idx%64/8*8 + l) * valAt b (idx/64*64 + l*8 + idx%8)
+  --            = (chosen-piece valAt at loc)
+  have hjmod : idx % 8 = loc % 8 := by subst loc; omega
+  rcases hr_cases with h0 | h1 | h2 | h3
+  · -- r = 0
+    have hsel : ([fw_matmul (chunkPrimDimN 1 4 0 a) (chunkPrimDimN 1 4 0 b),
+                  fw_matmul (chunkPrimDimN 1 4 1 a) (chunkPrimDimN 1 4 1 b),
+                  fw_matmul (chunkPrimDimN 1 4 2 a) (chunkPrimDimN 1 4 2 b),
+                  fw_matmul (chunkPrimDimN 1 4 3 a) (chunkPrimDimN 1 4 3 b)] : List Tensor).getD
+                  (idx / 64) (zeroTensor [1, 1, 8, 8]) =
+                fw_matmul (chunkPrimDimN 1 4 0 a) (chunkPrimDimN 1 4 0 b) := by
+      have : idx / 64 = 0 := by rw [← hr_def]; exact h0
+      rw [this]; rfl
+    rw [hsel, hvalpiece 0 (by decide)]
+    apply Finset.sum_congr rfl
+    intro l _
+    have hidx_div : idx / 64 = 0 := by rw [← hr_def]; exact h0
+    congr 2 <;> (subst loc; omega)
+  · -- r = 1
+    have hidx_div : idx / 64 = 1 := by rw [← hr_def]; exact h1
+    have hsel : ([fw_matmul (chunkPrimDimN 1 4 0 a) (chunkPrimDimN 1 4 0 b),
+                  fw_matmul (chunkPrimDimN 1 4 1 a) (chunkPrimDimN 1 4 1 b),
+                  fw_matmul (chunkPrimDimN 1 4 2 a) (chunkPrimDimN 1 4 2 b),
+                  fw_matmul (chunkPrimDimN 1 4 3 a) (chunkPrimDimN 1 4 3 b)] : List Tensor).getD
+                  (idx / 64) (zeroTensor [1, 1, 8, 8]) =
+                fw_matmul (chunkPrimDimN 1 4 1 a) (chunkPrimDimN 1 4 1 b) := by
+      rw [hidx_div]; rfl
+    rw [hsel, hvalpiece 1 (by decide)]
+    apply Finset.sum_congr rfl
+    intro l _
+    congr 2 <;> (subst loc; omega)
+  · -- r = 2
+    have hidx_div : idx / 64 = 2 := by rw [← hr_def]; exact h2
+    have hsel : ([fw_matmul (chunkPrimDimN 1 4 0 a) (chunkPrimDimN 1 4 0 b),
+                  fw_matmul (chunkPrimDimN 1 4 1 a) (chunkPrimDimN 1 4 1 b),
+                  fw_matmul (chunkPrimDimN 1 4 2 a) (chunkPrimDimN 1 4 2 b),
+                  fw_matmul (chunkPrimDimN 1 4 3 a) (chunkPrimDimN 1 4 3 b)] : List Tensor).getD
+                  (idx / 64) (zeroTensor [1, 1, 8, 8]) =
+                fw_matmul (chunkPrimDimN 1 4 2 a) (chunkPrimDimN 1 4 2 b) := by
+      rw [hidx_div]; rfl
+    rw [hsel, hvalpiece 2 (by decide)]
+    apply Finset.sum_congr rfl
+    intro l _
+    congr 2 <;> (subst loc; omega)
+  · -- r = 3
+    have hidx_div : idx / 64 = 3 := by rw [← hr_def]; exact h3
+    have hsel : ([fw_matmul (chunkPrimDimN 1 4 0 a) (chunkPrimDimN 1 4 0 b),
+                  fw_matmul (chunkPrimDimN 1 4 1 a) (chunkPrimDimN 1 4 1 b),
+                  fw_matmul (chunkPrimDimN 1 4 2 a) (chunkPrimDimN 1 4 2 b),
+                  fw_matmul (chunkPrimDimN 1 4 3 a) (chunkPrimDimN 1 4 3 b)] : List Tensor).getD
+                  (idx / 64) (zeroTensor [1, 1, 8, 8]) =
+                fw_matmul (chunkPrimDimN 1 4 3 a) (chunkPrimDimN 1 4 3 b) := by
+      rw [hidx_div]; rfl
+    rw [hsel, hvalpiece 3 (by decide)]
+    apply Finset.sum_congr rfl
+    intro l _
+    congr 2 <;> (subst loc; omega)
+
+/-! ## AllToAll node helpers (for pattern_28 family) -/
+
+/-- Unfolding lemma for `AllToAllPrim` with explicit split/gather dimensions. -/
+theorem evalOp_allToAllPrimWithDims (numParts rank idim odim : Nat) (xs : List Tensor) :
+    evalOp numParts rank "OpName.AllToAllPrim" [idim, odim] xs =
+      [allToAllPrimWithDims numParts rank xs idim odim] := by
+  rfl
+
+/-- `applyNode` for `AllToAllPrim` with explicit split/gather dimensions. -/
+theorem applyNode_allToAllPrimWithDims_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (ins : List Tid) (outTid : Tid)
+    (idim odim : Nat) :
+    applyNode g s { rank := rank, op := "OpName.AllToAllPrim", ins := ins, outs := [outTid], params := [idim, odim] } outTid =
+      allToAllPrimWithDims g.numRanks rank (ins.map s) idim odim := by
+  unfold applyNode
+  rw [evalOp_allToAllPrimWithDims]
+  change storeSet s [(outTid, allToAllPrimWithDims g.numRanks rank (ins.map s) idim odim)] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+
 end
 end TrainVerify.Denote
