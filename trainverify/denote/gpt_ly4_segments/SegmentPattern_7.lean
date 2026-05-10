@@ -5,6 +5,7 @@
    Representative op scale: instances=4, goals/instance=8, ops/instance: SM=8, PM=44, ops=[OpName.BW_linear, OpName.AllReducePrim, OpName.BW_add, OpName.BW_multiref, OpName.AllToAllPrim, OpName.BW_layernorm, OpName.CROSS_DP_WRED, OpName.ChunkPrim]
 -/
 import denote.gpt_ly4_segments.GeneratedData
+import denote.gpt_ly4_segments.Instances
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
@@ -36,8 +37,12 @@ inductive segment_pattern_7_target : Prop → Prop
 def segment_pattern_7_stmt : Prop :=
   ∀ {target : Prop}, segment_pattern_7_target target → target
 theorem prove_segment_pattern_7 : segment_pattern_7_stmt := by
-  -- TODO: prove this bounded repeated segment once; each instance is a concrete conjunction.
-  sorry
+  intro target h
+  cases h with
+  | inst_1 => exact ⟨prove_goal_134_from_pattern_75, prove_goal_135_from_pattern_76, prove_goal_136_from_pattern_77, prove_goal_137_from_pattern_57, prove_goal_138_from_pattern_58, prove_goal_139_from_pattern_59, prove_goal_140_from_pattern_78, prove_goal_141_from_pattern_76⟩
+  | inst_2 => exact ⟨prove_goal_169_from_pattern_95, prove_goal_170_from_pattern_96, prove_goal_171_from_pattern_82, prove_goal_172_from_pattern_97, prove_goal_173_from_pattern_58, prove_goal_174_from_pattern_59, prove_goal_175_from_pattern_78, prove_goal_176_from_pattern_76⟩
+  | inst_3 => exact ⟨prove_goal_204_from_pattern_110, prove_goal_205_from_pattern_111, prove_goal_206_from_pattern_112, prove_goal_207_from_pattern_100, prove_goal_208_from_pattern_58, prove_goal_209_from_pattern_59, prove_goal_210_from_pattern_113, prove_goal_211_from_pattern_114⟩
+  | inst_4 => exact ⟨prove_goal_239_from_pattern_110, prove_goal_240_from_pattern_111, prove_goal_241_from_pattern_112, prove_goal_242_from_pattern_100, prove_goal_243_from_pattern_58, prove_goal_244_from_pattern_59, prove_goal_245_from_pattern_113, prove_goal_246_from_pattern_114⟩
 
 end TrainVerify.Denote.GeneratedSegmentPatterns
 
