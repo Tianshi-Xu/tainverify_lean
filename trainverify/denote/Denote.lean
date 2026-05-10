@@ -2394,6 +2394,26 @@ theorem applyNode_fw_add2_out
   unfold storeSet
   simp [List.find?]
 
+/-- `applyNode` for `ChunkPrim` with `params := [dim]` (chunk along arbitrary dimension). -/
+theorem applyNode_chunkPrimDimN_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid) (dim : Nat) :
+    applyNode g s { rank := rank, op := "OpName.ChunkPrim", ins := [inTid], outs := [outTid], params := [dim] } outTid =
+      chunkPrimDimN dim g.numRanks rank (s inTid) := by
+  unfold applyNode
+  change storeSet s [(outTid, chunkPrimDimN dim g.numRanks rank (s inTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `applyNode` for `FW_transpose` with `params := [d0, d1]` (transpose two arbitrary dims). -/
+theorem applyNode_fw_transposeAxes_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid) (d0 d1 : Nat) :
+    applyNode g s { rank := rank, op := "OpName.FW_transpose", ins := [inTid], outs := [outTid], params := [d0, d1] } outTid =
+      transposeAxes d0 d1 (s inTid) := by
+  unfold applyNode
+  change storeSet s [(outTid, transposeAxes d0 d1 (s inTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
 /-- `applyNode` for `AllReducePrim` with singleton output. -/
 theorem applyNode_allReducePrim_out
     (g : GraphDecl) (s : Store) (rank : Nat) (ins : List Tid) (outTid : Tid) :
