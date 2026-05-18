@@ -1812,10 +1812,10 @@ def pm : GraphDecl := by
     { rank := 2, op := "OpName.AllToAllPrim", ins := [1130, 1133, 1136, 1139], outs := [1106], params := [1, 2] },
     { rank := 3, op := "OpName.AllToAllPrim", ins := [1130, 1133, 1136, 1139], outs := [1108], params := [1, 2] },
     { rank := 0, op := "OpName.BW_embedding", ins := [1102, 1085, 565], outs := [1101] },
-    { rank := 0, op := "OpName.BW_embedding", ins := [719, 714, 1065], outs := [1081] },
-    { rank := 1, op := "OpName.BW_embedding", ins := [719, 714, 1066], outs := [1082] },
-    { rank := 2, op := "OpName.BW_embedding", ins := [719, 714, 1067], outs := [1083] },
-    { rank := 3, op := "OpName.BW_embedding", ins := [719, 714, 1068], outs := [1084] },
+    { rank := 0, op := "OpName.BW_embedding", ins := [719, 714, 1065], outs := [1081], params := [0] },
+    { rank := 1, op := "OpName.BW_embedding", ins := [719, 714, 1066], outs := [1082], params := [32] },
+    { rank := 2, op := "OpName.BW_embedding", ins := [719, 714, 1067], outs := [1083], params := [64] },
+    { rank := 3, op := "OpName.BW_embedding", ins := [719, 714, 1068], outs := [1084], params := [96] },
     { rank := 1, op := "OpName.BW_embedding", ins := [1104, 1086, 565], outs := [1103] },
     { rank := 2, op := "OpName.BW_embedding", ins := [1106, 1087, 565], outs := [1105] },
     { rank := 3, op := "OpName.BW_embedding", ins := [1108, 1088, 565], outs := [1107] },
@@ -6438,4 +6438,3 @@ to show no node outputs that tid.
 -/
 
 end TrainVerify.Denote.Generated
-

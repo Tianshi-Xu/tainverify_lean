@@ -17,10 +17,10 @@ def sm_goal_107 : GraphDecl := by
 def pm_goal_107 : GraphDecl := by
   refine { numRanks := 4, nodes := ?_ }
   exact [
-    { rank := 0, op := "OpName.BW_embedding", ins := [719, 714, 1065], outs := [1081] },
-    { rank := 1, op := "OpName.BW_embedding", ins := [719, 714, 1066], outs := [1082] },
-    { rank := 2, op := "OpName.BW_embedding", ins := [719, 714, 1067], outs := [1083] },
-    { rank := 3, op := "OpName.BW_embedding", ins := [719, 714, 1068], outs := [1084] },
+    { rank := 0, op := "OpName.BW_embedding", ins := [719, 714, 1065], outs := [1081], params := [0] },
+    { rank := 1, op := "OpName.BW_embedding", ins := [719, 714, 1066], outs := [1082], params := [32] },
+    { rank := 2, op := "OpName.BW_embedding", ins := [719, 714, 1067], outs := [1083], params := [64] },
+    { rank := 3, op := "OpName.BW_embedding", ins := [719, 714, 1068], outs := [1084], params := [96] },
   ]
 
 def sm_goal_107InitShapes : List (Tid × Shape) := [
@@ -49,4 +49,3 @@ def goal_107_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_107 pm_goal_107 goal_107 sm_goal_107InitEnv pm_goal_107InitEnv goal_107_cut_initGoals
 
 end TrainVerify.Denote.GeneratedGoals
-

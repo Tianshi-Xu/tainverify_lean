@@ -561,6 +561,19 @@ def bw_embedding (g ids weight : Tensor) : Tensor :=
     ∑ k ∈ Finset.range (prodShape ids.shape),
       if scalarToNat (valAt ids k) = row then valAt g (k * hidden + h) else 0)
 
+/-- Vocab-parallel embedding backward pass with an explicit row offset.
+
+For a shard covering global rows `[offset, offset + weight.shape[0])`, local
+row `i` accumulates gradients for global id `offset + i`. -/
+def bw_embedding_offset (offset : Nat) (g ids weight : Tensor) : Tensor :=
+  let hidden := lastD weight.shape
+  Tensor.mkShape weight.shape (fun wIdx =>
+    let localRow := wIdx.1 / hidden
+    let h := wIdx.1 % hidden
+    let globalRow := offset + localRow
+    ∑ k ∈ Finset.range (prodShape ids.shape),
+      if scalarToNat (valAt ids k) = globalRow then valAt g (k * hidden + h) else 0)
+
 def layerNormMeanAt (x : Tensor) (row d : Nat) : Scalar :=
   (∑ j ∈ Finset.range d, valAt x (row * d + j)) / (d : Scalar)
 
@@ -2219,7 +2232,10 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       match params with
       | [] => [fw_embedding ids weight]
       | offset :: _ => [fw_embedding_offset offset ids weight]
-  | "OpName.BW_embedding", [g, ids, weight] => [bw_embedding g ids weight]
+  | "OpName.BW_embedding", [g, ids, weight] =>
+      match params with
+      | [] => [bw_embedding g ids weight]
+      | offset :: _ => [bw_embedding_offset offset g ids weight]
   | "OpName.FW_layernorm", [x, weight, bias] => [fw_layernorm x weight bias]
   | "OpName.BW_layernorm", [g, x, weight, bias] =>
       let (dx, dw, db) := bw_layernorm g x weight bias
@@ -2341,6 +2357,17 @@ theorem evalOp_fw_embedding_offset (numParts rank offset : Nat) (ids w : Tensor)
       [fw_embedding_offset offset ids w] := by
   rfl
 
+/-- Unfolding lemma for `evalOp` on `BW_embedding` with empty params. -/
+theorem evalOp_bw_embedding_empty (numParts rank : Nat) (g ids w : Tensor) :
+    evalOp numParts rank "OpName.BW_embedding" [] [g, ids, w] = [bw_embedding g ids w] := by
+  rfl
+
+/-- Unfolding lemma for `evalOp` on `BW_embedding` with `params := [offset]`. -/
+theorem evalOp_bw_embedding_offset (numParts rank offset : Nat) (g ids w : Tensor) :
+    evalOp numParts rank "OpName.BW_embedding" [offset] [g, ids, w] =
+      [bw_embedding_offset offset g ids w] := by
+  rfl
+
 /-- Unfolding lemma for `evalOp` on `AllReducePrim`. -/
 theorem evalOp_allReducePrim (numParts rank : Nat) (params : List Nat) (xs : List Tensor) :
     evalOp numParts rank "OpName.AllReducePrim" params xs =
@@ -2379,6 +2406,30 @@ theorem applyNode_fw_embedding_offset_out
   rw [show ([idsTid, wTid] : List Tid).map s = [s idsTid, s wTid] from rfl,
       evalOp_fw_embedding_offset]
   change storeSet s [(outTid, fw_embedding_offset offset (s idsTid) (s wTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `applyNode` for `BW_embedding` with empty params (legacy semantics). -/
+theorem applyNode_bw_embedding_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (gTid idsTid wTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.BW_embedding", ins := [gTid, idsTid, wTid], outs := [outTid] } outTid =
+      bw_embedding (s gTid) (s idsTid) (s wTid) := by
+  unfold applyNode
+  rw [show ([gTid, idsTid, wTid] : List Tid).map s = [s gTid, s idsTid, s wTid] from rfl,
+      evalOp_bw_embedding_empty]
+  change storeSet s [(outTid, bw_embedding (s gTid) (s idsTid) (s wTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `applyNode` for `BW_embedding` with `params := [offset]` (vocab-parallel semantics). -/
+theorem applyNode_bw_embedding_offset_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (offset : Nat) (gTid idsTid wTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.BW_embedding", ins := [gTid, idsTid, wTid], outs := [outTid], params := [offset] } outTid =
+      bw_embedding_offset offset (s gTid) (s idsTid) (s wTid) := by
+  unfold applyNode
+  rw [show ([gTid, idsTid, wTid] : List Tid).map s = [s gTid, s idsTid, s wTid] from rfl,
+      evalOp_bw_embedding_offset]
+  change storeSet s [(outTid, bw_embedding_offset offset (s gTid) (s idsTid) (s wTid))] outTid = _
   unfold storeSet
   simp [List.find?]
 

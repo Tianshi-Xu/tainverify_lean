@@ -369,6 +369,58 @@ def _get_node_params(G: Any, n: Any, num_parts: int = 0) -> Optional[List[int]]:
 	return None
 
 
+def _embedding_offset_params_by_node(
+	G: Any, nodes: Sequence[Any], num_parts: int = 0
+) -> Dict[int, List[int]]:
+	"""Infer offset params for vocab-parallel embedding nodes.
+
+	There are two embedding patterns in GPT graphs:
+	- vocab-parallel token embedding: ids (and, for BW, g) are shared while each
+	  rank has a different weight shard. This needs offset = rank * shard_rows.
+	- replicated positional embedding: ids/g are already partitioned and all ranks
+	  use the same weight. This must not get an offset.
+	"""
+	if num_parts <= 1:
+		return {}
+
+	groups: Dict[Tuple[Any, ...], List[Any]] = {}
+	for n in nodes:
+		op = _safe_str_op(G.node_opname(n))
+		ins = [int(t.tid) for t in G.node_inputs(n)]
+		if "FW_embedding" in op and len(ins) == 2:
+			key = ("FW_embedding", ins[0])
+		elif "BW_embedding" in op and len(ins) == 3:
+			key = ("BW_embedding", ins[0], ins[1])
+		else:
+			continue
+		groups.setdefault(key, []).append(n)
+
+	out: Dict[int, List[int]] = {}
+	for ns in groups.values():
+		if len(ns) != num_parts:
+			continue
+		ranks = sorted(_node_rank(n) for n in ns)
+		if ranks != list(range(num_parts)):
+			continue
+		weight_tids = [int(G.node_inputs(n)[-1].tid) for n in ns]
+		if len(set(weight_tids)) != num_parts:
+			continue
+		try:
+			weight_shapes = [
+				[int(d) for d in G.tensor_shape(G.node_inputs(n)[-1])] for n in ns
+			]
+		except Exception:
+			continue
+		if not weight_shapes or any(sh != weight_shapes[0] for sh in weight_shapes):
+			continue
+		shard_rows = weight_shapes[0][0] if weight_shapes[0] else 0
+		if shard_rows <= 0:
+			continue
+		for n in ns:
+			out[id(n)] = [_node_rank(n) * shard_rows]
+	return out
+
+
 @dataclass(frozen=True)
 class SelectedLineage:
 	ts: int
@@ -750,6 +802,7 @@ def emit_lean_spec(
 		all ranks share the same inputs and each outputs one of those inputs,
 		we emit a single node with all inputs and all outputs.
 		"""
+		embedding_params = _embedding_offset_params_by_node(G, nodes, num_parts=num_parts)
 		# Build mapping for CROSS_DP_WRED: group by sorted inputs
 		wred_groups: Dict[tuple[int, ...], List[Any]] = {}
 		for n in nodes:
@@ -808,7 +861,7 @@ def emit_lean_spec(
 					return f"((List.range {n}).map (fun r => {base} + r))"
 				return lean_list_nat(xs)
 
-			node_params = _get_node_params(G, n, num_parts=num_parts)
+			node_params = embedding_params.get(id(n)) or _get_node_params(G, n, num_parts=num_parts)
 			params_str = f", params := {lean_list_nat(node_params)}" if node_params else ""
 			lines.append(
 				f"    {{ rank := {rank}, op := \"{op}\", ins := {_lean_list_nat_expr(ins)}, outs := {_lean_list_nat_expr(outs)}{params_str} }},"
@@ -1307,6 +1360,7 @@ def emit_lean_spec(
 				else:
 					num_ranks = max((_node_rank(n) for n in nodes), default=0) + 1
 				local_num_parts = num_ranks
+				embedding_params = _embedding_offset_params_by_node(G, nodes, num_parts=local_num_parts)
 				goal_lines.append(f"  refine {{ numRanks := {num_ranks}, nodes := ?_ }}")
 				goal_lines.append("  exact [")
 				for n in nodes:
@@ -1314,7 +1368,7 @@ def emit_lean_spec(
 					ins = [int(t.tid) for t in G.node_inputs(n)]
 					outs = [int(t.tid) for t in G.node_outputs(n)]
 					rank = _node_rank(n)
-					node_params = _get_node_params(G, n, num_parts=local_num_parts)
+					node_params = embedding_params.get(id(n)) or _get_node_params(G, n, num_parts=local_num_parts)
 					params_str = f", params := {lean_list_nat(node_params)}" if node_params else ""
 					goal_lines.append(
 						f"    {{ rank := {rank}, op := \"{op}\", ins := {lean_list_nat(ins)}, outs := {lean_list_nat(outs)}{params_str} }},"
@@ -1365,6 +1419,7 @@ def emit_lean_spec(
 
 		def _canonical_nodes(nodes: List[Any], G: Any, *, num_parts: int) -> Tuple[Tuple[Any, ...], ...]:
 			tid_to_sym: Dict[int, str] = {}
+			embedding_params = _embedding_offset_params_by_node(G, nodes, num_parts=num_parts)
 
 			def sym(tid: int) -> str:
 				if tid not in tid_to_sym:
@@ -1375,7 +1430,7 @@ def emit_lean_spec(
 			for n in nodes:
 				op = _safe_str_op(G.node_opname(n))
 				rank = _node_rank(n)
-				params = tuple(_get_node_params(G, n, num_parts=num_parts) or [])
+				params = tuple(embedding_params.get(id(n)) or _get_node_params(G, n, num_parts=num_parts) or [])
 				ins = tuple(sym(int(t.tid)) for t in G.node_inputs(n))
 				outs = tuple(sym(int(t.tid)) for t in G.node_outputs(n))
 				out.append((rank, op, params, ins, outs))
