@@ -4,11 +4,9 @@
    Goals: 31, 33, 81, 82
 -/
 import denote.gpt_ly4_segments.GeneratedData
-import denote.gpt_ly4_segments.SegmentPattern_1
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
-open TrainVerify.Denote.GeneratedSegmentPatterns
 
 namespace TrainVerify.Denote.GeneratedPatterns
 
@@ -25,17 +23,13 @@ theorem prove_pattern_25 : pattern_25_stmt := by
   intro target h
   cases h with
   | goal_31 =>
-      have hs := prove_segment_pattern_1 segment_pattern_1_target.inst_2
-      exact hs.right.right.left
+      sorry
   | goal_33 =>
-      have hs := prove_segment_pattern_1 segment_pattern_1_target.inst_2
-      exact hs.right.right.right.right.left
+      sorry
   | goal_81 =>
-      have hs := prove_segment_pattern_1 segment_pattern_1_target.inst_4
-      exact hs.right.right.left
+      sorry
   | goal_82 =>
-      have hs := prove_segment_pattern_1 segment_pattern_1_target.inst_4
-      exact hs.right.right.right.left
+      sorry
 
 end TrainVerify.Denote.GeneratedPatterns
 

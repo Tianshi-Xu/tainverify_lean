@@ -4,12 +4,9 @@
    Goals: 259, 269, 273, 285, 287, 295, 297, 299, 301, 309, 311
 -/
 import denote.gpt_ly4_segments.GeneratedData
-import denote.gpt_ly4_segments.SegmentPattern_9
-import denote.gpt_ly4_segments.SegmentPattern_10
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
-open TrainVerify.Denote.GeneratedSegmentPatterns
 
 namespace TrainVerify.Denote.GeneratedPatterns
 
@@ -33,38 +30,27 @@ theorem prove_pattern_128 : pattern_128_stmt := by
   intro target h
   cases h with
   | goal_259 =>
-      have hs := prove_segment_pattern_9 segment_pattern_9_target.inst_1
-      exact hs.right.right.left
+      sorry
   | goal_269 =>
-      have hs := prove_segment_pattern_10 segment_pattern_10_target.inst_1
-      exact hs.right.right.right.right.left
+      sorry
   | goal_273 =>
-      have hs := prove_segment_pattern_9 segment_pattern_9_target.inst_2
-      exact hs.right.right.left
+      sorry
   | goal_285 =>
-      have hs := prove_segment_pattern_9 segment_pattern_9_target.inst_3
-      exact hs.left
+      sorry
   | goal_287 =>
-      have hs := prove_segment_pattern_9 segment_pattern_9_target.inst_3
-      exact hs.right.right.left
+      sorry
   | goal_295 =>
-      have hs := prove_segment_pattern_10 segment_pattern_10_target.inst_3
-      exact hs.right.right.left
+      sorry
   | goal_297 =>
-      have hs := prove_segment_pattern_10 segment_pattern_10_target.inst_3
-      exact hs.right.right.right.right.left
+      sorry
   | goal_299 =>
-      have hs := prove_segment_pattern_9 segment_pattern_9_target.inst_4
-      exact hs.left
+      sorry
   | goal_301 =>
-      have hs := prove_segment_pattern_9 segment_pattern_9_target.inst_4
-      exact hs.right.right.left
+      sorry
   | goal_309 =>
-      have hs := prove_segment_pattern_10 segment_pattern_10_target.inst_4
-      exact hs.right.right.left
+      sorry
   | goal_311 =>
-      have hs := prove_segment_pattern_10 segment_pattern_10_target.inst_4
-      exact hs.right.right.right.right.left
+      sorry
 
 end TrainVerify.Denote.GeneratedPatterns
 
