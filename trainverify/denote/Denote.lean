@@ -1114,6 +1114,16 @@ theorem fw_add_split_dim2_4_1_8_32 (a b : Tensor) (ha : a.shape = [1, 8, 32]) (h
     have hidx3 : idx = p * 32 + 3 * 8 + j := by omega
     rw [← hidx3]
 
+private theorem elemwiseAdd_valAt_1_2_32 (x y : Tensor) (idx : Nat)
+    (hx : x.shape = [1, 2, 32]) (hy : y.shape = [1, 2, 32]) (hidx : idx < 64) :
+    valAt (elemwiseAdd x y) idx = valAt x idx + valAt y idx := by
+  have hout : (elemwiseAdd x y).shape = [1, 2, 32] := by
+    simp [elemwiseAdd, Tensor.mkShape, outShape2, hx, hy]
+  rw [valAt_of_lt _ _ (by simpa [hout, prodShape] using hidx)]
+  simp [elemwiseAdd, Tensor.mkShape, outShape2, hx, hy, broadcastValAtShape,
+    alignedMultiIndex, flatToMulti, multiToFlat, prodShape]
+  have hnorm : idx % 64 / 32 * 32 + idx % 32 = idx := by omega
+  rw [hnorm]
 /-- AllToAll with explicit split/gather dimensions.
     Gathers all inputs along `idim`, then chunks the result along `odim`. -/
 def allToAllPrimWithDims (numParts rank : Nat) (xs : List Tensor)
@@ -2570,6 +2580,156 @@ theorem chunk_dim1_4_1_8_32_valAt (x : Tensor) (r p j : Nat)
   have h6 : (p * 32 + j) % 32 = j := by omega
   rw [h5, h6]
   ring
+
+
+/-- Bridge: `elemwiseAdd (allGather along dim=1 of 4 `[1,2,32]` shards) full_b` equals
+    the dim=1 reconstruction of per-shard `elemwiseAdd` with `chunkPrimDimN 1 4 r b`.
+    Used by `FW_add` sequence-parallel patterns where one argument is already
+    delivered as four `[1,2,32]` shards (e.g. via `goal_287` lineage) and the other
+    is a full `[1,8,32]` tensor (e.g. the dyn `662` from an `AllReducePrim`). -/
+theorem fw_add_dim1_with_x_pieces_4_1_2_32_to_1_8_32
+    (a0 a1 a2 a3 b : Tensor)
+    (ha0 : a0.shape = [1, 2, 32]) (ha1 : a1.shape = [1, 2, 32])
+    (ha2 : a2.shape = [1, 2, 32]) (ha3 : a3.shape = [1, 2, 32])
+    (hb : b.shape = [1, 8, 32]) :
+    elemwiseAdd (allGatherPrimDimN 1 4 0 [a0, a1, a2, a3]) b =
+      allGatherPrimDimN 1 4 0
+        [elemwiseAdd a0 (chunkPrimDimN 1 4 0 b),
+         elemwiseAdd a1 (chunkPrimDimN 1 4 1 b),
+         elemwiseAdd a2 (chunkPrimDimN 1 4 2 b),
+         elemwiseAdd a3 (chunkPrimDimN 1 4 3 b)] := by
+  have hhead_a : (([a0, a1, a2, a3] : List Tensor).head?.map (fun t => t.shape)).getD []
+      = [1, 2, 32] := by simp [ha0]
+  have hgather_a_shape : (allGatherPrimDimN 1 4 0 [a0, a1, a2, a3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hhead_a]
+    simp [List.set, List.getD]
+  have hchunk_b_shape : ∀ r, (chunkPrimDimN 1 4 r b).shape = [1, 2, 32] := by
+    intro r; rw [chunkPrimDimN_shape 1 4 r _ _ hb (by omega)]; simp [List.set, List.getD]
+  have hpiece0_shape : (elemwiseAdd a0 (chunkPrimDimN 1 4 0 b)).shape = [1, 2, 32] := by
+    simp [elemwiseAdd, Tensor.mkShape, outShape2, ha0, hchunk_b_shape 0]
+  have hpiece1_shape : (elemwiseAdd a1 (chunkPrimDimN 1 4 1 b)).shape = [1, 2, 32] := by
+    simp [elemwiseAdd, Tensor.mkShape, outShape2, ha1, hchunk_b_shape 1]
+  have hpiece2_shape : (elemwiseAdd a2 (chunkPrimDimN 1 4 2 b)).shape = [1, 2, 32] := by
+    simp [elemwiseAdd, Tensor.mkShape, outShape2, ha2, hchunk_b_shape 2]
+  have hpiece3_shape : (elemwiseAdd a3 (chunkPrimDimN 1 4 3 b)).shape = [1, 2, 32] := by
+    simp [elemwiseAdd, Tensor.mkShape, outShape2, ha3, hchunk_b_shape 3]
+  have hhead_rhs : (([elemwiseAdd a0 (chunkPrimDimN 1 4 0 b),
+       elemwiseAdd a1 (chunkPrimDimN 1 4 1 b),
+       elemwiseAdd a2 (chunkPrimDimN 1 4 2 b),
+       elemwiseAdd a3 (chunkPrimDimN 1 4 3 b)].head?.map (fun t => t.shape)).getD []) = [1, 2, 32] := by
+    simp [hpiece0_shape]
+  have hrhs_shape : (allGatherPrimDimN 1 4 0
+      [elemwiseAdd a0 (chunkPrimDimN 1 4 0 b),
+       elemwiseAdd a1 (chunkPrimDimN 1 4 1 b),
+       elemwiseAdd a2 (chunkPrimDimN 1 4 2 b),
+       elemwiseAdd a3 (chunkPrimDimN 1 4 3 b)]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hhead_rhs]; simp [List.set, List.getD]
+  have hlhs_shape : (elemwiseAdd (allGatherPrimDimN 1 4 0 [a0, a1, a2, a3]) b).shape = [1, 8, 32] := by
+    simp [elemwiseAdd, Tensor.mkShape, outShape2, hgather_a_shape, hb]
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  have hidx_rhs : idx < prodShape (allGatherPrimDimN 1 4 0
+      [elemwiseAdd a0 (chunkPrimDimN 1 4 0 b),
+       elemwiseAdd a1 (chunkPrimDimN 1 4 1 b),
+       elemwiseAdd a2 (chunkPrimDimN 1 4 2 b),
+       elemwiseAdd a3 (chunkPrimDimN 1 4 3 b)]).shape := by
+    simpa [hrhs_shape, prodShape] using hidx256
+  -- LHS: rewrite elemwiseAdd
+  rw [elemwiseAdd_valAt_1_8_32 _ _ _ hgather_a_shape hb hidx256]
+  -- Decompose idx
+  set q := idx / 64 with hq_def
+  set p := idx % 64 / 32 with hp_def
+  set j := idx % 32 with hj_def
+  have hq_lt : q < 4 := by subst q; omega
+  have hp_lt : p < 2 := by subst p; omega
+  have hj_lt : j < 32 := by subst j; omega
+  have hloc_lt : p * 32 + j < 64 := by omega
+  have hidx_eq : idx = (q * 2 + p) * 32 + j := by subst q p j; omega
+  -- Compute valAt of LHS allGather a-side at idx
+  have hLHS_a : valAt (allGatherPrimDimN 1 4 0 [a0, a1, a2, a3]) idx =
+      valAt ([a0, a1, a2, a3].getD q (zeroTensor [1, 2, 32])) (p * 32 + j) := by
+    rw [valAt_of_lt _ _ (by
+      rw [allGatherPrimDimN_shape 1 4 _ _ hhead_a]
+      simp [List.set, List.getD, prodShape]; omega)]
+    unfold allGatherPrimDimN Tensor.mkShape
+    simp only [hhead_a, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+      Option.getD_some, List.drop, List.foldl,
+      show (8 : Nat) ≠ 0 by omega, show (32 : Nat) ≠ 0 by omega,
+      show (2 : Nat) ≠ 0 by omega,
+      show (1 : Nat) ≠ 0 by omega, ite_false,
+      if_neg (show ¬((256 : Nat) = 0) by decide),
+      show (1 : Nat) * 32 = 32 by norm_num]
+    simp only [show (2 : Nat) * 4 * 32 = 256 by norm_num,
+      show (2 : Nat) * 32 = 64 by norm_num]
+    have hpre : idx / 256 = 0 := Nat.div_eq_of_lt hidx256
+    have hmod : idx % 256 = idx := Nat.mod_eq_of_lt hidx256
+    rw [hpre, hmod]
+    have hqe : idx / 32 / 2 = q := by subst q; omega
+    have hpe : idx / 32 % 2 = p := by subst p; omega
+    have hje : idx % 32 = j := by subst j; rfl
+    rw [hqe, hpe, hje]
+    ring_nf
+  rw [hLHS_a]
+  -- RHS: expand allGather at idx
+  rw [valAt_of_lt _ _ hidx_rhs]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead_rhs, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl,
+    show (8 : Nat) ≠ 0 by omega, show (32 : Nat) ≠ 0 by omega,
+    show (2 : Nat) ≠ 0 by omega,
+    show (1 : Nat) ≠ 0 by omega, ite_false,
+    if_neg (show ¬((256 : Nat) = 0) by decide),
+    show (1 : Nat) * 32 = 32 by norm_num]
+  simp only [show (2 : Nat) * 4 * 32 = 256 by norm_num,
+    show (2 : Nat) * 32 = 64 by norm_num]
+  have hpre : idx / 256 = 0 := Nat.div_eq_of_lt hidx256
+  have hmod : idx % 256 = idx := Nat.mod_eq_of_lt hidx256
+  rw [hpre, hmod]
+  have hqe : idx / 32 / 2 = q := by subst q; omega
+  have hpe : idx / 32 % 2 = p := by subst p; omega
+  have hje : idx % 32 = j := by subst j; rfl
+  rw [hqe, hpe, hje]
+  -- Case split on q
+  have hq_cases : q = 0 ∨ q = 1 ∨ q = 2 ∨ q = 3 := by omega
+  rcases hq_cases with h0 | h1 | h2 | h3
+  · rw [h0]
+    change valAt a0 (p * 32 + j) + valAt b idx =
+      valAt (elemwiseAdd a0 (chunkPrimDimN 1 4 0 b)) (0 * 64 + p * 32 + j)
+    have hloc_eq : 0 * 64 + p * 32 + j = p * 32 + j := by ring
+    rw [hloc_eq]
+    rw [elemwiseAdd_valAt_1_2_32 _ _ _ ha0 (hchunk_b_shape 0) hloc_lt]
+    rw [chunk_dim1_4_1_8_32_valAt b 0 p j hb (by omega) hp_lt hj_lt]
+    have : idx = (0 * 2 + p) * 32 + j := by omega
+    rw [← this]
+  · rw [h1]
+    change valAt a1 (p * 32 + j) + valAt b idx =
+      valAt (elemwiseAdd a1 (chunkPrimDimN 1 4 1 b)) (0 * 64 + p * 32 + j)
+    have hloc_eq : 0 * 64 + p * 32 + j = p * 32 + j := by ring
+    rw [hloc_eq]
+    rw [elemwiseAdd_valAt_1_2_32 _ _ _ ha1 (hchunk_b_shape 1) hloc_lt]
+    rw [chunk_dim1_4_1_8_32_valAt b 1 p j hb (by omega) hp_lt hj_lt]
+    have : idx = (1 * 2 + p) * 32 + j := by omega
+    rw [← this]
+  · rw [h2]
+    change valAt a2 (p * 32 + j) + valAt b idx =
+      valAt (elemwiseAdd a2 (chunkPrimDimN 1 4 2 b)) (0 * 64 + p * 32 + j)
+    have hloc_eq : 0 * 64 + p * 32 + j = p * 32 + j := by ring
+    rw [hloc_eq]
+    rw [elemwiseAdd_valAt_1_2_32 _ _ _ ha2 (hchunk_b_shape 2) hloc_lt]
+    rw [chunk_dim1_4_1_8_32_valAt b 2 p j hb (by omega) hp_lt hj_lt]
+    have : idx = (2 * 2 + p) * 32 + j := by omega
+    rw [← this]
+  · rw [h3]
+    change valAt a3 (p * 32 + j) + valAt b idx =
+      valAt (elemwiseAdd a3 (chunkPrimDimN 1 4 3 b)) (0 * 64 + p * 32 + j)
+    have hloc_eq : 0 * 64 + p * 32 + j = p * 32 + j := by ring
+    rw [hloc_eq]
+    rw [elemwiseAdd_valAt_1_2_32 _ _ _ ha3 (hchunk_b_shape 3) hloc_lt]
+    rw [chunk_dim1_4_1_8_32_valAt b 3 p j hb (by omega) hp_lt hj_lt]
+    have : idx = (3 * 2 + p) * 32 + j := by omega
+    rw [← this]
+
 
 /-- Each chunked tensor (chunk along dim 1 of `[1,8,32]`-shaped `x`) has the same
     sum over a row's last-dim entries as the corresponding row of `x`. -/
