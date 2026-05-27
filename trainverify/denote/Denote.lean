@@ -2488,6 +2488,42 @@ theorem applyNode_fw_add2_out
   unfold storeSet
   simp [List.find?]
 
+/-- Unfolding lemma for ternary `BW_add` (3-arg case producing `[dx, dy]`). -/
+theorem evalOp_bw_add3 (numParts rank : Nat) (g x y : Tensor) :
+    evalOp numParts rank "OpName.BW_add" [] [g, x, y] =
+      [(bw_add2 g x y).1, (bw_add2 g x y).2] := by
+  show (let (dx, dy) := bw_add2 g x y; [dx, dy]) = _
+  rfl
+
+/-- `applyNode` for ternary `BW_add` first output (dx). The first output tid
+    is the dx side of `bw_add2 g x y`. -/
+theorem applyNode_bw_add3_fst_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (gTid xTid yTid dxTid dyTid : Tid)
+    (hne : dxTid ≠ dyTid) :
+    applyNode g s { rank := rank, op := "OpName.BW_add", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dxTid =
+      (bw_add2 (s gTid) (s xTid) (s yTid)).1 := by
+  unfold applyNode
+  rw [show ([gTid, xTid, yTid] : List Tid).map s = [s gTid, s xTid, s yTid] from rfl,
+      evalOp_bw_add3]
+  change storeSet s [(dxTid, (bw_add2 (s gTid) (s xTid) (s yTid)).1),
+                     (dyTid, (bw_add2 (s gTid) (s xTid) (s yTid)).2)] dxTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `applyNode` for ternary `BW_add` second output (dy). -/
+theorem applyNode_bw_add3_snd_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (gTid xTid yTid dxTid dyTid : Tid)
+    (hne : dxTid ≠ dyTid) :
+    applyNode g s { rank := rank, op := "OpName.BW_add", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dyTid =
+      (bw_add2 (s gTid) (s xTid) (s yTid)).2 := by
+  unfold applyNode
+  rw [show ([gTid, xTid, yTid] : List Tid).map s = [s gTid, s xTid, s yTid] from rfl,
+      evalOp_bw_add3]
+  change storeSet s [(dxTid, (bw_add2 (s gTid) (s xTid) (s yTid)).1),
+                     (dyTid, (bw_add2 (s gTid) (s xTid) (s yTid)).2)] dyTid = _
+  unfold storeSet
+  simp [List.find?, hne, hne.symm, Ne.symm hne]
+
 /-- `applyNode` for `ChunkPrim` with `params := [dim]` (chunk along arbitrary dimension). -/
 theorem applyNode_chunkPrimDimN_out
     (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid) (dim : Nat) :
