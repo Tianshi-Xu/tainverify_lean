@@ -326,282 +326,402 @@ private theorem fw_linear_split_dim1_4_1_8_32 (x w : Tensor)
     rw [chunk1_x_1_8_32_valAt x r hx hr_lt p' k hp'_lt hk_lt]
     rw [← hp_eq]
 
-/-! ### Per-graph evaluation lemmas
+/-! ### Per-graph evaluation lemmas (helper-step style; see helpers above). -/
 
-These lemmas give a clean characterization of the relevant tensors in the
-single-machine and parallel-machine graphs, by stripping non-writing suffixes
-of the graph and reducing the cons step using `applyNode_fw_linear_out`. -/
+/-! ## Generic helpers for unfolding `denoteGraph` at FW_linear / AllGatherPrim nodes.
+
+These are written à la `denote_bw_layernorm_dx_step` in Pattern_125: by taking
+the relevant `NodeDecl` as a `@[reducible]` private def and pushing the
+expensive `whnf` of `g.nodes.take K` out of the caller, we keep each per-tid
+eval to a single `apply ... (by decide) ...` line.  Without this packaging
+the per-eval `whnf` cost grows superlinearly with K and times out at
+`maxHeartbeats 4000000` for the K = 205/414/602 nodes used in this pattern. -/
+
+private theorem denote_fw_linear_step (g : GraphDecl) (initStore : Store)
+    (K : Nat) (xTid wTid outTid : Tid) (rk : Nat)
+    (node : NodeDecl)
+    (hnode : node = { rank := rk, op := "OpName.FW_linear",
+                      ins := [xTid, wTid], outs := [outTid] })
+    (hKlt : K < g.nodes.length)
+    (hidx : g.nodes[K]'hKlt = node)
+    (hsuf_out : ∀ n ∈ g.nodes.drop (K+1), outTid ∉ n.outs)
+    (hsuf_x : ∀ n ∈ g.nodes.drop K, xTid ∉ n.outs)
+    (hsuf_w : ∀ n ∈ g.nodes.drop K, wTid ∉ n.outs) :
+    denoteGraph g initStore outTid =
+      fw_linear (denoteGraph g initStore xTid) (denoteGraph g initStore wTid) := by
+  have hh1 : denoteGraph g initStore outTid =
+      denoteGraph { g with nodes := g.nodes.take (K+1) } initStore outTid :=
+    denoteGraph_tid_eq_of_suffix_no_writes g initStore outTid
+      (g.nodes.take (K+1)) (g.nodes.drop (K+1))
+      (List.take_append_drop (K+1) _).symm hsuf_out
+  rw [hh1]
+  have htake : g.nodes.take (K+1) = g.nodes.take K ++ [node] := by
+    rw [list_take_succ_eq_take_append_get g.nodes K hKlt, hidx]
+  have hg_eq : ({ g with nodes := g.nodes.take (K+1) } : GraphDecl) =
+      { g with nodes := g.nodes.take K ++ [node] } := by
+    cases g; congr 1
+  rw [hg_eq, denoteGraph_nodes_append]
+  have hsing : ({ g with nodes := [node] } : GraphDecl) =
+      { numRanks := g.numRanks, nodes := node :: [] } := by cases g; rfl
+  rw [hsing, denoteGraph_cons_eq g node []]
+  change applyNode g (denoteGraph { g with nodes := g.nodes.take K } initStore) node outTid = _
+  rw [hnode]
+  rw [applyNode_fw_linear_out]
+  have hx : (denoteGraph { g with nodes := g.nodes.take K } initStore) xTid =
+      denoteGraph g initStore xTid :=
+    (denoteGraph_tid_eq_of_suffix_no_writes g initStore xTid
+      (g.nodes.take K) (g.nodes.drop K)
+      (List.take_append_drop K _).symm hsuf_x).symm
+  have hw : (denoteGraph { g with nodes := g.nodes.take K } initStore) wTid =
+      denoteGraph g initStore wTid :=
+    (denoteGraph_tid_eq_of_suffix_no_writes g initStore wTid
+      (g.nodes.take K) (g.nodes.drop K)
+      (List.take_append_drop K _).symm hsuf_w).symm
+  rw [hx, hw]
+
+private theorem denote_allGather4_step (g : GraphDecl) (initStore : Store)
+    (K : Nat) (t0 outTid : Tid) (rk dim : Nat)
+    (node : NodeDecl)
+    (hnode : node = { rank := rk, op := "OpName.AllGatherPrim",
+                      ins := (List.range 4).map (fun r => t0 + r),
+                      outs := [outTid], params := [dim] })
+    (hKlt : K < g.nodes.length)
+    (hidx : g.nodes[K]'hKlt = node)
+    (hsuf_out : ∀ n ∈ g.nodes.drop (K+1), outTid ∉ n.outs)
+    (hsuf_0 : ∀ n ∈ g.nodes.drop K, t0 ∉ n.outs)
+    (hsuf_1 : ∀ n ∈ g.nodes.drop K, (t0 + 1) ∉ n.outs)
+    (hsuf_2 : ∀ n ∈ g.nodes.drop K, (t0 + 2) ∉ n.outs)
+    (hsuf_3 : ∀ n ∈ g.nodes.drop K, (t0 + 3) ∉ n.outs) :
+    denoteGraph g initStore outTid =
+      allGatherPrimDimN dim g.numRanks rk
+        [denoteGraph g initStore t0,
+         denoteGraph g initStore (t0 + 1),
+         denoteGraph g initStore (t0 + 2),
+         denoteGraph g initStore (t0 + 3)] := by
+  have hh1 : denoteGraph g initStore outTid =
+      denoteGraph { g with nodes := g.nodes.take (K+1) } initStore outTid :=
+    denoteGraph_tid_eq_of_suffix_no_writes g initStore outTid
+      (g.nodes.take (K+1)) (g.nodes.drop (K+1))
+      (List.take_append_drop (K+1) _).symm hsuf_out
+  rw [hh1]
+  have htake : g.nodes.take (K+1) = g.nodes.take K ++ [node] := by
+    rw [list_take_succ_eq_take_append_get g.nodes K hKlt, hidx]
+  have hg_eq : ({ g with nodes := g.nodes.take (K+1) } : GraphDecl) =
+      { g with nodes := g.nodes.take K ++ [node] } := by
+    cases g; congr 1
+  rw [hg_eq, denoteGraph_nodes_append]
+  have hsing : ({ g with nodes := [node] } : GraphDecl) =
+      { numRanks := g.numRanks, nodes := node :: [] } := by cases g; rfl
+  rw [hsing, denoteGraph_cons_eq g node []]
+  change applyNode g (denoteGraph { g with nodes := g.nodes.take K } initStore) node outTid = _
+  rw [hnode]
+  rw [applyNode_allGatherPrimDimN_out]
+  have h0 : (denoteGraph { g with nodes := g.nodes.take K } initStore) t0 =
+      denoteGraph g initStore t0 :=
+    (denoteGraph_tid_eq_of_suffix_no_writes g initStore t0
+      (g.nodes.take K) (g.nodes.drop K)
+      (List.take_append_drop K _).symm hsuf_0).symm
+  have h1 : (denoteGraph { g with nodes := g.nodes.take K } initStore) (t0 + 1) =
+      denoteGraph g initStore (t0 + 1) :=
+    (denoteGraph_tid_eq_of_suffix_no_writes g initStore (t0 + 1)
+      (g.nodes.take K) (g.nodes.drop K)
+      (List.take_append_drop K _).symm hsuf_1).symm
+  have h2 : (denoteGraph { g with nodes := g.nodes.take K } initStore) (t0 + 2) =
+      denoteGraph g initStore (t0 + 2) :=
+    (denoteGraph_tid_eq_of_suffix_no_writes g initStore (t0 + 2)
+      (g.nodes.take K) (g.nodes.drop K)
+      (List.take_append_drop K _).symm hsuf_2).symm
+  have h3 : (denoteGraph { g with nodes := g.nodes.take K } initStore) (t0 + 3) =
+      denoteGraph g initStore (t0 + 3) :=
+    (denoteGraph_tid_eq_of_suffix_no_writes g initStore (t0 + 3)
+      (g.nodes.take K) (g.nodes.drop K)
+      (List.take_append_drop K _).symm hsuf_3).symm
+  have hlist :
+      (((List.range 4).map (fun r => t0 + r)).map
+        (denoteGraph { g with nodes := g.nodes.take K } initStore)) =
+      [denoteGraph { g with nodes := g.nodes.take K } initStore t0,
+       denoteGraph { g with nodes := g.nodes.take K } initStore (t0 + 1),
+       denoteGraph { g with nodes := g.nodes.take K } initStore (t0 + 2),
+       denoteGraph { g with nodes := g.nodes.take K } initStore (t0 + 3)] := by
+    simp [List.range, List.range.loop, List.map]
+  rw [hlist, h0, h1, h2, h3]
+
+/-! ## Reducible NodeDecl handles for each FW_linear / AllGatherPrim node we need. -/
+
+@[reducible] private def smN_572 : NodeDecl :=
+  { rank := 0, op := "OpName.FW_linear", ins := [918, 571], outs := [572] }
+@[reducible] private def pmN_1177 : NodeDecl :=
+  { rank := 0, op := "OpName.FW_linear", ins := [1173, 571], outs := [1177] }
+@[reducible] private def pmN_1178 : NodeDecl :=
+  { rank := 1, op := "OpName.FW_linear", ins := [1174, 571], outs := [1178] }
+@[reducible] private def pmN_1179 : NodeDecl :=
+  { rank := 2, op := "OpName.FW_linear", ins := [1175, 571], outs := [1179] }
+@[reducible] private def pmN_1180 : NodeDecl :=
+  { rank := 3, op := "OpName.FW_linear", ins := [1176, 571], outs := [1180] }
+@[reducible] private def pmN_AG_572 : NodeDecl :=
+  { rank := 0, op := "OpName.AllGatherPrim",
+    ins := (List.range 4).map (fun r => 1177 + r),
+    outs := [572], params := [1] }
+@[reducible] private def smN_574 : NodeDecl :=
+  { rank := 0, op := "OpName.FW_linear", ins := [922, 573], outs := [574] }
+@[reducible] private def pmN_1205 : NodeDecl :=
+  { rank := 0, op := "OpName.FW_linear", ins := [1201, 573], outs := [1205] }
+@[reducible] private def pmN_1206 : NodeDecl :=
+  { rank := 1, op := "OpName.FW_linear", ins := [1202, 573], outs := [1206] }
+@[reducible] private def pmN_1207 : NodeDecl :=
+  { rank := 2, op := "OpName.FW_linear", ins := [1203, 573], outs := [1207] }
+@[reducible] private def pmN_1208 : NodeDecl :=
+  { rank := 3, op := "OpName.FW_linear", ins := [1204, 573], outs := [1208] }
+@[reducible] private def pmN_AG_574 : NodeDecl :=
+  { rank := 0, op := "OpName.AllGatherPrim",
+    ins := (List.range 4).map (fun r => 1205 + r),
+    outs := [574], params := [1] }
+@[reducible] private def smN_609 : NodeDecl :=
+  { rank := 0, op := "OpName.FW_linear", ins := [965, 608], outs := [609] }
+@[reducible] private def pmN_1725 : NodeDecl :=
+  { rank := 0, op := "OpName.FW_linear", ins := [1721, 608], outs := [1725] }
+@[reducible] private def pmN_1726 : NodeDecl :=
+  { rank := 1, op := "OpName.FW_linear", ins := [1722, 608], outs := [1726] }
+@[reducible] private def pmN_1727 : NodeDecl :=
+  { rank := 2, op := "OpName.FW_linear", ins := [1723, 608], outs := [1727] }
+@[reducible] private def pmN_1728 : NodeDecl :=
+  { rank := 3, op := "OpName.FW_linear", ins := [1724, 608], outs := [1728] }
+@[reducible] private def pmN_AG_609 : NodeDecl :=
+  { rank := 0, op := "OpName.AllGatherPrim",
+    ins := (List.range 4).map (fun r => 1725 + r),
+    outs := [609], params := [1] }
+@[reducible] private def smN_646 : NodeDecl :=
+  { rank := 0, op := "OpName.FW_linear", ins := [1012, 645], outs := [646] }
+@[reducible] private def pmN_2317 : NodeDecl :=
+  { rank := 0, op := "OpName.FW_linear", ins := [2313, 645], outs := [2317] }
+@[reducible] private def pmN_2318 : NodeDecl :=
+  { rank := 1, op := "OpName.FW_linear", ins := [2314, 645], outs := [2318] }
+@[reducible] private def pmN_2319 : NodeDecl :=
+  { rank := 2, op := "OpName.FW_linear", ins := [2315, 645], outs := [2319] }
+@[reducible] private def pmN_2320 : NodeDecl :=
+  { rank := 3, op := "OpName.FW_linear", ins := [2316, 645], outs := [2320] }
+@[reducible] private def pmN_AG_646 : NodeDecl :=
+  { rank := 0, op := "OpName.AllGatherPrim",
+    ins := (List.range 4).map (fun r => 2317 + r),
+    outs := [646], params := [1] }
+@[reducible] private def smN_681 : NodeDecl :=
+  { rank := 0, op := "OpName.FW_linear", ins := [1055, 680], outs := [681] }
+@[reducible] private def pmN_2873 : NodeDecl :=
+  { rank := 0, op := "OpName.FW_linear", ins := [2869, 680], outs := [2873] }
+@[reducible] private def pmN_2874 : NodeDecl :=
+  { rank := 1, op := "OpName.FW_linear", ins := [2870, 680], outs := [2874] }
+@[reducible] private def pmN_2875 : NodeDecl :=
+  { rank := 2, op := "OpName.FW_linear", ins := [2871, 680], outs := [2875] }
+@[reducible] private def pmN_2876 : NodeDecl :=
+  { rank := 3, op := "OpName.FW_linear", ins := [2872, 680], outs := [2876] }
+@[reducible] private def pmN_AG_681 : NodeDecl :=
+  { rank := 0, op := "OpName.AllGatherPrim",
+    ins := (List.range 4).map (fun r => 2873 + r),
+    outs := [681], params := [1] }
 
 private theorem sm_eval_572 (initSM : Store) :
     denoteGraph sm initSM 572 =
-      fw_linear (denoteGraph sm initSM 918) (denoteGraph sm initSM 571) := by
-  -- 572 is produced by node at index 6 in `sm.nodes`.
-  have hsub : (denoteGraph sm initSM) 572 =
-      (denoteGraph { sm with nodes := sm.nodes.take 7 } initSM) 572 :=
-    denoteGraph_tid_eq_of_suffix_no_writes sm initSM 572
-      (sm.nodes.take 7) (sm.nodes.drop 7)
-      (List.take_append_drop 7 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  rw [hsub]
-  have htake : ({ sm with nodes := sm.nodes.take 7 } : GraphDecl) =
-      { sm with nodes := sm.nodes.take 6 ++
-        [{ rank := 0, op := "OpName.FW_linear", ins := [918, 571], outs := [572] }] } := rfl
-  rw [htake, denoteGraph_nodes_append]
-  rw [denoteGraph_cons_eq sm
-      { rank := 0, op := "OpName.FW_linear", ins := [918, 571], outs := [572] } []]
-  change (applyNode sm (denoteGraph { sm with nodes := sm.nodes.take 6 } initSM)
-      { rank := 0, op := "OpName.FW_linear", ins := [918, 571], outs := [572] }) 572 = _
-  rw [applyNode_fw_linear_out]
-  have h918 : denoteGraph { sm with nodes := sm.nodes.take 6 } initSM 918 =
-      denoteGraph sm initSM 918 := by
-    symm
-    exact denoteGraph_tid_eq_of_suffix_no_writes sm initSM 918
-      (sm.nodes.take 6) (sm.nodes.drop 6)
-      (List.take_append_drop 6 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  have h571 : denoteGraph { sm with nodes := sm.nodes.take 6 } initSM 571 =
-      denoteGraph sm initSM 571 := by
-    symm
-    exact denoteGraph_tid_eq_of_suffix_no_writes sm initSM 571
-      (sm.nodes.take 6) (sm.nodes.drop 6)
-      (List.take_append_drop 6 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  rw [h918, h571]
+      fw_linear (denoteGraph sm initSM 918) (denoteGraph sm initSM 571) :=
+  denote_fw_linear_step sm initSM 6 918 571 572 0 smN_572 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
 
 private theorem pm_eval_1177 (initPM : Store) :
     denoteGraph pm initPM 1177 =
-      fw_linear (denoteGraph pm initPM 1173) (denoteGraph pm initPM 571) := by
-  -- 1177 is produced by node at index 41 in `pm.nodes`.
-  have hsub : (denoteGraph pm initPM) 1177 =
-      (denoteGraph { pm with nodes := pm.nodes.take 42 } initPM) 1177 :=
-    denoteGraph_tid_eq_of_suffix_no_writes pm initPM 1177
-      (pm.nodes.take 42) (pm.nodes.drop 42)
-      (List.take_append_drop 42 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  rw [hsub]
-  have htake : ({ pm with nodes := pm.nodes.take 42 } : GraphDecl) =
-      { pm with nodes := pm.nodes.take 41 ++
-        [{ rank := 0, op := "OpName.FW_linear", ins := [1173, 571], outs := [1177] }] } := rfl
-  rw [htake, denoteGraph_nodes_append]
-  rw [denoteGraph_cons_eq pm
-      { rank := 0, op := "OpName.FW_linear", ins := [1173, 571], outs := [1177] } []]
-  change (applyNode pm (denoteGraph { pm with nodes := pm.nodes.take 41 } initPM)
-      { rank := 0, op := "OpName.FW_linear", ins := [1173, 571], outs := [1177] }) 1177 = _
-  rw [applyNode_fw_linear_out]
-  have h1173 : denoteGraph { pm with nodes := pm.nodes.take 41 } initPM 1173 =
-      denoteGraph pm initPM 1173 := by
-    symm
-    exact denoteGraph_tid_eq_of_suffix_no_writes pm initPM 1173
-      (pm.nodes.take 41) (pm.nodes.drop 41)
-      (List.take_append_drop 41 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  have h571 : denoteGraph { pm with nodes := pm.nodes.take 41 } initPM 571 =
-      denoteGraph pm initPM 571 := by
-    symm
-    exact denoteGraph_tid_eq_of_suffix_no_writes pm initPM 571
-      (pm.nodes.take 41) (pm.nodes.drop 41)
-      (List.take_append_drop 41 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  rw [h1173, h571]
+      fw_linear (denoteGraph pm initPM 1173) (denoteGraph pm initPM 571) :=
+  denote_fw_linear_step pm initPM 41 1173 571 1177 0 pmN_1177 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
 
 private theorem pm_eval_1178 (initPM : Store) :
     denoteGraph pm initPM 1178 =
-      fw_linear (denoteGraph pm initPM 1174) (denoteGraph pm initPM 571) := by
-  have hsub : (denoteGraph pm initPM) 1178 =
-      (denoteGraph { pm with nodes := pm.nodes.take 44 } initPM) 1178 :=
-    denoteGraph_tid_eq_of_suffix_no_writes pm initPM 1178
-      (pm.nodes.take 44) (pm.nodes.drop 44)
-      (List.take_append_drop 44 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  rw [hsub]
-  have htake : ({ pm with nodes := pm.nodes.take 44 } : GraphDecl) =
-      { pm with nodes := pm.nodes.take 43 ++
-        [{ rank := 1, op := "OpName.FW_linear", ins := [1174, 571], outs := [1178] }] } := rfl
-  rw [htake, denoteGraph_nodes_append]
-  rw [denoteGraph_cons_eq pm
-      { rank := 1, op := "OpName.FW_linear", ins := [1174, 571], outs := [1178] } []]
-  change (applyNode pm (denoteGraph { pm with nodes := pm.nodes.take 43 } initPM)
-      { rank := 1, op := "OpName.FW_linear", ins := [1174, 571], outs := [1178] }) 1178 = _
-  rw [applyNode_fw_linear_out]
-  have h1174 : denoteGraph { pm with nodes := pm.nodes.take 43 } initPM 1174 =
-      denoteGraph pm initPM 1174 := by
-    symm
-    exact denoteGraph_tid_eq_of_suffix_no_writes pm initPM 1174
-      (pm.nodes.take 43) (pm.nodes.drop 43)
-      (List.take_append_drop 43 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  have h571 : denoteGraph { pm with nodes := pm.nodes.take 43 } initPM 571 =
-      denoteGraph pm initPM 571 := by
-    symm
-    exact denoteGraph_tid_eq_of_suffix_no_writes pm initPM 571
-      (pm.nodes.take 43) (pm.nodes.drop 43)
-      (List.take_append_drop 43 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  rw [h1174, h571]
+      fw_linear (denoteGraph pm initPM 1174) (denoteGraph pm initPM 571) :=
+  denote_fw_linear_step pm initPM 43 1174 571 1178 1 pmN_1178 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
 
 private theorem pm_eval_1179 (initPM : Store) :
     denoteGraph pm initPM 1179 =
-      fw_linear (denoteGraph pm initPM 1175) (denoteGraph pm initPM 571) := by
-  have hsub : (denoteGraph pm initPM) 1179 =
-      (denoteGraph { pm with nodes := pm.nodes.take 46 } initPM) 1179 :=
-    denoteGraph_tid_eq_of_suffix_no_writes pm initPM 1179
-      (pm.nodes.take 46) (pm.nodes.drop 46)
-      (List.take_append_drop 46 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  rw [hsub]
-  have htake : ({ pm with nodes := pm.nodes.take 46 } : GraphDecl) =
-      { pm with nodes := pm.nodes.take 45 ++
-        [{ rank := 2, op := "OpName.FW_linear", ins := [1175, 571], outs := [1179] }] } := rfl
-  rw [htake, denoteGraph_nodes_append]
-  rw [denoteGraph_cons_eq pm
-      { rank := 2, op := "OpName.FW_linear", ins := [1175, 571], outs := [1179] } []]
-  change (applyNode pm (denoteGraph { pm with nodes := pm.nodes.take 45 } initPM)
-      { rank := 2, op := "OpName.FW_linear", ins := [1175, 571], outs := [1179] }) 1179 = _
-  rw [applyNode_fw_linear_out]
-  have h1175 : denoteGraph { pm with nodes := pm.nodes.take 45 } initPM 1175 =
-      denoteGraph pm initPM 1175 := by
-    symm
-    exact denoteGraph_tid_eq_of_suffix_no_writes pm initPM 1175
-      (pm.nodes.take 45) (pm.nodes.drop 45)
-      (List.take_append_drop 45 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  have h571 : denoteGraph { pm with nodes := pm.nodes.take 45 } initPM 571 =
-      denoteGraph pm initPM 571 := by
-    symm
-    exact denoteGraph_tid_eq_of_suffix_no_writes pm initPM 571
-      (pm.nodes.take 45) (pm.nodes.drop 45)
-      (List.take_append_drop 45 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  rw [h1175, h571]
+      fw_linear (denoteGraph pm initPM 1175) (denoteGraph pm initPM 571) :=
+  denote_fw_linear_step pm initPM 45 1175 571 1179 2 pmN_1179 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
 
 private theorem pm_eval_1180 (initPM : Store) :
     denoteGraph pm initPM 1180 =
-      fw_linear (denoteGraph pm initPM 1176) (denoteGraph pm initPM 571) := by
-  -- 1180 is at idx 48 in pm.nodes.
-  have hsub : (denoteGraph pm initPM) 1180 =
-      (denoteGraph { pm with nodes := pm.nodes.take 49 } initPM) 1180 :=
-    denoteGraph_tid_eq_of_suffix_no_writes pm initPM 1180
-      (pm.nodes.take 49) (pm.nodes.drop 49)
-      (List.take_append_drop 49 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  rw [hsub]
-  have htake : ({ pm with nodes := pm.nodes.take 49 } : GraphDecl) =
-      { pm with nodes := pm.nodes.take 48 ++
-        [{ rank := 3, op := "OpName.FW_linear", ins := [1176, 571], outs := [1180] }] } := rfl
-  rw [htake, denoteGraph_nodes_append]
-  rw [denoteGraph_cons_eq pm
-      { rank := 3, op := "OpName.FW_linear", ins := [1176, 571], outs := [1180] } []]
-  change (applyNode pm (denoteGraph { pm with nodes := pm.nodes.take 48 } initPM)
-      { rank := 3, op := "OpName.FW_linear", ins := [1176, 571], outs := [1180] }) 1180 = _
-  rw [applyNode_fw_linear_out]
-  have h1176 : denoteGraph { pm with nodes := pm.nodes.take 48 } initPM 1176 =
-      denoteGraph pm initPM 1176 := by
-    symm
-    exact denoteGraph_tid_eq_of_suffix_no_writes pm initPM 1176
-      (pm.nodes.take 48) (pm.nodes.drop 48)
-      (List.take_append_drop 48 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  have h571 : denoteGraph { pm with nodes := pm.nodes.take 48 } initPM 571 =
-      denoteGraph pm initPM 571 := by
-    symm
-    exact denoteGraph_tid_eq_of_suffix_no_writes pm initPM 571
-      (pm.nodes.take 48) (pm.nodes.drop 48)
-      (List.take_append_drop 48 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  rw [h1176, h571]
-
-/-! ### PM eval for tid 572 = AllGatherPrim of [1177..1180] dim 1.
-
-Tid 572 is produced in PM by an AllGatherPrim node (at index 54 in `pm.nodes`,
-i.e. `pm.nodes.take 55` ends with that node). -/
+      fw_linear (denoteGraph pm initPM 1176) (denoteGraph pm initPM 571) :=
+  denote_fw_linear_step pm initPM 48 1176 571 1180 3 pmN_1180 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
 
 private theorem pm_eval_572 (initPM : Store) :
     denoteGraph pm initPM 572 = allGatherPrimDimN 1 4 0
       [denoteGraph pm initPM 1177, denoteGraph pm initPM 1178,
        denoteGraph pm initPM 1179, denoteGraph pm initPM 1180] := by
-  have hsub : (denoteGraph pm initPM) 572 =
-      (denoteGraph { pm with nodes := pm.nodes.take 55 } initPM) 572 :=
-    denoteGraph_tid_eq_of_suffix_no_writes pm initPM 572
-      (pm.nodes.take 55) (pm.nodes.drop 55)
-      (List.take_append_drop 55 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  rw [hsub]
-  have htake : ({ pm with nodes := pm.nodes.take 55 } : GraphDecl) =
-      { pm with nodes := pm.nodes.take 54 ++
-        [{ rank := 0, op := "OpName.AllGatherPrim",
-           ins := (List.range 4).map (fun r => 1177 + r),
-           outs := [572], params := [1] }] } := rfl
-  rw [htake, denoteGraph_nodes_append]
-  rw [denoteGraph_cons_eq pm
-      { rank := 0, op := "OpName.AllGatherPrim",
-        ins := (List.range 4).map (fun r => 1177 + r),
-        outs := [572], params := [1] } []]
-  change (applyNode pm (denoteGraph { pm with nodes := pm.nodes.take 54 } initPM)
-      { rank := 0, op := "OpName.AllGatherPrim",
-        ins := (List.range 4).map (fun r => 1177 + r),
-        outs := [572], params := [1] }) 572 = _
-  rw [applyNode_allGatherPrimDimN_out]
-  -- Suffix-equivalence for each input tid in 1177..1180
-  have h1177 : denoteGraph { pm with nodes := pm.nodes.take 54 } initPM 1177 =
-      denoteGraph pm initPM 1177 := by
-    symm
-    exact denoteGraph_tid_eq_of_suffix_no_writes pm initPM 1177
-      (pm.nodes.take 54) (pm.nodes.drop 54)
-      (List.take_append_drop 54 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  have h1178 : denoteGraph { pm with nodes := pm.nodes.take 54 } initPM 1178 =
-      denoteGraph pm initPM 1178 := by
-    symm
-    exact denoteGraph_tid_eq_of_suffix_no_writes pm initPM 1178
-      (pm.nodes.take 54) (pm.nodes.drop 54)
-      (List.take_append_drop 54 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  have h1179 : denoteGraph { pm with nodes := pm.nodes.take 54 } initPM 1179 =
-      denoteGraph pm initPM 1179 := by
-    symm
-    exact denoteGraph_tid_eq_of_suffix_no_writes pm initPM 1179
-      (pm.nodes.take 54) (pm.nodes.drop 54)
-      (List.take_append_drop 54 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  have h1180 : denoteGraph { pm with nodes := pm.nodes.take 54 } initPM 1180 =
-      denoteGraph pm initPM 1180 := by
-    symm
-    exact denoteGraph_tid_eq_of_suffix_no_writes pm initPM 1180
-      (pm.nodes.take 54) (pm.nodes.drop 54)
-      (List.take_append_drop 54 _).symm
-      (by set_option maxRecDepth 20000 in decide)
-  -- Reduce ((List.range 4).map (1177+r)).map s = [s 1177, s 1178, s 1179, s 1180]
-  show allGatherPrimDimN 1 pm.numRanks 0
-        (((List.range 4).map (fun r => 1177 + r)).map
-          (denoteGraph { pm with nodes := pm.nodes.take 54 } initPM)) = _
-  have hlist :
-      (((List.range 4).map (fun r => 1177 + r)).map
-        (denoteGraph { pm with nodes := pm.nodes.take 54 } initPM)) =
-      [denoteGraph { pm with nodes := pm.nodes.take 54 } initPM 1177,
-       denoteGraph { pm with nodes := pm.nodes.take 54 } initPM 1178,
-       denoteGraph { pm with nodes := pm.nodes.take 54 } initPM 1179,
-       denoteGraph { pm with nodes := pm.nodes.take 54 } initPM 1180] := by
-    show (((List.range 4).map (fun r => 1177 + r)).map _) = _
-    rfl
-  rw [hlist, h1177, h1178, h1179, h1180]
-  rfl
+  have h := denote_allGather4_step pm initPM 54 1177 572 0 1 pmN_AG_572 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+  -- helper produces RHS with (t0 + k); g.numRanks reduces to 4
+  simpa using h
 
-/-! ### Goal_6 case
+private theorem sm_eval_574 (initSM : Store) :
+    denoteGraph sm initSM 574 =
+      fw_linear (denoteGraph sm initSM 922) (denoteGraph sm initSM 573) :=
+  denote_fw_linear_step sm initSM 7 922 573 574 0 smN_574 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
 
-Combines `sm_eval_572`, `pm_eval_117{7,8,9}`, `pm_eval_1180`, `pm_eval_572`,
-the bridging lemma `fw_linear_split_dim1_4_1_8_32`, and the prereq `goal_261`
-(supplied via `prove_pattern_129`).
+private theorem pm_eval_1205 (initPM : Store) :
+    denoteGraph pm initPM 1205 =
+      fw_linear (denoteGraph pm initPM 1201) (denoteGraph pm initPM 573) :=
+  denote_fw_linear_step pm initPM 42 1201 573 1205 0 pmN_1205 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
 
-The other goals (7/32/58/83) follow the same structural pattern but require
-their own SM/PM eval lemmas and their own prerequisite alpha-equivalence
-patterns. They are left as `sorry` for now. -/
+private theorem pm_eval_1206 (initPM : Store) :
+    denoteGraph pm initPM 1206 =
+      fw_linear (denoteGraph pm initPM 1202) (denoteGraph pm initPM 573) :=
+  denote_fw_linear_step pm initPM 44 1202 573 1206 1 pmN_1206 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_1207 (initPM : Store) :
+    denoteGraph pm initPM 1207 =
+      fw_linear (denoteGraph pm initPM 1203) (denoteGraph pm initPM 573) :=
+  denote_fw_linear_step pm initPM 46 1203 573 1207 2 pmN_1207 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_1208 (initPM : Store) :
+    denoteGraph pm initPM 1208 =
+      fw_linear (denoteGraph pm initPM 1204) (denoteGraph pm initPM 573) :=
+  denote_fw_linear_step pm initPM 49 1204 573 1208 3 pmN_1208 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_574 (initPM : Store) :
+    denoteGraph pm initPM 574 = allGatherPrimDimN 1 4 0
+      [denoteGraph pm initPM 1205, denoteGraph pm initPM 1206,
+       denoteGraph pm initPM 1207, denoteGraph pm initPM 1208] := by
+  have h := denote_allGather4_step pm initPM 55 1205 574 0 1 pmN_AG_574 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+  -- helper produces RHS with (t0 + k); g.numRanks reduces to 4
+  simpa using h
+
+private theorem sm_eval_609 (initSM : Store) :
+    denoteGraph sm initSM 609 =
+      fw_linear (denoteGraph sm initSM 965) (denoteGraph sm initSM 608) :=
+  denote_fw_linear_step sm initSM 35 965 608 609 0 smN_609 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_1725 (initPM : Store) :
+    denoteGraph pm initPM 1725 =
+      fw_linear (denoteGraph pm initPM 1721) (denoteGraph pm initPM 608) :=
+  denote_fw_linear_step pm initPM 205 1721 608 1725 0 pmN_1725 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_1726 (initPM : Store) :
+    denoteGraph pm initPM 1726 =
+      fw_linear (denoteGraph pm initPM 1722) (denoteGraph pm initPM 608) :=
+  denote_fw_linear_step pm initPM 206 1722 608 1726 1 pmN_1726 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_1727 (initPM : Store) :
+    denoteGraph pm initPM 1727 =
+      fw_linear (denoteGraph pm initPM 1723) (denoteGraph pm initPM 608) :=
+  denote_fw_linear_step pm initPM 207 1723 608 1727 2 pmN_1727 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_1728 (initPM : Store) :
+    denoteGraph pm initPM 1728 =
+      fw_linear (denoteGraph pm initPM 1724) (denoteGraph pm initPM 608) :=
+  denote_fw_linear_step pm initPM 215 1724 608 1728 3 pmN_1728 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_609 (initPM : Store) :
+    denoteGraph pm initPM 609 = allGatherPrimDimN 1 4 0
+      [denoteGraph pm initPM 1725, denoteGraph pm initPM 1726,
+       denoteGraph pm initPM 1727, denoteGraph pm initPM 1728] := by
+  have h := denote_allGather4_step pm initPM 224 1725 609 0 1 pmN_AG_609 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+  -- helper produces RHS with (t0 + k); g.numRanks reduces to 4
+  simpa using h
+
+private theorem sm_eval_646 (initSM : Store) :
+    denoteGraph sm initSM 646 =
+      fw_linear (denoteGraph sm initSM 1012) (denoteGraph sm initSM 645) :=
+  denote_fw_linear_step sm initSM 64 1012 645 646 0 smN_646 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_2317 (initPM : Store) :
+    denoteGraph pm initPM 2317 =
+      fw_linear (denoteGraph pm initPM 2313) (denoteGraph pm initPM 645) :=
+  denote_fw_linear_step pm initPM 400 2313 645 2317 0 pmN_2317 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_2318 (initPM : Store) :
+    denoteGraph pm initPM 2318 =
+      fw_linear (denoteGraph pm initPM 2314) (denoteGraph pm initPM 645) :=
+  denote_fw_linear_step pm initPM 401 2314 645 2318 1 pmN_2318 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_2319 (initPM : Store) :
+    denoteGraph pm initPM 2319 =
+      fw_linear (denoteGraph pm initPM 2315) (denoteGraph pm initPM 645) :=
+  denote_fw_linear_step pm initPM 402 2315 645 2319 2 pmN_2319 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_2320 (initPM : Store) :
+    denoteGraph pm initPM 2320 =
+      fw_linear (denoteGraph pm initPM 2316) (denoteGraph pm initPM 645) :=
+  denote_fw_linear_step pm initPM 405 2316 645 2320 3 pmN_2320 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_646 (initPM : Store) :
+    denoteGraph pm initPM 646 = allGatherPrimDimN 1 4 0
+      [denoteGraph pm initPM 2317, denoteGraph pm initPM 2318,
+       denoteGraph pm initPM 2319, denoteGraph pm initPM 2320] := by
+  have h := denote_allGather4_step pm initPM 414 2317 646 0 1 pmN_AG_646 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+  -- helper produces RHS with (t0 + k); g.numRanks reduces to 4
+  simpa using h
+
+private theorem sm_eval_681 (initSM : Store) :
+    denoteGraph sm initSM 681 =
+      fw_linear (denoteGraph sm initSM 1055) (denoteGraph sm initSM 680) :=
+  denote_fw_linear_step sm initSM 92 1055 680 681 0 smN_681 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_2873 (initPM : Store) :
+    denoteGraph pm initPM 2873 =
+      fw_linear (denoteGraph pm initPM 2869) (denoteGraph pm initPM 680) :=
+  denote_fw_linear_step pm initPM 582 2869 680 2873 0 pmN_2873 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_2874 (initPM : Store) :
+    denoteGraph pm initPM 2874 =
+      fw_linear (denoteGraph pm initPM 2870) (denoteGraph pm initPM 680) :=
+  denote_fw_linear_step pm initPM 583 2870 680 2874 1 pmN_2874 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_2875 (initPM : Store) :
+    denoteGraph pm initPM 2875 =
+      fw_linear (denoteGraph pm initPM 2871) (denoteGraph pm initPM 680) :=
+  denote_fw_linear_step pm initPM 584 2871 680 2875 2 pmN_2875 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_2876 (initPM : Store) :
+    denoteGraph pm initPM 2876 =
+      fw_linear (denoteGraph pm initPM 2872) (denoteGraph pm initPM 680) :=
+  denote_fw_linear_step pm initPM 593 2872 680 2876 3 pmN_2876 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+private theorem pm_eval_681 (initPM : Store) :
+    denoteGraph pm initPM 681 = allGatherPrimDimN 1 4 0
+      [denoteGraph pm initPM 2873, denoteGraph pm initPM 2874,
+       denoteGraph pm initPM 2875, denoteGraph pm initPM 2876] := by
+  have h := denote_allGather4_step pm initPM 602 2873 681 0 1 pmN_AG_681 rfl
+    (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+  -- helper produces RHS with (t0 + k); g.numRanks reduces to 4
+  simpa using h
+
+
+/-! ## Main theorem. -/
 
 theorem prove_pattern_6 : pattern_6_stmt := by
   intro target h
   cases h with
   | goal_6 =>
     intro initSM initPM hSmInit hPmInit hInitGoals
-    -- Get goal_261: SM 918 = AllGather of PM [1173..1176] dim 1
     have hL : goal_261_stmt :=
       prove_pattern_129 pattern_129_target.goal_261
     have hLtr := hL initSM initPM hSmInit hPmInit hInitGoals
@@ -631,7 +751,6 @@ theorem prove_pattern_6 : pattern_6_stmt := by
       rw [reconstructWithDim_cons_cons_nonscalar]
       rw [h_pm_shapes_split.1]
       intro hbad; cases hbad
-    -- Init equality of weight 571
     have h_init_W : InitGoalHolds pm.numRanks initGoal_571 initSM initPM := by
       apply hInitGoals; simp [initGoals]
     have hW_init_eq : initSM 571 = initPM 571 := by
@@ -650,34 +769,22 @@ theorem prove_pattern_6 : pattern_6_stmt := by
       rw [hh]; rfl
     have hW_sm_pm : denoteGraph sm initSM 571 = denoteGraph pm initPM 571 := by
       rw [h_smW_init, h_pmW_init, hW_init_eq]
-    -- Shape of W = [32, 32]
     have hW_init_shape : (initPM 571).shape = [32, 32] := by
       have hh := h_init_W.2.1
       simpa [initGoal_571, List.map_cons, List.map_nil] using hh
     have hW_sm_shape : (denoteGraph sm initSM 571).shape = [32, 32] := by
       rw [h_smW_init, hW_init_eq]; exact hW_init_shape
-    -- Now compute SM 572
     have h_SM_572 := sm_eval_572 initSM
-    -- Shape of SM 572
     have hSM572_shape : (denoteGraph sm initSM 572).shape = [1, 8, 32] := by
       rw [h_SM_572]
       exact fw_linear_3d_shape 1 8 32 32 _ _ h_x_sm_shape hW_sm_shape
-    -- PM evals for 1177..1180
     have h_PM_1177 := pm_eval_1177 initPM
     have h_PM_1178 := pm_eval_1178 initPM
     have h_PM_1179 := pm_eval_1179 initPM
     have h_PM_1180 := pm_eval_1180 initPM
     have h_PM_572 := pm_eval_572 initPM
-    -- Apply the bridging lemma to convert SM 572 to allGather of pieces
     have h_main : denoteGraph sm initSM 572 = denoteGraph pm initPM 572 := by
       rw [h_SM_572, h_input_gather, hW_sm_pm]
-      -- Now goal: fw_linear (allGather PM[1173..]) PM571 = PM 572
-      -- For the bridging lemma to apply we need allGather to have shape [1,8,32]
-      -- and we need to phrase it so each piece is chunkPrimDimN.
-      -- Actually our bridging lemma takes x : [1,8,32] and chunks. The result LHS
-      -- is fw_linear x w, RHS is allGather of pieces of fw_linear chunk r x.
-      -- We want fw_linear (allGather PM[1173..1176]) PM571 = allGather [PM1177..1180]
-      -- Substitute via h_input_gather already done. Rewrite using bridging lemma:
       set X := allGatherPrimDimN 1 4 0
         [denoteGraph pm initPM 1173, denoteGraph pm initPM 1174,
          denoteGraph pm initPM 1175, denoteGraph pm initPM 1176] with hXdef
@@ -686,11 +793,8 @@ theorem prove_pattern_6 : pattern_6_stmt := by
         rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 32]
           (by simp [List.head?, h_pm_shapes_split.1])]
         rfl
-      -- Apply bridging
       rw [fw_linear_split_dim1_4_1_8_32 X (denoteGraph pm initPM 571) hX_shape
         (by rw [h_pmW_init]; exact hW_init_shape)]
-      -- Now LHS = allGather [fw_linear (chunk r X) W for r in 0..3]
-      -- We need: chunk r X = PM (1173 + r). This is via chunk-of-allGather.
       have hI0_shape := h_pm_shapes_split.1
       have hI1_shape := h_pm_shapes_split.2.1
       have hI2_shape := h_pm_shapes_split.2.2.1
@@ -710,7 +814,6 @@ theorem prove_pattern_6 : pattern_6_stmt := by
       rw [hchunk0, hchunk1, hchunk2, hchunk3]
       rw [← h_PM_1177, ← h_PM_1178, ← h_PM_1179, ← h_PM_1180]
       rw [← h_PM_572]
-    -- Conclude: goal_6_stmt
     show (denoteGraph sm initSM 572).shape = goal_6.tsShape ∧
       _ = goal_6.tpShapes ∧
       denoteGraph sm initSM 572 =
@@ -727,9 +830,449 @@ theorem prove_pattern_6 : pattern_6_stmt := by
         reconstructWithDim 1 pm.numRanks 0 [denoteGraph pm initPM 572]
       rw [reconstructWithDim_singleton]
       exact h_main
-  | goal_7 => sorry
-  | goal_32 => sorry
-  | goal_58 => sorry
-  | goal_83 => sorry
+
+  | goal_7 =>
+    intro initSM initPM hSmInit hPmInit hInitGoals
+    have hL : goal_263_stmt :=
+      prove_pattern_129 pattern_129_target.goal_263
+    have hLtr := hL initSM initPM hSmInit hPmInit hInitGoals
+    obtain ⟨h_sm_shape_922, h_pm_shapes_922, h_eq_rec_922⟩ := hLtr
+    have h_pm_shapes_922' :
+        [(denoteGraph pm initPM 1201).shape, (denoteGraph pm initPM 1202).shape,
+         (denoteGraph pm initPM 1203).shape, (denoteGraph pm initPM 1204).shape] =
+        [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]] := by
+      simpa [goal_263, List.map_cons, List.map_nil] using h_pm_shapes_922
+    have h_pm_shapes_split :
+        (denoteGraph pm initPM 1201).shape = [1, 2, 32] ∧
+        (denoteGraph pm initPM 1202).shape = [1, 2, 32] ∧
+        (denoteGraph pm initPM 1203).shape = [1, 2, 32] ∧
+        (denoteGraph pm initPM 1204).shape = [1, 2, 32] := by
+      have hh := h_pm_shapes_922'
+      rw [List.cons.injEq, List.cons.injEq, List.cons.injEq, List.cons.injEq] at hh
+      exact ⟨hh.1, hh.2.1, hh.2.2.1, hh.2.2.2.1⟩
+    have h_x_sm_shape : (denoteGraph sm initSM 922).shape = [1, 8, 32] := by
+      simpa [goal_263] using h_sm_shape_922
+    have h_input_gather : denoteGraph sm initSM 922 = allGatherPrimDimN 1 4 0
+        [denoteGraph pm initPM 1201, denoteGraph pm initPM 1202,
+         denoteGraph pm initPM 1203, denoteGraph pm initPM 1204] := by
+      have hh := h_eq_rec_922
+      simp only [goal_263, List.map_cons, List.map_nil] at hh
+      rw [hh]
+      rw [show pm.numRanks = 4 from rfl]
+      rw [reconstructWithDim_cons_cons_nonscalar]
+      rw [h_pm_shapes_split.1]
+      intro hbad; cases hbad
+    have h_init_W : InitGoalHolds pm.numRanks initGoal_573 initSM initPM := by
+      apply hInitGoals; simp [initGoals]
+    have hW_init_eq : initSM 573 = initPM 573 := by
+      have hh := h_init_W.2.2
+      simpa [initGoal_573, List.map_cons, List.map_nil, reconstructWithDim_singleton]
+        using hh
+    have h_smW_init : denoteGraph sm initSM 573 = initSM 573 := by
+      have hh := denoteGraph_tid_eq_of_suffix_no_writes sm initSM 573
+        [] sm.nodes (by simp)
+        (by set_option maxRecDepth 20000 in decide)
+      rw [hh]; rfl
+    have h_pmW_init : denoteGraph pm initPM 573 = initPM 573 := by
+      have hh := denoteGraph_tid_eq_of_suffix_no_writes pm initPM 573
+        [] pm.nodes (by simp)
+        (by set_option maxRecDepth 20000 in decide)
+      rw [hh]; rfl
+    have hW_sm_pm : denoteGraph sm initSM 573 = denoteGraph pm initPM 573 := by
+      rw [h_smW_init, h_pmW_init, hW_init_eq]
+    have hW_init_shape : (initPM 573).shape = [32, 32] := by
+      have hh := h_init_W.2.1
+      simpa [initGoal_573, List.map_cons, List.map_nil] using hh
+    have hW_sm_shape : (denoteGraph sm initSM 573).shape = [32, 32] := by
+      rw [h_smW_init, hW_init_eq]; exact hW_init_shape
+    have h_SM_574 := sm_eval_574 initSM
+    have hSM574_shape : (denoteGraph sm initSM 574).shape = [1, 8, 32] := by
+      rw [h_SM_574]
+      exact fw_linear_3d_shape 1 8 32 32 _ _ h_x_sm_shape hW_sm_shape
+    have h_PM_1205 := pm_eval_1205 initPM
+    have h_PM_1206 := pm_eval_1206 initPM
+    have h_PM_1207 := pm_eval_1207 initPM
+    have h_PM_1208 := pm_eval_1208 initPM
+    have h_PM_574 := pm_eval_574 initPM
+    have h_main : denoteGraph sm initSM 574 = denoteGraph pm initPM 574 := by
+      rw [h_SM_574, h_input_gather, hW_sm_pm]
+      set X := allGatherPrimDimN 1 4 0
+        [denoteGraph pm initPM 1201, denoteGraph pm initPM 1202,
+         denoteGraph pm initPM 1203, denoteGraph pm initPM 1204] with hXdef
+      have hX_shape : X.shape = [1, 8, 32] := by
+        rw [hXdef]
+        rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 32]
+          (by simp [List.head?, h_pm_shapes_split.1])]
+        rfl
+      rw [fw_linear_split_dim1_4_1_8_32 X (denoteGraph pm initPM 573) hX_shape
+        (by rw [h_pmW_init]; exact hW_init_shape)]
+      have hI0_shape := h_pm_shapes_split.1
+      have hI1_shape := h_pm_shapes_split.2.1
+      have hI2_shape := h_pm_shapes_split.2.2.1
+      have hI3_shape := h_pm_shapes_split.2.2.2
+      have hchunk0 : chunkPrimDimN 1 4 0 X = denoteGraph pm initPM 1201 := by
+        rw [hXdef]
+        exact chunk1_4_of_ag1_1_2_32_idx0 _ _ _ _ hI0_shape hI1_shape hI2_shape hI3_shape
+      have hchunk1 : chunkPrimDimN 1 4 1 X = denoteGraph pm initPM 1202 := by
+        rw [hXdef]
+        exact chunk1_4_of_ag1_1_2_32_idx1 _ _ _ _ hI0_shape hI1_shape hI2_shape hI3_shape
+      have hchunk2 : chunkPrimDimN 1 4 2 X = denoteGraph pm initPM 1203 := by
+        rw [hXdef]
+        exact chunk1_4_of_ag1_1_2_32_idx2 _ _ _ _ hI0_shape hI1_shape hI2_shape hI3_shape
+      have hchunk3 : chunkPrimDimN 1 4 3 X = denoteGraph pm initPM 1204 := by
+        rw [hXdef]
+        exact chunk1_4_of_ag1_1_2_32_idx3 _ _ _ _ hI0_shape hI1_shape hI2_shape hI3_shape
+      rw [hchunk0, hchunk1, hchunk2, hchunk3]
+      rw [← h_PM_1205, ← h_PM_1206, ← h_PM_1207, ← h_PM_1208]
+      rw [← h_PM_574]
+    show (denoteGraph sm initSM 574).shape = goal_7.tsShape ∧
+      _ = goal_7.tpShapes ∧
+      denoteGraph sm initSM 574 =
+        reconstructWithDim goal_7.gatherDim pm.numRanks 0
+          (goal_7.tps.map (fun p => denoteGraph pm initPM p.tid))
+    refine ⟨?_, ?_, ?_⟩
+    · change (denoteGraph sm initSM 574).shape = [1, 8, 32]
+      exact hSM574_shape
+    · have hPM574_shape : (denoteGraph pm initPM 574).shape = [1, 8, 32] := by
+        rw [← h_main]; exact hSM574_shape
+      change [(denoteGraph pm initPM 574).shape] = [[1, 8, 32]]
+      rw [hPM574_shape]
+    · change denoteGraph sm initSM 574 =
+        reconstructWithDim 1 pm.numRanks 0 [denoteGraph pm initPM 574]
+      rw [reconstructWithDim_singleton]
+      exact h_main
+
+  | goal_32 =>
+    intro initSM initPM hSmInit hPmInit hInitGoals
+    have hL : goal_277_stmt :=
+      prove_pattern_129 pattern_129_target.goal_277
+    have hLtr := hL initSM initPM hSmInit hPmInit hInitGoals
+    obtain ⟨h_sm_shape_965, h_pm_shapes_965, h_eq_rec_965⟩ := hLtr
+    have h_pm_shapes_965' :
+        [(denoteGraph pm initPM 1721).shape, (denoteGraph pm initPM 1722).shape,
+         (denoteGraph pm initPM 1723).shape, (denoteGraph pm initPM 1724).shape] =
+        [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]] := by
+      simpa [goal_277, List.map_cons, List.map_nil] using h_pm_shapes_965
+    have h_pm_shapes_split :
+        (denoteGraph pm initPM 1721).shape = [1, 2, 32] ∧
+        (denoteGraph pm initPM 1722).shape = [1, 2, 32] ∧
+        (denoteGraph pm initPM 1723).shape = [1, 2, 32] ∧
+        (denoteGraph pm initPM 1724).shape = [1, 2, 32] := by
+      have hh := h_pm_shapes_965'
+      rw [List.cons.injEq, List.cons.injEq, List.cons.injEq, List.cons.injEq] at hh
+      exact ⟨hh.1, hh.2.1, hh.2.2.1, hh.2.2.2.1⟩
+    have h_x_sm_shape : (denoteGraph sm initSM 965).shape = [1, 8, 32] := by
+      simpa [goal_277] using h_sm_shape_965
+    have h_input_gather : denoteGraph sm initSM 965 = allGatherPrimDimN 1 4 0
+        [denoteGraph pm initPM 1721, denoteGraph pm initPM 1722,
+         denoteGraph pm initPM 1723, denoteGraph pm initPM 1724] := by
+      have hh := h_eq_rec_965
+      simp only [goal_277, List.map_cons, List.map_nil] at hh
+      rw [hh]
+      rw [show pm.numRanks = 4 from rfl]
+      rw [reconstructWithDim_cons_cons_nonscalar]
+      rw [h_pm_shapes_split.1]
+      intro hbad; cases hbad
+    have h_init_W : InitGoalHolds pm.numRanks initGoal_608 initSM initPM := by
+      apply hInitGoals; simp [initGoals]
+    have hW_init_eq : initSM 608 = initPM 608 := by
+      have hh := h_init_W.2.2
+      simpa [initGoal_608, List.map_cons, List.map_nil, reconstructWithDim_singleton]
+        using hh
+    have h_smW_init : denoteGraph sm initSM 608 = initSM 608 := by
+      have hh := denoteGraph_tid_eq_of_suffix_no_writes sm initSM 608
+        [] sm.nodes (by simp)
+        (by set_option maxRecDepth 20000 in decide)
+      rw [hh]; rfl
+    have h_pmW_init : denoteGraph pm initPM 608 = initPM 608 := by
+      have hh := denoteGraph_tid_eq_of_suffix_no_writes pm initPM 608
+        [] pm.nodes (by simp)
+        (by set_option maxRecDepth 20000 in decide)
+      rw [hh]; rfl
+    have hW_sm_pm : denoteGraph sm initSM 608 = denoteGraph pm initPM 608 := by
+      rw [h_smW_init, h_pmW_init, hW_init_eq]
+    have hW_init_shape : (initPM 608).shape = [32, 32] := by
+      have hh := h_init_W.2.1
+      simpa [initGoal_608, List.map_cons, List.map_nil] using hh
+    have hW_sm_shape : (denoteGraph sm initSM 608).shape = [32, 32] := by
+      rw [h_smW_init, hW_init_eq]; exact hW_init_shape
+    have h_SM_609 := sm_eval_609 initSM
+    have hSM609_shape : (denoteGraph sm initSM 609).shape = [1, 8, 32] := by
+      rw [h_SM_609]
+      exact fw_linear_3d_shape 1 8 32 32 _ _ h_x_sm_shape hW_sm_shape
+    have h_PM_1725 := pm_eval_1725 initPM
+    have h_PM_1726 := pm_eval_1726 initPM
+    have h_PM_1727 := pm_eval_1727 initPM
+    have h_PM_1728 := pm_eval_1728 initPM
+    have h_PM_609 := pm_eval_609 initPM
+    have h_main : denoteGraph sm initSM 609 = denoteGraph pm initPM 609 := by
+      rw [h_SM_609, h_input_gather, hW_sm_pm]
+      set X := allGatherPrimDimN 1 4 0
+        [denoteGraph pm initPM 1721, denoteGraph pm initPM 1722,
+         denoteGraph pm initPM 1723, denoteGraph pm initPM 1724] with hXdef
+      have hX_shape : X.shape = [1, 8, 32] := by
+        rw [hXdef]
+        rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 32]
+          (by simp [List.head?, h_pm_shapes_split.1])]
+        rfl
+      rw [fw_linear_split_dim1_4_1_8_32 X (denoteGraph pm initPM 608) hX_shape
+        (by rw [h_pmW_init]; exact hW_init_shape)]
+      have hI0_shape := h_pm_shapes_split.1
+      have hI1_shape := h_pm_shapes_split.2.1
+      have hI2_shape := h_pm_shapes_split.2.2.1
+      have hI3_shape := h_pm_shapes_split.2.2.2
+      have hchunk0 : chunkPrimDimN 1 4 0 X = denoteGraph pm initPM 1721 := by
+        rw [hXdef]
+        exact chunk1_4_of_ag1_1_2_32_idx0 _ _ _ _ hI0_shape hI1_shape hI2_shape hI3_shape
+      have hchunk1 : chunkPrimDimN 1 4 1 X = denoteGraph pm initPM 1722 := by
+        rw [hXdef]
+        exact chunk1_4_of_ag1_1_2_32_idx1 _ _ _ _ hI0_shape hI1_shape hI2_shape hI3_shape
+      have hchunk2 : chunkPrimDimN 1 4 2 X = denoteGraph pm initPM 1723 := by
+        rw [hXdef]
+        exact chunk1_4_of_ag1_1_2_32_idx2 _ _ _ _ hI0_shape hI1_shape hI2_shape hI3_shape
+      have hchunk3 : chunkPrimDimN 1 4 3 X = denoteGraph pm initPM 1724 := by
+        rw [hXdef]
+        exact chunk1_4_of_ag1_1_2_32_idx3 _ _ _ _ hI0_shape hI1_shape hI2_shape hI3_shape
+      rw [hchunk0, hchunk1, hchunk2, hchunk3]
+      rw [← h_PM_1725, ← h_PM_1726, ← h_PM_1727, ← h_PM_1728]
+      rw [← h_PM_609]
+    show (denoteGraph sm initSM 609).shape = goal_32.tsShape ∧
+      _ = goal_32.tpShapes ∧
+      denoteGraph sm initSM 609 =
+        reconstructWithDim goal_32.gatherDim pm.numRanks 0
+          (goal_32.tps.map (fun p => denoteGraph pm initPM p.tid))
+    refine ⟨?_, ?_, ?_⟩
+    · change (denoteGraph sm initSM 609).shape = [1, 8, 32]
+      exact hSM609_shape
+    · have hPM609_shape : (denoteGraph pm initPM 609).shape = [1, 8, 32] := by
+        rw [← h_main]; exact hSM609_shape
+      change [(denoteGraph pm initPM 609).shape] = [[1, 8, 32]]
+      rw [hPM609_shape]
+    · change denoteGraph sm initSM 609 =
+        reconstructWithDim 1 pm.numRanks 0 [denoteGraph pm initPM 609]
+      rw [reconstructWithDim_singleton]
+      exact h_main
+
+  | goal_58 =>
+    intro initSM initPM hSmInit hPmInit hInitGoals
+    have hL : goal_293_stmt :=
+      prove_pattern_129 pattern_129_target.goal_293
+    have hLtr := hL initSM initPM hSmInit hPmInit hInitGoals
+    obtain ⟨h_sm_shape_1012, h_pm_shapes_1012, h_eq_rec_1012⟩ := hLtr
+    have h_pm_shapes_1012' :
+        [(denoteGraph pm initPM 2313).shape, (denoteGraph pm initPM 2314).shape,
+         (denoteGraph pm initPM 2315).shape, (denoteGraph pm initPM 2316).shape] =
+        [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]] := by
+      simpa [goal_293, List.map_cons, List.map_nil] using h_pm_shapes_1012
+    have h_pm_shapes_split :
+        (denoteGraph pm initPM 2313).shape = [1, 2, 32] ∧
+        (denoteGraph pm initPM 2314).shape = [1, 2, 32] ∧
+        (denoteGraph pm initPM 2315).shape = [1, 2, 32] ∧
+        (denoteGraph pm initPM 2316).shape = [1, 2, 32] := by
+      have hh := h_pm_shapes_1012'
+      rw [List.cons.injEq, List.cons.injEq, List.cons.injEq, List.cons.injEq] at hh
+      exact ⟨hh.1, hh.2.1, hh.2.2.1, hh.2.2.2.1⟩
+    have h_x_sm_shape : (denoteGraph sm initSM 1012).shape = [1, 8, 32] := by
+      simpa [goal_293] using h_sm_shape_1012
+    have h_input_gather : denoteGraph sm initSM 1012 = allGatherPrimDimN 1 4 0
+        [denoteGraph pm initPM 2313, denoteGraph pm initPM 2314,
+         denoteGraph pm initPM 2315, denoteGraph pm initPM 2316] := by
+      have hh := h_eq_rec_1012
+      simp only [goal_293, List.map_cons, List.map_nil] at hh
+      rw [hh]
+      rw [show pm.numRanks = 4 from rfl]
+      rw [reconstructWithDim_cons_cons_nonscalar]
+      rw [h_pm_shapes_split.1]
+      intro hbad; cases hbad
+    have h_init_W : InitGoalHolds pm.numRanks initGoal_645 initSM initPM := by
+      apply hInitGoals; simp [initGoals]
+    have hW_init_eq : initSM 645 = initPM 645 := by
+      have hh := h_init_W.2.2
+      simpa [initGoal_645, List.map_cons, List.map_nil, reconstructWithDim_singleton]
+        using hh
+    have h_smW_init : denoteGraph sm initSM 645 = initSM 645 := by
+      have hh := denoteGraph_tid_eq_of_suffix_no_writes sm initSM 645
+        [] sm.nodes (by simp)
+        (by set_option maxRecDepth 20000 in decide)
+      rw [hh]; rfl
+    have h_pmW_init : denoteGraph pm initPM 645 = initPM 645 := by
+      have hh := denoteGraph_tid_eq_of_suffix_no_writes pm initPM 645
+        [] pm.nodes (by simp)
+        (by set_option maxRecDepth 20000 in decide)
+      rw [hh]; rfl
+    have hW_sm_pm : denoteGraph sm initSM 645 = denoteGraph pm initPM 645 := by
+      rw [h_smW_init, h_pmW_init, hW_init_eq]
+    have hW_init_shape : (initPM 645).shape = [32, 32] := by
+      have hh := h_init_W.2.1
+      simpa [initGoal_645, List.map_cons, List.map_nil] using hh
+    have hW_sm_shape : (denoteGraph sm initSM 645).shape = [32, 32] := by
+      rw [h_smW_init, hW_init_eq]; exact hW_init_shape
+    have h_SM_646 := sm_eval_646 initSM
+    have hSM646_shape : (denoteGraph sm initSM 646).shape = [1, 8, 32] := by
+      rw [h_SM_646]
+      exact fw_linear_3d_shape 1 8 32 32 _ _ h_x_sm_shape hW_sm_shape
+    have h_PM_2317 := pm_eval_2317 initPM
+    have h_PM_2318 := pm_eval_2318 initPM
+    have h_PM_2319 := pm_eval_2319 initPM
+    have h_PM_2320 := pm_eval_2320 initPM
+    have h_PM_646 := pm_eval_646 initPM
+    have h_main : denoteGraph sm initSM 646 = denoteGraph pm initPM 646 := by
+      rw [h_SM_646, h_input_gather, hW_sm_pm]
+      set X := allGatherPrimDimN 1 4 0
+        [denoteGraph pm initPM 2313, denoteGraph pm initPM 2314,
+         denoteGraph pm initPM 2315, denoteGraph pm initPM 2316] with hXdef
+      have hX_shape : X.shape = [1, 8, 32] := by
+        rw [hXdef]
+        rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 32]
+          (by simp [List.head?, h_pm_shapes_split.1])]
+        rfl
+      rw [fw_linear_split_dim1_4_1_8_32 X (denoteGraph pm initPM 645) hX_shape
+        (by rw [h_pmW_init]; exact hW_init_shape)]
+      have hI0_shape := h_pm_shapes_split.1
+      have hI1_shape := h_pm_shapes_split.2.1
+      have hI2_shape := h_pm_shapes_split.2.2.1
+      have hI3_shape := h_pm_shapes_split.2.2.2
+      have hchunk0 : chunkPrimDimN 1 4 0 X = denoteGraph pm initPM 2313 := by
+        rw [hXdef]
+        exact chunk1_4_of_ag1_1_2_32_idx0 _ _ _ _ hI0_shape hI1_shape hI2_shape hI3_shape
+      have hchunk1 : chunkPrimDimN 1 4 1 X = denoteGraph pm initPM 2314 := by
+        rw [hXdef]
+        exact chunk1_4_of_ag1_1_2_32_idx1 _ _ _ _ hI0_shape hI1_shape hI2_shape hI3_shape
+      have hchunk2 : chunkPrimDimN 1 4 2 X = denoteGraph pm initPM 2315 := by
+        rw [hXdef]
+        exact chunk1_4_of_ag1_1_2_32_idx2 _ _ _ _ hI0_shape hI1_shape hI2_shape hI3_shape
+      have hchunk3 : chunkPrimDimN 1 4 3 X = denoteGraph pm initPM 2316 := by
+        rw [hXdef]
+        exact chunk1_4_of_ag1_1_2_32_idx3 _ _ _ _ hI0_shape hI1_shape hI2_shape hI3_shape
+      rw [hchunk0, hchunk1, hchunk2, hchunk3]
+      rw [← h_PM_2317, ← h_PM_2318, ← h_PM_2319, ← h_PM_2320]
+      rw [← h_PM_646]
+    show (denoteGraph sm initSM 646).shape = goal_58.tsShape ∧
+      _ = goal_58.tpShapes ∧
+      denoteGraph sm initSM 646 =
+        reconstructWithDim goal_58.gatherDim pm.numRanks 0
+          (goal_58.tps.map (fun p => denoteGraph pm initPM p.tid))
+    refine ⟨?_, ?_, ?_⟩
+    · change (denoteGraph sm initSM 646).shape = [1, 8, 32]
+      exact hSM646_shape
+    · have hPM646_shape : (denoteGraph pm initPM 646).shape = [1, 8, 32] := by
+        rw [← h_main]; exact hSM646_shape
+      change [(denoteGraph pm initPM 646).shape] = [[1, 8, 32]]
+      rw [hPM646_shape]
+    · change denoteGraph sm initSM 646 =
+        reconstructWithDim 1 pm.numRanks 0 [denoteGraph pm initPM 646]
+      rw [reconstructWithDim_singleton]
+      exact h_main
+
+  | goal_83 =>
+    intro initSM initPM hSmInit hPmInit hInitGoals
+    have hL : goal_307_stmt :=
+      prove_pattern_129 pattern_129_target.goal_307
+    have hLtr := hL initSM initPM hSmInit hPmInit hInitGoals
+    obtain ⟨h_sm_shape_1055, h_pm_shapes_1055, h_eq_rec_1055⟩ := hLtr
+    have h_pm_shapes_1055' :
+        [(denoteGraph pm initPM 2869).shape, (denoteGraph pm initPM 2870).shape,
+         (denoteGraph pm initPM 2871).shape, (denoteGraph pm initPM 2872).shape] =
+        [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]] := by
+      simpa [goal_307, List.map_cons, List.map_nil] using h_pm_shapes_1055
+    have h_pm_shapes_split :
+        (denoteGraph pm initPM 2869).shape = [1, 2, 32] ∧
+        (denoteGraph pm initPM 2870).shape = [1, 2, 32] ∧
+        (denoteGraph pm initPM 2871).shape = [1, 2, 32] ∧
+        (denoteGraph pm initPM 2872).shape = [1, 2, 32] := by
+      have hh := h_pm_shapes_1055'
+      rw [List.cons.injEq, List.cons.injEq, List.cons.injEq, List.cons.injEq] at hh
+      exact ⟨hh.1, hh.2.1, hh.2.2.1, hh.2.2.2.1⟩
+    have h_x_sm_shape : (denoteGraph sm initSM 1055).shape = [1, 8, 32] := by
+      simpa [goal_307] using h_sm_shape_1055
+    have h_input_gather : denoteGraph sm initSM 1055 = allGatherPrimDimN 1 4 0
+        [denoteGraph pm initPM 2869, denoteGraph pm initPM 2870,
+         denoteGraph pm initPM 2871, denoteGraph pm initPM 2872] := by
+      have hh := h_eq_rec_1055
+      simp only [goal_307, List.map_cons, List.map_nil] at hh
+      rw [hh]
+      rw [show pm.numRanks = 4 from rfl]
+      rw [reconstructWithDim_cons_cons_nonscalar]
+      rw [h_pm_shapes_split.1]
+      intro hbad; cases hbad
+    have h_init_W : InitGoalHolds pm.numRanks initGoal_680 initSM initPM := by
+      apply hInitGoals; simp [initGoals]
+    have hW_init_eq : initSM 680 = initPM 680 := by
+      have hh := h_init_W.2.2
+      simpa [initGoal_680, List.map_cons, List.map_nil, reconstructWithDim_singleton]
+        using hh
+    have h_smW_init : denoteGraph sm initSM 680 = initSM 680 := by
+      have hh := denoteGraph_tid_eq_of_suffix_no_writes sm initSM 680
+        [] sm.nodes (by simp)
+        (by set_option maxRecDepth 20000 in decide)
+      rw [hh]; rfl
+    have h_pmW_init : denoteGraph pm initPM 680 = initPM 680 := by
+      have hh := denoteGraph_tid_eq_of_suffix_no_writes pm initPM 680
+        [] pm.nodes (by simp)
+        (by set_option maxRecDepth 20000 in decide)
+      rw [hh]; rfl
+    have hW_sm_pm : denoteGraph sm initSM 680 = denoteGraph pm initPM 680 := by
+      rw [h_smW_init, h_pmW_init, hW_init_eq]
+    have hW_init_shape : (initPM 680).shape = [32, 32] := by
+      have hh := h_init_W.2.1
+      simpa [initGoal_680, List.map_cons, List.map_nil] using hh
+    have hW_sm_shape : (denoteGraph sm initSM 680).shape = [32, 32] := by
+      rw [h_smW_init, hW_init_eq]; exact hW_init_shape
+    have h_SM_681 := sm_eval_681 initSM
+    have hSM681_shape : (denoteGraph sm initSM 681).shape = [1, 8, 32] := by
+      rw [h_SM_681]
+      exact fw_linear_3d_shape 1 8 32 32 _ _ h_x_sm_shape hW_sm_shape
+    have h_PM_2873 := pm_eval_2873 initPM
+    have h_PM_2874 := pm_eval_2874 initPM
+    have h_PM_2875 := pm_eval_2875 initPM
+    have h_PM_2876 := pm_eval_2876 initPM
+    have h_PM_681 := pm_eval_681 initPM
+    have h_main : denoteGraph sm initSM 681 = denoteGraph pm initPM 681 := by
+      rw [h_SM_681, h_input_gather, hW_sm_pm]
+      set X := allGatherPrimDimN 1 4 0
+        [denoteGraph pm initPM 2869, denoteGraph pm initPM 2870,
+         denoteGraph pm initPM 2871, denoteGraph pm initPM 2872] with hXdef
+      have hX_shape : X.shape = [1, 8, 32] := by
+        rw [hXdef]
+        rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 32]
+          (by simp [List.head?, h_pm_shapes_split.1])]
+        rfl
+      rw [fw_linear_split_dim1_4_1_8_32 X (denoteGraph pm initPM 680) hX_shape
+        (by rw [h_pmW_init]; exact hW_init_shape)]
+      have hI0_shape := h_pm_shapes_split.1
+      have hI1_shape := h_pm_shapes_split.2.1
+      have hI2_shape := h_pm_shapes_split.2.2.1
+      have hI3_shape := h_pm_shapes_split.2.2.2
+      have hchunk0 : chunkPrimDimN 1 4 0 X = denoteGraph pm initPM 2869 := by
+        rw [hXdef]
+        exact chunk1_4_of_ag1_1_2_32_idx0 _ _ _ _ hI0_shape hI1_shape hI2_shape hI3_shape
+      have hchunk1 : chunkPrimDimN 1 4 1 X = denoteGraph pm initPM 2870 := by
+        rw [hXdef]
+        exact chunk1_4_of_ag1_1_2_32_idx1 _ _ _ _ hI0_shape hI1_shape hI2_shape hI3_shape
+      have hchunk2 : chunkPrimDimN 1 4 2 X = denoteGraph pm initPM 2871 := by
+        rw [hXdef]
+        exact chunk1_4_of_ag1_1_2_32_idx2 _ _ _ _ hI0_shape hI1_shape hI2_shape hI3_shape
+      have hchunk3 : chunkPrimDimN 1 4 3 X = denoteGraph pm initPM 2872 := by
+        rw [hXdef]
+        exact chunk1_4_of_ag1_1_2_32_idx3 _ _ _ _ hI0_shape hI1_shape hI2_shape hI3_shape
+      rw [hchunk0, hchunk1, hchunk2, hchunk3]
+      rw [← h_PM_2873, ← h_PM_2874, ← h_PM_2875, ← h_PM_2876]
+      rw [← h_PM_681]
+    show (denoteGraph sm initSM 681).shape = goal_83.tsShape ∧
+      _ = goal_83.tpShapes ∧
+      denoteGraph sm initSM 681 =
+        reconstructWithDim goal_83.gatherDim pm.numRanks 0
+          (goal_83.tps.map (fun p => denoteGraph pm initPM p.tid))
+    refine ⟨?_, ?_, ?_⟩
+    · change (denoteGraph sm initSM 681).shape = [1, 8, 32]
+      exact hSM681_shape
+    · have hPM681_shape : (denoteGraph pm initPM 681).shape = [1, 8, 32] := by
+        rw [← h_main]; exact hSM681_shape
+      change [(denoteGraph pm initPM 681).shape] = [[1, 8, 32]]
+      rw [hPM681_shape]
+    · change denoteGraph sm initSM 681 =
+        reconstructWithDim 1 pm.numRanks 0 [denoteGraph pm initPM 681]
+      rw [reconstructWithDim_singleton]
+      exact h_main
 
 end TrainVerify.Denote.GeneratedPatterns
