@@ -2356,6 +2356,39 @@ axiom applyNode_bw_linear_snd_out
     applyNode g s { rank := rank, op := "OpName.BW_linear", ins := [gTid, xTid, wTid], outs := [dxTid, dwTid] } dwTid =
       (bw_linear (s gTid) (s xTid) (s wTid)).2
 
+/-- applyNode for bw_layernorm first output (dx, input-grad). -/
+axiom applyNode_bw_layernorm_fst_out
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (gTid xTid wTid bTid dxTid dwTid dbTid : Tid)
+    (_h1 : dxTid ≠ dwTid) (_h2 : dxTid ≠ dbTid) (_h3 : dwTid ≠ dbTid) :
+    applyNode g s
+      { rank := rank, op := "OpName.BW_layernorm",
+        ins := [gTid, xTid, wTid, bTid],
+        outs := [dxTid, dwTid, dbTid] } dxTid =
+      (bw_layernorm (s gTid) (s xTid) (s wTid) (s bTid)).1
+
+/-- applyNode for bw_layernorm second output (dw, weight-grad). -/
+axiom applyNode_bw_layernorm_snd_out
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (gTid xTid wTid bTid dxTid dwTid dbTid : Tid)
+    (_h1 : dxTid ≠ dwTid) (_h2 : dxTid ≠ dbTid) (_h3 : dwTid ≠ dbTid) :
+    applyNode g s
+      { rank := rank, op := "OpName.BW_layernorm",
+        ins := [gTid, xTid, wTid, bTid],
+        outs := [dxTid, dwTid, dbTid] } dwTid =
+      (bw_layernorm (s gTid) (s xTid) (s wTid) (s bTid)).2.1
+
+/-- applyNode for bw_layernorm third output (db, bias-grad). -/
+axiom applyNode_bw_layernorm_thrd_out
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (gTid xTid wTid bTid dxTid dwTid dbTid : Tid)
+    (_h1 : dxTid ≠ dwTid) (_h2 : dxTid ≠ dbTid) (_h3 : dwTid ≠ dbTid) :
+    applyNode g s
+      { rank := rank, op := "OpName.BW_layernorm",
+        ins := [gTid, xTid, wTid, bTid],
+        outs := [dxTid, dwTid, dbTid] } dbTid =
+      (bw_layernorm (s gTid) (s xTid) (s wTid) (s bTid)).2.2
+
 /-- Unfolding lemma for `evalOp` on `FW_embedding` with empty params. -/
 theorem evalOp_fw_embedding_empty (numParts rank : Nat) (ids w : Tensor) :
     evalOp numParts rank "OpName.FW_embedding" [] [ids, w] = [fw_embedding ids w] := by
