@@ -6435,7 +6435,256 @@ theorem fw_matmul_split_dim1_4_1_4_8_8 (a b : Tensor)
     intro l _
     congr 2 <;> (subst loc; omega)
 
+/-! ## FW_gelu / allGather bridges (for pattern_22 family) -/
+
+/-- Unfolding lemma for unary `FW_gelu`. -/
+theorem evalOp_fw_gelu (numParts rank : Nat) (x : Tensor) :
+    evalOp numParts rank "OpName.FW_gelu" [] [x] = [fw_gelu x] := by
+  rfl
+
+/-- `applyNode` for unary `FW_gelu` with singleton output. -/
+theorem applyNode_fw_gelu_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_gelu", ins := [xTid], outs := [outTid] } outTid =
+      fw_gelu (s xTid) := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl,
+      evalOp_fw_gelu]
+  change storeSet s [(outTid, fw_gelu (s xTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+private theorem fw_gelu_valAt_pointwise (x : Tensor) (idx : Nat)
+    (hidx : idx < prodShape x.shape) :
+    valAt (fw_gelu x) idx = geluScalar (valAt x idx) := by
+  have hshape : (fw_gelu x).shape = x.shape := by
+    simp [fw_gelu, Tensor.mkShape]
+  rw [valAt_of_lt _ _ (by rw [hshape]; exact hidx)]
+  simp [fw_gelu, Tensor.mkShape, valAt_of_lt _ _ hidx]
+
+/-- Bridge for `Pattern_22`: `fw_gelu` distributes through `allGatherPrimDimN` on
+dim 2 for four `[1,8,32]` shards. -/
+theorem fw_gelu_dim2_pieces_4_1_8_32_to_1_8_128
+    (a0 a1 a2 a3 : Tensor)
+    (h0 : a0.shape = [1, 8, 32]) (h1 : a1.shape = [1, 8, 32])
+    (h2 : a2.shape = [1, 8, 32]) (h3 : a3.shape = [1, 8, 32]) :
+    fw_gelu (allGatherPrimDimN 2 4 0 [a0, a1, a2, a3])
+      = allGatherPrimDimN 2 4 0 [fw_gelu a0, fw_gelu a1, fw_gelu a2, fw_gelu a3] := by
+  have hhead_in :
+      (([a0, a1, a2, a3] : List Tensor).head?.map (fun t => t.shape)).getD [] = [1, 8, 32] := by
+    simp [h0]
+  have hg_shape : ∀ {y : Tensor}, y.shape = [1, 8, 32] → (fw_gelu y).shape = [1, 8, 32] := by
+    intro y hy; simp [fw_gelu, Tensor.mkShape, hy]
+  have hg0 := hg_shape h0
+  have hg1 := hg_shape h1
+  have hg2 := hg_shape h2
+  have hg3 := hg_shape h3
+  have hhead_out :
+      (([fw_gelu a0, fw_gelu a1, fw_gelu a2, fw_gelu a3] : List Tensor).head?.map
+          (fun t => t.shape)).getD [] = [1, 8, 32] := by
+    simp [hg0]
+  have hin_shape : (allGatherPrimDimN 2 4 0 [a0, a1, a2, a3]).shape = [1, 8, 128] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead_in]
+    simp [List.set, List.getD]
+  have hout_shape :
+      (allGatherPrimDimN 2 4 0 [fw_gelu a0, fw_gelu a1, fw_gelu a2, fw_gelu a3]).shape =
+        [1, 8, 128] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead_out]
+    simp [List.set, List.getD]
+  have hlhs_shape :
+      (fw_gelu (allGatherPrimDimN 2 4 0 [a0, a1, a2, a3])).shape = [1, 8, 128] := by
+    simp [fw_gelu, Tensor.mkShape, hin_shape]
+  apply Tensor.ext (by rw [hlhs_shape, hout_shape])
+  intro idx hidx
+  have hidx1024 : idx < 1024 := by simpa [hlhs_shape, prodShape] using hidx
+  have hidx_in : idx < prodShape (allGatherPrimDimN 2 4 0 [a0, a1, a2, a3]).shape := by
+    simpa [hin_shape, prodShape] using hidx1024
+  have hidx_out :
+      idx <
+        prodShape
+          (allGatherPrimDimN 2 4 0 [fw_gelu a0, fw_gelu a1, fw_gelu a2, fw_gelu a3]).shape := by
+    simpa [hout_shape, prodShape] using hidx1024
+  rw [fw_gelu_valAt_pointwise _ idx hidx_in]
+  rw [valAt_of_lt _ _ hidx_in]
+  rw [valAt_of_lt _ _ hidx_out]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead_in, hhead_out, List.getD, List.getElem?_cons_zero,
+    List.getElem?_cons_succ, Option.getD_some, List.drop, List.foldl,
+    show (32 : Nat) ≠ 0 by omega, show (128 : Nat) ≠ 0 by omega,
+    show (1 : Nat) ≠ 0 by omega, ite_false]
+  simp only [show (32 : Nat) * 4 * 1 = 128 by norm_num,
+    show (32 : Nat) * 1 = 32 by norm_num]
+  set p := idx / 128 with hp_def
+  set r := idx % 128 / 32 with hr_def
+  set j := idx % 32 with hj_def
+  set loc := p * 32 + j with hloc_def
+  have hp_lt : p < 8 := by subst p; omega
+  have hr_lt : r < 4 := by subst r; omega
+  have hj_lt : j < 32 := by subst j; omega
+  have hloc_lt : loc < 256 := by subst loc p j; omega
+  have hidxget : idx % 128 / 1 / 32 = r := by subst r; omega
+  have hlocnorm :
+      idx / 128 * 32 + idx % 128 / 1 % 32 * 1 + idx % 128 % 1 = loc := by
+    subst loc p j; omega
+  rw [hidxget, hlocnorm]
+  have hr_cases : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+  have hgloc_a0 : valAt (fw_gelu a0) loc = geluScalar (valAt a0 loc) := by
+    apply fw_gelu_valAt_pointwise; rw [h0]; simpa [prodShape] using hloc_lt
+  have hgloc_a1 : valAt (fw_gelu a1) loc = geluScalar (valAt a1 loc) := by
+    apply fw_gelu_valAt_pointwise; rw [h1]; simpa [prodShape] using hloc_lt
+  have hgloc_a2 : valAt (fw_gelu a2) loc = geluScalar (valAt a2 loc) := by
+    apply fw_gelu_valAt_pointwise; rw [h2]; simpa [prodShape] using hloc_lt
+  have hgloc_a3 : valAt (fw_gelu a3) loc = geluScalar (valAt a3 loc) := by
+    apply fw_gelu_valAt_pointwise; rw [h3]; simpa [prodShape] using hloc_lt
+  rcases hr_cases with h0r | h1r | h2r | h3r
+  · rw [h0r]
+    change geluScalar (valAt a0 loc) = valAt (fw_gelu a0) loc
+    rw [hgloc_a0]
+  · rw [h1r]
+    change geluScalar (valAt a1 loc) = valAt (fw_gelu a1) loc
+    rw [hgloc_a1]
+  · rw [h2r]
+    change geluScalar (valAt a2 loc) = valAt (fw_gelu a2) loc
+    rw [hgloc_a2]
+  · rw [h3r]
+    change geluScalar (valAt a3 loc) = valAt (fw_gelu a3) loc
+    rw [hgloc_a3]
+
 /-! ## AllToAll node helpers (for pattern_28 family) -/
+
+/-- `allGatherPrimDimN` along dim 2 with four `[1, 8, 8]` shards: index lookup
+    at `p * 32 + r * 8 + j` is the rank-`r` piece at `p * 8 + j`. -/
+private theorem allGather_dim2_4_1_8_8_valAt
+    (x0 x1 x2 x3 : Tensor) (r p j : Nat)
+    (hx0 : x0.shape = [1, 8, 8]) (hx1 : x1.shape = [1, 8, 8])
+    (hx2 : x2.shape = [1, 8, 8]) (hx3 : x3.shape = [1, 8, 8])
+    (hr : r < 4) (hp : p < 8) (hj : j < 8) :
+    valAt (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3]) (p * 32 + r * 8 + j) =
+      valAt ([x0, x1, x2, x3].getD r (zeroTensor [1, 8, 8])) (p * 8 + j) := by
+  have hidx_lt : p * 32 + r * 8 + j < 256 := by
+    have hp7 : p ≤ 7 := by omega
+    have hr3 : r ≤ 3 := by omega
+    have hj7 : j ≤ 7 := by omega
+    have hp32 : p * 32 ≤ 7 * 32 := Nat.mul_le_mul_right 32 hp7
+    have hr8 : r * 8 ≤ 3 * 8 := Nat.mul_le_mul_right 8 hr3
+    omega
+  have hhead : (([x0, x1, x2, x3] : List Tensor).head?.map (fun t => t.shape)).getD []
+      = [1, 8, 8] := by simp [hx0]
+  have hgather_shape : (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead]; simp [List.set, List.getD]
+  rw [valAt_of_lt _ _ (by
+    rw [hgather_shape]; simpa [prodShape] using hidx_lt)]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl,
+    show (8 : Nat) ≠ 0 by omega, show (32 : Nat) ≠ 0 by omega,
+    show (1 : Nat) ≠ 0 by omega, ite_false]
+  simp only [show (8 : Nat) * 4 * 1 = 32 by norm_num,
+    show (8 : Nat) * 1 = 8 by norm_num]
+  set idx := p * 32 + r * 8 + j with hidx_def
+  have hq : idx / 32 = p := by subst idx; omega
+  have hjFull_div : idx % 32 / 1 / 8 = r := by subst idx; omega
+  have hjFull_mod : idx % 32 / 1 % 8 = j := by subst idx; omega
+  have hmod1 : idx % 32 % 1 = 0 := by subst idx; omega
+  rw [hq, hjFull_div, hjFull_mod, hmod1]
+  -- valAt (piece r) (p * 8 + j * 1 + 0)
+  have hloc : p * 8 + j * 1 + 0 = p * 8 + j := by ring
+  rw [hloc]
+
+/-- Bridge: `elemwiseAdd` of two dim-2 four-way `[1,8,8]`-sharded reconstructions
+    equals the reconstruction of per-shard `elemwiseAdd`. Used by P20-style
+    `FW_add` goals where both inputs arrive as four pre-computed `[1,8,8]`
+    shards (gather dim=2). -/
+theorem fw_add_dim2_pre_sharded_4_1_8_8
+    (a0 a1 a2 a3 b0 b1 b2 b3 : Tensor)
+    (ha0 : a0.shape = [1, 8, 8]) (ha1 : a1.shape = [1, 8, 8])
+    (ha2 : a2.shape = [1, 8, 8]) (ha3 : a3.shape = [1, 8, 8])
+    (hb0 : b0.shape = [1, 8, 8]) (hb1 : b1.shape = [1, 8, 8])
+    (hb2 : b2.shape = [1, 8, 8]) (hb3 : b3.shape = [1, 8, 8]) :
+    elemwiseAdd (allGatherPrimDimN 2 4 0 [a0, a1, a2, a3])
+                (allGatherPrimDimN 2 4 0 [b0, b1, b2, b3]) =
+      allGatherPrimDimN 2 4 0
+        [elemwiseAdd a0 b0, elemwiseAdd a1 b1,
+         elemwiseAdd a2 b2, elemwiseAdd a3 b3] := by
+  have hhead_a : (([a0, a1, a2, a3] : List Tensor).head?.map (fun t => t.shape)).getD []
+      = [1, 8, 8] := by simp [ha0]
+  have hhead_b : (([b0, b1, b2, b3] : List Tensor).head?.map (fun t => t.shape)).getD []
+      = [1, 8, 8] := by simp [hb0]
+  have hgather_a_shape : (allGatherPrimDimN 2 4 0 [a0, a1, a2, a3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead_a]; simp [List.set, List.getD]
+  have hgather_b_shape : (allGatherPrimDimN 2 4 0 [b0, b1, b2, b3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead_b]; simp [List.set, List.getD]
+  have hpiece0_shape : (elemwiseAdd a0 b0).shape = [1, 8, 8] :=
+    elemwiseAdd_shape_of_shapes _ _ [1, 8, 8] ha0 hb0
+  have hpiece1_shape : (elemwiseAdd a1 b1).shape = [1, 8, 8] :=
+    elemwiseAdd_shape_of_shapes _ _ [1, 8, 8] ha1 hb1
+  have hpiece2_shape : (elemwiseAdd a2 b2).shape = [1, 8, 8] :=
+    elemwiseAdd_shape_of_shapes _ _ [1, 8, 8] ha2 hb2
+  have hpiece3_shape : (elemwiseAdd a3 b3).shape = [1, 8, 8] :=
+    elemwiseAdd_shape_of_shapes _ _ [1, 8, 8] ha3 hb3
+  have hhead_rhs : (([elemwiseAdd a0 b0, elemwiseAdd a1 b1, elemwiseAdd a2 b2,
+        elemwiseAdd a3 b3] : List Tensor).head?.map (fun t => t.shape)).getD []
+      = [1, 8, 8] := by simp [hpiece0_shape]
+  have hrhs_shape : (allGatherPrimDimN 2 4 0
+      [elemwiseAdd a0 b0, elemwiseAdd a1 b1, elemwiseAdd a2 b2,
+       elemwiseAdd a3 b3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead_rhs]; simp [List.set, List.getD]
+  have hlhs_shape : (elemwiseAdd (allGatherPrimDimN 2 4 0 [a0, a1, a2, a3])
+      (allGatherPrimDimN 2 4 0 [b0, b1, b2, b3])).shape = [1, 8, 32] := by
+    simp [elemwiseAdd, Tensor.mkShape, outShape2, hgather_a_shape, hgather_b_shape]
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  have hidx_rhs : idx < prodShape (allGatherPrimDimN 2 4 0
+      [elemwiseAdd a0 b0, elemwiseAdd a1 b1, elemwiseAdd a2 b2,
+       elemwiseAdd a3 b3]).shape := by
+    simpa [hrhs_shape, prodShape] using hidx256
+  rw [elemwiseAdd_valAt_1_8_32 _ _ _ hgather_a_shape hgather_b_shape hidx256]
+  set p := idx / 32 with hp_def
+  set r := idx % 32 / 8 with hr_def
+  set j := idx % 8 with hj_def
+  have hp_lt : p < 8 := by subst p; omega
+  have hr_lt : r < 4 := by subst r; omega
+  have hj_lt : j < 8 := by subst j; omega
+  have hloc_lt : p * 8 + j < 64 := by omega
+  have hidx_eq : idx = p * 32 + r * 8 + j := by subst p r j; omega
+  have hLHS_a : valAt (allGatherPrimDimN 2 4 0 [a0, a1, a2, a3]) idx =
+      valAt ([a0, a1, a2, a3].getD r (zeroTensor [1, 8, 8])) (p * 8 + j) := by
+    rw [hidx_eq]
+    exact allGather_dim2_4_1_8_8_valAt a0 a1 a2 a3 r p j ha0 ha1 ha2 ha3 hr_lt hp_lt hj_lt
+  have hLHS_b : valAt (allGatherPrimDimN 2 4 0 [b0, b1, b2, b3]) idx =
+      valAt ([b0, b1, b2, b3].getD r (zeroTensor [1, 8, 8])) (p * 8 + j) := by
+    rw [hidx_eq]
+    exact allGather_dim2_4_1_8_8_valAt b0 b1 b2 b3 r p j hb0 hb1 hb2 hb3 hr_lt hp_lt hj_lt
+  rw [hLHS_a, hLHS_b]
+  have hRHS : valAt (allGatherPrimDimN 2 4 0
+      [elemwiseAdd a0 b0, elemwiseAdd a1 b1, elemwiseAdd a2 b2,
+       elemwiseAdd a3 b3]) idx =
+      valAt ([elemwiseAdd a0 b0, elemwiseAdd a1 b1, elemwiseAdd a2 b2,
+              elemwiseAdd a3 b3].getD r (zeroTensor [1, 8, 8])) (p * 8 + j) := by
+    rw [hidx_eq]
+    exact allGather_dim2_4_1_8_8_valAt (elemwiseAdd a0 b0) (elemwiseAdd a1 b1)
+      (elemwiseAdd a2 b2) (elemwiseAdd a3 b3) r p j
+      hpiece0_shape hpiece1_shape hpiece2_shape hpiece3_shape hr_lt hp_lt hj_lt
+  rw [hRHS]
+  have hr_cases : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+  rcases hr_cases with h0 | h1 | h2 | h3
+  · rw [h0]
+    change valAt a0 (p * 8 + j) + valAt b0 (p * 8 + j) =
+      valAt (elemwiseAdd a0 b0) (p * 8 + j)
+    rw [elemwiseAdd_valAt_1_8_8 _ _ _ ha0 hb0 hloc_lt]
+  · rw [h1]
+    change valAt a1 (p * 8 + j) + valAt b1 (p * 8 + j) =
+      valAt (elemwiseAdd a1 b1) (p * 8 + j)
+    rw [elemwiseAdd_valAt_1_8_8 _ _ _ ha1 hb1 hloc_lt]
+  · rw [h2]
+    change valAt a2 (p * 8 + j) + valAt b2 (p * 8 + j) =
+      valAt (elemwiseAdd a2 b2) (p * 8 + j)
+    rw [elemwiseAdd_valAt_1_8_8 _ _ _ ha2 hb2 hloc_lt]
+  · rw [h3]
+    change valAt a3 (p * 8 + j) + valAt b3 (p * 8 + j) =
+      valAt (elemwiseAdd a3 b3) (p * 8 + j)
+    rw [elemwiseAdd_valAt_1_8_8 _ _ _ ha3 hb3 hloc_lt]
 
 end
 end TrainVerify.Denote
