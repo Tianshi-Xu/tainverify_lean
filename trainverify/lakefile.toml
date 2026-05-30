@@ -21,3 +21,6 @@ name = "Trainverify"
 [[lean_lib]]
 name = "denote"
 roots = ["denote"]
+# Large gpt2 graphs require deep kernel recursion (~4365) when peeling producing
+# nodes from the real graph; bump the elaboration thread stack to 1 GB.
+moreLeanArgs = ["-s", "1048576"]
