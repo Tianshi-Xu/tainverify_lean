@@ -5,13 +5,13 @@ import denote.Denote
 
 set_option linter.style.longLine false
 set_option linter.style.nativeDecide false
-set_option maxRecDepth 20000
+set_option maxRecDepth 1000000
 
 open TrainVerify.Denote
 
 namespace TrainVerify.Denote.Generated
 
-def sm : GraphDecl := by
+noncomputable def sm : GraphDecl := by
   refine { numRanks := 1, nodes := ?_ }
   exact [
     { rank := 0, op := "OpName.FW_embedding", ins := [2034, 1603], outs := [1604] },
@@ -700,7 +700,7 @@ def sm : GraphDecl := by
     { rank := 0, op := "OpName.BW_embedding", ins := [2039, 2034, 1603], outs := [2038] },
   ]
 
-def pm : GraphDecl := by
+noncomputable def pm : GraphDecl := by
   refine { numRanks := 4, nodes := ?_ }
   exact [
     { rank := 0, op := "OpName.FW_embedding", ins := [2034, 3057], outs := [3061] },
@@ -5260,7 +5260,7 @@ def pm : GraphDecl := by
     { rank := 3, op := "OpName.BW_embedding", ins := [3080, 2034, 3060], outs := [3079] },
   ]
 
-def smInitShapes : List (Tid × Shape) := [
+noncomputable def smInitShapes : List (Tid × Shape) := [
   (1602, [1]),
   (1603, [50257, 768]),
   (1604, [1, 1024, 768]),
@@ -6295,9 +6295,9 @@ def smInitShapes : List (Tid × Shape) := [
   (3068, [1, 1024, 768]),
 ]
 
-def smInitEnv : ShapeEnv := shapeEnvOfList smInitShapes
+noncomputable def smInitEnv : ShapeEnv := shapeEnvOfList smInitShapes
 
-def pmInitShapes : List (Tid × Shape) := [
+noncomputable def pmInitShapes : List (Tid × Shape) := [
   (1602, [1]),
   (1606, [1, 1024, 768]),
   (1608, [768]),
@@ -11638,7 +11638,7 @@ def pmInitShapes : List (Tid × Shape) := [
   (10760, [1, 256, 768]),
 ]
 
-def pmInitEnv : ShapeEnv := shapeEnvOfList pmInitShapes
+noncomputable def pmInitEnv : ShapeEnv := shapeEnvOfList pmInitShapes
 
 def initGoal_1603 : LineageGoal :=
   { ts := 1603, tsShape := [50257, 768], tps := [{ rank := 0, tid := 3057 }, { rank := 1, tid := 3058 }, { rank := 2, tid := 3059 }, { rank := 3, tid := 3060 }], tpShapes := [[50257, 192], [50257, 192], [50257, 192], [50257, 192]], gatherDim := 1 }
