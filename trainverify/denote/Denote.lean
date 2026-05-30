@@ -6442,6 +6442,8 @@ theorem evalOp_fw_gelu (numParts rank : Nat) (x : Tensor) :
     evalOp numParts rank "OpName.FW_gelu" [] [x] = [fw_gelu x] := by
   rfl
 
+theorem fw_gelu_shape (x : Tensor) : (fw_gelu x).shape = x.shape := rfl
+
 /-- `applyNode` for unary `FW_gelu` with singleton output. -/
 theorem applyNode_fw_gelu_out
     (g : GraphDecl) (s : Store) (rank : Nat) (xTid outTid : Tid) :
