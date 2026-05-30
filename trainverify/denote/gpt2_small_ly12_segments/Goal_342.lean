@@ -49,5 +49,238 @@ def goal_342_cut_initGoals : List LineageGoal := initGoals ++ goal_342_prereqs
 def goal_342_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_342 pm_goal_342 goal_342 sm_goal_342InitEnv pm_goal_342InitEnv goal_342_cut_initGoals
 
+/-! ## Real, `sorry`-free proof of the (cut) BW_gelu lineage goal.
+
+`goal_342` is a backward-gelu (`BW_gelu`, binary `[grad, x]`) tensor sharded on
+dim 2 over 4 ranks. The cut graphs `sm_goal_342` / `pm_goal_342` contain only the
+`BW_gelu` node(s); the two input lineages are exactly `goal_26` (the `x` input,
+sm 1638 = gather of pm 3577..3580) and `goal_343` (the `grad` input, sm 2081 =
+gather of pm 3613..3616), both supplied as init-goals in `goal_342_cut_initGoals`.
+
+The proof mirrors `gpt_ly4_segments/Pattern_22` but for the binary `BW_gelu`
+kernel and uses the new pointwise bridge
+`bw_gelu_dim2_pieces_4_1_1024_768_to_1_1024_3072` (added to `Denote.lean`). -/
+
+set_option maxHeartbeats 4000000
+set_option maxRecDepth 100000
+
+@[reducible] private def g342_sm : NodeDecl :=
+  { rank := 0, op := "OpName.BW_gelu", ins := [2081, 1638], outs := [2080] }
+@[reducible] private def g342_p0 : NodeDecl :=
+  { rank := 0, op := "OpName.BW_gelu", ins := [3613, 3577], outs := [3591] }
+@[reducible] private def g342_p1 : NodeDecl :=
+  { rank := 1, op := "OpName.BW_gelu", ins := [3614, 3578], outs := [3594] }
+@[reducible] private def g342_p2 : NodeDecl :=
+  { rank := 2, op := "OpName.BW_gelu", ins := [3615, 3579], outs := [3597] }
+@[reducible] private def g342_p3 : NodeDecl :=
+  { rank := 3, op := "OpName.BW_gelu", ins := [3616, 3580], outs := [3600] }
+
+private theorem sm_eval_2080 (initSM : Store) :
+    denoteGraph sm_goal_342 initSM 2080 = bw_gelu (initSM 2081) (initSM 1638) := by
+  have h1 : sm_goal_342 = { numRanks := sm_goal_342.numRanks, nodes := g342_sm :: [] } := rfl
+  rw [h1, denoteGraph_cons_eq sm_goal_342 g342_sm []]
+  change (applyNode sm_goal_342 initSM g342_sm) 2080 = _
+  rw [applyNode_bw_gelu_out]
+
+private theorem pm_eval_3591 (initPM : Store) :
+    denoteGraph pm_goal_342 initPM 3591 = bw_gelu (initPM 3613) (initPM 3577) := by
+  have hsub : denoteGraph pm_goal_342 initPM 3591 =
+      denoteGraph { pm_goal_342 with nodes := pm_goal_342.nodes.take 1 } initPM 3591 :=
+    denoteGraph_tid_eq_of_suffix_no_writes pm_goal_342 initPM 3591
+      (pm_goal_342.nodes.take 1) (pm_goal_342.nodes.drop 1)
+      (List.take_append_drop 1 _).symm (by decide)
+  rw [hsub]
+  have htake : ({ pm_goal_342 with nodes := pm_goal_342.nodes.take 1 } : GraphDecl) =
+      { pm_goal_342 with nodes := pm_goal_342.nodes.take 0 ++ [g342_p0] } := rfl
+  rw [htake, denoteGraph_nodes_append]
+  have hsing : ({ pm_goal_342 with nodes := [g342_p0] } : GraphDecl) =
+      { numRanks := pm_goal_342.numRanks, nodes := g342_p0 :: [] } := rfl
+  rw [hsing, denoteGraph_cons_eq pm_goal_342 g342_p0 []]
+  have hpre : denoteGraph { pm_goal_342 with nodes := pm_goal_342.nodes.take 0 } initPM = initPM := rfl
+  change (applyNode pm_goal_342 (denoteGraph { pm_goal_342 with nodes := pm_goal_342.nodes.take 0 } initPM) g342_p0) 3591 = _
+  rw [hpre, applyNode_bw_gelu_out]
+
+private theorem pm_eval_3594 (initPM : Store) :
+    denoteGraph pm_goal_342 initPM 3594 = bw_gelu (initPM 3614) (initPM 3578) := by
+  have hg : denoteGraph { pm_goal_342 with nodes := pm_goal_342.nodes.take 1 } initPM 3614 = initPM 3614 := by
+    have h := denoteGraph_tid_eq_of_suffix_no_writes
+      { pm_goal_342 with nodes := pm_goal_342.nodes.take 1 } initPM 3614
+      [] (pm_goal_342.nodes.take 1) rfl (by decide)
+    rw [h]
+    exact congrFun (denoteGraph_nodes_nil _ initPM) _
+  have hx : denoteGraph { pm_goal_342 with nodes := pm_goal_342.nodes.take 1 } initPM 3578 = initPM 3578 := by
+    have h := denoteGraph_tid_eq_of_suffix_no_writes
+      { pm_goal_342 with nodes := pm_goal_342.nodes.take 1 } initPM 3578
+      [] (pm_goal_342.nodes.take 1) rfl (by decide)
+    rw [h]
+    exact congrFun (denoteGraph_nodes_nil _ initPM) _
+  have hsub : denoteGraph pm_goal_342 initPM 3594 =
+      denoteGraph { pm_goal_342 with nodes := pm_goal_342.nodes.take 2 } initPM 3594 :=
+    denoteGraph_tid_eq_of_suffix_no_writes pm_goal_342 initPM 3594
+      (pm_goal_342.nodes.take 2) (pm_goal_342.nodes.drop 2)
+      (List.take_append_drop 2 _).symm (by decide)
+  rw [hsub]
+  have htake : ({ pm_goal_342 with nodes := pm_goal_342.nodes.take 2 } : GraphDecl) =
+      { pm_goal_342 with nodes := pm_goal_342.nodes.take 1 ++ [g342_p1] } := rfl
+  rw [htake, denoteGraph_nodes_append]
+  have hsing : ({ pm_goal_342 with nodes := [g342_p1] } : GraphDecl) =
+      { numRanks := pm_goal_342.numRanks, nodes := g342_p1 :: [] } := rfl
+  rw [hsing, denoteGraph_cons_eq pm_goal_342 g342_p1 []]
+  change (applyNode pm_goal_342 (denoteGraph { pm_goal_342 with nodes := pm_goal_342.nodes.take 1 } initPM) g342_p1) 3594 = _
+  rw [applyNode_bw_gelu_out, hg, hx]
+
+private theorem pm_eval_3597 (initPM : Store) :
+    denoteGraph pm_goal_342 initPM 3597 = bw_gelu (initPM 3615) (initPM 3579) := by
+  have hg : denoteGraph { pm_goal_342 with nodes := pm_goal_342.nodes.take 2 } initPM 3615 = initPM 3615 := by
+    have h := denoteGraph_tid_eq_of_suffix_no_writes
+      { pm_goal_342 with nodes := pm_goal_342.nodes.take 2 } initPM 3615
+      [] (pm_goal_342.nodes.take 2) rfl (by decide)
+    rw [h]
+    exact congrFun (denoteGraph_nodes_nil _ initPM) _
+  have hx : denoteGraph { pm_goal_342 with nodes := pm_goal_342.nodes.take 2 } initPM 3579 = initPM 3579 := by
+    have h := denoteGraph_tid_eq_of_suffix_no_writes
+      { pm_goal_342 with nodes := pm_goal_342.nodes.take 2 } initPM 3579
+      [] (pm_goal_342.nodes.take 2) rfl (by decide)
+    rw [h]
+    exact congrFun (denoteGraph_nodes_nil _ initPM) _
+  have hsub : denoteGraph pm_goal_342 initPM 3597 =
+      denoteGraph { pm_goal_342 with nodes := pm_goal_342.nodes.take 3 } initPM 3597 :=
+    denoteGraph_tid_eq_of_suffix_no_writes pm_goal_342 initPM 3597
+      (pm_goal_342.nodes.take 3) (pm_goal_342.nodes.drop 3)
+      (List.take_append_drop 3 _).symm (by decide)
+  rw [hsub]
+  have htake : ({ pm_goal_342 with nodes := pm_goal_342.nodes.take 3 } : GraphDecl) =
+      { pm_goal_342 with nodes := pm_goal_342.nodes.take 2 ++ [g342_p2] } := rfl
+  rw [htake, denoteGraph_nodes_append]
+  have hsing : ({ pm_goal_342 with nodes := [g342_p2] } : GraphDecl) =
+      { numRanks := pm_goal_342.numRanks, nodes := g342_p2 :: [] } := rfl
+  rw [hsing, denoteGraph_cons_eq pm_goal_342 g342_p2 []]
+  change (applyNode pm_goal_342 (denoteGraph { pm_goal_342 with nodes := pm_goal_342.nodes.take 2 } initPM) g342_p2) 3597 = _
+  rw [applyNode_bw_gelu_out, hg, hx]
+
+private theorem pm_eval_3600 (initPM : Store) :
+    denoteGraph pm_goal_342 initPM 3600 = bw_gelu (initPM 3616) (initPM 3580) := by
+  have hg : denoteGraph { pm_goal_342 with nodes := pm_goal_342.nodes.take 3 } initPM 3616 = initPM 3616 := by
+    have h := denoteGraph_tid_eq_of_suffix_no_writes
+      { pm_goal_342 with nodes := pm_goal_342.nodes.take 3 } initPM 3616
+      [] (pm_goal_342.nodes.take 3) rfl (by decide)
+    rw [h]
+    exact congrFun (denoteGraph_nodes_nil _ initPM) _
+  have hx : denoteGraph { pm_goal_342 with nodes := pm_goal_342.nodes.take 3 } initPM 3580 = initPM 3580 := by
+    have h := denoteGraph_tid_eq_of_suffix_no_writes
+      { pm_goal_342 with nodes := pm_goal_342.nodes.take 3 } initPM 3580
+      [] (pm_goal_342.nodes.take 3) rfl (by decide)
+    rw [h]
+    exact congrFun (denoteGraph_nodes_nil _ initPM) _
+  have hsub : denoteGraph pm_goal_342 initPM 3600 =
+      denoteGraph { pm_goal_342 with nodes := pm_goal_342.nodes.take 4 } initPM 3600 :=
+    denoteGraph_tid_eq_of_suffix_no_writes pm_goal_342 initPM 3600
+      (pm_goal_342.nodes.take 4) (pm_goal_342.nodes.drop 4)
+      (List.take_append_drop 4 _).symm (by decide)
+  rw [hsub]
+  have htake : ({ pm_goal_342 with nodes := pm_goal_342.nodes.take 4 } : GraphDecl) =
+      { pm_goal_342 with nodes := pm_goal_342.nodes.take 3 ++ [g342_p3] } := rfl
+  rw [htake, denoteGraph_nodes_append]
+  have hsing : ({ pm_goal_342 with nodes := [g342_p3] } : GraphDecl) =
+      { numRanks := pm_goal_342.numRanks, nodes := g342_p3 :: [] } := rfl
+  rw [hsing, denoteGraph_cons_eq pm_goal_342 g342_p3 []]
+  change (applyNode pm_goal_342 (denoteGraph { pm_goal_342 with nodes := pm_goal_342.nodes.take 3 } initPM) g342_p3) 3600 = _
+  rw [applyNode_bw_gelu_out, hg, hx]
+
+theorem prove_goal_342 : goal_342_stmt_cut := by
+  intro initSM initPM _hSmInit _hPmInit hInitGoals
+  -- Input lineages, taken honestly from the cut init-goals.
+  have hmem26 : goal_26 ∈ goal_342_cut_initGoals := by
+    unfold goal_342_cut_initGoals
+    exact List.mem_append.mpr (Or.inr (by decide))
+  have hmem343 : goal_343 ∈ goal_342_cut_initGoals := by
+    unfold goal_342_cut_initGoals
+    exact List.mem_append.mpr (Or.inr (by decide))
+  have h26 := hInitGoals goal_26 hmem26
+  have h343 := hInitGoals goal_343 hmem343
+  obtain ⟨h1638_shape, h1638_pm_shapes, h1638_eq_rec⟩ := h26
+  obtain ⟨_h2081_shape, h2081_pm_shapes, h2081_eq_rec⟩ := h343
+  -- Per-rank piece shapes for the `x` input (goal_26).
+  have ⟨hx0, hx1, hx2, hx3⟩ :
+      (initPM 3577).shape = [1, 1024, 768] ∧ (initPM 3578).shape = [1, 1024, 768] ∧
+      (initPM 3579).shape = [1, 1024, 768] ∧ (initPM 3580).shape = [1, 1024, 768] := by
+    have hs := h1638_pm_shapes
+    change [(initPM 3577).shape, (initPM 3578).shape, (initPM 3579).shape, (initPM 3580).shape]
+      = [[1, 1024, 768], [1, 1024, 768], [1, 1024, 768], [1, 1024, 768]] at hs
+    simp only [List.cons.injEq, and_true] at hs
+    exact ⟨hs.1, hs.2.1, hs.2.2.1, hs.2.2.2⟩
+  -- Per-rank piece shapes for the `grad` input (goal_343).
+  have ⟨hg0, hg1, hg2, hg3⟩ :
+      (initPM 3613).shape = [1, 1024, 768] ∧ (initPM 3614).shape = [1, 1024, 768] ∧
+      (initPM 3615).shape = [1, 1024, 768] ∧ (initPM 3616).shape = [1, 1024, 768] := by
+    have hs := h2081_pm_shapes
+    change [(initPM 3613).shape, (initPM 3614).shape, (initPM 3615).shape, (initPM 3616).shape]
+      = [[1, 1024, 768], [1, 1024, 768], [1, 1024, 768], [1, 1024, 768]] at hs
+    simp only [List.cons.injEq, and_true] at hs
+    exact ⟨hs.1, hs.2.1, hs.2.2.1, hs.2.2.2⟩
+  -- Input lineage equations as plain `allGatherPrimDimN`.
+  have h1638_eq : initSM 1638 = allGatherPrimDimN 2 4 0
+      [initPM 3577, initPM 3578, initPM 3579, initPM 3580] := by
+    have hh := h1638_eq_rec
+    change initSM 1638 = reconstructWithDim 2 pm_goal_342.numRanks 0
+      ([({ rank := 0, tid := 3577 } : Piece), { rank := 1, tid := 3578 },
+        { rank := 2, tid := 3579 }, { rank := 3, tid := 3580 }].map
+        (fun p => initPM p.tid)) at hh
+    simp only [List.map_cons, List.map_nil] at hh
+    rw [hh, show pm_goal_342.numRanks = 4 from rfl, reconstructWithDim_cons_cons_nonscalar]
+    rw [show (initPM 3577).shape = [1, 1024, 768] from hx0]
+    intro hbad; cases hbad
+  have h2081_eq : initSM 2081 = allGatherPrimDimN 2 4 0
+      [initPM 3613, initPM 3614, initPM 3615, initPM 3616] := by
+    have hh := h2081_eq_rec
+    change initSM 2081 = reconstructWithDim 2 pm_goal_342.numRanks 0
+      ([({ rank := 0, tid := 3613 } : Piece), { rank := 1, tid := 3614 },
+        { rank := 2, tid := 3615 }, { rank := 3, tid := 3616 }].map
+        (fun p => initPM p.tid)) at hh
+    simp only [List.map_cons, List.map_nil] at hh
+    rw [hh, show pm_goal_342.numRanks = 4 from rfl, reconstructWithDim_cons_cons_nonscalar]
+    rw [show (initPM 3613).shape = [1, 1024, 768] from hg0]
+    intro hbad; cases hbad
+  -- Kernel reductions on the cut graphs.
+  have hsm := sm_eval_2080 initSM
+  have he0 := pm_eval_3591 initPM
+  have he1 := pm_eval_3594 initPM
+  have he2 := pm_eval_3597 initPM
+  have he3 := pm_eval_3600 initPM
+  have h_p1 : (denoteGraph sm_goal_342 initSM 2080).shape = [1, 1024, 3072] := by
+    rw [hsm, bw_gelu_shape]; exact h1638_shape
+  have h_p2 :
+      [(denoteGraph pm_goal_342 initPM 3591).shape, (denoteGraph pm_goal_342 initPM 3594).shape,
+       (denoteGraph pm_goal_342 initPM 3597).shape, (denoteGraph pm_goal_342 initPM 3600).shape]
+      = [[1, 1024, 768], [1, 1024, 768], [1, 1024, 768], [1, 1024, 768]] := by
+    rw [he0, he1, he2, he3, bw_gelu_shape, bw_gelu_shape, bw_gelu_shape, bw_gelu_shape,
+        hx0, hx1, hx2, hx3]
+  have h_p3 : denoteGraph sm_goal_342 initSM 2080 = reconstructWithDim 2 4 0
+      [denoteGraph pm_goal_342 initPM 3591, denoteGraph pm_goal_342 initPM 3594,
+       denoteGraph pm_goal_342 initPM 3597, denoteGraph pm_goal_342 initPM 3600] := by
+    rw [hsm, h2081_eq, h1638_eq, he0, he1, he2, he3, reconstructWithDim_cons_cons_nonscalar]
+    · exact bw_gelu_dim2_pieces_4_1_1024_768_to_1_1024_3072
+        (initPM 3613) (initPM 3614) (initPM 3615) (initPM 3616)
+        (initPM 3577) (initPM 3578) (initPM 3579) (initPM 3580)
+        hg0 hg1 hg2 hg3 hx0 hx1 hx2 hx3
+    · rw [bw_gelu_shape, hx0]; intro hbad; cases hbad
+  change (denoteGraph sm_goal_342 initSM 2080).shape = [1, 1024, 3072] ∧
+    List.map (fun t => t.shape)
+      ([({ rank := 0, tid := 3591 } : Piece), { rank := 1, tid := 3594 },
+        { rank := 2, tid := 3597 }, { rank := 3, tid := 3600 }].map
+        (fun p => denoteGraph pm_goal_342 initPM p.tid)) =
+      [[1, 1024, 768], [1, 1024, 768], [1, 1024, 768], [1, 1024, 768]] ∧
+    denoteGraph sm_goal_342 initSM 2080 =
+      reconstructWithDim 2 pm_goal_342.numRanks 0
+        ([({ rank := 0, tid := 3591 } : Piece), { rank := 1, tid := 3594 },
+          { rank := 2, tid := 3597 }, { rank := 3, tid := 3600 }].map
+          (fun p => denoteGraph pm_goal_342 initPM p.tid))
+  refine ⟨h_p1, ?_, ?_⟩
+  · simp only [List.map_cons, List.map_nil]; exact h_p2
+  · simp only [List.map_cons, List.map_nil, show pm_goal_342.numRanks = 4 from rfl]
+    exact h_p3
+
+#print axioms prove_goal_342
+
 end TrainVerify.Denote.GeneratedGoals
 

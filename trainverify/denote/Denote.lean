@@ -6571,6 +6571,129 @@ theorem fw_gelu_dim2_pieces_4_1_8_32_to_1_8_128
     change geluScalar (valAt a3 loc) = valAt (fw_gelu a3) loc
     rw [hgloc_a3]
 
+/-! ## BW_gelu sharding bridge (for backward gelu goals, e.g. goal_342)
+
+`bw_gelu` is pointwise in both inputs (`valAt (bw_gelu g x) i = valAt g i *
+geluDerivScalar (valAt x i)`), so it commutes with a dim-2 all-gather of its two
+inputs. This is the binary analogue of `fw_gelu_dim2_pieces_*`. -/
+
+private theorem bw_gelu_valAt_pointwise (g x : Tensor) (idx : Nat)
+    (hidx : idx < prodShape x.shape) :
+    valAt (bw_gelu g x) idx = valAt g idx * geluDerivScalar (valAt x idx) := by
+  have hshape : (bw_gelu g x).shape = x.shape := rfl
+  rw [valAt_of_lt _ _ (by rw [hshape]; exact hidx)]
+  simp [bw_gelu, Tensor.mkShape, valAt_of_lt _ _ hidx]
+
+/-- `allGatherPrimDimN` along dim 2 with four `[1, 1024, 768]` shards: index lookup
+    at `p * 3072 + r * 768 + j` is the rank-`r` piece at `p * 768 + j`. -/
+private theorem allGather_dim2_4_1_1024_768_valAt
+    (x0 x1 x2 x3 : Tensor) (r p j : Nat)
+    (hx0 : x0.shape = [1, 1024, 768]) (hx1 : x1.shape = [1, 1024, 768])
+    (hx2 : x2.shape = [1, 1024, 768]) (hx3 : x3.shape = [1, 1024, 768])
+    (hr : r < 4) (hp : p < 1024) (hj : j < 768) :
+    valAt (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3]) (p * 3072 + r * 768 + j) =
+      valAt ([x0, x1, x2, x3].getD r (zeroTensor [1, 1024, 768])) (p * 768 + j) := by
+  have hidx_lt : p * 3072 + r * 768 + j < 3145728 := by
+    have hp1 : p ≤ 1023 := by omega
+    have hr3 : r ≤ 3 := by omega
+    have hj1 : j ≤ 767 := by omega
+    have hp32 : p * 3072 ≤ 1023 * 3072 := Nat.mul_le_mul_right 3072 hp1
+    have hr8 : r * 768 ≤ 3 * 768 := Nat.mul_le_mul_right 768 hr3
+    omega
+  have hhead : (([x0, x1, x2, x3] : List Tensor).head?.map (fun t => t.shape)).getD []
+      = [1, 1024, 768] := by simp [hx0]
+  have hgather_shape : (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3]).shape = [1, 1024, 3072] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead]; simp [List.set, List.getD]
+  rw [valAt_of_lt _ _ (by
+    rw [hgather_shape]; simpa [prodShape] using hidx_lt)]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl,
+    show (768 : Nat) ≠ 0 by omega, show (3072 : Nat) ≠ 0 by omega,
+    show (1 : Nat) ≠ 0 by omega, ite_false]
+  simp only [show (768 : Nat) * 4 * 1 = 3072 by norm_num,
+    show (768 : Nat) * 1 = 768 by norm_num]
+  set idx := p * 3072 + r * 768 + j with hidx_def
+  have hq : idx / 3072 = p := by subst idx; omega
+  have hjFull_div : idx % 3072 / 1 / 768 = r := by subst idx; omega
+  have hjFull_mod : idx % 3072 / 1 % 768 = j := by subst idx; omega
+  have hmod1 : idx % 3072 % 1 = 0 := by subst idx; omega
+  rw [hq, hjFull_div, hjFull_mod, hmod1]
+  have hloc : p * 768 + j * 1 + 0 = p * 768 + j := by ring
+  rw [hloc]
+
+/-- Bridge for backward-gelu goals (`goal_342` family): `bw_gelu` distributes
+through `allGatherPrimDimN` on dim 2 for four `[1,1024,768]` shards in each input. -/
+theorem bw_gelu_dim2_pieces_4_1_1024_768_to_1_1024_3072
+    (g0 g1 g2 g3 x0 x1 x2 x3 : Tensor)
+    (hg0 : g0.shape = [1, 1024, 768]) (hg1 : g1.shape = [1, 1024, 768])
+    (hg2 : g2.shape = [1, 1024, 768]) (hg3 : g3.shape = [1, 1024, 768])
+    (hx0 : x0.shape = [1, 1024, 768]) (hx1 : x1.shape = [1, 1024, 768])
+    (hx2 : x2.shape = [1, 1024, 768]) (hx3 : x3.shape = [1, 1024, 768]) :
+    bw_gelu (allGatherPrimDimN 2 4 0 [g0, g1, g2, g3])
+            (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3])
+      = allGatherPrimDimN 2 4 0
+          [bw_gelu g0 x0, bw_gelu g1 x1, bw_gelu g2 x2, bw_gelu g3 x3] := by
+  have hhead_g : (([g0, g1, g2, g3] : List Tensor).head?.map (fun t => t.shape)).getD []
+      = [1, 1024, 768] := by simp [hg0]
+  have hhead_x : (([x0, x1, x2, x3] : List Tensor).head?.map (fun t => t.shape)).getD []
+      = [1, 1024, 768] := by simp [hx0]
+  have hpiece0 : (bw_gelu g0 x0).shape = [1, 1024, 768] := by rw [bw_gelu_shape]; exact hx0
+  have hpiece1 : (bw_gelu g1 x1).shape = [1, 1024, 768] := by rw [bw_gelu_shape]; exact hx1
+  have hpiece2 : (bw_gelu g2 x2).shape = [1, 1024, 768] := by rw [bw_gelu_shape]; exact hx2
+  have hpiece3 : (bw_gelu g3 x3).shape = [1, 1024, 768] := by rw [bw_gelu_shape]; exact hx3
+  have hhead_out :
+      (([bw_gelu g0 x0, bw_gelu g1 x1, bw_gelu g2 x2, bw_gelu g3 x3] : List Tensor).head?.map
+        (fun t => t.shape)).getD [] = [1, 1024, 768] := by simp [hpiece0]
+  have hG_shape : (allGatherPrimDimN 2 4 0 [g0, g1, g2, g3]).shape = [1, 1024, 3072] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead_g]; simp [List.set, List.getD]
+  have hX_shape : (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3]).shape = [1, 1024, 3072] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead_x]; simp [List.set, List.getD]
+  have hout_shape :
+      (allGatherPrimDimN 2 4 0
+        [bw_gelu g0 x0, bw_gelu g1 x1, bw_gelu g2 x2, bw_gelu g3 x3]).shape = [1, 1024, 3072] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead_out]; simp [List.set, List.getD]
+  have hlhs_shape :
+      (bw_gelu (allGatherPrimDimN 2 4 0 [g0, g1, g2, g3])
+               (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3])).shape = [1, 1024, 3072] := by
+    rw [bw_gelu_shape]; exact hX_shape
+  apply Tensor.ext (by rw [hlhs_shape, hout_shape])
+  intro idx hidx
+  have hidx_tot : idx < 3145728 := by simpa [hlhs_shape, prodShape] using hidx
+  have hidxX : idx < prodShape (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3]).shape := by
+    simpa [hX_shape, prodShape] using hidx_tot
+  obtain ⟨p, r, j, hp, hr, hj, hidx_eq⟩ :
+      ∃ p r j, p < 1024 ∧ r < 4 ∧ j < 768 ∧ idx = p * 3072 + r * 768 + j :=
+    ⟨idx / 3072, idx % 3072 / 768, idx % 768, by omega, by omega, by omega, by omega⟩
+  subst hidx_eq
+  rw [bw_gelu_valAt_pointwise _ _ _ hidxX]
+  rw [allGather_dim2_4_1_1024_768_valAt g0 g1 g2 g3 r p j hg0 hg1 hg2 hg3 hr hp hj]
+  rw [allGather_dim2_4_1_1024_768_valAt x0 x1 x2 x3 r p j hx0 hx1 hx2 hx3 hr hp hj]
+  rw [allGather_dim2_4_1_1024_768_valAt (bw_gelu g0 x0) (bw_gelu g1 x1) (bw_gelu g2 x2)
+        (bw_gelu g3 x3) r p j hpiece0 hpiece1 hpiece2 hpiece3 hr hp hj]
+  have hloc_lt : p * 768 + j < 786432 := by
+    have hp1 : p ≤ 1023 := by omega
+    have hp768 : p * 768 ≤ 1023 * 768 := Nat.mul_le_mul_right 768 hp1
+    omega
+  have hloc_x0 : p * 768 + j < prodShape x0.shape := by rw [hx0]; simpa [prodShape] using hloc_lt
+  have hloc_x1 : p * 768 + j < prodShape x1.shape := by rw [hx1]; simpa [prodShape] using hloc_lt
+  have hloc_x2 : p * 768 + j < prodShape x2.shape := by rw [hx2]; simpa [prodShape] using hloc_lt
+  have hloc_x3 : p * 768 + j < prodShape x3.shape := by rw [hx3]; simpa [prodShape] using hloc_lt
+  have hr_cases : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+  rcases hr_cases with h0 | h1 | h2 | h3
+  · subst h0
+    simp only [List.getD_cons_zero]
+    rw [bw_gelu_valAt_pointwise g0 x0 _ hloc_x0]
+  · subst h1
+    simp only [List.getD_cons_succ, List.getD_cons_zero]
+    rw [bw_gelu_valAt_pointwise g1 x1 _ hloc_x1]
+  · subst h2
+    simp only [List.getD_cons_succ, List.getD_cons_zero]
+    rw [bw_gelu_valAt_pointwise g2 x2 _ hloc_x2]
+  · subst h3
+    simp only [List.getD_cons_succ, List.getD_cons_zero]
+    rw [bw_gelu_valAt_pointwise g3 x3 _ hloc_x3]
+
 /-! ## AllToAll node helpers (for pattern_28 family) -/
 
 /-- `allGatherPrimDimN` along dim 2 with four `[1, 8, 8]` shards: index lookup
