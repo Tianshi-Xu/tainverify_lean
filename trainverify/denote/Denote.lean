@@ -6456,6 +6456,25 @@ theorem applyNode_fw_gelu_out
   unfold storeSet
   simp [List.find?]
 
+/-- Unfolding lemma for binary `BW_gelu` (grad, input). -/
+theorem evalOp_bw_gelu (numParts rank : Nat) (g x : Tensor) :
+    evalOp numParts rank "OpName.BW_gelu" [] [g, x] = [bw_gelu g x] := by
+  rfl
+
+theorem bw_gelu_shape (g x : Tensor) : (bw_gelu g x).shape = x.shape := rfl
+
+/-- `applyNode` for binary `BW_gelu` with singleton output. -/
+theorem applyNode_bw_gelu_out
+    (gr : GraphDecl) (s : Store) (rank : Nat) (gTid xTid outTid : Tid) :
+    applyNode gr s { rank := rank, op := "OpName.BW_gelu", ins := [gTid, xTid], outs := [outTid] } outTid =
+      bw_gelu (s gTid) (s xTid) := by
+  unfold applyNode
+  rw [show ([gTid, xTid] : List Tid).map s = [s gTid, s xTid] from rfl,
+      evalOp_bw_gelu]
+  change storeSet s [(outTid, bw_gelu (s gTid) (s xTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
 private theorem fw_gelu_valAt_pointwise (x : Tensor) (idx : Nat)
     (hidx : idx < prodShape x.shape) :
     valAt (fw_gelu x) idx = geluScalar (valAt x idx) := by
