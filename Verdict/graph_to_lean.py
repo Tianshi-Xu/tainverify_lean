@@ -372,16 +372,34 @@ def _get_node_params(G: Any, n: Any, num_parts: int = 0) -> Optional[List[int]]:
 def _embedding_offset_params_by_node(
 	G: Any, nodes: Sequence[Any], num_parts: int = 0
 ) -> Dict[int, List[int]]:
-	"""Infer offset params for vocab-parallel embedding nodes.
+	"""Infer offset params for row/vocab-sharded embedding nodes.
 
 	There are two embedding patterns in GPT graphs:
-	- vocab-parallel token embedding: ids (and, for BW, g) are shared while each
-	  rank has a different weight shard. This needs offset = rank * shard_rows.
-	- replicated positional embedding: ids/g are already partitioned and all ranks
-	  use the same weight. This must not get an offset.
+	- row/vocab-sharded embedding: each rank has a different row shard and the
+	  per-rank lookup outputs are summed with AllReducePrim. This needs
+	  offset = rank * shard_rows.
+	- hidden-sharded embedding: each rank has all rows but only a hidden slice and
+	  the lookup outputs are gathered. This must not get an offset.
 	"""
 	if num_parts <= 1:
 		return {}
+
+	consumers: Dict[int, List[Any]] = {}
+	for n in nodes:
+		for t in G.node_inputs(n):
+			consumers.setdefault(int(t.tid), []).append(n)
+
+	def _fw_outputs_feed_allreduce(ns: Sequence[Any]) -> bool:
+		out_tids = sorted(int(G.node_outputs(n)[0].tid) for n in ns if G.node_outputs(n))
+		if len(out_tids) != num_parts:
+			return False
+		for c in consumers.get(out_tids[0], []):
+			if "AllReducePrim" not in _safe_str_op(G.node_opname(c)):
+				continue
+			c_ins = sorted(int(t.tid) for t in G.node_inputs(c))
+			if c_ins == out_tids:
+				return True
+		return False
 
 	groups: Dict[Tuple[Any, ...], List[Any]] = {}
 	for n in nodes:
@@ -396,11 +414,13 @@ def _embedding_offset_params_by_node(
 		groups.setdefault(key, []).append(n)
 
 	out: Dict[int, List[int]] = {}
-	for ns in groups.values():
+	for key, ns in groups.items():
 		if len(ns) != num_parts:
 			continue
 		ranks = sorted(_node_rank(n) for n in ns)
 		if ranks != list(range(num_parts)):
+			continue
+		if key and key[0] == "FW_embedding" and not _fw_outputs_feed_allreduce(ns):
 			continue
 		weight_tids = [int(G.node_inputs(n)[-1].tid) for n in ns]
 		if len(set(weight_tids)) != num_parts:
@@ -788,7 +808,7 @@ def emit_lean_spec(
 	lines.append("")
 	lines.append("set_option linter.style.longLine false")
 	lines.append("set_option linter.style.nativeDecide false")
-	lines.append("set_option maxRecDepth 20000")
+	lines.append("set_option maxRecDepth 100000")
 	lines.append("")
 	lines.append("open TrainVerify.Denote")
 	lines.append("")
@@ -1835,7 +1855,7 @@ def emit_lean_spec(
 			main_lines.append(f"import {parent_module}.SegmentInstances")
 		main_lines.append(f"import {parent_module}.Instances")
 		main_lines.append("")
-		main_lines.append("set_option maxRecDepth 20000")
+		main_lines.append("set_option maxRecDepth 100000")
 		main_lines.append("set_option linter.style.emptyLine false")
 		main_lines.append("")
 		main_lines.append("open TrainVerify.Denote")

@@ -17,10 +17,10 @@ def sm_goal_3 : GraphDecl := by
 def pm_goal_3 : GraphDecl := by
   refine { numRanks := 4, nodes := ?_ }
   exact [
-    { rank := 0, op := "OpName.FW_embedding", ins := [2036, 3081], outs := [3085] },
-    { rank := 1, op := "OpName.FW_embedding", ins := [2036, 3082], outs := [3086] },
-    { rank := 2, op := "OpName.FW_embedding", ins := [2036, 3083], outs := [3087] },
-    { rank := 3, op := "OpName.FW_embedding", ins := [2036, 3084], outs := [3088] },
+    { rank := 0, op := "OpName.FW_embedding", ins := [2036, 3081], outs := [3085], params := [0] },
+    { rank := 1, op := "OpName.FW_embedding", ins := [2036, 3082], outs := [3086], params := [256] },
+    { rank := 2, op := "OpName.FW_embedding", ins := [2036, 3083], outs := [3087], params := [512] },
+    { rank := 3, op := "OpName.FW_embedding", ins := [2036, 3084], outs := [3088], params := [768] },
     { rank := 0, op := "OpName.AllReducePrim", ins := [3085, 3086, 3087, 3088], outs := [1606] },
   ]
 

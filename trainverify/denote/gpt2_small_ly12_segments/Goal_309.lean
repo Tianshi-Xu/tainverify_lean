@@ -17,10 +17,10 @@ def sm_goal_309 : GraphDecl := by
 def pm_goal_309 : GraphDecl := by
   refine { numRanks := 4, nodes := ?_ }
   exact [
-    { rank := 0, op := "OpName.BW_embedding", ins := [2041, 2036, 3081], outs := [3097] },
-    { rank := 1, op := "OpName.BW_embedding", ins := [2041, 2036, 3082], outs := [3098] },
-    { rank := 2, op := "OpName.BW_embedding", ins := [2041, 2036, 3083], outs := [3099] },
-    { rank := 3, op := "OpName.BW_embedding", ins := [2041, 2036, 3084], outs := [3100] },
+    { rank := 0, op := "OpName.BW_embedding", ins := [2041, 2036, 3081], outs := [3097], params := [0] },
+    { rank := 1, op := "OpName.BW_embedding", ins := [2041, 2036, 3082], outs := [3098], params := [256] },
+    { rank := 2, op := "OpName.BW_embedding", ins := [2041, 2036, 3083], outs := [3099], params := [512] },
+    { rank := 3, op := "OpName.BW_embedding", ins := [2041, 2036, 3084], outs := [3100], params := [768] },
   ]
 
 def sm_goal_309InitShapes : List (Tid × Shape) := [

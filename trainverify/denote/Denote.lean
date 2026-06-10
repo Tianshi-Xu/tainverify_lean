@@ -2264,6 +2264,7 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
   | "OpName.BW_mean", [g, x] => [bw_mean g x]
   | "OpName.FW_rsqrt", [x] => [fw_rsqrt x]
   | "OpName.BW_rsqrt", [g, x] => [bw_rsqrt g x]
+  | "OpName.BW_multiref", xs => [tensorSum xs]
   | _, _ => []
 
 /-!

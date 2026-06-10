@@ -5,7 +5,7 @@ import denote.Denote
 
 set_option linter.style.longLine false
 set_option linter.style.nativeDecide false
-set_option maxRecDepth 20000
+set_option maxRecDepth 100000
 
 open TrainVerify.Denote
 
@@ -704,13 +704,13 @@ def pm : GraphDecl := by
   refine { numRanks := 4, nodes := ?_ }
   exact [
     { rank := 0, op := "OpName.FW_embedding", ins := [2034, 3057], outs := [3061] },
-    { rank := 0, op := "OpName.FW_embedding", ins := [2036, 3081], outs := [3085] },
+    { rank := 0, op := "OpName.FW_embedding", ins := [2036, 3081], outs := [3085], params := [0] },
     { rank := 1, op := "OpName.FW_embedding", ins := [2034, 3058], outs := [3062] },
-    { rank := 1, op := "OpName.FW_embedding", ins := [2036, 3082], outs := [3086] },
+    { rank := 1, op := "OpName.FW_embedding", ins := [2036, 3082], outs := [3086], params := [256] },
     { rank := 2, op := "OpName.FW_embedding", ins := [2034, 3059], outs := [3063] },
-    { rank := 2, op := "OpName.FW_embedding", ins := [2036, 3083], outs := [3087] },
+    { rank := 2, op := "OpName.FW_embedding", ins := [2036, 3083], outs := [3087], params := [512] },
     { rank := 3, op := "OpName.FW_embedding", ins := [2034, 3060], outs := [3064] },
-    { rank := 3, op := "OpName.FW_embedding", ins := [2036, 3084], outs := [3088] },
+    { rank := 3, op := "OpName.FW_embedding", ins := [2036, 3084], outs := [3088], params := [768] },
     { rank := 0, op := "OpName.AllToAllPrim", ins := ((List.range 4).map (fun r => 3061 + r)), outs := [3101], params := [2, 1] },
     { rank := 1, op := "OpName.AllToAllPrim", ins := ((List.range 4).map (fun r => 3061 + r)), outs := [3102], params := [2, 1] },
     { rank := 2, op := "OpName.AllToAllPrim", ins := ((List.range 4).map (fun r => 3061 + r)), outs := [3103], params := [2, 1] },
@@ -5250,10 +5250,10 @@ def pm : GraphDecl := by
     { rank := 1, op := "OpName.AllToAllPrim", ins := [3121, 3124, 3127, 3130], outs := [3076], params := [2, 1] },
     { rank := 2, op := "OpName.AllToAllPrim", ins := [3121, 3124, 3127, 3130], outs := [3078], params := [2, 1] },
     { rank := 3, op := "OpName.AllToAllPrim", ins := [3121, 3124, 3127, 3130], outs := [3080], params := [2, 1] },
-    { rank := 0, op := "OpName.BW_embedding", ins := [2041, 2036, 3081], outs := [3097] },
-    { rank := 1, op := "OpName.BW_embedding", ins := [2041, 2036, 3082], outs := [3098] },
-    { rank := 2, op := "OpName.BW_embedding", ins := [2041, 2036, 3083], outs := [3099] },
-    { rank := 3, op := "OpName.BW_embedding", ins := [2041, 2036, 3084], outs := [3100] },
+    { rank := 0, op := "OpName.BW_embedding", ins := [2041, 2036, 3081], outs := [3097], params := [0] },
+    { rank := 1, op := "OpName.BW_embedding", ins := [2041, 2036, 3082], outs := [3098], params := [256] },
+    { rank := 2, op := "OpName.BW_embedding", ins := [2041, 2036, 3083], outs := [3099], params := [512] },
+    { rank := 3, op := "OpName.BW_embedding", ins := [2041, 2036, 3084], outs := [3100], params := [768] },
     { rank := 0, op := "OpName.BW_embedding", ins := [3074, 2034, 3057], outs := [3073] },
     { rank := 1, op := "OpName.BW_embedding", ins := [3076, 2034, 3058], outs := [3075] },
     { rank := 2, op := "OpName.BW_embedding", ins := [3078, 2034, 3059], outs := [3077] },
