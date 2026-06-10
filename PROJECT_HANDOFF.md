@@ -86,6 +86,16 @@ lake build denote.Denote
 lake build denote.gpt_ly4_segments.GeneratedData
 ```
 
+构建前先跑 generated Lean 静态审计，优先拦截缺失算子、arity、params 和 embedding offset 这类结构性错误：
+
+```bash
+python Verdict/test_audit_generated_lean.py
+python Verdict/audit_generated_lean.py trainverify/denote/gpt_ly4_segments/GeneratedData.lean
+python Verdict/audit_generated_lean.py trainverify/denote/gpt2_small_ly12_segments/GeneratedData.lean
+```
+
+其中 `test_audit_generated_lean.py` 验证审计器本身能抓到缺失算子和错误参数；`audit_generated_lean.py` 检查实际生成物。
+
 对大文件，优先构建具体 goal，而不是整包全量构建：
 
 ```bash
@@ -248,6 +258,8 @@ Lean 证明很容易因为 `simp` 展开太多定义而慢到不可用。项目�
 
 ```bash
 cd /data/home/xts/code/tainverify_lean/trainverify
+python ../Verdict/test_audit_generated_lean.py
+python ../Verdict/audit_generated_lean.py <生成目录>/GeneratedData.lean
 lake build denote.Denote
 lake build <具体失败模块>
 ```
@@ -261,7 +273,7 @@ lake build <具体失败模块>
 目标流程：
 
 1. 自动生成 SM/PM 图和 Lean 文件。
-2. 自动静态审计生成图：检查 op 是否都被 `evalOp` 分发、arity 是否匹配、shape 是否与 op 语义一致、embedding 是否正确区分 row-sharded 与 hidden-sharded。
+2. 自动静态审计生成图：以 `Verdict/audit_generated_lean.py` 作为 proof 前置 gate，检查 op 是否都被 `evalOp` 分发、arity 是否匹配、shape 是否与 op 语义一致、embedding 是否正确区分 row-sharded 与 hidden-sharded。
 3. 自动为每个 goal 选择 proof strategy：base op、communication op、linear/embedding/layernorm/backward segment 分开处理。
 4. 自动生成局部 lemma skeleton，而不是只生成 `sorry` theorem。
 5. 自动按依赖顺序构建：先 `Denote`，再小 goal，再 pattern，再 segment，最后才尝试大 `GeneratedData`。
