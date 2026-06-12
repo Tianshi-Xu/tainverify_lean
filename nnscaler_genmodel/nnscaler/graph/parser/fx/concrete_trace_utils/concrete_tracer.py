@@ -394,7 +394,8 @@ class ConcreteTracer(TracerBase):
                 mod = self.fetch_attr(target)
                 if self.cpu_offload:
                     try:
-                        mod.cuda()
+                        if torch.cuda.is_available():
+                            mod.cuda()
                         result = mod(*args, **kwargs)
                     except:
                         mod.cpu()
@@ -1372,6 +1373,8 @@ def tree_to_cuda(pytree):
     """return a same spec pytree with all the given pytree leaf tensor to cuda"""
     # any operations under torch.no_grad context will have the result tensor with attribute requires_grad is False,
     # here we must follow the original tensor requires_grad attribute when we move tensor to cuda to ensure the correctness of the tensor requires_grad state
+    if not torch.cuda.is_available():
+        return map_trees_with_func(lambda a: a.requires_grad_(a.requires_grad) if isinstance(a, torch.Tensor) else a, [pytree])
     return map_trees_with_func(lambda a: a.cuda().requires_grad_(a.requires_grad) if isinstance(a, torch.Tensor) else a, [pytree])
 
 

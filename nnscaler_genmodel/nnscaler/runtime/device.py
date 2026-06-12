@@ -50,10 +50,11 @@ class DeviceGroup:
                 self.local_rank = int(os.environ.get('LOCAL_RANK'))
                 self.node_rank = int(os.environ.get('GROUP_RANK'))
 
-            torch.cuda.set_device(self.local_rank)
+            if torch.cuda.is_available():
+                torch.cuda.set_device(self.local_rank)
             self.groups: Dict = { '1'*self.world_size: None }
-            self.streams: Dict[str, torch.cuda.Stream] = {
-                'default': torch.cuda.default_stream()}
+            self.streams: Dict = (
+                {'default': torch.cuda.default_stream()} if torch.cuda.is_available() else {'default': None})
 
     instance = None
 

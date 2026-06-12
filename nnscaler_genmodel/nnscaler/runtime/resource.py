@@ -30,7 +30,7 @@ class EnvResource:
 
         def get_device_capability(self) -> Tuple[DeviceInfo]:
             if CompileFlag.dev_mode:
-                memory = [torch.cuda.get_device_properties(0).total_memory]
+                memory = [torch.cuda.get_device_properties(0).total_memory] if torch.cuda.is_available() else [80*1024*1024*1024]
             else:
                 rank = torch.distributed.get_rank()
                 memory = torch.tensor(torch.cuda.get_device_properties(0).total_memory, 

@@ -156,11 +156,11 @@ def dummy_data(batch_size: int, cfg: Config):
         0, cfg.num_embeddings,
         size=(batch_size, cfg.seqlen,),
         dtype=torch.int64,
-        device=torch.cuda.current_device()
+        device=(torch.cuda.current_device() if torch.cuda.is_available() else 'cpu')
     )
     position_ids = torch.arange(
         0, cfg.seqlen, dtype=torch.int64,
-        device=torch.cuda.current_device()
+        device=(torch.cuda.current_device() if torch.cuda.is_available() else 'cpu')
     ).repeat(batch_size, 1).view(batch_size, cfg.seqlen,)
 
     return input_ids, position_ids
