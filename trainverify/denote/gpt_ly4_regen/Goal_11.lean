@@ -41,5 +41,42 @@ def goal_11_cut_initGoals : List LineageGoal := initGoals ++ goal_11_prereqs
 def goal_11_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_11 pm_goal_11 goal_11 sm_goal_11InitEnv pm_goal_11InitEnv goal_11_cut_initGoals
 
+theorem prove_goal_11_cut : goal_11_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Prereq goal_7 constrains tensor 574 as replicated: initSM 574 = initPM 574.
+  have hInit574 : InitGoalHolds pm_goal_11.numRanks goal_7 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_11_cut_initGoals, initGoals]
+    decide
+  have h574_eq : initSM 574 = initPM 574 := by
+    have hrec := hInit574.2.2
+    simp only [goal_7, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  have h574_shape : (initSM 574).shape = [1, 8, 32] := hInit574.1
+  -- SM store: fw_view [1,8,4,8] (initSM 574)
+  have hsm : (denoteGraph sm_goal_11 initSM) 579 = fw_view [1, 8, 4, 8] (initSM 574) := by
+    simp only [sm_goal_11, denoteGraph, List.foldl]
+    rw [applyNode_fw_view_out]
+  -- PM store: all four ranks write tid 579; none writes 574, so 574 stays replicated.
+  -- The store value at 579 is the rank-3 view of the (unchanged) input 574.
+  have hpm : (denoteGraph pm_goal_11 initPM) 579 = fw_view [1, 8, 4, 8] (initPM 574) := by
+    simp only [pm_goal_11, denoteGraph, List.foldl]
+    rw [applyNode_fw_view_out]
+    -- reduce the inner 3-fold store at 574 back to initPM 574 (574 ∉ any node's outs)
+    rw [applyNode_skip _ _ _ 574 (by decide),
+        applyNode_skip _ _ _ 574 (by decide),
+        applyNode_skip _ _ _ 574 (by decide)]
+  -- The two views are equal because the input is replicated.
+  have hview_eq : fw_view [1, 8, 4, 8] (initSM 574) = fw_view [1, 8, 4, 8] (initPM 574) := by
+    rw [h574_eq]
+  have hview_shape : (fw_view [1, 8, 4, 8] (initSM 574)).shape = [1, 8, 4, 8] := by
+    simp [fw_view, Tensor.mkShape, h574_shape, prodShape]
+  simp only [goal_11, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, hview_shape]
+  · rw [hpm, ← hview_eq, hview_shape]
+  · rw [hsm, hpm, reconstructWithDim_singleton, hview_eq]
+
 end TrainVerify.Denote.GeneratedGoals
 

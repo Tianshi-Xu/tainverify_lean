@@ -3042,6 +3042,23 @@ theorem applyNode_fw_add2_out
   unfold storeSet
   simp [List.find?]
 
+/-- Unfolding lemma for `FW_view` with an explicit (non-empty) target shape. -/
+theorem evalOp_fw_view (numParts rank : Nat) (hd : Nat) (tl : List Nat) (x : Tensor) :
+    evalOp numParts rank "OpName.FW_view" (hd :: tl) [x] = [fw_view (hd :: tl) x] := by
+  rfl
+
+/-- `applyNode` for `FW_view` with singleton output and explicit (non-empty) target shape. -/
+theorem applyNode_fw_view_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (hd : Nat) (tl : List Nat) (xTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_view", ins := [xTid], outs := [outTid], params := hd :: tl } outTid =
+      fw_view (hd :: tl) (s xTid) := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl,
+      evalOp_fw_view]
+  change storeSet s [(outTid, fw_view (hd :: tl) (s xTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
 /-- Unfolding lemma for `BW_multiref` (tensorSum of all inputs). -/
 theorem evalOp_bw_multiref (numParts rank : Nat) (params : List Nat) (xs : List Tensor) :
     evalOp numParts rank "OpName.BW_multiref" params xs = [tensorSum xs] := by
