@@ -2933,6 +2933,11 @@ theorem evalOp_fw_gelu (numParts rank : Nat) (params : List Nat) (x : Tensor) :
     evalOp numParts rank "OpName.FW_gelu" params [x] = [fw_gelu x] := by
   rfl
 
+/-- Unfolding lemma for `evalOp` on `ChunkPrim` with dim parameter. -/
+theorem evalOp_chunkPrimDimN (numParts rank dim : Nat) (x : Tensor) :
+    evalOp numParts rank "OpName.ChunkPrim" [dim] [x] = [chunkPrimDimN dim numParts rank x] := by
+  rfl
+
 /-- `applyNode` for `FW_gelu` with singleton output. -/
 theorem applyNode_fw_gelu_out
     (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid) :
@@ -2948,6 +2953,82 @@ theorem applyNode_fw_gelu_out
 /-- `fw_gelu` preserves shape. -/
 theorem fw_gelu_shape (x : Tensor) : (fw_gelu x).shape = x.shape := by
   simp [fw_gelu, Tensor.mkShape]
+
+/-- `valAt` of `fw_gelu` at a valid index. -/
+theorem fw_gelu_valAt (x : Tensor) (idx : Nat) (h : idx < prodShape x.shape) :
+    valAt (fw_gelu x) idx = geluScalar (valAt x idx) := by
+  rw [valAt_of_lt _ _ (by rw [fw_gelu_shape]; exact h)]
+  simp [fw_gelu, Tensor.mkShape]
+
+/-- `fw_gelu` distributes over `allGatherPrimDimN`: applying `fw_gelu` to the
+    gathered tensor equals gathering the per-shard `fw_gelu` results.
+    This holds because `fw_gelu` is a pointwise (elementwise) operation. -/
+theorem fw_gelu_allGatherPrimDimN_eq
+    (gatherDim numParts : Nat) (xs : List Tensor)
+    (shardShape : Shape)
+    (hnp : 0 < numParts)
+    (hlen : xs.length = numParts)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = shardShape)
+    (hxs_shape : ∀ i (hi : i < xs.length), (xs.get ⟨i, hi⟩).shape = shardShape) :
+    fw_gelu (allGatherPrimDimN gatherDim numParts 0 xs) =
+      allGatherPrimDimN gatherDim numParts 0 (xs.map fw_gelu) := by
+  have hlen_map : (xs.map fw_gelu).length = numParts := by
+    rw [List.length_map, hlen]
+  have hhead_map : ((xs.map fw_gelu).head?.map (fun t => t.shape)).getD [] = shardShape := by
+    have h0 : (0 : Nat) < xs.length := by omega
+    have h0m : (0 : Nat) < (xs.map fw_gelu).length := by rw [List.length_map]; omega
+    rw [List.head?_eq_getElem?]
+    rw [List.getElem?_eq_getElem h0m]
+    simp only [Option.map_some, Option.getD_some]
+    have hm0 : (xs.map fw_gelu)[0]'h0m = fw_gelu (xs[0]'h0) := List.getElem_map ..
+    rw [hm0, fw_gelu_shape]
+    exact hxs_shape 0 h0
+  set outShape := shardShape.set gatherDim (shardShape.getD gatherDim 0 * numParts) with houtShape_def
+  have hgather_shape : (allGatherPrimDimN gatherDim numParts 0 xs).shape = outShape :=
+    allGatherPrimDimN_shape gatherDim numParts xs shardShape hhead
+  have hlhs_shape : (fw_gelu (allGatherPrimDimN gatherDim numParts 0 xs)).shape = outShape := by
+    rw [fw_gelu_shape]; exact hgather_shape
+  have hrhs_shape : (allGatherPrimDimN gatherDim numParts 0 (xs.map fw_gelu)).shape = outShape :=
+    allGatherPrimDimN_shape gatherDim numParts _ shardShape hhead_map
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx_out : idx < prodShape outShape := by rwa [hlhs_shape] at hidx
+  have hgather_idx : idx < prodShape (allGatherPrimDimN gatherDim numParts 0 xs).shape := by
+    rw [hgather_shape]; exact hidx_out
+  -- LHS: valAt (fw_gelu (allGather xs)) idx = geluScalar (valAt (allGather xs) idx)
+  rw [fw_gelu_valAt _ _ hgather_idx]
+  -- Now goal: geluScalar (valAt (allGather xs) idx) = valAt (allGather (map fw_gelu xs)) idx
+  -- Unfold both valAt through allGatherPrimDimN
+  rw [valAt_of_lt _ _ hgather_idx]
+  conv_rhs => rw [valAt_of_lt _ _ (by rw [hrhs_shape]; exact hidx_out)]
+  simp only [allGatherPrimDimN, Tensor.mkShape, hhead, hhead_map]
+  -- Now both sides select shard r and local index loc from idx
+  -- Generalize the reindex
+  set ds := List.getD shardShape gatherDim 0
+  set ps := List.foldl (· * ·) 1 (List.drop (gatherDim + 1) shardShape)
+  set fds := ds * numParts * ps
+  generalize (if ds = 0 then 0
+    else (if ps = 0 then 0 else (if fds = 0 then 0 else idx % fds) / ps) / ds) = r
+  generalize (if fds = 0 then 0 else idx / fds) * (ds * ps) +
+    (if ds = 0 then 0 else (if ps = 0 then 0 else (if fds = 0 then 0 else idx % fds) / ps) % ds) * ps +
+    (if ps = 0 then 0 else (if fds = 0 then 0 else idx % fds) % ps) = loc
+  by_cases hr_lt : r < numParts
+  · have hr_xs : r < xs.length := by omega
+    have hr_map : r < (xs.map fw_gelu).length := by omega
+    rw [list_getD_of_lt _ _ _ hr_xs, list_getD_of_lt _ _ _ hr_map]
+    have hmap_r : (xs.map fw_gelu)[r]'hr_map = fw_gelu (xs[r]'hr_xs) := List.getElem_map ..
+    rw [hmap_r]
+    by_cases hloc_lt : loc < prodShape (xs[r]'hr_xs).shape
+    · rw [fw_gelu_valAt _ _ hloc_lt]
+    · have h1 : ¬(loc < prodShape (fw_gelu (xs[r]'hr_xs)).shape) := by
+        rw [fw_gelu_shape]; exact hloc_lt
+      simp only [valAt, h1, hloc_lt, dite_false]
+      simp [geluScalar]
+  · have hr_xs : ¬(r < xs.length) := by omega
+    have hr_map : ¬(r < (xs.map fw_gelu).length) := by omega
+    rw [list_getD_of_ge _ _ _ hr_xs, list_getD_of_ge _ _ _ hr_map]
+    simp only [zeroTensor, Tensor.mkShape, valAt, prodShape, List.foldl]
+    simp [geluScalar]
 
 /-- `applyNode` for binary `FW_add` with singleton output. -/
 theorem applyNode_fw_add2_out
@@ -6480,6 +6561,127 @@ theorem fw_matmul_split_dim1_4_1_4_8_8 (a b : Tensor)
     apply Finset.sum_congr rfl
     intro l _
     congr 2 <;> (subst loc; omega)
+
+/-! ## Gather-of-chunks identity for dim 1, 4 parts, shape [1,8,128] -/
+
+set_option maxHeartbeats 400000 in
+theorem chunk_dim1_4_1_8_128_valAt (x : Tensor) (r p j : Nat)
+    (hx : x.shape = [1, 8, 128]) (hr : r < 4) (hp : p < 2) (hj : j < 128) :
+    valAt (chunkPrimDimN 1 4 r x) (p * 128 + j) = valAt x ((r * 2 + p) * 128 + j) := by
+  have hloc : p * 128 + j < 256 := by omega
+  have hchunk_shape : (chunkPrimDimN 1 4 r x).shape = [1, 2, 128] := by
+    rw [chunkPrimDimN_shape 1 4 r _ _ hx (by omega)]
+    simp [List.set, List.getD]
+  have hloc_shape : p * 128 + j < prodShape (chunkPrimDimN 1 4 r x).shape := by
+    rw [hchunk_shape]; simp [prodShape]; exact hloc
+  rw [valAt_of_lt _ _ hloc_shape]
+  unfold chunkPrimDimN Tensor.mkShape
+  simp only [hx, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl,
+    show (4 : Nat) ≠ 0 by omega, show (128 : Nat) ≠ 0 by omega,
+    show (8 : Nat) ≠ 0 by omega, show (2 : Nat) ≠ 0 by omega,
+    show (1 : Nat) ≠ 0 by omega, ite_false]
+  congr 1
+  have hrm : r % 4 = r := Nat.mod_eq_of_lt hr
+  rw [hrm]
+  have h1 : (8 / 4 : Nat) = 2 := by norm_num
+  have h2 : (1 * 128 : Nat) = 128 := by norm_num
+  have h3 : (8 * (1 * 128) : Nat) = 1024 := by norm_num
+  have h4 : (2 * (1 * 128) : Nat) = 256 := by norm_num
+  simp only [h1, h2, h3, h4, show (256 : Nat) ≠ 0 by omega, show (128 : Nat) ≠ 0 by omega,
+    ite_false]
+  have hd : (p * 128 + j) / 256 = 0 := Nat.div_eq_of_lt hloc
+  have hm : (p * 128 + j) % 256 = p * 128 + j := Nat.mod_eq_of_lt hloc
+  rw [hd, hm]
+  have h5 : (p * 128 + j) / 128 = p := by omega
+  have h6 : (p * 128 + j) % 128 = j := by omega
+  rw [h5, h6]
+  ring
+
+set_option maxHeartbeats 400000 in
+set_option maxRecDepth 4096 in
+theorem allGatherPrimDimN_dim1_4_1_2_128_valAt (xs : List Tensor)
+    (r : Nat) (hr : r < 4) (p : Nat) (hp : p < 2) (j : Nat) (hj : j < 128)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [1, 2, 128]) :
+    valAt (allGatherPrimDimN 1 4 0 xs) ((r * 2 + p) * 128 + j) =
+      valAt (xs.getD r (zeroTensor [1, 2, 128])) (p * 128 + j) := by
+  have hgather_shape : (allGatherPrimDimN 1 4 0 xs).shape = [1, 8, 128] := by
+    rw [allGatherPrimDimN_shape 1 4 xs [1, 2, 128] hhead]
+    simp [List.set, List.getD]
+  have hidx_lt : (r * 2 + p) * 128 + j < 1024 := by omega
+  have hidx_prod : (r * 2 + p) * 128 + j < prodShape (allGatherPrimDimN 1 4 0 xs).shape := by
+    rw [hgather_shape]; simp [prodShape]; exact hidx_lt
+  rw [valAt_of_lt _ _ hidx_prod]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl,
+    show (8 : Nat) ≠ 0 by omega, show (128 : Nat) ≠ 0 by omega,
+    show (4 : Nat) ≠ 0 by omega, show (2 : Nat) ≠ 0 by omega,
+    show (1 : Nat) ≠ 0 by omega, ite_false]
+  simp only [show (2 : Nat) * 4 * 1 = 8 by norm_num,
+    show (2 : Nat) * 1 = 2 by norm_num,
+    show (8 : Nat) * (1 * 128) = 1024 by norm_num,
+    show (1 : Nat) * 128 = 128 by norm_num,
+    show (2 : Nat) * (1 * 128) = 256 by norm_num,
+    show (1024 : Nat) = 0 ↔ False by simp,
+    show (128 : Nat) = 0 ↔ False by simp,
+    show (256 : Nat) = 0 ↔ False by simp,
+    ite_false]
+  have hd1024 : ((r * 2 + p) * 128 + j) / 1024 = 0 := Nat.div_eq_of_lt hidx_lt
+  have hm1024 : ((r * 2 + p) * 128 + j) % 1024 = (r * 2 + p) * 128 + j :=
+    Nat.mod_eq_of_lt hidx_lt
+  have hd128 : ((r * 2 + p) * 128 + j) / 128 = r * 2 + p := by omega
+  have hm128 : ((r * 2 + p) * 128 + j) % 128 = j := by omega
+  have hdr : (r * 2 + p) / 2 = r := by omega
+  have hmr : (r * 2 + p) % 2 = p := by omega
+  rw [hd1024, hm1024, hd128, hm128, hdr, hmr]
+  congr 1
+  ring
+
+set_option maxHeartbeats 800000 in
+set_option maxRecDepth 4096 in
+theorem allGatherPrimDimN_chunkPrimDimN_id_dim1_4_128 (x : Tensor)
+    (hsh : x.shape = [1, 8, 128]) :
+    allGatherPrimDimN 1 4 0
+      [chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x] = x := by
+  have hchunk_shape : ∀ r, (chunkPrimDimN 1 4 r x).shape = [1, 2, 128] := by
+    intro r
+    rw [chunkPrimDimN_shape 1 4 r _ _ hsh (by omega)]
+    simp [List.set, List.getD]
+  have hhead : ([chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x].head?.map (·.shape)).getD [] = [1, 2, 128] := by
+    simp [List.head?, Option.map, hchunk_shape 0]
+  have hgather_shape : (allGatherPrimDimN 1 4 0
+      [chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x]).shape = [1, 8, 128] := by
+    rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 128] hhead]
+    simp [List.set, List.getD]
+  symm
+  apply Tensor.ext (by rw [hsh, hgather_shape])
+  intro idx hidx
+  rw [hsh] at hidx
+  have hidx1024 : idx < 1024 := by simpa [prodShape] using hidx
+  set r := idx / 256
+  set p := (idx % 256) / 128
+  set j := idx % 128
+  have hr : r < 4 := by omega
+  have hp : p < 2 := by
+    have : (idx % 256) / 128 < 256 / 128 := Nat.div_lt_div_of_lt_of_dvd ⟨2, rfl⟩ (Nat.mod_lt _ (by omega))
+    omega
+  have hj : j < 128 := Nat.mod_lt idx (by omega)
+  have hidx_eq : idx = (r * 2 + p) * 128 + j := by subst r p j; omega
+  rw [hidx_eq]
+  rw [allGatherPrimDimN_dim1_4_1_2_128_valAt _ r hr p hp j hj hhead]
+  have hgetD : ∀ (i : Nat) (hi : i < 4),
+      [chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x].getD i (zeroTensor [1, 2, 128]) =
+        chunkPrimDimN 1 4 i x := by
+    intro i hi
+    have h4 : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases h4 with rfl | rfl | rfl | rfl <;> simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ]
+  rw [hgetD r hr]
+  exact (chunk_dim1_4_1_8_128_valAt x r p j hsh hr hp hj).symm
 
 /-! ## AllToAll node helpers (for pattern_28 family) -/
 
