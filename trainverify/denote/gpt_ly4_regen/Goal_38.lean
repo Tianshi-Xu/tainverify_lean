@@ -41,5 +41,35 @@ def goal_38_cut_initGoals : List LineageGoal := initGoals ++ goal_38_prereqs
 def goal_38_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_38 pm_goal_38 goal_38 sm_goal_38InitEnv pm_goal_38InitEnv goal_38_cut_initGoals
 
-end TrainVerify.Denote.GeneratedGoals
+theorem prove_goal_38_cut : goal_38_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  have hInit611 : InitGoalHolds pm_goal_38.numRanks goal_33 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_38_cut_initGoals, initGoals]
+    decide
+  have h611_eq : initSM 611 = initPM 611 := by
+    have hrec := hInit611.2.2
+    simp only [goal_33, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  have hgrad_shape : (initSM 611).shape = [1, 8, 32] := hInit611.1
+  have hsm : (denoteGraph sm_goal_38 initSM) 616 = fw_view [1, 8, 4, 8] (initSM 611) := by
+    simp only [sm_goal_38, denoteGraph, List.foldl]
+    rw [applyNode_fw_view_out]
+  have hpm : (denoteGraph pm_goal_38 initPM) 616 = fw_view [1, 8, 4, 8] (initPM 611) := by
+    simp only [pm_goal_38, denoteGraph, List.foldl]
+    rw [applyNode_fw_view_out]
+    rw [applyNode_skip _ _ _ 611 (by decide),
+        applyNode_skip _ _ _ 611 (by decide),
+        applyNode_skip _ _ _ 611 (by decide)]
+  have hview_eq : fw_view [1, 8, 4, 8] (initSM 611) = fw_view [1, 8, 4, 8] (initPM 611) := by
+    rw [h611_eq]
+  have hview_shape : (fw_view [1, 8, 4, 8] (initSM 611)).shape = [1, 8, 4, 8] := by
+    simp [fw_view, Tensor.mkShape, hgrad_shape, prodShape]
+  simp only [goal_38, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, hview_shape]
+  · rw [hpm, ← hview_eq, hview_shape]
+  · rw [hsm, hpm, reconstructWithDim_singleton, hview_eq]
 
+end TrainVerify.Denote.GeneratedGoals

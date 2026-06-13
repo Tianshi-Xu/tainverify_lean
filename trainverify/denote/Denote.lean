@@ -3059,6 +3059,24 @@ theorem applyNode_fw_view_out
   unfold storeSet
   simp [List.find?]
 
+/-- Unfolding lemma for `BW_view` with an explicit (non-empty) target shape.
+    BW_view applies the view to its gradient input `g`, ignoring the reference input. -/
+theorem evalOp_bw_view (numParts rank : Nat) (hd : Nat) (tl : List Nat) (g x : Tensor) :
+    evalOp numParts rank "OpName.BW_view" (hd :: tl) [g, x] = [fw_view (hd :: tl) g] := by
+  rfl
+
+/-- `applyNode` for `BW_view` with singleton output and explicit (non-empty) target shape. -/
+theorem applyNode_bw_view_out
+    (gr : GraphDecl) (s : Store) (rank : Nat) (hd : Nat) (tl : List Nat) (gTid xTid outTid : Tid) :
+    applyNode gr s { rank := rank, op := "OpName.BW_view", ins := [gTid, xTid], outs := [outTid], params := hd :: tl } outTid =
+      fw_view (hd :: tl) (s gTid) := by
+  unfold applyNode
+  rw [show ([gTid, xTid] : List Tid).map s = [s gTid, s xTid] from rfl,
+      evalOp_bw_view]
+  change storeSet s [(outTid, fw_view (hd :: tl) (s gTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
 /-- Unfolding lemma for `BW_multiref` (tensorSum of all inputs). -/
 theorem evalOp_bw_multiref (numParts rank : Nat) (params : List Nat) (xs : List Tensor) :
     evalOp numParts rank "OpName.BW_multiref" params xs = [tensorSum xs] := by

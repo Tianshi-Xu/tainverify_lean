@@ -43,5 +43,44 @@ def goal_221_cut_initGoals : List LineageGoal := initGoals ++ goal_221_prereqs
 def goal_221_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_221 pm_goal_221 goal_221 sm_goal_221InitEnv pm_goal_221InitEnv goal_221_cut_initGoals
 
-end TrainVerify.Denote.GeneratedGoals
+theorem prove_goal_221_cut : goal_221_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  have hInit863 : InitGoalHolds pm_goal_221.numRanks goal_226 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_221_cut_initGoals, initGoals]
+    decide
+  have h863_eq : initSM 863 = initPM 863 := by
+    have hrec := hInit863.2.2
+    simp only [goal_226, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  have hInit677 : InitGoalHolds pm_goal_221.numRanks goal_81 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_221_cut_initGoals, initGoals]
+    decide
+  have h677_eq : initSM 677 = initPM 677 := by
+    have hrec := hInit677.2.2
+    simp only [goal_81, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  have hgrad_shape : (initSM 863).shape = [1, 8, 4, 8] := hInit863.1
+  have hsm : (denoteGraph sm_goal_221 initSM) 858 = fw_view [1, 8, 32] (initSM 863) := by
+    simp only [sm_goal_221, denoteGraph, List.foldl]
+    rw [applyNode_bw_view_out]
+  have hpm : (denoteGraph pm_goal_221 initPM) 858 = fw_view [1, 8, 32] (initPM 863) := by
+    simp only [pm_goal_221, denoteGraph, List.foldl]
+    rw [applyNode_bw_view_out]
+    rw [applyNode_skip _ _ _ 863 (by decide),
+        applyNode_skip _ _ _ 863 (by decide),
+        applyNode_skip _ _ _ 863 (by decide)]
+  have hview_eq : fw_view [1, 8, 32] (initSM 863) = fw_view [1, 8, 32] (initPM 863) := by
+    rw [h863_eq]
+  have hview_shape : (fw_view [1, 8, 32] (initSM 863)).shape = [1, 8, 32] := by
+    simp [fw_view, Tensor.mkShape, hgrad_shape, prodShape]
+  simp only [goal_221, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, hview_shape]
+  · rw [hpm, ← hview_eq, hview_shape]
+  · rw [hsm, hpm, reconstructWithDim_singleton, hview_eq]
 
+end TrainVerify.Denote.GeneratedGoals
