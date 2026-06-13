@@ -2305,7 +2305,20 @@ def main() -> None:
 			dep = deps_by_ts.get(int(g.ts))
 			prereq_lineages: List[SelectedLineage] = []
 			if dep and dep.prereq_intermediate_goals:
-				prereq_lineages = [lin for (_ts, lin) in dep.prereq_intermediate_goals]
+				# IMPORTANT: use the SAME (normalized) lineage that is emitted as the
+				# goal_N prerequisite LineageGoal. compute_goal_dependencies() records the
+				# RAW lineage (collective shard tps), but the emitted goal_<ts> def and its
+				# InitGoalHolds use the collective-normalized form (e.g. an AllReduce output
+				# collapsed to a single replicated tid). If we slice the PM subgraph against
+				# the raw shard tps while the init goal only constrains the normalized tid,
+				# the cut PM graph re-derives the collective from unconstrained shard inits
+				# and the goal becomes unprovable. Prefer the normalized intermediate_lineages
+				# entry so the cut boundary == the constrained init tensor.
+				for (_ts, lin) in dep.prereq_intermediate_goals:
+					norm = intermediate_lineages.get(int(_ts))
+					if norm is None:
+						norm = compress_if_replicated(normalize_pm_lineage(lin))
+					prereq_lineages.append(norm)
 
 			stop_sm_tids = set(sm_init_tids) | {int(lin.ts) for lin in prereq_lineages}
 			needed_sm = sm_backward_until([int(g.ts)], stop_sm_tids)
