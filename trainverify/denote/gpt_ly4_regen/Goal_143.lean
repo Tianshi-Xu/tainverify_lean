@@ -25,10 +25,10 @@ def pm_goal_143 : GraphDecl := by
     { rank := 1, op := "OpName.BW_linear", ins := [1622, 1602, 600], outs := [1620, 1621] },
     { rank := 2, op := "OpName.BW_linear", ins := [1625, 1603, 600], outs := [1623, 1624] },
     { rank := 3, op := "OpName.BW_linear", ins := [1628, 1604, 600], outs := [1626, 1627] },
-    { rank := 0, op := "OpName.AllToAllPrim", ins := [1617, 1620, 1623, 1626], outs := [1597], params := [2, 1] },
-    { rank := 1, op := "OpName.AllToAllPrim", ins := [1617, 1620, 1623, 1626], outs := [1598], params := [2, 1] },
-    { rank := 2, op := "OpName.AllToAllPrim", ins := [1617, 1620, 1623, 1626], outs := [1599], params := [2, 1] },
-    { rank := 3, op := "OpName.AllToAllPrim", ins := [1617, 1620, 1623, 1626], outs := [1600], params := [2, 1] },
+    { rank := 0, op := "OpName.AllToAllPrim", ins := [1617, 1620, 1623, 1626], outs := [1597], params := [1, 2] },
+    { rank := 1, op := "OpName.AllToAllPrim", ins := [1617, 1620, 1623, 1626], outs := [1598], params := [1, 2] },
+    { rank := 2, op := "OpName.AllToAllPrim", ins := [1617, 1620, 1623, 1626], outs := [1599], params := [1, 2] },
+    { rank := 3, op := "OpName.AllToAllPrim", ins := [1617, 1620, 1623, 1626], outs := [1600], params := [1, 2] },
   ]
 
 def sm_goal_143InitShapes : List (Tid × Shape) := [

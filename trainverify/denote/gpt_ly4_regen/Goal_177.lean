@@ -25,10 +25,10 @@ def pm_goal_177 : GraphDecl := by
     { rank := 1, op := "OpName.BW_gelu", ins := [2160, 2142], outs := [2159] },
     { rank := 2, op := "OpName.BW_gelu", ins := [2162, 2143], outs := [2161] },
     { rank := 3, op := "OpName.BW_gelu", ins := [2164, 2144], outs := [2163] },
-    { rank := 0, op := "OpName.AllToAllPrim", ins := [2157, 2159, 2161, 2163], outs := [2131], params := [2, 1] },
-    { rank := 1, op := "OpName.AllToAllPrim", ins := [2157, 2159, 2161, 2163], outs := [2134], params := [2, 1] },
-    { rank := 2, op := "OpName.AllToAllPrim", ins := [2157, 2159, 2161, 2163], outs := [2137], params := [2, 1] },
-    { rank := 3, op := "OpName.AllToAllPrim", ins := [2157, 2159, 2161, 2163], outs := [2140], params := [2, 1] },
+    { rank := 0, op := "OpName.AllToAllPrim", ins := [2157, 2159, 2161, 2163], outs := [2131], params := [1, 2] },
+    { rank := 1, op := "OpName.AllToAllPrim", ins := [2157, 2159, 2161, 2163], outs := [2134], params := [1, 2] },
+    { rank := 2, op := "OpName.AllToAllPrim", ins := [2157, 2159, 2161, 2163], outs := [2137], params := [1, 2] },
+    { rank := 3, op := "OpName.AllToAllPrim", ins := [2157, 2159, 2161, 2163], outs := [2140], params := [1, 2] },
   ]
 
 def sm_goal_177InitShapes : List (Tid × Shape) := [

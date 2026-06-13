@@ -29,10 +29,10 @@ def pm_goal_167 : GraphDecl := by
     { rank := 1, op := "OpName.BW_contiguous", ins := [2016, 1998], outs := [2015] },
     { rank := 2, op := "OpName.BW_contiguous", ins := [2018, 1999], outs := [2017] },
     { rank := 3, op := "OpName.BW_contiguous", ins := [2020, 2000], outs := [2019] },
-    { rank := 0, op := "OpName.AllToAllPrim", ins := [2013, 2015, 2017, 2019], outs := [1990], params := [3, 2] },
-    { rank := 1, op := "OpName.AllToAllPrim", ins := [2013, 2015, 2017, 2019], outs := [1992], params := [3, 2] },
-    { rank := 2, op := "OpName.AllToAllPrim", ins := [2013, 2015, 2017, 2019], outs := [1994], params := [3, 2] },
-    { rank := 3, op := "OpName.AllToAllPrim", ins := [2013, 2015, 2017, 2019], outs := [1996], params := [3, 2] },
+    { rank := 0, op := "OpName.AllToAllPrim", ins := [2013, 2015, 2017, 2019], outs := [1990], params := [2, 3] },
+    { rank := 1, op := "OpName.AllToAllPrim", ins := [2013, 2015, 2017, 2019], outs := [1992], params := [2, 3] },
+    { rank := 2, op := "OpName.AllToAllPrim", ins := [2013, 2015, 2017, 2019], outs := [1994], params := [2, 3] },
+    { rank := 3, op := "OpName.AllToAllPrim", ins := [2013, 2015, 2017, 2019], outs := [1996], params := [2, 3] },
   ]
 
 def sm_goal_167InitShapes : List (Tid × Shape) := [

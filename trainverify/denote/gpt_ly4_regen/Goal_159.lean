@@ -25,10 +25,10 @@ def pm_goal_159 : GraphDecl := by
     { rank := 1, op := "OpName.BW_transpose", ins := [1868, 1850], outs := [1867], params := [2, 3] },
     { rank := 2, op := "OpName.BW_transpose", ins := [1870, 1851], outs := [1869], params := [2, 3] },
     { rank := 3, op := "OpName.BW_transpose", ins := [1872, 1852], outs := [1871], params := [2, 3] },
-    { rank := 0, op := "OpName.AllToAllPrim", ins := [1865, 1867, 1869, 1871], outs := [1818], params := [1, 2] },
-    { rank := 1, op := "OpName.AllToAllPrim", ins := [1865, 1867, 1869, 1871], outs := [1820], params := [1, 2] },
-    { rank := 2, op := "OpName.AllToAllPrim", ins := [1865, 1867, 1869, 1871], outs := [1822], params := [1, 2] },
-    { rank := 3, op := "OpName.AllToAllPrim", ins := [1865, 1867, 1869, 1871], outs := [1824], params := [1, 2] },
+    { rank := 0, op := "OpName.AllToAllPrim", ins := [1865, 1867, 1869, 1871], outs := [1818], params := [2, 1] },
+    { rank := 1, op := "OpName.AllToAllPrim", ins := [1865, 1867, 1869, 1871], outs := [1820], params := [2, 1] },
+    { rank := 2, op := "OpName.AllToAllPrim", ins := [1865, 1867, 1869, 1871], outs := [1822], params := [2, 1] },
+    { rank := 3, op := "OpName.AllToAllPrim", ins := [1865, 1867, 1869, 1871], outs := [1824], params := [2, 1] },
   ]
 
 def sm_goal_159InitShapes : List (Tid × Shape) := [

@@ -25,10 +25,10 @@ def pm_goal_163 : GraphDecl := by
     { rank := 1, op := "OpName.BW_div", ins := [1924, 1906], outs := [1923], params := [2] },
     { rank := 2, op := "OpName.BW_div", ins := [1926, 1907], outs := [1925], params := [2] },
     { rank := 3, op := "OpName.BW_div", ins := [1928, 1908], outs := [1927], params := [2] },
-    { rank := 0, op := "OpName.AllToAllPrim", ins := [1921, 1923, 1925, 1927], outs := [1895], params := [1, 2] },
-    { rank := 1, op := "OpName.AllToAllPrim", ins := [1921, 1923, 1925, 1927], outs := [1898], params := [1, 2] },
-    { rank := 2, op := "OpName.AllToAllPrim", ins := [1921, 1923, 1925, 1927], outs := [1901], params := [1, 2] },
-    { rank := 3, op := "OpName.AllToAllPrim", ins := [1921, 1923, 1925, 1927], outs := [1904], params := [1, 2] },
+    { rank := 0, op := "OpName.AllToAllPrim", ins := [1921, 1923, 1925, 1927], outs := [1895], params := [2, 1] },
+    { rank := 1, op := "OpName.AllToAllPrim", ins := [1921, 1923, 1925, 1927], outs := [1898], params := [2, 1] },
+    { rank := 2, op := "OpName.AllToAllPrim", ins := [1921, 1923, 1925, 1927], outs := [1901], params := [2, 1] },
+    { rank := 3, op := "OpName.AllToAllPrim", ins := [1921, 1923, 1925, 1927], outs := [1904], params := [2, 1] },
   ]
 
 def sm_goal_163InitShapes : List (Tid × Shape) := [

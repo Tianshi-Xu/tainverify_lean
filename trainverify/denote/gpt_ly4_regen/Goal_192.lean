@@ -25,10 +25,10 @@ def pm_goal_192 : GraphDecl := by
     { rank := 1, op := "OpName.BW_matmul", ins := [2458, 2438, 653], outs := [2456, 2460] },
     { rank := 2, op := "OpName.BW_matmul", ins := [2461, 2439, 653], outs := [2459, 2457] },
     { rank := 3, op := "OpName.BW_matmul", ins := [2464, 2440, 653], outs := [2462, 2454] },
-    { rank := 0, op := "OpName.AllToAllPrim", ins := [2453, 2456, 2459, 2462], outs := [2358], params := [1, 2] },
-    { rank := 1, op := "OpName.AllToAllPrim", ins := [2453, 2456, 2459, 2462], outs := [2360], params := [1, 2] },
-    { rank := 2, op := "OpName.AllToAllPrim", ins := [2453, 2456, 2459, 2462], outs := [2362], params := [1, 2] },
-    { rank := 3, op := "OpName.AllToAllPrim", ins := [2453, 2456, 2459, 2462], outs := [2364], params := [1, 2] },
+    { rank := 0, op := "OpName.AllToAllPrim", ins := [2453, 2456, 2459, 2462], outs := [2358], params := [2, 1] },
+    { rank := 1, op := "OpName.AllToAllPrim", ins := [2453, 2456, 2459, 2462], outs := [2360], params := [2, 1] },
+    { rank := 2, op := "OpName.AllToAllPrim", ins := [2453, 2456, 2459, 2462], outs := [2362], params := [2, 1] },
+    { rank := 3, op := "OpName.AllToAllPrim", ins := [2453, 2456, 2459, 2462], outs := [2364], params := [2, 1] },
   ]
 
 def sm_goal_192InitShapes : List (Tid × Shape) := [

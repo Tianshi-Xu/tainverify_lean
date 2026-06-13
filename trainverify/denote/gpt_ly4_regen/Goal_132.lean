@@ -29,10 +29,10 @@ def pm_goal_132 : GraphDecl := by
     { rank := 1, op := "OpName.BW_contiguous", ins := [1468, 1450], outs := [1467] },
     { rank := 2, op := "OpName.BW_contiguous", ins := [1470, 1451], outs := [1469] },
     { rank := 3, op := "OpName.BW_contiguous", ins := [1472, 1452], outs := [1471] },
-    { rank := 0, op := "OpName.AllToAllPrim", ins := [1465, 1467, 1469, 1471], outs := [1445], params := [3, 1] },
-    { rank := 1, op := "OpName.AllToAllPrim", ins := [1465, 1467, 1469, 1471], outs := [1446], params := [3, 1] },
-    { rank := 2, op := "OpName.AllToAllPrim", ins := [1465, 1467, 1469, 1471], outs := [1447], params := [3, 1] },
-    { rank := 3, op := "OpName.AllToAllPrim", ins := [1465, 1467, 1469, 1471], outs := [1448], params := [3, 1] },
+    { rank := 0, op := "OpName.AllToAllPrim", ins := [1465, 1467, 1469, 1471], outs := [1445], params := [1, 3] },
+    { rank := 1, op := "OpName.AllToAllPrim", ins := [1465, 1467, 1469, 1471], outs := [1446], params := [1, 3] },
+    { rank := 2, op := "OpName.AllToAllPrim", ins := [1465, 1467, 1469, 1471], outs := [1447], params := [1, 3] },
+    { rank := 3, op := "OpName.AllToAllPrim", ins := [1465, 1467, 1469, 1471], outs := [1448], params := [1, 3] },
   ]
 
 def sm_goal_132InitShapes : List (Tid × Shape) := [

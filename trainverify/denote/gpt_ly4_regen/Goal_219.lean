@@ -17,14 +17,14 @@ def sm_goal_219 : GraphDecl := by
 def pm_goal_219 : GraphDecl := by
   refine { numRanks := 4, nodes := ?_ }
   exact [
-    { rank := 0, op := "OpName.AllToAllPrim", ins := [2833, 2835, 2837, 2839], outs := [3680], params := [1, 2] },
-    { rank := 1, op := "OpName.AllToAllPrim", ins := [2833, 2835, 2837, 2839], outs := [3690], params := [1, 2] },
-    { rank := 2, op := "OpName.AllToAllPrim", ins := [2833, 2835, 2837, 2839], outs := [3700], params := [1, 2] },
-    { rank := 3, op := "OpName.AllToAllPrim", ins := [2833, 2835, 2837, 2839], outs := [3710], params := [1, 2] },
-    { rank := 0, op := "OpName.AllToAllPrim", ins := [2861, 2863, 2865, 2867], outs := [3682], params := [1, 2] },
-    { rank := 1, op := "OpName.AllToAllPrim", ins := [2861, 2863, 2865, 2867], outs := [3692], params := [1, 2] },
-    { rank := 2, op := "OpName.AllToAllPrim", ins := [2861, 2863, 2865, 2867], outs := [3702], params := [1, 2] },
-    { rank := 3, op := "OpName.AllToAllPrim", ins := [2861, 2863, 2865, 2867], outs := [3712], params := [1, 2] },
+    { rank := 0, op := "OpName.AllToAllPrim", ins := [2833, 2835, 2837, 2839], outs := [3680], params := [2, 1] },
+    { rank := 1, op := "OpName.AllToAllPrim", ins := [2833, 2835, 2837, 2839], outs := [3690], params := [2, 1] },
+    { rank := 2, op := "OpName.AllToAllPrim", ins := [2833, 2835, 2837, 2839], outs := [3700], params := [2, 1] },
+    { rank := 3, op := "OpName.AllToAllPrim", ins := [2833, 2835, 2837, 2839], outs := [3710], params := [2, 1] },
+    { rank := 0, op := "OpName.AllToAllPrim", ins := [2861, 2863, 2865, 2867], outs := [3682], params := [2, 1] },
+    { rank := 1, op := "OpName.AllToAllPrim", ins := [2861, 2863, 2865, 2867], outs := [3692], params := [2, 1] },
+    { rank := 2, op := "OpName.AllToAllPrim", ins := [2861, 2863, 2865, 2867], outs := [3702], params := [2, 1] },
+    { rank := 3, op := "OpName.AllToAllPrim", ins := [2861, 2863, 2865, 2867], outs := [3712], params := [2, 1] },
     { rank := 0, op := "OpName.BW_multiref", ins := [3680, 3682, 2885], outs := [2800] },
     { rank := 1, op := "OpName.BW_multiref", ins := [3690, 3692, 2888], outs := [2804] },
     { rank := 2, op := "OpName.BW_multiref", ins := [3700, 3702, 2891], outs := [2808] },

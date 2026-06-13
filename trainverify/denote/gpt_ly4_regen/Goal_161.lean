@@ -29,10 +29,10 @@ def pm_goal_161 : GraphDecl := by
     { rank := 1, op := "OpName.BW_matmul", ins := [789, 1946, 1950], outs := [1967, 1968] },
     { rank := 2, op := "OpName.BW_matmul", ins := [789, 1947, 1951], outs := [1969, 1970] },
     { rank := 3, op := "OpName.BW_matmul", ins := [789, 1948, 1952], outs := [1971, 1972] },
-    { rank := 0, op := "OpName.AllToAllPrim", ins := [1966, 1968, 1970, 1972], outs := [1842], params := [3, 2] },
-    { rank := 1, op := "OpName.AllToAllPrim", ins := [1966, 1968, 1970, 1972], outs := [1844], params := [3, 2] },
-    { rank := 2, op := "OpName.AllToAllPrim", ins := [1966, 1968, 1970, 1972], outs := [1846], params := [3, 2] },
-    { rank := 3, op := "OpName.AllToAllPrim", ins := [1966, 1968, 1970, 1972], outs := [1848], params := [3, 2] },
+    { rank := 0, op := "OpName.AllToAllPrim", ins := [1966, 1968, 1970, 1972], outs := [1842], params := [2, 3] },
+    { rank := 1, op := "OpName.AllToAllPrim", ins := [1966, 1968, 1970, 1972], outs := [1844], params := [2, 3] },
+    { rank := 2, op := "OpName.AllToAllPrim", ins := [1966, 1968, 1970, 1972], outs := [1846], params := [2, 3] },
+    { rank := 3, op := "OpName.AllToAllPrim", ins := [1966, 1968, 1970, 1972], outs := [1848], params := [2, 3] },
   ]
 
 def sm_goal_161InitShapes : List (Tid × Shape) := [

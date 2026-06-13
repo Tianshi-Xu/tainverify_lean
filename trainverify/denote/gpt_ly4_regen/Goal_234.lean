@@ -25,10 +25,10 @@ def pm_goal_234 : GraphDecl := by
     { rank := 1, op := "OpName.BW_softmax", ins := [3060, 3042], outs := [3059] },
     { rank := 2, op := "OpName.BW_softmax", ins := [3062, 3043], outs := [3061] },
     { rank := 3, op := "OpName.BW_softmax", ins := [3064, 3044], outs := [3063] },
-    { rank := 0, op := "OpName.AllToAllPrim", ins := [3057, 3059, 3061, 3063], outs := [3034], params := [2, 1] },
-    { rank := 1, op := "OpName.AllToAllPrim", ins := [3057, 3059, 3061, 3063], outs := [3036], params := [2, 1] },
-    { rank := 2, op := "OpName.AllToAllPrim", ins := [3057, 3059, 3061, 3063], outs := [3038], params := [2, 1] },
-    { rank := 3, op := "OpName.AllToAllPrim", ins := [3057, 3059, 3061, 3063], outs := [3040], params := [2, 1] },
+    { rank := 0, op := "OpName.AllToAllPrim", ins := [3057, 3059, 3061, 3063], outs := [3034], params := [1, 2] },
+    { rank := 1, op := "OpName.AllToAllPrim", ins := [3057, 3059, 3061, 3063], outs := [3036], params := [1, 2] },
+    { rank := 2, op := "OpName.AllToAllPrim", ins := [3057, 3059, 3061, 3063], outs := [3038], params := [1, 2] },
+    { rank := 3, op := "OpName.AllToAllPrim", ins := [3057, 3059, 3061, 3063], outs := [3040], params := [1, 2] },
   ]
 
 def sm_goal_234InitShapes : List (Tid × Shape) := [

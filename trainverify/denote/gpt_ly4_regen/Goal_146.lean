@@ -17,10 +17,10 @@ def sm_goal_146 : GraphDecl := by
 def pm_goal_146 : GraphDecl := by
   refine { numRanks := 4, nodes := ?_ }
   exact [
-    { rank := 0, op := "OpName.AllToAllPrim", ins := [1677, 1681, 1685, 1689], outs := [3494], params := [2, 1] },
-    { rank := 1, op := "OpName.AllToAllPrim", ins := [1677, 1681, 1685, 1689], outs := [3500], params := [2, 1] },
-    { rank := 2, op := "OpName.AllToAllPrim", ins := [1677, 1681, 1685, 1689], outs := [3506], params := [2, 1] },
-    { rank := 3, op := "OpName.AllToAllPrim", ins := [1677, 1681, 1685, 1689], outs := [3512], params := [2, 1] },
+    { rank := 0, op := "OpName.AllToAllPrim", ins := [1677, 1681, 1685, 1689], outs := [3494], params := [1, 2] },
+    { rank := 1, op := "OpName.AllToAllPrim", ins := [1677, 1681, 1685, 1689], outs := [3500], params := [1, 2] },
+    { rank := 2, op := "OpName.AllToAllPrim", ins := [1677, 1681, 1685, 1689], outs := [3506], params := [1, 2] },
+    { rank := 3, op := "OpName.AllToAllPrim", ins := [1677, 1681, 1685, 1689], outs := [3512], params := [1, 2] },
     { rank := 0, op := "OpName.BW_multiref", ins := [3494, 2069], outs := [1651] },
     { rank := 1, op := "OpName.BW_multiref", ins := [3500, 2072], outs := [1654] },
     { rank := 2, op := "OpName.BW_multiref", ins := [3506, 2075], outs := [1657] },
