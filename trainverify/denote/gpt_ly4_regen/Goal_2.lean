@@ -46,5 +46,123 @@ def goal_2_cut_initGoals : List LineageGoal := initGoals
 def goal_2_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_2 pm_goal_2 goal_2 sm_goal_2InitEnv pm_goal_2InitEnv goal_2_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- FW_embedding distributes over vocab-sharded weights via allReducePrim of fw_embedding_offset
+theorem prove_goal_2_cut : goal_2_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for initGoal_563 (weight: SM 563 = gather of PM shards 1065..1068 on dim 0)
+  have hInit563 : InitGoalHolds pm_goal_2.numRanks initGoal_563 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_2_cut_initGoals, initGoals]
+    decide
+  -- Extract init alignment for initGoal_714 (ids: SM 714 = replicated PM 714)
+  have hInit714 : InitGoalHolds pm_goal_2.numRanks initGoal_714 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_2_cut_initGoals, initGoals]
+    decide
+  -- initGoal_563: initSM 563 = reconstructWithDim 0 4 0 [initPM 1065, ..., initPM 1068]
+  have h563_rec : initSM 563 = reconstructWithDim 0 4 0
+      [initPM 1065, initPM 1066, initPM 1067, initPM 1068] := by
+    have hrec := hInit563.2.2
+    simp only [initGoal_563, pm_goal_2, List.map] at hrec
+    exact hrec
+  -- initGoal_714: initSM 714 = reconstructWithDim 0 4 0 [initPM 714] = initPM 714
+  have h714_eq : initSM 714 = initPM 714 := by
+    have hrec := hInit714.2.2
+    simp only [initGoal_714, pm_goal_2, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  -- Shape facts
+  have h563_shape : (initSM 563).shape = [128, 32] := hInit563.1
+  have htp563_shapes := hInit563.2.1
+  simp only [initGoal_563, List.map] at htp563_shapes
+  have h1065_shape : (initPM 1065).shape = [32, 32] := by
+    have := congrArg List.head? htp563_shapes; simpa using this
+  have h1066_shape : (initPM 1066).shape = [32, 32] := by
+    have := congrArg List.tail htp563_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1067_shape : (initPM 1067).shape = [32, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp563_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1068_shape : (initPM 1068).shape = [32, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp563_shapes
+    have := congrArg List.head? this; simpa using this
+  have h714_shape : (initSM 714).shape = [1, 8] := hInit714.1
+  have h714_pm_shape : (initPM 714).shape = [1, 8] := by
+    rw [← h714_eq]; exact h714_shape
+  -- reconstructWithDim 0 on 4 shards with shape [32,32] ≠ [1] → allGatherPrimDimN
+  have h563_gather : initSM 563 = allGatherPrimDimN 0 4 0
+      [initPM 1065, initPM 1066, initPM 1067, initPM 1068] := by
+    rw [h563_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _ (by rw [h1065_shape]; decide)
+  -- SM store: smStore 564 = fw_embedding (initSM 714) (initSM 563)
+  have hsm : (denoteGraph sm_goal_2 initSM) 564 = fw_embedding (initSM 714) (initSM 563) := by
+    simp only [sm_goal_2, denoteGraph, List.foldl]
+    rw [applyNode_fw_embedding_out]
+  -- PM store: pmStore 564 = allReducePrim 4 0 [fw_embedding_offset 0 (initPM 714) (initPM 1065), ...]
+  have hpm_list : (denoteGraph pm_goal_2 initPM) 564 =
+      allReducePrim 4 0
+        [fw_embedding_offset 0 (initPM 714) (initPM 1065),
+         fw_embedding_offset 32 (initPM 714) (initPM 1066),
+         fw_embedding_offset 64 (initPM 714) (initPM 1067),
+         fw_embedding_offset 96 (initPM 714) (initPM 1068)] := by
+    simp only [pm_goal_2, denoteGraph, List.foldl]
+    rw [applyNode_allReducePrim_out]
+    simp only [List.map]
+    congr 1
+  -- Key equation: fw_embedding(ids)(gather Ws) = allReducePrim(map fw_embedding_offset)
+  have hkey : fw_embedding (initPM 714) (allGatherPrimDimN 0 4 0
+      [initPM 1065, initPM 1066, initPM 1067, initPM 1068]) =
+    allReducePrim 4 0
+      [fw_embedding_offset 0 (initPM 714) (initPM 1065),
+       fw_embedding_offset 32 (initPM 714) (initPM 1066),
+       fw_embedding_offset 64 (initPM 714) (initPM 1067),
+       fw_embedding_offset 96 (initPM 714) (initPM 1068)] := by
+    have hbase := fw_embedding_eq_allReduce_offset_shards
+      (numParts := 4) (shard := 32) (hidden := 32)
+      (hparts := by omega) (hshard := by omega) (hhid := by omega)
+      (ids := initPM 714)
+      (Ws := [initPM 1065, initPM 1066, initPM 1067, initPM 1068])
+      (hlen := by simp)
+      (hWs_head := by simp [h1065_shape])
+      (hWs_shape := by
+        intro r hr
+        match r with
+        | 0 => simp [List.getD, h1065_shape]
+        | 1 => simp [List.getD, h1066_shape]
+        | 2 => simp [List.getD, h1067_shape]
+        | 3 => simp [List.getD, h1068_shape]
+        | n + 4 => omega)
+    calc fw_embedding (initPM 714) (allGatherPrimDimN 0 4 0 [initPM 1065, initPM 1066, initPM 1067, initPM 1068])
+        = allReducePrim 4 0 (List.ofFn fun r : Fin 4 =>
+            fw_embedding_offset (r.val * 32) (initPM 714)
+              ([initPM 1065, initPM 1066, initPM 1067, initPM 1068].getD r.val (zeroTensor [32, 32]))) := hbase
+      _ = allReducePrim 4 0
+            [fw_embedding_offset 0 (initPM 714) (initPM 1065),
+             fw_embedding_offset 32 (initPM 714) (initPM 1066),
+             fw_embedding_offset 64 (initPM 714) (initPM 1067),
+             fw_embedding_offset 96 (initPM 714) (initPM 1068)] := by
+          congr 1
+  -- Prove the three conjuncts of goal_2
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM shape: [1, 8, 32]
+    change (denoteGraph sm_goal_2 initSM 564).shape = [1, 8, 32]
+    rw [hsm, fw_embedding_shape, h714_shape, h563_shape]
+    simp [lastD]
+  · -- PM tp shapes: [[1, 8, 32]]
+    change [(denoteGraph pm_goal_2 initPM 564).shape] = [[1, 8, 32]]
+    rw [hpm_list]
+    rw [allReducePrim_shape 4 0
+        [fw_embedding_offset 0 (initPM 714) (initPM 1065),
+         fw_embedding_offset 32 (initPM 714) (initPM 1066),
+         fw_embedding_offset 64 (initPM 714) (initPM 1067),
+         fw_embedding_offset 96 (initPM 714) (initPM 1068)]
+        (fw_embedding_offset 0 (initPM 714) (initPM 1065)) rfl]
+    rw [fw_embedding_offset_shape, h1065_shape, h714_pm_shape]
+    simp [lastD]
+  · -- Value equality: smStore 564 = reconstructWithDim 0 4 0 [pmStore 564]
+    change denoteGraph sm_goal_2 initSM 564 = reconstructWithDim 0 4 0 [denoteGraph pm_goal_2 initPM 564]
+    rw [hsm, h714_eq, h563_gather, hkey, ← hpm_list, reconstructWithDim_singleton]
+
 end TrainVerify.Denote.GeneratedGoals
 

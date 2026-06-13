@@ -2800,6 +2800,125 @@ theorem fw_layernorm_split_dim1_4_1_8_32 (x w b : Tensor)
       | (rw [h2]; rfl)
       | (rw [h3]; rfl)
 
+/-- valAt of `allGatherPrimDimN 1 4 0 xs` at index `(r*2+p)*32+j` when shard shape is [1,2,32]. -/
+theorem allGatherPrimDimN_dim1_4_1_2_32_valAt (xs : List Tensor)
+    (r : Nat) (hr : r < 4) (p : Nat) (hp : p < 2) (j : Nat) (hj : j < 32)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [1, 2, 32]) :
+    valAt (allGatherPrimDimN 1 4 0 xs) ((r * 2 + p) * 32 + j) =
+      valAt (xs.getD r (zeroTensor [1, 2, 32])) (p * 32 + j) := by
+  have hgather_shape : (allGatherPrimDimN 1 4 0 xs).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 xs [1, 2, 32] hhead]
+    simp [List.set, List.getD]
+  have hidx_lt : (r * 2 + p) * 32 + j < 256 := by omega
+  have hidx_prod : (r * 2 + p) * 32 + j < prodShape (allGatherPrimDimN 1 4 0 xs).shape := by
+    rw [hgather_shape]; simp [prodShape]; exact hidx_lt
+  rw [valAt_of_lt _ _ hidx_prod]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl,
+    show (8 : Nat) ≠ 0 by omega, show (32 : Nat) ≠ 0 by omega,
+    show (4 : Nat) ≠ 0 by omega, show (2 : Nat) ≠ 0 by omega,
+    show (1 : Nat) ≠ 0 by omega, ite_false]
+  -- Simplify numeric expressions
+  simp only [show (2 : Nat) * 4 * 1 = 8 by norm_num,
+    show (2 : Nat) * 1 = 2 by norm_num,
+    show (8 : Nat) * (1 * 32) = 256 by norm_num,
+    show (1 : Nat) * 32 = 32 by norm_num,
+    show (2 : Nat) * (1 * 32) = 64 by norm_num,
+    show (256 : Nat) = 0 ↔ False by simp,
+    show (32 : Nat) = 0 ↔ False by simp,
+    show (64 : Nat) = 0 ↔ False by simp,
+    ite_false]
+  -- Arithmetic simplifications
+  have hd256 : ((r * 2 + p) * 32 + j) / 256 = 0 := Nat.div_eq_of_lt hidx_lt
+  have hm256 : ((r * 2 + p) * 32 + j) % 256 = (r * 2 + p) * 32 + j :=
+    Nat.mod_eq_of_lt hidx_lt
+  have hd32 : ((r * 2 + p) * 32 + j) / 32 = r * 2 + p := by omega
+  have hm32 : ((r * 2 + p) * 32 + j) % 32 = j := by omega
+  have hdr : (r * 2 + p) / 2 = r := by omega
+  have hmr : (r * 2 + p) % 2 = p := by omega
+  rw [hd256, hm256, hd32, hm32, hdr, hmr]
+  congr 1
+  ring
+
+/-- Chunk-gather cancellation: chunking an allGather along the same dim recovers the shard. -/
+theorem chunkPrimDimN_allGatherPrimDimN_dim1_4_1_2_32 (xs : List Tensor) (r : Nat)
+    (hr : r < 4) (hlen : xs.length = 4)
+    (hshape : ∀ x ∈ xs, x.shape = [1, 2, 32]) :
+    chunkPrimDimN 1 4 r (allGatherPrimDimN 1 4 0 xs) = xs.getD r (zeroTensor [1, 2, 32]) := by
+  have hhead : (xs.head?.map (fun t => t.shape)).getD [] = [1, 2, 32] := by
+    match xs, hlen with
+    | x0 :: _, _ =>
+      simp only [List.head?, Option.map, Option.getD]
+      exact hshape x0 (List.mem_cons_self ..)
+  have hgather_shape : (allGatherPrimDimN 1 4 0 xs).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 xs [1, 2, 32] hhead]
+    simp [List.set, List.getD]
+  have hchunk_shape : (chunkPrimDimN 1 4 r (allGatherPrimDimN 1 4 0 xs)).shape = [1, 2, 32] := by
+    rw [chunkPrimDimN_shape 1 4 r _ _ hgather_shape (by omega)]
+    simp [List.set, List.getD]
+  have hrhs_shape : (xs.getD r (zeroTensor [1, 2, 32])).shape = [1, 2, 32] := by
+    have hr_len : r < xs.length := by omega
+    have helem : xs.getD r (zeroTensor [1, 2, 32]) = xs[r] := by
+      simp [List.getD, List.getElem?_eq_getElem hr_len]
+    rw [helem]
+    exact hshape (xs[r]) (List.getElem_mem hr_len)
+  apply Tensor.ext
+  · rw [hchunk_shape, hrhs_shape]
+  · intro idx hidx
+    rw [hchunk_shape] at hidx
+    have hidx64 : idx < 64 := by simpa [prodShape] using hidx
+    set p := idx / 32
+    set j := idx % 32
+    have hp : p < 2 := by
+      have : idx / 32 < 64 / 32 := Nat.div_lt_div_of_lt_of_dvd ⟨2, rfl⟩ hidx64
+      simpa using this
+    have hj : j < 32 := Nat.mod_lt idx (by omega)
+    have hidx_eq : idx = p * 32 + j := by subst p j; omega
+    rw [hidx_eq]
+    rw [chunk_dim1_4_1_8_32_valAt (allGatherPrimDimN 1 4 0 xs) r p j
+        hgather_shape hr hp hj]
+    exact allGatherPrimDimN_dim1_4_1_2_32_valAt xs r hr p hp j hj hhead
+
+/-- Layernorm distributes over allGatherPrimDimN on dim 1 for shape [1,2,32] shards.
+    This is the core bridge: `fw_layernorm(gather(shards), w, b) = gather(map(fw_layernorm(·,w,b), shards))`. -/
+theorem fw_layernorm_distribute_allGatherPrimDimN_dim1_4_1_2_32
+    (xs : List Tensor) (w b : Tensor)
+    (hlen : xs.length = 4)
+    (hshape : ∀ x ∈ xs, x.shape = [1, 2, 32]) :
+    fw_layernorm (allGatherPrimDimN 1 4 0 xs) w b =
+      allGatherPrimDimN 1 4 0 (xs.map (fun x => fw_layernorm x w b)) := by
+  have hhead : (xs.head?.map (fun t => t.shape)).getD [] = [1, 2, 32] := by
+    match xs, hlen with
+    | x0 :: _, _ =>
+      simp only [List.head?, Option.map, Option.getD]
+      exact hshape x0 (List.mem_cons_self ..)
+  have hgather_shape : (allGatherPrimDimN 1 4 0 xs).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 xs [1, 2, 32] hhead]
+    simp [List.set, List.getD]
+  have hsplit := fw_layernorm_split_dim1_4_1_8_32
+    (allGatherPrimDimN 1 4 0 xs) w b hgather_shape
+  rw [hsplit]
+  congr 1
+  -- Show the 4-element lists are equal by rewriting chunks to shards
+  match xs, hlen, hshape with
+  | [x0, x1, x2, x3], _, hshape =>
+    simp only [List.map, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+      Option.getD_some]
+    have hshape' : ∀ x ∈ [x0, x1, x2, x3], x.shape = [1, 2, 32] := hshape
+    have hcancel : ∀ r (hr : r < 4),
+        chunkPrimDimN 1 4 r (allGatherPrimDimN 1 4 0 [x0, x1, x2, x3]) =
+          [x0, x1, x2, x3].getD r (zeroTensor [1, 2, 32]) :=
+      fun r hr => chunkPrimDimN_allGatherPrimDimN_dim1_4_1_2_32
+        [x0, x1, x2, x3] r hr (by simp) hshape'
+    have h0 := hcancel 0 (by omega)
+    have h1 := hcancel 1 (by omega)
+    have h2 := hcancel 2 (by omega)
+    have h3 := hcancel 3 (by omega)
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+      Option.getD_some] at h0 h1 h2 h3
+    rw [h0, h1, h2, h3]
+
 /-!
 ## Bridging lemmas for vocab-parallel embedding
 
@@ -3151,6 +3270,179 @@ theorem fw_embedding_eq_allReduce_offset_shards
       have h3 : numParts * shard * hidden = shard * numParts * hidden := by ring
       omega
     simp [valAt, hoob]
+
+/-! ### BW_embedding shape and distribute lemmas -/
+
+theorem bw_embedding_shape (g ids weight : Tensor) :
+    (bw_embedding g ids weight).shape = weight.shape := by
+  simp [bw_embedding, Tensor.mkShape]
+
+theorem bw_embedding_offset_shape (offset : Nat) (g ids weight : Tensor) :
+    (bw_embedding_offset offset g ids weight).shape = weight.shape := by
+  simp [bw_embedding_offset, Tensor.mkShape]
+
+/-- Pointwise value of `bw_embedding`. -/
+theorem bw_embedding_valAt (g ids weight : Tensor) (idx : Nat)
+    (hidx : idx < prodShape weight.shape) :
+    valAt (bw_embedding g ids weight) idx =
+      let hidden := lastD weight.shape
+      let row := idx / hidden
+      let h := idx % hidden
+      ∑ k ∈ Finset.range (prodShape ids.shape),
+        if scalarToNat (valAt ids k) = row then valAt g (k * hidden + h) else 0 := by
+  simp only [bw_embedding, Tensor.mkShape, valAt, hidx, dite_true]
+
+/-- Pointwise value of `bw_embedding_offset`. -/
+theorem bw_embedding_offset_valAt (offset : Nat) (g ids weight : Tensor) (idx : Nat)
+    (hidx : idx < prodShape weight.shape) :
+    valAt (bw_embedding_offset offset g ids weight) idx =
+      let hidden := lastD weight.shape
+      let localRow := idx / hidden
+      let h := idx % hidden
+      let globalRow := offset + localRow
+      ∑ k ∈ Finset.range (prodShape ids.shape),
+        if scalarToNat (valAt ids k) = globalRow then valAt g (k * hidden + h) else 0 := by
+  simp only [bw_embedding_offset, Tensor.mkShape, valAt, hidx, dite_true]
+
+/-- Bridging lemma: under vocab-parallel sharding (vstack of weights along dim 0),
+    `bw_embedding` of the full weight equals `allGatherPrimDimN 0` of the per-rank
+    `bw_embedding_offset` results (4-shard specialization). -/
+theorem bw_embedding_eq_allGather_offset_4shards
+    (shard hidden : Nat)
+    (hshard : 0 < shard) (hhid : 0 < hidden)
+    (g ids w0 w1 w2 w3 : Tensor)
+    (hw0 : w0.shape = [shard, hidden]) (hw1 : w1.shape = [shard, hidden])
+    (hw2 : w2.shape = [shard, hidden]) (hw3 : w3.shape = [shard, hidden]) :
+    bw_embedding g ids (allGatherPrimDimN 0 4 0 [w0, w1, w2, w3]) =
+      allGatherPrimDimN 0 4 0
+        [bw_embedding_offset (0 * shard) g ids w0,
+         bw_embedding_offset (1 * shard) g ids w1,
+         bw_embedding_offset (2 * shard) g ids w2,
+         bw_embedding_offset (3 * shard) g ids w3] := by
+  set fullW : Tensor := allGatherPrimDimN 0 4 0 [w0, w1, w2, w3] with hfullW
+  set rhs0 := bw_embedding_offset (0 * shard) g ids w0
+  set rhs1 := bw_embedding_offset (1 * shard) g ids w1
+  set rhs2 := bw_embedding_offset (2 * shard) g ids w2
+  set rhs3 := bw_embedding_offset (3 * shard) g ids w3
+  -- Shape of fullW.
+  have hfullW_shape : fullW.shape = [shard * 4, hidden] := by
+    have := allGatherPrimDimN_shape 0 4 [w0, w1, w2, w3] [shard, hidden] (by simp [hw0])
+    simpa using this
+  have hlastD_full : lastD fullW.shape = hidden := by
+    rw [hfullW_shape]; rfl
+  -- Shapes of bw_embedding_offset results.
+  have hrhs0_shape : rhs0.shape = [shard, hidden] := by
+    simp only [rhs0]; rw [bw_embedding_offset_shape, hw0]
+  have hrhs1_shape : rhs1.shape = [shard, hidden] := by
+    simp only [rhs1]; rw [bw_embedding_offset_shape, hw1]
+  have hrhs2_shape : rhs2.shape = [shard, hidden] := by
+    simp only [rhs2]; rw [bw_embedding_offset_shape, hw2]
+  have hrhs3_shape : rhs3.shape = [shard, hidden] := by
+    simp only [rhs3]; rw [bw_embedding_offset_shape, hw3]
+  -- LHS and RHS shapes.
+  have hlhs_shape : (bw_embedding g ids fullW).shape = [shard * 4, hidden] := by
+    rw [bw_embedding_shape]; exact hfullW_shape
+  have hrhs_head : ([rhs0, rhs1, rhs2, rhs3].head?.map (fun t => t.shape)).getD [] = [shard, hidden] := by
+    simp [hrhs0_shape]
+  have hrhs_shape : (allGatherPrimDimN 0 4 0 [rhs0, rhs1, rhs2, rhs3]).shape = [shard * 4, hidden] := by
+    have := allGatherPrimDimN_shape 0 4 [rhs0, rhs1, rhs2, rhs3] [shard, hidden] hrhs_head
+    simpa using this
+  -- RHS element shapes for allGatherPrimDimN0_valAt.
+  have hrhs_ws_shape : ∀ r (_ : r < 4),
+      ([rhs0, rhs1, rhs2, rhs3].getD r (zeroTensor [shard, hidden])).shape = [shard, hidden] := by
+    intro r hr
+    have : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+    rcases this with rfl | rfl | rfl | rfl <;> simp [List.getD, hrhs0_shape, hrhs1_shape, hrhs2_shape, hrhs3_shape]
+  -- Ws element shapes.
+  have hWs_shape : ∀ r (_ : r < 4),
+      ([w0, w1, w2, w3].getD r (zeroTensor [shard, hidden])).shape = [shard, hidden] := by
+    intro r hr
+    have : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+    rcases this with rfl | rfl | rfl | rfl <;> simp [List.getD, hw0, hw1, hw2, hw3]
+  -- Apply Tensor.ext.
+  apply Tensor.ext
+  · rw [hlhs_shape, hrhs_shape]
+  -- Per-index equality.
+  intro idx hout
+  have hbound : idx < shard * 4 * hidden := by
+    have : prodShape [shard * 4, hidden] = shard * 4 * hidden := by simp [prodShape]
+    rwa [hlhs_shape, this] at hout
+  -- Decompose idx into (r, i, j).
+  have hsh_pos : 0 < shard * hidden := Nat.mul_pos hshard hhid
+  set r := idx / (shard * hidden)
+  set rem := idx % (shard * hidden)
+  set i := rem / hidden
+  set j := rem % hidden
+  have hr_lt : r < 4 := by
+    have h : idx < (shard * hidden) * 4 := by
+      have : shard * 4 * hidden = (shard * hidden) * 4 := by ring
+      omega
+    exact Nat.div_lt_of_lt_mul h
+  have hrem_lt : rem < shard * hidden := Nat.mod_lt _ hsh_pos
+  have hi_lt : i < shard := by
+    have h : rem < hidden * shard := by
+      have : shard * hidden = hidden * shard := by ring
+      omega
+    exact Nat.div_lt_of_lt_mul h
+  have hj_lt : j < hidden := Nat.mod_lt _ hhid
+  -- Reconstruct idx from (r, i, j).
+  have hidx_eq : idx = (r * shard + i) * hidden + j := by
+    have h1 : (shard * hidden) * r + rem = idx := Nat.div_add_mod idx (shard * hidden)
+    have h2 : hidden * i + j = rem := Nat.div_add_mod rem hidden
+    have h3 : (r * shard + i) * hidden + j = (shard * hidden) * r + (hidden * i + j) := by ring
+    omega
+  -- LHS value.
+  have hidx_prod : idx < prodShape fullW.shape := by
+    rw [hfullW_shape]; simpa [prodShape] using hbound
+  rw [bw_embedding_valAt g ids fullW idx hidx_prod]
+  simp only [hlastD_full]
+  -- RHS value via allGatherPrimDimN0_valAt.
+  have hWs_head' : ([w0, w1, w2, w3].head?.map (fun t => t.shape)).getD [] = [shard, hidden] := by
+    simp [hw0]
+  have hag := allGatherPrimDimN0_valAt 4 shard hidden [rhs0, rhs1, rhs2, rhs3]
+    (by omega) hshard hhid hrhs_head hrhs_ws_shape r hr_lt i hi_lt j hj_lt
+  rw [hidx_eq, hag]
+  -- Identify which shard we're in and unfold bw_embedding_offset valAt.
+  have hi_hidden_bound : i * hidden + j < prodShape [shard, hidden] := by
+    simp [prodShape]
+    calc i * hidden + j < i * hidden + hidden := by omega
+      _ = (i + 1) * hidden := by ring
+      _ ≤ shard * hidden := Nat.mul_le_mul_right _ hi_lt
+  -- Get the right shard from the list.
+  have hrhs_getD : ∀ (rv : Nat) (hrv : rv < 4),
+      [rhs0, rhs1, rhs2, rhs3].getD rv (zeroTensor [shard, hidden]) =
+      bw_embedding_offset (rv * shard) g ids ([w0, w1, w2, w3].getD rv (zeroTensor [shard, hidden])) := by
+    intro rv hrv
+    have : rv = 0 ∨ rv = 1 ∨ rv = 2 ∨ rv = 3 := by omega
+    rcases this with rfl | rfl | rfl | rfl <;> simp [List.getD, rhs0, rhs1, rhs2, rhs3]
+  rw [hrhs_getD r hr_lt]
+  -- Value of bw_embedding_offset at (i * hidden + j).
+  have hWr_shape := hWs_shape r hr_lt
+  have hlastD_Wr : lastD ([w0, w1, w2, w3].getD r (zeroTensor [shard, hidden])).shape = hidden := by
+    rw [hWr_shape]; rfl
+  rw [bw_embedding_offset_valAt (r * shard) g ids
+      ([w0, w1, w2, w3].getD r (zeroTensor [shard, hidden])) (i * hidden + j)
+      (by rw [hWr_shape]; exact hi_hidden_bound)]
+  simp only [hlastD_Wr]
+  -- Now both sides compute the same sum. Show the indices match.
+  -- LHS row = ((r*shard+i)*hidden+j)/hidden = r*shard+i
+  -- LHS h = ((r*shard+i)*hidden+j)%hidden = j
+  -- RHS localRow = (i*hidden+j)/hidden = i, h = (i*hidden+j)%hidden = j
+  -- RHS globalRow = r*shard + i
+  have hlhs_div : ((r * shard + i) * hidden + j) / hidden = r * shard + i := by
+    rw [show (r * shard + i) * hidden + j = j + hidden * (r * shard + i) from by ring,
+        Nat.add_mul_div_left _ _ hhid, Nat.div_eq_of_lt hj_lt, Nat.zero_add]
+  have hrhs_div : (i * hidden + j) / hidden = i := by
+    rw [show i * hidden + j = j + hidden * i from by ring,
+        Nat.add_mul_div_left _ _ hhid, Nat.div_eq_of_lt hj_lt, Nat.zero_add]
+  have hlhs_mod : ((r * shard + i) * hidden + j) % hidden = j := by
+    rw [show (r * shard + i) * hidden + j = j + hidden * (r * shard + i) from by ring,
+        Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hj_lt]
+  have hrhs_mod : (i * hidden + j) % hidden = j := by
+    rw [show i * hidden + j = j + hidden * i from by ring,
+        Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hj_lt]
+  simp only [hlhs_div, hrhs_div, hlhs_mod, hrhs_mod]
+
 /-!
 ## Dimension consistency (well-formedness)
 

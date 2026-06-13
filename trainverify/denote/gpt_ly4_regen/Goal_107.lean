@@ -48,5 +48,140 @@ def goal_107_cut_initGoals : List LineageGoal := initGoals ++ goal_107_prereqs
 def goal_107_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_107 pm_goal_107 goal_107 sm_goal_107InitEnv pm_goal_107InitEnv goal_107_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- bw_embedding distributes over vocab-parallel sharding (allGatherPrimDimN dim 0)
+theorem prove_goal_107_cut : goal_107_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for initGoal_563 (tensor 563 = gather of shards 1065..1068 on dim 0)
+  have hInit563 : InitGoalHolds pm_goal_107.numRanks initGoal_563 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_107_cut_initGoals, goal_107_prereqs]
+    decide
+  have h563_rec : initSM 563 = reconstructWithDim 0 4 0
+      [initPM 1065, initPM 1066, initPM 1067, initPM 1068] := by
+    have hrec := hInit563.2.2
+    simp only [initGoal_563, pm_goal_107, List.map] at hrec
+    exact hrec
+  have h563_shape : (initSM 563).shape = [128, 32] := hInit563.1
+  -- Extract PM shard shapes
+  have htp563_shapes := hInit563.2.1
+  simp only [initGoal_563, List.map] at htp563_shapes
+  have h1065_shape : (initPM 1065).shape = [32, 32] := by
+    have := congrArg List.head? htp563_shapes; simpa using this
+  have h1066_shape : (initPM 1066).shape = [32, 32] := by
+    have := congrArg List.tail htp563_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1067_shape : (initPM 1067).shape = [32, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp563_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1068_shape : (initPM 1068).shape = [32, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp563_shapes
+    have := congrArg List.head? this; simpa using this
+  -- reconstructWithDim 0 on 4 shards with shape [32,32] ≠ [1] → allGatherPrimDimN
+  have h563_gather : initSM 563 = allGatherPrimDimN 0 4 0
+      [initPM 1065, initPM 1066, initPM 1067, initPM 1068] := by
+    rw [h563_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _ (by rw [h1065_shape]; decide)
+  -- Extract init alignment for goal_108 (tensor 719 is replicated)
+  have hInit719 : InitGoalHolds pm_goal_107.numRanks goal_108 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_107_cut_initGoals, goal_107_prereqs]
+    decide
+  have h719_eq : initSM 719 = initPM 719 := by
+    have hrec := hInit719.2.2
+    simp only [goal_108, pm_goal_107, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  -- Extract init alignment for initGoal_714 (tensor 714 is replicated)
+  have hInit714 : InitGoalHolds pm_goal_107.numRanks initGoal_714 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_107_cut_initGoals, goal_107_prereqs]
+    decide
+  have h714_eq : initSM 714 = initPM 714 := by
+    have hrec := hInit714.2.2
+    simp only [initGoal_714, pm_goal_107, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  -- SM store: smStore 718 = bw_embedding(initSM 719, initSM 714, initSM 563)
+  have hsm : (denoteGraph sm_goal_107 initSM) 718 =
+      bw_embedding (initSM 719) (initSM 714) (initSM 563) := by
+    simp only [sm_goal_107, denoteGraph, List.foldl]
+    rw [applyNode_bw_embedding_out]
+  -- PM store: each rank computes bw_embedding_offset
+  -- After denoteGraph foldl, the store is nested applyNode calls.
+  -- Each node writes to a unique tid and reads only from init store.
+  have hpm0 : (denoteGraph pm_goal_107 initPM) 1081 =
+      bw_embedding_offset 0 (initPM 719) (initPM 714) (initPM 1065) := by
+    simp only [pm_goal_107, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (show (1081 : Tid) ∉ [1084] from by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (show (1081 : Tid) ∉ [1083] from by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (show (1081 : Tid) ∉ [1082] from by decide)]
+    rw [applyNode_bw_embedding_offset_out]
+  have hpm1 : (denoteGraph pm_goal_107 initPM) 1082 =
+      bw_embedding_offset 32 (initPM 719) (initPM 714) (initPM 1066) := by
+    simp only [pm_goal_107, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (show (1082 : Tid) ∉ [1084] from by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (show (1082 : Tid) ∉ [1083] from by decide)]
+    rw [applyNode_bw_embedding_offset_out]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+  have hpm2 : (denoteGraph pm_goal_107 initPM) 1083 =
+      bw_embedding_offset 64 (initPM 719) (initPM 714) (initPM 1067) := by
+    simp only [pm_goal_107, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (show (1083 : Tid) ∉ [1084] from by decide)]
+    rw [applyNode_bw_embedding_offset_out]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+  have hpm3 : (denoteGraph pm_goal_107 initPM) 1084 =
+      bw_embedding_offset 96 (initPM 719) (initPM 714) (initPM 1068) := by
+    simp only [pm_goal_107, denoteGraph, List.foldl]
+    rw [applyNode_bw_embedding_offset_out]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+  -- Key equation: bw_embedding on gathered weight = allGatherPrimDimN of offset results
+  have hkey : bw_embedding (initSM 719) (initSM 714) (initSM 563) =
+      allGatherPrimDimN 0 4 0
+        [bw_embedding_offset 0 (initPM 719) (initPM 714) (initPM 1065),
+         bw_embedding_offset 32 (initPM 719) (initPM 714) (initPM 1066),
+         bw_embedding_offset 64 (initPM 719) (initPM 714) (initPM 1067),
+         bw_embedding_offset 96 (initPM 719) (initPM 714) (initPM 1068)] := by
+    rw [h719_eq, h714_eq, h563_gather]
+    have := bw_embedding_eq_allGather_offset_4shards
+      (shard := 32) (hidden := 32)
+      (hshard := by omega) (hhid := by omega)
+      (g := initPM 719) (ids := initPM 714)
+      (w0 := initPM 1065) (w1 := initPM 1066) (w2 := initPM 1067) (w3 := initPM 1068)
+      h1065_shape h1066_shape h1067_shape h1068_shape
+    simpa using this
+  -- Prove the three conjuncts
+  simp only [goal_107, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM shape: [128, 32]
+    rw [hsm, bw_embedding_shape, h563_shape]
+  · -- PM tp shapes: [[32,32],[32,32],[32,32],[32,32]]
+    rw [hpm0, hpm1, hpm2, hpm3]
+    simp [bw_embedding_offset_shape, h1065_shape, h1066_shape, h1067_shape, h1068_shape]
+  · -- Value equality: smStore 718 = reconstructWithDim 0 4 0 [pmStore 1081..1084]
+    rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
+    -- LHS = allGatherPrimDimN 0 4 0 [pmStore 1081, ..., 1084]
+    -- Need to show this = reconstructWithDim 0 4 0 [pmStore 1081, ..., 1084]
+    -- Since shapes are [32,32] ≠ [1], reconstructWithDim uses allGatherPrimDimN
+    symm
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [hpm0, bw_embedding_offset_shape, h1065_shape]
+    decide
+
 end TrainVerify.Denote.GeneratedGoals
 
