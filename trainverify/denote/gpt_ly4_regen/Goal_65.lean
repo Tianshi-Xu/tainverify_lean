@@ -51,3 +51,77 @@ def goal_65_stmt_cut : Prop :=
 
 end TrainVerify.Denote.GeneratedGoals
 
+
+
+namespace TrainVerify.Denote.GeneratedGoals
+
+set_option maxHeartbeats 4000000 in
+theorem prove_goal_65_cut : goal_65_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  have hInit : InitGoalHolds pm_goal_65.numRanks goal_62 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_65_cut_initGoals, goal_65_prereqs]
+    decide
+  have h650_shape : (initSM 650).shape = [1, 4, 8, 8] := hInit.1
+  have htp_shapes := hInit.2.1
+  simp only [goal_62, LineageGoal.tps, List.map] at htp_shapes
+  have h2369 : (initPM 2369).shape = [1, 4, 8, 2] := by
+    have := congrArg (List.getD · 0 []) htp_shapes; simp at this; exact this
+  have h2370 : (initPM 2370).shape = [1, 4, 8, 2] := by
+    have := congrArg (List.getD · 1 []) htp_shapes; simp at this; exact this
+  have h2371 : (initPM 2371).shape = [1, 4, 8, 2] := by
+    have := congrArg (List.getD · 2 []) htp_shapes; simp at this; exact this
+  have h2372 : (initPM 2372).shape = [1, 4, 8, 2] := by
+    have := congrArg (List.getD · 3 []) htp_shapes; simp at this; exact this
+  have h650_eq : initSM 650 = allGatherPrimDimN 3 4 0
+      [initPM 2369, initPM 2370, initPM 2371, initPM 2372] := by
+    have hrec := hInit.2.2
+    simp only [goal_62, LineageGoal.tps, LineageGoal.gatherDim, List.map] at hrec
+    rw [hrec]
+    exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h2369]; decide)
+  have hsm : (denoteGraph sm_goal_65 initSM) 653 = transposeAxes 2 3 (initSM 650) := by
+    simp only [sm_goal_65, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_fw_transposeAxes_out]
+  have hpm : (denoteGraph pm_goal_65 initPM) 653 = allGatherPrimDimN 1 4 0
+      [transposeAxes 2 3 (allToAllPrimWithDims 4 0 [initPM 2369, initPM 2370, initPM 2371, initPM 2372] 3 1),
+       transposeAxes 2 3 (allToAllPrimWithDims 4 1 [initPM 2369, initPM 2370, initPM 2371, initPM 2372] 3 1),
+       transposeAxes 2 3 (allToAllPrimWithDims 4 2 [initPM 2369, initPM 2370, initPM 2371, initPM 2372] 3 1),
+       transposeAxes 2 3 (allToAllPrimWithDims 4 3 [initPM 2369, initPM 2370, initPM 2371, initPM 2372] 3 1)] := by
+    simp only [pm_goal_65, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_allGatherPrimDimN_out_thm]
+    congr 1
+    repeat rw [applyNode_bw_transposeAxes_out]
+    all_goals
+      congr 1
+      repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  have halltoall : ∀ r, r < 4 →
+      allToAllPrimWithDims 4 r [initPM 2369, initPM 2370, initPM 2371, initPM 2372] 3 1 =
+      chunkPrimDimN 1 4 r (initSM 650) := by
+    intro r _
+    simp only [allToAllPrimWithDims]
+    rw [← h650_eq]
+  have hpm' : (denoteGraph pm_goal_65 initPM) 653 = allGatherPrimDimN 1 4 0
+      [transposeAxes 2 3 (chunkPrimDimN 1 4 0 (initSM 650)),
+       transposeAxes 2 3 (chunkPrimDimN 1 4 1 (initSM 650)),
+       transposeAxes 2 3 (chunkPrimDimN 1 4 2 (initSM 650)),
+       transposeAxes 2 3 (chunkPrimDimN 1 4 3 (initSM 650))] := by
+    rw [hpm, halltoall 0 (by omega), halltoall 1 (by omega), halltoall 2 (by omega), halltoall 3 (by omega)]
+  have hbridge : transposeAxes 2 3 (initSM 650) = allGatherPrimDimN 1 4 0
+      [transposeAxes 2 3 (chunkPrimDimN 1 4 0 (initSM 650)),
+       transposeAxes 2 3 (chunkPrimDimN 1 4 1 (initSM 650)),
+       transposeAxes 2 3 (chunkPrimDimN 1 4 2 (initSM 650)),
+       transposeAxes 2 3 (chunkPrimDimN 1 4 3 (initSM 650))] :=
+    fw_transpose23_split_dim1_4_1_4_8_8 (initSM 650) h650_shape
+  simp only [goal_65, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
+    LineageGoal.gatherDim, List.map, Piece.tid]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]
+    simp [transposeAxes, Tensor.mkShape, h650_shape, listSwapAt, List.getD, List.set]
+  · rw [hpm', allGatherPrimDimN_shape 1 4 _ [1, 1, 8, 8]]
+    · simp [List.set, List.getD]
+    · simp [transposeAxes, Tensor.mkShape, chunkPrimDimN_shape, h650_shape, List.getD, List.set,
+        listSwapAt, List.head?, Option.map, Option.getD]
+  · rw [reconstructWithDim_singleton, hsm, hpm']
+    exact hbridge
+
+end TrainVerify.Denote.GeneratedGoals
