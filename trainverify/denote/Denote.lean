@@ -510,6 +510,129 @@ def bw_add2 (g x y : Tensor) : Tensor × Tensor :=
   (reduceBroadcast outShape x.shape (fun k => valAt g k),
    reduceBroadcast outShape y.shape (fun k => valAt g k))
 
+/-! ### Helper lemmas for `bw_add2` identity (when outShape = inShape) -/
+
+private theorem prodShape_cons' (d : Nat) (rest : Shape) :
+    prodShape (d :: rest) = d * prodShape rest := by
+  simp only [prodShape, List.foldl]
+  suffices ∀ (a : Nat) (bs : List Nat), List.foldl (fun acc d => acc * d) a bs =
+      a * List.foldl (fun acc d => acc * d) 1 bs by rw [this]; simp
+  intro a bs
+  induction bs generalizing a with
+  | nil => simp [List.foldl]
+  | cons b bs' ih =>
+    simp only [List.foldl, Nat.one_mul]; rw [ih, ih b]; exact Nat.mul_assoc a b _
+
+private theorem flatToMulti_length' (s : Shape) (k : Nat) :
+    (flatToMulti s k).length = s.length := by
+  induction s generalizing k with
+  | nil => rfl
+  | cons d rest ih =>
+    change (let stride := prodShape rest
+            if stride = 0 then 0 :: flatToMulti rest 0
+            else (k / stride) :: flatToMulti rest (k % stride)).length = _
+    dsimp only []; split_ifs
+    · simp only [List.length_cons]; exact congrArg Nat.succ (ih 0)
+    · simp only [List.length_cons]; exact congrArg Nat.succ (ih _)
+
+private theorem flatToMulti_zero_at_dim_one (s : Shape) (k : Nat) (i : Nat)
+    (hk : k < prodShape s) (hi : i < s.length) (hdim : s[i] = 1) :
+    (flatToMulti s k)[i]'(by rw [flatToMulti_length']; exact hi) = 0 := by
+  induction s generalizing k i with
+  | nil => exact absurd hi (Nat.not_lt_zero _)
+  | cons d rest ih =>
+    have hne : prodShape rest ≠ 0 := by
+      intro h; rw [prodShape_cons'] at hk; simp [h] at hk
+    have hprod_pos : 0 < prodShape rest := Nat.pos_of_ne_zero hne
+    have hfm : flatToMulti (d :: rest) k =
+        (k / prodShape rest) :: flatToMulti rest (k % prodShape rest) := by
+      change (let stride := prodShape rest
+              if stride = 0 then 0 :: flatToMulti rest 0
+              else (k / stride) :: flatToMulti rest (k % stride)) = _
+      dsimp only []; rw [if_neg hne]
+    match i, hi, hdim with
+    | 0, _, hdim0 =>
+      have hd : d = 1 := hdim0
+      subst hd; rw [prodShape_cons', Nat.one_mul] at hk
+      have hfm1 : flatToMulti (1 :: rest) k =
+          (k / prodShape rest) :: flatToMulti rest (k % prodShape rest) := by
+        change (let stride := prodShape rest
+                if stride = 0 then 0 :: flatToMulti rest 0
+                else (k / stride) :: flatToMulti rest (k % stride)) = _
+        dsimp only []; rw [if_neg hne]
+      simp [hfm1, Nat.div_eq_of_lt hk]
+    | i' + 1, hi_succ, hdim_succ =>
+      have hi_rest : i' < rest.length := by
+        have : (d :: rest).length = rest.length + 1 := rfl
+        omega
+      have key : (flatToMulti (d :: rest) k)[i' + 1]'(by rw [flatToMulti_length']; exact hi_succ) =
+          (flatToMulti rest (k % prodShape rest))[i']'(by rw [flatToMulti_length']; exact hi_rest) := by
+        simp only [hfm, List.getElem_cons_succ]
+      rw [key]
+      exact ih (k % prodShape rest) i' (Nat.mod_lt k hprod_pos) hi_rest hdim_succ
+
+private theorem multiToFlat_flatToMulti' (s : Shape) (k : Nat) (hk : k < prodShape s) :
+    multiToFlat s (flatToMulti s k) = k := by
+  induction s generalizing k with
+  | nil =>
+    have hk0 : k = 0 := by have : prodShape ([] : List Nat) = 1 := rfl; omega
+    subst hk0; rfl
+  | cons d rest ih =>
+    have hne : prodShape rest ≠ 0 := by
+      intro h; rw [prodShape_cons'] at hk; simp [h] at hk
+    have hprod_pos : 0 < prodShape rest := Nat.pos_of_ne_zero hne
+    have hfm : flatToMulti (d :: rest) k =
+        (k / prodShape rest) :: flatToMulti rest (k % prodShape rest) := by
+      change (let stride := prodShape rest
+              if stride = 0 then 0 :: flatToMulti rest 0
+              else (k / stride) :: flatToMulti rest (k % stride)) = _
+      dsimp only []; rw [if_neg hne]
+    rw [hfm]; show k / prodShape rest * prodShape rest +
+      multiToFlat rest (flatToMulti rest (k % prodShape rest)) = k
+    rw [ih _ (Nat.mod_lt k hprod_pos), Nat.mul_comm]
+    exact Nat.div_add_mod k (prodShape rest)
+
+private theorem multiToFlat_alignedMultiIndex_same' (s : Shape) (k : Nat) (hk : k < prodShape s) :
+    multiToFlat s (alignedMultiIndex s s k) = k := by
+  suffices h : alignedMultiIndex s s k = flatToMulti s k by
+    rw [h]; exact multiToFlat_flatToMulti' s k hk
+  simp only [alignedMultiIndex, Nat.sub_self, List.drop_zero]
+  apply List.ext_getElem (by simp [flatToMulti_length'])
+  intro i hi1 hi2
+  simp only [List.getElem_ofFn]
+  have hi_s : i < s.length := by have := flatToMulti_length' s k; omega
+  split_ifs with hdim
+  · have hdim' : s[i] = 1 := by
+      simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hi_s] at hdim; exact hdim
+    have h0 := flatToMulti_zero_at_dim_one s k i hk hi_s hdim'
+    omega
+  · rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hi2]
+    simp
+
+theorem reduceBroadcast_same (s : Shape) (v : Nat → Scalar) :
+    reduceBroadcast s s v = Tensor.mkShape s (fun i => v i.1) := by
+  simp only [reduceBroadcast, Tensor.mkShape]
+  congr 1
+  funext ⟨idx, hidx⟩
+  have hrt : ∀ k ∈ Finset.range (prodShape s),
+      multiToFlat s (alignedMultiIndex s s k) = k := fun k hk =>
+    multiToFlat_alignedMultiIndex_same' s k (Finset.mem_range.mp hk)
+  have heq : (∑ k ∈ Finset.range (prodShape s),
+      if multiToFlat s (alignedMultiIndex s s k) = idx then v k else 0) =
+    (∑ k ∈ Finset.range (prodShape s), if k = idx then v k else 0) :=
+    Finset.sum_congr rfl (fun k hk => by rw [hrt k hk])
+  rw [heq, Finset.sum_ite_eq']
+  simp [Finset.mem_range, hidx]
+
+theorem bw_add2_fst_same_shape (g x y : Tensor) (h : g.shape = x.shape) :
+    (bw_add2 g x y).1 = g := by
+  show reduceBroadcast g.shape x.shape (fun k => valAt g k) = g
+  rw [h, reduceBroadcast_same]
+  rw [← h]
+  apply Tensor.ext (by simp [Tensor.mkShape])
+  intro idx hidx
+  simp [Tensor.mkShape, valAt_of_lt g idx hidx]
+
 def bw_mul2 (g x y : Tensor) : Tensor × Tensor :=
   let outShape := g.shape
   (reduceBroadcast outShape x.shape
@@ -2512,6 +2635,27 @@ theorem evalOp_allReducePrim (numParts rank : Nat) (params : List Nat) (xs : Lis
 theorem evalOp_fw_add2 (numParts rank : Nat) (x y : Tensor) :
     evalOp numParts rank "OpName.FW_add" [] [x, y] = [elemwiseAdd x y] := by
   rfl
+
+/-- Unfolding lemma for `evalOp` on ternary `BW_add` (backward of binary add). -/
+theorem evalOp_bw_add2 (numParts rank : Nat) (g x y : Tensor) :
+    evalOp numParts rank "OpName.BW_add" [] [g, x, y] =
+      [(bw_add2 g x y).1, (bw_add2 g x y).2] := by
+  rfl
+
+/-- `applyNode` for ternary `BW_add` — first output (dx). -/
+theorem applyNode_bw_add2_fst_out
+    (graph : GraphDecl) (s : Store) (rank : Nat)
+    (gTid xTid yTid dxTid dyTid : Tid)
+    (hne : dxTid ≠ dyTid) :
+    applyNode graph s { rank := rank, op := "OpName.BW_add", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dxTid =
+      (bw_add2 (s gTid) (s xTid) (s yTid)).1 := by
+  unfold applyNode
+  rw [show ([gTid, xTid, yTid] : List Tid).map s = [s gTid, s xTid, s yTid] from rfl,
+      evalOp_bw_add2]
+  change storeSet s [(dxTid, (bw_add2 (s gTid) (s xTid) (s yTid)).1),
+                     (dyTid, (bw_add2 (s gTid) (s xTid) (s yTid)).2)] dxTid = _
+  unfold storeSet
+  simp [List.find?, hne]
 
 /-- Unfolding lemma for `AllToAllPrim` with explicit split/gather dimensions. -/
 theorem evalOp_allToAllPrimWithDims (numParts rank idim odim : Nat) (xs : List Tensor) :
