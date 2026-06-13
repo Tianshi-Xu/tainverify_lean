@@ -3455,6 +3455,108 @@ theorem fw_layernorm_distribute_allGatherPrimDimN_dim1_4_1_2_32
       Option.getD_some] at h0 h1 h2 h3
     rw [h0, h1, h2, h3]
 
+/-- `elemwiseAdd` value accessor for shape `[1, 2, 32]`. -/
+private theorem elemwiseAdd_valAt_1_2_32 (x y : Tensor) (idx : Nat)
+    (hx : x.shape = [1, 2, 32]) (hy : y.shape = [1, 2, 32]) (hidx : idx < 64) :
+    valAt (elemwiseAdd x y) idx = valAt x idx + valAt y idx := by
+  have hout : (elemwiseAdd x y).shape = [1, 2, 32] := by
+    simp [elemwiseAdd, Tensor.mkShape, outShape2, hx, hy]
+  rw [valAt_of_lt _ _ (by simpa [hout, prodShape] using hidx)]
+  simp [elemwiseAdd, Tensor.mkShape, outShape2, hx, hy, broadcastValAtShape,
+    alignedMultiIndex, flatToMulti, multiToFlat, prodShape]
+  have hnorm : idx % 64 / 32 * 32 + idx % 32 = idx := by omega
+  rw [hnorm]
+
+/-- Concrete instance of `fw_add_split_dim_statement` for `[1, 8, 32]` tensors split four ways along dim 1. -/
+theorem fw_add_split_dim1_4_1_8_32 (a b : Tensor) (ha : a.shape = [1, 8, 32]) (hb : b.shape = [1, 8, 32]) :
+    elemwiseAdd a b = allGatherPrimDimN 1 4 0
+      [elemwiseAdd (chunkPrimDimN 1 4 0 a) (chunkPrimDimN 1 4 0 b),
+       elemwiseAdd (chunkPrimDimN 1 4 1 a) (chunkPrimDimN 1 4 1 b),
+       elemwiseAdd (chunkPrimDimN 1 4 2 a) (chunkPrimDimN 1 4 2 b),
+       elemwiseAdd (chunkPrimDimN 1 4 3 a) (chunkPrimDimN 1 4 3 b)] := by
+  have hchunk_shape_a : ∀ r, r < 4 → (chunkPrimDimN 1 4 r a).shape = [1, 2, 32] := by
+    intro r _; rw [chunkPrimDimN_shape 1 4 r _ _ ha (by omega)]; simp [List.set, List.getD]
+  have hchunk_shape_b : ∀ r, r < 4 → (chunkPrimDimN 1 4 r b).shape = [1, 2, 32] := by
+    intro r _; rw [chunkPrimDimN_shape 1 4 r _ _ hb (by omega)]; simp [List.set, List.getD]
+  have hpiece_shape : ∀ r, r < 4 → (elemwiseAdd (chunkPrimDimN 1 4 r a) (chunkPrimDimN 1 4 r b)).shape = [1, 2, 32] := by
+    intro r hr; exact elemwiseAdd_shape_of_shapes _ _ _ (hchunk_shape_a r hr) (hchunk_shape_b r hr)
+  have hhead : (([elemwiseAdd (chunkPrimDimN 1 4 0 a) (chunkPrimDimN 1 4 0 b),
+       elemwiseAdd (chunkPrimDimN 1 4 1 a) (chunkPrimDimN 1 4 1 b),
+       elemwiseAdd (chunkPrimDimN 1 4 2 a) (chunkPrimDimN 1 4 2 b),
+       elemwiseAdd (chunkPrimDimN 1 4 3 a) (chunkPrimDimN 1 4 3 b)].head?.map (fun t => t.shape)).getD []) = [1, 2, 32] := by
+    simp [hpiece_shape 0 (by omega)]
+  have hrhs_shape : (allGatherPrimDimN 1 4 0
+      [elemwiseAdd (chunkPrimDimN 1 4 0 a) (chunkPrimDimN 1 4 0 b),
+       elemwiseAdd (chunkPrimDimN 1 4 1 a) (chunkPrimDimN 1 4 1 b),
+       elemwiseAdd (chunkPrimDimN 1 4 2 a) (chunkPrimDimN 1 4 2 b),
+       elemwiseAdd (chunkPrimDimN 1 4 3 a) (chunkPrimDimN 1 4 3 b)]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hhead]
+    simp [List.set, List.getD]
+  have hlhs_shape : (elemwiseAdd a b).shape = [1, 8, 32] := by
+    simp [elemwiseAdd, Tensor.mkShape, outShape2, ha, hb]
+  apply Tensor.ext
+  · rw [hlhs_shape, hrhs_shape]
+  · intro idx hidx
+    rw [hlhs_shape] at hidx
+    have hidx256 : idx < 256 := by simpa [prodShape] using hidx
+    -- Decompose idx = p * 32 + j with p < 8, j < 32
+    set p := idx / 32 with hp_def
+    set j := idx % 32 with hj_def
+    have hp_lt : p < 8 := by
+      have : idx / 32 < 256 / 32 := Nat.div_lt_div_of_lt_of_dvd ⟨8, rfl⟩ hidx256
+      simpa using this
+    have hj_lt : j < 32 := Nat.mod_lt idx (by omega)
+    have hidx_eq : idx = p * 32 + j := by subst p j; omega
+    rw [hidx_eq]
+    rw [elemwiseAdd_valAt_1_8_32 a b (p * 32 + j) ha hb (by omega)]
+    -- Now compute RHS
+    have hrhs_idx : p * 32 + j < prodShape (allGatherPrimDimN 1 4 0
+        [elemwiseAdd (chunkPrimDimN 1 4 0 a) (chunkPrimDimN 1 4 0 b),
+         elemwiseAdd (chunkPrimDimN 1 4 1 a) (chunkPrimDimN 1 4 1 b),
+         elemwiseAdd (chunkPrimDimN 1 4 2 a) (chunkPrimDimN 1 4 2 b),
+         elemwiseAdd (chunkPrimDimN 1 4 3 a) (chunkPrimDimN 1 4 3 b)]).shape := by
+      rw [hrhs_shape]; simp [prodShape]; omega
+    -- Decompose p into r = p/2 and p' = p%2
+    set r := p / 2 with hr_def
+    set p' := p % 2 with hp'_def
+    have hr_lt : r < 4 := by
+      have : p / 2 < 8 / 2 := Nat.div_lt_div_of_lt_of_dvd ⟨4, rfl⟩ hp_lt
+      simpa using this
+    have hp'_lt : p' < 2 := Nat.mod_lt p (by omega)
+    have hp_eq : p = r * 2 + p' := by subst r p'; omega
+    -- Use allGatherPrimDimN_dim1_4_1_2_32_valAt
+    rw [hp_eq]
+    rw [allGatherPrimDimN_dim1_4_1_2_32_valAt
+        [elemwiseAdd (chunkPrimDimN 1 4 0 a) (chunkPrimDimN 1 4 0 b),
+         elemwiseAdd (chunkPrimDimN 1 4 1 a) (chunkPrimDimN 1 4 1 b),
+         elemwiseAdd (chunkPrimDimN 1 4 2 a) (chunkPrimDimN 1 4 2 b),
+         elemwiseAdd (chunkPrimDimN 1 4 3 a) (chunkPrimDimN 1 4 3 b)]
+        r hr_lt p' hp'_lt j hj_lt hhead]
+    -- Now goal: valAt a ((r*2+p')*32+j) + valAt b ((r*2+p')*32+j) =
+    --           valAt ([pieces][r].getD ...) (p'*32+j)
+    have hr_cases : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+    rcases hr_cases with h0 | h1 | h2 | h3
+    · rw [h0]; simp only [List.getD, List.getElem?_cons_zero, Option.getD_some]
+      rw [elemwiseAdd_valAt_1_2_32 _ _ (p' * 32 + j)
+          (hchunk_shape_a 0 (by omega)) (hchunk_shape_b 0 (by omega)) (by omega)]
+      rw [chunk_dim1_4_1_8_32_valAt a 0 p' j ha (by omega) hp'_lt hj_lt]
+      rw [chunk_dim1_4_1_8_32_valAt b 0 p' j hb (by omega) hp'_lt hj_lt]
+    · rw [h1]; simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+      rw [elemwiseAdd_valAt_1_2_32 _ _ (p' * 32 + j)
+          (hchunk_shape_a 1 (by omega)) (hchunk_shape_b 1 (by omega)) (by omega)]
+      rw [chunk_dim1_4_1_8_32_valAt a 1 p' j ha (by omega) hp'_lt hj_lt]
+      rw [chunk_dim1_4_1_8_32_valAt b 1 p' j hb (by omega) hp'_lt hj_lt]
+    · rw [h2]; simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+      rw [elemwiseAdd_valAt_1_2_32 _ _ (p' * 32 + j)
+          (hchunk_shape_a 2 (by omega)) (hchunk_shape_b 2 (by omega)) (by omega)]
+      rw [chunk_dim1_4_1_8_32_valAt a 2 p' j ha (by omega) hp'_lt hj_lt]
+      rw [chunk_dim1_4_1_8_32_valAt b 2 p' j hb (by omega) hp'_lt hj_lt]
+    · rw [h3]; simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+      rw [elemwiseAdd_valAt_1_2_32 _ _ (p' * 32 + j)
+          (hchunk_shape_a 3 (by omega)) (hchunk_shape_b 3 (by omega)) (by omega)]
+      rw [chunk_dim1_4_1_8_32_valAt a 3 p' j ha (by omega) hp'_lt hj_lt]
+      rw [chunk_dim1_4_1_8_32_valAt b 3 p' j hb (by omega) hp'_lt hj_lt]
+
 /-!
 ## Bridging lemmas for vocab-parallel embedding
 
