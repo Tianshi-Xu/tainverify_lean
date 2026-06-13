@@ -1446,7 +1446,7 @@ theorem tensorSum_add_gather_dim2_4_1_8_32 (a b0 b1 b2 b3 : Tensor)
     Gathers all inputs along `idim`, then chunks the result along `odim`. -/
 def allToAllPrimWithDims (numParts rank : Nat) (xs : List Tensor)
     (idim odim : Nat) : Tensor :=
-  chunkPrimDimN idim numParts rank (allGatherPrimDimN odim numParts 0 xs)
+  chunkPrimDimN odim numParts rank (allGatherPrimDimN idim numParts 0 xs)
 
 /-- `allToAllPrimWithDims` shape theorem. -/
 theorem allToAllPrimWithDims_shape (numParts rank : Nat) (xs : List Tensor)
@@ -1455,12 +1455,12 @@ theorem allToAllPrimWithDims_shape (numParts rank : Nat) (xs : List Tensor)
     (hhead : (xs.head?.map (fun t => t.shape)).getD [] = shardShape)
     (hnz : numParts ≠ 0) :
     (allToAllPrimWithDims numParts rank xs idim odim).shape =
-      (shardShape.set odim (shardShape.getD odim 0 * numParts)).set idim
-        ((shardShape.set odim (shardShape.getD odim 0 * numParts)).getD idim 0 /
+      (shardShape.set idim (shardShape.getD idim 0 * numParts)).set odim
+        ((shardShape.set idim (shardShape.getD idim 0 * numParts)).getD odim 0 /
           numParts) := by
   simp only [allToAllPrimWithDims]
-  exact chunkPrimDimN_shape idim numParts rank _
-    _ (allGatherPrimDimN_shape odim numParts xs shardShape hhead) hnz
+  exact chunkPrimDimN_shape odim numParts rank _
+    _ (allGatherPrimDimN_shape idim numParts xs shardShape hhead) hnz
 
 /-- `allGatherPrim` shape for 2D tensors with consistent shard shapes. -/
 theorem allGatherPrim_shape (numParts o shard : Nat) (xs : List Tensor)
