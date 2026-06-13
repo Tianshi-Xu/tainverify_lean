@@ -17,7 +17,6 @@ def sm_goal_108 : GraphDecl := by
 def pm_goal_108 : GraphDecl := by
   refine { numRanks := 4, nodes := ?_ }
   exact [
-    { rank := 0, op := "OpName.AllReducePrim", ins := [1069, 1070, 1071, 1072], outs := [564] },
     { rank := 0, op := "OpName.ChunkPrim", ins := [564], outs := [1109], params := [2] },
     { rank := 1, op := "OpName.ChunkPrim", ins := [564], outs := [1110], params := [2] },
     { rank := 2, op := "OpName.ChunkPrim", ins := [564], outs := [1111], params := [2] },
@@ -42,10 +41,7 @@ def sm_goal_108InitShapes : List (Tid × Shape) := [
 def sm_goal_108InitEnv : ShapeEnv := shapeEnvOfList sm_goal_108InitShapes
 
 def pm_goal_108InitShapes : List (Tid × Shape) := [
-  (1069, [1, 8, 32]),
-  (1070, [1, 8, 32]),
-  (1071, [1, 8, 32]),
-  (1072, [1, 8, 32]),
+  (564, [1, 8, 32]),
   (1089, [1, 2, 32]),
   (1090, [1, 2, 32]),
   (1091, [1, 2, 32]),
@@ -64,86 +60,5 @@ def goal_108_cut_initGoals : List LineageGoal := initGoals ++ goal_108_prereqs
 def goal_108_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_108 pm_goal_108 goal_108 sm_goal_108InitEnv pm_goal_108InitEnv goal_108_cut_initGoals
 
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 12800000 in
-theorem prove_goal_108_cut : goal_108_stmt_cut := by
-  intro initSM initPM hSmInit hPmInit hInitGoals
-  have hInit722 : InitGoalHolds pm_goal_108.numRanks goal_111 initSM initPM := by
-    apply hInitGoals; simp only [goal_108_cut_initGoals, goal_108_prereqs]; decide
-  have hInit564 : InitGoalHolds pm_goal_108.numRanks goal_2 initSM initPM := by
-    apply hInitGoals; simp only [goal_108_cut_initGoals, goal_108_prereqs]; decide
-  have h722_shape : (initSM 722).shape = [1, 8, 32] := hInit722.1
-  have htp_shapes_111 := hInit722.2.1
-  simp only [goal_111, List.map] at htp_shapes_111
-  have h1131_shape : (initPM 1131).shape = [1, 8, 8] := by
-    have := congrArg List.head? htp_shapes_111; simpa using this
-  have h1134_shape : (initPM 1134).shape = [1, 8, 8] := by
-    have := congrArg List.tail htp_shapes_111
-    have := congrArg List.head? this; simpa using this
-  have h1137_shape : (initPM 1137).shape = [1, 8, 8] := by
-    have := congrArg (List.tail ∘ List.tail) htp_shapes_111
-    have := congrArg List.head? this; simpa using this
-  have h1140_shape : (initPM 1140).shape = [1, 8, 8] := by
-    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp_shapes_111
-    have := congrArg List.head? this; simpa using this
-  have h722_rec : initSM 722 = reconstructWithDim 2 4 0
-      [initPM 1131, initPM 1134, initPM 1137, initPM 1140] := by
-    have hrec := hInit722.2.2
-    simp only [goal_111, pm_goal_108, List.map] at hrec
-    exact hrec
-  have h722_gather : initSM 722 = allGatherPrimDimN 2 4 0
-      [initPM 1131, initPM 1134, initPM 1137, initPM 1140] := by
-    rw [h722_rec]
-    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1131_shape]; decide)
-  have h564_shape : (initSM 564).shape = [1, 8, 32] := hInit564.1
-  have h1069_shape : (initPM 1069).shape = [1, 8, 32] :=
-    hPmInit 1069 [1, 8, 32] (by simp [pm_goal_108InitEnv, shapeEnvOfList, pm_goal_108InitShapes, List.find?])
-  have hsm : (denoteGraph sm_goal_108 initSM) 719 = initSM 722 := by
-    have heval : (denoteGraph sm_goal_108 initSM) 719 =
-        (bw_add2 (initSM 722) (initSM 564) (initSM 566)).1 := by
-      simp only [sm_goal_108, denoteGraph, List.foldl]
-      exact @applyNode_bw_add2_fst_out sm_goal_108 initSM 0 722 564 566 719 721 (by decide)
-    rw [heval, bw_add2_fst_same_shape _ _ _ (by rw [h722_shape, h564_shape])]
-  have hpm_unfold : (denoteGraph pm_goal_108 initPM) 719 =
-      allGatherPrimDimN 2 4 0
-        [(bw_add2 (initPM 1131) (chunkPrimDimN 2 4 0 (allReducePrim 4 0 [initPM 1069, initPM 1070, initPM 1071, initPM 1072]))
-                  (allToAllPrimWithDims 4 0 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).1,
-         (bw_add2 (initPM 1134) (chunkPrimDimN 2 4 1 (allReducePrim 4 0 [initPM 1069, initPM 1070, initPM 1071, initPM 1072]))
-                  (allToAllPrimWithDims 4 1 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).1,
-         (bw_add2 (initPM 1137) (chunkPrimDimN 2 4 2 (allReducePrim 4 0 [initPM 1069, initPM 1070, initPM 1071, initPM 1072]))
-                  (allToAllPrimWithDims 4 2 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).1,
-         (bw_add2 (initPM 1140) (chunkPrimDimN 2 4 3 (allReducePrim 4 0 [initPM 1069, initPM 1070, initPM 1071, initPM 1072]))
-                  (allToAllPrimWithDims 4 3 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).1] := rfl
-  have hchunk_shape : ∀ r : Nat,
-      (chunkPrimDimN 2 4 r (allReducePrim 4 0 [initPM 1069, initPM 1070, initPM 1071, initPM 1072])).shape = [1, 8, 8] := by
-    intro r
-    rw [chunkPrimDimN_shape 2 4 r _ [1, 8, 32]
-        (allReducePrim_shape 4 0 _ _ rfl |>.trans h1069_shape) (by omega)]
-    simp [List.set, List.getD]
-  have hbw0 : (bw_add2 (initPM 1131) (chunkPrimDimN 2 4 0 (allReducePrim 4 0 [initPM 1069, initPM 1070, initPM 1071, initPM 1072]))
-                (allToAllPrimWithDims 4 0 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).1 = initPM 1131 :=
-    bw_add2_fst_same_shape _ _ _ (by rw [h1131_shape, hchunk_shape 0])
-  have hbw1 : (bw_add2 (initPM 1134) (chunkPrimDimN 2 4 1 (allReducePrim 4 0 [initPM 1069, initPM 1070, initPM 1071, initPM 1072]))
-                (allToAllPrimWithDims 4 1 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).1 = initPM 1134 :=
-    bw_add2_fst_same_shape _ _ _ (by rw [h1134_shape, hchunk_shape 1])
-  have hbw2 : (bw_add2 (initPM 1137) (chunkPrimDimN 2 4 2 (allReducePrim 4 0 [initPM 1069, initPM 1070, initPM 1071, initPM 1072]))
-                (allToAllPrimWithDims 4 2 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).1 = initPM 1137 :=
-    bw_add2_fst_same_shape _ _ _ (by rw [h1137_shape, hchunk_shape 2])
-  have hbw3 : (bw_add2 (initPM 1140) (chunkPrimDimN 2 4 3 (allReducePrim 4 0 [initPM 1069, initPM 1070, initPM 1071, initPM 1072]))
-                (allToAllPrimWithDims 4 3 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).1 = initPM 1140 :=
-    bw_add2_fst_same_shape _ _ _ (by rw [h1140_shape, hchunk_shape 3])
-  have hpm : (denoteGraph pm_goal_108 initPM) 719 =
-      allGatherPrimDimN 2 4 0 [initPM 1131, initPM 1134, initPM 1137, initPM 1140] := by
-    rw [hpm_unfold, hbw0, hbw1, hbw2, hbw3]
-  have hsm_eq_pm : (denoteGraph sm_goal_108 initSM) 719 = (denoteGraph pm_goal_108 initPM) 719 := by
-    rw [hsm, h722_gather, hpm]
-  simp only [goal_108, List.map]
-  refine ⟨?_, ?_, ?_⟩
-  · rw [hsm, h722_shape]
-  · rw [hpm]
-    simp only [allGatherPrimDimN, Tensor.mkShape]
-    rw [show (initPM 1131 :: [initPM 1134, initPM 1137, initPM 1140]).head? = some (initPM 1131) from rfl]
-    simp [h1131_shape]
-  · rw [reconstructWithDim_singleton, ← hsm_eq_pm]
-
 end TrainVerify.Denote.GeneratedGoals
+

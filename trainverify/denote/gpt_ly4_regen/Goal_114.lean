@@ -17,7 +17,6 @@ def sm_goal_114 : GraphDecl := by
 def pm_goal_114 : GraphDecl := by
   refine { numRanks := 4, nodes := ?_ }
   exact [
-    { rank := 0, op := "OpName.AllReducePrim", ins := [1254, 1251, 1248, 1245], outs := [926] },
     { rank := 0, op := "OpName.ChunkPrim", ins := [926], outs := [3440], params := [1] },
     { rank := 1, op := "OpName.ChunkPrim", ins := [926], outs := [3448], params := [1] },
     { rank := 2, op := "OpName.ChunkPrim", ins := [926], outs := [3456], params := [1] },
@@ -37,6 +36,7 @@ def sm_goal_114InitShapes : List (Tid × Shape) := [
 def sm_goal_114InitEnv : ShapeEnv := shapeEnvOfList sm_goal_114InitShapes
 
 def pm_goal_114InitShapes : List (Tid × Shape) := [
+  (926, [1, 8, 32]),
   (1189, [1, 2, 32]),
   (1192, [1, 2, 32]),
   (1195, [1, 2, 32]),
@@ -45,10 +45,6 @@ def pm_goal_114InitShapes : List (Tid × Shape) := [
   (1220, [1, 2, 32]),
   (1223, [1, 2, 32]),
   (1226, [1, 2, 32]),
-  (1245, [1, 8, 32]),
-  (1248, [1, 8, 32]),
-  (1251, [1, 8, 32]),
-  (1254, [1, 8, 32]),
 ]
 
 def pm_goal_114InitEnv : ShapeEnv := shapeEnvOfList pm_goal_114InitShapes
