@@ -306,7 +306,7 @@ def _get_node_params(G: Any, n: Any, num_parts: int = 0) -> Optional[List[int]]:
 	  - FW_view / BW_view: target shape (list of dims)
 	  - FW_transpose / BW_transpose: [dim0, dim1]
 	  - FW_div / BW_div: [divisor_int] from __consts (integer part)
-	  - AllToAllPrim: [idim, odim]
+	  - AllToAllPrim: [idim, odim] (shape-validated; backward nodes get [odim, idim])
 	  - FW_multiref: [num_outputs]
 	  - ChunkPrim: [chunk_dim]
 	  - AllGatherPrim: [gather_dim]
@@ -338,12 +338,54 @@ def _get_node_params(G: Any, n: Any, num_parts: int = 0) -> Optional[List[int]]:
 		if "idim" in kwargs and "odim" in kwargs:
 			idim, odim = int(kwargs["idim"]), int(kwargs["odim"])
 			ins = G.node_inputs(n)
+			outs = G.node_outputs(n)
 			if ins:
 				ndim = len(list(G.tensor_shape(ins[0])))
 				if idim < 0:
 					idim = ndim + idim
 				if odim < 0:
 					odim = ndim + odim
+			# The Lean denotation `allToAllPrimWithDims xs idim odim` computes
+			# `chunkPrimDimN odim (allGatherPrimDimN idim xs)`: it gathers the input
+			# shards along `idim` (dim grows x numParts) and then chunks the result
+			# along `odim` (dim shrinks / numParts). This matches nnscaler's forward
+			# all_to_all (collectives.py: chunk input along odim, concat output along
+			# idim). nnscaler's BACKWARD all_to_all (nn.py: `all_to_all(grad, odim,
+			# idim)`) runs with idim/odim SWAPPED, but the traced node still reports
+			# the forward kwargs. So for a backward node, emitting the raw
+			# [idim, odim] makes the Lean def compute the wrong (often shape-invalid)
+			# tensor. Pick the ordering whose Lean-def output shape matches the
+			# node's recorded output shape; this selects [idim, odim] for forward
+			# nodes and [odim, idim] for backward nodes, with no fw/bw heuristic.
+			if ins and outs and num_parts > 0:
+				in_shape = list(int(d) for d in G.tensor_shape(ins[0]))
+				out_shape = list(int(d) for d in G.tensor_shape(outs[0]))
+
+				def _a2a_out_shape(
+					shard: List[int], gather_dim: int, chunk_dim: int
+				) -> Optional[List[int]]:
+					# Mirror `chunkPrimDimN chunk_dim (allGatherPrimDimN gather_dim shard)`.
+					if not (
+						0 <= gather_dim < len(shard) and 0 <= chunk_dim < len(shard)
+					):
+						return None
+					gathered = list(shard)
+					gathered[gather_dim] = gathered[gather_dim] * num_parts
+					if gathered[chunk_dim] % num_parts != 0:
+						return None
+					gathered[chunk_dim] = gathered[chunk_dim] // num_parts
+					return gathered
+
+				direct = _a2a_out_shape(in_shape, idim, odim)
+				swapped = _a2a_out_shape(in_shape, odim, idim)
+				if direct == out_shape:
+					return [idim, odim]
+				if swapped == out_shape:
+					# Backward all_to_all: emit swapped dims so the Lean def
+					# (gather idim, chunk odim) reproduces the backward tensor.
+					return [odim, idim]
+				# Neither matched exactly (shape ambiguity / scalar dims): fall back
+				# to the raw kwargs order to preserve prior behavior.
 			return [idim, odim]
 	elif "FW_multiref" in op:
 		outs = G.node_outputs(n)
