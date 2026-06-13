@@ -47,3 +47,73 @@ def goal_10_stmt_cut : Prop :=
 
 end TrainVerify.Denote.GeneratedGoals
 
+-- Proof re-inserted (same pattern as Goal_14)
+namespace TrainVerify.Denote.GeneratedGoals
+
+set_option maxHeartbeats 4000000 in
+theorem prove_goal_10_cut : goal_10_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  have hInit : InitGoalHolds pm_goal_10.numRanks goal_9 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_10_cut_initGoals, goal_10_prereqs]
+    decide
+  have h577_shape : (initSM 577).shape = [1, 8, 4, 8] := hInit.1
+  have h577_eq : initSM 577 = initPM 577 := by
+    have hrec := hInit.2.2
+    simp only [goal_9, pm_goal_10, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  have h577pm_shape : (initPM 577).shape = [1, 8, 4, 8] := by rw [← h577_eq]; exact h577_shape
+  have hsm : (denoteGraph sm_goal_10 initSM) 578 = transposeAxes 1 2 (initSM 577) := by
+    simp only [sm_goal_10, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_fw_transposeAxes_out]
+  have hpm0 : (denoteGraph pm_goal_10 initPM) 1261 =
+      transposeAxes 1 2 (chunkPrimDimN 3 4 0 (initPM 577)) := by
+    simp only [pm_goal_10, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_transposeAxes_out]; congr 1
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  have hpm1 : (denoteGraph pm_goal_10 initPM) 1262 =
+      transposeAxes 1 2 (chunkPrimDimN 3 4 1 (initPM 577)) := by
+    simp only [pm_goal_10, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_transposeAxes_out]; congr 1
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  have hpm2 : (denoteGraph pm_goal_10 initPM) 1263 =
+      transposeAxes 1 2 (chunkPrimDimN 3 4 2 (initPM 577)) := by
+    simp only [pm_goal_10, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_transposeAxes_out]; congr 1
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  have hpm3 : (denoteGraph pm_goal_10 initPM) 1264 =
+      transposeAxes 1 2 (chunkPrimDimN 3 4 3 (initPM 577)) := by
+    simp only [pm_goal_10, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_transposeAxes_out]; congr 1
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  have hbridge : transposeAxes 1 2 (initPM 577) = allGatherPrimDimN 3 4 0
+      [transposeAxes 1 2 (chunkPrimDimN 3 4 0 (initPM 577)),
+       transposeAxes 1 2 (chunkPrimDimN 3 4 1 (initPM 577)),
+       transposeAxes 1 2 (chunkPrimDimN 3 4 2 (initPM 577)),
+       transposeAxes 1 2 (chunkPrimDimN 3 4 3 (initPM 577))] :=
+    fw_transpose12_split_dim3_4_1_8_4_8 (initPM 577) h577pm_shape
+  have htp_shape : ∀ r, r < 4 → (transposeAxes 1 2 (chunkPrimDimN 3 4 r (initPM 577))).shape = [1, 4, 8, 2] := by
+    intro r hr
+    have hcs : (chunkPrimDimN 3 4 r (initPM 577)).shape = [1, 8, 4, 2] := by
+      rw [chunkPrimDimN_shape 3 4 r _ _ h577pm_shape (by omega)]; simp [List.set, List.getD]
+    simp only [transposeAxes, Tensor.mkShape, listSwapAt, hcs, List.getD, List.set,
+      List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  simp only [goal_10, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]
+    simp only [transposeAxes, Tensor.mkShape, listSwapAt, h577_shape, List.getD, List.set,
+      List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  · rw [hpm0, hpm1, hpm2, hpm3]
+    simp [htp_shape 0 (by omega), htp_shape 1 (by omega), htp_shape 2 (by omega), htp_shape 3 (by omega)]
+  · rw [hsm, h577_eq, hbridge, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
+    symm
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [hpm0, htp_shape 0 (by omega)]
+    decide
+
+end TrainVerify.Denote.GeneratedGoals

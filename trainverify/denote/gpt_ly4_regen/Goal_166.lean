@@ -51,5 +51,56 @@ def goal_166_cut_initGoals : List LineageGoal := initGoals ++ goal_166_prereqs
 def goal_166_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_166 pm_goal_166 goal_166 sm_goal_166InitEnv pm_goal_166InitEnv goal_166_cut_initGoals
 
-end TrainVerify.Denote.GeneratedGoals
+set_option maxHeartbeats 4000000 in
+theorem prove_goal_166_cut : goal_166_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  have hInit : InitGoalHolds pm_goal_166.numRanks goal_167 initSM initPM := by
+    apply hInitGoals; decide
+  have hgrad_shape : (initSM 790).shape = [1, 8, 4, 8] := hInit.1
+  have hchunk_shapes := hInit.2.1
+  simp only [goal_167, LineageGoal.tps, List.map] at hchunk_shapes
+  have hc0 : (initPM 1990).shape = [1, 8, 4, 2] := by
+    have h := hchunk_shapes; simp only [List.cons.injEq] at h; exact h.1
+  have hc1 : (initPM 1992).shape = [1, 8, 4, 2] := by
+    have h := hchunk_shapes; simp only [List.cons.injEq] at h; exact h.2.1
+  have hc2 : (initPM 1994).shape = [1, 8, 4, 2] := by
+    have h := hchunk_shapes; simp only [List.cons.injEq] at h; exact h.2.2.1
+  have hc3 : (initPM 1996).shape = [1, 8, 4, 2] := by
+    have h := hchunk_shapes; simp only [List.cons.injEq] at h; exact h.2.2.2.1
+  have hrec : initSM 790 = reconstructWithDim 3 4 0
+      [initPM 1990, initPM 1992, initPM 1994, initPM 1996] := by
+    have h := hInit.2.2
+    simp only [goal_167, LineageGoal.tps, LineageGoal.gatherDim, List.map] at h
+    exact h
+  have hrec_ag : initSM 790 = allGatherPrimDimN 3 4 0
+      [initPM 1990, initPM 1992, initPM 1994, initPM 1996] := by
+    rw [hrec]; rw [reconstructWithDim_cons_cons_nonscalar]; rw [hc0]; decide
+  have hsm : (denoteGraph sm_goal_166 initSM) 789 = transposeAxes 1 2 (initSM 790) := by
+    simp only [sm_goal_166, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_bw_transposeAxes_out]
+  have hpm : (denoteGraph pm_goal_166 initPM) 789 =
+      allGatherPrimDimN 3 4 0
+        [transposeAxes 1 2 (initPM 1990), transposeAxes 1 2 (initPM 1992),
+         transposeAxes 1 2 (initPM 1994), transposeAxes 1 2 (initPM 1996)] := by
+    simp only [pm_goal_166, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_allGatherPrimDimN_out_thm]
+    congr 1
+  have hbridge : transposeAxes 1 2 (initSM 790) =
+      allGatherPrimDimN 3 4 0
+        [transposeAxes 1 2 (initPM 1990), transposeAxes 1 2 (initPM 1992),
+         transposeAxes 1 2 (initPM 1994), transposeAxes 1 2 (initPM 1996)] := by
+    rw [hrec_ag]; exact bw_transpose12_gather3_4_1_8_4_2 _ _ _ _ hc0 hc1 hc2 hc3
+  simp only [goal_166, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
+    LineageGoal.gatherDim, List.map, Piece.tid]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]
+    simp only [transposeAxes, Tensor.mkShape, listSwapAt, hgrad_shape, List.getD, List.set,
+      List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  · rw [hpm, allGatherPrimDimN_shape 3 4 _ [1, 4, 8, 2]]
+    · simp [List.set, List.getD]
+    · simp [transposeAxes, Tensor.mkShape, listSwapAt, hc0, List.getD, List.set,
+        List.head?, Option.map, Option.getD]
+  · rw [reconstructWithDim_singleton, hsm, hpm]
+    exact hbridge
 
+end TrainVerify.Denote.GeneratedGoals

@@ -45,5 +45,80 @@ def goal_87_cut_initGoals : List LineageGoal := initGoals ++ goal_87_prereqs
 def goal_87_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_87 pm_goal_87 goal_87 sm_goal_87InitEnv pm_goal_87InitEnv goal_87_cut_initGoals
 
-end TrainVerify.Denote.GeneratedGoals
 
+set_option maxHeartbeats 400000 in
+theorem prove_goal_87_cut : goal_87_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract prereq goal_86: initSM 684 has shape [1, 8, 4, 8] and = initPM 684
+  have hInit : InitGoalHolds pm_goal_87.numRanks goal_86 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_87_cut_initGoals, goal_87_prereqs]
+    decide
+  have h684_shape : (initSM 684).shape = [1, 8, 4, 8] := hInit.1
+  have h684_eq : initSM 684 = initPM 684 := by
+    have hrec := hInit.2.2
+    simp only [goal_86, pm_goal_87, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  have h684pm_shape : (initPM 684).shape = [1, 8, 4, 8] := by rw [← h684_eq]; exact h684_shape
+  -- SM computation
+  have hsm : (denoteGraph sm_goal_87 initSM) 685 = transposeAxes 1 2 (initSM 684) := by
+    simp only [sm_goal_87, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_fw_transposeAxes_out]
+  -- PM computation
+  have hpm0 : (denoteGraph pm_goal_87 initPM) 2925 =
+      transposeAxes 1 2 (chunkPrimDimN 3 4 0 (initPM 684)) := by
+    simp only [pm_goal_87, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_transposeAxes_out]; congr 1
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  have hpm1 : (denoteGraph pm_goal_87 initPM) 2926 =
+      transposeAxes 1 2 (chunkPrimDimN 3 4 1 (initPM 684)) := by
+    simp only [pm_goal_87, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_transposeAxes_out]; congr 1
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  have hpm2 : (denoteGraph pm_goal_87 initPM) 2927 =
+      transposeAxes 1 2 (chunkPrimDimN 3 4 2 (initPM 684)) := by
+    simp only [pm_goal_87, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_transposeAxes_out]; congr 1
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  have hpm3 : (denoteGraph pm_goal_87 initPM) 2928 =
+      transposeAxes 1 2 (chunkPrimDimN 3 4 3 (initPM 684)) := by
+    simp only [pm_goal_87, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_transposeAxes_out]; congr 1
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  -- Bridge
+  have hbridge : transposeAxes 1 2 (initPM 684) = allGatherPrimDimN 3 4 0
+      [transposeAxes 1 2 (chunkPrimDimN 3 4 0 (initPM 684)),
+       transposeAxes 1 2 (chunkPrimDimN 3 4 1 (initPM 684)),
+       transposeAxes 1 2 (chunkPrimDimN 3 4 2 (initPM 684)),
+       transposeAxes 1 2 (chunkPrimDimN 3 4 3 (initPM 684))] :=
+    fw_transpose12_split_dim3_4_1_8_4_8 (initPM 684) h684pm_shape
+  -- Shapes
+  have htp_shape : ∀ r, r < 4 → (transposeAxes 1 2 (chunkPrimDimN 3 4 r (initPM 684))).shape = [1, 4, 8, 2] := by
+    intro r hr
+    have hcs : (chunkPrimDimN 3 4 r (initPM 684)).shape = [1, 8, 4, 2] := by
+      rw [chunkPrimDimN_shape 3 4 r _ _ h684pm_shape (by omega)]; simp [List.set, List.getD]
+    simp only [transposeAxes, Tensor.mkShape, listSwapAt, hcs, List.getD, List.set,
+      List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  -- Three conjuncts
+  simp only [goal_87, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape
+    rw [hsm]
+    simp only [transposeAxes, Tensor.mkShape, listSwapAt, h684_shape, List.getD, List.set,
+      List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  · -- PM tp shapes
+    rw [hpm0, hpm1, hpm2, hpm3]
+    simp [htp_shape 0 (by omega), htp_shape 1 (by omega), htp_shape 2 (by omega), htp_shape 3 (by omega)]
+  · -- Value equality
+    rw [hsm, h684_eq, hbridge, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
+    symm
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [hpm0, htp_shape 0 (by omega)]
+    decide
+
+end TrainVerify.Denote.GeneratedGoals
