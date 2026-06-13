@@ -2369,6 +2369,139 @@ theorem evalOp_bw_embedding_offset (numParts rank offset : Nat) (g ids w : Tenso
       [bw_embedding_offset offset g ids w] := by
   rfl
 
+/-- Unfolding lemma for `BW_gelu`. -/
+theorem evalOp_bw_gelu (numParts rank : Nat) (g x : Tensor) :
+    evalOp numParts rank "OpName.BW_gelu" [] [g, x] = [bw_gelu g x] := by
+  rfl
+
+/-- `applyNode` for `BW_gelu` with singleton output. -/
+theorem applyNode_bw_gelu_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (gTid xTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.BW_gelu", ins := [gTid, xTid], outs := [outTid] } outTid =
+      bw_gelu (s gTid) (s xTid) := by
+  unfold applyNode
+  rw [show ([gTid, xTid] : List Tid).map s = [s gTid, s xTid] from rfl,
+      evalOp_bw_gelu]
+  change storeSet s [(outTid, bw_gelu (s gTid) (s xTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `bw_gelu` preserves the shape of its second input. -/
+theorem bw_gelu_shape (g x : Tensor) : (bw_gelu g x).shape = x.shape := by
+  simp [bw_gelu, Tensor.mkShape]
+
+/-- `valAt` of `bw_gelu` at a valid index. -/
+theorem bw_gelu_valAt (g x : Tensor) (idx : Nat) (h : idx < prodShape x.shape) :
+    valAt (bw_gelu g x) idx = valAt g idx * geluDerivScalar (valAt x idx) := by
+  have hsh : (bw_gelu g x).shape = x.shape := bw_gelu_shape g x
+  rw [valAt_of_lt _ _ (hsh ▸ h)]
+  simp [bw_gelu, Tensor.mkShape]
+
+/-- Helper: List.getD when index is in bounds. -/
+private theorem list_getD_of_lt {α : Type*} (l : List α) (i : Nat) (d : α) (h : i < l.length) :
+    l.getD i d = l[i] := by
+  unfold List.getD
+  rw [List.getElem?_eq_getElem h]
+  simp
+
+/-- Helper: List.getD when index is out of bounds. -/
+private theorem list_getD_of_ge {α : Type*} (l : List α) (i : Nat) (d : α) (h : ¬(i < l.length)) :
+    l.getD i d = d := by
+  unfold List.getD
+  rw [List.getElem?_eq_none (by omega)]
+  simp
+
+/-- `bw_gelu` distributes over `allGatherPrimDimN`: applying `bw_gelu` to two
+    gathered tensors equals gathering the pairwise `bw_gelu` results.
+    This holds because `bw_gelu` is a pointwise operation that reads both inputs
+    at the same index position. -/
+theorem bw_gelu_allGatherPrimDimN_eq
+    (gatherDim numParts : Nat) (gs xs : List Tensor)
+    (shardShape : Shape)
+    (hnp : 0 < numParts)
+    (hlen_g : gs.length = numParts) (hlen_x : xs.length = numParts)
+    (hhead_g : (gs.head?.map (fun t => t.shape)).getD [] = shardShape)
+    (hhead_x : (xs.head?.map (fun t => t.shape)).getD [] = shardShape)
+    (hgs_shape : ∀ i (hi : i < gs.length), (gs.get ⟨i, hi⟩).shape = shardShape)
+    (hxs_shape : ∀ i (hi : i < xs.length), (xs.get ⟨i, hi⟩).shape = shardShape) :
+    bw_gelu (allGatherPrimDimN gatherDim numParts 0 gs)
+            (allGatherPrimDimN gatherDim numParts 0 xs) =
+      allGatherPrimDimN gatherDim numParts 0 (List.zipWith bw_gelu gs xs) := by
+  have hlen_zw : (List.zipWith bw_gelu gs xs).length = numParts := by
+    rw [List.length_zipWith, hlen_g, hlen_x, Nat.min_self]
+  have hhead_zw : ((List.zipWith bw_gelu gs xs).head?.map (fun t => t.shape)).getD [] = shardShape := by
+    have h0zw : (0 : Nat) < (List.zipWith bw_gelu gs xs).length := by omega
+    have h0g : (0 : Nat) < gs.length := by omega
+    have h0x : (0 : Nat) < xs.length := by omega
+    rw [List.head?_eq_getElem?]
+    rw [List.getElem?_eq_getElem h0zw]
+    simp only [Option.map_some, Option.getD_some]
+    have hzw0 : (List.zipWith bw_gelu gs xs)[0]'h0zw = bw_gelu (gs[0]'h0g) (xs[0]'h0x) :=
+      List.getElem_zipWith
+    rw [hzw0, bw_gelu_shape]
+    exact hxs_shape 0 h0x
+  -- Output shape
+  set outShape := shardShape.set gatherDim (shardShape.getD gatherDim 0 * numParts) with houtShape_def
+  have hgather_x_shape : (allGatherPrimDimN gatherDim numParts 0 xs).shape = outShape :=
+    allGatherPrimDimN_shape gatherDim numParts xs shardShape hhead_x
+  have hgather_g_shape : (allGatherPrimDimN gatherDim numParts 0 gs).shape = outShape :=
+    allGatherPrimDimN_shape gatherDim numParts gs shardShape hhead_g
+  have hlhs_shape : (bw_gelu (allGatherPrimDimN gatherDim numParts 0 gs)
+      (allGatherPrimDimN gatherDim numParts 0 xs)).shape = outShape := by
+    rw [bw_gelu_shape]; exact hgather_x_shape
+  have hrhs_shape : (allGatherPrimDimN gatherDim numParts 0
+      (List.zipWith bw_gelu gs xs)).shape = outShape :=
+    allGatherPrimDimN_shape gatherDim numParts _ shardShape hhead_zw
+  -- Tensor.ext
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx_out : idx < prodShape outShape := by rwa [hlhs_shape] at hidx
+  rw [bw_gelu_valAt _ _ idx (by rw [hgather_x_shape]; exact hidx_out)]
+  rw [valAt_of_lt _ _ (by rw [hgather_g_shape]; exact hidx_out)]
+  rw [valAt_of_lt _ _ (by rw [hgather_x_shape]; exact hidx_out)]
+  rw [valAt_of_lt _ _ (by rw [hrhs_shape]; exact hidx_out)]
+  -- After valAt_of_lt, all three are Tensor.mkShape value functions.
+  -- Unfold allGatherPrimDimN and substitute head shapes.
+  simp only [allGatherPrimDimN, Tensor.mkShape, hhead_g, hhead_x, hhead_zw]
+  -- After simp, all three computations use the same shardShape.
+  -- Use set to name common subexpressions, then generalize r and loc.
+  set ds := List.getD shardShape gatherDim 0
+  set ps := List.foldl (· * ·) 1 (List.drop (gatherDim + 1) shardShape)
+  set fds := ds * numParts * ps
+  -- r = if ds = 0 then 0 else (if ps = 0 then 0 else (if fds = 0 then 0 else idx % fds) / ps) / ds
+  generalize hr_def : (if ds = 0 then 0
+    else (if ps = 0 then 0 else (if fds = 0 then 0 else idx % fds) / ps) / ds) = r
+  -- loc = (if fds = 0 then 0 else idx / fds) * (ds * ps) + ...
+  generalize hloc_def : (if fds = 0 then 0 else idx / fds) * (ds * ps) +
+    (if ds = 0 then 0 else (if ps = 0 then 0 else (if fds = 0 then 0 else idx % fds) / ps) % ds) * ps +
+    (if ps = 0 then 0 else (if fds = 0 then 0 else idx % fds) % ps) = loc
+  -- Now the goal is: valAt(gs.getD r z) loc * geluDeriv(valAt(xs.getD r z) loc) = valAt(zipWith.getD r z) loc
+  by_cases hr_lt : r < numParts
+  · have hr_g : r < gs.length := by omega
+    have hr_x : r < xs.length := by omega
+    have hr_zw : r < (List.zipWith bw_gelu gs xs).length := by omega
+    rw [list_getD_of_lt _ _ _ hr_zw, list_getD_of_lt _ _ _ hr_g, list_getD_of_lt _ _ _ hr_x]
+    have hzw_elem : (List.zipWith bw_gelu gs xs)[r]'hr_zw = bw_gelu (gs[r]'hr_g) (xs[r]'hr_x) :=
+      List.getElem_zipWith
+    rw [hzw_elem]
+    by_cases hloc : loc < prodShape (xs[r]'hr_x).shape
+    · exact (bw_gelu_valAt _ _ loc hloc).symm
+    · have hbw_sh : (bw_gelu (gs[r]'hr_g) (xs[r]'hr_x)).shape =
+          (xs[r]'hr_x).shape := bw_gelu_shape _ _
+      have hg_sh : (gs[r]'hr_g).shape = (xs[r]'hr_x).shape := by
+        rw [show (gs[r]'hr_g).shape = shardShape from hgs_shape r hr_g,
+            show (xs[r]'hr_x).shape = shardShape from hxs_shape r hr_x]
+      have h1 : ¬(loc < prodShape (bw_gelu (gs[r]'hr_g) (xs[r]'hr_x)).shape) := by
+        rw [hbw_sh]; exact hloc
+      have h2 : ¬(loc < prodShape (gs[r]'hr_g).shape) := by
+        rw [hg_sh]; exact hloc
+      simp [valAt, h1, h2]
+  · have hr_g : ¬(r < gs.length) := by omega
+    have hr_x : ¬(r < xs.length) := by omega
+    have hr_zw : ¬(r < (List.zipWith bw_gelu gs xs).length) := by omega
+    rw [list_getD_of_ge _ _ _ hr_zw, list_getD_of_ge _ _ _ hr_g, list_getD_of_ge _ _ _ hr_x]
+    simp [zeroTensor, Tensor.mkShape, valAt, prodShape]
+
 /-- Unfolding lemma for `evalOp` on `AllReducePrim`. -/
 theorem evalOp_allReducePrim (numParts rank : Nat) (params : List Nat) (xs : List Tensor) :
     evalOp numParts rank "OpName.AllReducePrim" params xs =

@@ -49,5 +49,140 @@ def goal_142_cut_initGoals : List LineageGoal := initGoals ++ goal_142_prereqs
 def goal_142_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_142 pm_goal_142 goal_142 sm_goal_142InitEnv pm_goal_142InitEnv goal_142_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- bw_gelu distributes pointwise over allGatherPrimDimN (dim 2) — no collective needed
+theorem prove_goal_142_cut : goal_142_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_143 (tensor 761 = gather of shards 1597..1600 on dim 2)
+  have hInit761 : InitGoalHolds pm_goal_142.numRanks goal_143 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_142_cut_initGoals, goal_142_prereqs]
+    decide
+  -- Extract init alignment for goal_26 (tensor 598 = gather of shards 1561..1564 on dim 2)
+  have hInit598 : InitGoalHolds pm_goal_142.numRanks goal_26 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_142_cut_initGoals, goal_142_prereqs]
+    decide
+  -- goal_143: initSM 761 = reconstructWithDim 2 4 0 [initPM 1597..1600]
+  have h761_rec : initSM 761 = reconstructWithDim 2 4 0
+      [initPM 1597, initPM 1598, initPM 1599, initPM 1600] := by
+    have hrec := hInit761.2.2
+    simp only [goal_143, pm_goal_142, List.map] at hrec
+    exact hrec
+  have h761_shape : (initSM 761).shape = [1, 8, 128] := hInit761.1
+  -- goal_26: initSM 598 = reconstructWithDim 2 4 0 [initPM 1561..1564]
+  have h598_rec : initSM 598 = reconstructWithDim 2 4 0
+      [initPM 1561, initPM 1562, initPM 1563, initPM 1564] := by
+    have hrec := hInit598.2.2
+    simp only [goal_26, pm_goal_142, List.map] at hrec
+    exact hrec
+  have h598_shape : (initSM 598).shape = [1, 8, 128] := hInit598.1
+  -- Extract PM shard shapes from goal_143
+  have htp761_shapes := hInit761.2.1
+  simp only [goal_143, List.map] at htp761_shapes
+  have h1597_shape : (initPM 1597).shape = [1, 8, 32] := by
+    have := congrArg List.head? htp761_shapes; simpa using this
+  have h1598_shape : (initPM 1598).shape = [1, 8, 32] := by
+    have := congrArg List.tail htp761_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1599_shape : (initPM 1599).shape = [1, 8, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp761_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1600_shape : (initPM 1600).shape = [1, 8, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp761_shapes
+    have := congrArg List.head? this; simpa using this
+  -- Extract PM shard shapes from goal_26
+  have htp598_shapes := hInit598.2.1
+  simp only [goal_26, List.map] at htp598_shapes
+  have h1561_shape : (initPM 1561).shape = [1, 8, 32] := by
+    have := congrArg List.head? htp598_shapes; simpa using this
+  have h1562_shape : (initPM 1562).shape = [1, 8, 32] := by
+    have := congrArg List.tail htp598_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1563_shape : (initPM 1563).shape = [1, 8, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp598_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1564_shape : (initPM 1564).shape = [1, 8, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp598_shapes
+    have := congrArg List.head? this; simpa using this
+  -- Convert reconstructWithDim to allGatherPrimDimN (non-scalar shards)
+  have h761_gather : initSM 761 = allGatherPrimDimN 2 4 0
+      [initPM 1597, initPM 1598, initPM 1599, initPM 1600] := by
+    rw [h761_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1597_shape]; decide)
+  have h598_gather : initSM 598 = allGatherPrimDimN 2 4 0
+      [initPM 1561, initPM 1562, initPM 1563, initPM 1564] := by
+    rw [h598_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1561_shape]; decide)
+  -- SM store: smStore 760 = bw_gelu (initSM 761) (initSM 598)
+  have hsm : (denoteGraph sm_goal_142 initSM) 760 = bw_gelu (initSM 761) (initSM 598) := by
+    simp only [sm_goal_142, denoteGraph, List.foldl]
+    rw [applyNode_bw_gelu_out]
+  -- PM store: each rank applies bw_gelu independently
+  -- The PM has 4 nodes with distinct output tids (1575, 1578, 1581, 1584)
+  have hpm0 : (denoteGraph pm_goal_142 initPM) 1575 = bw_gelu (initPM 1597) (initPM 1561) := by
+    simp only [pm_goal_142, denoteGraph, List.foldl, applyNode,
+      evalOp_bw_gelu, List.map, List.zip, storeSet, List.find?, Prod.fst]
+    rfl
+  have hpm1 : (denoteGraph pm_goal_142 initPM) 1578 = bw_gelu (initPM 1598) (initPM 1562) := by
+    simp only [pm_goal_142, denoteGraph, List.foldl, applyNode,
+      evalOp_bw_gelu, List.map, List.zip, storeSet, List.find?, Prod.fst]
+    rfl
+  have hpm2 : (denoteGraph pm_goal_142 initPM) 1581 = bw_gelu (initPM 1599) (initPM 1563) := by
+    simp only [pm_goal_142, denoteGraph, List.foldl, applyNode,
+      evalOp_bw_gelu, List.map, List.zip, storeSet, List.find?, Prod.fst]
+    rfl
+  have hpm3 : (denoteGraph pm_goal_142 initPM) 1584 = bw_gelu (initPM 1600) (initPM 1564) := by
+    simp only [pm_goal_142, denoteGraph, List.foldl, applyNode,
+      evalOp_bw_gelu, List.map, List.zip, storeSet, List.find?, Prod.fst]
+    rfl
+  -- Key equation: bw_gelu distributes over allGatherPrimDimN
+  have hkey : bw_gelu (initSM 761) (initSM 598) =
+      allGatherPrimDimN 2 4 0
+        [bw_gelu (initPM 1597) (initPM 1561), bw_gelu (initPM 1598) (initPM 1562),
+         bw_gelu (initPM 1599) (initPM 1563), bw_gelu (initPM 1600) (initPM 1564)] := by
+    conv_lhs => rw [h761_gather, h598_gather]
+    have := bw_gelu_allGatherPrimDimN_eq
+      (gatherDim := 2) (numParts := 4)
+      (gs := [initPM 1597, initPM 1598, initPM 1599, initPM 1600])
+      (xs := [initPM 1561, initPM 1562, initPM 1563, initPM 1564])
+      (shardShape := [1, 8, 32])
+      (hnp := by omega)
+      (hlen_g := by simp)
+      (hlen_x := by simp)
+      (hhead_g := by simp [h1597_shape])
+      (hhead_x := by simp [h1561_shape])
+      (hgs_shape := by
+        intro i hi
+        simp only [List.length] at hi
+        match i, hi with
+        | 0, _ => exact h1597_shape
+        | 1, _ => exact h1598_shape
+        | 2, _ => exact h1599_shape
+        | 3, _ => exact h1600_shape)
+      (hxs_shape := by
+        intro i hi
+        simp only [List.length] at hi
+        match i, hi with
+        | 0, _ => exact h1561_shape
+        | 1, _ => exact h1562_shape
+        | 2, _ => exact h1563_shape
+        | 3, _ => exact h1564_shape)
+    simpa [List.zipWith] using this
+  -- Prove the three conjuncts
+  simp only [goal_142, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM shape: [1, 8, 128]
+    rw [hsm, bw_gelu_shape]
+    rw [h598_shape]
+  · -- PM tp shapes: [[1,8,32], [1,8,32], [1,8,32], [1,8,32]]
+    rw [hpm0, hpm1, hpm2, hpm3]
+    simp only [bw_gelu_shape, h1561_shape, h1562_shape, h1563_shape, h1564_shape]
+  · -- Value equality: smStore 760 = reconstructWithDim 2 4 0 [pmStores]
+    rw [hsm, hpm0, hpm1, hpm2, hpm3, hkey]
+    symm
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by
+      rw [bw_gelu_shape, h1561_shape]; decide)
+
 end TrainVerify.Denote.GeneratedGoals
 
