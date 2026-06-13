@@ -54,5 +54,111 @@ def goal_138_cut_initGoals : List LineageGoal := initGoals ++ goal_138_prereqs
 def goal_138_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_138 pm_goal_138 goal_138 sm_goal_138InitEnv pm_goal_138InitEnv goal_138_cut_initGoals
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 800000 in
+theorem prove_goal_138_cut : goal_138_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  have hInitX : InitGoalHolds pm_goal_138.numRanks goal_267 initSM initPM := by
+    apply hInitGoals; simp only [goal_138_cut_initGoals, goal_138_prereqs]; decide
+  have hInitG : InitGoalHolds pm_goal_138.numRanks goal_140 initSM initPM := by
+    apply hInitGoals; simp only [goal_138_cut_initGoals, goal_138_prereqs]; decide
+  have hInitW : InitGoalHolds pm_goal_138.numRanks initGoal_594 initSM initPM := by
+    apply hInitGoals; simp only [goal_138_cut_initGoals, goal_138_prereqs, initGoals]; decide
+  have hInitB : InitGoalHolds pm_goal_138.numRanks initGoal_595 initSM initPM := by
+    apply hInitGoals; simp only [goal_138_cut_initGoals, goal_138_prereqs, initGoals]; decide
+  -- x gather
+  have hX_rec : initSM 934 = reconstructWithDim 1 4 0
+      [initPM 1525, initPM 1526, initPM 1527, initPM 1528] := by
+    have hrec := hInitX.2.2
+    simp only [goal_267, pm_goal_138, List.map] at hrec
+    exact hrec
+  have htpX := hInitX.2.1
+  simp only [goal_267, List.map] at htpX
+  have h1525_shape : (initPM 1525).shape = [1, 2, 32] := by
+    have := congrArg List.head? htpX; simpa using this
+  have h1526_shape : (initPM 1526).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htpX; simpa using this
+  have h1527_shape : (initPM 1527).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htpX; simpa using this
+  have h1528_shape : (initPM 1528).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htpX; simpa using this
+  -- grad gather
+  have hG_rec : initSM 758 = reconstructWithDim 1 4 0
+      [initPM 1544, initPM 1548, initPM 1552, initPM 1556] := by
+    have hrec := hInitG.2.2
+    simp only [goal_140, pm_goal_138, List.map] at hrec
+    exact hrec
+  have htpG := hInitG.2.1
+  simp only [goal_140, List.map] at htpG
+  have h1544_shape : (initPM 1544).shape = [1, 2, 32] := by
+    have := congrArg List.head? htpG; simpa using this
+  have h1548_shape : (initPM 1548).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htpG; simpa using this
+  have h1552_shape : (initPM 1552).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htpG; simpa using this
+  have h1556_shape : (initPM 1556).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htpG; simpa using this
+  -- weight/bias (replicated)
+  have hW_eq : initSM 594 = initPM 594 := by
+    have hrec := hInitW.2.2
+    simp only [initGoal_594, pm_goal_138, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  have hW_shape : (initSM 594).shape = [32] := hInitW.1
+  have hB_eq : initSM 595 = initPM 595 := by
+    have hrec := hInitB.2.2
+    simp only [initGoal_595, pm_goal_138, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  -- Convert to allGatherPrimDimN
+  have hX_gather : initSM 934 = allGatherPrimDimN 1 4 0
+      [initPM 1525, initPM 1526, initPM 1527, initPM 1528] := by
+    rw [hX_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1525_shape]; decide)
+  have hG_gather : initSM 758 = allGatherPrimDimN 1 4 0
+      [initPM 1544, initPM 1548, initPM 1552, initPM 1556] := by
+    rw [hG_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1544_shape]; decide)
+  -- SM store
+  have hsm : (denoteGraph sm_goal_138 initSM) 756 =
+      (bw_layernorm (initSM 758) (initSM 934) (initSM 594) (initSM 595)).2.1 := by
+    simp only [sm_goal_138, denoteGraph, List.foldl]
+    rw [applyNode_bw_layernorm_dw_out (hne := by decide)]
+  -- PM store
+  have hpm : (denoteGraph pm_goal_138 initPM) 1542 =
+      cross_dp_wred [(bw_layernorm (initPM 1544) (initPM 1525) (initPM 594) (initPM 595)).2.1,
+                     (bw_layernorm (initPM 1548) (initPM 1526) (initPM 594) (initPM 595)).2.1,
+                     (bw_layernorm (initPM 1552) (initPM 1527) (initPM 594) (initPM 595)).2.1,
+                     (bw_layernorm (initPM 1556) (initPM 1528) (initPM 594) (initPM 595)).2.1] := by
+    simp only [pm_goal_138, denoteGraph, List.foldl]
+    rw [applyNode_cross_dp_wred_out]
+    congr 1
+  -- Key equation
+  have hkey : (bw_layernorm (initSM 758) (initSM 934) (initSM 594) (initSM 595)).2.1 =
+      cross_dp_wred [(bw_layernorm (initPM 1544) (initPM 1525) (initPM 594) (initPM 595)).2.1,
+                     (bw_layernorm (initPM 1548) (initPM 1526) (initPM 594) (initPM 595)).2.1,
+                     (bw_layernorm (initPM 1552) (initPM 1527) (initPM 594) (initPM 595)).2.1,
+                     (bw_layernorm (initPM 1556) (initPM 1528) (initPM 594) (initPM 595)).2.1] := by
+    rw [hG_gather, hX_gather, hW_eq, hB_eq]
+    unfold cross_dp_wred
+    exact bw_layernorm_dw_dp_split_dim1_4_1_2_32
+      (initPM 1544) (initPM 1548) (initPM 1552) (initPM 1556)
+      (initPM 1525) (initPM 1526) (initPM 1527) (initPM 1528)
+      (initPM 594) (initPM 595)
+      h1544_shape h1548_shape h1552_shape h1556_shape
+      h1525_shape h1526_shape h1527_shape h1528_shape
+      (by rw [← hW_eq]; exact hW_shape)
+  -- Three conjuncts
+  simp only [goal_138, List.map]
+  have hw568 : (initPM 594).shape = [32] := by rw [← hW_eq]; exact hW_shape
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, hkey]; unfold cross_dp_wred
+    rw [tensorSum_shape, bw_layernorm_dw_shape _ _ _ _ 32 [2, 1] (by rw [h1525_shape]; decide)]
+    exact hw568
+  · rw [hpm]; unfold cross_dp_wred
+    rw [show [(tensorSum _).shape] = [[32]] from by
+      rw [tensorSum_shape, bw_layernorm_dw_shape _ _ _ _ 32 [2, 1] (by rw [h1525_shape]; decide), hw568]]
+  · rw [hsm, hkey, ← hpm]
+    rw [reconstructWithDim_singleton]
+
+
 end TrainVerify.Denote.GeneratedGoals
 

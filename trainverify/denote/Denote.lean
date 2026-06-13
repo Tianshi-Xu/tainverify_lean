@@ -6720,5 +6720,271 @@ theorem allGatherPrimDimN_chunkPrimDimN_id_dim1_4_128 (x : Tensor)
 
 /-! ## AllToAll node helpers (for pattern_28 family) -/
 
+/-! ## BW_layernorm + CROSS_DP_WRED helpers for data-parallel weight-gradient goals -/
+
+/-- Unfolding lemma for `evalOp` on `CROSS_DP_WRED`. -/
+theorem evalOp_cross_dp_wred (numParts rank : Nat) (params : List Nat) (xs : List Tensor) :
+    evalOp numParts rank "OpName.CROSS_DP_WRED" params xs = [cross_dp_wred xs] := by
+  rfl
+
+/-- `applyNode` for `CROSS_DP_WRED` with singleton output (in-place semantics). -/
+theorem applyNode_cross_dp_wred_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (ins : List Tid) (outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.CROSS_DP_WRED", ins := ins, outs := [outTid] } outTid =
+      cross_dp_wred (ins.map s) := by
+  unfold applyNode
+  rw [evalOp_cross_dp_wred]
+  change storeSet s [(outTid, cross_dp_wred (ins.map s))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- Unfolding lemma for `evalOp` on `BW_layernorm`. -/
+theorem evalOp_bw_layernorm (numParts rank : Nat) (g x w b : Tensor) :
+    evalOp numParts rank "OpName.BW_layernorm" [] [g, x, w, b] =
+      [(bw_layernorm g x w b).1, (bw_layernorm g x w b).2.1, (bw_layernorm g x w b).2.2] := by
+  rfl
+
+/-- `applyNode` for `BW_layernorm` extracting the dw output (index 1 of 3). -/
+theorem applyNode_bw_layernorm_dw_out
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (gTid xTid wTid bTid dxTid dwTid dbTid : Tid)
+    (hne : dxTid ≠ dwTid) :
+    applyNode g s (⟨rank, "OpName.BW_layernorm", [gTid, xTid, wTid, bTid], [dxTid, dwTid, dbTid], []⟩ : NodeDecl) dwTid =
+      (bw_layernorm (s gTid) (s xTid) (s wTid) (s bTid)).2.1 := by
+  unfold applyNode
+  have hmap : ([gTid, xTid, wTid, bTid] : List Tid).map s = [s gTid, s xTid, s wTid, s bTid] := rfl
+  rw [hmap, evalOp_bw_layernorm]
+  unfold storeSet
+  simp [List.find?, hne]
+
+/-- `applyNode` for `BW_layernorm` extracting the db output (index 2 of 3). -/
+theorem applyNode_bw_layernorm_db_out
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (gTid xTid wTid bTid dxTid dwTid dbTid : Tid)
+    (hne1 : dxTid ≠ dbTid) (hne2 : dwTid ≠ dbTid) :
+    applyNode g s (⟨rank, "OpName.BW_layernorm", [gTid, xTid, wTid, bTid], [dxTid, dwTid, dbTid], []⟩ : NodeDecl) dbTid =
+      (bw_layernorm (s gTid) (s xTid) (s wTid) (s bTid)).2.2 := by
+  unfold applyNode
+  have hmap : ([gTid, xTid, wTid, bTid] : List Tid).map s = [s gTid, s xTid, s wTid, s bTid] := rfl
+  rw [hmap, evalOp_bw_layernorm]
+  unfold storeSet
+  simp [List.find?, hne1, hne2]
+
+/-- Unfolding lemma: dw output of `bw_layernorm` when x.shape.reverse starts with d. -/
+theorem bw_layernorm_dw_eq (g x w b : Tensor) (d : Nat) (rest : List Nat)
+    (hrev : x.shape.reverse = d :: rest) :
+    (bw_layernorm g x w b).2.1 = Tensor.mkShape w.shape (fun wIdx =>
+      let j := wIdx.1
+      ∑ row ∈ Finset.range (prodShape x.shape / d),
+        let mean := layerNormMeanAt x row d
+        let var := layerNormVarAt x row d mean
+        let invStd := 1 / sqrtFn (var + layerNormEps)
+        valAt g (row * d + j) * ((valAt x (row * d + j) - mean) * invStd)) := by
+  unfold bw_layernorm; rw [hrev]
+
+/-- Unfolding lemma: db output of `bw_layernorm` when x.shape.reverse starts with d. -/
+theorem bw_layernorm_db_eq (g x w b : Tensor) (d : Nat) (rest : List Nat)
+    (hrev : x.shape.reverse = d :: rest) :
+    (bw_layernorm g x w b).2.2 = Tensor.mkShape b.shape (fun bIdx =>
+      let j := bIdx.1
+      ∑ row ∈ Finset.range (prodShape x.shape / d),
+        valAt g (row * d + j)) := by
+  unfold bw_layernorm; rw [hrev]
+
+/-- Shape of `bw_layernorm` dw output. -/
+theorem bw_layernorm_dw_shape (g x w b : Tensor) (d : Nat) (rest : List Nat)
+    (hrev : x.shape.reverse = d :: rest) :
+    (bw_layernorm g x w b).2.1.shape = w.shape := by
+  rw [bw_layernorm_dw_eq g x w b d rest hrev]; simp [Tensor.mkShape]
+
+/-- Shape of `bw_layernorm` db output. -/
+theorem bw_layernorm_db_shape (g x w b : Tensor) (d : Nat) (rest : List Nat)
+    (hrev : x.shape.reverse = d :: rest) :
+    (bw_layernorm g x w b).2.2.shape = b.shape := by
+  rw [bw_layernorm_db_eq g x w b d rest hrev]; simp [Tensor.mkShape]
+
+/-- `layerNormMeanAt` on allGather = `layerNormMeanAt` on shard. -/
+theorem layerNormMeanAt_allGatherPrimDimN_dim1_4_1_2_32 (xs : List Tensor)
+    (r : Nat) (hr : r < 4) (p : Nat) (hp : p < 2)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [1, 2, 32]) :
+    layerNormMeanAt (allGatherPrimDimN 1 4 0 xs) (r * 2 + p) 32 =
+      layerNormMeanAt (xs.getD r (zeroTensor [1, 2, 32])) p 32 := by
+  unfold layerNormMeanAt
+  congr 1
+  apply Finset.sum_congr rfl
+  intro j hj
+  rw [Finset.mem_range] at hj
+  exact allGatherPrimDimN_dim1_4_1_2_32_valAt xs r hr p hp j hj hhead
+
+/-- `layerNormVarAt` on allGather = `layerNormVarAt` on shard. -/
+theorem layerNormVarAt_allGatherPrimDimN_dim1_4_1_2_32 (xs : List Tensor)
+    (r : Nat) (hr : r < 4) (p : Nat) (hp : p < 2) (mean : Scalar)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [1, 2, 32]) :
+    layerNormVarAt (allGatherPrimDimN 1 4 0 xs) (r * 2 + p) 32 mean =
+      layerNormVarAt (xs.getD r (zeroTensor [1, 2, 32])) p 32 mean := by
+  unfold layerNormVarAt
+  congr 1
+  apply Finset.sum_congr rfl
+  intro j hj
+  rw [Finset.mem_range] at hj
+  rw [allGatherPrimDimN_dim1_4_1_2_32_valAt xs r hr p hp j hj hhead]
+
+set_option maxHeartbeats 800000 in
+/-- The dw output of `bw_layernorm` on dim-1-gathered tensors (4 parts, shard [1,2,32])
+    equals `tensorSum` of per-shard dw outputs. -/
+theorem bw_layernorm_dw_dp_split_dim1_4_1_2_32
+    (g0 g1 g2 g3 x0 x1 x2 x3 w b : Tensor)
+    (hg0 : g0.shape = [1, 2, 32]) (hg1 : g1.shape = [1, 2, 32])
+    (hg2 : g2.shape = [1, 2, 32]) (hg3 : g3.shape = [1, 2, 32])
+    (hx0 : x0.shape = [1, 2, 32]) (hx1 : x1.shape = [1, 2, 32])
+    (hx2 : x2.shape = [1, 2, 32]) (hx3 : x3.shape = [1, 2, 32])
+    (hw : w.shape = [32]) :
+    (bw_layernorm (allGatherPrimDimN 1 4 0 [g0, g1, g2, g3])
+                  (allGatherPrimDimN 1 4 0 [x0, x1, x2, x3]) w b).2.1 =
+      tensorSum [(bw_layernorm g0 x0 w b).2.1,
+                 (bw_layernorm g1 x1 w b).2.1,
+                 (bw_layernorm g2 x2 w b).2.1,
+                 (bw_layernorm g3 x3 w b).2.1] := by
+  have hxs_head : (([x0, x1, x2, x3] : List Tensor).head?.map (fun t => t.shape)).getD [] = [1, 2, 32] := by
+    simp [hx0]
+  have hgs_head : (([g0, g1, g2, g3] : List Tensor).head?.map (fun t => t.shape)).getD [] = [1, 2, 32] := by
+    simp [hg0]
+  have hfullX_shape : (allGatherPrimDimN 1 4 0 [x0, x1, x2, x3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 32] hxs_head]; simp [List.set, List.getD]
+  have hfullX_rev : (allGatherPrimDimN 1 4 0 [x0, x1, x2, x3]).shape.reverse = [32, 8, 1] := by
+    rw [hfullX_shape]; decide
+  have hx0_rev : x0.shape.reverse = [32, 2, 1] := by rw [hx0]; decide
+  rw [bw_layernorm_dw_eq _ _ w b 32 [8, 1] hfullX_rev]
+  have hprod_full : prodShape (allGatherPrimDimN 1 4 0 [x0, x1, x2, x3]).shape / 32 = 8 := by
+    rw [hfullX_shape]; simp [prodShape]
+  apply Tensor.ext
+  · simp [Tensor.mkShape, hw, tensorSum, bw_layernorm_dw_shape _ _ _ _ 32 [2, 1] hx0_rev]
+  · intro idx hidx
+    have hidx_lt : idx < 32 := by simp [Tensor.mkShape, hw] at hidx; exact hidx
+    rw [valAt_of_lt _ _ (by simp [Tensor.mkShape, hw, prodShape]; exact hidx_lt)]
+    simp only [Tensor.mkShape, hprod_full]
+    -- RHS
+    have hdw0_shape : (bw_layernorm g0 x0 w b).2.1.shape = [32] := by
+      rw [bw_layernorm_dw_shape _ _ _ _ 32 [2, 1] hx0_rev, hw]
+    rw [show tensorSum _ = Tensor.mkShape (bw_layernorm g0 x0 w b).2.1.shape
+        (fun i => [(bw_layernorm g0 x0 w b).2.1, (bw_layernorm g1 x1 w b).2.1,
+                   (bw_layernorm g2 x2 w b).2.1, (bw_layernorm g3 x3 w b).2.1].foldl
+                   (fun acc x => acc + valAt x i.1) 0) from rfl]
+    rw [valAt_of_lt _ _ (by rw [Tensor.mkShape, hdw0_shape]; simp [prodShape]; exact hidx_lt)]
+    simp only [Tensor.mkShape, List.foldl]
+    rw [bw_layernorm_dw_eq g0 x0 w b 32 [2, 1] hx0_rev,
+        bw_layernorm_dw_eq g1 x1 w b 32 [2, 1] (by rw [hx1]; decide),
+        bw_layernorm_dw_eq g2 x2 w b 32 [2, 1] (by rw [hx2]; decide),
+        bw_layernorm_dw_eq g3 x3 w b 32 [2, 1] (by rw [hx3]; decide)]
+    simp only [Tensor.mkShape]
+    rw [valAt_of_lt _ _ (by simp [prodShape, hw]; exact hidx_lt),
+        valAt_of_lt _ _ (by simp [prodShape, hw]; exact hidx_lt),
+        valAt_of_lt _ _ (by simp [prodShape, hw]; exact hidx_lt),
+        valAt_of_lt _ _ (by simp [prodShape, hw]; exact hidx_lt)]
+    simp only [hw, hx0, hx1, hx2, hx3, prodShape,
+               show [1, 2, 32].foldl (· * ·) 1 = 64 from rfl,
+               show (64 : Nat) / 32 = 2 from rfl]
+    simp only [Finset.sum_range_succ, Finset.sum_range_zero, zero_add]
+    rw [allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 0 (by omega) 0 (by omega) idx hidx_lt hgs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 0 (by omega) 1 (by omega) idx hidx_lt hgs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 1 (by omega) 0 (by omega) idx hidx_lt hgs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 1 (by omega) 1 (by omega) idx hidx_lt hgs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 2 (by omega) 0 (by omega) idx hidx_lt hgs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 2 (by omega) 1 (by omega) idx hidx_lt hgs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 3 (by omega) 0 (by omega) idx hidx_lt hgs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 3 (by omega) 1 (by omega) idx hidx_lt hgs_head]
+    rw [allGatherPrimDimN_dim1_4_1_2_32_valAt [x0,x1,x2,x3] 0 (by omega) 0 (by omega) idx hidx_lt hxs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [x0,x1,x2,x3] 0 (by omega) 1 (by omega) idx hidx_lt hxs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [x0,x1,x2,x3] 1 (by omega) 0 (by omega) idx hidx_lt hxs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [x0,x1,x2,x3] 1 (by omega) 1 (by omega) idx hidx_lt hxs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [x0,x1,x2,x3] 2 (by omega) 0 (by omega) idx hidx_lt hxs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [x0,x1,x2,x3] 2 (by omega) 1 (by omega) idx hidx_lt hxs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [x0,x1,x2,x3] 3 (by omega) 0 (by omega) idx hidx_lt hxs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [x0,x1,x2,x3] 3 (by omega) 1 (by omega) idx hidx_lt hxs_head]
+    rw [layerNormMeanAt_allGatherPrimDimN_dim1_4_1_2_32 [x0,x1,x2,x3] 0 (by omega) 0 (by omega) hxs_head,
+        layerNormMeanAt_allGatherPrimDimN_dim1_4_1_2_32 [x0,x1,x2,x3] 0 (by omega) 1 (by omega) hxs_head,
+        layerNormMeanAt_allGatherPrimDimN_dim1_4_1_2_32 [x0,x1,x2,x3] 1 (by omega) 0 (by omega) hxs_head,
+        layerNormMeanAt_allGatherPrimDimN_dim1_4_1_2_32 [x0,x1,x2,x3] 1 (by omega) 1 (by omega) hxs_head,
+        layerNormMeanAt_allGatherPrimDimN_dim1_4_1_2_32 [x0,x1,x2,x3] 2 (by omega) 0 (by omega) hxs_head,
+        layerNormMeanAt_allGatherPrimDimN_dim1_4_1_2_32 [x0,x1,x2,x3] 2 (by omega) 1 (by omega) hxs_head,
+        layerNormMeanAt_allGatherPrimDimN_dim1_4_1_2_32 [x0,x1,x2,x3] 3 (by omega) 0 (by omega) hxs_head,
+        layerNormMeanAt_allGatherPrimDimN_dim1_4_1_2_32 [x0,x1,x2,x3] 3 (by omega) 1 (by omega) hxs_head]
+    rw [layerNormVarAt_allGatherPrimDimN_dim1_4_1_2_32 [x0,x1,x2,x3] 0 (by omega) 0 (by omega) _ hxs_head,
+        layerNormVarAt_allGatherPrimDimN_dim1_4_1_2_32 [x0,x1,x2,x3] 0 (by omega) 1 (by omega) _ hxs_head,
+        layerNormVarAt_allGatherPrimDimN_dim1_4_1_2_32 [x0,x1,x2,x3] 1 (by omega) 0 (by omega) _ hxs_head,
+        layerNormVarAt_allGatherPrimDimN_dim1_4_1_2_32 [x0,x1,x2,x3] 1 (by omega) 1 (by omega) _ hxs_head,
+        layerNormVarAt_allGatherPrimDimN_dim1_4_1_2_32 [x0,x1,x2,x3] 2 (by omega) 0 (by omega) _ hxs_head,
+        layerNormVarAt_allGatherPrimDimN_dim1_4_1_2_32 [x0,x1,x2,x3] 2 (by omega) 1 (by omega) _ hxs_head,
+        layerNormVarAt_allGatherPrimDimN_dim1_4_1_2_32 [x0,x1,x2,x3] 3 (by omega) 0 (by omega) _ hxs_head,
+        layerNormVarAt_allGatherPrimDimN_dim1_4_1_2_32 [x0,x1,x2,x3] 3 (by omega) 1 (by omega) _ hxs_head]
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    ring
+
+set_option maxHeartbeats 400000 in
+/-- The db output of `bw_layernorm` on dim-1-gathered tensors (4 parts, shard [1,2,32])
+    equals `tensorSum` of per-shard db outputs. -/
+theorem bw_layernorm_db_dp_split_dim1_4_1_2_32
+    (g0 g1 g2 g3 x0 x1 x2 x3 w b : Tensor)
+    (hg0 : g0.shape = [1, 2, 32]) (hg1 : g1.shape = [1, 2, 32])
+    (hg2 : g2.shape = [1, 2, 32]) (hg3 : g3.shape = [1, 2, 32])
+    (hx0 : x0.shape = [1, 2, 32]) (hx1 : x1.shape = [1, 2, 32])
+    (hx2 : x2.shape = [1, 2, 32]) (hx3 : x3.shape = [1, 2, 32])
+    (hb : b.shape = [32]) :
+    (bw_layernorm (allGatherPrimDimN 1 4 0 [g0, g1, g2, g3])
+                  (allGatherPrimDimN 1 4 0 [x0, x1, x2, x3]) w b).2.2 =
+      tensorSum [(bw_layernorm g0 x0 w b).2.2,
+                 (bw_layernorm g1 x1 w b).2.2,
+                 (bw_layernorm g2 x2 w b).2.2,
+                 (bw_layernorm g3 x3 w b).2.2] := by
+  have hxs_head : (([x0, x1, x2, x3] : List Tensor).head?.map (fun t => t.shape)).getD [] = [1, 2, 32] := by
+    simp [hx0]
+  have hgs_head : (([g0, g1, g2, g3] : List Tensor).head?.map (fun t => t.shape)).getD [] = [1, 2, 32] := by
+    simp [hg0]
+  have hfullX_shape : (allGatherPrimDimN 1 4 0 [x0, x1, x2, x3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 32] hxs_head]; simp [List.set, List.getD]
+  have hfullX_rev : (allGatherPrimDimN 1 4 0 [x0, x1, x2, x3]).shape.reverse = [32, 8, 1] := by
+    rw [hfullX_shape]; decide
+  have hx0_rev : x0.shape.reverse = [32, 2, 1] := by rw [hx0]; decide
+  rw [bw_layernorm_db_eq _ _ w b 32 [8, 1] hfullX_rev]
+  have hprod_full : prodShape (allGatherPrimDimN 1 4 0 [x0, x1, x2, x3]).shape / 32 = 8 := by
+    rw [hfullX_shape]; simp [prodShape]
+  apply Tensor.ext
+  · simp [Tensor.mkShape, hb, tensorSum, bw_layernorm_db_shape _ _ _ _ 32 [2, 1] hx0_rev]
+  · intro idx hidx
+    have hidx_lt : idx < 32 := by simp [Tensor.mkShape, hb] at hidx; exact hidx
+    rw [valAt_of_lt _ _ (by simp [Tensor.mkShape, hb, prodShape]; exact hidx_lt)]
+    simp only [Tensor.mkShape, hprod_full]
+    have hdb0_shape : (bw_layernorm g0 x0 w b).2.2.shape = [32] := by
+      rw [bw_layernorm_db_shape _ _ _ _ 32 [2, 1] hx0_rev, hb]
+    rw [show tensorSum _ = Tensor.mkShape (bw_layernorm g0 x0 w b).2.2.shape
+        (fun i => [(bw_layernorm g0 x0 w b).2.2, (bw_layernorm g1 x1 w b).2.2,
+                   (bw_layernorm g2 x2 w b).2.2, (bw_layernorm g3 x3 w b).2.2].foldl
+                   (fun acc x => acc + valAt x i.1) 0) from rfl]
+    rw [valAt_of_lt _ _ (by rw [Tensor.mkShape, hdb0_shape]; simp [prodShape]; exact hidx_lt)]
+    simp only [Tensor.mkShape, List.foldl]
+    rw [bw_layernorm_db_eq g0 x0 w b 32 [2, 1] hx0_rev,
+        bw_layernorm_db_eq g1 x1 w b 32 [2, 1] (by rw [hx1]; decide),
+        bw_layernorm_db_eq g2 x2 w b 32 [2, 1] (by rw [hx2]; decide),
+        bw_layernorm_db_eq g3 x3 w b 32 [2, 1] (by rw [hx3]; decide)]
+    simp only [Tensor.mkShape]
+    rw [valAt_of_lt _ _ (by simp [prodShape, hb]; exact hidx_lt),
+        valAt_of_lt _ _ (by simp [prodShape, hb]; exact hidx_lt),
+        valAt_of_lt _ _ (by simp [prodShape, hb]; exact hidx_lt),
+        valAt_of_lt _ _ (by simp [prodShape, hb]; exact hidx_lt)]
+    simp only [hb, hx0, hx1, hx2, hx3, prodShape,
+               show [1, 2, 32].foldl (· * ·) 1 = 64 from rfl,
+               show (64 : Nat) / 32 = 2 from rfl]
+    simp only [Finset.sum_range_succ, Finset.sum_range_zero, zero_add]
+    rw [allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 0 (by omega) 0 (by omega) idx hidx_lt hgs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 0 (by omega) 1 (by omega) idx hidx_lt hgs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 1 (by omega) 0 (by omega) idx hidx_lt hgs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 1 (by omega) 1 (by omega) idx hidx_lt hgs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 2 (by omega) 0 (by omega) idx hidx_lt hgs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 2 (by omega) 1 (by omega) idx hidx_lt hgs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 3 (by omega) 0 (by omega) idx hidx_lt hgs_head,
+        allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 3 (by omega) 1 (by omega) idx hidx_lt hgs_head]
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    ring
+
 end
 end TrainVerify.Denote
