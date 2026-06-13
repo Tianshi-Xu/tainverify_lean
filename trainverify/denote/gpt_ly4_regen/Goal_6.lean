@@ -49,3 +49,95 @@ def goal_6_stmt_cut : Prop :=
 
 end TrainVerify.Denote.GeneratedGoals
 
+namespace TrainVerify.Denote.GeneratedGoals
+
+set_option maxHeartbeats 4000000 in
+theorem prove_goal_6_cut : goal_6_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract goal_261: X is gathered on dim1
+  have hInit261 : InitGoalHolds pm_goal_6.numRanks goal_261 initSM initPM := by
+    apply hInitGoals; simp only [goal_6_cut_initGoals, goal_6_prereqs]; decide
+  have h918_shape : (initSM 918).shape = [1, 8, 32] := hInit261.1
+  have h918_rec : initSM 918 = reconstructWithDim 1 4 0
+      [initPM 1173, initPM 1174, initPM 1175, initPM 1176] := by
+    have hrec := hInit261.2.2
+    simp only [goal_261, pm_goal_6, List.map] at hrec
+    exact hrec
+  have htp261_shapes := hInit261.2.1
+  simp only [goal_261, List.map] at htp261_shapes
+  have h1173_shape : (initPM 1173).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp261_shapes; simpa using this
+  have h1174_shape : (initPM 1174).shape = [1, 2, 32] := by
+    have := congrArg List.tail htp261_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1175_shape : (initPM 1175).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp261_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1176_shape : (initPM 1176).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp261_shapes
+    have := congrArg List.head? this; simpa using this
+  have h918_gather : initSM 918 = allGatherPrimDimN 1 4 0
+      [initPM 1173, initPM 1174, initPM 1175, initPM 1176] := by
+    rw [h918_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1173_shape]; decide)
+  -- Extract initGoal_571: W is replicated (single part)
+  have hInit571 : InitGoalHolds pm_goal_6.numRanks initGoal_571 initSM initPM := by
+    apply hInitGoals; simp only [goal_6_cut_initGoals, goal_6_prereqs]; decide
+  have h571_sm_shape : (initSM 571).shape = [32, 32] := hInit571.1
+  have h571_eq : initSM 571 = initPM 571 := by
+    have hrec := hInit571.2.2
+    simp only [initGoal_571, pm_goal_6, List.map] at hrec
+    rw [hrec]; exact reconstructWithDim_singleton ..
+  have h571_pm_shape : (initPM 571).shape = [32, 32] := by
+    rw [← h571_eq]; exact h571_sm_shape
+  -- SM store
+  have hsm : (denoteGraph sm_goal_6 initSM) 572 = fw_linear (initSM 918) (initSM 571) := by
+    simp only [sm_goal_6, denoteGraph, List.foldl]
+    rw [applyNode_fw_linear_out]
+  -- PM store
+  have hpm : (denoteGraph pm_goal_6 initPM) 572 = allGatherPrimDimN 1 4 0
+      [fw_linear (initPM 1173) (initPM 571), fw_linear (initPM 1174) (initPM 571),
+       fw_linear (initPM 1175) (initPM 571), fw_linear (initPM 1176) (initPM 571)] := by
+    simp only [pm_goal_6, denoteGraph, List.foldl]
+    rw [applyNode_allGatherPrimDimN_out]
+    simp only [List.map]
+    set_option maxHeartbeats 800000 in congr 1
+  -- Key equation: fw_linear distributes over allGatherPrimDimN dim1
+  have hkey : fw_linear (initSM 918) (initSM 571) = allGatherPrimDimN 1 4 0
+      [fw_linear (initPM 1173) (initPM 571), fw_linear (initPM 1174) (initPM 571),
+       fw_linear (initPM 1175) (initPM 571), fw_linear (initPM 1176) (initPM 571)] := by
+    rw [h918_gather, h571_eq]
+    have hdist := fw_linear_distribute_allGatherPrimDimN_dim1_4_1_2_32
+      [initPM 1173, initPM 1174, initPM 1175, initPM 1176] (initPM 571)
+      (by rfl)
+      (by intro x hx
+          simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+          rcases hx with rfl | rfl | rfl | rfl
+          · exact h1173_shape
+          · exact h1174_shape
+          · exact h1175_shape
+          · exact h1176_shape)
+      h571_pm_shape
+    simp only [List.map] at hdist
+    exact hdist
+  -- Discharge 3 conjuncts
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape = [1, 8, 32]
+    show (denoteGraph sm_goal_6 initSM 572).shape = _
+    rw [hsm]
+    exact fw_linear_3d_shape 1 8 32 32 _ _ h918_shape h571_sm_shape
+  · -- PM tps shapes
+    show [(denoteGraph pm_goal_6 initPM 572).shape] = _
+    rw [hpm]
+    congr 1
+    exact allGatherPrimDimN_shape 1 4 _ [1, 2, 32] (by
+      simp only [List.map, List.head?, Option.map, Option.getD]
+      exact fw_linear_3d_shape 1 2 32 32 _ _ h1173_shape h571_pm_shape)
+  · -- Value equality
+    show denoteGraph sm_goal_6 initSM 572 = reconstructWithDim _ _ _ _
+    rw [hsm, hkey, ← hpm]
+    exact (reconstructWithDim_singleton ..).symm
+
+#print axioms prove_goal_6_cut
+
+end TrainVerify.Denote.GeneratedGoals

@@ -49,3 +49,93 @@ def goal_7_stmt_cut : Prop :=
 
 end TrainVerify.Denote.GeneratedGoals
 
+
+namespace TrainVerify.Denote.GeneratedGoals
+
+set_option maxHeartbeats 4000000 in
+theorem prove_goal_7_cut : goal_7_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract goal_263: X is gathered on dim1
+  have hInitX : InitGoalHolds pm_goal_7.numRanks goal_263 initSM initPM := by
+    apply hInitGoals; simp only [goal_7_cut_initGoals, goal_7_prereqs]; decide
+  have hX_shape : (initSM 922).shape = [1, 8, 32] := hInitX.1
+  have hX_rec : initSM 922 = reconstructWithDim 1 4 0
+      [initPM 1201, initPM 1202, initPM 1203, initPM 1204] := by
+    have hrec := hInitX.2.2
+    simp only [goal_263, pm_goal_7, List.map] at hrec
+    exact hrec
+  have htpX_shapes := hInitX.2.1
+  simp only [goal_263, List.map] at htpX_shapes
+  have h1201_shape : (initPM 1201).shape = [1, 2, 32] := by
+    have := congrArg List.head? htpX_shapes; simpa using this
+  have h1202_shape : (initPM 1202).shape = [1, 2, 32] := by
+    have := congrArg List.tail htpX_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1203_shape : (initPM 1203).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htpX_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1204_shape : (initPM 1204).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htpX_shapes
+    have := congrArg List.head? this; simpa using this
+  have hX_gather : initSM 922 = allGatherPrimDimN 1 4 0
+      [initPM 1201, initPM 1202, initPM 1203, initPM 1204] := by
+    rw [hX_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1201_shape]; decide)
+  -- Extract initGoal_573: W is replicated
+  have hInitW : InitGoalHolds pm_goal_7.numRanks initGoal_573 initSM initPM := by
+    apply hInitGoals; simp only [goal_7_cut_initGoals, goal_7_prereqs]; decide
+  have hW_sm_shape : (initSM 573).shape = [32, 32] := hInitW.1
+  have hW_eq : initSM 573 = initPM 573 := by
+    have hrec := hInitW.2.2
+    simp only [initGoal_573, pm_goal_7, List.map] at hrec
+    rw [hrec]; exact reconstructWithDim_singleton ..
+  have hW_pm_shape : (initPM 573).shape = [32, 32] := by
+    rw [← hW_eq]; exact hW_sm_shape
+  -- SM store
+  have hsm : (denoteGraph sm_goal_7 initSM) 574 = fw_linear (initSM 922) (initSM 573) := by
+    simp only [sm_goal_7, denoteGraph, List.foldl]
+    rw [applyNode_fw_linear_out]
+  -- PM store
+  have hpm : (denoteGraph pm_goal_7 initPM) 574 = allGatherPrimDimN 1 4 0
+      [fw_linear (initPM 1201) (initPM 573), fw_linear (initPM 1202) (initPM 573),
+       fw_linear (initPM 1203) (initPM 573), fw_linear (initPM 1204) (initPM 573)] := by
+    simp only [pm_goal_7, denoteGraph, List.foldl]
+    rw [applyNode_allGatherPrimDimN_out_thm]
+    simp only [List.map]
+    congr 1
+  -- Key equation
+  have hkey : fw_linear (initSM 922) (initSM 573) = allGatherPrimDimN 1 4 0
+      [fw_linear (initPM 1201) (initPM 573), fw_linear (initPM 1202) (initPM 573),
+       fw_linear (initPM 1203) (initPM 573), fw_linear (initPM 1204) (initPM 573)] := by
+    rw [hX_gather, hW_eq]
+    have hdist := fw_linear_distribute_allGatherPrimDimN_dim1_4_1_2_32
+      [initPM 1201, initPM 1202, initPM 1203, initPM 1204] (initPM 573)
+      (by rfl)
+      (by intro x hx
+          simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+          rcases hx with rfl | rfl | rfl | rfl
+          · exact h1201_shape
+          · exact h1202_shape
+          · exact h1203_shape
+          · exact h1204_shape)
+      hW_pm_shape
+    simp only [List.map] at hdist
+    exact hdist
+  -- Discharge 3 conjuncts
+  refine ⟨?_, ?_, ?_⟩
+  · show (denoteGraph sm_goal_7 initSM 574).shape = _
+    rw [hsm]
+    exact fw_linear_3d_shape 1 8 32 32 _ _ hX_shape hW_sm_shape
+  · show [(denoteGraph pm_goal_7 initPM 574).shape] = _
+    rw [hpm]
+    congr 1
+    exact allGatherPrimDimN_shape 1 4 _ [1, 2, 32] (by
+      simp only [List.map, List.head?, Option.map, Option.getD]
+      exact fw_linear_3d_shape 1 2 32 32 _ _ h1201_shape hW_pm_shape)
+  · show denoteGraph sm_goal_7 initSM 574 = reconstructWithDim _ _ _ _
+    rw [hsm, hkey, ← hpm]
+    exact (reconstructWithDim_singleton ..).symm
+
+#print axioms prove_goal_7_cut
+
+end TrainVerify.Denote.GeneratedGoals
