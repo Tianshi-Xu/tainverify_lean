@@ -46,5 +46,116 @@ def goal_106_cut_initGoals : List LineageGoal := initGoals ++ goal_106_prereqs
 def goal_106_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_106 pm_goal_106 goal_106 sm_goal_106InitEnv pm_goal_106InitEnv goal_106_cut_initGoals
 
-end TrainVerify.Denote.GeneratedGoals
+set_option maxHeartbeats 8000000 in
+theorem prove_goal_106_cut : goal_106_stmt_cut := by
+  unfold goal_106_stmt_cut CoarseLineageHoldsWithInit
+  intro initSM initPM hInitSM hInitPM hInitGoals
+  have hInit711 : InitGoalHolds pm_goal_106.numRanks initGoal_711 initSM initPM := by
+    apply hInitGoals; simp only [goal_106_cut_initGoals, initGoals]; decide
+  have h711_shape : (initSM 711).shape = [128, 32] := hInit711.1
+  have h711_rec : initSM 711 = reconstructWithDim 0 4 0
+      [initPM 3369, initPM 3370, initPM 3371, initPM 3372] := by
+    have hrec := hInit711.2.2
+    simp only [initGoal_711, pm_goal_106, List.map] at hrec
+    exact hrec
+  have htp711_shapes := hInit711.2.1
+  simp only [initGoal_711, List.map] at htp711_shapes
+  have h3369_shape : (initPM 3369).shape = [32, 32] := by
+    have := congrArg List.head? htp711_shapes; simpa using this
+  have h3370_shape : (initPM 3370).shape = [32, 32] := by
+    have := congrArg List.tail htp711_shapes
+    have := congrArg List.head? this; simpa using this
+  have h3371_shape : (initPM 3371).shape = [32, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp711_shapes
+    have := congrArg List.head? this; simpa using this
+  have h3372_shape : (initPM 3372).shape = [32, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp711_shapes
+    have := congrArg List.head? this; simpa using this
+  have h711_gather : initSM 711 = allGatherPrimDimN 0 4 0
+      [initPM 3369, initPM 3370, initPM 3371, initPM 3372] := by
+    rw [h711_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _ (by rw [h3369_shape]; decide)
+  have hInit105 : InitGoalHolds pm_goal_106.numRanks goal_105 initSM initPM := by
+    apply hInitGoals; simp only [goal_106_cut_initGoals, goal_106_prereqs]; decide
+  have h710_shape : (initSM 710).shape = [1, 8, 32] := hInit105.1
+  have h710_eq : initSM 710 = initPM 710 := by
+    have hrec := hInit105.2.2
+    simp only [goal_105, pm_goal_106, List.map] at hrec
+    rw [hrec]; exact reconstructWithDim_singleton ..
+  have hsm : (denoteGraph sm_goal_106 initSM) 712 = fw_linear (initSM 710) (initSM 711) := by
+    simp only [sm_goal_106, denoteGraph, List.foldl]
+    rw [applyNode_fw_linear_out]
+  have hpm0 : (denoteGraph pm_goal_106 initPM) 3373 = fw_linear (initPM 710) (initPM 3369) := by
+    simp only [pm_goal_106, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ (3373 : Tid) (by decide : (3373:Tid) ∉ [3376])]
+    rw [applyNode_skip _ _ _ (3373 : Tid) (by decide : (3373:Tid) ∉ [3375])]
+    rw [applyNode_skip _ _ _ (3373 : Tid) (by decide : (3373:Tid) ∉ [3374])]
+    rw [applyNode_fw_linear_out]
+  have hpm1 : (denoteGraph pm_goal_106 initPM) 3374 = fw_linear (initPM 710) (initPM 3370) := by
+    simp only [pm_goal_106, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ (3374 : Tid) (by decide : (3374:Tid) ∉ [3376])]
+    rw [applyNode_skip _ _ _ (3374 : Tid) (by decide : (3374:Tid) ∉ [3375])]
+    rw [applyNode_fw_linear_out]
+    rw [applyNode_skip _ _ _ (710 : Tid) (by decide : (710:Tid) ∉ [3373])]
+    rw [applyNode_skip _ _ _ (3370 : Tid) (by decide : (3370:Tid) ∉ [3373])]
+  have hpm2 : (denoteGraph pm_goal_106 initPM) 3375 = fw_linear (initPM 710) (initPM 3371) := by
+    simp only [pm_goal_106, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ (3375 : Tid) (by decide : (3375:Tid) ∉ [3376])]
+    rw [applyNode_fw_linear_out]
+    rw [applyNode_skip _ _ _ (710 : Tid) (by decide : (710:Tid) ∉ [3374])]
+    rw [applyNode_skip _ _ _ (3371 : Tid) (by decide : (3371:Tid) ∉ [3374])]
+    rw [applyNode_skip _ _ _ (710 : Tid) (by decide : (710:Tid) ∉ [3373])]
+    rw [applyNode_skip _ _ _ (3371 : Tid) (by decide : (3371:Tid) ∉ [3373])]
+  have hpm3 : (denoteGraph pm_goal_106 initPM) 3376 = fw_linear (initPM 710) (initPM 3372) := by
+    simp only [pm_goal_106, denoteGraph, List.foldl]
+    rw [applyNode_fw_linear_out]
+    rw [applyNode_skip _ _ _ (710 : Tid) (by decide : (710:Tid) ∉ [3375])]
+    rw [applyNode_skip _ _ _ (3372 : Tid) (by decide : (3372:Tid) ∉ [3375])]
+    rw [applyNode_skip _ _ _ (710 : Tid) (by decide : (710:Tid) ∉ [3374])]
+    rw [applyNode_skip _ _ _ (3372 : Tid) (by decide : (3372:Tid) ∉ [3374])]
+    rw [applyNode_skip _ _ _ (710 : Tid) (by decide : (710:Tid) ∉ [3373])]
+    rw [applyNode_skip _ _ _ (3372 : Tid) (by decide : (3372:Tid) ∉ [3373])]
+  have hkey : fw_linear (initSM 710) (initSM 711) =
+      allGatherPrimDimN 2 4 0
+        [fw_linear (initPM 710) (initPM 3369), fw_linear (initPM 710) (initPM 3370),
+         fw_linear (initPM 710) (initPM 3371), fw_linear (initPM 710) (initPM 3372)] := by
+    rw [h711_gather, h710_eq]
+    have hdist := fw_linear_column_parallel_4_1_8_32_32
+      (initPM 710) [initPM 3369, initPM 3370, initPM 3371, initPM 3372]
+      (by rw [← h710_eq]; exact h710_shape)
+      (by rfl)
+      (by intro w hw
+          simp only [List.mem_cons, List.mem_nil_iff, or_false] at hw
+          rcases hw with rfl | rfl | rfl | rfl
+          · exact h3369_shape
+          · exact h3370_shape
+          · exact h3371_shape
+          · exact h3372_shape)
+    simp only [List.map] at hdist
+    exact hdist
+  simp only [goal_106, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · show (denoteGraph sm_goal_106 initSM 712).shape = _
+    rw [hsm]; exact fw_linear_3d_shape 1 8 32 128 _ _ h710_shape h711_shape
+  · show [(denoteGraph pm_goal_106 initPM 3373).shape,
+          (denoteGraph pm_goal_106 initPM 3374).shape,
+          (denoteGraph pm_goal_106 initPM 3375).shape,
+          (denoteGraph pm_goal_106 initPM 3376).shape] = _
+    rw [hpm0, hpm1, hpm2, hpm3]
+    have h710_pm : (initPM 710).shape = [1, 8, 32] := by rw [← h710_eq]; exact h710_shape
+    simp only [fw_linear_3d_shape 1 8 32 32 _ _ h710_pm h3369_shape,
+               fw_linear_3d_shape 1 8 32 32 _ _ h710_pm h3370_shape,
+               fw_linear_3d_shape 1 8 32 32 _ _ h710_pm h3371_shape,
+               fw_linear_3d_shape 1 8 32 32 _ _ h710_pm h3372_shape]
+  · show denoteGraph sm_goal_106 initSM 712 =
+      reconstructWithDim 2 4 0 [denoteGraph pm_goal_106 initPM 3373,
+        denoteGraph pm_goal_106 initPM 3374, denoteGraph pm_goal_106 initPM 3375,
+        denoteGraph pm_goal_106 initPM 3376]
+    rw [hsm, hpm0, hpm1, hpm2, hpm3, hkey]
+    symm; apply reconstructWithDim_cons_cons_nonscalar
+    have h710_pm : (initPM 710).shape = [1, 8, 32] := by rw [← h710_eq]; exact h710_shape
+    rw [fw_linear_3d_shape 1 8 32 32 _ _ h710_pm h3369_shape]; decide
 
+#print axioms prove_goal_106_cut
+
+end TrainVerify.Denote.GeneratedGoals
