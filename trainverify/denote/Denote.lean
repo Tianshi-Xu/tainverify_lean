@@ -1237,11 +1237,216 @@ theorem fw_add_split_dim2_4_1_8_32 (a b : Tensor) (ha : a.shape = [1, 8, 32]) (h
     have hidx3 : idx = p * 32 + 3 * 8 + j := by omega
     rw [← hidx3]
 
+/-- `valAt` for `tensorSum [a, b]` when the index is in-bounds of `a.shape`. -/
+private theorem tensorSum_pair_valAt (a b : Tensor) (idx : Nat)
+    (hidx : idx < prodShape a.shape) :
+    valAt (tensorSum [a, b]) idx = valAt a idx + valAt b idx := by
+  have hsh : (tensorSum [a, b]).shape = a.shape := rfl
+  rw [valAt_of_lt _ _ (by rw [hsh]; exact hidx)]
+  simp [tensorSum, Tensor.mkShape, List.foldl]
+
+/-- `valAt` for `tensorSum [a, b]` with shape [1, 8, 8]. -/
+private theorem tensorSum_pair_valAt_1_8_8 (a b : Tensor) (idx : Nat)
+    (ha : a.shape = [1, 8, 8]) (hb : b.shape = [1, 8, 8]) (hidx : idx < 64) :
+    valAt (tensorSum [a, b]) idx = valAt a idx + valAt b idx := by
+  exact tensorSum_pair_valAt a b idx (by simp [ha, prodShape]; exact hidx)
+
+/-- `tensorSum [a, b]` distributes over allGatherPrimDimN on dim 2 with 4 parts for shape [1, 8, 32].
+    Concrete fast instance for BW_multiref goals. -/
+theorem tensorSum_pair_split_dim2_4_1_8_32 (a b : Tensor)
+    (ha : a.shape = [1, 8, 32]) (hb : b.shape = [1, 8, 32]) :
+    tensorSum [a, b] = allGatherPrimDimN 2 4 0
+      [tensorSum [chunkPrimDimN 2 4 0 a, chunkPrimDimN 2 4 0 b],
+       tensorSum [chunkPrimDimN 2 4 1 a, chunkPrimDimN 2 4 1 b],
+       tensorSum [chunkPrimDimN 2 4 2 a, chunkPrimDimN 2 4 2 b],
+       tensorSum [chunkPrimDimN 2 4 3 a, chunkPrimDimN 2 4 3 b]] := by
+  have hchunk_shape_a : ∀ r, (chunkPrimDimN 2 4 r a).shape = [1, 8, 8] := by
+    intro r; rw [chunkPrimDimN_shape 2 4 r _ _ ha (by omega)]; simp [List.set, List.getD]
+  have hchunk_shape_b : ∀ r, (chunkPrimDimN 2 4 r b).shape = [1, 8, 8] := by
+    intro r; rw [chunkPrimDimN_shape 2 4 r _ _ hb (by omega)]; simp [List.set, List.getD]
+  have hpiece_shape : ∀ r, (tensorSum [chunkPrimDimN 2 4 r a, chunkPrimDimN 2 4 r b]).shape = [1, 8, 8] := by
+    intro r; show (chunkPrimDimN 2 4 r a).shape = [1, 8, 8]; exact hchunk_shape_a r
+  have hhead : (([tensorSum [chunkPrimDimN 2 4 0 a, chunkPrimDimN 2 4 0 b],
+       tensorSum [chunkPrimDimN 2 4 1 a, chunkPrimDimN 2 4 1 b],
+       tensorSum [chunkPrimDimN 2 4 2 a, chunkPrimDimN 2 4 2 b],
+       tensorSum [chunkPrimDimN 2 4 3 a, chunkPrimDimN 2 4 3 b]].head?.map (fun t => t.shape)).getD []) = [1, 8, 8] := by
+    simp [hpiece_shape]
+  have hrhs_shape : (allGatherPrimDimN 2 4 0
+      [tensorSum [chunkPrimDimN 2 4 0 a, chunkPrimDimN 2 4 0 b],
+       tensorSum [chunkPrimDimN 2 4 1 a, chunkPrimDimN 2 4 1 b],
+       tensorSum [chunkPrimDimN 2 4 2 a, chunkPrimDimN 2 4 2 b],
+       tensorSum [chunkPrimDimN 2 4 3 a, chunkPrimDimN 2 4 3 b]]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead]
+    simp [List.set, List.getD]
+  have hlhs_shape : (tensorSum [a, b]).shape = [1, 8, 32] := by
+    show a.shape = [1, 8, 32]; exact ha
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  have hidx_rhs : idx < prodShape (allGatherPrimDimN 2 4 0
+      [tensorSum [chunkPrimDimN 2 4 0 a, chunkPrimDimN 2 4 0 b],
+       tensorSum [chunkPrimDimN 2 4 1 a, chunkPrimDimN 2 4 1 b],
+       tensorSum [chunkPrimDimN 2 4 2 a, chunkPrimDimN 2 4 2 b],
+       tensorSum [chunkPrimDimN 2 4 3 a, chunkPrimDimN 2 4 3 b]]).shape := by
+    simpa [hrhs_shape, prodShape] using hidx256
+  rw [tensorSum_pair_valAt a b idx (by simp [ha, prodShape]; omega)]
+  rw [valAt_of_lt _ _ hidx_rhs]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl,
+    show (8 : Nat) ≠ 0 by omega, show (32 : Nat) ≠ 0 by omega,
+    show (1 : Nat) ≠ 0 by omega, ite_false]
+  simp only [show (8 : Nat) * 4 * 1 = 32 by norm_num,
+    show (8 : Nat) * 1 = 8 by norm_num]
+  set p := idx / 32 with hp_def
+  set r := idx % 32 / 8 with hr_def
+  set j := idx % 8 with hj_def
+  set loc := p * 8 + j with hloc_def
+  have hp_lt : p < 8 := by omega
+  have hr_lt : r < 4 := by omega
+  have hj_lt : j < 8 := by omega
+  have hloc_lt : loc < 64 := by omega
+  have hidxget : idx % 32 / 1 / 8 = r := by subst r; omega
+  have hlocnorm : idx / 32 * 8 + idx % 32 / 1 % 8 * 1 + idx % 32 % 1 = loc := by
+    subst loc p j
+    omega
+  rw [hidxget, hlocnorm]
+  have hr_cases : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+  rcases hr_cases with h0 | h1 | h2 | h3
+  · rw [h0]
+    change valAt a idx + valAt b idx =
+      valAt (tensorSum [chunkPrimDimN 2 4 0 a, chunkPrimDimN 2 4 0 b]) loc
+    rw [tensorSum_pair_valAt_1_8_8 _ _ loc (hchunk_shape_a 0) (hchunk_shape_b 0) hloc_lt]
+    rw [chunk2_4_1_8_32_valAt_pj a 0 p j ha (by omega) hp_lt hj_lt]
+    rw [chunk2_4_1_8_32_valAt_pj b 0 p j hb (by omega) hp_lt hj_lt]
+    have hidx0 : idx = p * 32 + 0 * 8 + j := by omega
+    rw [← hidx0]
+  · rw [h1]
+    change valAt a idx + valAt b idx =
+      valAt (tensorSum [chunkPrimDimN 2 4 1 a, chunkPrimDimN 2 4 1 b]) loc
+    rw [tensorSum_pair_valAt_1_8_8 _ _ loc (hchunk_shape_a 1) (hchunk_shape_b 1) hloc_lt]
+    rw [chunk2_4_1_8_32_valAt_pj a 1 p j ha (by omega) hp_lt hj_lt]
+    rw [chunk2_4_1_8_32_valAt_pj b 1 p j hb (by omega) hp_lt hj_lt]
+    have hidx1 : idx = p * 32 + 1 * 8 + j := by omega
+    rw [← hidx1]
+  · rw [h2]
+    change valAt a idx + valAt b idx =
+      valAt (tensorSum [chunkPrimDimN 2 4 2 a, chunkPrimDimN 2 4 2 b]) loc
+    rw [tensorSum_pair_valAt_1_8_8 _ _ loc (hchunk_shape_a 2) (hchunk_shape_b 2) hloc_lt]
+    rw [chunk2_4_1_8_32_valAt_pj a 2 p j ha (by omega) hp_lt hj_lt]
+    rw [chunk2_4_1_8_32_valAt_pj b 2 p j hb (by omega) hp_lt hj_lt]
+    have hidx2 : idx = p * 32 + 2 * 8 + j := by omega
+    rw [← hidx2]
+  · rw [h3]
+    change valAt a idx + valAt b idx =
+      valAt (tensorSum [chunkPrimDimN 2 4 3 a, chunkPrimDimN 2 4 3 b]) loc
+    rw [tensorSum_pair_valAt_1_8_8 _ _ loc (hchunk_shape_a 3) (hchunk_shape_b 3) hloc_lt]
+    rw [chunk2_4_1_8_32_valAt_pj a 3 p j ha (by omega) hp_lt hj_lt]
+    rw [chunk2_4_1_8_32_valAt_pj b 3 p j hb (by omega) hp_lt hj_lt]
+    have hidx3 : idx = p * 32 + 3 * 8 + j := by omega
+    rw [← hidx3]
+
+/-- `tensorSum [a, allGatherPrimDimN 2 4 0 [b0, b1, b2, b3]]` distributes as
+    `allGatherPrimDimN 2 4 0 [tensorSum [chunk_r a, b_r] | r]` for shape [1, 8, 32].
+    Direct form that avoids needing a chunk-gather inverse lemma. -/
+theorem tensorSum_add_gather_dim2_4_1_8_32 (a b0 b1 b2 b3 : Tensor)
+    (ha : a.shape = [1, 8, 32])
+    (hb0 : b0.shape = [1, 8, 8]) (hb1 : b1.shape = [1, 8, 8])
+    (hb2 : b2.shape = [1, 8, 8]) (hb3 : b3.shape = [1, 8, 8]) :
+    tensorSum [a, allGatherPrimDimN 2 4 0 [b0, b1, b2, b3]] = allGatherPrimDimN 2 4 0
+      [tensorSum [chunkPrimDimN 2 4 0 a, b0],
+       tensorSum [chunkPrimDimN 2 4 1 a, b1],
+       tensorSum [chunkPrimDimN 2 4 2 a, b2],
+       tensorSum [chunkPrimDimN 2 4 3 a, b3]] := by
+  have hchunk_shape_a : ∀ r, (chunkPrimDimN 2 4 r a).shape = [1, 8, 8] := by
+    intro r; rw [chunkPrimDimN_shape 2 4 r _ _ ha (by omega)]; simp [List.set, List.getD]
+  have hpiece_shape : ∀ (x y : Tensor), x.shape = [1, 8, 8] → y.shape = [1, 8, 8] →
+      (tensorSum [x, y]).shape = [1, 8, 8] := by intros x _ hx _; exact hx
+  have hbhead : (([b0, b1, b2, b3].head?.map (fun t => t.shape)).getD []) = [1, 8, 8] := by
+    simp [hb0]
+  have hgather_b_shape : (allGatherPrimDimN 2 4 0 [b0, b1, b2, b3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hbhead]; simp [List.set, List.getD]
+  have hlhs_shape : (tensorSum [a, allGatherPrimDimN 2 4 0 [b0, b1, b2, b3]]).shape =
+      [1, 8, 32] := ha
+  have hpiece0 : (tensorSum [chunkPrimDimN 2 4 0 a, b0]).shape = [1, 8, 8] := hchunk_shape_a 0
+  have hrhs_head : (([tensorSum [chunkPrimDimN 2 4 0 a, b0],
+       tensorSum [chunkPrimDimN 2 4 1 a, b1],
+       tensorSum [chunkPrimDimN 2 4 2 a, b2],
+       tensorSum [chunkPrimDimN 2 4 3 a, b3]].head?.map (fun t => t.shape)).getD []) =
+      [1, 8, 8] := by simp [hpiece0]
+  have hrhs_shape : (allGatherPrimDimN 2 4 0
+      [tensorSum [chunkPrimDimN 2 4 0 a, b0],
+       tensorSum [chunkPrimDimN 2 4 1 a, b1],
+       tensorSum [chunkPrimDimN 2 4 2 a, b2],
+       tensorSum [chunkPrimDimN 2 4 3 a, b3]]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hrhs_head]; simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  -- Rewrite LHS with tensorSum_pair_valAt
+  rw [tensorSum_pair_valAt a _ idx (by simp [ha, prodShape]; omega)]
+  -- Now goal: valAt a idx + valAt (allGatherPrimDimN 2 4 0 [b0,b1,b2,b3]) idx =
+  --           valAt (allGatherPrimDimN 2 4 0 [sum0,sum1,sum2,sum3]) idx
+  -- Unfold BOTH allGather expressions simultaneously
+  have hidx_lhs : idx < prodShape (allGatherPrimDimN 2 4 0 [b0, b1, b2, b3]).shape := by
+    simpa [hgather_b_shape, prodShape] using hidx256
+  have hidx_rhs : idx < prodShape (allGatherPrimDimN 2 4 0
+      [tensorSum [chunkPrimDimN 2 4 0 a, b0],
+       tensorSum [chunkPrimDimN 2 4 1 a, b1],
+       tensorSum [chunkPrimDimN 2 4 2 a, b2],
+       tensorSum [chunkPrimDimN 2 4 3 a, b3]]).shape := by
+    simpa [hrhs_shape, prodShape] using hidx256
+  rw [valAt_of_lt _ _ hidx_lhs, valAt_of_lt _ _ hidx_rhs]
+  simp only [allGatherPrimDimN, Tensor.mkShape, hbhead, hrhs_head,
+    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl,
+    show (8 : Nat) ≠ 0 by omega, show (32 : Nat) ≠ 0 by omega,
+    show (1 : Nat) ≠ 0 by omega, ite_false]
+  simp only [show (8 : Nat) * 4 * 1 = 32 by norm_num,
+    show (8 : Nat) * 1 = 8 by norm_num]
+  set p := idx / 32 with hp_def
+  set r := idx % 32 / 8 with hr_def
+  set j := idx % 8 with hj_def
+  set loc := p * 8 + j with hloc_def
+  have hp_lt : p < 8 := by omega
+  have hr_lt : r < 4 := by omega
+  have hj_lt : j < 8 := by omega
+  have hloc_lt : loc < 64 := by omega
+  have hidxget : idx % 32 / 1 / 8 = r := by subst r; omega
+  have hlocnorm : idx / 32 * 8 + idx % 32 / 1 % 8 * 1 + idx % 32 % 1 = loc := by
+    subst loc p j; omega
+  rw [hidxget, hlocnorm]
+  -- Now goal: valAt a idx + valAt ([b0,b1,b2,b3].getD r ...) loc =
+  --           valAt ([sum0,...].getD r ...) loc
+  have hidx_norm : idx = p * 32 + r * 8 + j := by subst p r j; omega
+  have hr_cases : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+  rcases hr_cases with h0 | h1 | h2 | h3
+  · rw [h0]; simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    rw [tensorSum_pair_valAt _ _ loc (by simp [hchunk_shape_a 0, prodShape]; omega)]
+    rw [chunk2_4_1_8_32_valAt_pj a 0 p j ha (by omega) hp_lt hj_lt]
+    have hidx0 : idx = p * 32 + 0 * 8 + j := by omega
+    rw [← hidx0]
+  · rw [h1]; simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    rw [tensorSum_pair_valAt _ _ loc (by simp [hchunk_shape_a 1, prodShape]; omega)]
+    rw [chunk2_4_1_8_32_valAt_pj a 1 p j ha (by omega) hp_lt hj_lt]
+    have hidx1 : idx = p * 32 + 1 * 8 + j := by omega
+    rw [← hidx1]
+  · rw [h2]; simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    rw [tensorSum_pair_valAt _ _ loc (by simp [hchunk_shape_a 2, prodShape]; omega)]
+    rw [chunk2_4_1_8_32_valAt_pj a 2 p j ha (by omega) hp_lt hj_lt]
+    have hidx2 : idx = p * 32 + 2 * 8 + j := by omega
+    rw [← hidx2]
+  · rw [h3]; simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    rw [tensorSum_pair_valAt _ _ loc (by simp [hchunk_shape_a 3, prodShape]; omega)]
+    rw [chunk2_4_1_8_32_valAt_pj a 3 p j ha (by omega) hp_lt hj_lt]
+    have hidx3 : idx = p * 32 + 3 * 8 + j := by omega
+    rw [← hidx3]
+
 /-- AllToAll with explicit split/gather dimensions.
     Gathers all inputs along `idim`, then chunks the result along `odim`. -/
 def allToAllPrimWithDims (numParts rank : Nat) (xs : List Tensor)
     (idim odim : Nat) : Tensor :=
-  chunkPrimDimN odim numParts rank (allGatherPrimDimN idim numParts 0 xs)
+  chunkPrimDimN idim numParts rank (allGatherPrimDimN odim numParts 0 xs)
 
 /-- `allToAllPrimWithDims` shape theorem. -/
 theorem allToAllPrimWithDims_shape (numParts rank : Nat) (xs : List Tensor)
@@ -1250,12 +1455,12 @@ theorem allToAllPrimWithDims_shape (numParts rank : Nat) (xs : List Tensor)
     (hhead : (xs.head?.map (fun t => t.shape)).getD [] = shardShape)
     (hnz : numParts ≠ 0) :
     (allToAllPrimWithDims numParts rank xs idim odim).shape =
-      (shardShape.set idim (shardShape.getD idim 0 * numParts)).set odim
-        ((shardShape.set idim (shardShape.getD idim 0 * numParts)).getD odim 0 /
+      (shardShape.set odim (shardShape.getD odim 0 * numParts)).set idim
+        ((shardShape.set odim (shardShape.getD odim 0 * numParts)).getD idim 0 /
           numParts) := by
   simp only [allToAllPrimWithDims]
-  exact chunkPrimDimN_shape odim numParts rank _
-    _ (allGatherPrimDimN_shape idim numParts xs shardShape hhead) hnz
+  exact chunkPrimDimN_shape idim numParts rank _
+    _ (allGatherPrimDimN_shape odim numParts xs shardShape hhead) hnz
 
 /-- `allGatherPrim` shape for 2D tensors with consistent shard shapes. -/
 theorem allGatherPrim_shape (numParts o shard : Nat) (xs : List Tensor)
@@ -2435,6 +2640,18 @@ These are definitional facts that keep generated proofs readable and avoid repea
 unfolding `storeSet`/`find?` for the common case `outs = [tid]`.
 -/
 
+/-- Looking up `tid` in `applyNode g s node` when `tid ∉ node.outs` falls through to `s tid`. -/
+theorem applyNode_skip (g : GraphDecl) (s : Store) (n : NodeDecl) (tid : Tid)
+    (h : tid ∉ n.outs) :
+    applyNode g s n tid = s tid := by
+  unfold applyNode
+  apply storeSet_eq_of_not_mem_fst
+  intro hmem
+  apply h
+  have ⟨⟨a, b⟩, hmem_zip, heq⟩ := List.mem_map.mp hmem
+  simp only [Prod.fst] at heq; subst heq
+  exact (List.of_mem_zip hmem_zip).1
+
 axiom applyNode_fw_sum_out
     (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid) :
     applyNode g s { rank := rank, op := "OpName.FW_sum", ins := [inTid], outs := [outTid] } outTid =
@@ -2711,6 +2928,27 @@ theorem applyNode_bw_embedding_offset_out
   unfold storeSet
   simp [List.find?]
 
+/-- Unfolding lemma for `evalOp` on `FW_gelu`. -/
+theorem evalOp_fw_gelu (numParts rank : Nat) (params : List Nat) (x : Tensor) :
+    evalOp numParts rank "OpName.FW_gelu" params [x] = [fw_gelu x] := by
+  rfl
+
+/-- `applyNode` for `FW_gelu` with singleton output. -/
+theorem applyNode_fw_gelu_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_gelu", ins := [inTid], outs := [outTid] } outTid =
+      fw_gelu (s inTid) := by
+  unfold applyNode
+  rw [show ([inTid] : List Tid).map s = [s inTid] from rfl,
+      evalOp_fw_gelu]
+  change storeSet s [(outTid, fw_gelu (s inTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `fw_gelu` preserves shape. -/
+theorem fw_gelu_shape (x : Tensor) : (fw_gelu x).shape = x.shape := by
+  simp [fw_gelu, Tensor.mkShape]
+
 /-- `applyNode` for binary `FW_add` with singleton output. -/
 theorem applyNode_fw_add2_out
     (g : GraphDecl) (s : Store) (rank : Nat) (xTid yTid outTid : Tid) :
@@ -2722,6 +2960,27 @@ theorem applyNode_fw_add2_out
   change storeSet s [(outTid, elemwiseAdd (s xTid) (s yTid))] outTid = _
   unfold storeSet
   simp [List.find?]
+
+/-- Unfolding lemma for `BW_multiref` (tensorSum of all inputs). -/
+theorem evalOp_bw_multiref (numParts rank : Nat) (params : List Nat) (xs : List Tensor) :
+    evalOp numParts rank "OpName.BW_multiref" params xs = [tensorSum xs] := by
+  rfl
+
+/-- `applyNode` for `BW_multiref` with variable-length inputs and singleton output. -/
+theorem applyNode_bw_multiref_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (ins : List Tid) (outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.BW_multiref", ins := ins, outs := [outTid] } outTid =
+      tensorSum (ins.map s) := by
+  unfold applyNode
+  rw [evalOp_bw_multiref]
+  change storeSet s [(outTid, tensorSum (ins.map s))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- Shape of `tensorSum` equals the shape of the first element. -/
+theorem tensorSum_shape (x : Tensor) (xs : List Tensor) :
+    (tensorSum (x :: xs)).shape = x.shape := by
+  simp [tensorSum, Tensor.mkShape]
 
 /-- `applyNode` for `ChunkPrim` with `params := [dim]` (chunk along arbitrary dimension). -/
 theorem applyNode_chunkPrimDimN_out
