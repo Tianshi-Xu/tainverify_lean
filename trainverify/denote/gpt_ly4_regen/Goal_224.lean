@@ -53,5 +53,102 @@ def goal_224_cut_initGoals : List LineageGoal := initGoals ++ goal_224_prereqs
 def goal_224_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_224 pm_goal_224 goal_224 sm_goal_224InitEnv pm_goal_224InitEnv goal_224_cut_initGoals
 
+theorem prove_goal_224_cut : goal_224_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract prereqs: goal_307 (x=1055 gather), goal_225 (g=862 shared), initGoal_680 (w)
+  have hInit307 : InitGoalHolds pm_goal_224.numRanks goal_307 initSM initPM := by
+    apply hInitGoals; simp only [goal_224_cut_initGoals, goal_224_prereqs]; decide
+  have hInit225 : InitGoalHolds pm_goal_224.numRanks goal_225 initSM initPM := by
+    apply hInitGoals; simp only [goal_224_cut_initGoals, goal_224_prereqs]; decide
+  have hInit680 : InitGoalHolds pm_goal_224.numRanks initGoal_680 initSM initPM := by
+    apply hInitGoals; simp only [goal_224_cut_initGoals, goal_224_prereqs, initGoals]; decide
+  -- goal_307: initSM 1055 = reconstructWithDim 1 4 0 [2869,2870,2871,2872]
+  have h1055_rec : initSM 1055 = reconstructWithDim 1 4 0
+      [initPM 2869, initPM 2870, initPM 2871, initPM 2872] := by
+    have hrec := hInit307.2.2
+    simp only [goal_307, pm_goal_224, List.map] at hrec
+    exact hrec
+  have htp307 := hInit307.2.1
+  simp only [goal_307, List.map] at htp307
+  have h2869_shape : (initPM 2869).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp307; simpa using this
+  have h2870_shape : (initPM 2870).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htp307; simpa using this
+  have h2871_shape : (initPM 2871).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp307; simpa using this
+  have h2872_shape : (initPM 2872).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp307; simpa using this
+  -- goal_225: initSM 862 = initPM 862 (singleton)
+  have h862_eq : initSM 862 = initPM 862 := by
+    have hrec := hInit225.2.2
+    simp only [goal_225, pm_goal_224, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  have h862_shape : (initSM 862).shape = [1, 8, 32] := hInit225.1
+  -- initGoal_680: initSM 680 = initPM 680 (replicated)
+  have h680_eq : initSM 680 = initPM 680 := by
+    have hrec := hInit680.2.2
+    simp only [initGoal_680, pm_goal_224, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  have h680_shape : (initSM 680).shape = [32, 32] := hInit680.1
+  -- shapes of shared init tensors on PM side
+  have h862_shapeP : (initPM 862).shape = [1, 8, 32] := by rw [← h862_eq]; exact h862_shape
+  have h680_shapeP : (initPM 680).shape = [32, 32] := by rw [← h680_eq]; exact h680_shape
+  have hchunk0_shape : (chunkPrimDimN 1 4 0 (initPM 862)).shape = [1, 2, 32] := by
+    rw [chunkPrimDimN_shape 1 4 0 (initPM 862) _ h862_shapeP (by omega)]; simp [List.set, List.getD]
+  -- convert reconstruct to allGather (non-scalar shards)
+  have h1055_gather : initSM 1055 = allGatherPrimDimN 1 4 0
+      [initPM 2869, initPM 2870, initPM 2871, initPM 2872] := by
+    rw [h1055_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2869_shape]; decide)
+  -- SM store: dW (output index 1) of BW_linear on full tensors
+  have hsm : (denoteGraph sm_goal_224 initSM) 861 =
+      (bw_linear (initSM 862) (initSM 1055) (initSM 680)).2 := by
+    simp only [sm_goal_224, denoteGraph, List.foldl]
+    rw [applyNode_bw_linear_snd_out (hne := by decide)]
+  -- PM store: 4 ChunkPrim + 4 BW_linear, then CROSS_DP_WRED sums the dW outputs
+  have hpm : (denoteGraph pm_goal_224 initPM) 2886 =
+      cross_dp_wred
+        [(bw_linear (chunkPrimDimN 1 4 0 (initPM 862)) (initPM 2869) (initPM 680)).2,
+         (bw_linear (chunkPrimDimN 1 4 1 (initPM 862)) (initPM 2870) (initPM 680)).2,
+         (bw_linear (chunkPrimDimN 1 4 2 (initPM 862)) (initPM 2871) (initPM 680)).2,
+         (bw_linear (chunkPrimDimN 1 4 3 (initPM 862)) (initPM 2872) (initPM 680)).2] := by
+    simp only [pm_goal_224, denoteGraph, List.foldl]
+    rw [applyNode_cross_dp_wred_out]
+    congr 1
+  -- Key equation: SM dW = DP reduction of per-rank PM dW
+  have hkey : (bw_linear (initSM 862) (initSM 1055) (initSM 680)).2 =
+      cross_dp_wred
+        [(bw_linear (chunkPrimDimN 1 4 0 (initPM 862)) (initPM 2869) (initPM 680)).2,
+         (bw_linear (chunkPrimDimN 1 4 1 (initPM 862)) (initPM 2870) (initPM 680)).2,
+         (bw_linear (chunkPrimDimN 1 4 2 (initPM 862)) (initPM 2871) (initPM 680)).2,
+         (bw_linear (chunkPrimDimN 1 4 3 (initPM 862)) (initPM 2872) (initPM 680)).2] := by
+    rw [h1055_gather, h862_eq, h680_eq]
+    unfold cross_dp_wred
+    exact bw_linear_dw_dp_split_dim1_4_1_2_32 (initPM 862)
+      (initPM 2869) (initPM 2870) (initPM 2871) (initPM 2872) (initPM 680)
+      h862_shapeP h2869_shape h2870_shape h2871_shape h2872_shape h680_shapeP
+  -- Discharge the three conjuncts
+  simp only [goal_224, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape: [32, 32]
+    rw [hsm, hkey]; unfold cross_dp_wred
+    rw [tensorSum_shape,
+        bw_linear_3d_snd_shape 1 2 32 32 (chunkPrimDimN 1 4 0 (initPM 862))
+          (initPM 2869) (initPM 680) hchunk0_shape h2869_shape h680_shapeP]
+  · -- PM tp shapes: [[32, 32]]
+    rw [hpm]; unfold cross_dp_wred
+    rw [show [(tensorSum
+        [(bw_linear (chunkPrimDimN 1 4 0 (initPM 862)) (initPM 2869) (initPM 680)).2,
+         (bw_linear (chunkPrimDimN 1 4 1 (initPM 862)) (initPM 2870) (initPM 680)).2,
+         (bw_linear (chunkPrimDimN 1 4 2 (initPM 862)) (initPM 2871) (initPM 680)).2,
+         (bw_linear (chunkPrimDimN 1 4 3 (initPM 862)) (initPM 2872) (initPM 680)).2]).shape]
+        = [[32, 32]] from by
+      rw [tensorSum_shape,
+          bw_linear_3d_snd_shape 1 2 32 32 (chunkPrimDimN 1 4 0 (initPM 862))
+            (initPM 2869) (initPM 680) hchunk0_shape h2869_shape h680_shapeP]]
+  · -- Value equality: smStore 861 = reconstructWithDim 0 4 0 [pmStore 2886]
+    rw [hsm, hkey, ← hpm, reconstructWithDim_singleton]
+
 end TrainVerify.Denote.GeneratedGoals
+
 
