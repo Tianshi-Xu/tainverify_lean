@@ -56,5 +56,97 @@ def goal_215_cut_initGoals : List LineageGoal := initGoals ++ goal_215_prereqs
 def goal_215_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_215 pm_goal_215 goal_215 sm_goal_215InitEnv pm_goal_215InitEnv goal_215_cut_initGoals
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1600000 in
+-- BW_add dW (second output, tid 847): the gradient g=848 is dim-1 all-gathered from
+-- 4 shards (goal_216).  BW_add's second output is exactly the (broadcast-reduced)
+-- gradient, so smStore 847 = initSM 848 and each per-rank dW = initPM 277x.  The
+-- full dW equals the dim-1 all-gather of the per-rank dW outputs.
+theorem prove_goal_215_cut : goal_215_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Prereqs: goal_216 (g=848 gather dim1), goal_78 (y=671 shared singleton)
+  have hInit216 : InitGoalHolds pm_goal_215.numRanks goal_216 initSM initPM := by
+    apply hInitGoals; simp only [goal_215_cut_initGoals, goal_215_prereqs]; decide
+  have hInit78 : InitGoalHolds pm_goal_215.numRanks goal_78 initSM initPM := by
+    apply hInitGoals; simp only [goal_215_cut_initGoals, goal_215_prereqs]; decide
+  -- goal_216: shard shapes [1,2,32] and reconstruct of g=848 along dim 1
+  have htp216 := hInit216.2.1
+  simp only [goal_216, List.map] at htp216
+  have h2771_shape : (initPM 2771).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp216; simpa using this
+  have h2774_shape : (initPM 2774).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htp216; simpa using this
+  have h2777_shape : (initPM 2777).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp216; simpa using this
+  have h2780_shape : (initPM 2780).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp216; simpa using this
+  have h848_rec : initSM 848 = reconstructWithDim 1 4 0
+      [initPM 2771, initPM 2774, initPM 2777, initPM 2780] := by
+    have hrec := hInit216.2.2
+    simp only [goal_216, pm_goal_215, List.map] at hrec
+    exact hrec
+  have h848_gather : initSM 848 = allGatherPrimDimN 1 4 0
+      [initPM 2771, initPM 2774, initPM 2777, initPM 2780] := by
+    rw [h848_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2771_shape]; decide)
+  have h848_shape : (initSM 848).shape = [1, 8, 32] := hInit216.1
+  -- goal_78: y=671 shared (singleton)
+  have h671_eq : initSM 671 = initPM 671 := by
+    have hrec := hInit78.2.2
+    simp only [goal_78, pm_goal_215, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  have h671_shape : (initSM 671).shape = [1, 8, 32] := hInit78.1
+  have h671_shapeP : (initPM 671).shape = [1, 8, 32] := by rw [← h671_eq]; exact h671_shape
+  -- chunk shapes [1,2,32]
+  have hc : ∀ r, (chunkPrimDimN 1 4 r (initPM 671)).shape = [1, 2, 32] := by
+    intro r
+    rw [chunkPrimDimN_shape 1 4 r (initPM 671) _ h671_shapeP (by omega)]; simp [List.set, List.getD]
+  -- SM store: dW (second output, tid 847) of BW_add on full tensors
+  have hsm : (denoteGraph sm_goal_215 initSM) 847 =
+      (bw_add2 (initSM 848) (initSM 1024) (initSM 671)).2 := by
+    simp only [sm_goal_215, denoteGraph, List.foldl]
+    rw [applyNode_bw_add2_snd_out_g215 _ _ 0 848 1024 671 1025 847 (by decide)]
+  -- SM second output is just the gradient (shapes match)
+  have hdw_sm : (bw_add2 (initSM 848) (initSM 1024) (initSM 671)).2 = initSM 848 :=
+    bw_add2_snd_same_shape_g215 _ _ _ (by rw [h848_shape, h671_shape])
+  -- PM store: dim-1 all-gather of the 4 per-rank dW outputs
+  have hpm : (denoteGraph pm_goal_215 initPM) 847 =
+      allGatherPrimDimN 1 4 0
+        [(bw_add2 (initPM 2771) (initPM 2749) (chunkPrimDimN 1 4 0 (initPM 671))).2,
+         (bw_add2 (initPM 2774) (initPM 2750) (chunkPrimDimN 1 4 1 (initPM 671))).2,
+         (bw_add2 (initPM 2777) (initPM 2751) (chunkPrimDimN 1 4 2 (initPM 671))).2,
+         (bw_add2 (initPM 2780) (initPM 2752) (chunkPrimDimN 1 4 3 (initPM 671))).2] := by
+    simp only [pm_goal_215, denoteGraph, List.foldl]
+    rw [applyNode_allGatherPrimDimN_out]
+    congr 1
+  -- each per-rank second output is just the local gradient shard
+  have hdw_pm0 : (bw_add2 (initPM 2771) (initPM 2749) (chunkPrimDimN 1 4 0 (initPM 671))).2 = initPM 2771 :=
+    bw_add2_snd_same_shape_g215 _ _ _ (by rw [h2771_shape, hc 0])
+  have hdw_pm1 : (bw_add2 (initPM 2774) (initPM 2750) (chunkPrimDimN 1 4 1 (initPM 671))).2 = initPM 2774 :=
+    bw_add2_snd_same_shape_g215 _ _ _ (by rw [h2774_shape, hc 1])
+  have hdw_pm2 : (bw_add2 (initPM 2777) (initPM 2751) (chunkPrimDimN 1 4 2 (initPM 671))).2 = initPM 2777 :=
+    bw_add2_snd_same_shape_g215 _ _ _ (by rw [h2777_shape, hc 2])
+  have hdw_pm3 : (bw_add2 (initPM 2780) (initPM 2752) (chunkPrimDimN 1 4 3 (initPM 671))).2 = initPM 2780 :=
+    bw_add2_snd_same_shape_g215 _ _ _ (by rw [h2780_shape, hc 3])
+  have hpm' : (denoteGraph pm_goal_215 initPM) 847 =
+      allGatherPrimDimN 1 4 0 [initPM 2771, initPM 2774, initPM 2777, initPM 2780] := by
+    rw [hpm, hdw_pm0, hdw_pm1, hdw_pm2, hdw_pm3]
+  -- head shape of the gathered shard list
+  have hRhead : (([initPM 2771, initPM 2774, initPM 2777, initPM 2780] : List Tensor).head?.map
+      (fun t => t.shape)).getD [] = [1, 2, 32] := by
+    simp only [List.head?, Option.map, Option.getD]; exact h2771_shape
+  -- smStore 847 = pmStore 847
+  have hfinal : (denoteGraph sm_goal_215 initSM) 847 = (denoteGraph pm_goal_215 initPM) 847 := by
+    rw [hsm, hdw_sm, h848_gather, ← hpm']
+  -- Discharge the three conjuncts
+  simp only [goal_215, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape: [1, 8, 32]
+    rw [hsm, hdw_sm]; exact h848_shape
+  · -- PM tp shapes: [[1, 8, 32]]
+    rw [hpm', allGatherPrimDimN_shape 1 4 _ [1, 2, 32] hRhead]; decide
+  · -- Value equality: smStore 847 = reconstructWithDim _ _ _ [pmStore 847]
+    rw [reconstructWithDim_singleton]; exact hfinal
+
 end TrainVerify.Denote.GeneratedGoals
 
