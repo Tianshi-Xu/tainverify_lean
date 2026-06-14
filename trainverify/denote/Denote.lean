@@ -6367,6 +6367,49 @@ theorem chunkPrim_allGatherPrimDimN_2_roundtrip_1_8_8 (c0 c1 c2 c3 : Tensor)
       = idx / 8 * 8 + idx % 8 := by omega
   rw [hrank, hflat]
 
+/-- `chunkPrimDimN` (dim 2) undoes `allGatherPrimDimN` (dim 2) on `[1, 8, 8]` shards.
+    This is the dim-2 analogue of `chunkPrimDimN_allGatherPrimDimN_dim1_4_1_2_32`. -/
+theorem chunkPrimDimN_allGatherPrimDimN_dim2_4_1_8_8 (xs : List Tensor) (r : Nat)
+    (hr : r < 4) (hlen : xs.length = 4)
+    (hshape : ∀ x ∈ xs, x.shape = [1, 8, 8]) :
+    chunkPrimDimN 2 4 r (allGatherPrimDimN 2 4 0 xs) = xs.getD r (zeroTensor [1, 8, 8]) := by
+  have hhead : (xs.head?.map (fun t => t.shape)).getD [] = [1, 8, 8] := by
+    match xs, hlen with
+    | x0 :: _, _ =>
+      simp only [List.head?, Option.map, Option.getD]
+      exact hshape x0 (List.mem_cons_self ..)
+  have hgather_shape : (allGatherPrimDimN 2 4 0 xs).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 2 4 xs [1, 8, 8] hhead]
+    simp [List.set, List.getD]
+  have hchunk_shape : (chunkPrimDimN 2 4 r (allGatherPrimDimN 2 4 0 xs)).shape = [1, 8, 8] := by
+    rw [chunkPrimDimN_shape 2 4 r _ _ hgather_shape (by omega)]
+    simp [List.set, List.getD]
+  have hrhs_shape : (xs.getD r (zeroTensor [1, 8, 8])).shape = [1, 8, 8] := by
+    have hr_len : r < xs.length := by omega
+    have helem : xs.getD r (zeroTensor [1, 8, 8]) = xs[r] := by
+      simp [List.getD, List.getElem?_eq_getElem hr_len]
+    rw [helem]
+    exact hshape (xs[r]) (List.getElem_mem hr_len)
+  apply Tensor.ext
+  · rw [hchunk_shape, hrhs_shape]
+  · intro idx hidx
+    rw [hchunk_shape] at hidx
+    have hidx64 : idx < 64 := by simpa [prodShape] using hidx
+    set p := idx / 8 with hpdef
+    set j := idx % 8 with hjdef
+    have hp : p < 8 := by
+      have : idx / 8 < 64 / 8 := Nat.div_lt_div_of_lt_of_dvd ⟨8, rfl⟩ hidx64
+      simpa using this
+    have hj : j < 8 := Nat.mod_lt idx (by omega)
+    have hidx_eq : idx = p * 8 + j := by rw [hpdef, hjdef]; omega
+    rw [hidx_eq]
+    rw [chunk2_4_1_8_32_valAt_pj (allGatherPrimDimN 2 4 0 xs) r p j hgather_shape hr hp hj]
+    have hlt256 : p * 32 + r * 8 + j < 256 := by omega
+    rw [allGatherPrimDimN_2_4_valAt_1_8_8 _ _ hhead hlt256]
+    have hrank : (p * 32 + r * 8 + j) % 32 / 8 = r := by omega
+    have hflat : (p * 32 + r * 8 + j) / 32 * 8 + (p * 32 + r * 8 + j) % 8 = p * 8 + j := by omega
+    rw [hrank, hflat]
+
 /-!
 ## Initial-value alignment (input consistency)
 

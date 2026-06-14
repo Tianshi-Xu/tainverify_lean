@@ -54,5 +54,117 @@ def goal_4_cut_initGoals : List LineageGoal := initGoals ++ goal_4_prereqs
 def goal_4_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_4 pm_goal_4 goal_4 sm_goal_4InitEnv pm_goal_4InitEnv goal_4_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- FW_add distributes over chunk (dim 2) with the second operand re-sharded by AllToAll
+theorem prove_goal_4_cut : goal_4_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract prereqs
+  have hInit564 : InitGoalHolds pm_goal_4.numRanks goal_2 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_4_cut_initGoals, goal_4_prereqs]
+    decide
+  have hInit566 : InitGoalHolds pm_goal_4.numRanks goal_3 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_4_cut_initGoals, goal_4_prereqs]
+    decide
+  -- goal_2: 564 is replicated (singleton) → initSM 564 = initPM 564
+  have h564_eq : initSM 564 = initPM 564 := by
+    have hrec := hInit564.2.2
+    simp only [goal_2, pm_goal_4, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  have h564_shape : (initSM 564).shape = [1, 8, 32] := hInit564.1
+  -- goal_3: 566 is sharded along dim 1 over [1089,1090,1091,1092]
+  have h566_rec : initSM 566 = reconstructWithDim 1 4 0
+      [initPM 1089, initPM 1090, initPM 1091, initPM 1092] := by
+    have hrec := hInit566.2.2
+    simp only [goal_3, pm_goal_4, List.map] at hrec
+    exact hrec
+  have h566_shape : (initSM 566).shape = [1, 8, 32] := hInit566.1
+  have htp_shapes := hInit566.2.1
+  simp only [goal_3, List.map] at htp_shapes
+  have h1089_shape : (initPM 1089).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp_shapes; simpa using this
+  have h566_gather : initSM 566 = allGatherPrimDimN 1 4 0
+      [initPM 1089, initPM 1090, initPM 1091, initPM 1092] := by
+    rw [h566_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1089_shape]; decide)
+  -- AllToAll re-shards 566: allToAll(...) = chunk_r(566) on dim 2
+  have hata : ∀ r, allToAllPrimWithDims 4 r
+      [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2 =
+      chunkPrimDimN 2 4 r (initSM 566) := by
+    intro r
+    simp only [allToAllPrimWithDims]
+    rw [← h566_gather]
+  -- SM store
+  have hsm : (denoteGraph sm_goal_4 initSM) 567 =
+      elemwiseAdd (initSM 564) (initSM 566) := by
+    simp only [sm_goal_4, denoteGraph, List.foldl]
+    rw [applyNode_fw_add2_out]
+  -- PM stores: FW_add(chunk_r 564, allToAll_r 566)
+  have hpm0 : (denoteGraph pm_goal_4 initPM) 1117 =
+      elemwiseAdd (chunkPrimDimN 2 4 0 (initPM 564))
+        (allToAllPrimWithDims 4 0 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2) := by
+    simp only [pm_goal_4, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_add2_out]; congr 1
+  have hpm1 : (denoteGraph pm_goal_4 initPM) 1118 =
+      elemwiseAdd (chunkPrimDimN 2 4 1 (initPM 564))
+        (allToAllPrimWithDims 4 1 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2) := by
+    simp only [pm_goal_4, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_add2_out]; congr 1
+  have hpm2 : (denoteGraph pm_goal_4 initPM) 1119 =
+      elemwiseAdd (chunkPrimDimN 2 4 2 (initPM 564))
+        (allToAllPrimWithDims 4 2 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2) := by
+    simp only [pm_goal_4, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_add2_out]; congr 1
+  have hpm3 : (denoteGraph pm_goal_4 initPM) 1120 =
+      elemwiseAdd (chunkPrimDimN 2 4 3 (initPM 564))
+        (allToAllPrimWithDims 4 3 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2) := by
+    simp only [pm_goal_4, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_fw_add2_out]; congr 1
+  -- Canonical form of the PM stores in terms of initSM shards
+  have hpm0' : (denoteGraph pm_goal_4 initPM) 1117 =
+      elemwiseAdd (chunkPrimDimN 2 4 0 (initSM 564)) (chunkPrimDimN 2 4 0 (initSM 566)) := by
+    rw [hpm0, hata 0, ← h564_eq]
+  have hpm1' : (denoteGraph pm_goal_4 initPM) 1118 =
+      elemwiseAdd (chunkPrimDimN 2 4 1 (initSM 564)) (chunkPrimDimN 2 4 1 (initSM 566)) := by
+    rw [hpm1, hata 1, ← h564_eq]
+  have hpm2' : (denoteGraph pm_goal_4 initPM) 1119 =
+      elemwiseAdd (chunkPrimDimN 2 4 2 (initSM 564)) (chunkPrimDimN 2 4 2 (initSM 566)) := by
+    rw [hpm2, hata 2, ← h564_eq]
+  have hpm3' : (denoteGraph pm_goal_4 initPM) 1120 =
+      elemwiseAdd (chunkPrimDimN 2 4 3 (initSM 564)) (chunkPrimDimN 2 4 3 (initSM 566)) := by
+    rw [hpm3, hata 3, ← h564_eq]
+  -- Key distribution: FW_add over chunk on dim 2
+  have hkey := fw_add_split_dim2_4_1_8_32 (initSM 564) (initSM 566) h564_shape h566_shape
+  -- Chunk shapes
+  have hc564 : ∀ r, (chunkPrimDimN 2 4 r (initSM 564)).shape = [1, 8, 8] := by
+    intro r; rw [chunkPrimDimN_shape 2 4 r _ _ h564_shape (by omega)]; simp [List.set, List.getD]
+  have hc566 : ∀ r, (chunkPrimDimN 2 4 r (initSM 566)).shape = [1, 8, 8] := by
+    intro r; rw [chunkPrimDimN_shape 2 4 r _ _ h566_shape (by omega)]; simp [List.set, List.getD]
+  -- Prove the three conjuncts
+  simp only [goal_4, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]
+    exact elemwiseAdd_shape_of_shapes _ _ _ h564_shape h566_shape
+  · rw [hpm0', hpm1', hpm2', hpm3']
+    have hs0 := elemwiseAdd_shape_of_shapes _ _ _ (hc564 0) (hc566 0)
+    have hs1 := elemwiseAdd_shape_of_shapes _ _ _ (hc564 1) (hc566 1)
+    have hs2 := elemwiseAdd_shape_of_shapes _ _ _ (hc564 2) (hc566 2)
+    have hs3 := elemwiseAdd_shape_of_shapes _ _ _ (hc564 3) (hc566 3)
+    simp [hs0, hs1, hs2, hs3]
+  · rw [hsm, hkey, ← hpm0', ← hpm1', ← hpm2', ← hpm3']
+    symm
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [hpm0']
+    rw [elemwiseAdd_shape_of_shapes _ _ _ (hc564 0) (hc566 0)]; decide
+
 end TrainVerify.Denote.GeneratedGoals
+
 
