@@ -46,5 +46,99 @@ def goal_256_cut_initGoals : List LineageGoal := initGoals ++ goal_256_prereqs
 def goal_256_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_256 pm_goal_256 goal_256 sm_goal_256InitEnv pm_goal_256InitEnv goal_256_cut_initGoals
 
-end TrainVerify.Denote.GeneratedGoals
+set_option maxRecDepth 4096 in
+theorem prove_goal_256_cut : goal_256_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- g input (ins[0] = 896, replicated scalar)
+  have hInitG : InitGoalHolds pm_goal_256.numRanks initGoal_896 initSM initPM := by
+    apply hInitGoals; simp only [goal_256_cut_initGoals, goal_256_prereqs, initGoals]; decide
+  -- x input (ins[1] = 712)
+  have hInitX : InitGoalHolds pm_goal_256.numRanks goal_106 initSM initPM := by
+    apply hInitGoals; simp only [goal_256_cut_initGoals, goal_256_prereqs]; decide
+  -- g replicated
+  have hG_eq : initSM 896 = initPM 896 := by
+    have hrec := hInitG.2.2
+    simp only [initGoal_896, pm_goal_256, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  -- x gather (712, dim 2)
+  have hX_rec : initSM 712 = reconstructWithDim 2 4 0
+      [initPM 3373, initPM 3374, initPM 3375, initPM 3376] := by
+    have hrec := hInitX.2.2
+    simp only [goal_106, pm_goal_256, List.map] at hrec
+    exact hrec
+  have htpX := hInitX.2.1
+  simp only [goal_106, List.map] at htpX
+  have h3373_shape : (initPM 3373).shape = [1, 8, 32] := by
+    have := congrArg List.head? htpX; simpa using this
+  have h3374_shape : (initPM 3374).shape = [1, 8, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htpX; simpa using this
+  have h3375_shape : (initPM 3375).shape = [1, 8, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htpX; simpa using this
+  have h3376_shape : (initPM 3376).shape = [1, 8, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htpX; simpa using this
+  have hX_gather : initSM 712 = allGatherPrimDimN 2 4 0
+      [initPM 3373, initPM 3374, initPM 3375, initPM 3376] := by
+    rw [hX_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h3373_shape]; decide)
+  -- SM store (output 895)
+  have hsm : (denoteGraph sm_goal_256 initSM) 895 = bw_sum (initSM 896) (initSM 712) := by
+    simp only [sm_goal_256, denoteGraph, List.foldl]
+    rw [applyNode_bw_sum_out]
+  -- PM stores
+  have hpm0 : (denoteGraph pm_goal_256 initPM) 3387 = bw_sum (initPM 896) (initPM 3373) := by
+    simp only [pm_goal_256, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.BW_sum", ins := [896, 3376], outs := [3396] } 3387 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_sum", ins := [896, 3375], outs := [3393] } 3387 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_sum", ins := [896, 3374], outs := [3390] } 3387 (by decide)]
+    rw [applyNode_bw_sum_out]
+  have hpm1 : (denoteGraph pm_goal_256 initPM) 3390 = bw_sum (initPM 896) (initPM 3374) := by
+    simp only [pm_goal_256, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.BW_sum", ins := [896, 3376], outs := [3396] } 3390 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_sum", ins := [896, 3375], outs := [3393] } 3390 (by decide)]
+    rw [applyNode_bw_sum_out]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_sum", ins := [896, 3373], outs := [3387] } 896 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_sum", ins := [896, 3373], outs := [3387] } 3374 (by decide)]
+  have hpm2 : (denoteGraph pm_goal_256 initPM) 3393 = bw_sum (initPM 896) (initPM 3375) := by
+    simp only [pm_goal_256, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.BW_sum", ins := [896, 3376], outs := [3396] } 3393 (by decide)]
+    rw [applyNode_bw_sum_out]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_sum", ins := [896, 3374], outs := [3390] } 896 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_sum", ins := [896, 3373], outs := [3387] } 896 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_sum", ins := [896, 3374], outs := [3390] } 3375 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_sum", ins := [896, 3373], outs := [3387] } 3375 (by decide)]
+  have hpm3 : (denoteGraph pm_goal_256 initPM) 3396 = bw_sum (initPM 896) (initPM 3376) := by
+    simp only [pm_goal_256, denoteGraph, List.foldl]
+    rw [applyNode_bw_sum_out]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_sum", ins := [896, 3375], outs := [3393] } 896 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_sum", ins := [896, 3374], outs := [3390] } 896 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_sum", ins := [896, 3373], outs := [3387] } 896 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_sum", ins := [896, 3375], outs := [3393] } 3376 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_sum", ins := [896, 3374], outs := [3390] } 3376 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_sum", ins := [896, 3373], outs := [3387] } 3376 (by decide)]
+  -- Key equation: bw_sum distributes over the dim-2 allGather.
+  have hkey : bw_sum (initSM 896) (initSM 712) =
+      allGatherPrimDimN 2 4 0
+        [bw_sum (initPM 896) (initPM 3373),
+         bw_sum (initPM 896) (initPM 3374),
+         bw_sum (initPM 896) (initPM 3375),
+         bw_sum (initPM 896) (initPM 3376)] := by
+    rw [hG_eq, hX_gather]
+    exact bw_sum_allGatherPrimDimN_split_dim2_4_1_8_32
+      (initPM 896) (initPM 3373) (initPM 3374) (initPM 3375) (initPM 3376)
+      h3373_shape h3374_shape h3375_shape h3376_shape
+  have hout0_shape : (bw_sum (initPM 896) (initPM 3373)).shape = [1, 8, 32] := by
+    rw [bw_sum_shape, h3373_shape]
+  -- Three conjuncts
+  simp only [goal_256, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, bw_sum_shape, hX_gather,
+        allGatherPrimDimN_shape 2 4 [initPM 3373, initPM 3374, initPM 3375, initPM 3376] [1, 8, 32] (by simp [h3373_shape])]
+    decide
+  · rw [hpm0, hpm1, hpm2, hpm3,
+        bw_sum_shape, h3373_shape, bw_sum_shape, h3374_shape,
+        bw_sum_shape, h3375_shape, bw_sum_shape, h3376_shape]
+  · rw [hsm, hkey, hpm0, hpm1, hpm2, hpm3,
+        reconstructWithDim_cons_cons_nonscalar 2 pm_goal_256.numRanks 0 _ _ _ (by rw [hout0_shape]; decide)]
+    rfl
 
+end TrainVerify.Denote.GeneratedGoals
