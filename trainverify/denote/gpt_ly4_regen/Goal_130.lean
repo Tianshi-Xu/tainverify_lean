@@ -58,3 +58,157 @@ def goal_130_stmt_cut : Prop :=
 
 end TrainVerify.Denote.GeneratedGoals
 
+namespace TrainVerify.Denote.GeneratedGoals
+
+set_option maxHeartbeats 8000000 in
+set_option maxRecDepth 1000000 in
+theorem prove_goal_130_cut : goal_130_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- PM input shapes (g shards, y shards, x replicated)
+  have h1426_shape : (initPM 1426).shape = [1, 4, 8, 2] := hPmInit 1426 [1, 4, 8, 2] (by decide)
+  have h1428_shape : (initPM 1428).shape = [1, 4, 8, 2] := hPmInit 1428 [1, 4, 8, 2] (by decide)
+  have h1430_shape : (initPM 1430).shape = [1, 4, 8, 2] := hPmInit 1430 [1, 4, 8, 2] (by decide)
+  have h1432_shape : (initPM 1432).shape = [1, 4, 8, 2] := hPmInit 1432 [1, 4, 8, 2] (by decide)
+  have h1309_shape : (initPM 1309).shape = [1, 4, 8, 2] := hPmInit 1309 [1, 4, 8, 2] (by decide)
+  have h1310_shape : (initPM 1310).shape = [1, 4, 8, 2] := hPmInit 1310 [1, 4, 8, 2] (by decide)
+  have h1311_shape : (initPM 1311).shape = [1, 4, 8, 2] := hPmInit 1311 [1, 4, 8, 2] (by decide)
+  have h1312_shape : (initPM 1312).shape = [1, 4, 8, 2] := hPmInit 1312 [1, 4, 8, 2] (by decide)
+  -- goal_131: tensor 747 (= g) is the dim-3 gather of shards 1426,1428,1430,1432
+  have hInit747 : InitGoalHolds pm_goal_130.numRanks goal_131 initSM initPM := by
+    apply hInitGoals; decide
+  have h747_gather : initSM 747 = allGatherPrimDimN 3 4 0
+      [initPM 1426, initPM 1428, initPM 1430, initPM 1432] := by
+    have hrec := hInit747.2.2
+    simp only [goal_131, pm_goal_130, List.map] at hrec
+    rw [hrec]
+    exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h1426_shape]; decide)
+  -- goal_14: tensor 582 (= y) is the dim-3 gather of shards 1309,1310,1311,1312
+  have hInit582 : InitGoalHolds pm_goal_130.numRanks goal_14 initSM initPM := by
+    apply hInitGoals; decide
+  have h582_gather : initSM 582 = allGatherPrimDimN 3 4 0
+      [initPM 1309, initPM 1310, initPM 1311, initPM 1312] := by
+    have hrec := hInit582.2.2
+    simp only [goal_14, pm_goal_130, List.map] at hrec
+    rw [hrec]
+    exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h1309_shape]; decide)
+  -- SM store 746 = dX = (bw_matmul g x y).1 = batchedMatmul g (transpose2d y)
+  have hsm : denoteGraph sm_goal_130 initSM 746 =
+      (bw_matmul (initSM 747) (initSM 586) (initSM 582)).1 := by
+    simp only [sm_goal_130, denoteGraph, List.foldl]
+    rw [applyNode_bw_matmul_fst_out _ _ 0 747 586 582 746 742 (by decide)]
+  -- Key: SM dX = AllReduce of per-rank dX (contraction dim split → AllReduce)
+  have hsmkey : (bw_matmul (initSM 747) (initSM 586) (initSM 582)).1 =
+      allReducePrim 4 0 [(bw_matmul (initPM 1426) (initPM 586) (initPM 1309)).1,
+        (bw_matmul (initPM 1428) (initPM 586) (initPM 1310)).1,
+        (bw_matmul (initPM 1430) (initPM 586) (initPM 1311)).1,
+        (bw_matmul (initPM 1432) (initPM 586) (initPM 1312)).1] := by
+    show batchedMatmul (initSM 747) (transpose2d (initSM 582)) =
+      allReducePrim 4 0 [batchedMatmul (initPM 1426) (transpose2d (initPM 1309)),
+        batchedMatmul (initPM 1428) (transpose2d (initPM 1310)),
+        batchedMatmul (initPM 1430) (transpose2d (initPM 1311)),
+        batchedMatmul (initPM 1432) (transpose2d (initPM 1312))]
+    rw [h747_gather, h582_gather]
+    exact bw_matmul_fst_split_dW_1_4_8_8 (initPM 1426) (initPM 1428) (initPM 1430) (initPM 1432)
+      (initPM 1309) (initPM 1310) (initPM 1311) (initPM 1312)
+      h1426_shape h1428_shape h1430_shape h1432_shape
+      h1309_shape h1310_shape h1311_shape h1312_shape
+  -- PM per-rank dX stores
+  have hpm0 : denoteGraph pm_goal_130 initPM 1431 =
+      (bw_matmul (initPM 1426) (initPM 586) (initPM 1309)).1 := by
+    simp only [pm_goal_130, denoteGraph, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_matmul_fst_out _ _ 0 1426 586 1309 1431 1322 (by decide)]
+  have hpm1 : denoteGraph pm_goal_130 initPM 1429 =
+      (bw_matmul (initPM 1428) (initPM 586) (initPM 1310)).1 := by
+    simp only [pm_goal_130, denoteGraph, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_matmul_fst_out _ _ 1 1428 586 1310 1429 1324 (by decide)]
+    congr 1 <;> (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)])
+  have hpm2 : denoteGraph pm_goal_130 initPM 1427 =
+      (bw_matmul (initPM 1430) (initPM 586) (initPM 1311)).1 := by
+    simp only [pm_goal_130, denoteGraph, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_matmul_fst_out _ _ 2 1430 586 1311 1427 1326 (by decide)]
+    congr 1 <;> (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)])
+  have hpm3 : denoteGraph pm_goal_130 initPM 1425 =
+      (bw_matmul (initPM 1432) (initPM 586) (initPM 1312)).1 := by
+    simp only [pm_goal_130, denoteGraph, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_matmul_fst_out _ _ 3 1432 586 1312 1425 1328 (by decide)]
+    congr 1 <;> (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)])
+  -- PM 746 = AllReduce of per-rank dX
+  have hpm_reduce : denoteGraph pm_goal_130 initPM 746 =
+      allReducePrim 4 0 [(bw_matmul (initPM 1426) (initPM 586) (initPM 1309)).1,
+        (bw_matmul (initPM 1428) (initPM 586) (initPM 1310)).1,
+        (bw_matmul (initPM 1430) (initPM 586) (initPM 1311)).1,
+        (bw_matmul (initPM 1432) (initPM 586) (initPM 1312)).1] := by
+    have hstep : denoteGraph pm_goal_130 initPM 746 =
+        allReducePrim 4 0 [denoteGraph pm_goal_130 initPM 1431,
+          denoteGraph pm_goal_130 initPM 1429,
+          denoteGraph pm_goal_130 initPM 1427,
+          denoteGraph pm_goal_130 initPM 1425] := by
+      simp only [pm_goal_130, denoteGraph, List.foldl]
+      repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+      rw [applyNode_allReducePrim_out]
+      simp only [List.map]
+      congr 1 <;> (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)])
+    rw [hstep, hpm0, hpm1, hpm2, hpm3]
+  -- smStore746 = pmStore746
+  have hsm_eq_pm : denoteGraph sm_goal_130 initSM 746 = denoteGraph pm_goal_130 initPM 746 := by
+    rw [hsm, hsmkey, hpm_reduce]
+  -- pm746 shape [1,4,8,8]
+  have hpm746_shape : (denoteGraph pm_goal_130 initPM 746).shape = [1, 4, 8, 8] := by
+    rw [hpm_reduce, allReducePrim_shape 4 0 _ _ rfl]
+    show (batchedMatmul (initPM 1426) (transpose2d (initPM 1309))).shape = [1, 4, 8, 8]
+    exact batchedMatmul_shape_1_4_8_2_1_4_2_8 _ _ h1426_shape
+      (transpose2d_shape_1_4_8_2 _ h1309_shape)
+  -- PM chunk stores (dim 2)
+  have hchunk0 : denoteGraph pm_goal_130 initPM 1406 =
+      chunkPrimDimN 2 4 0 (denoteGraph pm_goal_130 initPM 746) := by
+    simp only [pm_goal_130, denoteGraph, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_chunkPrimDimN_out]
+    congr 1 <;> (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)])
+  have hchunk1 : denoteGraph pm_goal_130 initPM 1408 =
+      chunkPrimDimN 2 4 1 (denoteGraph pm_goal_130 initPM 746) := by
+    simp only [pm_goal_130, denoteGraph, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_chunkPrimDimN_out]
+    congr 1 <;> (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)])
+  have hchunk2 : denoteGraph pm_goal_130 initPM 1410 =
+      chunkPrimDimN 2 4 2 (denoteGraph pm_goal_130 initPM 746) := by
+    simp only [pm_goal_130, denoteGraph, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_chunkPrimDimN_out]
+    congr 1 <;> (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)])
+  have hchunk3 : denoteGraph pm_goal_130 initPM 1412 =
+      chunkPrimDimN 2 4 3 (denoteGraph pm_goal_130 initPM 746) := by
+    simp only [pm_goal_130, denoteGraph, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_chunkPrimDimN_out]
+    congr 1 <;> (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)])
+  -- Discharge 3 conjuncts
+  simp only [goal_130, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · show (denoteGraph sm_goal_130 initSM 746).shape = _
+    rw [hsm_eq_pm, hpm746_shape]
+  · show [(denoteGraph pm_goal_130 initPM 1406).shape, (denoteGraph pm_goal_130 initPM 1408).shape,
+      (denoteGraph pm_goal_130 initPM 1410).shape, (denoteGraph pm_goal_130 initPM 1412).shape] = _
+    rw [hchunk0, hchunk1, hchunk2, hchunk3]
+    rw [chunkPrimDimN_shape 2 4 0 _ _ hpm746_shape (by omega),
+        chunkPrimDimN_shape 2 4 1 _ _ hpm746_shape (by omega),
+        chunkPrimDimN_shape 2 4 2 _ _ hpm746_shape (by omega),
+        chunkPrimDimN_shape 2 4 3 _ _ hpm746_shape (by omega)]
+    simp [List.set, List.getD]
+  · show denoteGraph sm_goal_130 initSM 746 = reconstructWithDim _ _ _ _
+    rw [hchunk0, hchunk1, hchunk2, hchunk3]
+    have hchunk0_ne : (chunkPrimDimN 2 4 0 (denoteGraph pm_goal_130 initPM 746)).shape ≠ [1] := by
+      rw [chunkPrimDimN_shape 2 4 0 _ _ hpm746_shape (by omega)]
+      simp [List.set, List.getD]
+    rw [reconstructWithDim_cons_cons_nonscalar _ _ _ _ _ _ hchunk0_ne]
+    rw [show pm_goal_130.numRanks = 4 from rfl]
+    rw [allGatherPrimDimN_chunkPrimDimN_id_dim2_4_8_8 _ hpm746_shape]
+    exact hsm_eq_pm
+
+end TrainVerify.Denote.GeneratedGoals
+

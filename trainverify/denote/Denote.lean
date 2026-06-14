@@ -13784,4 +13784,163 @@ theorem bw_linear_dx_csplit_dim1_4_1_8_8_g276
 
 
 
+/-- Shape of `batchedMatmul` on `[1,4,8,2] @ [1,4,2,8] -> [1,4,8,8]`. -/
+theorem batchedMatmul_shape_1_4_8_2_1_4_2_8 (a b : Tensor)
+    (ha : a.shape = [1, 4, 8, 2]) (hb : b.shape = [1, 4, 2, 8]) :
+    (batchedMatmul a b).shape = [1, 4, 8, 8] := by
+  unfold batchedMatmul
+  simp only [ha, hb, List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append,
+    Tensor.mkShape]
+
+/-- `valAt` of `batchedMatmul a b` for `a : [1,4,8,2]`, `b : [1,4,2,8]`, output `[1,4,8,8]`
+(contraction over the inner dimension of size 2). -/
+theorem batchedMatmul_valAt_1_4_8_2_1_4_2_8 (a b : Tensor) (loc : Nat)
+    (ha : a.shape = [1, 4, 8, 2]) (hb : b.shape = [1, 4, 2, 8]) (hloc : loc < 256) :
+    valAt (batchedMatmul a b) loc =
+      ∑ l ∈ Finset.range 2,
+        valAt a (loc / 64 * 16 + loc % 64 / 8 * 2 + l) *
+          valAt b (loc / 64 * 16 + l * 8 + loc % 8) := by
+  have key : batchedMatmul a b = Tensor.mkShape [1, 4, 8, 8] (fun outIdx =>
+      ∑ l ∈ Finset.range 2,
+        valAt a (outIdx.1 / (8 * 8) * (8 * 2) + outIdx.1 % (8 * 8) / 8 * 2 + l) *
+          valAt b (outIdx.1 / (8 * 8) * (2 * 8) + l * 8 + outIdx.1 % (8 * 8) % 8)) := by
+    unfold batchedMatmul
+    rw [ha, hb]
+    rfl
+  rw [key]
+  have hloc' : loc < prodShape ([1, 4, 8, 8] : Shape) := by simp [prodShape]; omega
+  rw [valAt_of_lt _ _ (by simp [Tensor.mkShape]; exact hloc')]
+  show ∑ l ∈ Finset.range 2,
+        valAt a (loc / (8 * 8) * (8 * 2) + loc % (8 * 8) / 8 * 2 + l) *
+          valAt b (loc / (8 * 8) * (2 * 8) + l * 8 + loc % (8 * 8) % 8) = _
+  apply Finset.sum_congr rfl
+  intro l _
+  congr 2 <;> omega
+
+/-! Flat-index arithmetic helpers for `bw_matmul_fst_split_dW_1_4_8_8` (proven in an empty
+context over fresh variables so `omega` stays robust). -/
+
+private theorem dw_aux_mod8 (a m l : Nat) (hl : l < 8) :
+    (a * 64 + m * 8 + l) % 8 / 2 = l / 2 := by omega
+
+private theorem dw_aux_div8 (a m l : Nat) (hl : l < 8) :
+    (a * 64 + m * 8 + l) / 8 * 2 + (a * 64 + m * 8 + l) % 8 % 2 = a * 16 + m * 2 + l % 2 := by omega
+
+set_option maxHeartbeats 6400000 in
+-- heavy flat-index arithmetic across matmul / transpose / two gathers
+theorem bw_matmul_fst_split_dW_1_4_8_8 (g0 g1 g2 g3 y0 y1 y2 y3 : Tensor)
+    (hg0 : g0.shape = [1, 4, 8, 2]) (hg1 : g1.shape = [1, 4, 8, 2])
+    (hg2 : g2.shape = [1, 4, 8, 2]) (hg3 : g3.shape = [1, 4, 8, 2])
+    (hy0 : y0.shape = [1, 4, 8, 2]) (hy1 : y1.shape = [1, 4, 8, 2])
+    (hy2 : y2.shape = [1, 4, 8, 2]) (hy3 : y3.shape = [1, 4, 8, 2]) :
+    batchedMatmul (allGatherPrimDimN 3 4 0 [g0, g1, g2, g3])
+        (transpose2d (allGatherPrimDimN 3 4 0 [y0, y1, y2, y3])) =
+      allReducePrim 4 0
+        [batchedMatmul g0 (transpose2d y0), batchedMatmul g1 (transpose2d y1),
+         batchedMatmul g2 (transpose2d y2), batchedMatmul g3 (transpose2d y3)] := by
+  have hhead_g : (([g0, g1, g2, g3] : List Tensor).head?.map (fun t => t.shape)).getD [] =
+      [1, 4, 8, 2] := by simp [hg0]
+  have hhead_y : (([y0, y1, y2, y3] : List Tensor).head?.map (fun t => t.shape)).getD [] =
+      [1, 4, 8, 2] := by simp [hy0]
+  have hgfull : (allGatherPrimDimN 3 4 0 [g0, g1, g2, g3]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 3 4 _ _ hhead_g]; simp [List.set, List.getD]
+  have hyfull : (allGatherPrimDimN 3 4 0 [y0, y1, y2, y3]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 3 4 _ _ hhead_y]; simp [List.set, List.getD]
+  have htYfull : (transpose2d (allGatherPrimDimN 3 4 0 [y0, y1, y2, y3])).shape = [1, 4, 8, 8] :=
+    transpose2d_shape_1_4_8_8 _ hyfull
+  -- piece shape (each rank's product is [1,4,8,8])
+  have hP0_shape : (batchedMatmul g0 (transpose2d y0)).shape = [1, 4, 8, 8] :=
+    batchedMatmul_shape_1_4_8_2_1_4_2_8 _ _ hg0 (transpose2d_shape_1_4_8_2 _ hy0)
+  -- LHS shape
+  have hlhs_shape : (batchedMatmul (allGatherPrimDimN 3 4 0 [g0, g1, g2, g3])
+      (transpose2d (allGatherPrimDimN 3 4 0 [y0, y1, y2, y3]))).shape = [1, 4, 8, 8] := by
+    unfold batchedMatmul
+    simp only [hgfull, htYfull, List.reverse_cons, List.reverse_nil, List.nil_append,
+      List.cons_append, Tensor.mkShape]
+  -- RHS shape
+  have hrhs_shape : (allReducePrim 4 0
+      [batchedMatmul g0 (transpose2d y0), batchedMatmul g1 (transpose2d y1),
+       batchedMatmul g2 (transpose2d y2), batchedMatmul g3 (transpose2d y3)]).shape =
+      [1, 4, 8, 8] := by
+    rw [allReducePrim_shape 4 0 _ _ rfl]; exact hP0_shape
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  -- per-rank value lemma (each rank: g_s @ y_sᵀ contracted over inner dim 2)
+  have hPval : ∀ (gs ys : Tensor), gs.shape = [1, 4, 8, 2] → ys.shape = [1, 4, 8, 2] →
+      valAt (batchedMatmul gs (transpose2d ys)) idx =
+        ∑ l ∈ Finset.range 2,
+          valAt gs (idx / 64 * 16 + idx % 64 / 8 * 2 + l) *
+            valAt ys (idx / 64 * 16 + idx % 8 * 2 + l) := by
+    intro gs ys hgs hys
+    rw [batchedMatmul_valAt_1_4_8_2_1_4_2_8 gs (transpose2d ys) idx hgs
+        (transpose2d_shape_1_4_8_2 _ hys) hidx256]
+    apply Finset.sum_congr rfl
+    intro l hl
+    have hl2 : l < 2 := Finset.mem_range.mp hl
+    rw [transpose2d_valAt_1_4_8_2 ys (idx / 64 * 16 + l * 8 + idx % 8) hys (by omega)]
+    have hyidx : (idx / 64 * 16 + l * 8 + idx % 8) / 16 * 16 +
+        (idx / 64 * 16 + l * 8 + idx % 8) % 8 * 2 +
+        (idx / 64 * 16 + l * 8 + idx % 8) % 16 / 8 = idx / 64 * 16 + idx % 8 * 2 + l := by omega
+    rw [hyidx]
+  -- LHS as a fw_matmul value
+  rw [show batchedMatmul (allGatherPrimDimN 3 4 0 [g0, g1, g2, g3])
+        (transpose2d (allGatherPrimDimN 3 4 0 [y0, y1, y2, y3])) =
+        fw_matmul (allGatherPrimDimN 3 4 0 [g0, g1, g2, g3])
+          (transpose2d (allGatherPrimDimN 3 4 0 [y0, y1, y2, y3])) from rfl,
+      fw_matmul_valAt_1_4_8_8 _ _ idx hgfull htYfull hidx256]
+  -- rewrite the LHS sum termwise into shard form
+  have hA : ∀ l, l < 8 →
+      valAt (allGatherPrimDimN 3 4 0 [g0, g1, g2, g3]) (idx / 64 * 64 + idx % 64 / 8 * 8 + l) *
+        valAt (transpose2d (allGatherPrimDimN 3 4 0 [y0, y1, y2, y3]))
+          (idx / 64 * 64 + l * 8 + idx % 8) =
+      valAt ([g0, g1, g2, g3].getD (l / 2) (zeroTensor [1, 4, 8, 2]))
+          (idx / 64 * 16 + idx % 64 / 8 * 2 + l % 2) *
+        valAt ([y0, y1, y2, y3].getD (l / 2) (zeroTensor [1, 4, 8, 2]))
+          (idx / 64 * 16 + idx % 8 * 2 + l % 2) := by
+    intro l hl
+    rw [allGatherPrimDimN_3_4_valAt_1_4_8_2 [g0, g1, g2, g3]
+        (idx / 64 * 64 + idx % 64 / 8 * 8 + l) hhead_g (by omega)]
+    rw [transpose2d_valAt_1_4_8_8 (allGatherPrimDimN 3 4 0 [y0, y1, y2, y3])
+        (idx / 64 * 64 + l * 8 + idx % 8) hyfull (by omega)]
+    have hRsimp : (idx / 64 * 64 + l * 8 + idx % 8) / 64 * 64 +
+        (idx / 64 * 64 + l * 8 + idx % 8) % 8 * 8 +
+        (idx / 64 * 64 + l * 8 + idx % 8) % 64 / 8 = idx / 64 * 64 + idx % 8 * 8 + l := by omega
+    rw [hRsimp]
+    rw [allGatherPrimDimN_3_4_valAt_1_4_8_2 [y0, y1, y2, y3]
+        (idx / 64 * 64 + idx % 8 * 8 + l) hhead_y (by omega)]
+    have eg1 : (idx / 64 * 64 + idx % 64 / 8 * 8 + l) % 8 / 2 = l / 2 :=
+      dw_aux_mod8 (idx / 64) (idx % 64 / 8) l (by omega)
+    have eg2 : (idx / 64 * 64 + idx % 64 / 8 * 8 + l) / 8 * 2 +
+        (idx / 64 * 64 + idx % 64 / 8 * 8 + l) % 8 % 2 =
+        idx / 64 * 16 + idx % 64 / 8 * 2 + l % 2 :=
+      dw_aux_div8 (idx / 64) (idx % 64 / 8) l (by omega)
+    have ey1 : (idx / 64 * 64 + idx % 8 * 8 + l) % 8 / 2 = l / 2 :=
+      dw_aux_mod8 (idx / 64) (idx % 8) l (by omega)
+    have ey2 : (idx / 64 * 64 + idx % 8 * 8 + l) / 8 * 2 +
+        (idx / 64 * 64 + idx % 8 * 8 + l) % 8 % 2 =
+        idx / 64 * 16 + idx % 8 * 2 + l % 2 :=
+      dw_aux_div8 (idx / 64) (idx % 8) l (by omega)
+    rw [eg1, eg2, ey1, ey2]
+  rw [show (∑ l ∈ Finset.range 8,
+        valAt (allGatherPrimDimN 3 4 0 [g0, g1, g2, g3]) (idx / 64 * 64 + idx % 64 / 8 * 8 + l) *
+          valAt (transpose2d (allGatherPrimDimN 3 4 0 [y0, y1, y2, y3]))
+            (idx / 64 * 64 + l * 8 + idx % 8)) =
+      ∑ l ∈ Finset.range 8,
+        valAt ([g0, g1, g2, g3].getD (l / 2) (zeroTensor [1, 4, 8, 2]))
+            (idx / 64 * 16 + idx % 64 / 8 * 2 + l % 2) *
+          valAt ([y0, y1, y2, y3].getD (l / 2) (zeroTensor [1, 4, 8, 2]))
+            (idx / 64 * 16 + idx % 8 * 2 + l % 2)
+      from Finset.sum_congr rfl (fun l hl => hA l (Finset.mem_range.mp hl))]
+  -- RHS: unfold allReduce sum
+  rw [allReducePrim_valAt 4 0 _ idx _ rfl (by rw [hP0_shape]; simpa [prodShape] using hidx256)]
+  simp only [List.foldl]
+  rw [hPval g0 y0 hg0 hy0, hPval g1 y1 hg1 hy1, hPval g2 y2 hg2 hy2, hPval g3 y3 hg3 hy3]
+  -- expand all finite sums and getD selections, then close by ring
+  simp only [Finset.sum_range_succ, Finset.sum_range_zero,
+    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
+    Nat.reduceDiv, Nat.reduceMod, Nat.reduceAdd, Nat.add_zero, Nat.zero_add]
+  ring
+
+
 end TrainVerify.Denote
