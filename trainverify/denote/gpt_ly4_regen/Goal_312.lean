@@ -55,5 +55,131 @@ def goal_312_cut_initGoals : List LineageGoal := initGoals ++ goal_312_prereqs
 def goal_312_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_312 pm_goal_312 goal_312 sm_goal_312InitEnv pm_goal_312InitEnv goal_312_cut_initGoals
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 800000 in
+-- BW_add dX (first output, tid 1068): the gradient g=890 is dim-1 reconstructed from
+-- 4 shards (goal_251).  BW_add's first output is exactly the gradient, so smStore 1068
+-- = initSM 890 and each per-rank dX = initPM 333x = the gradient shard.  The full dX
+-- equals the dim-1 reconstruct of the per-rank dX outputs (= goal_251's relation).
+theorem prove_goal_312_cut : goal_312_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Prereqs: goal_251 (g=890 reconstruct dim1), goal_311 (x=1067 reconstruct dim1)
+  have hInit251 : InitGoalHolds pm_goal_312.numRanks goal_251 initSM initPM := by
+    apply hInitGoals; simp only [goal_312_cut_initGoals, goal_312_prereqs]; decide
+  have hInit311 : InitGoalHolds pm_goal_312.numRanks goal_311 initSM initPM := by
+    apply hInitGoals; simp only [goal_312_cut_initGoals, goal_312_prereqs]; decide
+  -- SM gradient shape and reconstruct (goal_251)
+  have h890_shape : (initSM 890).shape = [1, 8, 32] := hInit251.1
+  have h890_rec : initSM 890 = reconstructWithDim 1 4 0
+      [initPM 3335, initPM 3338, initPM 3341, initPM 3344] := by
+    have hrec := hInit251.2.2
+    simp only [goal_251, pm_goal_312, List.map] at hrec
+    exact hrec
+  have htp251 := hInit251.2.1
+  simp only [goal_251, List.map] at htp251
+  have h3335_shape : (initPM 3335).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp251; simpa using this
+  have h3338_shape : (initPM 3338).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htp251; simpa using this
+  have h3341_shape : (initPM 3341).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp251; simpa using this
+  have h3344_shape : (initPM 3344).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp251; simpa using this
+  -- SM second input shape and PM shards (goal_311)
+  have h1067_shape : (initSM 1067).shape = [1, 8, 32] := hInit311.1
+  have htp311 := hInit311.2.1
+  simp only [goal_311, List.map] at htp311
+  have h3313_shape : (initPM 3313).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp311; simpa using this
+  have h3314_shape : (initPM 3314).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htp311; simpa using this
+  have h3315_shape : (initPM 3315).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp311; simpa using this
+  have h3316_shape : (initPM 3316).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp311; simpa using this
+  -- SM store: dX (first output, tid 1068) = initSM 890 (the gradient)
+  have hsm : (denoteGraph sm_goal_312 initSM) 1068 =
+      (bw_add2 (initSM 890) (initSM 1067) (initSM 706)).1 := by
+    simp only [sm_goal_312, denoteGraph, List.foldl]
+    rw [applyNode_bw_add2_fst_out _ _ 0 890 1067 706 1068 889 (by decide)]
+  have hsm_val : (denoteGraph sm_goal_312 initSM) 1068 = initSM 890 := by
+    rw [hsm]; exact bw_add2_fst_same_shape _ _ _ (by rw [h890_shape, h1067_shape])
+  -- PM stores: each per-rank dX = the gradient shard initPM 333x
+  have hpm0 : (denoteGraph pm_goal_312 initPM) 3333 = initPM 3335 := by
+    simp only [pm_goal_312, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.BW_add", ins := [3344, 3316, 3320], outs := [3342, 3343] } 3333 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_add", ins := [3341, 3315, 3319], outs := [3339, 3340] } 3333 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_add", ins := [3338, 3314, 3318], outs := [3336, 3337] } 3333 (by decide)]
+    rw [applyNode_bw_add2_fst_out _ _ 0 3335 3313 3317 3333 3334 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.ChunkPrim", ins := [706], outs := [3320], params := [1] } 3335 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.ChunkPrim", ins := [706], outs := [3319], params := [1] } 3335 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.ChunkPrim", ins := [706], outs := [3318], params := [1] } 3335 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.ChunkPrim", ins := [706], outs := [3317], params := [1] } 3335 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.ChunkPrim", ins := [706], outs := [3320], params := [1] } 3313 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.ChunkPrim", ins := [706], outs := [3319], params := [1] } 3313 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.ChunkPrim", ins := [706], outs := [3318], params := [1] } 3313 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.ChunkPrim", ins := [706], outs := [3317], params := [1] } 3313 (by decide)]
+    exact bw_add2_fst_same_shape _ _ _ (by rw [h3335_shape, h3313_shape])
+  have hpm1 : (denoteGraph pm_goal_312 initPM) 3336 = initPM 3338 := by
+    simp only [pm_goal_312, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.BW_add", ins := [3344, 3316, 3320], outs := [3342, 3343] } 3336 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_add", ins := [3341, 3315, 3319], outs := [3339, 3340] } 3336 (by decide)]
+    rw [applyNode_bw_add2_fst_out _ _ 1 3338 3314 3318 3336 3337 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_add", ins := [3335, 3313, 3317], outs := [3333, 3334] } 3338 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.ChunkPrim", ins := [706], outs := [3320], params := [1] } 3338 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.ChunkPrim", ins := [706], outs := [3319], params := [1] } 3338 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.ChunkPrim", ins := [706], outs := [3318], params := [1] } 3338 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.ChunkPrim", ins := [706], outs := [3317], params := [1] } 3338 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_add", ins := [3335, 3313, 3317], outs := [3333, 3334] } 3314 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.ChunkPrim", ins := [706], outs := [3320], params := [1] } 3314 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.ChunkPrim", ins := [706], outs := [3319], params := [1] } 3314 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.ChunkPrim", ins := [706], outs := [3318], params := [1] } 3314 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.ChunkPrim", ins := [706], outs := [3317], params := [1] } 3314 (by decide)]
+    exact bw_add2_fst_same_shape _ _ _ (by rw [h3338_shape, h3314_shape])
+  have hpm2 : (denoteGraph pm_goal_312 initPM) 3339 = initPM 3341 := by
+    simp only [pm_goal_312, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.BW_add", ins := [3344, 3316, 3320], outs := [3342, 3343] } 3339 (by decide)]
+    rw [applyNode_bw_add2_fst_out _ _ 2 3341 3315 3319 3339 3340 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_add", ins := [3338, 3314, 3318], outs := [3336, 3337] } 3341 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_add", ins := [3335, 3313, 3317], outs := [3333, 3334] } 3341 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.ChunkPrim", ins := [706], outs := [3320], params := [1] } 3341 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.ChunkPrim", ins := [706], outs := [3319], params := [1] } 3341 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.ChunkPrim", ins := [706], outs := [3318], params := [1] } 3341 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.ChunkPrim", ins := [706], outs := [3317], params := [1] } 3341 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_add", ins := [3338, 3314, 3318], outs := [3336, 3337] } 3315 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_add", ins := [3335, 3313, 3317], outs := [3333, 3334] } 3315 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.ChunkPrim", ins := [706], outs := [3320], params := [1] } 3315 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.ChunkPrim", ins := [706], outs := [3319], params := [1] } 3315 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.ChunkPrim", ins := [706], outs := [3318], params := [1] } 3315 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.ChunkPrim", ins := [706], outs := [3317], params := [1] } 3315 (by decide)]
+    exact bw_add2_fst_same_shape _ _ _ (by rw [h3341_shape, h3315_shape])
+  have hpm3 : (denoteGraph pm_goal_312 initPM) 3342 = initPM 3344 := by
+    simp only [pm_goal_312, denoteGraph, List.foldl]
+    rw [applyNode_bw_add2_fst_out _ _ 3 3344 3316 3320 3342 3343 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_add", ins := [3341, 3315, 3319], outs := [3339, 3340] } 3344 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_add", ins := [3338, 3314, 3318], outs := [3336, 3337] } 3344 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_add", ins := [3335, 3313, 3317], outs := [3333, 3334] } 3344 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.ChunkPrim", ins := [706], outs := [3320], params := [1] } 3344 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.ChunkPrim", ins := [706], outs := [3319], params := [1] } 3344 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.ChunkPrim", ins := [706], outs := [3318], params := [1] } 3344 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.ChunkPrim", ins := [706], outs := [3317], params := [1] } 3344 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_add", ins := [3341, 3315, 3319], outs := [3339, 3340] } 3316 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_add", ins := [3338, 3314, 3318], outs := [3336, 3337] } 3316 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_add", ins := [3335, 3313, 3317], outs := [3333, 3334] } 3316 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.ChunkPrim", ins := [706], outs := [3320], params := [1] } 3316 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.ChunkPrim", ins := [706], outs := [3319], params := [1] } 3316 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.ChunkPrim", ins := [706], outs := [3318], params := [1] } 3316 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.ChunkPrim", ins := [706], outs := [3317], params := [1] } 3316 (by decide)]
+    exact bw_add2_fst_same_shape _ _ _ (by rw [h3344_shape, h3316_shape])
+  -- Discharge the three conjuncts
+  simp only [goal_312, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape: [1, 8, 32]
+    rw [hsm_val]; exact h890_shape
+  · -- PM tp shapes: [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]]
+    rw [hpm0, hpm1, hpm2, hpm3, h3335_shape, h3338_shape, h3341_shape, h3344_shape]
+  · -- Value equality: smStore 1068 = reconstructWithDim 1 4 0 [pmStores]
+    rw [hsm_val, hpm0, hpm1, hpm2, hpm3]; exact h890_rec
+
 end TrainVerify.Denote.GeneratedGoals
 
