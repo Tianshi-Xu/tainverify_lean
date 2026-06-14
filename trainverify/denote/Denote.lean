@@ -13817,6 +13817,117 @@ theorem batchedMatmul_valAt_1_4_8_2_1_4_2_8 (a b : Tensor) (loc : Nat)
   intro l _
   congr 2 <;> omega
 
+/-! ## FW_matmul contraction-dim split (`[1,4,8,8] = [1,4,8,2] @ [1,4,2,8]` shards summed)
+
+`FW_matmul` with both inputs partitioned along their shared contraction dimension
+(`x` along dim 3 into 4 shards `[1,4,8,2]`, `y` along dim 2 into 4 shards `[1,4,2,8]`).
+Each rank computes the local `fw_matmul` of its shards (shape `[1,4,8,8]`), and the full
+result is the `allReducePrim` sum of the per-rank products. -/
+
+/-- Split `Finset.range 8` into `4 × 2` for the contraction-dim reindex. -/
+theorem sum_range_split_4_2 (f : ℕ → Scalar) :
+    ∑ j ∈ Finset.range 8, f j =
+    ∑ r ∈ Finset.range 4, ∑ lc ∈ Finset.range 2, f (r * 2 + lc) := by
+  simp only [Finset.sum_range_succ, Finset.sum_range_zero, zero_add, Nat.zero_mul,
+    Nat.reduceMul, Nat.reduceAdd]
+  ring
+
+/-! Flat-index arithmetic helpers for `fw_matmul_split_dimK_1_4_8_8` (proven in an empty
+context so `omega` stays fast). -/
+
+private theorem mm_aux_pbnd (idx l : Nat) (hl : l < 8) (hidx : idx < 256) :
+    idx / 64 * 64 + idx % 64 / 8 * 8 + l < 256 := by omega
+
+private theorem mm_aux_qbnd (idx l : Nat) (hl : l < 8) (hidx : idx < 256) :
+    idx / 64 * 64 + l * 8 + idx % 8 < 256 := by omega
+
+private theorem mm_aux_x_shard (idx l : Nat) (hl : l < 8) :
+    (idx / 64 * 64 + idx % 64 / 8 * 8 + l) % 8 / 2 = l / 2 := by omega
+
+private theorem mm_aux_x_idx (idx l : Nat) (hl : l < 8) :
+    (idx / 64 * 64 + idx % 64 / 8 * 8 + l) / 8 * 2 +
+      (idx / 64 * 64 + idx % 64 / 8 * 8 + l) % 8 % 2 =
+      idx / 64 * 16 + idx % 64 / 8 * 2 + l % 2 := by omega
+
+private theorem mm_aux_y_shard (idx l : Nat) (hl : l < 8) :
+    (idx / 64 * 64 + l * 8 + idx % 8) % 64 / 16 = l / 2 := by omega
+
+private theorem mm_aux_y_idx (idx l : Nat) (hl : l < 8) :
+    (idx / 64 * 64 + l * 8 + idx % 8) / 64 * 16 +
+      (idx / 64 * 64 + l * 8 + idx % 8) % 16 / 8 * 8 +
+      (idx / 64 * 64 + l * 8 + idx % 8) % 8 =
+      idx / 64 * 16 + l % 2 * 8 + idx % 8 := by omega
+
+set_option maxHeartbeats 1600000 in
+-- heavy flat-index arithmetic across two gathers, an allReduce and four shard matmuls
+theorem fw_matmul_split_dimK_1_4_8_8 (x0 x1 x2 x3 y0 y1 y2 y3 : Tensor)
+    (hx0 : x0.shape = [1, 4, 8, 2]) (hx1 : x1.shape = [1, 4, 8, 2])
+    (hx2 : x2.shape = [1, 4, 8, 2]) (hx3 : x3.shape = [1, 4, 8, 2])
+    (hy0 : y0.shape = [1, 4, 2, 8]) (hy1 : y1.shape = [1, 4, 2, 8])
+    (hy2 : y2.shape = [1, 4, 2, 8]) (hy3 : y3.shape = [1, 4, 2, 8]) :
+    fw_matmul (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3])
+        (allGatherPrimDimN 2 4 0 [y0, y1, y2, y3]) =
+      allReducePrim 4 0
+        [fw_matmul x0 y0, fw_matmul x1 y1, fw_matmul x2 y2, fw_matmul x3 y3] := by
+  have hhead_x : (([x0, x1, x2, x3] : List Tensor).head?.map (fun t => t.shape)).getD [] =
+      [1, 4, 8, 2] := by simp [hx0]
+  have hhead_y : (([y0, y1, y2, y3] : List Tensor).head?.map (fun t => t.shape)).getD [] =
+      [1, 4, 2, 8] := by simp [hy0]
+  have hX_shape : (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 3 4 _ _ hhead_x]; simp [List.set, List.getD]
+  have hY_shape : (allGatherPrimDimN 2 4 0 [y0, y1, y2, y3]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead_y]; simp [List.set, List.getD]
+  have hm0 : (fw_matmul x0 y0).shape = [1, 4, 8, 8] :=
+    batchedMatmul_shape_1_4_8_2_1_4_2_8 x0 y0 hx0 hy0
+  have hlhs_shape : (fw_matmul (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3])
+      (allGatherPrimDimN 2 4 0 [y0, y1, y2, y3])).shape = [1, 4, 8, 8] :=
+    fw_matmul_shape_1_4_8_8 _ _ hX_shape hY_shape
+  have hhead_rhs : ([fw_matmul x0 y0, fw_matmul x1 y1, fw_matmul x2 y2,
+      fw_matmul x3 y3] : List Tensor).head? = some (fw_matmul x0 y0) := rfl
+  have hrhs_shape : (allReducePrim 4 0 [fw_matmul x0 y0, fw_matmul x1 y1,
+      fw_matmul x2 y2, fw_matmul x3 y3]).shape = [1, 4, 8, 8] := by
+    rw [allReducePrim_shape 4 0 _ _ hhead_rhs]; exact hm0
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  rw [fw_matmul_valAt_1_4_8_8 _ _ idx hX_shape hY_shape hidx256]
+  have hLHSsum : (∑ l ∈ Finset.range 8,
+        valAt (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3])
+            (idx / 64 * 64 + idx % 64 / 8 * 8 + l) *
+          valAt (allGatherPrimDimN 2 4 0 [y0, y1, y2, y3])
+            (idx / 64 * 64 + l * 8 + idx % 8)) =
+      ∑ l ∈ Finset.range 8,
+        valAt ([x0, x1, x2, x3].getD (l / 2) (zeroTensor [1, 4, 8, 2]))
+            (idx / 64 * 16 + idx % 64 / 8 * 2 + l % 2) *
+          valAt ([y0, y1, y2, y3].getD (l / 2) (zeroTensor [1, 4, 2, 8]))
+            (idx / 64 * 16 + l % 2 * 8 + idx % 8) := by
+    apply Finset.sum_congr rfl
+    intro l hl
+    have hl8 : l < 8 := Finset.mem_range.mp hl
+    rw [allGatherPrimDimN_3_4_valAt_1_4_8_2 _ (idx / 64 * 64 + idx % 64 / 8 * 8 + l)
+        hhead_x (mm_aux_pbnd idx l hl8 hidx256)]
+    rw [allGatherPrimDimN_2_4_valAt_1_4_2_8 _ (idx / 64 * 64 + l * 8 + idx % 8)
+        hhead_y (mm_aux_qbnd idx l hl8 hidx256)]
+    rw [mm_aux_x_shard idx l hl8, mm_aux_x_idx idx l hl8,
+        mm_aux_y_shard idx l hl8, mm_aux_y_idx idx l hl8]
+  rw [hLHSsum]
+  rw [allReducePrim_valAt 4 0 _ idx (fw_matmul x0 y0) hhead_rhs
+      (by rw [hm0]; simpa [prodShape] using hidx256)]
+  simp only [List.foldl]
+  rw [show fw_matmul x0 y0 = batchedMatmul x0 y0 from rfl,
+      show fw_matmul x1 y1 = batchedMatmul x1 y1 from rfl,
+      show fw_matmul x2 y2 = batchedMatmul x2 y2 from rfl,
+      show fw_matmul x3 y3 = batchedMatmul x3 y3 from rfl]
+  rw [batchedMatmul_valAt_1_4_8_2_1_4_2_8 x0 y0 idx hx0 hy0 hidx256,
+      batchedMatmul_valAt_1_4_8_2_1_4_2_8 x1 y1 idx hx1 hy1 hidx256,
+      batchedMatmul_valAt_1_4_8_2_1_4_2_8 x2 y2 idx hx2 hy2 hidx256,
+      batchedMatmul_valAt_1_4_8_2_1_4_2_8 x3 y3 idx hx3 hy3 hidx256]
+  simp only [Finset.sum_range_succ, Finset.sum_range_zero, zero_add,
+    Nat.reduceDiv, Nat.reduceMod, Nat.reduceMul, Nat.reduceAdd,
+    Nat.zero_mul, Nat.add_zero,
+    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  ring
+
 /-! Flat-index arithmetic helpers for `bw_matmul_fst_split_dW_1_4_8_8` (proven in an empty
 context over fresh variables so `omega` stays robust). -/
 
