@@ -9872,6 +9872,194 @@ theorem fw_linear_colParallel_4_1_8_32_128_8
     simp only [Finset.sum_range_succ, Finset.sum_range_zero, zero_add]
   rw [hLHS_eq, hRHS_eq]
 
+theorem allGatherPrimDimN1_4_valAt_32_8 (ws : List Tensor)
+    (hhead : (ws.head?.map (fun t => t.shape)).getD [] = [32, 8])
+    (hW_shapes : ∀ r (_ : r < 4), (ws.getD r (zeroTensor [32, 8])).shape = [32, 8])
+    (row : Nat) (hrow : row < 32) (r : Nat) (hr : r < 4) (lc : Nat) (hlc : lc < 8) :
+    valAt (allGatherPrimDimN 1 4 0 ws) (row * 32 + r * 8 + lc) =
+      valAt (ws.getD r (zeroTensor [32, 8])) (row * 8 + lc) := by
+  have hidx_lt : row * 32 + r * 8 + lc < 1024 := by omega
+  have hgather_shape : (allGatherPrimDimN 1 4 0 ws).shape = [32, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 ws [32, 8] hhead]
+    simp [List.set, List.getD]
+  have hidx_prod : row * 32 + r * 8 + lc < prodShape (allGatherPrimDimN 1 4 0 ws).shape := by
+    rw [hgather_shape]; simp [prodShape]; exact hidx_lt
+  rw [valAt_of_lt _ _ hidx_prod]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl, List.set,
+    show (4 : Nat) ≠ 0 by omega, show (8 : Nat) ≠ 0 by omega,
+    show (32 : Nat) ≠ 0 by omega,
+    show (1 : Nat) ≠ 0 by omega, ite_false]
+  have h1 : (row * 32 + r * 8 + lc) / 32 = row := by omega
+  have h2 : (row * 32 + r * 8 + lc) % 32 = r * 8 + lc := by omega
+  have h3 : (r * 8 + lc) / 1 = r * 8 + lc := by omega
+  have h4 : (r * 8 + lc) % 1 = 0 := by omega
+  have h5 : (r * 8 + lc) / 8 = r := by omega
+  have h6 : (r * 8 + lc) % 8 = lc := by omega
+  simp only [h1, h2, h3, h4, h5, h6]
+  congr 1; omega
+
+set_option maxHeartbeats 2000000 in
+theorem fw_linear_colParallel_4_1_8_32_32_8
+    (x : Tensor) (ws : List Tensor)
+    (hx : x.shape = [1, 8, 32])
+    (hlen : ws.length = 4)
+    (hshape : ∀ w ∈ ws, w.shape = [32, 8]) :
+    fw_linear x (allGatherPrimDimN 1 4 0 ws) =
+    allReducePrim 4 0 (List.ofFn (fun r : Fin 4 =>
+      fw_linear (chunkPrimDimN 2 4 r.val x)
+        (ws.getD r.val (zeroTensor [32, 8])))) := by
+  have hhead_w : (ws.head?.map (fun t => t.shape)).getD [] = [32, 8] := by
+    match ws, hlen, hshape with
+    | w0 :: _, _, hshape =>
+      simp only [List.head?, Option.map, Option.getD]
+      exact hshape w0 (List.mem_cons_self ..)
+  have hW_shapes : ∀ r (_ : r < 4), (ws.getD r (zeroTensor [32, 8])).shape = [32, 8] := by
+    intro r hr
+    have hr_len : r < ws.length := by omega
+    simp [List.getD, List.getElem?_eq_getElem hr_len]
+    exact hshape _ (List.getElem_mem hr_len)
+  have hW_shape : (allGatherPrimDimN 1 4 0 ws).shape = [32, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 ws [32, 8] hhead_w]
+    simp [List.set, List.getD]
+  have hLHS_shape : (fw_linear x (allGatherPrimDimN 1 4 0 ws)).shape = [1, 8, 32] :=
+    fw_linear_3d_shape 1 8 32 32 x _ hx hW_shape
+  have hchunk_shape : ∀ r : Fin 4, (chunkPrimDimN 2 4 r.val x).shape = [1, 8, 8] := by
+    intro r
+    rw [chunkPrimDimN_shape 2 4 r.val _ _ hx (by omega)]
+    simp [List.set, List.getD]
+  have hlocal_shape : ∀ r : Fin 4,
+      (fw_linear (chunkPrimDimN 2 4 r.val x) (ws.getD r.val (zeroTensor [32, 8]))).shape =
+        [1, 8, 32] := by
+    intro r
+    exact fw_linear_3d_shape 1 8 8 32 _ _ (hchunk_shape r) (hW_shapes r.val r.isLt)
+  have hRHS_head : (List.ofFn (fun r : Fin 4 =>
+      fw_linear (chunkPrimDimN 2 4 r.val x) (ws.getD r.val (zeroTensor [32, 8])))).head? =
+      some (fw_linear (chunkPrimDimN 2 4 0 x) (ws.getD 0 (zeroTensor [32, 8]))) := by
+    simp only [List.ofFn_succ, List.head?_cons, Fin.val_zero]
+  have hRHS_shape : (allReducePrim 4 0 (List.ofFn (fun r : Fin 4 =>
+      fw_linear (chunkPrimDimN 2 4 r.val x)
+        (ws.getD r.val (zeroTensor [32, 8]))))).shape = [1, 8, 32] := by
+    rw [allReducePrim_shape 4 0 _ _ hRHS_head]
+    exact hlocal_shape ⟨0, by omega⟩
+  apply Tensor.ext (by rw [hLHS_shape, hRHS_shape])
+  intro idx hidx
+  rw [hLHS_shape] at hidx
+  have hidx256 : idx < 256 := by simpa [prodShape] using hidx
+  set seq := idx / 32
+  set col := idx % 32
+  have hcol : col < 32 := Nat.mod_lt _ (by omega)
+  have hseq : seq < 8 := by omega
+  -- LHS value
+  have hprod_lhs : idx < prodShape [1, 8, 32] := by simp [prodShape]; exact hidx256
+  have hLHS_eq : valAt (fw_linear x (allGatherPrimDimN 1 4 0 ws)) idx =
+      ∑ r ∈ Finset.range 4, ∑ lc ∈ Finset.range 8,
+        valAt x (seq * 32 + r * 8 + lc) *
+          valAt (ws.getD r (zeroTensor [32, 8])) (col * 8 + lc) := by
+    conv_lhs => rw [show fw_linear x (allGatherPrimDimN 1 4 0 ws) =
+      Tensor.mkShape [1, 8, 32] (fun outIdx =>
+        let flat := outIdx.1
+        ∑ j ∈ Finset.range 32,
+          valAt x ((flat / 256 * 8 + flat % 256 / 32) * 32 + j) *
+          valAt (allGatherPrimDimN 1 4 0 ws) (flat % 32 * 32 + j)) from by
+      simp [fw_linear, hx, hW_shape, Tensor.mkShape]]
+    rw [valAt_of_lt _ _ hprod_lhs]
+    simp only [Tensor.mkShape]
+    have h1 : idx / 256 = 0 := by omega
+    have h2 : idx % 256 = idx := by omega
+    simp only [h1, h2, Nat.zero_mul, Nat.zero_add]
+    -- Now: ∑ j, valAt(x, seq*32+j) * valAt(W_gathered, col*32+j)
+    have heq_terms : ∀ j, j < 32 →
+        valAt x (seq * 32 + j) * valAt (allGatherPrimDimN 1 4 0 ws) (col * 32 + j) =
+        valAt x (seq * 32 + j) *
+          valAt (ws.getD (j / 8) (zeroTensor [32, 8])) (col * 8 + j % 8) := by
+      intro j hj
+      congr 1
+      have hj8 : j / 8 < 4 := by omega
+      have hjmod : j % 8 < 8 := Nat.mod_lt _ (by omega)
+      conv_lhs => rw [show col * 32 + j = col * 32 + (j / 8) * 8 + j % 8 from by omega]
+      exact allGatherPrimDimN1_4_valAt_32_8 ws hhead_w hW_shapes col hcol (j / 8) hj8 (j % 8) hjmod
+    calc ∑ j ∈ Finset.range 32,
+          valAt x (seq * 32 + j) * valAt (allGatherPrimDimN 1 4 0 ws) (col * 32 + j)
+        = ∑ j ∈ Finset.range 32,
+          valAt x (seq * 32 + j) *
+            valAt (ws.getD (j / 8) (zeroTensor [32, 8])) (col * 8 + j % 8) := by
+          apply Finset.sum_congr rfl
+          intro j hj; exact heq_terms j (Finset.mem_range.mp hj)
+      _ = ∑ r ∈ Finset.range 4, ∑ lc ∈ Finset.range 8,
+          valAt x (seq * 32 + (r * 8 + lc)) *
+            valAt (ws.getD ((r * 8 + lc) / 8) (zeroTensor [32, 8]))
+              (col * 8 + (r * 8 + lc) % 8) := by
+          rw [sum_range_split_4_8]
+      _ = ∑ r ∈ Finset.range 4, ∑ lc ∈ Finset.range 8,
+          valAt x (seq * 32 + r * 8 + lc) *
+            valAt (ws.getD r (zeroTensor [32, 8])) (col * 8 + lc) := by
+          apply Finset.sum_congr rfl; intro r hr_mem
+          apply Finset.sum_congr rfl; intro lc hlc_mem
+          have hr : r < 4 := Finset.mem_range.mp hr_mem
+          have hlc : lc < 8 := Finset.mem_range.mp hlc_mem
+          simp only [show (r * 8 + lc) / 8 = r from by omega,
+                     show (r * 8 + lc) % 8 = lc from by omega,
+                     show seq * 32 + (r * 8 + lc) = seq * 32 + r * 8 + lc from by omega]
+  -- RHS value
+  have hRHS_eq : valAt (allReducePrim 4 0 (List.ofFn (fun r : Fin 4 =>
+      fw_linear (chunkPrimDimN 2 4 r.val x)
+        (ws.getD r.val (zeroTensor [32, 8]))))) idx =
+      ∑ r ∈ Finset.range 4, ∑ lc ∈ Finset.range 8,
+        valAt x (seq * 32 + r * 8 + lc) *
+          valAt (ws.getD r (zeroTensor [32, 8])) (col * 8 + lc) := by
+    have hhead0_shape : (fw_linear (chunkPrimDimN 2 4 0 x) (ws.getD 0 (zeroTensor [32, 8]))).shape =
+        [1, 8, 32] := hlocal_shape ⟨0, by omega⟩
+    rw [allReducePrim_valAt 4 0 _ idx _ hRHS_head
+      (by rw [hhead0_shape]; simpa [prodShape])]
+    -- foldl for 4-element list
+    have hlist_eq : List.ofFn (fun r : Fin 4 =>
+        fw_linear (chunkPrimDimN 2 4 r.val x) (ws.getD r.val (zeroTensor [32, 8]))) =
+      [fw_linear (chunkPrimDimN 2 4 0 x) (ws.getD 0 (zeroTensor [32, 8])),
+       fw_linear (chunkPrimDimN 2 4 1 x) (ws.getD 1 (zeroTensor [32, 8])),
+       fw_linear (chunkPrimDimN 2 4 2 x) (ws.getD 2 (zeroTensor [32, 8])),
+       fw_linear (chunkPrimDimN 2 4 3 x) (ws.getD 3 (zeroTensor [32, 8]))] := by
+      rfl
+    rw [hlist_eq]
+    simp only [List.foldl]
+    -- Now have: 0 + v0 + v1 + v2 + v3 where v_r = valAt(fw_linear(chunk_r, ws_r), idx)
+    have hterm : ∀ r : Nat, r < 4 →
+        valAt (fw_linear (chunkPrimDimN 2 4 r x) (ws.getD r (zeroTensor [32, 8]))) idx =
+        ∑ lc ∈ Finset.range 8,
+          valAt x (seq * 32 + r * 8 + lc) *
+            valAt (ws.getD r (zeroTensor [32, 8])) (col * 8 + lc) := by
+      intro r hr
+      have hchunk_r : (chunkPrimDimN 2 4 r x).shape = [1, 8, 8] := by
+        rw [chunkPrimDimN_shape 2 4 r _ _ hx (by omega)]
+        simp [List.set, List.getD]
+      have hwr : (ws.getD r (zeroTensor [32, 8])).shape = [32, 8] := hW_shapes r hr
+      have hr_len : r < ws.length := by omega
+      have hgetD_eq : ws.getD r (zeroTensor [32, 8]) = ws[r] := by
+        simp [List.getD, List.getElem?_eq_getElem hr_len]
+      have hwr' : (ws[r]).shape = [32, 8] := by rw [← hgetD_eq]; exact hwr
+      rw [hgetD_eq]
+      conv_lhs => rw [show fw_linear (chunkPrimDimN 2 4 r x) (ws[r]) =
+        Tensor.mkShape [1, 8, 32] (fun outIdx =>
+          let flat := outIdx.1
+          ∑ j ∈ Finset.range 8,
+            valAt (chunkPrimDimN 2 4 r x) ((flat / 256 * 8 + flat % 256 / 32) * 8 + j) *
+            valAt (ws[r]) (flat % 32 * 8 + j)) from by
+        simp [fw_linear, hchunk_r, hwr', Tensor.mkShape]]
+      rw [valAt_of_lt _ _ hprod_lhs]
+      simp only [Tensor.mkShape]
+      have h1 : idx / 256 = 0 := by omega
+      have h2 : idx % 256 = idx := by omega
+      simp only [h1, h2, Nat.zero_mul, Nat.zero_add]
+      apply Finset.sum_congr rfl
+      intro lc hlc_mem
+      have hlc : lc < 8 := Finset.mem_range.mp hlc_mem
+      congr 1
+      exact chunk2_4_1_8_32_valAt_pj x r seq lc hx hr hseq hlc
+    rw [hterm 0 (by omega), hterm 1 (by omega), hterm 2 (by omega), hterm 3 (by omega)]
+    simp only [Finset.sum_range_succ, Finset.sum_range_zero, zero_add]
+  rw [hLHS_eq, hRHS_eq]
+
 -- Chunk dim2 valAt for [1,8,128] tensors chunked into [1,8,32]
 theorem chunk2_4_1_8_128_valAt_pj (x : Tensor) (r p j : Nat)
     (hx : x.shape = [1, 8, 128]) (hr : r < 4) (hp : p < 8) (hj : j < 32) :
