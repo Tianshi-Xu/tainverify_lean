@@ -51,5 +51,120 @@ def goal_255_cut_initGoals : List LineageGoal := initGoals ++ goal_255_prereqs
 def goal_255_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_255 pm_goal_255 goal_255 sm_goal_255InitEnv pm_goal_255InitEnv goal_255_cut_initGoals
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 800000 in
+-- BW_linear dW: output-(tensor-)parallel. g (895) split on output dim (gather dim 2),
+-- x (710) replicated, w (711) split on dim 0; full dW (894) is the dim-0 concatenation
+-- (allGather) of the per-rank dW shards.
+theorem prove_goal_255_cut : goal_255_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract prereqs: goal_256 (g=895 gather dim2), goal_105 (x=710 replicated), initGoal_711 (w split dim0)
+  have hInit256 : InitGoalHolds pm_goal_255.numRanks goal_256 initSM initPM := by
+    apply hInitGoals; simp only [goal_255_cut_initGoals, goal_255_prereqs]; decide
+  have hInit105 : InitGoalHolds pm_goal_255.numRanks goal_105 initSM initPM := by
+    apply hInitGoals; simp only [goal_255_cut_initGoals, goal_255_prereqs]; decide
+  have hInit711 : InitGoalHolds pm_goal_255.numRanks initGoal_711 initSM initPM := by
+    apply hInitGoals; simp only [goal_255_cut_initGoals, goal_255_prereqs, initGoals]; decide
+  -- goal_256: initSM 895 = reconstructWithDim 2 4 0 [3387,3390,3393,3396]
+  have h895_rec : initSM 895 = reconstructWithDim 2 4 0
+      [initPM 3387, initPM 3390, initPM 3393, initPM 3396] := by
+    have hrec := hInit256.2.2
+    simp only [goal_256, pm_goal_255, List.map] at hrec
+    exact hrec
+  have h895_shape : (initSM 895).shape = [1, 8, 128] := hInit256.1
+  have htp256 := hInit256.2.1
+  simp only [goal_256, List.map] at htp256
+  have h3387_shape : (initPM 3387).shape = [1, 8, 32] := by
+    have := congrArg List.head? htp256; simpa using this
+  have h3390_shape : (initPM 3390).shape = [1, 8, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htp256; simpa using this
+  have h3393_shape : (initPM 3393).shape = [1, 8, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp256; simpa using this
+  have h3396_shape : (initPM 3396).shape = [1, 8, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp256; simpa using this
+  -- goal_105: initSM 710 = initPM 710 (replicated)
+  have h710_eq : initSM 710 = initPM 710 := by
+    have hrec := hInit105.2.2
+    simp only [goal_105, pm_goal_255, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  have h710_shape : (initSM 710).shape = [1, 8, 32] := hInit105.1
+  have h710P_shape : (initPM 710).shape = [1, 8, 32] := by rw [← h710_eq]; exact h710_shape
+  -- initGoal_711: initSM 711 = reconstructWithDim 0 4 0 [3369,3370,3371,3372]
+  have h711_rec : initSM 711 = reconstructWithDim 0 4 0
+      [initPM 3369, initPM 3370, initPM 3371, initPM 3372] := by
+    have hrec := hInit711.2.2
+    simp only [initGoal_711, pm_goal_255, List.map] at hrec
+    exact hrec
+  have h711_shape : (initSM 711).shape = [128, 32] := hInit711.1
+  have htp711 := hInit711.2.1
+  simp only [initGoal_711, List.map] at htp711
+  have h3369_shape : (initPM 3369).shape = [32, 32] := by
+    have := congrArg List.head? htp711; simpa using this
+  have h3370_shape : (initPM 3370).shape = [32, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htp711; simpa using this
+  have h3371_shape : (initPM 3371).shape = [32, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp711; simpa using this
+  have h3372_shape : (initPM 3372).shape = [32, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp711; simpa using this
+  -- convert reconstructs to allGather (non-scalar shards)
+  have h895_gather : initSM 895 = allGatherPrimDimN 2 4 0
+      [initPM 3387, initPM 3390, initPM 3393, initPM 3396] := by
+    rw [h895_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h3387_shape]; decide)
+  have h711_gather : initSM 711 = allGatherPrimDimN 0 4 0
+      [initPM 3369, initPM 3370, initPM 3371, initPM 3372] := by
+    rw [h711_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _ (by rw [h3369_shape]; decide)
+  -- SM store: dW (output index 1) of BW_linear on full tensors
+  have hsm : (denoteGraph sm_goal_255 initSM) 894 =
+      (bw_linear (initSM 895) (initSM 710) (initSM 711)).2 := by
+    simp only [sm_goal_255, denoteGraph, List.foldl]
+    rw [applyNode_bw_linear_snd_out (hne := by decide)]
+  -- PM stores: per-rank dW (second output of each BW_linear node)
+  have hpm0 : (denoteGraph pm_goal_255 initPM) 3386 =
+      (bw_linear (initPM 3387) (initPM 710) (initPM 3369)).2 := by
+    simp only [pm_goal_255, denoteGraph, List.foldl]
+    rw [applyNode_skip (h := by decide), applyNode_skip (h := by decide),
+        applyNode_skip (h := by decide), applyNode_bw_linear_snd_out (hne := by decide)]
+  have hpm1 : (denoteGraph pm_goal_255 initPM) 3389 =
+      (bw_linear (initPM 3390) (initPM 710) (initPM 3370)).2 := by
+    simp only [pm_goal_255, denoteGraph, List.foldl]
+    rw [applyNode_skip (h := by decide), applyNode_skip (h := by decide),
+        applyNode_bw_linear_snd_out (hne := by decide)]
+    congr 1
+  have hpm2 : (denoteGraph pm_goal_255 initPM) 3392 =
+      (bw_linear (initPM 3393) (initPM 710) (initPM 3371)).2 := by
+    simp only [pm_goal_255, denoteGraph, List.foldl]
+    rw [applyNode_skip (h := by decide), applyNode_bw_linear_snd_out (hne := by decide)]
+    congr 1
+  have hpm3 : (denoteGraph pm_goal_255 initPM) 3395 =
+      (bw_linear (initPM 3396) (initPM 710) (initPM 3372)).2 := by
+    simp only [pm_goal_255, denoteGraph, List.foldl]
+    rw [applyNode_bw_linear_snd_out (hne := by decide)]
+    congr 1
+  -- Discharge the three conjuncts
+  simp only [goal_255, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape: [128, 32]
+    rw [hsm, bw_linear_3d_snd_shape 1 8 128 32 _ _ _ h895_shape h710_shape h711_shape]
+  · -- PM tp shapes: [[32, 32], [32, 32], [32, 32], [32, 32]]
+    rw [hpm0, hpm1, hpm2, hpm3,
+        bw_linear_3d_snd_shape 1 8 32 32 _ _ _ h3387_shape h710P_shape h3369_shape,
+        bw_linear_3d_snd_shape 1 8 32 32 _ _ _ h3390_shape h710P_shape h3370_shape,
+        bw_linear_3d_snd_shape 1 8 32 32 _ _ _ h3393_shape h710P_shape h3371_shape,
+        bw_linear_3d_snd_shape 1 8 32 32 _ _ _ h3396_shape h710P_shape h3372_shape]
+  · -- Value equality: smStore 894 = reconstructWithDim 0 4 0 [pm dW shards]
+    rw [show pm_goal_255.numRanks = 4 from rfl,
+        hpm0, hpm1, hpm2, hpm3,
+        reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _
+          (by rw [bw_linear_3d_snd_shape 1 8 32 32 _ _ _ h3387_shape h710P_shape h3369_shape]; decide),
+        hsm, h895_gather, h710_eq, h711_gather,
+        bw_linear_dw_osplit_dim2_4_1_8_32_g255 (initPM 710)
+          (initPM 3387) (initPM 3390) (initPM 3393) (initPM 3396)
+          (initPM 3369) (initPM 3370) (initPM 3371) (initPM 3372)
+          h710P_shape h3387_shape h3390_shape h3393_shape h3396_shape
+          h3369_shape h3370_shape h3371_shape h3372_shape]
+
 end TrainVerify.Denote.GeneratedGoals
+
 
