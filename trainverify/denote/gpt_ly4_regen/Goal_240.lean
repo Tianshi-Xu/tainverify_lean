@@ -52,5 +52,141 @@ def goal_240_cut_initGoals : List LineageGoal := initGoals ++ goal_240_prereqs
 def goal_240_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_240 pm_goal_240 goal_240 sm_goal_240InitEnv pm_goal_240InitEnv goal_240_cut_initGoals
 
-end TrainVerify.Denote.GeneratedGoals
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 800000 in
+-- BW_linear dW: column-(input-)parallel split of the input dim (ChunkPrim on dim 2 of x)
+-- reconstructs the global weight gradient by dim-1 all-gather of the per-rank dW outputs.
+theorem prove_goal_240_cut : goal_240_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Prereqs: goal_241 (g=878 replicated), goal_97 (x=695 replicated), initGoal_696 (w shards)
+  have hInit241 : InitGoalHolds pm_goal_240.numRanks goal_241 initSM initPM := by
+    apply hInitGoals; simp only [goal_240_cut_initGoals, goal_240_prereqs]; decide
+  have hInit97 : InitGoalHolds pm_goal_240.numRanks goal_97 initSM initPM := by
+    apply hInitGoals; simp only [goal_240_cut_initGoals, goal_240_prereqs]; decide
+  have hInit696 : InitGoalHolds pm_goal_240.numRanks initGoal_696 initSM initPM := by
+    apply hInitGoals; simp only [goal_240_cut_initGoals, goal_240_prereqs, initGoals]; decide
+  -- goal_241: initSM 878 = initPM 878 (singleton)
+  have h878_eq : initSM 878 = initPM 878 := by
+    have hrec := hInit241.2.2
+    simp only [goal_241, pm_goal_240, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  have h878_shape : (initSM 878).shape = [1, 8, 32] := hInit241.1
+  have h878_shapeP : (initPM 878).shape = [1, 8, 32] := by rw [← h878_eq]; exact h878_shape
+  -- goal_97: initSM 695 = initPM 695 (singleton)
+  have h695_eq : initSM 695 = initPM 695 := by
+    have hrec := hInit97.2.2
+    simp only [goal_97, pm_goal_240, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  have h695_shape : (initSM 695).shape = [1, 8, 32] := hInit97.1
+  have h695_shapeP : (initPM 695).shape = [1, 8, 32] := by rw [← h695_eq]; exact h695_shape
+  -- initGoal_696: w shards [32,8] each, full w = [32,32]
+  have hs696 := hInit696.2.1
+  simp only [initGoal_696, List.map, List.cons.injEq, and_true] at hs696
+  obtain ⟨h3145_shape, h3146_shape, h3147_shape, h3148_shape⟩ := hs696
+  have h696_shape : (initSM 696).shape = [32, 32] := hInit696.1
+  -- SM store: dW (snd output, tid 877) of BW_linear on full tensors
+  have hsm : (denoteGraph sm_goal_240 initSM) 877 =
+      (bw_linear (initSM 878) (initSM 695) (initSM 696)).2 := by
+    simp only [sm_goal_240, denoteGraph, List.foldl]
+    rw [applyNode_bw_linear_snd_out _ _ 0 878 695 696 876 877 (by decide)]
+  -- PM stores: each rank's dW (snd output) from full g, chunked x, sharded w
+  have hpm0 : (denoteGraph pm_goal_240 initPM) 3162 =
+      (bw_linear (initPM 878) (chunkPrimDimN 2 4 0 (initPM 695)) (initPM 3145)).2 := by
+    simp only [pm_goal_240, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 3162 (by decide), applyNode_skip _ _ _ 3162 (by decide),
+        applyNode_skip _ _ _ 3162 (by decide),
+        applyNode_bw_linear_snd_out _ _ 0 878 3141 3145 3161 3162 (by decide),
+        applyNode_skip _ _ _ 3141 (by decide), applyNode_skip _ _ _ 3141 (by decide),
+        applyNode_skip _ _ _ 3141 (by decide),
+        applyNode_chunkPrimDimN_out _ _ 0 695 3141 2,
+        applyNode_skip _ _ _ 878 (by decide), applyNode_skip _ _ _ 878 (by decide),
+        applyNode_skip _ _ _ 878 (by decide), applyNode_skip _ _ _ 878 (by decide),
+        applyNode_skip _ _ _ 3145 (by decide), applyNode_skip _ _ _ 3145 (by decide),
+        applyNode_skip _ _ _ 3145 (by decide), applyNode_skip _ _ _ 3145 (by decide)]
+  have hpm1 : (denoteGraph pm_goal_240 initPM) 3164 =
+      (bw_linear (initPM 878) (chunkPrimDimN 2 4 1 (initPM 695)) (initPM 3146)).2 := by
+    simp only [pm_goal_240, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 3164 (by decide), applyNode_skip _ _ _ 3164 (by decide),
+        applyNode_bw_linear_snd_out _ _ 1 878 3142 3146 3163 3164 (by decide),
+        applyNode_skip _ _ _ 3142 (by decide), applyNode_skip _ _ _ 3142 (by decide),
+        applyNode_skip _ _ _ 3142 (by decide),
+        applyNode_chunkPrimDimN_out _ _ 1 695 3142 2,
+        applyNode_skip _ _ _ 695 (by decide),
+        applyNode_skip _ _ _ 878 (by decide), applyNode_skip _ _ _ 878 (by decide),
+        applyNode_skip _ _ _ 878 (by decide), applyNode_skip _ _ _ 878 (by decide),
+        applyNode_skip _ _ _ 878 (by decide),
+        applyNode_skip _ _ _ 3146 (by decide), applyNode_skip _ _ _ 3146 (by decide),
+        applyNode_skip _ _ _ 3146 (by decide), applyNode_skip _ _ _ 3146 (by decide),
+        applyNode_skip _ _ _ 3146 (by decide)]
+  have hpm2 : (denoteGraph pm_goal_240 initPM) 3166 =
+      (bw_linear (initPM 878) (chunkPrimDimN 2 4 2 (initPM 695)) (initPM 3147)).2 := by
+    simp only [pm_goal_240, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 3166 (by decide),
+        applyNode_bw_linear_snd_out _ _ 2 878 3143 3147 3165 3166 (by decide),
+        applyNode_skip _ _ _ 3143 (by decide), applyNode_skip _ _ _ 3143 (by decide),
+        applyNode_skip _ _ _ 3143 (by decide),
+        applyNode_chunkPrimDimN_out _ _ 2 695 3143 2,
+        applyNode_skip _ _ _ 695 (by decide), applyNode_skip _ _ _ 695 (by decide),
+        applyNode_skip _ _ _ 878 (by decide), applyNode_skip _ _ _ 878 (by decide),
+        applyNode_skip _ _ _ 878 (by decide), applyNode_skip _ _ _ 878 (by decide),
+        applyNode_skip _ _ _ 878 (by decide), applyNode_skip _ _ _ 878 (by decide),
+        applyNode_skip _ _ _ 3147 (by decide), applyNode_skip _ _ _ 3147 (by decide),
+        applyNode_skip _ _ _ 3147 (by decide), applyNode_skip _ _ _ 3147 (by decide),
+        applyNode_skip _ _ _ 3147 (by decide), applyNode_skip _ _ _ 3147 (by decide)]
+  have hpm3 : (denoteGraph pm_goal_240 initPM) 3168 =
+      (bw_linear (initPM 878) (chunkPrimDimN 2 4 3 (initPM 695)) (initPM 3148)).2 := by
+    simp only [pm_goal_240, denoteGraph, List.foldl]
+    rw [applyNode_bw_linear_snd_out _ _ 3 878 3144 3148 3167 3168 (by decide),
+        applyNode_skip _ _ _ 3144 (by decide), applyNode_skip _ _ _ 3144 (by decide),
+        applyNode_skip _ _ _ 3144 (by decide),
+        applyNode_chunkPrimDimN_out _ _ 3 695 3144 2,
+        applyNode_skip _ _ _ 695 (by decide), applyNode_skip _ _ _ 695 (by decide),
+        applyNode_skip _ _ _ 695 (by decide),
+        applyNode_skip _ _ _ 878 (by decide), applyNode_skip _ _ _ 878 (by decide),
+        applyNode_skip _ _ _ 878 (by decide), applyNode_skip _ _ _ 878 (by decide),
+        applyNode_skip _ _ _ 878 (by decide), applyNode_skip _ _ _ 878 (by decide),
+        applyNode_skip _ _ _ 878 (by decide),
+        applyNode_skip _ _ _ 3148 (by decide), applyNode_skip _ _ _ 3148 (by decide),
+        applyNode_skip _ _ _ 3148 (by decide), applyNode_skip _ _ _ 3148 (by decide),
+        applyNode_skip _ _ _ 3148 (by decide), applyNode_skip _ _ _ 3148 (by decide),
+        applyNode_skip _ _ _ 3148 (by decide)]
+  -- per-rank PM output shapes [32,8]
+  have hch0 : (chunkPrimDimN 2 4 0 (initPM 695)).shape = [1, 8, 8] := by
+    rw [chunkPrimDimN_shape 2 4 0 (initPM 695) _ h695_shapeP (by omega)]; simp [List.set, List.getD]
+  have hch1 : (chunkPrimDimN 2 4 1 (initPM 695)).shape = [1, 8, 8] := by
+    rw [chunkPrimDimN_shape 2 4 1 (initPM 695) _ h695_shapeP (by omega)]; simp [List.set, List.getD]
+  have hch2 : (chunkPrimDimN 2 4 2 (initPM 695)).shape = [1, 8, 8] := by
+    rw [chunkPrimDimN_shape 2 4 2 (initPM 695) _ h695_shapeP (by omega)]; simp [List.set, List.getD]
+  have hch3 : (chunkPrimDimN 2 4 3 (initPM 695)).shape = [1, 8, 8] := by
+    rw [chunkPrimDimN_shape 2 4 3 (initPM 695) _ h695_shapeP (by omega)]; simp [List.set, List.getD]
+  -- Main equation: SM dW = dim-1 gather of the 4 per-rank dW shards
+  have hkey : (bw_linear (initSM 878) (initSM 695) (initSM 696)).2 =
+      allGatherPrimDimN 1 4 0
+        [(bw_linear (initPM 878) (chunkPrimDimN 2 4 0 (initPM 695)) (initPM 3145)).2,
+         (bw_linear (initPM 878) (chunkPrimDimN 2 4 1 (initPM 695)) (initPM 3146)).2,
+         (bw_linear (initPM 878) (chunkPrimDimN 2 4 2 (initPM 695)) (initPM 3147)).2,
+         (bw_linear (initPM 878) (chunkPrimDimN 2 4 3 (initPM 695)) (initPM 3148)).2] := by
+    rw [h878_eq, h695_eq]
+    exact bw_linear_dw_xsplit_dim2_4_g240 (initPM 878) (initPM 695) (initSM 696)
+      (initPM 3145) (initPM 3146) (initPM 3147) (initPM 3148)
+      h878_shapeP h695_shapeP h696_shape h3145_shape h3146_shape h3147_shape h3148_shape
+  -- Discharge the three conjuncts
+  simp only [goal_240, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape [32,32]
+    rw [hsm, hkey, allGatherPrimDimN_shape 1 4 _ [32, 8] (by
+      simp [bw_linear_3d_snd_shape 1 8 32 8 _ _ _ h878_shapeP hch0 h3145_shape])]
+    decide
+  · -- PM shard shapes [[32,8],[32,8],[32,8],[32,8]]
+    rw [hpm0, hpm1, hpm2, hpm3,
+        bw_linear_3d_snd_shape 1 8 32 8 _ _ _ h878_shapeP hch0 h3145_shape,
+        bw_linear_3d_snd_shape 1 8 32 8 _ _ _ h878_shapeP hch1 h3146_shape,
+        bw_linear_3d_snd_shape 1 8 32 8 _ _ _ h878_shapeP hch2 h3147_shape,
+        bw_linear_3d_snd_shape 1 8 32 8 _ _ _ h878_shapeP hch3 h3148_shape]
+  · -- value equality: smStore 877 = reconstructWithDim 1 4 0 [pm shards]
+    rw [hsm, hkey, hpm0, hpm1, hpm2, hpm3]
+    rw [reconstructWithDim_cons_cons_nonscalar 1 pm_goal_240.numRanks 0 _ _ _ (by
+      rw [bw_linear_3d_snd_shape 1 8 32 8 _ _ _ h878_shapeP hch0 h3145_shape]; decide)]
+    rfl
 
+end TrainVerify.Denote.GeneratedGoals
