@@ -52,5 +52,110 @@ def goal_134_cut_initGoals : List LineageGoal := initGoals ++ goal_134_prereqs
 def goal_134_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_134 pm_goal_134 goal_134 sm_goal_134InitEnv pm_goal_134InitEnv goal_134_cut_initGoals
 
-end TrainVerify.Denote.GeneratedGoals
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 800000 in
+-- BW_linear dX: tensor-parallel reduction (AllReducePrim) of per-rank dX via
+-- dim-2 split gradient (goal_136) and dim-0 split weight (initGoal_591).
+theorem prove_goal_134_cut : goal_134_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract prereqs: goal_136 (g=752 gather dim2), goal_22 (x=590 shared), initGoal_591 (w shards)
+  have hInit136 : InitGoalHolds pm_goal_134.numRanks goal_136 initSM initPM := by
+    apply hInitGoals; simp only [goal_134_cut_initGoals, goal_134_prereqs]; decide
+  have hInit22 : InitGoalHolds pm_goal_134.numRanks goal_22 initSM initPM := by
+    apply hInitGoals; simp only [goal_134_cut_initGoals, goal_134_prereqs]; decide
+  have hInit591 : InitGoalHolds pm_goal_134.numRanks initGoal_591 initSM initPM := by
+    apply hInitGoals; simp only [goal_134_cut_initGoals, goal_134_prereqs, initGoals]; decide
+  -- goal_136: shard shapes [1,8,8] and reconstruct of g=752
+  have htp136 := hInit136.2.1
+  simp only [goal_136, List.map] at htp136
+  have h1491_shape : (initPM 1491).shape = [1, 8, 8] := by
+    have := congrArg List.head? htp136; simpa using this
+  have h1494_shape : (initPM 1494).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail) htp136; simpa using this
+  have h1497_shape : (initPM 1497).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp136; simpa using this
+  have h1500_shape : (initPM 1500).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp136; simpa using this
+  have h752_rec : initSM 752 = reconstructWithDim 2 4 0
+      [initPM 1491, initPM 1494, initPM 1497, initPM 1500] := by
+    have hrec := hInit136.2.2
+    simp only [goal_136, pm_goal_134, List.map] at hrec
+    exact hrec
+  have h752_gather : initSM 752 = allGatherPrimDimN 2 4 0
+      [initPM 1491, initPM 1494, initPM 1497, initPM 1500] := by
+    rw [h752_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1491_shape]; decide)
+  -- initGoal_591: shard shapes [8,32] and reconstruct of w=591
+  have htp591 := hInit591.2.1
+  simp only [initGoal_591, List.map] at htp591
+  have h1473_shape : (initPM 1473).shape = [8, 32] := by
+    have := congrArg List.head? htp591; simpa using this
+  have h1474_shape : (initPM 1474).shape = [8, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htp591; simpa using this
+  have h1475_shape : (initPM 1475).shape = [8, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp591; simpa using this
+  have h1476_shape : (initPM 1476).shape = [8, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp591; simpa using this
+  have h591_rec : initSM 591 = reconstructWithDim 0 4 0
+      [initPM 1473, initPM 1474, initPM 1475, initPM 1476] := by
+    have hrec := hInit591.2.2
+    simp only [initGoal_591, pm_goal_134, List.map] at hrec
+    exact hrec
+  have h591_gather : initSM 591 = allGatherPrimDimN 0 4 0
+      [initPM 1473, initPM 1474, initPM 1475, initPM 1476] := by
+    rw [h591_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _ (by rw [h1473_shape]; decide)
+  -- goal_22: x=590 shared (singleton)
+  have h590_eq : initSM 590 = initPM 590 := by
+    have hrec := hInit22.2.2
+    simp only [goal_22, pm_goal_134, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  have h590_shape : (initSM 590).shape = [1, 8, 32] := hInit22.1
+  have h590_shapeP : (initPM 590).shape = [1, 8, 32] := by rw [← h590_eq]; exact h590_shape
+  -- SM store: dX (output index 0) of BW_linear on full tensors
+  have hsm : (denoteGraph sm_goal_134 initSM) 750 =
+      (bw_linear (initSM 752) (initSM 590) (initSM 591)).1 := by
+    simp only [sm_goal_134, denoteGraph, List.foldl]
+    rw [applyNode_bw_linear_fst_out _ _ _ _ _ _ _ _ (by decide)]
+  -- PM store: 4 BW_linear (dX outputs), then AllReducePrim sums them
+  have hpm : (denoteGraph pm_goal_134 initPM) 750 =
+      allReducePrim 4 0
+        [(bw_linear (initPM 1491) (initPM 590) (initPM 1473)).1,
+         (bw_linear (initPM 1494) (initPM 590) (initPM 1474)).1,
+         (bw_linear (initPM 1497) (initPM 590) (initPM 1475)).1,
+         (bw_linear (initPM 1500) (initPM 590) (initPM 1476)).1] := by
+    simp only [pm_goal_134, denoteGraph, List.foldl]
+    rw [applyNode_allReducePrim_out]
+    congr 1
+  -- Key equation: SM dX = TP reduction of per-rank PM dX
+  have hkey : (bw_linear (initSM 752) (initSM 590) (initSM 591)).1 =
+      allReducePrim 4 0
+        [(bw_linear (initPM 1491) (initPM 590) (initPM 1473)).1,
+         (bw_linear (initPM 1494) (initPM 590) (initPM 1474)).1,
+         (bw_linear (initPM 1497) (initPM 590) (initPM 1475)).1,
+         (bw_linear (initPM 1500) (initPM 590) (initPM 1476)).1] := by
+    rw [h752_gather, h590_eq, h591_gather]
+    exact bw_linear_dx_tp_split_dim2_4_g134
+      (initPM 1491) (initPM 1494) (initPM 1497) (initPM 1500) (initPM 590)
+      (initPM 1473) (initPM 1474) (initPM 1475) (initPM 1476)
+      h1491_shape h1494_shape h1497_shape h1500_shape h590_shapeP
+      h1473_shape h1474_shape h1475_shape h1476_shape
+  -- shape of one PM dX shard (= [1,8,32])
+  have hdx0shape : (bw_linear (initPM 1491) (initPM 590) (initPM 1473)).1.shape = [1, 8, 32] :=
+    bw_linear_3d_fst_shape 1 8 8 32 _ _ _ h1491_shape h590_shapeP h1473_shape
+  have hRhead : ([(bw_linear (initPM 1491) (initPM 590) (initPM 1473)).1,
+       (bw_linear (initPM 1494) (initPM 590) (initPM 1474)).1,
+       (bw_linear (initPM 1497) (initPM 590) (initPM 1475)).1,
+       (bw_linear (initPM 1500) (initPM 590) (initPM 1476)).1] : List Tensor).head?
+      = some (bw_linear (initPM 1491) (initPM 590) (initPM 1473)).1 := rfl
+  -- Discharge the three conjuncts
+  simp only [goal_134, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape: [1, 8, 32]
+    rw [hsm, hkey, allReducePrim_shape 4 0 _ _ hRhead, hdx0shape]
+  · -- PM tp shapes: [[1, 8, 32]]
+    rw [hpm, allReducePrim_shape 4 0 _ _ hRhead, hdx0shape]
+  · -- Value equality: smStore 750 = reconstructWithDim 0 4 0 [pmStore 750]
+    rw [hsm, hkey, ← hpm, reconstructWithDim_singleton]
 
+end TrainVerify.Denote.GeneratedGoals

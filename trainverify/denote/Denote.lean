@@ -11149,4 +11149,279 @@ theorem bw_matmul_snd_split_dX_1_4_8_8 (g x0 x1 x2 x3 : Tensor)
   -- the two products agree (same `x` shard, same `g`, equal indices)
   rw [bw_snd_aux_geq idx l loc hidx256 hloc]
 
+
+-- ==== batch3 g134 additions ====
+/-!
+## BW_linear dX tensor-parallel reduction (goal 134)
+
+When the output gradient `g` is split along its feature dimension (dim 2) and the
+weight `w` is split along its output rows (dim 0), the input gradient (dX) of
+`bw_linear` equals the `allReducePrim` (sum) of the per-rank dX outputs.
+These lemmas are specialized to the concrete shapes of goal 134
+(b=1, s=8, i=32, 4 ranks each handling an 8-wide output slice).
+-/
+
+/-- Value of `bw_linear` dX (first output) for 3D inputs `[1,8,o] × [1,8,32] × [o,32]`. -/
+theorem bw_linear_fst_valAt_1_8_32_g134 (g x w : Tensor) (o : Nat)
+    (hg : g.shape = [1, 8, o]) (hx : x.shape = [1, 8, 32]) (hw : w.shape = [o, 32])
+    (P : Nat) (hP : P < 8) (col : Nat) (hcol : col < 32) :
+    valAt (bw_linear g x w).1 (P * 32 + col) =
+      ∑ j ∈ Finset.range o, valAt g (P * o + j) * valAt w (j * 32 + col) := by
+  have hdx : (bw_linear g x w).1 =
+      Tensor.mkShape [1, 8, 32] (fun outIdx =>
+        ∑ j ∈ Finset.range o,
+          valAt g (((if (8:Nat) * 32 = 0 then 0 else outIdx.1 / (8 * 32)) * 8 +
+                    if (32:Nat) = 0 then 0 else (if (8:Nat) * 32 = 0 then 0 else outIdx.1 % (8 * 32)) / 32) * o + j) *
+          valAt w (j * 32 + if (32:Nat) = 0 then 0 else (if (8:Nat) * 32 = 0 then 0 else outIdx.1 % (8 * 32)) % 32)) := by
+    unfold bw_linear
+    rw [hg, hx, hw]
+  rw [hdx]
+  rw [valAt_of_lt _ _ (by simp only [Tensor.mkShape, prodShape, List.foldl]; omega)]
+  simp only [Tensor.mkShape]
+  have e1 : (P*32+col)/(8*32) = 0 := by omega
+  have e2 : ((P*32+col)%(8*32))/32 = P := by omega
+  have e3 : ((P*32+col)%(8*32))%32 = col := by omega
+  simp only [show ((8:Nat)*32=0)=False from by simp, show ((32:Nat)=0)=False from by simp,
+    if_false, e1, e2, e3, Nat.zero_mul, Nat.zero_add]
+
+set_option maxRecDepth 8192 in
+/-- Value of `allGatherPrimDimN 2 4` over shards of shape `[1,8,8]`. -/
+theorem allGatherDimN2_4_188_valAt_g134 (gs : List Tensor)
+    (hhead : (gs.head?.map (fun t => t.shape)).getD [] = [1, 8, 8])
+    (P : Nat) (hP : P < 8) (r : Nat) (hr : r < 4) (jl : Nat) (hjl : jl < 8) :
+    valAt (allGatherPrimDimN 2 4 0 gs) (P * 32 + (r * 8 + jl)) =
+      valAt (gs.getD r (zeroTensor [1, 8, 8])) (P * 8 + jl) := by
+  have hshape : (allGatherPrimDimN 2 4 0 gs).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 2 4 gs [1, 8, 8] hhead]; simp [List.set, List.getD]
+  have hbound : P * 32 + (r * 8 + jl) < prodShape (allGatherPrimDimN 2 4 0 gs).shape := by
+    rw [hshape]; simp only [prodShape, List.foldl]; omega
+  rw [valAt_of_lt _ _ hbound]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead, List.drop, List.foldl, show ([1,8,8].getD 2 0 : Nat) = 8 from rfl]
+  have d1 : (P * 32 + (r * 8 + jl)) / (8 * 4 * 1) = P := by omega
+  have d2 : ((P * 32 + (r * 8 + jl)) % (8 * 4 * 1)) / 1 / 8 = r := by omega
+  have d3 : ((P * 32 + (r * 8 + jl)) % (8 * 4 * 1)) / 1 % 8 = jl := by omega
+  have d4 : ((P * 32 + (r * 8 + jl)) % (8 * 4 * 1)) % 1 = 0 := by omega
+  simp only [show (8*4*1:Nat) ≠ 0 from by omega, show (8:Nat) ≠ 0 from by omega,
+    show (1:Nat) ≠ 0 from by omega, if_false, d1, d2, d3, d4]
+  congr 1
+  omega
+
+set_option maxRecDepth 8192 in
+/-- Value of `allGatherPrimDimN 0 4` over shards of shape `[8,32]`. -/
+theorem allGatherDimN0_4_832_valAt_g134 (ws : List Tensor)
+    (hhead : (ws.head?.map (fun t => t.shape)).getD [] = [8, 32])
+    (r : Nat) (hr : r < 4) (jl : Nat) (hjl : jl < 8) (col : Nat) (hcol : col < 32) :
+    valAt (allGatherPrimDimN 0 4 0 ws) ((r * 8 + jl) * 32 + col) =
+      valAt (ws.getD r (zeroTensor [8, 32])) (jl * 32 + col) := by
+  have hshape : (allGatherPrimDimN 0 4 0 ws).shape = [32, 32] := by
+    rw [allGatherPrimDimN_shape 0 4 ws [8, 32] hhead]; simp [List.set, List.getD]
+  have hbound : (r * 8 + jl) * 32 + col < prodShape (allGatherPrimDimN 0 4 0 ws).shape := by
+    rw [hshape]; simp only [prodShape, List.foldl]; omega
+  rw [valAt_of_lt _ _ hbound]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead, List.drop, List.foldl, show ([8,32].getD 0 0 : Nat) = 8 from rfl]
+  have d1 : ((r * 8 + jl) * 32 + col) / (8 * 4 * 32) = 0 := by omega
+  have d2 : ((r * 8 + jl) * 32 + col) % (8 * 4 * 32) / 32 / 8 = r := by omega
+  have d3 : ((r * 8 + jl) * 32 + col) % (8 * 4 * 32) / 32 % 8 = jl := by omega
+  have d4 : ((r * 8 + jl) * 32 + col) % (8 * 4 * 32) % 32 = col := by omega
+  simp only [show (8*4*32:Nat) ≠ 0 from by omega, show (8:Nat) ≠ 0 from by omega,
+    show (32:Nat) ≠ 0 from by omega, if_false, d1, d2, d3, d4]
+  congr 1
+  omega
+
+set_option maxHeartbeats 2000000 in
+set_option maxRecDepth 8192 in
+/-- Tensor-parallel dX reduction for `BW_linear`: dim-2 split gradient + dim-0 split
+    weight, reduced by `allReducePrim`. -/
+theorem bw_linear_dx_tp_split_dim2_4_g134
+    (g0 g1 g2 g3 x w0 w1 w2 w3 : Tensor)
+    (hg0 : g0.shape = [1,8,8]) (hg1 : g1.shape = [1,8,8])
+    (hg2 : g2.shape = [1,8,8]) (hg3 : g3.shape = [1,8,8])
+    (hx : x.shape = [1,8,32])
+    (hw0 : w0.shape = [8,32]) (hw1 : w1.shape = [8,32])
+    (hw2 : w2.shape = [8,32]) (hw3 : w3.shape = [8,32]) :
+    (bw_linear (allGatherPrimDimN 2 4 0 [g0,g1,g2,g3]) x
+        (allGatherPrimDimN 0 4 0 [w0,w1,w2,w3])).1 =
+      allReducePrim 4 0
+        [(bw_linear g0 x w0).1, (bw_linear g1 x w1).1,
+         (bw_linear g2 x w2).1, (bw_linear g3 x w3).1] := by
+  have hheadg : (([g0,g1,g2,g3] : List Tensor).head?.map (fun t => t.shape)).getD [] = [1,8,8] := by
+    simp [hg0]
+  have hheadw : (([w0,w1,w2,w3] : List Tensor).head?.map (fun t => t.shape)).getD [] = [8,32] := by
+    simp [hw0]
+  set G := allGatherPrimDimN 2 4 0 [g0,g1,g2,g3] with hGdef
+  set W := allGatherPrimDimN 0 4 0 [w0,w1,w2,w3] with hWdef
+  have hGshape : G.shape = [1,8,32] := by
+    rw [hGdef, allGatherPrimDimN_shape 2 4 _ [1,8,8] hheadg]; simp [List.set, List.getD]
+  have hWshape : W.shape = [32,32] := by
+    rw [hWdef, allGatherPrimDimN_shape 0 4 _ [8,32] hheadw]; simp [List.set, List.getD]
+  have hLshape : (bw_linear G x W).1.shape = [1,8,32] :=
+    bw_linear_3d_fst_shape 1 8 32 32 G x W hGshape hx hWshape
+  have hdx0shape : (bw_linear g0 x w0).1.shape = [1,8,32] :=
+    bw_linear_3d_fst_shape 1 8 8 32 g0 x w0 hg0 hx hw0
+  have hRhead : ([(bw_linear g0 x w0).1, (bw_linear g1 x w1).1,
+         (bw_linear g2 x w2).1, (bw_linear g3 x w3).1] : List Tensor).head?
+       = some (bw_linear g0 x w0).1 := rfl
+  have hRshape : (allReducePrim 4 0
+        [(bw_linear g0 x w0).1, (bw_linear g1 x w1).1,
+         (bw_linear g2 x w2).1, (bw_linear g3 x w3).1]).shape = [1,8,32] := by
+    rw [allReducePrim_shape 4 0 _ _ hRhead, hdx0shape]
+  apply Tensor.ext
+  · rw [hLshape, hRshape]
+  · intro idx hidx
+    rw [hLshape] at hidx
+    have hidx256 : idx < 256 := by simpa [prodShape, List.foldl] using hidx
+    have hP : idx/32 < 8 := by omega
+    have hcol : idx%32 < 32 := by omega
+    have hidxeq : idx = (idx/32)*32 + idx%32 := by omega
+    rw [hidxeq]
+    set P := idx/32 with hPdef
+    set col := idx%32 with hcoldef
+    rw [allReducePrim_valAt 4 0 _ (P*32+col) (bw_linear g0 x w0).1 hRhead (by rw [hdx0shape]; simp [prodShape]; omega)]
+    simp only [List.foldl, zero_add]
+    rw [bw_linear_fst_valAt_1_8_32_g134 g0 x w0 8 hg0 hx hw0 P hP col hcol,
+        bw_linear_fst_valAt_1_8_32_g134 g1 x w1 8 hg1 hx hw1 P hP col hcol,
+        bw_linear_fst_valAt_1_8_32_g134 g2 x w2 8 hg2 hx hw2 P hP col hcol,
+        bw_linear_fst_valAt_1_8_32_g134 g3 x w3 8 hg3 hx hw3 P hP col hcol]
+    rw [bw_linear_fst_valAt_1_8_32_g134 G x W 32 hGshape hx hWshape P hP col hcol]
+    have hsplit : (∑ j ∈ Finset.range 32, valAt G (P*32+j) * valAt W (j*32+col))
+        = ∑ i ∈ Finset.range 4, ∑ j ∈ Finset.range 8,
+            valAt G (P*32+(i*8+j)) * valAt W ((i*8+j)*32+col) := by
+      have := Finset.sum_range_mul_eq_sum_sum 4 8 (fun k => valAt G (P*32+k) * valAt W (k*32+col))
+      simpa using this
+    rw [hsplit]
+    have key : ∀ i, i < 4 →
+        (∑ j ∈ Finset.range 8, valAt G (P*32+(i*8+j)) * valAt W ((i*8+j)*32+col))
+        = ∑ j ∈ Finset.range 8,
+            valAt ([g0,g1,g2,g3].getD i (zeroTensor [1,8,8])) (P*8+j)
+            * valAt ([w0,w1,w2,w3].getD i (zeroTensor [8,32])) (j*32+col) := by
+      intro i hi
+      apply Finset.sum_congr rfl
+      intro j hj
+      have hj8 : j < 8 := Finset.mem_range.mp hj
+      rw [hGdef, allGatherDimN2_4_188_valAt_g134 [g0,g1,g2,g3] hheadg P hP i hi j hj8,
+          hWdef, allGatherDimN0_4_832_valAt_g134 [w0,w1,w2,w3] hheadw i hi j hj8 col hcol]
+    rw [Finset.sum_range_succ, Finset.sum_range_succ, Finset.sum_range_succ, Finset.sum_range_one]
+    rw [key 0 (by omega), key 1 (by omega), key 2 (by omega), key 3 (by omega)]
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+
+
+-- ==== batch3 g141 additions ====
+/-- valAt of a dim-0 all-gather of four `[32,32]` shards into a `[128,32]` tensor.
+    The output row `r*32+lc` (rank `r`, local row `lc`), column `jcol` reads shard `r`
+    at local index `lc*32 + jcol`. -/
+theorem allGatherPrimDimN_0_4_valAt_32_32_g141 (xs : List Tensor)
+    (r : Nat) (hr : r < 4) (lc : Nat) (hlc : lc < 32) (jcol : Nat) (hjcol : jcol < 32)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [32, 32]) :
+    valAt (allGatherPrimDimN 0 4 0 xs) ((r * 32 + lc) * 32 + jcol) =
+      valAt (xs.getD r (zeroTensor [32, 32])) (lc * 32 + jcol) := by
+  have hidx_lt : (r * 32 + lc) * 32 + jcol < 4096 := by omega
+  have hgather_shape : (allGatherPrimDimN 0 4 0 xs).shape = [128, 32] := by
+    rw [allGatherPrimDimN_shape 0 4 xs [32, 32] hhead]
+    simp [List.set, List.getD]
+  have hidx_prod : (r * 32 + lc) * 32 + jcol < prodShape (allGatherPrimDimN 0 4 0 xs).shape := by
+    rw [hgather_shape]; simp [prodShape]; omega
+  rw [valAt_of_lt _ _ hidx_prod]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl, List.set,
+    show (32 : Nat) ≠ 0 from by omega, show (128 : Nat) ≠ 0 from by omega,
+    show (4096 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
+    ite_false]
+  have e1 : ((r * 32 + lc) * 32 + jcol) / 4096 = 0 := by omega
+  have e2 : ((r * 32 + lc) * 32 + jcol) % 4096 = (r * 32 + lc) * 32 + jcol := by omega
+  have e3 : ((r * 32 + lc) * 32 + jcol) / 32 = r * 32 + lc := by omega
+  have e4 : ((r * 32 + lc) * 32 + jcol) % 32 = jcol := by omega
+  have e5 : (r * 32 + lc) / 32 = r := by omega
+  have e6 : (r * 32 + lc) % 32 = lc := by omega
+  rw [e1, e2, e3, e4, e5, e6]
+  simp only [Nat.zero_mul, Nat.zero_add]
+
+set_option maxHeartbeats 1600000 in
+/-- Column-parallel weight gradient for `BW_linear`: the gradient output `gradOut`
+    (`[1,8,128]`) is sharded on dim 2 into four `[1,8,32]` shards, the weight `w`
+    (`[128,32]`) is sharded on dim 0 into four `[32,32]` shards, and the activation `x`
+    (`[1,8,32]`) is shared.  Then the full dW (`[128,32]`) equals the dim-0 all-gather of
+    the four per-rank dW outputs (`[32,32]`). -/
+theorem bw_linear_dw_col_split_dim2_4_1_8_32_g141
+    (g0 g1 g2 g3 x w0 w1 w2 w3 : Tensor)
+    (hg0 : g0.shape = [1, 8, 32]) (hg1 : g1.shape = [1, 8, 32])
+    (hg2 : g2.shape = [1, 8, 32]) (hg3 : g3.shape = [1, 8, 32])
+    (hx : x.shape = [1, 8, 32])
+    (hw0 : w0.shape = [32, 32]) (hw1 : w1.shape = [32, 32])
+    (hw2 : w2.shape = [32, 32]) (hw3 : w3.shape = [32, 32]) :
+    (bw_linear (allGatherPrimDimN 2 4 0 [g0, g1, g2, g3]) x
+        (allGatherPrimDimN 0 4 0 [w0, w1, w2, w3])).2 =
+      allGatherPrimDimN 0 4 0
+        [(bw_linear g0 x w0).2, (bw_linear g1 x w1).2,
+         (bw_linear g2 x w2).2, (bw_linear g3 x w3).2] := by
+  classical
+  have hgg_head : (([g0, g1, g2, g3]).head?.map (fun t => t.shape)).getD [] = [1, 8, 32] := by
+    simp [hg0]
+  have hgw_head : (([w0, w1, w2, w3]).head?.map (fun t => t.shape)).getD [] = [32, 32] := by
+    simp [hw0]
+  have hG : (allGatherPrimDimN 2 4 0 [g0, g1, g2, g3]).shape = [1, 8, 128] := by
+    rw [allGatherPrimDimN_shape 2 4 _ [1, 8, 32] hgg_head]; simp [List.set, List.getD]
+  have hW : (allGatherPrimDimN 0 4 0 [w0, w1, w2, w3]).shape = [128, 32] := by
+    rw [allGatherPrimDimN_shape 0 4 _ [32, 32] hgw_head]; simp [List.set, List.getD]
+  have hL_shape : (bw_linear (allGatherPrimDimN 2 4 0 [g0, g1, g2, g3]) x
+      (allGatherPrimDimN 0 4 0 [w0, w1, w2, w3])).2.shape = [128, 32] :=
+    bw_linear_3d_snd_shape 1 8 128 32 _ _ _ hG hx hW
+  have hp0 : (bw_linear g0 x w0).2.shape = [32, 32] := bw_linear_3d_snd_shape 1 8 32 32 _ _ _ hg0 hx hw0
+  have hpieces_head : (([(bw_linear g0 x w0).2, (bw_linear g1 x w1).2,
+      (bw_linear g2 x w2).2, (bw_linear g3 x w3).2]).head?.map (fun t => t.shape)).getD [] = [32, 32] := by
+    simp [hp0]
+  have hR_shape : (allGatherPrimDimN 0 4 0
+      [(bw_linear g0 x w0).2, (bw_linear g1 x w1).2,
+       (bw_linear g2 x w2).2, (bw_linear g3 x w3).2]).shape = [128, 32] := by
+    rw [allGatherPrimDimN_shape 0 4 _ [32, 32] hpieces_head]; simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hL_shape, hR_shape])
+  intro idx hidx
+  rw [hL_shape] at hidx
+  have hidx4096 : idx < 4096 := by simpa [prodShape] using hidx
+  set c := idx / 32 with hc_def
+  set jcol := idx % 32 with hjcol_def
+  have hjcol : jcol < 32 := Nat.mod_lt _ (by omega)
+  have hc : c < 128 := by omega
+  have hidx_eq : idx = c * 32 + jcol := by omega
+  set r := c / 32 with hr_def
+  set lc := c % 32 with hlc_def
+  have hr : r < 4 := by omega
+  have hlc : lc < 32 := Nat.mod_lt _ (by omega)
+  have hc_eq : c = r * 32 + lc := by omega
+  -- LHS value as a sum
+  have hLval : valAt (bw_linear (allGatherPrimDimN 2 4 0 [g0, g1, g2, g3]) x
+      (allGatherPrimDimN 0 4 0 [w0, w1, w2, w3])).2 idx =
+      ∑ p ∈ Finset.range (1 * 8),
+        valAt (allGatherPrimDimN 2 4 0 [g0, g1, g2, g3]) (p * 128 + c) * valAt x (p * 32 + jcol) := by
+    rw [hidx_eq]
+    exact bw_linear_dw_valAt3d _ _ _ 1 8 128 32 hG hx hW c hc jcol hjcol
+  -- rewrite the gathered-gradient term per summand
+  have hgather_term : ∀ p, p < 8 →
+      valAt (allGatherPrimDimN 2 4 0 [g0, g1, g2, g3]) (p * 128 + c) =
+        valAt (([g0, g1, g2, g3]).getD r (zeroTensor [1, 8, 32])) (p * 32 + lc) := by
+    intro p hp
+    rw [show p * 128 + c = p * 128 + r * 32 + lc from by rw [hc_eq]; ring]
+    exact allGatherPrimDimN_dim2_4_1_8_32_valAt _ p hp r hr lc hlc hgg_head
+  -- RHS value
+  have hRval : valAt (allGatherPrimDimN 0 4 0
+      [(bw_linear g0 x w0).2, (bw_linear g1 x w1).2,
+       (bw_linear g2 x w2).2, (bw_linear g3 x w3).2]) idx =
+      valAt (([(bw_linear g0 x w0).2, (bw_linear g1 x w1).2,
+        (bw_linear g2 x w2).2, (bw_linear g3 x w3).2]).getD r (zeroTensor [32, 32]))
+        (lc * 32 + jcol) := by
+    rw [hidx_eq, hc_eq]
+    exact allGatherPrimDimN_0_4_valAt_32_32_g141 _ r hr lc hlc jcol hjcol hpieces_head
+  rw [hLval, hRval]
+  rw [Finset.sum_congr rfl (fun p hp => by
+    rw [hgather_term p (by simpa using hp)])]
+  -- now both sides are a sum over the rank-r shard; case on r
+  have hr4 : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+  clear_value r
+  rcases hr4 with rfl | rfl | rfl | rfl <;>
+    (simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some];
+     rw [bw_linear_dw_valAt3d _ _ _ 1 8 32 32 (by assumption) hx (by assumption) lc hlc jcol hjcol])
+
+
 end TrainVerify.Denote
