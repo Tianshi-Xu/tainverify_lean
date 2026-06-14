@@ -44,5 +44,84 @@ def goal_27_cut_initGoals : List LineageGoal := initGoals ++ goal_27_prereqs
 def goal_27_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_27 pm_goal_27 goal_27 sm_goal_27InitEnv pm_goal_27InitEnv goal_27_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- fw_gelu distributes pointwise over allGather (gatherDim 2): inputs are pre-sharded,
+-- each PM rank applies fw_gelu to its shard, so no collective is needed on inputs.
+theorem prove_goal_27_cut : goal_27_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_26 (tensor 598 gathered along dim 2 from 1561..1564)
+  have hInit26 : InitGoalHolds pm_goal_27.numRanks goal_26 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_27_cut_initGoals, goal_27_prereqs]
+    decide
+  have h598_shape : (initSM 598).shape = [1, 8, 128] := hInit26.1
+  -- Per-shard shapes from goal_26
+  have hshapes := hInit26.2.1
+  simp only [goal_26, List.map] at hshapes
+  rw [List.cons.injEq, List.cons.injEq, List.cons.injEq, List.cons.injEq] at hshapes
+  obtain ⟨e1, e2, e3, e4, _⟩ := hshapes
+  -- Reconstruction: initSM 598 = reconstructWithDim 2 4 0 [initPM 1561,..,1564]
+  have h598_eq : initSM 598 =
+      reconstructWithDim 2 4 0
+        [initPM 1561, initPM 1562, initPM 1563, initPM 1564] := by
+    have hrec := hInit26.2.2
+    simp only [goal_26, pm_goal_27, List.map] at hrec
+    exact hrec
+  set xs : List Tensor := [initPM 1561, initPM 1562, initPM 1563, initPM 1564] with hxs
+  have hxs_len : xs.length = 4 := by simp [hxs]
+  have hxs_head : (xs.head?.map (fun t => t.shape)).getD [] = [1, 8, 32] := by
+    simp [hxs, List.head?, Option.map, e1]
+  have hxs_shape : ∀ i (hi : i < xs.length), (xs.get ⟨i, hi⟩).shape = [1, 8, 32] := by
+    intro i hi
+    simp only [hxs, List.length] at hi
+    have h4 : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases h4 with rfl | rfl | rfl | rfl <;> simp [hxs, e1, e2, e3, e4]
+  -- 598 reconstruct is a nonscalar allGather
+  have h598_gather : initSM 598 = allGatherPrimDimN 2 4 0 xs := by
+    rw [h598_eq, hxs]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [e1]; decide)
+  -- SM store: smStore 599 = fw_gelu (initSM 598)
+  have hsm : (denoteGraph sm_goal_27 initSM) 599 = fw_gelu (initSM 598) := by
+    simp only [sm_goal_27, denoteGraph, List.foldl]
+    rw [applyNode_fw_gelu_out]
+  -- PM stores: each rank applies fw_gelu to its shard directly
+  have hpm0 : (denoteGraph pm_goal_27 initPM) 1585 = fw_gelu (initPM 1561) := by
+    simp only [pm_goal_27, denoteGraph, List.foldl, applyNode,
+      evalOp_fw_gelu, List.map, storeSet]
+    rfl
+  have hpm1 : (denoteGraph pm_goal_27 initPM) 1586 = fw_gelu (initPM 1562) := by
+    simp only [pm_goal_27, denoteGraph, List.foldl, applyNode,
+      evalOp_fw_gelu, List.map, storeSet]
+    rfl
+  have hpm2 : (denoteGraph pm_goal_27 initPM) 1587 = fw_gelu (initPM 1563) := by
+    simp only [pm_goal_27, denoteGraph, List.foldl, applyNode,
+      evalOp_fw_gelu, List.map, storeSet]
+    rfl
+  have hpm3 : (denoteGraph pm_goal_27 initPM) 1588 = fw_gelu (initPM 1564) := by
+    simp only [pm_goal_27, denoteGraph, List.foldl, applyNode,
+      evalOp_fw_gelu, List.map, storeSet]
+    rfl
+  -- Key equation: fw_gelu distributes over allGatherPrimDimN (dim 2)
+  have hkey : fw_gelu (initSM 598) =
+      reconstructWithDim 2 4 0
+        [fw_gelu (initPM 1561), fw_gelu (initPM 1562),
+         fw_gelu (initPM 1563), fw_gelu (initPM 1564)] := by
+    rw [h598_gather]
+    rw [fw_gelu_allGatherPrimDimN_eq 2 4 xs [1, 8, 32] (by omega) hxs_len hxs_head hxs_shape]
+    have hmap : xs.map fw_gelu =
+        [fw_gelu (initPM 1561), fw_gelu (initPM 1562),
+         fw_gelu (initPM 1563), fw_gelu (initPM 1564)] := by simp [hxs, List.map]
+    rw [hmap]
+    symm
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [fw_gelu_shape, e1]; decide)
+  -- Discharge the three conjuncts
+  simp only [goal_27, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, fw_gelu_shape, h598_shape]
+  · rw [hpm0, hpm1, hpm2, hpm3]
+    simp only [fw_gelu_shape, e1, e2, e3, e4]
+  · have hnr : pm_goal_27.numRanks = 4 := rfl
+    rw [hsm, hpm0, hpm1, hpm2, hpm3, hnr, hkey]
+
 end TrainVerify.Denote.GeneratedGoals
 
