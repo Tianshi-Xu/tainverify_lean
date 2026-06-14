@@ -14090,6 +14090,101 @@ theorem fw_matmul_split_dimK_1_4_8_8 (x0 x1 x2 x3 y0 y1 y2 y3 : Tensor)
     List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
   ring
 
+/-! ## FW_matmul output-dim (column-parallel) split (`[1,4,8,8] @ [1,4,8,8]` with the
+second operand sharded along dim 3 into 4 shards `[1,4,8,2]`).
+
+The first operand `x` is replicated across ranks; the second operand `y` is split along
+its last (output `N`) dimension. Each rank computes the local `fw_matmul x yᵣ` of shape
+`[1,4,8,2]`, and the full result is the `allGatherPrimDimN 3` concatenation of the per-rank
+products (no reduction needed). -/
+
+/-! Flat-index arithmetic helpers for `fw_matmul_split_dimN_1_4_8_8` (proven in an empty
+context so `omega` stays fast). -/
+
+private theorem col_aux_qbnd (idx l : Nat) (hl : l < 8) (hidx : idx < 256) :
+    idx / 64 * 64 + l * 8 + idx % 8 < 256 := by omega
+
+private theorem col_aux_shard (idx l : Nat) (hl : l < 8) :
+    (idx / 64 * 64 + l * 8 + idx % 8) % 8 / 2 = idx % 8 / 2 := by omega
+
+private theorem col_aux_idx (idx l : Nat) (hl : l < 8) :
+    (idx / 64 * 64 + l * 8 + idx % 8) / 8 * 2 +
+      (idx / 64 * 64 + l * 8 + idx % 8) % 8 % 2 =
+      idx / 64 * 16 + l * 2 + idx % 8 % 2 := by omega
+
+set_option maxHeartbeats 1600000 in
+private theorem col_final (x y : Tensor) (idx : Nat)
+    (hx : x.shape = [1, 4, 8, 8]) (hy : y.shape = [1, 4, 8, 2]) (hidx : idx < 256) :
+    (∑ l ∈ Finset.range 8,
+        valAt x (idx / 64 * 64 + idx % 64 / 8 * 8 + l) *
+          valAt y (idx / 64 * 16 + l * 2 + idx % 8 % 2)) =
+      valAt (fw_matmul x y) (idx / 8 * 2 + idx % 8 % 2) := by
+  rw [show fw_matmul x y = batchedMatmul x y from rfl]
+  rw [batchedMatmul_valAt_1_4_8_8_1_4_8_2 x y (idx / 8 * 2 + idx % 8 % 2) hx hy (by omega)]
+  apply Finset.sum_congr rfl
+  intro l hl
+  have hl8 : l < 8 := Finset.mem_range.mp hl
+  congr 1
+  · congr 1; omega
+  · congr 1; omega
+
+set_option maxHeartbeats 1600000 in
+-- fw_matmul distributes over an output-dim (dim 3) split of the second operand via allGather
+theorem fw_matmul_split_dimN_1_4_8_8 (x y0 y1 y2 y3 : Tensor)
+    (hx : x.shape = [1, 4, 8, 8])
+    (hy0 : y0.shape = [1, 4, 8, 2]) (hy1 : y1.shape = [1, 4, 8, 2])
+    (hy2 : y2.shape = [1, 4, 8, 2]) (hy3 : y3.shape = [1, 4, 8, 2]) :
+    fw_matmul x (allGatherPrimDimN 3 4 0 [y0, y1, y2, y3]) =
+      allGatherPrimDimN 3 4 0
+        [fw_matmul x y0, fw_matmul x y1, fw_matmul x y2, fw_matmul x y3] := by
+  have hhead_y : (([y0, y1, y2, y3] : List Tensor).head?.map (fun t => t.shape)).getD [] =
+      [1, 4, 8, 2] := by simp [hy0]
+  have hY_shape : (allGatherPrimDimN 3 4 0 [y0, y1, y2, y3]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 3 4 _ _ hhead_y]; simp [List.set, List.getD]
+  have hm0 : (fw_matmul x y0).shape = [1, 4, 8, 2] :=
+    batchedMatmul_shape_1_4_8_8_1_4_8_2 x y0 hx hy0
+  have hlhs_shape : (fw_matmul x (allGatherPrimDimN 3 4 0 [y0, y1, y2, y3])).shape =
+      [1, 4, 8, 8] :=
+    fw_matmul_shape_1_4_8_8 _ _ hx hY_shape
+  have hhead_rhs : (([fw_matmul x y0, fw_matmul x y1, fw_matmul x y2, fw_matmul x y3] :
+      List Tensor).head?.map (fun t => t.shape)).getD [] = [1, 4, 8, 2] := by simp [hm0]
+  have hrhs_shape : (allGatherPrimDimN 3 4 0
+      [fw_matmul x y0, fw_matmul x y1, fw_matmul x y2, fw_matmul x y3]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 3 4 _ _ hhead_rhs]; simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  rw [fw_matmul_valAt_1_4_8_8 _ _ idx hx hY_shape hidx256]
+  rw [allGatherPrimDimN_3_4_valAt_1_4_8_2 _ idx hhead_rhs hidx256]
+  have hLHSsum : (∑ l ∈ Finset.range 8,
+        valAt x (idx / 64 * 64 + idx % 64 / 8 * 8 + l) *
+          valAt (allGatherPrimDimN 3 4 0 [y0, y1, y2, y3]) (idx / 64 * 64 + l * 8 + idx % 8)) =
+      ∑ l ∈ Finset.range 8,
+        valAt x (idx / 64 * 64 + idx % 64 / 8 * 8 + l) *
+          valAt ([y0, y1, y2, y3].getD (idx % 8 / 2) (zeroTensor [1, 4, 8, 2]))
+            (idx / 64 * 16 + l * 2 + idx % 8 % 2) := by
+    apply Finset.sum_congr rfl
+    intro l hl
+    have hl8 : l < 8 := Finset.mem_range.mp hl
+    rw [allGatherPrimDimN_3_4_valAt_1_4_8_2 _ (idx / 64 * 64 + l * 8 + idx % 8) hhead_y
+        (col_aux_qbnd idx l hl8 hidx256)]
+    rw [col_aux_shard idx l hl8, col_aux_idx idx l hl8]
+  rw [hLHSsum]
+  rcases (show idx % 8 / 2 = 0 ∨ idx % 8 / 2 = 1 ∨ idx % 8 / 2 = 2 ∨ idx % 8 / 2 = 3 from by omega)
+    with h | h | h | h
+  · rw [h]
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    exact col_final x y0 idx hx hy0 hidx256
+  · rw [h]
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    exact col_final x y1 idx hx hy1 hidx256
+  · rw [h]
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    exact col_final x y2 idx hx hy2 hidx256
+  · rw [h]
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    exact col_final x y3 idx hx hy3 hidx256
+
 /-! Flat-index arithmetic helpers for `bw_matmul_fst_split_dW_1_4_8_8` (proven in an empty
 context over fresh variables so `omega` stays robust). -/
 

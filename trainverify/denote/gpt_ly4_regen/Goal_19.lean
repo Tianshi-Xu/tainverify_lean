@@ -46,5 +46,111 @@ def goal_19_cut_initGoals : List LineageGoal := initGoals ++ goal_19_prereqs
 def goal_19_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_19 pm_goal_19 goal_19 sm_goal_19InitEnv pm_goal_19InitEnv goal_19_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- fw_matmul distributes over an output-dim (dim 3) split of the second operand;
+-- x (586) is replicated, y (582) is column-sharded, output is the dim-3 gather (no reduce)
+theorem prove_goal_19_cut : goal_19_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- input 586 (x) replicated  (goal_18)
+  have hInit586 : InitGoalHolds pm_goal_19.numRanks goal_18 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_19_cut_initGoals, goal_19_prereqs]
+    decide
+  -- input 582 (y) = gather along dim 3 of shards 1309..1312  (goal_14)
+  have hInit582 : InitGoalHolds pm_goal_19.numRanks goal_14 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_19_cut_initGoals, goal_19_prereqs]
+    decide
+  -- 586 replicated relation
+  have h586_shape : (initSM 586).shape = [1, 4, 8, 8] := hInit586.1
+  have h586_eq : initSM 586 = initPM 586 := by
+    have hrec := hInit586.2.2
+    simp only [goal_18, pm_goal_19, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  have h586pm_shape : (initPM 586).shape = [1, 4, 8, 8] := by rw [← h586_eq]; exact h586_shape
+  -- 582 reconstruct relation
+  have h582_rec : initSM 582 = reconstructWithDim 3 4 0
+      [initPM 1309, initPM 1310, initPM 1311, initPM 1312] := by
+    have hrec := hInit582.2.2
+    simp only [goal_14, pm_goal_19, List.map] at hrec
+    exact hrec
+  -- shard shapes for y (1309..1312) : [1,4,8,2]
+  have htp582 := hInit582.2.1
+  simp only [goal_14, List.map] at htp582
+  have h1309_shape : (initPM 1309).shape = [1, 4, 8, 2] := by
+    have := congrArg List.head? htp582; simpa using this
+  have h1310_shape : (initPM 1310).shape = [1, 4, 8, 2] := by
+    have := congrArg List.tail htp582
+    have := congrArg List.head? this; simpa using this
+  have h1311_shape : (initPM 1311).shape = [1, 4, 8, 2] := by
+    have := congrArg (List.tail ∘ List.tail) htp582
+    have := congrArg List.head? this; simpa using this
+  have h1312_shape : (initPM 1312).shape = [1, 4, 8, 2] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp582
+    have := congrArg List.head? this; simpa using this
+  -- convert reconstruct to allGatherPrimDimN (shards are non-scalar)
+  have h582_gather : initSM 582 = allGatherPrimDimN 3 4 0
+      [initPM 1309, initPM 1310, initPM 1311, initPM 1312] := by
+    rw [h582_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h1309_shape]; decide)
+  -- per-shard output shapes
+  have hm0_shape : (fw_matmul (initPM 586) (initPM 1309)).shape = [1, 4, 8, 2] :=
+    batchedMatmul_shape_1_4_8_8_1_4_8_2 (initPM 586) (initPM 1309) h586pm_shape h1309_shape
+  have hm1_shape : (fw_matmul (initPM 586) (initPM 1310)).shape = [1, 4, 8, 2] :=
+    batchedMatmul_shape_1_4_8_8_1_4_8_2 (initPM 586) (initPM 1310) h586pm_shape h1310_shape
+  have hm2_shape : (fw_matmul (initPM 586) (initPM 1311)).shape = [1, 4, 8, 2] :=
+    batchedMatmul_shape_1_4_8_8_1_4_8_2 (initPM 586) (initPM 1311) h586pm_shape h1311_shape
+  have hm3_shape : (fw_matmul (initPM 586) (initPM 1312)).shape = [1, 4, 8, 2] :=
+    batchedMatmul_shape_1_4_8_8_1_4_8_2 (initPM 586) (initPM 1312) h586pm_shape h1312_shape
+  -- SM store: smStore 587 = fw_matmul (initSM 586) (initSM 582)
+  have hsm : (denoteGraph sm_goal_19 initSM) 587 = fw_matmul (initSM 586) (initSM 582) := by
+    simp only [sm_goal_19, denoteGraph, List.foldl]
+    rw [applyNode_fw_matmul_out]
+  -- PM stores: each shard output is a per-rank matmul
+  have hpm0 : (denoteGraph pm_goal_19 initPM) 1413 = fw_matmul (initPM 586) (initPM 1309) := by
+    simp only [pm_goal_19, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_matmul_out]
+  have hpm1 : (denoteGraph pm_goal_19 initPM) 1414 = fw_matmul (initPM 586) (initPM 1310) := by
+    simp only [pm_goal_19, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_matmul_out]
+    congr 1 <;> repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  have hpm2 : (denoteGraph pm_goal_19 initPM) 1415 = fw_matmul (initPM 586) (initPM 1311) := by
+    simp only [pm_goal_19, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_matmul_out]
+    congr 1 <;> repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  have hpm3 : (denoteGraph pm_goal_19 initPM) 1416 = fw_matmul (initPM 586) (initPM 1312) := by
+    simp only [pm_goal_19, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_matmul_out]
+    congr 1 <;> repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  -- Key equation: matmul of the gather = gather of the per-shard matmuls
+  have hkey : fw_matmul (initSM 586) (initSM 582) = allGatherPrimDimN 3 4 0
+      [fw_matmul (initPM 586) (initPM 1309), fw_matmul (initPM 586) (initPM 1310),
+       fw_matmul (initPM 586) (initPM 1311), fw_matmul (initPM 586) (initPM 1312)] := by
+    rw [h586_eq, h582_gather]
+    exact fw_matmul_split_dimN_1_4_8_8 (initPM 586) _ _ _ _
+      h586pm_shape h1309_shape h1310_shape h1311_shape h1312_shape
+  -- discharge the three conjuncts
+  simp only [goal_19, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, hkey]
+    have hhd : (([fw_matmul (initPM 586) (initPM 1309), fw_matmul (initPM 586) (initPM 1310),
+        fw_matmul (initPM 586) (initPM 1311), fw_matmul (initPM 586) (initPM 1312)] :
+        List Tensor).head?.map (fun t => t.shape)).getD [] = [1, 4, 8, 2] := by simp [hm0_shape]
+    rw [allGatherPrimDimN_shape 3 4 _ _ hhd]
+    simp [List.set, List.getD]
+  · rw [hpm0, hpm1, hpm2, hpm3]
+    simp [hm0_shape, hm1_shape, hm2_shape, hm3_shape]
+  · rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
+    symm
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [hpm0, hm0_shape]
+    decide
+
 end TrainVerify.Denote.GeneratedGoals
+
 
