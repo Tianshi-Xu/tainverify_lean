@@ -59,5 +59,227 @@ def goal_231_cut_initGoals : List LineageGoal := initGoals ++ goal_231_prereqs
 def goal_231_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_231 pm_goal_231 goal_231 sm_goal_231InitEnv pm_goal_231InitEnv goal_231_cut_initGoals
 
+set_option maxRecDepth 8192 in
+set_option maxHeartbeats 1600000 in
+-- BW_matmul dW (second output) through an AllToAll → BW_matmul → AllToAll pipeline.
+theorem prove_goal_231_cut : goal_231_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- goal_236: tensor 873 (= g, first operand) is the dim-3 gather of shards 3083,3086,3089,3092
+  have hInit873 : InitGoalHolds pm_goal_231.numRanks goal_236 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_231_cut_initGoals, goal_231_prereqs]
+    decide
+  have h873_rec : initSM 873 = reconstructWithDim 3 4 0
+      [initPM 3083, initPM 3086, initPM 3089, initPM 3092] := by
+    have hrec := hInit873.2.2
+    simp only [goal_236, pm_goal_231, List.map] at hrec
+    exact hrec
+  have hs873 := hInit873.2.1
+  simp only [goal_236, List.map, List.cons.injEq, and_true] at hs873
+  obtain ⟨h3083_shape, h3086_shape, h3089_shape, h3092_shape⟩ := hs873
+  have h873_gather : initSM 873 = allGatherPrimDimN 3 4 0
+      [initPM 3083, initPM 3086, initPM 3089, initPM 3092] := by
+    rw [h873_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h3083_shape]; decide)
+  -- goal_93: tensor 691 (= x, second operand) is replicated (singleton)
+  have hInit691 : InitGoalHolds pm_goal_231.numRanks goal_93 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_231_cut_initGoals, goal_231_prereqs]
+    decide
+  have h691_eq : initSM 691 = initPM 691 := by
+    have hrec := hInit691.2.2
+    simp only [goal_93, pm_goal_231, List.map] at hrec
+    rw [hrec]; exact reconstructWithDim_singleton _ _ _ _
+  have hs691 := hInit691.2.1
+  simp only [goal_93, List.map, List.cons.injEq, and_true] at hs691
+  have h691_shape : (initPM 691).shape = [1, 4, 8, 8] := hs691
+  have ha : (transpose2d (initPM 691)).shape = [1, 4, 8, 8] :=
+    transpose2d_shape_1_4_8_8 _ h691_shape
+  -- SM store: 868 = dW = batchedMatmul (transpose2d x) g
+  have hsm868 : (denoteGraph sm_goal_231 initSM) 868 =
+      (bw_matmul (initSM 873) (initSM 691) (initSM 687)).2 := by
+    simp only [sm_goal_231, denoteGraph, List.foldl]
+    rw [applyNode_bw_matmul_snd_out _ _ 0 873 691 687 872 868 (by decide)]
+  -- PM dW shards (second BW_matmul output per rank)
+  have hdy0 : (denoteGraph pm_goal_231 initPM) 3082 =
+      batchedMatmul (transpose2d (initPM 691)) (initPM 3083) := by
+    simp only [pm_goal_231, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 3082 (by decide), applyNode_skip _ _ _ 3082 (by decide),
+        applyNode_skip _ _ _ 3082 (by decide), applyNode_skip _ _ _ 3082 (by decide),
+        applyNode_skip _ _ _ 3082 (by decide), applyNode_skip _ _ _ 3082 (by decide),
+        applyNode_skip _ _ _ 3082 (by decide),
+        applyNode_bw_matmul_snd_out _ _ 0 3083 691 3065 3090 3082 (by decide),
+        applyNode_skip _ _ _ 3083 (by decide), applyNode_skip _ _ _ 3083 (by decide),
+        applyNode_skip _ _ _ 3083 (by decide), applyNode_skip _ _ _ 3083 (by decide),
+        applyNode_skip _ _ _ 691 (by decide), applyNode_skip _ _ _ 691 (by decide),
+        applyNode_skip _ _ _ 691 (by decide), applyNode_skip _ _ _ 691 (by decide)]
+    rfl
+  have hdy1 : (denoteGraph pm_goal_231 initPM) 3085 =
+      batchedMatmul (transpose2d (initPM 691)) (initPM 3086) := by
+    simp only [pm_goal_231, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 3085 (by decide), applyNode_skip _ _ _ 3085 (by decide),
+        applyNode_skip _ _ _ 3085 (by decide), applyNode_skip _ _ _ 3085 (by decide),
+        applyNode_skip _ _ _ 3085 (by decide), applyNode_skip _ _ _ 3085 (by decide),
+        applyNode_bw_matmul_snd_out _ _ 1 3086 691 3066 3087 3085 (by decide),
+        applyNode_skip _ _ _ 3086 (by decide), applyNode_skip _ _ _ 3086 (by decide),
+        applyNode_skip _ _ _ 3086 (by decide), applyNode_skip _ _ _ 3086 (by decide),
+        applyNode_skip _ _ _ 3086 (by decide),
+        applyNode_skip _ _ _ 691 (by decide), applyNode_skip _ _ _ 691 (by decide),
+        applyNode_skip _ _ _ 691 (by decide), applyNode_skip _ _ _ 691 (by decide),
+        applyNode_skip _ _ _ 691 (by decide)]
+    rfl
+  have hdy2 : (denoteGraph pm_goal_231 initPM) 3088 =
+      batchedMatmul (transpose2d (initPM 691)) (initPM 3089) := by
+    simp only [pm_goal_231, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 3088 (by decide), applyNode_skip _ _ _ 3088 (by decide),
+        applyNode_skip _ _ _ 3088 (by decide), applyNode_skip _ _ _ 3088 (by decide),
+        applyNode_skip _ _ _ 3088 (by decide),
+        applyNode_bw_matmul_snd_out _ _ 2 3089 691 3067 3084 3088 (by decide),
+        applyNode_skip _ _ _ 3089 (by decide), applyNode_skip _ _ _ 3089 (by decide),
+        applyNode_skip _ _ _ 3089 (by decide), applyNode_skip _ _ _ 3089 (by decide),
+        applyNode_skip _ _ _ 3089 (by decide), applyNode_skip _ _ _ 3089 (by decide),
+        applyNode_skip _ _ _ 691 (by decide), applyNode_skip _ _ _ 691 (by decide),
+        applyNode_skip _ _ _ 691 (by decide), applyNode_skip _ _ _ 691 (by decide),
+        applyNode_skip _ _ _ 691 (by decide), applyNode_skip _ _ _ 691 (by decide)]
+    rfl
+  have hdy3 : (denoteGraph pm_goal_231 initPM) 3091 =
+      batchedMatmul (transpose2d (initPM 691)) (initPM 3092) := by
+    simp only [pm_goal_231, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 3091 (by decide), applyNode_skip _ _ _ 3091 (by decide),
+        applyNode_skip _ _ _ 3091 (by decide), applyNode_skip _ _ _ 3091 (by decide),
+        applyNode_bw_matmul_snd_out _ _ 3 3092 691 3068 3081 3091 (by decide),
+        applyNode_skip _ _ _ 3092 (by decide), applyNode_skip _ _ _ 3092 (by decide),
+        applyNode_skip _ _ _ 3092 (by decide), applyNode_skip _ _ _ 3092 (by decide),
+        applyNode_skip _ _ _ 3092 (by decide), applyNode_skip _ _ _ 3092 (by decide),
+        applyNode_skip _ _ _ 3092 (by decide),
+        applyNode_skip _ _ _ 691 (by decide), applyNode_skip _ _ _ 691 (by decide),
+        applyNode_skip _ _ _ 691 (by decide), applyNode_skip _ _ _ 691 (by decide),
+        applyNode_skip _ _ _ 691 (by decide), applyNode_skip _ _ _ 691 (by decide),
+        applyNode_skip _ _ _ 691 (by decide)]
+    rfl
+  -- PM final shards (last AllToAll output per rank) in terms of the dW shards
+  have hf0 : (denoteGraph pm_goal_231 initPM) 2962 =
+      allToAllPrimWithDims 4 0 [(denoteGraph pm_goal_231 initPM) 3082,
+        (denoteGraph pm_goal_231 initPM) 3085, (denoteGraph pm_goal_231 initPM) 3088,
+        (denoteGraph pm_goal_231 initPM) 3091] 3 2 := by
+    simp only [pm_goal_231, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 2962 (by decide), applyNode_skip _ _ _ 2962 (by decide),
+        applyNode_skip _ _ _ 2962 (by decide),
+        applyNode_allToAllPrimWithDims_out _ _ 0 [3082, 3085, 3088, 3091] 2962 3 2,
+        applyNode_skip _ _ _ 3082 (by decide), applyNode_skip _ _ _ 3082 (by decide),
+        applyNode_skip _ _ _ 3082 (by decide), applyNode_skip _ _ _ 3082 (by decide),
+        applyNode_skip _ _ _ 3085 (by decide), applyNode_skip _ _ _ 3085 (by decide),
+        applyNode_skip _ _ _ 3085 (by decide), applyNode_skip _ _ _ 3085 (by decide),
+        applyNode_skip _ _ _ 3088 (by decide), applyNode_skip _ _ _ 3088 (by decide),
+        applyNode_skip _ _ _ 3088 (by decide), applyNode_skip _ _ _ 3088 (by decide),
+        applyNode_skip _ _ _ 3091 (by decide), applyNode_skip _ _ _ 3091 (by decide),
+        applyNode_skip _ _ _ 3091 (by decide), applyNode_skip _ _ _ 3091 (by decide)]
+    rfl
+  have hf1 : (denoteGraph pm_goal_231 initPM) 2964 =
+      allToAllPrimWithDims 4 1 [(denoteGraph pm_goal_231 initPM) 3082,
+        (denoteGraph pm_goal_231 initPM) 3085, (denoteGraph pm_goal_231 initPM) 3088,
+        (denoteGraph pm_goal_231 initPM) 3091] 3 2 := by
+    simp only [pm_goal_231, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 2964 (by decide), applyNode_skip _ _ _ 2964 (by decide),
+        applyNode_allToAllPrimWithDims_out _ _ 1 [3082, 3085, 3088, 3091] 2964 3 2,
+        applyNode_skip _ _ _ 3082 (by decide), applyNode_skip _ _ _ 3082 (by decide),
+        applyNode_skip _ _ _ 3082 (by decide),
+        applyNode_skip _ _ _ 3085 (by decide), applyNode_skip _ _ _ 3085 (by decide),
+        applyNode_skip _ _ _ 3085 (by decide),
+        applyNode_skip _ _ _ 3088 (by decide), applyNode_skip _ _ _ 3088 (by decide),
+        applyNode_skip _ _ _ 3088 (by decide),
+        applyNode_skip _ _ _ 3091 (by decide), applyNode_skip _ _ _ 3091 (by decide),
+        applyNode_skip _ _ _ 3091 (by decide)]
+    rfl
+  have hf2 : (denoteGraph pm_goal_231 initPM) 2966 =
+      allToAllPrimWithDims 4 2 [(denoteGraph pm_goal_231 initPM) 3082,
+        (denoteGraph pm_goal_231 initPM) 3085, (denoteGraph pm_goal_231 initPM) 3088,
+        (denoteGraph pm_goal_231 initPM) 3091] 3 2 := by
+    simp only [pm_goal_231, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 2966 (by decide),
+        applyNode_allToAllPrimWithDims_out _ _ 2 [3082, 3085, 3088, 3091] 2966 3 2,
+        applyNode_skip _ _ _ 3082 (by decide), applyNode_skip _ _ _ 3082 (by decide),
+        applyNode_skip _ _ _ 3085 (by decide), applyNode_skip _ _ _ 3085 (by decide),
+        applyNode_skip _ _ _ 3088 (by decide), applyNode_skip _ _ _ 3088 (by decide),
+        applyNode_skip _ _ _ 3091 (by decide), applyNode_skip _ _ _ 3091 (by decide)]
+    rfl
+  have hf3 : (denoteGraph pm_goal_231 initPM) 2968 =
+      allToAllPrimWithDims 4 3 [(denoteGraph pm_goal_231 initPM) 3082,
+        (denoteGraph pm_goal_231 initPM) 3085, (denoteGraph pm_goal_231 initPM) 3088,
+        (denoteGraph pm_goal_231 initPM) 3091] 3 2 := by
+    simp only [pm_goal_231, denoteGraph, List.foldl]
+    rw [applyNode_allToAllPrimWithDims_out _ _ 3 [3082, 3085, 3088, 3091] 2968 3 2,
+        applyNode_skip _ _ _ 3082 (by decide),
+        applyNode_skip _ _ _ 3085 (by decide),
+        applyNode_skip _ _ _ 3088 (by decide),
+        applyNode_skip _ _ _ 3091 (by decide)]
+    rfl
+  -- main distribution: batchedMatmul (xᵀ) (gather of g shards) = gather of per-rank dW shards
+  have hsplit := bw_matmul_snd_split_1_4_8_8 (transpose2d (initPM 691))
+    (initPM 3083) (initPM 3086) (initPM 3089) (initPM 3092)
+    ha h3083_shape h3086_shape h3089_shape h3092_shape
+  -- shape of Z (the dim-3 gather of the dW shards) is [1,4,8,8]
+  have hZ_shape : (allGatherPrimDimN 3 4 0
+      [(denoteGraph pm_goal_231 initPM) 3082, (denoteGraph pm_goal_231 initPM) 3085,
+       (denoteGraph pm_goal_231 initPM) 3088, (denoteGraph pm_goal_231 initPM) 3091]).shape
+      = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 3 4 _ [1, 4, 8, 2]
+      (by show ((denoteGraph pm_goal_231 initPM) 3082).shape = [1, 4, 8, 2]
+          rw [hdy0]; exact batchedMatmul_shape_1_4_8_8_1_4_8_2 _ _ ha h3083_shape)]
+    simp [List.set, List.getD]
+  -- each final shard is a dim-2 chunk of Z
+  have hf0_chunk : (denoteGraph pm_goal_231 initPM) 2962 = chunkPrimDimN 2 4 0
+      (allGatherPrimDimN 3 4 0 [(denoteGraph pm_goal_231 initPM) 3082,
+        (denoteGraph pm_goal_231 initPM) 3085, (denoteGraph pm_goal_231 initPM) 3088,
+        (denoteGraph pm_goal_231 initPM) 3091]) := by
+    rw [hf0]; simp only [allToAllPrimWithDims]
+  have hf1_chunk : (denoteGraph pm_goal_231 initPM) 2964 = chunkPrimDimN 2 4 1
+      (allGatherPrimDimN 3 4 0 [(denoteGraph pm_goal_231 initPM) 3082,
+        (denoteGraph pm_goal_231 initPM) 3085, (denoteGraph pm_goal_231 initPM) 3088,
+        (denoteGraph pm_goal_231 initPM) 3091]) := by
+    rw [hf1]; simp only [allToAllPrimWithDims]
+  have hf2_chunk : (denoteGraph pm_goal_231 initPM) 2966 = chunkPrimDimN 2 4 2
+      (allGatherPrimDimN 3 4 0 [(denoteGraph pm_goal_231 initPM) 3082,
+        (denoteGraph pm_goal_231 initPM) 3085, (denoteGraph pm_goal_231 initPM) 3088,
+        (denoteGraph pm_goal_231 initPM) 3091]) := by
+    rw [hf2]; simp only [allToAllPrimWithDims]
+  have hf3_chunk : (denoteGraph pm_goal_231 initPM) 2968 = chunkPrimDimN 2 4 3
+      (allGatherPrimDimN 3 4 0 [(denoteGraph pm_goal_231 initPM) 3082,
+        (denoteGraph pm_goal_231 initPM) 3085, (denoteGraph pm_goal_231 initPM) 3088,
+        (denoteGraph pm_goal_231 initPM) 3091]) := by
+    rw [hf3]; simp only [allToAllPrimWithDims]
+  -- Z (gather of dW shards) equals the SM-side dW
+  have hZeq : allGatherPrimDimN 3 4 0 [(denoteGraph pm_goal_231 initPM) 3082,
+      (denoteGraph pm_goal_231 initPM) 3085, (denoteGraph pm_goal_231 initPM) 3088,
+      (denoteGraph pm_goal_231 initPM) 3091]
+      = batchedMatmul (transpose2d (initPM 691))
+        (allGatherPrimDimN 3 4 0 [initPM 3083, initPM 3086, initPM 3089, initPM 3092]) := by
+    rw [hdy0, hdy1, hdy2, hdy3]
+    exact hsplit.symm
+  -- discharge the three conjuncts
+  simp only [goal_231, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape
+    rw [hsm868]
+    show (batchedMatmul (transpose2d (initSM 691)) (initSM 873)).shape = _
+    rw [h691_eq, h873_gather, ← hZeq]
+    exact hZ_shape
+  · -- PM shard shapes
+    rw [hf0_chunk, hf1_chunk, hf2_chunk, hf3_chunk,
+        chunkPrimDimN_shape 2 4 0 _ _ hZ_shape (by omega),
+        chunkPrimDimN_shape 2 4 1 _ _ hZ_shape (by omega),
+        chunkPrimDimN_shape 2 4 2 _ _ hZ_shape (by omega),
+        chunkPrimDimN_shape 2 4 3 _ _ hZ_shape (by omega)]
+    simp [List.set, List.getD]
+  · -- value
+    rw [hsm868]
+    show batchedMatmul (transpose2d (initSM 691)) (initSM 873) = _
+    rw [show pm_goal_231.numRanks = 4 from rfl]
+    rw [h691_eq, h873_gather, hf0_chunk, hf1_chunk, hf2_chunk, hf3_chunk,
+        reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _
+          (by rw [chunkPrimDimN_shape 2 4 0 _ _ hZ_shape (by omega)]; decide),
+        allGatherPrimDimN_chunkPrimDimN_id_dim2_4_8_8 _ hZ_shape, hZeq]
+
 end TrainVerify.Denote.GeneratedGoals
+
 
