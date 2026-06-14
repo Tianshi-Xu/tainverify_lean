@@ -10841,4 +10841,112 @@ theorem bw_matmul_fst_split_1_4_8_8 (g y0 y1 y2 y3 : Tensor)
   -- the two products agree (same `g`, same `y` shard, equal indices)
   rw [bw_split_aux_hgeq idx l loc hidx256 hloc]
 
+/-- `applyNode` for `BW_matmul`, second output (`dy`). -/
+theorem applyNode_bw_matmul_snd_out
+    (gr : GraphDecl) (s : Store) (rank : Nat) (gTid xTid yTid dxTid dyTid : Tid)
+    (hne : dxTid ≠ dyTid) :
+    applyNode gr s { rank := rank, op := "OpName.BW_matmul", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dyTid =
+      (bw_matmul (s gTid) (s xTid) (s yTid)).2 := by
+  unfold applyNode
+  rw [show ([gTid, xTid, yTid] : List Tid).map s = [s gTid, s xTid, s yTid] from rfl,
+      evalOp_bw_matmul]
+  change storeSet s [(dxTid, (bw_matmul (s gTid) (s xTid) (s yTid)).1),
+                     (dyTid, (bw_matmul (s gTid) (s xTid) (s yTid)).2)] dyTid = _
+  unfold storeSet
+  simp [List.find?, hne]
+
+/-! Flat-index arithmetic helpers for `bw_matmul_snd_split_1_4_8_8`. -/
+
+private theorem snd_split_aux_a (idx l loc : Nat) (hidx : idx < 256)
+    (hloc : loc = idx / 8 * 2 + idx % 8 % 2) :
+    idx / 64 * 64 + idx % 64 / 8 * 8 + l = loc / 16 * 64 + loc % 16 / 2 * 8 + l := by
+  subst hloc; omega
+
+private theorem snd_split_aux_g (idx l loc : Nat) (hidx : idx < 256)
+    (hloc : loc = idx / 8 * 2 + idx % 8 % 2) :
+    idx / 64 * 16 + l * 2 + idx % 8 % 2 = loc / 16 * 16 + l * 2 + loc % 2 := by
+  subst hloc; omega
+
+private theorem snd_split_aux_Gbnd (idx l : Nat) (hl : l < 8) (hidx : idx < 256) :
+    idx / 64 * 64 + l * 8 + idx % 8 < 256 := by omega
+
+private theorem snd_split_aux_sh (idx l : Nat) :
+    (idx / 64 * 64 + l * 8 + idx % 8) % 8 / 2 = idx % 8 / 2 := by omega
+
+private theorem snd_split_aux_gloc (idx l : Nat) :
+    (idx / 64 * 64 + l * 8 + idx % 8) / 8 * 2 + (idx / 64 * 64 + l * 8 + idx % 8) % 8 % 2
+      = idx / 64 * 16 + l * 2 + idx % 8 % 2 := by omega
+
+/- Core distributed-equivalence lemma for `BW_matmul`'s second output (`dy = xᵀ @ g`).
+`g` of shape `[1,4,8,8]` is partitioned along its last dimension (dim 3) into 4 shards of
+shape `[1,4,8,2]`; each rank computes `xᵀ @ shard` (shape `[1,4,8,2]`), and the full `dy`
+is reconstructed by gathering along the output's last dimension (dim 3). Here `a = xᵀ` is
+the (shared) transposed input. -/
+set_option maxHeartbeats 3200000 in
+-- heavy flat-index arithmetic across matmul / gather
+theorem bw_matmul_snd_split_1_4_8_8 (a g0 g1 g2 g3 : Tensor)
+    (ha : a.shape = [1, 4, 8, 8])
+    (h0 : g0.shape = [1, 4, 8, 2]) (h1 : g1.shape = [1, 4, 8, 2])
+    (h2 : g2.shape = [1, 4, 8, 2]) (h3 : g3.shape = [1, 4, 8, 2]) :
+    batchedMatmul a (allGatherPrimDimN 3 4 0 [g0, g1, g2, g3]) =
+      allGatherPrimDimN 3 4 0
+        [batchedMatmul a g0, batchedMatmul a g1, batchedMatmul a g2, batchedMatmul a g3] := by
+  have hhead3 : (([g0, g1, g2, g3] : List Tensor).head?.map (fun t => t.shape)).getD [] =
+      [1, 4, 8, 2] := by simp [h0]
+  have hgshape : ∀ i, i < 4 →
+      ([g0, g1, g2, g3].getD i (zeroTensor [1, 4, 8, 2])).shape = [1, 4, 8, 2] := by
+    intro i hi
+    have : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases this with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, h0, h1, h2, h3]
+  have hG_shape : (allGatherPrimDimN 3 4 0 [g0, g1, g2, g3]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 3 4 _ _ hhead3]; simp [List.set, List.getD]
+  have hpiece_shape : ∀ i, i < 4 →
+      (batchedMatmul a ([g0, g1, g2, g3].getD i (zeroTensor [1, 4, 8, 2]))).shape = [1, 4, 8, 2] := by
+    intro i hi
+    exact batchedMatmul_shape_1_4_8_8_1_4_8_2 _ _ ha (hgshape i hi)
+  have hp0 : (batchedMatmul a g0).shape = [1, 4, 8, 2] := by
+    have := hpiece_shape 0 (by omega)
+    simpa [List.getD, List.getElem?_cons_zero] using this
+  have hhead_rhs : (([batchedMatmul a g0, batchedMatmul a g1, batchedMatmul a g2,
+      batchedMatmul a g3] : List Tensor).head?.map (fun t => t.shape)).getD [] = [1, 4, 8, 2] := by
+    simp [hp0]
+  have hlhs_shape : (batchedMatmul a (allGatherPrimDimN 3 4 0 [g0, g1, g2, g3])).shape = [1, 4, 8, 8] := by
+    unfold batchedMatmul
+    simp only [ha, hG_shape, List.reverse_cons, List.reverse_nil, List.nil_append,
+      List.cons_append, Tensor.mkShape]
+  have hrhs_shape : (allGatherPrimDimN 3 4 0
+      [batchedMatmul a g0, batchedMatmul a g1, batchedMatmul a g2, batchedMatmul a g3]).shape
+        = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 3 4 _ _ hhead_rhs]; simp [List.set, List.getD]
+  have hlist_get : ∀ i, i < 4 →
+      [batchedMatmul a g0, batchedMatmul a g1, batchedMatmul a g2, batchedMatmul a g3].getD i
+        (zeroTensor [1, 4, 8, 2]) =
+      batchedMatmul a ([g0, g1, g2, g3].getD i (zeroTensor [1, 4, 8, 2])) := by
+    intro i hi
+    have : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases this with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ]
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  rw [allGatherPrimDimN_3_4_valAt_1_4_8_2 _ idx hhead_rhs hidx256]
+  set sh := (idx % 8) / 2 with hsh
+  set loc := (idx / 8) * 2 + (idx % 8) % 2 with hloc
+  have hsh4 : sh < 4 := by rw [hsh]; omega
+  have hloc64 : loc < 64 := by rw [hloc]; omega
+  rw [hlist_get sh hsh4,
+      batchedMatmul_valAt_1_4_8_8_1_4_8_2 a ([g0, g1, g2, g3].getD sh (zeroTensor [1, 4, 8, 2])) loc
+        ha (hgshape sh hsh4) hloc64]
+  rw [show batchedMatmul a (allGatherPrimDimN 3 4 0 [g0, g1, g2, g3]) =
+        fw_matmul a (allGatherPrimDimN 3 4 0 [g0, g1, g2, g3]) from rfl,
+      fw_matmul_valAt_1_4_8_8 a (allGatherPrimDimN 3 4 0 [g0, g1, g2, g3]) idx ha hG_shape hidx256]
+  apply Finset.sum_congr rfl
+  intro l hl
+  have hl8 : l < 8 := Finset.mem_range.mp hl
+  rw [allGatherPrimDimN_3_4_valAt_1_4_8_2 [g0, g1, g2, g3] (idx / 64 * 64 + l * 8 + idx % 8)
+        hhead3 (snd_split_aux_Gbnd idx l hl8 hidx256)]
+  rw [snd_split_aux_sh idx l, ← hsh, snd_split_aux_gloc idx l]
+  rw [snd_split_aux_a idx l loc hidx256 hloc, snd_split_aux_g idx l loc hidx256 hloc]
+
 end TrainVerify.Denote
