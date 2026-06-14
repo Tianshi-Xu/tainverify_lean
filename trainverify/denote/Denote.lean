@@ -14548,4 +14548,93 @@ theorem applyNode_bw_add2_snd_out_g136
   unfold storeSet
   simp [List.find?, hne]
 
+/-! ## BW_add second-output (dW) helpers for goal_180 (AllToAll BW_add template) -/
+
+/-- `bw_add2` second output is the gradient itself when `g` and `y` share a shape. -/
+theorem bw_add2_snd_same_shape_g180 (g x y : Tensor) (h : g.shape = y.shape) :
+    (bw_add2 g x y).2 = g := by
+  show reduceBroadcast g.shape y.shape (fun k => valAt g k) = g
+  rw [h, reduceBroadcast_same]
+  rw [← h]
+  apply Tensor.ext (by simp [Tensor.mkShape])
+  intro idx hidx
+  simp [Tensor.mkShape, valAt_of_lt g idx hidx]
+
+/-- `applyNode` for ternary `BW_add` — second output (dW). -/
+theorem applyNode_bw_add2_snd_out_g180
+    (graph : GraphDecl) (s : Store) (rank : Nat)
+    (gTid xTid yTid dxTid dyTid : Tid)
+    (hne : dxTid ≠ dyTid) :
+    applyNode graph s { rank := rank, op := "OpName.BW_add", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dyTid =
+      (bw_add2 (s gTid) (s xTid) (s yTid)).2 := by
+  unfold applyNode
+  rw [show ([gTid, xTid, yTid] : List Tid).map s = [s gTid, s xTid, s yTid] from rfl,
+      evalOp_bw_add2]
+  change storeSet s [(dxTid, (bw_add2 (s gTid) (s xTid) (s yTid)).1),
+                     (dyTid, (bw_add2 (s gTid) (s xTid) (s yTid)).2)] dyTid = _
+  unfold storeSet
+  simp [List.find?, hne]
+
+/-- Roundtrip identity: gathering the four dim-2 chunks of a `[1,8,32]` tensor
+    along dim 2 reconstructs the original tensor. -/
+theorem allGatherPrimDimN_chunkPrimDimN_id_dim2_4_1_8_32_g180 (x : Tensor)
+    (hsh : x.shape = [1, 8, 32]) :
+    allGatherPrimDimN 2 4 0
+      [chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x] = x := by
+  have hchunk_shape : ∀ r, (chunkPrimDimN 2 4 r x).shape = [1, 8, 8] := by
+    intro r; rw [chunkPrimDimN_shape 2 4 r _ _ hsh (by omega)]; simp [List.set, List.getD]
+  have hhead : (([chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x].head?.map (fun t => t.shape)).getD []) = [1, 8, 8] := by
+    simp [List.head?, Option.map, hchunk_shape 0]
+  have hgather_shape : (allGatherPrimDimN 2 4 0
+      [chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead]; simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hgather_shape, hsh])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hgather_shape, prodShape] using hidx
+  have hidx_g : idx < prodShape (allGatherPrimDimN 2 4 0
+      [chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x]).shape := by
+    simpa [hgather_shape, prodShape] using hidx256
+  rw [valAt_of_lt _ _ hidx_g]
+  simp only [allGatherPrimDimN, Tensor.mkShape, hhead,
+    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl,
+    show (8 : Nat) ≠ 0 by omega, show (32 : Nat) ≠ 0 by omega,
+    show (1 : Nat) ≠ 0 by omega, ite_false]
+  simp only [show (8 : Nat) * 4 * 1 = 32 by norm_num,
+    show (8 : Nat) * 1 = 8 by norm_num]
+  set p := idx / 32 with hp_def
+  set r := idx % 32 / 8 with hr_def
+  set j := idx % 8 with hj_def
+  set loc := p * 8 + j with hloc_def
+  have hp_lt : p < 8 := by omega
+  have hr_lt : r < 4 := by omega
+  have hj_lt : j < 8 := by omega
+  have hidxget : idx % 32 / 1 / 8 = r := by subst r; omega
+  have hlocnorm : idx / 32 * 8 + idx % 32 / 1 % 8 * 1 + idx % 32 % 1 = loc := by
+    subst loc p j; omega
+  rw [hidxget, hlocnorm]
+  have hidx_norm : idx = p * 32 + r * 8 + j := by subst p r j; omega
+  have hr_cases : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+  rcases hr_cases with h0 | h1 | h2 | h3
+  · rw [h0]; simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    rw [chunk2_4_1_8_32_valAt_pj x 0 p j hsh (by omega) hp_lt hj_lt]
+    have : idx = p * 32 + 0 * 8 + j := by omega
+    rw [← this]
+  · rw [h1]; simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    rw [chunk2_4_1_8_32_valAt_pj x 1 p j hsh (by omega) hp_lt hj_lt]
+    have : idx = p * 32 + 1 * 8 + j := by omega
+    rw [← this]
+  · rw [h2]; simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    rw [chunk2_4_1_8_32_valAt_pj x 2 p j hsh (by omega) hp_lt hj_lt]
+    have : idx = p * 32 + 2 * 8 + j := by omega
+    rw [← this]
+  · rw [h3]; simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    rw [chunk2_4_1_8_32_valAt_pj x 3 p j hsh (by omega) hp_lt hj_lt]
+    have : idx = p * 32 + 3 * 8 + j := by omega
+    rw [← this]
+
 end TrainVerify.Denote
