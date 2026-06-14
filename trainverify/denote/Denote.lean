@@ -14384,28 +14384,4 @@ theorem applyNode_bw_add2_snd_out_g110
   unfold storeSet
   simp [List.find?, hne]
 
-theorem bw_add2_snd_same_shape (g x y : Tensor) (h : g.shape = y.shape) :
-    (bw_add2 g x y).2 = g := by
-  show reduceBroadcast g.shape y.shape (fun k => valAt g k) = g
-  rw [h, reduceBroadcast_same]
-  rw [← h]
-  apply Tensor.ext (by simp [Tensor.mkShape])
-  intro idx hidx
-  simp [Tensor.mkShape, valAt_of_lt g idx hidx]
-
-/-- `applyNode` for ternary `BW_add` — second output (dy). -/
-theorem applyNode_bw_add2_snd_out
-    (graph : GraphDecl) (s : Store) (rank : Nat)
-    (gTid xTid yTid dxTid dyTid : Tid)
-    (hne : dxTid ≠ dyTid) :
-    applyNode graph s { rank := rank, op := "OpName.BW_add", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dyTid =
-      (bw_add2 (s gTid) (s xTid) (s yTid)).2 := by
-  unfold applyNode
-  rw [show ([gTid, xTid, yTid] : List Tid).map s = [s gTid, s xTid, s yTid] from rfl,
-      evalOp_bw_add2]
-  change storeSet s [(dxTid, (bw_add2 (s gTid) (s xTid) (s yTid)).1),
-                     (dyTid, (bw_add2 (s gTid) (s xTid) (s yTid)).2)] dyTid = _
-  unfold storeSet
-  simp [List.find?, hne]
-
 end TrainVerify.Denote
