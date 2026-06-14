@@ -51,5 +51,150 @@ def goal_222_cut_initGoals : List LineageGoal := initGoals ++ goal_222_prereqs
 def goal_222_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_222 pm_goal_222 goal_222 sm_goal_222InitEnv pm_goal_222InitEnv goal_222_cut_initGoals
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 8000000 in
+-- BW_linear dX: input-parallel (x sharded on dim 2, weight on dim 1), so the full dX
+-- equals the dim-1 all-gather of the per-rank dX outputs.
+theorem prove_goal_222_cut : goal_222_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- g (860): replicated singleton
+  have hInit223 : InitGoalHolds pm_goal_222.numRanks goal_223 initSM initPM := by
+    apply hInitGoals; simp only [goal_222_cut_initGoals, goal_222_prereqs]; decide
+  have h860_shape : (initSM 860).shape = [1, 8, 32] := hInit223.1
+  have h860_eq : initSM 860 = initPM 860 := by
+    have hrec := hInit223.2.2
+    simp only [goal_223, pm_goal_222, List.map] at hrec
+    rw [hrec]; exact reconstructWithDim_singleton ..
+  have h860_shapeP : (initPM 860).shape = [1, 8, 32] := by rw [← h860_eq]; exact h860_shape
+  -- x (1051): gather on dim 2 from [2841,2842,2843,2844]
+  have hInit305 : InitGoalHolds pm_goal_222.numRanks goal_305 initSM initPM := by
+    apply hInitGoals; simp only [goal_222_cut_initGoals, goal_222_prereqs]; decide
+  have h1051_shape : (initSM 1051).shape = [1, 8, 32] := hInit305.1
+  have h1051_rec : initSM 1051 = reconstructWithDim 2 4 0
+      [initPM 2841, initPM 2842, initPM 2843, initPM 2844] := by
+    have hrec := hInit305.2.2
+    simp only [goal_305, pm_goal_222, List.map] at hrec
+    exact hrec
+  have htp305 := hInit305.2.1
+  simp only [goal_305, List.map] at htp305
+  have h2841_shape : (initPM 2841).shape = [1, 8, 8] := by
+    have := congrArg List.head? htp305; simpa using this
+  have h2842_shape : (initPM 2842).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail) htp305; simpa using this
+  have h2843_shape : (initPM 2843).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp305; simpa using this
+  have h2844_shape : (initPM 2844).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp305; simpa using this
+  have h1051_gather : initSM 1051 = allGatherPrimDimN 2 4 0
+      [initPM 2841, initPM 2842, initPM 2843, initPM 2844] := by
+    rw [h1051_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h2841_shape]; decide)
+  -- w (678): gather on dim 1 from [2845,2846,2847,2848]
+  have hInit678 : InitGoalHolds pm_goal_222.numRanks initGoal_678 initSM initPM := by
+    apply hInitGoals; simp only [goal_222_cut_initGoals, goal_222_prereqs, initGoals]; decide
+  have h678_shape : (initSM 678).shape = [32, 32] := hInit678.1
+  have h678_rec : initSM 678 = reconstructWithDim 1 4 0
+      [initPM 2845, initPM 2846, initPM 2847, initPM 2848] := by
+    have hrec := hInit678.2.2
+    simp only [initGoal_678, pm_goal_222, List.map] at hrec
+    exact hrec
+  have htp678 := hInit678.2.1
+  simp only [initGoal_678, List.map] at htp678
+  have h2845_shape : (initPM 2845).shape = [32, 8] := by
+    have := congrArg List.head? htp678; simpa using this
+  have h2846_shape : (initPM 2846).shape = [32, 8] := by
+    have := congrArg (List.head? ∘ List.tail) htp678; simpa using this
+  have h2847_shape : (initPM 2847).shape = [32, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp678; simpa using this
+  have h2848_shape : (initPM 2848).shape = [32, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp678; simpa using this
+  have h678_gather : initSM 678 = allGatherPrimDimN 1 4 0
+      [initPM 2845, initPM 2846, initPM 2847, initPM 2848] := by
+    rw [h678_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2845_shape]; decide)
+  -- SM store: dX of full BW_linear
+  have hsm : (denoteGraph sm_goal_222 initSM) 859 =
+      (bw_linear (initSM 860) (initSM 1051) (initSM 678)).2 := by
+    simp only [sm_goal_222, denoteGraph, List.foldl]
+    rw [applyNode_bw_linear_snd_out (hne := by decide)]
+  -- PM stores: four independent BW_linear dX outputs
+  have hpm0 : (denoteGraph pm_goal_222 initPM) 2862 =
+      (bw_linear (initPM 860) (initPM 2841) (initPM 2845)).2 := by
+    simp only [pm_goal_222, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ (2862 : Tid) (by decide : (2862 : Tid) ∉ [2867, 2868])]
+    rw [applyNode_skip _ _ _ (2862 : Tid) (by decide : (2862 : Tid) ∉ [2865, 2866])]
+    rw [applyNode_skip _ _ _ (2862 : Tid) (by decide : (2862 : Tid) ∉ [2863, 2864])]
+    rw [applyNode_bw_linear_snd_out (hne := by decide)]
+  have hpm1 : (denoteGraph pm_goal_222 initPM) 2864 =
+      (bw_linear (initPM 860) (initPM 2842) (initPM 2846)).2 := by
+    simp only [pm_goal_222, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ (2864 : Tid) (by decide : (2864 : Tid) ∉ [2867, 2868])]
+    rw [applyNode_skip _ _ _ (2864 : Tid) (by decide : (2864 : Tid) ∉ [2865, 2866])]
+    rw [applyNode_bw_linear_snd_out (hne := by decide)]
+    rw [applyNode_skip _ _ _ (860 : Tid) (by decide : (860 : Tid) ∉ [2861, 2862])]
+    rw [applyNode_skip _ _ _ (2842 : Tid) (by decide : (2842 : Tid) ∉ [2861, 2862])]
+    rw [applyNode_skip _ _ _ (2846 : Tid) (by decide : (2846 : Tid) ∉ [2861, 2862])]
+  have hpm2 : (denoteGraph pm_goal_222 initPM) 2866 =
+      (bw_linear (initPM 860) (initPM 2843) (initPM 2847)).2 := by
+    simp only [pm_goal_222, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ (2866 : Tid) (by decide : (2866 : Tid) ∉ [2867, 2868])]
+    rw [applyNode_bw_linear_snd_out (hne := by decide)]
+    rw [applyNode_skip _ _ _ (860 : Tid) (by decide : (860 : Tid) ∉ [2863, 2864])]
+    rw [applyNode_skip _ _ _ (860 : Tid) (by decide : (860 : Tid) ∉ [2861, 2862])]
+    rw [applyNode_skip _ _ _ (2843 : Tid) (by decide : (2843 : Tid) ∉ [2863, 2864])]
+    rw [applyNode_skip _ _ _ (2843 : Tid) (by decide : (2843 : Tid) ∉ [2861, 2862])]
+    rw [applyNode_skip _ _ _ (2847 : Tid) (by decide : (2847 : Tid) ∉ [2863, 2864])]
+    rw [applyNode_skip _ _ _ (2847 : Tid) (by decide : (2847 : Tid) ∉ [2861, 2862])]
+  have hpm3 : (denoteGraph pm_goal_222 initPM) 2868 =
+      (bw_linear (initPM 860) (initPM 2844) (initPM 2848)).2 := by
+    simp only [pm_goal_222, denoteGraph, List.foldl]
+    rw [applyNode_bw_linear_snd_out (hne := by decide)]
+    rw [applyNode_skip _ _ _ (860 : Tid) (by decide : (860 : Tid) ∉ [2865, 2866])]
+    rw [applyNode_skip _ _ _ (860 : Tid) (by decide : (860 : Tid) ∉ [2863, 2864])]
+    rw [applyNode_skip _ _ _ (860 : Tid) (by decide : (860 : Tid) ∉ [2861, 2862])]
+    rw [applyNode_skip _ _ _ (2844 : Tid) (by decide : (2844 : Tid) ∉ [2865, 2866])]
+    rw [applyNode_skip _ _ _ (2844 : Tid) (by decide : (2844 : Tid) ∉ [2863, 2864])]
+    rw [applyNode_skip _ _ _ (2844 : Tid) (by decide : (2844 : Tid) ∉ [2861, 2862])]
+    rw [applyNode_skip _ _ _ (2848 : Tid) (by decide : (2848 : Tid) ∉ [2865, 2866])]
+    rw [applyNode_skip _ _ _ (2848 : Tid) (by decide : (2848 : Tid) ∉ [2863, 2864])]
+    rw [applyNode_skip _ _ _ (2848 : Tid) (by decide : (2848 : Tid) ∉ [2861, 2862])]
+  -- Key equation: full dX = dim-1 all-gather of per-rank dX
+  have hkey : (bw_linear (initSM 860) (initSM 1051) (initSM 678)).2 =
+      allGatherPrimDimN 1 4 0
+        [(bw_linear (initPM 860) (initPM 2841) (initPM 2845)).2,
+         (bw_linear (initPM 860) (initPM 2842) (initPM 2846)).2,
+         (bw_linear (initPM 860) (initPM 2843) (initPM 2847)).2,
+         (bw_linear (initPM 860) (initPM 2844) (initPM 2848)).2] := by
+    rw [h1051_gather, h860_eq, h678_gather]
+    exact bw_linear_dw_isplit_dim2_4_1_8_8_g150 (initPM 860)
+      (initPM 2841) (initPM 2842) (initPM 2843) (initPM 2844)
+      (initPM 2845) (initPM 2846) (initPM 2847) (initPM 2848)
+      h860_shapeP h2841_shape h2842_shape h2843_shape h2844_shape
+      h2845_shape h2846_shape h2847_shape h2848_shape
+  -- Discharge the three conjuncts
+  simp only [goal_222, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · show (denoteGraph sm_goal_222 initSM 859).shape = _
+    rw [hsm]
+    exact bw_linear_3d_snd_shape 1 8 32 32 _ _ _ h860_shape h1051_shape h678_shape
+  · show [(denoteGraph pm_goal_222 initPM 2862).shape,
+          (denoteGraph pm_goal_222 initPM 2864).shape,
+          (denoteGraph pm_goal_222 initPM 2866).shape,
+          (denoteGraph pm_goal_222 initPM 2868).shape] = _
+    rw [hpm0, hpm1, hpm2, hpm3]
+    simp only [bw_linear_3d_snd_shape 1 8 32 8 _ _ _ h860_shapeP h2841_shape h2845_shape,
+               bw_linear_3d_snd_shape 1 8 32 8 _ _ _ h860_shapeP h2842_shape h2846_shape,
+               bw_linear_3d_snd_shape 1 8 32 8 _ _ _ h860_shapeP h2843_shape h2847_shape,
+               bw_linear_3d_snd_shape 1 8 32 8 _ _ _ h860_shapeP h2844_shape h2848_shape]
+  · show denoteGraph sm_goal_222 initSM 859 =
+      reconstructWithDim 1 4 0 [denoteGraph pm_goal_222 initPM 2862,
+        denoteGraph pm_goal_222 initPM 2864, denoteGraph pm_goal_222 initPM 2866,
+        denoteGraph pm_goal_222 initPM 2868]
+    rw [hsm, hpm0, hpm1, hpm2, hpm3, hkey]
+    symm
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [bw_linear_3d_snd_shape 1 8 32 8 _ _ _ h860_shapeP h2841_shape h2845_shape]; decide
+
 end TrainVerify.Denote.GeneratedGoals
+
 
