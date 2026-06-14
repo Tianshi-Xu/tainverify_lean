@@ -53,5 +53,105 @@ def goal_152_cut_initGoals : List LineageGoal := initGoals ++ goal_152_prereqs
 def goal_152_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_152 pm_goal_152 goal_152 sm_goal_152InitEnv pm_goal_152InitEnv goal_152_cut_initGoals
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 800000 in
+-- BW_linear dW: data-parallel reduction (CROSS_DP_WRED) of per-rank dW via dim-1 split.
+theorem prove_goal_152_cut : goal_152_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract prereqs: goal_277 (x=965 gather), goal_153 (g=776 shared), initGoal_608 (w)
+  have hInit277 : InitGoalHolds pm_goal_152.numRanks goal_277 initSM initPM := by
+    apply hInitGoals; simp only [goal_152_cut_initGoals, goal_152_prereqs]; decide
+  have hInit153 : InitGoalHolds pm_goal_152.numRanks goal_153 initSM initPM := by
+    apply hInitGoals; simp only [goal_152_cut_initGoals, goal_152_prereqs]; decide
+  have hInit608 : InitGoalHolds pm_goal_152.numRanks initGoal_608 initSM initPM := by
+    apply hInitGoals; simp only [goal_152_cut_initGoals, goal_152_prereqs, initGoals]; decide
+  -- goal_277: initSM 965 = reconstructWithDim 1 4 0 [1721,1722,1723,1724]
+  have h965_rec : initSM 965 = reconstructWithDim 1 4 0
+      [initPM 1721, initPM 1722, initPM 1723, initPM 1724] := by
+    have hrec := hInit277.2.2
+    simp only [goal_277, pm_goal_152, List.map] at hrec
+    exact hrec
+  have htp277 := hInit277.2.1
+  simp only [goal_277, List.map] at htp277
+  have h1721_shape : (initPM 1721).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp277; simpa using this
+  have h1722_shape : (initPM 1722).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htp277; simpa using this
+  have h1723_shape : (initPM 1723).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp277; simpa using this
+  have h1724_shape : (initPM 1724).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp277; simpa using this
+  -- goal_153: initSM 776 = initPM 776 (singleton)
+  have h776_eq : initSM 776 = initPM 776 := by
+    have hrec := hInit153.2.2
+    simp only [goal_153, pm_goal_152, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  have h776_shape : (initSM 776).shape = [1, 8, 32] := hInit153.1
+  -- initGoal_608: initSM 608 = initPM 608 (replicated)
+  have h608_eq : initSM 608 = initPM 608 := by
+    have hrec := hInit608.2.2
+    simp only [initGoal_608, pm_goal_152, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  have h608_shape : (initSM 608).shape = [32, 32] := hInit608.1
+  -- shapes of shared init tensors on PM side
+  have h776_shapeP : (initPM 776).shape = [1, 8, 32] := by rw [← h776_eq]; exact h776_shape
+  have h608_shapeP : (initPM 608).shape = [32, 32] := by rw [← h608_eq]; exact h608_shape
+  have hchunk0_shape : (chunkPrimDimN 1 4 0 (initPM 776)).shape = [1, 2, 32] := by
+    rw [chunkPrimDimN_shape 1 4 0 (initPM 776) _ h776_shapeP (by omega)]; simp [List.set, List.getD]
+  -- convert reconstruct to allGather (non-scalar shards)
+  have h965_gather : initSM 965 = allGatherPrimDimN 1 4 0
+      [initPM 1721, initPM 1722, initPM 1723, initPM 1724] := by
+    rw [h965_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1721_shape]; decide)
+  -- SM store: dW (output index 1) of BW_linear on full tensors
+  have hsm : (denoteGraph sm_goal_152 initSM) 775 =
+      (bw_linear (initSM 776) (initSM 965) (initSM 608)).2 := by
+    simp only [sm_goal_152, denoteGraph, List.foldl]
+    rw [applyNode_bw_linear_snd_out (hne := by decide)]
+  -- PM store: 4 ChunkPrim + 4 BW_linear, then CROSS_DP_WRED sums the dW outputs
+  have hpm : (denoteGraph pm_goal_152 initPM) 1738 =
+      cross_dp_wred
+        [(bw_linear (chunkPrimDimN 1 4 0 (initPM 776)) (initPM 1721) (initPM 608)).2,
+         (bw_linear (chunkPrimDimN 1 4 1 (initPM 776)) (initPM 1722) (initPM 608)).2,
+         (bw_linear (chunkPrimDimN 1 4 2 (initPM 776)) (initPM 1723) (initPM 608)).2,
+         (bw_linear (chunkPrimDimN 1 4 3 (initPM 776)) (initPM 1724) (initPM 608)).2] := by
+    simp only [pm_goal_152, denoteGraph, List.foldl]
+    rw [applyNode_cross_dp_wred_out]
+    congr 1
+  -- Key equation: SM dW = DP reduction of per-rank PM dW
+  have hkey : (bw_linear (initSM 776) (initSM 965) (initSM 608)).2 =
+      cross_dp_wred
+        [(bw_linear (chunkPrimDimN 1 4 0 (initPM 776)) (initPM 1721) (initPM 608)).2,
+         (bw_linear (chunkPrimDimN 1 4 1 (initPM 776)) (initPM 1722) (initPM 608)).2,
+         (bw_linear (chunkPrimDimN 1 4 2 (initPM 776)) (initPM 1723) (initPM 608)).2,
+         (bw_linear (chunkPrimDimN 1 4 3 (initPM 776)) (initPM 1724) (initPM 608)).2] := by
+    rw [h965_gather, h776_eq, h608_eq]
+    unfold cross_dp_wred
+    exact bw_linear_dw_dp_split_dim1_4_1_2_32 (initPM 776)
+      (initPM 1721) (initPM 1722) (initPM 1723) (initPM 1724) (initPM 608)
+      h776_shapeP h1721_shape h1722_shape h1723_shape h1724_shape h608_shapeP
+  -- Discharge the three conjuncts
+  simp only [goal_152, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape: [32, 32]
+    rw [hsm, hkey]; unfold cross_dp_wred
+    rw [tensorSum_shape,
+        bw_linear_3d_snd_shape 1 2 32 32 (chunkPrimDimN 1 4 0 (initPM 776))
+          (initPM 1721) (initPM 608) hchunk0_shape h1721_shape h608_shapeP]
+  · -- PM tp shapes: [[32, 32]]
+    rw [hpm]; unfold cross_dp_wred
+    rw [show [(tensorSum
+        [(bw_linear (chunkPrimDimN 1 4 0 (initPM 776)) (initPM 1721) (initPM 608)).2,
+         (bw_linear (chunkPrimDimN 1 4 1 (initPM 776)) (initPM 1722) (initPM 608)).2,
+         (bw_linear (chunkPrimDimN 1 4 2 (initPM 776)) (initPM 1723) (initPM 608)).2,
+         (bw_linear (chunkPrimDimN 1 4 3 (initPM 776)) (initPM 1724) (initPM 608)).2]).shape]
+        = [[32, 32]] from by
+      rw [tensorSum_shape,
+          bw_linear_3d_snd_shape 1 2 32 32 (chunkPrimDimN 1 4 0 (initPM 776))
+            (initPM 1721) (initPM 608) hchunk0_shape h1721_shape h608_shapeP]]
+  · -- Value equality: smStore 775 = reconstructWithDim 0 4 0 [pmStore 1738]
+    rw [hsm, hkey, ← hpm, reconstructWithDim_singleton]
+
 end TrainVerify.Denote.GeneratedGoals
+
 
