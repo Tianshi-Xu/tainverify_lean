@@ -51,5 +51,125 @@ def goal_247_cut_initGoals : List LineageGoal := initGoals ++ goal_247_prereqs
 def goal_247_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_247 pm_goal_247 goal_247 sm_goal_247InitEnv pm_goal_247InitEnv goal_247_cut_initGoals
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1600000 in
+-- BW_gelu, tensor-parallel split on dim 1.  The grad g=887 is dim-1 all-gathered
+-- from four [1,2,128] shards (goal_248); the activation x=703 is replicated
+-- (goal_101) and locally dim-1 chunked into four [1,2,128] pieces.  The full output
+-- (tid 886) equals the dim-1 all-gather of the per-rank bw_gelu results.
+theorem prove_goal_247_cut : goal_247_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Prereqs: goal_248 (g=887 gather dim1), goal_101 (x=703 replicated)
+  have hInit887 : InitGoalHolds pm_goal_247.numRanks goal_248 initSM initPM := by
+    apply hInitGoals; simp only [goal_247_cut_initGoals, goal_247_prereqs]; decide
+  have hInit703 : InitGoalHolds pm_goal_247.numRanks goal_101 initSM initPM := by
+    apply hInitGoals; simp only [goal_247_cut_initGoals, goal_247_prereqs]; decide
+  -- goal_101: x=703 replicated (singleton)
+  have h703_eq : initSM 703 = initPM 703 := by
+    have hrec := hInit703.2.2
+    simp only [goal_101, pm_goal_247, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  have h703_shape : (initSM 703).shape = [1, 8, 128] := hInit703.1
+  have h703_shapeP : (initPM 703).shape = [1, 8, 128] := by rw [← h703_eq]; exact h703_shape
+  -- goal_248: g=887 dim-1 all-gathered from four [1,2,128] shards
+  have htp887 := hInit887.2.1
+  simp only [goal_248, List.map] at htp887
+  have h3278_shape : (initPM 3278).shape = [1, 2, 128] := by
+    have := congrArg List.head? htp887; simpa using this
+  have h3280_shape : (initPM 3280).shape = [1, 2, 128] := by
+    have := congrArg (List.head? ∘ List.tail) htp887; simpa using this
+  have h3282_shape : (initPM 3282).shape = [1, 2, 128] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp887; simpa using this
+  have h3284_shape : (initPM 3284).shape = [1, 2, 128] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp887; simpa using this
+  have h887_rec : initSM 887 = reconstructWithDim 1 4 0
+      [initPM 3278, initPM 3280, initPM 3282, initPM 3284] := by
+    have hrec := hInit887.2.2
+    simp only [goal_248, pm_goal_247, List.map] at hrec
+    exact hrec
+  have h887_gather : initSM 887 = allGatherPrimDimN 1 4 0
+      [initPM 3278, initPM 3280, initPM 3282, initPM 3284] := by
+    rw [h887_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h3278_shape]; decide)
+  -- chunk shapes for dim-1 chunks of x=703
+  have hchunk_shape : ∀ r, (chunkPrimDimN 1 4 r (initPM 703)).shape = [1, 2, 128] := by
+    intro r
+    rw [chunkPrimDimN_shape 1 4 r (initPM 703) _ h703_shapeP (by omega)]
+    simp [List.set, List.getD]
+  -- SM store: smStore 886 = bw_gelu (initSM 887) (initSM 703)
+  have hsm : (denoteGraph sm_goal_247 initSM) 886 = bw_gelu (initSM 887) (initSM 703) := by
+    simp only [sm_goal_247, denoteGraph, List.foldl]
+    rw [applyNode_bw_gelu_out]
+  -- PM store: dim-1 all-gather of the 4 per-rank bw_gelu outputs (sharded g, chunked x)
+  have hpm : (denoteGraph pm_goal_247 initPM) 886 =
+      allGatherPrimDimN 1 4 0
+        [bw_gelu (initPM 3278) (chunkPrimDimN 1 4 0 (initPM 703)),
+         bw_gelu (initPM 3280) (chunkPrimDimN 1 4 1 (initPM 703)),
+         bw_gelu (initPM 3282) (chunkPrimDimN 1 4 2 (initPM 703)),
+         bw_gelu (initPM 3284) (chunkPrimDimN 1 4 3 (initPM 703))] := by
+    simp only [pm_goal_247, denoteGraph, List.foldl]
+    rw [applyNode_allGatherPrimDimN_out]
+    congr 1
+  -- head shape of the per-rank result list
+  have hRhead : (([bw_gelu (initPM 3278) (chunkPrimDimN 1 4 0 (initPM 703)),
+       bw_gelu (initPM 3280) (chunkPrimDimN 1 4 1 (initPM 703)),
+       bw_gelu (initPM 3282) (chunkPrimDimN 1 4 2 (initPM 703)),
+       bw_gelu (initPM 3284) (chunkPrimDimN 1 4 3 (initPM 703))] : List Tensor).head?.map
+      (fun t => t.shape)).getD [] = [1, 2, 128] := by
+    simp only [List.head?, Option.map, Option.getD]
+    rw [bw_gelu_shape]; exact hchunk_shape 0
+  -- x=703 split: replicated activation equals dim-1 gather of its dim-1 chunks
+  have h703_split : initPM 703 = allGatherPrimDimN 1 4 0
+      [chunkPrimDimN 1 4 0 (initPM 703), chunkPrimDimN 1 4 1 (initPM 703),
+       chunkPrimDimN 1 4 2 (initPM 703), chunkPrimDimN 1 4 3 (initPM 703)] :=
+    (allGatherPrimDimN_chunkPrimDimN_id_dim1_4_128 (initPM 703) h703_shapeP).symm
+  -- Key equation: SM bw_gelu = dim-1 gather of per-rank PM bw_gelu
+  have hkey : bw_gelu (initSM 887) (initSM 703) =
+      allGatherPrimDimN 1 4 0
+        [bw_gelu (initPM 3278) (chunkPrimDimN 1 4 0 (initPM 703)),
+         bw_gelu (initPM 3280) (chunkPrimDimN 1 4 1 (initPM 703)),
+         bw_gelu (initPM 3282) (chunkPrimDimN 1 4 2 (initPM 703)),
+         bw_gelu (initPM 3284) (chunkPrimDimN 1 4 3 (initPM 703))] := by
+    rw [h887_gather, h703_eq]
+    conv_lhs => rw [h703_split]
+    have := bw_gelu_allGatherPrimDimN_eq
+      (gatherDim := 1) (numParts := 4)
+      (gs := [initPM 3278, initPM 3280, initPM 3282, initPM 3284])
+      (xs := [chunkPrimDimN 1 4 0 (initPM 703), chunkPrimDimN 1 4 1 (initPM 703),
+              chunkPrimDimN 1 4 2 (initPM 703), chunkPrimDimN 1 4 3 (initPM 703)])
+      (shardShape := [1, 2, 128])
+      (hnp := by omega)
+      (hlen_g := by simp)
+      (hlen_x := by simp)
+      (hhead_g := by simp [h3278_shape])
+      (hhead_x := by simp [hchunk_shape 0])
+      (hgs_shape := by
+        intro i hi
+        simp only [List.length] at hi
+        match i, hi with
+        | 0, _ => exact h3278_shape
+        | 1, _ => exact h3280_shape
+        | 2, _ => exact h3282_shape
+        | 3, _ => exact h3284_shape)
+      (hxs_shape := by
+        intro i hi
+        simp only [List.length] at hi
+        match i, hi with
+        | 0, _ => exact hchunk_shape 0
+        | 1, _ => exact hchunk_shape 1
+        | 2, _ => exact hchunk_shape 2
+        | 3, _ => exact hchunk_shape 3)
+    rw [this]
+    simp only [List.zipWith]
+  -- Discharge the three conjuncts
+  simp only [goal_247, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape: [1, 8, 128]
+    rw [hsm, hkey, allGatherPrimDimN_shape 1 4 _ [1, 2, 128] hRhead]; decide
+  · -- PM tp shapes: [[1, 8, 128]]
+    rw [hpm, allGatherPrimDimN_shape 1 4 _ [1, 2, 128] hRhead]; decide
+  · -- Value equality: smStore 886 = reconstructWithDim _ _ _ [pmStore 886]
+    rw [hsm, hkey, ← hpm, reconstructWithDim_singleton]
+
 end TrainVerify.Denote.GeneratedGoals
 
