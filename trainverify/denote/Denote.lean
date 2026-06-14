@@ -6118,6 +6118,255 @@ theorem fw_linear_allGather_eq_allReduce_fw_linear_chunk
     _ rfl hws_len hws_shapes hparts hshard
   rw [← hi]; exact hx
 
+
+/-- `chunkPrim` value access for 3D tensors: analogous to `chunkPrim_valAt_mul_add` but
+for tensors of shape `[b, s, numParts * shard]`. -/
+theorem chunkPrim_valAt_mul_add_3d
+    (numParts rank b s shard : Nat) (x : Tensor)
+    (hshape : x.shape = [b, s, numParts * shard])
+    (hparts : 0 < numParts)
+    (hrank : rank < numParts)
+    (p : Nat) (hp : p < b * s)
+    (j : Nat) (hj : j < shard) :
+    valAt (chunkPrim numParts rank x) (p * shard + j) =
+      valAt x (p * (numParts * shard) + rank * shard + j) := by
+  have hshard_pos : 0 < shard := Nat.lt_of_le_of_lt (Nat.zero_le _) hj
+  have hnumParts_ne0 : numParts ≠ 0 := Nat.ne_of_gt hparts
+  have hdiv : divNat (numParts * shard) numParts = shard := by
+    simp [divNat, hnumParts_ne0]
+  have hchunkShape : (chunkPrim numParts rank x).shape = [b, s, shard] := by
+    simp [chunkPrim, Tensor.mkShape, hshape, dropLast, lastD, appendLast, divNat, hnumParts_ne0]
+  have hlt_chunk' : p * shard + j < b * s * shard := by
+    have h1 : p * shard + j < p * shard + shard := Nat.add_lt_add_left hj _
+    have h2 : (p + 1) * shard ≤ b * s * shard := Nat.mul_le_mul_right shard (by omega)
+    have h3 : p * shard + shard = (p + 1) * shard := by ring
+    omega
+  have hlt_chunk : p * shard + j < prodShape (chunkPrim numParts rank x).shape := by
+    simp only [hchunkShape, prodShape, List.foldl, Nat.one_mul]
+    have h : b * s * shard = b * (s * shard) := Nat.mul_assoc b s shard
+    omega
+  have hdiv_p : (p * shard + j) / shard = p := by
+    have heq : j + shard * p = p * shard + j := by ring
+    exact (Nat.div_mod_unique hshard_pos).2 ⟨heq, hj⟩ |>.1
+  have hmod_p : (p * shard + j) % shard = j := by
+    have heq : j + shard * p = p * shard + j := by ring
+    exact (Nat.div_mod_unique hshard_pos).2 ⟨heq, hj⟩ |>.2
+  have hrmod : (rank % numParts) = rank := Nat.mod_eq_of_lt hrank
+  have h0 : valAt (chunkPrim numParts rank x) (p * shard + j) =
+      (chunkPrim numParts rank x).val ⟨p * shard + j, hlt_chunk⟩ := by
+    simp [valAt, hlt_chunk]
+  rw [h0]
+  simp [chunkPrim, Tensor.mkShape, hshape, dropLast, lastD, appendLast, divNat,
+    hnumParts_ne0, hshard_pos.ne', hdiv_p, hmod_p, hrmod]
+
+-- 3D version of fw_linear_allGather_eq_allReduce_fw_linear_chunk
+set_option maxHeartbeats 800000 in
+theorem fw_linear_allGather_eq_allReduce_fw_linear_chunk_3d
+    (numParts b s i o shard : Nat) (x : Tensor) (ws : List Tensor)
+    (hx : x.shape = [b, s, i]) (hi : i = numParts * shard)
+    (hws_len : ws.length = numParts) (hws_shapes : ∀ w ∈ ws, w.shape = [o, shard])
+    (hparts : 0 < numParts) (hshard : 0 < shard) (hs : 0 < s) (ho : 0 < o) :
+    fw_linear x (allGatherPrim numParts 0 ws) =
+      allReducePrim numParts 0 (List.ofFn (fun r : Fin numParts =>
+        fw_linear (chunkPrim numParts r.val x) (ws.get ⟨r.val, by omega⟩))) := by
+  have hnumParts_ne0 : numParts ≠ 0 := Nat.ne_of_gt hparts
+  have hws_head : (ws.head?.map (fun t => t.shape)).getD [] = [o, shard] := by
+    match ws with
+    | [] => simp at hws_len; omega
+    | w0 :: _ => exact hws_shapes w0 (by simp)
+  have hallGather_shape : (allGatherPrim numParts 0 ws).shape = [o, i] := by
+    simp only [allGatherPrim, Tensor.mkShape, hws_head, dropLast, lastD, appendLast]
+    simp [hi, Nat.mul_comm]
+  have hchunk_shape : ∀ r : Fin numParts, (chunkPrim numParts r.val x).shape = [b, s, shard] := by
+    intro r
+    have hdiv : divNat i numParts = shard := by simp [divNat, hnumParts_ne0, hi]
+    simp [chunkPrim, Tensor.mkShape, hx, dropLast, lastD, appendLast, hdiv]
+  have hLHS_shape : (fw_linear x (allGatherPrim numParts 0 ws)).shape = [b, s, o] :=
+    fw_linear_3d_shape b s i o x _ hx hallGather_shape
+  have hRHS_head : (List.ofFn (fun r : Fin numParts =>
+      fw_linear (chunkPrim numParts r.val x) (ws.get ⟨r.val, by omega⟩))).head? =
+      some (fw_linear (chunkPrim numParts 0 x) (ws.get ⟨0, by omega⟩)) := by
+    obtain ⟨np, hnp⟩ : ∃ np, numParts = np + 1 := ⟨numParts - 1, by omega⟩
+    subst hnp; exact list_ofFn_head_eq _
+  have hpiece0_shape : (fw_linear (chunkPrim numParts 0 x) (ws.get ⟨0, by omega⟩)).shape = [b, s, o] :=
+    fw_linear_3d_shape b s shard o _ _ (hchunk_shape ⟨0, hparts⟩)
+      (hws_shapes _ (List.getElem_mem (by omega)))
+  have hRHS_shape : (allReducePrim numParts 0 (List.ofFn (fun r : Fin numParts =>
+      fw_linear (chunkPrim numParts r.val x) (ws.get ⟨r.val, by omega⟩)))).shape = [b, s, o] := by
+    rw [allReducePrim_shape _ _ _ _ hRHS_head, hpiece0_shape]
+  apply Tensor.ext (by rw [hLHS_shape, hRHS_shape])
+  intro idx hidx
+  rw [hLHS_shape] at hidx
+  simp only [prodShape, List.foldl, Nat.one_mul] at hidx
+  have hso_pos : 0 < s * o := Nat.mul_pos hs ho
+  have hso_ne : s * o ≠ 0 := Nat.ne_of_gt hso_pos
+  have ho_ne : (o : Nat) ≠ 0 := by omega
+  have hi_ne : (i : Nat) ≠ 0 := by subst hi; exact Nat.ne_of_gt (Nat.mul_pos hparts hshard)
+  set row := idx / (s * o)
+  set rso := idx % (s * o)
+  set seq := rso / o
+  set col := rso % o
+  have hrow_lt : row < b := by
+    apply Nat.div_lt_of_lt_mul
+    calc idx < b * s * o := hidx
+      _ = s * o * b := by ring
+  have hseq_lt : seq < s := by
+    apply Nat.div_lt_of_lt_mul
+    calc rso < s * o := Nat.mod_lt _ hso_pos
+      _ = o * s := by ring
+  have hcol_lt : col < o := Nat.mod_lt _ ho
+  have hflat_row : row * s + seq < b * s := by
+    calc row * s + seq < row * s + s := by omega
+      _ = (row + 1) * s := by ring
+      _ ≤ b * s := Nat.mul_le_mul_right s (by omega)
+  have hprod : idx < prodShape [b, s, o] := by
+    simp only [prodShape, List.foldl, Nat.one_mul]; exact hidx
+  conv_lhs => simp only [fw_linear, hx, hallGather_shape]
+  rw [valAt_of_lt _ _ hprod]
+  simp only [Tensor.mkShape, hso_ne, ho_ne, ↓reduceIte]
+  have hsum_split : ∑ j_1 ∈ Finset.range i,
+      valAt x ((idx / (s * o) * s + idx % (s * o) / o) * i + j_1) *
+      valAt (allGatherPrim numParts 0 ws) (idx % (s * o) % o * i + j_1) =
+    ∑ r : Fin numParts, ∑ j_1 ∈ Finset.range shard,
+      valAt x ((row * s + seq) * i + (r.val * shard + j_1)) *
+      valAt (ws.get ⟨r.val, by omega⟩) (col * shard + j_1) := by
+    rw [hi]
+    conv_lhs => rw [Finset.sum_range_mul_eq_sum_sum (n := numParts) (m := shard)]
+    rw [← Fin.sum_univ_eq_sum_range]
+    apply Finset.sum_congr rfl; intro r _
+    apply Finset.sum_congr rfl; intro j hj
+    have hj' : j < shard := Finset.mem_range.mp hj
+    have hr_lt : r.val < numParts := r.isLt
+    have hgv := allGatherPrim_valAt_mul_add numParts (r.val) o shard ws
+      hws_head hparts hr_lt col hcol_lt j hj'
+    -- After rw [hi], goal allGatherPrim index is: col * (numParts * shard) + (r * shard + j)
+    -- hgv uses: col * (shard * numParts) + r * shard + j
+    -- These are equal by ring/commutativity
+    have hag_idx : col * (numParts * shard) + (↑r * shard + j) =
+        col * (shard * numParts) + ↑r * shard + j := by ring
+    conv_lhs => rw [show idx % (s * o) % o = col from rfl,
+      show col * (numParts * shard) + (↑r * shard + j) =
+        col * (shard * numParts) + ↑r * shard + j from hag_idx]
+    rw [hgv]
+    simp only [List.getD, List.getElem?_eq_getElem (by omega : r.val < ws.length),
+      Option.getD_some, List.get_eq_getElem]
+    rfl
+  rw [hsum_split]
+  -- Unfold RHS: valAt (allReducePrim ...) idx = foldl sum of valAt
+  have hpiece0_prod : idx < prodShape (fw_linear (chunkPrim numParts 0 x) (ws.get ⟨0, by omega⟩)).shape := by
+    rw [hpiece0_shape, prodShape, List.foldl]; simp [Nat.one_mul]; exact hidx
+  rw [allReducePrim_valAt numParts 0 _ idx _ hRHS_head hpiece0_prod]
+  rw [List.foldl_add_eq_sum, List.map_ofFn]
+  rw [Fin.sum_ofFn]
+  apply Finset.sum_congr rfl; intro r _
+  simp only [Function.comp_apply]
+  have hr_shape := hchunk_shape r
+  have hwr_shape := hws_shapes (ws.get ⟨r.val, by omega⟩) (List.getElem_mem (by omega))
+  conv_rhs => simp only [fw_linear, hr_shape, hwr_shape]
+  rw [valAt_of_lt _ _ hprod]
+  simp only [Tensor.mkShape, hso_ne, ho_ne, ↓reduceIte]
+  apply Finset.sum_congr rfl; intro j hj
+  have hj' : j < shard := Finset.mem_range.mp hj
+  have hcv := chunkPrim_valAt_mul_add_3d numParts r.val b s shard x
+    (by rw [hx, hi]) hparts r.isLt (row * s + seq) hflat_row j hj'
+  -- After rw [hcv], chunk valAt becomes x valAt with explicit offset
+  -- Need: (row*s+seq)*i + r*shard+j = (row*s+seq)*(numParts*shard) + r*shard + j (from hi)
+  have hx_idx_eq : (row * s + seq) * (numParts * shard) + ↑r * shard + j =
+      (row * s + seq) * i + (↑r * shard + j) := by rw [hi]; ring
+  rw [hx_idx_eq] at hcv
+  rw [← hcv]
+
+-- For 2D tensors with shape [o, shard], allGatherPrimDimN 1 = allGatherPrim (both gather on last dim)
+theorem allGatherPrimDimN_1_eq_allGatherPrim_2d (numParts : Nat) (xs : List Tensor)
+    (o shard : Nat)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [o, shard])
+    (hshard : 0 < shard) (hnp : 0 < numParts) :
+    allGatherPrimDimN 1 numParts 0 xs = allGatherPrim numParts 0 xs := by
+  have hshape_lhs : (allGatherPrimDimN 1 numParts 0 xs).shape = [o, shard * numParts] := by
+    rw [allGatherPrimDimN_shape 1 numParts xs [o, shard] hhead]
+    simp [List.set, List.getD]
+  have hshape_rhs : (allGatherPrim numParts 0 xs).shape = [o, shard * numParts] := by
+    simp [allGatherPrim, Tensor.mkShape, hhead, dropLast, lastD, appendLast]
+  apply Tensor.ext (by rw [hshape_lhs, hshape_rhs])
+  intro idx hidx
+  rw [hshape_lhs] at hidx
+  simp only [prodShape, List.foldl, Nat.one_mul] at hidx
+  have hlt_lhs : idx < prodShape (allGatherPrimDimN 1 numParts 0 xs).shape := by
+    rw [hshape_lhs]; simp [prodShape]; omega
+  have hlt_rhs : idx < prodShape (allGatherPrim numParts 0 xs).shape := by
+    rw [hshape_rhs]; simp [prodShape]; omega
+  rw [valAt_of_lt _ _ hlt_lhs, valAt_of_lt _ _ hlt_rhs]
+  simp only [allGatherPrimDimN, allGatherPrim, Tensor.mkShape, hhead,
+    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl, List.set, dropLast, lastD, appendLast,
+    Nat.mul_one, Nat.add_zero, Nat.div_one, Nat.mod_one,
+    show shard ≠ 0 from Nat.ne_of_gt hshard,
+    show shard * numParts ≠ 0 from Nat.ne_of_gt (Nat.mul_pos hshard hnp),
+    show (1 : Nat) ≠ 0 from by omega, ite_false,
+    show ([o, shard] : List Nat).getLastD 0 = shard from by simp [List.getLastD],
+    show ([o, shard] : List Nat).dropLast = [o] from by simp [List.dropLast]]
+  simp only [List.cons_append, List.nil_append]
+
+-- valAt for allGatherPrimDimN 2 on [1, 8, 8] pieces (4 parts → [1, 8, 32])
+theorem allGatherPrimDimN_2_4_valAt_1_8_8 (xs : List Tensor) (idx : Nat)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [1, 8, 8]) (hidx : idx < 256) :
+    valAt (allGatherPrimDimN 2 4 0 xs) idx =
+      valAt (xs.getD (idx % 32 / 8) (zeroTensor [1, 8, 8]))
+        ((idx / 32) * 8 + idx % 8) := by
+  have hresult_shape : (allGatherPrimDimN 2 4 0 xs).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 2 4 xs [1, 8, 8] hhead]
+    simp [List.set, List.getD]
+  have hprod : idx < prodShape (allGatherPrimDimN 2 4 0 xs).shape := by
+    rw [hresult_shape]; simp [prodShape]; exact hidx
+  rw [valAt_of_lt _ _ hprod]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl, Nat.reduceMul, Nat.reduceAdd,
+    Nat.reduceDiv, Nat.reduceMod, Nat.div_one, Nat.mod_one, Nat.mul_one,
+    Nat.add_zero, Nat.zero_add, show (8 : Nat) ≠ 0 from by omega,
+    show (32 : Nat) ≠ 0 from by omega,
+    show (1 : Nat) ≠ 0 from by omega, ite_false, List.set]
+  congr 1
+  omega
+
+-- Roundtrip: chunkPrim undoes allGatherPrimDimN 2 on [1, 8, 8] pieces with 4 parts
+set_option maxHeartbeats 800000 in
+theorem chunkPrim_allGatherPrimDimN_2_roundtrip_1_8_8 (c0 c1 c2 c3 : Tensor)
+    (hc0 : c0.shape = [1, 8, 8]) (hc1 : c1.shape = [1, 8, 8])
+    (hc2 : c2.shape = [1, 8, 8]) (hc3 : c3.shape = [1, 8, 8])
+    (r : Nat) (hr : r < 4) :
+    chunkPrim 4 r (allGatherPrimDimN 2 4 0 [c0, c1, c2, c3]) =
+      [c0, c1, c2, c3].getD r (zeroTensor [1, 8, 8]) := by
+  have hhead : (([c0, c1, c2, c3] : List Tensor).head?.map (fun t => t.shape)).getD [] = [1, 8, 8] := by
+    simp [hc0]
+  have hgather_shape : (allGatherPrimDimN 2 4 0 [c0, c1, c2, c3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead]; simp [List.set, List.getD]
+  have hchunk_shape : (chunkPrim 4 r (allGatherPrimDimN 2 4 0 [c0, c1, c2, c3])).shape = [1, 8, 8] := by
+    simp [chunkPrim, Tensor.mkShape, hgather_shape, dropLast, lastD, appendLast, divNat]
+  have hrhs_shape : ([c0, c1, c2, c3].getD r (zeroTensor [1, 8, 8])).shape = [1, 8, 8] := by
+    have h4 : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+    rcases h4 with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, hc0, hc1, hc2, hc3]
+  apply Tensor.ext (by rw [hchunk_shape, hrhs_shape])
+  intro idx hidx
+  have hidx64 : idx < 64 := by simpa [hchunk_shape, prodShape] using hidx
+  -- Use chunkPrim_valAt_mul_add_3d: chunkPrim 4 r x at (p*8+j) = valAt x (p*32 + r*8 + j)
+  have hp : idx / 8 < 1 * 8 := by omega
+  have hj : idx % 8 < 8 := Nat.mod_lt _ (by omega)
+  have hidx_eq : idx = (idx / 8) * 8 + (idx % 8) := by omega
+  rw [hidx_eq]
+  rw [chunkPrim_valAt_mul_add_3d 4 r 1 8 8 _ hgather_shape (by omega) hr _ hp _ hj]
+  -- Now LHS = valAt (allGatherPrimDimN 2 4 0 [c0,c1,c2,c3]) (idx/8 * 32 + r * 8 + idx%8)
+  have hgather_idx : idx / 8 * (4 * 8) + r * 8 + idx % 8 = idx / 8 * 32 + r * 8 + idx % 8 := by ring
+  rw [hgather_idx]
+  have hlt256 : idx / 8 * 32 + r * 8 + idx % 8 < 256 := by omega
+  rw [allGatherPrimDimN_2_4_valAt_1_8_8 _ _ hhead hlt256]
+  -- Reduce the rank index and the flat index explicitly so the getD targets match.
+  have hrank : (idx / 8 * 32 + r * 8 + idx % 8) % 32 / 8 = r := by omega
+  have hflat : (idx / 8 * 32 + r * 8 + idx % 8) / 32 * 8 + (idx / 8 * 32 + r * 8 + idx % 8) % 8
+      = idx / 8 * 8 + idx % 8 := by omega
+  rw [hrank, hflat]
+
 /-!
 ## Initial-value alignment (input consistency)
 
