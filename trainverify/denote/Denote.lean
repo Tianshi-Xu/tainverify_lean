@@ -10949,4 +10949,204 @@ theorem bw_matmul_snd_split_1_4_8_8 (a g0 g1 g2 g3 : Tensor)
   rw [snd_split_aux_sh idx l, ← hsh, snd_split_aux_gloc idx l]
   rw [snd_split_aux_a idx l loc hidx256 hloc, snd_split_aux_g idx l loc hidx256 hloc]
 
+/-! ### BW_matmul second output (`dy = xᵀ @ g`) distributed-equivalence -/
+
+/-- `transpose2d` maps shape `[1,4,8,2]` to `[1,4,2,8]`. -/
+theorem transpose2d_shape_1_4_8_2 (x : Tensor) (hx : x.shape = [1, 4, 8, 2]) :
+    (transpose2d x).shape = [1, 4, 2, 8] := by
+  unfold transpose2d
+  rw [hx]
+  rfl
+
+/-- `valAt` of `transpose2d x` for `x : [1,4,8,2]` (output shape `[1,4,2,8]`). -/
+theorem transpose2d_valAt_1_4_8_2 (x : Tensor) (idx : Nat)
+    (hx : x.shape = [1, 4, 8, 2]) (hidx : idx < 64) :
+    valAt (transpose2d x) idx = valAt x (idx / 16 * 16 + idx % 8 * 2 + idx % 16 / 8) := by
+  have key : transpose2d x = Tensor.mkShape [1, 4, 2, 8] (fun outIdx =>
+      valAt x (outIdx.1 / (8 * 2) * (8 * 2) + outIdx.1 % (8 * 2) % 8 * 2 +
+        outIdx.1 % (8 * 2) / 8)) := by
+    unfold transpose2d
+    rw [hx]
+    rfl
+  rw [key]
+  have hidx' : idx < prodShape ([1, 4, 2, 8] : Shape) := by simp [prodShape]; omega
+  rw [valAt_of_lt _ _ (by simp [Tensor.mkShape]; exact hidx')]
+  show valAt x (idx / (8 * 2) * (8 * 2) + idx % (8 * 2) % 8 * 2 + idx % (8 * 2) / 8) = _
+  congr 1
+  omega
+
+/-- Shape of `batchedMatmul` on `[1,4,2,8] @ [1,4,8,8] -> [1,4,2,8]`. -/
+theorem batchedMatmul_shape_1_4_2_8_1_4_8_8 (a b : Tensor)
+    (ha : a.shape = [1, 4, 2, 8]) (hb : b.shape = [1, 4, 8, 8]) :
+    (batchedMatmul a b).shape = [1, 4, 2, 8] := by
+  unfold batchedMatmul
+  simp only [ha, hb, List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append,
+    Tensor.mkShape]
+
+/-- `valAt` of `batchedMatmul a b` for `a : [1,4,2,8]`, `b : [1,4,8,8]`, output `[1,4,2,8]`. -/
+theorem batchedMatmul_valAt_1_4_2_8_1_4_8_8 (a b : Tensor) (loc : Nat)
+    (ha : a.shape = [1, 4, 2, 8]) (hb : b.shape = [1, 4, 8, 8]) (hloc : loc < 64) :
+    valAt (batchedMatmul a b) loc =
+      ∑ l ∈ Finset.range 8,
+        valAt a (loc / 16 * 16 + loc % 16 / 8 * 8 + l) *
+          valAt b (loc / 16 * 64 + l * 8 + loc % 8) := by
+  have key : batchedMatmul a b = Tensor.mkShape [1, 4, 2, 8] (fun outIdx =>
+      ∑ l ∈ Finset.range 8,
+        valAt a (outIdx.1 / (2 * 8) * (2 * 8) + outIdx.1 % (2 * 8) / 8 * 8 + l) *
+          valAt b (outIdx.1 / (2 * 8) * (8 * 8) + l * 8 + outIdx.1 % (2 * 8) % 8)) := by
+    unfold batchedMatmul
+    rw [ha, hb]
+    rfl
+  rw [key]
+  have hloc' : loc < prodShape ([1, 4, 2, 8] : Shape) := by simp [prodShape]; omega
+  rw [valAt_of_lt _ _ (by simp [Tensor.mkShape]; exact hloc')]
+  show ∑ l ∈ Finset.range 8,
+        valAt a (loc / (2 * 8) * (2 * 8) + loc % (2 * 8) / 8 * 8 + l) *
+          valAt b (loc / (2 * 8) * (8 * 8) + l * 8 + loc % (2 * 8) % 8) = _
+  apply Finset.sum_congr rfl
+  intro l _
+  congr 2 <;> omega
+
+-- NOTE: applyNode_bw_matmul_snd_out is already provided by the BW_matmul(126) merge
+-- (identical statement); reusing the existing one to avoid a duplicate declaration.
+
+/-! Flat-index arithmetic helpers for `bw_matmul_snd_split_dX_1_4_8_8`. -/
+
+private theorem bw_snd_aux_cleanX (idx l : Nat) (hl : l < 8) :
+    (idx / 64 * 64 + idx % 64 / 8 * 8 + l) / 64 * 64 +
+      (idx / 64 * 64 + idx % 64 / 8 * 8 + l) % 8 * 8 +
+      (idx / 64 * 64 + idx % 64 / 8 * 8 + l) % 64 / 8 = idx / 64 * 64 + l * 8 + idx % 64 / 8 := by
+  omega
+
+private theorem bw_snd_aux_abnd (idx l : Nat) (hl : l < 8) (hidx : idx < 256) :
+    idx / 64 * 64 + idx % 64 / 8 * 8 + l < 256 := by omega
+
+private theorem bw_snd_aux_qbnd (idx l : Nat) (hl : l < 8) (hidx : idx < 256) :
+    idx / 64 * 64 + l * 8 + idx % 64 / 8 < 256 := by omega
+
+private theorem bw_snd_aux_xshard (idx l : Nat) :
+    (idx / 64 * 64 + l * 8 + idx % 64 / 8) % 8 / 2 = idx % 64 / 16 := by omega
+
+private theorem bw_snd_aux_xgloc (idx l : Nat) (hl : l < 8) :
+    (idx / 64 * 64 + l * 8 + idx % 64 / 8) / 8 * 2 +
+      (idx / 64 * 64 + l * 8 + idx % 64 / 8) % 8 % 2 =
+    (idx / 64 * 8 + l) * 2 + idx % 64 / 8 % 2 := by omega
+
+private theorem bw_snd_aux_locbnd (idx : Nat) (hidx : idx < 256) :
+    idx / 64 * 16 + idx % 16 / 8 * 8 + idx % 8 < 64 := by omega
+
+private theorem bw_snd_aux_pbnd (l loc : Nat) (hl : l < 8) (hloc : loc < 64) :
+    loc / 16 * 16 + loc % 16 / 8 * 8 + l < 64 := by omega
+
+private theorem bw_snd_aux_xeq (idx l loc : Nat) (hl : l < 8) (hidx : idx < 256)
+    (hloc : loc = idx / 64 * 16 + idx % 16 / 8 * 8 + idx % 8) :
+    (loc / 16 * 16 + loc % 16 / 8 * 8 + l) / 16 * 16 +
+      (loc / 16 * 16 + loc % 16 / 8 * 8 + l) % 8 * 2 +
+      (loc / 16 * 16 + loc % 16 / 8 * 8 + l) % 16 / 8 =
+    (idx / 64 * 8 + l) * 2 + idx % 64 / 8 % 2 := by subst hloc; omega
+
+private theorem bw_snd_aux_geq (idx l loc : Nat) (hidx : idx < 256)
+    (hloc : loc = idx / 64 * 16 + idx % 16 / 8 * 8 + idx % 8) :
+    loc / 16 * 64 + l * 8 + loc % 8 = idx / 64 * 64 + l * 8 + idx % 8 := by subst hloc; omega
+
+/- Core distributed-equivalence lemma for `BW_matmul`'s second output (`dy = xᵀ @ g`).
+`x` of shape `[1,4,8,8]` is partitioned along its last dimension (dim 3) into 4 shards of
+shape `[1,4,8,2]`; each rank computes `shardᵀ @ g` (shape `[1,4,2,8]`), and the full `dy`
+is reconstructed by gathering along the output's dim 2. -/
+set_option maxHeartbeats 3200000 in
+-- heavy flat-index arithmetic across matmul / transpose / gather
+theorem bw_matmul_snd_split_dX_1_4_8_8 (g x0 x1 x2 x3 : Tensor)
+    (hg : g.shape = [1, 4, 8, 8])
+    (h0 : x0.shape = [1, 4, 8, 2]) (h1 : x1.shape = [1, 4, 8, 2])
+    (h2 : x2.shape = [1, 4, 8, 2]) (h3 : x3.shape = [1, 4, 8, 2]) :
+    batchedMatmul (transpose2d (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3])) g =
+      allGatherPrimDimN 2 4 0
+        [batchedMatmul (transpose2d x0) g, batchedMatmul (transpose2d x1) g,
+         batchedMatmul (transpose2d x2) g, batchedMatmul (transpose2d x3) g] := by
+  -- x-list facts
+  have hhead3 : (([x0, x1, x2, x3] : List Tensor).head?.map (fun t => t.shape)).getD [] =
+      [1, 4, 8, 2] := by simp [h0]
+  have hxshape : ∀ i, i < 4 →
+      ([x0, x1, x2, x3].getD i (zeroTensor [1, 4, 8, 2])).shape = [1, 4, 8, 2] := by
+    intro i hi
+    have : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases this with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, h0, h1, h2, h3]
+  -- gather and transpose shapes
+  have hX_shape : (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 3 4 _ _ hhead3]; simp [List.set, List.getD]
+  have htX_shape : (transpose2d (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3])).shape = [1, 4, 8, 8] :=
+    transpose2d_shape_1_4_8_8 _ hX_shape
+  -- piece shapes (each shard matmul has shape [1,4,2,8])
+  have hpiece_shape : ∀ i, i < 4 →
+      (batchedMatmul (transpose2d ([x0, x1, x2, x3].getD i (zeroTensor [1, 4, 8, 2]))) g).shape =
+        [1, 4, 2, 8] := by
+    intro i hi
+    exact batchedMatmul_shape_1_4_2_8_1_4_8_8 _ _
+      (transpose2d_shape_1_4_8_2 _ (hxshape i hi)) hg
+  have hp0 : (batchedMatmul (transpose2d x0) g).shape = [1, 4, 2, 8] := by
+    have := hpiece_shape 0 (by omega)
+    simpa [List.getD, List.getElem?_cons_zero] using this
+  -- list of pieces head shape
+  have hhead_rhs : (([batchedMatmul (transpose2d x0) g, batchedMatmul (transpose2d x1) g,
+      batchedMatmul (transpose2d x2) g, batchedMatmul (transpose2d x3) g] :
+        List Tensor).head?.map (fun t => t.shape)).getD [] = [1, 4, 2, 8] := by
+    simp [hp0]
+  have hlhs_shape : (batchedMatmul (transpose2d (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3])) g).shape =
+      [1, 4, 8, 8] := by
+    unfold batchedMatmul
+    simp only [hg, htX_shape, List.reverse_cons, List.reverse_nil, List.nil_append,
+      List.cons_append, Tensor.mkShape]
+  have hrhs_shape : (allGatherPrimDimN 2 4 0
+      [batchedMatmul (transpose2d x0) g, batchedMatmul (transpose2d x1) g,
+       batchedMatmul (transpose2d x2) g, batchedMatmul (transpose2d x3) g]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead_rhs]; simp [List.set, List.getD]
+  -- getD selection over the piece list
+  have hlist_get : ∀ i, i < 4 →
+      [batchedMatmul (transpose2d x0) g, batchedMatmul (transpose2d x1) g,
+       batchedMatmul (transpose2d x2) g, batchedMatmul (transpose2d x3) g].getD i
+        (zeroTensor [1, 4, 2, 8]) =
+      batchedMatmul (transpose2d ([x0, x1, x2, x3].getD i (zeroTensor [1, 4, 8, 2]))) g := by
+    intro i hi
+    have : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases this with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ]
+  -- elementwise equality
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  -- RHS: gather (dim 2) of shard matmuls
+  rw [allGatherPrimDimN_2_4_valAt_1_4_2_8 _ idx hhead_rhs hidx256]
+  set sh := (idx % 64) / 16 with hsh
+  set loc := idx / 64 * 16 + idx % 16 / 8 * 8 + idx % 8 with hloc
+  have hsh4 : sh < 4 := by rw [hsh]; omega
+  have hloc64 : loc < 64 := by rw [hloc]; exact bw_snd_aux_locbnd idx hidx256
+  rw [hlist_get sh hsh4,
+      batchedMatmul_valAt_1_4_2_8_1_4_8_8 _ g loc
+        (transpose2d_shape_1_4_8_2 _ (hxshape sh hsh4)) hg hloc64]
+  -- LHS: matmul (transpose2d X) g
+  rw [show batchedMatmul (transpose2d (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3])) g =
+        fw_matmul (transpose2d (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3])) g from rfl,
+      fw_matmul_valAt_1_4_8_8 (transpose2d (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3])) g idx
+        htX_shape hg hidx256]
+  -- termwise
+  apply Finset.sum_congr rfl
+  intro l hl
+  have hl8 : l < 8 := Finset.mem_range.mp hl
+  -- LHS: clean the transpose2d(X) index, then unfold the gather
+  rw [transpose2d_valAt_1_4_8_8 (allGatherPrimDimN 3 4 0 [x0, x1, x2, x3])
+        (idx / 64 * 64 + idx % 64 / 8 * 8 + l) hX_shape (bw_snd_aux_abnd idx l hl8 hidx256)]
+  rw [bw_snd_aux_cleanX idx l hl8]
+  rw [allGatherPrimDimN_3_4_valAt_1_4_8_2 [x0, x1, x2, x3] (idx / 64 * 64 + l * 8 + idx % 64 / 8)
+        hhead3 (bw_snd_aux_qbnd idx l hl8 hidx256)]
+  rw [bw_snd_aux_xshard idx l, ← hsh]
+  rw [bw_snd_aux_xgloc idx l hl8]
+  -- RHS: clean the transpose2d(shard) index
+  rw [transpose2d_valAt_1_4_8_2 ([x0, x1, x2, x3].getD sh (zeroTensor [1, 4, 8, 2]))
+        (loc / 16 * 16 + loc % 16 / 8 * 8 + l) (hxshape sh hsh4)
+        (bw_snd_aux_pbnd l loc hl8 hloc64)]
+  rw [bw_snd_aux_xeq idx l loc hl8 hidx256 hloc]
+  -- the two products agree (same `x` shard, same `g`, equal indices)
+  rw [bw_snd_aux_geq idx l loc hidx256 hloc]
+
 end TrainVerify.Denote
