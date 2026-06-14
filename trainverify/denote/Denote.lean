@@ -1713,6 +1713,65 @@ theorem allGatherPrim_bw_sum_eq_bw_sum_allGather
   rw [hL', hL'']
   exact hR.symm
 
+/-- `bw_sum` distributes over `allGatherPrimDimN` on dim 2 with 4 parts for shard shape [1, 8, 32].
+    Since `bw_sum` ignores its second argument and broadcasts the scalar gradient, the gathered
+    per-shard `bw_sum` results equal `bw_sum` of the gathered tensor. Concrete fast instance for
+    BW_sum cut goals. -/
+theorem bw_sum_allGatherPrimDimN_split_dim2_4_1_8_32
+    (g x0 x1 x2 x3 : Tensor)
+    (h0 : x0.shape = [1, 8, 32]) (h1 : x1.shape = [1, 8, 32])
+    (h2 : x2.shape = [1, 8, 32]) (h3 : x3.shape = [1, 8, 32]) :
+    bw_sum g (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3]) =
+      allGatherPrimDimN 2 4 0 [bw_sum g x0, bw_sum g x1, bw_sum g x2, bw_sum g x3] := by
+  have hheadL : (([x0, x1, x2, x3]).head?.map (fun t => t.shape)).getD [] = [1, 8, 32] := by
+    simp [h0]
+  have hgatherL_shape : (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3]).shape = [1, 8, 128] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hheadL]; simp [List.set, List.getD]
+  have hlhs_shape : (bw_sum g (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3])).shape = [1, 8, 128] := by
+    rw [bw_sum_shape, hgatherL_shape]
+  have hheadR : (([bw_sum g x0, bw_sum g x1, bw_sum g x2, bw_sum g x3]).head?.map (fun t => t.shape)).getD [] = [1, 8, 32] := by
+    simp [bw_sum_shape, h0]
+  have hrhs_shape : (allGatherPrimDimN 2 4 0 [bw_sum g x0, bw_sum g x1, bw_sum g x2, bw_sum g x3]).shape = [1, 8, 128] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hheadR]; simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx1024 : idx < 1024 := by
+    have h := hidx; rw [hlhs_shape] at h; simpa [prodShape] using h
+  -- LHS: bw_sum ignores its argument, value is `valAt g 0`.
+  have hLHS : valAt (bw_sum g (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3])) idx = valAt g 0 := by
+    apply bw_sum_valAt_of_lt
+    rw [hgatherL_shape]; simpa [prodShape] using hidx1024
+  rw [hLHS]
+  -- RHS: unfold the gather and reduce to the selected `bw_sum` piece.
+  have hidx_rhs : idx < prodShape (allGatherPrimDimN 2 4 0
+      [bw_sum g x0, bw_sum g x1, bw_sum g x2, bw_sum g x3]).shape := by
+    rw [hrhs_shape]; simpa [prodShape] using hidx1024
+  rw [valAt_of_lt _ _ hidx_rhs]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hheadR, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl,
+    show (8 : Nat) ≠ 0 by omega, show (32 : Nat) ≠ 0 by omega,
+    show (1 : Nat) ≠ 0 by omega, ite_false]
+  simp only [show (32 : Nat) * 4 * 1 = 128 by norm_num,
+    show (32 : Nat) * 1 = 32 by norm_num,
+    if_neg (show ¬ (128 = 0) by decide), Nat.div_one]
+  have hbound : idx / 128 * 32 + idx % 128 % 32 * 1 + idx % 128 % 1 < 256 := by omega
+  have hr_cases : idx % 128 / 32 = 0 ∨ idx % 128 / 32 = 1 ∨ idx % 128 / 32 = 2 ∨ idx % 128 / 32 = 3 := by
+    omega
+  rcases hr_cases with hc | hc | hc | hc
+  · rw [hc]
+    change valAt g 0 = valAt (bw_sum g x0) (idx / 128 * 32 + idx % 128 % 32 * 1 + idx % 128 % 1)
+    exact (bw_sum_valAt_of_lt g x0 _ (by rw [h0]; simpa [prodShape] using hbound)).symm
+  · rw [hc]
+    change valAt g 0 = valAt (bw_sum g x1) (idx / 128 * 32 + idx % 128 % 32 * 1 + idx % 128 % 1)
+    exact (bw_sum_valAt_of_lt g x1 _ (by rw [h1]; simpa [prodShape] using hbound)).symm
+  · rw [hc]
+    change valAt g 0 = valAt (bw_sum g x2) (idx / 128 * 32 + idx % 128 % 32 * 1 + idx % 128 % 1)
+    exact (bw_sum_valAt_of_lt g x2 _ (by rw [h2]; simpa [prodShape] using hbound)).symm
+  · rw [hc]
+    change valAt g 0 = valAt (bw_sum g x3) (idx / 128 * 32 + idx % 128 % 32 * 1 + idx % 128 % 1)
+    exact (bw_sum_valAt_of_lt g x3 _ (by rw [h3]; simpa [prodShape] using hbound)).symm
+
 
 def allReducePrim (_numParts _rank : Nat) (xs : List Tensor) : Tensor :=
   let sh := (xs.head?.map (fun t => t.shape)).getD []
@@ -3809,6 +3868,111 @@ theorem fw_embedding_shape (ids weight : Tensor) :
     (fw_embedding ids weight).shape = ids.shape ++ [lastD weight.shape] := by
   simp [fw_embedding, Tensor.mkShape]
 
+/-- `valAt` of chunking a `[1,8]`-shaped tensor along dim 1 into 4 parts.
+    Local index `p` of shard `r` corresponds to global index `r*2 + p`. -/
+theorem chunk_dim1_4_1_8_valAt (x : Tensor) (r p : Nat)
+    (hx : x.shape = [1, 8]) (hr : r < 4) (hp : p < 2) :
+    valAt (chunkPrimDimN 1 4 r x) p = valAt x (r * 2 + p) := by
+  have hchunk_shape : (chunkPrimDimN 1 4 r x).shape = [1, 2] := by
+    rw [chunkPrimDimN_shape 1 4 r _ _ hx (by omega)]
+    simp [List.set, List.getD]
+  have hloc_shape : p < prodShape (chunkPrimDimN 1 4 r x).shape := by
+    rw [hchunk_shape]; simp [prodShape]; omega
+  rw [valAt_of_lt _ _ hloc_shape]
+  unfold chunkPrimDimN Tensor.mkShape
+  simp only [hx, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl,
+    show (4 : Nat) ≠ 0 by omega, show (8 : Nat) ≠ 0 by omega,
+    show (2 : Nat) ≠ 0 by omega, show (1 : Nat) ≠ 0 by omega, ite_false]
+  congr 1
+  have hrm : r % 4 = r := Nat.mod_eq_of_lt hr
+  rw [hrm]
+  have h1 : (8 / 4 : Nat) = 2 := by norm_num
+  simp only [h1, show (2 : Nat) * 1 = 2 by norm_num, show (8 : Nat) * 1 = 8 by norm_num,
+    show (2 : Nat) ≠ 0 by omega, show (1 : Nat) ≠ 0 by omega, ite_false]
+  omega
+
+/-- Per-element bridge: the `fw_embedding` of the full ids at global position
+    `c*2 + p` equals the `fw_embedding` of the `c`-th sequence chunk at local
+    position `p`. Both index the same row of `W`. -/
+theorem fw_embedding_chunk_piece_valAt (ids W : Tensor) (c p j : Nat)
+    (hids : ids.shape = [1, 8]) (hW : W.shape = [8, 32])
+    (hc : c < 4) (hp : p < 2) (hj : j < 32) :
+    valAt (fw_embedding ids W) ((c * 2 + p) * 32 + j) =
+      valAt (fw_embedding (chunkPrimDimN 1 4 c ids) W) (p * 32 + j) := by
+  have hlastW : lastD W.shape = 32 := by rw [hW]; rfl
+  have hcs : (chunkPrimDimN 1 4 c ids).shape = [1, 2] := by
+    rw [chunkPrimDimN_shape 1 4 c _ _ hids (by omega)]
+    simp [List.set, List.getD]
+  -- LHS
+  rw [fw_embedding_valAt]
+  have hprod1 : prodShape (ids.shape ++ [lastD W.shape]) = 256 := by rw [hids, hlastW]; rfl
+  have hb1 : (c * 2 + p) * 32 + j < prodShape (ids.shape ++ [lastD W.shape]) := by
+    rw [hprod1]; omega
+  rw [dif_pos hb1, hlastW]
+  have hdiv1 : ((c * 2 + p) * 32 + j) / 32 = c * 2 + p := by omega
+  have hmod1 : ((c * 2 + p) * 32 + j) % 32 = j := by omega
+  rw [hdiv1, hmod1]
+  -- RHS
+  rw [fw_embedding_valAt]
+  have hprodc : prodShape ((chunkPrimDimN 1 4 c ids).shape ++ [lastD W.shape]) = 64 := by
+    rw [hcs, hlastW]; rfl
+  have hb2 : p * 32 + j < prodShape ((chunkPrimDimN 1 4 c ids).shape ++ [lastD W.shape]) := by
+    rw [hprodc]; omega
+  rw [dif_pos hb2, hlastW]
+  have hdiv2 : (p * 32 + j) / 32 = p := by omega
+  have hmod2 : (p * 32 + j) % 32 = j := by omega
+  rw [hdiv2, hmod2]
+  rw [chunk_dim1_4_1_8_valAt ids c p hids hc hp]
+
+/-- `fw_embedding` distributes over sequence-parallel sharding: chunking the ids
+    along dim 1 (into 4 parts), embedding each chunk with the full weight, and
+    gathering the per-chunk results along dim 1 recovers the full embedding.
+    Specialized to ids of shape `[1,8]` and weight of shape `[8,32]`. -/
+theorem fw_embedding_distribute_chunk_ids_dim1_4_1_8_32
+    (ids W : Tensor) (hids : ids.shape = [1, 8]) (hW : W.shape = [8, 32]) :
+    fw_embedding ids W = allGatherPrimDimN 1 4 0
+      [fw_embedding (chunkPrimDimN 1 4 0 ids) W,
+       fw_embedding (chunkPrimDimN 1 4 1 ids) W,
+       fw_embedding (chunkPrimDimN 1 4 2 ids) W,
+       fw_embedding (chunkPrimDimN 1 4 3 ids) W] := by
+  have hlastW : lastD W.shape = 32 := by rw [hW]; rfl
+  have hcs : ∀ r, (chunkPrimDimN 1 4 r ids).shape = [1, 2] := by
+    intro r; rw [chunkPrimDimN_shape 1 4 r _ _ hids (by omega)]; simp [List.set, List.getD]
+  have hpiece_shape : (fw_embedding (chunkPrimDimN 1 4 0 ids) W).shape = [1, 2, 32] := by
+    rw [fw_embedding_shape, hcs 0, hlastW]; rfl
+  have hhead : (([fw_embedding (chunkPrimDimN 1 4 0 ids) W,
+      fw_embedding (chunkPrimDimN 1 4 1 ids) W,
+      fw_embedding (chunkPrimDimN 1 4 2 ids) W,
+      fw_embedding (chunkPrimDimN 1 4 3 ids) W].head?.map
+        (fun t => t.shape)).getD []) = [1, 2, 32] := by
+    simp only [List.head?, Option.map, Option.getD]
+    exact hpiece_shape
+  have hlhs_shape : (fw_embedding ids W).shape = [1, 8, 32] := by
+    rw [fw_embedding_shape, hids, hlastW]; rfl
+  have hrhs_shape : (allGatherPrimDimN 1 4 0
+      [fw_embedding (chunkPrimDimN 1 4 0 ids) W,
+       fw_embedding (chunkPrimDimN 1 4 1 ids) W,
+       fw_embedding (chunkPrimDimN 1 4 2 ids) W,
+       fw_embedding (chunkPrimDimN 1 4 3 ids) W]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 32] hhead]; simp [List.set, List.getD]
+  apply Tensor.ext
+  · rw [hlhs_shape, hrhs_shape]
+  · intro idx hidx
+    rw [hlhs_shape] at hidx
+    have hidx256 : idx < 256 := by simpa [prodShape] using hidx
+    obtain ⟨r, p, j, hr, hp, hj, hidx_eq⟩ :
+        ∃ r p j, r < 4 ∧ p < 2 ∧ j < 32 ∧ idx = (r * 2 + p) * 32 + j := by
+      refine ⟨idx / 32 / 2, idx / 32 % 2, idx % 32, by omega, by omega, by omega, by omega⟩
+    rw [hidx_eq]
+    rw [allGatherPrimDimN_dim1_4_1_2_32_valAt _ r hr p hp j hj hhead]
+    have hr4 : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+    rcases hr4 with h|h|h|h <;> subst h
+    · exact fw_embedding_chunk_piece_valAt ids W 0 p j hids hW (by omega) hp hj
+    · exact fw_embedding_chunk_piece_valAt ids W 1 p j hids hW (by omega) hp hj
+    · exact fw_embedding_chunk_piece_valAt ids W 2 p j hids hW (by omega) hp hj
+    · exact fw_embedding_chunk_piece_valAt ids W 3 p j hids hW (by omega) hp hj
+
 /-- Sum of `valAt` over a list of tensors, expressed via `List.foldl`. -/
 theorem allReducePrim_valAt
     (numParts rank : Nat) (xs : List Tensor) (idx : Nat) (x0 : Tensor)
@@ -4196,6 +4360,171 @@ theorem bw_embedding_eq_allGather_offset_4shards
     rw [show i * hidden + j = j + hidden * i from by ring,
         Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hj_lt]
   simp only [hlhs_div, hrhs_div, hlhs_mod, hrhs_mod]
+
+/-- `valAt` of a sequence-parallel id chunk: chunking `ids` (shape `[1,8]`) along dim 1
+    into 4 parts selects elements `[r*2, r*2+2)`. -/
+private theorem chunkPrimDimN_1_4_ids_valAt (ids : Tensor) (r k' : Nat)
+    (hids : ids.shape = [1, 8]) (hr : r < 4) (hk : k' < 2) :
+    valAt (chunkPrimDimN 1 4 r ids) k' = valAt ids (r * 2 + k') := by
+  have hchunk_shape : (chunkPrimDimN 1 4 r ids).shape = [1, 2] := by
+    rw [chunkPrimDimN_shape 1 4 r _ _ hids (by omega)]
+    simp [List.set, List.getD]
+  have hloc_shape : k' < prodShape (chunkPrimDimN 1 4 r ids).shape := by
+    rw [hchunk_shape]; simp [prodShape]; omega
+  rw [valAt_of_lt _ _ hloc_shape]
+  unfold chunkPrimDimN Tensor.mkShape
+  simp only [hids, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl, Nat.reduceDiv, Nat.reduceMul,
+    Nat.reduceEqDiff, reduceIte]
+  congr 1
+  omega
+
+/-- `valAt` of a sequence-parallel all-gather along dim 1 over four `[1,2,32]` shards:
+    output index `k*32+h` (with `k<8`, `h<32`) reads shard `k/2` at `(k%2)*32+h`. -/
+private theorem allGatherPrimDimN_1_4_1_2_32_valAt
+    (g0 g1 g2 g3 : Tensor) (k h : Nat)
+    (hg0 : g0.shape = [1, 2, 32]) (hk : k < 8) (hh : h < 32) :
+    valAt (allGatherPrimDimN 1 4 0 [g0, g1, g2, g3]) (k * 32 + h) =
+      valAt ([g0, g1, g2, g3].getD (k / 2) (zeroTensor [1, 2, 32])) ((k % 2) * 32 + h) := by
+  have hhead : (([g0, g1, g2, g3].head?.map (fun t => t.shape)).getD []) = [1, 2, 32] := by
+    simp [hg0]
+  have hout_shape : (allGatherPrimDimN 1 4 0 [g0, g1, g2, g3]).shape = [1, 8, 32] := by
+    have := allGatherPrimDimN_shape 1 4 [g0, g1, g2, g3] [1, 2, 32] hhead
+    simpa using this
+  have hidx_lt256 : k * 32 + h < 256 := by omega
+  have hidx_lt : k * 32 + h < prodShape (allGatherPrimDimN 1 4 0 [g0, g1, g2, g3]).shape := by
+    rw [hout_shape]; simp [prodShape]; omega
+  have e_div256 : (k * 32 + h) / 256 = 0 := Nat.div_eq_of_lt hidx_lt256
+  have e_mod256 : (k * 32 + h) % 256 = k * 32 + h := Nat.mod_eq_of_lt hidx_lt256
+  have e_div32 : (k * 32 + h) / 32 = k := by
+    rw [show k * 32 + h = h + 32 * k from by ring, Nat.add_mul_div_left _ _ (by omega),
+        Nat.div_eq_of_lt hh, Nat.zero_add]
+  have e_mod32 : (k * 32 + h) % 32 = h := by
+    rw [show k * 32 + h = h + 32 * k from by ring, Nat.add_mul_mod_self_left,
+        Nat.mod_eq_of_lt hh]
+  rw [valAt_of_lt _ _ hidx_lt]
+  simp only [allGatherPrimDimN, Tensor.mkShape, hhead, List.getD, List.getElem?_cons_zero,
+    List.getElem?_cons_succ, Option.getD_some, List.drop, List.foldl,
+    show (256 : Nat) ≠ 0 by omega, show (32 : Nat) ≠ 0 by omega, show (2 : Nat) ≠ 0 by omega,
+    ite_false]
+  rw [e_mod256, e_div256, e_div32, e_mod32]
+  simp only [Nat.zero_mul, Nat.zero_add, valAt]
+
+/-- `valAt` of a four-element `tensorSum` reduces to the pointwise sum. -/
+private theorem tensorSum_4_valAt (t0 t1 t2 t3 : Tensor) (idx : Nat)
+    (hidx : idx < prodShape t0.shape) :
+    valAt (tensorSum [t0, t1, t2, t3]) idx =
+      valAt t0 idx + valAt t1 idx + valAt t2 idx + valAt t3 idx := by
+  have hsh : (tensorSum [t0, t1, t2, t3]).shape = t0.shape := rfl
+  rw [valAt_of_lt _ _ (by rw [hsh]; exact hidx)]
+  simp [tensorSum, Tensor.mkShape, List.foldl]
+
+/-- Sequence-parallel distribution of `bw_embedding`: the full backward embedding over a
+    sequence-sharded gradient equals the sum (cross-DP reduce) of the per-shard backward
+    embeddings, where the ids are chunked along the sequence dimension. -/
+theorem bw_embedding_seqchunk_4shards_1_8_32
+    (g0 g1 g2 g3 ids w : Tensor)
+    (hids : ids.shape = [1, 8]) (hw : w.shape = [8, 32])
+    (hg0 : g0.shape = [1, 2, 32]) :
+    bw_embedding (allGatherPrimDimN 1 4 0 [g0, g1, g2, g3]) ids w =
+      tensorSum
+        [ bw_embedding g0 (chunkPrimDimN 1 4 0 ids) w,
+          bw_embedding g1 (chunkPrimDimN 1 4 1 ids) w,
+          bw_embedding g2 (chunkPrimDimN 1 4 2 ids) w,
+          bw_embedding g3 (chunkPrimDimN 1 4 3 ids) w ] := by
+  set G := allGatherPrimDimN 1 4 0 [g0, g1, g2, g3] with hG
+  have hhead : (([g0, g1, g2, g3].head?.map (fun t => t.shape)).getD []) = [1, 2, 32] := by
+    simp [hg0]
+  have hG_shape : G.shape = [1, 8, 32] := by
+    rw [hG]
+    have := allGatherPrimDimN_shape 1 4 [g0, g1, g2, g3] [1, 2, 32] hhead
+    simpa using this
+  -- chunk shapes
+  have hchunk_shape : ∀ r, (chunkPrimDimN 1 4 r ids).shape = [1, 2] := by
+    intro r
+    rw [chunkPrimDimN_shape 1 4 r _ _ hids (by omega)]
+    simp [List.set, List.getD]
+  -- Shape equality of both sides.
+  apply Tensor.ext
+  · rw [bw_embedding_shape]
+    rw [tensorSum_shape (bw_embedding g0 (chunkPrimDimN 1 4 0 ids) w)
+        [bw_embedding g1 (chunkPrimDimN 1 4 1 ids) w,
+         bw_embedding g2 (chunkPrimDimN 1 4 2 ids) w,
+         bw_embedding g3 (chunkPrimDimN 1 4 3 ids) w]]
+    rw [bw_embedding_shape]
+  -- Pointwise equality.
+  intro idx hidx0
+  have hidx256 : idx < 256 := by
+    rw [bw_embedding_shape, hw] at hidx0
+    simpa [prodShape] using hidx0
+  have hlastw : lastD w.shape = 32 := by rw [hw]; rfl
+  have hidsprod : prodShape ids.shape = 8 := by rw [hids]; rfl
+  -- LHS value.
+  have hidxw : idx < prodShape w.shape := by rw [hw]; simpa [prodShape] using hidx256
+  rw [bw_embedding_valAt G ids w idx hidxw]
+  simp only [hlastw, hidsprod]
+  -- Convert the range-8 sum into a double sum over (i ∈ range 4)(j ∈ range 2).
+  rw [show (8 : Nat) = 4 * 2 from rfl,
+      Finset.sum_range_mul_eq_sum_sum 4 2
+        (fun kk => if scalarToNat (valAt ids kk) = idx / 32 then valAt G (kk * 32 + idx % 32) else 0)]
+  -- RHS value.
+  have hb0prod : idx < prodShape (bw_embedding g0 (chunkPrimDimN 1 4 0 ids) w).shape := by
+    rw [bw_embedding_shape, hw]; simpa [prodShape] using hidx256
+  rw [tensorSum_4_valAt _ _ _ _ idx hb0prod]
+  have hmod32 : idx % 32 < 32 := Nat.mod_lt _ (by omega)
+  -- Expansion of a single per-shard backward embedding into a range-2 sum, given the
+  -- gather/shard value identity supplied as a hypothesis.
+  have hterm : ∀ (gr : Tensor) (r : Nat), r < 4 →
+      (∀ j, j < 2 → valAt gr (j * 32 + idx % 32) = valAt G ((r * 2 + j) * 32 + idx % 32)) →
+      valAt (bw_embedding gr (chunkPrimDimN 1 4 r ids) w) idx =
+        ∑ j ∈ Finset.range 2,
+          if scalarToNat (valAt ids (r * 2 + j)) = idx / 32 then valAt G ((r * 2 + j) * 32 + idx % 32) else 0 := by
+    intro gr r hr hgath
+    rw [bw_embedding_valAt _ _ w idx hidxw]
+    simp only [hlastw]
+    have hcprod : prodShape (chunkPrimDimN 1 4 r ids).shape = 2 := by
+      rw [hchunk_shape r]; rfl
+    rw [hcprod]
+    apply Finset.sum_congr rfl
+    intro j hj
+    have hj2 : j < 2 := by simpa using hj
+    rw [chunkPrimDimN_1_4_ids_valAt ids r j hids hr hj2]
+    by_cases hcond : scalarToNat (valAt ids (r * 2 + j)) = idx / 32
+    · simp only [hcond, if_true]; exact hgath j hj2
+    · simp only [hcond, if_false]
+  -- Gather/shard value identities for each rank.
+  have hgath0 : ∀ j, j < 2 → valAt g0 (j * 32 + idx % 32) = valAt G ((0 * 2 + j) * 32 + idx % 32) := by
+    intro j hj
+    rw [hG, allGatherPrimDimN_1_4_1_2_32_valAt g0 g1 g2 g3 (0 * 2 + j) (idx % 32) hg0 (by omega) hmod32]
+    have h1 : (0 * 2 + j) / 2 = 0 := by omega
+    have h2 : (0 * 2 + j) % 2 = j := by omega
+    rw [h1, h2]
+    rfl
+  have hgath1 : ∀ j, j < 2 → valAt g1 (j * 32 + idx % 32) = valAt G ((1 * 2 + j) * 32 + idx % 32) := by
+    intro j hj
+    rw [hG, allGatherPrimDimN_1_4_1_2_32_valAt g0 g1 g2 g3 (1 * 2 + j) (idx % 32) hg0 (by omega) hmod32]
+    have h1 : (1 * 2 + j) / 2 = 1 := by omega
+    have h2 : (1 * 2 + j) % 2 = j := by omega
+    rw [h1, h2]
+    rfl
+  have hgath2 : ∀ j, j < 2 → valAt g2 (j * 32 + idx % 32) = valAt G ((2 * 2 + j) * 32 + idx % 32) := by
+    intro j hj
+    rw [hG, allGatherPrimDimN_1_4_1_2_32_valAt g0 g1 g2 g3 (2 * 2 + j) (idx % 32) hg0 (by omega) hmod32]
+    have h1 : (2 * 2 + j) / 2 = 2 := by omega
+    have h2 : (2 * 2 + j) % 2 = j := by omega
+    rw [h1, h2]
+    rfl
+  have hgath3 : ∀ j, j < 2 → valAt g3 (j * 32 + idx % 32) = valAt G ((3 * 2 + j) * 32 + idx % 32) := by
+    intro j hj
+    rw [hG, allGatherPrimDimN_1_4_1_2_32_valAt g0 g1 g2 g3 (3 * 2 + j) (idx % 32) hg0 (by omega) hmod32]
+    have h1 : (3 * 2 + j) / 2 = 3 := by omega
+    have h2 : (3 * 2 + j) % 2 = j := by omega
+    rw [h1, h2]
+    rfl
+  rw [hterm g0 0 (by omega) hgath0, hterm g1 1 (by omega) hgath1,
+      hterm g2 2 (by omega) hgath2, hterm g3 3 (by omega) hgath3]
+  simp only [Finset.sum_range_succ, Finset.sum_range_zero, Nat.zero_add]
+  ring
 
 /-!
 ## Dimension consistency (well-formedness)
@@ -9344,6 +9673,47 @@ theorem allGatherPrimDimN_chunkPrimDimN_id_dim3_4_8_8 (x : Tensor)
   congr 1
   omega
 
+/-- Gather-after-chunk identity: reassembling dim-2 chunks (of shape [1,4,2,8]) recovers the
+    original tensor of shape [1,4,8,8]. -/
+theorem allGatherPrimDimN_chunkPrimDimN_id_dim2_4_8_8 (x : Tensor)
+    (hsh : x.shape = [1, 4, 8, 8]) :
+    allGatherPrimDimN 2 4 0
+      [chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x] = x := by
+  have hchunk_shape : ∀ r, (chunkPrimDimN 2 4 r x).shape = [1, 4, 2, 8] := by
+    intro r
+    rw [chunkPrimDimN_shape 2 4 r _ _ hsh (by omega)]
+    simp [List.set, List.getD]
+  have hhead : ([chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x].head?.map (·.shape)).getD [] = [1, 4, 2, 8] := by
+    simp [List.head?, Option.map, hchunk_shape 0]
+  have hgather_shape : (allGatherPrimDimN 2 4 0
+      [chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 2 4 _ [1, 4, 2, 8] hhead]
+    simp [List.set, List.getD]
+  symm
+  apply Tensor.ext (by rw [hsh, hgather_shape])
+  intro idx hidx
+  rw [hsh] at hidx
+  have hidx256 : idx < 256 := by simpa [prodShape] using hidx
+  rw [allGatherPrimDimN_2_4_valAt_1_4_2_8 _ idx hhead hidx256]
+  have hgetD : ∀ (i : Nat) (hi : i < 4),
+      [chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x].getD i (zeroTensor [1, 4, 2, 8]) =
+        chunkPrimDimN 2 4 i x := by
+    intro i hi
+    have h4 : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases h4 with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ]
+  have hr : (idx % 64) / 16 < 4 := by omega
+  have hloc : (idx / 64) * 16 + ((idx % 16) / 8) * 8 + idx % 8 < 64 := by omega
+  rw [hgetD ((idx % 64) / 16) hr]
+  rw [chunkPrimDimN_2_4_valAt_1_4_8_8 x ((idx % 64) / 16)
+    ((idx / 64) * 16 + ((idx % 16) / 8) * 8 + idx % 8) hsh hr hloc]
+  congr 1
+  omega
+
 end
 
 /-- fw_linear distributes over allGatherPrimDimN on dim 1 for shard shape [1,2,32] with w:[32,32].
@@ -10436,6 +10806,69 @@ theorem chunk2_4_1_8_128_valAt_pj (x : Tensor) (r p j : Nat)
   have hidx : (p * 32 + j) / 32 * 128 + (r % 4 * 32 + (p * 32 + j) % 32 / 1) * 1 + (p * 32 + j) % 32 % 1 =
       p * 128 + r * 32 + j := by omega
   rw [hidx]
+
+/-- valAt of `allGatherPrimDimN 2 4 0 xs` on `[1, 8, 32]` shards (result `[1, 8, 128]`). -/
+theorem allGatherPrimDimN_2_4_valAt_1_8_32 (xs : List Tensor) (idx : Nat)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [1, 8, 32]) (hidx : idx < 1024) :
+    valAt (allGatherPrimDimN 2 4 0 xs) idx =
+      valAt (xs.getD (idx % 128 / 32) (zeroTensor [1, 8, 32]))
+        ((idx / 128) * 32 + idx % 32) := by
+  have hresult_shape : (allGatherPrimDimN 2 4 0 xs).shape = [1, 8, 128] := by
+    rw [allGatherPrimDimN_shape 2 4 xs [1, 8, 32] hhead]
+    simp [List.set, List.getD]
+  have hprod : idx < prodShape (allGatherPrimDimN 2 4 0 xs).shape := by
+    rw [hresult_shape]; simp [prodShape]; exact hidx
+  rw [valAt_of_lt _ _ hprod]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl, Nat.reduceMul, Nat.reduceAdd,
+    Nat.reduceDiv, Nat.reduceMod, Nat.div_one, Nat.mod_one, Nat.mul_one,
+    Nat.add_zero, Nat.zero_add, show (8 : Nat) ≠ 0 from by omega,
+    show (32 : Nat) ≠ 0 from by omega, show (128 : Nat) ≠ 0 from by omega,
+    show (1 : Nat) ≠ 0 from by omega, ite_false, List.set]
+  congr 1
+  omega
+
+/-- Gather-chunk roundtrip on dim 2 for shape `[1, 8, 128]`: allGathering the four
+    dim-2 chunks of `x` recovers `x`. -/
+theorem allGather_chunkPrimDimN_roundtrip_dim2_4_1_8_128 (x : Tensor)
+    (hx : x.shape = [1, 8, 128]) :
+    allGatherPrimDimN 2 4 0
+      [chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x] = x := by
+  have hc0 : (chunkPrimDimN 2 4 0 x).shape = [1, 8, 32] := by
+    rw [chunkPrimDimN_shape 2 4 0 _ _ hx (by omega)]; simp [List.set, List.getD]
+  have hhead : (([chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+      chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x] : List Tensor).head?.map
+      (fun t => t.shape)).getD [] = [1, 8, 32] := by simp [hc0]
+  have hg_shape : (allGatherPrimDimN 2 4 0
+      [chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x]).shape = [1, 8, 128] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead]; simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hg_shape, hx])
+  intro idx hidx
+  have hidx1024 : idx < 1024 := by simpa [hg_shape, prodShape] using hidx
+  rw [allGatherPrimDimN_2_4_valAt_1_8_32 _ _ hhead hidx1024]
+  have hp : idx / 128 < 8 := by omega
+  have hj : idx % 32 < 32 := by omega
+  rcases (show idx % 128 / 32 = 0 ∨ idx % 128 / 32 = 1 ∨ idx % 128 / 32 = 2 ∨ idx % 128 / 32 = 3
+      from by omega) with h | h | h | h
+  · rw [h]
+    simp only [List.getD, List.getElem?_cons_zero, Option.getD_some]
+    rw [chunk2_4_1_8_128_valAt_pj x 0 (idx / 128) (idx % 32) hx (by omega) hp hj]
+    congr 1; omega
+  · rw [h]
+    simp only [List.getD, List.getElem?_cons_succ, List.getElem?_cons_zero, Option.getD_some]
+    rw [chunk2_4_1_8_128_valAt_pj x 1 (idx / 128) (idx % 32) hx (by omega) hp hj]
+    congr 1; omega
+  · rw [h]
+    simp only [List.getD, List.getElem?_cons_succ, List.getElem?_cons_zero, Option.getD_some]
+    rw [chunk2_4_1_8_128_valAt_pj x 2 (idx / 128) (idx % 32) hx (by omega) hp hj]
+    congr 1; omega
+  · rw [h]
+    simp only [List.getD, List.getElem?_cons_succ, List.getElem?_cons_zero, Option.getD_some]
+    rw [chunk2_4_1_8_128_valAt_pj x 3 (idx / 128) (idx % 32) hx (by omega) hp hj]
+    congr 1; omega
 
 set_option maxHeartbeats 2000000 in
 theorem fw_linear_colParallel_4_1_8_128_32_32
