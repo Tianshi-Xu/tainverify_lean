@@ -14840,4 +14840,123 @@ theorem fw_matmul_split_dim2_first_1_4_8_8_g192 (a b : Tensor)
     intro l _
     congr 2 <;> omega
 
+/-! ## BW_matmul dW contraction-dim (dim2) split with AllReduce (for goal_197 family).
+
+`transpose2d` commutes with a dim-2 gather (turning it into a dim-3 gather of the
+transposed shards), and `BW_matmul`'s second output (`dy = xᵀ @ g`) with both operands
+partitioned along their shared contraction dimension (dim 2, size `8 → 2`) reduces to the
+`allReducePrim` sum of the per-rank products. -/
+
+/-! Flat-index arithmetic helpers for `transpose2d_gather2_eq_gather3_g197`
+(proven in an empty context so `omega` stays fast). -/
+
+private theorem t2g_aux_jbnd_g197 (idx : Nat) (hidx : idx < 256) :
+    idx / 64 * 64 + idx % 8 * 8 + idx % 64 / 8 < 256 := by omega
+
+private theorem t2g_aux_sh_g197 (idx : Nat) :
+    (idx / 64 * 64 + idx % 8 * 8 + idx % 64 / 8) % 64 / 16 = idx % 8 / 2 := by
+  have hj : (idx / 64 * 64 + idx % 8 * 8 + idx % 64 / 8) % 64 = idx % 8 * 8 + idx % 64 / 8 := by
+    omega
+  rw [hj]; omega
+
+private theorem t2g_aux_mbnd_g197 (idx : Nat) (hidx : idx < 256) :
+    idx / 8 * 2 + idx % 8 % 2 < 64 := by omega
+
+private theorem t2g_aux_inner_g197 (idx : Nat) :
+    (idx / 64 * 64 + idx % 8 * 8 + idx % 64 / 8) / 64 * 16 +
+      (idx / 64 * 64 + idx % 8 * 8 + idx % 64 / 8) % 16 / 8 * 8 +
+      (idx / 64 * 64 + idx % 8 * 8 + idx % 64 / 8) % 8 =
+    (idx / 8 * 2 + idx % 8 % 2) / 16 * 16 + (idx / 8 * 2 + idx % 8 % 2) % 2 * 8 +
+      (idx / 8 * 2 + idx % 8 % 2) % 16 / 2 := by
+  have ha : idx % 8 < 8 := Nat.mod_lt _ (by omega)
+  have hb : idx % 64 / 8 < 8 := by omega
+  have hidx8 : idx / 8 = idx / 64 * 8 + idx % 64 / 8 := by omega
+  rw [hidx8]
+  revert ha hb
+  generalize idx % 8 = A
+  generalize idx % 64 / 8 = B
+  generalize idx / 64 = E
+  intro ha hb
+  rw [show (E * 64 + A * 8 + B) / 64 = E from by omega,
+      show (E * 64 + A * 8 + B) % 16 / 8 = A % 2 from by omega,
+      show (E * 64 + A * 8 + B) % 8 = B from by omega,
+      show ((E * 8 + B) * 2 + A % 2) / 16 = E from by omega,
+      show ((E * 8 + B) * 2 + A % 2) % 2 = A % 2 from by omega,
+      show ((E * 8 + B) * 2 + A % 2) % 16 / 2 = B from by omega]
+
+/-- `transpose2d` of a dim-2 gather equals the dim-3 gather of the transposed shards
+(for `[1,4,2,8]` shards gathered into `[1,4,8,8]`). -/
+theorem transpose2d_gather2_eq_gather3_g197 (x0 x1 x2 x3 : Tensor)
+    (h0 : x0.shape = [1, 4, 2, 8]) (h1 : x1.shape = [1, 4, 2, 8])
+    (h2 : x2.shape = [1, 4, 2, 8]) (h3 : x3.shape = [1, 4, 2, 8]) :
+    transpose2d (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3]) =
+      allGatherPrimDimN 3 4 0
+        [transpose2d x0, transpose2d x1, transpose2d x2, transpose2d x3] := by
+  have hhead2 : (([x0, x1, x2, x3] : List Tensor).head?.map (fun t => t.shape)).getD [] =
+      [1, 4, 2, 8] := by simp [h0]
+  have htx0 : (transpose2d x0).shape = [1, 4, 8, 2] := transpose2d_shape_1_4_2_8 _ h0
+  have hhead3 : (([transpose2d x0, transpose2d x1, transpose2d x2, transpose2d x3] :
+      List Tensor).head?.map (fun t => t.shape)).getD [] = [1, 4, 8, 2] := by simp [htx0]
+  have hX_shape : (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead2]; simp [List.set, List.getD]
+  have hlhs_shape : (transpose2d (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3])).shape = [1, 4, 8, 8] :=
+    transpose2d_shape_1_4_8_8 _ hX_shape
+  have hrhs_shape : (allGatherPrimDimN 3 4 0
+      [transpose2d x0, transpose2d x1, transpose2d x2, transpose2d x3]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 3 4 _ _ hhead3]; simp [List.set, List.getD]
+  have hxget : ∀ s, s < 4 →
+      ([x0, x1, x2, x3].getD s (zeroTensor [1, 4, 2, 8])).shape = [1, 4, 2, 8] := by
+    intro s hs
+    have : s = 0 ∨ s = 1 ∨ s = 2 ∨ s = 3 := by omega
+    rcases this with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, h0, h1, h2, h3]
+  have hsel : ∀ s, s < 4 →
+      [transpose2d x0, transpose2d x1, transpose2d x2, transpose2d x3].getD s
+          (zeroTensor [1, 4, 8, 2]) =
+        transpose2d ([x0, x1, x2, x3].getD s (zeroTensor [1, 4, 2, 8])) := by
+    intro s hs
+    have : s = 0 ∨ s = 1 ∨ s = 2 ∨ s = 3 := by omega
+    rcases this with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ]
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  rw [transpose2d_valAt_1_4_8_8 _ idx hX_shape hidx256]
+  rw [allGatherPrimDimN_2_4_valAt_1_4_2_8 [x0, x1, x2, x3]
+      (idx / 64 * 64 + idx % 8 * 8 + idx % 64 / 8) hhead2 (t2g_aux_jbnd_g197 idx hidx256)]
+  rw [allGatherPrimDimN_3_4_valAt_1_4_8_2
+      [transpose2d x0, transpose2d x1, transpose2d x2, transpose2d x3] idx hhead3 hidx256]
+  rw [hsel ((idx % 8) / 2) (by omega)]
+  rw [transpose2d_valAt_1_4_2_8 _ (idx / 8 * 2 + idx % 8 % 2)
+      (hxget ((idx % 8) / 2) (by omega)) (t2g_aux_mbnd_g197 idx hidx256)]
+  rw [t2g_aux_sh_g197 idx]
+  congr 1
+  exact t2g_aux_inner_g197 idx
+
+/-- `BW_matmul` second output (`dy = xᵀ @ g`) with both operands partitioned along their
+shared contraction dimension (dim 2 into 4 shards `[1,4,2,8]`); the full `dy` is the
+`allReducePrim` sum of the per-rank products `xᵣᵀ @ gᵣ`. -/
+theorem bw_matmul_snd_split_dW_g197 (x0 x1 x2 x3 g0 g1 g2 g3 : Tensor)
+    (hx0 : x0.shape = [1, 4, 2, 8]) (hx1 : x1.shape = [1, 4, 2, 8])
+    (hx2 : x2.shape = [1, 4, 2, 8]) (hx3 : x3.shape = [1, 4, 2, 8])
+    (hg0 : g0.shape = [1, 4, 2, 8]) (hg1 : g1.shape = [1, 4, 2, 8])
+    (hg2 : g2.shape = [1, 4, 2, 8]) (hg3 : g3.shape = [1, 4, 2, 8]) :
+    batchedMatmul (transpose2d (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3]))
+        (allGatherPrimDimN 2 4 0 [g0, g1, g2, g3]) =
+      allReducePrim 4 0
+        [batchedMatmul (transpose2d x0) g0, batchedMatmul (transpose2d x1) g1,
+         batchedMatmul (transpose2d x2) g2, batchedMatmul (transpose2d x3) g3] := by
+  rw [transpose2d_gather2_eq_gather3_g197 x0 x1 x2 x3 hx0 hx1 hx2 hx3]
+  rw [show batchedMatmul (allGatherPrimDimN 3 4 0
+        [transpose2d x0, transpose2d x1, transpose2d x2, transpose2d x3])
+        (allGatherPrimDimN 2 4 0 [g0, g1, g2, g3]) =
+      fw_matmul (allGatherPrimDimN 3 4 0
+        [transpose2d x0, transpose2d x1, transpose2d x2, transpose2d x3])
+        (allGatherPrimDimN 2 4 0 [g0, g1, g2, g3]) from rfl]
+  rw [fw_matmul_split_dimK_1_4_8_8 (transpose2d x0) (transpose2d x1) (transpose2d x2)
+      (transpose2d x3) g0 g1 g2 g3
+      (transpose2d_shape_1_4_2_8 _ hx0) (transpose2d_shape_1_4_2_8 _ hx1)
+      (transpose2d_shape_1_4_2_8 _ hx2) (transpose2d_shape_1_4_2_8 _ hx3)
+      hg0 hg1 hg2 hg3]
+
 end TrainVerify.Denote
