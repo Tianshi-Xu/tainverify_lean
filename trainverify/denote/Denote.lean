@@ -14408,4 +14408,120 @@ theorem applyNode_bw_add2_snd_out_g171
   unfold storeSet
   simp [List.find?, hne]
 
+/-! ### batch10 BW_add g145 net-new lemmas -/
+
+/-- `bw_add2` second output (dY) equals the gradient when `g` and `y` share a shape. -/
+theorem bw_add2_snd_same_shape_g145 (g x y : Tensor) (h : g.shape = y.shape) :
+    (bw_add2 g x y).2 = g := by
+  show reduceBroadcast g.shape y.shape (fun k => valAt g k) = g
+  rw [h, reduceBroadcast_same]
+  rw [← h]
+  apply Tensor.ext (by simp [Tensor.mkShape])
+  intro idx hidx
+  simp [Tensor.mkShape, valAt_of_lt g idx hidx]
+
+/-- `applyNode` for ternary `BW_add` — second output (dy). -/
+theorem applyNode_bw_add2_snd_out_g145
+    (graph : GraphDecl) (s : Store) (rank : Nat)
+    (gTid xTid yTid dxTid dyTid : Tid)
+    (hne : dxTid ≠ dyTid) :
+    applyNode graph s { rank := rank, op := "OpName.BW_add", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dyTid =
+      (bw_add2 (s gTid) (s xTid) (s yTid)).2 := by
+  unfold applyNode
+  rw [show ([gTid, xTid, yTid] : List Tid).map s = [s gTid, s xTid, s yTid] from rfl,
+      evalOp_bw_add2]
+  change storeSet s [(dxTid, (bw_add2 (s gTid) (s xTid) (s yTid)).1),
+                     (dyTid, (bw_add2 (s gTid) (s xTid) (s yTid)).2)] dyTid = _
+  unfold storeSet
+  simp [List.find?, hne]
+
+/-- Value of `chunkPrimDimN 1 4 r x` (chunk along dim 1) for `x : [1,8,32]`.
+    The shard has shape `[1,2,32]` (product 64); local flat `loc < 64` maps to
+    global flat `r*64 + loc`. -/
+theorem chunk_dim1_4_1_8_32_valAt_g145 (x : Tensor) (r loc : Nat)
+    (hx : x.shape = [1, 8, 32]) (hr : r < 4) (hloc : loc < 64) :
+    valAt (chunkPrimDimN 1 4 r x) loc = valAt x (r * 64 + loc) := by
+  have hchunk_shape : (chunkPrimDimN 1 4 r x).shape = [1, 2, 32] := by
+    rw [chunkPrimDimN_shape 1 4 r _ _ hx (by omega)]
+    simp [List.set, List.getD]
+  have hloc_shape : loc < prodShape (chunkPrimDimN 1 4 r x).shape := by
+    rw [hchunk_shape]; simp [prodShape]; exact hloc
+  rw [valAt_of_lt _ _ hloc_shape]
+  unfold chunkPrimDimN Tensor.mkShape
+  simp only [hx, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl,
+    show (4 : Nat) ≠ 0 by omega, show (8 : Nat) ≠ 0 by omega,
+    show (32 : Nat) ≠ 0 by omega, show (1 : Nat) ≠ 0 by omega, ite_false,
+    Nat.reduceMul, Nat.reduceDiv, Nat.reduceAdd,
+    show (2 : Nat) ≠ 0 by omega, show (64 : Nat) ≠ 0 by omega]
+  have hr4 : r % 4 = r := Nat.mod_eq_of_lt hr
+  rw [hr4]
+  congr 1
+  omega
+
+/-- Value of `allGatherPrimDimN 1 4 0 xs` (gather along dim 1) for shards of shape
+    `[1,2,32]`: the gathered tensor has shape `[1,8,32]`; global flat `idx < 256`
+    selects piece `idx / 64` at local flat `idx % 64`. -/
+theorem allGatherPrimDimN_1_4_valAt_1_2_32_g145 (xs : List Tensor) (idx : Nat)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [1, 2, 32])
+    (hidx : idx < 256) :
+    valAt (allGatherPrimDimN 1 4 0 xs) idx =
+      valAt (xs.getD (idx / 64) (zeroTensor [1, 2, 32])) (idx % 64) := by
+  have hresult_shape : (allGatherPrimDimN 1 4 0 xs).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 xs [1, 2, 32] hhead]; simp [List.set, List.getD]
+  have hprod : idx < prodShape (allGatherPrimDimN 1 4 0 xs).shape := by
+    rw [hresult_shape]; simp [prodShape]; exact hidx
+  rw [valAt_of_lt _ _ hprod]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl, Nat.reduceMul, Nat.reduceAdd,
+    Nat.reduceDiv, Nat.reduceMod, Nat.div_one, Nat.mod_one, Nat.mul_one,
+    Nat.add_zero, Nat.zero_add, show (2 : Nat) ≠ 0 from by omega,
+    show (32 : Nat) ≠ 0 from by omega, show (64 : Nat) ≠ 0 from by omega,
+    show (256 : Nat) ≠ 0 from by omega, ite_false]
+  have hpre : idx / 256 = 0 := by omega
+  have hrem : idx % 256 = idx := by omega
+  rw [hpre, hrem]
+  have hjFull_div : idx / (32 * 1) / 2 = idx / 64 := by omega
+  have hjLocal : idx / (32 * 1) % 2 = (idx % 64) / 32 := by omega
+  have hk : idx % (32 * 1) = idx % 32 := by omega
+  rw [hjFull_div, hjLocal, hk]
+  congr 1
+  omega
+
+/-- All-gather (dim 1) of the four dim-1 chunks of a `[1,8,32]` tensor recovers it. -/
+theorem allGather_chunkPrimDimN_roundtrip_dim1_4_1_8_32_g145 (x : Tensor)
+    (hx : x.shape = [1, 8, 32]) :
+    allGatherPrimDimN 1 4 0
+      [chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x] = x := by
+  have hc0 : (chunkPrimDimN 1 4 0 x).shape = [1, 2, 32] := by
+    rw [chunkPrimDimN_shape 1 4 0 _ _ hx (by omega)]; simp [List.set, List.getD]
+  have hhead : (([chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+      chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x] : List Tensor).head?.map
+      (fun t => t.shape)).getD [] = [1, 2, 32] := by
+    simp [hc0]
+  have hg_shape : (allGatherPrimDimN 1 4 0
+      [chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hhead]; simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hg_shape, hx])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hg_shape, prodShape] using hidx
+  rw [allGatherPrimDimN_1_4_valAt_1_2_32_g145 _ _ hhead hidx256]
+  have hr : idx / 64 < 4 := by omega
+  have hloc : idx % 64 < 64 := Nat.mod_lt idx (by omega)
+  have hgetD : ∀ (i : Nat) (_ : i < 4),
+      [chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x].getD i (zeroTensor [1, 2, 32]) =
+        chunkPrimDimN 1 4 i x := by
+    intro i hi
+    have h4 : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases h4 with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ]
+  rw [hgetD (idx / 64) hr]
+  rw [chunk_dim1_4_1_8_32_valAt_g145 x (idx / 64) (idx % 64) hx hr hloc]
+  congr 1
+  omega
+
 end TrainVerify.Denote
