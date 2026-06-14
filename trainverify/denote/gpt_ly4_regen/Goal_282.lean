@@ -53,5 +53,152 @@ def goal_282_cut_initGoals : List LineageGoal := initGoals ++ goal_282_prereqs
 def goal_282_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_282 pm_goal_282 goal_282 sm_goal_282InitEnv pm_goal_282InitEnv goal_282_cut_initGoals
 
-end TrainVerify.Denote.GeneratedGoals
+set_option maxRecDepth 4096 in
+theorem prove_goal_282_cut : goal_282_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- grad input (ins[0] = 800)
+  have hInitG : InitGoalHolds pm_goal_282.numRanks goal_175 initSM initPM := by
+    apply hInitGoals; simp only [goal_282_cut_initGoals, goal_282_prereqs]; decide
+  -- x input (ins[1] = 977)
+  have hInitX : InitGoalHolds pm_goal_282.numRanks goal_281 initSM initPM := by
+    apply hInitGoals; simp only [goal_282_cut_initGoals, goal_282_prereqs]; decide
+  have hInitW : InitGoalHolds pm_goal_282.numRanks initGoal_629 initSM initPM := by
+    apply hInitGoals; simp only [goal_282_cut_initGoals, goal_282_prereqs, initGoals]; decide
+  have hInitB : InitGoalHolds pm_goal_282.numRanks initGoal_630 initSM initPM := by
+    apply hInitGoals; simp only [goal_282_cut_initGoals, goal_282_prereqs, initGoals]; decide
+  -- grad gather (800)
+  have hG_rec : initSM 800 = reconstructWithDim 1 4 0
+      [initPM 2100, initPM 2104, initPM 2108, initPM 2112] := by
+    have hrec := hInitG.2.2
+    simp only [goal_175, pm_goal_282, List.map] at hrec
+    exact hrec
+  have htpG := hInitG.2.1
+  simp only [goal_175, List.map] at htpG
+  have h2100_shape : (initPM 2100).shape = [1, 2, 32] := by
+    have := congrArg List.head? htpG; simpa using this
+  have h2104_shape : (initPM 2104).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htpG; simpa using this
+  have h2108_shape : (initPM 2108).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htpG; simpa using this
+  have h2112_shape : (initPM 2112).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htpG; simpa using this
+  -- x gather (977)
+  have hX_rec : initSM 977 = reconstructWithDim 1 4 0
+      [initPM 2081, initPM 2082, initPM 2083, initPM 2084] := by
+    have hrec := hInitX.2.2
+    simp only [goal_281, pm_goal_282, List.map] at hrec
+    exact hrec
+  have hX_shape : (initSM 977).shape = [1, 8, 32] := by
+    have := hInitX.1; simpa [goal_281] using this
+  have htpX := hInitX.2.1
+  simp only [goal_281, List.map] at htpX
+  have h2081_shape : (initPM 2081).shape = [1, 2, 32] := by
+    have := congrArg List.head? htpX; simpa using this
+  have h2082_shape : (initPM 2082).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htpX; simpa using this
+  have h2083_shape : (initPM 2083).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htpX; simpa using this
+  have h2084_shape : (initPM 2084).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htpX; simpa using this
+  -- weight/bias (replicated)
+  have hW_eq : initSM 629 = initPM 629 := by
+    have hrec := hInitW.2.2
+    simp only [initGoal_629, pm_goal_282, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  have hW_shape : (initSM 629).shape = [32] := hInitW.1
+  have hB_eq : initSM 630 = initPM 630 := by
+    have hrec := hInitB.2.2
+    simp only [initGoal_630, pm_goal_282, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  -- Convert to allGatherPrimDimN
+  have hG_gather : initSM 800 = allGatherPrimDimN 1 4 0
+      [initPM 2100, initPM 2104, initPM 2108, initPM 2112] := by
+    rw [hG_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2100_shape]; decide)
+  have hX_gather : initSM 977 = allGatherPrimDimN 1 4 0
+      [initPM 2081, initPM 2082, initPM 2083, initPM 2084] := by
+    rw [hX_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2081_shape]; decide)
+  -- SM store (dx output, index 0 = 978)
+  have hsm : (denoteGraph sm_goal_282 initSM) 978 =
+      (bw_layernorm (initSM 800) (initSM 977) (initSM 629) (initSM 630)).1 := by
+    simp only [sm_goal_282, denoteGraph, List.foldl]
+    rw [applyNode_bw_layernorm_dx_out]
+  -- PM stores (4 BW_layernorm nodes, NO cross node)
+  have hpm0 : (denoteGraph pm_goal_282 initPM) 2097 =
+      (bw_layernorm (initPM 2100) (initPM 2081) (initPM 629) (initPM 630)).1 := by
+    simp only [pm_goal_282, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.BW_layernorm", ins := [2112, 2084, 629, 630], outs := [2109, 2110, 2111] } 2097 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_layernorm", ins := [2108, 2083, 629, 630], outs := [2105, 2106, 2107] } 2097 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [2104, 2082, 629, 630], outs := [2101, 2102, 2103] } 2097 (by decide)]
+    rw [applyNode_bw_layernorm_dx_out]
+  have hpm1 : (denoteGraph pm_goal_282 initPM) 2101 =
+      (bw_layernorm (initPM 2104) (initPM 2082) (initPM 629) (initPM 630)).1 := by
+    simp only [pm_goal_282, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.BW_layernorm", ins := [2112, 2084, 629, 630], outs := [2109, 2110, 2111] } 2101 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_layernorm", ins := [2108, 2083, 629, 630], outs := [2105, 2106, 2107] } 2101 (by decide)]
+    rw [applyNode_bw_layernorm_dx_out]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [2100, 2081, 629, 630], outs := [2097, 2098, 2099] } 2104 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [2100, 2081, 629, 630], outs := [2097, 2098, 2099] } 2082 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [2100, 2081, 629, 630], outs := [2097, 2098, 2099] } 629 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [2100, 2081, 629, 630], outs := [2097, 2098, 2099] } 630 (by decide)]
+  have hpm2 : (denoteGraph pm_goal_282 initPM) 2105 =
+      (bw_layernorm (initPM 2108) (initPM 2083) (initPM 629) (initPM 630)).1 := by
+    simp only [pm_goal_282, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.BW_layernorm", ins := [2112, 2084, 629, 630], outs := [2109, 2110, 2111] } 2105 (by decide)]
+    rw [applyNode_bw_layernorm_dx_out]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [2104, 2082, 629, 630], outs := [2101, 2102, 2103] } 2108 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [2100, 2081, 629, 630], outs := [2097, 2098, 2099] } 2108 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [2104, 2082, 629, 630], outs := [2101, 2102, 2103] } 2083 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [2100, 2081, 629, 630], outs := [2097, 2098, 2099] } 2083 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [2104, 2082, 629, 630], outs := [2101, 2102, 2103] } 629 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [2100, 2081, 629, 630], outs := [2097, 2098, 2099] } 629 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [2104, 2082, 629, 630], outs := [2101, 2102, 2103] } 630 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [2100, 2081, 629, 630], outs := [2097, 2098, 2099] } 630 (by decide)]
+  have hpm3 : (denoteGraph pm_goal_282 initPM) 2109 =
+      (bw_layernorm (initPM 2112) (initPM 2084) (initPM 629) (initPM 630)).1 := by
+    simp only [pm_goal_282, denoteGraph, List.foldl]
+    rw [applyNode_bw_layernorm_dx_out]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_layernorm", ins := [2108, 2083, 629, 630], outs := [2105, 2106, 2107] } 2112 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [2104, 2082, 629, 630], outs := [2101, 2102, 2103] } 2112 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [2100, 2081, 629, 630], outs := [2097, 2098, 2099] } 2112 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_layernorm", ins := [2108, 2083, 629, 630], outs := [2105, 2106, 2107] } 2084 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [2104, 2082, 629, 630], outs := [2101, 2102, 2103] } 2084 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [2100, 2081, 629, 630], outs := [2097, 2098, 2099] } 2084 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_layernorm", ins := [2108, 2083, 629, 630], outs := [2105, 2106, 2107] } 629 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [2104, 2082, 629, 630], outs := [2101, 2102, 2103] } 629 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [2100, 2081, 629, 630], outs := [2097, 2098, 2099] } 629 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_layernorm", ins := [2108, 2083, 629, 630], outs := [2105, 2106, 2107] } 630 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [2104, 2082, 629, 630], outs := [2101, 2102, 2103] } 630 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [2100, 2081, 629, 630], outs := [2097, 2098, 2099] } 630 (by decide)]
+  -- Key equation (dx distributes as allGather)
+  have hkey : (bw_layernorm (initSM 800) (initSM 977) (initSM 629) (initSM 630)).1 =
+      allGatherPrimDimN 1 4 0
+        [(bw_layernorm (initPM 2100) (initPM 2081) (initPM 629) (initPM 630)).1,
+         (bw_layernorm (initPM 2104) (initPM 2082) (initPM 629) (initPM 630)).1,
+         (bw_layernorm (initPM 2108) (initPM 2083) (initPM 629) (initPM 630)).1,
+         (bw_layernorm (initPM 2112) (initPM 2084) (initPM 629) (initPM 630)).1] := by
+    rw [hG_gather, hX_gather, hW_eq, hB_eq]
+    exact bw_layernorm_dx_dp_split_dim1_4_1_2_32
+      (initPM 2100) (initPM 2104) (initPM 2108) (initPM 2112)
+      (initPM 2081) (initPM 2082) (initPM 2083) (initPM 2084)
+      (initPM 629) (initPM 630)
+      h2100_shape h2104_shape h2108_shape h2112_shape
+      h2081_shape h2082_shape h2083_shape h2084_shape
+      (by rw [← hW_eq]; exact hW_shape)
+  have hdx0_shape : (bw_layernorm (initPM 2100) (initPM 2081) (initPM 629) (initPM 630)).1.shape = [1, 2, 32] := by
+    rw [bw_layernorm_dx_shape _ _ _ _ 32 [2, 1] (by rw [h2081_shape]; rfl), h2081_shape]
+  -- Three conjuncts
+  simp only [goal_282, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, bw_layernorm_dx_shape _ _ _ _ 32 [8, 1] (by rw [hX_shape]; rfl), hX_shape]
+  · rw [hpm0, hpm1, hpm2, hpm3,
+        bw_layernorm_dx_shape _ _ _ _ 32 [2, 1] (by rw [h2081_shape]; rfl), h2081_shape,
+        bw_layernorm_dx_shape _ _ _ _ 32 [2, 1] (by rw [h2082_shape]; rfl), h2082_shape,
+        bw_layernorm_dx_shape _ _ _ _ 32 [2, 1] (by rw [h2083_shape]; rfl), h2083_shape,
+        bw_layernorm_dx_shape _ _ _ _ 32 [2, 1] (by rw [h2084_shape]; rfl), h2084_shape]
+  · rw [hsm, hkey, hpm0, hpm1, hpm2, hpm3,
+        reconstructWithDim_cons_cons_nonscalar 1 pm_goal_282.numRanks 0 _ _ _ (by rw [hdx0_shape]; decide)]
+    rfl
 
+end TrainVerify.Denote.GeneratedGoals
