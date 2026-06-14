@@ -58,5 +58,130 @@ def goal_284_cut_initGoals : List LineageGoal := initGoals ++ goal_284_prereqs
 def goal_284_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_284 pm_goal_284 goal_284 sm_goal_284InitEnv pm_goal_284InitEnv goal_284_cut_initGoals
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1600000 in
+-- BW_add dX (first output, tid 982): the gradient g=806 is dim-1 reconstructed from
+-- 4 shards [2215,2218,2221,2224] (goal_181).  BW_add's first output is exactly the
+-- gradient, so smStore 982 = initSM 806 and each per-rank dX = initPM 221x.  The full
+-- dX equals the dim-1 reconstruct of the per-rank dX outputs (goal_181 directly).
+theorem prove_goal_284_cut : goal_284_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- g (806): dim-1 reconstruct from [2215,2218,2221,2224] (goal_181)
+  have hInit181 : InitGoalHolds pm_goal_284.numRanks goal_181 initSM initPM := by
+    apply hInitGoals; simp only [goal_284_cut_initGoals, goal_284_prereqs]; decide
+  have h806_shape : (initSM 806).shape = [1, 8, 32] := hInit181.1
+  have h806_rec : initSM 806 = reconstructWithDim 1 4 0
+      [initPM 2215, initPM 2218, initPM 2221, initPM 2224] := by
+    have hrec := hInit181.2.2
+    simp only [goal_181, pm_goal_284, List.map] at hrec
+    exact hrec
+  have htp181 := hInit181.2.1
+  simp only [goal_181, List.map] at htp181
+  have h2215_shape : (initPM 2215).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp181; simpa using this
+  have h2218_shape : (initPM 2218).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htp181; simpa using this
+  have h2221_shape : (initPM 2221).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp181; simpa using this
+  have h2224_shape : (initPM 2224).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp181; simpa using this
+  -- x (981): dim-1 reconstruct from [2193,2194,2195,2196] (goal_283)
+  have hInit283 : InitGoalHolds pm_goal_284.numRanks goal_283 initSM initPM := by
+    apply hInitGoals; simp only [goal_284_cut_initGoals, goal_284_prereqs]; decide
+  have h981_shape : (initSM 981).shape = [1, 8, 32] := hInit283.1
+  have htp283 := hInit283.2.1
+  simp only [goal_283, List.map] at htp283
+  have h2193_shape : (initPM 2193).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp283; simpa using this
+  have h2194_shape : (initPM 2194).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htp283; simpa using this
+  have h2195_shape : (initPM 2195).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp283; simpa using this
+  have h2196_shape : (initPM 2196).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp283; simpa using this
+  -- SM store: dX (first output, tid 982) of BW_add on full tensors = initSM 806
+  have hsm : (denoteGraph sm_goal_284 initSM) 982 =
+      (bw_add2 (initSM 806) (initSM 981) (initSM 636)).1 := by
+    simp only [sm_goal_284, denoteGraph, List.foldl]
+    rw [applyNode_bw_add2_fst_out _ _ 0 806 981 636 982 805 (by decide)]
+  have hdx_sm : (bw_add2 (initSM 806) (initSM 981) (initSM 636)).1 = initSM 806 :=
+    bw_add2_fst_same_shape _ _ _ (by rw [h806_shape, h981_shape])
+  -- PM stores: four per-rank BW_add first outputs, each equal to its gradient shard
+  have hpm0 : (denoteGraph pm_goal_284 initPM) 2213 = initPM 2215 := by
+    simp only [pm_goal_284, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ (2213 : Tid) (by decide : (2213 : Tid) ∉ [2222, 2223])]
+    rw [applyNode_skip _ _ _ (2213 : Tid) (by decide : (2213 : Tid) ∉ [2219, 2220])]
+    rw [applyNode_skip _ _ _ (2213 : Tid) (by decide : (2213 : Tid) ∉ [2216, 2217])]
+    rw [applyNode_bw_add2_fst_out _ _ 0 2215 2193 2197 2213 2214 (by decide)]
+    rw [applyNode_skip _ _ _ (2215 : Tid) (by decide : (2215 : Tid) ∉ [2200])]
+    rw [applyNode_skip _ _ _ (2215 : Tid) (by decide : (2215 : Tid) ∉ [2199])]
+    rw [applyNode_skip _ _ _ (2215 : Tid) (by decide : (2215 : Tid) ∉ [2198])]
+    rw [applyNode_skip _ _ _ (2215 : Tid) (by decide : (2215 : Tid) ∉ [2197])]
+    rw [applyNode_skip _ _ _ (2193 : Tid) (by decide : (2193 : Tid) ∉ [2200])]
+    rw [applyNode_skip _ _ _ (2193 : Tid) (by decide : (2193 : Tid) ∉ [2199])]
+    rw [applyNode_skip _ _ _ (2193 : Tid) (by decide : (2193 : Tid) ∉ [2198])]
+    rw [applyNode_skip _ _ _ (2193 : Tid) (by decide : (2193 : Tid) ∉ [2197])]
+    exact bw_add2_fst_same_shape _ _ _ (by rw [h2215_shape, h2193_shape])
+  have hpm1 : (denoteGraph pm_goal_284 initPM) 2216 = initPM 2218 := by
+    simp only [pm_goal_284, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ (2216 : Tid) (by decide : (2216 : Tid) ∉ [2222, 2223])]
+    rw [applyNode_skip _ _ _ (2216 : Tid) (by decide : (2216 : Tid) ∉ [2219, 2220])]
+    rw [applyNode_bw_add2_fst_out _ _ 1 2218 2194 2198 2216 2217 (by decide)]
+    rw [applyNode_skip _ _ _ (2218 : Tid) (by decide : (2218 : Tid) ∉ [2213, 2214])]
+    rw [applyNode_skip _ _ _ (2218 : Tid) (by decide : (2218 : Tid) ∉ [2200])]
+    rw [applyNode_skip _ _ _ (2218 : Tid) (by decide : (2218 : Tid) ∉ [2199])]
+    rw [applyNode_skip _ _ _ (2218 : Tid) (by decide : (2218 : Tid) ∉ [2198])]
+    rw [applyNode_skip _ _ _ (2218 : Tid) (by decide : (2218 : Tid) ∉ [2197])]
+    rw [applyNode_skip _ _ _ (2194 : Tid) (by decide : (2194 : Tid) ∉ [2213, 2214])]
+    rw [applyNode_skip _ _ _ (2194 : Tid) (by decide : (2194 : Tid) ∉ [2200])]
+    rw [applyNode_skip _ _ _ (2194 : Tid) (by decide : (2194 : Tid) ∉ [2199])]
+    rw [applyNode_skip _ _ _ (2194 : Tid) (by decide : (2194 : Tid) ∉ [2198])]
+    rw [applyNode_skip _ _ _ (2194 : Tid) (by decide : (2194 : Tid) ∉ [2197])]
+    exact bw_add2_fst_same_shape _ _ _ (by rw [h2218_shape, h2194_shape])
+  have hpm2 : (denoteGraph pm_goal_284 initPM) 2219 = initPM 2221 := by
+    simp only [pm_goal_284, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ (2219 : Tid) (by decide : (2219 : Tid) ∉ [2222, 2223])]
+    rw [applyNode_bw_add2_fst_out _ _ 2 2221 2195 2199 2219 2220 (by decide)]
+    rw [applyNode_skip _ _ _ (2221 : Tid) (by decide : (2221 : Tid) ∉ [2216, 2217])]
+    rw [applyNode_skip _ _ _ (2221 : Tid) (by decide : (2221 : Tid) ∉ [2213, 2214])]
+    rw [applyNode_skip _ _ _ (2221 : Tid) (by decide : (2221 : Tid) ∉ [2200])]
+    rw [applyNode_skip _ _ _ (2221 : Tid) (by decide : (2221 : Tid) ∉ [2199])]
+    rw [applyNode_skip _ _ _ (2221 : Tid) (by decide : (2221 : Tid) ∉ [2198])]
+    rw [applyNode_skip _ _ _ (2221 : Tid) (by decide : (2221 : Tid) ∉ [2197])]
+    rw [applyNode_skip _ _ _ (2195 : Tid) (by decide : (2195 : Tid) ∉ [2216, 2217])]
+    rw [applyNode_skip _ _ _ (2195 : Tid) (by decide : (2195 : Tid) ∉ [2213, 2214])]
+    rw [applyNode_skip _ _ _ (2195 : Tid) (by decide : (2195 : Tid) ∉ [2200])]
+    rw [applyNode_skip _ _ _ (2195 : Tid) (by decide : (2195 : Tid) ∉ [2199])]
+    rw [applyNode_skip _ _ _ (2195 : Tid) (by decide : (2195 : Tid) ∉ [2198])]
+    rw [applyNode_skip _ _ _ (2195 : Tid) (by decide : (2195 : Tid) ∉ [2197])]
+    exact bw_add2_fst_same_shape _ _ _ (by rw [h2221_shape, h2195_shape])
+  have hpm3 : (denoteGraph pm_goal_284 initPM) 2222 = initPM 2224 := by
+    simp only [pm_goal_284, denoteGraph, List.foldl]
+    rw [applyNode_bw_add2_fst_out _ _ 3 2224 2196 2200 2222 2223 (by decide)]
+    rw [applyNode_skip _ _ _ (2224 : Tid) (by decide : (2224 : Tid) ∉ [2219, 2220])]
+    rw [applyNode_skip _ _ _ (2224 : Tid) (by decide : (2224 : Tid) ∉ [2216, 2217])]
+    rw [applyNode_skip _ _ _ (2224 : Tid) (by decide : (2224 : Tid) ∉ [2213, 2214])]
+    rw [applyNode_skip _ _ _ (2224 : Tid) (by decide : (2224 : Tid) ∉ [2200])]
+    rw [applyNode_skip _ _ _ (2224 : Tid) (by decide : (2224 : Tid) ∉ [2199])]
+    rw [applyNode_skip _ _ _ (2224 : Tid) (by decide : (2224 : Tid) ∉ [2198])]
+    rw [applyNode_skip _ _ _ (2224 : Tid) (by decide : (2224 : Tid) ∉ [2197])]
+    rw [applyNode_skip _ _ _ (2196 : Tid) (by decide : (2196 : Tid) ∉ [2219, 2220])]
+    rw [applyNode_skip _ _ _ (2196 : Tid) (by decide : (2196 : Tid) ∉ [2216, 2217])]
+    rw [applyNode_skip _ _ _ (2196 : Tid) (by decide : (2196 : Tid) ∉ [2213, 2214])]
+    rw [applyNode_skip _ _ _ (2196 : Tid) (by decide : (2196 : Tid) ∉ [2200])]
+    rw [applyNode_skip _ _ _ (2196 : Tid) (by decide : (2196 : Tid) ∉ [2199])]
+    rw [applyNode_skip _ _ _ (2196 : Tid) (by decide : (2196 : Tid) ∉ [2198])]
+    rw [applyNode_skip _ _ _ (2196 : Tid) (by decide : (2196 : Tid) ∉ [2197])]
+    exact bw_add2_fst_same_shape _ _ _ (by rw [h2224_shape, h2196_shape])
+  -- Discharge the three conjuncts
+  simp only [goal_284, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape: [1, 8, 32]
+    rw [hsm, hdx_sm]; exact h806_shape
+  · -- PM tp shapes: [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]]
+    rw [hpm0, hpm1, hpm2, hpm3, h2215_shape, h2218_shape, h2221_shape, h2224_shape]
+  · -- Value equality: smStore 982 = reconstructWithDim 1 4 0 [pm shards]
+    rw [hsm, hdx_sm, hpm0, hpm1, hpm2, hpm3]; exact h806_rec
+
 end TrainVerify.Denote.GeneratedGoals
 
