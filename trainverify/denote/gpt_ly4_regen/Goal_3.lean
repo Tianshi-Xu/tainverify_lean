@@ -46,5 +46,92 @@ def goal_3_cut_initGoals : List LineageGoal := initGoals
 def goal_3_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_3 pm_goal_3 goal_3 sm_goal_3InitEnv pm_goal_3InitEnv goal_3_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- FW_embedding distributes over sequence-sharded ids (ChunkPrim on dim 1) via allGather of per-chunk embeddings
+theorem prove_goal_3_cut : goal_3_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for the ids (716) and weight (565); both replicated (singleton)
+  have hInit716 : InitGoalHolds pm_goal_3.numRanks initGoal_716 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_3_cut_initGoals, initGoals]
+    decide
+  have hInit565 : InitGoalHolds pm_goal_3.numRanks initGoal_565 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_3_cut_initGoals, initGoals]
+    decide
+  -- initSM 716 = initPM 716, initSM 565 = initPM 565
+  have h716_eq : initSM 716 = initPM 716 := by
+    have hrec := hInit716.2.2
+    simp only [initGoal_716, pm_goal_3, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  have h565_eq : initSM 565 = initPM 565 := by
+    have hrec := hInit565.2.2
+    simp only [initGoal_565, pm_goal_3, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  -- Shape facts
+  have h716_shape : (initSM 716).shape = [1, 8] := hInit716.1
+  have h565_shape : (initSM 565).shape = [8, 32] := hInit565.1
+  have h716pm_shape : (initPM 716).shape = [1, 8] := by rw [← h716_eq]; exact h716_shape
+  have h565pm_shape : (initPM 565).shape = [8, 32] := by rw [← h565_eq]; exact h565_shape
+  -- SM store: smStore 566 = fw_embedding (initSM 716) (initSM 565)
+  have hsm : (denoteGraph sm_goal_3 initSM) 566 =
+      fw_embedding (initSM 716) (initSM 565) := by
+    simp only [sm_goal_3, denoteGraph, List.foldl]
+    rw [applyNode_fw_embedding_out]
+  -- PM stores: fw_embedding (chunk_r (initPM 716)) (initPM 565)
+  have hpm0 : (denoteGraph pm_goal_3 initPM) 1089 =
+      fw_embedding (chunkPrimDimN 1 4 0 (initPM 716)) (initPM 565) := by
+    simp only [pm_goal_3, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_embedding_out]
+    congr 1
+  have hpm1 : (denoteGraph pm_goal_3 initPM) 1090 =
+      fw_embedding (chunkPrimDimN 1 4 1 (initPM 716)) (initPM 565) := by
+    simp only [pm_goal_3, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_embedding_out]
+    congr 1
+  have hpm2 : (denoteGraph pm_goal_3 initPM) 1091 =
+      fw_embedding (chunkPrimDimN 1 4 2 (initPM 716)) (initPM 565) := by
+    simp only [pm_goal_3, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_embedding_out]
+    congr 1
+  have hpm3 : (denoteGraph pm_goal_3 initPM) 1092 =
+      fw_embedding (chunkPrimDimN 1 4 3 (initPM 716)) (initPM 565) := by
+    simp only [pm_goal_3, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_fw_embedding_out]
+    congr 1
+  -- Key distribution lemma
+  have hkey : fw_embedding (initPM 716) (initPM 565) = allGatherPrimDimN 1 4 0
+      [fw_embedding (chunkPrimDimN 1 4 0 (initPM 716)) (initPM 565),
+       fw_embedding (chunkPrimDimN 1 4 1 (initPM 716)) (initPM 565),
+       fw_embedding (chunkPrimDimN 1 4 2 (initPM 716)) (initPM 565),
+       fw_embedding (chunkPrimDimN 1 4 3 (initPM 716)) (initPM 565)] :=
+    fw_embedding_distribute_chunk_ids_dim1_4_1_8_32 (initPM 716) (initPM 565)
+      h716pm_shape h565pm_shape
+  -- Per-chunk output shapes
+  have hsh : ∀ r, (fw_embedding (chunkPrimDimN 1 4 r (initPM 716)) (initPM 565)).shape = [1, 2, 32] := by
+    intro r
+    have hcs : (chunkPrimDimN 1 4 r (initPM 716)).shape = [1, 2] := by
+      rw [chunkPrimDimN_shape 1 4 r _ _ h716pm_shape (by omega)]; simp [List.set, List.getD]
+    rw [fw_embedding_shape, hcs, h565pm_shape]; rfl
+  -- Prove the three conjuncts of goal_3
+  simp only [goal_3, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape: [1, 8, 32]
+    rw [hsm, fw_embedding_shape, h716_shape, h565_shape]; rfl
+  · -- PM tp shapes: [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]]
+    rw [hpm0, hpm1, hpm2, hpm3]
+    simp [hsh 0, hsh 1, hsh 2, hsh 3]
+  · -- Value equality
+    rw [hsm, h716_eq, h565_eq, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
+    symm
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [hpm0, hsh 0]; decide
+
 end TrainVerify.Denote.GeneratedGoals
+
 
