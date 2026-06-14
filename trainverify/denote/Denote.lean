@@ -7328,6 +7328,31 @@ theorem fw_matmul_split_dim1_4_1_4_8_8 (a b : Tensor)
     intro l _
     congr 2 <;> (subst loc; omega)
 
+/-- `transpose2d` maps shape `[1,1,8,8]` to `[1,1,8,8]`. -/
+theorem transpose2d_shape_1_1_8_8 (x : Tensor) (hx : x.shape = [1, 1, 8, 8]) :
+    (transpose2d x).shape = [1, 1, 8, 8] := by
+  unfold transpose2d
+  rw [hx]
+  rfl
+
+/-- `valAt` of `transpose2d x` for `x : [1,1,8,8]` (swap of the last two dims, batch fixed). -/
+theorem transpose2d_valAt_1_1_8_8 (x : Tensor) (idx : Nat)
+    (hx : x.shape = [1, 1, 8, 8]) (hidx : idx < 64) :
+    valAt (transpose2d x) idx = valAt x (idx % 8 * 8 + idx / 8) := by
+  have key : transpose2d x = Tensor.mkShape [1, 1, 8, 8] (fun outIdx =>
+      valAt x (outIdx.1 / (8 * 8) * (8 * 8) + outIdx.1 % (8 * 8) % 8 * 8 +
+        outIdx.1 % (8 * 8) / 8)) := by
+    unfold transpose2d
+    rw [hx]
+    rfl
+  rw [key]
+  have hidx' : idx < prodShape ([1, 1, 8, 8] : Shape) := by simp [prodShape]; omega
+  rw [valAt_of_lt _ _ (by simp [Tensor.mkShape]; exact hidx')]
+  show valAt x (idx / (8 * 8) * (8 * 8) + idx % (8 * 8) % 8 * 8 + idx % (8 * 8) / 8) = _
+  congr 1
+  omega
+
+
 /-! ## Gather-of-chunks identity for dim 1, 4 parts, shape [1,8,128] -/
 
 set_option maxHeartbeats 400000 in
@@ -11080,6 +11105,135 @@ theorem transpose2d_valAt_1_4_2_8 (x : Tensor) (idx : Nat)
   show valAt x (idx / (2 * 8) * (2 * 8) + idx % (2 * 8) % 2 * 8 + idx % (2 * 8) / 2) = _
   congr 1
   omega
+
+/- Core distributed-equivalence lemma for `BW_matmul`'s second output (`dy = xᵀ @ g`) split
+along the leading *batch* dimension (dim 1). `X` of shape `[1,4,8,8]` is chunked along dim 1
+into 4 batch-slices of shape `[1,1,8,8]`; rank `r` computes `xᵀ_r @ G_r` where `G_r` is the
+matching batch shard, and the full `dy` is reconstructed by gathering along dim 1. Since
+`transpose2d` and `batchedMatmul` act independently per batch element, batch-chunking commutes
+with the matmul. -/
+set_option maxHeartbeats 3200000 in
+theorem bw_matmul_snd_split_batchdim1_1_4_8_8 (X G0 G1 G2 G3 : Tensor)
+    (hX : X.shape = [1, 4, 8, 8])
+    (hg0 : G0.shape = [1, 1, 8, 8]) (hg1 : G1.shape = [1, 1, 8, 8])
+    (hg2 : G2.shape = [1, 1, 8, 8]) (hg3 : G3.shape = [1, 1, 8, 8]) :
+    batchedMatmul (transpose2d X) (allGatherPrimDimN 1 4 0 [G0, G1, G2, G3]) =
+      allGatherPrimDimN 1 4 0
+        [batchedMatmul (transpose2d (chunkPrimDimN 1 4 0 X)) G0,
+         batchedMatmul (transpose2d (chunkPrimDimN 1 4 1 X)) G1,
+         batchedMatmul (transpose2d (chunkPrimDimN 1 4 2 X)) G2,
+         batchedMatmul (transpose2d (chunkPrimDimN 1 4 3 X)) G3] := by
+  have htX : (transpose2d X).shape = [1, 4, 8, 8] := transpose2d_shape_1_4_8_8 X hX
+  have hhead_g : (([G0, G1, G2, G3] : List Tensor).head?.map (·.shape)).getD [] = [1, 1, 8, 8] := by
+    simp [hg0]
+  have hG : (allGatherPrimDimN 1 4 0 [G0, G1, G2, G3]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hhead_g]; simp [List.set, List.getD]
+  have hcX : ∀ r, (chunkPrimDimN 1 4 r X).shape = [1, 1, 8, 8] := by
+    intro r; rw [chunkPrimDimN_shape 1 4 r _ _ hX (by omega)]; simp [List.set, List.getD]
+  have htcX : ∀ r, (transpose2d (chunkPrimDimN 1 4 r X)).shape = [1, 1, 8, 8] := by
+    intro r; exact transpose2d_shape_1_1_8_8 _ (hcX r)
+  have hp0 : (batchedMatmul (transpose2d (chunkPrimDimN 1 4 0 X)) G0).shape = [1, 1, 8, 8] :=
+    fw_matmul_shape_1_1_8_8 _ _ (htcX 0) hg0
+  have hp1 : (batchedMatmul (transpose2d (chunkPrimDimN 1 4 1 X)) G1).shape = [1, 1, 8, 8] :=
+    fw_matmul_shape_1_1_8_8 _ _ (htcX 1) hg1
+  have hp2 : (batchedMatmul (transpose2d (chunkPrimDimN 1 4 2 X)) G2).shape = [1, 1, 8, 8] :=
+    fw_matmul_shape_1_1_8_8 _ _ (htcX 2) hg2
+  have hp3 : (batchedMatmul (transpose2d (chunkPrimDimN 1 4 3 X)) G3).shape = [1, 1, 8, 8] :=
+    fw_matmul_shape_1_1_8_8 _ _ (htcX 3) hg3
+  have hhead_rhs : (([batchedMatmul (transpose2d (chunkPrimDimN 1 4 0 X)) G0,
+      batchedMatmul (transpose2d (chunkPrimDimN 1 4 1 X)) G1,
+      batchedMatmul (transpose2d (chunkPrimDimN 1 4 2 X)) G2,
+      batchedMatmul (transpose2d (chunkPrimDimN 1 4 3 X)) G3] : List Tensor).head?.map
+        (·.shape)).getD [] = [1, 1, 8, 8] := by simp [hp0]
+  have hlhs_shape : (batchedMatmul (transpose2d X) (allGatherPrimDimN 1 4 0 [G0, G1, G2, G3])).shape
+      = [1, 4, 8, 8] := fw_matmul_shape_1_4_8_8 _ _ htX hG
+  have hrhs_shape : (allGatherPrimDimN 1 4 0
+      [batchedMatmul (transpose2d (chunkPrimDimN 1 4 0 X)) G0,
+       batchedMatmul (transpose2d (chunkPrimDimN 1 4 1 X)) G1,
+       batchedMatmul (transpose2d (chunkPrimDimN 1 4 2 X)) G2,
+       batchedMatmul (transpose2d (chunkPrimDimN 1 4 3 X)) G3]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hhead_rhs]; simp [List.set, List.getD]
+  -- per-term rewrite helpers
+  have hL : ∀ (c j l : Nat), c < 4 → j < 64 → l < 8 →
+      valAt (transpose2d X) (c * 64 + j / 8 * 8 + l) = valAt X (c * 64 + l * 8 + j / 8) := by
+    intro c j l hc hj hl
+    rw [transpose2d_valAt_1_4_8_8 X (c * 64 + j / 8 * 8 + l) hX (by omega)]
+    congr 1; omega
+  have hP : ∀ (c j l : Nat), c < 4 → j < 64 → l < 8 →
+      valAt (transpose2d (chunkPrimDimN 1 4 c X)) (j / 8 * 8 + l) = valAt X (c * 64 + l * 8 + j / 8) := by
+    intro c j l hc hj hl
+    rw [transpose2d_valAt_1_1_8_8 (chunkPrimDimN 1 4 c X) (j / 8 * 8 + l) (hcX c) (by omega)]
+    rw [chunk_dim1_4_1_4_8_8_valAt X c ((j / 8 * 8 + l) % 8 * 8 + (j / 8 * 8 + l) / 8) hX hc (by omega)]
+    congr 1; omega
+  have hLG : ∀ (c l m : Nat), c < 4 → l < 8 → m < 8 →
+      valAt (allGatherPrimDimN 1 4 0 [G0, G1, G2, G3]) (c * 64 + l * 8 + m) =
+        valAt ([G0, G1, G2, G3].getD c (zeroTensor [1, 1, 8, 8])) (l * 8 + m) := by
+    intro c l m hc hl hm
+    rw [allGather_dim1_4_1_1_8_8_valAt _ _ _ _ (c * 64 + l * 8 + m) hg0 hg1 hg2 hg3 (by omega)]
+    have ha : (c * 64 + l * 8 + m) / 64 = c := by omega
+    have hb : (c * 64 + l * 8 + m) % 64 = l * 8 + m := by omega
+    rw [ha, hb]
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  rw [show batchedMatmul (transpose2d X) (allGatherPrimDimN 1 4 0 [G0, G1, G2, G3]) =
+        fw_matmul (transpose2d X) (allGatherPrimDimN 1 4 0 [G0, G1, G2, G3]) from rfl,
+      fw_matmul_valAt_1_4_8_8 (transpose2d X) (allGatherPrimDimN 1 4 0 [G0, G1, G2, G3]) idx
+        htX hG hidx256]
+  rw [allGather_dim1_4_1_1_8_8_valAt _ _ _ _ idx hp0 hp1 hp2 hp3 hidx256]
+  have hmm : idx % 64 % 8 = idx % 8 := by omega
+  have hjmod : idx % 64 < 64 := by omega
+  have hm8 : idx % 8 < 8 := by omega
+  have hr_cases : idx / 64 = 0 ∨ idx / 64 = 1 ∨ idx / 64 = 2 ∨ idx / 64 = 3 := by omega
+  rcases hr_cases with hdiv | hdiv | hdiv | hdiv
+  · rw [hdiv]
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    rw [show batchedMatmul (transpose2d (chunkPrimDimN 1 4 0 X)) G0 =
+          fw_matmul (transpose2d (chunkPrimDimN 1 4 0 X)) G0 from rfl,
+        fw_matmul_valAt_1_1_8_8 (transpose2d (chunkPrimDimN 1 4 0 X)) G0 (idx % 64)
+          (htcX 0) hg0 (by omega)]
+    apply Finset.sum_congr rfl
+    intro l hl
+    have hl8 : l < 8 := by simpa using hl
+    rw [hL 0 (idx % 64) l (by omega) hjmod hl8, hP 0 (idx % 64) l (by omega) hjmod hl8,
+        hLG 0 l (idx % 8) (by omega) hl8 hm8, hmm]
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  · rw [hdiv]
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    rw [show batchedMatmul (transpose2d (chunkPrimDimN 1 4 1 X)) G1 =
+          fw_matmul (transpose2d (chunkPrimDimN 1 4 1 X)) G1 from rfl,
+        fw_matmul_valAt_1_1_8_8 (transpose2d (chunkPrimDimN 1 4 1 X)) G1 (idx % 64)
+          (htcX 1) hg1 (by omega)]
+    apply Finset.sum_congr rfl
+    intro l hl
+    have hl8 : l < 8 := by simpa using hl
+    rw [hL 1 (idx % 64) l (by omega) hjmod hl8, hP 1 (idx % 64) l (by omega) hjmod hl8,
+        hLG 1 l (idx % 8) (by omega) hl8 hm8, hmm]
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  · rw [hdiv]
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    rw [show batchedMatmul (transpose2d (chunkPrimDimN 1 4 2 X)) G2 =
+          fw_matmul (transpose2d (chunkPrimDimN 1 4 2 X)) G2 from rfl,
+        fw_matmul_valAt_1_1_8_8 (transpose2d (chunkPrimDimN 1 4 2 X)) G2 (idx % 64)
+          (htcX 2) hg2 (by omega)]
+    apply Finset.sum_congr rfl
+    intro l hl
+    have hl8 : l < 8 := by simpa using hl
+    rw [hL 2 (idx % 64) l (by omega) hjmod hl8, hP 2 (idx % 64) l (by omega) hjmod hl8,
+        hLG 2 l (idx % 8) (by omega) hl8 hm8, hmm]
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  · rw [hdiv]
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    rw [show batchedMatmul (transpose2d (chunkPrimDimN 1 4 3 X)) G3 =
+          fw_matmul (transpose2d (chunkPrimDimN 1 4 3 X)) G3 from rfl,
+        fw_matmul_valAt_1_1_8_8 (transpose2d (chunkPrimDimN 1 4 3 X)) G3 (idx % 64)
+          (htcX 3) hg3 (by omega)]
+    apply Finset.sum_congr rfl
+    intro l hl
+    have hl8 : l < 8 := by simpa using hl
+    rw [hL 3 (idx % 64) l (by omega) hjmod hl8, hP 3 (idx % 64) l (by omega) hjmod hl8,
+        hLG 3 l (idx % 8) (by omega) hl8 hm8, hmm]
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
 
 /-- Shape of `batchedMatmul` on `[1,4,8,8] @ [1,4,8,2] -> [1,4,8,2]`. -/
 theorem batchedMatmul_shape_1_4_8_8_1_4_8_2 (a b : Tensor)
