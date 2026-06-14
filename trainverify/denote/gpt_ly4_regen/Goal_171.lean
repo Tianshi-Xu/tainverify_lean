@@ -62,5 +62,163 @@ def goal_171_cut_initGoals : List LineageGoal := initGoals ++ goal_171_prereqs
 def goal_171_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_171 pm_goal_171 goal_171 sm_goal_171InitEnv pm_goal_171InitEnv goal_171_cut_initGoals
 
-end TrainVerify.Denote.GeneratedGoals
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1600000 in
+-- BW_add dY (second output, tid 794): the gradient g=795 is dim-2 all-gathered from
+-- 4 shards (goal_172).  BW_add's second output is exactly the (broadcast-reduced)
+-- gradient, so smStore 794 = initSM 795.  On the PM side each per-rank dY equals the
+-- local gradient shard initPM 207x; the trailing AllToAll (idim=2, odim=1) re-splits the
+-- gathered gradient on dim 1, and the full dY equals the dim-1 reconstruction of the
+-- four per-rank AllToAll outputs.
+theorem prove_goal_171_cut : goal_171_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Prereqs: goal_172 (g=795 gather dim2), goal_48 (y=627 shape)
+  have hInit172 : InitGoalHolds pm_goal_171.numRanks goal_172 initSM initPM := by
+    apply hInitGoals; simp only [goal_171_cut_initGoals, goal_171_prereqs]; decide
+  have hInit48 : InitGoalHolds pm_goal_171.numRanks goal_48 initSM initPM := by
+    apply hInitGoals; simp only [goal_171_cut_initGoals, goal_171_prereqs]; decide
+  -- goal_172: shard shapes [1,8,8] and reconstruct of g=795 along dim 2
+  have htp172 := hInit172.2.1
+  simp only [goal_172, List.map] at htp172
+  have h2071_shape : (initPM 2071).shape = [1, 8, 8] := by
+    have := congrArg List.head? htp172; simpa using this
+  have h2074_shape : (initPM 2074).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail) htp172; simpa using this
+  have h2077_shape : (initPM 2077).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp172; simpa using this
+  have h2080_shape : (initPM 2080).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp172; simpa using this
+  have h795_shape : (initSM 795).shape = [1, 8, 32] := hInit172.1
+  have h795_rec : initSM 795 = reconstructWithDim 2 4 0
+      [initPM 2071, initPM 2074, initPM 2077, initPM 2080] := by
+    have hrec := hInit172.2.2
+    simp only [goal_172, pm_goal_171, List.map] at hrec
+    exact hrec
+  -- The gathered gradient G = allGather dim2 of the four shards = initSM 795
+  have h795_gather : initSM 795 = allGatherPrimDimN 2 4 0
+      [initPM 2071, initPM 2074, initPM 2077, initPM 2080] := by
+    rw [h795_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h2071_shape]; decide)
+  have hG_shape : (allGatherPrimDimN 2 4 0
+      [initPM 2071, initPM 2074, initPM 2077, initPM 2080]).shape = [1, 8, 32] := by
+    rw [← h795_gather]; exact h795_shape
+  -- goal_48: y=627 has shape [1,8,32]
+  have h627_shape : (initSM 627).shape = [1, 8, 32] := hInit48.1
+  -- shapes of the first AllToAll outputs (third BW_add input), [1,8,8]
+  have h2025_shape : (initPM 2025).shape = [1, 2, 32] := hPmInit 2025 [1, 2, 32] (by decide)
+  have hAA_shape : ∀ r, (allToAllPrimWithDims 4 r
+      [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2).shape = [1, 8, 8] := by
+    intro r
+    rw [allToAllPrimWithDims_shape 4 r _ 1 2 [1, 2, 32]
+        (by simp [List.head?, Option.map, h2025_shape]) (by omega)]
+    simp [List.set, List.getD]
+  -- each per-rank dY (second BW_add output) equals the local gradient shard
+  have hbw0 : (bw_add2 (initPM 2071) (initPM 2049)
+      (allToAllPrimWithDims 4 0 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2
+      = initPM 2071 :=
+    bw_add2_snd_same_shape_g171 _ _ _ (by rw [h2071_shape, hAA_shape 0])
+  have hbw1 : (bw_add2 (initPM 2074) (initPM 2050)
+      (allToAllPrimWithDims 4 1 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2
+      = initPM 2074 :=
+    bw_add2_snd_same_shape_g171 _ _ _ (by rw [h2074_shape, hAA_shape 1])
+  have hbw2 : (bw_add2 (initPM 2077) (initPM 2051)
+      (allToAllPrimWithDims 4 2 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2
+      = initPM 2077 :=
+    bw_add2_snd_same_shape_g171 _ _ _ (by rw [h2077_shape, hAA_shape 2])
+  have hbw3 : (bw_add2 (initPM 2080) (initPM 2052)
+      (allToAllPrimWithDims 4 3 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2
+      = initPM 2080 :=
+    bw_add2_snd_same_shape_g171 _ _ _ (by rw [h2080_shape, hAA_shape 3])
+  -- PM store: each tp is the dim-1 chunk of the gathered gradient G
+  have hpm0 : (denoteGraph pm_goal_171 initPM) 2039 =
+      chunkPrimDimN 1 4 0 (allGatherPrimDimN 2 4 0
+        [initPM 2071, initPM 2074, initPM 2077, initPM 2080]) := by
+    have hraw : (denoteGraph pm_goal_171 initPM) 2039 = allToAllPrimWithDims 4 0
+        [(bw_add2 (initPM 2071) (initPM 2049)
+            (allToAllPrimWithDims 4 0 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2,
+         (bw_add2 (initPM 2074) (initPM 2050)
+            (allToAllPrimWithDims 4 1 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2,
+         (bw_add2 (initPM 2077) (initPM 2051)
+            (allToAllPrimWithDims 4 2 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2,
+         (bw_add2 (initPM 2080) (initPM 2052)
+            (allToAllPrimWithDims 4 3 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2] 2 1 := by
+      simp only [pm_goal_171, denoteGraph, List.foldl]
+      rw [applyNode_skip (h := by decide), applyNode_skip (h := by decide),
+          applyNode_skip (h := by decide), applyNode_allToAllPrimWithDims_out]
+      rfl
+    rw [hraw, hbw0, hbw1, hbw2, hbw3, allToAllPrimWithDims]
+  have hpm1 : (denoteGraph pm_goal_171 initPM) 2042 =
+      chunkPrimDimN 1 4 1 (allGatherPrimDimN 2 4 0
+        [initPM 2071, initPM 2074, initPM 2077, initPM 2080]) := by
+    have hraw : (denoteGraph pm_goal_171 initPM) 2042 = allToAllPrimWithDims 4 1
+        [(bw_add2 (initPM 2071) (initPM 2049)
+            (allToAllPrimWithDims 4 0 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2,
+         (bw_add2 (initPM 2074) (initPM 2050)
+            (allToAllPrimWithDims 4 1 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2,
+         (bw_add2 (initPM 2077) (initPM 2051)
+            (allToAllPrimWithDims 4 2 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2,
+         (bw_add2 (initPM 2080) (initPM 2052)
+            (allToAllPrimWithDims 4 3 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2] 2 1 := by
+      simp only [pm_goal_171, denoteGraph, List.foldl]
+      rw [applyNode_skip (h := by decide), applyNode_skip (h := by decide),
+          applyNode_allToAllPrimWithDims_out]
+      rfl
+    rw [hraw, hbw0, hbw1, hbw2, hbw3, allToAllPrimWithDims]
+  have hpm2 : (denoteGraph pm_goal_171 initPM) 2045 =
+      chunkPrimDimN 1 4 2 (allGatherPrimDimN 2 4 0
+        [initPM 2071, initPM 2074, initPM 2077, initPM 2080]) := by
+    have hraw : (denoteGraph pm_goal_171 initPM) 2045 = allToAllPrimWithDims 4 2
+        [(bw_add2 (initPM 2071) (initPM 2049)
+            (allToAllPrimWithDims 4 0 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2,
+         (bw_add2 (initPM 2074) (initPM 2050)
+            (allToAllPrimWithDims 4 1 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2,
+         (bw_add2 (initPM 2077) (initPM 2051)
+            (allToAllPrimWithDims 4 2 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2,
+         (bw_add2 (initPM 2080) (initPM 2052)
+            (allToAllPrimWithDims 4 3 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2] 2 1 := by
+      simp only [pm_goal_171, denoteGraph, List.foldl]
+      rw [applyNode_skip (h := by decide), applyNode_allToAllPrimWithDims_out]
+      rfl
+    rw [hraw, hbw0, hbw1, hbw2, hbw3, allToAllPrimWithDims]
+  have hpm3 : (denoteGraph pm_goal_171 initPM) 2048 =
+      chunkPrimDimN 1 4 3 (allGatherPrimDimN 2 4 0
+        [initPM 2071, initPM 2074, initPM 2077, initPM 2080]) := by
+    have hraw : (denoteGraph pm_goal_171 initPM) 2048 = allToAllPrimWithDims 4 3
+        [(bw_add2 (initPM 2071) (initPM 2049)
+            (allToAllPrimWithDims 4 0 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2,
+         (bw_add2 (initPM 2074) (initPM 2050)
+            (allToAllPrimWithDims 4 1 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2,
+         (bw_add2 (initPM 2077) (initPM 2051)
+            (allToAllPrimWithDims 4 2 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2,
+         (bw_add2 (initPM 2080) (initPM 2052)
+            (allToAllPrimWithDims 4 3 [initPM 2025, initPM 2026, initPM 2027, initPM 2028] 1 2)).2] 2 1 := by
+      simp only [pm_goal_171, denoteGraph, List.foldl]
+      rw [applyNode_allToAllPrimWithDims_out]
+      rfl
+    rw [hraw, hbw0, hbw1, hbw2, hbw3, allToAllPrimWithDims]
+  -- chunk shapes [1,2,32]
+  have hcshape : ∀ r, (chunkPrimDimN 1 4 r (allGatherPrimDimN 2 4 0
+      [initPM 2071, initPM 2074, initPM 2077, initPM 2080])).shape = [1, 2, 32] := by
+    intro r
+    rw [chunkPrimDimN_shape 1 4 r _ _ hG_shape (by omega)]; simp [List.set, List.getD]
+  -- SM store: dY (second output, tid 794) of BW_add on full tensors
+  have hsm : (denoteGraph sm_goal_171 initSM) 794 =
+      (bw_add2 (initSM 795) (initSM 950) (initSM 627)).2 := by
+    simp only [sm_goal_171, denoteGraph, List.foldl]
+    rw [applyNode_bw_add2_snd_out_g171 _ _ 0 795 950 627 951 794 (by decide)]
+  have hdy_sm : (bw_add2 (initSM 795) (initSM 950) (initSM 627)).2 = initSM 795 :=
+    bw_add2_snd_same_shape_g171 _ _ _ (by rw [h795_shape, h627_shape])
+  -- Discharge the three conjuncts
+  simp only [goal_171, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape: [1, 8, 32]
+    rw [hsm, hdy_sm]; exact h795_shape
+  · -- PM tp shapes: [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]]
+    rw [hpm0, hpm1, hpm2, hpm3, hcshape 0, hcshape 1, hcshape 2, hcshape 3]
+  · -- Value equality: smStore 794 = reconstructWithDim 1 4 0 [pm tps]
+    rw [hsm, hdy_sm, h795_gather, hpm0, hpm1, hpm2, hpm3]
+    rw [show pm_goal_171.numRanks = 4 from rfl]
+    rw [reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [hcshape 0]; decide)]
+    rw [allGatherPrimDimN_chunkPrimDimN_id_dim1_4_32 _ hG_shape]
 
+end TrainVerify.Denote.GeneratedGoals
