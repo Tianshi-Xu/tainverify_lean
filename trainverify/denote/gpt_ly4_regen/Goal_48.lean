@@ -49,3 +49,105 @@ def goal_48_stmt_cut : Prop :=
 
 end TrainVerify.Denote.GeneratedGoals
 
+namespace TrainVerify.Denote.GeneratedGoals
+
+set_option maxHeartbeats 4000000 in
+theorem prove_goal_48_cut : goal_48_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract goal_47: X (tid 625) is replicated (singleton)
+  have hInit47 : InitGoalHolds pm_goal_48.numRanks goal_47 initSM initPM := by
+    apply hInitGoals; simp only [goal_48_cut_initGoals, goal_48_prereqs]; decide
+  have h625_shape : (initSM 625).shape = [1, 8, 32] := hInit47.1
+  have h625_eq : initSM 625 = initPM 625 := by
+    have hrec := hInit47.2.2
+    simp only [goal_47, pm_goal_48, List.map] at hrec
+    rw [hrec]; exact reconstructWithDim_singleton ..
+  have h625_pm_shape : (initPM 625).shape = [1, 8, 32] := by
+    rw [← h625_eq]; exact h625_shape
+  -- Extract initGoal_626: W (tid 626) is replicated
+  have hInit626 : InitGoalHolds pm_goal_48.numRanks initGoal_626 initSM initPM := by
+    apply hInitGoals; simp only [goal_48_cut_initGoals, goal_48_prereqs]; decide
+  have h626_shape : (initSM 626).shape = [32, 32] := hInit626.1
+  have h626_eq : initSM 626 = initPM 626 := by
+    have hrec := hInit626.2.2
+    simp only [initGoal_626, pm_goal_48, List.map] at hrec
+    rw [hrec]; exact reconstructWithDim_singleton ..
+  have h626_pm_shape : (initPM 626).shape = [32, 32] := by
+    rw [← h626_eq]; exact h626_shape
+  -- Chunk shapes
+  have hchunk_shape : ∀ r, (chunkPrimDimN 1 4 r (initPM 625)).shape = [1, 2, 32] := by
+    intro r
+    rw [chunkPrimDimN_shape 1 4 r _ _ h625_pm_shape (by omega)]
+    simp [List.set, List.getD]
+  -- SM store
+  have hsm : (denoteGraph sm_goal_48 initSM) 627 = fw_linear (initSM 625) (initSM 626) := by
+    simp only [sm_goal_48, denoteGraph, List.foldl]
+    rw [applyNode_fw_linear_out]
+  -- PM store
+  have hpm_list : (denoteGraph pm_goal_48 initPM) 2025 = fw_linear (chunkPrimDimN 1 4 0 (initPM 625)) (initPM 626) ∧
+      (denoteGraph pm_goal_48 initPM) 2026 = fw_linear (chunkPrimDimN 1 4 1 (initPM 625)) (initPM 626) ∧
+      (denoteGraph pm_goal_48 initPM) 2027 = fw_linear (chunkPrimDimN 1 4 2 (initPM 625)) (initPM 626) ∧
+      (denoteGraph pm_goal_48 initPM) 2028 = fw_linear (chunkPrimDimN 1 4 3 (initPM 625)) (initPM 626) := by
+    simp only [pm_goal_48, denoteGraph, List.foldl]
+    refine ⟨?_, ?_, ?_, ?_⟩
+    all_goals (
+      repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+      rw [applyNode_fw_linear_out]
+      congr 1
+      repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)])
+  obtain ⟨hpm0, hpm1, hpm2, hpm3⟩ := hpm_list
+  -- Key equation: fw_linear distributes over chunks
+  have hgather_eq : initSM 625 = allGatherPrimDimN 1 4 0
+      [chunkPrimDimN 1 4 0 (initPM 625), chunkPrimDimN 1 4 1 (initPM 625),
+       chunkPrimDimN 1 4 2 (initPM 625), chunkPrimDimN 1 4 3 (initPM 625)] := by
+    rw [h625_eq]
+    exact (allGatherPrimDimN_chunkPrimDimN_id_dim1_4_32 (initPM 625) h625_pm_shape).symm
+  have hkey : fw_linear (initSM 625) (initSM 626) = allGatherPrimDimN 1 4 0
+      [fw_linear (chunkPrimDimN 1 4 0 (initPM 625)) (initPM 626),
+       fw_linear (chunkPrimDimN 1 4 1 (initPM 625)) (initPM 626),
+       fw_linear (chunkPrimDimN 1 4 2 (initPM 625)) (initPM 626),
+       fw_linear (chunkPrimDimN 1 4 3 (initPM 625)) (initPM 626)] := by
+    rw [hgather_eq, h626_eq]
+    have hdist := fw_linear_distribute_allGatherPrimDimN_dim1_4_1_2_32
+      [chunkPrimDimN 1 4 0 (initPM 625), chunkPrimDimN 1 4 1 (initPM 625),
+       chunkPrimDimN 1 4 2 (initPM 625), chunkPrimDimN 1 4 3 (initPM 625)]
+      (initPM 626) (by rfl)
+      (by intro x hx
+          simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+          rcases hx with rfl | rfl | rfl | rfl
+          · exact hchunk_shape 0
+          · exact hchunk_shape 1
+          · exact hchunk_shape 2
+          · exact hchunk_shape 3)
+      h626_pm_shape
+    simp only [List.map] at hdist
+    exact hdist
+  -- Discharge 3 conjuncts
+  simp only [goal_48, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape = [1, 8, 32]
+    show (denoteGraph sm_goal_48 initSM 627).shape = _
+    rw [hsm]
+    exact fw_linear_3d_shape 1 8 32 32 _ _ h625_shape h626_shape
+  · -- PM tps shapes
+    show [(denoteGraph pm_goal_48 initPM 2025).shape,
+          (denoteGraph pm_goal_48 initPM 2026).shape,
+          (denoteGraph pm_goal_48 initPM 2027).shape,
+          (denoteGraph pm_goal_48 initPM 2028).shape] = _
+    rw [hpm0, hpm1, hpm2, hpm3,
+        fw_linear_3d_shape 1 2 32 32 _ _ (hchunk_shape 0) h626_pm_shape,
+        fw_linear_3d_shape 1 2 32 32 _ _ (hchunk_shape 1) h626_pm_shape,
+        fw_linear_3d_shape 1 2 32 32 _ _ (hchunk_shape 2) h626_pm_shape,
+        fw_linear_3d_shape 1 2 32 32 _ _ (hchunk_shape 3) h626_pm_shape]
+  · -- Value equality
+    show denoteGraph sm_goal_48 initSM 627 = reconstructWithDim _ _ _ _
+    rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
+    symm
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [hpm0, fw_linear_3d_shape 1 2 32 32 _ _ (hchunk_shape 0) h626_pm_shape]
+    decide
+
+#print axioms prove_goal_48_cut
+
+end TrainVerify.Denote.GeneratedGoals
+
