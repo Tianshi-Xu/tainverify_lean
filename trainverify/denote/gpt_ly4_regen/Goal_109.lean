@@ -53,5 +53,84 @@ def goal_109_cut_initGoals : List LineageGoal := initGoals ++ goal_109_prereqs
 def goal_109_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_109 pm_goal_109 goal_109 sm_goal_109InitEnv pm_goal_109InitEnv goal_109_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- bw_embedding distributes over sequence-parallel sharding (chunk ids on dim 1, DP all-reduce)
+theorem prove_goal_109_cut : goal_109_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract prereqs: goal_110 (grad 721 sequence-sharded), initGoal_716 (ids replicated),
+  -- initGoal_565 (embedding table replicated).
+  have hInit110 : InitGoalHolds pm_goal_109.numRanks goal_110 initSM initPM := by
+    apply hInitGoals; simp only [goal_109_cut_initGoals, goal_109_prereqs]; decide
+  have hInit716 : InitGoalHolds pm_goal_109.numRanks initGoal_716 initSM initPM := by
+    apply hInitGoals; simp only [goal_109_cut_initGoals, goal_109_prereqs, initGoals]; decide
+  have hInit565 : InitGoalHolds pm_goal_109.numRanks initGoal_565 initSM initPM := by
+    apply hInitGoals; simp only [goal_109_cut_initGoals, goal_109_prereqs, initGoals]; decide
+  -- goal_110: initSM 721 = reconstructWithDim 1 4 0 [1102, 1104, 1106, 1108]
+  have h721_rec : initSM 721 = reconstructWithDim 1 4 0
+      [initPM 1102, initPM 1104, initPM 1106, initPM 1108] := by
+    have hrec := hInit110.2.2
+    simp only [goal_110, pm_goal_109, List.map] at hrec
+    exact hrec
+  have htp110 := hInit110.2.1
+  simp only [goal_110, List.map] at htp110
+  have h1102_shape : (initPM 1102).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp110; simpa using this
+  -- ids 716 replicated
+  have h716_eq : initSM 716 = initPM 716 := by
+    have hrec := hInit716.2.2
+    simp only [initGoal_716, pm_goal_109, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  have h716_shape : (initSM 716).shape = [1, 8] := hInit716.1
+  have h716_shapeP : (initPM 716).shape = [1, 8] := by rw [← h716_eq]; exact h716_shape
+  -- embedding table 565 replicated
+  have h565_eq : initSM 565 = initPM 565 := by
+    have hrec := hInit565.2.2
+    simp only [initGoal_565, pm_goal_109, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  have h565_shape : (initSM 565).shape = [8, 32] := hInit565.1
+  have h565_shapeP : (initPM 565).shape = [8, 32] := by rw [← h565_eq]; exact h565_shape
+  -- convert reconstruct to allGather (non-scalar shards)
+  have h721_gather : initSM 721 = allGatherPrimDimN 1 4 0
+      [initPM 1102, initPM 1104, initPM 1106, initPM 1108] := by
+    rw [h721_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1102_shape]; decide)
+  -- SM store: full bw_embedding
+  have hsm : (denoteGraph sm_goal_109 initSM) 720 =
+      bw_embedding (initSM 721) (initSM 716) (initSM 565) := by
+    simp only [sm_goal_109, denoteGraph, List.foldl]
+    rw [applyNode_bw_embedding_out]
+  -- PM store: 4 ChunkPrim + 4 BW_embedding, then CROSS_DP_WRED sums them
+  have hpm : (denoteGraph pm_goal_109 initPM) 1101 =
+      cross_dp_wred
+        [ bw_embedding (initPM 1102) (chunkPrimDimN 1 4 0 (initPM 716)) (initPM 565),
+          bw_embedding (initPM 1104) (chunkPrimDimN 1 4 1 (initPM 716)) (initPM 565),
+          bw_embedding (initPM 1106) (chunkPrimDimN 1 4 2 (initPM 716)) (initPM 565),
+          bw_embedding (initPM 1108) (chunkPrimDimN 1 4 3 (initPM 716)) (initPM 565) ] := by
+    simp only [pm_goal_109, denoteGraph, List.foldl]
+    rw [applyNode_cross_dp_wred_out]
+    congr 1
+  -- Key equation: SM bw_embedding = DP reduction of per-rank PM bw_embeddings
+  have hkey : bw_embedding (initSM 721) (initSM 716) (initSM 565) =
+      cross_dp_wred
+        [ bw_embedding (initPM 1102) (chunkPrimDimN 1 4 0 (initPM 716)) (initPM 565),
+          bw_embedding (initPM 1104) (chunkPrimDimN 1 4 1 (initPM 716)) (initPM 565),
+          bw_embedding (initPM 1106) (chunkPrimDimN 1 4 2 (initPM 716)) (initPM 565),
+          bw_embedding (initPM 1108) (chunkPrimDimN 1 4 3 (initPM 716)) (initPM 565) ] := by
+    rw [h721_gather, h716_eq, h565_eq]
+    unfold cross_dp_wred
+    exact bw_embedding_seqchunk_4shards_1_8_32 (initPM 1102) (initPM 1104) (initPM 1106)
+      (initPM 1108) (initPM 716) (initPM 565) h716_shapeP h565_shapeP h1102_shape
+  -- Discharge the three conjuncts
+  simp only [goal_109, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape: [8, 32]
+    rw [hsm, hkey]; unfold cross_dp_wred
+    rw [tensorSum_shape, bw_embedding_shape]; exact h565_shapeP
+  · -- PM tp shapes: [[8, 32]]
+    rw [hpm]; unfold cross_dp_wred
+    rw [tensorSum_shape, bw_embedding_shape, h565_shapeP]
+  · -- Value equality: smStore 720 = reconstructWithDim 0 4 0 [pmStore 1101]
+    rw [hsm, hkey, ← hpm, reconstructWithDim_singleton]
+
 end TrainVerify.Denote.GeneratedGoals
 
