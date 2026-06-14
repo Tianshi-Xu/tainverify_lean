@@ -48,5 +48,129 @@ def goal_55_cut_initGoals : List LineageGoal := initGoals ++ goal_55_prereqs
 def goal_55_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_55 pm_goal_55 goal_55 sm_goal_55InitEnv pm_goal_55InitEnv goal_55_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- fw_layernorm distributes over allGatherPrimDimN (dim 1) for [1,2,32] shards
+theorem prove_goal_55_cut : goal_55_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract prereqs
+  have hInit989 : InitGoalHolds pm_goal_55.numRanks goal_285 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_55_cut_initGoals, goal_55_prereqs]
+    decide
+  have hInit638 : InitGoalHolds pm_goal_55.numRanks initGoal_638 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_55_cut_initGoals, goal_55_prereqs]
+    decide
+  have hInit639 : InitGoalHolds pm_goal_55.numRanks initGoal_639 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_55_cut_initGoals, goal_55_prereqs]
+    decide
+  -- goal_285: initSM 989 = reconstructWithDim 1 4 0 [initPM 2225,...,initPM 2228]
+  have h989_rec : initSM 989 = reconstructWithDim 1 4 0
+      [initPM 2225, initPM 2226, initPM 2227, initPM 2228] := by
+    have hrec := hInit989.2.2
+    simp only [goal_285, pm_goal_55, List.map] at hrec
+    exact hrec
+  have h989_shape : (initSM 989).shape = [1, 8, 32] := hInit989.1
+  -- Shard shapes from goal_285
+  have htp_shapes := hInit989.2.1
+  simp only [goal_285, List.map] at htp_shapes
+  have h2225_shape : (initPM 2225).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp_shapes; simpa using this
+  have h2226_shape : (initPM 2226).shape = [1, 2, 32] := by
+    have := congrArg List.tail htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h2227_shape : (initPM 2227).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h2228_shape : (initPM 2228).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  -- Replicated weights: initSM 638 = initPM 638, initSM 639 = initPM 639
+  have h638_eq : initSM 638 = initPM 638 := by
+    have hrec := hInit638.2.2
+    simp only [initGoal_638, pm_goal_55, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  have h639_eq : initSM 639 = initPM 639 := by
+    have hrec := hInit639.2.2
+    simp only [initGoal_639, pm_goal_55, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  -- Convert reconstructWithDim to allGatherPrimDimN (non-scalar shards)
+  have h989_gather : initSM 989 = allGatherPrimDimN 1 4 0
+      [initPM 2225, initPM 2226, initPM 2227, initPM 2228] := by
+    rw [h989_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2225_shape]; decide)
+  -- SM store: smStore 640 = fw_layernorm (initSM 989) (initSM 638) (initSM 639)
+  have hsm : (denoteGraph sm_goal_55 initSM) 640 =
+      fw_layernorm (initSM 989) (initSM 638) (initSM 639) := by
+    simp only [sm_goal_55, denoteGraph, List.foldl]
+    rw [applyNode_fw_layernorm_out]
+  -- PM store: 4 independent layernorms (each node writes to a distinct tid)
+  have hpm3 : (denoteGraph pm_goal_55 initPM) 2232 =
+      fw_layernorm (initPM 2228) (initPM 638) (initPM 639) := by
+    simp only [pm_goal_55, denoteGraph, List.foldl]
+    rw [applyNode_fw_layernorm_out]; congr 1
+  have hpm2 : (denoteGraph pm_goal_55 initPM) 2231 =
+      fw_layernorm (initPM 2227) (initPM 638) (initPM 639) := by
+    simp only [pm_goal_55, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_layernorm_out]; congr 1
+  have hpm1 : (denoteGraph pm_goal_55 initPM) 2230 =
+      fw_layernorm (initPM 2226) (initPM 638) (initPM 639) := by
+    simp only [pm_goal_55, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_layernorm_out]; congr 1
+  have hpm0 : (denoteGraph pm_goal_55 initPM) 2229 =
+      fw_layernorm (initPM 2225) (initPM 638) (initPM 639) := by
+    simp only [pm_goal_55, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_layernorm_out]
+  -- Key equation: fw_layernorm(gather(shards), w, b) = gather(map(fw_layernorm(·,w,b), shards))
+  have hkey : fw_layernorm (initSM 989) (initSM 638) (initSM 639) =
+      allGatherPrimDimN 1 4 0
+        [fw_layernorm (initPM 2225) (initPM 638) (initPM 639),
+         fw_layernorm (initPM 2226) (initPM 638) (initPM 639),
+         fw_layernorm (initPM 2227) (initPM 638) (initPM 639),
+         fw_layernorm (initPM 2228) (initPM 638) (initPM 639)] := by
+    conv_lhs => rw [h989_gather, h638_eq, h639_eq]
+    have := fw_layernorm_distribute_allGatherPrimDimN_dim1_4_1_2_32
+      [initPM 2225, initPM 2226, initPM 2227, initPM 2228]
+      (initPM 638) (initPM 639) (by simp) (by
+        intro x hx
+        simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+        rcases hx with rfl | rfl | rfl | rfl
+        · exact h2225_shape
+        · exact h2226_shape
+        · exact h2227_shape
+        · exact h2228_shape)
+    simpa [List.map] using this
+  -- Prove the three conjuncts
+  simp only [goal_55, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM shape: [1, 8, 32]
+    rw [hsm]
+    exact fw_layernorm_shape_1_8_32 (initSM 989) (initSM 638) (initSM 639) h989_shape
+  · -- PM tp shapes: [[1,2,32], [1,2,32], [1,2,32], [1,2,32]]
+    rw [hpm0, hpm1, hpm2, hpm3]
+    have hs0 := fw_layernorm_shape_1_2_32 (initPM 2225) (initPM 638) (initPM 639) h2225_shape
+    have hs1 := fw_layernorm_shape_1_2_32 (initPM 2226) (initPM 638) (initPM 639) h2226_shape
+    have hs2 := fw_layernorm_shape_1_2_32 (initPM 2227) (initPM 638) (initPM 639) h2227_shape
+    have hs3 := fw_layernorm_shape_1_2_32 (initPM 2228) (initPM 638) (initPM 639) h2228_shape
+    simp [hs0, hs1, hs2, hs3]
+  · -- Value equality: smStore 640 = reconstructWithDim 1 4 0 [pmStore 2229,...,2232]
+    rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
+    symm
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [hpm0]
+    rw [fw_layernorm_shape_1_2_32 (initPM 2225) (initPM 638) (initPM 639) h2225_shape]
+    decide
+
 end TrainVerify.Denote.GeneratedGoals
+
+
 
