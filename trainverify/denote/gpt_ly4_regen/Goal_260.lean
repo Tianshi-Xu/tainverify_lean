@@ -54,5 +54,88 @@ def goal_260_cut_initGoals : List LineageGoal := initGoals ++ goal_260_prereqs
 def goal_260_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_260 pm_goal_260 goal_260 sm_goal_260InitEnv pm_goal_260InitEnv goal_260_cut_initGoals
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1600000 in
+-- BW_add dX (first output, tid 908): the gradient g=753 is dim-2 reconstructed from
+-- 4 shards (goal_137).  BW_add's first output equals its first input (the gradient),
+-- both on the SM (full) and PM (per-rank) sides.  PM has no collectives: each rank's
+-- BW_add first output is exactly its local gradient shard, so the dim-2 reconstruct of
+-- the per-rank outputs equals the dim-2 reconstruct of the gradient shards = initSM 753.
+theorem prove_goal_260_cut : goal_260_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Prereq goal_137: g=753 reconstructed (dim 2) from shards [1518,1520,1522,1524]
+  have hInit137 : InitGoalHolds pm_goal_260.numRanks goal_137 initSM initPM := by
+    apply hInitGoals; simp only [goal_260_cut_initGoals, goal_260_prereqs]; decide
+  -- SM input shapes
+  have s753 : (initSM 753).shape = [1, 8, 32] := hSmInit 753 [1, 8, 32] (by decide)
+  have s907 : (initSM 907).shape = [1, 8, 32] := hSmInit 907 [1, 8, 32] (by decide)
+  -- PM gradient-shard and x-input shapes
+  have g1518 : (initPM 1518).shape = [1, 8, 8] := hPmInit 1518 [1, 8, 8] (by decide)
+  have g1520 : (initPM 1520).shape = [1, 8, 8] := hPmInit 1520 [1, 8, 8] (by decide)
+  have g1522 : (initPM 1522).shape = [1, 8, 8] := hPmInit 1522 [1, 8, 8] (by decide)
+  have g1524 : (initPM 1524).shape = [1, 8, 8] := hPmInit 1524 [1, 8, 8] (by decide)
+  have x1501 : (initPM 1501).shape = [1, 8, 8] := hPmInit 1501 [1, 8, 8] (by decide)
+  have x1502 : (initPM 1502).shape = [1, 8, 8] := hPmInit 1502 [1, 8, 8] (by decide)
+  have x1503 : (initPM 1503).shape = [1, 8, 8] := hPmInit 1503 [1, 8, 8] (by decide)
+  have x1504 : (initPM 1504).shape = [1, 8, 8] := hPmInit 1504 [1, 8, 8] (by decide)
+  -- SM store: first output (dX, tid 908) of BW_add equals the gradient initSM 753
+  have hsm : (denoteGraph sm_goal_260 initSM) 908 =
+      (bw_add2 (initSM 753) (initSM 907) (initSM 592)).1 := by
+    simp only [sm_goal_260, denoteGraph, List.foldl]
+    rw [applyNode_bw_add2_fst_out _ _ 0 753 907 592 908 752 (by decide)]
+  have hsm' : (denoteGraph sm_goal_260 initSM) 908 = initSM 753 := by
+    rw [hsm]; exact bw_add2_fst_same_shape _ _ _ (by rw [s753, s907])
+  -- goal_137 value relation: initSM 753 = reconstruct (dim 2) of gradient shards
+  have hrec137 : initSM 753 =
+      reconstructWithDim 2 pm_goal_260.numRanks 0
+        [initPM 1518, initPM 1520, initPM 1522, initPM 1524] := by
+    have hrec := hInit137.2.2
+    simp only [goal_137, List.map] at hrec
+    exact hrec
+  -- PM stores: each rank's BW_add first output equals its local gradient shard
+  have hpm0 : (denoteGraph pm_goal_260 initPM) 1517 = initPM 1518 := by
+    simp only [pm_goal_260, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ 1517 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 1517 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 1517 (by decide),
+        applyNode_bw_add2_fst_out _ _ 0 1518 1501 1477 1517 1491 (by decide)]
+    exact bw_add2_fst_same_shape _ _ _ (by rw [g1518, x1501])
+  have hpm1 : (denoteGraph pm_goal_260 initPM) 1519 = initPM 1520 := by
+    simp only [pm_goal_260, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ 1519 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 1519 (by decide),
+        applyNode_bw_add2_fst_out _ _ 1 1520 1502 1478 1519 1494 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 1520 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 1502 (by decide)]
+    exact bw_add2_fst_same_shape _ _ _ (by rw [g1520, x1502])
+  have hpm2 : (denoteGraph pm_goal_260 initPM) 1521 = initPM 1522 := by
+    simp only [pm_goal_260, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ 1521 (by decide),
+        applyNode_bw_add2_fst_out _ _ 2 1522 1503 1479 1521 1497 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 1522 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 1522 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 1503 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 1503 (by decide)]
+    exact bw_add2_fst_same_shape _ _ _ (by rw [g1522, x1503])
+  have hpm3 : (denoteGraph pm_goal_260 initPM) 1523 = initPM 1524 := by
+    simp only [pm_goal_260, denoteGraph, List.foldl]
+    rw [applyNode_bw_add2_fst_out _ _ 3 1524 1504 1480 1523 1500 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 1524 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 1524 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 1524 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 1504 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 1504 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 1504 (by decide)]
+    exact bw_add2_fst_same_shape _ _ _ (by rw [g1524, x1504])
+  -- Discharge the three conjuncts
+  simp only [goal_260, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape: [1, 8, 32]
+    rw [hsm']; exact s753
+  · -- PM tp shapes: [[1,8,8],[1,8,8],[1,8,8],[1,8,8]]
+    rw [hpm0, hpm1, hpm2, hpm3, g1518, g1520, g1522, g1524]
+  · -- Value equality: smStore 908 = reconstruct (dim 2) of the four PM tp outputs
+    rw [hsm', hpm0, hpm1, hpm2, hpm3]; exact hrec137
+
 end TrainVerify.Denote.GeneratedGoals
 
