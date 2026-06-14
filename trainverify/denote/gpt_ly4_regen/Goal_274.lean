@@ -58,5 +58,132 @@ def goal_274_cut_initGoals : List LineageGoal := initGoals ++ goal_274_prereqs
 def goal_274_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_274 pm_goal_274 goal_274 sm_goal_274InitEnv pm_goal_274InitEnv goal_274_cut_initGoals
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1600000 in
+-- BW_add dX (first output, tid 951): the gradient g=795 is dim-2 reconstructed from
+-- 4 shards (goal_172).  BW_add's first output is exactly the gradient, so smStore 951
+-- = initSM 795 and each per-rank dX = initPM 207x.  The full dX equals the dim-2
+-- reconstruction of the per-rank dX outputs.  No final collective in PM.
+theorem prove_goal_274_cut : goal_274_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Prereqs: goal_172 (g=795 reconstruct dim2), goal_273 (x=950 reconstruct dim2)
+  have hInit172 : InitGoalHolds pm_goal_274.numRanks goal_172 initSM initPM := by
+    apply hInitGoals; simp only [goal_274_cut_initGoals, goal_274_prereqs]; decide
+  have hInit273 : InitGoalHolds pm_goal_274.numRanks goal_273 initSM initPM := by
+    apply hInitGoals; simp only [goal_274_cut_initGoals, goal_274_prereqs]; decide
+  -- goal_172: shard shapes [1,8,8] and reconstruct of g=795 along dim 2
+  have htp172 := hInit172.2.1
+  simp only [goal_172, List.map] at htp172
+  have h2071_shape : (initPM 2071).shape = [1, 8, 8] := by
+    have := congrArg List.head? htp172; simpa using this
+  have h2074_shape : (initPM 2074).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail) htp172; simpa using this
+  have h2077_shape : (initPM 2077).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp172; simpa using this
+  have h2080_shape : (initPM 2080).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp172; simpa using this
+  have h795_rec : initSM 795 = reconstructWithDim 2 pm_goal_274.numRanks 0
+      [initPM 2071, initPM 2074, initPM 2077, initPM 2080] := by
+    have hrec := hInit172.2.2
+    simp only [goal_172, List.map] at hrec
+    exact hrec
+  have h795_shape : (initSM 795).shape = [1, 8, 32] := hInit172.1
+  -- goal_273: shard shapes [1,8,8] for x=950 and SM shape of x
+  have htp273 := hInit273.2.1
+  simp only [goal_273, List.map] at htp273
+  have h2049_shape : (initPM 2049).shape = [1, 8, 8] := by
+    have := congrArg List.head? htp273; simpa using this
+  have h2050_shape : (initPM 2050).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail) htp273; simpa using this
+  have h2051_shape : (initPM 2051).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp273; simpa using this
+  have h2052_shape : (initPM 2052).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp273; simpa using this
+  have h950_shape : (initSM 950).shape = [1, 8, 32] := hInit273.1
+  -- SM store: dX (first output, tid 951) of BW_add on full tensors = gradient
+  have hsm : (denoteGraph sm_goal_274 initSM) 951 =
+      (bw_add2 (initSM 795) (initSM 950) (initSM 627)).1 := by
+    simp only [sm_goal_274, denoteGraph, List.foldl]
+    rw [applyNode_bw_add2_fst_out _ _ 0 795 950 627 951 794 (by decide)]
+  have hdx_sm : (bw_add2 (initSM 795) (initSM 950) (initSM 627)).1 = initSM 795 :=
+    bw_add2_fst_same_shape _ _ _ (by rw [h795_shape, h950_shape])
+  -- PM stores: each per-rank first output is just the local gradient shard
+  have hpm0 : (denoteGraph pm_goal_274 initPM) 2069 = initPM 2071 := by
+    simp only [pm_goal_274, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ 2069 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2069 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2069 (by decide),
+        applyNode_bw_add2_fst_out _ _ 0 2071 2049 2053 2069 2070 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ 2071 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2071 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2071 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2071 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ 2049 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2049 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2049 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2049 (by decide)]
+    rw [bw_add2_fst_same_shape (initPM 2071) (initPM 2049) _ (by rw [h2071_shape, h2049_shape])]
+  have hpm1 : (denoteGraph pm_goal_274 initPM) 2072 = initPM 2074 := by
+    simp only [pm_goal_274, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ 2072 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2072 (by decide),
+        applyNode_bw_add2_fst_out _ _ 1 2074 2050 2054 2072 2073 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ 2074 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2074 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2074 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2074 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2074 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ 2050 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2050 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2050 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2050 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2050 (by decide)]
+    rw [bw_add2_fst_same_shape (initPM 2074) (initPM 2050) _ (by rw [h2074_shape, h2050_shape])]
+  have hpm2 : (denoteGraph pm_goal_274 initPM) 2075 = initPM 2077 := by
+    simp only [pm_goal_274, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ 2075 (by decide),
+        applyNode_bw_add2_fst_out _ _ 2 2077 2051 2055 2075 2076 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ 2077 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2077 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2077 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2077 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2077 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2077 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ 2051 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2051 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2051 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2051 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2051 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2051 (by decide)]
+    rw [bw_add2_fst_same_shape (initPM 2077) (initPM 2051) _ (by rw [h2077_shape, h2051_shape])]
+  have hpm3 : (denoteGraph pm_goal_274 initPM) 2078 = initPM 2080 := by
+    simp only [pm_goal_274, denoteGraph, List.foldl]
+    rw [applyNode_bw_add2_fst_out _ _ 3 2080 2052 2056 2078 2079 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ 2080 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2080 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2080 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2080 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2080 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2080 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2080 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ 2052 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2052 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2052 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2052 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2052 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2052 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ 2052 (by decide)]
+    rw [bw_add2_fst_same_shape (initPM 2080) (initPM 2052) _ (by rw [h2080_shape, h2052_shape])]
+  -- Discharge the three conjuncts
+  simp only [goal_274, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape: [1, 8, 32]
+    rw [hsm, hdx_sm]; exact h795_shape
+  · -- PM tp shapes: [[1,8,8],[1,8,8],[1,8,8],[1,8,8]]
+    rw [hpm0, hpm1, hpm2, hpm3, h2071_shape, h2074_shape, h2077_shape, h2080_shape]
+  · -- Value equality: smStore 951 = reconstructWithDim 2 _ 0 [pmStore ...]
+    rw [hsm, hdx_sm, hpm0, hpm1, hpm2, hpm3, h795_rec]
+
 end TrainVerify.Denote.GeneratedGoals
+
 
