@@ -14207,5 +14207,53 @@ theorem bw_matmul_fst_split_dW_1_4_8_8 (g0 g1 g2 g3 y0 y1 y2 y3 : Tensor)
     Nat.reduceDiv, Nat.reduceMod, Nat.reduceAdd, Nat.add_zero, Nat.zero_add]
   ring
 
+/-! ## BW_matmul dX batch-dim (dim1) distribution helpers (for goal_157 family) -/
+
+/-- The first output (`dX`) of `bw_matmul` is `g @ yᵀ`. -/
+theorem bw_matmul_fst_eq (g x y : Tensor) :
+    (bw_matmul g x y).1 = batchedMatmul g (transpose2d y) := rfl
+
+/-- Chunking along dim 1 commutes with `transpose2d` (which swaps the last two dims). -/
+theorem transpose2d_chunkPrimDimN1_comm_1_4_8_8 (x : Tensor) (r : Nat)
+    (hx : x.shape = [1, 4, 8, 8]) (hr : r < 4) :
+    transpose2d (chunkPrimDimN 1 4 r x) = chunkPrimDimN 1 4 r (transpose2d x) := by
+  have hchunk_shape : (chunkPrimDimN 1 4 r x).shape = [1, 1, 8, 8] := by
+    rw [chunkPrimDimN_shape 1 4 r _ _ hx (by omega)]
+    simp [List.set, List.getD]
+  have htx_shape : (transpose2d x).shape = [1, 4, 8, 8] := transpose2d_shape_1_4_8_8 x hx
+  have hlhs_shape : (transpose2d (chunkPrimDimN 1 4 r x)).shape = [1, 1, 8, 8] :=
+    transpose2d_shape_1_1_8_8 _ hchunk_shape
+  have hrhs_shape : (chunkPrimDimN 1 4 r (transpose2d x)).shape = [1, 1, 8, 8] := by
+    rw [chunkPrimDimN_shape 1 4 r _ _ htx_shape (by omega)]
+    simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx64 : idx < 64 := by simpa [hlhs_shape, prodShape] using hidx
+  rw [transpose2d_valAt_1_1_8_8 _ idx hchunk_shape hidx64]
+  have hb1 : idx % 8 * 8 + idx / 8 < 64 := by omega
+  rw [chunk_dim1_4_1_4_8_8_valAt x r (idx % 8 * 8 + idx / 8) hx hr hb1]
+  rw [chunk_dim1_4_1_4_8_8_valAt (transpose2d x) r idx htx_shape hr hidx64]
+  rw [transpose2d_valAt_1_4_8_8 x (r * 64 + idx) hx (by omega)]
+  congr 1
+  omega
+
+/-- `dX = g @ yᵀ` distributes over a batch-dim (dim 1) split:
+    gathering the per-shard `bw_matmul.1` results along dim 1 reconstructs the full result. -/
+theorem bw_matmul_fst_split_dim1_4_1_4_8_8 (g y : Tensor)
+    (hg : g.shape = [1, 4, 8, 8]) (hy : y.shape = [1, 4, 8, 8]) :
+    batchedMatmul g (transpose2d y) =
+      allGatherPrimDimN 1 4 0
+        [batchedMatmul (chunkPrimDimN 1 4 0 g) (transpose2d (chunkPrimDimN 1 4 0 y)),
+         batchedMatmul (chunkPrimDimN 1 4 1 g) (transpose2d (chunkPrimDimN 1 4 1 y)),
+         batchedMatmul (chunkPrimDimN 1 4 2 g) (transpose2d (chunkPrimDimN 1 4 2 y)),
+         batchedMatmul (chunkPrimDimN 1 4 3 g) (transpose2d (chunkPrimDimN 1 4 3 y))] := by
+  have hty : (transpose2d y).shape = [1, 4, 8, 8] := transpose2d_shape_1_4_8_8 y hy
+  have hsplit := fw_matmul_split_dim1_4_1_4_8_8 g (transpose2d y) hg hty
+  rw [← transpose2d_chunkPrimDimN1_comm_1_4_8_8 y 0 hy (by omega),
+      ← transpose2d_chunkPrimDimN1_comm_1_4_8_8 y 1 hy (by omega),
+      ← transpose2d_chunkPrimDimN1_comm_1_4_8_8 y 2 hy (by omega),
+      ← transpose2d_chunkPrimDimN1_comm_1_4_8_8 y 3 hy (by omega)] at hsplit
+  exact hsplit
+
 
 end TrainVerify.Denote
