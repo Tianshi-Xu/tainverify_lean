@@ -58,5 +58,91 @@ def goal_270_cut_initGoals : List LineageGoal := initGoals ++ goal_270_prereqs
 def goal_270_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_270 pm_goal_270 goal_270 sm_goal_270InitEnv pm_goal_270InitEnv goal_270_cut_initGoals
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1600000 in
+-- BW_add dX (first output, tid 939): the gradient g=764 is dim-2 reconstructed from
+-- 4 shards (goal_146); the other addend x=938 is dim-2 reconstructed (goal_269).
+-- BW_add's first output equals the (broadcast-reduced) gradient, so smStore 939 =
+-- initSM 764 and each per-rank first output equals its local gradient shard initPM
+-- 1651/1654/1657/1660.  The full dX equals the dim-2 reconstruct of those shards.
+theorem prove_goal_270_cut : goal_270_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Prereqs: goal_146 (g=764 reconstruct dim2), goal_269 (x=938 reconstruct dim2)
+  have hInit146 : InitGoalHolds pm_goal_270.numRanks goal_146 initSM initPM := by
+    apply hInitGoals; simp only [goal_270_cut_initGoals, goal_270_prereqs]; decide
+  have hInit269 : InitGoalHolds pm_goal_270.numRanks goal_269 initSM initPM := by
+    apply hInitGoals; simp only [goal_270_cut_initGoals, goal_270_prereqs]; decide
+  -- goal_146: shard shapes [1,8,8] and reconstruct of g=764 along dim 2
+  have htp146 := hInit146.2.1
+  simp only [goal_146, List.map] at htp146
+  have h1651_shape : (initPM 1651).shape = [1, 8, 8] := by
+    have := congrArg List.head? htp146; simpa using this
+  have h1654_shape : (initPM 1654).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail) htp146; simpa using this
+  have h1657_shape : (initPM 1657).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp146; simpa using this
+  have h1660_shape : (initPM 1660).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp146; simpa using this
+  have h764_shape : (initSM 764).shape = [1, 8, 32] := hInit146.1
+  have h764_rec : initSM 764 = reconstructWithDim 2 pm_goal_270.numRanks 0
+      [initPM 1651, initPM 1654, initPM 1657, initPM 1660] := by
+    have hrec := hInit146.2.2
+    simp only [goal_146, List.map] at hrec
+    exact hrec
+  -- goal_269: shard shapes [1,8,8] for x=938
+  have htp269 := hInit269.2.1
+  simp only [goal_269, List.map] at htp269
+  have h1629_shape : (initPM 1629).shape = [1, 8, 8] := by
+    have := congrArg List.head? htp269; simpa using this
+  have h1630_shape : (initPM 1630).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail) htp269; simpa using this
+  have h1631_shape : (initPM 1631).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp269; simpa using this
+  have h1632_shape : (initPM 1632).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp269; simpa using this
+  have h938_shape : (initSM 938).shape = [1, 8, 32] := hInit269.1
+  -- SM store: dX (first output, tid 939) of BW_add on full tensors = gradient g=764
+  have hsm : (denoteGraph sm_goal_270 initSM) 939 =
+      (bw_add2 (initSM 764) (initSM 938) (initSM 601)).1 := by
+    simp only [sm_goal_270, denoteGraph, List.foldl]
+    rw [applyNode_bw_add2_fst_out _ _ 0 764 938 601 939 763 (by decide)]
+  have hsm_eq : (bw_add2 (initSM 764) (initSM 938) (initSM 601)).1 = initSM 764 :=
+    bw_add2_fst_same_shape _ _ _ (by rw [h764_shape, h938_shape])
+  -- PM store: each per-rank first output is its local gradient shard
+  have hpm0 : (denoteGraph pm_goal_270 initPM) 1649 = initPM 1651 := by
+    simp only [pm_goal_270, denoteGraph, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_add2_fst_out _ _ 0 1651 1629 1633 1649 1650 (by decide)]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    exact bw_add2_fst_same_shape _ _ _ (by rw [h1651_shape, h1629_shape])
+  have hpm1 : (denoteGraph pm_goal_270 initPM) 1652 = initPM 1654 := by
+    simp only [pm_goal_270, denoteGraph, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_add2_fst_out _ _ 1 1654 1630 1634 1652 1653 (by decide)]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    exact bw_add2_fst_same_shape _ _ _ (by rw [h1654_shape, h1630_shape])
+  have hpm2 : (denoteGraph pm_goal_270 initPM) 1655 = initPM 1657 := by
+    simp only [pm_goal_270, denoteGraph, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_add2_fst_out _ _ 2 1657 1631 1635 1655 1656 (by decide)]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    exact bw_add2_fst_same_shape _ _ _ (by rw [h1657_shape, h1631_shape])
+  have hpm3 : (denoteGraph pm_goal_270 initPM) 1658 = initPM 1660 := by
+    simp only [pm_goal_270, denoteGraph, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_add2_fst_out _ _ 3 1660 1632 1636 1658 1659 (by decide)]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    exact bw_add2_fst_same_shape _ _ _ (by rw [h1660_shape, h1632_shape])
+  -- Discharge the three conjuncts
+  simp only [goal_270, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape: [1, 8, 32]
+    rw [hsm, hsm_eq]; exact h764_shape
+  · -- PM tp shapes: [[1,8,8],[1,8,8],[1,8,8],[1,8,8]]
+    rw [hpm0, hpm1, hpm2, hpm3, h1651_shape, h1654_shape, h1657_shape, h1660_shape]
+  · -- Value equality: smStore 939 = reconstructWithDim 2 4 0 [pmStore 1649,...]
+    rw [hsm, hsm_eq, h764_rec, hpm0, hpm1, hpm2, hpm3]
+
 end TrainVerify.Denote.GeneratedGoals
+
 
