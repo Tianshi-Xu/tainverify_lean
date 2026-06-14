@@ -11736,6 +11736,14 @@ theorem bw_matmul_snd_split_dX_1_4_8_8 (g x0 x1 x2 x3 : Tensor)
   -- the two products agree (same `x` shard, same `g`, equal indices)
   rw [bw_snd_aux_geq idx l loc hidx256 hloc]
 
+/-- Shape of `batchedMatmul` on `[1,4,8,8] @ [1,4,8,8] -> [1,4,8,8]`. -/
+theorem batchedMatmul_shape_1_4_8_8_1_4_8_8 (a b : Tensor)
+    (ha : a.shape = [1, 4, 8, 8]) (hb : b.shape = [1, 4, 8, 8]) :
+    (batchedMatmul a b).shape = [1, 4, 8, 8] := by
+  unfold batchedMatmul
+  simp only [ha, hb, List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append,
+    Tensor.mkShape]
+
 
 -- ==== batch3 g134 additions ====
 /-!
