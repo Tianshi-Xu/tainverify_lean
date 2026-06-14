@@ -63,5 +63,164 @@ def goal_110_cut_initGoals : List LineageGoal := initGoals ++ goal_110_prereqs
 def goal_110_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_110 pm_goal_110 goal_110 sm_goal_110InitEnv pm_goal_110InitEnv goal_110_cut_initGoals
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1600000 in
+-- BW_add dW (second output, tid 721): the gradient g=722 is dim-2 all-gathered from
+-- 4 shards (goal_111). BW_add's second output equals the (broadcast-reduced) gradient,
+-- so smStore 721 = initSM 722 and each per-rank dW = initPM 113x. The final AllToAll
+-- [idim=2, odim=1] redistributes the dim-2 shards into dim-1 shards, so the dim-1
+-- reconstruction of the per-rank AllToAll outputs equals the dim-2 all-gather, i.e. initSM 722.
+theorem prove_goal_110_cut : goal_110_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Prereq goal_111: g=722 is dim-2 gather of shards 1131,1134,1137,1140 (each [1,8,8]).
+  have hInit111 : InitGoalHolds pm_goal_110.numRanks goal_111 initSM initPM := by
+    apply hInitGoals; simp only [goal_110_cut_initGoals, goal_110_prereqs]; decide
+  have htp111 := hInit111.2.1
+  simp only [goal_111, List.map] at htp111
+  have h1131_shape : (initPM 1131).shape = [1, 8, 8] := by
+    have := congrArg List.head? htp111; simpa using this
+  have h1134_shape : (initPM 1134).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail) htp111; simpa using this
+  have h1137_shape : (initPM 1137).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htp111; simpa using this
+  have h1140_shape : (initPM 1140).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htp111; simpa using this
+  have h722_rec : initSM 722 = reconstructWithDim 2 4 0
+      [initPM 1131, initPM 1134, initPM 1137, initPM 1140] := by
+    have hrec := hInit111.2.2
+    simp only [goal_111, pm_goal_110, List.map] at hrec
+    exact hrec
+  have h722_gather : initSM 722 = allGatherPrimDimN 2 4 0
+      [initPM 1131, initPM 1134, initPM 1137, initPM 1140] := by
+    rw [h722_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1131_shape]; decide)
+  have h722_shape : (initSM 722).shape = [1, 8, 32] := hInit111.1
+  -- Init shapes of the AllToAll(idim=1,odim=2) inputs (each [1,2,32]).
+  have h1089_shape : (initPM 1089).shape = [1, 2, 32] := hPmInit 1089 _ (by decide)
+  have hA12_shape : ∀ r,
+      (allToAllPrimWithDims 4 r [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2).shape
+        = [1, 8, 8] := by
+    intro r
+    rw [allToAllPrimWithDims_shape 4 r _ 1 2 [1, 2, 32]
+      (by simp only [List.head?, Option.map, Option.getD]; exact h1089_shape) (by omega)]
+    decide
+  -- 566 init shape (the y-input of the SM BW_add).
+  have h566_shape : (initSM 566).shape = [1, 8, 32] := hSmInit 566 _ (by decide)
+  -- SM store: dW (second output, tid 721) of BW_add on full tensors = gradient g=722.
+  have hsm : (denoteGraph sm_goal_110 initSM) 721 =
+      (bw_add2 (initSM 722) (initSM 564) (initSM 566)).2 := by
+    simp only [sm_goal_110, denoteGraph, List.foldl]
+    rw [applyNode_bw_add2_snd_out_g110 _ _ 0 722 564 566 719 721 (by decide)]
+  have hdw_sm : (bw_add2 (initSM 722) (initSM 564) (initSM 566)).2 = initSM 722 :=
+    bw_add2_snd_same_shape_g110 _ _ _ (by rw [h722_shape, h566_shape])
+  -- PM store: each final AllToAll(idim=2,odim=1) output is the dim-1 chunk of g=722.
+  have hpm1102 : (denoteGraph pm_goal_110 initPM) 1102 =
+      allToAllPrimWithDims 4 0
+        [(bw_add2 (initPM 1131) (chunkPrimDimN 2 4 0 (initPM 564))
+            (allToAllPrimWithDims 4 0 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).2,
+         (bw_add2 (initPM 1134) (chunkPrimDimN 2 4 1 (initPM 564))
+            (allToAllPrimWithDims 4 1 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).2,
+         (bw_add2 (initPM 1137) (chunkPrimDimN 2 4 2 (initPM 564))
+            (allToAllPrimWithDims 4 2 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).2,
+         (bw_add2 (initPM 1140) (chunkPrimDimN 2 4 3 (initPM 564))
+            (allToAllPrimWithDims 4 3 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).2] 2 1 := by
+    simp only [pm_goal_110, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_allToAllPrimWithDims_out]
+    congr 1
+  have hpm1104 : (denoteGraph pm_goal_110 initPM) 1104 =
+      allToAllPrimWithDims 4 1
+        [(bw_add2 (initPM 1131) (chunkPrimDimN 2 4 0 (initPM 564))
+            (allToAllPrimWithDims 4 0 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).2,
+         (bw_add2 (initPM 1134) (chunkPrimDimN 2 4 1 (initPM 564))
+            (allToAllPrimWithDims 4 1 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).2,
+         (bw_add2 (initPM 1137) (chunkPrimDimN 2 4 2 (initPM 564))
+            (allToAllPrimWithDims 4 2 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).2,
+         (bw_add2 (initPM 1140) (chunkPrimDimN 2 4 3 (initPM 564))
+            (allToAllPrimWithDims 4 3 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).2] 2 1 := by
+    simp only [pm_goal_110, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_allToAllPrimWithDims_out]
+    congr 1
+  have hpm1106 : (denoteGraph pm_goal_110 initPM) 1106 =
+      allToAllPrimWithDims 4 2
+        [(bw_add2 (initPM 1131) (chunkPrimDimN 2 4 0 (initPM 564))
+            (allToAllPrimWithDims 4 0 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).2,
+         (bw_add2 (initPM 1134) (chunkPrimDimN 2 4 1 (initPM 564))
+            (allToAllPrimWithDims 4 1 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).2,
+         (bw_add2 (initPM 1137) (chunkPrimDimN 2 4 2 (initPM 564))
+            (allToAllPrimWithDims 4 2 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).2,
+         (bw_add2 (initPM 1140) (chunkPrimDimN 2 4 3 (initPM 564))
+            (allToAllPrimWithDims 4 3 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).2] 2 1 := by
+    simp only [pm_goal_110, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_allToAllPrimWithDims_out]
+    congr 1
+  have hpm1108 : (denoteGraph pm_goal_110 initPM) 1108 =
+      allToAllPrimWithDims 4 3
+        [(bw_add2 (initPM 1131) (chunkPrimDimN 2 4 0 (initPM 564))
+            (allToAllPrimWithDims 4 0 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).2,
+         (bw_add2 (initPM 1134) (chunkPrimDimN 2 4 1 (initPM 564))
+            (allToAllPrimWithDims 4 1 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).2,
+         (bw_add2 (initPM 1137) (chunkPrimDimN 2 4 2 (initPM 564))
+            (allToAllPrimWithDims 4 2 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).2,
+         (bw_add2 (initPM 1140) (chunkPrimDimN 2 4 3 (initPM 564))
+            (allToAllPrimWithDims 4 3 [initPM 1089, initPM 1090, initPM 1091, initPM 1092] 1 2)).2] 2 1 := by
+    simp only [pm_goal_110, denoteGraph, List.foldl]
+    rw [applyNode_allToAllPrimWithDims_out]
+    congr 1
+  -- Simplify the per-rank dW outputs to the local gradient shards, then redistribute.
+  have hchunk722 : ∀ r, (chunkPrimDimN 1 4 r (initSM 722)).shape = [1, 2, 32] := by
+    intro r
+    rw [chunkPrimDimN_shape 1 4 r _ _ h722_shape (by omega)]; simp [List.set, List.getD]
+  have hpm1102' : (denoteGraph pm_goal_110 initPM) 1102 = chunkPrimDimN 1 4 0 (initSM 722) := by
+    rw [hpm1102,
+        bw_add2_snd_same_shape_g110 _ _ _ (by rw [h1131_shape, hA12_shape 0]),
+        bw_add2_snd_same_shape_g110 _ _ _ (by rw [h1134_shape, hA12_shape 1]),
+        bw_add2_snd_same_shape_g110 _ _ _ (by rw [h1137_shape, hA12_shape 2]),
+        bw_add2_snd_same_shape_g110 _ _ _ (by rw [h1140_shape, hA12_shape 3])]
+    simp only [allToAllPrimWithDims]
+    rw [← h722_gather]
+  have hpm1104' : (denoteGraph pm_goal_110 initPM) 1104 = chunkPrimDimN 1 4 1 (initSM 722) := by
+    rw [hpm1104,
+        bw_add2_snd_same_shape_g110 _ _ _ (by rw [h1131_shape, hA12_shape 0]),
+        bw_add2_snd_same_shape_g110 _ _ _ (by rw [h1134_shape, hA12_shape 1]),
+        bw_add2_snd_same_shape_g110 _ _ _ (by rw [h1137_shape, hA12_shape 2]),
+        bw_add2_snd_same_shape_g110 _ _ _ (by rw [h1140_shape, hA12_shape 3])]
+    simp only [allToAllPrimWithDims]
+    rw [← h722_gather]
+  have hpm1106' : (denoteGraph pm_goal_110 initPM) 1106 = chunkPrimDimN 1 4 2 (initSM 722) := by
+    rw [hpm1106,
+        bw_add2_snd_same_shape_g110 _ _ _ (by rw [h1131_shape, hA12_shape 0]),
+        bw_add2_snd_same_shape_g110 _ _ _ (by rw [h1134_shape, hA12_shape 1]),
+        bw_add2_snd_same_shape_g110 _ _ _ (by rw [h1137_shape, hA12_shape 2]),
+        bw_add2_snd_same_shape_g110 _ _ _ (by rw [h1140_shape, hA12_shape 3])]
+    simp only [allToAllPrimWithDims]
+    rw [← h722_gather]
+  have hpm1108' : (denoteGraph pm_goal_110 initPM) 1108 = chunkPrimDimN 1 4 3 (initSM 722) := by
+    rw [hpm1108,
+        bw_add2_snd_same_shape_g110 _ _ _ (by rw [h1131_shape, hA12_shape 0]),
+        bw_add2_snd_same_shape_g110 _ _ _ (by rw [h1134_shape, hA12_shape 1]),
+        bw_add2_snd_same_shape_g110 _ _ _ (by rw [h1137_shape, hA12_shape 2]),
+        bw_add2_snd_same_shape_g110 _ _ _ (by rw [h1140_shape, hA12_shape 3])]
+    simp only [allToAllPrimWithDims]
+    rw [← h722_gather]
+  -- Discharge the three conjuncts.
+  simp only [goal_110, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape: [1, 8, 32]
+    rw [hsm, hdw_sm]; exact h722_shape
+  · -- PM tp shapes: [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]]
+    rw [hpm1102', hpm1104', hpm1106', hpm1108',
+        hchunk722 0, hchunk722 1, hchunk722 2, hchunk722 3]
+  · -- Value equality: smStore 721 = reconstructWithDim 1 4 0 [pmStore 1102, ...]
+    rw [hsm, hdw_sm, hpm1102', hpm1104', hpm1106', hpm1108',
+        show pm_goal_110.numRanks = 4 from rfl,
+        reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [hchunk722 0]; decide)]
+    exact (allGatherPrimDimN_chunkPrimDimN_id_dim1_4_32 (initSM 722) h722_shape).symm
+
 end TrainVerify.Denote.GeneratedGoals
 
