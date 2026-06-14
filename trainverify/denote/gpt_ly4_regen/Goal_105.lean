@@ -49,5 +49,99 @@ def goal_105_cut_initGoals : List LineageGoal := initGoals ++ goal_105_prereqs
 def goal_105_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_105 pm_goal_105 goal_105 sm_goal_105InitEnv pm_goal_105InitEnv goal_105_cut_initGoals
 
+set_option maxHeartbeats 4000000 in
+set_option maxRecDepth 4096 in
+theorem prove_goal_105_cut : goal_105_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract goal_104: X (707) is gathered on dim1
+  have hInitX : InitGoalHolds pm_goal_105.numRanks goal_104 initSM initPM := by
+    apply hInitGoals; simp only [goal_105_cut_initGoals, goal_105_prereqs]; decide
+  have hX_shape : (initSM 707).shape = [1, 8, 32] := hInitX.1
+  have hX_rec : initSM 707 = reconstructWithDim 1 4 0
+      [initPM 3321, initPM 3322, initPM 3323, initPM 3324] := by
+    have hrec := hInitX.2.2
+    simp only [goal_104, pm_goal_105, List.map] at hrec
+    exact hrec
+  have htpX_shapes := hInitX.2.1
+  simp only [goal_104, List.map] at htpX_shapes
+  have h3321_shape : (initPM 3321).shape = [1, 2, 32] := by
+    have := congrArg List.head? htpX_shapes; simpa using this
+  have h3322_shape : (initPM 3322).shape = [1, 2, 32] := by
+    have := congrArg List.tail htpX_shapes
+    have := congrArg List.head? this; simpa using this
+  have h3323_shape : (initPM 3323).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htpX_shapes
+    have := congrArg List.head? this; simpa using this
+  have h3324_shape : (initPM 3324).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htpX_shapes
+    have := congrArg List.head? this; simpa using this
+  have hX_gather : initSM 707 = allGatherPrimDimN 1 4 0
+      [initPM 3321, initPM 3322, initPM 3323, initPM 3324] := by
+    rw [hX_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h3321_shape]; decide)
+  -- Replicated weight (708) and bias (709)
+  have hInitW : InitGoalHolds pm_goal_105.numRanks initGoal_708 initSM initPM := by
+    apply hInitGoals; simp only [goal_105_cut_initGoals, goal_105_prereqs]; decide
+  have hInitB : InitGoalHolds pm_goal_105.numRanks initGoal_709 initSM initPM := by
+    apply hInitGoals; simp only [goal_105_cut_initGoals, goal_105_prereqs]; decide
+  have hW_eq : initSM 708 = initPM 708 := by
+    have hrec := hInitW.2.2
+    simp only [initGoal_708, pm_goal_105, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  have hB_eq : initSM 709 = initPM 709 := by
+    have hrec := hInitB.2.2
+    simp only [initGoal_709, pm_goal_105, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  -- SM store
+  have hsm : (denoteGraph sm_goal_105 initSM) 710 =
+      fw_layernorm (initSM 707) (initSM 708) (initSM 709) := by
+    simp only [sm_goal_105, denoteGraph, List.foldl]
+    rw [applyNode_fw_layernorm_out]
+  -- PM store: final AllGather of the 4 shard layernorms
+  have hpm : (denoteGraph pm_goal_105 initPM) 710 = allGatherPrimDimN 1 4 0
+      [fw_layernorm (initPM 3321) (initPM 708) (initPM 709),
+       fw_layernorm (initPM 3322) (initPM 708) (initPM 709),
+       fw_layernorm (initPM 3323) (initPM 708) (initPM 709),
+       fw_layernorm (initPM 3324) (initPM 708) (initPM 709)] := by
+    simp only [pm_goal_105, denoteGraph, List.foldl]
+    rw [applyNode_allGatherPrimDimN_out_thm]
+    simp only [List.map]
+    congr 1
+  -- Key equation: layernorm distributes over the gather
+  have hkey : fw_layernorm (initSM 707) (initSM 708) (initSM 709) = allGatherPrimDimN 1 4 0
+      [fw_layernorm (initPM 3321) (initPM 708) (initPM 709),
+       fw_layernorm (initPM 3322) (initPM 708) (initPM 709),
+       fw_layernorm (initPM 3323) (initPM 708) (initPM 709),
+       fw_layernorm (initPM 3324) (initPM 708) (initPM 709)] := by
+    rw [hX_gather, hW_eq, hB_eq]
+    have hdist := fw_layernorm_distribute_allGatherPrimDimN_dim1_4_1_2_32
+      [initPM 3321, initPM 3322, initPM 3323, initPM 3324]
+      (initPM 708) (initPM 709) (by simp) (by
+        intro x hx
+        simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+        rcases hx with rfl | rfl | rfl | rfl
+        · exact h3321_shape
+        · exact h3322_shape
+        · exact h3323_shape
+        · exact h3324_shape)
+    simpa [List.map] using hdist
+  -- Discharge 3 conjuncts
+  refine ⟨?_, ?_, ?_⟩
+  · show (denoteGraph sm_goal_105 initSM 710).shape = _
+    rw [hsm]
+    exact fw_layernorm_shape_1_8_32 (initSM 707) (initSM 708) (initSM 709) hX_shape
+  · show [(denoteGraph pm_goal_105 initPM 710).shape] = _
+    rw [hpm]
+    congr 1
+    exact allGatherPrimDimN_shape 1 4 _ [1, 2, 32] (by
+      simp only [List.map, List.head?, Option.map, Option.getD]
+      exact fw_layernorm_shape_1_2_32 (initPM 3321) (initPM 708) (initPM 709) h3321_shape)
+  · show denoteGraph sm_goal_105 initSM 710 = reconstructWithDim _ _ _ _
+    rw [hsm, hkey, ← hpm]
+    exact (reconstructWithDim_singleton ..).symm
+
 end TrainVerify.Denote.GeneratedGoals
+
 
