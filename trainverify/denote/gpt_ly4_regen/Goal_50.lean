@@ -49,5 +49,98 @@ def goal_50_cut_initGoals : List LineageGoal := initGoals ++ goal_50_prereqs
 def goal_50_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_50 pm_goal_50 goal_50 sm_goal_50InitEnv pm_goal_50InitEnv goal_50_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- fw_layernorm distributes over allGatherPrimDimN (dim 1) for [1,2,32] shards,
+-- then the per-rank results are gathered by the AllGatherPrim node.
+theorem prove_goal_50_cut : goal_50_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract goal_281: X (977) is gathered on dim1 from shards 2081..2084
+  have hInitX : InitGoalHolds pm_goal_50.numRanks goal_281 initSM initPM := by
+    apply hInitGoals; simp only [goal_50_cut_initGoals, goal_50_prereqs]; decide
+  have hX_shape : (initSM 977).shape = [1, 8, 32] := hInitX.1
+  have hX_rec : initSM 977 = reconstructWithDim 1 4 0
+      [initPM 2081, initPM 2082, initPM 2083, initPM 2084] := by
+    have hrec := hInitX.2.2
+    simp only [goal_281, pm_goal_50, List.map] at hrec
+    exact hrec
+  have htpX_shapes := hInitX.2.1
+  simp only [goal_281, List.map] at htpX_shapes
+  have h2081_shape : (initPM 2081).shape = [1, 2, 32] := by
+    have := congrArg List.head? htpX_shapes; simpa using this
+  have h2082_shape : (initPM 2082).shape = [1, 2, 32] := by
+    have := congrArg List.tail htpX_shapes
+    have := congrArg List.head? this; simpa using this
+  have h2083_shape : (initPM 2083).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htpX_shapes
+    have := congrArg List.head? this; simpa using this
+  have h2084_shape : (initPM 2084).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htpX_shapes
+    have := congrArg List.head? this; simpa using this
+  have hX_gather : initSM 977 = allGatherPrimDimN 1 4 0
+      [initPM 2081, initPM 2082, initPM 2083, initPM 2084] := by
+    rw [hX_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2081_shape]; decide)
+  -- Replicated weights 629 (gamma) and 630 (beta)
+  have hInitW : InitGoalHolds pm_goal_50.numRanks initGoal_629 initSM initPM := by
+    apply hInitGoals; simp only [goal_50_cut_initGoals, goal_50_prereqs]; decide
+  have hInitB : InitGoalHolds pm_goal_50.numRanks initGoal_630 initSM initPM := by
+    apply hInitGoals; simp only [goal_50_cut_initGoals, goal_50_prereqs]; decide
+  have hW_eq : initSM 629 = initPM 629 := by
+    have hrec := hInitW.2.2
+    simp only [initGoal_629, pm_goal_50, List.map] at hrec
+    rw [hrec]; exact reconstructWithDim_singleton ..
+  have hB_eq : initSM 630 = initPM 630 := by
+    have hrec := hInitB.2.2
+    simp only [initGoal_630, pm_goal_50, List.map] at hrec
+    rw [hrec]; exact reconstructWithDim_singleton ..
+  -- SM store
+  have hsm : (denoteGraph sm_goal_50 initSM) 631 =
+      fw_layernorm (initSM 977) (initSM 629) (initSM 630) := by
+    simp only [sm_goal_50, denoteGraph, List.foldl]
+    rw [applyNode_fw_layernorm_out]
+  -- PM store: 4 layernorms then AllGather
+  have hpm : (denoteGraph pm_goal_50 initPM) 631 = allGatherPrimDimN 1 4 0
+      [fw_layernorm (initPM 2081) (initPM 629) (initPM 630),
+       fw_layernorm (initPM 2082) (initPM 629) (initPM 630),
+       fw_layernorm (initPM 2083) (initPM 629) (initPM 630),
+       fw_layernorm (initPM 2084) (initPM 629) (initPM 630)] := by
+    simp only [pm_goal_50, denoteGraph, List.foldl]
+    rw [applyNode_allGatherPrimDimN_out_thm]
+    simp only [List.map]
+    congr 1
+  -- Key equation: fw_layernorm(gather(shards), w, b) = gather(map(fw_layernorm(·,w,b)))
+  have hkey : fw_layernorm (initSM 977) (initSM 629) (initSM 630) = allGatherPrimDimN 1 4 0
+      [fw_layernorm (initPM 2081) (initPM 629) (initPM 630),
+       fw_layernorm (initPM 2082) (initPM 629) (initPM 630),
+       fw_layernorm (initPM 2083) (initPM 629) (initPM 630),
+       fw_layernorm (initPM 2084) (initPM 629) (initPM 630)] := by
+    rw [hX_gather, hW_eq, hB_eq]
+    have hdist := fw_layernorm_distribute_allGatherPrimDimN_dim1_4_1_2_32
+      [initPM 2081, initPM 2082, initPM 2083, initPM 2084]
+      (initPM 629) (initPM 630) (by rfl)
+      (by intro x hx
+          simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+          rcases hx with rfl | rfl | rfl | rfl
+          · exact h2081_shape
+          · exact h2082_shape
+          · exact h2083_shape
+          · exact h2084_shape)
+    simpa [List.map] using hdist
+  -- Discharge 3 conjuncts
+  simp only [goal_50, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · show (denoteGraph sm_goal_50 initSM 631).shape = _
+    rw [hsm]
+    exact fw_layernorm_shape_1_8_32 (initSM 977) (initSM 629) (initSM 630) hX_shape
+  · show [(denoteGraph pm_goal_50 initPM 631).shape] = _
+    rw [hpm]
+    congr 1
+    exact allGatherPrimDimN_shape 1 4 _ [1, 2, 32] (by
+      simp only [List.map, List.head?, Option.map, Option.getD]
+      exact fw_layernorm_shape_1_2_32 (initPM 2081) (initPM 629) (initPM 630) h2081_shape)
+  · show denoteGraph sm_goal_50 initSM 631 = reconstructWithDim _ _ _ _
+    rw [hsm, hkey, ← hpm]
+    exact (reconstructWithDim_singleton ..).symm
+
 end TrainVerify.Denote.GeneratedGoals
 

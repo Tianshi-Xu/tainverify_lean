@@ -49,5 +49,174 @@ def goal_24_cut_initGoals : List LineageGoal := initGoals ++ goal_24_prereqs
 def goal_24_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_24 pm_goal_24 goal_24 sm_goal_24InitEnv pm_goal_24InitEnv goal_24_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- FW_add distributes over allGatherPrimDimN (dim 2) for both [1,8,8]-sharded inputs
+theorem prove_goal_24_cut : goal_24_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract prereqs: goal_259 reconstructs 907, goal_23 reconstructs 592
+  have hInit907 : InitGoalHolds pm_goal_24.numRanks goal_259 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_24_cut_initGoals, goal_24_prereqs]
+    decide
+  have hInit592 : InitGoalHolds pm_goal_24.numRanks goal_23 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_24_cut_initGoals, goal_24_prereqs]
+    decide
+  -- goal_259: initSM 907 = reconstructWithDim 2 4 0 [initPM 1501,...,1504]
+  have h907_rec : initSM 907 = reconstructWithDim 2 4 0
+      [initPM 1501, initPM 1502, initPM 1503, initPM 1504] := by
+    have hrec := hInit907.2.2
+    simp only [goal_259, pm_goal_24, List.map] at hrec
+    exact hrec
+  have h907_shape : (initSM 907).shape = [1, 8, 32] := hInit907.1
+  have h907_tp_shapes := hInit907.2.1
+  simp only [goal_259, List.map] at h907_tp_shapes
+  have h1501_shape : (initPM 1501).shape = [1, 8, 8] := by
+    have := congrArg List.head? h907_tp_shapes; simpa using this
+  have h1502_shape : (initPM 1502).shape = [1, 8, 8] := by
+    have := congrArg List.tail h907_tp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1503_shape : (initPM 1503).shape = [1, 8, 8] := by
+    have := congrArg (List.tail ∘ List.tail) h907_tp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1504_shape : (initPM 1504).shape = [1, 8, 8] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) h907_tp_shapes
+    have := congrArg List.head? this; simpa using this
+  -- goal_23: initSM 592 = reconstructWithDim 2 4 0 [initPM 1477,...,1480]
+  have h592_rec : initSM 592 = reconstructWithDim 2 4 0
+      [initPM 1477, initPM 1478, initPM 1479, initPM 1480] := by
+    have hrec := hInit592.2.2
+    simp only [goal_23, pm_goal_24, List.map] at hrec
+    exact hrec
+  have h592_shape : (initSM 592).shape = [1, 8, 32] := hInit592.1
+  have h592_tp_shapes := hInit592.2.1
+  simp only [goal_23, List.map] at h592_tp_shapes
+  have h1477_shape : (initPM 1477).shape = [1, 8, 8] := by
+    have := congrArg List.head? h592_tp_shapes; simpa using this
+  have h1478_shape : (initPM 1478).shape = [1, 8, 8] := by
+    have := congrArg List.tail h592_tp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1479_shape : (initPM 1479).shape = [1, 8, 8] := by
+    have := congrArg (List.tail ∘ List.tail) h592_tp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1480_shape : (initPM 1480).shape = [1, 8, 8] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) h592_tp_shapes
+    have := congrArg List.head? this; simpa using this
+  -- Convert reconstructWithDim to allGatherPrimDimN (non-scalar shards)
+  have h907_gather : initSM 907 = allGatherPrimDimN 2 4 0
+      [initPM 1501, initPM 1502, initPM 1503, initPM 1504] := by
+    rw [h907_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1501_shape]; decide)
+  have h592_gather : initSM 592 = allGatherPrimDimN 2 4 0
+      [initPM 1477, initPM 1478, initPM 1479, initPM 1480] := by
+    rw [h592_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1477_shape]; decide)
+  -- SM store: smStore 593 = elemwiseAdd (initSM 907) (initSM 592)
+  have hsm : (denoteGraph sm_goal_24 initSM) 593 =
+      elemwiseAdd (initSM 907) (initSM 592) := by
+    simp only [sm_goal_24, denoteGraph, List.foldl]
+    rw [applyNode_fw_add2_out]
+  -- PM store: four FW_add nodes write 1505..1508
+  have hpm0 : (denoteGraph pm_goal_24 initPM) 1505 =
+      elemwiseAdd (initPM 1501) (initPM 1477) := by
+    simp only [pm_goal_24, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_add2_out]
+  have hpm1 : (denoteGraph pm_goal_24 initPM) 1506 =
+      elemwiseAdd (initPM 1502) (initPM 1478) := by
+    simp only [pm_goal_24, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_add2_out]
+    congr 1
+  have hpm2 : (denoteGraph pm_goal_24 initPM) 1507 =
+      elemwiseAdd (initPM 1503) (initPM 1479) := by
+    simp only [pm_goal_24, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_add2_out]
+    congr 1
+  have hpm3 : (denoteGraph pm_goal_24 initPM) 1508 =
+      elemwiseAdd (initPM 1504) (initPM 1480) := by
+    simp only [pm_goal_24, denoteGraph, List.foldl]
+    rw [applyNode_fw_add2_out]
+    congr 1
+  -- Key equation: add of two gathers = gather of per-shard adds
+  have hkey : elemwiseAdd (initSM 907) (initSM 592) =
+      allGatherPrimDimN 2 4 0
+        [elemwiseAdd (initPM 1501) (initPM 1477),
+         elemwiseAdd (initPM 1502) (initPM 1478),
+         elemwiseAdd (initPM 1503) (initPM 1479),
+         elemwiseAdd (initPM 1504) (initPM 1480)] := by
+    conv_lhs => rw [h907_gather, h592_gather]
+    have hsplit := fw_add_split_dim2_4_1_8_32
+      (allGatherPrimDimN 2 4 0 [initPM 1501, initPM 1502, initPM 1503, initPM 1504])
+      (allGatherPrimDimN 2 4 0 [initPM 1477, initPM 1478, initPM 1479, initPM 1480])
+      (by rw [← h907_gather]; exact h907_shape)
+      (by rw [← h592_gather]; exact h592_shape)
+    rw [hsplit]
+    have hshapesA : ∀ x ∈ [initPM 1501, initPM 1502, initPM 1503, initPM 1504],
+        x.shape = [1, 8, 8] := by
+      intro x hx
+      simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+      rcases hx with rfl | rfl | rfl | rfl
+      · exact h1501_shape
+      · exact h1502_shape
+      · exact h1503_shape
+      · exact h1504_shape
+    have hshapesB : ∀ x ∈ [initPM 1477, initPM 1478, initPM 1479, initPM 1480],
+        x.shape = [1, 8, 8] := by
+      intro x hx
+      simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+      rcases hx with rfl | rfl | rfl | rfl
+      · exact h1477_shape
+      · exact h1478_shape
+      · exact h1479_shape
+      · exact h1480_shape
+    have hcancelA : ∀ r (hr : r < 4),
+        chunkPrimDimN 2 4 r (allGatherPrimDimN 2 4 0
+          [initPM 1501, initPM 1502, initPM 1503, initPM 1504]) =
+          [initPM 1501, initPM 1502, initPM 1503, initPM 1504].getD r (zeroTensor [1, 8, 8]) :=
+      fun r hr => chunkPrimDimN_allGatherPrimDimN_dim2_4_1_8_8
+        [initPM 1501, initPM 1502, initPM 1503, initPM 1504] r hr (by simp) hshapesA
+    have hcancelB : ∀ r (hr : r < 4),
+        chunkPrimDimN 2 4 r (allGatherPrimDimN 2 4 0
+          [initPM 1477, initPM 1478, initPM 1479, initPM 1480]) =
+          [initPM 1477, initPM 1478, initPM 1479, initPM 1480].getD r (zeroTensor [1, 8, 8]) :=
+      fun r hr => chunkPrimDimN_allGatherPrimDimN_dim2_4_1_8_8
+        [initPM 1477, initPM 1478, initPM 1479, initPM 1480] r hr (by simp) hshapesB
+    have ha0 := hcancelA 0 (by omega)
+    have ha1 := hcancelA 1 (by omega)
+    have ha2 := hcancelA 2 (by omega)
+    have ha3 := hcancelA 3 (by omega)
+    have hb0 := hcancelB 0 (by omega)
+    have hb1 := hcancelB 1 (by omega)
+    have hb2 := hcancelB 2 (by omega)
+    have hb3 := hcancelB 3 (by omega)
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+      Option.getD_some] at ha0 ha1 ha2 ha3 hb0 hb1 hb2 hb3
+    rw [ha0, ha1, ha2, ha3, hb0, hb1, hb2, hb3]
+  -- Prove the three conjuncts
+  simp only [goal_24, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM shape: [1, 8, 32]
+    rw [hsm]
+    exact elemwiseAdd_shape_of_shapes _ _ _ h907_shape h592_shape
+  · -- PM tp shapes: [[1,8,8], [1,8,8], [1,8,8], [1,8,8]]
+    rw [hpm0, hpm1, hpm2, hpm3]
+    have hs0 := elemwiseAdd_shape_of_shapes _ _ _ h1501_shape h1477_shape
+    have hs1 := elemwiseAdd_shape_of_shapes _ _ _ h1502_shape h1478_shape
+    have hs2 := elemwiseAdd_shape_of_shapes _ _ _ h1503_shape h1479_shape
+    have hs3 := elemwiseAdd_shape_of_shapes _ _ _ h1504_shape h1480_shape
+    simp [hs0, hs1, hs2, hs3]
+  · -- Value equality
+    rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
+    symm
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [hpm0]
+    rw [elemwiseAdd_shape_of_shapes _ _ _ h1501_shape h1477_shape]; decide
+
 end TrainVerify.Denote.GeneratedGoals
+
 

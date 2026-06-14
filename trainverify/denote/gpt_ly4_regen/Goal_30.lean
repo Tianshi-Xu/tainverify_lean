@@ -48,5 +48,127 @@ def goal_30_cut_initGoals : List LineageGoal := initGoals ++ goal_30_prereqs
 def goal_30_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_30 pm_goal_30 goal_30 sm_goal_30InitEnv pm_goal_30InitEnv goal_30_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- fw_layernorm distributes over allGatherPrimDimN (dim 1) for [1,2,32] shards
+theorem prove_goal_30_cut : goal_30_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract prereqs
+  have hInit946 : InitGoalHolds pm_goal_30.numRanks goal_271 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_30_cut_initGoals, goal_30_prereqs]
+    decide
+  have hInit603 : InitGoalHolds pm_goal_30.numRanks initGoal_603 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_30_cut_initGoals, goal_30_prereqs]
+    decide
+  have hInit604 : InitGoalHolds pm_goal_30.numRanks initGoal_604 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_30_cut_initGoals, goal_30_prereqs]
+    decide
+  -- goal_271: initSM 946 = reconstructWithDim 1 4 0 [initPM 1661,...,initPM 1664]
+  have h946_rec : initSM 946 = reconstructWithDim 1 4 0
+      [initPM 1661, initPM 1662, initPM 1663, initPM 1664] := by
+    have hrec := hInit946.2.2
+    simp only [goal_271, pm_goal_30, List.map] at hrec
+    exact hrec
+  have h946_shape : (initSM 946).shape = [1, 8, 32] := hInit946.1
+  -- Shard shapes from goal_271
+  have htp_shapes := hInit946.2.1
+  simp only [goal_271, List.map] at htp_shapes
+  have h1661_shape : (initPM 1661).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp_shapes; simpa using this
+  have h1662_shape : (initPM 1662).shape = [1, 2, 32] := by
+    have := congrArg List.tail htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1663_shape : (initPM 1663).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1664_shape : (initPM 1664).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  -- Replicated weights: initSM 603 = initPM 603, initSM 604 = initPM 604
+  have h603_eq : initSM 603 = initPM 603 := by
+    have hrec := hInit603.2.2
+    simp only [initGoal_603, pm_goal_30, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  have h604_eq : initSM 604 = initPM 604 := by
+    have hrec := hInit604.2.2
+    simp only [initGoal_604, pm_goal_30, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  -- Convert reconstructWithDim to allGatherPrimDimN (non-scalar shards)
+  have h946_gather : initSM 946 = allGatherPrimDimN 1 4 0
+      [initPM 1661, initPM 1662, initPM 1663, initPM 1664] := by
+    rw [h946_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1661_shape]; decide)
+  -- SM store: smStore 605 = fw_layernorm (initSM 946) (initSM 603) (initSM 604)
+  have hsm : (denoteGraph sm_goal_30 initSM) 605 =
+      fw_layernorm (initSM 946) (initSM 603) (initSM 604) := by
+    simp only [sm_goal_30, denoteGraph, List.foldl]
+    rw [applyNode_fw_layernorm_out]
+  -- PM store: 4 independent layernorms (each node writes to a distinct tid)
+  have hpm3 : (denoteGraph pm_goal_30 initPM) 1668 =
+      fw_layernorm (initPM 1664) (initPM 603) (initPM 604) := by
+    simp only [pm_goal_30, denoteGraph, List.foldl]
+    rw [applyNode_fw_layernorm_out]; congr 1
+  have hpm2 : (denoteGraph pm_goal_30 initPM) 1667 =
+      fw_layernorm (initPM 1663) (initPM 603) (initPM 604) := by
+    simp only [pm_goal_30, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_layernorm_out]; congr 1
+  have hpm1 : (denoteGraph pm_goal_30 initPM) 1666 =
+      fw_layernorm (initPM 1662) (initPM 603) (initPM 604) := by
+    simp only [pm_goal_30, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_layernorm_out]; congr 1
+  have hpm0 : (denoteGraph pm_goal_30 initPM) 1665 =
+      fw_layernorm (initPM 1661) (initPM 603) (initPM 604) := by
+    simp only [pm_goal_30, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_layernorm_out]
+  -- Key equation: fw_layernorm(gather(shards), w, b) = gather(map(fw_layernorm(·,w,b), shards))
+  have hkey : fw_layernorm (initSM 946) (initSM 603) (initSM 604) =
+      allGatherPrimDimN 1 4 0
+        [fw_layernorm (initPM 1661) (initPM 603) (initPM 604),
+         fw_layernorm (initPM 1662) (initPM 603) (initPM 604),
+         fw_layernorm (initPM 1663) (initPM 603) (initPM 604),
+         fw_layernorm (initPM 1664) (initPM 603) (initPM 604)] := by
+    conv_lhs => rw [h946_gather, h603_eq, h604_eq]
+    have := fw_layernorm_distribute_allGatherPrimDimN_dim1_4_1_2_32
+      [initPM 1661, initPM 1662, initPM 1663, initPM 1664]
+      (initPM 603) (initPM 604) (by simp) (by
+        intro x hx
+        simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+        rcases hx with rfl | rfl | rfl | rfl
+        · exact h1661_shape
+        · exact h1662_shape
+        · exact h1663_shape
+        · exact h1664_shape)
+    simpa [List.map] using this
+  -- Prove the three conjuncts
+  simp only [goal_30, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM shape: [1, 8, 32]
+    rw [hsm]
+    exact fw_layernorm_shape_1_8_32 (initSM 946) (initSM 603) (initSM 604) h946_shape
+  · -- PM tp shapes
+    rw [hpm0, hpm1, hpm2, hpm3]
+    have hs0 := fw_layernorm_shape_1_2_32 (initPM 1661) (initPM 603) (initPM 604) h1661_shape
+    have hs1 := fw_layernorm_shape_1_2_32 (initPM 1662) (initPM 603) (initPM 604) h1662_shape
+    have hs2 := fw_layernorm_shape_1_2_32 (initPM 1663) (initPM 603) (initPM 604) h1663_shape
+    have hs3 := fw_layernorm_shape_1_2_32 (initPM 1664) (initPM 603) (initPM 604) h1664_shape
+    simp [hs0, hs1, hs2, hs3]
+  · -- Value equality
+    rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
+    symm
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [hpm0]
+    rw [fw_layernorm_shape_1_2_32 (initPM 1661) (initPM 603) (initPM 604) h1661_shape]
+    decide
+
 end TrainVerify.Denote.GeneratedGoals
 

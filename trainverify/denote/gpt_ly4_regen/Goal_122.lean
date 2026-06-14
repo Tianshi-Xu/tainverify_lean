@@ -51,5 +51,121 @@ def goal_122_cut_initGoals : List LineageGoal := initGoals ++ goal_122_prereqs
 def goal_122_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_122 pm_goal_122 goal_122 sm_goal_122InitEnv pm_goal_122InitEnv goal_122_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- BW_matmul dX = g @ yᵀ distributes: gather y on dim2 ↔ gather dX on dim3
+theorem prove_goal_122_cut : goal_122_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- goal_15: tensor 583 (= y) is the dim-2 gather of shards 1333..1336
+  have hInit583 : InitGoalHolds pm_goal_122.numRanks goal_15 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_122_cut_initGoals, goal_122_prereqs]
+    decide
+  have h583_rec : initSM 583 = reconstructWithDim 2 4 0
+      [initPM 1333, initPM 1334, initPM 1335, initPM 1336] := by
+    have hrec := hInit583.2.2
+    simp only [goal_15, pm_goal_122, List.map] at hrec
+    exact hrec
+  have hs583 := hInit583.2.1
+  simp only [goal_15, List.map, List.cons.injEq, and_true] at hs583
+  obtain ⟨h1333_shape, h1334_shape, h1335_shape, h1336_shape⟩ := hs583
+  have h583_gather : initSM 583 = allGatherPrimDimN 2 4 0
+      [initPM 1333, initPM 1334, initPM 1335, initPM 1336] := by
+    rw [h583_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1333_shape]; decide)
+  -- goal_128: tensor 744 (= g) is replicated (singleton)
+  have hInit744 : InitGoalHolds pm_goal_122.numRanks goal_128 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_122_cut_initGoals, goal_122_prereqs]
+    decide
+  have h744_eq : initSM 744 = initPM 744 := by
+    have hrec := hInit744.2.2
+    simp only [goal_128, pm_goal_122, List.map] at hrec
+    rw [hrec]; exact reconstructWithDim_singleton _ _ _ _
+  have hs744 := hInit744.2.1
+  simp only [goal_128, List.map, List.cons.injEq, and_true] at hs744
+  have h744_shape : (initPM 744).shape = [1, 4, 8, 8] := hs744
+  -- SM store: 738 = dX = batchedMatmul g (transpose2d y)
+  have hsm738 : (denoteGraph sm_goal_122 initSM) 738 =
+      (bw_matmul (initSM 744) (initSM 578) (initSM 583)).1 := by
+    simp only [sm_goal_122, denoteGraph, List.foldl]
+    rw [applyNode_bw_matmul_fst_out _ _ 0 744 578 583 738 743 (by decide)]
+  -- PM stores: each rank's first output is batchedMatmul g (transpose2d shard)
+  have hpm1274 : (denoteGraph pm_goal_122 initPM) 1274 =
+      (bw_matmul (initPM 744) (initPM 1261) (initPM 1333)).1 := by
+    simp only [pm_goal_122, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 1274 (by decide), applyNode_skip _ _ _ 1274 (by decide),
+        applyNode_skip _ _ _ 1274 (by decide),
+        applyNode_bw_matmul_fst_out _ _ 0 744 1261 1333 1274 1346 (by decide)]
+  have hpm1276 : (denoteGraph pm_goal_122 initPM) 1276 =
+      (bw_matmul (initPM 744) (initPM 1262) (initPM 1334)).1 := by
+    simp only [pm_goal_122, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 1276 (by decide), applyNode_skip _ _ _ 1276 (by decide),
+        applyNode_bw_matmul_fst_out _ _ 1 744 1262 1334 1276 1348 (by decide),
+        applyNode_skip _ _ _ 744 (by decide), applyNode_skip _ _ _ 1262 (by decide),
+        applyNode_skip _ _ _ 1334 (by decide)]
+  have hpm1278 : (denoteGraph pm_goal_122 initPM) 1278 =
+      (bw_matmul (initPM 744) (initPM 1263) (initPM 1335)).1 := by
+    simp only [pm_goal_122, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 1278 (by decide),
+        applyNode_bw_matmul_fst_out _ _ 2 744 1263 1335 1278 1350 (by decide),
+        applyNode_skip _ _ _ 744 (by decide), applyNode_skip _ _ _ 744 (by decide),
+        applyNode_skip _ _ _ 1263 (by decide), applyNode_skip _ _ _ 1263 (by decide),
+        applyNode_skip _ _ _ 1335 (by decide), applyNode_skip _ _ _ 1335 (by decide)]
+  have hpm1280 : (denoteGraph pm_goal_122 initPM) 1280 =
+      (bw_matmul (initPM 744) (initPM 1264) (initPM 1336)).1 := by
+    simp only [pm_goal_122, denoteGraph, List.foldl]
+    rw [applyNode_bw_matmul_fst_out _ _ 3 744 1264 1336 1280 1352 (by decide),
+        applyNode_skip _ _ _ 744 (by decide), applyNode_skip _ _ _ 744 (by decide),
+        applyNode_skip _ _ _ 744 (by decide),
+        applyNode_skip _ _ _ 1264 (by decide), applyNode_skip _ _ _ 1264 (by decide),
+        applyNode_skip _ _ _ 1264 (by decide),
+        applyNode_skip _ _ _ 1336 (by decide), applyNode_skip _ _ _ 1336 (by decide),
+        applyNode_skip _ _ _ 1336 (by decide)]
+  -- PM shard-output shapes ([1,4,8,2])
+  have hpm1274_shape : ((denoteGraph pm_goal_122 initPM) 1274).shape = [1, 4, 8, 2] := by
+    rw [hpm1274]
+    exact batchedMatmul_shape_1_4_8_8_1_4_8_2 _ _ h744_shape
+      (transpose2d_shape_1_4_2_8 _ h1333_shape)
+  have hpm1276_shape : ((denoteGraph pm_goal_122 initPM) 1276).shape = [1, 4, 8, 2] := by
+    rw [hpm1276]
+    exact batchedMatmul_shape_1_4_8_8_1_4_8_2 _ _ h744_shape
+      (transpose2d_shape_1_4_2_8 _ h1334_shape)
+  have hpm1278_shape : ((denoteGraph pm_goal_122 initPM) 1278).shape = [1, 4, 8, 2] := by
+    rw [hpm1278]
+    exact batchedMatmul_shape_1_4_8_8_1_4_8_2 _ _ h744_shape
+      (transpose2d_shape_1_4_2_8 _ h1335_shape)
+  have hpm1280_shape : ((denoteGraph pm_goal_122 initPM) 1280).shape = [1, 4, 8, 2] := by
+    rw [hpm1280]
+    exact batchedMatmul_shape_1_4_8_8_1_4_8_2 _ _ h744_shape
+      (transpose2d_shape_1_4_2_8 _ h1336_shape)
+  -- Main equation: dX = gather over the 4 shard outputs (dim 3)
+  have heq_main : (denoteGraph sm_goal_122 initSM) 738 = allGatherPrimDimN 3 4 0
+      [(denoteGraph pm_goal_122 initPM) 1274, (denoteGraph pm_goal_122 initPM) 1276,
+       (denoteGraph pm_goal_122 initPM) 1278, (denoteGraph pm_goal_122 initPM) 1280] := by
+    rw [hsm738, hpm1274, hpm1276, hpm1278, hpm1280]
+    show batchedMatmul (initSM 744) (transpose2d (initSM 583)) =
+      allGatherPrimDimN 3 4 0
+        [batchedMatmul (initPM 744) (transpose2d (initPM 1333)),
+         batchedMatmul (initPM 744) (transpose2d (initPM 1334)),
+         batchedMatmul (initPM 744) (transpose2d (initPM 1335)),
+         batchedMatmul (initPM 744) (transpose2d (initPM 1336))]
+    rw [h744_eq, h583_gather]
+    exact bw_matmul_fst_split_1_4_8_8 (initPM 744) (initPM 1333) (initPM 1334)
+      (initPM 1335) (initPM 1336) h744_shape h1333_shape h1334_shape h1335_shape h1336_shape
+  -- Discharge the three conjuncts
+  simp only [goal_122, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM tensor shape
+    rw [heq_main, allGatherPrimDimN_shape 3 4 _ [1, 4, 8, 2] (by simp [hpm1274_shape])]
+    decide
+  · -- PM shard shapes
+    rw [hpm1274_shape, hpm1276_shape, hpm1278_shape, hpm1280_shape]
+  · -- value: dX = reconstructWithDim 3 4 0 [shards]
+    show (denoteGraph sm_goal_122 initSM) 738 = reconstructWithDim 3 4 0
+      [(denoteGraph pm_goal_122 initPM) 1274, (denoteGraph pm_goal_122 initPM) 1276,
+       (denoteGraph pm_goal_122 initPM) 1278, (denoteGraph pm_goal_122 initPM) 1280]
+    rw [reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [hpm1274_shape]; decide)]
+    exact heq_main
+
 end TrainVerify.Denote.GeneratedGoals
 

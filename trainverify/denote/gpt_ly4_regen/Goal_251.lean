@@ -53,5 +53,153 @@ def goal_251_cut_initGoals : List LineageGoal := initGoals ++ goal_251_prereqs
 def goal_251_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_251 pm_goal_251 goal_251 sm_goal_251InitEnv pm_goal_251InitEnv goal_251_cut_initGoals
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 800000 in
+theorem prove_goal_251_cut : goal_251_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  have hInitX : InitGoalHolds pm_goal_251.numRanks goal_104 initSM initPM := by
+    apply hInitGoals; simp only [goal_251_cut_initGoals, goal_251_prereqs]; decide
+  have hInitG : InitGoalHolds pm_goal_251.numRanks goal_254 initSM initPM := by
+    apply hInitGoals; simp only [goal_251_cut_initGoals, goal_251_prereqs]; decide
+  have hInitW : InitGoalHolds pm_goal_251.numRanks initGoal_708 initSM initPM := by
+    apply hInitGoals; simp only [goal_251_cut_initGoals, goal_251_prereqs, initGoals]; decide
+  have hInitB : InitGoalHolds pm_goal_251.numRanks initGoal_709 initSM initPM := by
+    apply hInitGoals; simp only [goal_251_cut_initGoals, goal_251_prereqs, initGoals]; decide
+  -- x gather
+  have hX_rec : initSM 707 = reconstructWithDim 1 4 0
+      [initPM 3321, initPM 3322, initPM 3323, initPM 3324] := by
+    have hrec := hInitX.2.2
+    simp only [goal_104, pm_goal_251, List.map] at hrec
+    exact hrec
+  have hX_shape : (initSM 707).shape = [1, 8, 32] := by
+    have := hInitX.1; simpa [goal_104] using this
+  have htpX := hInitX.2.1
+  simp only [goal_104, List.map] at htpX
+  have h3321_shape : (initPM 3321).shape = [1, 2, 32] := by
+    have := congrArg List.head? htpX; simpa using this
+  have h3322_shape : (initPM 3322).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htpX; simpa using this
+  have h3323_shape : (initPM 3323).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htpX; simpa using this
+  have h3324_shape : (initPM 3324).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htpX; simpa using this
+  -- grad gather
+  have hG_rec : initSM 893 = reconstructWithDim 1 4 0
+      [initPM 3359, initPM 3362, initPM 3365, initPM 3368] := by
+    have hrec := hInitG.2.2
+    simp only [goal_254, pm_goal_251, List.map] at hrec
+    exact hrec
+  have htpG := hInitG.2.1
+  simp only [goal_254, List.map] at htpG
+  have h3359_shape : (initPM 3359).shape = [1, 2, 32] := by
+    have := congrArg List.head? htpG; simpa using this
+  have h3362_shape : (initPM 3362).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail) htpG; simpa using this
+  have h3365_shape : (initPM 3365).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htpG; simpa using this
+  have h3368_shape : (initPM 3368).shape = [1, 2, 32] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htpG; simpa using this
+  -- weight/bias (replicated)
+  have hW_eq : initSM 708 = initPM 708 := by
+    have hrec := hInitW.2.2
+    simp only [initGoal_708, pm_goal_251, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  have hW_shape : (initSM 708).shape = [32] := hInitW.1
+  have hB_eq : initSM 709 = initPM 709 := by
+    have hrec := hInitB.2.2
+    simp only [initGoal_709, pm_goal_251, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec; exact hrec
+  -- Convert to allGatherPrimDimN
+  have hX_gather : initSM 707 = allGatherPrimDimN 1 4 0
+      [initPM 3321, initPM 3322, initPM 3323, initPM 3324] := by
+    rw [hX_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h3321_shape]; decide)
+  have hG_gather : initSM 893 = allGatherPrimDimN 1 4 0
+      [initPM 3359, initPM 3362, initPM 3365, initPM 3368] := by
+    rw [hG_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h3359_shape]; decide)
+  -- SM store (dx output, index 0)
+  have hsm : (denoteGraph sm_goal_251 initSM) 890 =
+      (bw_layernorm (initSM 893) (initSM 707) (initSM 708) (initSM 709)).1 := by
+    simp only [sm_goal_251, denoteGraph, List.foldl]
+    rw [applyNode_bw_layernorm_dx_out]
+  -- PM stores (4 BW_layernorm nodes, NO cross node)
+  have hpm0 : (denoteGraph pm_goal_251 initPM) 3335 =
+      (bw_layernorm (initPM 3359) (initPM 3321) (initPM 708) (initPM 709)).1 := by
+    simp only [pm_goal_251, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.BW_layernorm", ins := [3368, 3324, 708, 709], outs := [3344, 3366, 3367] } 3335 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_layernorm", ins := [3365, 3323, 708, 709], outs := [3341, 3363, 3364] } 3335 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [3362, 3322, 708, 709], outs := [3338, 3360, 3361] } 3335 (by decide)]
+    rw [applyNode_bw_layernorm_dx_out]
+  have hpm1 : (denoteGraph pm_goal_251 initPM) 3338 =
+      (bw_layernorm (initPM 3362) (initPM 3322) (initPM 708) (initPM 709)).1 := by
+    simp only [pm_goal_251, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.BW_layernorm", ins := [3368, 3324, 708, 709], outs := [3344, 3366, 3367] } 3338 (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_layernorm", ins := [3365, 3323, 708, 709], outs := [3341, 3363, 3364] } 3338 (by decide)]
+    rw [applyNode_bw_layernorm_dx_out]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [3359, 3321, 708, 709], outs := [3335, 3357, 3358] } 3362 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [3359, 3321, 708, 709], outs := [3335, 3357, 3358] } 3322 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [3359, 3321, 708, 709], outs := [3335, 3357, 3358] } 708 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [3359, 3321, 708, 709], outs := [3335, 3357, 3358] } 709 (by decide)]
+  have hpm2 : (denoteGraph pm_goal_251 initPM) 3341 =
+      (bw_layernorm (initPM 3365) (initPM 3323) (initPM 708) (initPM 709)).1 := by
+    simp only [pm_goal_251, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.BW_layernorm", ins := [3368, 3324, 708, 709], outs := [3344, 3366, 3367] } 3341 (by decide)]
+    rw [applyNode_bw_layernorm_dx_out]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [3362, 3322, 708, 709], outs := [3338, 3360, 3361] } 3365 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [3359, 3321, 708, 709], outs := [3335, 3357, 3358] } 3365 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [3362, 3322, 708, 709], outs := [3338, 3360, 3361] } 3323 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [3359, 3321, 708, 709], outs := [3335, 3357, 3358] } 3323 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [3362, 3322, 708, 709], outs := [3338, 3360, 3361] } 708 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [3359, 3321, 708, 709], outs := [3335, 3357, 3358] } 708 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [3362, 3322, 708, 709], outs := [3338, 3360, 3361] } 709 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [3359, 3321, 708, 709], outs := [3335, 3357, 3358] } 709 (by decide)]
+  have hpm3 : (denoteGraph pm_goal_251 initPM) 3344 =
+      (bw_layernorm (initPM 3368) (initPM 3324) (initPM 708) (initPM 709)).1 := by
+    simp only [pm_goal_251, denoteGraph, List.foldl]
+    rw [applyNode_bw_layernorm_dx_out]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_layernorm", ins := [3365, 3323, 708, 709], outs := [3341, 3363, 3364] } 3368 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [3362, 3322, 708, 709], outs := [3338, 3360, 3361] } 3368 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [3359, 3321, 708, 709], outs := [3335, 3357, 3358] } 3368 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_layernorm", ins := [3365, 3323, 708, 709], outs := [3341, 3363, 3364] } 3324 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [3362, 3322, 708, 709], outs := [3338, 3360, 3361] } 3324 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [3359, 3321, 708, 709], outs := [3335, 3357, 3358] } 3324 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_layernorm", ins := [3365, 3323, 708, 709], outs := [3341, 3363, 3364] } 708 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [3362, 3322, 708, 709], outs := [3338, 3360, 3361] } 708 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [3359, 3321, 708, 709], outs := [3335, 3357, 3358] } 708 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.BW_layernorm", ins := [3365, 3323, 708, 709], outs := [3341, 3363, 3364] } 709 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.BW_layernorm", ins := [3362, 3322, 708, 709], outs := [3338, 3360, 3361] } 709 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.BW_layernorm", ins := [3359, 3321, 708, 709], outs := [3335, 3357, 3358] } 709 (by decide)]
+  -- Key equation (dx distributes as allGather)
+  have hkey : (bw_layernorm (initSM 893) (initSM 707) (initSM 708) (initSM 709)).1 =
+      allGatherPrimDimN 1 4 0
+        [(bw_layernorm (initPM 3359) (initPM 3321) (initPM 708) (initPM 709)).1,
+         (bw_layernorm (initPM 3362) (initPM 3322) (initPM 708) (initPM 709)).1,
+         (bw_layernorm (initPM 3365) (initPM 3323) (initPM 708) (initPM 709)).1,
+         (bw_layernorm (initPM 3368) (initPM 3324) (initPM 708) (initPM 709)).1] := by
+    rw [hG_gather, hX_gather, hW_eq, hB_eq]
+    exact bw_layernorm_dx_dp_split_dim1_4_1_2_32
+      (initPM 3359) (initPM 3362) (initPM 3365) (initPM 3368)
+      (initPM 3321) (initPM 3322) (initPM 3323) (initPM 3324)
+      (initPM 708) (initPM 709)
+      h3359_shape h3362_shape h3365_shape h3368_shape
+      h3321_shape h3322_shape h3323_shape h3324_shape
+      (by rw [← hW_eq]; exact hW_shape)
+  have hdx0_shape : (bw_layernorm (initPM 3359) (initPM 3321) (initPM 708) (initPM 709)).1.shape = [1, 2, 32] := by
+    rw [bw_layernorm_dx_shape _ _ _ _ 32 [2, 1] (by rw [h3321_shape]; rfl), h3321_shape]
+  -- Three conjuncts
+  simp only [goal_251, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, bw_layernorm_dx_shape _ _ _ _ 32 [8, 1] (by rw [hX_shape]; rfl), hX_shape]
+  · rw [hpm0, hpm1, hpm2, hpm3,
+        bw_layernorm_dx_shape _ _ _ _ 32 [2, 1] (by rw [h3321_shape]; rfl), h3321_shape,
+        bw_layernorm_dx_shape _ _ _ _ 32 [2, 1] (by rw [h3322_shape]; rfl), h3322_shape,
+        bw_layernorm_dx_shape _ _ _ _ 32 [2, 1] (by rw [h3323_shape]; rfl), h3323_shape,
+        bw_layernorm_dx_shape _ _ _ _ 32 [2, 1] (by rw [h3324_shape]; rfl), h3324_shape]
+  · rw [hsm, hkey, hpm0, hpm1, hpm2, hpm3,
+        reconstructWithDim_cons_cons_nonscalar 1 pm_goal_251.numRanks 0 _ _ _ (by rw [hdx0_shape]; decide)]
+    rfl
+
 end TrainVerify.Denote.GeneratedGoals
+
 

@@ -7096,6 +7096,87 @@ theorem bw_layernorm_db_shape (g x w b : Tensor) (d : Nat) (rest : List Nat)
     (bw_layernorm g x w b).2.2.shape = b.shape := by
   rw [bw_layernorm_db_eq g x w b d rest hrev]; simp [Tensor.mkShape]
 
+/-- Unfolding lemma: dx output of `bw_layernorm` when x.shape.reverse starts with d. -/
+theorem bw_layernorm_dx_eq (g x w b : Tensor) (d : Nat) (rest : List Nat)
+    (hrev : x.shape.reverse = d :: rest) :
+    (bw_layernorm g x w b).1 = Tensor.mkShape x.shape (fun outIdx =>
+      let row := outIdx.1 / d
+      let j := outIdx.1 % d
+      let mean := layerNormMeanAt x row d
+      let var := layerNormVarAt x row d mean
+      let invStd := 1 / sqrtFn (var + layerNormEps)
+      let xhat := (valAt x outIdx.1 - mean) * invStd
+      let sumDy := ∑ k ∈ Finset.range d,
+        valAt g (row * d + k) * valAt w k
+      let sumDyXhat := ∑ k ∈ Finset.range d,
+        let xhatK := (valAt x (row * d + k) - mean) * invStd
+        (valAt g (row * d + k) * valAt w k) * xhatK
+      invStd / (d : Scalar) *
+        ((d : Scalar) * (valAt g outIdx.1 * valAt w j) - sumDy - xhat * sumDyXhat)) := by
+  unfold bw_layernorm; rw [hrev]
+
+/-- Shape of `bw_layernorm` dx output. -/
+theorem bw_layernorm_dx_shape (g x w b : Tensor) (d : Nat) (rest : List Nat)
+    (hrev : x.shape.reverse = d :: rest) :
+    (bw_layernorm g x w b).1.shape = x.shape := by
+  rw [bw_layernorm_dx_eq g x w b d rest hrev]; simp [Tensor.mkShape]
+
+/-- `applyNode` for `BW_layernorm` extracting the dx output (index 0 of 3). -/
+theorem applyNode_bw_layernorm_dx_out
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (gTid xTid wTid bTid dxTid dwTid dbTid : Tid) :
+    applyNode g s (⟨rank, "OpName.BW_layernorm", [gTid, xTid, wTid, bTid], [dxTid, dwTid, dbTid], []⟩ : NodeDecl) dxTid =
+      (bw_layernorm (s gTid) (s xTid) (s wTid) (s bTid)).1 := by
+  unfold applyNode
+  have hmap : ([gTid, xTid, wTid, bTid] : List Tid).map s = [s gTid, s xTid, s wTid, s bTid] := rfl
+  rw [hmap, evalOp_bw_layernorm]
+  unfold storeSet
+  simp [List.find?]
+
+/-- valAt of `bw_layernorm` dx output at index `p*32 + j` for x shape `[1,8,32]`. -/
+theorem bw_layernorm_dx_valAt_1_8_32 (g x w b : Tensor) (p j : Nat)
+    (hx : x.shape = [1, 8, 32]) (hp : p < 8) (hj : j < 32) :
+    valAt (bw_layernorm g x w b).1 (p * 32 + j) =
+      let mean := layerNormMeanAt x p 32
+      let var := layerNormVarAt x p 32 mean
+      let invStd := 1 / sqrtFn (var + layerNormEps)
+      let xhat := (valAt x (p * 32 + j) - mean) * invStd
+      let sumDy := ∑ k ∈ Finset.range 32, valAt g (p * 32 + k) * valAt w k
+      let sumDyXhat := ∑ k ∈ Finset.range 32,
+        (valAt g (p * 32 + k) * valAt w k) * ((valAt x (p * 32 + k) - mean) * invStd)
+      invStd / (32 : Scalar) *
+        ((32 : Scalar) * (valAt g (p * 32 + j) * valAt w j) - sumDy - xhat * sumDyXhat) := by
+  have hidx : p * 32 + j < 256 := by
+    have h1 : p * 32 ≤ 7 * 32 := Nat.mul_le_mul_right 32 (by omega)
+    omega
+  rw [bw_layernorm_dx_eq g x w b 32 [8, 1] (by rw [hx]; rfl)]
+  rw [valAt_of_lt _ _ (by simp only [Tensor.mkShape]; rw [hx]; exact hidx)]
+  have hdj : (p * 32 + j) / 32 = p := by omega
+  have hmj : (p * 32 + j) % 32 = j := by omega
+  simp only [Tensor.mkShape, hdj, hmj, Nat.cast_ofNat]
+
+/-- valAt of `bw_layernorm` dx output at index `p*32 + j` for x shape `[1,2,32]`. -/
+theorem bw_layernorm_dx_valAt_1_2_32 (g x w b : Tensor) (p j : Nat)
+    (hx : x.shape = [1, 2, 32]) (hp : p < 2) (hj : j < 32) :
+    valAt (bw_layernorm g x w b).1 (p * 32 + j) =
+      let mean := layerNormMeanAt x p 32
+      let var := layerNormVarAt x p 32 mean
+      let invStd := 1 / sqrtFn (var + layerNormEps)
+      let xhat := (valAt x (p * 32 + j) - mean) * invStd
+      let sumDy := ∑ k ∈ Finset.range 32, valAt g (p * 32 + k) * valAt w k
+      let sumDyXhat := ∑ k ∈ Finset.range 32,
+        (valAt g (p * 32 + k) * valAt w k) * ((valAt x (p * 32 + k) - mean) * invStd)
+      invStd / (32 : Scalar) *
+        ((32 : Scalar) * (valAt g (p * 32 + j) * valAt w j) - sumDy - xhat * sumDyXhat) := by
+  have hidx : p * 32 + j < 64 := by
+    have h1 : p * 32 ≤ 1 * 32 := Nat.mul_le_mul_right 32 (by omega)
+    omega
+  rw [bw_layernorm_dx_eq g x w b 32 [2, 1] (by rw [hx]; rfl)]
+  rw [valAt_of_lt _ _ (by simp only [Tensor.mkShape]; rw [hx]; exact hidx)]
+  have hdj : (p * 32 + j) / 32 = p := by omega
+  have hmj : (p * 32 + j) % 32 = j := by omega
+  simp only [Tensor.mkShape, hdj, hmj, Nat.cast_ofNat]
+
 /-- `layerNormMeanAt` on allGather = `layerNormMeanAt` on shard. -/
 theorem layerNormMeanAt_allGatherPrimDimN_dim1_4_1_2_32 (xs : List Tensor)
     (r : Nat) (hr : r < 4) (p : Nat) (hp : p < 2)
@@ -7278,6 +7359,128 @@ theorem bw_layernorm_db_dp_split_dim1_4_1_2_32
         allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] 3 (by omega) 1 (by omega) idx hidx_lt hgs_head]
     simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
     ring
+
+/-- Per-index bridge: the dx value of `bw_layernorm` on dim-1 allGather inputs at the
+    global index `(r*2+p)*32+j` equals the dx value of the rank-`r` shard at the local
+    index `p*32+j`. -/
+theorem bw_layernorm_dx_allGather_valAt_dim1_4_1_2_32
+    (gs xs : List Tensor) (w b : Tensor) (r p j : Nat)
+    (hr : r < 4) (hp : p < 2) (hj : j < 32)
+    (hgs_head : (gs.head?.map (fun t => t.shape)).getD [] = [1, 2, 32])
+    (hxs_head : (xs.head?.map (fun t => t.shape)).getD [] = [1, 2, 32])
+    (hxr : (xs.getD r (zeroTensor [1, 2, 32])).shape = [1, 2, 32]) :
+    valAt (bw_layernorm (allGatherPrimDimN 1 4 0 gs) (allGatherPrimDimN 1 4 0 xs) w b).1
+        ((r * 2 + p) * 32 + j) =
+      valAt (bw_layernorm (gs.getD r (zeroTensor [1, 2, 32]))
+                          (xs.getD r (zeroTensor [1, 2, 32])) w b).1 (p * 32 + j) := by
+  have hfullX : (allGatherPrimDimN 1 4 0 xs).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 xs [1, 2, 32] hxs_head]; simp [List.set, List.getD]
+  set gr := gs.getD r (zeroTensor [1, 2, 32]) with hgr_def
+  set xr := xs.getD r (zeroTensor [1, 2, 32]) with hxr_def
+  have hMean : layerNormMeanAt (allGatherPrimDimN 1 4 0 xs) (r * 2 + p) 32
+      = layerNormMeanAt xr p 32 :=
+    layerNormMeanAt_allGatherPrimDimN_dim1_4_1_2_32 xs r hr p hp hxs_head
+  have hVar : ∀ m, layerNormVarAt (allGatherPrimDimN 1 4 0 xs) (r * 2 + p) 32 m
+      = layerNormVarAt xr p 32 m :=
+    fun m => layerNormVarAt_allGatherPrimDimN_dim1_4_1_2_32 xs r hr p hp m hxs_head
+  have hVX : ∀ k, k < 32 →
+      valAt (allGatherPrimDimN 1 4 0 xs) ((r * 2 + p) * 32 + k) = valAt xr (p * 32 + k) :=
+    fun k hk => allGatherPrimDimN_dim1_4_1_2_32_valAt xs r hr p hp k hk hxs_head
+  have hVG : ∀ k, k < 32 →
+      valAt (allGatherPrimDimN 1 4 0 gs) ((r * 2 + p) * 32 + k) = valAt gr (p * 32 + k) :=
+    fun k hk => allGatherPrimDimN_dim1_4_1_2_32_valAt gs r hr p hp k hk hgs_head
+  rw [bw_layernorm_dx_valAt_1_8_32 _ _ w b (r * 2 + p) j hfullX (by omega) hj,
+      bw_layernorm_dx_valAt_1_2_32 gr xr w b p j hxr hp hj]
+  simp only [hMean, hVar, hVX j hj, hVG j hj]
+  have hSumDy : (∑ k ∈ Finset.range 32,
+        valAt (allGatherPrimDimN 1 4 0 gs) ((r * 2 + p) * 32 + k) * valAt w k)
+      = ∑ k ∈ Finset.range 32, valAt gr (p * 32 + k) * valAt w k := by
+    apply Finset.sum_congr rfl; intro k hk; rw [Finset.mem_range] at hk; rw [hVG k hk]
+  have hSumDyXhat : (∑ k ∈ Finset.range 32,
+        valAt (allGatherPrimDimN 1 4 0 gs) ((r * 2 + p) * 32 + k) * valAt w k *
+          ((valAt (allGatherPrimDimN 1 4 0 xs) ((r * 2 + p) * 32 + k) - layerNormMeanAt xr p 32) *
+            (1 / sqrtFn (layerNormVarAt xr p 32 (layerNormMeanAt xr p 32) + layerNormEps))))
+      = ∑ k ∈ Finset.range 32,
+        valAt gr (p * 32 + k) * valAt w k *
+          ((valAt xr (p * 32 + k) - layerNormMeanAt xr p 32) *
+            (1 / sqrtFn (layerNormVarAt xr p 32 (layerNormMeanAt xr p 32) + layerNormEps))) := by
+    apply Finset.sum_congr rfl; intro k hk; rw [Finset.mem_range] at hk
+    rw [hVG k hk, hVX k hk]
+  rw [hSumDy, hSumDyXhat]
+
+set_option maxHeartbeats 800000 in
+/-- The dx output of `bw_layernorm` on dim-1-gathered tensors (4 parts, shard [1,2,32])
+    equals the allGather of the per-shard dx outputs. -/
+theorem bw_layernorm_dx_dp_split_dim1_4_1_2_32
+    (g0 g1 g2 g3 x0 x1 x2 x3 w b : Tensor)
+    (hg0 : g0.shape = [1, 2, 32]) (hg1 : g1.shape = [1, 2, 32])
+    (hg2 : g2.shape = [1, 2, 32]) (hg3 : g3.shape = [1, 2, 32])
+    (hx0 : x0.shape = [1, 2, 32]) (hx1 : x1.shape = [1, 2, 32])
+    (hx2 : x2.shape = [1, 2, 32]) (hx3 : x3.shape = [1, 2, 32])
+    (hw : w.shape = [32]) :
+    (bw_layernorm (allGatherPrimDimN 1 4 0 [g0, g1, g2, g3])
+                  (allGatherPrimDimN 1 4 0 [x0, x1, x2, x3]) w b).1 =
+      allGatherPrimDimN 1 4 0
+        [(bw_layernorm g0 x0 w b).1, (bw_layernorm g1 x1 w b).1,
+         (bw_layernorm g2 x2 w b).1, (bw_layernorm g3 x3 w b).1] := by
+  have hgs_head : (([g0, g1, g2, g3] : List Tensor).head?.map (fun t => t.shape)).getD [] = [1, 2, 32] := by
+    simp [hg0]
+  have hxs_head : (([x0, x1, x2, x3] : List Tensor).head?.map (fun t => t.shape)).getD [] = [1, 2, 32] := by
+    simp [hx0]
+  have hfullX_shape : (allGatherPrimDimN 1 4 0 [x0, x1, x2, x3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 32] hxs_head]; simp [List.set, List.getD]
+  have hfullG_shape : (allGatherPrimDimN 1 4 0 [g0, g1, g2, g3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 32] hgs_head]; simp [List.set, List.getD]
+  have hdx0_shape : (bw_layernorm g0 x0 w b).1.shape = [1, 2, 32] := by
+    rw [bw_layernorm_dx_shape g0 x0 w b 32 [2, 1] (by rw [hx0]; rfl), hx0]
+  have hdxs_head : (([(bw_layernorm g0 x0 w b).1, (bw_layernorm g1 x1 w b).1,
+      (bw_layernorm g2 x2 w b).1, (bw_layernorm g3 x3 w b).1] : List Tensor).head?.map
+      (fun t => t.shape)).getD [] = [1, 2, 32] := by
+    simp [hdx0_shape]
+  have hlhs_shape : (bw_layernorm (allGatherPrimDimN 1 4 0 [g0, g1, g2, g3])
+                  (allGatherPrimDimN 1 4 0 [x0, x1, x2, x3]) w b).1.shape = [1, 8, 32] := by
+    rw [bw_layernorm_dx_shape _ _ w b 32 [8, 1] (by rw [hfullX_shape]; rfl), hfullX_shape]
+  have hrhs_shape : (allGatherPrimDimN 1 4 0
+      [(bw_layernorm g0 x0 w b).1, (bw_layernorm g1 x1 w b).1,
+       (bw_layernorm g2 x2 w b).1, (bw_layernorm g3 x3 w b).1]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 32] hdxs_head]; simp [List.set, List.getD]
+  have hxr : ∀ r, r < 4 →
+      (([x0, x1, x2, x3] : List Tensor).getD r (zeroTensor [1, 2, 32])).shape = [1, 2, 32] := by
+    intro r hr
+    have hrc : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+    rcases hrc with h | h | h | h <;> subst h <;>
+      simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
+        hx0, hx1, hx2, hx3]
+  apply Tensor.ext
+  · rw [hlhs_shape, hrhs_shape]
+  · intro idx hidx
+    have hidx256 : idx < 256 := by
+      have h := hidx; rw [hlhs_shape] at h; simpa [prodShape] using h
+    set p := idx / 32 with hp_def
+    set j := idx % 32 with hj_def
+    have hp_lt : p < 8 := by
+      have : idx / 32 < 256 / 32 := Nat.div_lt_div_of_lt_of_dvd ⟨8, rfl⟩ hidx256
+      simpa using this
+    have hj_lt : j < 32 := Nat.mod_lt idx (by omega)
+    have hidx_eq : idx = p * 32 + j := by subst p j; omega
+    set r := p / 2 with hr_def
+    set p' := p % 2 with hp'_def
+    have hr_lt : r < 4 := by
+      have : p / 2 < 8 / 2 := Nat.div_lt_div_of_lt_of_dvd ⟨4, rfl⟩ hp_lt
+      simpa using this
+    have hp'_lt : p' < 2 := Nat.mod_lt p (by omega)
+    have hp_eq : p = r * 2 + p' := by subst r p'; omega
+    rw [hidx_eq, hp_eq]
+    rw [bw_layernorm_dx_allGather_valAt_dim1_4_1_2_32 [g0, g1, g2, g3] [x0, x1, x2, x3]
+        w b r p' j hr_lt hp'_lt hj_lt hgs_head hxs_head (hxr r hr_lt)]
+    rw [allGatherPrimDimN_dim1_4_1_2_32_valAt
+        [(bw_layernorm g0 x0 w b).1, (bw_layernorm g1 x1 w b).1,
+         (bw_layernorm g2 x2 w b).1, (bw_layernorm g3 x3 w b).1]
+        r hr_lt p' hp'_lt j hj_lt hdxs_head]
+    have hrc : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+    rcases hrc with h | h | h | h <;> rw [h] <;>
+      simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+
 /-- `applyNode` for `BW_transpose`. -/
 theorem applyNode_bw_transposeAxes_out
     (g : GraphDecl) (s : Store) (rank : Nat) (gradTid xTid outTid : Tid) (d0 d1 : Nat) :
@@ -10281,5 +10484,252 @@ theorem fw_linear_colParallel_4_1_8_128_32_32
     rw [hterm 0 (by omega), hterm 1 (by omega), hterm 2 (by omega), hterm 3 (by omega)]
     simp only [Finset.sum_range_succ, Finset.sum_range_zero, zero_add]
   rw [hLHS_eq, hRHS_eq]
+
+/-! ## BW_matmul (first output, dX) distributed-equivalence lemmas
+
+These lemmas support proving that `BW_matmul`'s first output (`dx = g @ yᵀ`) distributed
+along the contraction dimension reconstructs by `allGatherPrimDimN` on the output's last
+dimension.  The concrete shapes are `g : [1,4,8,8]`, `y` shards `: [1,4,2,8]`. -/
+
+/-- `transpose2d` preserves the shape `[1,4,8,8]`. -/
+theorem transpose2d_shape_1_4_8_8 (x : Tensor) (hx : x.shape = [1, 4, 8, 8]) :
+    (transpose2d x).shape = [1, 4, 8, 8] := by
+  unfold transpose2d
+  rw [hx]
+  rfl
+
+/-- `transpose2d` maps shape `[1,4,2,8]` to `[1,4,8,2]`. -/
+theorem transpose2d_shape_1_4_2_8 (x : Tensor) (hx : x.shape = [1, 4, 2, 8]) :
+    (transpose2d x).shape = [1, 4, 8, 2] := by
+  unfold transpose2d
+  rw [hx]
+  rfl
+
+/-- `valAt` of `transpose2d x` for `x : [1,4,8,8]` (swap of the last two dims). -/
+theorem transpose2d_valAt_1_4_8_8 (x : Tensor) (idx : Nat)
+    (hx : x.shape = [1, 4, 8, 8]) (hidx : idx < 256) :
+    valAt (transpose2d x) idx = valAt x (idx / 64 * 64 + idx % 8 * 8 + idx % 64 / 8) := by
+  have key : transpose2d x = Tensor.mkShape [1, 4, 8, 8] (fun outIdx =>
+      valAt x (outIdx.1 / (8 * 8) * (8 * 8) + outIdx.1 % (8 * 8) % 8 * 8 +
+        outIdx.1 % (8 * 8) / 8)) := by
+    unfold transpose2d
+    rw [hx]
+    rfl
+  rw [key]
+  have hidx' : idx < prodShape ([1, 4, 8, 8] : Shape) := by simp [prodShape]; omega
+  rw [valAt_of_lt _ _ (by simp [Tensor.mkShape]; exact hidx')]
+  show valAt x (idx / (8 * 8) * (8 * 8) + idx % (8 * 8) % 8 * 8 + idx % (8 * 8) / 8) = _
+  congr 1
+  omega
+
+/-- `valAt` of `transpose2d x` for `x : [1,4,2,8]` (output shape `[1,4,8,2]`). -/
+theorem transpose2d_valAt_1_4_2_8 (x : Tensor) (idx : Nat)
+    (hx : x.shape = [1, 4, 2, 8]) (hidx : idx < 64) :
+    valAt (transpose2d x) idx = valAt x (idx / 16 * 16 + idx % 2 * 8 + idx % 16 / 2) := by
+  have key : transpose2d x = Tensor.mkShape [1, 4, 8, 2] (fun outIdx =>
+      valAt x (outIdx.1 / (2 * 8) * (2 * 8) + outIdx.1 % (2 * 8) % 2 * 8 +
+        outIdx.1 % (2 * 8) / 2)) := by
+    unfold transpose2d
+    rw [hx]
+    rfl
+  rw [key]
+  have hidx' : idx < prodShape ([1, 4, 8, 2] : Shape) := by simp [prodShape]; omega
+  rw [valAt_of_lt _ _ (by simp [Tensor.mkShape]; exact hidx')]
+  show valAt x (idx / (2 * 8) * (2 * 8) + idx % (2 * 8) % 2 * 8 + idx % (2 * 8) / 2) = _
+  congr 1
+  omega
+
+/-- Shape of `batchedMatmul` on `[1,4,8,8] @ [1,4,8,2] -> [1,4,8,2]`. -/
+theorem batchedMatmul_shape_1_4_8_8_1_4_8_2 (a b : Tensor)
+    (ha : a.shape = [1, 4, 8, 8]) (hb : b.shape = [1, 4, 8, 2]) :
+    (batchedMatmul a b).shape = [1, 4, 8, 2] := by
+  unfold batchedMatmul
+  simp only [ha, hb, List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append,
+    Tensor.mkShape]
+
+/-- `valAt` of `batchedMatmul a b` for `a : [1,4,8,8]`, `b : [1,4,8,2]`, output `[1,4,8,2]`. -/
+theorem batchedMatmul_valAt_1_4_8_8_1_4_8_2 (a b : Tensor) (loc : Nat)
+    (ha : a.shape = [1, 4, 8, 8]) (hb : b.shape = [1, 4, 8, 2]) (hloc : loc < 64) :
+    valAt (batchedMatmul a b) loc =
+      ∑ l ∈ Finset.range 8,
+        valAt a (loc / 16 * 64 + loc % 16 / 2 * 8 + l) *
+          valAt b (loc / 16 * 16 + l * 2 + loc % 2) := by
+  have key : batchedMatmul a b = Tensor.mkShape [1, 4, 8, 2] (fun outIdx =>
+      ∑ l ∈ Finset.range 8,
+        valAt a (outIdx.1 / (8 * 2) * (8 * 8) + outIdx.1 % (8 * 2) / 2 * 8 + l) *
+          valAt b (outIdx.1 / (8 * 2) * (8 * 2) + l * 2 + outIdx.1 % (8 * 2) % 2)) := by
+    unfold batchedMatmul
+    rw [ha, hb]
+    rfl
+  rw [key]
+  have hloc' : loc < prodShape ([1, 4, 8, 2] : Shape) := by simp [prodShape]; omega
+  rw [valAt_of_lt _ _ (by simp [Tensor.mkShape]; exact hloc')]
+  show ∑ l ∈ Finset.range 8,
+        valAt a (loc / (8 * 2) * (8 * 8) + loc % (8 * 2) / 2 * 8 + l) *
+          valAt b (loc / (8 * 2) * (8 * 2) + l * 2 + loc % (8 * 2) % 2) = _
+  apply Finset.sum_congr rfl
+  intro l _
+  congr 2 <;> omega
+
+/-- `evalOp` unfolding for `BW_matmul` with empty params (three inputs, two outputs). -/
+theorem evalOp_bw_matmul (numParts rank : Nat) (g x y : Tensor) :
+    evalOp numParts rank "OpName.BW_matmul" [] [g, x, y] =
+      [(bw_matmul g x y).1, (bw_matmul g x y).2] := by
+  rfl
+
+/-- `applyNode` for `BW_matmul`, first output (`dx`). -/
+theorem applyNode_bw_matmul_fst_out
+    (gr : GraphDecl) (s : Store) (rank : Nat) (gTid xTid yTid dxTid dyTid : Tid)
+    (_ : dxTid ≠ dyTid) :
+    applyNode gr s { rank := rank, op := "OpName.BW_matmul", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dxTid =
+      (bw_matmul (s gTid) (s xTid) (s yTid)).1 := by
+  unfold applyNode
+  rw [show ([gTid, xTid, yTid] : List Tid).map s = [s gTid, s xTid, s yTid] from rfl,
+      evalOp_bw_matmul]
+  change storeSet s [(dxTid, (bw_matmul (s gTid) (s xTid) (s yTid)).1),
+                     (dyTid, (bw_matmul (s gTid) (s xTid) (s yTid)).2)] dxTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-! Flat-index arithmetic helpers for `bw_matmul_fst_split_1_4_8_8`. Proven in an empty
+context so `omega` stays fast (avoids scanning the large hypothesis context of the main proof). -/
+
+private theorem bw_split_aux_cleanY (idx l : Nat) (hl : l < 8) :
+    (idx / 64 * 64 + l * 8 + idx % 8) / 64 * 64 +
+      (idx / 64 * 64 + l * 8 + idx % 8) % 8 * 8 +
+      (idx / 64 * 64 + l * 8 + idx % 8) % 64 / 8 = idx / 64 * 64 + idx % 8 * 8 + l := by omega
+
+private theorem bw_split_aux_hgi (idx l : Nat) (hl : l < 8) :
+    (idx / 64 * 64 + idx % 8 * 8 + l) % 64 / 16 = idx % 8 / 2 := by omega
+
+private theorem bw_split_aux_hii (idx l : Nat) (hl : l < 8) :
+    (idx / 64 * 64 + idx % 8 * 8 + l) / 64 * 16 +
+      (idx / 64 * 64 + idx % 8 * 8 + l) % 16 / 8 * 8 +
+      (idx / 64 * 64 + idx % 8 * 8 + l) % 8 = idx / 64 * 16 + idx % 2 * 8 + l := by omega
+
+private theorem bw_split_aux_hmi (idx l loc : Nat) (hl : l < 8) (hidx : idx < 256)
+    (hloc : loc = idx / 8 * 2 + idx % 8 % 2) :
+    (loc / 16 * 16 + l * 2 + loc % 2) / 16 * 16 +
+      (loc / 16 * 16 + l * 2 + loc % 2) % 2 * 8 +
+      (loc / 16 * 16 + l * 2 + loc % 2) % 16 / 2 = idx / 64 * 16 + idx % 2 * 8 + l := by
+  subst hloc; omega
+
+private theorem bw_split_aux_hgeq (idx l loc : Nat) (hidx : idx < 256)
+    (hloc : loc = idx / 8 * 2 + idx % 8 % 2) :
+    idx / 64 * 64 + idx % 64 / 8 * 8 + l = loc / 16 * 64 + loc % 16 / 2 * 8 + l := by
+  subst hloc; omega
+
+private theorem bw_split_aux_htbnd (idx l loc : Nat) (hl : l < 8) (hidx : idx < 256)
+    (hloc : loc = idx / 8 * 2 + idx % 8 % 2) :
+    loc / 16 * 16 + l * 2 + loc % 2 < 64 := by subst hloc; omega
+
+private theorem bw_split_aux_hJbnd (idx l : Nat) (hl : l < 8) (hidx : idx < 256) :
+    idx / 64 * 64 + l * 8 + idx % 8 < 256 := by omega
+
+private theorem bw_split_aux_hKbnd (idx l : Nat) (hl : l < 8) (hidx : idx < 256) :
+    idx / 64 * 64 + idx % 8 * 8 + l < 256 := by omega
+
+/- Core distributed-equivalence lemma for `BW_matmul`'s first output (`dx = g @ yᵀ`).
+`y` of shape `[1,4,8,8]` is partitioned along its contraction-free output dimension (dim 2)
+into 4 shards of shape `[1,4,2,8]`; each rank computes `g @ shardᵀ` (shape `[1,4,8,2]`), and
+the full `dx` is reconstructed by gathering along the output's last dimension (dim 3). -/
+set_option maxHeartbeats 3200000 in
+-- heavy flat-index arithmetic across matmul / transpose / gather
+theorem bw_matmul_fst_split_1_4_8_8 (g y0 y1 y2 y3 : Tensor)
+    (hg : g.shape = [1, 4, 8, 8])
+    (h0 : y0.shape = [1, 4, 2, 8]) (h1 : y1.shape = [1, 4, 2, 8])
+    (h2 : y2.shape = [1, 4, 2, 8]) (h3 : y3.shape = [1, 4, 2, 8]) :
+    batchedMatmul g (transpose2d (allGatherPrimDimN 2 4 0 [y0, y1, y2, y3])) =
+      allGatherPrimDimN 3 4 0
+        [batchedMatmul g (transpose2d y0), batchedMatmul g (transpose2d y1),
+         batchedMatmul g (transpose2d y2), batchedMatmul g (transpose2d y3)] := by
+  -- y-list facts
+  have hhead2 : (([y0, y1, y2, y3] : List Tensor).head?.map (fun t => t.shape)).getD [] =
+      [1, 4, 2, 8] := by simp [h0]
+  have hyshape : ∀ i, i < 4 →
+      ([y0, y1, y2, y3].getD i (zeroTensor [1, 4, 2, 8])).shape = [1, 4, 2, 8] := by
+    intro i hi
+    have : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases this with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, h0, h1, h2, h3]
+  -- gather and transpose shapes
+  have hY_shape : (allGatherPrimDimN 2 4 0 [y0, y1, y2, y3]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead2]; simp [List.set, List.getD]
+  have htY_shape : (transpose2d (allGatherPrimDimN 2 4 0 [y0, y1, y2, y3])).shape = [1, 4, 8, 8] :=
+    transpose2d_shape_1_4_8_8 _ hY_shape
+  -- piece shapes (each shard matmul has shape [1,4,8,2])
+  have hpiece_shape : ∀ i, i < 4 →
+      (batchedMatmul g (transpose2d ([y0, y1, y2, y3].getD i (zeroTensor [1, 4, 2, 8])))).shape =
+        [1, 4, 8, 2] := by
+    intro i hi
+    exact batchedMatmul_shape_1_4_8_8_1_4_8_2 _ _ hg
+      (transpose2d_shape_1_4_2_8 _ (hyshape i hi))
+  have hp0 : (batchedMatmul g (transpose2d y0)).shape = [1, 4, 8, 2] := by
+    have := hpiece_shape 0 (by omega)
+    simpa [List.getD, List.getElem?_cons_zero] using this
+  -- list of pieces head shape
+  have hhead_rhs : (([batchedMatmul g (transpose2d y0), batchedMatmul g (transpose2d y1),
+      batchedMatmul g (transpose2d y2), batchedMatmul g (transpose2d y3)] :
+        List Tensor).head?.map (fun t => t.shape)).getD [] = [1, 4, 8, 2] := by
+    simp [hp0]
+  have hlhs_shape : (batchedMatmul g (transpose2d (allGatherPrimDimN 2 4 0 [y0, y1, y2, y3]))).shape =
+      [1, 4, 8, 8] := by
+    -- batchedMatmul [1,4,8,8] @ [1,4,8,8] -> [1,4,8,8]
+    unfold batchedMatmul
+    simp only [hg, htY_shape, List.reverse_cons, List.reverse_nil, List.nil_append,
+      List.cons_append, Tensor.mkShape]
+  have hrhs_shape : (allGatherPrimDimN 3 4 0
+      [batchedMatmul g (transpose2d y0), batchedMatmul g (transpose2d y1),
+       batchedMatmul g (transpose2d y2), batchedMatmul g (transpose2d y3)]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 3 4 _ _ hhead_rhs]; simp [List.set, List.getD]
+  -- getD selection over the piece list
+  have hlist_get : ∀ i, i < 4 →
+      [batchedMatmul g (transpose2d y0), batchedMatmul g (transpose2d y1),
+       batchedMatmul g (transpose2d y2), batchedMatmul g (transpose2d y3)].getD i
+        (zeroTensor [1, 4, 8, 2]) =
+      batchedMatmul g (transpose2d ([y0, y1, y2, y3].getD i (zeroTensor [1, 4, 2, 8]))) := by
+    intro i hi
+    have : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases this with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ]
+  -- elementwise equality
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  -- RHS: gather of shard matmuls
+  rw [allGatherPrimDimN_3_4_valAt_1_4_8_2 _ idx hhead_rhs hidx256]
+  set sh := (idx % 8) / 2 with hsh
+  set loc := (idx / 8) * 2 + (idx % 8) % 2 with hloc
+  have hsh4 : sh < 4 := by rw [hsh]; omega
+  have hloc64 : loc < 64 := by rw [hloc]; omega
+  rw [hlist_get sh hsh4,
+      batchedMatmul_valAt_1_4_8_8_1_4_8_2 g
+        (transpose2d ([y0, y1, y2, y3].getD sh (zeroTensor [1, 4, 2, 8]))) loc hg
+        (transpose2d_shape_1_4_2_8 _ (hyshape sh hsh4)) hloc64]
+  -- LHS: matmul g (transpose2d Y)
+  rw [show batchedMatmul g (transpose2d (allGatherPrimDimN 2 4 0 [y0, y1, y2, y3])) =
+        fw_matmul g (transpose2d (allGatherPrimDimN 2 4 0 [y0, y1, y2, y3])) from rfl,
+      fw_matmul_valAt_1_4_8_8 g (transpose2d (allGatherPrimDimN 2 4 0 [y0, y1, y2, y3])) idx hg
+        htY_shape hidx256]
+  -- termwise
+  apply Finset.sum_congr rfl
+  intro l hl
+  have hl8 : l < 8 := Finset.mem_range.mp hl
+  have hgi : (idx / 64 * 64 + idx % 8 * 8 + l) % 64 / 16 = sh := by
+    rw [hsh]; exact bw_split_aux_hgi idx l hl8
+  -- LHS: clean the transpose2d(Y) index, then unfold the gather
+  rw [transpose2d_valAt_1_4_8_8 (allGatherPrimDimN 2 4 0 [y0, y1, y2, y3])
+        (idx / 64 * 64 + l * 8 + idx % 8) hY_shape (bw_split_aux_hJbnd idx l hl8 hidx256)]
+  rw [bw_split_aux_cleanY idx l hl8]
+  rw [allGatherPrimDimN_2_4_valAt_1_4_2_8 [y0, y1, y2, y3] (idx / 64 * 64 + idx % 8 * 8 + l)
+        hhead2 (bw_split_aux_hKbnd idx l hl8 hidx256)]
+  rw [hgi, bw_split_aux_hii idx l hl8]
+  -- RHS: clean the transpose2d(shard) index
+  rw [transpose2d_valAt_1_4_2_8 ([y0, y1, y2, y3].getD sh (zeroTensor [1, 4, 2, 8]))
+        (loc / 16 * 16 + l * 2 + loc % 2) (hyshape sh hsh4)
+        (bw_split_aux_htbnd idx l loc hl8 hidx256 hloc)]
+  rw [bw_split_aux_hmi idx l loc hl8 hidx256 hloc]
+  -- the two products agree (same `g`, same `y` shard, equal indices)
+  rw [bw_split_aux_hgeq idx l loc hidx256 hloc]
 
 end TrainVerify.Denote

@@ -53,5 +53,154 @@ def goal_29_cut_initGoals : List LineageGoal := initGoals ++ goal_29_prereqs
 def goal_29_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_29 pm_goal_29 goal_29 sm_goal_29InitEnv pm_goal_29InitEnv goal_29_cut_initGoals
 
-end TrainVerify.Denote.GeneratedGoals
+set_option maxRecDepth 4096 in
+-- FW_add distributes over the AllToAll redistribution (dim-2 reconstruct) for [1,8,32].
+theorem prove_goal_29_cut : goal_29_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract prereqs: goal_28 (tid 601, gatherDim 1), goal_269 (tid 938, gatherDim 2)
+  have hInit601 : InitGoalHolds pm_goal_29.numRanks goal_28 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_29_cut_initGoals, goal_29_prereqs]
+    decide
+  have hInit938 : InitGoalHolds pm_goal_29.numRanks goal_269 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_29_cut_initGoals, goal_29_prereqs]
+    decide
+  -- goal_28: initSM 601 = reconstructWithDim 1 4 0 [initPM 1605,...,1608]
+  have h601_rec : initSM 601 = reconstructWithDim 1 4 0
+      [initPM 1605, initPM 1606, initPM 1607, initPM 1608] := by
+    have hrec := hInit601.2.2
+    simp only [goal_28, pm_goal_29, List.map] at hrec
+    exact hrec
+  have h601_shape : (initSM 601).shape = [1, 8, 32] := hInit601.1
+  have htp601 := hInit601.2.1
+  simp only [goal_28, List.map] at htp601
+  have h1605_shape : (initPM 1605).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp601; simpa using this
+  -- goal_269: initSM 938 = reconstructWithDim 2 4 0 [initPM 1629,...,1632]
+  have h938_rec : initSM 938 = reconstructWithDim 2 4 0
+      [initPM 1629, initPM 1630, initPM 1631, initPM 1632] := by
+    have hrec := hInit938.2.2
+    simp only [goal_269, pm_goal_29, List.map] at hrec
+    exact hrec
+  have h938_shape : (initSM 938).shape = [1, 8, 32] := hInit938.1
+  have htp938 := hInit938.2.1
+  simp only [goal_269, List.map] at htp938
+  have h1629_shape : (initPM 1629).shape = [1, 8, 8] := by
+    have := congrArg List.head? htp938; simpa using this
+  have h1630_shape : (initPM 1630).shape = [1, 8, 8] := by
+    have := congrArg List.tail htp938
+    have := congrArg List.head? this; simpa using this
+  have h1631_shape : (initPM 1631).shape = [1, 8, 8] := by
+    have := congrArg (List.tail ∘ List.tail) htp938
+    have := congrArg List.head? this; simpa using this
+  have h1632_shape : (initPM 1632).shape = [1, 8, 8] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp938
+    have := congrArg List.head? this; simpa using this
+  -- Convert reconstructWithDim to allGatherPrimDimN (non-scalar shards)
+  have h601_gather : initSM 601 = allGatherPrimDimN 1 4 0
+      [initPM 1605, initPM 1606, initPM 1607, initPM 1608] := by
+    rw [h601_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1605_shape]; decide)
+  have h938_gather : initSM 938 = allGatherPrimDimN 2 4 0
+      [initPM 1629, initPM 1630, initPM 1631, initPM 1632] := by
+    rw [h938_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1629_shape]; decide)
+  -- SM store: smStore 602 = elemwiseAdd (initSM 938) (initSM 601)
+  have hsm : (denoteGraph sm_goal_29 initSM) 602 =
+      elemwiseAdd (initSM 938) (initSM 601) := by
+    simp only [sm_goal_29, denoteGraph, List.foldl]
+    rw [applyNode_fw_add2_out]
+  -- PM stores: AllToAll nodes write 1633..1636, FW_add nodes write 1637..1640
+  have hpm0 : (denoteGraph pm_goal_29 initPM) 1637 =
+      elemwiseAdd (initPM 1629)
+        (chunkPrimDimN 2 4 0 (allGatherPrimDimN 1 4 0
+          [initPM 1605, initPM 1606, initPM 1607, initPM 1608])) := by
+    simp only [pm_goal_29, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_add2_out]; congr 1
+  have hpm1 : (denoteGraph pm_goal_29 initPM) 1638 =
+      elemwiseAdd (initPM 1630)
+        (chunkPrimDimN 2 4 1 (allGatherPrimDimN 1 4 0
+          [initPM 1605, initPM 1606, initPM 1607, initPM 1608])) := by
+    simp only [pm_goal_29, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_add2_out]; congr 1
+  have hpm2 : (denoteGraph pm_goal_29 initPM) 1639 =
+      elemwiseAdd (initPM 1631)
+        (chunkPrimDimN 2 4 2 (allGatherPrimDimN 1 4 0
+          [initPM 1605, initPM 1606, initPM 1607, initPM 1608])) := by
+    simp only [pm_goal_29, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_add2_out]; congr 1
+  have hpm3 : (denoteGraph pm_goal_29 initPM) 1640 =
+      elemwiseAdd (initPM 1632)
+        (chunkPrimDimN 2 4 3 (allGatherPrimDimN 1 4 0
+          [initPM 1605, initPM 1606, initPM 1607, initPM 1608])) := by
+    simp only [pm_goal_29, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_fw_add2_out]; congr 1
+  -- gather-of-input-601 shape helper
+  have hB_shape : (allGatherPrimDimN 1 4 0
+      [initPM 1605, initPM 1606, initPM 1607, initPM 1608]).shape = [1, 8, 32] := by
+    have hhead : (([initPM 1605, initPM 1606, initPM 1607, initPM 1608].head?.map
+        (fun t => t.shape)).getD []) = [1, 2, 32] := by simp [h1605_shape]
+    rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 32] hhead]; simp [List.set, List.getD]
+  have hchk : ∀ r, r < 4 → (chunkPrimDimN 2 4 r (allGatherPrimDimN 1 4 0
+      [initPM 1605, initPM 1606, initPM 1607, initPM 1608])).shape = [1, 8, 8] := by
+    intro r _; rw [chunkPrimDimN_shape 2 4 r _ _ hB_shape (by omega)]; simp [List.set, List.getD]
+  -- Key equation: FW_add distributes over the dim-2 reconstruction
+  have hkey : elemwiseAdd (initSM 938) (initSM 601) =
+      allGatherPrimDimN 2 4 0
+        [elemwiseAdd (initPM 1629) (chunkPrimDimN 2 4 0 (allGatherPrimDimN 1 4 0
+            [initPM 1605, initPM 1606, initPM 1607, initPM 1608])),
+         elemwiseAdd (initPM 1630) (chunkPrimDimN 2 4 1 (allGatherPrimDimN 1 4 0
+            [initPM 1605, initPM 1606, initPM 1607, initPM 1608])),
+         elemwiseAdd (initPM 1631) (chunkPrimDimN 2 4 2 (allGatherPrimDimN 1 4 0
+            [initPM 1605, initPM 1606, initPM 1607, initPM 1608])),
+         elemwiseAdd (initPM 1632) (chunkPrimDimN 2 4 3 (allGatherPrimDimN 1 4 0
+            [initPM 1605, initPM 1606, initPM 1607, initPM 1608]))] := by
+    have hsplit := fw_add_split_dim2_4_1_8_32 (initSM 938) (initSM 601) h938_shape h601_shape
+    rw [hsplit, h601_gather, h938_gather]
+    have hshapes : ∀ x ∈ [initPM 1629, initPM 1630, initPM 1631, initPM 1632],
+        x.shape = [1, 8, 8] := by
+      intro x hx
+      simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+      rcases hx with rfl | rfl | rfl | rfl
+      · exact h1629_shape
+      · exact h1630_shape
+      · exact h1631_shape
+      · exact h1632_shape
+    have hcancel : ∀ r (hr : r < 4),
+        chunkPrimDimN 2 4 r (allGatherPrimDimN 2 4 0
+          [initPM 1629, initPM 1630, initPM 1631, initPM 1632]) =
+          [initPM 1629, initPM 1630, initPM 1631, initPM 1632].getD r (zeroTensor [1, 8, 8]) :=
+      fun r hr => chunkPrimDimN_allGatherPrimDimN_dim2_4_1_8_8
+        [initPM 1629, initPM 1630, initPM 1631, initPM 1632] r hr (by simp) hshapes
+    have hc0 := hcancel 0 (by omega)
+    have hc1 := hcancel 1 (by omega)
+    have hc2 := hcancel 2 (by omega)
+    have hc3 := hcancel 3 (by omega)
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+      Option.getD_some] at hc0 hc1 hc2 hc3
+    rw [hc0, hc1, hc2, hc3]
+  -- Prove the three conjuncts
+  simp only [goal_29, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]
+    exact elemwiseAdd_shape_of_shapes _ _ _ h938_shape h601_shape
+  · rw [hpm0, hpm1, hpm2, hpm3]
+    have hs0 := elemwiseAdd_shape_of_shapes _ _ _ h1629_shape (hchk 0 (by omega))
+    have hs1 := elemwiseAdd_shape_of_shapes _ _ _ h1630_shape (hchk 1 (by omega))
+    have hs2 := elemwiseAdd_shape_of_shapes _ _ _ h1631_shape (hchk 2 (by omega))
+    have hs3 := elemwiseAdd_shape_of_shapes _ _ _ h1632_shape (hchk 3 (by omega))
+    simp [hs0, hs1, hs2, hs3]
+  · rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
+    symm
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [hpm0]
+    rw [elemwiseAdd_shape_of_shapes _ _ _ h1629_shape (hchk 0 (by omega))]; decide
 
+end TrainVerify.Denote.GeneratedGoals
