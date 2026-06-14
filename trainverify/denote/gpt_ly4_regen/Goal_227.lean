@@ -58,5 +58,146 @@ def goal_227_cut_initGoals : List LineageGoal := initGoals ++ goal_227_prereqs
 def goal_227_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_227 pm_goal_227 goal_227 sm_goal_227InitEnv pm_goal_227InitEnv goal_227_cut_initGoals
 
-end TrainVerify.Denote.GeneratedGoals
+theorem prove_goal_227_cut : goal_227_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- goal_233: tensor 870 (= g) is the dim-1 gather of shards 3010/3012/3014/3016
+  have hInit870 : InitGoalHolds pm_goal_227.numRanks goal_233 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_227_cut_initGoals, goal_227_prereqs]
+    decide
+  have h870_shape : (initSM 870).shape = [1, 4, 8, 8] := hInit870.1
+  have hs870 := hInit870.2.1
+  simp only [goal_233, List.map, List.cons.injEq, and_true] at hs870
+  obtain ⟨h3010_shape, h3012_shape, h3014_shape, h3016_shape⟩ := hs870
+  have h870_gather : initSM 870 = allGatherPrimDimN 1 4 0
+      [initPM 3010, initPM 3012, initPM 3014, initPM 3016] := by
+    have hrec := hInit870.2.2
+    simp only [goal_233, pm_goal_227, List.map] at hrec
+    rw [hrec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h3010_shape]; decide)
+  -- goal_90: tensor 688 (= y) is the dim-3 gather of shards 2973/2974/2975/2976
+  have hInit688 : InitGoalHolds pm_goal_227.numRanks goal_90 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_227_cut_initGoals, goal_227_prereqs]
+    decide
+  have h688_shape : (initSM 688).shape = [1, 4, 8, 8] := hInit688.1
+  have hs688 := hInit688.2.1
+  simp only [goal_90, List.map, List.cons.injEq, and_true] at hs688
+  obtain ⟨h2973_shape, h2974_shape, h2975_shape, h2976_shape⟩ := hs688
+  have h688_gather : initSM 688 = allGatherPrimDimN 3 4 0
+      [initPM 2973, initPM 2974, initPM 2975, initPM 2976] := by
+    have hrec := hInit688.2.2
+    simp only [goal_90, pm_goal_227, List.map] at hrec
+    rw [hrec]
+    exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h2973_shape]; decide)
+  -- Relate the g-shards to dim-1 chunks of 870
+  have hg_chunk0 : chunkPrimDimN 1 4 0 (initSM 870) = initPM 3010 := by
+    rw [h870_gather]
+    simpa using chunk1_gather1_roundtrip_1_1_8_8 _ _ _ _ h3010_shape h3012_shape h3014_shape h3016_shape 0 (by omega)
+  have hg_chunk1 : chunkPrimDimN 1 4 1 (initSM 870) = initPM 3012 := by
+    rw [h870_gather]
+    simpa using chunk1_gather1_roundtrip_1_1_8_8 _ _ _ _ h3010_shape h3012_shape h3014_shape h3016_shape 1 (by omega)
+  have hg_chunk2 : chunkPrimDimN 1 4 2 (initSM 870) = initPM 3014 := by
+    rw [h870_gather]
+    simpa using chunk1_gather1_roundtrip_1_1_8_8 _ _ _ _ h3010_shape h3012_shape h3014_shape h3016_shape 2 (by omega)
+  have hg_chunk3 : chunkPrimDimN 1 4 3 (initSM 870) = initPM 3016 := by
+    rw [h870_gather]
+    simpa using chunk1_gather1_roundtrip_1_1_8_8 _ _ _ _ h3010_shape h3012_shape h3014_shape h3016_shape 3 (by omega)
+  -- The AllToAll of y-shards (dims 3→1) is the dim-1 chunk of 688
+  have hy_chunk0 : allToAllPrimWithDims 4 0 [initPM 2973, initPM 2974, initPM 2975, initPM 2976] 3 1 =
+      chunkPrimDimN 1 4 0 (initSM 688) := by
+    simp only [allToAllPrimWithDims]; rw [← h688_gather]
+  have hy_chunk1 : allToAllPrimWithDims 4 1 [initPM 2973, initPM 2974, initPM 2975, initPM 2976] 3 1 =
+      chunkPrimDimN 1 4 1 (initSM 688) := by
+    simp only [allToAllPrimWithDims]; rw [← h688_gather]
+  have hy_chunk2 : allToAllPrimWithDims 4 2 [initPM 2973, initPM 2974, initPM 2975, initPM 2976] 3 1 =
+      chunkPrimDimN 1 4 2 (initSM 688) := by
+    simp only [allToAllPrimWithDims]; rw [← h688_gather]
+  have hy_chunk3 : allToAllPrimWithDims 4 3 [initPM 2973, initPM 2974, initPM 2975, initPM 2976] 3 1 =
+      chunkPrimDimN 1 4 3 (initSM 688) := by
+    simp only [allToAllPrimWithDims]; rw [← h688_gather]
+  -- SM store: 864 = dX = batchedMatmul g (transpose2d y)
+  have hsm : (denoteGraph sm_goal_227 initSM) 864 =
+      batchedMatmul (initSM 870) (transpose2d (initSM 688)) := by
+    simp only [sm_goal_227, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_bw_matmul_fst_out _ _ 0 870 683 688 864 869 (by decide), bw_matmul_fst_eq]
+  -- PM BW_matmul .1 outputs, in terms of init shards
+  have hbw0 : (denoteGraph pm_goal_227 initPM) 2914 =
+      batchedMatmul (initPM 3010)
+        (transpose2d (allToAllPrimWithDims 4 0
+          [initPM 2973, initPM 2974, initPM 2975, initPM 2976] 3 1)) := by
+    simp only [pm_goal_227, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_matmul_fst_out _ _ 0 3010 2901 2993 2914 3009 (by decide), bw_matmul_fst_eq]
+    congr 2
+  have hbw1 : (denoteGraph pm_goal_227 initPM) 2916 =
+      batchedMatmul (initPM 3012)
+        (transpose2d (allToAllPrimWithDims 4 1
+          [initPM 2973, initPM 2974, initPM 2975, initPM 2976] 3 1)) := by
+    simp only [pm_goal_227, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_matmul_fst_out _ _ 1 3012 2902 2994 2916 3011 (by decide), bw_matmul_fst_eq]
+    congr 2
+  have hbw2 : (denoteGraph pm_goal_227 initPM) 2918 =
+      batchedMatmul (initPM 3014)
+        (transpose2d (allToAllPrimWithDims 4 2
+          [initPM 2973, initPM 2974, initPM 2975, initPM 2976] 3 1)) := by
+    simp only [pm_goal_227, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_matmul_fst_out _ _ 2 3014 2903 2995 2918 3013 (by decide), bw_matmul_fst_eq]
+    congr 2
+  have hbw3 : (denoteGraph pm_goal_227 initPM) 2920 =
+      batchedMatmul (initPM 3016)
+        (transpose2d (allToAllPrimWithDims 4 3
+          [initPM 2973, initPM 2974, initPM 2975, initPM 2976] 3 1)) := by
+    simp only [pm_goal_227, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_matmul_fst_out _ _ 3 3016 2904 2996 2920 3015 (by decide), bw_matmul_fst_eq]
+    congr 2
+  -- Rewrite BW outputs as batchedMatmul of dim-1 chunks of 870 and 688
+  have hbw0' : (denoteGraph pm_goal_227 initPM) 2914 =
+      batchedMatmul (chunkPrimDimN 1 4 0 (initSM 870)) (transpose2d (chunkPrimDimN 1 4 0 (initSM 688))) := by
+    rw [hbw0, hy_chunk0, ← hg_chunk0]
+  have hbw1' : (denoteGraph pm_goal_227 initPM) 2916 =
+      batchedMatmul (chunkPrimDimN 1 4 1 (initSM 870)) (transpose2d (chunkPrimDimN 1 4 1 (initSM 688))) := by
+    rw [hbw1, hy_chunk1, ← hg_chunk1]
+  have hbw2' : (denoteGraph pm_goal_227 initPM) 2918 =
+      batchedMatmul (chunkPrimDimN 1 4 2 (initSM 870)) (transpose2d (chunkPrimDimN 1 4 2 (initSM 688))) := by
+    rw [hbw2, hy_chunk2, ← hg_chunk2]
+  have hbw3' : (denoteGraph pm_goal_227 initPM) 2920 =
+      batchedMatmul (chunkPrimDimN 1 4 3 (initSM 870)) (transpose2d (chunkPrimDimN 1 4 3 (initSM 688))) := by
+    rw [hbw3, hy_chunk3, ← hg_chunk3]
+  -- Main distribution: batchedMatmul g yᵀ = gather_dim1 of the per-shard products
+  have hVsplit : batchedMatmul (initSM 870) (transpose2d (initSM 688)) =
+      allGatherPrimDimN 1 4 0
+        [batchedMatmul (chunkPrimDimN 1 4 0 (initSM 870)) (transpose2d (chunkPrimDimN 1 4 0 (initSM 688))),
+         batchedMatmul (chunkPrimDimN 1 4 1 (initSM 870)) (transpose2d (chunkPrimDimN 1 4 1 (initSM 688))),
+         batchedMatmul (chunkPrimDimN 1 4 2 (initSM 870)) (transpose2d (chunkPrimDimN 1 4 2 (initSM 688))),
+         batchedMatmul (chunkPrimDimN 1 4 3 (initSM 870)) (transpose2d (chunkPrimDimN 1 4 3 (initSM 688)))] :=
+    bw_matmul_fst_split_dim1_4_1_4_8_8 (initSM 870) (initSM 688) h870_shape h688_shape
+  -- Shapes
+  have hV_shape : (batchedMatmul (initSM 870) (transpose2d (initSM 688))).shape = [1, 4, 8, 8] :=
+    fw_matmul_shape_1_4_8_8 _ _ h870_shape (transpose2d_shape_1_4_8_8 _ h688_shape)
+  have hpiece : ∀ r, r < 4 →
+      (batchedMatmul (chunkPrimDimN 1 4 r (initSM 870)) (transpose2d (chunkPrimDimN 1 4 r (initSM 688)))).shape
+        = [1, 1, 8, 8] := by
+    intro r hr
+    have hg_shape : (chunkPrimDimN 1 4 r (initSM 870)).shape = [1, 1, 8, 8] := by
+      rw [chunkPrimDimN_shape 1 4 r _ _ h870_shape (by omega)]; simp [List.set, List.getD]
+    have hy_shape : (chunkPrimDimN 1 4 r (initSM 688)).shape = [1, 1, 8, 8] := by
+      rw [chunkPrimDimN_shape 1 4 r _ _ h688_shape (by omega)]; simp [List.set, List.getD]
+    exact fw_matmul_shape_1_1_8_8 _ _ hg_shape (transpose2d_shape_1_1_8_8 _ hy_shape)
+  -- Discharge the three conjuncts
+  simp only [goal_227, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
+    LineageGoal.gatherDim, List.map, Piece.tid]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]; exact hV_shape
+  · rw [hbw0', hbw1', hbw2', hbw3',
+        hpiece 0 (by omega), hpiece 1 (by omega), hpiece 2 (by omega), hpiece 3 (by omega)]
+  · rw [hsm]
+    symm
+    rw [hbw0', hbw1', hbw2', hbw3']
+    simp only [reconstructWithDim_cons_cons_nonscalar (h := by rw [hpiece 0 (by omega)]; decide)]
+    exact hVsplit.symm
 
+end TrainVerify.Denote.GeneratedGoals
