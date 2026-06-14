@@ -68,3 +68,188 @@ def goal_196_stmt_cut : Prop :=
 
 end TrainVerify.Denote.GeneratedGoals
 
+
+namespace TrainVerify.Denote.GeneratedGoals
+
+set_option maxHeartbeats 4000000 in
+-- BW_matmul dY = xᵀ @ g wrapped by AllToAll reshards: input AllToAll on x (gather dim2 → chunk
+-- dim1) and output AllToAll (gather dim1 → chunk dim3) compose to the identity on dY.
+theorem prove_goal_196_cut : goal_196_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- goal_68: tensor 656 (= x) is the dim-2 gather of shards 2481..2484
+  have hInit68 : InitGoalHolds pm_goal_196.numRanks goal_68 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_196_cut_initGoals, goal_196_prereqs]
+    decide
+  have h656_shape : (initSM 656).shape = [1, 4, 8, 8] := hInit68.1
+  have hs68 := hInit68.2.1
+  simp only [goal_68, List.map, List.cons.injEq, and_true] at hs68
+  obtain ⟨h2481_shape, _, _, _⟩ := hs68
+  have h656_gather : initSM 656 = allGatherPrimDimN 2 4 0
+      [initPM 2481, initPM 2482, initPM 2483, initPM 2484] := by
+    have hrec := hInit68.2.2
+    simp only [goal_68, pm_goal_196, List.map] at hrec
+    rw [hrec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h2481_shape]; decide)
+  -- goal_201: tensor 831 (= g) is the dim-1 gather of shards 2519,2522,2525,2528
+  have hInit201 : InitGoalHolds pm_goal_196.numRanks goal_201 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_196_cut_initGoals, goal_196_prereqs]
+    decide
+  have h831_shape : (initSM 831).shape = [1, 4, 8, 8] := hInit201.1
+  have hs201 := hInit201.2.1
+  simp only [goal_201, List.map, List.cons.injEq, and_true] at hs201
+  obtain ⟨hg2519, hg2522, hg2525, hg2528⟩ := hs201
+  have h831_gather : initSM 831 = allGatherPrimDimN 1 4 0
+      [initPM 2519, initPM 2522, initPM 2525, initPM 2528] := by
+    have hrec := hInit201.2.2
+    simp only [goal_201, pm_goal_196, List.map] at hrec
+    rw [hrec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [hg2519]; decide)
+  have ht656 : (transpose2d (initSM 656)).shape = [1, 4, 8, 8] :=
+    transpose2d_shape_1_4_8_8 _ h656_shape
+  -- input AllToAll reduces to a batch-dim chunk of x
+  have hx' : ∀ k, allToAllPrimWithDims 4 k
+      [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1 =
+      chunkPrimDimN 1 4 k (initSM 656) := by
+    intro k
+    simp only [allToAllPrimWithDims]
+    rw [← h656_gather]
+  -- SM store: 826 = dY = batchedMatmul (transpose2d x) g
+  have hsm826 : (denoteGraph sm_goal_196 initSM) 826 =
+      (bw_matmul (initSM 831) (initSM 656) (initSM 652)).2 := by
+    simp only [sm_goal_196, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_bw_matmul_snd_out _ _ 0 831 656 652 830 826 (by decide)]
+  -- PM output AllToAll nodes: each rank's reshard of the four per-rank dY shards
+  have hOut0 : (denoteGraph pm_goal_196 initPM) 2406 = allToAllPrimWithDims 4 0
+      [(bw_matmul (initPM 2519) (allToAllPrimWithDims 4 0 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 0 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2,
+       (bw_matmul (initPM 2522) (allToAllPrimWithDims 4 1 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 1 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2,
+       (bw_matmul (initPM 2525) (allToAllPrimWithDims 4 2 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 2 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2,
+       (bw_matmul (initPM 2528) (allToAllPrimWithDims 4 3 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 3 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2] 1 2 := by
+    simp only [pm_goal_196, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    refine congrArg (fun L => allToAllPrimWithDims 4 0 L 1 2) ?_
+    simp only [List.map_cons, List.map_nil, List.cons.injEq, and_true]
+    refine ⟨?_, ?_, ?_, ?_⟩ <;>
+      (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]) <;>
+      rw [applyNode_bw_matmul_snd_out _ _ _ _ _ _ _ _ (by decide)] <;>
+      (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]) <;>
+      rw [applyNode_allToAllPrimWithDims_out] <;>
+      (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]) <;>
+      rw [applyNode_allToAllPrimWithDims_out] <;> rfl
+  have hOut1 : (denoteGraph pm_goal_196 initPM) 2408 = allToAllPrimWithDims 4 1
+      [(bw_matmul (initPM 2519) (allToAllPrimWithDims 4 0 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 0 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2,
+       (bw_matmul (initPM 2522) (allToAllPrimWithDims 4 1 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 1 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2,
+       (bw_matmul (initPM 2525) (allToAllPrimWithDims 4 2 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 2 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2,
+       (bw_matmul (initPM 2528) (allToAllPrimWithDims 4 3 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 3 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2] 1 2 := by
+    simp only [pm_goal_196, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    refine congrArg (fun L => allToAllPrimWithDims 4 1 L 1 2) ?_
+    simp only [List.map_cons, List.map_nil, List.cons.injEq, and_true]
+    refine ⟨?_, ?_, ?_, ?_⟩ <;>
+      (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]) <;>
+      rw [applyNode_bw_matmul_snd_out _ _ _ _ _ _ _ _ (by decide)] <;>
+      (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]) <;>
+      rw [applyNode_allToAllPrimWithDims_out] <;>
+      (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]) <;>
+      rw [applyNode_allToAllPrimWithDims_out] <;> rfl
+  have hOut2 : (denoteGraph pm_goal_196 initPM) 2410 = allToAllPrimWithDims 4 2
+      [(bw_matmul (initPM 2519) (allToAllPrimWithDims 4 0 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 0 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2,
+       (bw_matmul (initPM 2522) (allToAllPrimWithDims 4 1 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 1 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2,
+       (bw_matmul (initPM 2525) (allToAllPrimWithDims 4 2 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 2 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2,
+       (bw_matmul (initPM 2528) (allToAllPrimWithDims 4 3 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 3 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2] 1 2 := by
+    simp only [pm_goal_196, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    refine congrArg (fun L => allToAllPrimWithDims 4 2 L 1 2) ?_
+    simp only [List.map_cons, List.map_nil, List.cons.injEq, and_true]
+    refine ⟨?_, ?_, ?_, ?_⟩ <;>
+      (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]) <;>
+      rw [applyNode_bw_matmul_snd_out _ _ _ _ _ _ _ _ (by decide)] <;>
+      (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]) <;>
+      rw [applyNode_allToAllPrimWithDims_out] <;>
+      (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]) <;>
+      rw [applyNode_allToAllPrimWithDims_out] <;> rfl
+  have hOut3 : (denoteGraph pm_goal_196 initPM) 2412 = allToAllPrimWithDims 4 3
+      [(bw_matmul (initPM 2519) (allToAllPrimWithDims 4 0 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 0 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2,
+       (bw_matmul (initPM 2522) (allToAllPrimWithDims 4 1 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 1 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2,
+       (bw_matmul (initPM 2525) (allToAllPrimWithDims 4 2 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 2 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2,
+       (bw_matmul (initPM 2528) (allToAllPrimWithDims 4 3 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 3 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2] 1 2 := by
+    simp only [pm_goal_196, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    refine congrArg (fun L => allToAllPrimWithDims 4 3 L 1 2) ?_
+    simp only [List.map_cons, List.map_nil, List.cons.injEq, and_true]
+    refine ⟨?_, ?_, ?_, ?_⟩ <;>
+      (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]) <;>
+      rw [applyNode_bw_matmul_snd_out _ _ _ _ _ _ _ _ (by decide)] <;>
+      (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]) <;>
+      rw [applyNode_allToAllPrimWithDims_out] <;>
+      (repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]) <;>
+      rw [applyNode_allToAllPrimWithDims_out] <;> rfl
+  -- per-rank dY shard = batchedMatmul (transpose2d (chunk₁ x)) gₖ
+  have hbw0 : (bw_matmul (initPM 2519) (allToAllPrimWithDims 4 0 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 0 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2 =
+      batchedMatmul (transpose2d (chunkPrimDimN 1 4 0 (initSM 656))) (initPM 2519) := by
+    show batchedMatmul (transpose2d (allToAllPrimWithDims 4 0 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1)) (initPM 2519) = _
+    rw [hx' 0]
+  have hbw1 : (bw_matmul (initPM 2522) (allToAllPrimWithDims 4 1 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 1 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2 =
+      batchedMatmul (transpose2d (chunkPrimDimN 1 4 1 (initSM 656))) (initPM 2522) := by
+    show batchedMatmul (transpose2d (allToAllPrimWithDims 4 1 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1)) (initPM 2522) = _
+    rw [hx' 1]
+  have hbw2 : (bw_matmul (initPM 2525) (allToAllPrimWithDims 4 2 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 2 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2 =
+      batchedMatmul (transpose2d (chunkPrimDimN 1 4 2 (initSM 656))) (initPM 2525) := by
+    show batchedMatmul (transpose2d (allToAllPrimWithDims 4 2 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1)) (initPM 2525) = _
+    rw [hx' 2]
+  have hbw3 : (bw_matmul (initPM 2528) (allToAllPrimWithDims 4 3 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1) (allToAllPrimWithDims 4 3 [initPM 2393, initPM 2394, initPM 2395, initPM 2396] 2 1)).2 =
+      batchedMatmul (transpose2d (chunkPrimDimN 1 4 3 (initSM 656))) (initPM 2528) := by
+    show batchedMatmul (transpose2d (allToAllPrimWithDims 4 3 [initPM 2481, initPM 2482, initPM 2483, initPM 2484] 2 1)) (initPM 2528) = _
+    rw [hx' 3]
+  -- gather over the four per-rank shards reassembles the full dY
+  have hW : allGatherPrimDimN 1 4 0
+      [batchedMatmul (transpose2d (chunkPrimDimN 1 4 0 (initSM 656))) (initPM 2519),
+       batchedMatmul (transpose2d (chunkPrimDimN 1 4 1 (initSM 656))) (initPM 2522),
+       batchedMatmul (transpose2d (chunkPrimDimN 1 4 2 (initSM 656))) (initPM 2525),
+       batchedMatmul (transpose2d (chunkPrimDimN 1 4 3 (initSM 656))) (initPM 2528)] =
+      batchedMatmul (transpose2d (initSM 656)) (initSM 831) := by
+    rw [h831_gather]
+    exact (bw_matmul_snd_split_batchdim1_1_4_8_8 (initSM 656) (initPM 2519) (initPM 2522)
+      (initPM 2525) (initPM 2528) h656_shape hg2519 hg2522 hg2525 hg2528).symm
+  have hW_shape : (batchedMatmul (transpose2d (initSM 656)) (initSM 831)).shape = [1, 4, 8, 8] :=
+    fw_matmul_shape_1_4_8_8 _ _ ht656 h831_shape
+  -- final per-rank PM output = a dim-3 chunk of the full dY
+  have hP0 : (denoteGraph pm_goal_196 initPM) 2406 =
+      chunkPrimDimN 2 4 0 (batchedMatmul (transpose2d (initSM 656)) (initSM 831)) := by
+    rw [hOut0, hbw0, hbw1, hbw2, hbw3]; simp only [allToAllPrimWithDims]; rw [hW]
+  have hP1 : (denoteGraph pm_goal_196 initPM) 2408 =
+      chunkPrimDimN 2 4 1 (batchedMatmul (transpose2d (initSM 656)) (initSM 831)) := by
+    rw [hOut1, hbw0, hbw1, hbw2, hbw3]; simp only [allToAllPrimWithDims]; rw [hW]
+  have hP2 : (denoteGraph pm_goal_196 initPM) 2410 =
+      chunkPrimDimN 2 4 2 (batchedMatmul (transpose2d (initSM 656)) (initSM 831)) := by
+    rw [hOut2, hbw0, hbw1, hbw2, hbw3]; simp only [allToAllPrimWithDims]; rw [hW]
+  have hP3 : (denoteGraph pm_goal_196 initPM) 2412 =
+      chunkPrimDimN 2 4 3 (batchedMatmul (transpose2d (initSM 656)) (initSM 831)) := by
+    rw [hOut3, hbw0, hbw1, hbw2, hbw3]; simp only [allToAllPrimWithDims]; rw [hW]
+  have hPshape : ∀ r, (chunkPrimDimN 2 4 r
+      (batchedMatmul (transpose2d (initSM 656)) (initSM 831))).shape = [1, 4, 2, 8] := by
+    intro r
+    rw [chunkPrimDimN_shape 2 4 r _ _ hW_shape (by omega)]
+    simp [List.set, List.getD]
+  -- Discharge the three conjuncts
+  simp only [goal_196, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm826]; exact hW_shape
+  · rw [hP0, hP1, hP2, hP3, hPshape 0, hPshape 1, hPshape 2, hPshape 3]
+  · show (denoteGraph sm_goal_196 initSM) 826 = reconstructWithDim 2 4 0
+      [(denoteGraph pm_goal_196 initPM) 2406, (denoteGraph pm_goal_196 initPM) 2408,
+       (denoteGraph pm_goal_196 initPM) 2410, (denoteGraph pm_goal_196 initPM) 2412]
+    rw [hsm826, hP0, hP1, hP2, hP3,
+      reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _
+        (by rw [chunkPrimDimN_shape 2 4 0 _ _ hW_shape (by omega)]; decide)]
+    exact (allGatherPrimDimN_chunkPrimDimN_id_dim2_4_8_8 _ hW_shape).symm
+
+end TrainVerify.Denote.GeneratedGoals
+
+
+
