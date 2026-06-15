@@ -49,5 +49,106 @@ def goal_242_cut_initGoals : List LineageGoal := initGoals ++ goal_242_prereqs
 def goal_242_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_242 pm_goal_242 goal_242 sm_goal_242InitEnv pm_goal_242InitEnv goal_242_cut_initGoals
 
+set_option maxRecDepth 4096 in
+/-- BW_multiref (tensorSum) distributes over allGather on dim 1: both inputs are
+    gathered identically, so the sum gathers the per-shard sums. -/
+theorem prove_goal_242_cut : goal_242_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract prereq goal_310: tensor 1064 = allGather dim 1 of shards [3217,3221,3225,3229]
+  have hInit1064 : InitGoalHolds pm_goal_242.numRanks goal_310 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_242_cut_initGoals, goal_242_prereqs]
+    decide
+  have h1064_rec : initSM 1064 = reconstructWithDim 1 4 0
+      [initPM 3217, initPM 3221, initPM 3225, initPM 3229] := by
+    have hrec := hInit1064.2.2
+    simp only [goal_310, pm_goal_242, List.map] at hrec
+    exact hrec
+  have h1064_shape : (initSM 1064).shape = [1, 8, 32] := hInit1064.1
+  have htp310 := hInit1064.2.1
+  simp only [goal_310, List.map] at htp310
+  have h3217_shape : (initPM 3217).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp310; simpa using this
+  have h3221_shape : (initPM 3221).shape = [1, 2, 32] := by
+    have := congrArg List.tail htp310
+    have := congrArg List.head? this; simpa using this
+  have h3225_shape : (initPM 3225).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp310
+    have := congrArg List.head? this; simpa using this
+  have h3229_shape : (initPM 3229).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp310
+    have := congrArg List.head? this; simpa using this
+  have h1064_gather : initSM 1064 = allGatherPrimDimN 1 4 0
+      [initPM 3217, initPM 3221, initPM 3225, initPM 3229] := by
+    rw [h1064_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h3217_shape]; decide)
+  -- Extract prereq goal_312: tensor 1068 = allGather dim 1 of shards [3333,3336,3339,3342]
+  have hInit1068 : InitGoalHolds pm_goal_242.numRanks goal_312 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_242_cut_initGoals, goal_242_prereqs]
+    decide
+  have h1068_rec : initSM 1068 = reconstructWithDim 1 4 0
+      [initPM 3333, initPM 3336, initPM 3339, initPM 3342] := by
+    have hrec := hInit1068.2.2
+    simp only [goal_312, pm_goal_242, List.map] at hrec
+    exact hrec
+  have h1068_shape : (initSM 1068).shape = [1, 8, 32] := hInit1068.1
+  have htp312 := hInit1068.2.1
+  simp only [goal_312, List.map] at htp312
+  have h3333_shape : (initPM 3333).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp312; simpa using this
+  have h3336_shape : (initPM 3336).shape = [1, 2, 32] := by
+    have := congrArg List.tail htp312
+    have := congrArg List.head? this; simpa using this
+  have h3339_shape : (initPM 3339).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp312
+    have := congrArg List.head? this; simpa using this
+  have h3342_shape : (initPM 3342).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp312
+    have := congrArg List.head? this; simpa using this
+  have h1068_gather : initSM 1068 = allGatherPrimDimN 1 4 0
+      [initPM 3333, initPM 3336, initPM 3339, initPM 3342] := by
+    rw [h1068_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h3333_shape]; decide)
+  -- SM store: tensorSum [initSM 1064, initSM 1068]
+  have hsm : (denoteGraph sm_goal_242 initSM) 879 =
+      tensorSum [initSM 1064, initSM 1068] := by
+    simp only [sm_goal_242, denoteGraph, List.foldl]
+    rw [applyNode_bw_multiref_out]
+    simp [List.map]
+  -- PM stores: per-rank tensorSum of the two sharded inputs
+  have hpm_3191 : (denoteGraph pm_goal_242 initPM) 3191 =
+      tensorSum [initPM 3217, initPM 3333] := by rfl
+  have hpm_3194 : (denoteGraph pm_goal_242 initPM) 3194 =
+      tensorSum [initPM 3221, initPM 3336] := by rfl
+  have hpm_3197 : (denoteGraph pm_goal_242 initPM) 3197 =
+      tensorSum [initPM 3225, initPM 3339] := by rfl
+  have hpm_3200 : (denoteGraph pm_goal_242 initPM) 3200 =
+      tensorSum [initPM 3229, initPM 3342] := by rfl
+  -- Key equation: tensorSum of two identically-gathered tensors = gather of per-shard sums
+  have hkey : tensorSum [initSM 1064, initSM 1068] =
+      allGatherPrimDimN 1 4 0
+        [tensorSum [initPM 3217, initPM 3333], tensorSum [initPM 3221, initPM 3336],
+         tensorSum [initPM 3225, initPM 3339], tensorSum [initPM 3229, initPM 3342]] := by
+    rw [h1064_gather, h1068_gather]
+    exact tensorSum_pair_gather_dim1_4_1_2_32_g242
+      (initPM 3217) (initPM 3221) (initPM 3225) (initPM 3229)
+      (initPM 3333) (initPM 3336) (initPM 3339) (initPM 3342)
+      h3217_shape h3221_shape h3225_shape h3229_shape
+      h3333_shape h3336_shape h3339_shape h3342_shape
+  -- Discharge the three conjuncts
+  simp only [goal_242, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM shape: [1, 8, 32]
+    rw [hsm, tensorSum_shape]; exact h1064_shape
+  · -- PM tp shapes: [[1,2,32], [1,2,32], [1,2,32], [1,2,32]]
+    simp only [hpm_3191, hpm_3194, hpm_3197, hpm_3200, tensorSum_shape,
+      h3217_shape, h3221_shape, h3225_shape, h3229_shape]
+  · -- Value equality: smStore 879 = reconstructWithDim 1 4 0 [pmStore 3191, ...]
+    rw [hsm, hkey, ← hpm_3191, ← hpm_3194, ← hpm_3197, ← hpm_3200]
+    symm
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _
+      (by rw [hpm_3191, tensorSum_shape, h3217_shape]; decide)
+
 end TrainVerify.Denote.GeneratedGoals
 
