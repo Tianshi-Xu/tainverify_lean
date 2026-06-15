@@ -45,5 +45,52 @@ def goal_289_cut_initGoals : List LineageGoal := initGoals ++ goal_289_prereqs
 def goal_289_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_289 pm_goal_289 goal_289 sm_goal_289InitEnv pm_goal_289InitEnv goal_289_cut_initGoals
 
+set_option maxHeartbeats 4000000 in
+set_option maxRecDepth 4096 in
+theorem prove_goal_289_cut : goal_289_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract goal_55: X (640) is gathered on dim1 from the 4 shards 2229..2232
+  have hInitX : InitGoalHolds pm_goal_289.numRanks goal_55 initSM initPM := by
+    apply hInitGoals; simp only [goal_289_cut_initGoals, goal_289_prereqs]; decide
+  have hX_shape : (initSM 640).shape = [1, 8, 32] := hInitX.1
+  have hX_rec : initSM 640 = reconstructWithDim 1 4 0
+      [initPM 2229, initPM 2230, initPM 2231, initPM 2232] := by
+    have hrec := hInitX.2.2
+    simp only [goal_55, pm_goal_289, List.map] at hrec
+    exact hrec
+  have htpX_shapes := hInitX.2.1
+  simp only [goal_55, List.map] at htpX_shapes
+  have h2229_shape : (initPM 2229).shape = [1, 2, 32] := by
+    have := congrArg List.head? htpX_shapes; simpa using this
+  have hX_gather : initSM 640 = allGatherPrimDimN 1 4 0
+      [initPM 2229, initPM 2230, initPM 2231, initPM 2232] := by
+    rw [hX_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2229_shape]; decide)
+  -- SM store: first FW_multiref output equals the input
+  have hsm : (denoteGraph sm_goal_289 initSM) 1004 = initSM 640 := by
+    simp only [sm_goal_289, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref3_first_out_g289]
+  -- PM store: final AllGather of the 4 shard first-outputs (each equal to its input)
+  have hpm : (denoteGraph pm_goal_289 initPM) 999 = allGatherPrimDimN 1 4 0
+      [initPM 2229, initPM 2230, initPM 2231, initPM 2232] := by
+    simp only [pm_goal_289, denoteGraph, List.foldl]
+    rw [applyNode_allGatherPrimDimN_out_thm]
+    simp only [List.map]
+    congr 1
+  -- Discharge 3 conjuncts
+  refine ⟨?_, ?_, ?_⟩
+  · show (denoteGraph sm_goal_289 initSM 1004).shape = _
+    rw [hsm]; exact hX_shape
+  · show [(denoteGraph pm_goal_289 initPM 999).shape] = _
+    rw [hpm]
+    congr 1
+    exact allGatherPrimDimN_shape 1 4 _ [1, 2, 32] (by
+      simp only [List.map, List.head?, Option.map, Option.getD]
+      exact h2229_shape)
+  · show denoteGraph sm_goal_289 initSM 1004 = reconstructWithDim _ _ _ _
+    rw [hsm, hX_gather, ← hpm]
+    exact (reconstructWithDim_singleton ..).symm
+
 end TrainVerify.Denote.GeneratedGoals
+
 
