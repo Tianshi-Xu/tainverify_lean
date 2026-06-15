@@ -18286,4 +18286,141 @@ theorem bw_softmax_distribute_allGatherPrimDimN_dim2_4_1_4_2_8_g164
         ((idx / 64) * 16 + (idx % 16) / 8 * 8 + idx % 8) % 8 =
         (idx / 64) * 16 + (idx % 16) / 8 * 8 + idx % 8 from by omega]
 
+/-! ## BW_softmax (softmaxBwd) distribution lemmas (goal_199 family) -/
+
+/-- `evalOp` unfolding for `BW_softmax`. -/
+theorem evalOp_bw_softmax_g199 (numParts rank : Nat) (params : List Nat) (g y : Tensor) :
+    evalOp numParts rank "OpName.BW_softmax" params [g, y] = [bw_softmax g y] := rfl
+
+/-- `applyNode` for `BW_softmax` with two inputs and singleton output. -/
+theorem applyNode_bw_softmax_out_g199
+    (gr : GraphDecl) (s : Store) (rank : Nat) (gTid yTid outTid : Tid) :
+    applyNode gr s { rank := rank, op := "OpName.BW_softmax", ins := [gTid, yTid], outs := [outTid] } outTid =
+      bw_softmax (s gTid) (s yTid) := by
+  unfold applyNode
+  rw [show ([gTid, yTid] : List Tid).map s = [s gTid, s yTid] from rfl,
+      evalOp_bw_softmax_g199]
+  change storeSet s [(outTid, bw_softmax (s gTid) (s yTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- Shape of `bw_softmax g y` is the shape of `y` (when `y` has a last dimension). -/
+theorem bw_softmax_shape_g199 (g y : Tensor) (pre : Shape) (d : Nat)
+    (hy : y.shape = pre ++ [d]) :
+    (bw_softmax g y).shape = pre ++ [d] := by
+  unfold bw_softmax softmaxBwd
+  rw [hy]
+  rw [List.reverse_append]
+  simp [Tensor.mkShape]
+
+/-- `bw_softmax g y` as an explicit `mkShape` when the softmax dimension is 8. -/
+theorem bw_softmax_unfold8_g199 (g y : Tensor) (pre : Shape) (hy : y.shape = pre ++ [8]) :
+    bw_softmax g y = Tensor.mkShape y.shape (fun outIdx =>
+      valAt y (outIdx.1 / 8 * 8 + outIdx.1 % 8) *
+        (valAt g (outIdx.1 / 8 * 8 + outIdx.1 % 8)
+          - ∑ j ∈ Finset.range 8,
+              valAt y (outIdx.1 / 8 * 8 + j) * valAt g (outIdx.1 / 8 * 8 + j))) := by
+  have hrev : y.shape.reverse = 8 :: pre.reverse := by
+    rw [hy, List.reverse_append]; simp
+  unfold bw_softmax softmaxBwd
+  rw [hrev]
+  simp only [show ((8 : Nat) = 0) = False from by simp, if_false]
+
+/-- `valAt` of `bw_softmax g y` when the softmax dimension is 8. -/
+theorem bw_softmax_valAt8_g199 (g y : Tensor) (pre : Shape) (idx : Nat)
+    (hy : y.shape = pre ++ [8]) (hidx : idx < prodShape y.shape) :
+    valAt (bw_softmax g y) idx =
+      valAt y idx *
+        (valAt g idx -
+          ∑ j ∈ Finset.range 8,
+            valAt y (idx / 8 * 8 + j) * valAt g (idx / 8 * 8 + j)) := by
+  rw [bw_softmax_unfold8_g199 g y pre hy]
+  rw [valAt_of_lt _ _ (by simp only [Tensor.mkShape]; exact hidx)]
+  simp only [Tensor.mkShape]
+  rw [show idx / 8 * 8 + idx % 8 = idx from by omega]
+
+/-- Per-shard equality used by the BW_softmax dim-2 split: the local `bw_softmax`
+    of the rank-`r` chunk equals the global `bw_softmax` restricted to the gathered index. -/
+theorem bw_softmax_piece_eq_g199 (g y : Tensor) (r idx : Nat)
+    (hg : g.shape = [1, 4, 8, 8]) (hy : y.shape = [1, 4, 8, 8])
+    (hr : r < 4) (hidx : idx < 256) (hrsel : idx % 64 / 16 = r) :
+    valAt (bw_softmax (chunkPrimDimN 2 4 r g) (chunkPrimDimN 2 4 r y))
+        (idx / 64 * 16 + idx % 16 / 8 * 8 + idx % 8)
+      = valAt (bw_softmax g y) idx := by
+  have hcy : (chunkPrimDimN 2 4 r y).shape = [1, 4, 2, 8] := by
+    rw [chunkPrimDimN_shape 2 4 r _ _ hy (by omega)]; simp [List.set, List.getD]
+  have hcg : (chunkPrimDimN 2 4 r g).shape = [1, 4, 2, 8] := by
+    rw [chunkPrimDimN_shape 2 4 r _ _ hg (by omega)]; simp [List.set, List.getD]
+  set L := idx / 64 * 16 + idx % 16 / 8 * 8 + idx % 8 with hL
+  have hL64 : L < 64 := by rw [hL]; omega
+  have hLprod : L < prodShape (chunkPrimDimN 2 4 r y).shape := by
+    rw [hcy]; simpa [prodShape] using hL64
+  have hidxprod : idx < prodShape y.shape := by rw [hy]; simpa [prodShape] using hidx
+  rw [bw_softmax_valAt8_g199 (chunkPrimDimN 2 4 r g) (chunkPrimDimN 2 4 r y) [1, 4, 2] L hcy hLprod,
+      bw_softmax_valAt8_g199 g y [1, 4, 8] idx hy hidxprod]
+  have hdot :
+      (∑ j ∈ Finset.range 8,
+          valAt (chunkPrimDimN 2 4 r y) (L / 8 * 8 + j) *
+            valAt (chunkPrimDimN 2 4 r g) (L / 8 * 8 + j))
+        = ∑ j ∈ Finset.range 8, valAt y (idx / 8 * 8 + j) * valAt g (idx / 8 * 8 + j) := by
+    apply Finset.sum_congr rfl
+    intro j hj
+    have hj8 : j < 8 := Finset.mem_range.mp hj
+    have hidxj : L / 8 * 8 + j < 64 := by rw [hL]; omega
+    rw [chunkPrimDimN_2_4_valAt_1_4_8_8 y r (L / 8 * 8 + j) hy hr hidxj,
+        chunkPrimDimN_2_4_valAt_1_4_8_8 g r (L / 8 * 8 + j) hg hr hidxj]
+    have e1 : (L / 8 * 8 + j) / 16 * 64 + r * 16 + (L / 8 * 8 + j) % 16 = idx / 8 * 8 + j := by
+      rw [hL]; omega
+    rw [e1]
+  rw [chunkPrimDimN_2_4_valAt_1_4_8_8 y r L hy hr hL64,
+      chunkPrimDimN_2_4_valAt_1_4_8_8 g r L hg hr hL64]
+  have e0 : L / 16 * 64 + r * 16 + L % 16 = idx := by rw [hL]; omega
+  rw [e0, hdot]
+
+/-- `bw_softmax` distributes over a dim-2 (sequence) split for `[1,4,8,8]` tensors:
+    the softmax axis (last dim) is untouched, so gathering the per-shard backward
+    results along dim 2 reconstructs the full backward result. -/
+theorem bw_softmax_split_dim2_4_1_4_8_8_g199 (g y : Tensor)
+    (hg : g.shape = [1, 4, 8, 8]) (hy : y.shape = [1, 4, 8, 8]) :
+    bw_softmax g y = allGatherPrimDimN 2 4 0
+      [bw_softmax (chunkPrimDimN 2 4 0 g) (chunkPrimDimN 2 4 0 y),
+       bw_softmax (chunkPrimDimN 2 4 1 g) (chunkPrimDimN 2 4 1 y),
+       bw_softmax (chunkPrimDimN 2 4 2 g) (chunkPrimDimN 2 4 2 y),
+       bw_softmax (chunkPrimDimN 2 4 3 g) (chunkPrimDimN 2 4 3 y)] := by
+  have hcy : ∀ r, r < 4 → (chunkPrimDimN 2 4 r y).shape = [1, 4, 2, 8] := by
+    intro r hr; rw [chunkPrimDimN_shape 2 4 r _ _ hy (by omega)]; simp [List.set, List.getD]
+  have hpiece : ∀ r, r < 4 →
+      (bw_softmax (chunkPrimDimN 2 4 r g) (chunkPrimDimN 2 4 r y)).shape = [1, 4, 2, 8] := by
+    intro r hr
+    exact bw_softmax_shape_g199 _ _ [1, 4, 2] 8 (hcy r hr)
+  have hhead : (([bw_softmax (chunkPrimDimN 2 4 0 g) (chunkPrimDimN 2 4 0 y),
+       bw_softmax (chunkPrimDimN 2 4 1 g) (chunkPrimDimN 2 4 1 y),
+       bw_softmax (chunkPrimDimN 2 4 2 g) (chunkPrimDimN 2 4 2 y),
+       bw_softmax (chunkPrimDimN 2 4 3 g) (chunkPrimDimN 2 4 3 y)].head?.map
+        (fun t => t.shape)).getD []) = [1, 4, 2, 8] := by
+    simp [hpiece 0 (by omega)]
+  have hlhs : (bw_softmax g y).shape = [1, 4, 8, 8] :=
+    bw_softmax_shape_g199 g y [1, 4, 8] 8 hy
+  have hrhs : (allGatherPrimDimN 2 4 0
+      [bw_softmax (chunkPrimDimN 2 4 0 g) (chunkPrimDimN 2 4 0 y),
+       bw_softmax (chunkPrimDimN 2 4 1 g) (chunkPrimDimN 2 4 1 y),
+       bw_softmax (chunkPrimDimN 2 4 2 g) (chunkPrimDimN 2 4 2 y),
+       bw_softmax (chunkPrimDimN 2 4 3 g) (chunkPrimDimN 2 4 3 y)]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hhead]; simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hlhs, hrhs])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs, prodShape] using hidx
+  rw [allGatherPrimDimN_2_4_valAt_1_4_2_8 _ idx hhead hidx256]
+  have hr4 : idx % 64 / 16 = 0 ∨ idx % 64 / 16 = 1 ∨ idx % 64 / 16 = 2 ∨ idx % 64 / 16 = 3 := by
+    omega
+  rcases hr4 with h | h | h | h
+  · rw [h]; simp only [List.getD_cons_zero]
+    exact (bw_softmax_piece_eq_g199 g y 0 idx hg hy (by omega) hidx256 h).symm
+  · rw [h]; simp only [List.getD_cons_succ, List.getD_cons_zero]
+    exact (bw_softmax_piece_eq_g199 g y 1 idx hg hy (by omega) hidx256 h).symm
+  · rw [h]; simp only [List.getD_cons_succ, List.getD_cons_zero]
+    exact (bw_softmax_piece_eq_g199 g y 2 idx hg hy (by omega) hidx256 h).symm
+  · rw [h]; simp only [List.getD_cons_succ, List.getD_cons_zero]
+    exact (bw_softmax_piece_eq_g199 g y 3 idx hg hy (by omega) hidx256 h).symm
+
 end TrainVerify.Denote

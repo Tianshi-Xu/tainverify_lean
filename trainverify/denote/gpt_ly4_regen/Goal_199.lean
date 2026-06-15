@@ -49,5 +49,126 @@ def goal_199_cut_initGoals : List LineageGoal := initGoals ++ goal_199_prereqs
 def goal_199_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_199 pm_goal_199 goal_199 sm_goal_199InitEnv pm_goal_199InitEnv goal_199_cut_initGoals
 
+set_option maxHeartbeats 4000000 in
+-- BW_softmax distributes over a dim-2 (sequence) split: the softmax axis (last dim)
+-- is untouched, so gathering per-shard backward results along dim 2 reconstructs the
+-- full backward result.
+theorem prove_goal_199_cut : goal_199_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- init alignment for the upstream gradient g (tensor 830 = goal_200)
+  have hInitG : InitGoalHolds pm_goal_199.numRanks goal_200 initSM initPM := by
+    apply hInitGoals; decide
+  have hg_shape : (initSM 830).shape = [1, 4, 8, 8] := hInitG.1
+  have htpG := hInitG.2.1
+  simp only [goal_200, LineageGoal.tps, List.map] at htpG
+  have hG0 : (initPM 2493).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.getD · 0 []) htpG; simp at this; exact this
+  have hG1 : (initPM 2494).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.getD · 1 []) htpG; simp at this; exact this
+  have hG2 : (initPM 2495).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.getD · 2 []) htpG; simp at this; exact this
+  have hG3 : (initPM 2496).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.getD · 3 []) htpG; simp at this; exact this
+  have hrecG : initSM 830 = allGatherPrimDimN 2 4 0
+      [initPM 2493, initPM 2494, initPM 2495, initPM 2496] := by
+    have hrec := hInitG.2.2
+    simp only [goal_200, LineageGoal.tps, LineageGoal.gatherDim, List.map] at hrec
+    rw [hrec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [hG0]; decide)
+  -- init alignment for the softmax output y (tensor 655 = goal_67)
+  have hInitY : InitGoalHolds pm_goal_199.numRanks goal_67 initSM initPM := by
+    apply hInitGoals; decide
+  have hy_shape : (initSM 655).shape = [1, 4, 8, 8] := hInitY.1
+  have htpY := hInitY.2.1
+  simp only [goal_67, LineageGoal.tps, List.map] at htpY
+  have hY0 : (initPM 2465).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.getD · 0 []) htpY; simp at this; exact this
+  have hY1 : (initPM 2466).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.getD · 1 []) htpY; simp at this; exact this
+  have hY2 : (initPM 2467).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.getD · 2 []) htpY; simp at this; exact this
+  have hY3 : (initPM 2468).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.getD · 3 []) htpY; simp at this; exact this
+  have hrecY : initSM 655 = allGatherPrimDimN 2 4 0
+      [initPM 2465, initPM 2466, initPM 2467, initPM 2468] := by
+    have hrec := hInitY.2.2
+    simp only [goal_67, LineageGoal.tps, LineageGoal.gatherDim, List.map] at hrec
+    rw [hrec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [hY0]; decide)
+  -- SM store
+  have hsm : (denoteGraph sm_goal_199 initSM) 829 = bw_softmax (initSM 830) (initSM 655) := by
+    simp only [sm_goal_199, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_bw_softmax_out_g199]
+  -- PM stores
+  have hpm0 : (denoteGraph pm_goal_199 initPM) 2477 = bw_softmax (initPM 2493) (initPM 2465) := by
+    simp only [pm_goal_199, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_softmax_out_g199]
+  have hpm1 : (denoteGraph pm_goal_199 initPM) 2478 = bw_softmax (initPM 2494) (initPM 2466) := by
+    simp only [pm_goal_199, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_softmax_out_g199]
+    congr 1
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  have hpm2 : (denoteGraph pm_goal_199 initPM) 2479 = bw_softmax (initPM 2495) (initPM 2467) := by
+    simp only [pm_goal_199, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_softmax_out_g199]
+    congr 1
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  have hpm3 : (denoteGraph pm_goal_199 initPM) 2480 = bw_softmax (initPM 2496) (initPM 2468) := by
+    simp only [pm_goal_199, denoteGraph, GraphDecl.nodes, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_softmax_out_g199]
+    congr 1
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  -- chunk/gather roundtrip: chunk r of the gathered input recovers the rank-r shard
+  have hcG0 : chunkPrimDimN 2 4 0 (initSM 830) = initPM 2493 := by
+    rw [hrecG]; simpa using chunk2_gather2_roundtrip_1_4_2_8 _ _ _ _ hG0 hG1 hG2 hG3 0 (by omega)
+  have hcG1 : chunkPrimDimN 2 4 1 (initSM 830) = initPM 2494 := by
+    rw [hrecG]; simpa using chunk2_gather2_roundtrip_1_4_2_8 _ _ _ _ hG0 hG1 hG2 hG3 1 (by omega)
+  have hcG2 : chunkPrimDimN 2 4 2 (initSM 830) = initPM 2495 := by
+    rw [hrecG]; simpa using chunk2_gather2_roundtrip_1_4_2_8 _ _ _ _ hG0 hG1 hG2 hG3 2 (by omega)
+  have hcG3 : chunkPrimDimN 2 4 3 (initSM 830) = initPM 2496 := by
+    rw [hrecG]; simpa using chunk2_gather2_roundtrip_1_4_2_8 _ _ _ _ hG0 hG1 hG2 hG3 3 (by omega)
+  have hcY0 : chunkPrimDimN 2 4 0 (initSM 655) = initPM 2465 := by
+    rw [hrecY]; simpa using chunk2_gather2_roundtrip_1_4_2_8 _ _ _ _ hY0 hY1 hY2 hY3 0 (by omega)
+  have hcY1 : chunkPrimDimN 2 4 1 (initSM 655) = initPM 2466 := by
+    rw [hrecY]; simpa using chunk2_gather2_roundtrip_1_4_2_8 _ _ _ _ hY0 hY1 hY2 hY3 1 (by omega)
+  have hcY2 : chunkPrimDimN 2 4 2 (initSM 655) = initPM 2467 := by
+    rw [hrecY]; simpa using chunk2_gather2_roundtrip_1_4_2_8 _ _ _ _ hY0 hY1 hY2 hY3 2 (by omega)
+  have hcY3 : chunkPrimDimN 2 4 3 (initSM 655) = initPM 2468 := by
+    rw [hrecY]; simpa using chunk2_gather2_roundtrip_1_4_2_8 _ _ _ _ hY0 hY1 hY2 hY3 3 (by omega)
+  -- key distribution: bw_softmax of gathered inputs = gather of per-shard bw_softmax
+  have hbridge : bw_softmax (initSM 830) (initSM 655) = allGatherPrimDimN 2 4 0
+      [bw_softmax (initPM 2493) (initPM 2465), bw_softmax (initPM 2494) (initPM 2466),
+       bw_softmax (initPM 2495) (initPM 2467), bw_softmax (initPM 2496) (initPM 2468)] := by
+    have := bw_softmax_split_dim2_4_1_4_8_8_g199 (initSM 830) (initSM 655) hg_shape hy_shape
+    rw [hcG0, hcG1, hcG2, hcG3, hcY0, hcY1, hcY2, hcY3] at this
+    exact this
+  -- shapes of the per-shard backward results
+  have hp0 : (bw_softmax (initPM 2493) (initPM 2465)).shape = [1, 4, 2, 8] :=
+    bw_softmax_shape_g199 _ _ [1, 4, 2] 8 hY0
+  have hp1 : (bw_softmax (initPM 2494) (initPM 2466)).shape = [1, 4, 2, 8] :=
+    bw_softmax_shape_g199 _ _ [1, 4, 2] 8 hY1
+  have hp2 : (bw_softmax (initPM 2495) (initPM 2467)).shape = [1, 4, 2, 8] :=
+    bw_softmax_shape_g199 _ _ [1, 4, 2] 8 hY2
+  have hp3 : (bw_softmax (initPM 2496) (initPM 2468)).shape = [1, 4, 2, 8] :=
+    bw_softmax_shape_g199 _ _ [1, 4, 2] 8 hY3
+  simp only [goal_199, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
+    LineageGoal.gatherDim, List.map, Piece.tid]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape
+    rw [hsm]
+    exact bw_softmax_shape_g199 _ _ [1, 4, 8] 8 hy_shape
+  · -- PM tp shapes
+    rw [hpm0, hpm1, hpm2, hpm3]
+    rw [hp0, hp1, hp2, hp3]
+  · -- value equality
+    rw [hsm, hpm0, hpm1, hpm2, hpm3, hbridge]
+    rw [show pm_goal_199.numRanks = 4 from rfl]
+    rw [reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [hp0]; decide)]
+
 end TrainVerify.Denote.GeneratedGoals
+
 
