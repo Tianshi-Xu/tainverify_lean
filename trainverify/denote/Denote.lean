@@ -16978,4 +16978,19 @@ theorem applyNode_fw_multiref2_second_out_g269
   unfold storeSet
   simp [List.zip, List.zipWith, List.replicate, List.find?, hne, Ne.symm hne]
 
+/-- `applyNode` for `FW_multiref` with `outs = [t1, t2]` and `params = [2]`: the second
+    output equals the input. -/
+theorem applyNode_fw_multiref2_second_out_g273
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid t1 t2 : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid],
+                    outs := [t1, t2], params := [2] } t2 = s xTid := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl,
+      evalOp_fw_multiref]
+  change storeSet s ([t1, t2].zip (List.replicate 2 (s xTid))) t2 = _
+  unfold storeSet
+  by_cases h : t1 = t2
+  · subst h; simp [List.zip, List.zipWith, List.replicate, List.find?]
+  · simp [List.zip, List.zipWith, List.replicate, List.find?, h]
+
 end TrainVerify.Denote

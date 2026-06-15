@@ -44,5 +44,57 @@ def goal_273_cut_initGoals : List LineageGoal := initGoals ++ goal_273_prereqs
 def goal_273_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_273 pm_goal_273 goal_273 sm_goal_273InitEnv pm_goal_273InitEnv goal_273_cut_initGoals
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 800000 in
+theorem prove_goal_273_cut : goal_273_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Input alignment: SM input 602 reconstructs from PM inputs 1637..1640 (gatherDim=2).
+  have hInitX : InitGoalHolds pm_goal_273.numRanks goal_29 initSM initPM := by
+    apply hInitGoals; simp only [goal_273_cut_initGoals, goal_273_prereqs]; decide
+  have hX_rec : initSM 602 = reconstructWithDim 2 4 0
+      [initPM 1637, initPM 1638, initPM 1639, initPM 1640] := by
+    have hrec := hInitX.2.2
+    simp only [goal_29, pm_goal_273, List.map] at hrec
+    exact hrec
+  have hX_shape : (initSM 602).shape = [1, 8, 32] := hInitX.1
+  have htpX := hInitX.2.1
+  simp only [goal_29, List.map] at htpX
+  have h1637_shape : (initPM 1637).shape = [1, 8, 8] := by
+    have := congrArg List.head? htpX; simpa using this
+  have h1638_shape : (initPM 1638).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail) htpX; simpa using this
+  have h1639_shape : (initPM 1639).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail) htpX; simpa using this
+  have h1640_shape : (initPM 1640).shape = [1, 8, 8] := by
+    have := congrArg (List.head? ∘ List.tail ∘ List.tail ∘ List.tail) htpX; simpa using this
+  -- SM store: second output 950 = input 602.
+  have hsm : (denoteGraph sm_goal_273 initSM) 950 = initSM 602 := by
+    simp only [sm_goal_273, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_second_out_g273]
+  -- PM stores: each rank's second output equals its input.
+  have hpm0 : (denoteGraph pm_goal_273 initPM) 2049 = initPM 1637 := by
+    simp only [pm_goal_273, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 2049 (by decide), applyNode_skip _ _ _ 2049 (by decide),
+        applyNode_skip _ _ _ 2049 (by decide), applyNode_fw_multiref2_second_out_g273]
+  have hpm1 : (denoteGraph pm_goal_273 initPM) 2050 = initPM 1638 := by
+    simp only [pm_goal_273, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 2050 (by decide), applyNode_skip _ _ _ 2050 (by decide),
+        applyNode_fw_multiref2_second_out_g273, applyNode_skip _ _ _ 1638 (by decide)]
+  have hpm2 : (denoteGraph pm_goal_273 initPM) 2051 = initPM 1639 := by
+    simp only [pm_goal_273, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 2051 (by decide), applyNode_fw_multiref2_second_out_g273,
+        applyNode_skip _ _ _ 1639 (by decide), applyNode_skip _ _ _ 1639 (by decide)]
+  have hpm3 : (denoteGraph pm_goal_273 initPM) 2052 = initPM 1640 := by
+    simp only [pm_goal_273, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_second_out_g273,
+        applyNode_skip _ _ _ 1640 (by decide), applyNode_skip _ _ _ 1640 (by decide),
+        applyNode_skip _ _ _ 1640 (by decide)]
+  -- Three conjuncts.
+  simp only [goal_273, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]; exact hX_shape
+  · rw [hpm0, hpm1, hpm2, hpm3, h1637_shape, h1638_shape, h1639_shape, h1640_shape]
+  · rw [hsm, hpm0, hpm1, hpm2, hpm3]; exact hX_rec
+
 end TrainVerify.Denote.GeneratedGoals
 
