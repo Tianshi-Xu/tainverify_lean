@@ -17296,4 +17296,144 @@ theorem applyNode_fw_multiref3_out_g307
   rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_multiref]
   exact storeSet_replicate_mem_g307 s [t1, t2, t3] (s xTid) i hi
 
+/-! ## BW_softmax distribution lemmas (goal 129)
+
+`bw_softmax` (softmax backward) reduces over the last dimension.  When the
+redistribution gather dimension is *not* the last dimension, the per-shard
+`bw_softmax` results gather back to the full `bw_softmax`, exactly as for a
+pointwise op — but the proof must respect the per-row reduction. -/
+
+/-- `bw_softmax` preserves the shape of its second input, when that shape has a
+nonempty (cons) reversal. -/
+theorem bw_softmax_shape_of_g129 (g y : Tensor) (sh : Shape) (d : Nat) (rest : List Nat)
+    (hy : y.shape = sh) (hrev : sh.reverse = d :: rest) :
+    (bw_softmax g y).shape = sh := by
+  simp only [bw_softmax, softmaxBwd, hy, hrev, Tensor.mkShape]
+
+/-- Unfolding lemma for `evalOp` on `BW_softmax`. -/
+theorem evalOp_bw_softmax_g129 (numParts rank : Nat) (g y : Tensor) :
+    evalOp numParts rank "OpName.BW_softmax" [] [g, y] = [bw_softmax g y] := rfl
+
+/-- `applyNode` for `BW_softmax` with singleton output. -/
+theorem applyNode_bw_softmax_out_g129
+    (gr : GraphDecl) (s : Store) (rank : Nat) (gTid yTid outTid : Tid) :
+    applyNode gr s { rank := rank, op := "OpName.BW_softmax", ins := [gTid, yTid], outs := [outTid] } outTid =
+      bw_softmax (s gTid) (s yTid) := by
+  unfold applyNode
+  rw [show ([gTid, yTid] : List Tid).map s = [s gTid, s yTid] from rfl,
+      evalOp_bw_softmax_g129]
+  change storeSet s [(outTid, bw_softmax (s gTid) (s yTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- If the last-dimension rows (of size 8) of `(g, y)` at `idx` agree with the
+rows of `(g', y')` at `mapped`, and the in-row offsets match, then `bw_softmax`
+produces equal values.  `bw_softmax` only reads within a single length-8 row. -/
+private theorem softmaxBwd_valAt_batch_eq_8_g129
+    (g y g' y' : Tensor) (idx mapped : Nat)
+    (hidx : idx < prodShape y.shape) (hmapped : mapped < prodShape y'.shape)
+    (hy_rev : y.shape.reverse.head? = some 8)
+    (hy'_rev : y'.shape.reverse.head? = some 8)
+    (hbatchY : ∀ i, i < 8 → valAt y ((idx / 8) * 8 + i) = valAt y' ((mapped / 8) * 8 + i))
+    (hbatchG : ∀ i, i < 8 → valAt g ((idx / 8) * 8 + i) = valAt g' ((mapped / 8) * 8 + i))
+    (hmod : mapped % 8 = idx % 8) :
+    valAt (bw_softmax g y) idx = valAt (bw_softmax g' y') mapped := by
+  have ⟨rest_y, hyr⟩ : ∃ rest, y.shape.reverse = 8 :: rest := by
+    cases h : y.shape.reverse with
+    | nil => rw [h] at hy_rev; exact absurd hy_rev nofun
+    | cons d rest =>
+      rw [h] at hy_rev
+      simp only [List.head?, Option.some.injEq] at hy_rev
+      subst hy_rev; exact ⟨rest, rfl⟩
+  have ⟨rest_y', hy'r⟩ : ∃ rest, y'.shape.reverse = 8 :: rest := by
+    cases h : y'.shape.reverse with
+    | nil => rw [h] at hy'_rev; exact absurd hy'_rev nofun
+    | cons d rest =>
+      rw [h] at hy'_rev
+      simp only [List.head?, Option.some.injEq] at hy'_rev
+      subst hy'_rev; exact ⟨rest, rfl⟩
+  simp only [bw_softmax, softmaxBwd, hyr, hy'r]
+  simp only [valAt, Tensor.mkShape, show (8 : Nat) ≠ 0 from by omega, ↓reduceIte]
+  rw [dif_pos hidx, dif_pos hmapped, hmod]
+  have hvy := hbatchY (idx % 8) (Nat.mod_lt idx (by omega))
+  have hvg := hbatchG (idx % 8) (Nat.mod_lt idx (by omega))
+  have hsum : (∑ i ∈ Finset.range 8, valAt y ((idx / 8) * 8 + i) * valAt g ((idx / 8) * 8 + i))
+            = (∑ i ∈ Finset.range 8, valAt y' ((mapped / 8) * 8 + i) * valAt g' ((mapped / 8) * 8 + i)) := by
+    apply Finset.sum_congr rfl
+    intro i hi
+    rw [hbatchY i (Finset.mem_range.mp hi), hbatchG i (Finset.mem_range.mp hi)]
+  simp only [valAt] at hvy hvg hsum
+  rw [hvy, hvg, hsum]
+
+/-- `bw_softmax` distributes over `allGatherPrimDimN` on dim 2 (orthogonal to the
+softmax/last dimension), for shard shape `[1,4,2,8]` with 4 parts. -/
+theorem bw_softmax_allGatherPrimDimN_2_4_eq_g129
+    (gs xs : List Tensor)
+    (hlen_g : gs.length = 4) (hlen_x : xs.length = 4)
+    (hgs : ∀ i (hi : i < gs.length), (gs.get ⟨i, hi⟩).shape = [1, 4, 2, 8])
+    (hxs : ∀ i (hi : i < xs.length), (xs.get ⟨i, hi⟩).shape = [1, 4, 2, 8]) :
+    bw_softmax (allGatherPrimDimN 2 4 0 gs) (allGatherPrimDimN 2 4 0 xs) =
+      allGatherPrimDimN 2 4 0 (List.zipWith bw_softmax gs xs) := by
+  have hx0 : (0 : Nat) < xs.length := by omega
+  have hg0 : (0 : Nat) < gs.length := by omega
+  have hhead_x : (xs.head?.map (fun t => t.shape)).getD [] = [1, 4, 2, 8] := by
+    rw [List.head?_eq_getElem?, List.getElem?_eq_getElem hx0]
+    simp only [Option.map_some, Option.getD_some]
+    exact hxs 0 hx0
+  have hhead_g : (gs.head?.map (fun t => t.shape)).getD [] = [1, 4, 2, 8] := by
+    rw [List.head?_eq_getElem?, List.getElem?_eq_getElem hg0]
+    simp only [Option.map_some, Option.getD_some]
+    exact hgs 0 hg0
+  have hzw0 : (0 : Nat) < (List.zipWith bw_softmax gs xs).length := by
+    rw [List.length_zipWith]; omega
+  have hhead_zw : ((List.zipWith bw_softmax gs xs).head?.map (fun t => t.shape)).getD [] = [1, 4, 2, 8] := by
+    rw [List.head?_eq_getElem?, List.getElem?_eq_getElem hzw0]
+    simp only [Option.map_some, Option.getD_some]
+    rw [List.getElem_zipWith]
+    exact bw_softmax_shape_of_g129 _ _ [1, 4, 2, 8] 8 [2, 4, 1] (hxs 0 hx0) rfl
+  have hAG_x_shape : (allGatherPrimDimN 2 4 0 xs).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 2 4 xs [1, 4, 2, 8] hhead_x]; simp [List.set, List.getD]
+  have hAG_zw_shape : (allGatherPrimDimN 2 4 0 (List.zipWith bw_softmax gs xs)).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 2 4 _ [1, 4, 2, 8] hhead_zw]; simp [List.set, List.getD]
+  have hlhs_shape : (bw_softmax (allGatherPrimDimN 2 4 0 gs) (allGatherPrimDimN 2 4 0 xs)).shape = [1, 4, 8, 8] := by
+    rw [bw_softmax_shape_of_g129 _ _ [1, 4, 8, 8] 8 [8, 4, 1] hAG_x_shape rfl]
+  apply Tensor.ext (by rw [hlhs_shape, hAG_zw_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by rw [hlhs_shape] at hidx; simpa [prodShape] using hidx
+  rw [allGatherPrimDimN_2_4_valAt_1_4_2_8 _ idx hhead_zw hidx256]
+  have hzw_get : (List.zipWith bw_softmax gs xs).getD ((idx % 64) / 16) (zeroTensor [1, 4, 2, 8])
+      = bw_softmax (gs.getD ((idx % 64) / 16) (zeroTensor [1, 4, 2, 8]))
+                   (xs.getD ((idx % 64) / 16) (zeroTensor [1, 4, 2, 8])) := by
+    rw [list_getD_of_lt _ _ _ (by rw [List.length_zipWith]; omega : (idx % 64) / 16 < (List.zipWith bw_softmax gs xs).length),
+        list_getD_of_lt _ _ _ (by omega : (idx % 64) / 16 < gs.length),
+        list_getD_of_lt _ _ _ (by omega : (idx % 64) / 16 < xs.length)]
+    exact List.getElem_zipWith
+  rw [hzw_get]
+  have hxr_shape : (xs.getD ((idx % 64) / 16) (zeroTensor [1, 4, 2, 8])).shape = [1, 4, 2, 8] := by
+    rw [list_getD_of_lt _ _ _ (by omega : (idx % 64) / 16 < xs.length)]
+    exact hxs ((idx % 64) / 16) (by omega)
+  refine softmaxBwd_valAt_batch_eq_8_g129
+    (allGatherPrimDimN 2 4 0 gs) (allGatherPrimDimN 2 4 0 xs)
+    (gs.getD ((idx % 64) / 16) (zeroTensor [1, 4, 2, 8]))
+    (xs.getD ((idx % 64) / 16) (zeroTensor [1, 4, 2, 8]))
+    idx ((idx / 64) * 16 + ((idx % 16) / 8) * 8 + idx % 8)
+    ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  · rw [hAG_x_shape]; simpa [prodShape] using hidx256
+  · rw [hxr_shape]; show _ < prodShape [1, 4, 2, 8]; simp only [prodShape, List.foldl]; omega
+  · rw [hAG_x_shape]; rfl
+  · rw [hxr_shape]; rfl
+  · intro i hi
+    rw [allGatherPrimDimN_2_4_valAt_1_4_2_8 xs ((idx / 8) * 8 + i) hhead_x (by omega)]
+    have e1 : (((idx / 8) * 8 + i) % 64) / 16 = (idx % 64) / 16 := by omega
+    have e2 : ((idx / 8) * 8 + i) / 64 * 16 + ((((idx / 8) * 8 + i) % 16) / 8) * 8 + ((idx / 8) * 8 + i) % 8
+            = (((idx / 64) * 16 + ((idx % 16) / 8) * 8 + idx % 8) / 8) * 8 + i := by omega
+    rw [e1, e2]
+  · intro i hi
+    rw [allGatherPrimDimN_2_4_valAt_1_4_2_8 gs ((idx / 8) * 8 + i) hhead_g (by omega)]
+    have e1 : (((idx / 8) * 8 + i) % 64) / 16 = (idx % 64) / 16 := by omega
+    have e2 : ((idx / 8) * 8 + i) / 64 * 16 + ((((idx / 8) * 8 + i) % 16) / 8) * 8 + ((idx / 8) * 8 + i) % 8
+            = (((idx / 64) * 16 + ((idx % 16) / 8) * 8 + idx % 8) / 8) * 8 + i := by omega
+    rw [e1, e2]
+  · omega
+
 end TrainVerify.Denote

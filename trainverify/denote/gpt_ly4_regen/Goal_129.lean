@@ -57,5 +57,176 @@ def goal_129_cut_initGoals : List LineageGoal := initGoals ++ goal_129_prereqs
 def goal_129_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_129 pm_goal_129 goal_129 sm_goal_129InitEnv pm_goal_129InitEnv goal_129_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- bw_softmax over an AllToAll(dim1->dim2) redistribution sandwiched by a second
+-- AllToAll(dim2->dim1): the per-rank bw_softmax over dim-2 slices (orthogonal to the
+-- softmax/last dimension) reconstructs the full result.
+theorem prove_goal_129_cut : goal_129_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Input 746 (grad) is gathered on dim2 from shards 1406,1408,1410,1412 (goal_130)
+  have hInit746 : InitGoalHolds pm_goal_129.numRanks goal_130 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_129_cut_initGoals, goal_129_prereqs]
+    decide
+  -- Input 585 (activation/output) is gathered on dim1 from shards 1369..1372 (goal_17)
+  have hInit585 : InitGoalHolds pm_goal_129.numRanks goal_17 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_129_cut_initGoals, goal_129_prereqs]
+    decide
+  -- goal_130: initSM 746 = reconstructWithDim 2 4 0 [1406, 1408, 1410, 1412]
+  have h746_rec : initSM 746 = reconstructWithDim 2 4 0
+      [initPM 1406, initPM 1408, initPM 1410, initPM 1412] := by
+    have hrec := hInit746.2.2
+    simp only [goal_130, pm_goal_129, List.map] at hrec
+    exact hrec
+  have htp746 := hInit746.2.1
+  simp only [goal_130, List.map] at htp746
+  have h1406_shape : (initPM 1406).shape = [1, 4, 2, 8] := by
+    have := congrArg List.head? htp746; simpa using this
+  have h1408_shape : (initPM 1408).shape = [1, 4, 2, 8] := by
+    have := congrArg List.tail htp746
+    have := congrArg List.head? this; simpa using this
+  have h1410_shape : (initPM 1410).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.tail ∘ List.tail) htp746
+    have := congrArg List.head? this; simpa using this
+  have h1412_shape : (initPM 1412).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp746
+    have := congrArg List.head? this; simpa using this
+  -- goal_17: initSM 585 = reconstructWithDim 1 4 0 [1369, 1370, 1371, 1372]
+  have h585_rec : initSM 585 = reconstructWithDim 1 4 0
+      [initPM 1369, initPM 1370, initPM 1371, initPM 1372] := by
+    have hrec := hInit585.2.2
+    simp only [goal_17, pm_goal_129, List.map] at hrec
+    exact hrec
+  have htp585 := hInit585.2.1
+  simp only [goal_17, List.map] at htp585
+  have h1369_shape : (initPM 1369).shape = [1, 1, 8, 8] := by
+    have := congrArg List.head? htp585; simpa using this
+  -- C = full activation, gathered on dim1
+  set C : Tensor := allGatherPrimDimN 1 4 0
+    [initPM 1369, initPM 1370, initPM 1371, initPM 1372] with hCdef
+  have h585_gather : initSM 585 = C := by
+    rw [h585_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1369_shape]; decide)
+  have hC_shape : C.shape = [1, 4, 8, 8] := by
+    rw [hCdef]
+    rw [allGatherPrimDimN_shape 1 4 _ [1, 1, 8, 8] (by simp [h1369_shape])]
+    simp [List.set, List.getD]
+  -- grad full, gathered on dim2
+  have h746_gather : initSM 746 = allGatherPrimDimN 2 4 0
+      [initPM 1406, initPM 1408, initPM 1410, initPM 1412] := by
+    rw [h746_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1406_shape]; decide)
+  -- chunk shapes for dim-2 chunks of C
+  have hchunk2_shape : ∀ r, (chunkPrimDimN 2 4 r C).shape = [1, 4, 2, 8] := by
+    intro r
+    rw [chunkPrimDimN_shape 2 4 r _ _ hC_shape (by omega)]
+    simp [List.set, List.getD]
+  -- Per-rank bw_softmax results
+  set Y0 : Tensor := bw_softmax (initPM 1406) (chunkPrimDimN 2 4 0 C) with hY0
+  set Y1 : Tensor := bw_softmax (initPM 1408) (chunkPrimDimN 2 4 1 C) with hY1
+  set Y2 : Tensor := bw_softmax (initPM 1410) (chunkPrimDimN 2 4 2 C) with hY2
+  set Y3 : Tensor := bw_softmax (initPM 1412) (chunkPrimDimN 2 4 3 C) with hY3
+  -- SM store
+  have hsm : (denoteGraph sm_goal_129 initSM) 745 = bw_softmax (initSM 746) (initSM 585) := by
+    simp only [sm_goal_129, denoteGraph, List.foldl]
+    rw [applyNode_bw_softmax_out_g129]
+  -- PM stores for the four final AllToAll outputs.
+  have hpm0 : (denoteGraph pm_goal_129 initPM) 1382 =
+      chunkPrimDimN 1 4 0 (allGatherPrimDimN 2 4 0 [Y0, Y1, Y2, Y3]) := by
+    simp only [pm_goal_129, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    simp only [List.map]
+    show allToAllPrimWithDims 4 0 _ 2 1 = _
+    rw [allToAllPrimWithDims]
+    congr 1
+  have hpm1 : (denoteGraph pm_goal_129 initPM) 1384 =
+      chunkPrimDimN 1 4 1 (allGatherPrimDimN 2 4 0 [Y0, Y1, Y2, Y3]) := by
+    simp only [pm_goal_129, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    simp only [List.map]
+    show allToAllPrimWithDims 4 1 _ 2 1 = _
+    rw [allToAllPrimWithDims]
+    congr 1
+  have hpm2 : (denoteGraph pm_goal_129 initPM) 1386 =
+      chunkPrimDimN 1 4 2 (allGatherPrimDimN 2 4 0 [Y0, Y1, Y2, Y3]) := by
+    simp only [pm_goal_129, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    simp only [List.map]
+    show allToAllPrimWithDims 4 2 _ 2 1 = _
+    rw [allToAllPrimWithDims]
+    congr 1
+  have hpm3 : (denoteGraph pm_goal_129 initPM) 1388 =
+      chunkPrimDimN 1 4 3 (allGatherPrimDimN 2 4 0 [Y0, Y1, Y2, Y3]) := by
+    simp only [pm_goal_129, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_allToAllPrimWithDims_out]
+    simp only [List.map]
+    show allToAllPrimWithDims 4 3 _ 2 1 = _
+    rw [allToAllPrimWithDims]
+    congr 1
+  -- Key: bw_softmax of the full gathered inputs equals gathering the per-rank results.
+  have hC_split : C = allGatherPrimDimN 2 4 0
+      [chunkPrimDimN 2 4 0 C, chunkPrimDimN 2 4 1 C,
+       chunkPrimDimN 2 4 2 C, chunkPrimDimN 2 4 3 C] :=
+    (allGatherPrimDimN_chunkPrimDimN_id_dim2_4_8_8 C hC_shape).symm
+  have hG : bw_softmax (initSM 746) (initSM 585) =
+      allGatherPrimDimN 2 4 0 [Y0, Y1, Y2, Y3] := by
+    rw [h746_gather, h585_gather]
+    conv_lhs => rw [hC_split]
+    rw [bw_softmax_allGatherPrimDimN_2_4_eq_g129
+      [initPM 1406, initPM 1408, initPM 1410, initPM 1412]
+      [chunkPrimDimN 2 4 0 C, chunkPrimDimN 2 4 1 C,
+       chunkPrimDimN 2 4 2 C, chunkPrimDimN 2 4 3 C]
+      (by simp) (by simp)
+      (by
+        intro i hi
+        simp only [List.length] at hi
+        match i, hi with
+        | 0, _ => exact h1406_shape
+        | 1, _ => exact h1408_shape
+        | 2, _ => exact h1410_shape
+        | 3, _ => exact h1412_shape)
+      (by
+        intro i hi
+        simp only [List.length] at hi
+        match i, hi with
+        | 0, _ => exact hchunk2_shape 0
+        | 1, _ => exact hchunk2_shape 1
+        | 2, _ => exact hchunk2_shape 2
+        | 3, _ => exact hchunk2_shape 3)]
+    simp only [List.zipWith, hY0, hY1, hY2, hY3]
+  -- G has shape [1,4,8,8]
+  have hG_shape : (allGatherPrimDimN 2 4 0 [Y0, Y1, Y2, Y3]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 2 4 _ [1, 4, 2, 8]
+      (by
+        simp only [List.head?, Option.map, hY0]
+        exact bw_softmax_shape_of_g129 _ _ [1, 4, 2, 8] 8 [2, 4, 1] (hchunk2_shape 0) rfl)]
+    simp [List.set, List.getD]
+  -- Discharge the three conjuncts.
+  simp only [goal_129, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape
+    rw [hsm, hG, hG_shape]
+  · -- PM tp shapes
+    rw [hpm0, hpm1, hpm2, hpm3]
+    have hch : ∀ r, (chunkPrimDimN 1 4 r (allGatherPrimDimN 2 4 0 [Y0, Y1, Y2, Y3])).shape
+        = [1, 1, 8, 8] := by
+      intro r
+      rw [chunkPrimDimN_shape 1 4 r _ _ hG_shape (by omega)]
+      simp [List.set, List.getD]
+    simp only [hch]
+  · -- Value equality
+    rw [hsm, hG, hpm0, hpm1, hpm2, hpm3]
+    show allGatherPrimDimN 2 4 0 [Y0, Y1, Y2, Y3] = reconstructWithDim 1 4 0 _
+    rw [reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by
+      rw [chunkPrimDimN_shape 1 4 0 _ _ hG_shape (by omega)]; decide)]
+    exact (allGatherPrimDimN_chunkPrimDimN_id_dim1_4_8_8 _ hG_shape).symm
+
 end TrainVerify.Denote.GeneratedGoals
 
