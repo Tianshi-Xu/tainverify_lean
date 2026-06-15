@@ -44,5 +44,53 @@ def goal_307_cut_initGoals : List LineageGoal := initGoals ++ goal_307_prereqs
 def goal_307_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_307 pm_goal_307 goal_307 sm_goal_307InitEnv pm_goal_307InitEnv goal_307_cut_initGoals
 
-end TrainVerify.Denote.GeneratedGoals
+-- FW_multiref copies its input to each output; the SM/PM alignment reduces to the
+-- input tensor's prerequisite goal (goal_80, tensor 675).
+theorem prove_goal_307_cut : goal_307_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_80 (tensor 675 = gather of shards 2785..2788 on dim 1)
+  have hInit675 : InitGoalHolds pm_goal_307.numRanks goal_80 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_307_cut_initGoals, goal_307_prereqs]
+    decide
+  have h675_rec : initSM 675 = reconstructWithDim 1 pm_goal_307.numRanks 0
+      [initPM 2785, initPM 2786, initPM 2787, initPM 2788] := by
+    have hrec := hInit675.2.2
+    simp only [goal_80, List.map] at hrec
+    exact hrec
+  have htp_shapes := hInit675.2.1
+  simp only [goal_80, List.map] at htp_shapes
+  -- SM store: smStore 1055 = initSM 675 (third output of FW_multiref)
+  have hsm : (denoteGraph sm_goal_307 initSM) 1055 = initSM 675 := by
+    simp only [sm_goal_307, denoteGraph, List.foldl]
+    exact applyNode_fw_multiref3_out_g307 _ _ _ _ _ _ _ _ (by decide)
+  -- PM stores: each PM output equals the corresponding PM input
+  have hpm0 : (denoteGraph pm_goal_307 initPM) 2869 = initPM 2785 := by
+    simp only [pm_goal_307, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ _ (by decide), applyNode_skip _ _ _ _ (by decide),
+        applyNode_skip _ _ _ _ (by decide)]
+    exact applyNode_fw_multiref3_out_g307 _ _ _ _ _ _ _ _ (by decide)
+  have hpm1 : (denoteGraph pm_goal_307 initPM) 2870 = initPM 2786 := by
+    simp only [pm_goal_307, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ _ (by decide), applyNode_skip _ _ _ _ (by decide)]
+    rw [applyNode_fw_multiref3_out_g307 _ _ _ _ _ _ _ _ (by decide)]
+    exact applyNode_skip _ _ _ _ (by decide)
+  have hpm2 : (denoteGraph pm_goal_307 initPM) 2871 = initPM 2787 := by
+    simp only [pm_goal_307, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ _ (by decide)]
+    rw [applyNode_fw_multiref3_out_g307 _ _ _ _ _ _ _ _ (by decide)]
+    rw [applyNode_skip _ _ _ _ (by decide)]
+    exact applyNode_skip _ _ _ _ (by decide)
+  have hpm3 : (denoteGraph pm_goal_307 initPM) 2872 = initPM 2788 := by
+    simp only [pm_goal_307, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref3_out_g307 _ _ _ _ _ _ _ _ (by decide)]
+    rw [applyNode_skip _ _ _ _ (by decide), applyNode_skip _ _ _ _ (by decide)]
+    exact applyNode_skip _ _ _ _ (by decide)
+  -- Prove the three conjuncts
+  simp only [goal_307, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]; exact hInit675.1
+  · rw [hpm0, hpm1, hpm2, hpm3]; exact htp_shapes
+  · rw [hsm, hpm0, hpm1, hpm2, hpm3]; exact h675_rec
 
+end TrainVerify.Denote.GeneratedGoals

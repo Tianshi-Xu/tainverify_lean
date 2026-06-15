@@ -17265,4 +17265,35 @@ theorem applyNode_fw_multiref3_second_out_g305
   unfold storeSet
   simp [List.zip, List.zipWith, List.replicate, List.find?, h01]
 
+/-- `storeSet` over a list of pairs all carrying the same value `v`: any key present
+    in the list reads back as `v`. -/
+theorem storeSet_replicate_mem_g307 (s : Store) (keys : List Tid) (v : Tensor) (tid : Tid)
+    (h : tid ∈ keys) :
+    storeSet s (keys.zip (List.replicate keys.length v)) tid = v := by
+  induction keys with
+  | nil => simp at h
+  | cons k ks ih =>
+      by_cases hk : k = tid
+      · subst hk
+        unfold storeSet
+        simp [List.replicate, List.zip, List.zipWith, List.find?]
+      · have h' : tid ∈ ks := by
+          rcases List.mem_cons.mp h with he | he
+          · exact absurd he.symm hk
+          · exact he
+        have hrec := ih h'
+        unfold storeSet at hrec ⊢
+        simpa [List.replicate, List.zip, List.zipWith, List.find?, hk] using hrec
+
+/-- `applyNode` for `FW_multiref` with `outs = [t1, t2, t3]` and `params = [3]`: every
+    output (in particular the third) equals the input. -/
+theorem applyNode_fw_multiref3_out_g307
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid t1 t2 t3 i : Tid)
+    (hi : i ∈ ([t1, t2, t3] : List Tid)) :
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid],
+                    outs := [t1, t2, t3], params := [3] } i = s xTid := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_multiref]
+  exact storeSet_replicate_mem_g307 s [t1, t2, t3] (s xTid) i hi
+
 end TrainVerify.Denote
