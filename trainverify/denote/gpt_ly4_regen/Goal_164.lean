@@ -49,5 +49,131 @@ def goal_164_cut_initGoals : List LineageGoal := initGoals ++ goal_164_prereqs
 def goal_164_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_164 pm_goal_164 goal_164 sm_goal_164InitEnv pm_goal_164InitEnv goal_164_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- bw_softmax distributes over allGatherPrimDimN (dim 2) for [1,4,2,8] shards
+theorem prove_goal_164_cut : goal_164_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract prereqs: goal_165 for tensor 788 (gradient g), goal_42 for tensor 620 (output y)
+  have hInit788 : InitGoalHolds pm_goal_164.numRanks goal_165 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_164_cut_initGoals, goal_164_prereqs]
+    decide
+  have hInit620 : InitGoalHolds pm_goal_164.numRanks goal_42 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_164_cut_initGoals, goal_164_prereqs]
+    decide
+  -- goal_165: initSM 788 = reconstructWithDim 2 4 0 [initPM 1941,...,1944]
+  have h788_rec : initSM 788 = reconstructWithDim 2 4 0
+      [initPM 1941, initPM 1942, initPM 1943, initPM 1944] := by
+    have hrec := hInit788.2.2
+    simp only [goal_165, pm_goal_164, List.map] at hrec
+    exact hrec
+  -- goal_42: initSM 620 = reconstructWithDim 2 4 0 [initPM 1909,...,1912]
+  have h620_rec : initSM 620 = reconstructWithDim 2 4 0
+      [initPM 1909, initPM 1910, initPM 1911, initPM 1912] := by
+    have hrec := hInit620.2.2
+    simp only [goal_42, pm_goal_164, List.map] at hrec
+    exact hrec
+  -- Shard shapes from goal_165 (g shards)
+  have htp_g := hInit788.2.1
+  simp only [goal_165, List.map] at htp_g
+  have h1941_shape : (initPM 1941).shape = [1, 4, 2, 8] := by
+    have := congrArg List.head? htp_g; simpa using this
+  have h1942_shape : (initPM 1942).shape = [1, 4, 2, 8] := by
+    have := congrArg List.tail htp_g
+    have := congrArg List.head? this; simpa using this
+  have h1943_shape : (initPM 1943).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.tail ∘ List.tail) htp_g
+    have := congrArg List.head? this; simpa using this
+  have h1944_shape : (initPM 1944).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp_g
+    have := congrArg List.head? this; simpa using this
+  -- Shard shapes from goal_42 (y shards)
+  have htp_y := hInit620.2.1
+  simp only [goal_42, List.map] at htp_y
+  have h1909_shape : (initPM 1909).shape = [1, 4, 2, 8] := by
+    have := congrArg List.head? htp_y; simpa using this
+  have h1910_shape : (initPM 1910).shape = [1, 4, 2, 8] := by
+    have := congrArg List.tail htp_y
+    have := congrArg List.head? this; simpa using this
+  have h1911_shape : (initPM 1911).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.tail ∘ List.tail) htp_y
+    have := congrArg List.head? this; simpa using this
+  have h1912_shape : (initPM 1912).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp_y
+    have := congrArg List.head? this; simpa using this
+  -- Convert reconstructWithDim to allGatherPrimDimN (non-scalar shards)
+  have h788_gather : initSM 788 = allGatherPrimDimN 2 4 0
+      [initPM 1941, initPM 1942, initPM 1943, initPM 1944] := by
+    rw [h788_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1941_shape]; decide)
+  have h620_gather : initSM 620 = allGatherPrimDimN 2 4 0
+      [initPM 1909, initPM 1910, initPM 1911, initPM 1912] := by
+    rw [h620_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1909_shape]; decide)
+  -- SM store: smStore 787 = bw_softmax (initSM 788) (initSM 620)
+  have hsm : (denoteGraph sm_goal_164 initSM) 787 =
+      bw_softmax (initSM 788) (initSM 620) := by
+    simp only [sm_goal_164, denoteGraph, List.foldl]
+    rw [applyNode_bw_softmax_out_g164]
+  -- PM stores: 4 independent bw_softmax (each node writes to a distinct tid)
+  have hpm0 : (denoteGraph pm_goal_164 initPM) 1922 =
+      bw_softmax (initPM 1941) (initPM 1909) := by
+    simp only [pm_goal_164, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_softmax_out_g164]
+  have hpm1 : (denoteGraph pm_goal_164 initPM) 1924 =
+      bw_softmax (initPM 1942) (initPM 1910) := by
+    simp only [pm_goal_164, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_softmax_out_g164]; congr 1
+  have hpm2 : (denoteGraph pm_goal_164 initPM) 1926 =
+      bw_softmax (initPM 1943) (initPM 1911) := by
+    simp only [pm_goal_164, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_bw_softmax_out_g164]; congr 1
+  have hpm3 : (denoteGraph pm_goal_164 initPM) 1928 =
+      bw_softmax (initPM 1944) (initPM 1912) := by
+    simp only [pm_goal_164, denoteGraph, List.foldl]
+    rw [applyNode_bw_softmax_out_g164]; congr 1
+  -- Key equation: bw_softmax(gather(g), gather(y)) = gather(pairwise bw_softmax)
+  have hkey : bw_softmax (initSM 788) (initSM 620) =
+      allGatherPrimDimN 2 4 0
+        [bw_softmax (initPM 1941) (initPM 1909),
+         bw_softmax (initPM 1942) (initPM 1910),
+         bw_softmax (initPM 1943) (initPM 1911),
+         bw_softmax (initPM 1944) (initPM 1912)] := by
+    conv_lhs => rw [h788_gather, h620_gather]
+    exact bw_softmax_distribute_allGatherPrimDimN_dim2_4_1_4_2_8_g164
+      (initPM 1941) (initPM 1942) (initPM 1943) (initPM 1944)
+      (initPM 1909) (initPM 1910) (initPM 1911) (initPM 1912)
+      h1941_shape h1942_shape h1943_shape h1944_shape
+      h1909_shape h1910_shape h1911_shape h1912_shape
+  -- Prove the three conjuncts
+  simp only [goal_164, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM shape: [1, 4, 8, 8]
+    rw [hsm, h788_gather, h620_gather]
+    exact softmaxBwd_shape_1_4_8_8_g164 _ _ (by
+      rw [allGatherPrimDimN_shape 2 4 _ [1, 4, 2, 8] (by simp [h1909_shape])]; simp [List.set, List.getD])
+  · -- PM tp shapes: [[1,4,2,8] × 4]
+    rw [hpm0, hpm1, hpm2, hpm3]
+    have hs0 := softmaxBwd_shape_1_4_2_8_g164 (initPM 1941) (initPM 1909) h1909_shape
+    have hs1 := softmaxBwd_shape_1_4_2_8_g164 (initPM 1942) (initPM 1910) h1910_shape
+    have hs2 := softmaxBwd_shape_1_4_2_8_g164 (initPM 1943) (initPM 1911) h1911_shape
+    have hs3 := softmaxBwd_shape_1_4_2_8_g164 (initPM 1944) (initPM 1912) h1912_shape
+    simp [hs0, hs1, hs2, hs3]
+  · -- Value equality: smStore 787 = reconstructWithDim 2 4 0 [pmStore 1922,...,1928]
+    rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
+    symm
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [hpm0]
+    rw [softmaxBwd_shape_1_4_2_8_g164 (initPM 1941) (initPM 1909) h1909_shape]
+    decide
+
 end TrainVerify.Denote.GeneratedGoals
+
 
