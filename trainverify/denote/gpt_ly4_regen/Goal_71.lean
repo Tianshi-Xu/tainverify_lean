@@ -49,5 +49,81 @@ def goal_71_cut_initGoals : List LineageGoal := initGoals ++ goal_71_prereqs
 def goal_71_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_71 pm_goal_71 goal_71 sm_goal_71InitEnv pm_goal_71InitEnv goal_71_cut_initGoals
 
+set_option maxHeartbeats 4000000 in
+set_option maxRecDepth 4096 in
+-- AllToAll (gatherDim 1, scatterDim 3) chunks tensor 658 along dim 3; each PM rank applies
+-- fw_contiguous (identity) to its chunk; AllGather (dim 3) reassembles. fw_contiguous is the
+-- identity, so reassembling the chunks recovers the original tensor.
+theorem prove_goal_71_cut : goal_71_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_70 (tensor 658 gathered along dim 1 from 2533..2536)
+  have hInit : InitGoalHolds pm_goal_71.numRanks goal_70 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_71_cut_initGoals, goal_71_prereqs]
+    decide
+  have h658_shape : (initSM 658).shape = [1, 8, 4, 8] := hInit.1
+  have htp_shapes := hInit.2.1
+  simp only [goal_70, LineageGoal.tps, List.map] at htp_shapes
+  have h2533 : (initPM 2533).shape = [1, 2, 4, 8] := by
+    have := congrArg (List.getD · 0 []) htp_shapes; simp at this; exact this
+  have h658_eq : initSM 658 = allGatherPrimDimN 1 4 0
+      [initPM 2533, initPM 2534, initPM 2535, initPM 2536] := by
+    have hrec := hInit.2.2
+    simp only [goal_70, LineageGoal.tps, LineageGoal.gatherDim, List.map] at hrec
+    rw [hrec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2533]; decide)
+  -- SM store: smStore 659 = initSM 658 (FW_contiguous is identity)
+  have hsm : (denoteGraph sm_goal_71 initSM) 659 = initSM 658 := by
+    simp only [sm_goal_71, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_fw_contiguous_out_g71]
+  -- PM store: AllGather (dim 3) of per-rank AllToAll outputs (contiguous is identity)
+  have hpm : (denoteGraph pm_goal_71 initPM) 659 = allGatherPrimDimN 3 4 0
+      [allToAllPrimWithDims 4 0 [initPM 2533, initPM 2534, initPM 2535, initPM 2536] 1 3,
+       allToAllPrimWithDims 4 1 [initPM 2533, initPM 2534, initPM 2535, initPM 2536] 1 3,
+       allToAllPrimWithDims 4 2 [initPM 2533, initPM 2534, initPM 2535, initPM 2536] 1 3,
+       allToAllPrimWithDims 4 3 [initPM 2533, initPM 2534, initPM 2535, initPM 2536] 1 3] := by
+    simp only [pm_goal_71, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_allGatherPrimDimN_out_thm]
+    congr 1
+  -- AllToAll on rank r yields chunk r of tensor 658 along dim 3
+  have halltoall : ∀ r, r < 4 →
+      allToAllPrimWithDims 4 r [initPM 2533, initPM 2534, initPM 2535, initPM 2536] 1 3 =
+      chunkPrimDimN 3 4 r (initSM 658) := by
+    intro r _
+    simp only [allToAllPrimWithDims]
+    rw [← h658_eq]
+  have hpm' : (denoteGraph pm_goal_71 initPM) 659 = allGatherPrimDimN 3 4 0
+      [chunkPrimDimN 3 4 0 (initSM 658),
+       chunkPrimDimN 3 4 1 (initSM 658),
+       chunkPrimDimN 3 4 2 (initSM 658),
+       chunkPrimDimN 3 4 3 (initSM 658)] := by
+    rw [hpm, halltoall 0 (by omega), halltoall 1 (by omega), halltoall 2 (by omega), halltoall 3 (by omega)]
+  -- Bridge: reassembling dim-3 chunks recovers the original tensor (identity op)
+  have hbridge : initSM 658 = allGatherPrimDimN 3 4 0
+      [chunkPrimDimN 3 4 0 (initSM 658),
+       chunkPrimDimN 3 4 1 (initSM 658),
+       chunkPrimDimN 3 4 2 (initSM 658),
+       chunkPrimDimN 3 4 3 (initSM 658)] :=
+    (allGatherPrimDimN_chunkPrimDimN_id_dim3_1_8_4_8_g71 (initSM 658) h658_shape).symm
+  -- Discharge the three conjuncts
+  simp only [goal_71, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
+    LineageGoal.gatherDim, List.map, Piece.tid]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, h658_shape]
+  · rw [hpm']
+    have hchunk_shape : ∀ r, (chunkPrimDimN 3 4 r (initSM 658)).shape = [1, 8, 4, 2] := by
+      intro r
+      rw [chunkPrimDimN_shape 3 4 r _ _ h658_shape (by omega)]
+      simp [List.set, List.getD]
+    have hhead : ([chunkPrimDimN 3 4 0 (initSM 658), chunkPrimDimN 3 4 1 (initSM 658),
+        chunkPrimDimN 3 4 2 (initSM 658), chunkPrimDimN 3 4 3 (initSM 658)].head?.map
+        (·.shape)).getD [] = [1, 8, 4, 2] := by
+      simp [List.head?, Option.map, hchunk_shape 0]
+    rw [allGatherPrimDimN_shape 3 4 _ [1, 8, 4, 2] hhead]
+    simp [List.set, List.getD]
+  · rw [reconstructWithDim_singleton, hsm, hpm']
+    exact hbridge
+
 end TrainVerify.Denote.GeneratedGoals
+
 
