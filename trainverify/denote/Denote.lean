@@ -15178,4 +15178,139 @@ theorem fw_matmul_split_dim2_4_1_4_8_8_g66 (a b : Tensor)
     have hl8 : l < 8 := Finset.mem_range.mp hl
     congr 2 <;> (subst loc; omega)
 
+/-- Shape preservation for `fw_matmul` with `x : [1,4,8,8]`, `y : [1,4,8,2]`. -/
+theorem fw_matmul_shape_1_4_8_2_g94 (x y : Tensor)
+    (hx : x.shape = [1, 4, 8, 8]) (hy : y.shape = [1, 4, 8, 2]) :
+    (fw_matmul x y).shape = [1, 4, 8, 2] := by
+  unfold fw_matmul batchedMatmul
+  simp only [hx, hy, List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append,
+    Tensor.mkShape]
+
+/-- valAt of `fw_matmul a b` at flat `idx < 64` for `a : [1,4,8,8]`, `b : [1,4,8,2]`.
+    The output has shape `[1,4,8,2]`. -/
+private theorem fw_matmul_valAt_1_4_8_2_g94 (a b : Tensor) (idx : Nat)
+    (ha : a.shape = [1, 4, 8, 8]) (hb : b.shape = [1, 4, 8, 2]) (hidx : idx < 64) :
+    valAt (fw_matmul a b) idx =
+      ∑ l ∈ Finset.range 8,
+        valAt a (idx / 16 * 64 + idx % 16 / 2 * 8 + l) *
+          valAt b (idx / 16 * 16 + l * 2 + idx % 2) := by
+  have key : fw_matmul a b = Tensor.mkShape [1, 4, 8, 2] (fun outIdx =>
+      ∑ l ∈ Finset.range 8,
+        valAt a (outIdx.1 / (8 * 2) * (8 * 8) +
+                  outIdx.1 % (8 * 2) / 2 * 8 + l) *
+          valAt b (outIdx.1 / (8 * 2) * (8 * 2) + l * 2 +
+                    outIdx.1 % (8 * 2) % 2)) := by
+    unfold fw_matmul batchedMatmul
+    rw [ha, hb]
+    rfl
+  rw [key]
+  have hidx' : idx < prodShape ([1,4,8,2] : Shape) := by simp [prodShape]; omega
+  rw [valAt_of_lt _ _ (by simp [Tensor.mkShape]; exact hidx')]
+  show ∑ l ∈ Finset.range 8,
+        valAt a (idx / (8 * 2) * (8 * 8) + idx % (8 * 2) / 2 * 8 + l) *
+          valAt b (idx / (8 * 2) * (8 * 2) + l * 2 + idx % (8 * 2) % 2) = _
+  apply Finset.sum_congr rfl
+  intro l _
+  congr 2 <;> omega
+
+set_option maxHeartbeats 4000000 in
+/-- `fw_matmul` distributes over a dim-3 (output-column) split of the second operand:
+    chunking `b` along dim 3 commutes with matmul, and the full result is the all-gather
+    along dim 3 of the per-chunk matmuls. The first operand `a` is shared by every chunk. -/
+theorem fw_matmul_split_dim3_4_1_4_8_8_g94 (a b : Tensor)
+    (ha : a.shape = [1, 4, 8, 8]) (hb : b.shape = [1, 4, 8, 8]) :
+    fw_matmul a b =
+      allGatherPrimDimN 3 4 0
+        [fw_matmul a (chunkPrimDimN 3 4 0 b),
+         fw_matmul a (chunkPrimDimN 3 4 1 b),
+         fw_matmul a (chunkPrimDimN 3 4 2 b),
+         fw_matmul a (chunkPrimDimN 3 4 3 b)] := by
+  have hchunk_b : ∀ r, r < 4 → (chunkPrimDimN 3 4 r b).shape = [1, 4, 8, 2] := by
+    intro r hr
+    rw [chunkPrimDimN_shape 3 4 r _ _ hb (by omega)]
+    simp [List.set, List.getD]
+  have hpiece_shape : ∀ r, r < 4 →
+      (fw_matmul a (chunkPrimDimN 3 4 r b)).shape = [1, 4, 8, 2] := by
+    intro r hr
+    exact fw_matmul_shape_1_4_8_2_g94 _ _ ha (hchunk_b r hr)
+  have hp0 := hpiece_shape 0 (by decide)
+  have hlhs_shape : (fw_matmul a b).shape = [1, 4, 8, 8] :=
+    fw_matmul_shape_1_4_8_8 a b ha hb
+  have hhead : (([fw_matmul a (chunkPrimDimN 3 4 0 b),
+                  fw_matmul a (chunkPrimDimN 3 4 1 b),
+                  fw_matmul a (chunkPrimDimN 3 4 2 b),
+                  fw_matmul a (chunkPrimDimN 3 4 3 b)] : List Tensor).head?.map
+                (fun t => t.shape)).getD [] = [1, 4, 8, 2] := by
+    simp [hp0]
+  have hrhs_shape : (allGatherPrimDimN 3 4 0
+      [fw_matmul a (chunkPrimDimN 3 4 0 b),
+       fw_matmul a (chunkPrimDimN 3 4 1 b),
+       fw_matmul a (chunkPrimDimN 3 4 2 b),
+       fw_matmul a (chunkPrimDimN 3 4 3 b)]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 3 4 _ _ hhead]
+    simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  rw [fw_matmul_valAt_1_4_8_8 a b idx ha hb hidx256]
+  rw [allGatherPrimDimN_3_4_valAt_1_4_8_2 _ idx hhead hidx256]
+  set r := (idx % 8) / 2 with hr_def
+  set loc := (idx / 8) * 2 + (idx % 8) % 2 with hloc_def
+  have hloc_lt : loc < 64 := by rw [hloc_def]; omega
+  have hvalpiece : ∀ rr, rr < 4 →
+      valAt (fw_matmul a (chunkPrimDimN 3 4 rr b)) loc =
+        ∑ l ∈ Finset.range 8,
+          valAt a (loc / 16 * 64 + loc % 16 / 2 * 8 + l) *
+          valAt b ((loc / 16 * 16 + l * 2 + loc % 2) / 2 * 8 + rr * 2 +
+                    (loc / 16 * 16 + l * 2 + loc % 2) % 2) := by
+    intro rr hrr
+    rw [fw_matmul_valAt_1_4_8_2_g94 a (chunkPrimDimN 3 4 rr b) loc ha (hchunk_b rr hrr) hloc_lt]
+    apply Finset.sum_congr rfl
+    intro l hl
+    have hl_lt : l < 8 := by simpa using hl
+    have hbidx_lt : loc / 16 * 16 + l * 2 + loc % 2 < 64 := by omega
+    rw [chunkPrimDimN_3_4_valAt_1_4_8_8 b rr (loc / 16 * 16 + l * 2 + loc % 2) hb hrr hbidx_lt]
+  have hr_cases : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by rw [hr_def]; omega
+  rcases hr_cases with h | h | h | h
+  · have hsel : ([fw_matmul a (chunkPrimDimN 3 4 0 b),
+                  fw_matmul a (chunkPrimDimN 3 4 1 b),
+                  fw_matmul a (chunkPrimDimN 3 4 2 b),
+                  fw_matmul a (chunkPrimDimN 3 4 3 b)] : List Tensor).getD r
+                  (zeroTensor [1, 4, 8, 2]) = fw_matmul a (chunkPrimDimN 3 4 0 b) := by
+      rw [h]; rfl
+    rw [hsel, hvalpiece 0 (by decide)]
+    apply Finset.sum_congr rfl
+    intro l _
+    congr 2 <;> omega
+  · have hsel : ([fw_matmul a (chunkPrimDimN 3 4 0 b),
+                  fw_matmul a (chunkPrimDimN 3 4 1 b),
+                  fw_matmul a (chunkPrimDimN 3 4 2 b),
+                  fw_matmul a (chunkPrimDimN 3 4 3 b)] : List Tensor).getD r
+                  (zeroTensor [1, 4, 8, 2]) = fw_matmul a (chunkPrimDimN 3 4 1 b) := by
+      rw [h]; rfl
+    rw [hsel, hvalpiece 1 (by decide)]
+    apply Finset.sum_congr rfl
+    intro l _
+    congr 2 <;> omega
+  · have hsel : ([fw_matmul a (chunkPrimDimN 3 4 0 b),
+                  fw_matmul a (chunkPrimDimN 3 4 1 b),
+                  fw_matmul a (chunkPrimDimN 3 4 2 b),
+                  fw_matmul a (chunkPrimDimN 3 4 3 b)] : List Tensor).getD r
+                  (zeroTensor [1, 4, 8, 2]) = fw_matmul a (chunkPrimDimN 3 4 2 b) := by
+      rw [h]; rfl
+    rw [hsel, hvalpiece 2 (by decide)]
+    apply Finset.sum_congr rfl
+    intro l _
+    congr 2 <;> omega
+  · have hsel : ([fw_matmul a (chunkPrimDimN 3 4 0 b),
+                  fw_matmul a (chunkPrimDimN 3 4 1 b),
+                  fw_matmul a (chunkPrimDimN 3 4 2 b),
+                  fw_matmul a (chunkPrimDimN 3 4 3 b)] : List Tensor).getD r
+                  (zeroTensor [1, 4, 8, 2]) = fw_matmul a (chunkPrimDimN 3 4 3 b) := by
+      rw [h]; rfl
+    rw [hsel, hvalpiece 3 (by decide)]
+    apply Finset.sum_congr rfl
+    intro l _
+    congr 2 <;> omega
+
 end TrainVerify.Denote
