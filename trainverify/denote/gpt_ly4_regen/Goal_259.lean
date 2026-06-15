@@ -44,5 +44,73 @@ def goal_259_cut_initGoals : List LineageGoal := initGoals ++ goal_259_prereqs
 def goal_259_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_259 pm_goal_259 goal_259 sm_goal_259InitEnv pm_goal_259InitEnv goal_259_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- FW_multiref copies its input to multiple outputs.  The second output (tid 907)
+-- equals the input (tid 567), which is the dim-2 gather of the per-rank inputs
+-- (goal_4).  Each per-rank second output equals that rank's input, so the SM
+-- output is the dim-2 gather of the per-rank outputs.
+theorem prove_goal_259_cut : goal_259_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- goal_4: tensor 567 is the dim-2 gather of shards 1117..1120
+  have hInit567 : InitGoalHolds pm_goal_259.numRanks goal_4 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_259_cut_initGoals, goal_259_prereqs]
+    decide
+  have h567_rec : initSM 567 = reconstructWithDim 2 4 0
+      [initPM 1117, initPM 1118, initPM 1119, initPM 1120] := by
+    have hrec := hInit567.2.2
+    simp only [goal_4, pm_goal_259, List.map] at hrec
+    exact hrec
+  have h567_shape : (initSM 567).shape = [1, 8, 32] := hInit567.1
+  have hs := hInit567.2.1
+  simp only [goal_4, List.map, List.cons.injEq, and_true] at hs
+  obtain ⟨h1117_shape, h1118_shape, h1119_shape, h1120_shape⟩ := hs
+  -- SM store: second output (tid 907) equals input 567
+  have hsm907 : (denoteGraph sm_goal_259 initSM) 907 = initSM 567 := by
+    simp only [sm_goal_259, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_second_out_g259 _ _ 0 567 903 907 (by decide)]
+  -- PM stores: each rank's second output equals that rank's input
+  have hpm1501 : (denoteGraph pm_goal_259 initPM) 1501 = initPM 1117 := by
+    simp only [pm_goal_259, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 1501 (by decide), applyNode_skip _ _ _ 1501 (by decide),
+        applyNode_skip _ _ _ 1501 (by decide),
+        applyNode_fw_multiref2_second_out_g259 _ _ 0 1117 3413 1501 (by decide)]
+  have hpm1502 : (denoteGraph pm_goal_259 initPM) 1502 = initPM 1118 := by
+    simp only [pm_goal_259, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 1502 (by decide), applyNode_skip _ _ _ 1502 (by decide),
+        applyNode_fw_multiref2_second_out_g259 _ _ 1 1118 3419 1502 (by decide),
+        applyNode_skip _ _ _ 1118 (by decide)]
+  have hpm1503 : (denoteGraph pm_goal_259 initPM) 1503 = initPM 1119 := by
+    simp only [pm_goal_259, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 1503 (by decide),
+        applyNode_fw_multiref2_second_out_g259 _ _ 2 1119 3425 1503 (by decide),
+        applyNode_skip _ _ _ 1119 (by decide), applyNode_skip _ _ _ 1119 (by decide)]
+  have hpm1504 : (denoteGraph pm_goal_259 initPM) 1504 = initPM 1120 := by
+    simp only [pm_goal_259, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_second_out_g259 _ _ 3 1120 3431 1504 (by decide),
+        applyNode_skip _ _ _ 1120 (by decide), applyNode_skip _ _ _ 1120 (by decide),
+        applyNode_skip _ _ _ 1120 (by decide)]
+  -- PM shard shapes
+  have hpm1501_shape : ((denoteGraph pm_goal_259 initPM) 1501).shape = [1, 8, 8] := by
+    rw [hpm1501]; exact h1117_shape
+  have hpm1502_shape : ((denoteGraph pm_goal_259 initPM) 1502).shape = [1, 8, 8] := by
+    rw [hpm1502]; exact h1118_shape
+  have hpm1503_shape : ((denoteGraph pm_goal_259 initPM) 1503).shape = [1, 8, 8] := by
+    rw [hpm1503]; exact h1119_shape
+  have hpm1504_shape : ((denoteGraph pm_goal_259 initPM) 1504).shape = [1, 8, 8] := by
+    rw [hpm1504]; exact h1120_shape
+  -- Discharge the three conjuncts
+  simp only [goal_259, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape: [1, 8, 32]
+    rw [hsm907]; exact h567_shape
+  · -- PM shard shapes
+    rw [hpm1501_shape, hpm1502_shape, hpm1503_shape, hpm1504_shape]
+  · -- Value equality: smStore 907 = reconstructWithDim 2 4 0 [pmStore 1501..1504]
+    change (denoteGraph sm_goal_259 initSM) 907 = reconstructWithDim 2 4 0
+      [(denoteGraph pm_goal_259 initPM) 1501, (denoteGraph pm_goal_259 initPM) 1502,
+       (denoteGraph pm_goal_259 initPM) 1503, (denoteGraph pm_goal_259 initPM) 1504]
+    rw [hsm907, hpm1501, hpm1502, hpm1503, hpm1504, h567_rec]
+
 end TrainVerify.Denote.GeneratedGoals
 
