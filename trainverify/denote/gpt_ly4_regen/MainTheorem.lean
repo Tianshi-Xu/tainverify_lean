@@ -1,15 +1,14 @@
 /- MAIN THEOREM SKELETON: GPT-2 ly4 parallel-training correctness.
 
    `gpt_main_all_goals : all_goals_stmt` assembles all 312 per-goal correctness
-   statements into the full top-level theorem. Status of the 312 leaves:
-     * 200 goals: cut-form PROVEN (`prove_goal_N_cut`, 0 sorry). Their full form
-       is obtained via a `goal_N_cut_to_full` bridge. goal_2/goal_3 bridges are
-       fully proven (imported); the other 198 bridges are `sorry` placeholders
-       pending the topological-induction template.
-     * 112 goals: cut-form NOT yet proven -> `goal_N_full` is `sorry` directly.
-
-   The THEOREM STRUCTURE (chunk decomposition + combiner) is complete and
-   type-checks. Remaining work = discharge the per-goal sorries. -/
+   statements into the full top-level theorem. Two proof layers:
+     1. cut-form per goal (`prove_goal_N_cut`, in Goal_N.lean)
+     2. cut->full bridge (`goal_N_cut_to_full`)
+   Live progress is NOT tracked in this comment (it drifts). Query it instead:
+     cut-form proven:  grep -lc 'prove_goal_.*_cut' denote/gpt_ly4_regen/Goal_*.lean | grep -c ':1' (and confirm 0 sorry)
+     bridges proven:   inspect goal_N_cut_to_full sites that are not `sorry`
+   The THEOREM STRUCTURE (chunk decomposition + combiner) type-checks; remaining
+   work = discharge the per-goal sorries (cut proofs + bridges). -/
 import denote.gpt_ly4_regen.GeneratedData
 import denote.gpt_ly4_regen.Goal_1
 import denote.gpt_ly4_regen.Goal_2
@@ -325,6 +324,7 @@ import denote.gpt_ly4_regen.Goal_311
 import denote.gpt_ly4_regen.Goal_312
 import denote.gpt_ly4_regen.SpikeBridge   -- goal_2_cut_to_full (proven)
 import denote.gpt_ly4_regen.Goal3Bridge    -- goal_3_cut_to_full (proven)
+import denote.gpt_ly4_regen.Goal4Bridge    -- goal_4_cut_to_full (proven, topological induction)
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -340,7 +340,7 @@ namespace TrainVerify.Denote.GeneratedGoals
 theorem goal_1_cut_to_full : goal_1_stmt_cut → goal_1_stmt := by sorry
 -- goal_2_cut_to_full : imported (proven)
 -- goal_3_cut_to_full : imported (proven)
-theorem goal_4_cut_to_full : goal_4_stmt_cut → goal_4_stmt := by sorry
+-- goal_4_cut_to_full : imported (proven, Goal4Bridge)
 theorem goal_5_cut_to_full : goal_5_stmt_cut → goal_5_stmt := by sorry
 theorem goal_6_cut_to_full : goal_6_stmt_cut → goal_6_stmt := by sorry
 theorem goal_7_cut_to_full : goal_7_stmt_cut → goal_7_stmt := by sorry
