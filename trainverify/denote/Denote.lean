@@ -19059,4 +19059,138 @@ theorem applyNode_bw_div_out_g233
   unfold storeSet
   simp [List.find?]
 
+/-! ## BW_softmax distribution lemmas (goal_234 template) -/
+
+/-- `applyNode` for `BW_softmax` with singleton output: `bw_softmax g y`. -/
+theorem applyNode_bw_softmax_out_g234
+    (gr : GraphDecl) (s : Store) (rank : Nat) (gTid yTid outTid : Tid) (params : List Nat) :
+    applyNode gr s { rank := rank, op := "OpName.BW_softmax", ins := [gTid, yTid],
+                     outs := [outTid], params := params } outTid =
+      bw_softmax (s gTid) (s yTid) := by
+  unfold applyNode
+  change storeSet s [(outTid, bw_softmax (s gTid) (s yTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- Explicit `mkShape` form of `softmaxBwd g y` when the last dimension is `8`. -/
+theorem softmaxBwd_eq_mk_d8_g234 (g y : Tensor) (a b c : Nat)
+    (hy : y.shape = [a, b, c, 8]) :
+    softmaxBwd g y = Tensor.mkShape y.shape (fun outIdx =>
+      valAt y (outIdx.1 / 8 * 8 + outIdx.1 % 8) *
+        (valAt g (outIdx.1 / 8 * 8 + outIdx.1 % 8) -
+          ∑ j ∈ Finset.range 8,
+            valAt y (outIdx.1 / 8 * 8 + j) * valAt g (outIdx.1 / 8 * 8 + j))) := by
+  unfold softmaxBwd
+  have hrev : y.shape.reverse = 8 :: [c, b, a] := by rw [hy]; rfl
+  split
+  next d tail heq =>
+    rw [hrev] at heq
+    simp only [List.cons.injEq] at heq
+    obtain ⟨hd, -⟩ := heq
+    subst hd
+    rfl
+  next heq =>
+    simp [hrev] at heq
+
+/-- `softmaxBwd` preserves shape when the last (softmax) dimension is `8`. -/
+theorem softmaxBwd_shape_d8_g234 (g y : Tensor) (a b c : Nat)
+    (hy : y.shape = [a, b, c, 8]) :
+    (softmaxBwd g y).shape = [a, b, c, 8] := by
+  rw [softmaxBwd_eq_mk_d8_g234 g y a b c hy]
+  simp only [Tensor.mkShape]
+  exact hy
+
+-- `valAt` of `softmaxBwd g y` when the last dimension is `8`:
+-- `dx_i = y_i * (g_i - Σ_j y_j g_j)` summed over the contiguous last-dim block.
+set_option maxHeartbeats 1600000 in
+theorem softmaxBwd_valAt_d8_g234 (g y : Tensor) (a b c idx : Nat)
+    (hy : y.shape = [a, b, c, 8]) (hidx : idx < prodShape y.shape) :
+    valAt (softmaxBwd g y) idx =
+      valAt y (idx / 8 * 8 + idx % 8) *
+        (valAt g (idx / 8 * 8 + idx % 8) -
+          ∑ j ∈ Finset.range 8,
+            valAt y (idx / 8 * 8 + j) * valAt g (idx / 8 * 8 + j)) := by
+  rw [softmaxBwd_eq_mk_d8_g234 g y a b c hy]
+  have hprod : idx < prodShape (Tensor.mkShape y.shape (fun outIdx =>
+      valAt y (outIdx.1 / 8 * 8 + outIdx.1 % 8) *
+        (valAt g (outIdx.1 / 8 * 8 + outIdx.1 % 8) -
+          ∑ j ∈ Finset.range 8,
+            valAt y (outIdx.1 / 8 * 8 + j) * valAt g (outIdx.1 / 8 * 8 + j)))).shape := by
+    simp only [Tensor.mkShape]; exact hidx
+  rw [valAt_of_lt _ _ hprod]
+  simp only [Tensor.mkShape]
+
+-- `bw_softmax` distributes over an all-gather along dim 1 (the batch axis,
+-- independent of the last softmax axis), for shard shape `[1,1,8,8]`.
+set_option maxHeartbeats 3200000 in
+theorem softmaxBwd_split_dim1_4_1_4_8_8_g234 (g y : Tensor)
+    (hg : g.shape = [1, 4, 8, 8]) (hy : y.shape = [1, 4, 8, 8]) :
+    softmaxBwd g y = allGatherPrimDimN 1 4 0
+      [softmaxBwd (chunkPrimDimN 1 4 0 g) (chunkPrimDimN 1 4 0 y),
+       softmaxBwd (chunkPrimDimN 1 4 1 g) (chunkPrimDimN 1 4 1 y),
+       softmaxBwd (chunkPrimDimN 1 4 2 g) (chunkPrimDimN 1 4 2 y),
+       softmaxBwd (chunkPrimDimN 1 4 3 g) (chunkPrimDimN 1 4 3 y)] := by
+  have hcy : ∀ r, r < 4 → (chunkPrimDimN 1 4 r y).shape = [1, 1, 8, 8] := by
+    intro r _; rw [chunkPrimDimN_shape 1 4 r _ _ hy (by omega)]; simp [List.set, List.getD]
+  have hcg : ∀ r, r < 4 → (chunkPrimDimN 1 4 r g).shape = [1, 1, 8, 8] := by
+    intro r _; rw [chunkPrimDimN_shape 1 4 r _ _ hg (by omega)]; simp [List.set, List.getD]
+  have hpiece_shape : ∀ r, r < 4 →
+      (softmaxBwd (chunkPrimDimN 1 4 r g) (chunkPrimDimN 1 4 r y)).shape = [1, 1, 8, 8] := by
+    intro r hr; exact softmaxBwd_shape_d8_g234 _ _ 1 1 8 (hcy r hr)
+  have hhead : (([softmaxBwd (chunkPrimDimN 1 4 0 g) (chunkPrimDimN 1 4 0 y),
+       softmaxBwd (chunkPrimDimN 1 4 1 g) (chunkPrimDimN 1 4 1 y),
+       softmaxBwd (chunkPrimDimN 1 4 2 g) (chunkPrimDimN 1 4 2 y),
+       softmaxBwd (chunkPrimDimN 1 4 3 g) (chunkPrimDimN 1 4 3 y)] : List Tensor).head?.map
+       (fun t => t.shape)).getD [] = [1, 1, 8, 8] := by
+    simp only [List.head?, Option.map]; exact hpiece_shape 0 (by omega)
+  have hlhs_shape : (softmaxBwd g y).shape = [1, 4, 8, 8] :=
+    softmaxBwd_shape_d8_g234 g y 1 4 8 hy
+  have hrhs_shape : (allGatherPrimDimN 1 4 0
+      [softmaxBwd (chunkPrimDimN 1 4 0 g) (chunkPrimDimN 1 4 0 y),
+       softmaxBwd (chunkPrimDimN 1 4 1 g) (chunkPrimDimN 1 4 1 y),
+       softmaxBwd (chunkPrimDimN 1 4 2 g) (chunkPrimDimN 1 4 2 y),
+       softmaxBwd (chunkPrimDimN 1 4 3 g) (chunkPrimDimN 1 4 3 y)]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hhead]; simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  rw [softmaxBwd_valAt_d8_g234 g y 1 4 8 idx hy (by rw [hy]; simpa [prodShape] using hidx256)]
+  have hp0 := hpiece_shape 0 (by omega)
+  have hp1 := hpiece_shape 1 (by omega)
+  have hp2 := hpiece_shape 2 (by omega)
+  have hp3 := hpiece_shape 3 (by omega)
+  rw [allGather_dim1_4_1_1_8_8_valAt _ _ _ _ idx hp0 hp1 hp2 hp3 hidx256]
+  set r := idx / 64 with hr_def
+  have hr : r < 4 := by rw [hr_def]; omega
+  have hgetD : ∀ q, q < 4 → [softmaxBwd (chunkPrimDimN 1 4 0 g) (chunkPrimDimN 1 4 0 y),
+       softmaxBwd (chunkPrimDimN 1 4 1 g) (chunkPrimDimN 1 4 1 y),
+       softmaxBwd (chunkPrimDimN 1 4 2 g) (chunkPrimDimN 1 4 2 y),
+       softmaxBwd (chunkPrimDimN 1 4 3 g) (chunkPrimDimN 1 4 3 y)].getD q (zeroTensor [1, 1, 8, 8]) =
+       softmaxBwd (chunkPrimDimN 1 4 q g) (chunkPrimDimN 1 4 q y) := by
+    intro q hq
+    rcases (by omega : q = 0 ∨ q = 1 ∨ q = 2 ∨ q = 3) with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ]
+  rw [hgetD r hr]
+  have hm : idx % 64 < 64 := by omega
+  rw [softmaxBwd_valAt_d8_g234 (chunkPrimDimN 1 4 r g) (chunkPrimDimN 1 4 r y) 1 1 8 (idx % 64)
+    (hcy r hr) (by rw [hcy r hr]; simpa [prodShape] using hm)]
+  -- rewrite chunk valAt back to global indices
+  have hloc0 : (idx % 64) / 8 * 8 + (idx % 64) % 8 < 64 := by omega
+  rw [chunk_dim1_4_1_4_8_8_valAt y r _ hy hr hloc0]
+  rw [chunk_dim1_4_1_4_8_8_valAt g r _ hg hr hloc0]
+  -- now match the two products and the sum
+  have hidxeq : r * 64 + ((idx % 64) / 8 * 8 + (idx % 64) % 8) = idx / 8 * 8 + idx % 8 := by
+    rw [hr_def]; omega
+  rw [hidxeq]
+  congr 1
+  congr 1
+  apply Finset.sum_congr rfl
+  intro j hj
+  have hjlt : j < 8 := by simpa using Finset.mem_range.mp hj
+  have hlocj : (idx % 64) / 8 * 8 + j < 64 := by omega
+  rw [chunk_dim1_4_1_4_8_8_valAt y r _ hy hr hlocj]
+  rw [chunk_dim1_4_1_4_8_8_valAt g r _ hg hr hlocj]
+  have hjeq : r * 64 + ((idx % 64) / 8 * 8 + j) = idx / 8 * 8 + j := by rw [hr_def]; omega
+  rw [hjeq]
+
 end TrainVerify.Denote
