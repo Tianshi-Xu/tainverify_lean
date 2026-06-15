@@ -44,5 +44,70 @@ def goal_301_cut_initGoals : List LineageGoal := initGoals ++ goal_301_prereqs
 def goal_301_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_301 pm_goal_301 goal_301 sm_goal_301InitEnv pm_goal_301InitEnv goal_301_cut_initGoals
 
+-- FW_multiref copies its input to each output; the second output's lineage is
+-- exactly the input's lineage (goal_79: tensor 672 → shards 2757..2760, gather dim 1).
+theorem prove_goal_301_cut : goal_301_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_79 (tensor 672 = gather of shards 2757..2760 on dim 1)
+  have hInit672 : InitGoalHolds pm_goal_301.numRanks goal_79 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_301_cut_initGoals, goal_301_prereqs]
+    decide
+  have h672_rec : initSM 672 = reconstructWithDim 1 4 0
+      [initPM 2757, initPM 2758, initPM 2759, initPM 2760] := by
+    have hrec := hInit672.2.2
+    simp only [goal_79, pm_goal_301, List.map] at hrec
+    exact hrec
+  have h672_shape : (initSM 672).shape = [1, 8, 32] := hInit672.1
+  have htp_shapes := hInit672.2.1
+  simp only [goal_79, List.map] at htp_shapes
+  have h2757_shape : (initPM 2757).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp_shapes; simpa using this
+  have h2758_shape : (initPM 2758).shape = [1, 2, 32] := by
+    have := congrArg List.tail htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h2759_shape : (initPM 2759).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h2760_shape : (initPM 2760).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  -- SM store: smStore 1036 = initSM 672 (second output of FW_multiref)
+  have hsm : (denoteGraph sm_goal_301 initSM) 1036 = initSM 672 := by
+    simp only [sm_goal_301, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_second_out_g301]
+  -- PM stores: each rank's second output equals its input
+  have hpm0 : (denoteGraph pm_goal_301 initPM) 3169 = initPM 2757 := by
+    simp only [pm_goal_301, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ _ (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ _ (by decide),
+        applyNode_fw_multiref2_second_out_g301]
+  have hpm1 : (denoteGraph pm_goal_301 initPM) 3170 = initPM 2758 := by
+    simp only [pm_goal_301, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ _ (by decide),
+        applyNode_fw_multiref2_second_out_g301,
+        applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+  have hpm2 : (denoteGraph pm_goal_301 initPM) 3171 = initPM 2759 := by
+    simp only [pm_goal_301, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide),
+        applyNode_fw_multiref2_second_out_g301,
+        applyNode_eq_of_not_mem_outs _ _ _ _ (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+  have hpm3 : (denoteGraph pm_goal_301 initPM) 3172 = initPM 2760 := by
+    simp only [pm_goal_301, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_second_out_g301,
+        applyNode_eq_of_not_mem_outs _ _ _ _ (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ _ (by decide),
+        applyNode_eq_of_not_mem_outs _ _ _ _ (by decide)]
+  -- Prove the three conjuncts
+  simp only [goal_301, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]; exact h672_shape
+  · rw [hpm0, hpm1, hpm2, hpm3, h2757_shape, h2758_shape, h2759_shape, h2760_shape]
+  · rw [hsm, hpm0, hpm1, hpm2, hpm3, h672_rec]; rfl
+
 end TrainVerify.Denote.GeneratedGoals
+
 
