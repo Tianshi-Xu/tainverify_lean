@@ -17252,4 +17252,17 @@ theorem allGatherPrimDimN_chunkPrimDimN_id_dim2_4_1_8_32_g303 (x : Tensor)
   congr 1
   omega
 
+/-- `applyNode` for `FW_multiref` with three outputs `[t0, t1, t2]` and `params = [3]`:
+    the second output (`t1`) equals the input. -/
+theorem applyNode_fw_multiref3_second_out_g305
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid t0 t1 t2 : Tid)
+    (h01 : t0 ≠ t1) :
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid],
+                    outs := [t0, t1, t2], params := [3] } t1 = s xTid := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_multiref]
+  change storeSet s ([t0, t1, t2].zip (List.replicate 3 (s xTid))) t1 = _
+  unfold storeSet
+  simp [List.zip, List.zipWith, List.replicate, List.find?, h01]
+
 end TrainVerify.Denote

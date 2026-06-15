@@ -48,5 +48,172 @@ def goal_305_cut_initGoals : List LineageGoal := initGoals ++ goal_305_prereqs
 def goal_305_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_305 pm_goal_305 goal_305 sm_goal_305InitEnv pm_goal_305InitEnv goal_305_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- FW_multiref replicates its input; on the PM side each rank's index-1 copy equals
+-- its input shard, and the AllToAll re-shards (dim1 → dim2) the gathered input.
+theorem prove_goal_305_cut : goal_305_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract prereq goal_80: 675 sharded along dim 1 over [2785,2786,2787,2788]
+  have hInit675 : InitGoalHolds pm_goal_305.numRanks goal_80 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_305_cut_initGoals, goal_305_prereqs]
+    decide
+  have h675_rec : initSM 675 = reconstructWithDim 1 4 0
+      [initPM 2785, initPM 2786, initPM 2787, initPM 2788] := by
+    have hrec := hInit675.2.2
+    simp only [goal_80, pm_goal_305, List.map] at hrec
+    exact hrec
+  have h675_shape : (initSM 675).shape = [1, 8, 32] := hInit675.1
+  have htp675 := hInit675.2.1
+  simp only [goal_80, List.map] at htp675
+  have h2785_shape : (initPM 2785).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp675; simpa using this
+  -- Convert to allGatherPrimDimN (non-scalar shards)
+  have h675_gather : initSM 675 = allGatherPrimDimN 1 4 0
+      [initPM 2785, initPM 2786, initPM 2787, initPM 2788] := by
+    rw [h675_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2785_shape]; decide)
+  -- AllToAll re-shards the gathered input: dim1 → dim2 chunk of initSM 675
+  have hata : ∀ r, allToAllPrimWithDims 4 r
+      [initPM 2785, initPM 2786, initPM 2787, initPM 2788] 1 2 =
+      chunkPrimDimN 2 4 r (initSM 675) := by
+    intro r
+    simp only [allToAllPrimWithDims]
+    rw [← h675_gather]
+  -- SM store: 1051 is the second (index 1) FW_multiref output = initSM 675
+  have hsm : (denoteGraph sm_goal_305 initSM) 1051 = initSM 675 := by
+    simp only [sm_goal_305, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref3_second_out_g305 (h01 := by decide)]
+  -- PM stores: each AllToAll output = chunkPrimDimN 2 4 r (initSM 675)
+  have hpm0 : (denoteGraph pm_goal_305 initPM) 2841 = chunkPrimDimN 2 4 0 (initSM 675) := by
+    simp only [pm_goal_305, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    simp only [List.map]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_fw_multiref3_second_out_g305 (h01 := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_fw_multiref3_second_out_g305 (h01 := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_fw_multiref3_second_out_g305 (h01 := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_multiref3_second_out_g305 (h01 := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide)]
+    exact hata 0
+  have hpm1 : (denoteGraph pm_goal_305 initPM) 2842 = chunkPrimDimN 2 4 1 (initSM 675) := by
+    simp only [pm_goal_305, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    simp only [List.map]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_fw_multiref3_second_out_g305 (h01 := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_fw_multiref3_second_out_g305 (h01 := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_fw_multiref3_second_out_g305 (h01 := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_fw_multiref3_second_out_g305 (h01 := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide)]
+    exact hata 1
+  have hpm2 : (denoteGraph pm_goal_305 initPM) 2843 = chunkPrimDimN 2 4 2 (initSM 675) := by
+    simp only [pm_goal_305, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    simp only [List.map]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_fw_multiref3_second_out_g305 (h01 := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_fw_multiref3_second_out_g305 (h01 := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_fw_multiref3_second_out_g305 (h01 := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_fw_multiref3_second_out_g305 (h01 := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide)]
+    exact hata 2
+  have hpm3 : (denoteGraph pm_goal_305 initPM) 2844 = chunkPrimDimN 2 4 3 (initSM 675) := by
+    simp only [pm_goal_305, denoteGraph, List.foldl]
+    rw [applyNode_allToAllPrimWithDims_out]
+    simp only [List.map]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_fw_multiref3_second_out_g305 (h01 := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_fw_multiref3_second_out_g305 (h01 := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_fw_multiref3_second_out_g305 (h01 := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_fw_multiref3_second_out_g305 (h01 := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide),
+        applyNode_eq_of_not_mem_outs (h := by decide)]
+    exact hata 3
+  -- Chunk shapes
+  have hc : ∀ r, (chunkPrimDimN 2 4 r (initSM 675)).shape = [1, 8, 8] := by
+    intro r; rw [chunkPrimDimN_shape 2 4 r _ _ h675_shape (by omega)]; simp [List.set, List.getD]
+  -- Discharge the three conjuncts
+  simp only [goal_305, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]; exact h675_shape
+  · rw [hpm0, hpm1, hpm2, hpm3]
+    simp [hc 0, hc 1, hc 2, hc 3]
+  · rw [hsm, hpm0, hpm1, hpm2, hpm3]
+    show initSM 675 = reconstructWithDim 2 4 0
+      [chunkPrimDimN 2 4 0 (initSM 675), chunkPrimDimN 2 4 1 (initSM 675),
+       chunkPrimDimN 2 4 2 (initSM 675), chunkPrimDimN 2 4 3 (initSM 675)]
+    rw [reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [hc 0]; decide)]
+    exact (allGather_chunkPrimDimN_roundtrip_dim2_4_1_8_32_g205 (initSM 675) h675_shape).symm
+
 end TrainVerify.Denote.GeneratedGoals
 
