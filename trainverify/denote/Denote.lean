@@ -16918,4 +16918,51 @@ theorem applyNode_fw_multiref3_third_out_g265
   unfold storeSet
   simp [List.zip, List.zipWith, List.replicate, List.find?, h1, h2]
 
+/-- Gather-of-chunks identity along dim 1 for shape `[1, 8, 32]`, 4 parts:
+    all-gathering the 4 chunks of `x` along dim 1 recovers `x`. -/
+theorem allGatherPrimDimN_chunkPrimDimN_id_dim1_4_1_8_32_g267 (x : Tensor)
+    (hsh : x.shape = [1, 8, 32]) :
+    allGatherPrimDimN 1 4 0
+      [chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x] = x := by
+  have hchunk_shape : ∀ r, (chunkPrimDimN 1 4 r x).shape = [1, 2, 32] := by
+    intro r
+    rw [chunkPrimDimN_shape 1 4 r _ _ hsh (by omega)]
+    simp [List.set, List.getD]
+  have hhead : ([chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x].head?.map (·.shape)).getD [] = [1, 2, 32] := by
+    simp [List.head?, Option.map, hchunk_shape 0]
+  have hgather_shape : (allGatherPrimDimN 1 4 0
+      [chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 32] hhead]
+    simp [List.set, List.getD]
+  symm
+  apply Tensor.ext (by rw [hsh, hgather_shape])
+  intro idx hidx
+  rw [hsh] at hidx
+  have hidx256 : idx < 256 := by simpa [prodShape] using hidx
+  set r := idx / 64 with hrdef
+  set p := (idx % 64) / 32 with hpdef
+  set j := idx % 32 with hjdef
+  have hr : r < 4 := by omega
+  have hp : p < 2 := by
+    have : (idx % 64) / 32 < 64 / 32 :=
+      Nat.div_lt_div_of_lt_of_dvd ⟨2, rfl⟩ (Nat.mod_lt _ (by omega))
+    omega
+  have hj : j < 32 := Nat.mod_lt idx (by omega)
+  have hidx_eq : idx = (r * 2 + p) * 32 + j := by subst r p j; omega
+  rw [hidx_eq]
+  rw [allGatherPrimDimN_dim1_4_1_2_32_valAt _ r hr p hp j hj hhead]
+  have hgetD : ∀ (i : Nat) (hi : i < 4),
+      [chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x].getD i (zeroTensor [1, 2, 32]) =
+        chunkPrimDimN 1 4 i x := by
+    intro i hi
+    have h4 : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases h4 with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ]
+  rw [hgetD r hr]
+  exact (chunk_dim1_4_1_8_32_valAt x r p j hsh hr hp hj).symm
+
 end TrainVerify.Denote
