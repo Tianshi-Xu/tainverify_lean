@@ -49,5 +49,106 @@ def goal_207_cut_initGoals : List LineageGoal := initGoals ++ goal_207_prereqs
 def goal_207_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_207 pm_goal_207 goal_207 sm_goal_207InitEnv pm_goal_207InitEnv goal_207_cut_initGoals
 
+set_option maxRecDepth 4096 in
+/-- BW_multiref distributes: tensorSum over two same-dim allGathers (dim 1). -/
+theorem prove_goal_207_cut : goal_207_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Prereq goal_296: tensor 1021 = allGather dim 1 of shards [2653,2657,2661,2665]
+  have hInit1021 : InitGoalHolds pm_goal_207.numRanks goal_296 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_207_cut_initGoals, goal_207_prereqs]
+    decide
+  have h1021_rec : initSM 1021 = reconstructWithDim 1 4 0
+      [initPM 2653, initPM 2657, initPM 2661, initPM 2665] := by
+    have hrec := hInit1021.2.2
+    simp only [goal_296, pm_goal_207, List.map] at hrec
+    exact hrec
+  have h1021_shape : (initSM 1021).shape = [1, 8, 32] := hInit1021.1
+  have htp296 := hInit1021.2.1
+  simp only [goal_296, List.map] at htp296
+  have h2653_shape : (initPM 2653).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp296; simpa using this
+  have h2657_shape : (initPM 2657).shape = [1, 2, 32] := by
+    have := congrArg List.tail htp296
+    have := congrArg List.head? this; simpa using this
+  have h2661_shape : (initPM 2661).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp296
+    have := congrArg List.head? this; simpa using this
+  have h2665_shape : (initPM 2665).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp296
+    have := congrArg List.head? this; simpa using this
+  have h1021_gather : initSM 1021 = allGatherPrimDimN 1 4 0
+      [initPM 2653, initPM 2657, initPM 2661, initPM 2665] := by
+    rw [h1021_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2653_shape]; decide)
+  -- Prereq goal_298: tensor 1025 = allGather dim 1 of shards [2769,2772,2775,2778]
+  have hInit1025 : InitGoalHolds pm_goal_207.numRanks goal_298 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_207_cut_initGoals, goal_207_prereqs]
+    decide
+  have h1025_rec : initSM 1025 = reconstructWithDim 1 4 0
+      [initPM 2769, initPM 2772, initPM 2775, initPM 2778] := by
+    have hrec := hInit1025.2.2
+    simp only [goal_298, pm_goal_207, List.map] at hrec
+    exact hrec
+  have h1025_shape : (initSM 1025).shape = [1, 8, 32] := hInit1025.1
+  have htp298 := hInit1025.2.1
+  simp only [goal_298, List.map] at htp298
+  have h2769_shape : (initPM 2769).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp298; simpa using this
+  have h2772_shape : (initPM 2772).shape = [1, 2, 32] := by
+    have := congrArg List.tail htp298
+    have := congrArg List.head? this; simpa using this
+  have h2775_shape : (initPM 2775).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp298
+    have := congrArg List.head? this; simpa using this
+  have h2778_shape : (initPM 2778).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp298
+    have := congrArg List.head? this; simpa using this
+  have h1025_gather : initSM 1025 = allGatherPrimDimN 1 4 0
+      [initPM 2769, initPM 2772, initPM 2775, initPM 2778] := by
+    rw [h1025_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2769_shape]; decide)
+  -- SM store: tensorSum [initSM 1021, initSM 1025]
+  have hsm : (denoteGraph sm_goal_207 initSM) 837 =
+      tensorSum [initSM 1021, initSM 1025] := by
+    simp only [sm_goal_207, denoteGraph, List.foldl]
+    rw [applyNode_bw_multiref_out]
+    simp [List.map]
+  -- PM stores: each rank computes tensorSum of its two shards
+  have hpm_2627 : (denoteGraph pm_goal_207 initPM) 2627 =
+      tensorSum [initPM 2653, initPM 2769] := by rfl
+  have hpm_2630 : (denoteGraph pm_goal_207 initPM) 2630 =
+      tensorSum [initPM 2657, initPM 2772] := by rfl
+  have hpm_2633 : (denoteGraph pm_goal_207 initPM) 2633 =
+      tensorSum [initPM 2661, initPM 2775] := by rfl
+  have hpm_2636 : (denoteGraph pm_goal_207 initPM) 2636 =
+      tensorSum [initPM 2665, initPM 2778] := by rfl
+  -- Key distribution equation
+  have hkey : tensorSum [initSM 1021, initSM 1025] =
+      allGatherPrimDimN 1 4 0
+        [tensorSum [initPM 2653, initPM 2769], tensorSum [initPM 2657, initPM 2772],
+         tensorSum [initPM 2661, initPM 2775], tensorSum [initPM 2665, initPM 2778]] := by
+    rw [h1021_gather, h1025_gather]
+    exact tensorSum_gather_gather_dim1_4_1_2_32_g207
+      (initPM 2653) (initPM 2657) (initPM 2661) (initPM 2665)
+      (initPM 2769) (initPM 2772) (initPM 2775) (initPM 2778)
+      h2653_shape h2657_shape h2661_shape h2665_shape
+      h2769_shape h2772_shape h2775_shape h2778_shape
+  -- Discharge the three conjuncts
+  simp only [goal_207, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM shape
+    rw [hsm, tensorSum_shape]; exact h1021_shape
+  · -- PM tp shapes
+    simp only [hpm_2627, hpm_2630, hpm_2633, hpm_2636, tensorSum_shape,
+      h2653_shape, h2657_shape, h2661_shape, h2665_shape]
+  · -- Value equality
+    rw [hsm, hkey, ← hpm_2627, ← hpm_2630, ← hpm_2633, ← hpm_2636]
+    symm
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _
+      (by rw [hpm_2627, tensorSum_shape, h2653_shape]; decide)
+
 end TrainVerify.Denote.GeneratedGoals
+
 

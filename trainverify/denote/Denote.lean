@@ -15571,4 +15571,69 @@ theorem tensorSum_add3_gather_dim1_4_1_8_32_g184 (A B c0 c1 c2 c3 : Tensor)
     rw [chunk_dim1_4_1_8_32_valAt B 3 p' j hB (by omega) hp'_lt hj_lt]
     rw [show idx = (3 * 2 + p') * 32 + j from by rw [hidx_rp, h3]]
 
+/-- BW_multiref distributes over two same-dim allGathers (dim 1, 4 parts, [1,2,32] shards):
+    `tensorSum [gather as, gather bs] = gather [tensorSum [a_r, b_r] | r]`. -/
+theorem tensorSum_gather_gather_dim1_4_1_2_32_g207
+    (a0 a1 a2 a3 b0 b1 b2 b3 : Tensor)
+    (ha0 : a0.shape = [1, 2, 32]) (ha1 : a1.shape = [1, 2, 32])
+    (ha2 : a2.shape = [1, 2, 32]) (ha3 : a3.shape = [1, 2, 32])
+    (hb0 : b0.shape = [1, 2, 32]) (hb1 : b1.shape = [1, 2, 32])
+    (hb2 : b2.shape = [1, 2, 32]) (hb3 : b3.shape = [1, 2, 32]) :
+    tensorSum [allGatherPrimDimN 1 4 0 [a0, a1, a2, a3],
+               allGatherPrimDimN 1 4 0 [b0, b1, b2, b3]] =
+      allGatherPrimDimN 1 4 0
+        [tensorSum [a0, b0], tensorSum [a1, b1],
+         tensorSum [a2, b2], tensorSum [a3, b3]] := by
+  have haHead : (([a0, a1, a2, a3].head?.map (fun t => t.shape)).getD []) = [1, 2, 32] := by
+    simp [ha0]
+  have hbHead : (([b0, b1, b2, b3].head?.map (fun t => t.shape)).getD []) = [1, 2, 32] := by
+    simp [hb0]
+  have hsHead : (([tensorSum [a0, b0], tensorSum [a1, b1],
+      tensorSum [a2, b2], tensorSum [a3, b3]].head?.map (fun t => t.shape)).getD []) = [1, 2, 32] := by
+    simp only [List.head?, Option.map, Option.getD]
+    rw [tensorSum_shape]; exact ha0
+  have hgatherA_shape : (allGatherPrimDimN 1 4 0 [a0, a1, a2, a3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ haHead]; simp [List.set, List.getD]
+  have hgatherB_shape : (allGatherPrimDimN 1 4 0 [b0, b1, b2, b3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hbHead]; simp [List.set, List.getD]
+  have hlhs_shape : (tensorSum [allGatherPrimDimN 1 4 0 [a0, a1, a2, a3],
+      allGatherPrimDimN 1 4 0 [b0, b1, b2, b3]]).shape = [1, 8, 32] := by
+    rw [tensorSum_shape]; exact hgatherA_shape
+  have hrhs_shape : (allGatherPrimDimN 1 4 0
+      [tensorSum [a0, b0], tensorSum [a1, b1],
+       tensorSum [a2, b2], tensorSum [a3, b3]]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hsHead]; simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  set q := idx / 32 with hq_def
+  set j := idx % 32 with hj_def
+  set r := q / 2 with hr_def
+  set p := q % 2 with hp_def
+  have hj_lt : j < 32 := by omega
+  have hq_lt : q < 8 := by omega
+  have hr_lt : r < 4 := by omega
+  have hp_lt : p < 2 := by omega
+  have hidx_eq : idx = (r * 2 + p) * 32 + j := by omega
+  rw [tensorSum_pair_valAt _ _ idx (by rw [hgatherA_shape]; simp [prodShape]; omega)]
+  rw [hidx_eq]
+  rw [allGatherPrimDimN_dim1_4_1_2_32_valAt [a0, a1, a2, a3] r hr_lt p hp_lt j hj_lt haHead]
+  rw [allGatherPrimDimN_dim1_4_1_2_32_valAt [b0, b1, b2, b3] r hr_lt p hp_lt j hj_lt hbHead]
+  rw [allGatherPrimDimN_dim1_4_1_2_32_valAt
+      [tensorSum [a0, b0], tensorSum [a1, b1], tensorSum [a2, b2], tensorSum [a3, b3]]
+      r hr_lt p hp_lt j hj_lt hsHead]
+  rcases (show r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 by omega) with h | h | h | h
+  · rw [h]
+    show valAt a0 (p * 32 + j) + valAt b0 (p * 32 + j) = valAt (tensorSum [a0, b0]) (p * 32 + j)
+    rw [tensorSum_pair_valAt a0 b0 (p * 32 + j) (by rw [ha0]; simp [prodShape]; omega)]
+  · rw [h]
+    show valAt a1 (p * 32 + j) + valAt b1 (p * 32 + j) = valAt (tensorSum [a1, b1]) (p * 32 + j)
+    rw [tensorSum_pair_valAt a1 b1 (p * 32 + j) (by rw [ha1]; simp [prodShape]; omega)]
+  · rw [h]
+    show valAt a2 (p * 32 + j) + valAt b2 (p * 32 + j) = valAt (tensorSum [a2, b2]) (p * 32 + j)
+    rw [tensorSum_pair_valAt a2 b2 (p * 32 + j) (by rw [ha2]; simp [prodShape]; omega)]
+  · rw [h]
+    show valAt a3 (p * 32 + j) + valAt b3 (p * 32 + j) = valAt (tensorSum [a3, b3]) (p * 32 + j)
+    rw [tensorSum_pair_valAt a3 b3 (p * 32 + j) (by rw [ha3]; simp [prodShape]; omega)]
+
 end TrainVerify.Denote
