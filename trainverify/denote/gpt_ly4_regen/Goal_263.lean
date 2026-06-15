@@ -44,5 +44,69 @@ def goal_263_cut_initGoals : List LineageGoal := initGoals ++ goal_263_prereqs
 def goal_263_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_263 pm_goal_263 goal_263 sm_goal_263InitEnv pm_goal_263InitEnv goal_263_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- FW_multiref copies its single input to each output; the second SM output equals
+-- the input 570, and each PM second output equals its input shard. The reconstruct
+-- of those shards is exactly the prereq goal_5 alignment for input 570.
+theorem prove_goal_263_cut : goal_263_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_5 (tensor 570 = gather of shards 1145..1148 on dim 1)
+  have hInit570 : InitGoalHolds pm_goal_263.numRanks goal_5 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_263_cut_initGoals, goal_263_prereqs]
+    decide
+  -- goal_5 reconstruct: initSM 570 = reconstructWithDim 1 4 0 [initPM 1145..1148]
+  have h570_rec : initSM 570 = reconstructWithDim 1 4 0
+      [initPM 1145, initPM 1146, initPM 1147, initPM 1148] := by
+    have hrec := hInit570.2.2
+    simp only [goal_5, pm_goal_263, List.map] at hrec
+    exact hrec
+  have h570_shape : (initSM 570).shape = [1, 8, 32] := hInit570.1
+  -- PM shard shapes from goal_5
+  have htp_shapes := hInit570.2.1
+  simp only [goal_5, List.map] at htp_shapes
+  -- SM store: smStore 922 = initSM 570 (second output of FW_multiref)
+  have hsm : (denoteGraph sm_goal_263 initSM) 922 = initSM 570 := by
+    simp only [sm_goal_263, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref3_second_out_g263 _ _ _ _ _ _ _ (by decide)]
+  -- PM stores: each second output equals its input shard.
+  have hpm1201 : (denoteGraph pm_goal_263 initPM) 1201 = initPM 1145 := by
+    simp only [pm_goal_263, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref3_passthrough_g263 _ _ _ _ 1176 1204 3463 _ (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_passthrough_g263 _ _ _ _ 1175 1203 3455 _ (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_passthrough_g263 _ _ _ _ 1174 1202 3447 _ (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_second_out_g263 _ _ _ _ _ _ _ (by decide)]
+  have hpm1202 : (denoteGraph pm_goal_263 initPM) 1202 = initPM 1146 := by
+    simp only [pm_goal_263, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref3_passthrough_g263 _ _ _ _ 1176 1204 3463 _ (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_passthrough_g263 _ _ _ _ 1175 1203 3455 _ (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_second_out_g263 _ _ _ _ _ _ _ (by decide),
+        applyNode_fw_multiref3_passthrough_g263 _ _ _ _ 1173 1201 3439 _ (by decide) (by decide) (by decide)]
+  have hpm1203 : (denoteGraph pm_goal_263 initPM) 1203 = initPM 1147 := by
+    simp only [pm_goal_263, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref3_passthrough_g263 _ _ _ _ 1176 1204 3463 _ (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_second_out_g263 _ _ _ _ _ _ _ (by decide),
+        applyNode_fw_multiref3_passthrough_g263 _ _ _ _ 1174 1202 3447 _ (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_passthrough_g263 _ _ _ _ 1173 1201 3439 _ (by decide) (by decide) (by decide)]
+  have hpm1204 : (denoteGraph pm_goal_263 initPM) 1204 = initPM 1148 := by
+    simp only [pm_goal_263, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref3_second_out_g263 _ _ _ _ _ _ _ (by decide),
+        applyNode_fw_multiref3_passthrough_g263 _ _ _ _ 1175 1203 3455 _ (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_passthrough_g263 _ _ _ _ 1174 1202 3447 _ (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_passthrough_g263 _ _ _ _ 1173 1201 3439 _ (by decide) (by decide) (by decide)]
+  -- Prove the three conjuncts.
+  simp only [goal_263, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM shape
+    rw [hsm]; exact h570_shape
+  · -- PM tps shapes
+    rw [hpm1201, hpm1202, hpm1203, hpm1204]
+    exact htp_shapes
+  · -- Value equality
+    rw [hsm, hpm1201, hpm1202, hpm1203, hpm1204]
+    exact h570_rec
+
 end TrainVerify.Denote.GeneratedGoals
 
+
+ 

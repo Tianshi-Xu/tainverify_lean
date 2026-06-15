@@ -16876,4 +16876,32 @@ theorem applyNode_fw_multiref_first_out_g261
   unfold storeSet
   simp [List.find?]
 
+/-- `applyNode` for `FW_multiref` with `outs = [t1, t2, t3]` and `params = [3]`: the second
+    output equals the input (provided `t1 ≠ t2`). -/
+theorem applyNode_fw_multiref3_second_out_g263
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid t1 t2 t3 : Tid)
+    (h12 : t1 ≠ t2) :
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid],
+                    outs := [t1, t2, t3], params := [3] } t2 = s xTid := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl,
+      evalOp_fw_multiref]
+  change storeSet s ([t1, t2, t3].zip (List.replicate 3 (s xTid))) t2 = _
+  unfold storeSet
+  simp [List.zip, List.zipWith, List.replicate, List.find?, h12]
+
+/-- `applyNode` for `FW_multiref` with `outs = [t1, t2, t3]` and `params = [3]` leaves any
+    tensor id outside the outputs unchanged. -/
+theorem applyNode_fw_multiref3_passthrough_g263
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid t1 t2 t3 tid : Tid)
+    (h1 : tid ≠ t1) (h2 : tid ≠ t2) (h3 : tid ≠ t3) :
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid],
+                    outs := [t1, t2, t3], params := [3] } tid = s tid := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl,
+      evalOp_fw_multiref]
+  change storeSet s ([t1, t2, t3].zip (List.replicate 3 (s xTid))) tid = _
+  apply storeSet_eq_of_not_mem_fst
+  simp [List.zip, List.zipWith, List.replicate, List.map, h1, h2, h3]
+
 end TrainVerify.Denote
