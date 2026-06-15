@@ -44,5 +44,94 @@ def goal_43_cut_initGoals : List LineageGoal := initGoals ++ goal_43_prereqs
 def goal_43_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_43 pm_goal_43 goal_43 sm_goal_43InitEnv pm_goal_43InitEnv goal_43_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- fw_softmax distributes over allGatherPrimDimN (dim 2) for [1,4,2,8] shards
+theorem prove_goal_43_cut : goal_43_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract prereq: goal_42 aligns SM input 620 with PM shards 1909..1912 (gatherDim 2)
+  have hInit620 : InitGoalHolds pm_goal_43.numRanks goal_42 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_43_cut_initGoals, goal_43_prereqs]
+    decide
+  have h620_rec : initSM 620 = reconstructWithDim 2 4 0
+      [initPM 1909, initPM 1910, initPM 1911, initPM 1912] := by
+    have hrec := hInit620.2.2
+    simp only [goal_42, pm_goal_43, List.map] at hrec
+    exact hrec
+  have htp_shapes := hInit620.2.1
+  simp only [goal_42, List.map] at htp_shapes
+  have h1909_shape : (initPM 1909).shape = [1, 4, 2, 8] := by
+    have := congrArg List.head? htp_shapes; simpa using this
+  have h1910_shape : (initPM 1910).shape = [1, 4, 2, 8] := by
+    have := congrArg List.tail htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1911_shape : (initPM 1911).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h1912_shape : (initPM 1912).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  -- Convert reconstructWithDim to allGatherPrimDimN (non-scalar shards)
+  have h620_gather : initSM 620 = allGatherPrimDimN 2 4 0
+      [initPM 1909, initPM 1910, initPM 1911, initPM 1912] := by
+    rw [h620_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1909_shape]; decide)
+  -- SM store
+  have hsm : (denoteGraph sm_goal_43 initSM) 621 = fw_softmax (initSM 620) := by
+    simp only [sm_goal_43, denoteGraph, List.foldl]
+    rw [applyNode_fw_softmax_out_g43]
+  -- PM stores: 4 independent softmaxes
+  have hpm3 : (denoteGraph pm_goal_43 initPM) 1932 = fw_softmax (initPM 1912) := by
+    simp only [pm_goal_43, denoteGraph, List.foldl]
+    rw [applyNode_fw_softmax_out_g43]; congr 1
+  have hpm2 : (denoteGraph pm_goal_43 initPM) 1931 = fw_softmax (initPM 1911) := by
+    simp only [pm_goal_43, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_softmax_out_g43]; congr 1
+  have hpm1 : (denoteGraph pm_goal_43 initPM) 1930 = fw_softmax (initPM 1910) := by
+    simp only [pm_goal_43, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_softmax_out_g43]; congr 1
+  have hpm0 : (denoteGraph pm_goal_43 initPM) 1929 = fw_softmax (initPM 1909) := by
+    simp only [pm_goal_43, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_softmax_out_g43]
+  -- Key equation: softmax(gather(shards)) = gather(map(softmax, shards))
+  have hkey : fw_softmax (initSM 620) =
+      allGatherPrimDimN 2 4 0
+        [fw_softmax (initPM 1909), fw_softmax (initPM 1910),
+         fw_softmax (initPM 1911), fw_softmax (initPM 1912)] := by
+    conv_lhs => rw [h620_gather]
+    have := fw_softmax_distribute_allGatherPrimDimN_dim2_4_1_4_2_8_g43
+      [initPM 1909, initPM 1910, initPM 1911, initPM 1912] (by simp) (by
+        intro x hx
+        simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+        rcases hx with rfl | rfl | rfl | rfl
+        · exact h1909_shape
+        · exact h1910_shape
+        · exact h1911_shape
+        · exact h1912_shape)
+    simpa [List.map] using this
+  -- Prove the three conjuncts
+  simp only [goal_43, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM shape: [1, 4, 8, 8]
+    rw [hsm, fw_softmax_shape_g43]
+    exact hInit620.1
+  · -- PM tp shapes
+    rw [hpm0, hpm1, hpm2, hpm3]
+    rw [fw_softmax_shape_g43, fw_softmax_shape_g43, fw_softmax_shape_g43, fw_softmax_shape_g43]
+    rw [h1909_shape, h1910_shape, h1911_shape, h1912_shape]
+  · -- Value equality
+    rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
+    symm
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [hpm0, fw_softmax_shape_g43, h1909_shape]
+    decide
+
 end TrainVerify.Denote.GeneratedGoals
+
 

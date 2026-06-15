@@ -17566,4 +17566,170 @@ theorem softmax_allGather2_distrib_1_4_2_8_g18 (c0 c1 c2 c3 : Tensor)
       rw [heq_r, heq_loc, ← hcr_def]
     rw [hden, hnum]
 
+/-! ## FW_softmax sequence-parallel split helpers (goal 43)
+
+    `softmax` normalizes across the *last* dimension. Sharding along a non-last
+    dimension (here dim 2 of `[1,4,8,8]`, sharded into 4 chunks of size 2) is
+    orthogonal to the normalization axis, so per-shard softmax followed by an
+    all-gather equals the full softmax. -/
+
+/-- Unfolding lemma for `FW_softmax`. -/
+theorem evalOp_fw_softmax_g43 (numParts rank : Nat) (params : List Nat) (x : Tensor) :
+    evalOp numParts rank "OpName.FW_softmax" params [x] = [fw_softmax x] := by
+  rfl
+
+/-- `applyNode` for `FW_softmax` with singleton input/output. -/
+theorem applyNode_fw_softmax_out_g43
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid outTid : Tid) (params : List Nat) :
+    applyNode g s { rank := rank, op := "OpName.FW_softmax", ins := [xTid],
+                    outs := [outTid], params := params } outTid =
+      fw_softmax (s xTid) := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_softmax_g43]
+  change storeSet s [(outTid, fw_softmax (s xTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `softmax` preserves shape. -/
+theorem fw_softmax_shape_g43 (x : Tensor) : (fw_softmax x).shape = x.shape := by
+  unfold fw_softmax softmax
+  cases h : x.shape.reverse with
+  | nil => simp
+  | cons d rest => simp [Tensor.mkShape]
+
+/-- Explicit form of `softmax` when the reversed shape starts with `d`. -/
+theorem fw_softmax_eq_g43 (x : Tensor) (d : Nat) (rest : List Nat)
+    (hx : x.shape.reverse = d :: rest) :
+    fw_softmax x = Tensor.mkShape x.shape (fun outIdx =>
+        let batch := if d = 0 then 0 else outIdx.1 / d
+        let idx := if d = 0 then 0 else outIdx.1 % d
+        let base := batch * d
+        let expSum := ∑ j ∈ Finset.range d, expFn (valAt x (base + j))
+        if expSum = 0 then 0 else expFn (valAt x (base + idx)) / expSum) := by
+  unfold fw_softmax softmax
+  rw [hx]
+
+/-- Value of `softmax` at index `i` (reversed shape starting with nonzero `d`). -/
+theorem fw_softmax_valAt_g43 (x : Tensor) (d : Nat) (rest : List Nat)
+    (hx : x.shape.reverse = d :: rest) (hd : d ≠ 0) (i : Nat)
+    (hi : i < prodShape x.shape) :
+    valAt (fw_softmax x) i =
+      (if (∑ j ∈ Finset.range d, expFn (valAt x ((i / d) * d + j))) = 0 then 0
+       else expFn (valAt x i) /
+            (∑ j ∈ Finset.range d, expFn (valAt x ((i / d) * d + j)))) := by
+  rw [fw_softmax_eq_g43 x d rest hx]
+  have hi' : i < prodShape (Tensor.mkShape x.shape (fun outIdx =>
+        let batch := if d = 0 then 0 else outIdx.1 / d
+        let idx := if d = 0 then 0 else outIdx.1 % d
+        let base := batch * d
+        let expSum := ∑ j ∈ Finset.range d, expFn (valAt x (base + j))
+        if expSum = 0 then 0 else expFn (valAt x (base + idx)) / expSum)).shape := by
+    simpa [Tensor.mkShape] using hi
+  rw [valAt_of_lt _ _ hi']
+  simp only [Tensor.mkShape, hd, if_false]
+  have hbi : i / d * d + i % d = i := by
+    rw [Nat.div_add_mod']
+  rw [hbi]
+
+/-- `valAt` of `allGatherPrimDimN 2 4 0 xs` (shards of shape `[1,4,2,8]`).
+    Index decomposed as `64*P + 8*Q + k` with `P<4, Q<8, k<8`. -/
+theorem allGatherDim2_1_4_2_8_valAt_g43 (xs : List Tensor)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [1, 4, 2, 8])
+    (P Q k : Nat) (hP : P < 4) (hQ : Q < 8) (hk : k < 8) :
+    valAt (allGatherPrimDimN 2 4 0 xs) (64 * P + 8 * Q + k) =
+      valAt (xs.getD (Q / 2) (zeroTensor [1, 4, 2, 8])) (16 * P + 8 * (Q % 2) + k) := by
+  have hresult_shape : (allGatherPrimDimN 2 4 0 xs).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 2 4 xs [1, 4, 2, 8] hhead]
+    simp [List.set, List.getD]
+  have hprod : 64 * P + 8 * Q + k < prodShape (allGatherPrimDimN 2 4 0 xs).shape := by
+    rw [hresult_shape]; simp [prodShape]; omega
+  rw [valAt_of_lt _ _ hprod]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl, Nat.reduceMul, Nat.reduceAdd,
+    Nat.reduceDiv, Nat.reduceMod, Nat.div_one, Nat.mod_one, Nat.mul_one,
+    Nat.add_zero, Nat.zero_add, show (8 : Nat) ≠ 0 from by omega,
+    show (16 : Nat) ≠ 0 from by omega, show (64 : Nat) ≠ 0 from by omega,
+    show (2 : Nat) ≠ 0 from by omega, show (1 : Nat) ≠ 0 from by omega, ite_false, List.set]
+  have hr : (64 * P + 8 * Q + k) % 64 / 8 / 2 = Q / 2 := by omega
+  have hl : (64 * P + 8 * Q + k) / 64 * 16 + (64 * P + 8 * Q + k) % 64 / 8 % 2 * 8 +
+      (64 * P + 8 * Q + k) % 64 % 8 = 16 * P + 8 * (Q % 2) + k := by omega
+  rw [hr, hl]
+
+/-- `softmax` distributes over `allGatherPrimDimN` on dim 2 for `[1,4,2,8]` shards. -/
+theorem fw_softmax_distribute_allGatherPrimDimN_dim2_4_1_4_2_8_g43
+    (xs : List Tensor) (hlen : xs.length = 4)
+    (hshape : ∀ x ∈ xs, x.shape = [1, 4, 2, 8]) :
+    fw_softmax (allGatherPrimDimN 2 4 0 xs) =
+      allGatherPrimDimN 2 4 0 (xs.map fw_softmax) := by
+  match xs, hlen, hshape with
+  | [x0, x1, x2, x3], _, hshape =>
+    have hx0 : x0.shape = [1, 4, 2, 8] := hshape x0 (by simp)
+    have hx1 : x1.shape = [1, 4, 2, 8] := hshape x1 (by simp)
+    have hx2 : x2.shape = [1, 4, 2, 8] := hshape x2 (by simp)
+    have hx3 : x3.shape = [1, 4, 2, 8] := hshape x3 (by simp)
+    have hhead : (([x0, x1, x2, x3] : List Tensor).head?.map (fun t => t.shape)).getD []
+        = [1, 4, 2, 8] := by simp [hx0]
+    have hheadM : (([x0, x1, x2, x3].map fw_softmax : List Tensor).head?.map
+        (fun t => t.shape)).getD [] = [1, 4, 2, 8] := by
+      simp only [List.map, List.head?, Option.map, Option.getD]
+      rw [fw_softmax_shape_g43, hx0]
+    have hgather_shape : (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3]).shape = [1, 4, 8, 8] := by
+      rw [allGatherPrimDimN_shape 2 4 _ _ hhead]; simp [List.set, List.getD]
+    have hmap_shape : (allGatherPrimDimN 2 4 0 ([x0, x1, x2, x3].map fw_softmax)).shape
+        = [1, 4, 8, 8] := by
+      rw [allGatherPrimDimN_shape 2 4 _ _ hheadM]; simp [List.set, List.getD]
+    have hgetshape : ∀ r, r < 4 →
+        (([x0, x1, x2, x3].getD r (zeroTensor [1, 4, 2, 8])).shape = [1, 4, 2, 8]) := by
+      intro r hr
+      rcases (show r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 by omega) with rfl | rfl | rfl | rfl <;>
+        simp [List.getD, hx0, hx1, hx2, hx3]
+    have hmapget : ∀ r, r < 4 →
+        ([x0, x1, x2, x3].map fw_softmax).getD r (zeroTensor [1, 4, 2, 8]) =
+          fw_softmax ([x0, x1, x2, x3].getD r (zeroTensor [1, 4, 2, 8])) := by
+      intro r hr
+      rcases (show r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 by omega) with rfl | rfl | rfl | rfl <;> rfl
+    apply Tensor.ext
+    · rw [fw_softmax_shape_g43, hgather_shape, hmap_shape]
+    · intro idx hidx
+      rw [fw_softmax_shape_g43, hgather_shape] at hidx
+      have hidx256 : idx < 256 := by simpa [prodShape] using hidx
+      set P := idx / 64 with hPdef
+      set Q := idx % 64 / 8 with hQdef
+      set k := idx % 8 with hkdef
+      have hP : P < 4 := by omega
+      have hQ : Q < 8 := by omega
+      have hk : k < 8 := by omega
+      have hidx_eq : idx = 64 * P + 8 * Q + k := by omega
+      have hr2 : Q / 2 < 4 := by omega
+      -- LHS: softmax of the gathered tensor at idx
+      rw [fw_softmax_valAt_g43 (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3]) 8 [8, 4, 1]
+            (by rw [hgather_shape]; rfl) (by omega) idx (by rw [hgather_shape]; simpa [prodShape] using hidx256)]
+      -- RHS: gather of softmaxed shards at idx
+      rw [hidx_eq]
+      rw [allGatherDim2_1_4_2_8_valAt_g43 ([x0, x1, x2, x3].map fw_softmax) hheadM P Q k hP hQ hk]
+      rw [hmapget (Q / 2) hr2]
+      rw [fw_softmax_valAt_g43 ([x0, x1, x2, x3].getD (Q / 2) (zeroTensor [1, 4, 2, 8])) 8 [2, 4, 1]
+            (by rw [hgetshape (Q / 2) hr2]; rfl) (by omega) (16 * P + 8 * (Q % 2) + k)
+            (by rw [hgetshape (Q / 2) hr2]; simp [prodShape]; omega)]
+      -- Numerator equality
+      have hnum : valAt (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3]) (64 * P + 8 * Q + k) =
+          valAt ([x0, x1, x2, x3].getD (Q / 2) (zeroTensor [1, 4, 2, 8]))
+            (16 * P + 8 * (Q % 2) + k) :=
+        allGatherDim2_1_4_2_8_valAt_g43 [x0, x1, x2, x3] hhead P Q k hP hQ hk
+      -- Denominator (sum) equality, term by term
+      have hsum : (∑ j ∈ Finset.range 8, expFn (valAt (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3])
+            ((64 * P + 8 * Q + k) / 8 * 8 + j))) =
+          (∑ j ∈ Finset.range 8, expFn (valAt
+            ([x0, x1, x2, x3].getD (Q / 2) (zeroTensor [1, 4, 2, 8]))
+            ((16 * P + 8 * (Q % 2) + k) / 8 * 8 + j))) := by
+        apply Finset.sum_congr rfl
+        intro j hj
+        have hjlt : j < 8 := by simpa using hj
+        have hL : (64 * P + 8 * Q + k) / 8 * 8 + j = 64 * P + 8 * Q + j := by omega
+        have hR : (16 * P + 8 * (Q % 2) + k) / 8 * 8 + j = 16 * P + 8 * (Q % 2) + j := by omega
+        rw [hL, hR]
+        rw [allGatherDim2_1_4_2_8_valAt_g43 [x0, x1, x2, x3] hhead P Q j hP hQ hjlt]
+      rw [hsum, hnum]
+
 end TrainVerify.Denote
