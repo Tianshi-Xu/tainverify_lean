@@ -58,5 +58,100 @@ def goal_167_cut_initGoals : List LineageGoal := initGoals ++ goal_167_prereqs
 def goal_167_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_167 pm_goal_167 goal_167 sm_goal_167InitEnv pm_goal_167InitEnv goal_167_cut_initGoals
 
+set_option maxHeartbeats 4000000 in
+-- BW_contiguous returns its first input; PM re-shards the gradient via
+-- ChunkPrim (dim2) + AllToAll (dim2→dim3), which reconstructs along dim3.
+theorem prove_goal_167_cut : goal_167_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- goal_168: tensor 791 is replicated (singleton) → initSM 791 = initPM 791
+  have hInit791 : InitGoalHolds pm_goal_167.numRanks goal_168 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_167_cut_initGoals, goal_167_prereqs]
+    decide
+  have h791_eq : initSM 791 = initPM 791 := by
+    have hrec := hInit791.2.2
+    simp only [goal_168, pm_goal_167, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  have h791_shape : (initSM 791).shape = [1, 8, 4, 8] := hInit791.1
+  have h791pm_shape : (initPM 791).shape = [1, 8, 4, 8] := by rw [← h791_eq]; exact h791_shape
+  -- SM store: BW_contiguous(791, 623) = initSM 791
+  have hsm : (denoteGraph sm_goal_167 initSM) 790 = initSM 791 := by
+    simp only [sm_goal_167, denoteGraph, List.foldl]
+    rw [applyNode_bw_contiguous_out_g167]
+  -- PM stores: each final AllToAll re-shards the gradient.
+  -- pmStore 199(2k) = allToAllPrimWithDims 4 k [chunk2_0 .. chunk2_3 (initPM 791)] 2 3
+  have hpm0 : (denoteGraph pm_goal_167 initPM) 1990 =
+      allToAllPrimWithDims 4 0
+        [chunkPrimDimN 2 4 0 (initPM 791), chunkPrimDimN 2 4 1 (initPM 791),
+         chunkPrimDimN 2 4 2 (initPM 791), chunkPrimDimN 2 4 3 (initPM 791)] 2 3 := by
+    simp only [pm_goal_167, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    congr 1
+  have hpm1 : (denoteGraph pm_goal_167 initPM) 1992 =
+      allToAllPrimWithDims 4 1
+        [chunkPrimDimN 2 4 0 (initPM 791), chunkPrimDimN 2 4 1 (initPM 791),
+         chunkPrimDimN 2 4 2 (initPM 791), chunkPrimDimN 2 4 3 (initPM 791)] 2 3 := by
+    simp only [pm_goal_167, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    congr 1
+  have hpm2 : (denoteGraph pm_goal_167 initPM) 1994 =
+      allToAllPrimWithDims 4 2
+        [chunkPrimDimN 2 4 0 (initPM 791), chunkPrimDimN 2 4 1 (initPM 791),
+         chunkPrimDimN 2 4 2 (initPM 791), chunkPrimDimN 2 4 3 (initPM 791)] 2 3 := by
+    simp only [pm_goal_167, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    congr 1
+  have hpm3 : (denoteGraph pm_goal_167 initPM) 1996 =
+      allToAllPrimWithDims 4 3
+        [chunkPrimDimN 2 4 0 (initPM 791), chunkPrimDimN 2 4 1 (initPM 791),
+         chunkPrimDimN 2 4 2 (initPM 791), chunkPrimDimN 2 4 3 (initPM 791)] 2 3 := by
+    simp only [pm_goal_167, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_allToAllPrimWithDims_out]
+    congr 1
+  -- AllToAll(2→3) of dim-2 chunks of 791 equals dim-3 chunk of 791.
+  have hata : ∀ r, r < 4 →
+      allToAllPrimWithDims 4 r
+        [chunkPrimDimN 2 4 0 (initPM 791), chunkPrimDimN 2 4 1 (initPM 791),
+         chunkPrimDimN 2 4 2 (initPM 791), chunkPrimDimN 2 4 3 (initPM 791)] 2 3 =
+      chunkPrimDimN 3 4 r (initPM 791) := by
+    intro r _
+    simp only [allToAllPrimWithDims]
+    rw [allGatherPrimDimN_chunkPrimDimN_id_dim2_4_1_8_4_8_g167 (initPM 791) h791pm_shape]
+  -- Canonical PM stores: chunk along dim 3
+  have hpm0' : (denoteGraph pm_goal_167 initPM) 1990 = chunkPrimDimN 3 4 0 (initPM 791) := by
+    rw [hpm0, hata 0 (by omega)]
+  have hpm1' : (denoteGraph pm_goal_167 initPM) 1992 = chunkPrimDimN 3 4 1 (initPM 791) := by
+    rw [hpm1, hata 1 (by omega)]
+  have hpm2' : (denoteGraph pm_goal_167 initPM) 1994 = chunkPrimDimN 3 4 2 (initPM 791) := by
+    rw [hpm2, hata 2 (by omega)]
+  have hpm3' : (denoteGraph pm_goal_167 initPM) 1996 = chunkPrimDimN 3 4 3 (initPM 791) := by
+    rw [hpm3, hata 3 (by omega)]
+  -- Chunk shapes for dim 3 split of [1,8,4,8]
+  have hc : ∀ r, (chunkPrimDimN 3 4 r (initPM 791)).shape = [1, 8, 4, 2] := by
+    intro r
+    rw [chunkPrimDimN_shape 3 4 r _ _ h791pm_shape (by omega)]
+    simp [List.set, List.getD]
+  -- Discharge the three conjuncts
+  simp only [goal_167, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]; exact h791_shape
+  · rw [hpm0', hpm1', hpm2', hpm3']
+    simp [hc 0, hc 1, hc 2, hc 3]
+  · rw [hsm, hpm0', hpm1', hpm2', hpm3']
+    show initSM 791 = reconstructWithDim 3 4 0
+      [chunkPrimDimN 3 4 0 (initPM 791), chunkPrimDimN 3 4 1 (initPM 791),
+       chunkPrimDimN 3 4 2 (initPM 791), chunkPrimDimN 3 4 3 (initPM 791)]
+    rw [reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [hc 0]; decide)]
+    rw [allGatherPrimDimN_chunkPrimDimN_id_dim3_4_1_8_4_8_g167 (initPM 791) h791pm_shape]
+    exact h791_eq
+
 end TrainVerify.Denote.GeneratedGoals
+
 
