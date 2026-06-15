@@ -49,5 +49,86 @@ def goal_18_cut_initGoals : List LineageGoal := initGoals ++ goal_18_prereqs
 def goal_18_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_18 pm_goal_18 goal_18 sm_goal_18InitEnv pm_goal_18InitEnv goal_18_cut_initGoals
 
+set_option maxHeartbeats 4000000 in
+set_option maxRecDepth 4096 in
+-- AllToAll (gatherDim 1, scatterDim 2) chunks tensor 585 along dim 2; each PM rank applies
+-- fw_softmax to its chunk; AllGather (dim 2) reassembles. Softmax is along the last dim (size 8),
+-- which a dim-2 split keeps intact, so softmax distributes over the collective.
+theorem prove_goal_18_cut : goal_18_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_17 (tensor 585 gathered along dim 1 from 1369..1372)
+  have hInit : InitGoalHolds pm_goal_18.numRanks goal_17 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_18_cut_initGoals, goal_18_prereqs]
+    decide
+  have h585_shape : (initSM 585).shape = [1, 4, 8, 8] := hInit.1
+  have htp_shapes := hInit.2.1
+  simp only [goal_17, LineageGoal.tps, List.map] at htp_shapes
+  have h1369 : (initPM 1369).shape = [1, 1, 8, 8] := by
+    have := congrArg (List.getD · 0 []) htp_shapes; simp at this; exact this
+  have h585_eq : initSM 585 = allGatherPrimDimN 1 4 0
+      [initPM 1369, initPM 1370, initPM 1371, initPM 1372] := by
+    have hrec := hInit.2.2
+    simp only [goal_17, LineageGoal.tps, LineageGoal.gatherDim, List.map] at hrec
+    rw [hrec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1369]; decide)
+  -- chunk shapes for dim-2 split of [1,4,8,8]
+  have hchunk_shape : ∀ r, (chunkPrimDimN 2 4 r (initSM 585)).shape = [1, 4, 2, 8] := by
+    intro r
+    rw [chunkPrimDimN_shape 2 4 r _ _ h585_shape (by omega)]
+    simp [List.set, List.getD]
+  -- SM store: smStore 586 = fw_softmax (initSM 585)
+  have hsm : (denoteGraph sm_goal_18 initSM) 586 = fw_softmax (initSM 585) := by
+    simp only [sm_goal_18, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_fw_softmax_out_g18]
+  -- PM store: AllGather of per-rank fw_softmax of AllToAll outputs
+  have hpm : (denoteGraph pm_goal_18 initPM) 586 = allGatherPrimDimN 2 4 0
+      [fw_softmax (allToAllPrimWithDims 4 0 [initPM 1369, initPM 1370, initPM 1371, initPM 1372] 1 2),
+       fw_softmax (allToAllPrimWithDims 4 1 [initPM 1369, initPM 1370, initPM 1371, initPM 1372] 1 2),
+       fw_softmax (allToAllPrimWithDims 4 2 [initPM 1369, initPM 1370, initPM 1371, initPM 1372] 1 2),
+       fw_softmax (allToAllPrimWithDims 4 3 [initPM 1369, initPM 1370, initPM 1371, initPM 1372] 1 2)] := by
+    simp only [pm_goal_18, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_allGatherPrimDimN_out_thm]
+    congr 1
+  -- AllToAll on rank r yields chunk r of tensor 585 along dim 2
+  have halltoall : ∀ r, r < 4 →
+      allToAllPrimWithDims 4 r [initPM 1369, initPM 1370, initPM 1371, initPM 1372] 1 2 =
+      chunkPrimDimN 2 4 r (initSM 585) := by
+    intro r _
+    simp only [allToAllPrimWithDims]
+    rw [← h585_eq]
+  have hpm' : (denoteGraph pm_goal_18 initPM) 586 = allGatherPrimDimN 2 4 0
+      [fw_softmax (chunkPrimDimN 2 4 0 (initSM 585)),
+       fw_softmax (chunkPrimDimN 2 4 1 (initSM 585)),
+       fw_softmax (chunkPrimDimN 2 4 2 (initSM 585)),
+       fw_softmax (chunkPrimDimN 2 4 3 (initSM 585))] := by
+    rw [hpm, halltoall 0 (by omega), halltoall 1 (by omega), halltoall 2 (by omega), halltoall 3 (by omega)]
+  -- Bridge: fw_softmax distributes over chunk+gather on dim 2 for shape [1,4,8,8]
+  have hbridge : fw_softmax (initSM 585) = allGatherPrimDimN 2 4 0
+      [fw_softmax (chunkPrimDimN 2 4 0 (initSM 585)),
+       fw_softmax (chunkPrimDimN 2 4 1 (initSM 585)),
+       fw_softmax (chunkPrimDimN 2 4 2 (initSM 585)),
+       fw_softmax (chunkPrimDimN 2 4 3 (initSM 585))] := by
+    conv_lhs => rw [← allGatherPrimDimN_chunkPrimDimN_id_dim2_4_8_8 (initSM 585) h585_shape]
+    exact softmax_allGather2_distrib_1_4_2_8_g18 _ _ _ _
+      (hchunk_shape 0) (hchunk_shape 1) (hchunk_shape 2) (hchunk_shape 3)
+  -- head shape of the per-rank softmax list (for AllGather shape lemma)
+  have hhead_sm : (([fw_softmax (chunkPrimDimN 2 4 0 (initSM 585)),
+       fw_softmax (chunkPrimDimN 2 4 1 (initSM 585)),
+       fw_softmax (chunkPrimDimN 2 4 2 (initSM 585)),
+       fw_softmax (chunkPrimDimN 2 4 3 (initSM 585))] : List Tensor).head?.map
+       (fun t => t.shape)).getD [] = [1, 4, 2, 8] := by
+    simp [softmax_shape_g18, hchunk_shape 0]
+  -- Discharge the three conjuncts
+  simp only [goal_18, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
+    LineageGoal.gatherDim, List.map, Piece.tid]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, softmax_shape_g18, h585_shape]
+  · rw [hpm', allGatherPrimDimN_shape 2 4 _ [1, 4, 2, 8] hhead_sm]
+    simp [List.set, List.getD]
+  · rw [reconstructWithDim_singleton, hsm, hpm']
+    exact hbridge
+
 end TrainVerify.Denote.GeneratedGoals
+
 
