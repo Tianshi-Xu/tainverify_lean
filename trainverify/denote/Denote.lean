@@ -15826,4 +15826,84 @@ theorem tensorSum_pair_gather_dim1_4_1_2_32_g242
   · rw [tensorSum_pair_valAt a2 b2 _ (hpj64 a2 ha2)]
   · rw [tensorSum_pair_valAt a3 b3 _ (hpj64 a3 ha3)]
 
+set_option maxHeartbeats 1600000 in
+/-- The dW output of `bw_linear` where BOTH the gradient `G` (`[1,8,32]`) and the input
+    `X` (`[1,8,128]`) are dim-1 chunked per rank, equals `tensorSum` of the per-rank dW
+    outputs.  This is the data-parallel weight reduction (CROSS_DP_WRED) identity for
+    `BW_linear` with `w = [32,128]`, used by goal_144 (activation arrives via AllToAll). -/
+theorem bw_linear_dw_dp_chunk_both_dim1_4_1_8_32_128_g144
+    (G X w : Tensor)
+    (hG : G.shape = [1, 8, 32])
+    (hX : X.shape = [1, 8, 128])
+    (hw : w.shape = [32, 128]) :
+    (bw_linear G X w).2 =
+      tensorSum [(bw_linear (chunkPrimDimN 1 4 0 G) (chunkPrimDimN 1 4 0 X) w).2,
+                 (bw_linear (chunkPrimDimN 1 4 1 G) (chunkPrimDimN 1 4 1 X) w).2,
+                 (bw_linear (chunkPrimDimN 1 4 2 G) (chunkPrimDimN 1 4 2 X) w).2,
+                 (bw_linear (chunkPrimDimN 1 4 3 G) (chunkPrimDimN 1 4 3 X) w).2] := by
+  have hcG0 : (chunkPrimDimN 1 4 0 G).shape = [1, 2, 32] := by
+    rw [chunkPrimDimN_shape 1 4 0 G _ hG (by omega)]; simp [List.set, List.getD]
+  have hcG1 : (chunkPrimDimN 1 4 1 G).shape = [1, 2, 32] := by
+    rw [chunkPrimDimN_shape 1 4 1 G _ hG (by omega)]; simp [List.set, List.getD]
+  have hcG2 : (chunkPrimDimN 1 4 2 G).shape = [1, 2, 32] := by
+    rw [chunkPrimDimN_shape 1 4 2 G _ hG (by omega)]; simp [List.set, List.getD]
+  have hcG3 : (chunkPrimDimN 1 4 3 G).shape = [1, 2, 32] := by
+    rw [chunkPrimDimN_shape 1 4 3 G _ hG (by omega)]; simp [List.set, List.getD]
+  have hcX0 : (chunkPrimDimN 1 4 0 X).shape = [1, 2, 128] := by
+    rw [chunkPrimDimN_shape 1 4 0 X _ hX (by omega)]; simp [List.set, List.getD]
+  have hcX1 : (chunkPrimDimN 1 4 1 X).shape = [1, 2, 128] := by
+    rw [chunkPrimDimN_shape 1 4 1 X _ hX (by omega)]; simp [List.set, List.getD]
+  have hcX2 : (chunkPrimDimN 1 4 2 X).shape = [1, 2, 128] := by
+    rw [chunkPrimDimN_shape 1 4 2 X _ hX (by omega)]; simp [List.set, List.getD]
+  have hcX3 : (chunkPrimDimN 1 4 3 X).shape = [1, 2, 128] := by
+    rw [chunkPrimDimN_shape 1 4 3 X _ hX (by omega)]; simp [List.set, List.getD]
+  apply Tensor.ext
+  · rw [bw_linear_3d_snd_shape 1 8 32 128 G X w hG hX hw, tensorSum_shape,
+        bw_linear_3d_snd_shape 1 2 32 128 (chunkPrimDimN 1 4 0 G) (chunkPrimDimN 1 4 0 X) w hcG0 hcX0 hw]
+  · intro idx hidx
+    rw [bw_linear_3d_snd_shape 1 8 32 128 G X w hG hX hw] at hidx
+    have hidxp : idx < 4096 := by simpa [prodShape] using hidx
+    have hc : idx / 128 < 32 := by omega
+    have hk : idx % 128 < 128 := by omega
+    have hide : idx = (idx / 128) * 128 + idx % 128 := by omega
+    rw [hide]
+    rw [bw_linear_dw_valAt3d G X w 1 8 32 128 hG hX hw (idx / 128) hc (idx % 128) hk]
+    rw [show tensorSum [(bw_linear (chunkPrimDimN 1 4 0 G) (chunkPrimDimN 1 4 0 X) w).2,
+                        (bw_linear (chunkPrimDimN 1 4 1 G) (chunkPrimDimN 1 4 1 X) w).2,
+                        (bw_linear (chunkPrimDimN 1 4 2 G) (chunkPrimDimN 1 4 2 X) w).2,
+                        (bw_linear (chunkPrimDimN 1 4 3 G) (chunkPrimDimN 1 4 3 X) w).2] =
+            Tensor.mkShape (bw_linear (chunkPrimDimN 1 4 0 G) (chunkPrimDimN 1 4 0 X) w).2.shape
+              (fun i => [(bw_linear (chunkPrimDimN 1 4 0 G) (chunkPrimDimN 1 4 0 X) w).2,
+                         (bw_linear (chunkPrimDimN 1 4 1 G) (chunkPrimDimN 1 4 1 X) w).2,
+                         (bw_linear (chunkPrimDimN 1 4 2 G) (chunkPrimDimN 1 4 2 X) w).2,
+                         (bw_linear (chunkPrimDimN 1 4 3 G) (chunkPrimDimN 1 4 3 X) w).2].foldl
+                         (fun acc x => acc + valAt x i.1) 0) from rfl]
+    rw [valAt_of_lt _ _ (by
+      rw [Tensor.mkShape, bw_linear_3d_snd_shape 1 2 32 128 (chunkPrimDimN 1 4 0 G) (chunkPrimDimN 1 4 0 X) w hcG0 hcX0 hw]
+      simp [prodShape]; omega)]
+    simp only [Tensor.mkShape, List.foldl]
+    rw [bw_linear_dw_valAt3d (chunkPrimDimN 1 4 0 G) (chunkPrimDimN 1 4 0 X) w 1 2 32 128 hcG0 hcX0 hw (idx / 128) hc (idx % 128) hk,
+        bw_linear_dw_valAt3d (chunkPrimDimN 1 4 1 G) (chunkPrimDimN 1 4 1 X) w 1 2 32 128 hcG1 hcX1 hw (idx / 128) hc (idx % 128) hk,
+        bw_linear_dw_valAt3d (chunkPrimDimN 1 4 2 G) (chunkPrimDimN 1 4 2 X) w 1 2 32 128 hcG2 hcX2 hw (idx / 128) hc (idx % 128) hk,
+        bw_linear_dw_valAt3d (chunkPrimDimN 1 4 3 G) (chunkPrimDimN 1 4 3 X) w 1 2 32 128 hcG3 hcX3 hw (idx / 128) hc (idx % 128) hk]
+    simp only [show (1 : Nat) * 8 = 8 from rfl, show (1 : Nat) * 2 = 2 from rfl]
+    simp only [Finset.sum_range_succ, Finset.sum_range_zero, zero_add]
+    rw [chunk_dim1_4_1_8_32_valAt G 0 0 (idx / 128) hG (by omega) (by omega) hc,
+        chunk_dim1_4_1_8_32_valAt G 0 1 (idx / 128) hG (by omega) (by omega) hc,
+        chunk_dim1_4_1_8_32_valAt G 1 0 (idx / 128) hG (by omega) (by omega) hc,
+        chunk_dim1_4_1_8_32_valAt G 1 1 (idx / 128) hG (by omega) (by omega) hc,
+        chunk_dim1_4_1_8_32_valAt G 2 0 (idx / 128) hG (by omega) (by omega) hc,
+        chunk_dim1_4_1_8_32_valAt G 2 1 (idx / 128) hG (by omega) (by omega) hc,
+        chunk_dim1_4_1_8_32_valAt G 3 0 (idx / 128) hG (by omega) (by omega) hc,
+        chunk_dim1_4_1_8_32_valAt G 3 1 (idx / 128) hG (by omega) (by omega) hc]
+    rw [chunk_dim1_4_1_8_128_valAt X 0 0 (idx % 128) hX (by omega) (by omega) hk,
+        chunk_dim1_4_1_8_128_valAt X 0 1 (idx % 128) hX (by omega) (by omega) hk,
+        chunk_dim1_4_1_8_128_valAt X 1 0 (idx % 128) hX (by omega) (by omega) hk,
+        chunk_dim1_4_1_8_128_valAt X 1 1 (idx % 128) hX (by omega) (by omega) hk,
+        chunk_dim1_4_1_8_128_valAt X 2 0 (idx % 128) hX (by omega) (by omega) hk,
+        chunk_dim1_4_1_8_128_valAt X 2 1 (idx % 128) hX (by omega) (by omega) hk,
+        chunk_dim1_4_1_8_128_valAt X 3 0 (idx % 128) hX (by omega) (by omega) hk,
+        chunk_dim1_4_1_8_128_valAt X 3 1 (idx % 128) hX (by omega) (by omega) hk]
+    ring
+
 end TrainVerify.Denote
