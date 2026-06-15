@@ -17156,4 +17156,19 @@ theorem applyNode_fw_multiref3_pass_g293
   apply storeSet_eq_of_not_mem_fst
   simp [List.zip, List.zipWith, List.replicate, h1, h2, h3]
 
+/-- `applyNode` for `FW_multiref` with `outs = [t1, t2]` and `params = [2]`: reading any
+    tid distinct from both outputs is unchanged. -/
+theorem applyNode_fw_multiref2_other_g295
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid t1 t2 tid : Tid)
+    (h1 : tid ≠ t1) (h2 : tid ≠ t2) :
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid],
+                    outs := [t1, t2], params := [2] } tid = s tid := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl,
+      evalOp_fw_multiref]
+  change storeSet s ([t1, t2].zip (List.replicate 2 (s xTid))) tid = _
+  unfold storeSet
+  simp [List.zip, List.zipWith, List.replicate, List.find?,
+        Ne.symm h1, Ne.symm h2]
+
 end TrainVerify.Denote

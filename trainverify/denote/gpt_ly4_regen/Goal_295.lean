@@ -44,5 +44,59 @@ def goal_295_cut_initGoals : List LineageGoal := initGoals ++ goal_295_prereqs
 def goal_295_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_295 pm_goal_295 goal_295 sm_goal_295InitEnv pm_goal_295InitEnv goal_295_cut_initGoals
 
+-- FW_multiref first output is a copy of its input; lineage follows directly from the
+-- input alignment (goal_74).
+theorem prove_goal_295_cut : goal_295_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Input alignment for tensor 663 (= reconstruct of shards 2613..2616 on dim 1)
+  have hInit663 : InitGoalHolds pm_goal_295.numRanks goal_74 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_295_cut_initGoals, goal_295_prereqs]
+    decide
+  have h663_rec : initSM 663 = reconstructWithDim 1 4 0
+      [initPM 2613, initPM 2614, initPM 2615, initPM 2616] := by
+    have hrec := hInit663.2.2
+    simp only [goal_74, pm_goal_295, List.map] at hrec
+    exact hrec
+  have h663_shape : (initSM 663).shape = [1, 8, 32] := hInit663.1
+  have htp_shapes := hInit663.2.1
+  simp only [goal_74, List.map] at htp_shapes
+  -- SM store: smStore 1020 = initSM 663
+  have hsm : (denoteGraph sm_goal_295 initSM) 1020 = initSM 663 := by
+    simp only [sm_goal_295, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_first_out]
+  -- PM stores: each first output equals its input shard
+  have e2637 : (denoteGraph pm_goal_295 initPM) 2637 = initPM 2613 := by
+    simp only [pm_goal_295, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_other_g295 _ _ 3 2616 2640 2752 2637 (by decide) (by decide),
+        applyNode_fw_multiref2_other_g295 _ _ 2 2615 2639 2751 2637 (by decide) (by decide),
+        applyNode_fw_multiref2_other_g295 _ _ 1 2614 2638 2750 2637 (by decide) (by decide),
+        applyNode_fw_multiref2_first_out]
+  have e2638 : (denoteGraph pm_goal_295 initPM) 2638 = initPM 2614 := by
+    simp only [pm_goal_295, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_other_g295 _ _ 3 2616 2640 2752 2638 (by decide) (by decide),
+        applyNode_fw_multiref2_other_g295 _ _ 2 2615 2639 2751 2638 (by decide) (by decide),
+        applyNode_fw_multiref2_first_out,
+        applyNode_fw_multiref2_other_g295 _ _ 0 2613 2637 2749 2614 (by decide) (by decide)]
+  have e2639 : (denoteGraph pm_goal_295 initPM) 2639 = initPM 2615 := by
+    simp only [pm_goal_295, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_other_g295 _ _ 3 2616 2640 2752 2639 (by decide) (by decide),
+        applyNode_fw_multiref2_first_out,
+        applyNode_fw_multiref2_other_g295 _ _ 1 2614 2638 2750 2615 (by decide) (by decide),
+        applyNode_fw_multiref2_other_g295 _ _ 0 2613 2637 2749 2615 (by decide) (by decide)]
+  have e2640 : (denoteGraph pm_goal_295 initPM) 2640 = initPM 2616 := by
+    simp only [pm_goal_295, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_first_out,
+        applyNode_fw_multiref2_other_g295 _ _ 2 2615 2639 2751 2616 (by decide) (by decide),
+        applyNode_fw_multiref2_other_g295 _ _ 1 2614 2638 2750 2616 (by decide) (by decide),
+        applyNode_fw_multiref2_other_g295 _ _ 0 2613 2637 2749 2616 (by decide) (by decide)]
+  -- Discharge the three conjuncts
+  simp only [goal_295, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]; exact h663_shape
+  · rw [e2637, e2638, e2639, e2640]; exact htp_shapes
+  · rw [hsm, e2637, e2638, e2639, e2640]; exact h663_rec
+
 end TrainVerify.Denote.GeneratedGoals
+
 
