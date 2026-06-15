@@ -18977,4 +18977,86 @@ theorem bw_div_allGatherPrimDimN_eq_g198
     rw [list_getD_of_ge _ _ _ hr_m, list_getD_of_ge _ _ _ hr_g]
     simp [zeroTensor, Tensor.mkShape, valAt, prodShape]
 
+/-! ## BW_div (scalar division backward) lemmas (goal_233) -/
+
+theorem bw_div_shape_g233 (c : Scalar) (g : Tensor) : (bw_div c g).shape = g.shape := by
+  simp [bw_div, scalarDiv, Tensor.mkShape]
+
+theorem bw_div_valAt_g233 (c : Scalar) (g : Tensor) (idx : Nat)
+    (h : idx < prodShape g.shape) :
+    valAt (bw_div c g) idx = valAt g idx / c := by
+  rw [valAt_of_lt _ _ (by rw [bw_div_shape_g233]; exact h)]
+  simp [bw_div, scalarDiv, Tensor.mkShape]
+
+theorem bw_div_allGatherPrimDimN_eq_g233
+    (c : Scalar) (gatherDim numParts : Nat) (xs : List Tensor)
+    (shardShape : Shape)
+    (hnp : 0 < numParts)
+    (hlen : xs.length = numParts)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = shardShape)
+    (hxs_shape : ∀ i (hi : i < xs.length), (xs.get ⟨i, hi⟩).shape = shardShape) :
+    bw_div c (allGatherPrimDimN gatherDim numParts 0 xs) =
+      allGatherPrimDimN gatherDim numParts 0 (xs.map (fun t => bw_div c t)) := by
+  have hlen_map : (xs.map (fun t => bw_div c t)).length = numParts := by
+    rw [List.length_map, hlen]
+  have hhead_map : ((xs.map (fun t => bw_div c t)).head?.map (fun t => t.shape)).getD [] = shardShape := by
+    have h0 : (0 : Nat) < xs.length := by omega
+    have h0m : (0 : Nat) < (xs.map (fun t => bw_div c t)).length := by rw [List.length_map]; omega
+    rw [List.head?_eq_getElem?]
+    rw [List.getElem?_eq_getElem h0m]
+    simp only [Option.map_some, Option.getD_some]
+    have hm0 : (xs.map (fun t => bw_div c t))[0]'h0m = bw_div c (xs[0]'h0) := List.getElem_map ..
+    rw [hm0, bw_div_shape_g233]
+    exact hxs_shape 0 h0
+  set outShape := shardShape.set gatherDim (shardShape.getD gatherDim 0 * numParts) with houtShape_def
+  have hgather_shape : (allGatherPrimDimN gatherDim numParts 0 xs).shape = outShape :=
+    allGatherPrimDimN_shape gatherDim numParts xs shardShape hhead
+  have hlhs_shape : (bw_div c (allGatherPrimDimN gatherDim numParts 0 xs)).shape = outShape := by
+    rw [bw_div_shape_g233]; exact hgather_shape
+  have hrhs_shape : (allGatherPrimDimN gatherDim numParts 0 (xs.map (fun t => bw_div c t))).shape = outShape :=
+    allGatherPrimDimN_shape gatherDim numParts _ shardShape hhead_map
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx_out : idx < prodShape outShape := by rwa [hlhs_shape] at hidx
+  have hgather_idx : idx < prodShape (allGatherPrimDimN gatherDim numParts 0 xs).shape := by
+    rw [hgather_shape]; exact hidx_out
+  rw [bw_div_valAt_g233 _ _ _ hgather_idx]
+  rw [valAt_of_lt _ _ hgather_idx]
+  conv_rhs => rw [valAt_of_lt _ _ (by rw [hrhs_shape]; exact hidx_out)]
+  simp only [allGatherPrimDimN, Tensor.mkShape, hhead, hhead_map]
+  set ds := List.getD shardShape gatherDim 0
+  set ps := List.foldl (· * ·) 1 (List.drop (gatherDim + 1) shardShape)
+  set fds := ds * numParts * ps
+  generalize (if ds = 0 then 0
+    else (if ps = 0 then 0 else (if fds = 0 then 0 else idx % fds) / ps) / ds) = r
+  generalize (if fds = 0 then 0 else idx / fds) * (ds * ps) +
+    (if ds = 0 then 0 else (if ps = 0 then 0 else (if fds = 0 then 0 else idx % fds) / ps) % ds) * ps +
+    (if ps = 0 then 0 else (if fds = 0 then 0 else idx % fds) % ps) = loc
+  by_cases hr_lt : r < numParts
+  · have hr_xs : r < xs.length := by omega
+    have hr_map : r < (xs.map (fun t => bw_div c t)).length := by omega
+    rw [list_getD_of_lt _ _ _ hr_xs, list_getD_of_lt _ _ _ hr_map]
+    have hmap_r : (xs.map (fun t => bw_div c t))[r]'hr_map = bw_div c (xs[r]'hr_xs) := List.getElem_map ..
+    rw [hmap_r]
+    by_cases hloc_lt : loc < prodShape (xs[r]'hr_xs).shape
+    · rw [bw_div_valAt_g233 _ _ _ hloc_lt]
+    · have h1 : ¬(loc < prodShape (bw_div c (xs[r]'hr_xs)).shape) := by
+        rw [bw_div_shape_g233]; exact hloc_lt
+      simp only [valAt, h1, hloc_lt, dite_false]
+      simp
+  · have hr_xs : ¬(r < xs.length) := by omega
+    have hr_map : ¬(r < (xs.map (fun t => bw_div c t)).length) := by omega
+    rw [list_getD_of_ge _ _ _ hr_xs, list_getD_of_ge _ _ _ hr_map]
+    simp only [zeroTensor, Tensor.mkShape, valAt, prodShape, List.foldl]
+    simp
+
+theorem applyNode_bw_div_out_g233
+    (g : GraphDecl) (s : Store) (rank : Nat) (gradTid xTid outTid c : Nat) :
+    applyNode g s { rank := rank, op := "OpName.BW_div", ins := [gradTid, xTid], outs := [outTid], params := [c] } outTid =
+      bw_div ((c : Nat) : Scalar) (s gradTid) := by
+  unfold applyNode
+  change storeSet s [(outTid, bw_div ((c : Nat) : Scalar) (s gradTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
 end TrainVerify.Denote
