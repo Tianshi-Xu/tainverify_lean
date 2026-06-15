@@ -16849,4 +16849,17 @@ theorem bw_linear_dw_xsplit_dim2_4_1_8_128_g249
       intro r' _
       rw [show r' * 128 + 3 * 32 + k % 32 = r' * 128 + k from by omega]
 
+/-- `applyNode` for `FW_multiref` with `outs = [t1, t2]` and `params = [2]`: the second
+    output equals the input (when `t1 ≠ t2`). -/
+theorem applyNode_fw_multiref2_second_out_g259
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid t1 t2 : Tid) (hne : t1 ≠ t2) :
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid],
+                    outs := [t1, t2], params := [2] } t2 = s xTid := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl,
+      evalOp_fw_multiref]
+  change storeSet s ([t1, t2].zip (List.replicate 2 (s xTid))) t2 = _
+  unfold storeSet
+  simp [List.zip, List.zipWith, List.replicate, List.find?, hne]
+
 end TrainVerify.Denote
