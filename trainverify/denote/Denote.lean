@@ -16314,4 +16314,113 @@ theorem bw_linear_dw_isplit_dim2_4_1_8_32_g214
     refine Finset.sum_congr rfl (fun p hp => ?_)
     rw [hX_term p (Finset.mem_range.mp hp), h, List.getD]; simp
 
+-- ===== net-new lemmas for BW_linear AllToAll goal_245 (_g245 suffix) =====
+
+/-- `bw_linear` dX (first output) ignores the *value* of the activation `x`; it depends on
+    `x` only through its shape (which fixes the output width).  Specialised to the
+    `[1,8,128] × [1,8,32] × [128,32]` instance used by goal_245. -/
+theorem bw_linear_fst_x_irrelevant_1_8_32_g245 (g x x' w : Tensor)
+    (hg : g.shape = [1, 8, 128]) (hx : x.shape = [1, 8, 32]) (hx' : x'.shape = [1, 8, 32])
+    (hw : w.shape = [128, 32]) :
+    (bw_linear g x w).1 = (bw_linear g x' w).1 := by
+  have s1 : (bw_linear g x w).1.shape = [1, 8, 32] :=
+    bw_linear_3d_fst_shape 1 8 128 32 g x w hg hx hw
+  have s2 : (bw_linear g x' w).1.shape = [1, 8, 32] :=
+    bw_linear_3d_fst_shape 1 8 128 32 g x' w hg hx' hw
+  apply Tensor.ext (by rw [s1, s2])
+  intro idx hidx
+  rw [s1] at hidx
+  have hidx256 : idx < 256 := by simpa [prodShape] using hidx
+  set seq := idx / 32 with hseq_def
+  set col := idx % 32 with hcol_def
+  have hcol : col < 32 := by rw [hcol_def]; exact Nat.mod_lt _ (by omega)
+  have hseq : seq < 8 := by rw [hseq_def]; omega
+  have hidx_eq : idx = seq * 32 + col := by rw [hseq_def, hcol_def]; omega
+  rw [hidx_eq,
+      bw_linear_fst_valAt_1_8_32_g134 g x w 128 hg hx hw seq hseq col hcol,
+      bw_linear_fst_valAt_1_8_32_g134 g x' w 128 hg hx' hw seq hseq col hcol]
+
+set_option maxHeartbeats 1600000 in
+/-- Column-parallel (output-feature split) input gradient for `BW_linear` with a wide
+    gradient (`g : [1,8,128]`).  The gradient `g` is shared, the weight `w` (`[128,32]`)
+    is sharded on dim 1 into four `[128,8]` shards (reassembled by `allGatherPrimDimN 1`),
+    and the activation `x` (`[1,8,32]`) is sharded on dim 2 into four `[1,8,8]` shards
+    (reassembled by `allGatherPrimDimN 2`).  Then the full dX (`[1,8,32]`) equals the
+    dim-2 all-gather of the four per-rank dX outputs (each `[1,8,8]`).  dX depends only on
+    `g` and `w`, so the per-rank `x` shards only fix the output column width. -/
+theorem bw_linear_dx_csplit_dim1_4_1_8_8_g245
+    (g x0 x1 x2 x3 w0 w1 w2 w3 : Tensor)
+    (hg : g.shape = [1, 8, 128])
+    (hx0 : x0.shape = [1, 8, 8]) (hx1 : x1.shape = [1, 8, 8])
+    (hx2 : x2.shape = [1, 8, 8]) (hx3 : x3.shape = [1, 8, 8])
+    (hw0 : w0.shape = [128, 8]) (hw1 : w1.shape = [128, 8])
+    (hw2 : w2.shape = [128, 8]) (hw3 : w3.shape = [128, 8]) :
+    (bw_linear g (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3])
+        (allGatherPrimDimN 1 4 0 [w0, w1, w2, w3])).1 =
+      allGatherPrimDimN 2 4 0
+        [(bw_linear g x0 w0).1, (bw_linear g x1 w1).1,
+         (bw_linear g x2 w2).1, (bw_linear g x3 w3).1] := by
+  have hxhead : (([x0, x1, x2, x3] : List Tensor).head?.map (fun t => t.shape)).getD [] = [1, 8, 8] := by
+    simp [hx0]
+  have hwhead : (([w0, w1, w2, w3] : List Tensor).head?.map (fun t => t.shape)).getD [] = [128, 8] := by
+    simp [hw0]
+  have hwgetD : ∀ r, r < 4 →
+      (([w0, w1, w2, w3] : List Tensor).getD r (zeroTensor [128, 8])).shape = [128, 8] := by
+    intro r hr
+    have : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+    rcases this with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, hw0, hw1, hw2, hw3]
+  have hX_shape : (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hxhead]; simp [List.set, List.getD]
+  have hW_shape : (allGatherPrimDimN 1 4 0 [w0, w1, w2, w3]).shape = [128, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hwhead]; simp [List.set, List.getD]
+  have hp0 : (bw_linear g x0 w0).1.shape = [1, 8, 8] := bw_linear_3d_fst_shape 1 8 128 8 g x0 w0 hg hx0 hw0
+  set pieces : List Tensor :=
+    [(bw_linear g x0 w0).1, (bw_linear g x1 w1).1, (bw_linear g x2 w2).1, (bw_linear g x3 w3).1]
+    with hpieces_def
+  have hphead : (pieces.head?.map (fun t => t.shape)).getD [] = [1, 8, 8] := by
+    simp [hpieces_def, hp0]
+  have hLHS_shape : (bw_linear g (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3])
+      (allGatherPrimDimN 1 4 0 [w0, w1, w2, w3])).1.shape = [1, 8, 32] :=
+    bw_linear_3d_fst_shape 1 8 128 32 g _ _ hg hX_shape hW_shape
+  have hRHS_shape : (allGatherPrimDimN 2 4 0 pieces).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 2 4 _ _ hphead]; simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hLHS_shape, hRHS_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hLHS_shape, prodShape] using hidx
+  set seq := idx / 32 with hseq_def
+  set col := idx % 32 with hcol_def
+  have hcol : col < 32 := by rw [hcol_def]; exact Nat.mod_lt _ (by omega)
+  have hseq : seq < 8 := by rw [hseq_def]; omega
+  have hidx_eq : idx = seq * 32 + col := by rw [hseq_def, hcol_def]; omega
+  rw [hidx_eq]
+  rw [bw_linear_fst_valAt_1_8_32_g134 g (allGatherPrimDimN 2 4 0 [x0, x1, x2, x3])
+      (allGatherPrimDimN 1 4 0 [w0, w1, w2, w3]) 128 hg hX_shape hW_shape seq hseq col hcol]
+  have hr : col / 8 < 4 := by omega
+  have hlc : col % 8 < 8 := Nat.mod_lt _ (by omega)
+  conv_rhs => rw [show seq * 32 + col = seq * 32 + (col / 8 * 8 + col % 8) from by omega]
+  rw [allGatherDimN2_4_188_valAt_g134 pieces hphead seq hseq (col / 8) hr (col % 8) hlc]
+  have hW_term : ∀ j, j < 128 →
+      valAt (allGatherPrimDimN 1 4 0 [w0, w1, w2, w3]) (j * 32 + col) =
+      valAt (([w0, w1, w2, w3] : List Tensor).getD (col / 8) (zeroTensor [128, 8])) (j * 8 + col % 8) := by
+    intro j hj
+    rw [show j * 32 + col = j * 32 + col / 8 * 8 + col % 8 from by omega]
+    rw [allGatherPrimDimN1_4_valAt_128_8 [w0, w1, w2, w3] hwhead hwgetD j hj (col / 8) hr (col % 8) hlc]
+  rcases (show col / 8 = 0 ∨ col / 8 = 1 ∨ col / 8 = 2 ∨ col / 8 = 3 from by omega) with h | h | h | h <;>
+    rw [h] <;>
+    simp only [hpieces_def, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+      Option.getD_some]
+  · rw [bw_linear_fst_valAt_1_8_8_g276 g x0 w0 128 hg hx0 hw0 seq hseq (col % 8) hlc]
+    refine Finset.sum_congr rfl (fun j hj => ?_)
+    rw [hW_term j (Finset.mem_range.mp hj), h, List.getD]; simp
+  · rw [bw_linear_fst_valAt_1_8_8_g276 g x1 w1 128 hg hx1 hw1 seq hseq (col % 8) hlc]
+    refine Finset.sum_congr rfl (fun j hj => ?_)
+    rw [hW_term j (Finset.mem_range.mp hj), h, List.getD]; simp
+  · rw [bw_linear_fst_valAt_1_8_8_g276 g x2 w2 128 hg hx2 hw2 seq hseq (col % 8) hlc]
+    refine Finset.sum_congr rfl (fun j hj => ?_)
+    rw [hW_term j (Finset.mem_range.mp hj), h, List.getD]; simp
+  · rw [bw_linear_fst_valAt_1_8_8_g276 g x3 w3 128 hg hx3 hw3 seq hseq (col % 8) hlc]
+    refine Finset.sum_congr rfl (fun j hj => ?_)
+    rw [hW_term j (Finset.mem_range.mp hj), h, List.getD]; simp
+
 end TrainVerify.Denote
