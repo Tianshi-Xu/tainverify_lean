@@ -44,5 +44,82 @@ def goal_67_cut_initGoals : List LineageGoal := initGoals ++ goal_67_prereqs
 def goal_67_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_67 pm_goal_67 goal_67 sm_goal_67InitEnv pm_goal_67InitEnv goal_67_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- fw_div distributes pointwise over allGather (gatherDim 2): inputs are pre-sharded,
+-- each PM rank applies fw_div to its shard, so no collective is needed on inputs.
+theorem prove_goal_67_cut : goal_67_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_66 (tensor 654 gathered along dim 2 from 2441..2444)
+  have hInit66 : InitGoalHolds pm_goal_67.numRanks goal_66 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_67_cut_initGoals, goal_67_prereqs]
+    decide
+  have h654_shape : (initSM 654).shape = [1, 4, 8, 8] := hInit66.1
+  have hshapes := hInit66.2.1
+  simp only [goal_66, List.map] at hshapes
+  rw [List.cons.injEq, List.cons.injEq, List.cons.injEq, List.cons.injEq] at hshapes
+  obtain ⟨e1, e2, e3, e4, _⟩ := hshapes
+  have h654_eq : initSM 654 =
+      reconstructWithDim 2 4 0
+        [initPM 2441, initPM 2442, initPM 2443, initPM 2444] := by
+    have hrec := hInit66.2.2
+    simp only [goal_66, pm_goal_67, List.map] at hrec
+    exact hrec
+  set xs : List Tensor := [initPM 2441, initPM 2442, initPM 2443, initPM 2444] with hxs
+  have hxs_len : xs.length = 4 := by simp [hxs]
+  have hxs_head : (xs.head?.map (fun t => t.shape)).getD [] = [1, 4, 2, 8] := by
+    simp [hxs, List.head?, Option.map, e1]
+  have hxs_shape : ∀ i (hi : i < xs.length), (xs.get ⟨i, hi⟩).shape = [1, 4, 2, 8] := by
+    intro i hi
+    simp only [hxs, List.length] at hi
+    have h4 : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases h4 with rfl | rfl | rfl | rfl <;> simp [hxs, e1, e2, e3, e4]
+  have h654_gather : initSM 654 = allGatherPrimDimN 2 4 0 xs := by
+    rw [h654_eq, hxs]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [e1]; decide)
+  -- SM store: smStore 655 = fw_div 2 (initSM 654)
+  have hsm : (denoteGraph sm_goal_67 initSM) 655 = fw_div ((2 : Nat) : Scalar) (initSM 654) := by
+    simp only [sm_goal_67, denoteGraph, List.foldl]
+    rw [applyNode_fw_div_out_g67]
+  -- PM stores: each rank applies fw_div to its shard directly
+  have hpm0 : (denoteGraph pm_goal_67 initPM) 2465 = fw_div ((2 : Nat) : Scalar) (initPM 2441) := by
+    simp only [pm_goal_67, denoteGraph, List.foldl, applyNode,
+      evalOp_fw_div_g67, List.map, storeSet]
+    rfl
+  have hpm1 : (denoteGraph pm_goal_67 initPM) 2466 = fw_div ((2 : Nat) : Scalar) (initPM 2442) := by
+    simp only [pm_goal_67, denoteGraph, List.foldl, applyNode,
+      evalOp_fw_div_g67, List.map, storeSet]
+    rfl
+  have hpm2 : (denoteGraph pm_goal_67 initPM) 2467 = fw_div ((2 : Nat) : Scalar) (initPM 2443) := by
+    simp only [pm_goal_67, denoteGraph, List.foldl, applyNode,
+      evalOp_fw_div_g67, List.map, storeSet]
+    rfl
+  have hpm3 : (denoteGraph pm_goal_67 initPM) 2468 = fw_div ((2 : Nat) : Scalar) (initPM 2444) := by
+    simp only [pm_goal_67, denoteGraph, List.foldl, applyNode,
+      evalOp_fw_div_g67, List.map, storeSet]
+    rfl
+  -- Key equation: fw_div distributes over allGatherPrimDimN (dim 2)
+  have hkey : fw_div ((2 : Nat) : Scalar) (initSM 654) =
+      reconstructWithDim 2 4 0
+        [fw_div ((2 : Nat) : Scalar) (initPM 2441), fw_div ((2 : Nat) : Scalar) (initPM 2442),
+         fw_div ((2 : Nat) : Scalar) (initPM 2443), fw_div ((2 : Nat) : Scalar) (initPM 2444)] := by
+    rw [h654_gather]
+    rw [fw_div_allGatherPrimDimN_eq_g67 ((2 : Nat) : Scalar) 2 4 xs [1, 4, 2, 8] (by omega) hxs_len hxs_head hxs_shape]
+    have hmap : xs.map (fw_div ((2 : Nat) : Scalar)) =
+        [fw_div ((2 : Nat) : Scalar) (initPM 2441), fw_div ((2 : Nat) : Scalar) (initPM 2442),
+         fw_div ((2 : Nat) : Scalar) (initPM 2443), fw_div ((2 : Nat) : Scalar) (initPM 2444)] := by
+      simp [hxs, List.map]
+    rw [hmap]
+    symm
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [fw_div_shape_g67, e1]; decide)
+  -- Discharge the three conjuncts
+  simp only [goal_67, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, fw_div_shape_g67, h654_shape]
+  · rw [hpm0, hpm1, hpm2, hpm3]
+    simp only [fw_div_shape_g67, e1, e2, e3, e4]
+  · have hnr : pm_goal_67.numRanks = 4 := rfl
+    rw [hsm, hpm0, hpm1, hpm2, hpm3, hnr, hkey]
+
 end TrainVerify.Denote.GeneratedGoals
 
