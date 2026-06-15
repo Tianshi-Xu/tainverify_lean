@@ -58,5 +58,141 @@ def goal_44_cut_initGoals : List LineageGoal := initGoals ++ goal_44_prereqs
 def goal_44_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_44 pm_goal_44 goal_44 sm_goal_44InitEnv pm_goal_44InitEnv goal_44_cut_initGoals
 
+set_option maxHeartbeats 4000000 in
+-- fw_matmul distributes over a contraction-dim (dim K) split: each PM rank gathers its inputs
+-- via AllToAll (= chunk along the contraction dim of the gathered SM inputs), matmuls, then the
+-- SM output is the all-reduce (sum) of those per-rank partial matmuls.
+theorem prove_goal_44_cut : goal_44_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- input 621 (x) = gather along dim 2 of shards 1929..1932   (goal_43)
+  have hInit621 : InitGoalHolds pm_goal_44.numRanks goal_43 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_44_cut_initGoals, goal_44_prereqs]
+    decide
+  -- input 617 (y) = gather along dim 3 of shards 1829..1832   (goal_39)
+  have hInit617 : InitGoalHolds pm_goal_44.numRanks goal_39 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_44_cut_initGoals, goal_44_prereqs]
+    decide
+  -- SM input shapes
+  have h621_shape : (initSM 621).shape = [1, 4, 8, 8] := hInit621.1
+  have h617_shape : (initSM 617).shape = [1, 4, 8, 8] := hInit617.1
+  -- reconstruct relations
+  have h621_rec : initSM 621 = reconstructWithDim 2 4 0
+      [initPM 1929, initPM 1930, initPM 1931, initPM 1932] := by
+    have hrec := hInit621.2.2
+    simp only [goal_43, pm_goal_44, List.map] at hrec
+    exact hrec
+  have h617_rec : initSM 617 = reconstructWithDim 3 4 0
+      [initPM 1829, initPM 1830, initPM 1831, initPM 1832] := by
+    have hrec := hInit617.2.2
+    simp only [goal_39, pm_goal_44, List.map] at hrec
+    exact hrec
+  -- shard shapes for x (1929..1932) : [1,4,2,8]
+  have htp621 := hInit621.2.1
+  simp only [goal_43, List.map] at htp621
+  have h1929_shape : (initPM 1929).shape = [1, 4, 2, 8] := by
+    have := congrArg List.head? htp621; simpa using this
+  -- shard shapes for y (1829..1832) : [1,4,8,2]
+  have htp617 := hInit617.2.1
+  simp only [goal_39, List.map] at htp617
+  have h1829_shape : (initPM 1829).shape = [1, 4, 8, 2] := by
+    have := congrArg List.head? htp617; simpa using this
+  -- convert reconstruct to allGatherPrimDimN (shards are non-scalar)
+  have h621_gather : initSM 621 = allGatherPrimDimN 2 4 0
+      [initPM 1929, initPM 1930, initPM 1931, initPM 1932] := by
+    rw [h621_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1929_shape]; decide)
+  have h617_gather : initSM 617 = allGatherPrimDimN 3 4 0
+      [initPM 1829, initPM 1830, initPM 1831, initPM 1832] := by
+    rw [h617_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h1829_shape]; decide)
+  -- the AllToAll outputs equal chunks (along the contraction dim) of the gathered SM inputs.
+  -- x: gather dim 2 then chunk dim 3  (params [2,3])
+  have halltoall_x : ∀ r,
+      allToAllPrimWithDims 4 r [initPM 1929, initPM 1930, initPM 1931, initPM 1932] 2 3 =
+      chunkPrimDimN 3 4 r (initSM 621) := by
+    intro r
+    simp only [allToAllPrimWithDims]
+    rw [← h621_gather]
+  -- y: gather dim 3 then chunk dim 2  (params [3,2])
+  have halltoall_y : ∀ r,
+      allToAllPrimWithDims 4 r [initPM 1829, initPM 1830, initPM 1831, initPM 1832] 3 2 =
+      chunkPrimDimN 2 4 r (initSM 617) := by
+    intro r
+    simp only [allToAllPrimWithDims]
+    rw [← h617_gather]
+  -- chunk shapes
+  have hchunk3 : ∀ r, (chunkPrimDimN 3 4 r (initSM 621)).shape = [1, 4, 8, 2] := by
+    intro r
+    rw [chunkPrimDimN_shape 3 4 r _ _ h621_shape (by omega)]
+    simp [List.set, List.getD]
+  have hchunk2 : ∀ r, (chunkPrimDimN 2 4 r (initSM 617)).shape = [1, 4, 2, 8] := by
+    intro r
+    rw [chunkPrimDimN_shape 2 4 r _ _ h617_shape (by omega)]
+    simp [List.set, List.getD]
+  -- SM store: smStore 622 = fw_matmul (initSM 621) (initSM 617)
+  have hsm : (denoteGraph sm_goal_44 initSM) 622 = fw_matmul (initSM 621) (initSM 617) := by
+    simp only [sm_goal_44, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_fw_matmul_out]
+  -- PM store: pmStore 622 = allReduce of the four per-rank chunk matmuls
+  have hpm : (denoteGraph pm_goal_44 initPM) 622 =
+      allReducePrim 4 0
+        [fw_matmul (chunkPrimDimN 3 4 0 (initSM 621)) (chunkPrimDimN 2 4 0 (initSM 617)),
+         fw_matmul (chunkPrimDimN 3 4 1 (initSM 621)) (chunkPrimDimN 2 4 1 (initSM 617)),
+         fw_matmul (chunkPrimDimN 3 4 2 (initSM 621)) (chunkPrimDimN 2 4 2 (initSM 617)),
+         fw_matmul (chunkPrimDimN 3 4 3 (initSM 621)) (chunkPrimDimN 2 4 3 (initSM 617))] := by
+    have hraw : (denoteGraph pm_goal_44 initPM) 622 =
+        allReducePrim 4 0
+          [fw_matmul (allToAllPrimWithDims 4 0 [initPM 1929, initPM 1930, initPM 1931, initPM 1932] 2 3)
+                     (allToAllPrimWithDims 4 0 [initPM 1829, initPM 1830, initPM 1831, initPM 1832] 3 2),
+           fw_matmul (allToAllPrimWithDims 4 1 [initPM 1929, initPM 1930, initPM 1931, initPM 1932] 2 3)
+                     (allToAllPrimWithDims 4 1 [initPM 1829, initPM 1830, initPM 1831, initPM 1832] 3 2),
+           fw_matmul (allToAllPrimWithDims 4 2 [initPM 1929, initPM 1930, initPM 1931, initPM 1932] 2 3)
+                     (allToAllPrimWithDims 4 2 [initPM 1829, initPM 1830, initPM 1831, initPM 1832] 3 2),
+           fw_matmul (allToAllPrimWithDims 4 3 [initPM 1929, initPM 1930, initPM 1931, initPM 1932] 2 3)
+                     (allToAllPrimWithDims 4 3 [initPM 1829, initPM 1830, initPM 1831, initPM 1832] 3 2)] := by
+      simp only [pm_goal_44, denoteGraph, GraphDecl.nodes, List.foldl]
+      rw [applyNode_allReducePrim_out]
+      simp only [List.map]
+      congr 1
+    rw [hraw, halltoall_x 0, halltoall_x 1, halltoall_x 2, halltoall_x 3,
+        halltoall_y 0, halltoall_y 1, halltoall_y 2, halltoall_y 3]
+  -- Key equation: matmul of the gathers = all-reduce (sum) of the per-rank chunk matmuls
+  have hkey : fw_matmul (initSM 621) (initSM 617) =
+      allReducePrim 4 0
+        [fw_matmul (chunkPrimDimN 3 4 0 (initSM 621)) (chunkPrimDimN 2 4 0 (initSM 617)),
+         fw_matmul (chunkPrimDimN 3 4 1 (initSM 621)) (chunkPrimDimN 2 4 1 (initSM 617)),
+         fw_matmul (chunkPrimDimN 3 4 2 (initSM 621)) (chunkPrimDimN 2 4 2 (initSM 617)),
+         fw_matmul (chunkPrimDimN 3 4 3 (initSM 621)) (chunkPrimDimN 2 4 3 (initSM 617))] := by
+    conv_lhs => rw [← allGatherPrimDimN_chunkPrimDimN_id_dim3_4_8_8 (initSM 621) h621_shape,
+                    ← allGatherPrimDimN_chunkPrimDimN_id_dim2_4_8_8 (initSM 617) h617_shape]
+    exact fw_matmul_split_dimK_1_4_8_8 _ _ _ _ _ _ _ _
+      (hchunk3 0) (hchunk3 1) (hchunk3 2) (hchunk3 3)
+      (hchunk2 0) (hchunk2 1) (hchunk2 2) (hchunk2 3)
+  -- per-rank matmul output shapes
+  have hpiece_shape : ∀ r,
+      (fw_matmul (chunkPrimDimN 3 4 r (initSM 621)) (chunkPrimDimN 2 4 r (initSM 617))).shape
+        = [1, 4, 8, 8] := by
+    intro r
+    exact batchedMatmul_shape_1_4_8_2_1_4_2_8 _ _ (hchunk3 r) (hchunk2 r)
+  -- discharge the three conjuncts
+  simp only [goal_44, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]
+    exact fw_matmul_shape_1_4_8_8 _ _ h621_shape h617_shape
+  · rw [hpm]
+    have hsh : (allReducePrim 4 0
+        [fw_matmul (chunkPrimDimN 3 4 0 (initSM 621)) (chunkPrimDimN 2 4 0 (initSM 617)),
+         fw_matmul (chunkPrimDimN 3 4 1 (initSM 621)) (chunkPrimDimN 2 4 1 (initSM 617)),
+         fw_matmul (chunkPrimDimN 3 4 2 (initSM 621)) (chunkPrimDimN 2 4 2 (initSM 617)),
+         fw_matmul (chunkPrimDimN 3 4 3 (initSM 621)) (chunkPrimDimN 2 4 3 (initSM 617))]).shape
+        = [1, 4, 8, 8] := by
+      rw [allReducePrim_shape 4 0 _ _ rfl]; exact hpiece_shape 0
+    simp [hsh]
+  · rw [hsm, hkey, ← hpm]
+    simp [reconstructWithDim]
+
 end TrainVerify.Denote.GeneratedGoals
+
 
