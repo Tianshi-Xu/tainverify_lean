@@ -44,5 +44,93 @@ def goal_293_cut_initGoals : List LineageGoal := initGoals ++ goal_293_prereqs
 def goal_293_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_293 pm_goal_293 goal_293 sm_goal_293InitEnv pm_goal_293InitEnv goal_293_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- FW_multiref copies its input to 3 outputs; the lineage of each output equals the input lineage.
+theorem prove_goal_293_cut : goal_293_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_55 (tensor 640 = gather of shards 2229..2232 on dim 1)
+  have hInit640 : InitGoalHolds pm_goal_293.numRanks goal_55 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_293_cut_initGoals, goal_293_prereqs]
+    decide
+  -- goal_55: initSM 640 = reconstructWithDim 1 4 0 [initPM 2229..2232]
+  have h640_rec : initSM 640 = reconstructWithDim 1 4 0
+      [initPM 2229, initPM 2230, initPM 2231, initPM 2232] := by
+    have hrec := hInit640.2.2
+    simp only [goal_55, pm_goal_293, List.map] at hrec
+    exact hrec
+  have h640_shape : (initSM 640).shape = [1, 8, 32] := hInit640.1
+  -- PM shard shapes from goal_55
+  have htp_shapes := hInit640.2.1
+  simp only [goal_55, List.map] at htp_shapes
+  have h2229_shape : (initPM 2229).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp_shapes; simpa using this
+  have h2230_shape : (initPM 2230).shape = [1, 2, 32] := by
+    have := congrArg List.tail htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h2231_shape : (initPM 2231).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h2232_shape : (initPM 2232).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  -- SM store: smStore 1012 = initSM 640 (third copy of FW_multiref)
+  have hsm : (denoteGraph sm_goal_293 initSM) 1012 = initSM 640 := by
+    simp only [sm_goal_293, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref3_third_out_g293 _ _ 0 640 1004 1008 1012
+        (by decide) (by decide)]
+  -- PM stores: each rank's third output equals that rank's input
+  have hpm0 : (denoteGraph pm_goal_293 initPM) 2313 = initPM 2229 := by
+    simp only [pm_goal_293, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref3_pass_g293 _ _ 3 2232 3637 3639 2316 2313
+          (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_pass_g293 _ _ 2 2231 3627 3629 2315 2313
+          (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_pass_g293 _ _ 1 2230 3617 3619 2314 2313
+          (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_third_out_g293 _ _ 0 2229 3607 3609 2313
+          (by decide) (by decide)]
+  have hpm1 : (denoteGraph pm_goal_293 initPM) 2314 = initPM 2230 := by
+    simp only [pm_goal_293, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref3_pass_g293 _ _ 3 2232 3637 3639 2316 2314
+          (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_pass_g293 _ _ 2 2231 3627 3629 2315 2314
+          (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_third_out_g293 _ _ 1 2230 3617 3619 2314
+          (by decide) (by decide),
+        applyNode_fw_multiref3_pass_g293 _ _ 0 2229 3607 3609 2313 2230
+          (by decide) (by decide) (by decide)]
+  have hpm2 : (denoteGraph pm_goal_293 initPM) 2315 = initPM 2231 := by
+    simp only [pm_goal_293, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref3_pass_g293 _ _ 3 2232 3637 3639 2316 2315
+          (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_third_out_g293 _ _ 2 2231 3627 3629 2315
+          (by decide) (by decide),
+        applyNode_fw_multiref3_pass_g293 _ _ 1 2230 3617 3619 2314 2231
+          (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_pass_g293 _ _ 0 2229 3607 3609 2313 2231
+          (by decide) (by decide) (by decide)]
+  have hpm3 : (denoteGraph pm_goal_293 initPM) 2316 = initPM 2232 := by
+    simp only [pm_goal_293, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref3_third_out_g293 _ _ 3 2232 3637 3639 2316
+          (by decide) (by decide),
+        applyNode_fw_multiref3_pass_g293 _ _ 2 2231 3627 3629 2315 2232
+          (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_pass_g293 _ _ 1 2230 3617 3619 2314 2232
+          (by decide) (by decide) (by decide),
+        applyNode_fw_multiref3_pass_g293 _ _ 0 2229 3607 3609 2313 2232
+          (by decide) (by decide) (by decide)]
+  -- Prove the three conjuncts
+  simp only [goal_293, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape
+    rw [hsm]; exact h640_shape
+  · -- PM tps shapes
+    rw [hpm0, hpm1, hpm2, hpm3, h2229_shape, h2230_shape, h2231_shape, h2232_shape]
+  · -- Value equality
+    rw [hsm, hpm0, hpm1, hpm2, hpm3, h640_rec]
+    rfl
+
 end TrainVerify.Denote.GeneratedGoals
+
 

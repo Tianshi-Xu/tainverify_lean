@@ -17129,4 +17129,31 @@ theorem applyNode_fw_multiref3_second_out_g291
   unfold storeSet
   simp [List.zip, List.zipWith, List.replicate, List.find?, h]
 
+/-- `applyNode` for `FW_multiref` with three outputs `[t1, t2, t3]` and `params = [3]`:
+    the third output equals the input (when `t3` is distinct from `t1`, `t2`). -/
+theorem applyNode_fw_multiref3_third_out_g293
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid t1 t2 t3 : Tid)
+    (h13 : ¬ t1 = t3) (h23 : ¬ t2 = t3) :
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid],
+                    outs := [t1, t2, t3], params := [3] } t3 = s xTid := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl,
+      evalOp_fw_multiref]
+  change storeSet s ([t1, t2, t3].zip (List.replicate 3 (s xTid))) t3 = _
+  unfold storeSet
+  simp [List.zip, List.zipWith, List.replicate, List.find?, h13, h23]
+
+/-- `applyNode` for `FW_multiref` with three outputs `[t1, t2, t3]` and `params = [3]`
+    passes a query for any `outTid` distinct from all three outputs through to `s`. -/
+theorem applyNode_fw_multiref3_pass_g293
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid t1 t2 t3 outTid : Tid)
+    (h1 : ¬ outTid = t1) (h2 : ¬ outTid = t2) (h3 : ¬ outTid = t3) :
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid],
+                    outs := [t1, t2, t3], params := [3] } outTid = s outTid := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl,
+      evalOp_fw_multiref]
+  apply storeSet_eq_of_not_mem_fst
+  simp [List.zip, List.zipWith, List.replicate, h1, h2, h3]
+
 end TrainVerify.Denote
