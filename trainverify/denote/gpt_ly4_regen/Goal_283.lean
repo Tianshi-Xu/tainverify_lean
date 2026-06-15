@@ -50,3 +50,181 @@ def goal_283_stmt_cut : Prop :=
 
 end TrainVerify.Denote.GeneratedGoals
 
+namespace TrainVerify.Denote.GeneratedGoals
+
+set_option maxHeartbeats 4000000 in
+theorem prove_goal_283_cut : goal_283_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- goal_49: tensor 628 = reconstructWithDim (dim 2) of shards 2057..2060
+  have hInit49 : InitGoalHolds pm_goal_283.numRanks goal_49 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_283_cut_initGoals, goal_283_prereqs]
+    decide
+  have h628_shape : (initSM 628).shape = [1, 8, 32] := hInit49.1
+  have h628_rec : initSM 628 = reconstructWithDim 2 4 0
+      [initPM 2057, initPM 2058, initPM 2059, initPM 2060] := by
+    have hrec := hInit49.2.2
+    simp only [goal_49, pm_goal_283, List.map] at hrec
+    exact hrec
+  have htp49_shapes := hInit49.2.1
+  simp only [goal_49, List.map] at htp49_shapes
+  have h2057_shape : (initPM 2057).shape = [1, 8, 8] := by
+    have := congrArg List.head? htp49_shapes; simpa using this
+  -- 628 = allGatherPrimDimN (dim 2) of the shards
+  have h628_gather : initSM 628 = allGatherPrimDimN 2 4 0
+      [initPM 2057, initPM 2058, initPM 2059, initPM 2060] := by
+    rw [h628_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h2057_shape]; decide)
+  -- AllToAll result for each rank: chunk on dim1 of the dim2-gather
+  have halltoall : ∀ r, r < 4 →
+      allToAllPrimWithDims 4 r [initPM 2057, initPM 2058, initPM 2059, initPM 2060] 2 1 =
+      chunkPrimDimN 1 4 r (initSM 628) := by
+    intro r _
+    simp only [allToAllPrimWithDims]
+    rw [← h628_gather]
+  -- chunk shapes
+  have hchunk_shape : ∀ r, (chunkPrimDimN 1 4 r (initSM 628)).shape = [1, 2, 32] := by
+    intro r
+    rw [chunkPrimDimN_shape 1 4 r _ _ h628_shape (by omega)]
+    simp [List.set, List.getD]
+  -- SM store: second multiref output 981 equals input 628
+  have hsm : (denoteGraph sm_goal_283 initSM) 981 = initSM 628 := by
+    simp only [sm_goal_283, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide)]
+  -- PM stores
+  have hpm0 : (denoteGraph pm_goal_283 initPM) 2193 =
+      chunkPrimDimN 1 4 0 (initSM 628) := by
+    simp only [pm_goal_283, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 2193 (by decide),
+        applyNode_skip _ _ _ 2193 (by decide),
+        applyNode_skip _ _ _ 2193 (by decide),
+        applyNode_allToAllPrimWithDims_out]
+    simp only [List.map]
+    rw [applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide)]
+    rw [applyNode_skip _ _ _ 3567 (by decide),
+        applyNode_skip _ _ _ 3567 (by decide),
+        applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide),
+        applyNode_skip _ _ _ 2058 (by decide)]
+    rw [applyNode_skip _ _ _ 3575 (by decide),
+        applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide),
+        applyNode_skip _ _ _ 2059 (by decide),
+        applyNode_skip _ _ _ 2059 (by decide)]
+    rw [applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide),
+        applyNode_skip _ _ _ 2060 (by decide),
+        applyNode_skip _ _ _ 2060 (by decide),
+        applyNode_skip _ _ _ 2060 (by decide)]
+    exact halltoall 0 (by omega)
+  have hpm1 : (denoteGraph pm_goal_283 initPM) 2194 =
+      chunkPrimDimN 1 4 1 (initSM 628) := by
+    simp only [pm_goal_283, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 2194 (by decide),
+        applyNode_skip _ _ _ 2194 (by decide),
+        applyNode_allToAllPrimWithDims_out]
+    simp only [List.map]
+    rw [applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide)]
+    rw [applyNode_skip _ _ _ 3567 (by decide),
+        applyNode_skip _ _ _ 3567 (by decide),
+        applyNode_skip _ _ _ 3567 (by decide),
+        applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide),
+        applyNode_skip _ _ _ 2058 (by decide)]
+    rw [applyNode_skip _ _ _ 3575 (by decide),
+        applyNode_skip _ _ _ 3575 (by decide),
+        applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide),
+        applyNode_skip _ _ _ 2059 (by decide),
+        applyNode_skip _ _ _ 2059 (by decide)]
+    rw [applyNode_skip _ _ _ 3583 (by decide),
+        applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide),
+        applyNode_skip _ _ _ 2060 (by decide),
+        applyNode_skip _ _ _ 2060 (by decide),
+        applyNode_skip _ _ _ 2060 (by decide)]
+    exact halltoall 1 (by omega)
+  have hpm2 : (denoteGraph pm_goal_283 initPM) 2195 =
+      chunkPrimDimN 1 4 2 (initSM 628) := by
+    simp only [pm_goal_283, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 2195 (by decide),
+        applyNode_allToAllPrimWithDims_out]
+    simp only [List.map]
+    rw [applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide)]
+    rw [applyNode_skip _ _ _ 3567 (by decide),
+        applyNode_skip _ _ _ 3567 (by decide),
+        applyNode_skip _ _ _ 3567 (by decide),
+        applyNode_skip _ _ _ 3567 (by decide),
+        applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide),
+        applyNode_skip _ _ _ 2058 (by decide)]
+    rw [applyNode_skip _ _ _ 3575 (by decide),
+        applyNode_skip _ _ _ 3575 (by decide),
+        applyNode_skip _ _ _ 3575 (by decide),
+        applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide),
+        applyNode_skip _ _ _ 2059 (by decide),
+        applyNode_skip _ _ _ 2059 (by decide)]
+    rw [applyNode_skip _ _ _ 3583 (by decide),
+        applyNode_skip _ _ _ 3583 (by decide),
+        applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide),
+        applyNode_skip _ _ _ 2060 (by decide),
+        applyNode_skip _ _ _ 2060 (by decide),
+        applyNode_skip _ _ _ 2060 (by decide)]
+    exact halltoall 2 (by omega)
+  have hpm3 : (denoteGraph pm_goal_283 initPM) 2196 =
+      chunkPrimDimN 1 4 3 (initSM 628) := by
+    simp only [pm_goal_283, denoteGraph, List.foldl]
+    rw [applyNode_allToAllPrimWithDims_out]
+    simp only [List.map]
+    rw [applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_skip _ _ _ 3559 (by decide),
+        applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide)]
+    rw [applyNode_skip _ _ _ 3567 (by decide),
+        applyNode_skip _ _ _ 3567 (by decide),
+        applyNode_skip _ _ _ 3567 (by decide),
+        applyNode_skip _ _ _ 3567 (by decide),
+        applyNode_skip _ _ _ 3567 (by decide),
+        applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide),
+        applyNode_skip _ _ _ 2058 (by decide)]
+    rw [applyNode_skip _ _ _ 3575 (by decide),
+        applyNode_skip _ _ _ 3575 (by decide),
+        applyNode_skip _ _ _ 3575 (by decide),
+        applyNode_skip _ _ _ 3575 (by decide),
+        applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide),
+        applyNode_skip _ _ _ 2059 (by decide),
+        applyNode_skip _ _ _ 2059 (by decide)]
+    rw [applyNode_skip _ _ _ 3583 (by decide),
+        applyNode_skip _ _ _ 3583 (by decide),
+        applyNode_skip _ _ _ 3583 (by decide),
+        applyNode_fw_multiref2_second_out_g283 _ _ _ _ _ _ (by decide),
+        applyNode_skip _ _ _ 2060 (by decide),
+        applyNode_skip _ _ _ 2060 (by decide),
+        applyNode_skip _ _ _ 2060 (by decide)]
+    exact halltoall 3 (by omega)
+  -- discharge the three conjuncts
+  simp only [goal_283, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · show (denoteGraph sm_goal_283 initSM 981).shape = _
+    rw [hsm, h628_shape]
+  · show [(denoteGraph pm_goal_283 initPM 2193).shape,
+          (denoteGraph pm_goal_283 initPM 2194).shape,
+          (denoteGraph pm_goal_283 initPM 2195).shape,
+          (denoteGraph pm_goal_283 initPM 2196).shape] = _
+    rw [hpm0, hpm1, hpm2, hpm3,
+        hchunk_shape 0, hchunk_shape 1, hchunk_shape 2, hchunk_shape 3]
+  · show denoteGraph sm_goal_283 initSM 981 = reconstructWithDim _ _ _ _
+    rw [hsm, hpm0, hpm1, hpm2, hpm3]
+    rw [reconstructWithDim_cons_cons_nonscalar 1 _ 0 _ _ _ (by rw [hchunk_shape 0]; decide)]
+    exact (allGatherPrimDimN_chunkPrimDimN_id_dim1_4_32 (initSM 628) h628_shape).symm
+
+
+end TrainVerify.Denote.GeneratedGoals
