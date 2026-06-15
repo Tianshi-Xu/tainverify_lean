@@ -17732,4 +17732,167 @@ theorem fw_softmax_distribute_allGatherPrimDimN_dim2_4_1_4_2_8_g43
         rw [allGatherDim2_1_4_2_8_valAt_g43 [x0, x1, x2, x3] hhead P Q j hP hQ hjlt]
       rw [hsum, hnum]
 
+/-! ### FW_softmax distribution over allGatherPrimDimN (dim 2, shard [1,4,2,8]) — g68 -/
+
+/-- `fw_softmax` preserves shape. -/
+theorem fw_softmax_shape_g68 (x : Tensor) : (fw_softmax x).shape = x.shape := by
+  show (softmax x).shape = x.shape
+  unfold softmax
+  split <;> rfl
+
+/-- Rewrite `fw_softmax x` as an explicit `Tensor.mkShape`, given the last-dim size `d`. -/
+theorem softmax_mkShape_g68 (x : Tensor) (d : Nat) (tl : List Nat)
+    (hrev : x.shape.reverse = d :: tl) :
+    fw_softmax x = Tensor.mkShape x.shape (fun outIdx =>
+        let batch := if d = 0 then 0 else outIdx.1 / d
+        let i := if d = 0 then 0 else outIdx.1 % d
+        let base := batch * d
+        let expSum := ∑ m ∈ Finset.range d, expFn (valAt x (base + m))
+        if expSum = 0 then 0 else expFn (valAt x (base + i)) / expSum) := by
+  show softmax x = _
+  unfold softmax
+  split
+  · next d' tl' heq =>
+      rw [hrev] at heq
+      injection heq with h1 h2
+      subst h1; subst h2
+      rfl
+  · next heq =>
+      rw [hrev] at heq
+      exact absurd heq (List.cons_ne_nil d tl)
+
+/-- `valAt` of `fw_softmax x` at index `idx`, when the last dim of `x` is `8`. -/
+theorem fw_softmax_valAt_lastdim8_g68 (x : Tensor) (tl : List Nat)
+    (hrev : x.shape.reverse = 8 :: tl) (idx : Nat) (hidx : idx < prodShape x.shape) :
+    valAt (fw_softmax x) idx =
+      (if (∑ m ∈ Finset.range 8, expFn (valAt x (idx / 8 * 8 + m))) = 0 then 0
+       else expFn (valAt x (idx / 8 * 8 + idx % 8))
+            / (∑ m ∈ Finset.range 8, expFn (valAt x (idx / 8 * 8 + m)))) := by
+  rw [softmax_mkShape_g68 x 8 tl hrev]
+  rw [valAt_of_lt _ _ (by simp only [Tensor.mkShape]; exact hidx)]
+  simp only [Tensor.mkShape, show (8 : Nat) ≠ 0 from by omega, if_false]
+
+/-- valAt of `allGatherPrimDimN 2 4 0 xs` (shard shape `[1,4,2,8]`) at an arbitrary index. -/
+theorem allGatherPrimDimN_2_4_valAt_1_4_2_8_g68 (xs : List Tensor) (idx : Nat)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [1, 4, 2, 8]) (hidx : idx < 256) :
+    valAt (allGatherPrimDimN 2 4 0 xs) idx =
+      valAt (xs.getD (idx % 64 / 8 / 2) (zeroTensor [1, 4, 2, 8]))
+        (idx / 64 * 16 + idx % 64 / 8 % 2 * 8 + idx % 8) := by
+  have hresult_shape : (allGatherPrimDimN 2 4 0 xs).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 2 4 xs [1, 4, 2, 8] hhead]
+    simp [List.set, List.getD]
+  have hprod : idx < prodShape (allGatherPrimDimN 2 4 0 xs).shape := by
+    rw [hresult_shape]; simp [prodShape]; exact hidx
+  rw [valAt_of_lt _ _ hprod]
+  unfold allGatherPrimDimN Tensor.mkShape
+  simp only [hhead, List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl, Nat.reduceMul, Nat.reduceAdd,
+    Nat.reduceDiv, Nat.reduceMod, Nat.div_one, Nat.mod_one, Nat.mul_one,
+    Nat.add_zero, Nat.zero_add, show (2 : Nat) ≠ 0 from by omega,
+    show (8 : Nat) ≠ 0 from by omega, show (64 : Nat) ≠ 0 from by omega,
+    ite_false, List.set]
+  congr 1
+  omega
+
+/-- Single-term mapping: a full-tensor element in row `idx/8` maps to the shard `idx%64/8/2`. -/
+theorem fw_softmax_allGather_term_g68 (xs : List Tensor) (idx m : Nat)
+    (hidx : idx < 256) (hm : m < 8)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [1, 4, 2, 8]) :
+    valAt (allGatherPrimDimN 2 4 0 xs) (idx / 8 * 8 + m) =
+      valAt (xs.getD (idx % 64 / 8 / 2) (zeroTensor [1, 4, 2, 8]))
+        (idx / 64 * 16 + idx % 64 / 8 % 2 * 8 + m) := by
+  rw [allGatherPrimDimN_2_4_valAt_1_4_2_8_g68 xs (idx / 8 * 8 + m) hhead (by omega)]
+  congr 1
+  · congr 1
+    omega
+  · omega
+
+/-- `fw_softmax` distributes over `allGatherPrimDimN` on dim 2 (shard shape `[1,4,2,8]`):
+    softmax is over the last dim, which lives entirely within each shard, so it commutes
+    with gathering on dim 2. -/
+theorem fw_softmax_allGatherPrimDimN_dim2_eq_g68 (xs : List Tensor)
+    (hlen : xs.length = 4)
+    (hshape : ∀ x ∈ xs, x.shape = [1, 4, 2, 8])
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [1, 4, 2, 8]) :
+    fw_softmax (allGatherPrimDimN 2 4 0 xs) =
+      allGatherPrimDimN 2 4 0 (xs.map fw_softmax) := by
+  have hgather_shape : (allGatherPrimDimN 2 4 0 xs).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 2 4 xs [1, 4, 2, 8] hhead]; simp [List.set, List.getD]
+  have hmap_head : ((xs.map fw_softmax).head?.map (fun t => t.shape)).getD [] = [1, 4, 2, 8] := by
+    cases xs with
+    | nil => simp at hlen
+    | cons a t =>
+      simp only [List.map, List.head?, Option.map, Option.getD]
+      rw [fw_softmax_shape_g68]
+      exact hshape a (List.mem_cons_self ..)
+  have hmap_gather_shape : (allGatherPrimDimN 2 4 0 (xs.map fw_softmax)).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 2 4 _ [1, 4, 2, 8] hmap_head]; simp [List.set, List.getD]
+  have hfull_rev : (allGatherPrimDimN 2 4 0 xs).shape.reverse = 8 :: [8, 4, 1] := by
+    rw [hgather_shape]; decide
+  apply Tensor.ext
+  · rw [fw_softmax_shape_g68, hgather_shape, hmap_gather_shape]
+  · intro idx hidx
+    rw [fw_softmax_shape_g68, hgather_shape] at hidx
+    have hidx256 : idx < 256 := by simpa [prodShape] using hidx
+    -- abbreviations
+    have hr4 : idx % 64 / 8 / 2 < 4 := by omega
+    have hrlen : idx % 64 / 8 / 2 < xs.length := by rw [hlen]; exact hr4
+    have hrlen_map : idx % 64 / 8 / 2 < (xs.map fw_softmax).length := by
+      rw [List.length_map]; exact hrlen
+    -- LHS: softmax of the full gathered tensor
+    rw [fw_softmax_valAt_lastdim8_g68 (allGatherPrimDimN 2 4 0 xs) [8, 4, 1] hfull_rev idx
+          (by rw [hgather_shape]; simpa [prodShape] using hidx256)]
+    -- RHS: gather of per-shard softmaxes
+    rw [allGatherPrimDimN_2_4_valAt_1_4_2_8_g68 (xs.map fw_softmax) idx hmap_head hidx256]
+    have hmapget : (xs.map fw_softmax).getD (idx % 64 / 8 / 2) (zeroTensor [1, 4, 2, 8])
+        = fw_softmax (xs.getD (idx % 64 / 8 / 2) (zeroTensor [1, 4, 2, 8])) := by
+      rw [list_getD_of_lt _ _ _ hrlen_map, list_getD_of_lt _ _ _ hrlen, List.getElem_map]
+    rw [hmapget]
+    have hxr_shape : (xs.getD (idx % 64 / 8 / 2) (zeroTensor [1, 4, 2, 8])).shape = [1, 4, 2, 8] := by
+      rw [list_getD_of_lt _ _ _ hrlen]
+      exact hshape _ (List.getElem_mem _)
+    have hxr_rev : (xs.getD (idx % 64 / 8 / 2) (zeroTensor [1, 4, 2, 8])).shape.reverse
+        = 8 :: [2, 4, 1] := by rw [hxr_shape]; decide
+    have hloc_lt : (idx / 64 * 16 + idx % 64 / 8 % 2 * 8 + idx % 8)
+        < prodShape (xs.getD (idx % 64 / 8 / 2) (zeroTensor [1, 4, 2, 8])).shape := by
+      rw [hxr_shape]; simp only [prodShape, List.foldl]; omega
+    rw [fw_softmax_valAt_lastdim8_g68 _ [2, 4, 1] hxr_rev _ hloc_lt]
+    -- Now both sides are `if (sum) = 0 then 0 else num / sum`. Match sums and numerators.
+    have hsum : (∑ m ∈ Finset.range 8,
+          expFn (valAt (allGatherPrimDimN 2 4 0 xs) (idx / 8 * 8 + m)))
+        = (∑ m ∈ Finset.range 8,
+          expFn (valAt (xs.getD (idx % 64 / 8 / 2) (zeroTensor [1, 4, 2, 8]))
+            ((idx / 64 * 16 + idx % 64 / 8 % 2 * 8 + idx % 8) / 8 * 8 + m))) := by
+      apply Finset.sum_congr rfl
+      intro m hm
+      rw [Finset.mem_range] at hm
+      rw [fw_softmax_allGather_term_g68 xs idx m hidx256 hm hhead]
+      congr 2
+      omega
+    have hnum : expFn (valAt (allGatherPrimDimN 2 4 0 xs) (idx / 8 * 8 + idx % 8))
+        = expFn (valAt (xs.getD (idx % 64 / 8 / 2) (zeroTensor [1, 4, 2, 8]))
+            ((idx / 64 * 16 + idx % 64 / 8 % 2 * 8 + idx % 8) / 8 * 8
+              + (idx / 64 * 16 + idx % 64 / 8 % 2 * 8 + idx % 8) % 8)) := by
+      rw [fw_softmax_allGather_term_g68 xs idx (idx % 8) hidx256 (by omega) hhead]
+      congr 2
+      omega
+    rw [hsum, hnum]
+
+/-- Unfolding lemma for `evalOp` on `FW_softmax`. -/
+theorem evalOp_fw_softmax_g68 (numParts rank : Nat) (params : List Nat) (x : Tensor) :
+    evalOp numParts rank "OpName.FW_softmax" params [x] = [fw_softmax x] := by
+  rfl
+
+/-- `applyNode` for `FW_softmax` with singleton output. -/
+theorem applyNode_fw_softmax_out_g68
+    (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_softmax", ins := [inTid], outs := [outTid] } outTid =
+      fw_softmax (s inTid) := by
+  unfold applyNode
+  rw [show ([inTid] : List Tid).map s = [s inTid] from rfl,
+      evalOp_fw_softmax_g68]
+  change storeSet s [(outTid, fw_softmax (s inTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
 end TrainVerify.Denote

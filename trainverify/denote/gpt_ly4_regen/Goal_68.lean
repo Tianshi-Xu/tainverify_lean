@@ -44,5 +44,87 @@ def goal_68_cut_initGoals : List LineageGoal := initGoals ++ goal_68_prereqs
 def goal_68_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_68 pm_goal_68 goal_68 sm_goal_68InitEnv pm_goal_68InitEnv goal_68_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- fw_softmax is over the last dim; the dim-2 sharding keeps every last-dim row inside a
+-- single shard, so softmax distributes pointwise over the gather (no collective on inputs).
+theorem prove_goal_68_cut : goal_68_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_67 (tensor 655 gathered along dim 2 from 2465..2468)
+  have hInit67 : InitGoalHolds pm_goal_68.numRanks goal_67 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_68_cut_initGoals, goal_68_prereqs]
+    decide
+  have h655_shape : (initSM 655).shape = [1, 4, 8, 8] := hInit67.1
+  have hshapes := hInit67.2.1
+  simp only [goal_67, List.map] at hshapes
+  rw [List.cons.injEq, List.cons.injEq, List.cons.injEq, List.cons.injEq] at hshapes
+  obtain ⟨e1, e2, e3, e4, _⟩ := hshapes
+  have h655_eq : initSM 655 =
+      reconstructWithDim 2 4 0
+        [initPM 2465, initPM 2466, initPM 2467, initPM 2468] := by
+    have hrec := hInit67.2.2
+    simp only [goal_67, pm_goal_68, List.map] at hrec
+    exact hrec
+  set xs : List Tensor := [initPM 2465, initPM 2466, initPM 2467, initPM 2468] with hxs
+  have hxs_len : xs.length = 4 := by simp [hxs]
+  have hxs_shape_all : ∀ t ∈ xs, t.shape = [1, 4, 2, 8] := by
+    intro t ht
+    simp only [hxs, List.mem_cons, List.not_mem_nil, or_false] at ht
+    rcases ht with rfl | rfl | rfl | rfl
+    · exact e1
+    · exact e2
+    · exact e3
+    · exact e4
+  have hxs_head : (xs.head?.map (fun t => t.shape)).getD [] = [1, 4, 2, 8] := by
+    simp [hxs, List.head?, Option.map, e1]
+  -- 655 reconstruct is a nonscalar allGather
+  have h655_gather : initSM 655 = allGatherPrimDimN 2 4 0 xs := by
+    rw [h655_eq, hxs]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [e1]; decide)
+  -- SM store: smStore 656 = fw_softmax (initSM 655)
+  have hsm : (denoteGraph sm_goal_68 initSM) 656 = fw_softmax (initSM 655) := by
+    simp only [sm_goal_68, denoteGraph, List.foldl]
+    rw [applyNode_fw_softmax_out_g68]
+  -- PM stores: each rank applies fw_softmax to its shard directly
+  have hpm0 : (denoteGraph pm_goal_68 initPM) 2481 = fw_softmax (initPM 2465) := by
+    simp only [pm_goal_68, denoteGraph, List.foldl, applyNode,
+      evalOp_fw_softmax_g68, List.map, storeSet]
+    rfl
+  have hpm1 : (denoteGraph pm_goal_68 initPM) 2482 = fw_softmax (initPM 2466) := by
+    simp only [pm_goal_68, denoteGraph, List.foldl, applyNode,
+      evalOp_fw_softmax_g68, List.map, storeSet]
+    rfl
+  have hpm2 : (denoteGraph pm_goal_68 initPM) 2483 = fw_softmax (initPM 2467) := by
+    simp only [pm_goal_68, denoteGraph, List.foldl, applyNode,
+      evalOp_fw_softmax_g68, List.map, storeSet]
+    rfl
+  have hpm3 : (denoteGraph pm_goal_68 initPM) 2484 = fw_softmax (initPM 2468) := by
+    simp only [pm_goal_68, denoteGraph, List.foldl, applyNode,
+      evalOp_fw_softmax_g68, List.map, storeSet]
+    rfl
+  -- Key equation: fw_softmax distributes over allGatherPrimDimN (dim 2)
+  have hkey : fw_softmax (initSM 655) =
+      reconstructWithDim 2 4 0
+        [fw_softmax (initPM 2465), fw_softmax (initPM 2466),
+         fw_softmax (initPM 2467), fw_softmax (initPM 2468)] := by
+    rw [h655_gather]
+    rw [fw_softmax_allGatherPrimDimN_dim2_eq_g68 xs hxs_len hxs_shape_all hxs_head]
+    have hmap : xs.map fw_softmax =
+        [fw_softmax (initPM 2465), fw_softmax (initPM 2466),
+         fw_softmax (initPM 2467), fw_softmax (initPM 2468)] := by simp [hxs, List.map]
+    rw [hmap]
+    symm
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [fw_softmax_shape_g68, e1]; decide)
+  -- Discharge the three conjuncts
+  simp only [goal_68, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, fw_softmax_shape_g68, h655_shape]
+  · rw [hpm0, hpm1, hpm2, hpm3]
+    simp only [fw_softmax_shape_g68, e1, e2, e3, e4]
+  · have hnr : pm_goal_68.numRanks = 4 := rfl
+    rw [hsm, hpm0, hpm1, hpm2, hpm3, hnr, hkey]
+
 end TrainVerify.Denote.GeneratedGoals
+
+
 
