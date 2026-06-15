@@ -60,3 +60,68 @@ def goal_237_stmt_cut : Prop :=
 
 end TrainVerify.Denote.GeneratedGoals
 
+
+namespace TrainVerify.Denote.GeneratedGoals
+
+set_option maxHeartbeats 4000000 in
+/-- BW_contiguous is identity on the gradient; the PM redistributes the gradient from a
+    dim-2 sharding to a dim-1 sharding via AllToAll, which composes back to the full tensor. -/
+theorem prove_goal_237_cut : goal_237_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- prereq goal_238: tensor 875 is replicated (singleton), so initSM 875 = initPM 875
+  have hInit875 : InitGoalHolds pm_goal_237.numRanks goal_238 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_237_cut_initGoals, goal_237_prereqs]
+    decide
+  have h875_shape : (initSM 875).shape = [1, 8, 4, 8] := hInit875.1
+  have h875_eq : initSM 875 = initPM 875 := by
+    have hrec := hInit875.2.2
+    simp only [goal_238, List.map] at hrec
+    rw [hrec, reconstructWithDim_singleton]
+  have hpm875_shape : (initPM 875).shape = [1, 8, 4, 8] := by rw [← h875_eq]; exact h875_shape
+  -- SM store: BW_contiguous identity
+  have hsm : (denoteGraph sm_goal_237 initSM) 874 = initSM 875 := by
+    simp only [sm_goal_237, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_bw_contiguous_out_g237]
+  -- PM stores reduce (by computation) to AllToAll of the dim-2 chunks of 875
+  have hpm0 : (denoteGraph pm_goal_237 initPM) 3110 =
+      allToAllPrimWithDims 4 0 [chunkPrimDimN 2 4 0 (initPM 875), chunkPrimDimN 2 4 1 (initPM 875),
+        chunkPrimDimN 2 4 2 (initPM 875), chunkPrimDimN 2 4 3 (initPM 875)] 2 1 := by rfl
+  have hpm1 : (denoteGraph pm_goal_237 initPM) 3112 =
+      allToAllPrimWithDims 4 1 [chunkPrimDimN 2 4 0 (initPM 875), chunkPrimDimN 2 4 1 (initPM 875),
+        chunkPrimDimN 2 4 2 (initPM 875), chunkPrimDimN 2 4 3 (initPM 875)] 2 1 := by rfl
+  have hpm2 : (denoteGraph pm_goal_237 initPM) 3114 =
+      allToAllPrimWithDims 4 2 [chunkPrimDimN 2 4 0 (initPM 875), chunkPrimDimN 2 4 1 (initPM 875),
+        chunkPrimDimN 2 4 2 (initPM 875), chunkPrimDimN 2 4 3 (initPM 875)] 2 1 := by rfl
+  have hpm3 : (denoteGraph pm_goal_237 initPM) 3116 =
+      allToAllPrimWithDims 4 3 [chunkPrimDimN 2 4 0 (initPM 875), chunkPrimDimN 2 4 1 (initPM 875),
+        chunkPrimDimN 2 4 2 (initPM 875), chunkPrimDimN 2 4 3 (initPM 875)] 2 1 := by rfl
+  -- gather of dim-2 chunks recovers 875
+  have hAg : allGatherPrimDimN 2 4 0 [chunkPrimDimN 2 4 0 (initPM 875), chunkPrimDimN 2 4 1 (initPM 875),
+      chunkPrimDimN 2 4 2 (initPM 875), chunkPrimDimN 2 4 3 (initPM 875)] = initPM 875 :=
+    allGatherPrimDimN_chunkPrimDimN_id_dim2_4_1_8_4_8_g237 (initPM 875) hpm875_shape
+  have hpm0' : (denoteGraph pm_goal_237 initPM) 3110 = chunkPrimDimN 1 4 0 (initPM 875) := by
+    rw [hpm0]; simp only [allToAllPrimWithDims]; rw [hAg]
+  have hpm1' : (denoteGraph pm_goal_237 initPM) 3112 = chunkPrimDimN 1 4 1 (initPM 875) := by
+    rw [hpm1]; simp only [allToAllPrimWithDims]; rw [hAg]
+  have hpm2' : (denoteGraph pm_goal_237 initPM) 3114 = chunkPrimDimN 1 4 2 (initPM 875) := by
+    rw [hpm2]; simp only [allToAllPrimWithDims]; rw [hAg]
+  have hpm3' : (denoteGraph pm_goal_237 initPM) 3116 = chunkPrimDimN 1 4 3 (initPM 875) := by
+    rw [hpm3]; simp only [allToAllPrimWithDims]; rw [hAg]
+  -- shapes of the dim-1 chunks
+  have hchunk1_shape : ∀ r, (chunkPrimDimN 1 4 r (initPM 875)).shape = [1, 2, 4, 8] := by
+    intro r
+    rw [chunkPrimDimN_shape 1 4 r _ _ hpm875_shape (by omega)]
+    simp [List.set, List.getD]
+  simp only [goal_237, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
+    LineageGoal.gatherDim, List.map, Piece.tid]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]; exact h875_shape
+  · rw [hpm0', hpm1', hpm2', hpm3']
+    simp only [hchunk1_shape]
+  · rw [hsm, hpm0', hpm1', hpm2', hpm3', h875_eq]
+    symm
+    simp only [reconstructWithDim_cons_cons_nonscalar (h := by rw [hchunk1_shape 0]; decide)]
+    exact allGatherPrimDimN_chunkPrimDimN_id_dim1_4_1_8_4_8_g237 (initPM 875) hpm875_shape
+
+end TrainVerify.Denote.GeneratedGoals
