@@ -15683,4 +15683,91 @@ theorem tensorSum_add_gather_dim1_4_1_2_32_g216
     rw [tensorSum_pair_valAt _ _ _
       (by (first | rw [ha0] | rw [ha1] | rw [ha2] | rw [ha3]); simp [prodShape]; omega)]
 
+/-- `valAt` of a 3-input `tensorSum`. -/
+private theorem tensorSum_triple_valAt_g219 (a b c : Tensor) (idx : Nat)
+    (hidx : idx < prodShape a.shape) :
+    valAt (tensorSum [a, b, c]) idx = valAt a idx + valAt b idx + valAt c idx := by
+  have hsh : (tensorSum [a, b, c]).shape = a.shape := rfl
+  rw [valAt_of_lt _ _ (by rw [hsh]; exact hidx)]
+  simp [tensorSum, Tensor.mkShape, List.foldl]
+
+/-- 3-input BW_multiref distribution over AllToAll on dim 1 (shape [1,8,32] inputs,
+    [1,2,32] shards). Two summands are gathered along dim 2 (so chunked along dim 1),
+    the third is gathered along dim 1. -/
+theorem tensorSum_add3_gather_dim1_4_1_8_32_g219 (a b c0 c1 c2 c3 : Tensor)
+    (ha : a.shape = [1, 8, 32]) (hb : b.shape = [1, 8, 32])
+    (hc0 : c0.shape = [1, 2, 32]) (hc1 : c1.shape = [1, 2, 32])
+    (hc2 : c2.shape = [1, 2, 32]) (hc3 : c3.shape = [1, 2, 32]) :
+    tensorSum [a, b, allGatherPrimDimN 1 4 0 [c0, c1, c2, c3]] = allGatherPrimDimN 1 4 0
+      [tensorSum [chunkPrimDimN 1 4 0 a, chunkPrimDimN 1 4 0 b, c0],
+       tensorSum [chunkPrimDimN 1 4 1 a, chunkPrimDimN 1 4 1 b, c1],
+       tensorSum [chunkPrimDimN 1 4 2 a, chunkPrimDimN 1 4 2 b, c2],
+       tensorSum [chunkPrimDimN 1 4 3 a, chunkPrimDimN 1 4 3 b, c3]] := by
+  have hchunk_shape_a : ∀ r, (chunkPrimDimN 1 4 r a).shape = [1, 2, 32] := by
+    intro r; rw [chunkPrimDimN_shape 1 4 r _ _ ha (by omega)]; simp [List.set, List.getD]
+  have hchunk_shape_b : ∀ r, (chunkPrimDimN 1 4 r b).shape = [1, 2, 32] := by
+    intro r; rw [chunkPrimDimN_shape 1 4 r _ _ hb (by omega)]; simp [List.set, List.getD]
+  have hsum_shape : ∀ (x y z : Tensor), x.shape = [1, 2, 32] →
+      (tensorSum [x, y, z]).shape = [1, 2, 32] := by
+    intro x y z hx; show x.shape = [1, 2, 32]; exact hx
+  have hsum0_shape : (tensorSum [chunkPrimDimN 1 4 0 a, chunkPrimDimN 1 4 0 b, c0]).shape = [1, 2, 32] :=
+    hsum_shape _ _ _ (hchunk_shape_a 0)
+  have hc_head : (([c0, c1, c2, c3].head?.map (fun t => t.shape)).getD []) = [1, 2, 32] := by
+    simp [hc0]
+  have hgather_c_shape : (allGatherPrimDimN 1 4 0 [c0, c1, c2, c3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hc_head]; simp [List.set, List.getD]
+  have hlhs_shape : (tensorSum [a, allGatherPrimDimN 1 4 0 [c0, c1, c2, c3]]).shape = [1, 8, 32] := ha
+  have hsums_head : (([tensorSum [chunkPrimDimN 1 4 0 a, chunkPrimDimN 1 4 0 b, c0],
+       tensorSum [chunkPrimDimN 1 4 1 a, chunkPrimDimN 1 4 1 b, c1],
+       tensorSum [chunkPrimDimN 1 4 2 a, chunkPrimDimN 1 4 2 b, c2],
+       tensorSum [chunkPrimDimN 1 4 3 a, chunkPrimDimN 1 4 3 b, c3]].head?.map
+         (fun t => t.shape)).getD []) = [1, 2, 32] := by simp [hsum0_shape]
+  have hrhs_shape : (allGatherPrimDimN 1 4 0
+      [tensorSum [chunkPrimDimN 1 4 0 a, chunkPrimDimN 1 4 0 b, c0],
+       tensorSum [chunkPrimDimN 1 4 1 a, chunkPrimDimN 1 4 1 b, c1],
+       tensorSum [chunkPrimDimN 1 4 2 a, chunkPrimDimN 1 4 2 b, c2],
+       tensorSum [chunkPrimDimN 1 4 3 a, chunkPrimDimN 1 4 3 b, c3]]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hsums_head]; simp [List.set, List.getD]
+  have hlhs_full_shape : (tensorSum [a, b, allGatherPrimDimN 1 4 0 [c0, c1, c2, c3]]).shape = [1, 8, 32] := ha
+  apply Tensor.ext (by rw [hlhs_full_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_full_shape, prodShape] using hidx
+  set r := idx / 64 with hr_def
+  set q := idx % 64 / 32 with hq_def
+  set k := idx % 32 with hk_def
+  have hr_lt : r < 4 := by omega
+  have hq_lt : q < 2 := by omega
+  have hk_lt : k < 32 := by omega
+  have hidx_eq : idx = (r * 2 + q) * 32 + k := by
+    rw [hr_def, hq_def, hk_def]; omega
+  rw [hidx_eq]
+  rw [tensorSum_triple_valAt_g219 a b (allGatherPrimDimN 1 4 0 [c0, c1, c2, c3]) ((r * 2 + q) * 32 + k)
+    (by rw [ha]; simp [prodShape]; omega)]
+  rw [allGatherPrimDimN_dim1_4_1_2_32_valAt [c0, c1, c2, c3] r hr_lt q hq_lt k hk_lt hc_head]
+  rw [allGatherPrimDimN_dim1_4_1_2_32_valAt
+    [tensorSum [chunkPrimDimN 1 4 0 a, chunkPrimDimN 1 4 0 b, c0],
+     tensorSum [chunkPrimDimN 1 4 1 a, chunkPrimDimN 1 4 1 b, c1],
+     tensorSum [chunkPrimDimN 1 4 2 a, chunkPrimDimN 1 4 2 b, c2],
+     tensorSum [chunkPrimDimN 1 4 3 a, chunkPrimDimN 1 4 3 b, c3]]
+    r hr_lt q hq_lt k hk_lt hsums_head]
+  clear_value r q k
+  rcases (show r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 by omega) with h | h | h | h <;> subst h <;>
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  · rw [tensorSum_triple_valAt_g219 _ _ c0 (q * 32 + k)
+      (by rw [hchunk_shape_a 0]; simp [prodShape]; omega)]
+    rw [chunk_dim1_4_1_8_32_valAt a 0 q k ha (by omega) hq_lt hk_lt]
+    rw [chunk_dim1_4_1_8_32_valAt b 0 q k hb (by omega) hq_lt hk_lt]
+  · rw [tensorSum_triple_valAt_g219 _ _ c1 (q * 32 + k)
+      (by rw [hchunk_shape_a 1]; simp [prodShape]; omega)]
+    rw [chunk_dim1_4_1_8_32_valAt a 1 q k ha (by omega) hq_lt hk_lt]
+    rw [chunk_dim1_4_1_8_32_valAt b 1 q k hb (by omega) hq_lt hk_lt]
+  · rw [tensorSum_triple_valAt_g219 _ _ c2 (q * 32 + k)
+      (by rw [hchunk_shape_a 2]; simp [prodShape]; omega)]
+    rw [chunk_dim1_4_1_8_32_valAt a 2 q k ha (by omega) hq_lt hk_lt]
+    rw [chunk_dim1_4_1_8_32_valAt b 2 q k hb (by omega) hq_lt hk_lt]
+  · rw [tensorSum_triple_valAt_g219 _ _ c3 (q * 32 + k)
+      (by rw [hchunk_shape_a 3]; simp [prodShape]; omega)]
+    rw [chunk_dim1_4_1_8_32_valAt a 3 q k ha (by omega) hq_lt hk_lt]
+    rw [chunk_dim1_4_1_8_32_valAt b 3 q k hb (by omega) hq_lt hk_lt]
+
 end TrainVerify.Denote
