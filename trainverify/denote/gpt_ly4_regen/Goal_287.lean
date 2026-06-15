@@ -44,5 +44,64 @@ def goal_287_cut_initGoals : List LineageGoal := initGoals ++ goal_287_prereqs
 def goal_287_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_287 pm_goal_287 goal_287 sm_goal_287InitEnv pm_goal_287InitEnv goal_287_cut_initGoals
 
+theorem prove_goal_287_cut : goal_287_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  have hInit54 : InitGoalHolds pm_goal_287.numRanks goal_54 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_287_cut_initGoals]
+    apply List.mem_append_right
+    simp only [goal_287_prereqs]
+    decide
+  have h54_shape : (initSM 637).shape = [1, 8, 32] := hInit54.1
+  have h54_tpshapes :
+      [(initPM 2201).shape, (initPM 2202).shape, (initPM 2203).shape, (initPM 2204).shape]
+        = [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]] := by
+    have h := hInit54.2.1
+    simp only [goal_54, List.map] at h
+    exact h
+  have h54_rec :
+      initSM 637 = reconstructWithDim 1 pm_goal_287.numRanks 0
+        [initPM 2201, initPM 2202, initPM 2203, initPM 2204] := by
+    have h := hInit54.2.2
+    simp only [goal_54, List.map] at h
+    exact h
+  -- SM store: second output of FW_multiref equals its input.
+  have hsm : (denoteGraph sm_goal_287 initSM) 993 = initSM 637 := by
+    simp only [sm_goal_287, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_second_out_g287]
+  -- PM stores: each rank's second output equals that rank's input.
+  have hpm5 : (denoteGraph pm_goal_287 initPM) 2605 = initPM 2201 := by
+    simp only [pm_goal_287, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 2605 (by decide),
+        applyNode_skip _ _ _ 2605 (by decide),
+        applyNode_skip _ _ _ 2605 (by decide),
+        applyNode_fw_multiref2_second_out_g287]
+  have hpm6 : (denoteGraph pm_goal_287 initPM) 2606 = initPM 2202 := by
+    simp only [pm_goal_287, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 2606 (by decide),
+        applyNode_skip _ _ _ 2606 (by decide),
+        applyNode_fw_multiref2_second_out_g287,
+        applyNode_skip _ _ _ 2202 (by decide)]
+  have hpm7 : (denoteGraph pm_goal_287 initPM) 2607 = initPM 2203 := by
+    simp only [pm_goal_287, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 2607 (by decide),
+        applyNode_fw_multiref2_second_out_g287,
+        applyNode_skip _ _ _ 2203 (by decide),
+        applyNode_skip _ _ _ 2203 (by decide)]
+  have hpm8 : (denoteGraph pm_goal_287 initPM) 2608 = initPM 2204 := by
+    simp only [pm_goal_287, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_second_out_g287,
+        applyNode_skip _ _ _ 2204 (by decide),
+        applyNode_skip _ _ _ 2204 (by decide),
+        applyNode_skip _ _ _ 2204 (by decide)]
+  simp only [goal_287, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, h54_shape]
+  · rw [hpm5, hpm6, hpm7, hpm8]
+    exact h54_tpshapes
+  · rw [hsm, hpm5, hpm6, hpm7, hpm8]
+    exact h54_rec
+
 end TrainVerify.Denote.GeneratedGoals
+
 
