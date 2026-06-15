@@ -51,5 +51,98 @@ def goal_128_cut_initGoals : List LineageGoal := initGoals ++ goal_128_prereqs
 def goal_128_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_128 pm_goal_128 goal_128 sm_goal_128InitEnv pm_goal_128InitEnv goal_128_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- bw_div (scalar division of the gradient) distributes pointwise over allGatherPrimDimN (dim 1).
+-- The gradient 745 is gathered on dim 1 from shards 1382,1384,1386,1388 (goal_129); the second
+-- input (584) is ignored by bw_div, so the chunk nodes are irrelevant to the value.
+theorem prove_goal_128_cut : goal_128_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Input 745 (grad) is gathered on dim1 from shards 1382,1384,1386,1388 (goal_129)
+  have hInit745 : InitGoalHolds pm_goal_128.numRanks goal_129 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_128_cut_initGoals, goal_128_prereqs]
+    decide
+  -- goal_129: initSM 745 = reconstructWithDim 1 4 0 [1382, 1384, 1386, 1388]
+  have h745_rec : initSM 745 = reconstructWithDim 1 4 0
+      [initPM 1382, initPM 1384, initPM 1386, initPM 1388] := by
+    have hrec := hInit745.2.2
+    simp only [goal_129, pm_goal_128, List.map] at hrec
+    exact hrec
+  have htp745 := hInit745.2.1
+  simp only [goal_129, List.map] at htp745
+  have h1382_shape : (initPM 1382).shape = [1, 1, 8, 8] := by
+    have := congrArg List.head? htp745; simpa using this
+  have h1384_shape : (initPM 1384).shape = [1, 1, 8, 8] := by
+    have := congrArg List.tail htp745
+    have := congrArg List.head? this; simpa using this
+  have h1386_shape : (initPM 1386).shape = [1, 1, 8, 8] := by
+    have := congrArg (List.tail ∘ List.tail) htp745
+    have := congrArg List.head? this; simpa using this
+  have h1388_shape : (initPM 1388).shape = [1, 1, 8, 8] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp745
+    have := congrArg List.head? this; simpa using this
+  -- Convert reconstructWithDim 745 to allGatherPrimDimN (non-scalar shards, dim 1)
+  have h745_gather : initSM 745 = allGatherPrimDimN 1 4 0
+      [initPM 1382, initPM 1384, initPM 1386, initPM 1388] := by
+    rw [h745_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1382_shape]; decide)
+  -- Per-rank bw_div result shapes
+  have hY_shape : (bw_div (2 : Scalar) (initPM 1382)).shape = [1, 1, 8, 8] := by
+    rw [bw_div_shape_g128, h1382_shape]
+  -- SM store: smStore 744 = bw_div 2 (initSM 745)
+  have hsm : (denoteGraph sm_goal_128 initSM) 744 = bw_div (2 : Scalar) (initSM 745) := by
+    simp only [sm_goal_128, denoteGraph, List.foldl]
+    rw [applyNode_bw_div_out_g128]
+    norm_num
+  -- PM store: per-rank bw_div of the gradient shards, gather on dim1
+  have hpm : (denoteGraph pm_goal_128 initPM) 744 =
+      allGatherPrimDimN 1 4 0
+        [bw_div (2 : Scalar) (initPM 1382), bw_div (2 : Scalar) (initPM 1384),
+         bw_div (2 : Scalar) (initPM 1386), bw_div (2 : Scalar) (initPM 1388)] := by
+    simp only [pm_goal_128, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_allGatherPrimDimN_out_thm]
+    congr 1
+  -- Key: bw_div of the full gathered gradient = gather of per-rank bw_div
+  have hG : bw_div (2 : Scalar) (initSM 745) =
+      allGatherPrimDimN 1 4 0
+        [bw_div (2 : Scalar) (initPM 1382), bw_div (2 : Scalar) (initPM 1384),
+         bw_div (2 : Scalar) (initPM 1386), bw_div (2 : Scalar) (initPM 1388)] := by
+    rw [h745_gather]
+    have := bw_div_allGatherPrimDimN_eq_g128
+      (c := (2 : Scalar)) (gatherDim := 1) (numParts := 4)
+      (gs := [initPM 1382, initPM 1384, initPM 1386, initPM 1388])
+      (shardShape := [1, 1, 8, 8])
+      (hnp := by omega)
+      (hlen_g := by simp)
+      (hhead_g := by simp [h1382_shape])
+      (hgs_shape := by
+        intro i hi
+        simp only [List.length] at hi
+        match i, hi with
+        | 0, _ => exact h1382_shape
+        | 1, _ => exact h1384_shape
+        | 2, _ => exact h1386_shape
+        | 3, _ => exact h1388_shape)
+    rw [this]
+    simp only [List.map]
+  -- G has shape [1,4,8,8]
+  have hG_shape : (allGatherPrimDimN 1 4 0
+      [bw_div (2 : Scalar) (initPM 1382), bw_div (2 : Scalar) (initPM 1384),
+       bw_div (2 : Scalar) (initPM 1386), bw_div (2 : Scalar) (initPM 1388)]).shape
+      = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 1 4 _ [1, 1, 8, 8]
+      (by simp only [List.head?, Option.map]; exact hY_shape)]
+    simp [List.set, List.getD]
+  -- Discharge the three conjuncts.
+  simp only [goal_128, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM output shape
+    rw [hsm, hG, hG_shape]
+  · -- PM tp shapes (single tp)
+    rw [hpm, hG_shape]
+  · -- Value equality
+    rw [hsm, hG, hpm, reconstructWithDim_singleton]
+
 end TrainVerify.Denote.GeneratedGoals
+
 
