@@ -326,6 +326,7 @@ import denote.gpt_ly4_regen.SpikeBridge   -- goal_2_cut_to_full (proven)
 import denote.gpt_ly4_regen.Goal3Bridge    -- goal_3_cut_to_full (proven)
 import denote.gpt_ly4_regen.Goal4Bridge    -- goal_4_cut_to_full (proven, topological induction)
 import denote.gpt_ly4_regen.Goal257Bridge  -- goal_257_cut_to_full (proven)
+import denote.gpt_ly4_regen.Goal259Bridge  -- goal_259_cut_to_full (proven)
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -799,7 +800,7 @@ theorem goal_255_full : goal_255_stmt := goal_255_cut_to_full prove_goal_255_cut
 theorem goal_256_full : goal_256_stmt := goal_256_cut_to_full prove_goal_256_cut
 theorem goal_257_full : goal_257_stmt := goal_257_cut_to_full prove_goal_257_cut
 theorem goal_258_full : goal_258_stmt := goal_258_cut_to_full prove_goal_258_cut
-theorem goal_259_full : goal_259_stmt := by sorry  -- cut-form not yet proven
+theorem goal_259_full : goal_259_stmt := goal_259_cut_to_full prove_goal_259_cut
 theorem goal_260_full : goal_260_stmt := by sorry  -- cut-form not yet proven
 theorem goal_261_full : goal_261_stmt := by sorry  -- cut-form not yet proven
 theorem goal_262_full : goal_262_stmt := goal_262_cut_to_full prove_goal_262_cut
