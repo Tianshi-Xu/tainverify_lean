@@ -44,5 +44,65 @@ def goal_261_cut_initGoals : List LineageGoal := initGoals ++ goal_261_prereqs
 def goal_261_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_261 pm_goal_261 goal_261 sm_goal_261InitEnv pm_goal_261InitEnv goal_261_cut_initGoals
 
+theorem prove_goal_261_cut : goal_261_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_5 (tensor 570 = gather of shards 1145..1148 on dim 1)
+  have hInit570 : InitGoalHolds pm_goal_261.numRanks goal_5 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_261_cut_initGoals, goal_261_prereqs]
+    decide
+  -- goal_5 conclusion: initSM 570 = reconstructWithDim 1 4 0 [initPM 1145..1148]
+  have h570_rec : initSM 570 = reconstructWithDim 1 4 0
+      [initPM 1145, initPM 1146, initPM 1147, initPM 1148] := by
+    have hrec := hInit570.2.2
+    simp only [goal_5, pm_goal_261, List.map] at hrec
+    exact hrec
+  have h570_shape : (initSM 570).shape = [1, 8, 32] := hInit570.1
+  have htp_shapes := hInit570.2.1
+  simp only [goal_5, List.map] at htp_shapes
+  -- SM store: smStore 918 = initSM 570 (first output of FW_multiref)
+  have hsm : (denoteGraph sm_goal_261 initSM) 918 = initSM 570 := by
+    simp only [sm_goal_261, denoteGraph, List.foldl]
+    exact applyNode_fw_multiref_first_out_g261 _ _ 0 3 570 918 [922, 926] (by decide)
+  -- PM store: each pmStore 117x = initPM 114x
+  have hfold : denoteGraph pm_goal_261 initPM =
+      applyNode pm_goal_261 (applyNode pm_goal_261 (applyNode pm_goal_261
+        (applyNode pm_goal_261 initPM
+          { rank := 0, op := "OpName.FW_multiref", ins := [1145], outs := [1173, 1201, 3439], params := [3] })
+          { rank := 1, op := "OpName.FW_multiref", ins := [1146], outs := [1174, 1202, 3447], params := [3] })
+          { rank := 2, op := "OpName.FW_multiref", ins := [1147], outs := [1175, 1203, 3455], params := [3] })
+          { rank := 3, op := "OpName.FW_multiref", ins := [1148], outs := [1176, 1204, 3463], params := [3] } := by
+    simp only [pm_goal_261, denoteGraph, List.foldl]
+  have hpm0 : (denoteGraph pm_goal_261 initPM) 1173 = initPM 1145 := by
+    rw [hfold]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide : (1173 : Tid) ∉ ([1176, 1204, 3463] : List Tid)),
+        applyNode_eq_of_not_mem_outs _ _ _ _ (by decide : (1173 : Tid) ∉ ([1175, 1203, 3455] : List Tid)),
+        applyNode_eq_of_not_mem_outs _ _ _ _ (by decide : (1173 : Tid) ∉ ([1174, 1202, 3447] : List Tid))]
+    exact applyNode_fw_multiref_first_out_g261 _ _ 0 3 1145 1173 [1201, 3439] (by decide)
+  have hpm1 : (denoteGraph pm_goal_261 initPM) 1174 = initPM 1146 := by
+    rw [hfold]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide : (1174 : Tid) ∉ ([1176, 1204, 3463] : List Tid)),
+        applyNode_eq_of_not_mem_outs _ _ _ _ (by decide : (1174 : Tid) ∉ ([1175, 1203, 3455] : List Tid))]
+    rw [applyNode_fw_multiref_first_out_g261 _ _ 1 3 1146 1174 [1202, 3447] (by decide)]
+    exact applyNode_eq_of_not_mem_outs _ _ _ _ (by decide : (1146 : Tid) ∉ ([1173, 1201, 3439] : List Tid))
+  have hpm2 : (denoteGraph pm_goal_261 initPM) 1175 = initPM 1147 := by
+    rw [hfold]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide : (1175 : Tid) ∉ ([1176, 1204, 3463] : List Tid))]
+    rw [applyNode_fw_multiref_first_out_g261 _ _ 2 3 1147 1175 [1203, 3455] (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide : (1147 : Tid) ∉ ([1174, 1202, 3447] : List Tid))]
+    exact applyNode_eq_of_not_mem_outs _ _ _ _ (by decide : (1147 : Tid) ∉ ([1173, 1201, 3439] : List Tid))
+  have hpm3 : (denoteGraph pm_goal_261 initPM) 1176 = initPM 1148 := by
+    rw [hfold]
+    rw [applyNode_fw_multiref_first_out_g261 _ _ 3 3 1148 1176 [1204, 3463] (by decide)]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide : (1148 : Tid) ∉ ([1175, 1203, 3455] : List Tid))]
+    rw [applyNode_eq_of_not_mem_outs _ _ _ _ (by decide : (1148 : Tid) ∉ ([1174, 1202, 3447] : List Tid))]
+    exact applyNode_eq_of_not_mem_outs _ _ _ _ (by decide : (1148 : Tid) ∉ ([1173, 1201, 3439] : List Tid))
+  -- Prove the three conjuncts
+  simp only [goal_261, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]; exact h570_shape
+  · rw [hpm0, hpm1, hpm2, hpm3]; exact htp_shapes
+  · rw [hsm, hpm0, hpm1, hpm2, hpm3]; exact h570_rec
+
 end TrainVerify.Denote.GeneratedGoals
 
