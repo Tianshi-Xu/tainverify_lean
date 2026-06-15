@@ -58,5 +58,91 @@ def goal_202_cut_initGoals : List LineageGoal := initGoals ++ goal_202_prereqs
 def goal_202_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_202 pm_goal_202 goal_202 sm_goal_202InitEnv pm_goal_202InitEnv goal_202_cut_initGoals
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1600000 in
+-- BW_contiguous is the gradient passthrough (identity on its first input).  The PM graph
+-- first re-shards along dim 3 (AllToAll [1,3] then chunk-3), applies BW_contiguous locally,
+-- then re-shards back along dim 1 (AllToAll [3,1]).  Since BW_contiguous keeps the (dim-3)
+-- chunk of the gradient 833, gathering along dim 3 recovers 833 and the per-rank outputs are
+-- the dim-1 chunks of 833, whose reconstruction along dim 1 is exactly the SM output.
+theorem prove_goal_202_cut : goal_202_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Prereq goal_203: gradient 833 is replicated (single tp) → initSM 833 = initPM 833
+  have hInit203 : InitGoalHolds pm_goal_202.numRanks goal_203 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_202_cut_initGoals, goal_202_prereqs]
+    decide
+  have h833_eq : initSM 833 = initPM 833 := by
+    have hrec := hInit203.2.2
+    simp only [goal_203, pm_goal_202, List.map] at hrec
+    rw [reconstructWithDim_singleton] at hrec
+    exact hrec
+  have h833_shape : (initSM 833).shape = [1, 8, 4, 8] := hInit203.1
+  have h833_shapeP : (initPM 833).shape = [1, 8, 4, 8] := by rw [← h833_eq]; exact h833_shape
+  -- SM store: BW_contiguous(833, 658) = 833
+  have hsm : (denoteGraph sm_goal_202 initSM) 832 = initSM 833 := by
+    simp only [sm_goal_202, denoteGraph, List.foldl]
+    rw [applyNode_bw_contiguous_out_g202]
+  -- The final per-rank AllToAll [3,1] of the dim-3 chunks of 833 = dim-1 chunk of 833
+  have hata : ∀ r, allToAllPrimWithDims 4 r
+      [chunkPrimDimN 3 4 0 (initPM 833), chunkPrimDimN 3 4 1 (initPM 833),
+       chunkPrimDimN 3 4 2 (initPM 833), chunkPrimDimN 3 4 3 (initPM 833)] 3 1 =
+      chunkPrimDimN 1 4 r (initPM 833) := by
+    intro r
+    simp only [allToAllPrimWithDims]
+    rw [allGatherPrimDimN_chunkPrimDimN_id_dim3_1_8_4_8_g202 (initPM 833) h833_shapeP]
+  -- PM stores (per rank): unfold the 16-node fold to the final AllToAll
+  have hpm0 : (denoteGraph pm_goal_202 initPM) 2546 = chunkPrimDimN 1 4 0 (initPM 833) := by
+    simp only [pm_goal_202, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    rw [show (([2569, 2571, 2573, 2575] : List Tid)).map _ =
+        [chunkPrimDimN 3 4 0 (initPM 833), chunkPrimDimN 3 4 1 (initPM 833),
+         chunkPrimDimN 3 4 2 (initPM 833), chunkPrimDimN 3 4 3 (initPM 833)] from rfl]
+    exact hata 0
+  have hpm1 : (denoteGraph pm_goal_202 initPM) 2548 = chunkPrimDimN 1 4 1 (initPM 833) := by
+    simp only [pm_goal_202, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    rw [show (([2569, 2571, 2573, 2575] : List Tid)).map _ =
+        [chunkPrimDimN 3 4 0 (initPM 833), chunkPrimDimN 3 4 1 (initPM 833),
+         chunkPrimDimN 3 4 2 (initPM 833), chunkPrimDimN 3 4 3 (initPM 833)] from rfl]
+    exact hata 1
+  have hpm2 : (denoteGraph pm_goal_202 initPM) 2550 = chunkPrimDimN 1 4 2 (initPM 833) := by
+    simp only [pm_goal_202, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    rw [show (([2569, 2571, 2573, 2575] : List Tid)).map _ =
+        [chunkPrimDimN 3 4 0 (initPM 833), chunkPrimDimN 3 4 1 (initPM 833),
+         chunkPrimDimN 3 4 2 (initPM 833), chunkPrimDimN 3 4 3 (initPM 833)] from rfl]
+    exact hata 2
+  have hpm3 : (denoteGraph pm_goal_202 initPM) 2552 = chunkPrimDimN 1 4 3 (initPM 833) := by
+    simp only [pm_goal_202, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_allToAllPrimWithDims_out]
+    rw [show (([2569, 2571, 2573, 2575] : List Tid)).map _ =
+        [chunkPrimDimN 3 4 0 (initPM 833), chunkPrimDimN 3 4 1 (initPM 833),
+         chunkPrimDimN 3 4 2 (initPM 833), chunkPrimDimN 3 4 3 (initPM 833)] from rfl]
+    exact hata 3
+  -- Chunk shapes [1,2,4,8]
+  have hc : ∀ r, (chunkPrimDimN 1 4 r (initPM 833)).shape = [1, 2, 4, 8] := by
+    intro r
+    rw [chunkPrimDimN_shape 1 4 r _ _ h833_shapeP (by omega)]; simp [List.set, List.getD]
+  -- Discharge the three conjuncts
+  simp only [goal_202, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]; exact h833_shape
+  · rw [hpm0, hpm1, hpm2, hpm3, hc 0, hc 1, hc 2, hc 3]
+  · rw [hsm, hpm0, hpm1, hpm2, hpm3]
+    change initSM 833 = reconstructWithDim 1 4 0
+      [chunkPrimDimN 1 4 0 (initPM 833), chunkPrimDimN 1 4 1 (initPM 833),
+       chunkPrimDimN 1 4 2 (initPM 833), chunkPrimDimN 1 4 3 (initPM 833)]
+    rw [reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [hc 0]; decide)]
+    rw [allGatherPrimDimN_chunkPrimDimN_id_dim1_1_8_4_8_g202 (initPM 833) h833_shapeP]
+    exact h833_eq
+
 end TrainVerify.Denote.GeneratedGoals
+
 
