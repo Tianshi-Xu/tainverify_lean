@@ -350,6 +350,8 @@ import denote.gpt_ly4_regen.Goal21Bridge   -- goal_21_cut_to_full (AllToAll+FW_c
 import denote.gpt_ly4_regen.Goal22Bridge   -- goal_22_cut_to_full (replicated FW_view single-tp same-tid)
 import denote.gpt_ly4_regen.Goal23Bridge   -- goal_23_cut_to_full (column-parallel FW_linear, multi-tps AllGather dim2)
 import denote.gpt_ly4_regen.Goal24Bridge   -- goal_24_cut_to_full (FW_add over two AllGather(dim2) inputs, multi-tps)
+import denote.gpt_ly4_regen.Goal267Bridge  -- goal_267_cut_to_full (FW_multiref first-out X(934) + AllToAll re-shard)
+import denote.gpt_ly4_regen.Goal25Bridge   -- goal_25_cut_to_full (FW_layernorm single-tp, replicated W/B, AllGather dim1)
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -385,7 +387,7 @@ theorem goal_1_cut_to_full : goal_1_stmt_cut → goal_1_stmt := by sorry
 -- goal_22_cut_to_full : imported (proven, Goal22Bridge)
 -- goal_23_cut_to_full : imported (proven, Goal23Bridge)
 -- goal_24_cut_to_full : imported (proven, Goal24Bridge)
-theorem goal_25_cut_to_full : goal_25_stmt_cut → goal_25_stmt := by sorry
+-- goal_25_cut_to_full : imported (proven, Goal25Bridge)
 theorem goal_26_cut_to_full : goal_26_stmt_cut → goal_26_stmt := by sorry
 theorem goal_27_cut_to_full : goal_27_stmt_cut → goal_27_stmt := by sorry
 theorem goal_28_cut_to_full : goal_28_stmt_cut → goal_28_stmt := by sorry
@@ -833,7 +835,7 @@ theorem goal_263_full : goal_263_stmt := goal_263_cut_to_full prove_goal_263_cut
 theorem goal_264_full : goal_264_stmt := goal_264_cut_to_full prove_goal_264_cut
 theorem goal_265_full : goal_265_stmt := goal_265_cut_to_full prove_goal_265_cut
 theorem goal_266_full : goal_266_stmt := goal_266_cut_to_full prove_goal_266_cut
-theorem goal_267_full : goal_267_stmt := by sorry  -- cut-form not yet proven
+theorem goal_267_full : goal_267_stmt := goal_267_cut_to_full prove_goal_267_cut
 theorem goal_268_full : goal_268_stmt := goal_268_cut_to_full prove_goal_268_cut
 theorem goal_269_full : goal_269_stmt := by sorry  -- cut-form not yet proven
 theorem goal_270_full : goal_270_stmt := by sorry  -- cut-form not yet proven
