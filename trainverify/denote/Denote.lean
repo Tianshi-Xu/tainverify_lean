@@ -19465,4 +19465,94 @@ theorem allGatherPrimDimN_chunkPrimDimN_id_dim2_4_1_8_4_8_g96 (x : Tensor)
     ((idx / 32) * 8 + idx % 8) hsh hr (by omega)]
   rw [hloc]
 
+/-- `applyNode` for `BW_contiguous` (`ins = [g, x]`, output = first input `g`). -/
+theorem applyNode_bw_contiguous_out_g132
+    (g : GraphDecl) (s : Store) (rank : Nat) (gTid xTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.BW_contiguous", ins := [gTid, xTid],
+                    outs := [outTid] } outTid = s gTid := by
+  unfold applyNode
+  change storeSet s [(outTid, s gTid)] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+set_option maxHeartbeats 1600000 in
+-- dim-1 gather-after-chunk identity; large index arithmetic needs raised heartbeats
+theorem allGatherPrimDimN_chunkPrimDimN_id_dim1_4_8_4_8_g132 (x : Tensor)
+    (hsh : x.shape = [1, 8, 4, 8]) :
+    allGatherPrimDimN 1 4 0
+      [chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x] = x := by
+  have hchunk_shape : ∀ r, (chunkPrimDimN 1 4 r x).shape = [1, 2, 4, 8] := by
+    intro r
+    rw [chunkPrimDimN_shape 1 4 r _ _ hsh (by omega)]
+    simp [List.set, List.getD]
+  have hhead : ([chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x].head?.map (·.shape)).getD [] = [1, 2, 4, 8] := by
+    simp [List.head?, Option.map, hchunk_shape 0]
+  have hgather_shape : (allGatherPrimDimN 1 4 0
+      [chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x]).shape = [1, 8, 4, 8] := by
+    rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 4, 8] hhead]
+    simp [List.set, List.getD]
+  symm
+  apply Tensor.ext (by rw [hsh, hgather_shape])
+  intro idx hidx
+  rw [hsh] at hidx
+  have hidx256 : idx < 256 := by simpa [prodShape] using hidx
+  rw [allGatherPrimDimN_1_4_valAt_1_2_4_8 _ idx hhead hidx256]
+  have hgetD : ∀ (i : Nat) (hi : i < 4),
+      [chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x].getD i (zeroTensor [1, 2, 4, 8]) =
+        chunkPrimDimN 1 4 i x := by
+    intro i hi
+    have h4 : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases h4 with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ]
+  have hr : idx / 64 < 4 := by omega
+  have hloc : idx % 64 < 64 := Nat.mod_lt idx (by omega)
+  rw [hgetD (idx / 64) hr]
+  rw [chunkPrimDimN_1_4_valAt_1_8_4_8 x (idx / 64) (idx % 64) hsh hr hloc]
+  congr 1
+  omega
+
+set_option maxHeartbeats 1600000 in
+-- dim-3 gather-after-chunk identity; large index arithmetic needs raised heartbeats
+theorem allGatherPrimDimN_chunkPrimDimN_id_dim3_4_8_4_8_g132 (x : Tensor)
+    (hsh : x.shape = [1, 8, 4, 8]) :
+    allGatherPrimDimN 3 4 0
+      [chunkPrimDimN 3 4 0 x, chunkPrimDimN 3 4 1 x,
+       chunkPrimDimN 3 4 2 x, chunkPrimDimN 3 4 3 x] = x := by
+  have hchunk_shape : ∀ r, (chunkPrimDimN 3 4 r x).shape = [1, 8, 4, 2] := by
+    intro r
+    rw [chunkPrimDimN_shape 3 4 r _ _ hsh (by omega)]
+    simp [List.set, List.getD]
+  have hhead : ([chunkPrimDimN 3 4 0 x, chunkPrimDimN 3 4 1 x,
+       chunkPrimDimN 3 4 2 x, chunkPrimDimN 3 4 3 x].head?.map (·.shape)).getD [] = [1, 8, 4, 2] := by
+    simp [List.head?, Option.map, hchunk_shape 0]
+  have hgather_shape : (allGatherPrimDimN 3 4 0
+      [chunkPrimDimN 3 4 0 x, chunkPrimDimN 3 4 1 x,
+       chunkPrimDimN 3 4 2 x, chunkPrimDimN 3 4 3 x]).shape = [1, 8, 4, 8] := by
+    rw [allGatherPrimDimN_shape 3 4 _ [1, 8, 4, 2] hhead]
+    simp [List.set, List.getD]
+  symm
+  apply Tensor.ext (by rw [hsh, hgather_shape])
+  intro idx hidx
+  rw [hsh] at hidx
+  have hidx256 : idx < 256 := by simpa [prodShape] using hidx
+  rw [allGatherPrimDimN_3_4_valAt_1_8_4_2 _ idx hhead hidx256]
+  have hgetD : ∀ (i : Nat) (hi : i < 4),
+      [chunkPrimDimN 3 4 0 x, chunkPrimDimN 3 4 1 x,
+       chunkPrimDimN 3 4 2 x, chunkPrimDimN 3 4 3 x].getD i (zeroTensor [1, 8, 4, 2]) =
+        chunkPrimDimN 3 4 i x := by
+    intro i hi
+    have h4 : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases h4 with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ]
+  have hr : (idx % 8) / 2 < 4 := by omega
+  have hloc : (idx / 8) * 2 + idx % 2 < 64 := by omega
+  rw [hgetD ((idx % 8) / 2) hr]
+  rw [chunkPrimDimN_3_4_valAt_1_8_4_8 x ((idx % 8) / 2) ((idx / 8) * 2 + idx % 2) hsh hr hloc]
+  congr 1
+  omega
+
 end TrainVerify.Denote
