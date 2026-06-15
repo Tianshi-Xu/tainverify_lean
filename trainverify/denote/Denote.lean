@@ -17198,4 +17198,58 @@ theorem applyNode_fw_multiref2_second_out_g301
   by_cases h : t1 = t2 <;>
     simp [List.zip, List.zipWith, List.replicate, List.find?, h]
 
+/-- `applyNode` for `FW_multiref` with `outs = [t1, t2, t3]` and `params = [3]`: the first
+    output equals the input. -/
+theorem applyNode_fw_multiref3_first_out_g303
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid t1 t2 t3 : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid],
+                    outs := [t1, t2, t3], params := [3] } t1 = s xTid := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl,
+      evalOp_fw_multiref]
+  change storeSet s ([t1, t2, t3].zip (List.replicate 3 (s xTid))) t1 = _
+  unfold storeSet
+  simp [List.zip, List.zipWith, List.replicate, List.find?]
+
+/-- Gather-after-chunk identity (dim 2): reassembling the dim-2 chunks (each `[1,8,8]`) of a
+    `[1,8,32]`-shaped tensor recovers the original.  This is the inverse direction of
+    `chunkPrimDimN_allGatherPrimDimN_dim2_4_1_8_8` and is used for `AllToAllPrim` lineage goals
+    where the source passes through `FW_multiref`. -/
+theorem allGatherPrimDimN_chunkPrimDimN_id_dim2_4_1_8_32_g303 (x : Tensor)
+    (hsh : x.shape = [1, 8, 32]) :
+    allGatherPrimDimN 2 4 0
+      [chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x] = x := by
+  have hchunk_shape : ∀ r, (chunkPrimDimN 2 4 r x).shape = [1, 8, 8] := by
+    intro r
+    rw [chunkPrimDimN_shape 2 4 r _ _ hsh (by omega)]
+    simp [List.set, List.getD]
+  have hhead : ([chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x].head?.map (·.shape)).getD [] = [1, 8, 8] := by
+    simp [List.head?, Option.map, hchunk_shape 0]
+  have hgather_shape : (allGatherPrimDimN 2 4 0
+      [chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 2 4 _ [1, 8, 8] hhead]
+    simp [List.set, List.getD]
+  symm
+  apply Tensor.ext (by rw [hsh, hgather_shape])
+  intro idx hidx
+  rw [hsh] at hidx
+  have hidx256 : idx < 256 := by simpa [prodShape] using hidx
+  rw [allGatherPrimDimN_2_4_valAt_1_8_8 _ idx hhead hidx256]
+  have hgetD : ∀ (i : Nat), i < 4 →
+      [chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x].getD i (zeroTensor [1, 8, 8]) =
+        chunkPrimDimN 2 4 i x := by
+    intro i hi
+    have h4 : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases h4 with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ]
+  have hr : idx % 32 / 8 < 4 := by omega
+  rw [hgetD (idx % 32 / 8) hr]
+  rw [chunk2_4_1_8_32_valAt_pj x (idx % 32 / 8) (idx / 32) (idx % 8) hsh hr (by omega) (by omega)]
+  congr 1
+  omega
+
 end TrainVerify.Denote
