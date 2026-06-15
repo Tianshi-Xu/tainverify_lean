@@ -14959,4 +14959,34 @@ theorem bw_matmul_snd_split_dW_g197 (x0 x1 x2 x3 g0 g1 g2 g3 : Tensor)
       (transpose2d_shape_1_4_2_8 _ hx2) (transpose2d_shape_1_4_2_8 _ hx3)
       hg0 hg1 hg2 hg3]
 
+/-- `chunkPrimDimN` (dim 1) undoes `allGatherPrimDimN` (dim 1) on `[1, 1, 8, 8]` shards.
+    This is the dim-1, 4-D analogue of `chunkPrimDimN_allGatherPrimDimN_dim2_4_1_8_8`. -/
+theorem chunkPrimDimN_allGatherPrimDimN_dim1_4_1_1_8_8_g232 (p0 p1 p2 p3 : Tensor) (r : Nat)
+    (h0 : p0.shape = [1, 1, 8, 8]) (h1 : p1.shape = [1, 1, 8, 8])
+    (h2 : p2.shape = [1, 1, 8, 8]) (h3 : p3.shape = [1, 1, 8, 8]) (hr : r < 4) :
+    chunkPrimDimN 1 4 r (allGatherPrimDimN 1 4 0 [p0, p1, p2, p3]) =
+      ([p0, p1, p2, p3] : List Tensor).getD r (zeroTensor [1, 1, 8, 8]) := by
+  have hhead : (([p0, p1, p2, p3] : List Tensor).head?.map (·.shape)).getD [] = [1, 1, 8, 8] := by
+    simp [h0]
+  have hgather_shape : (allGatherPrimDimN 1 4 0 [p0, p1, p2, p3]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hhead]; simp [List.set, List.getD]
+  have hchunk_shape : (chunkPrimDimN 1 4 r (allGatherPrimDimN 1 4 0 [p0, p1, p2, p3])).shape
+      = [1, 1, 8, 8] := by
+    rw [chunkPrimDimN_shape 1 4 r _ _ hgather_shape (by omega)]
+    simp [List.set, List.getD]
+  have hrhs_shape : (([p0, p1, p2, p3] : List Tensor).getD r (zeroTensor [1, 1, 8, 8])).shape
+      = [1, 1, 8, 8] := by
+    rcases (by omega : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3) with h | h | h | h <;> subst h <;>
+      simp [List.getD, h0, h1, h2, h3]
+  apply Tensor.ext
+  · rw [hchunk_shape, hrhs_shape]
+  · intro idx hidx
+    rw [hchunk_shape] at hidx
+    have hidx64 : idx < 64 := by simpa [prodShape] using hidx
+    rw [chunk_dim1_4_1_4_8_8_valAt _ r idx hgather_shape hr hidx64]
+    rw [allGather_dim1_4_1_1_8_8_valAt p0 p1 p2 p3 (r * 64 + idx) h0 h1 h2 h3 (by omega)]
+    have ha : (r * 64 + idx) / 64 = r := by omega
+    have hb : (r * 64 + idx) % 64 = idx := by omega
+    rw [ha, hb]
+
 end TrainVerify.Denote
