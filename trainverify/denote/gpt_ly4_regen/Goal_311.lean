@@ -44,5 +44,80 @@ def goal_311_cut_initGoals : List LineageGoal := initGoals ++ goal_311_prereqs
 def goal_311_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_311 pm_goal_311 goal_311 sm_goal_311InitEnv pm_goal_311InitEnv goal_311_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- FW_multiref just copies its input to each output; the second output of the SM op
+-- equals the gather of the second outputs of the PM ops since the input gathers.
+theorem prove_goal_311_cut : goal_311_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_99 (tensor 698 = gather of shards 3177..3180 on dim 1)
+  have hInit698 : InitGoalHolds pm_goal_311.numRanks goal_99 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_311_cut_initGoals, goal_311_prereqs]
+    decide
+  have h698_shape : (initSM 698).shape = [1, 8, 32] := hInit698.1
+  -- PM shard shapes
+  have htp_shapes := hInit698.2.1
+  simp only [goal_99, List.map] at htp_shapes
+  have h3177_shape : (initPM 3177).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp_shapes; simpa using this
+  have h3178_shape : (initPM 3178).shape = [1, 2, 32] := by
+    have := congrArg List.tail htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h3179_shape : (initPM 3179).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h3180_shape : (initPM 3180).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  -- goal_99: initSM 698 = reconstructWithDim 1 4 0 [initPM 3177..3180]
+  have h698_rec : initSM 698 = reconstructWithDim 1 4 0
+      [initPM 3177, initPM 3178, initPM 3179, initPM 3180] := by
+    have hrec := hInit698.2.2
+    simp only [goal_99, pm_goal_311, List.map] at hrec
+    exact hrec
+  -- SM store: smStore 1067 = copy of input 698
+  have hsm : (denoteGraph sm_goal_311 initSM) 1067 = initSM 698 := by
+    simp only [sm_goal_311, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_second_out_g311]
+  -- PM stores: each second output is a copy of the corresponding input.
+  -- The 4 PM node literals:
+  --   n0 = {rank:=0, ins:=[3177], outs:=[3201,3313]}, ... n3 = {rank:=3, ins:=[3180], outs:=[3204,3316]}.
+  have hpm3313 : (denoteGraph pm_goal_311 initPM) 3313 = initPM 3177 := by
+    simp only [pm_goal_311, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.FW_multiref", ins := [3180], outs := [3204, 3316], params := [2] } 3313 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.FW_multiref", ins := [3179], outs := [3203, 3315], params := [2] } 3313 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.FW_multiref", ins := [3178], outs := [3202, 3314], params := [2] } 3313 (by decide),
+        applyNode_fw_multiref2_second_out_g311]
+  have hpm3314 : (denoteGraph pm_goal_311 initPM) 3314 = initPM 3178 := by
+    simp only [pm_goal_311, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.FW_multiref", ins := [3180], outs := [3204, 3316], params := [2] } 3314 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.FW_multiref", ins := [3179], outs := [3203, 3315], params := [2] } 3314 (by decide),
+        applyNode_fw_multiref2_second_out_g311,
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.FW_multiref", ins := [3177], outs := [3201, 3313], params := [2] } 3178 (by decide)]
+  have hpm3315 : (denoteGraph pm_goal_311 initPM) 3315 = initPM 3179 := by
+    simp only [pm_goal_311, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs _ _ { rank := 3, op := "OpName.FW_multiref", ins := [3180], outs := [3204, 3316], params := [2] } 3315 (by decide),
+        applyNode_fw_multiref2_second_out_g311,
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.FW_multiref", ins := [3178], outs := [3202, 3314], params := [2] } 3179 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.FW_multiref", ins := [3177], outs := [3201, 3313], params := [2] } 3179 (by decide)]
+  have hpm3316 : (denoteGraph pm_goal_311 initPM) 3316 = initPM 3180 := by
+    simp only [pm_goal_311, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_second_out_g311,
+        applyNode_eq_of_not_mem_outs _ _ { rank := 2, op := "OpName.FW_multiref", ins := [3179], outs := [3203, 3315], params := [2] } 3180 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 1, op := "OpName.FW_multiref", ins := [3178], outs := [3202, 3314], params := [2] } 3180 (by decide),
+        applyNode_eq_of_not_mem_outs _ _ { rank := 0, op := "OpName.FW_multiref", ins := [3177], outs := [3201, 3313], params := [2] } 3180 (by decide)]
+  -- Prove the three conjuncts
+  simp only [goal_311, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · -- SM shape
+    rw [hsm]; exact h698_shape
+  · -- PM tps shapes
+    rw [hpm3313, hpm3314, hpm3315, hpm3316]
+    rw [h3177_shape, h3178_shape, h3179_shape, h3180_shape]
+  · -- Value equality
+    rw [hsm, hpm3313, hpm3314, hpm3315, hpm3316, h698_rec]
+    rfl
+
 end TrainVerify.Denote.GeneratedGoals
+
 
