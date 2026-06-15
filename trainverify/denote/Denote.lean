@@ -15399,4 +15399,73 @@ theorem tensorSum_triple_gather_dim1_4_1_8_32_g149 (a b0 b1 b2 b3 c : Tensor)
     rw [chunk_dim1_4_1_8_32_valAt a 3 p' j ha (by omega) hp'_lt hj_lt]
     rw [chunk_dim1_4_1_8_32_valAt c 3 p' j hc (by omega) hp'_lt hj_lt]
 
+set_option maxRecDepth 4096 in
+/-- BW_multiref distribution for two inputs both gathered along dim 1 with 4 parts,
+    shard shape [1, 2, 32]. `tensorSum` of two gathers equals the gather of per-rank
+    `tensorSum`s. Used for goal_181 and structurally identical BW_multiref goals. -/
+theorem tensorSum_gather_dim1_4_1_2_32_g181
+    (a0 a1 a2 a3 b0 b1 b2 b3 : Tensor)
+    (ha0 : a0.shape = [1, 2, 32]) (ha1 : a1.shape = [1, 2, 32])
+    (ha2 : a2.shape = [1, 2, 32]) (ha3 : a3.shape = [1, 2, 32])
+    (hb0 : b0.shape = [1, 2, 32]) (hb1 : b1.shape = [1, 2, 32])
+    (hb2 : b2.shape = [1, 2, 32]) (hb3 : b3.shape = [1, 2, 32]) :
+    tensorSum [allGatherPrimDimN 1 4 0 [a0, a1, a2, a3],
+               allGatherPrimDimN 1 4 0 [b0, b1, b2, b3]] =
+      allGatherPrimDimN 1 4 0
+        [tensorSum [a0, b0], tensorSum [a1, b1],
+         tensorSum [a2, b2], tensorSum [a3, b3]] := by
+  have hheadA : (([a0, a1, a2, a3].head?.map (fun t => t.shape)).getD []) = [1, 2, 32] := by
+    simp [ha0]
+  have hheadB : (([b0, b1, b2, b3].head?.map (fun t => t.shape)).getD []) = [1, 2, 32] := by
+    simp [hb0]
+  have hsum0 : (tensorSum [a0, b0]).shape = [1, 2, 32] := ha0
+  have hheadS : (([tensorSum [a0, b0], tensorSum [a1, b1],
+      tensorSum [a2, b2], tensorSum [a3, b3]].head?.map (fun t => t.shape)).getD []) =
+      [1, 2, 32] := by simp [hsum0]
+  have hgA_shape : (allGatherPrimDimN 1 4 0 [a0, a1, a2, a3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hheadA]; simp [List.set, List.getD]
+  have hgB_shape : (allGatherPrimDimN 1 4 0 [b0, b1, b2, b3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hheadB]; simp [List.set, List.getD]
+  have hrhs_shape : (allGatherPrimDimN 1 4 0
+      [tensorSum [a0, b0], tensorSum [a1, b1],
+       tensorSum [a2, b2], tensorSum [a3, b3]]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hheadS]; simp [List.set, List.getD]
+  have hlhs_shape : (tensorSum [allGatherPrimDimN 1 4 0 [a0, a1, a2, a3],
+      allGatherPrimDimN 1 4 0 [b0, b1, b2, b3]]).shape = [1, 8, 32] := hgA_shape
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  rw [tensorSum_pair_valAt _ _ idx (by rw [hgA_shape]; simp [prodShape]; omega)]
+  have hidxA : idx < prodShape (allGatherPrimDimN 1 4 0 [a0, a1, a2, a3]).shape := by
+    rw [hgA_shape]; simpa [prodShape] using hidx256
+  have hidxB : idx < prodShape (allGatherPrimDimN 1 4 0 [b0, b1, b2, b3]).shape := by
+    rw [hgB_shape]; simpa [prodShape] using hidx256
+  have hidxR : idx < prodShape (allGatherPrimDimN 1 4 0
+      [tensorSum [a0, b0], tensorSum [a1, b1],
+       tensorSum [a2, b2], tensorSum [a3, b3]]).shape := by
+    rw [hrhs_shape]; simpa [prodShape] using hidx256
+  rw [valAt_of_lt _ _ hidxA, valAt_of_lt _ _ hidxB, valAt_of_lt _ _ hidxR]
+  simp only [allGatherPrimDimN, Tensor.mkShape, hheadA, hheadB, hheadS,
+    List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl,
+    show (2 : Nat) ≠ 0 by omega, show (32 : Nat) ≠ 0 by omega, ite_false]
+  simp only [show (1 * 32 : Nat) = 32 from by norm_num,
+    show (2 * 4 * 32 : Nat) = 256 from by norm_num,
+    show (2 * 32 : Nat) = 64 from by norm_num,
+    show (256 : Nat) = 0 ↔ False from by simp, if_false]
+  set r := idx % 256 / 32 / 2 with hr_def
+  set loc := idx / 256 * 64 + idx % 256 / 32 % 2 * 32 + idx % 256 % 32 with hloc_def
+  have hr_lt : r < 4 := by omega
+  have hloc_lt : loc < 64 := by omega
+  have hsum_shape : ∀ (x y : Tensor), x.shape = [1, 2, 32] →
+      valAt (tensorSum [x, y]) loc = valAt x loc + valAt y loc := by
+    intro x y hx
+    exact tensorSum_pair_valAt x y loc (by rw [hx]; simp [prodShape]; omega)
+  have hr_cases : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+  rcases hr_cases with h0 | h1 | h2 | h3
+  · rw [h0]; exact (hsum_shape a0 b0 ha0).symm
+  · rw [h1]; exact (hsum_shape a1 b1 ha1).symm
+  · rw [h2]; exact (hsum_shape a2 b2 ha2).symm
+  · rw [h3]; exact (hsum_shape a3 b3 ha3).symm
+
 end TrainVerify.Denote
