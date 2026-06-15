@@ -48,5 +48,109 @@ def goal_92_cut_initGoals : List LineageGoal := initGoals ++ goal_92_prereqs
 def goal_92_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_92 pm_goal_92 goal_92 sm_goal_92InitEnv pm_goal_92InitEnv goal_92_cut_initGoals
 
+set_option maxHeartbeats 4000000 in
+set_option maxRecDepth 4096 in
+-- FW_div (division by scalar 2) is pointwise, so it distributes over the AllToAll
+-- redistribution (dim-2 reconstruct) for [1,4,8,8]. The AllToAll (idim 1, odim 2)
+-- chunks tensor 689 along dim 2; each PM rank divides its chunk; reconstruct (dim 2)
+-- reassembles. Division by a scalar commutes with chunk/gather.
+theorem prove_goal_92_cut : goal_92_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract prereq: goal_91 (tid 689, gatherDim 1 over 2997..3000)
+  have hInit689 : InitGoalHolds pm_goal_92.numRanks goal_91 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_92_cut_initGoals, goal_92_prereqs]
+    decide
+  have h689_shape : (initSM 689).shape = [1, 4, 8, 8] := hInit689.1
+  have htp689 := hInit689.2.1
+  simp only [goal_91, List.map] at htp689
+  have h2997_shape : (initPM 2997).shape = [1, 1, 8, 8] := by
+    have := congrArg List.head? htp689; simpa using this
+  -- goal_91: initSM 689 = reconstructWithDim 1 4 0 [initPM 2997,...,3000]
+  have h689_rec : initSM 689 = reconstructWithDim 1 4 0
+      [initPM 2997, initPM 2998, initPM 2999, initPM 3000] := by
+    have hrec := hInit689.2.2
+    simp only [goal_91, pm_goal_92, List.map] at hrec
+    exact hrec
+  have h689_gather : initSM 689 = allGatherPrimDimN 1 4 0
+      [initPM 2997, initPM 2998, initPM 2999, initPM 3000] := by
+    rw [h689_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2997_shape]; decide)
+  -- SM store: smStore 690 = fw_div 2 (initSM 689)
+  have hsm : (denoteGraph sm_goal_92 initSM) 690 = fw_div ((2 : Nat) : Scalar) (initSM 689) := by
+    simp only [sm_goal_92, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_fw_div_out_g92]
+  -- PM stores: AllToAll nodes write 3017..3020, FW_div nodes write 3021..3024.
+  -- allToAllPrimWithDims 4 r xs 1 2 = chunkPrimDimN 2 4 r (allGatherPrimDimN 1 4 0 xs)
+  -- which equals chunkPrimDimN 2 4 r (initSM 689).
+  have hpm0 : (denoteGraph pm_goal_92 initPM) 3021 =
+      fw_div ((2 : Nat) : Scalar) (chunkPrimDimN 2 4 0 (allGatherPrimDimN 1 4 0
+        [initPM 2997, initPM 2998, initPM 2999, initPM 3000])) := by
+    simp only [pm_goal_92, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_div_out_g92]; congr 1
+  have hpm1 : (denoteGraph pm_goal_92 initPM) 3022 =
+      fw_div ((2 : Nat) : Scalar) (chunkPrimDimN 2 4 1 (allGatherPrimDimN 1 4 0
+        [initPM 2997, initPM 2998, initPM 2999, initPM 3000])) := by
+    simp only [pm_goal_92, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_div_out_g92]; congr 1
+  have hpm2 : (denoteGraph pm_goal_92 initPM) 3023 =
+      fw_div ((2 : Nat) : Scalar) (chunkPrimDimN 2 4 2 (allGatherPrimDimN 1 4 0
+        [initPM 2997, initPM 2998, initPM 2999, initPM 3000])) := by
+    simp only [pm_goal_92, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_div_out_g92]; congr 1
+  have hpm3 : (denoteGraph pm_goal_92 initPM) 3024 =
+      fw_div ((2 : Nat) : Scalar) (chunkPrimDimN 2 4 3 (allGatherPrimDimN 1 4 0
+        [initPM 2997, initPM 2998, initPM 2999, initPM 3000])) := by
+    simp only [pm_goal_92, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_fw_div_out_g92]; congr 1
+  -- Rewrite chunk input as initSM 689
+  rw [← h689_gather] at hpm0 hpm1 hpm2 hpm3
+  -- shape of each chunk
+  have hchk : ∀ r, r < 4 → (chunkPrimDimN 2 4 r (initSM 689)).shape = [1, 4, 2, 8] := by
+    intro r _; rw [chunkPrimDimN_shape 2 4 r _ _ h689_shape (by omega)]; simp [List.set, List.getD]
+  -- Bridge: fw_div distributes over the dim-2 chunk+gather reconstruction
+  have hkey : fw_div ((2 : Nat) : Scalar) (initSM 689) = allGatherPrimDimN 2 4 0
+      [fw_div ((2 : Nat) : Scalar) (chunkPrimDimN 2 4 0 (initSM 689)),
+       fw_div ((2 : Nat) : Scalar) (chunkPrimDimN 2 4 1 (initSM 689)),
+       fw_div ((2 : Nat) : Scalar) (chunkPrimDimN 2 4 2 (initSM 689)),
+       fw_div ((2 : Nat) : Scalar) (chunkPrimDimN 2 4 3 (initSM 689))] := by
+    set chunks := [chunkPrimDimN 2 4 0 (initSM 689), chunkPrimDimN 2 4 1 (initSM 689),
+                   chunkPrimDimN 2 4 2 (initSM 689), chunkPrimDimN 2 4 3 (initSM 689)] with hchunks
+    have hchunks_len : chunks.length = 4 := by simp [hchunks]
+    have hchunks_head : (chunks.head?.map (·.shape)).getD [] = [1, 4, 2, 8] := by
+      simp [hchunks, List.head?, Option.map, hchk 0 (by omega)]
+    have hchunks_shape : ∀ i (hi : i < chunks.length), (chunks.get ⟨i, hi⟩).shape = [1, 4, 2, 8] := by
+      intro i hi
+      simp only [hchunks, List.length] at hi
+      have h4 : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+      rcases h4 with rfl | rfl | rfl | rfl <;> simp [hchunks, hchk]
+    have hlist_eq : [fw_div ((2 : Nat) : Scalar) (chunkPrimDimN 2 4 0 (initSM 689)),
+         fw_div ((2 : Nat) : Scalar) (chunkPrimDimN 2 4 1 (initSM 689)),
+         fw_div ((2 : Nat) : Scalar) (chunkPrimDimN 2 4 2 (initSM 689)),
+         fw_div ((2 : Nat) : Scalar) (chunkPrimDimN 2 4 3 (initSM 689))]
+         = chunks.map (fw_div ((2 : Nat) : Scalar)) := by
+      simp [hchunks, List.map]
+    rw [hlist_eq, ← fw_div_allGatherPrimDimN_eq_g92 ((2 : Nat) : Scalar) 2 4 chunks [1, 4, 2, 8]
+        (by omega) hchunks_len hchunks_head hchunks_shape]
+    congr 1
+    exact (allGatherPrimDimN_chunkPrimDimN_id_dim2_4_8_8 (initSM 689) h689_shape).symm
+  -- Discharge the three conjuncts
+  simp only [goal_92, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, fw_div_shape_g92, h689_shape]
+  · rw [hpm0, hpm1, hpm2, hpm3]
+    simp only [fw_div_shape_g92, hchk 0 (by omega), hchk 1 (by omega), hchk 2 (by omega),
+      hchk 3 (by omega)]
+  · rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
+    symm
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [hpm0, fw_div_shape_g92, hchk 0 (by omega)]; decide
+
 end TrainVerify.Denote.GeneratedGoals
 
