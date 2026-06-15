@@ -45,5 +45,93 @@ def goal_17_cut_initGoals : List LineageGoal := initGoals ++ goal_17_prereqs
 def goal_17_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_17 pm_goal_17 goal_17 sm_goal_17InitEnv pm_goal_17InitEnv goal_17_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- fw_div distributes pointwise over chunkPrimDimN (dim 1) — no collective needed
+theorem prove_goal_17_cut : goal_17_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_16 (tensor 584 = singleton [initPM 584])
+  have hInit584 : InitGoalHolds pm_goal_17.numRanks goal_16 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_17_cut_initGoals, goal_17_prereqs]
+    decide
+  have h584_shape : (initSM 584).shape = [1, 4, 8, 8] := hInit584.1
+  -- goal_16 singleton: initSM 584 = initPM 584
+  have h584_eq : initSM 584 = initPM 584 := by
+    have hrec := hInit584.2.2
+    simp only [goal_16, pm_goal_17, List.map, reconstructWithDim] at hrec
+    exact hrec
+  -- PM shard shape from goal_16
+  have htp584_shapes := hInit584.2.1
+  simp only [goal_16, List.map] at htp584_shapes
+  have h584pm_shape : (initPM 584).shape = [1, 4, 8, 8] := by
+    have := congrArg List.head? htp584_shapes; simpa using this
+  -- Divisor scalar
+  set c : Scalar := ((2 : Nat) : Scalar) with hc
+  -- SM store: smStore 585 = fw_div c (initSM 584)
+  have hsm : (denoteGraph sm_goal_17 initSM) 585 = fw_div c (initSM 584) := by
+    simp only [sm_goal_17, denoteGraph, List.foldl]
+    rw [applyNode_fw_div_out_g17]
+    rfl
+  -- PM store: each rank chunks tensor 584 along dim 1, then applies fw_div c
+  have hpm0 : (denoteGraph pm_goal_17 initPM) 1369 = fw_div c (chunkPrimDimN 1 4 0 (initPM 584)) := by
+    simp only [pm_goal_17, denoteGraph, List.foldl, applyNode,
+      evalOp_fw_div_g17, evalOp_chunkPrimDimN, List.map, List.zip, storeSet, List.find?, Prod.fst]
+    rfl
+  have hpm1 : (denoteGraph pm_goal_17 initPM) 1370 = fw_div c (chunkPrimDimN 1 4 1 (initPM 584)) := by
+    simp only [pm_goal_17, denoteGraph, List.foldl, applyNode,
+      evalOp_fw_div_g17, evalOp_chunkPrimDimN, List.map, List.zip, storeSet, List.find?, Prod.fst]
+    rfl
+  have hpm2 : (denoteGraph pm_goal_17 initPM) 1371 = fw_div c (chunkPrimDimN 1 4 2 (initPM 584)) := by
+    simp only [pm_goal_17, denoteGraph, List.foldl, applyNode,
+      evalOp_fw_div_g17, evalOp_chunkPrimDimN, List.map, List.zip, storeSet, List.find?, Prod.fst]
+    rfl
+  have hpm3 : (denoteGraph pm_goal_17 initPM) 1372 = fw_div c (chunkPrimDimN 1 4 3 (initPM 584)) := by
+    simp only [pm_goal_17, denoteGraph, List.foldl, applyNode,
+      evalOp_fw_div_g17, evalOp_chunkPrimDimN, List.map, List.zip, storeSet, List.find?, Prod.fst]
+    rfl
+  -- Per-shard shapes
+  have hchunk_shape : ∀ r, (chunkPrimDimN 1 4 r (initPM 584)).shape = [1, 1, 8, 8] := by
+    intro r
+    rw [chunkPrimDimN_shape 1 4 r _ _ h584pm_shape (by omega)]
+    simp [List.set, List.getD]
+  -- Key equation: fw_div c distributes over allGatherPrimDimN (dim 1)
+  have hkey : fw_div c (initSM 584) =
+      allGatherPrimDimN 1 4 0
+        [fw_div c (chunkPrimDimN 1 4 0 (initPM 584)),
+         fw_div c (chunkPrimDimN 1 4 1 (initPM 584)),
+         fw_div c (chunkPrimDimN 1 4 2 (initPM 584)),
+         fw_div c (chunkPrimDimN 1 4 3 (initPM 584))] := by
+    conv_lhs => rw [h584_eq]
+    set chunks := [chunkPrimDimN 1 4 0 (initPM 584), chunkPrimDimN 1 4 1 (initPM 584),
+                   chunkPrimDimN 1 4 2 (initPM 584), chunkPrimDimN 1 4 3 (initPM 584)]
+    have hchunks_len : chunks.length = 4 := by simp [chunks]
+    have hchunks_head : (chunks.head?.map (·.shape)).getD [] = [1, 1, 8, 8] := by
+      simp [chunks, List.head?, Option.map, hchunk_shape 0]
+    have hchunks_shape : ∀ i (hi : i < chunks.length), (chunks.get ⟨i, hi⟩).shape = [1, 1, 8, 8] := by
+      intro i hi
+      simp only [chunks, List.length] at hi
+      have h4 : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+      rcases h4 with rfl | rfl | rfl | rfl <;> simp [chunks, hchunk_shape]
+    have hlist_eq : [fw_div c (chunkPrimDimN 1 4 0 (initPM 584)),
+         fw_div c (chunkPrimDimN 1 4 1 (initPM 584)),
+         fw_div c (chunkPrimDimN 1 4 2 (initPM 584)),
+         fw_div c (chunkPrimDimN 1 4 3 (initPM 584))] = chunks.map (fw_div c) := by
+      simp [chunks, List.map]
+    rw [hlist_eq, ← fw_div_allGatherPrimDimN_eq_g17 c 1 4 chunks [1, 1, 8, 8]
+        (by omega) hchunks_len hchunks_head hchunks_shape]
+    congr 1
+    exact (allGatherPrimDimN_chunkPrimDimN_id_dim1_4_8_8 (initPM 584) h584pm_shape).symm
+  -- Prove the three conjuncts
+  simp only [goal_17, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, fw_div_shape_g17, h584_shape]
+  · rw [hpm0, hpm1, hpm2, hpm3]
+    simp only [fw_div_shape_g17]
+    simp only [hchunk_shape]
+  · rw [hsm, hpm0, hpm1, hpm2, hpm3, hkey]
+    symm
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by
+      rw [fw_div_shape_g17, hchunk_shape]; decide)
+
 end TrainVerify.Denote.GeneratedGoals
 
