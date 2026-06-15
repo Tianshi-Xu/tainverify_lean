@@ -108,4 +108,13 @@ theorem goal_9_cut_to_full (h : goal_9_stmt_cut) : goal_9_stmt := by
   rw [hsmf, hpm577]
   exact hcut
 
+theorem goal_9_intermediate (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks goal_9 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hfull : goal_9_stmt := goal_9_cut_to_full prove_goal_9_cut
+  have := hfull initSM initPM hSM hPM hInit
+  simpa [InitGoalHolds, goal_9] using this
+
 end TrainVerify.Denote.GeneratedGoals
+
