@@ -331,6 +331,7 @@ import denote.gpt_ly4_regen.Goal5Bridge    -- goal_5_cut_to_full (proven, bridge
 import denote.gpt_ly4_regen.Goal261Bridge  -- goal_261_cut_to_full (proven)
 import denote.gpt_ly4_regen.Goal263Bridge  -- goal_263_cut_to_full (proven)
 import denote.gpt_ly4_regen.Goal265Bridge  -- goal_265_cut_to_full (proven)
+import denote.gpt_ly4_regen.Goal6Bridge    -- goal_6_cut_to_full (proven)
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -348,7 +349,7 @@ theorem goal_1_cut_to_full : goal_1_stmt_cut → goal_1_stmt := by sorry
 -- goal_3_cut_to_full : imported (proven)
 -- goal_4_cut_to_full : imported (proven, Goal4Bridge)
 -- goal_5_cut_to_full : imported (proven, Goal5Bridge)
-theorem goal_6_cut_to_full : goal_6_stmt_cut → goal_6_stmt := by sorry
+-- goal_6_cut_to_full : imported (proven, Goal6Bridge)
 theorem goal_7_cut_to_full : goal_7_stmt_cut → goal_7_stmt := by sorry
 theorem goal_8_cut_to_full : goal_8_stmt_cut → goal_8_stmt := by sorry
 theorem goal_9_cut_to_full : goal_9_stmt_cut → goal_9_stmt := by sorry
