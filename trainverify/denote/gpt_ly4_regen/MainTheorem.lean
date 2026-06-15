@@ -342,6 +342,7 @@ import denote.gpt_ly4_regen.Goal12Bridge   -- goal_12_cut_to_full (worker proven
 import denote.gpt_ly4_regen.Goal14Bridge   -- goal_14_cut_to_full (worker proven)
 import denote.gpt_ly4_regen.Goal15Bridge   -- goal_15_cut_to_full (AllToAll+FW_transpose)
 import denote.gpt_ly4_regen.Goal16Bridge   -- goal_16_cut_to_full (FW_matmul contraction-split + AllReduce)
+import denote.gpt_ly4_regen.Goal17Bridge   -- goal_17_cut_to_full (ChunkPrim+FW_div multi-tps)
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -573,7 +574,7 @@ theorem goal_13_full : goal_13_stmt := goal_13_cut_to_full prove_goal_13_cut
 theorem goal_14_full : goal_14_stmt := goal_14_cut_to_full prove_goal_14_cut
 theorem goal_15_full : goal_15_stmt := goal_15_cut_to_full prove_goal_15_cut
 theorem goal_16_full : goal_16_stmt := goal_16_cut_to_full prove_goal_16_cut
-theorem goal_17_full : goal_17_stmt := by sorry  -- cut-form not yet proven
+theorem goal_17_full : goal_17_stmt := goal_17_cut_to_full prove_goal_17_cut
 theorem goal_18_full : goal_18_stmt := by sorry  -- cut-form not yet proven
 theorem goal_19_full : goal_19_stmt := goal_19_cut_to_full prove_goal_19_cut
 theorem goal_20_full : goal_20_stmt := goal_20_cut_to_full prove_goal_20_cut
