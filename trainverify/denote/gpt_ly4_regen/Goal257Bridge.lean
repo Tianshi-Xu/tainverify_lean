@@ -255,4 +255,13 @@ theorem goal_257_cut_to_full (h : goal_257_stmt_cut) : goal_257_stmt := by
   rw [hsmf, hpm1141, hpm1142, hpm1143, hpm1144]
   exact hcut
 
+-- ========== 导出 goal_257_intermediate (供后续依赖 goal_257 的 goal 复用) ==========
+theorem goal_257_intermediate (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks goal_257 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hfull : goal_257_stmt := goal_257_cut_to_full prove_goal_257_cut
+  have := hfull initSM initPM hSM hPM hInit
+  simpa [InitGoalHolds, goal_257] using this
+
 end TrainVerify.Denote.GeneratedGoals
