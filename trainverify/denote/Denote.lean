@@ -19193,4 +19193,57 @@ theorem softmaxBwd_split_dim1_4_1_4_8_8_g234 (g y : Tensor)
   have hjeq : r * 64 + ((idx % 64) / 8 * 8 + j) = idx / 8 * 8 + j := by rw [hr_def]; omega
   rw [hjeq]
 
+/-! ## FW_contiguous (identity op) lemmas for goal_21 (AllToAll [3,1] + AllGather dim1) -/
+
+/-- `applyNode` for `FW_contiguous` with singleton output: the op is the identity,
+    so the stored output equals the input tensor. -/
+theorem applyNode_fw_contiguous_out_g21
+    (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_contiguous", ins := [inTid], outs := [outTid] } outTid =
+      s inTid := by
+  unfold applyNode
+  change storeSet s [(outTid, s inTid)] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- Gather-after-chunk identity on dim 1 for shape `[1, 8, 4, 8]`:
+    reassembling the dim-1 chunks (each of shape `[1, 2, 4, 8]`) recovers the original tensor. -/
+theorem allGatherPrimDimN_chunkPrimDimN_id_dim1_4_1_8_4_8_g21 (x : Tensor)
+    (hsh : x.shape = [1, 8, 4, 8]) :
+    allGatherPrimDimN 1 4 0
+      [chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x] = x := by
+  have hchunk_shape : ∀ r, (chunkPrimDimN 1 4 r x).shape = [1, 2, 4, 8] := by
+    intro r
+    rw [chunkPrimDimN_shape 1 4 r _ _ hsh (by omega)]
+    simp [List.set, List.getD]
+  have hhead : (([chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x] : List Tensor).head?.map (·.shape)).getD [] = [1, 2, 4, 8] := by
+    simp [List.head?, Option.map, hchunk_shape 0]
+  have hgather_shape : (allGatherPrimDimN 1 4 0
+      [chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x]).shape = [1, 8, 4, 8] := by
+    rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 4, 8] hhead]
+    simp [List.set, List.getD]
+  symm
+  apply Tensor.ext (by rw [hsh, hgather_shape])
+  intro idx hidx
+  rw [hsh] at hidx
+  have hidx256 : idx < 256 := by simpa [prodShape] using hidx
+  rw [allGatherPrimDimN_1_4_valAt_1_2_4_8 _ idx hhead hidx256]
+  have hgetD : ∀ (i : Nat) (_ : i < 4),
+      [chunkPrimDimN 1 4 0 x, chunkPrimDimN 1 4 1 x,
+       chunkPrimDimN 1 4 2 x, chunkPrimDimN 1 4 3 x].getD i (zeroTensor [1, 2, 4, 8]) =
+        chunkPrimDimN 1 4 i x := by
+    intro i hi
+    have h4 : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases h4 with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ]
+  have hr : idx / 64 < 4 := by omega
+  have hloc : idx % 64 < 64 := Nat.mod_lt idx (by omega)
+  rw [hgetD (idx / 64) hr]
+  rw [chunkPrimDimN_1_4_valAt_1_8_4_8 x (idx / 64) (idx % 64) hsh hr hloc]
+  congr 1
+  omega
+
 end TrainVerify.Denote

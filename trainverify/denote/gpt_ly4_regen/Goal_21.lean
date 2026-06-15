@@ -51,3 +51,95 @@ def goal_21_stmt_cut : Prop :=
 
 end TrainVerify.Denote.GeneratedGoals
 
+namespace TrainVerify.Denote.GeneratedGoals
+
+set_option maxHeartbeats 4000000 in
+theorem prove_goal_21_cut : goal_21_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract goal_20: X (tid 588) is gathered on dim3 with shards 1433..1436
+  have hInit20 : InitGoalHolds pm_goal_21.numRanks goal_20 initSM initPM := by
+    apply hInitGoals; simp only [goal_21_cut_initGoals, goal_21_prereqs]; decide
+  have h588_shape : (initSM 588).shape = [1, 8, 4, 8] := hInit20.1
+  have h588_rec : initSM 588 = reconstructWithDim 3 4 0
+      [initPM 1433, initPM 1434, initPM 1435, initPM 1436] := by
+    have hrec := hInit20.2.2
+    simp only [goal_20, pm_goal_21, List.map] at hrec
+    exact hrec
+  have htp20_shapes := hInit20.2.1
+  simp only [goal_20, List.map] at htp20_shapes
+  have h1433_shape : (initPM 1433).shape = [1, 8, 4, 2] := by
+    have := congrArg List.head? htp20_shapes; simpa using this
+  have h588_gather : initSM 588 = allGatherPrimDimN 3 4 0
+      [initPM 1433, initPM 1434, initPM 1435, initPM 1436] := by
+    rw [h588_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h1433_shape]; decide)
+  -- AllToAll results: allToAllPrimWithDims 4 r [shards] 3 1 = chunkPrimDimN 1 4 r (initSM 588)
+  have halltoall : ∀ r, r < 4 →
+      allToAllPrimWithDims 4 r [initPM 1433, initPM 1434, initPM 1435, initPM 1436] 3 1 =
+      chunkPrimDimN 1 4 r (initSM 588) := by
+    intro r _
+    simp only [allToAllPrimWithDims]
+    rw [← h588_gather]
+  -- SM store: FW_contiguous is the identity
+  have hsm : (denoteGraph sm_goal_21 initSM) 589 = initSM 588 := by
+    simp only [sm_goal_21, denoteGraph, List.foldl]
+    rw [applyNode_fw_contiguous_out_g21]
+  -- PM intermediate stores: each FW_contiguous output equals the chunk of initSM 588
+  have hc0 : (denoteGraph pm_goal_21 initPM) 1453 = chunkPrimDimN 1 4 0 (initSM 588) := by
+    simp only [pm_goal_21, denoteGraph, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_contiguous_out_g21]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    simp only [List.map]
+    exact halltoall 0 (by omega)
+  have hc1 : (denoteGraph pm_goal_21 initPM) 1454 = chunkPrimDimN 1 4 1 (initSM 588) := by
+    simp only [pm_goal_21, denoteGraph, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_contiguous_out_g21]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    simp only [List.map]
+    exact halltoall 1 (by omega)
+  have hc2 : (denoteGraph pm_goal_21 initPM) 1455 = chunkPrimDimN 1 4 2 (initSM 588) := by
+    simp only [pm_goal_21, denoteGraph, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_contiguous_out_g21]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    simp only [List.map]
+    exact halltoall 2 (by omega)
+  have hc3 : (denoteGraph pm_goal_21 initPM) 1456 = chunkPrimDimN 1 4 3 (initSM 588) := by
+    simp only [pm_goal_21, denoteGraph, List.foldl]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_fw_contiguous_out_g21]
+    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    simp only [List.map]
+    exact halltoall 3 (by omega)
+  -- PM final store: AllGather of the four FW_contiguous outputs
+  have hpm589_gather : (denoteGraph pm_goal_21 initPM) 589 =
+      allGatherPrimDimN 1 4 0
+        [(denoteGraph pm_goal_21 initPM) 1453, (denoteGraph pm_goal_21 initPM) 1454,
+         (denoteGraph pm_goal_21 initPM) 1455, (denoteGraph pm_goal_21 initPM) 1456] := by
+    conv_lhs => rw [denoteGraph, pm_goal_21]
+    simp only [List.foldl]
+    rw [applyNode_allGatherPrimDimN_out]
+    simp only [List.map]
+    congr 1
+  have hpm589 : (denoteGraph pm_goal_21 initPM) 589 = initSM 588 := by
+    rw [hpm589_gather, hc0, hc1, hc2, hc3]
+    exact allGatherPrimDimN_chunkPrimDimN_id_dim1_4_1_8_4_8_g21 (initSM 588) h588_shape
+  -- Discharge the 3 conjuncts
+  simp only [goal_21, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · show (denoteGraph sm_goal_21 initSM 589).shape = _
+    rw [hsm]; exact h588_shape
+  · show [(denoteGraph pm_goal_21 initPM 589).shape] = _
+    rw [hpm589, h588_shape]
+  · show denoteGraph sm_goal_21 initSM 589 = reconstructWithDim _ _ _ _
+    rw [hsm, reconstructWithDim_singleton, hpm589]
+
+end TrainVerify.Denote.GeneratedGoals
+
+
