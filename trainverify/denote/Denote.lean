@@ -18885,4 +18885,96 @@ theorem bw_div_allGatherPrimDimN_eq_g163
     rw [list_getD_of_ge _ _ _ hr_m, list_getD_of_ge _ _ _ hr_g]
     simp [zeroTensor, Tensor.mkShape, valAt, prodShape, zero_div]
 
+/-! ### BW_div lemmas (elementwise division by scalar; reads only the gradient input) -/
+
+/-- Unfolding lemma for `BW_div` (params carry the scalar divisor). -/
+theorem evalOp_bw_div_g198 (numParts rank : Nat) (c : Nat) (g x : Tensor) :
+    evalOp numParts rank "OpName.BW_div" [c] [g, x] = [bw_div (c : Scalar) g] := by
+  rfl
+
+/-- `applyNode` for `BW_div` with singleton output. The second input is ignored. -/
+theorem applyNode_bw_div_out_g198
+    (gr : GraphDecl) (s : Store) (rank : Nat) (c : Nat) (gTid xTid outTid : Tid) :
+    applyNode gr s { rank := rank, op := "OpName.BW_div", ins := [gTid, xTid], outs := [outTid], params := [c] } outTid =
+      bw_div (c : Scalar) (s gTid) := by
+  unfold applyNode
+  rw [show ([gTid, xTid] : List Tid).map s = [s gTid, s xTid] from rfl,
+      evalOp_bw_div_g198]
+  change storeSet s [(outTid, bw_div (c : Scalar) (s gTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `bw_div` preserves the shape of its gradient input. -/
+theorem bw_div_shape_g198 (c : Scalar) (g : Tensor) : (bw_div c g).shape = g.shape := by
+  simp [bw_div, scalarDiv, Tensor.mkShape]
+
+/-- `valAt` of `bw_div` at a valid index. -/
+theorem bw_div_valAt_g198 (c : Scalar) (g : Tensor) (idx : Nat) (h : idx < prodShape g.shape) :
+    valAt (bw_div c g) idx = valAt g idx / c := by
+  have hsh : (bw_div c g).shape = g.shape := bw_div_shape_g198 c g
+  rw [valAt_of_lt _ _ (hsh ▸ h)]
+  simp [bw_div, scalarDiv, Tensor.mkShape]
+
+/-- `bw_div` distributes over `allGatherPrimDimN`: dividing the gathered gradient by
+    the scalar equals gathering the per-shard divisions. This holds because `bw_div`
+    is pointwise on its gradient input. -/
+theorem bw_div_allGatherPrimDimN_eq_g198
+    (c : Scalar) (gatherDim numParts : Nat) (gs : List Tensor)
+    (shardShape : Shape)
+    (hnp : 0 < numParts)
+    (hlen_g : gs.length = numParts)
+    (hhead_g : (gs.head?.map (fun t => t.shape)).getD [] = shardShape)
+    (hgs_shape : ∀ i (hi : i < gs.length), (gs.get ⟨i, hi⟩).shape = shardShape) :
+    bw_div c (allGatherPrimDimN gatherDim numParts 0 gs) =
+      allGatherPrimDimN gatherDim numParts 0 (List.map (bw_div c) gs) := by
+  have hlen_m : (List.map (bw_div c) gs).length = numParts := by
+    rw [List.length_map, hlen_g]
+  have hhead_m : ((List.map (bw_div c) gs).head?.map (fun t => t.shape)).getD [] = shardShape := by
+    have h0m : (0 : Nat) < (List.map (bw_div c) gs).length := by omega
+    have h0g : (0 : Nat) < gs.length := by omega
+    rw [List.head?_eq_getElem?, List.getElem?_eq_getElem h0m]
+    simp only [Option.map_some, Option.getD_some]
+    have hm0 : (List.map (bw_div c) gs)[0]'h0m = bw_div c (gs[0]'h0g) := List.getElem_map _
+    rw [hm0, bw_div_shape_g198]
+    exact hgs_shape 0 h0g
+  set outShape := shardShape.set gatherDim (shardShape.getD gatherDim 0 * numParts) with houtShape_def
+  have hgather_g_shape : (allGatherPrimDimN gatherDim numParts 0 gs).shape = outShape :=
+    allGatherPrimDimN_shape gatherDim numParts gs shardShape hhead_g
+  have hlhs_shape : (bw_div c (allGatherPrimDimN gatherDim numParts 0 gs)).shape = outShape := by
+    rw [bw_div_shape_g198]; exact hgather_g_shape
+  have hrhs_shape : (allGatherPrimDimN gatherDim numParts 0
+      (List.map (bw_div c) gs)).shape = outShape :=
+    allGatherPrimDimN_shape gatherDim numParts _ shardShape hhead_m
+  apply Tensor.ext (by rw [hlhs_shape, hrhs_shape])
+  intro idx hidx
+  have hidx_out : idx < prodShape outShape := by rwa [hlhs_shape] at hidx
+  rw [bw_div_valAt_g198 c _ idx (by rw [hgather_g_shape]; exact hidx_out)]
+  rw [valAt_of_lt _ _ (by rw [hgather_g_shape]; exact hidx_out)]
+  rw [valAt_of_lt _ _ (by rw [hrhs_shape]; exact hidx_out)]
+  simp only [allGatherPrimDimN, Tensor.mkShape, hhead_g, hhead_m]
+  set ds := List.getD shardShape gatherDim 0
+  set ps := List.foldl (· * ·) 1 (List.drop (gatherDim + 1) shardShape)
+  set fds := ds * numParts * ps
+  generalize hr_def : (if ds = 0 then 0
+    else (if ps = 0 then 0 else (if fds = 0 then 0 else idx % fds) / ps) / ds) = r
+  generalize hloc_def : (if fds = 0 then 0 else idx / fds) * (ds * ps) +
+    (if ds = 0 then 0 else (if ps = 0 then 0 else (if fds = 0 then 0 else idx % fds) / ps) % ds) * ps +
+    (if ps = 0 then 0 else (if fds = 0 then 0 else idx % fds) % ps) = loc
+  by_cases hr_lt : r < numParts
+  · have hr_g : r < gs.length := by omega
+    have hr_m : r < (List.map (bw_div c) gs).length := by omega
+    rw [list_getD_of_lt _ _ _ hr_m, list_getD_of_lt _ _ _ hr_g]
+    have hm_elem : (List.map (bw_div c) gs)[r]'hr_m = bw_div c (gs[r]'hr_g) :=
+      List.getElem_map _
+    rw [hm_elem]
+    by_cases hloc : loc < prodShape (gs[r]'hr_g).shape
+    · rw [bw_div_valAt_g198 c _ loc hloc]
+    · have h1 : ¬(loc < prodShape (bw_div c (gs[r]'hr_g)).shape) := by
+        rw [bw_div_shape_g198]; exact hloc
+      simp [valAt, hloc, h1]
+  · have hr_g : ¬(r < gs.length) := by omega
+    have hr_m : ¬(r < (List.map (bw_div c) gs).length) := by omega
+    rw [list_getD_of_ge _ _ _ hr_m, list_getD_of_ge _ _ _ hr_g]
+    simp [zeroTensor, Tensor.mkShape, valAt, prodShape]
+
 end TrainVerify.Denote
