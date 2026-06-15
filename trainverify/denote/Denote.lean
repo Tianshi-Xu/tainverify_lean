@@ -16423,4 +16423,107 @@ theorem bw_linear_dx_csplit_dim1_4_1_8_8_g245
     refine Finset.sum_congr rfl (fun j hj => ?_)
     rw [hW_term j (Finset.mem_range.mp hj), h, List.getD]; simp
 
+-- ===== net-new lemmas for batch10 BW_linear g143 (dX with AllToAll reshard) =====
+
+/-- Value of `bw_linear` dX (first output) for the per-rank 3D inputs whose intrinsic
+    output width is 128 and sequence length is 2 (so the per-rank dX shard has shape
+    `[1,2,128]`).  Mirror of `bw_linear_fst_valAt_1_2_32_g169` for output width 128. -/
+theorem bw_linear_fst_valAt_1_2_128_g143 (g x w : Tensor) (o : Nat)
+    (hg : g.shape = [1, 2, o]) (hx : x.shape = [1, 2, 128]) (hw : w.shape = [o, 128])
+    (P : Nat) (hP : P < 2) (col : Nat) (hcol : col < 128) :
+    valAt (bw_linear g x w).1 (P * 128 + col) =
+      ∑ j ∈ Finset.range o, valAt g (P * o + j) * valAt w (j * 128 + col) := by
+  have hdx : (bw_linear g x w).1 =
+      Tensor.mkShape [1, 2, 128] (fun outIdx =>
+        ∑ j ∈ Finset.range o,
+          valAt g (((if (2:Nat) * 128 = 0 then 0 else outIdx.1 / (2 * 128)) * 2 +
+                    if (128:Nat) = 0 then 0 else (if (2:Nat) * 128 = 0 then 0 else outIdx.1 % (2 * 128)) / 128) * o + j) *
+          valAt w (j * 128 + if (128:Nat) = 0 then 0 else (if (2:Nat) * 128 = 0 then 0 else outIdx.1 % (2 * 128)) % 128)) := by
+    unfold bw_linear
+    rw [hg, hx, hw]
+  rw [hdx]
+  rw [valAt_of_lt _ _ (by simp only [Tensor.mkShape, prodShape, List.foldl]; omega)]
+  simp only [Tensor.mkShape]
+  have e1 : (P*128+col)/(2*128) = 0 := by omega
+  have e2 : ((P*128+col)%(2*128))/128 = P := by omega
+  have e3 : ((P*128+col)%(2*128))%128 = col := by omega
+  simp only [show ((2:Nat)*128=0)=False from by simp, show ((128:Nat)=0)=False from by simp,
+    if_false, e1, e2, e3, Nat.zero_mul, Nat.zero_add]
+
+set_option maxHeartbeats 2000000 in
+/-- Data-parallel (sequence-dim) split of the dX output of `BW_linear` matching the
+    AllToAll-resharded layout of goal_143: the gradient (`[1,8,32]`) is dim-1 all-gathered
+    from four `[1,2,32]` shards `g0..g3`, the activation `x` (`[1,8,128]`) is only used for
+    its shape, the per-rank activations `x0..x3` (`[1,2,128]`) are arbitrary shards, and the
+    weight `w` (`[32,128]`) is shared.  Then the full dX (`[1,8,128]`) equals the dim-1
+    all-gather of the per-rank dX outputs (each `[1,2,128]`).  dX depends only on `g` and
+    `w`, so the per-rank activations need not match a chunk of any particular tensor. -/
+theorem bw_linear_dx_dp_split_dim1_4_g143
+    (g0 g1 g2 g3 x x0 x1 x2 x3 w : Tensor)
+    (hg0 : g0.shape = [1,2,32]) (hg1 : g1.shape = [1,2,32])
+    (hg2 : g2.shape = [1,2,32]) (hg3 : g3.shape = [1,2,32])
+    (hx : x.shape = [1,8,128])
+    (hx0 : x0.shape = [1,2,128]) (hx1 : x1.shape = [1,2,128])
+    (hx2 : x2.shape = [1,2,128]) (hx3 : x3.shape = [1,2,128])
+    (hw : w.shape = [32,128]) :
+    (bw_linear (allGatherPrimDimN 1 4 0 [g0,g1,g2,g3]) x w).1 =
+      allGatherPrimDimN 1 4 0
+        [(bw_linear g0 x0 w).1, (bw_linear g1 x1 w).1,
+         (bw_linear g2 x2 w).1, (bw_linear g3 x3 w).1] := by
+  have hheadg : (([g0,g1,g2,g3] : List Tensor).head?.map (fun t => t.shape)).getD [] = [1,2,32] := by
+    simp [hg0]
+  set G := allGatherPrimDimN 1 4 0 [g0,g1,g2,g3] with hGdef
+  have hGshape : G.shape = [1,8,32] := by
+    rw [hGdef, allGatherPrimDimN_shape 1 4 _ [1,2,32] hheadg]; simp [List.set, List.getD]
+  have hdx0shape : (bw_linear g0 x0 w).1.shape = [1,2,128] :=
+    bw_linear_3d_fst_shape 1 2 32 128 _ _ _ hg0 hx0 hw
+  have hLshape : (bw_linear G x w).1.shape = [1,8,128] :=
+    bw_linear_3d_fst_shape 1 8 32 128 G x w hGshape hx hw
+  have hheadR : (([(bw_linear g0 x0 w).1, (bw_linear g1 x1 w).1,
+                   (bw_linear g2 x2 w).1, (bw_linear g3 x3 w).1] : List Tensor).head?.map
+                  (fun t => t.shape)).getD [] = [1,2,128] := by
+    simp only [List.head?, Option.map, Option.getD]; exact hdx0shape
+  apply Tensor.ext
+  · rw [hLshape, allGatherPrimDimN_shape 1 4 _ [1,2,128] hheadR]; simp [List.set, List.getD]
+  · intro idx hidx
+    rw [hLshape] at hidx
+    have hidx1024 : idx < 1024 := by simpa [prodShape, List.foldl] using hidx
+    have hP : idx/128 < 8 := by omega
+    have hcol : idx%128 < 128 := by omega
+    have hide : idx = (idx/128)*128 + idx%128 := by omega
+    rw [hide]
+    set P := idx/128 with hPdef
+    set col := idx%128 with hcoldef
+    set r := P/2 with hrdef
+    set p := P%2 with hpdef
+    have hr : r < 4 := by omega
+    have hp : p < 2 := by omega
+    have hPrp : P = r * 2 + p := by omega
+    rw [bw_linear_fst_valAt_1_8_128_g178 G x w 32 hGshape hx hw P hP col hcol]
+    have hRHS : valAt (allGatherPrimDimN 1 4 0
+          [(bw_linear g0 x0 w).1, (bw_linear g1 x1 w).1,
+           (bw_linear g2 x2 w).1, (bw_linear g3 x3 w).1]) (P * 128 + col)
+        = valAt ([(bw_linear g0 x0 w).1, (bw_linear g1 x1 w).1,
+                  (bw_linear g2 x2 w).1, (bw_linear g3 x3 w).1].getD r (zeroTensor [1,2,128]))
+                (p * 128 + col) := by
+      rw [hPrp]
+      exact allGatherPrimDimN_dim1_4_1_2_128_valAt _ r hr p hp col hcol hheadR
+    rw [hRHS]
+    have hLHS : (∑ j ∈ Finset.range 32, valAt G (P*32+j) * valAt w (j*128+col))
+        = ∑ j ∈ Finset.range 32,
+            valAt ([g0,g1,g2,g3].getD r (zeroTensor [1,2,32])) (p*32+j) * valAt w (j*128+col) := by
+      apply Finset.sum_congr rfl
+      intro j hj
+      have hj32 : j < 32 := Finset.mem_range.mp hj
+      have hidxj : P * 32 + j = (r * 2 + p) * 32 + j := by rw [hPrp]
+      rw [hGdef, hidxj, allGatherPrimDimN_dim1_4_1_2_32_valAt [g0,g1,g2,g3] r hr p hp j hj32 hheadg]
+    rw [hLHS]
+    have hrcase : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+    rcases hrcase with h|h|h|h <;> rw [h] <;>
+      simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    · rw [bw_linear_fst_valAt_1_2_128_g143 g0 x0 w 32 hg0 hx0 hw p hp col hcol]
+    · rw [bw_linear_fst_valAt_1_2_128_g143 g1 x1 w 32 hg1 hx1 hw p hp col hcol]
+    · rw [bw_linear_fst_valAt_1_2_128_g143 g2 x2 w 32 hg2 hx2 hw p hp col hcol]
+    · rw [bw_linear_fst_valAt_1_2_128_g143 g3 x3 w 32 hg3 hx3 hw p hp col hcol]
+
 end TrainVerify.Denote
