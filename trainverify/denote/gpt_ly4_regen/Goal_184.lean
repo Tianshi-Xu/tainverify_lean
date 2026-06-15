@@ -56,5 +56,108 @@ def goal_184_cut_initGoals : List LineageGoal := initGoals ++ goal_184_prereqs
 def goal_184_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_184 pm_goal_184 goal_184 sm_goal_184InitEnv pm_goal_184InitEnv goal_184_cut_initGoals
 
+set_option maxRecDepth 4096 in
+/-- BW_multiref distributes: tensorSum of three inputs over chunk-then-sum per rank. -/
+theorem prove_goal_184_cut : goal_184_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Prereq goal_290: tensor 1005 replicates PM tensor 1008
+  have hInit1005 : InitGoalHolds pm_goal_184.numRanks goal_290 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_184_cut_initGoals, goal_184_prereqs]
+    decide
+  have h1005_eq : initSM 1005 = initPM 1008 := by
+    have hrec := hInit1005.2.2
+    simp only [goal_290, pm_goal_184, List.map] at hrec
+    rw [hrec, reconstructWithDim_singleton]
+  have h1005_shape : (initSM 1005).shape = [1, 8, 32] := hInit1005.1
+  have h1008_shape : (initPM 1008).shape = [1, 8, 32] := by rw [← h1005_eq]; exact h1005_shape
+  -- Prereq goal_292: tensor 1009 replicates PM tensor 1009
+  have hInit1009 : InitGoalHolds pm_goal_184.numRanks goal_292 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_184_cut_initGoals, goal_184_prereqs]
+    decide
+  have h1009_eq : initSM 1009 = initPM 1009 := by
+    have hrec := hInit1009.2.2
+    simp only [goal_292, pm_goal_184, List.map] at hrec
+    rw [hrec, reconstructWithDim_singleton]
+  have h1009_shape : (initSM 1009).shape = [1, 8, 32] := hInit1009.1
+  have h1009pm_shape : (initPM 1009).shape = [1, 8, 32] := by rw [← h1009_eq]; exact h1009_shape
+  -- Prereq goal_294: tensor 1013 = allGather dim 1 of [2329, 2332, 2335, 2338]
+  have hInit1013 : InitGoalHolds pm_goal_184.numRanks goal_294 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_184_cut_initGoals, goal_184_prereqs]
+    decide
+  have h1013_rec : initSM 1013 = reconstructWithDim 1 4 0
+      [initPM 2329, initPM 2332, initPM 2335, initPM 2338] := by
+    have hrec := hInit1013.2.2
+    simp only [goal_294, pm_goal_184, List.map] at hrec
+    exact hrec
+  have h1013_shape : (initSM 1013).shape = [1, 8, 32] := hInit1013.1
+  have htp294 := hInit1013.2.1
+  simp only [goal_294, List.map] at htp294
+  have h2329_shape : (initPM 2329).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp294; simpa using this
+  have h2332_shape : (initPM 2332).shape = [1, 2, 32] := by
+    have := congrArg List.tail htp294
+    have := congrArg List.head? this; simpa using this
+  have h2335_shape : (initPM 2335).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp294
+    have := congrArg List.head? this; simpa using this
+  have h2338_shape : (initPM 2338).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp294
+    have := congrArg List.head? this; simpa using this
+  have h1013_gather : initSM 1013 = allGatherPrimDimN 1 4 0
+      [initPM 2329, initPM 2332, initPM 2335, initPM 2338] := by
+    rw [h1013_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2329_shape]; decide)
+  -- SM store: tensorSum [initSM 1005, initSM 1009, initSM 1013]
+  have hsm : (denoteGraph sm_goal_184 initSM) 811 =
+      tensorSum [initSM 1005, initSM 1009, initSM 1013] := by
+    simp only [sm_goal_184, denoteGraph, List.foldl]
+    rw [applyNode_bw_multiref_out]
+    simp [List.map]
+  -- PM stores
+  have hpm_2244 : (denoteGraph pm_goal_184 initPM) 2244 =
+      tensorSum [chunkPrimDimN 1 4 0 (initPM 1008), chunkPrimDimN 1 4 0 (initPM 1009),
+        initPM 2329] := by rfl
+  have hpm_2248 : (denoteGraph pm_goal_184 initPM) 2248 =
+      tensorSum [chunkPrimDimN 1 4 1 (initPM 1008), chunkPrimDimN 1 4 1 (initPM 1009),
+        initPM 2332] := by rfl
+  have hpm_2252 : (denoteGraph pm_goal_184 initPM) 2252 =
+      tensorSum [chunkPrimDimN 1 4 2 (initPM 1008), chunkPrimDimN 1 4 2 (initPM 1009),
+        initPM 2335] := by rfl
+  have hpm_2256 : (denoteGraph pm_goal_184 initPM) 2256 =
+      tensorSum [chunkPrimDimN 1 4 3 (initPM 1008), chunkPrimDimN 1 4 3 (initPM 1009),
+        initPM 2338] := by rfl
+  -- Key equation: BW_multiref distributes over the dim-1 collective
+  have hkey : tensorSum [initSM 1005, initSM 1009, initSM 1013] =
+      allGatherPrimDimN 1 4 0
+        [tensorSum [chunkPrimDimN 1 4 0 (initPM 1008), chunkPrimDimN 1 4 0 (initPM 1009),
+          initPM 2329],
+         tensorSum [chunkPrimDimN 1 4 1 (initPM 1008), chunkPrimDimN 1 4 1 (initPM 1009),
+          initPM 2332],
+         tensorSum [chunkPrimDimN 1 4 2 (initPM 1008), chunkPrimDimN 1 4 2 (initPM 1009),
+          initPM 2335],
+         tensorSum [chunkPrimDimN 1 4 3 (initPM 1008), chunkPrimDimN 1 4 3 (initPM 1009),
+          initPM 2338]] := by
+    rw [h1005_eq, h1009_eq, h1013_gather]
+    exact tensorSum_add3_gather_dim1_4_1_8_32_g184 (initPM 1008) (initPM 1009)
+      (initPM 2329) (initPM 2332) (initPM 2335) (initPM 2338)
+      h1008_shape h1009pm_shape h2329_shape h2332_shape h2335_shape h2338_shape
+  -- Chunk shapes for the conjuncts
+  have hchunk1008 : ∀ r, (chunkPrimDimN 1 4 r (initPM 1008)).shape = [1, 2, 32] := by
+    intro r; rw [chunkPrimDimN_shape 1 4 r _ _ h1008_shape (by omega)]; simp [List.set, List.getD]
+  -- Discharge the three conjuncts
+  simp only [goal_184, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, tensorSum_shape]; exact h1005_shape
+  · simp only [hpm_2244, hpm_2248, hpm_2252, hpm_2256, tensorSum_shape, hchunk1008]
+  · rw [hsm, hkey, ← hpm_2244, ← hpm_2248, ← hpm_2252, ← hpm_2256]
+    symm
+    exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _
+      (by rw [hpm_2244, tensorSum_shape, hchunk1008]; decide)
+
 end TrainVerify.Denote.GeneratedGoals
+
+
 
