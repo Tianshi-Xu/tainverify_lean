@@ -348,6 +348,7 @@ import denote.gpt_ly4_regen.Goal19Bridge   -- goal_19_cut_to_full (two-input FW_
 import denote.gpt_ly4_regen.Goal20Bridge   -- goal_20_cut_to_full (per-rank FW_transpose multi-tps, no collective)
 import denote.gpt_ly4_regen.Goal21Bridge   -- goal_21_cut_to_full (AllToAll+FW_contiguous+AllGather single-tp)
 import denote.gpt_ly4_regen.Goal22Bridge   -- goal_22_cut_to_full (replicated FW_view single-tp same-tid)
+import denote.gpt_ly4_regen.Goal23Bridge   -- goal_23_cut_to_full (column-parallel FW_linear, multi-tps AllGather dim2)
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -381,7 +382,7 @@ theorem goal_1_cut_to_full : goal_1_stmt_cut → goal_1_stmt := by sorry
 -- goal_20_cut_to_full : imported (proven, Goal20Bridge)
 -- goal_21_cut_to_full : imported (proven, Goal21Bridge)
 -- goal_22_cut_to_full : imported (proven, Goal22Bridge)
-theorem goal_23_cut_to_full : goal_23_stmt_cut → goal_23_stmt := by sorry
+-- goal_23_cut_to_full : imported (proven, Goal23Bridge)
 theorem goal_24_cut_to_full : goal_24_stmt_cut → goal_24_stmt := by sorry
 theorem goal_25_cut_to_full : goal_25_stmt_cut → goal_25_stmt := by sorry
 theorem goal_26_cut_to_full : goal_26_stmt_cut → goal_26_stmt := by sorry
