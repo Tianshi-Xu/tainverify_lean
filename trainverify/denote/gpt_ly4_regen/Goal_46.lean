@@ -49,5 +49,77 @@ def goal_46_cut_initGoals : List LineageGoal := initGoals ++ goal_46_prereqs
 def goal_46_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_46 pm_goal_46 goal_46 sm_goal_46InitEnv pm_goal_46InitEnv goal_46_cut_initGoals
 
+set_option maxHeartbeats 4000000 in
+set_option maxRecDepth 4096 in
+-- AllToAll (gatherDim 3, scatterDim 2) reconstructs tensor 623 then chunks it along dim 2; each PM
+-- rank applies fw_contiguous (identity) to its chunk; AllGather (dim 2) reassembles. fw_contiguous
+-- is the identity so it trivially distributes.
+theorem prove_goal_46_cut : goal_46_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_45 (tensor 623 gathered along dim 3 from 1977..1980)
+  have hInit : InitGoalHolds pm_goal_46.numRanks goal_45 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_46_cut_initGoals, goal_46_prereqs]
+    decide
+  have h623_shape : (initSM 623).shape = [1, 8, 4, 8] := hInit.1
+  have htp_shapes := hInit.2.1
+  simp only [goal_45, LineageGoal.tps, List.map] at htp_shapes
+  have h1977 : (initPM 1977).shape = [1, 8, 4, 2] := by
+    have := congrArg (List.getD · 0 []) htp_shapes; simp at this; exact this
+  have h623_eq : initSM 623 = allGatherPrimDimN 3 4 0
+      [initPM 1977, initPM 1978, initPM 1979, initPM 1980] := by
+    have hrec := hInit.2.2
+    simp only [goal_45, LineageGoal.tps, LineageGoal.gatherDim, List.map] at hrec
+    rw [hrec]
+    exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h1977]; decide)
+  -- SM store: smStore 624 = fw_contiguous (initSM 623)
+  have hsm : (denoteGraph sm_goal_46 initSM) 624 = fw_contiguous (initSM 623) := by
+    simp only [sm_goal_46, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_fw_contiguous_out_g46]
+  -- PM store: AllGather (dim 2) of per-rank fw_contiguous of AllToAll outputs
+  have hpm : (denoteGraph pm_goal_46 initPM) 624 = allGatherPrimDimN 2 4 0
+      [fw_contiguous (allToAllPrimWithDims 4 0 [initPM 1977, initPM 1978, initPM 1979, initPM 1980] 3 2),
+       fw_contiguous (allToAllPrimWithDims 4 1 [initPM 1977, initPM 1978, initPM 1979, initPM 1980] 3 2),
+       fw_contiguous (allToAllPrimWithDims 4 2 [initPM 1977, initPM 1978, initPM 1979, initPM 1980] 3 2),
+       fw_contiguous (allToAllPrimWithDims 4 3 [initPM 1977, initPM 1978, initPM 1979, initPM 1980] 3 2)] := by
+    simp only [pm_goal_46, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_allGatherPrimDimN_out_thm]
+    congr 1
+  -- AllToAll on rank r yields chunk r of tensor 623 along dim 2
+  have halltoall : ∀ r, r < 4 →
+      allToAllPrimWithDims 4 r [initPM 1977, initPM 1978, initPM 1979, initPM 1980] 3 2 =
+      chunkPrimDimN 2 4 r (initSM 623) := by
+    intro r _
+    simp only [allToAllPrimWithDims]
+    rw [← h623_eq]
+  have hpm' : (denoteGraph pm_goal_46 initPM) 624 = allGatherPrimDimN 2 4 0
+      [fw_contiguous (chunkPrimDimN 2 4 0 (initSM 623)),
+       fw_contiguous (chunkPrimDimN 2 4 1 (initSM 623)),
+       fw_contiguous (chunkPrimDimN 2 4 2 (initSM 623)),
+       fw_contiguous (chunkPrimDimN 2 4 3 (initSM 623))] := by
+    rw [hpm, halltoall 0 (by omega), halltoall 1 (by omega), halltoall 2 (by omega), halltoall 3 (by omega)]
+  -- Bridge: fw_contiguous is the identity, so it distributes over chunk+gather on dim 2.
+  have hbridge : fw_contiguous (initSM 623) = allGatherPrimDimN 2 4 0
+      [fw_contiguous (chunkPrimDimN 2 4 0 (initSM 623)),
+       fw_contiguous (chunkPrimDimN 2 4 1 (initSM 623)),
+       fw_contiguous (chunkPrimDimN 2 4 2 (initSM 623)),
+       fw_contiguous (chunkPrimDimN 2 4 3 (initSM 623))] := by
+    show initSM 623 = allGatherPrimDimN 2 4 0
+      [chunkPrimDimN 2 4 0 (initSM 623), chunkPrimDimN 2 4 1 (initSM 623),
+       chunkPrimDimN 2 4 2 (initSM 623), chunkPrimDimN 2 4 3 (initSM 623)]
+    exact (allGatherPrimDimN_chunkPrimDimN_id_dim2_4_1_8_4_8_g46 (initSM 623) h623_shape).symm
+  -- Discharge the three conjuncts
+  simp only [goal_46, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
+    LineageGoal.gatherDim, List.map, Piece.tid]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, fw_contiguous_shape_g46, h623_shape]
+  · rw [hpm', allGatherPrimDimN_shape 2 4 _ [1, 8, 1, 8]]
+    · simp [List.set, List.getD]
+    · simp [fw_contiguous_shape_g46, chunkPrimDimN_shape, h623_shape, List.getD, List.set,
+        List.head?, Option.map, Option.getD]
+  · rw [reconstructWithDim_singleton, hsm, hpm']
+    exact hbridge
+
 end TrainVerify.Denote.GeneratedGoals
+
 

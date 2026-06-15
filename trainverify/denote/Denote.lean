@@ -19246,4 +19246,66 @@ theorem allGatherPrimDimN_chunkPrimDimN_id_dim1_4_1_8_4_8_g21 (x : Tensor)
   congr 1
   omega
 
+/-! ## FW_contiguous AllToAll helpers (goal_46 family) -/
+
+/-- Unfolding lemma for `evalOp` on `FW_contiguous` (identity). -/
+theorem evalOp_fw_contiguous_g46 (numParts rank : Nat) (params : List Nat) (x : Tensor) :
+    evalOp numParts rank "OpName.FW_contiguous" params [x] = [fw_contiguous x] := by
+  rfl
+
+/-- `applyNode` for `FW_contiguous` with singleton output. -/
+theorem applyNode_fw_contiguous_out_g46
+    (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_contiguous", ins := [inTid], outs := [outTid] } outTid =
+      fw_contiguous (s inTid) := by
+  unfold applyNode
+  rw [show ([inTid] : List Tid).map s = [s inTid] from rfl,
+      evalOp_fw_contiguous_g46]
+  change storeSet s [(outTid, fw_contiguous (s inTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `fw_contiguous` preserves shape (it is the identity). -/
+theorem fw_contiguous_shape_g46 (x : Tensor) : (fw_contiguous x).shape = x.shape := rfl
+
+/-- Gather-after-chunk identity: reassembling dim-2 chunks (of shape [1,8,1,8]) recovers the
+    original tensor of shape [1,8,4,8]. -/
+theorem allGatherPrimDimN_chunkPrimDimN_id_dim2_4_1_8_4_8_g46 (x : Tensor)
+    (hsh : x.shape = [1, 8, 4, 8]) :
+    allGatherPrimDimN 2 4 0
+      [chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x] = x := by
+  have hchunk_shape : ∀ r, (chunkPrimDimN 2 4 r x).shape = [1, 8, 1, 8] := by
+    intro r
+    rw [chunkPrimDimN_shape 2 4 r _ _ hsh (by omega)]
+    simp [List.set, List.getD]
+  have hhead : ([chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x].head?.map (·.shape)).getD [] = [1, 8, 1, 8] := by
+    simp [List.head?, Option.map, hchunk_shape 0]
+  have hgather_shape : (allGatherPrimDimN 2 4 0
+      [chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x]).shape = [1, 8, 4, 8] := by
+    rw [allGatherPrimDimN_shape 2 4 _ [1, 8, 1, 8] hhead]
+    simp [List.set, List.getD]
+  symm
+  apply Tensor.ext (by rw [hsh, hgather_shape])
+  intro idx hidx
+  rw [hsh] at hidx
+  have hidx256 : idx < 256 := by simpa [prodShape] using hidx
+  rw [allGatherPrimDimN_2_4_valAt_1_8_1_8 _ idx hhead hidx256]
+  have hgetD : ∀ (i : Nat) (hi : i < 4),
+      [chunkPrimDimN 2 4 0 x, chunkPrimDimN 2 4 1 x,
+       chunkPrimDimN 2 4 2 x, chunkPrimDimN 2 4 3 x].getD i (zeroTensor [1, 8, 1, 8]) =
+        chunkPrimDimN 2 4 i x := by
+    intro i hi
+    have h4 : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 := by omega
+    rcases h4 with rfl | rfl | rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ]
+  have hr : (idx % 32) / 8 < 4 := by omega
+  have hloc : (idx / 32) * 8 + idx % 8 < 64 := by omega
+  rw [hgetD ((idx % 32) / 8) hr]
+  rw [chunkPrimDimN_2_4_valAt_1_8_4_8 x ((idx % 32) / 8) ((idx / 32) * 8 + idx % 8) hsh hr hloc]
+  congr 1
+  omega
+
 end TrainVerify.Denote
