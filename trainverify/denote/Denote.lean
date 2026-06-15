@@ -15636,4 +15636,51 @@ theorem tensorSum_gather_gather_dim1_4_1_2_32_g207
     show valAt a3 (p * 32 + j) + valAt b3 (p * 32 + j) = valAt (tensorSum [a3, b3]) (p * 32 + j)
     rw [tensorSum_pair_valAt a3 b3 (p * 32 + j) (by rw [ha3]; simp [prodShape]; omega)]
 
+/-- `tensorSum [a, b]` distributes over `allGatherPrimDimN` on dim 1 with 4 parts for
+    `[1, 2, 32]` shards: summing two gathered tensors equals gathering the per-shard sums.
+    Used for BW_multiref goals whose inputs are both dim-1 all-gathers. -/
+theorem tensorSum_add_gather_dim1_4_1_2_32_g216
+    (a0 a1 a2 a3 b0 b1 b2 b3 : Tensor)
+    (ha0 : a0.shape = [1, 2, 32]) (ha1 : a1.shape = [1, 2, 32])
+    (ha2 : a2.shape = [1, 2, 32]) (ha3 : a3.shape = [1, 2, 32])
+    (hb0 : b0.shape = [1, 2, 32])
+    (hb1 : b1.shape = [1, 2, 32]) (hb2 : b2.shape = [1, 2, 32])
+    (hb3 : b3.shape = [1, 2, 32]) :
+    tensorSum [allGatherPrimDimN 1 4 0 [a0, a1, a2, a3],
+               allGatherPrimDimN 1 4 0 [b0, b1, b2, b3]] =
+      allGatherPrimDimN 1 4 0
+        [tensorSum [a0, b0], tensorSum [a1, b1], tensorSum [a2, b2], tensorSum [a3, b3]] := by
+  have hahead : (([a0, a1, a2, a3].head?.map (fun t => t.shape)).getD []) = [1, 2, 32] := by
+    simp [ha0]
+  have hbhead : (([b0, b1, b2, b3].head?.map (fun t => t.shape)).getD []) = [1, 2, 32] := by
+    simp [hb0]
+  have hshead : (([tensorSum [a0, b0], tensorSum [a1, b1], tensorSum [a2, b2],
+      tensorSum [a3, b3]].head?.map (fun t => t.shape)).getD []) = [1, 2, 32] := by
+    simp [tensorSum_shape, ha0]
+  have hgA : (allGatherPrimDimN 1 4 0 [a0, a1, a2, a3]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hahead]; simp [List.set, List.getD]
+  have hgS : (allGatherPrimDimN 1 4 0 [tensorSum [a0, b0], tensorSum [a1, b1],
+      tensorSum [a2, b2], tensorSum [a3, b3]]).shape = [1, 8, 32] := by
+    rw [allGatherPrimDimN_shape 1 4 _ _ hshead]; simp [List.set, List.getD]
+  have hlhs_shape : (tensorSum [allGatherPrimDimN 1 4 0 [a0, a1, a2, a3],
+      allGatherPrimDimN 1 4 0 [b0, b1, b2, b3]]).shape = [1, 8, 32] := by
+    rw [tensorSum_shape]; exact hgA
+  apply Tensor.ext (by rw [hlhs_shape, hgS])
+  intro idx hidx
+  have hidx256 : idx < 256 := by simpa [hlhs_shape, prodShape] using hidx
+  obtain ⟨r, p, j, hr_lt, hp_lt, hj_lt, hidx_eq⟩ :
+      ∃ r p j, r < 4 ∧ p < 2 ∧ j < 32 ∧ idx = (r * 2 + p) * 32 + j :=
+    ⟨idx / 32 / 2, idx / 32 % 2, idx % 32, by omega, by omega, by omega, by omega⟩
+  rw [hidx_eq]
+  rw [tensorSum_pair_valAt _ _ _ (by rw [hgA]; simp [prodShape]; omega)]
+  rw [allGatherPrimDimN_dim1_4_1_2_32_valAt _ r hr_lt p hp_lt j hj_lt hahead]
+  rw [allGatherPrimDimN_dim1_4_1_2_32_valAt _ r hr_lt p hp_lt j hj_lt hbhead]
+  rw [allGatherPrimDimN_dim1_4_1_2_32_valAt _ r hr_lt p hp_lt j hj_lt hshead]
+  have hpj_lt : p * 32 + j < 64 := by omega
+  rcases (by omega : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3) with h | h | h | h <;>
+    subst h <;>
+    simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some] <;>
+    rw [tensorSum_pair_valAt _ _ _
+      (by (first | rw [ha0] | rw [ha1] | rw [ha2] | rw [ha3]); simp [prodShape]; omega)]
+
 end TrainVerify.Denote
