@@ -48,5 +48,86 @@ def goal_281_cut_initGoals : List LineageGoal := initGoals ++ goal_281_prereqs
 def goal_281_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_281 pm_goal_281 goal_281 sm_goal_281InitEnv pm_goal_281InitEnv goal_281_cut_initGoals
 
+set_option maxHeartbeats 4000000 in
+-- SM: FW_multiref copies tensor 628 to output 977 (identity, shape [1,8,32]).
+-- PM: each rank copies its [1,8,8] input via FW_multiref, then AllToAllPrim (idim=2, odim=1)
+-- redistributes the 4 shards from dim-2 gather to dim-1 chunks. Reconstructing the AllToAll
+-- outputs along dim 1 recovers exactly the dim-2 gather of the original inputs = 628.
+theorem prove_goal_281_cut : goal_281_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract goal_49: tensor 628 is gathered on dim 2 with shards 2057..2060.
+  have hInit49 : InitGoalHolds pm_goal_281.numRanks goal_49 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_281_cut_initGoals, goal_281_prereqs]
+    decide
+  have h628_shape : (initSM 628).shape = [1, 8, 32] := hInit49.1
+  have h628_rec : initSM 628 = reconstructWithDim 2 4 0
+      [initPM 2057, initPM 2058, initPM 2059, initPM 2060] := by
+    have hrec := hInit49.2.2
+    simp only [goal_49, pm_goal_281, List.map] at hrec
+    exact hrec
+  have htp49 := hInit49.2.1
+  simp only [goal_49, List.map] at htp49
+  have h2057_shape : (initPM 2057).shape = [1, 8, 8] := by
+    have := congrArg List.head? htp49; simpa using this
+  -- Gather form for input 628.
+  have h628_gather : initSM 628 = allGatherPrimDimN 2 4 0
+      [initPM 2057, initPM 2058, initPM 2059, initPM 2060] := by
+    rw [h628_rec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h2057_shape]; decide)
+  -- AllToAll over the dim-2 shards = chunk on dim 1 of the gathered tensor.
+  have halltoall : ∀ r,
+      allToAllPrimWithDims 4 r [initPM 2057, initPM 2058, initPM 2059, initPM 2060] 2 1 =
+      chunkPrimDimN 1 4 r (initSM 628) := by
+    intro r
+    simp only [allToAllPrimWithDims]
+    rw [← h628_gather]
+  -- SM store: smStore 977 = initSM 628 (FW_multiref first output).
+  have hsm : (denoteGraph sm_goal_281 initSM) 977 = initSM 628 := by
+    simp only [sm_goal_281, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_first_out]
+  -- PM stores: each AllToAll output = chunkPrimDimN 1 4 r (initSM 628).
+  have hpm0 : (denoteGraph pm_goal_281 initPM) 2081 = chunkPrimDimN 1 4 0 (initSM 628) := by
+    rw [← halltoall 0]
+    simp only [pm_goal_281, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    congr 1
+  have hpm1 : (denoteGraph pm_goal_281 initPM) 2082 = chunkPrimDimN 1 4 1 (initSM 628) := by
+    rw [← halltoall 1]
+    simp only [pm_goal_281, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    congr 1
+  have hpm2 : (denoteGraph pm_goal_281 initPM) 2083 = chunkPrimDimN 1 4 2 (initSM 628) := by
+    rw [← halltoall 2]
+    simp only [pm_goal_281, denoteGraph, List.foldl]
+    rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+    rw [applyNode_allToAllPrimWithDims_out]
+    congr 1
+  have hpm3 : (denoteGraph pm_goal_281 initPM) 2084 = chunkPrimDimN 1 4 3 (initSM 628) := by
+    rw [← halltoall 3]
+    simp only [pm_goal_281, denoteGraph, List.foldl]
+    rw [applyNode_allToAllPrimWithDims_out]
+    congr 1
+  -- Chunk shapes.
+  have hchunk_shape : ∀ r, (chunkPrimDimN 1 4 r (initSM 628)).shape = [1, 2, 32] := by
+    intro r
+    rw [chunkPrimDimN_shape 1 4 r _ _ h628_shape (by omega)]
+    simp [List.set, List.getD]
+  -- Discharge the three conjuncts.
+  simp only [goal_281, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]; exact h628_shape
+  · rw [hpm0, hpm1, hpm2, hpm3, hchunk_shape 0, hchunk_shape 1, hchunk_shape 2, hchunk_shape 3]
+  · rw [hsm, hpm0, hpm1, hpm2, hpm3]
+    conv_lhs => rw [← allGatherPrimDimN_chunkPrimDimN_id_dim1_4_32 (initSM 628) h628_shape]
+    symm
+    apply reconstructWithDim_cons_cons_nonscalar
+    rw [hchunk_shape 0]; decide
+
 end TrainVerify.Denote.GeneratedGoals
 
