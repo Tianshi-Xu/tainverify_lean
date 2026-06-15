@@ -1,0 +1,506 @@
+=== START Sat May  9 12:24:57 UTC 2026 ===
+
+[1/3] Creating conda env verdict...
+2 channel Terms of Service accepted
+Retrieving notices: - \ | / - \ | / - \ | / - done
+Channels:
+ - defaults
+ - conda-forge
+Platform: linux-64
+Collecting package metadata (repodata.json): | / - \ | / - \ | / - \ | / - \ | / done
+Solving environment: \ | done
+
+
+==> WARNING: A newer version of conda exists. <==
+    current version: 25.5.1
+    latest version: 26.3.2
+
+Please update conda by running
+
+    $ conda update -n base -c defaults conda
+
+
+
+Downloading and Extracting Packages: ...working...tzdata-2026a         | 117 KB    |            |   0% tzdata-2026a         | 117 KB    | ########## | 100% tzdata-2026a         | 117 KB    | ########## | 100% tzdata-2026a         | 117 KB    | ########## | 100%                                                       done
+Preparing transaction: - \ done
+Verifying transaction: / - \ | / - \ | / done
+Executing transaction: \ | / - \ | / - \ | / - \ | / - \ done
+Installing pip dependencies: / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / - \ | / Ran pip subprocess with arguments:
+['/home/argustest/miniconda3/envs/verdict/bin/python', '-m', 'pip', 'install', '-U', '-r', '/home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt', '--exists-action=b']
+Pip subprocess output:
+Collecting certifi==2025.6.15 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 1))
+  Downloading certifi-2025.6.15-py3-none-any.whl.metadata (2.4 kB)
+Collecting charset-normalizer==3.4.2 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 2))
+  Using cached charset_normalizer-3.4.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (35 kB)
+Collecting contourpy==1.3.2 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 3))
+  Using cached contourpy-1.3.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.5 kB)
+Collecting cppimport==22.8.2 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 4))
+  Downloading cppimport-22.8.2.tar.gz (26 kB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Collecting cycler==0.12.1 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 5))
+  Using cached cycler-0.12.1-py3-none-any.whl.metadata (3.8 kB)
+Collecting dill==0.4.0 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 6))
+  Downloading dill-0.4.0-py3-none-any.whl.metadata (10 kB)
+Collecting fairscale==0.4.13 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 7))
+  Downloading fairscale-0.4.13.tar.gz (266 kB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Installing backend dependencies: started
+  Installing backend dependencies: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Collecting filelock==3.18.0 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 8))
+  Using cached filelock-3.18.0-py3-none-any.whl.metadata (2.9 kB)
+Collecting fonttools==4.58.4 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 9))
+  Downloading fonttools-4.58.4-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (106 kB)
+Collecting fsspec==2025.5.1 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 10))
+  Downloading fsspec-2025.5.1-py3-none-any.whl.metadata (11 kB)
+Collecting idna==3.10 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 11))
+  Using cached idna-3.10-py3-none-any.whl.metadata (10 kB)
+Collecting jinja2==3.1.6 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 12))
+  Using cached jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+Collecting kiwisolver==1.4.8 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 13))
+  Downloading kiwisolver-1.4.8-cp310-cp310-manylinux_2_12_x86_64.manylinux2010_x86_64.whl.metadata (6.2 kB)
+Collecting mako==1.3.10 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 14))
+  Downloading mako-1.3.10-py3-none-any.whl.metadata (2.9 kB)
+Collecting markupsafe==3.0.2 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 15))
+  Using cached MarkupSafe-3.0.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.0 kB)
+Collecting matplotlib==3.10.3 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 16))
+  Downloading matplotlib-3.10.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (11 kB)
+Collecting more-itertools==10.7.0 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 17))
+  Downloading more_itertools-10.7.0-py3-none-any.whl.metadata (37 kB)
+Collecting mpmath==1.3.0 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 18))
+  Using cached mpmath-1.3.0-py3-none-any.whl.metadata (8.6 kB)
+Collecting networkx==3.4.2 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 19))
+  Using cached networkx-3.4.2-py3-none-any.whl.metadata (6.3 kB)
+Collecting numpy==2.2.6 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 20))
+  Downloading numpy-2.2.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (62 kB)
+Collecting nvidia-cublas-cu12==12.1.3.1 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 21))
+  Downloading nvidia_cublas_cu12-12.1.3.1-py3-none-manylinux1_x86_64.whl.metadata (1.5 kB)
+Collecting nvidia-cuda-cupti-cu12==12.1.105 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 22))
+  Downloading nvidia_cuda_cupti_cu12-12.1.105-py3-none-manylinux1_x86_64.whl.metadata (1.6 kB)
+Collecting nvidia-cuda-nvrtc-cu12==12.1.105 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 23))
+  Downloading nvidia_cuda_nvrtc_cu12-12.1.105-py3-none-manylinux1_x86_64.whl.metadata (1.5 kB)
+Collecting nvidia-cuda-runtime-cu12==12.1.105 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 24))
+  Downloading nvidia_cuda_runtime_cu12-12.1.105-py3-none-manylinux1_x86_64.whl.metadata (1.5 kB)
+Collecting nvidia-cudnn-cu12==9.1.0.70 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 25))
+  Downloading nvidia_cudnn_cu12-9.1.0.70-py3-none-manylinux2014_x86_64.whl.metadata (1.6 kB)
+Collecting nvidia-cufft-cu12==11.0.2.54 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 26))
+  Downloading nvidia_cufft_cu12-11.0.2.54-py3-none-manylinux1_x86_64.whl.metadata (1.5 kB)
+Collecting nvidia-cufile-cu12==1.11.1.6 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 27))
+  Using cached nvidia_cufile_cu12-1.11.1.6-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (1.5 kB)
+Collecting nvidia-curand-cu12==10.3.2.106 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 28))
+  Downloading nvidia_curand_cu12-10.3.2.106-py3-none-manylinux1_x86_64.whl.metadata (1.5 kB)
+Collecting nvidia-cusolver-cu12==11.4.5.107 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 29))
+  Downloading nvidia_cusolver_cu12-11.4.5.107-py3-none-manylinux1_x86_64.whl.metadata (1.6 kB)
+Collecting nvidia-cusparse-cu12==12.1.0.106 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 30))
+  Downloading nvidia_cusparse_cu12-12.1.0.106-py3-none-manylinux1_x86_64.whl.metadata (1.6 kB)
+Collecting nvidia-cusparselt-cu12==0.6.3 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 31))
+  Using cached nvidia_cusparselt_cu12-0.6.3-py3-none-manylinux2014_x86_64.whl.metadata (6.8 kB)
+Collecting nvidia-nccl-cu12==2.20.5 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 32))
+  Downloading nvidia_nccl_cu12-2.20.5-py3-none-manylinux2014_x86_64.whl.metadata (1.8 kB)
+Collecting nvidia-nvjitlink-cu12==12.6.85 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 33))
+  Using cached nvidia_nvjitlink_cu12-12.6.85-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl.metadata (1.5 kB)
+Collecting nvidia-nvtx-cu12==12.1.105 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 34))
+  Downloading nvidia_nvtx_cu12-12.1.105-py3-none-manylinux1_x86_64.whl.metadata (1.7 kB)
+Collecting packaging==25.0 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 35))
+  Using cached packaging-25.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting pandas==2.3.1 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 36))
+  Using cached pandas-2.3.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (91 kB)
+Collecting pillow==11.2.1 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 37))
+  Downloading pillow-11.2.1-cp310-cp310-manylinux_2_28_x86_64.whl.metadata (8.9 kB)
+Collecting psutil==7.0.0 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 38))
+  Using cached psutil-7.0.0-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (22 kB)
+Collecting pulp==3.2.1 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 39))
+  Downloading pulp-3.2.1-py3-none-any.whl.metadata (6.9 kB)
+Collecting pybind11==2.13.6 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 40))
+  Downloading pybind11-2.13.6-py3-none-any.whl.metadata (9.5 kB)
+Collecting pyparsing==3.2.3 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 41))
+  Downloading pyparsing-3.2.3-py3-none-any.whl.metadata (5.0 kB)
+Requirement already satisfied: python-dateutil==2.9.0.post0 in /home/argustest/.local/lib/python3.10/site-packages (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 42)) (2.9.0.post0)
+Collecting pytz==2025.2 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 43))
+  Using cached pytz-2025.2-py2.py3-none-any.whl.metadata (22 kB)
+Collecting pyyaml==6.0.2 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 44))
+  Using cached PyYAML-6.0.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (2.1 kB)
+Collecting regex==2024.11.6 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 45))
+  Using cached regex-2024.11.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (40 kB)
+Collecting requests==2.32.4 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 46))
+  Using cached requests-2.32.4-py3-none-any.whl.metadata (4.9 kB)
+Collecting six==1.17.0 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 47))
+  Using cached six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+Collecting sympy==1.14.0 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 48))
+  Using cached sympy-1.14.0-py3-none-any.whl.metadata (12 kB)
+Collecting tiktoken==0.9.0 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 49))
+  Using cached tiktoken-0.9.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.7 kB)
+Collecting torch==2.4.0 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 50))
+  Downloading torch-2.4.0-cp310-cp310-manylinux1_x86_64.whl.metadata (26 kB)
+Collecting tqdm==4.67.1 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 51))
+  Using cached tqdm-4.67.1-py3-none-any.whl.metadata (57 kB)
+Collecting triton==3.0.0 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 52))
+  Downloading triton-3.0.0-1-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (1.3 kB)
+Collecting typing-extensions==4.14.0 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 53))
+  Downloading typing_extensions-4.14.0-py3-none-any.whl.metadata (3.0 kB)
+Collecting tzdata==2025.2 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 54))
+  Using cached tzdata-2025.2-py2.py3-none-any.whl.metadata (1.4 kB)
+Collecting urllib3==2.4.0 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 55))
+  Downloading urllib3-2.4.0-py3-none-any.whl.metadata (6.5 kB)
+Collecting z3-solver==4.15.1.0 (from -r /home/argustest/.openclaw/workspace/tainverify_lean/Verdict/condaenv.kpizb_l0.requirements.txt (line 56))
+  Downloading z3_solver-4.15.1.0-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (602 bytes)
+Downloading certifi-2025.6.15-py3-none-any.whl (157 kB)
+Using cached charset_normalizer-3.4.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (149 kB)
+Using cached contourpy-1.3.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (325 kB)
+Using cached cycler-0.12.1-py3-none-any.whl (8.3 kB)
+Downloading dill-0.4.0-py3-none-any.whl (119 kB)
+Using cached filelock-3.18.0-py3-none-any.whl (16 kB)
+Downloading fonttools-4.58.4-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (4.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.8/4.8 MB 86.2 MB/s eta 0:00:00
+Downloading fsspec-2025.5.1-py3-none-any.whl (199 kB)
+Using cached idna-3.10-py3-none-any.whl (70 kB)
+Using cached jinja2-3.1.6-py3-none-any.whl (134 kB)
+Downloading kiwisolver-1.4.8-cp310-cp310-manylinux_2_12_x86_64.manylinux2010_x86_64.whl (1.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.6/1.6 MB 49.2 MB/s eta 0:00:00
+Downloading mako-1.3.10-py3-none-any.whl (78 kB)
+Using cached MarkupSafe-3.0.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (20 kB)
+Downloading matplotlib-3.10.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (8.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8.6/8.6 MB 154.2 MB/s eta 0:00:00
+Downloading more_itertools-10.7.0-py3-none-any.whl (65 kB)
+Using cached mpmath-1.3.0-py3-none-any.whl (536 kB)
+Using cached networkx-3.4.2-py3-none-any.whl (1.7 MB)
+Downloading numpy-2.2.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (16.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.8/16.8 MB 110.4 MB/s eta 0:00:00
+Downloading nvidia_cublas_cu12-12.1.3.1-py3-none-manylinux1_x86_64.whl (410.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 410.6/410.6 MB 133.1 MB/s eta 0:00:00
+Downloading nvidia_cuda_cupti_cu12-12.1.105-py3-none-manylinux1_x86_64.whl (14.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.1/14.1 MB 193.5 MB/s eta 0:00:00
+Downloading nvidia_cuda_nvrtc_cu12-12.1.105-py3-none-manylinux1_x86_64.whl (23.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 23.7/23.7 MB 176.8 MB/s eta 0:00:00
+Downloading nvidia_cuda_runtime_cu12-12.1.105-py3-none-manylinux1_x86_64.whl (823 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 823.6/823.6 kB 39.9 MB/s eta 0:00:00
+Downloading nvidia_cudnn_cu12-9.1.0.70-py3-none-manylinux2014_x86_64.whl (664.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 664.8/664.8 MB 84.1 MB/s eta 0:00:00
+Downloading nvidia_cufft_cu12-11.0.2.54-py3-none-manylinux1_x86_64.whl (121.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 121.6/121.6 MB 187.5 MB/s eta 0:00:00
+Using cached nvidia_cufile_cu12-1.11.1.6-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (1.1 MB)
+Downloading nvidia_curand_cu12-10.3.2.106-py3-none-manylinux1_x86_64.whl (56.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 56.5/56.5 MB 164.6 MB/s eta 0:00:00
+Downloading nvidia_cusolver_cu12-11.4.5.107-py3-none-manylinux1_x86_64.whl (124.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 124.2/124.2 MB 90.1 MB/s eta 0:00:00
+Downloading nvidia_cusparse_cu12-12.1.0.106-py3-none-manylinux1_x86_64.whl (196.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 196.0/196.0 MB 107.6 MB/s eta 0:00:00
+Using cached nvidia_cusparselt_cu12-0.6.3-py3-none-manylinux2014_x86_64.whl (156.8 MB)
+Downloading nvidia_nccl_cu12-2.20.5-py3-none-manylinux2014_x86_64.whl (176.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 176.2/176.2 MB 156.3 MB/s eta 0:00:00
+Using cached nvidia_nvjitlink_cu12-12.6.85-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl (19.7 MB)
+Downloading nvidia_nvtx_cu12-12.1.105-py3-none-manylinux1_x86_64.whl (99 kB)
+Using cached packaging-25.0-py3-none-any.whl (66 kB)
+Using cached pandas-2.3.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (12.3 MB)
+Downloading pillow-11.2.1-cp310-cp310-manylinux_2_28_x86_64.whl (4.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.6/4.6 MB 117.1 MB/s eta 0:00:00
+Using cached psutil-7.0.0-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl (277 kB)
+Downloading pulp-3.2.1-py3-none-any.whl (16.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.4/16.4 MB 104.9 MB/s eta 0:00:00
+Downloading pybind11-2.13.6-py3-none-any.whl (243 kB)
+Downloading pyparsing-3.2.3-py3-none-any.whl (111 kB)
+Using cached pytz-2025.2-py2.py3-none-any.whl (509 kB)
+Using cached PyYAML-6.0.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (751 kB)
+Using cached regex-2024.11.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (781 kB)
+Using cached requests-2.32.4-py3-none-any.whl (64 kB)
+Downloading urllib3-2.4.0-py3-none-any.whl (128 kB)
+Using cached six-1.17.0-py2.py3-none-any.whl (11 kB)
+Using cached sympy-1.14.0-py3-none-any.whl (6.3 MB)
+Using cached tiktoken-0.9.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (1.2 MB)
+Downloading torch-2.4.0-cp310-cp310-manylinux1_x86_64.whl (797.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 797.2/797.2 MB 52.3 MB/s eta 0:00:00
+Using cached tqdm-4.67.1-py3-none-any.whl (78 kB)
+Downloading triton-3.0.0-1-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (209.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 209.4/209.4 MB 89.6 MB/s eta 0:00:00
+Downloading typing_extensions-4.14.0-py3-none-any.whl (43 kB)
+Using cached tzdata-2025.2-py2.py3-none-any.whl (347 kB)
+Downloading z3_solver-4.15.1.0-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (29.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 29.5/29.5 MB 32.1 MB/s eta 0:00:00
+Building wheels for collected packages: cppimport, fairscale
+  Building wheel for cppimport (pyproject.toml): started
+  Building wheel for cppimport (pyproject.toml): finished with status 'done'
+  Created wheel for cppimport: filename=cppimport-22.8.2-py3-none-any.whl size=17704 sha256=f4fda6dea876767a3d966893c54f98173939aa9a56bf5289585e144711f25df2
+  Stored in directory: /home/argustest/.cache/pip/wheels/38/0d/cd/d3a3135529beaf8c8fde3957e56ff89c25cd14ab18358bd724
+  Building wheel for fairscale (pyproject.toml): started
+  Building wheel for fairscale (pyproject.toml): finished with status 'done'
+  Created wheel for fairscale: filename=fairscale-0.4.13-py3-none-any.whl size=332207 sha256=536974b5cdae57842b133740792aabaa7ef18a3543b8043eaaf89c97dc3abe98
+  Stored in directory: /home/argustest/.cache/pip/wheels/78/a4/c0/fb0a7ef03cff161611c3fa40c6cf898f76e58ec421b88e8cb3
+Successfully built cppimport fairscale
+Installing collected packages: z3-solver, pytz, nvidia-cusparselt-cu12, mpmath, urllib3, tzdata, typing-extensions, tqdm, sympy, six, regex, pyyaml, pyparsing, pybind11, pulp, psutil, pillow, packaging, nvidia-nvtx-cu12, nvidia-nvjitlink-cu12, nvidia-nccl-cu12, nvidia-curand-cu12, nvidia-cufile-cu12, nvidia-cufft-cu12, nvidia-cuda-runtime-cu12, nvidia-cuda-nvrtc-cu12, nvidia-cuda-cupti-cu12, nvidia-cublas-cu12, numpy, networkx, more-itertools, markupsafe, kiwisolver, idna, fsspec, fonttools, filelock, dill, cycler, charset-normalizer, certifi, triton, requests, nvidia-cusparse-cu12, nvidia-cudnn-cu12, mako, jinja2, contourpy, tiktoken, pandas, nvidia-cusolver-cu12, matplotlib, cppimport, torch, fairscale
+  Attempting uninstall: typing-extensions
+    Found existing installation: typing_extensions 4.15.0
+    Uninstalling typing_extensions-4.15.0:
+      Successfully uninstalled typing_extensions-4.15.0
+  Attempting uninstall: tqdm
+    Found existing installation: tqdm 4.67.3
+    Uninstalling tqdm-4.67.3:
+      Successfully uninstalled tqdm-4.67.3
+  Attempting uninstall: psutil
+    Found existing installation: psutil 7.2.2
+    Uninstalling psutil-7.2.2:
+      Successfully uninstalled psutil-7.2.2
+
+Successfully installed certifi-2025.6.15 charset-normalizer-3.4.2 contourpy-1.3.2 cppimport-22.8.2 cycler-0.12.1 dill-0.4.0 fairscale-0.4.13 filelock-3.18.0 fonttools-4.58.4 fsspec-2025.5.1 idna-3.10 jinja2-3.1.6 kiwisolver-1.4.8 mako-1.3.10 markupsafe-3.0.2 matplotlib-3.10.3 more-itertools-10.7.0 mpmath-1.3.0 networkx-3.4.2 numpy-2.2.6 nvidia-cublas-cu12-12.1.3.1 nvidia-cuda-cupti-cu12-12.1.105 nvidia-cuda-nvrtc-cu12-12.1.105 nvidia-cuda-runtime-cu12-12.1.105 nvidia-cudnn-cu12-9.1.0.70 nvidia-cufft-cu12-11.0.2.54 nvidia-cufile-cu12-1.11.1.6 nvidia-curand-cu12-10.3.2.106 nvidia-cusolver-cu12-11.4.5.107 nvidia-cusparse-cu12-12.1.0.106 nvidia-cusparselt-cu12-0.6.3 nvidia-nccl-cu12-2.20.5 nvidia-nvjitlink-cu12-12.6.85 nvidia-nvtx-cu12-12.1.105 packaging-25.0 pandas-2.3.1 pillow-11.2.1 psutil-7.0.0 pulp-3.2.1 pybind11-2.13.6 pyparsing-3.2.3 pytz-2025.2 pyyaml-6.0.2 regex-2024.11.6 requests-2.32.4 six-1.17.0 sympy-1.14.0 tiktoken-0.9.0 torch-2.4.0 tqdm-4.67.1 triton-3.0.0 typing-extensions-4.14.0 tzdata-2025.2 urllib3-2.4.0 z3-solver-4.15.1.0
+
+done
+#
+# To activate this environment, use
+#
+#     $ conda activate verdict
+#
+# To deactivate an active environment, use
+#
+#     $ conda deactivate
+
+conda env create exit: 0
+Active env: verdict
+
+[2/3] Installing nnscaler_genmodel...
+Defaulting to user installation because normal site-packages is not writeable
+Collecting dill
+  Using cached dill-0.4.1-py3-none-any.whl (120 kB)
+Collecting matplotlib
+  Using cached matplotlib-3.10.9-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (8.8 MB)
+Requirement already satisfied: more-itertools in /usr/lib/python3/dist-packages (from -r requirements.txt (line 3)) (8.10.0)
+Collecting numpy>=1.23.0
+  Using cached numpy-2.2.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (16.8 MB)
+Collecting psutil
+  Using cached psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl (155 kB)
+Collecting pulp
+  Using cached pulp-3.3.1-py3-none-any.whl (16.4 MB)
+Collecting pybind11<3.0.0
+  Using cached pybind11-2.13.6-py3-none-any.whl (243 kB)
+Requirement already satisfied: pyyaml in /usr/lib/python3/dist-packages (from -r requirements.txt (line 8)) (5.4.1)
+Collecting torch<=2.6,>=2.0
+  Using cached torch-2.6.0-cp310-cp310-manylinux1_x86_64.whl (766.7 MB)
+Collecting tqdm
+  Using cached tqdm-4.67.3-py3-none-any.whl (78 kB)
+Requirement already satisfied: packaging>=20.0 in /usr/lib/python3/dist-packages (from matplotlib->-r requirements.txt (line 2)) (21.3)
+Collecting pillow>=8
+  Using cached pillow-12.2.0-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (7.1 MB)
+Collecting pyparsing>=3
+  Using cached pyparsing-3.3.2-py3-none-any.whl (122 kB)
+Collecting kiwisolver>=1.3.1
+  Using cached kiwisolver-1.5.0-cp310-cp310-manylinux_2_12_x86_64.manylinux2010_x86_64.whl (1.6 MB)
+Collecting fonttools>=4.22.0
+  Using cached fonttools-4.62.1-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (4.9 MB)
+Requirement already satisfied: python-dateutil>=2.7 in /home/argustest/.local/lib/python3.10/site-packages (from matplotlib->-r requirements.txt (line 2)) (2.9.0.post0)
+Collecting contourpy>=1.0.1
+  Using cached contourpy-1.3.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (325 kB)
+Collecting cycler>=0.10
+  Using cached cycler-0.12.1-py3-none-any.whl (8.3 kB)
+Collecting nvidia-cuda-cupti-cu12==12.4.127
+  Downloading nvidia_cuda_cupti_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl (13.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 13.8/13.8 MB 143.2 MB/s eta 0:00:00
+Collecting nvidia-nvtx-cu12==12.4.127
+  Downloading nvidia_nvtx_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl (99 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 99.1/99.1 KB 13.6 MB/s eta 0:00:00
+Collecting nvidia-cuda-runtime-cu12==12.4.127
+  Downloading nvidia_cuda_runtime_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl (883 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 883.7/883.7 KB 77.8 MB/s eta 0:00:00
+Collecting nvidia-cusolver-cu12==11.6.1.9
+  Downloading nvidia_cusolver_cu12-11.6.1.9-py3-none-manylinux2014_x86_64.whl (127.9 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 127.9/127.9 MB 20.6 MB/s eta 0:00:00
+Collecting sympy==1.13.1
+  Downloading sympy-1.13.1-py3-none-any.whl (6.2 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.2/6.2 MB 153.8 MB/s eta 0:00:00
+Collecting triton==3.2.0
+  Using cached triton-3.2.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (253.1 MB)
+Collecting nvidia-cusparselt-cu12==0.6.2
+  Using cached nvidia_cusparselt_cu12-0.6.2-py3-none-manylinux2014_x86_64.whl (150.1 MB)
+Collecting nvidia-nccl-cu12==2.21.5
+  Using cached nvidia_nccl_cu12-2.21.5-py3-none-manylinux2014_x86_64.whl (188.7 MB)
+Collecting nvidia-cudnn-cu12==9.1.0.70
+  Downloading nvidia_cudnn_cu12-9.1.0.70-py3-none-manylinux2014_x86_64.whl (664.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 664.8/664.8 MB 1.8 MB/s eta 0:00:00
+Collecting typing-extensions>=4.10.0
+  Using cached typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+Requirement already satisfied: jinja2 in /usr/lib/python3/dist-packages (from torch<=2.6,>=2.0->-r requirements.txt (line 9)) (3.0.3)
+Collecting filelock
+  Downloading filelock-3.29.0-py3-none-any.whl (39 kB)
+Collecting nvidia-cuda-nvrtc-cu12==12.4.127
+  Downloading nvidia_cuda_nvrtc_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl (24.6 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 24.6/24.6 MB 29.3 MB/s eta 0:00:00
+Collecting nvidia-cusparse-cu12==12.3.1.170
+  Downloading nvidia_cusparse_cu12-12.3.1.170-py3-none-manylinux2014_x86_64.whl (207.5 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 207.5/207.5 MB 8.6 MB/s eta 0:00:00
+Collecting nvidia-nvjitlink-cu12==12.4.127
+  Downloading nvidia_nvjitlink_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl (21.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 21.1/21.1 MB 42.8 MB/s eta 0:00:00
+Collecting nvidia-cufft-cu12==11.2.1.3
+  Downloading nvidia_cufft_cu12-11.2.1.3-py3-none-manylinux2014_x86_64.whl (211.5 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 211.5/211.5 MB 7.0 MB/s eta 0:00:00
+Collecting fsspec
+  Downloading fsspec-2026.4.0-py3-none-any.whl (203 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 203.4/203.4 KB 1.1 MB/s eta 0:00:00
+Collecting nvidia-curand-cu12==10.3.5.147
+  Downloading nvidia_curand_cu12-10.3.5.147-py3-none-manylinux2014_x86_64.whl (56.3 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 56.3/56.3 MB 15.6 MB/s eta 0:00:00
+Collecting networkx
+  Downloading networkx-3.4.2-py3-none-any.whl (1.7 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 10.9 MB/s eta 0:00:00
+Collecting nvidia-cublas-cu12==12.4.5.8
+  Downloading nvidia_cublas_cu12-12.4.5.8-py3-none-manylinux2014_x86_64.whl (363.4 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 363.4/363.4 MB 3.3 MB/s eta 0:00:00
+Collecting mpmath<1.4,>=1.1.0
+  Downloading mpmath-1.3.0-py3-none-any.whl (536 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 536.2/536.2 KB 48.1 MB/s eta 0:00:00
+Requirement already satisfied: six>=1.5 in /usr/lib/python3/dist-packages (from python-dateutil>=2.7->matplotlib->-r requirements.txt (line 2)) (1.16.0)
+Installing collected packages: triton, nvidia-cusparselt-cu12, mpmath, typing-extensions, tqdm, sympy, pyparsing, pybind11, pulp, psutil, pillow, nvidia-nvtx-cu12, nvidia-nvjitlink-cu12, nvidia-nccl-cu12, nvidia-curand-cu12, nvidia-cufft-cu12, nvidia-cuda-runtime-cu12, nvidia-cuda-nvrtc-cu12, nvidia-cuda-cupti-cu12, nvidia-cublas-cu12, numpy, networkx, kiwisolver, fsspec, fonttools, filelock, dill, cycler, nvidia-cusparse-cu12, nvidia-cudnn-cu12, contourpy, nvidia-cusolver-cu12, matplotlib, torch
+Successfully installed contourpy-1.3.2 cycler-0.12.1 dill-0.4.1 filelock-3.29.0 fonttools-4.62.1 fsspec-2026.4.0 kiwisolver-1.5.0 matplotlib-3.10.9 mpmath-1.3.0 networkx-3.4.2 numpy-2.2.6 nvidia-cublas-cu12-12.4.5.8 nvidia-cuda-cupti-cu12-12.4.127 nvidia-cuda-nvrtc-cu12-12.4.127 nvidia-cuda-runtime-cu12-12.4.127 nvidia-cudnn-cu12-9.1.0.70 nvidia-cufft-cu12-11.2.1.3 nvidia-curand-cu12-10.3.5.147 nvidia-cusolver-cu12-11.6.1.9 nvidia-cusparse-cu12-12.3.1.170 nvidia-cusparselt-cu12-0.6.2 nvidia-nccl-cu12-2.21.5 nvidia-nvjitlink-cu12-12.4.127 nvidia-nvtx-cu12-12.4.127 pillow-12.2.0 psutil-7.2.2 pulp-3.3.1 pybind11-2.13.6 pyparsing-3.3.2 sympy-1.13.1 torch-2.6.0 tqdm-4.67.3 triton-3.2.0 typing-extensions-4.15.0
+Defaulting to user installation because normal site-packages is not writeable
+Obtaining file:///home/argustest/.openclaw/workspace/tainverify_lean/nnscaler_genmodel
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Installing collected packages: UNKNOWN
+  Running setup.py develop for UNKNOWN
+    error: subprocess-exited-with-error
+    
+    × python setup.py develop did not run successfully.
+    │ exit code: 1
+    ╰─> [32 lines of output]
+        running develop
+        /usr/lib/python3/dist-packages/setuptools/command/easy_install.py:158: EasyInstallDeprecationWarning: easy_install command is deprecated. Use build and pip and other standards-based tools.
+          warnings.warn(
+        WARNING: The user site-packages directory is disabled.
+        /usr/lib/python3/dist-packages/setuptools/command/install.py:34: SetuptoolsDeprecationWarning: setup.py install is deprecated. Use build and pip and other standards-based tools.
+          warnings.warn(
+        error: can't create or remove files in install directory
+        
+        The following error occurred while trying to add or remove files in the
+        installation directory:
+        
+            [Errno 13] Permission denied: '/usr/local/lib/python3.10/dist-packages/test-easy-install-588915.write-test'
+        
+        The installation directory you specified (via --install-dir, --prefix, or
+        the distutils default setting) was:
+        
+            /usr/local/lib/python3.10/dist-packages/
+        
+        Perhaps your account does not have write access to this directory?  If the
+        installation directory is a system-owned directory, you may need to sign in
+        as the administrator or "root" account.  If you do not have administrative
+        access to this machine, you may wish to choose a different installation
+        directory, preferably one that is listed in your PYTHONPATH environment
+        variable.
+        
+        For information on other options, you may wish to consult the
+        documentation at:
+        
+          https://setuptools.pypa.io/en/latest/deprecated/easy_install.html
+        
+        Please make the appropriate changes for your system and try again.
+        
+        [end of output]
+    
+    note: This error originates from a subprocess, and is likely not a problem with pip.
+error: subprocess-exited-with-error
+
+× python setup.py develop did not run successfully.
+│ exit code: 1
+╰─> [32 lines of output]
+    running develop
+    /usr/lib/python3/dist-packages/setuptools/command/easy_install.py:158: EasyInstallDeprecationWarning: easy_install command is deprecated. Use build and pip and other standards-based tools.
+      warnings.warn(
+    WARNING: The user site-packages directory is disabled.
+    /usr/lib/python3/dist-packages/setuptools/command/install.py:34: SetuptoolsDeprecationWarning: setup.py install is deprecated. Use build and pip and other standards-based tools.
+      warnings.warn(
+    error: can't create or remove files in install directory
+    
+    The following error occurred while trying to add or remove files in the
+    installation directory:
+    
+        [Errno 13] Permission denied: '/usr/local/lib/python3.10/dist-packages/test-easy-install-588915.write-test'
+    
+    The installation directory you specified (via --install-dir, --prefix, or
+    the distutils default setting) was:
+    
+        /usr/local/lib/python3.10/dist-packages/
+    
+    Perhaps your account does not have write access to this directory?  If the
+    installation directory is a system-owned directory, you may need to sign in
+    as the administrator or "root" account.  If you do not have administrative
+    access to this machine, you may wish to choose a different installation
+    directory, preferably one that is listed in your PYTHONPATH environment
+    variable.
+    
+    For information on other options, you may wish to consult the
+    documentation at:
+    
+      https://setuptools.pypa.io/en/latest/deprecated/easy_install.html
+    
+    Please make the appropriate changes for your system and try again.
+    
+    [end of output]
+
+note: This error originates from a subprocess, and is likely not a problem with pip.
+
+[3/3] Setting up Lean trainverify (Mathlib download is slow)...
+info: mathlib: cloning https://github.com/leanprover-community/mathlib4
+info: mathlib: checking out revision '32d24245c7a12ded17325299fd41d412022cd3fe'
+info: plausible: cloning https://github.com/leanprover-community/plausible
+info: plausible: checking out revision '8d3713f36dda48467eb61f8c1c4db89c49a6251a'
+info: LeanSearchClient: cloning https://github.com/leanprover-community/LeanSearchClient
+info: LeanSearchClient: checking out revision '19e5f5cc9c21199be466ef99489e3acab370f079'
+info: importGraph: cloning https://github.com/leanprover-community/import-graph
+info: importGraph: checking out revision '4eb26e1a4806b200ddfe5179d0c2a0fae56c54a7'
+info: proofwidgets: cloning https://github.com/leanprover-community/ProofWidgets4
+info: proofwidgets: checking out revision 'ef8377f31b5535430b6753a974d685b0019d0681'
+info: aesop: cloning https://github.com/leanprover-community/aesop
+info: aesop: checking out revision 'fb12f5535c80e40119286d9575c9393562252d21'
+info: Qq: cloning https://github.com/leanprover-community/quote4
+info: Qq: checking out revision '523ec6fc8062d2f470fdc8de6f822fe89552b5e6'
+info: batteries: cloning https://github.com/leanprover-community/batteries
+info: batteries: checking out revision '6254bed25866358ce4f841fa5a13b77de04ffbc8'
+info: Cli: cloning https://github.com/leanprover/lean4-cli
+info: Cli: checking out revision '726b98c53e2da249c1de768fbbbb5e67bc9cef60'
+✔ [3/21] Built Cache.Lean (270ms)
+✔ [4/21] Built Cache.Lean:c.o (90ms)
+✔ [5/21] Built Cache.IO (962ms)
+✔ [6/21] Built Cache.Hashing (557ms)
+✔ [7/21] Built Cache.Hashing:c.o (383ms)
+✔ [8/21] Built Cache.IO:c.o (1.1s)
+✔ [14/21] Built Batteries.Data.String.Basic:c.o (82ms)
+✔ [15/21] Built Batteries.Data.Array.Match:c.o (198ms)
+✔ [16/21] Built Batteries.Data.String.Matcher:c.o (156ms)
+✔ [17/21] Built Cache.Requests (1.1s)
+✔ [18/21] Built Cache.Main (524ms)
+✔ [19/21] Built Cache.Main:c.o (405ms)
+✔ [20/21] Built Cache.Requests:c.o (1.2s)
+✔ [21/21] Built cache:exe (433ms)
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+100 1125k  100 1125k    0     0  3830k      0 --:--:-- --:--:-- --:--:-- 3830k
+
+installing leantar 0.1.16
+Fetching ProofWidgets cloud release... done!
+Current branch: HEAD
+Using cache (Azure) from origin: leanprover-community/mathlib4
+Attempting to download 7728 file(s) from leanprover-community/mathlib4 cache
+Downloaded: 1 file(s) [attempted 1/7728 = 0%, 11 KB/s]Downloaded: 14 file(s) [attempted 14/7728 = 0%, 6 KB/s]Downloaded: 52 file(s) [attempted 52/7728 = 0%, 261 KB/s]Downloaded: 87 file(s) [attempted 87/7728 = 1%, 266 KB/s]Downloaded: 125 file(s) [attempted 125/7728 = 1%, 241 KB/s]Downloaded: 166 file(s) [attempted 166/7728 = 2%, 163 KB/s]Downloaded: 208 file(s) [attempted 208/7728 = 2%, 755 KB/s]Downloaded: 253 file(s) [attempted 253/7728 = 3%, 293 KB/s]Downloaded: 301 file(s) [attempted 301/7728 = 3%, 790 KB/s]Downloaded: 349 file(s) [attempted 349/7728 = 4%, 442 KB/s]Downloaded: 392 file(s) [attempted 392/7728 = 5%, 106 KB/s]Downloaded: 439 file(s) [attempted 439/7728 = 5%, 194 KB/s]Downloaded: 488 file(s) [attempted 488/7728 = 6%, 710 KB/s]Downloaded: 533 file(s) [attempted 533/7728 = 6%, 485 KB/s]Downloaded: 584 file(s) [attempted 584/7728 = 7%, 248 KB/s]Downloaded: 633 file(s) [attempted 633/7728 = 8%, 99 KB/s]Downloaded: 671 file(s) [attempted 671/7728 = 8%, 605 KB/s]Downloaded: 719 file(s) [attempted 719/7728 = 9%, 970 KB/s]Downloaded: 764 file(s) [attempted 764/7728 = 9%, 655 KB/s]Downloaded: 805 file(s) [attempted 805/7728 = 10%, 267 KB/s]Downloaded: 857 file(s) [attempted 857/7728 = 11%, 944 KB/s]Downloaded: 906 file(s) [attempted 906/7728 = 11%, 215 KB/s]Downloaded: 954 file(s) [attempted 954/7728 = 12%, 206 KB/s]Downloaded: 1002 file(s) [attempted 1002/7728 = 12%, 349 KB/s]Downloaded: 1051 file(s) [attempted 1051/7728 = 13%, 182 KB/s]Downloaded: 1102 file(s) [attempted 1102/7728 = 14%, 915 KB/s]Downloaded: 1147 file(s) [attempted 1147/7728 = 14%, 356 KB/s]Downloaded: 1189 file(s) [attempted 1189/7728 = 15%, 180 KB/s]Downloaded: 1237 file(s) [attempted 1237/7728 = 16%, 1139 KB/s]Downloaded: 1285 file(s) [attempted 1285/7728 = 16%, 258 KB/s]Downloaded: 1334 file(s) [attempted 1334/7728 = 17%, 301 KB/s]Downloaded: 1385 file(s) [attempted 1385/7728 = 17%, 98 KB/s]Downloaded: 1434 file(s) [attempted 1434/7728 = 18%, 157 KB/s]Downloaded: 1478 file(s) [attempted 1478/7728 = 19%, 374 KB/s]Downloaded: 1520 file(s) [attempted 1520/7728 = 19%, 743 KB/s]Downloaded: 1568 file(s) [attempted 1568/7728 = 20%, 373 KB/s]Downloaded: 1613 file(s) [attempted 1613/7728 = 20%, 350 KB/s]Downloaded: 1661 file(s) [attempted 1661/7728 = 21%, 461 KB/s]Downloaded: 1710 file(s) [attempted 1710/7728 = 22%, 120 KB/s]Downloaded: 1754 file(s) [attempted 1754/7728 = 22%, 399 KB/s]Downloaded: 1799 file(s) [attempted 1799/7728 = 23%, 161 KB/s]Downloaded: 1848 file(s) [attempted 1848/7728 = 23%, 83 KB/s]Downloaded: 1896 file(s) [attempted 1896/7728 = 24%, 154 KB/s]Downloaded: 1944 file(s) [attempted 1944/7728 = 25%, 368 KB/s]Downloaded: 1989 file(s) [attempted 1989/7728 = 25%, 226 KB/s]Downloaded: 2034 file(s) [attempted 2034/7728 = 26%, 309 KB/s]Downloaded: 2079 file(s) [attempted 2079/7728 = 26%, 547 KB/s]Downloaded: 2127 file(s) [attempted 2127/7728 = 27%, 213 KB/s]Downloaded: 2174 file(s) [attempted 2174/7728 = 28%, 420 KB/s]Downloaded: 2220 file(s) [attempted 2220/7728 = 28%, 186 KB/s]Downloaded: 2269 file(s) [attempted 2269/7728 = 29%, 571 KB/s]Downloaded: 2314 file(s) [attempted 2314/7728 = 29%, 335 KB/s]Downloaded: 2358 file(s) [attempted 2358/7728 = 30%, 738 KB/s]Downloaded: 2403 file(s) [attempted 2403/7728 = 31%, 2141 KB/s]Downloaded: 2455 file(s) [attempted 2455/7728 = 31%, 241 KB/s]Downloaded: 2503 file(s) [attempted 2503/7728 = 32%, 476 KB/s]Downloaded: 2555 file(s) [attempted 2555/7728 = 33%, 505 KB/s]Downloaded: 2603 file(s) [attempted 2603/7728 = 33%, 231 KB/s]Downloaded: 2655 file(s) [attempted 2655/7728 = 34%, 215 KB/s]Downloaded: 2703 file(s) [attempted 2703/7728 = 34%, 744 KB/s]Downloaded: 2748 file(s) [attempted 2748/7728 = 35%, 2222 KB/s]Downloaded: 2793 file(s) [attempted 2793/7728 = 36%, 166 KB/s]Downloaded: 2841 file(s) [attempted 2841/7728 = 36%, 303 KB/s]Downloaded: 2886 file(s) [attempted 2886/7728 = 37%, 362 KB/s]Downloaded: 2935 file(s) [attempted 2935/7728 = 37%, 658 KB/s]Downloaded: 2986 file(s) [attempted 2986/7728 = 38%, 190 KB/s]Downloaded: 3035 file(s) [attempted 3035/7728 = 39%, 204 KB/s]Downloaded: 3083 file(s) [attempted 3083/7728 = 39%, 126 KB/s]Downloaded: 3131 file(s) [attempted 3131/7728 = 40%, 133 KB/s]Downloaded: 3180 file(s) [attempted 3180/7728 = 41%, 277 KB/s]Downloaded: 3228 file(s) [attempted 3228/7728 = 41%, 215 KB/s]Downloaded: 3273 file(s) [attempted 3273/7728 = 42%, 235 KB/s]Downloaded: 3318 file(s) [attempted 3318/7728 = 42%, 400 KB/s]Downloaded: 3366 file(s) [attempted 3366/7728 = 43%, 290 KB/s]Downloaded: 3414 file(s) [attempted 3414/7728 = 44%, 463 KB/s]Downloaded: 3459 file(s) [attempted 3459/7728 = 44%, 432 KB/s]Downloaded: 3508 file(s) [attempted 3508/7728 = 45%, 182 KB/s]Downloaded: 3556 file(s) [attempted 3556/7728 = 46%, 675 KB/s]Downloaded: 3604 file(s) [attempted 3604/7728 = 46%, 137 KB/s]Downloaded: 3652 file(s) [attempted 3652/7728 = 47%, 742 KB/s]Downloaded: 3701 file(s) [attempted 3701/7728 = 47%, 98 KB/s]Downloaded: 3749 file(s) [attempted 3749/7728 = 48%, 381 KB/s]Downloaded: 3794 file(s) [attempted 3794/7728 = 49%, 321 KB/s]Downloaded: 3838 file(s) [attempted 3838/7728 = 49%, 175 KB/s]Downloaded: 3880 file(s) [attempted 3880/7728 = 50%, 85 KB/s]Downloaded: 3925 file(s) [attempted 3925/7728 = 50%, 175 KB/s]Downloaded: 3973 file(s) [attempted 3973/7728 = 51%, 442 KB/s]Downloaded: 4025 file(s) [attempted 4025/7728 = 52%, 137 KB/s]Downloaded: 4073 file(s) [attempted 4073/7728 = 52%, 1619 KB/s]Downloaded: 4122 file(s) [attempted 4122/7728 = 53%, 186 KB/s]Downloaded: 4167 file(s) [attempted 4167/7728 = 53%, 1298 KB/s]Downloaded: 4215 file(s) [attempted 4215/7728 = 54%, 159 KB/s]Downloaded: 4263 file(s) [attempted 4263/7728 = 55%, 85 KB/s]Downloaded: 4312 file(s) [attempted 4312/7728 = 55%, 237 KB/s]Downloaded: 4360 file(s) [attempted 4360/7728 = 56%, 256 KB/s]Downloaded: 4408 file(s) [attempted 4408/7728 = 57%, 310 KB/s]Downloaded: 4456 file(s) [attempted 4456/7728 = 57%, 268 KB/s]Downloaded: 4505 file(s) [attempted 4505/7728 = 58%, 77 KB/s]Downloaded: 4553 file(s) [attempted 4553/7728 = 58%, 244 KB/s]Downloaded: 4605 file(s) [attempted 4605/7728 = 59%, 507 KB/s]Downloaded: 4653 file(s) [attempted 4653/7728 = 60%, 420 KB/s]Downloaded: 4702 file(s) [attempted 4702/7728 = 60%, 292 KB/s]Downloaded: 4753 file(s) [attempted 4753/7728 = 61%, 106 KB/s]Downloaded: 4802 file(s) [attempted 4802/7728 = 62%, 59 KB/s]Downloaded: 4850 file(s) [attempted 4850/7728 = 62%, 38 KB/s]Downloaded: 4898 file(s) [attempted 4898/7728 = 63%, 92 KB/s]Downloaded: 4947 file(s) [attempted 4947/7728 = 64%, 407 KB/s]Downloaded: 4995 file(s) [attempted 4995/7728 = 64%, 106 KB/s]Downloaded: 5043 file(s) [attempted 5043/7728 = 65%, 274 KB/s]Downloaded: 5095 file(s) [attempted 5095/7728 = 65%, 649 KB/s]Downloaded: 5143 file(s) [attempted 5143/7728 = 66%, 611 KB/s]Downloaded: 5195 file(s) [attempted 5195/7728 = 67%, 75 KB/s]Downloaded: 5243 file(s) [attempted 5243/7728 = 67%, 568 KB/s]Downloaded: 5295 file(s) [attempted 5295/7728 = 68%, 2006 KB/s]Downloaded: 5343 file(s) [attempted 5343/7728 = 69%, 99 KB/s]Downloaded: 5392 file(s) [attempted 5392/7728 = 69%, 602 KB/s]Downloaded: 5440 file(s) [attempted 5440/7728 = 70%, 48 KB/s]Downloaded: 5488 file(s) [attempted 5488/7728 = 71%, 707 KB/s]Downloaded: 5537 file(s) [attempted 5537/7728 = 71%, 603 KB/s]Downloaded: 5588 file(s) [attempted 5588/7728 = 72%, 1489 KB/s]Downloaded: 5637 file(s) [attempted 5637/7728 = 72%, 921 KB/s]Downloaded: 5688 file(s) [attempted 5688/7728 = 73%, 663 KB/s]Downloaded: 5737 file(s) [attempted 5737/7728 = 74%, 417 KB/s]Downloaded: 5785 file(s) [attempted 5785/7728 = 74%, 391 KB/s]Downloaded: 5837 file(s) [attempted 5837/7728 = 75%, 632 KB/s]Downloaded: 5882 file(s) [attempted 5882/7728 = 76%, 904 KB/s]Downloaded: 5927 file(s) [attempted 5927/7728 = 76%, 108 KB/s]Downloaded: 5971 file(s) [attempted 5971/7728 = 77%, 1656 KB/s]Downloaded: 6016 file(s) [attempted 6016/7728 = 77%, 1397 KB/s]Downloaded: 6061 file(s) [attempted 6061/7728 = 78%, 401 KB/s]Downloaded: 6109 file(s) [attempted 6109/7728 = 79%, 294 KB/s]Downloaded: 6154 file(s) [attempted 6154/7728 = 79%, 186 KB/s]Downloaded: 6199 file(s) [attempted 6199/7728 = 80%, 333 KB/s]Downloaded: 6247 file(s) [attempted 6247/7728 = 80%, 184 KB/s]Downloaded: 6296 file(s) [attempted 6296/7728 = 81%, 106 KB/s]Downloaded: 6344 file(s) [attempted 6344/7728 = 82%, 326 KB/s]Downloaded: 6392 file(s) [attempted 6392/7728 = 82%, 129 KB/s]Downloaded: 6441 file(s) [attempted 6441/7728 = 83%, 591 KB/s]Downloaded: 6489 file(s) [attempted 6489/7728 = 83%, 176 KB/s]Downloaded: 6537 file(s) [attempted 6537/7728 = 84%, 113 KB/s]Downloaded: 6586 file(s) [attempted 6586/7728 = 85%, 160 KB/s]Downloaded: 6637 file(s) [attempted 6637/7728 = 85%, 1285 KB/s]Downloaded: 6686 file(s) [attempted 6686/7728 = 86%, 226 KB/s]Downloaded: 6737 file(s) [attempted 6737/7728 = 87%, 299 KB/s]Downloaded: 6787 file(s) [attempted 6787/7728 = 87%, 166 KB/s]Downloaded: 6837 file(s) [attempted 6837/7728 = 88%, 325 KB/s]Downloaded: 6886 file(s) [attempted 6886/7728 = 89%, 151 KB/s]Downloaded: 6931 file(s) [attempted 6931/7728 = 89%, 133 KB/s]Downloaded: 6979 file(s) [attempted 6979/7728 = 90%, 200 KB/s]Downloaded: 7025 file(s) [attempted 7025/7728 = 90%, 90 KB/s]Downloaded: 7065 file(s) [attempted 7065/7728 = 91%, 108 KB/s]Downloaded: 7110 file(s) [attempted 7110/7728 = 92%, 47 KB/s]Downloaded: 7158 file(s) [attempted 7158/7728 = 92%, 238 KB/s]Downloaded: 7210 file(s) [attempted 7210/7728 = 93%, 451 KB/s]Downloaded: 7258 file(s) [attempted 7258/7728 = 93%, 852 KB/s]Downloaded: 7307 file(s) [attempted 7307/7728 = 94%, 2835 KB/s]Downloaded: 7355 file(s) [attempted 7355/7728 = 95%, 814 KB/s]Downloaded: 7407 file(s) [attempted 7407/7728 = 95%, 509 KB/s]Downloaded: 7455 file(s) [attempted 7455/7728 = 96%, 378 KB/s]Downloaded: 7507 file(s) [attempted 7507/7728 = 97%, 189 KB/s]Downloaded: 7555 file(s) [attempted 7555/7728 = 97%, 351 KB/s]Downloaded: 7600 file(s) [attempted 7600/7728 = 98%, 126 KB/s]Downloaded: 7648 file(s) [attempted 7648/7728 = 98%, 80 KB/s]Downloaded: 7700 file(s) [attempted 7700/7728 = 99%, 187 KB/s]Downloaded: 7728 file(s) [attempted 7728/7728 = 100%, 187 KB/s]
+Decompressing 7728 file(s)
+Unpacked in 13818 ms
+Completed successfully!
+cache get exit: 0
+✔ [7744/7746] Built Trainverify.Basic (4.1s)
+✔ [7745/7746] Built Trainverify (3.7s)
+Build completed successfully (7746 jobs).
+lake build exit: 0
+
+=== DONE Sat May  9 12:29:14 UTC 2026 ===

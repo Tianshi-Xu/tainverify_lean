@@ -1,0 +1,157 @@
+Now I understand the issue. The `valAt_of_lt` rewrite on line 2983 is matching the wrong `valAt` (the one inside `geluScalar` on the LHS instead of the RHS). I need to use `conv_rhs` to target the correct one. Let me fix it:
+
+Now let me fix the `split <;> [skip; omega]` syntax issues on lines 3015-3016. In Lean 4, the correct syntax uses commas for applying different tactics to different goals:
+
+Now let me build:
+
+There are still errors. Let me find the actual errors in Denote.lean:
+
+The `conv_rhs` fix resolved the rewrite error. Now the issue is `simp only [hr]` making no progress on line 3001. Let me see what the goal looks like after the big simp by temporarily inserting a `sorry`:
+
+Let me temporarily replace the broken block to see the goal state:
+
+`rw [hr]` works but `simp only [hr]` doesn't. Let me fix the proof using `rw [hr]`:
+
+The `rw [hr]` is also failing. The big `simp` must be changing the form. Let me see the goal state after the simp:
+
+The goal after the simp contains `prodShape (fw_gelu x).shape` unsimplified. Let me try a different approach - add `hlhs_shape` and use `simp` with the right lemmas:
+
+No errors! Let me verify there are no sorry warnings:
+
+No sorry/admit found. Let me verify the build exits 0:
+
+Build passes. Now let me verify axioms by adding `#print axioms`:
+
+The `#print axioms` was appended AFTER the namespace close. Let me fix:
+
+Now I need to write the full proof. Let me create both the helper lemma in Denote.lean and the theorem in Goal_102.lean. First, let me add the `fw_gelu_allGatherPrimDimN_eq` lemma after `fw_gelu_shape`:
+
+Now let me add the `fw_gelu_allGatherPrimDimN_eq` lemma. I'll insert it after `fw_gelu_shape` (line 2950):
+
+Now fix the out-of-bounds case at the end. The `list_getD_of_lt` usage is wrong. Let me fix:
+
+Also fix the `List.getElem_map` usage for `xs.map fw_gelu`:
+
+Let me fix the rewrite issues by being more explicit about which side to target:
+
+Also need to fix the getElem_map usage and the list_getD rewrites. Let me also fix the `list_getD_of_lt` issues — looking at the bw_gelu proof it just uses `rw [list_getD_of_lt _ _ _ hr_xs]`. Let me also fix the `show` pattern for getElem_map:
+
+The problem is the rewrite order. Let me take a fundamentally different approach - use a single `simp` to unfold everything symmetrically:
+
+The issue is that `valAt` of the struct needs further reduction. Let me use a different proof strategy - use `simp` more aggressively to fully normalize both sides:
+
+Let me take a fundamentally different approach. I'll add a helper lemma `fw_gelu_valAt` and use it to simplify the proof:
+
+Let me replace the entire lemma with a cleaner version. First, let me add a `fw_gelu_valAt` helper:
+
+Now let me rewrite the main proof body to use a cleaner approach. The key insight: after `Tensor.ext`, use `fw_gelu_valAt` on LHS, then show both sides select the same shard r and apply geluScalar to the same value:
+
+The `simp` already closed the goal. Remove the extra `rw`:
+
+Now let me check the other errors:
+
+I need to handle `geluScalar 0 = 0`. Let me fix both unsolved goals:
+
+The lemma compiles! Now let me build the full target:
+
+Now I need to write the `prove_goal_102_cut` theorem in Goal_102.lean. Let me write it:
+
+Good, `gatherDim` defaults to 0. So for `goal_101`, gatherDim = 0 (not specified, so default). Now let me write the Goal_102 proof:
+
+I also need to import Denote in Goal_102.lean:
+
+Good, GeneratedData already imports Denote. Let me also check if `evalOp_chunkPrim` exists:
+
+Now let me build to test my Goal_102 theorem:
+
+Need to fix the `evalOp_chunkPrim` reference. Let me use the right approach for PM store computation:
+
+Let me fix the PM store computation to avoid timeouts. I'll use `applyNode_chunkPrimDimN_out` and `applyNode_fw_gelu_out`:
+
+Now let me also fix line 147 (the `rw [hr]` issue in the case split). Let me look at what's there:
+
+I need to add an `evalOp_chunkPrimDimN` lemma. Let me add it near the other evalOp lemmas:
+
+Now update Goal_102 to use `evalOp_chunkPrimDimN`:
+
+Now let me also fix the `rw [hr]` issue at the case split. The same approach that worked before - the problem is that after the big simp, `idx / 128 / 2` doesn't appear. Let me use `simp only [hr]` after checking if it works, or try `subst`-style. Actually, looking back at the Denote.lean work, when I had `rcases hr_cases with hr | hr | hr | hr <;> rw [hr]`, it worked from `fw_gelu_valAt`'s approach. Let me check what's different here.
+
+Actually, the issue in Goal_102.lean at line 151 (`rw [hr]`) is the same as the earlier Denote.lean issue: after the big simp which unfolds allGatherPrimDimN, the expression `idx / 128 / 2` might not appear directly. Let me change the case split to use `omega`-based approach or use the method that worked in Denote.lean. Let me look at what worked there (the `rcases ... <;> rw [hr] <;> (...)` approach that compiled in the final version):
+
+Wait — actually looking back at what compiled in Denote.lean's `fw_gelu_allGatherPrimDimN_eq`, that proof was general and didn't have a case split on `idx / 128 / 2`. The case split was in the specific hkey proof in Goal_102.lean. Let me use the same `simp only [hr, ...]` combo approach that eventually worked in Denote.lean — but actually, looking at the earlier Denote.lean attempt, `simp only [hr]` and `rw [hr]` both failed. Let me instead try a completely different approach for hkey.
+
+Instead of manually doing the tensor extensionality proof, let me use `fw_gelu_allGatherPrimDimN_eq` combined with a chunk-gather identity. The approach:
+
+```
+fw_gelu (initPM 703) 
+= fw_gelu (allGatherPrimDimN 1 4 0 [chunk 0 (initPM 703), chunk 1 (initPM 703), chunk 2 (initPM 703), chunk 3 (initPM 703)])  -- by chunk+gather identity
+= allGatherPrimDimN 1 4 0 (List.map fw_gelu [chunk 0 .., chunk 1 .., chunk 2 .., chunk 3 ..])  -- by fw_gelu_allGatherPrimDimN_eq
+= allGatherPrimDimN 1 4 0 [fw_gelu (chunk 0 ..), fw_gelu (chunk 1 ..), fw_gelu (chunk 2 ..), fw_gelu (chunk 3 ..)]  -- by List.map
+```
+
+But we need a chunk+gather identity for dim 1, 4 parts, shape [1,8,128]. There's `chunkPrimDimN_allGatherPrimDimN_dim1_4_1_2_32` for shape [1,2,32] but not [1,2,128]. However, there might be a more general theorem. Let me check:
+
+Let me try a simpler approach for the `hkey` proof. Instead of the complex case split, let me try using `omega` after simp:
+
+Let me temporarily insert a sorry to see the goal state at the case split point:
+
+Good - the simp works now but omega can't prove the final goal. Let me see what's left after `congr 1`:
+
+Good - only the `sorry` warning remains. Now I need to figure out what goal the sorry leaves. Let me add a `#check @sorry` or use `trace` to see the goal. Actually, let me try a different approach - let me add `exact?` to see what Lean suggests:
+
+Let me try removing `at *` from the simp (which may be consuming `hr`) and then using `congr 1; omega`:
+
+The issue is `prodShape (fw_gelu (initPM 703)).shape` isn't being reduced. Let me add it to the simp:
+
+The `congr 1` is producing a bad subgoal due to array bound proofs. Let me try a different approach:
+
+Let me add a `set_option pp.all true` to see the goal type with all details. Actually, let me instead put a type error to show the goal:
+
+The goal is too complex after partial unfolding. Let me take a different approach using the existing `fw_gelu_allGatherPrimDimN_eq` lemma. First, let me check for existing chunk+gather identity lemmas:
+
+Let me look at the current state of the file to understand the full proof structure:
+
+Let me try `split_ifs` followed by `congr`/`omega`:
+
+Let me take a fundamentally different approach. Instead of manual Tensor.ext with complex unfolding, I'll use the `fw_gelu_allGatherPrimDimN_eq` lemma. First, let me write a gather-of-chunks identity helper:
+
+Let me take a fundamentally different approach. I'll restructure the `hkey` proof to use `fw_gelu_allGatherPrimDimN_eq` and reduce to a simpler gather-of-chunks identity:
+
+Let me rewrite the hkey proof to use `fw_gelu_allGatherPrimDimN_eq` and a simpler gather-of-chunks identity:
+
+The file got truncated - the theorem is gone. Let me check git:
+
+The theorem got lost. Let me rebuild it from scratch with the cleaner approach. Let me first check what reference files look like:
+
+Now I understand the structure. Let me write the complete theorem from scratch:
+
+The lemmas aren't visible. Let me check if Denote.lean builds with my additions:
+
+Now let me add the three lemmas I need. I'll add them after `fw_gelu_shape` (line 2950):
+
+Now let me build:
+
+I need to add a `have` that reduces `prodShape (allGatherPrimDimN 1 4 0 chunks).shape` before the `split_ifs`:
+
+The issue is that inner `valAt` calls from allGatherPrimDimN aren't being unfolded. Let me add `valAt` to the simp:
+
+Let me try a different approach - manually resolve the dite conditions instead of split_ifs:
+
+The issue is the variable list index `idx / 128 / 2` can't be resolved by simp. I need a case split. Let me restructure:
+
+Let me completely rewrite the gather-of-chunks part using the `generalize` approach like the working `fw_gelu_allGatherPrimDimN_eq`:
+
+The simp didn't fully reduce `[1, 2, 128].getD 1 0`. Let me add that computation to the simp set:
+
+Let me completely rethink. I'll add concrete reductions for the shardShape list operations and use `List.getD` resolution directly:
+
+Now I can see the issue. The LHS is `valAt (initPM 703) reindex_expr` and RHS is `(initPM 703).val ⟨idx, ...⟩`. I need to unfold valAt first:
+
+The issue is Fin type mismatch. Let me avoid Fin entirely and work at the `valAt` level:
+
+**The build passes!** No sorry, no admit. Now let me verify the axioms:
+
+Only `propext`, `Classical.choice`, `Quot.sound` — all standard mathlib axioms. Now remove the #print line and do a final clean build:
+
+Clean build, exit 0. Now write the report:
+

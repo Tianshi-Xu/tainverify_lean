@@ -1,0 +1,24 @@
+/- Auto-generated pattern proof file.
+   Pattern: 31
+   Hash: ffb9a4529bd4f852
+   Goals: 44
+-/
+import trainverify.denote.GeneratedData
+
+open TrainVerify.Denote
+open TrainVerify.Denote.Generated
+
+namespace TrainVerify.Denote.GeneratedPatterns
+
+def pattern_31_goalIds : List Nat := [44]
+inductive pattern_31_target : Prop → Prop
+  | goal_44 : pattern_31_target goal_44_stmt
+
+def pattern_31_stmt : Prop :=
+  ∀ {target : Prop}, pattern_31_target target → target
+theorem prove_pattern_31 : pattern_31_stmt := by
+  -- TODO: prove this alpha-equivalence pattern once; all member goals instantiate it automatically.
+  sorry
+
+end TrainVerify.Denote.GeneratedPatterns
+
