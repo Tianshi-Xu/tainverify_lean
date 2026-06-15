@@ -49,5 +49,74 @@ def goal_93_cut_initGoals : List LineageGoal := initGoals ++ goal_93_prereqs
 def goal_93_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_93 pm_goal_93 goal_93 sm_goal_93InitEnv pm_goal_93InitEnv goal_93_cut_initGoals
 
+set_option maxHeartbeats 4000000 in
+set_option maxRecDepth 4096 in
+-- AllToAll (gatherDim 2, scatterDim 1) chunks tensor 690 along dim 1; each PM rank applies
+-- fw_softmax to its chunk; AllGather (dim 1) reassembles. fw_softmax reduces over the last
+-- dimension, so it distributes over chunk/gather on dim 1.
+theorem prove_goal_93_cut : goal_93_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_92 (tensor 690 gathered along dim 2 from 3021..3024)
+  have hInit : InitGoalHolds pm_goal_93.numRanks goal_92 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_93_cut_initGoals, goal_93_prereqs]
+    decide
+  have h690_shape : (initSM 690).shape = [1, 4, 8, 8] := hInit.1
+  have htp_shapes := hInit.2.1
+  simp only [goal_92, LineageGoal.tps, List.map] at htp_shapes
+  have h3021 : (initPM 3021).shape = [1, 4, 2, 8] := by
+    have := congrArg (List.getD · 0 []) htp_shapes; simp at this; exact this
+  have h690_eq : initSM 690 = allGatherPrimDimN 2 4 0
+      [initPM 3021, initPM 3022, initPM 3023, initPM 3024] := by
+    have hrec := hInit.2.2
+    simp only [goal_92, LineageGoal.tps, LineageGoal.gatherDim, List.map] at hrec
+    rw [hrec]
+    exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h3021]; decide)
+  -- SM store: smStore 691 = fw_softmax (initSM 690)
+  have hsm : (denoteGraph sm_goal_93 initSM) 691 = fw_softmax (initSM 690) := by
+    simp only [sm_goal_93, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_fw_softmax_out_g93]
+  -- PM store: AllGather of per-rank fw_softmax of AllToAll outputs
+  have hpm : (denoteGraph pm_goal_93 initPM) 691 = allGatherPrimDimN 1 4 0
+      [fw_softmax (allToAllPrimWithDims 4 0 [initPM 3021, initPM 3022, initPM 3023, initPM 3024] 2 1),
+       fw_softmax (allToAllPrimWithDims 4 1 [initPM 3021, initPM 3022, initPM 3023, initPM 3024] 2 1),
+       fw_softmax (allToAllPrimWithDims 4 2 [initPM 3021, initPM 3022, initPM 3023, initPM 3024] 2 1),
+       fw_softmax (allToAllPrimWithDims 4 3 [initPM 3021, initPM 3022, initPM 3023, initPM 3024] 2 1)] := by
+    simp only [pm_goal_93, denoteGraph, GraphDecl.nodes, List.foldl]
+    rw [applyNode_allGatherPrimDimN_out_thm]
+    congr 1
+  -- AllToAll on rank r yields chunk r of tensor 690 along dim 1
+  have halltoall : ∀ r, r < 4 →
+      allToAllPrimWithDims 4 r [initPM 3021, initPM 3022, initPM 3023, initPM 3024] 2 1 =
+      chunkPrimDimN 1 4 r (initSM 690) := by
+    intro r _
+    simp only [allToAllPrimWithDims]
+    rw [← h690_eq]
+  have hpm' : (denoteGraph pm_goal_93 initPM) 691 = allGatherPrimDimN 1 4 0
+      [fw_softmax (chunkPrimDimN 1 4 0 (initSM 690)),
+       fw_softmax (chunkPrimDimN 1 4 1 (initSM 690)),
+       fw_softmax (chunkPrimDimN 1 4 2 (initSM 690)),
+       fw_softmax (chunkPrimDimN 1 4 3 (initSM 690))] := by
+    rw [hpm, halltoall 0 (by omega), halltoall 1 (by omega), halltoall 2 (by omega), halltoall 3 (by omega)]
+  -- Bridge: fw_softmax distributes over chunk+gather on dim 1 for shape [1,4,8,8]
+  have hbridge : fw_softmax (initSM 690) = allGatherPrimDimN 1 4 0
+      [fw_softmax (chunkPrimDimN 1 4 0 (initSM 690)),
+       fw_softmax (chunkPrimDimN 1 4 1 (initSM 690)),
+       fw_softmax (chunkPrimDimN 1 4 2 (initSM 690)),
+       fw_softmax (chunkPrimDimN 1 4 3 (initSM 690))] :=
+    fw_softmax_split_dim1_4_1_4_8_8_g93 (initSM 690) h690_shape
+  -- Discharge the three conjuncts
+  simp only [goal_93, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
+    LineageGoal.gatherDim, List.map, Piece.tid]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm, fw_softmax_shape_g93, h690_shape]
+  · rw [hpm', allGatherPrimDimN_shape 1 4 _ [1, 1, 8, 8]]
+    · simp [List.set, List.getD]
+    · simp [fw_softmax_shape_g93, chunkPrimDimN_shape, h690_shape, List.getD, List.set,
+        List.head?, Option.map, Option.getD]
+  · rw [reconstructWithDim_singleton, hsm, hpm']
+    exact hbridge
+
 end TrainVerify.Denote.GeneratedGoals
+
 

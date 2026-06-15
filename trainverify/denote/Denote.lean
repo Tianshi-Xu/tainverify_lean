@@ -17895,4 +17895,129 @@ theorem applyNode_fw_softmax_out_g68
   unfold storeSet
   simp [List.find?]
 
+/-! ## FW_softmax helpers and dim-1 split bridging lemma (g93 family) -/
+
+/-- Unfolding lemma for `evalOp` on `FW_softmax`. -/
+theorem evalOp_fw_softmax_g93 (numParts rank : Nat) (params : List Nat) (x : Tensor) :
+    evalOp numParts rank "OpName.FW_softmax" params [x] = [fw_softmax x] := by
+  rfl
+
+/-- `applyNode` for `FW_softmax` with singleton output. -/
+theorem applyNode_fw_softmax_out_g93
+    (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_softmax", ins := [inTid], outs := [outTid] } outTid =
+      fw_softmax (s inTid) := by
+  unfold applyNode
+  rw [show ([inTid] : List Tid).map s = [s inTid] from rfl,
+      evalOp_fw_softmax_g93]
+  change storeSet s [(outTid, fw_softmax (s inTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `fw_softmax` preserves shape. -/
+theorem fw_softmax_shape_g93 (x : Tensor) : (fw_softmax x).shape = x.shape := by
+  unfold fw_softmax softmax
+  split <;> simp [Tensor.mkShape]
+
+/-- Generic unfolding lemma for `fw_softmax` when the reversed shape starts with `d`. -/
+theorem fw_softmax_eq_g93 (x : Tensor) (d : Nat) (rest : List Nat)
+    (hrev : x.shape.reverse = d :: rest) :
+    fw_softmax x = Tensor.mkShape x.shape (fun outIdx =>
+      let batch := if d = 0 then 0 else outIdx.1 / d
+      let idx := if d = 0 then 0 else outIdx.1 % d
+      let base := batch * d
+      let expSum := ∑ j ∈ Finset.range d, expFn (valAt x (base + j))
+      if expSum = 0 then 0 else expFn (valAt x (base + idx)) / expSum) := by
+  unfold fw_softmax softmax
+  rw [hrev]
+
+/-- valAt of `fw_softmax` at index `idx` when the reversed shape starts with `8`. -/
+theorem fw_softmax_valAt_d8_g93 (x : Tensor) (rest : List Nat) (idx : Nat)
+    (hrev : x.shape.reverse = 8 :: rest) (hidx : idx < prodShape x.shape) :
+    valAt (fw_softmax x) idx =
+      (if (∑ j ∈ Finset.range 8, expFn (valAt x (idx / 8 * 8 + j))) = 0 then 0
+       else expFn (valAt x (idx / 8 * 8 + idx % 8)) /
+            (∑ j ∈ Finset.range 8, expFn (valAt x (idx / 8 * 8 + j)))) := by
+  rw [fw_softmax_eq_g93 x 8 rest hrev]
+  have hidx_shape : idx < prodShape (Tensor.mkShape x.shape
+      (fun outIdx : Fin (prodShape x.shape) =>
+        let batch := if (8 : Nat) = 0 then 0 else outIdx.1 / 8
+        let idx2 := if (8 : Nat) = 0 then 0 else outIdx.1 % 8
+        let base := batch * 8
+        let expSum := ∑ j ∈ Finset.range 8, expFn (valAt x (base + j))
+        if expSum = 0 then 0 else expFn (valAt x (base + idx2)) / expSum)).shape := by
+    simp [Tensor.mkShape]; exact hidx
+  rw [valAt_of_lt _ _ hidx_shape]
+  simp only [Tensor.mkShape, show (8 : Nat) = 0 ↔ False by simp, if_false]
+
+/-- `fw_softmax` distributes over dim-1 chunk/all-gather for shape `[1,4,8,8]`.
+    Softmax reduces over the last dimension (size 8); chunking along dim 1 keeps every
+    softmax row intact, so the operation distributes over the collective. -/
+theorem fw_softmax_split_dim1_4_1_4_8_8_g93 (x : Tensor)
+    (hx : x.shape = [1, 4, 8, 8]) :
+    fw_softmax x =
+      allGatherPrimDimN 1 4 0
+        [fw_softmax (chunkPrimDimN 1 4 0 x),
+         fw_softmax (chunkPrimDimN 1 4 1 x),
+         fw_softmax (chunkPrimDimN 1 4 2 x),
+         fw_softmax (chunkPrimDimN 1 4 3 x)] := by
+  have hchunk_shape : ∀ r, (chunkPrimDimN 1 4 r x).shape = [1, 1, 8, 8] := by
+    intro r
+    rw [chunkPrimDimN_shape 1 4 r _ _ hx (by omega)]
+    simp [List.set, List.getD]
+  have hchunk_rev : ∀ r, (chunkPrimDimN 1 4 r x).shape.reverse = 8 :: [8, 1, 1] := by
+    intro r; rw [hchunk_shape r]; rfl
+  have hsm_chunk_shape : ∀ r, (fw_softmax (chunkPrimDimN 1 4 r x)).shape = [1, 1, 8, 8] := by
+    intro r; rw [fw_softmax_shape_g93, hchunk_shape r]
+  have hlhs_shape : (fw_softmax x).shape = [1, 4, 8, 8] := by
+    rw [fw_softmax_shape_g93, hx]
+  have hhead : (([fw_softmax (chunkPrimDimN 1 4 0 x), fw_softmax (chunkPrimDimN 1 4 1 x),
+       fw_softmax (chunkPrimDimN 1 4 2 x), fw_softmax (chunkPrimDimN 1 4 3 x)] : List Tensor).head?.map
+       (·.shape)).getD [] = [1, 1, 8, 8] := by
+    simp [List.head?, Option.map, hsm_chunk_shape 0]
+  have hrhs_shape : (allGatherPrimDimN 1 4 0
+      [fw_softmax (chunkPrimDimN 1 4 0 x), fw_softmax (chunkPrimDimN 1 4 1 x),
+       fw_softmax (chunkPrimDimN 1 4 2 x), fw_softmax (chunkPrimDimN 1 4 3 x)]).shape = [1, 4, 8, 8] := by
+    rw [allGatherPrimDimN_shape 1 4 _ [1, 1, 8, 8] hhead]
+    simp [List.set, List.getD]
+  apply Tensor.ext
+  · rw [hlhs_shape, hrhs_shape]
+  · intro idx hidx
+    rw [hlhs_shape] at hidx
+    have hidx256 : idx < 256 := by simpa [prodShape] using hidx
+    have hr_b : idx / 64 < 4 := by omega
+    -- LHS
+    rw [fw_softmax_valAt_d8_g93 x [8, 4, 1] idx (by rw [hx]; rfl)
+        (by rw [hx]; simpa [prodShape] using hidx256)]
+    -- RHS: select shard idx/64 at local index idx%64
+    rw [allGather_dim1_4_1_1_8_8_valAt _ _ _ _ idx (hsm_chunk_shape 0) (hsm_chunk_shape 1)
+        (hsm_chunk_shape 2) (hsm_chunk_shape 3) hidx256]
+    have hgetD : ([fw_softmax (chunkPrimDimN 1 4 0 x), fw_softmax (chunkPrimDimN 1 4 1 x),
+        fw_softmax (chunkPrimDimN 1 4 2 x), fw_softmax (chunkPrimDimN 1 4 3 x)] : List Tensor).getD
+          (idx / 64) (zeroTensor [1, 1, 8, 8]) = fw_softmax (chunkPrimDimN 1 4 (idx / 64) x) := by
+      rcases (show idx / 64 = 0 ∨ idx / 64 = 1 ∨ idx / 64 = 2 ∨ idx / 64 = 3 by omega) with h | h | h | h <;>
+        rw [h] <;> rfl
+    rw [hgetD]
+    rw [fw_softmax_valAt_d8_g93 (chunkPrimDimN 1 4 (idx / 64) x) [8, 1, 1] (idx % 64)
+        (hchunk_rev (idx / 64)) (by rw [hchunk_shape (idx / 64)]; simpa [prodShape] using Nat.mod_lt idx (by omega))]
+    -- Relate chunk reads to the full tensor reads
+    have key : ∀ j, j < 8 →
+        valAt (chunkPrimDimN 1 4 (idx / 64) x) (idx % 64 / 8 * 8 + j) = valAt x (idx / 8 * 8 + j) := by
+      intro j hj
+      rw [chunk_dim1_4_1_4_8_8_valAt x (idx / 64) (idx % 64 / 8 * 8 + j) hx hr_b (by omega)]
+      congr 1
+      omega
+    have hsum_eq : (∑ j ∈ Finset.range 8,
+          expFn (valAt (chunkPrimDimN 1 4 (idx / 64) x) (idx % 64 / 8 * 8 + j))) =
+        (∑ j ∈ Finset.range 8, expFn (valAt x (idx / 8 * 8 + j))) := by
+      apply Finset.sum_congr rfl
+      intro j hj
+      rw [key j (Finset.mem_range.mp hj)]
+    have hnum_eq : valAt (chunkPrimDimN 1 4 (idx / 64) x) (idx % 64 / 8 * 8 + idx % 64 % 8) =
+        valAt x (idx / 8 * 8 + idx % 8) := by
+      rw [key (idx % 64 % 8) (by omega)]
+      congr 1
+      omega
+    rw [hsum_eq, hnum_eq]
+
 end TrainVerify.Denote
