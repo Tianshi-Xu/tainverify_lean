@@ -16115,4 +16115,109 @@ theorem bw_linear_dw_isplit_dim2_4_1_8_8_o128_g211
     refine Finset.sum_congr rfl (fun p hp => ?_)
     rw [hX_term p (Finset.mem_range.mp hp), h, List.getD]; simp
 
+-- ===== batch10 g213 net-new lemma(s) =====
+
+set_option maxRecDepth 8192 in
+/-- Value of `allGatherPrimDimN 1 4` over weight shards of shape `[32,32]`
+    (dim-1 gathered to `[32,128]`). -/
+theorem allGatherPrimDimN_dim1_4_32_32_valAt_g213 (ws : List Tensor)
+    (row : Nat) (hrow : row < 32) (r : Nat) (hr : r < 4) (lc : Nat) (hlc : lc < 32)
+    (hhead : (ws.head?.map (fun t => t.shape)).getD [] = [32, 32]) :
+    valAt (allGatherPrimDimN 1 4 0 ws) (row * 128 + r * 32 + lc) =
+      valAt (ws.getD r (zeroTensor [32, 32])) (row * 32 + lc) := by
+  have hidx_lt : row * 128 + r * 32 + lc < 4096 := by omega
+  have hgather_shape : (allGatherPrimDimN 1 4 0 ws).shape = [32, 128] := by
+    rw [allGatherPrimDimN_shape 1 4 ws [32, 32] hhead]
+    simp [List.set, List.getD]
+  have hidx_prod : row * 128 + r * 32 + lc < prodShape (allGatherPrimDimN 1 4 0 ws).shape := by
+    rw [hgather_shape]; simp [prodShape]; exact hidx_lt
+  rw [valAt_of_lt _ _ hidx_prod]
+  simp only [allGatherPrimDimN, Tensor.mkShape, hhead, List.getD,
+    List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.getD_some, List.drop, List.foldl, List.set, List.length, List.take,
+    show (32 : Nat) ≠ 0 from by omega,
+    show (128 : Nat) ≠ 0 from by omega,
+    show (4 : Nat) ≠ 0 from by omega, show (1 : Nat) ≠ 0 from by omega]
+  simp only [Nat.reduceMul, Nat.reduceAdd, Nat.reducePow, Nat.reduceDiv, Nat.reduceMod,
+    ite_false, ite_true, Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
+    List.prod_cons, List.prod_nil, Nat.one_mul]
+  have hd128 : (row * 128 + r * 32 + lc) / 128 = row := by omega
+  have hm128 : (row * 128 + r * 32 + lc) % 128 = r * 32 + lc := by omega
+  have hdr : (r * 32 + lc) / 32 = r := by omega
+  have hmr : (r * 32 + lc) % 32 = lc := by omega
+  rw [hd128, hm128, hdr, hmr]
+
+set_option maxHeartbeats 2000000 in
+set_option maxRecDepth 8192 in
+/-- BW_linear dX with the weight `w` (`[32,128]`) dim-1 split into 4 shards (each `[32,32]`,
+    dim-1 all-gathered), and the per-rank gradient `g` (`[1,8,32]`) shared.  The full dX
+    (`[1,8,128]`) is the dim-2 all-gather of the per-rank dX outputs (each `[1,8,32]`).
+    dX depends only on `g` and `w`, so the per-rank activation `x` shards are irrelevant. -/
+theorem bw_linear_dx_wsplit_dim1_4_g213
+    (g x x0 x1 x2 x3 w0 w1 w2 w3 : Tensor)
+    (hg : g.shape = [1,8,32]) (hx : x.shape = [1,8,128])
+    (hx0 : x0.shape = [1,8,32]) (hx1 : x1.shape = [1,8,32])
+    (hx2 : x2.shape = [1,8,32]) (hx3 : x3.shape = [1,8,32])
+    (hw0 : w0.shape = [32,32]) (hw1 : w1.shape = [32,32])
+    (hw2 : w2.shape = [32,32]) (hw3 : w3.shape = [32,32]) :
+    (bw_linear g x (allGatherPrimDimN 1 4 0 [w0,w1,w2,w3])).1 =
+      allGatherPrimDimN 2 4 0
+        [(bw_linear g x0 w0).1, (bw_linear g x1 w1).1,
+         (bw_linear g x2 w2).1, (bw_linear g x3 w3).1] := by
+  have hheadw : (([w0,w1,w2,w3] : List Tensor).head?.map (fun t => t.shape)).getD [] = [32,32] := by
+    simp [hw0]
+  set W := allGatherPrimDimN 1 4 0 [w0,w1,w2,w3] with hWdef
+  have hWshape : W.shape = [32,128] := by
+    rw [hWdef, allGatherPrimDimN_shape 1 4 _ [32,32] hheadw]; simp [List.set, List.getD]
+  have hdx0shape : (bw_linear g x0 w0).1.shape = [1,8,32] :=
+    bw_linear_3d_fst_shape 1 8 32 32 g x0 w0 hg hx0 hw0
+  have hLshape : (bw_linear g x W).1.shape = [1,8,128] :=
+    bw_linear_3d_fst_shape 1 8 32 128 g x W hg hx hWshape
+  have hheadR : (([(bw_linear g x0 w0).1, (bw_linear g x1 w1).1,
+                   (bw_linear g x2 w2).1, (bw_linear g x3 w3).1] : List Tensor).head?.map
+                  (fun t => t.shape)).getD [] = [1,8,32] := by
+    simp only [List.head?, Option.map, Option.getD]; exact hdx0shape
+  apply Tensor.ext
+  · rw [hLshape, allGatherPrimDimN_shape 2 4 _ [1,8,32] hheadR]; simp [List.set, List.getD]
+  · intro idx hidx
+    rw [hLshape] at hidx
+    have hidx1024 : idx < 1024 := by simpa [prodShape, List.foldl] using hidx
+    have hP : idx/128 < 8 := by omega
+    have hcol : idx%128 < 128 := by omega
+    have hide : idx = (idx/128)*128 + idx%128 := by omega
+    rw [hide]
+    set P := idx/128 with hPdef
+    set col := idx%128 with hcoldef
+    set r := col/32 with hrdef
+    set lc := col%32 with hlcdef
+    have hr : r < 4 := by omega
+    have hlc : lc < 32 := by omega
+    have hcolrlc : col = r * 32 + lc := by omega
+    rw [bw_linear_fst_valAt_1_8_128_g178 g x W 32 hg hx hWshape P hP col hcol]
+    have hRHS : valAt (allGatherPrimDimN 2 4 0
+          [(bw_linear g x0 w0).1, (bw_linear g x1 w1).1,
+           (bw_linear g x2 w2).1, (bw_linear g x3 w3).1]) (P * 128 + col)
+        = valAt ([(bw_linear g x0 w0).1, (bw_linear g x1 w1).1,
+                  (bw_linear g x2 w2).1, (bw_linear g x3 w3).1].getD r (zeroTensor [1,8,32]))
+                (P * 32 + lc) := by
+      rw [hcolrlc]
+      exact allGatherDimN2_4_1832_valAt_g175 _ hheadR P hP r hr lc hlc
+    rw [hRHS]
+    have hLHS : (∑ j ∈ Finset.range 32, valAt g (P*32+j) * valAt W (j*128+col))
+        = ∑ j ∈ Finset.range 32,
+            valAt g (P*32+j) * valAt ([w0,w1,w2,w3].getD r (zeroTensor [32,32])) (j*32+lc) := by
+      apply Finset.sum_congr rfl
+      intro j hj
+      have hj32 : j < 32 := Finset.mem_range.mp hj
+      have hidxj : j * 128 + col = j * 128 + r * 32 + lc := by rw [hcolrlc]; ring
+      rw [hWdef, hidxj, allGatherPrimDimN_dim1_4_32_32_valAt_g213 [w0,w1,w2,w3] j hj32 r hr lc hlc hheadw]
+    rw [hLHS]
+    have hrcase : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 := by omega
+    rcases hrcase with h|h|h|h <;> rw [h] <;>
+      simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+    · rw [bw_linear_fst_valAt_1_8_32_g134 g x0 w0 32 hg hx0 hw0 P hP lc hlc]
+    · rw [bw_linear_fst_valAt_1_8_32_g134 g x1 w1 32 hg hx1 hw1 P hP lc hlc]
+    · rw [bw_linear_fst_valAt_1_8_32_g134 g x2 w2 32 hg hx2 hw2 P hP lc hlc]
+    · rw [bw_linear_fst_valAt_1_8_32_g134 g x3 w3 32 hg hx3 hw3 P hP lc hlc]
+
 end TrainVerify.Denote
