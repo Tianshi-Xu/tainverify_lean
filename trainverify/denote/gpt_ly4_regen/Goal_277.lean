@@ -44,5 +44,67 @@ def goal_277_cut_initGoals : List LineageGoal := initGoals ++ goal_277_prereqs
 def goal_277_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_277 pm_goal_277 goal_277 sm_goal_277InitEnv pm_goal_277InitEnv goal_277_cut_initGoals
 
+set_option maxHeartbeats 4000000 in
+theorem prove_goal_277_cut : goal_277_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- goal_30: tensor 605 is the dim-1 gather of shards 1665..1668
+  have hInit605 : InitGoalHolds pm_goal_277.numRanks goal_30 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_277_cut_initGoals, goal_277_prereqs]
+    decide
+  have h605_rec : initSM 605 = reconstructWithDim 1 4 0
+      [initPM 1665, initPM 1666, initPM 1667, initPM 1668] := by
+    have hrec := hInit605.2.2
+    simp only [goal_30, pm_goal_277, List.map] at hrec
+    exact hrec
+  have h605_shape : (initSM 605).shape = [1, 8, 32] := hInit605.1
+  have hs := hInit605.2.1
+  simp only [goal_30, List.map, List.cons.injEq, and_true] at hs
+  obtain ⟨h1665_shape, h1666_shape, h1667_shape, h1668_shape⟩ := hs
+  -- SM store: second output (tid 965) equals input 605
+  have hsm965 : (denoteGraph sm_goal_277 initSM) 965 = initSM 605 := by
+    simp only [sm_goal_277, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref3_second_out_g277 _ _ 0 605 961 965 969 (by decide)]
+  -- PM stores: each rank's second output equals that rank's input
+  have hpm1721 : (denoteGraph pm_goal_277 initPM) 1721 = initPM 1665 := by
+    simp only [pm_goal_277, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 1721 (by decide), applyNode_skip _ _ _ 1721 (by decide),
+        applyNode_skip _ _ _ 1721 (by decide),
+        applyNode_fw_multiref3_second_out_g277 _ _ 0 1665 3519 1721 3521 (by decide)]
+  have hpm1722 : (denoteGraph pm_goal_277 initPM) 1722 = initPM 1666 := by
+    simp only [pm_goal_277, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 1722 (by decide), applyNode_skip _ _ _ 1722 (by decide),
+        applyNode_fw_multiref3_second_out_g277 _ _ 1 1666 3529 1722 3531 (by decide),
+        applyNode_skip _ _ _ 1666 (by decide)]
+  have hpm1723 : (denoteGraph pm_goal_277 initPM) 1723 = initPM 1667 := by
+    simp only [pm_goal_277, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ 1723 (by decide),
+        applyNode_fw_multiref3_second_out_g277 _ _ 2 1667 3539 1723 3541 (by decide),
+        applyNode_skip _ _ _ 1667 (by decide), applyNode_skip _ _ _ 1667 (by decide)]
+  have hpm1724 : (denoteGraph pm_goal_277 initPM) 1724 = initPM 1668 := by
+    simp only [pm_goal_277, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref3_second_out_g277 _ _ 3 1668 3549 1724 3551 (by decide),
+        applyNode_skip _ _ _ 1668 (by decide), applyNode_skip _ _ _ 1668 (by decide),
+        applyNode_skip _ _ _ 1668 (by decide)]
+  -- PM shard shapes
+  have hpm1721_shape : ((denoteGraph pm_goal_277 initPM) 1721).shape = [1, 2, 32] := by
+    rw [hpm1721]; exact h1665_shape
+  have hpm1722_shape : ((denoteGraph pm_goal_277 initPM) 1722).shape = [1, 2, 32] := by
+    rw [hpm1722]; exact h1666_shape
+  have hpm1723_shape : ((denoteGraph pm_goal_277 initPM) 1723).shape = [1, 2, 32] := by
+    rw [hpm1723]; exact h1667_shape
+  have hpm1724_shape : ((denoteGraph pm_goal_277 initPM) 1724).shape = [1, 2, 32] := by
+    rw [hpm1724]; exact h1668_shape
+  -- Discharge the three conjuncts
+  simp only [goal_277, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm965]; exact h605_shape
+  · rw [hpm1721_shape, hpm1722_shape, hpm1723_shape, hpm1724_shape]
+  · change (denoteGraph sm_goal_277 initSM) 965 = reconstructWithDim 1 4 0
+      [(denoteGraph pm_goal_277 initPM) 1721, (denoteGraph pm_goal_277 initPM) 1722,
+       (denoteGraph pm_goal_277 initPM) 1723, (denoteGraph pm_goal_277 initPM) 1724]
+    rw [hsm965, hpm1721, hpm1722, hpm1723, hpm1724, h605_rec]
+
 end TrainVerify.Denote.GeneratedGoals
+
 
