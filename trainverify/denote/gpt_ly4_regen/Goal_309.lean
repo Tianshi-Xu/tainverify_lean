@@ -44,5 +44,66 @@ def goal_309_cut_initGoals : List LineageGoal := initGoals ++ goal_309_prereqs
 def goal_309_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_309 pm_goal_309 goal_309 sm_goal_309InitEnv pm_goal_309InitEnv goal_309_cut_initGoals
 
+set_option maxRecDepth 4096 in
+-- FW_multiref copies its input to each output, so the gather lineage of the first
+-- output reduces directly to the gather lineage of the input (prereq goal_99).
+theorem prove_goal_309_cut : goal_309_stmt_cut := by
+  intro initSM initPM hSmInit hPmInit hInitGoals
+  -- Extract init alignment for goal_99 (tensor 698 = gather of shards 3177..3180 on dim 1)
+  have hInit698 : InitGoalHolds pm_goal_309.numRanks goal_99 initSM initPM := by
+    apply hInitGoals
+    simp only [goal_309_cut_initGoals, goal_309_prereqs]
+    decide
+  -- goal_99: initSM 698 = reconstructWithDim 1 4 0 [initPM 3177..3180]
+  have hrec : initSM 698 = reconstructWithDim 1 4 0
+      [initPM 3177, initPM 3178, initPM 3179, initPM 3180] := by
+    have h := hInit698.2.2
+    simp only [goal_99, pm_goal_309, List.map] at h
+    exact h
+  have h698_shape : (initSM 698).shape = [1, 8, 32] := hInit698.1
+  -- PM shard shapes from goal_99
+  have htp_shapes := hInit698.2.1
+  simp only [goal_99, List.map] at htp_shapes
+  have h3177_shape : (initPM 3177).shape = [1, 2, 32] := by
+    have := congrArg List.head? htp_shapes; simpa using this
+  have h3178_shape : (initPM 3178).shape = [1, 2, 32] := by
+    have := congrArg List.tail htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h3179_shape : (initPM 3179).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  have h3180_shape : (initPM 3180).shape = [1, 2, 32] := by
+    have := congrArg (List.tail ∘ List.tail ∘ List.tail) htp_shapes
+    have := congrArg List.head? this; simpa using this
+  -- SM store: smStore 1063 = initSM 698 (first output of FW_multiref)
+  have hsm : (denoteGraph sm_goal_309 initSM) 1063 = initSM 698 := by
+    simp only [sm_goal_309, denoteGraph, List.foldl]
+    exact applyNode_fw_multiref2_first_out _ _ _ _ _ _
+  -- PM stores: each first output equals the corresponding input
+  have hpm1 : (denoteGraph pm_goal_309 initPM) 3201 = initPM 3177 := by
+    simp only [pm_goal_309, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ _ (by decide), applyNode_skip _ _ _ _ (by decide),
+        applyNode_skip _ _ _ _ (by decide)]
+    exact applyNode_fw_multiref2_first_out _ _ _ _ _ _
+  have hpm2 : (denoteGraph pm_goal_309 initPM) 3202 = initPM 3178 := by
+    simp only [pm_goal_309, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ _ (by decide), applyNode_skip _ _ _ _ (by decide),
+        applyNode_fw_multiref2_first_out, applyNode_skip _ _ _ _ (by decide)]
+  have hpm3 : (denoteGraph pm_goal_309 initPM) 3203 = initPM 3179 := by
+    simp only [pm_goal_309, denoteGraph, List.foldl]
+    rw [applyNode_skip _ _ _ _ (by decide), applyNode_fw_multiref2_first_out,
+        applyNode_skip _ _ _ _ (by decide), applyNode_skip _ _ _ _ (by decide)]
+  have hpm4 : (denoteGraph pm_goal_309 initPM) 3204 = initPM 3180 := by
+    simp only [pm_goal_309, denoteGraph, List.foldl]
+    rw [applyNode_fw_multiref2_first_out, applyNode_skip _ _ _ _ (by decide),
+        applyNode_skip _ _ _ _ (by decide), applyNode_skip _ _ _ _ (by decide)]
+  -- Prove the three conjuncts
+  simp only [goal_309, List.map]
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsm]; exact h698_shape
+  · rw [hpm1, hpm2, hpm3, hpm4, h3177_shape, h3178_shape, h3179_shape, h3180_shape]
+  · rw [hsm, hpm1, hpm2, hpm3, hpm4]; exact hrec
+
 end TrainVerify.Denote.GeneratedGoals
+
 
