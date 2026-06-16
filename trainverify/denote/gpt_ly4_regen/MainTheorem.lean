@@ -377,6 +377,7 @@ import denote.gpt_ly4_regen.Goal41Bridge   -- goal_41_cut_to_full (fw_matmul 双
 import denote.gpt_ly4_regen.Goal42Bridge   -- goal_42_cut_to_full (FW_div over AllToAll reshard dim1->2, pointwise distributes; input 619 from goal_41; template Goal17Bridge+Goal41Bridge)
 import denote.gpt_ly4_regen.Goal43Bridge   -- goal_43_cut_to_full (FW_softmax over dim2-shard, no collective, pointwise distributes over allGather dim2; input 620 from goal_42; template Goal42Bridge)
 import denote.gpt_ly4_regen.Goal44Bridge   -- goal_44_cut_to_full (FW_matmul over two AllToAll reshards x dim2->3 + y dim3->2, contraction-dim split, then AllReduce; single-tp ts==tid 622; inputs 621/617 from goal_43/goal_39; template Goal33Bridge+Goal41Bridge)
+import denote.gpt_ly4_regen.Goal45Bridge   -- goal_45_cut_to_full (FW_transpose over ChunkPrim dim3, gather distributes over transpose, multi-tps gatherDim=3; input 622 from goal_44; same structure as goal_39, template Goal39Bridge)
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -430,7 +431,9 @@ theorem goal_1_cut_to_full : goal_1_stmt_cut → goal_1_stmt := by sorry
 -- goal_40_cut_to_full : imported (proven, Goal40Bridge)
 -- goal_41_cut_to_full : imported (proven, Goal41Bridge)
 -- goal_42_cut_to_full : imported (proven, Goal42Bridge)
-theorem goal_45_cut_to_full : goal_45_stmt_cut → goal_45_stmt := by sorry
+-- goal_43_cut_to_full : imported (proven, Goal43Bridge)
+-- goal_44_cut_to_full : imported (proven, Goal44Bridge)
+-- goal_45_cut_to_full : imported (proven, Goal45Bridge)
 theorem goal_47_cut_to_full : goal_47_stmt_cut → goal_47_stmt := by sorry
 theorem goal_48_cut_to_full : goal_48_stmt_cut → goal_48_stmt := by sorry
 theorem goal_49_cut_to_full : goal_49_stmt_cut → goal_49_stmt := by sorry
