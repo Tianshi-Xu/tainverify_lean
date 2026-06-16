@@ -388,6 +388,7 @@ import denote.gpt_ly4_regen.Goal50Bridge    -- goal_50_cut_to_full (per-rank FW_
 import denote.gpt_ly4_regen.Goal51Bridge    -- goal_51_cut_to_full (column-parallel FW_linear, multi-tps gatherDim=2, no collective tail; SM node 55 FW_linear(631,632)->633 [1,8,128]; PM nodes 363-366 4xFW_linear(631,2113+r)->2117+r each [1,8,32]; data 631 shared/replicated from goal_50 single-tp [1,8,32], weight 632 from initGoal_632 column-sharded [128,32]->4x[32,32] tps 2113-2116; output reconstruct dim2 4x[1,8,32]->[1,8,128]; template Goal30Bridge[multi-tps no-collective frame] adapted op FW_layernorm->FW_linear, per-rank data->shared 631, replicated w/b->sharded weight, gatherDim 1->2; hInitCut extracted to helper, 62 prereqs)
 import denote.gpt_ly4_regen.Goal52Bridge    -- goal_52_cut_to_full (FW_gelu over AllToAll-reshard dim2->1 + AllGather dim1 -> single-tp 634; SM node 56 FW_gelu(633)->634 [1,8,128]; PM nodes 367-370 4xAllToAll(range 2117,params[2,1])->2141-2144, nodes 371-374 4xFW_gelu->2145-2148, node 375 AllGather(range 2145,params[1])->634; input 633/2117-2120 from goal_51 gatherDim=2; template Goal46Bridge verbatim adapt op FW_contiguous->FW_gelu, AllToAll dim3->2 => 2->1, AllGather dim2->1; 63 prereqs)
 import denote.gpt_ly4_regen.Goal53Bridge    -- goal_53_cut_to_full (column-parallel FW_linear, multi-tps gatherDim=2, no collective tail; SM node 57 FW_linear(634,635)->636 [1,8,32]; PM nodes 376-379 4xFW_linear(634,2165+r)->2169+r each [1,8,8]; data 634 shared/replicated from goal_52 single-tp [1,8,128], weight 635 from initGoal_635 column-sharded [32,128]->4x[8,128] tps 2165-2168; output reconstruct dim2 4x[1,8,8]->[1,8,32]; template Goal51Bridge verbatim remap tid/node/shape; 64 prereqs adds goal_51/52)
+import denote.gpt_ly4_regen.Goal54Bridge    -- goal_54_cut_to_full (FW_add over AllToAll-reshard dim2->1, multi-tps gatherDim=1; SM node 58 FW_add(981,636)->637 [1,8,32]; PM nodes 380-383 4xAllToAll(range 2169,params[2,1])->2197-2200 + nodes 384-387 4xFW_add(2193+r,2197+r)->2201-2204 [1,2,32]; input 636 from goal_53 dim2-shard tps 2169-2172, 981 from goal_283 dim1-shard tps 2193-2196; template Goal29Bridge verbatim adapt AllToAll dim1->2 (params[1,2]) => dim2->1 (params[2,1]); 66 prereqs [2..53,257-283 odd]; needs goal_283 done)
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -452,7 +453,7 @@ theorem goal_1_cut_to_full : goal_1_stmt_cut → goal_1_stmt := by sorry
 -- goal_51_cut_to_full : imported (proven, Goal51Bridge)
 -- goal_52_cut_to_full : imported (proven, Goal52Bridge)
 -- goal_53_cut_to_full : imported (proven, Goal53Bridge)
-theorem goal_54_cut_to_full : goal_54_stmt_cut → goal_54_stmt := by sorry
+-- goal_54_cut_to_full : imported (proven, Goal54Bridge)
 theorem goal_55_cut_to_full : goal_55_stmt_cut → goal_55_stmt := by sorry
 theorem goal_56_cut_to_full : goal_56_stmt_cut → goal_56_stmt := by sorry
 theorem goal_57_cut_to_full : goal_57_stmt_cut → goal_57_stmt := by sorry
