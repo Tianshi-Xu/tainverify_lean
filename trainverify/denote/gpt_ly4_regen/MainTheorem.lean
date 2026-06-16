@@ -381,6 +381,7 @@ import denote.gpt_ly4_regen.Goal45Bridge   -- goal_45_cut_to_full (FW_transpose 
 import denote.gpt_ly4_regen.Goal46Bridge   -- goal_46_cut_to_full (FW_contiguous identity over AllToAll-reshard dim3->2 + AllGatherPrim dim2 -> single-tp 624; input 1977-1980 from goal_45 gatherDim=3; templates Goal42Bridge[AllToAll+per-rank pointwise]+Goal44Bridge[single-tp final-collective])
 import denote.gpt_ly4_regen.Goal47Bridge   -- goal_47_cut_to_full (FW_view [1,8,32] over 624 replicated on all 4 PM ranks, single-tp ts==tid 625; input 624 from goal_46; trivial replicated structure, template Goal9Bridge copy)
 import denote.gpt_ly4_regen.Goal48Bridge   -- goal_48_cut_to_full (FW_linear(625,626) with shared weight 626; PM=4×ChunkPrim(625,dim=1)+4×FW_linear(chunk_r,626), multi-tp gatherDim=1; input 625 from goal_47, weight 626 from initGoal_626; template Goal45Bridge[ChunkPrim+per-rank op])
+import denote.gpt_ly4_regen.Goal49Bridge   -- goal_49_cut_to_full (FW_add(950,627) over AllToAll reshard; PM=4×AllToAllPrim(2025..2028,params[1,2])→27重分布dim1->dim2 + 4×FW_add(2049+r,2053+r), multi-tp gatherDim=2; input 627 from goal_48 dim1-shard, 950 from goal_273 dim2-shard tps 2049-2052; binary pointwise over single AllToAll reshard, templates Goal42Bridge[AllToAll frame]+Goal44Bridge[binary op]; first to need goal_273)
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -440,7 +441,7 @@ theorem goal_1_cut_to_full : goal_1_stmt_cut → goal_1_stmt := by sorry
 -- goal_46_cut_to_full : imported (proven, Goal46Bridge)
 -- goal_47_cut_to_full : imported (proven, Goal47Bridge)
 -- goal_48_cut_to_full : imported (proven, Goal48Bridge)
-theorem goal_49_cut_to_full : goal_49_stmt_cut → goal_49_stmt := by sorry
+-- goal_49_cut_to_full : imported (proven, Goal49Bridge)
 theorem goal_50_cut_to_full : goal_50_stmt_cut → goal_50_stmt := by sorry
 theorem goal_51_cut_to_full : goal_51_stmt_cut → goal_51_stmt := by sorry
 theorem goal_52_cut_to_full : goal_52_stmt_cut → goal_52_stmt := by sorry
