@@ -356,6 +356,7 @@ import denote.gpt_ly4_regen.Goal26Bridge   -- goal_26_cut_to_full (column-parall
 import denote.gpt_ly4_regen.Goal27Bridge   -- goal_27_cut_to_full (pointwise FW_gelu over AllGather dim2, multi-tps)
 import denote.gpt_ly4_regen.Goal28Bridge   -- goal_28_cut_to_full (AllToAll dim2→1 reshard + column FW_linear, multi-tps gatherDim1)
 import denote.gpt_ly4_regen.Goal269Bridge  -- goal_269_cut_to_full (FW_multiref second-out, no follow-on collective)
+import denote.gpt_ly4_regen.Goal271Bridge  -- goal_271_cut_to_full (FW_multiref first-out + AllToAll dim2->1 reshard, multi-tps)
 import denote.gpt_ly4_regen.Goal29Bridge   -- goal_29_cut_to_full (25th structure: two-input FW_add + AllToAll dim1→2 reshard, multi-tps gatherDim2)
 
 set_option maxRecDepth 100000
@@ -844,7 +845,7 @@ theorem goal_267_full : goal_267_stmt := goal_267_cut_to_full prove_goal_267_cut
 theorem goal_268_full : goal_268_stmt := goal_268_cut_to_full prove_goal_268_cut
 theorem goal_269_full : goal_269_stmt := goal_269_cut_to_full prove_goal_269_cut
 theorem goal_270_full : goal_270_stmt := by sorry  -- cut-form not yet proven
-theorem goal_271_full : goal_271_stmt := by sorry  -- cut-form not yet proven
+theorem goal_271_full : goal_271_stmt := goal_271_cut_to_full prove_goal_271_cut
 theorem goal_272_full : goal_272_stmt := goal_272_cut_to_full prove_goal_272_cut
 theorem goal_273_full : goal_273_stmt := by sorry  -- cut-form not yet proven
 theorem goal_274_full : goal_274_stmt := by sorry  -- cut-form not yet proven
