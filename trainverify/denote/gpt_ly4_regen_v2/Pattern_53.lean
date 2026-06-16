@@ -1,7 +1,7 @@
 /- Auto-generated pattern proof file.
    Pattern: 53
-   Hash: 5e7587d364d954f7
-   Goals: 108
+   Hash: 1129fa7235d75828
+   Goals: 107
 -/
 import trainverify.denote.GeneratedData
 

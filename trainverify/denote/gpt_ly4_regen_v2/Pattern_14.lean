@@ -3,7 +3,7 @@
    Hash: 453513444068c2dd
    Goals: 18
 -/
-import trainverify.denote.GeneratedData
+import denote.gpt_ly4_segments.GeneratedData
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated

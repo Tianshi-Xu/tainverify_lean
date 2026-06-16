@@ -1576,16 +1576,15 @@ def emit_lean_spec(
 
 		instance_lines: List[str] = []
 		instance_lines.append("/- Auto-generated pattern instances.")
-		instance_lines.append("   For now these instances delegate to the concrete per-goal cut proofs.")
-		instance_lines.append("   Reusable pattern proofs can replace those delegates pattern by pattern.")
+		instance_lines.append("   These theorems instantiate reusable Pattern_N proofs to concrete goals.")
+		instance_lines.append("   They intentionally avoid importing Goal_N cut-proof files; the all-goals")
+		instance_lines.append("   theorem is meant to depend on reusable pattern proofs only.")
 		instance_lines.append("-/")
-		instance_lines.append(f"import {parent_module}.Patterns")
-		for sl in goal_slices:
-			instance_lines.append(f"import {parent_module}.Goal_{_goal_id(int(sl.goal.ts))}")
+		for pid in sorted(pattern_members):
+			instance_lines.append(f"import {parent_module}.Pattern_{pid}")
 		instance_lines.append("")
 		instance_lines.append("open TrainVerify.Denote")
 		instance_lines.append("open TrainVerify.Denote.Generated")
-		instance_lines.append("open TrainVerify.Denote.GeneratedGoals")
 		instance_lines.append("open TrainVerify.Denote.GeneratedPatterns")
 		instance_lines.append("")
 		instance_lines.append("namespace TrainVerify.Denote.GeneratedPatternInstances")
@@ -1794,14 +1793,13 @@ def emit_lean_spec(
 				seg_inst_lines: List[str] = []
 				seg_inst_lines.append("/- Auto-generated segment pattern instances.")
 				seg_inst_lines.append("   Each theorem projects one concrete goal from a segment conjunction.")
+				seg_inst_lines.append("   This optional layer is not used by MainTheorem's pattern-to-all_goals path.")
 				seg_inst_lines.append("-/")
-				seg_inst_lines.append(f"import {parent_module}.SegmentPatterns")
-				for sl in goal_slices:
-					seg_inst_lines.append(f"import {parent_module}.Goal_{_goal_id(int(sl.goal.ts))}")
+				for sid in range(1, len(segment_patterns) + 1):
+					seg_inst_lines.append(f"import {parent_module}.SegmentPattern_{sid}")
 				seg_inst_lines.append("")
 				seg_inst_lines.append("open TrainVerify.Denote")
 				seg_inst_lines.append("open TrainVerify.Denote.Generated")
-				seg_inst_lines.append("open TrainVerify.Denote.GeneratedGoals")
 				seg_inst_lines.append("open TrainVerify.Denote.GeneratedSegmentPatterns")
 				seg_inst_lines.append("")
 				seg_inst_lines.append("namespace TrainVerify.Denote.GeneratedSegmentInstances")
@@ -1825,25 +1823,23 @@ def emit_lean_spec(
 					"\n".join(seg_inst_lines) + "\n", encoding="utf-8"
 				)
 
-		used_fallback_patterns: Dict[int, List[str]] = {}
+		main_patterns: Dict[int, List[str]] = {}
 		if goal_slices:
 			for sl in goal_slices:
 				gid = _goal_id(int(sl.goal.ts))
-				if gid in segment_goal_sources:
-					continue
 				pid = pattern_by_key[_pattern_key(sl)]
-				used_fallback_patterns.setdefault(pid, []).append(gid)
+				main_patterns.setdefault(pid, []).append(gid)
 
 		obligation_lines: List[str] = []
 		obligation_lines.append("/- Auto-generated human proof obligation index.")
 		obligation_lines.append("")
 		obligation_lines.append("This is the intended entry point for human proof work.")
 		obligation_lines.append("Files imported here contain the reusable theorems whose bodies still need proofs.")
-		obligation_lines.append("Instance files such as `Instances.lean` and `SegmentInstances.lean` only project")
-		obligation_lines.append("these reusable proofs to concrete goals; they are not intended proof targets.")
+		obligation_lines.append("`Instances.lean` projects Pattern_N proofs to concrete goals, and")
+		obligation_lines.append("`MainTheorem.lean` composes those projections into `all_goals_stmt`.")
 		obligation_lines.append("")
 		if segment_pattern_count > 0:
-			obligation_lines.append("Segment proof obligations:")
+			obligation_lines.append("Optional segment proof packages, not needed for all_goals_stmt:")
 			for sid in range(1, segment_pattern_count + 1):
 				stats = segment_pattern_stats.get(sid, "")
 				obligation_lines.append(
@@ -1851,15 +1847,15 @@ def emit_lean_spec(
 					+ (f"  -- {stats}" if stats else "")
 				)
 		else:
-			obligation_lines.append("Segment proof obligations: none")
+			obligation_lines.append("Optional segment proof packages: none")
 		obligation_lines.append("")
-		if used_fallback_patterns:
-			obligation_lines.append("Fallback pattern proof obligations:")
-			for pid in sorted(used_fallback_patterns):
-				members = ", ".join(used_fallback_patterns[pid])
-				sm_ops, pm_ops, op_text = _op_summary_for_goal_ids([used_fallback_patterns[pid][0]])
+		if main_patterns:
+			obligation_lines.append("Pattern proof obligations for all_goals_stmt:")
+			for pid in sorted(main_patterns):
+				members = ", ".join(main_patterns[pid])
+				sm_ops, pm_ops, op_text = _op_summary_for_goal_ids([main_patterns[pid][0]])
 				stats = (
-					f"instances={len(used_fallback_patterns[pid])}, "
+					f"instances={len(main_patterns[pid])}, "
 					f"ops/instance: SM={sm_ops}, PM={pm_ops}, ops=[{op_text}]"
 				)
 				obligation_lines.append(
@@ -1867,20 +1863,16 @@ def emit_lean_spec(
 					f"  -- {stats}; concrete goals: {members}"
 				)
 		else:
-			obligation_lines.append("Fallback pattern proof obligations: none")
+			obligation_lines.append("Pattern proof obligations for all_goals_stmt: none")
 		obligation_lines.append("-/")
-		for sid in range(1, segment_pattern_count + 1):
-			obligation_lines.append(f"import {parent_module}.SegmentPattern_{sid}")
-		for pid in sorted(used_fallback_patterns):
+		for pid in sorted(main_patterns):
 			obligation_lines.append(f"import {parent_module}.Pattern_{pid}")
 		obligation_lines.append("")
 		obligation_lines.append("namespace TrainVerify.Denote.GeneratedProofObligations")
 		obligation_lines.append("")
-		obligation_lines.append(f"def humanSegmentProofCount : Nat := {segment_pattern_count}")
-		obligation_lines.append(f"def humanFallbackPatternProofCount : Nat := {len(used_fallback_patterns)}")
-		obligation_lines.append(
-			f"def humanProofObligationCount : Nat := {segment_pattern_count + len(used_fallback_patterns)}"
-		)
+		obligation_lines.append(f"def optionalSegmentProofPackageCount : Nat := {segment_pattern_count}")
+		obligation_lines.append(f"def humanPatternProofCount : Nat := {len(main_patterns)}")
+		obligation_lines.append(f"def humanProofObligationCount : Nat := {len(main_patterns)}")
 		obligation_lines.append("")
 		obligation_lines.append("end TrainVerify.Denote.GeneratedProofObligations")
 		obligation_lines.append("")
@@ -1890,11 +1882,8 @@ def emit_lean_spec(
 
 		main_lines: List[str] = []
 		main_lines.append("/- Auto-generated main composition skeleton.")
-		main_lines.append("   This file is the place where segment/pattern proofs are composed")
-		main_lines.append("   into the full graph theorem.")
+		main_lines.append("   This file composes reusable pattern proofs into all_goals_stmt.")
 		main_lines.append("-/")
-		if segment_pattern_count > 0:
-			main_lines.append(f"import {parent_module}.SegmentInstances")
 		main_lines.append(f"import {parent_module}.Instances")
 		main_lines.append("")
 		main_lines.append("set_option maxRecDepth 100000")
@@ -1903,8 +1892,6 @@ def emit_lean_spec(
 		main_lines.append("open TrainVerify.Denote")
 		main_lines.append("open TrainVerify.Denote.Generated")
 		main_lines.append("open TrainVerify.Denote.GeneratedPatternInstances")
-		if segment_pattern_count > 0:
-			main_lines.append("open TrainVerify.Denote.GeneratedSegmentInstances")
 		main_lines.append("")
 		main_lines.append("namespace TrainVerify.Denote.GeneratedMain")
 		main_lines.append("")
@@ -1927,12 +1914,12 @@ def emit_lean_spec(
 		main_lines.append("  | inl h => exact hx g h")
 		main_lines.append("  | inr h => exact hy g h")
 		main_lines.append("")
-		main_lines.append("/-- Full graph theorem placeholder.")
+		main_lines.append("/-- Main generated composition theorem.")
 		main_lines.append("")
-		main_lines.append("The intended proof path is:")
-		main_lines.append("1. replace duplicated concrete goal proofs by reusable pattern instances;")
-		main_lines.append("2. partition `fullGraphSegment` into real layer/block segments;")
-		main_lines.append("3. compose segment relations using the coverage certificate above.")
+		main_lines.append("Assuming every reusable Pattern_N proof is complete, this file instantiates")
+		main_lines.append("those proofs for every concrete goal and composes them into `all_goals_stmt`.")
+		main_lines.append("It deliberately stops at the lineage-goal layer rather than claiming a")
+		main_lines.append("stronger full-graph equivalence theorem.")
 		main_lines.append("-/")
 		if goal_slices:
 			chunk_size = 8
@@ -1952,10 +1939,7 @@ def emit_lean_spec(
 					pid = pattern_by_key[_pattern_key(sl)]
 					main_lines.append(f"{indent}cases hg with")
 					main_lines.append(f"{indent}| head =>")
-					if gid in segment_goal_sources:
-						main_lines.append(f"{indent}  exact {segment_goal_sources[gid]}")
-					else:
-						main_lines.append(f"{indent}  exact prove_goal_{gid}_from_pattern_{pid}")
+					main_lines.append(f"{indent}  exact prove_goal_{gid}_from_pattern_{pid}")
 					main_lines.append(f"{indent}| tail _ hg =>")
 					if idx == len(chunk) - 1:
 						main_lines.append(f"{indent}  cases hg")
