@@ -385,6 +385,7 @@ import denote.gpt_ly4_regen.Goal49Bridge   -- goal_49_cut_to_full (FW_add(950,62
 import denote.gpt_ly4_regen.Goal281Bridge   -- goal_281_cut_to_full (FW_multiref params=[2] first-output + 4xAllToAllPrim(idim=2,odim=1, params=[2,1]); SM node 53 FW_multiref(628)→[977,981], PM nodes 346-349 FW_multiref(2057+r)→[3557+8r,3559+8r] + 350/352/354/356 AllToAll(3557,3565,3573,3581)→2081-2084; ts 977=628 (first-output identity), tps 2081-2084 = chunk dim1 of 628; input 628 from goal_49 dim2-shard tps 2057-2060 [1,8,8]; same structure as Goal279Bridge but params=[2] first-output instead of params=[3] third-output, uses generic applyNode_fw_multiref2_first_out; unlocks goal_50)
 import denote.gpt_ly4_regen.Goal50Bridge    -- goal_50_cut_to_full (per-rank FW_layernorm shared w/b 629/630 + terminal AllGatherPrim dim1 -> single-tp 631; SM node 54 FW_layernorm(977,629,630)->631; PM nodes 358-361 4xFW_layernorm([2081+r,629,630])->2085-2088 + node 362 AllGatherPrim(range(2085..2088),params=[1])->631; input 977 from goal_281 first-output [1,8,32], tps 2081-2084 from goal_281 AllToAll chunk dim1 [1,2,32]; weights 629/630 from initGoal_629/630 replicated; template Goal30Bridge[per-rank layernorm]+Goal46Bridge[AllGather single output]; hInitCut extracted to helper lemma)
 import denote.gpt_ly4_regen.Goal51Bridge    -- goal_51_cut_to_full (column-parallel FW_linear, multi-tps gatherDim=2, no collective tail; SM node 55 FW_linear(631,632)->633 [1,8,128]; PM nodes 363-366 4xFW_linear(631,2113+r)->2117+r each [1,8,32]; data 631 shared/replicated from goal_50 single-tp [1,8,32], weight 632 from initGoal_632 column-sharded [128,32]->4x[32,32] tps 2113-2116; output reconstruct dim2 4x[1,8,32]->[1,8,128]; template Goal30Bridge[multi-tps no-collective frame] adapted op FW_layernorm->FW_linear, per-rank data->shared 631, replicated w/b->sharded weight, gatherDim 1->2; hInitCut extracted to helper, 62 prereqs)
+import denote.gpt_ly4_regen.Goal52Bridge    -- goal_52_cut_to_full (FW_gelu over AllToAll-reshard dim2->1 + AllGather dim1 -> single-tp 634; SM node 56 FW_gelu(633)->634 [1,8,128]; PM nodes 367-370 4xAllToAll(range 2117,params[2,1])->2141-2144, nodes 371-374 4xFW_gelu->2145-2148, node 375 AllGather(range 2145,params[1])->634; input 633/2117-2120 from goal_51 gatherDim=2; template Goal46Bridge verbatim adapt op FW_contiguous->FW_gelu, AllToAll dim3->2 => 2->1, AllGather dim2->1; 63 prereqs)
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -447,7 +448,7 @@ theorem goal_1_cut_to_full : goal_1_stmt_cut → goal_1_stmt := by sorry
 -- goal_49_cut_to_full : imported (proven, Goal49Bridge)
 -- goal_50_cut_to_full : imported (proven, Goal50Bridge)
 -- goal_51_cut_to_full : imported (proven, Goal51Bridge)
-theorem goal_52_cut_to_full : goal_52_stmt_cut → goal_52_stmt := by sorry
+-- goal_52_cut_to_full : imported (proven, Goal52Bridge)
 theorem goal_53_cut_to_full : goal_53_stmt_cut → goal_53_stmt := by sorry
 theorem goal_54_cut_to_full : goal_54_stmt_cut → goal_54_stmt := by sorry
 theorem goal_55_cut_to_full : goal_55_stmt_cut → goal_55_stmt := by sorry
