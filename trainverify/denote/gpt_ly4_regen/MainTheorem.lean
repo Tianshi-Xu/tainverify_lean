@@ -365,6 +365,7 @@ import denote.gpt_ly4_regen.Goal279Bridge  -- goal_279_cut_to_full (FW_multiref 
 import denote.gpt_ly4_regen.Goal29Bridge   -- goal_29_cut_to_full (25th structure: two-input FW_add + AllToAll dim1→2 reshard, multi-tps gatherDim2)
 import denote.gpt_ly4_regen.Goal31Bridge   -- goal_31_cut_to_full (28th structure: row-parallel FW_linear + AllReducePrim, single-tp; new collective)
 import denote.gpt_ly4_regen.Goal32Bridge   -- goal_32_cut_to_full (29th structure: column-parallel FW_linear + AllGatherPrim params=[1], single-tp; structurally identical to goal_6)
+import denote.gpt_ly4_regen.Goal33Bridge   -- goal_33_cut_to_full (row-parallel FW_linear + AllReducePrim, single-tp; structurally identical to goal_31, input from goal_279)
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -408,7 +409,7 @@ theorem goal_1_cut_to_full : goal_1_stmt_cut → goal_1_stmt := by sorry
 -- goal_30_cut_to_full : imported (proven, Goal30Bridge)
 -- goal_31_cut_to_full : imported (proven, Goal31Bridge)
 -- goal_32_cut_to_full : imported (proven, Goal32Bridge)
-theorem goal_33_cut_to_full : goal_33_stmt_cut → goal_33_stmt := by sorry
+-- goal_33_cut_to_full : imported (proven, Goal33Bridge)
 theorem goal_34_cut_to_full : goal_34_stmt_cut → goal_34_stmt := by sorry
 theorem goal_35_cut_to_full : goal_35_stmt_cut → goal_35_stmt := by sorry
 theorem goal_36_cut_to_full : goal_36_stmt_cut → goal_36_stmt := by sorry
