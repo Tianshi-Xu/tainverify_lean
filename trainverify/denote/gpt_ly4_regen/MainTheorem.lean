@@ -382,6 +382,7 @@ import denote.gpt_ly4_regen.Goal46Bridge   -- goal_46_cut_to_full (FW_contiguous
 import denote.gpt_ly4_regen.Goal47Bridge   -- goal_47_cut_to_full (FW_view [1,8,32] over 624 replicated on all 4 PM ranks, single-tp ts==tid 625; input 624 from goal_46; trivial replicated structure, template Goal9Bridge copy)
 import denote.gpt_ly4_regen.Goal48Bridge   -- goal_48_cut_to_full (FW_linear(625,626) with shared weight 626; PM=4×ChunkPrim(625,dim=1)+4×FW_linear(chunk_r,626), multi-tp gatherDim=1; input 625 from goal_47, weight 626 from initGoal_626; template Goal45Bridge[ChunkPrim+per-rank op])
 import denote.gpt_ly4_regen.Goal49Bridge   -- goal_49_cut_to_full (FW_add(950,627) over AllToAll reshard; PM=4×AllToAllPrim(2025..2028,params[1,2])→27重分布dim1->dim2 + 4×FW_add(2049+r,2053+r), multi-tp gatherDim=2; input 627 from goal_48 dim1-shard, 950 from goal_273 dim2-shard tps 2049-2052; binary pointwise over single AllToAll reshard, templates Goal42Bridge[AllToAll frame]+Goal44Bridge[binary op]; first to need goal_273)
+import denote.gpt_ly4_regen.Goal281Bridge   -- goal_281_cut_to_full (FW_multiref params=[2] first-output + 4xAllToAllPrim(idim=2,odim=1, params=[2,1]); SM node 53 FW_multiref(628)→[977,981], PM nodes 346-349 FW_multiref(2057+r)→[3557+8r,3559+8r] + 350/352/354/356 AllToAll(3557,3565,3573,3581)→2081-2084; ts 977=628 (first-output identity), tps 2081-2084 = chunk dim1 of 628; input 628 from goal_49 dim2-shard tps 2057-2060 [1,8,8]; same structure as Goal279Bridge but params=[2] first-output instead of params=[3] third-output, uses generic applyNode_fw_multiref2_first_out; unlocks goal_50)
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -883,7 +884,7 @@ theorem goal_277_full : goal_277_stmt := goal_277_cut_to_full prove_goal_277_cut
 theorem goal_278_full : goal_278_stmt := goal_278_cut_to_full prove_goal_278_cut
 theorem goal_279_full : goal_279_stmt := goal_279_cut_to_full prove_goal_279_cut
 theorem goal_280_full : goal_280_stmt := goal_280_cut_to_full prove_goal_280_cut
-theorem goal_281_full : goal_281_stmt := by sorry  -- cut-form not yet proven
+theorem goal_281_full : goal_281_stmt := goal_281_cut_to_full prove_goal_281_cut
 theorem goal_282_full : goal_282_stmt := goal_282_cut_to_full prove_goal_282_cut
 theorem goal_283_full : goal_283_stmt := by sorry  -- cut-form not yet proven
 theorem goal_284_full : goal_284_stmt := by sorry  -- cut-form not yet proven
