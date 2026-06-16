@@ -372,6 +372,7 @@ import denote.gpt_ly4_regen.Goal36Bridge   -- goal_36_cut_to_full (FW_view repli
 import denote.gpt_ly4_regen.Goal37Bridge   -- goal_37_cut_to_full (ChunkPrim dim2 + FW_transpose distributes over transpose, multi-tps; same structure as goal_35, input 614 from goal_36)
 import denote.gpt_ly4_regen.Goal38Bridge   -- goal_38_cut_to_full (FW_view replicated across 4 ranks, no collective, single-tp; same structure as goal_34/goal_36, input 611 from goal_33)
 import denote.gpt_ly4_regen.Goal39Bridge   -- goal_39_cut_to_full (ChunkPrim dim3 + FW_transpose distributes over transpose, multi-tps; same structure as goal_37, input 616 from goal_38)
+import denote.gpt_ly4_regen.Goal40Bridge   -- goal_40_cut_to_full (FW_transpose params=[2,3] + AllToAll dim1->2 reshard, two-layer PM, multi-tps gatherDim=3; input 615 from goal_37; template Goal279Bridge)
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -422,7 +423,7 @@ theorem goal_1_cut_to_full : goal_1_stmt_cut → goal_1_stmt := by sorry
 -- goal_37_cut_to_full : imported (proven, Goal37Bridge)
 -- goal_38_cut_to_full : imported (proven, Goal38Bridge)
 -- goal_39_cut_to_full : imported (proven, Goal39Bridge)
-theorem goal_40_cut_to_full : goal_40_stmt_cut → goal_40_stmt := by sorry
+-- goal_40_cut_to_full : imported (proven, Goal40Bridge)
 theorem goal_41_cut_to_full : goal_41_stmt_cut → goal_41_stmt := by sorry
 theorem goal_45_cut_to_full : goal_45_stmt_cut → goal_45_stmt := by sorry
 theorem goal_47_cut_to_full : goal_47_stmt_cut → goal_47_stmt := by sorry
