@@ -383,6 +383,7 @@ import denote.gpt_ly4_regen.Goal47Bridge   -- goal_47_cut_to_full (FW_view [1,8,
 import denote.gpt_ly4_regen.Goal48Bridge   -- goal_48_cut_to_full (FW_linear(625,626) with shared weight 626; PM=4×ChunkPrim(625,dim=1)+4×FW_linear(chunk_r,626), multi-tp gatherDim=1; input 625 from goal_47, weight 626 from initGoal_626; template Goal45Bridge[ChunkPrim+per-rank op])
 import denote.gpt_ly4_regen.Goal49Bridge   -- goal_49_cut_to_full (FW_add(950,627) over AllToAll reshard; PM=4×AllToAllPrim(2025..2028,params[1,2])→27重分布dim1->dim2 + 4×FW_add(2049+r,2053+r), multi-tp gatherDim=2; input 627 from goal_48 dim1-shard, 950 from goal_273 dim2-shard tps 2049-2052; binary pointwise over single AllToAll reshard, templates Goal42Bridge[AllToAll frame]+Goal44Bridge[binary op]; first to need goal_273)
 import denote.gpt_ly4_regen.Goal281Bridge   -- goal_281_cut_to_full (FW_multiref params=[2] first-output + 4xAllToAllPrim(idim=2,odim=1, params=[2,1]); SM node 53 FW_multiref(628)→[977,981], PM nodes 346-349 FW_multiref(2057+r)→[3557+8r,3559+8r] + 350/352/354/356 AllToAll(3557,3565,3573,3581)→2081-2084; ts 977=628 (first-output identity), tps 2081-2084 = chunk dim1 of 628; input 628 from goal_49 dim2-shard tps 2057-2060 [1,8,8]; same structure as Goal279Bridge but params=[2] first-output instead of params=[3] third-output, uses generic applyNode_fw_multiref2_first_out; unlocks goal_50)
+import denote.gpt_ly4_regen.Goal50Bridge    -- goal_50_cut_to_full (per-rank FW_layernorm shared w/b 629/630 + terminal AllGatherPrim dim1 -> single-tp 631; SM node 54 FW_layernorm(977,629,630)->631; PM nodes 358-361 4xFW_layernorm([2081+r,629,630])->2085-2088 + node 362 AllGatherPrim(range(2085..2088),params=[1])->631; input 977 from goal_281 first-output [1,8,32], tps 2081-2084 from goal_281 AllToAll chunk dim1 [1,2,32]; weights 629/630 from initGoal_629/630 replicated; template Goal30Bridge[per-rank layernorm]+Goal46Bridge[AllGather single output]; hInitCut extracted to helper lemma)
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -443,7 +444,7 @@ theorem goal_1_cut_to_full : goal_1_stmt_cut → goal_1_stmt := by sorry
 -- goal_47_cut_to_full : imported (proven, Goal47Bridge)
 -- goal_48_cut_to_full : imported (proven, Goal48Bridge)
 -- goal_49_cut_to_full : imported (proven, Goal49Bridge)
-theorem goal_50_cut_to_full : goal_50_stmt_cut → goal_50_stmt := by sorry
+-- goal_50_cut_to_full : imported (proven, Goal50Bridge)
 theorem goal_51_cut_to_full : goal_51_stmt_cut → goal_51_stmt := by sorry
 theorem goal_52_cut_to_full : goal_52_stmt_cut → goal_52_stmt := by sorry
 theorem goal_53_cut_to_full : goal_53_stmt_cut → goal_53_stmt := by sorry
