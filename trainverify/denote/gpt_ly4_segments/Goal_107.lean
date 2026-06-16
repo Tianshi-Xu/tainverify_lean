@@ -49,3 +49,4 @@ def goal_107_stmt_cut : Prop :=
   CoarseLineageHoldsWithInit sm_goal_107 pm_goal_107 goal_107 sm_goal_107InitEnv pm_goal_107InitEnv goal_107_cut_initGoals
 
 end TrainVerify.Denote.GeneratedGoals
+

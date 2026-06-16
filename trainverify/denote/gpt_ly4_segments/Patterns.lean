@@ -154,7 +154,7 @@ def numPatterns : Nat := 141
 /-- pattern 1, hash 5ce1449adbcdff14, goals: 1 -/
 def pattern_1_summary : List Nat := pattern_1_goalIds
 
-/-- pattern 2, hash d17205b18ceed4c3, goals: 2 -/
+/-- pattern 2, hash 14ceb9fa5202480a, goals: 2 -/
 def pattern_2_summary : List Nat := pattern_2_goalIds
 
 /-- pattern 3, hash 9e00b7a1370ce822, goals: 3 -/
@@ -307,7 +307,7 @@ def pattern_51_summary : List Nat := pattern_51_goalIds
 /-- pattern 52, hash 5dc4fe3a01d8cc6c, goals: 96 -/
 def pattern_52_summary : List Nat := pattern_52_goalIds
 
-/-- pattern 53, hash d36f1761f4e16e1d, goals: 107 -/
+/-- pattern 53, hash 1129fa7235d75828, goals: 107 -/
 def pattern_53_summary : List Nat := pattern_53_goalIds
 
 /-- pattern 54, hash df4a20c01c3ab7f5, goals: 108 -/

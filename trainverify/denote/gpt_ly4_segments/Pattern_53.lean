@@ -1,6 +1,6 @@
 /- Auto-generated pattern proof file.
    Pattern: 53
-   Hash: d36f1761f4e16e1d
+   Hash: 1129fa7235d75828
    Goals: 107
 -/
 import denote.gpt_ly4_segments.GeneratedData
