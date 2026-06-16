@@ -21,6 +21,20 @@ import denote.gpt_ly4_regen.Goal_29
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 0
+-- Silence noisy cosmetic/convention linters: native_decide is the sanctioned
+-- graph-lookup convention here, and the auto-generated frame produces many
+-- style/unused diagnostics. These do not affect proof soundness, and the sheer
+-- volume (2600+ diagnostics) otherwise overwhelms the build diagnostic pipeline.
+set_option linter.style.nativeDecide false
+set_option linter.unusedSimpArgs false
+set_option linter.style.commandStart false
+set_option linter.unusedTactic false
+set_option linter.unreachableTactic false
+set_option linter.unusedVariables false
+set_option linter.style.show false
+set_option linter.style.setOption false
+set_option linter.unnecessarySeqFocus false
+set_option linter.flexible false
 
 namespace TrainVerify.Denote.GeneratedGoals
 open TrainVerify.Denote TrainVerify.Denote.Generated
