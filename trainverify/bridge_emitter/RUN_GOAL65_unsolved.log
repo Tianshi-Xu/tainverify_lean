@@ -1,0 +1,4 @@
+[g65] single_tp=True mid=8 finals=1 smop=FW_transpose
+  probing with 20 imports ...
+  wrote /home/argustest/.openclaw/workspace/tainverify_lean/trainverify/denote/gpt_ly4_regen/Goal65Bridge.lean (24004 chars)
+  OK exit=0

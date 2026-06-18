@@ -192,6 +192,7 @@ set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 set_option linter.unusedVariables false
 set_option linter.style.show false
+set_option linter.style.emptyLine false
 set_option linter.style.setOption false
 set_option linter.unnecessarySeqFocus false
 set_option linter.flexible false
@@ -204,8 +205,7 @@ private theorem evalOp_bw_contiguous_loc (numParts rank : Nat) (params : List Na
     evalOp numParts rank "OpName.BW_contiguous" params [g, x] = [g] := rfl
 private theorem applyNode_bw_contiguous_out_loc
     (gr : GraphDecl) (s : Store) (rank : Nat) (gTid xTid outTid : Tid) (params : List Nat) :
-    applyNode gr s { rank := rank, op := "OpName.BW_contiguous", ins := [gTid, xTid],
-                    outs := [outTid], params := params } outTid = s gTid := by
+    applyNode gr s { rank := rank, op := "OpName.BW_contiguous", ins := [gTid, xTid], outs := [outTid], params := params } outTid = s gTid := by
   unfold applyNode
   rw [show ([gTid, xTid] : List Tid).map s = [s gTid, s xTid] from rfl, evalOp_bw_contiguous_loc]
   change storeSet s [(outTid, s gTid)] outTid = _
@@ -413,7 +413,7 @@ theorem pm_frame_2546_self (initPM : Store) :
       pm_prefix_eq initPM 1034 2571 (by native_decide),
       pm_prefix_eq initPM 1034 2573 (by native_decide),
       pm_prefix_eq initPM 1034 2575 (by native_decide)]
-  rw [pm_full_g202_2575, pm_full_g202_2573, pm_full_g202_2571, pm_full_g202_2569, pm_full_g202_2576, pm_full_g202_2574, pm_full_g202_2572, pm_full_g202_2570, pm_full_g202_2556, pm_full_g202_2555, pm_full_g202_2554, pm_full_g202_2553]
+  rw [pm_full_g202_2575, pm_full_g202_2573, pm_full_g202_2571, pm_full_g202_2569, pm_full_g202_2576, pm_full_g202_2574, pm_full_g202_2572, pm_full_g202_2570]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_2548_self (initPM : Store) :
@@ -429,7 +429,7 @@ theorem pm_frame_2548_self (initPM : Store) :
       pm_prefix_eq initPM 1035 2571 (by native_decide),
       pm_prefix_eq initPM 1035 2573 (by native_decide),
       pm_prefix_eq initPM 1035 2575 (by native_decide)]
-  rw [pm_full_g202_2575, pm_full_g202_2573, pm_full_g202_2571, pm_full_g202_2569, pm_full_g202_2576, pm_full_g202_2574, pm_full_g202_2572, pm_full_g202_2570, pm_full_g202_2556, pm_full_g202_2555, pm_full_g202_2554, pm_full_g202_2553]
+  rw [pm_full_g202_2575, pm_full_g202_2573, pm_full_g202_2571, pm_full_g202_2569, pm_full_g202_2576, pm_full_g202_2574, pm_full_g202_2572, pm_full_g202_2570]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_2550_self (initPM : Store) :
@@ -445,7 +445,7 @@ theorem pm_frame_2550_self (initPM : Store) :
       pm_prefix_eq initPM 1036 2571 (by native_decide),
       pm_prefix_eq initPM 1036 2573 (by native_decide),
       pm_prefix_eq initPM 1036 2575 (by native_decide)]
-  rw [pm_full_g202_2575, pm_full_g202_2573, pm_full_g202_2571, pm_full_g202_2569, pm_full_g202_2576, pm_full_g202_2574, pm_full_g202_2572, pm_full_g202_2570, pm_full_g202_2556, pm_full_g202_2555, pm_full_g202_2554, pm_full_g202_2553]
+  rw [pm_full_g202_2575, pm_full_g202_2573, pm_full_g202_2571, pm_full_g202_2569, pm_full_g202_2576, pm_full_g202_2574, pm_full_g202_2572, pm_full_g202_2570]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_2552_self (initPM : Store) :
@@ -461,7 +461,7 @@ theorem pm_frame_2552_self (initPM : Store) :
       pm_prefix_eq initPM 1037 2571 (by native_decide),
       pm_prefix_eq initPM 1037 2573 (by native_decide),
       pm_prefix_eq initPM 1037 2575 (by native_decide)]
-  rw [pm_full_g202_2575, pm_full_g202_2573, pm_full_g202_2571, pm_full_g202_2569, pm_full_g202_2576, pm_full_g202_2574, pm_full_g202_2572, pm_full_g202_2570, pm_full_g202_2556, pm_full_g202_2555, pm_full_g202_2554, pm_full_g202_2553]
+  rw [pm_full_g202_2575, pm_full_g202_2573, pm_full_g202_2571, pm_full_g202_2569, pm_full_g202_2576, pm_full_g202_2574, pm_full_g202_2572, pm_full_g202_2570]
   rw [show pm.numRanks = 4 from by native_decide]
 
 -- ========== helper: hInitCut separate lemma (heartbeat workaround) ==========

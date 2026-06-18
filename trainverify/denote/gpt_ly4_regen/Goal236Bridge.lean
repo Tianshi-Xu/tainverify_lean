@@ -161,6 +161,7 @@ set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 set_option linter.unusedVariables false
 set_option linter.style.show false
+set_option linter.style.emptyLine false
 set_option linter.style.setOption false
 set_option linter.unnecessarySeqFocus false
 set_option linter.flexible false
@@ -329,7 +330,7 @@ theorem pm_frame_3083_self (initPM : Store) :
       pm_prefix_eq initPM 861 3111 (by native_decide),
       pm_prefix_eq initPM 861 3113 (by native_decide),
       pm_prefix_eq initPM 861 3115 (by native_decide)]
-  rw [pm_full_g236_3115, pm_full_g236_3113, pm_full_g236_3111, pm_full_g236_3109, pm_full_g236_3096, pm_full_g236_3095, pm_full_g236_3094, pm_full_g236_3093]
+  rw [pm_full_g236_3115, pm_full_g236_3113, pm_full_g236_3111, pm_full_g236_3109]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_3086_self (initPM : Store) :
@@ -345,7 +346,7 @@ theorem pm_frame_3086_self (initPM : Store) :
       pm_prefix_eq initPM 862 3111 (by native_decide),
       pm_prefix_eq initPM 862 3113 (by native_decide),
       pm_prefix_eq initPM 862 3115 (by native_decide)]
-  rw [pm_full_g236_3115, pm_full_g236_3113, pm_full_g236_3111, pm_full_g236_3109, pm_full_g236_3096, pm_full_g236_3095, pm_full_g236_3094, pm_full_g236_3093]
+  rw [pm_full_g236_3115, pm_full_g236_3113, pm_full_g236_3111, pm_full_g236_3109]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_3089_self (initPM : Store) :
@@ -361,7 +362,7 @@ theorem pm_frame_3089_self (initPM : Store) :
       pm_prefix_eq initPM 863 3111 (by native_decide),
       pm_prefix_eq initPM 863 3113 (by native_decide),
       pm_prefix_eq initPM 863 3115 (by native_decide)]
-  rw [pm_full_g236_3115, pm_full_g236_3113, pm_full_g236_3111, pm_full_g236_3109, pm_full_g236_3096, pm_full_g236_3095, pm_full_g236_3094, pm_full_g236_3093]
+  rw [pm_full_g236_3115, pm_full_g236_3113, pm_full_g236_3111, pm_full_g236_3109]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_3092_self (initPM : Store) :
@@ -377,7 +378,7 @@ theorem pm_frame_3092_self (initPM : Store) :
       pm_prefix_eq initPM 864 3111 (by native_decide),
       pm_prefix_eq initPM 864 3113 (by native_decide),
       pm_prefix_eq initPM 864 3115 (by native_decide)]
-  rw [pm_full_g236_3115, pm_full_g236_3113, pm_full_g236_3111, pm_full_g236_3109, pm_full_g236_3096, pm_full_g236_3095, pm_full_g236_3094, pm_full_g236_3093]
+  rw [pm_full_g236_3115, pm_full_g236_3113, pm_full_g236_3111, pm_full_g236_3109]
   rw [show pm.numRanks = 4 from by native_decide]
 
 -- ========== helper: hInitCut separate lemma (heartbeat workaround) ==========

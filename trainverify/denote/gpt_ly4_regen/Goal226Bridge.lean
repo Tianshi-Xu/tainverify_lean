@@ -166,6 +166,7 @@ set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 set_option linter.unusedVariables false
 set_option linter.style.show false
+set_option linter.style.emptyLine false
 set_option linter.style.setOption false
 set_option linter.unnecessarySeqFocus false
 set_option linter.flexible false
@@ -294,7 +295,7 @@ theorem pm_frame_863_self (initPM : Store) :
       pm_prefix_eq initPM 928 2915 (by native_decide),
       pm_prefix_eq initPM 928 2917 (by native_decide),
       pm_prefix_eq initPM 928 2919 (by native_decide)]
-  rw [pm_full_g226_2919, pm_full_g226_2917, pm_full_g226_2915, pm_full_g226_2913, pm_full_g226_2900, pm_full_g226_2899, pm_full_g226_2898, pm_full_g226_2897]
+  rw [pm_full_g226_2919, pm_full_g226_2917, pm_full_g226_2915, pm_full_g226_2913]
   rw [show pm.numRanks = 4 from by native_decide]
 
 -- ========== helper: hInitCut separate lemma (heartbeat workaround) ==========

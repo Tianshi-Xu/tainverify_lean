@@ -193,6 +193,7 @@ set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 set_option linter.unusedVariables false
 set_option linter.style.show false
+set_option linter.style.emptyLine false
 set_option linter.style.setOption false
 set_option linter.unnecessarySeqFocus false
 set_option linter.flexible false
@@ -361,7 +362,7 @@ theorem pm_frame_2519_self (initPM : Store) :
       pm_prefix_eq initPM 1042 2547 (by native_decide),
       pm_prefix_eq initPM 1042 2549 (by native_decide),
       pm_prefix_eq initPM 1042 2551 (by native_decide)]
-  rw [pm_full_g201_2551, pm_full_g201_2549, pm_full_g201_2547, pm_full_g201_2545, pm_full_g201_2532, pm_full_g201_2531, pm_full_g201_2530, pm_full_g201_2529]
+  rw [pm_full_g201_2551, pm_full_g201_2549, pm_full_g201_2547, pm_full_g201_2545]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_2522_self (initPM : Store) :
@@ -377,7 +378,7 @@ theorem pm_frame_2522_self (initPM : Store) :
       pm_prefix_eq initPM 1043 2547 (by native_decide),
       pm_prefix_eq initPM 1043 2549 (by native_decide),
       pm_prefix_eq initPM 1043 2551 (by native_decide)]
-  rw [pm_full_g201_2551, pm_full_g201_2549, pm_full_g201_2547, pm_full_g201_2545, pm_full_g201_2532, pm_full_g201_2531, pm_full_g201_2530, pm_full_g201_2529]
+  rw [pm_full_g201_2551, pm_full_g201_2549, pm_full_g201_2547, pm_full_g201_2545]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_2525_self (initPM : Store) :
@@ -393,7 +394,7 @@ theorem pm_frame_2525_self (initPM : Store) :
       pm_prefix_eq initPM 1044 2547 (by native_decide),
       pm_prefix_eq initPM 1044 2549 (by native_decide),
       pm_prefix_eq initPM 1044 2551 (by native_decide)]
-  rw [pm_full_g201_2551, pm_full_g201_2549, pm_full_g201_2547, pm_full_g201_2545, pm_full_g201_2532, pm_full_g201_2531, pm_full_g201_2530, pm_full_g201_2529]
+  rw [pm_full_g201_2551, pm_full_g201_2549, pm_full_g201_2547, pm_full_g201_2545]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_2528_self (initPM : Store) :
@@ -409,7 +410,7 @@ theorem pm_frame_2528_self (initPM : Store) :
       pm_prefix_eq initPM 1045 2547 (by native_decide),
       pm_prefix_eq initPM 1045 2549 (by native_decide),
       pm_prefix_eq initPM 1045 2551 (by native_decide)]
-  rw [pm_full_g201_2551, pm_full_g201_2549, pm_full_g201_2547, pm_full_g201_2545, pm_full_g201_2532, pm_full_g201_2531, pm_full_g201_2530, pm_full_g201_2529]
+  rw [pm_full_g201_2551, pm_full_g201_2549, pm_full_g201_2547, pm_full_g201_2545]
   rw [show pm.numRanks = 4 from by native_decide]
 
 -- ========== helper: hInitCut separate lemma (heartbeat workaround) ==========

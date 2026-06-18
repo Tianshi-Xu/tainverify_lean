@@ -1,0 +1,82 @@
+I'll start by exploring the codebase structure and understanding the template bridge.
+
+Goal283Bridge.lean already exists. Let me check git status and the current state.
+
+A previous session created Goal283Bridge.lean (0 sorry, untracked). But `gen_goal54_bridge.py` is missing. Let me check the worker log and verify the existing bridge compiles.
+
+The previous session built gen283.py and Goal283Bridge.lean. Let me verify it compiles and check the MainTheorem wiring status.
+
+Let me compile the existing Goal283Bridge.lean to verify it works.
+
+Need proper build path. Let me check the lakefile structure.
+
+Build from the `trainverify` directory. Module is `denote.gpt_ly4_regen.Goal283Bridge`.
+
+Goal283Bridge compiles (0 sorry, only style warnings). Let me verify exported names and axioms.
+
+goal_283 verified — no sorryAx, only allowed axioms. Now wire it into MainTheorem. Let me view the relevant areas.
+
+Interesting — goal_283_full appears already wired at line 894. Let me check git diff of MainTheorem.
+
+goal_283 is already wired by previous session. Now let me find the goal_54 gen script (task says it should exist).
+
+gen_goal54 script is missing; I'll create the bridge. Let me read the full gen283.py and the Goal_54 generated data to understand structure.
+
+The cut proof for goal_54 is already done. The bridge is a frame wrapper. goal_54 (binary FW_add over AllToAll) closely matches Goal49Bridge. Let me read both Goal49Bridge and Goal283Bridge fully to build the goal_54 bridge.
+
+Now let me read Goal49Bridge.lean (closest template: FW_add over AllToAll reshard) and the goal_54 LineageGoal definition.
+
+I now fully understand both templates. goal_54 maps directly onto Goal49Bridge (binary FW_add, one AllToAll-resharded input + one direct input). Let me verify the full-graph node indices and the AllToAll `ins` form by probing.
+
+Need to avoid `!`. Let me use `findIdx?`/filterMap with `[i]?`.
+
+All node indices confirmed. goal_54 maps cleanly onto Goal49Bridge with substitutions:
+- SM node 58 FW_add[981,636]→637; direct input 981 (shards 2193-2196 [1,2,32], from goal_283), resharded input 636 (shards 2169-2172 [1,8,8], from goal_53, AllToAll idim=2→odim=1).
+- AllToAll nodes 380-383→2197-2200; FW_add nodes 384-387→2201-2204.
+
+Let me write the generator script.
+
+Now let me compile Goal54Bridge.
+
+Goal54Bridge built successfully. Let me verify 0 sorry and check axioms.
+
+Both bridges verified. Now wire goal_54 into MainTheorem. Let me view the relevant lines.
+
+Let me check the current git diff state of MainTheorem to understand what's already wired.
+
+The repository state changed — a parallel process committed the work. Let me check the current git log to understand.
+
+A parallel worker already committed both bridges (goal_283 = 6bfc959, goal_54 = e6b5258), fully wired. My regeneration modified the committed Goal54Bridge.lean. The committed version is canonical and proven, so I'll restore it. Let me verify the committed work and Denote.lean integrity.
+
+Denote.lean unchanged, both bridges 0 sorry. Let me build the committed bridges and verify axioms to confirm the canonical versions are sound.
+
+Both bridges sound (only allowed axioms). Now let me verify MainTheorem builds with the wiring intact.
+
+MainTheorem builds. The sorry warnings are for OTHER unproven goals (55, 56...). Let me confirm goal_54/goal_283 are NOT among them and the build completed.
+
+Build completed successfully. goal_54_full (line 666) and goal_283_full (line 895) are **not** in the sorry list — they use the proven bridges. Everything is verified. Let me clean up my redundant generator and write the result file.
+
+Let me verify the final working-tree state is clean (only my RESULT file + parallel worker's in-progress files remain).
+
+MainTheorem.lean shows modified — likely the parallel worker's goal_285 wiring. Let me confirm it's not goal_54/283 related.
+
+git diff for MainTheorem is now empty (the earlier `M` was a transient stat-cache state from the concurrent worker). Everything is verified and complete.
+
+## Summary
+
+Both bridges were proven, compile cleanly (0 `sorry`), and are wired into `MainTheorem.lean`.
+
+**goal_283** — commit `6bfc959`, `Goal283Bridge.lean`
+- FW_multiref params=[2] **second-output** + 4×AllToAllPrim (idim=2→odim=1). SM node 53 `FW_multiref(628)→[977,981]` takes 981; PM multiref nodes 346–349 (second outs 3559/3567/3575/3583) + non-adjacent AllToAll nodes 351/353/355/357→2193-2196. Template `Goal281Bridge` swapped to second output via `applyNode_fw_multiref2_second_out_g283`. 60 prereqs.
+
+**goal_54** — commit `e6b5258`, `Goal54Bridge.lean`
+- Binary FW_add over a single AllToAll reshard, gatherDim=1. SM node 58 `FW_add(981,636)→637`; PM AllToAll 380–383 (params[2,1], reshards 636 dim2→dim1)→2197-2200 + FW_add 384–387→2201-2204. Inputs 981 (goal_283) + 636 (goal_53). Template `Goal49Bridge`. 66 prereqs.
+
+**Verification**
+- `lake build denote.gpt_ly4_regen.MainTheorem` → *Build completed successfully*; `goal_54_full`/`goal_283_full` are **not** in the residual sorry list.
+- `#print axioms` on both `*_intermediate` lemmas → only allowed axioms (propext/Classical.choice/Quot.sound/ofReduceBool/trustCompiler + `applyNode_*`/helper series). No `sorryAx`.
+- `git diff bc19002 -- Denote.lean` → empty (core semantics untouched).
+- Not pushed. Results written to `trainverify/RESULT_G283_54.md`.
+
+**Note:** The repository was being worked on concurrently by a parallel instance that committed the same two bridges (the commits above). I independently re-verified the canonical committed versions, restored `Goal54Bridge.lean` after a redundant regeneration, removed my throwaway generator, and left the parallel worker's in-progress goal_285 files untouched.
+

@@ -1,0 +1,10 @@
+===== PASS 1 =====
+[p1][81] FAIL_OLEAN: denote/gpt_ly4_regen/Goal81Bridge.lean:535:16: error(lean.unknownIdentifier): Unknown identifier `goal_303_intermediate`
+[p1][82] FAIL_OLEAN: denote/gpt_ly4_regen/Goal82Bridge.lean:535:16: error(lean.unknownIdentifier): Unknown identifier `goal_305_intermediate`
+[p1][83] FAIL_OLEAN: denote/gpt_ly4_regen/Goal83Bridge.lean:535:16: error(lean.unknownIdentifier): Unknown identifier `goal_307_intermediate`
+[p1][305] PASS
+[p1][307] PASS
+----- pass 1: progressed=2 remaining_at_start=208 -----
+===== PASS 2 =====
+[p2][81] FAIL_OLEAN: denote/gpt_ly4_regen/Goal81Bridge.lean:535:16: error(lean.unknownIdentifier): Unknown identifier `goal_303_intermediate`
+[p2][82] PASS

@@ -1,0 +1,122 @@
+I'll start by exploring the existing emitter code and the gold-standard bridges.
+
+I'll read the core files in parallel.
+
+Now the emitter, probe, renderer, and the two gold standards.
+
+Now the two gold-standard bridges.
+
+Now the single-tp complex gold standard.
+
+Let me list all existing bridges and check the operator lemma availability.
+
+Let me run the topology analyzer over all 74 bridges to understand the distribution.
+
+Now I understand the distribution. Let me check operator lemma availability for the "dirty" ops.
+
+I have enough understanding. Let me set up the regression harness first so I can iterate empirically.
+
+Let me empirically test denote_pm tactics across families before building the renderer. Creating a scratch test.
+
+I have enough understanding. Let me look at how the cut_to_full needs adjustment for single-tp (replicated/init inputs with reconstruct) and check a couple more shape-source edge cases, then build. Let me check g6's full cut_to_full shape section.
+
+Now I'll write the universal renderer. Let me build it reusing renderer.py's proven assembly blocks.
+
+Let me check pm_val/pm_prefix semantics for the replicated case.
+
+I now have a thorough understanding. Let me write the universal renderer.
+
+Now the emit2 pipeline with a probe that handles replicated (multi-writer) finals.
+
+Now the regression harness with backup/restore safety.
+
+Let me first test emit2 dry-run on g30 (known-good family A) to sanity check rendering.
+
+Bug: pointwise args need parentheses. Let me fix the expression builders.
+
+Now let me test g30 end-to-end via regress (backup-safe).
+
+g30 PASS. Let me verify Goal30Bridge restored and check pre-existing dirty files aren't mine.
+
+g30 PASS, properly restored. The other dirty files are pre-existing (not mine). Let me restrict regression to git-tracked bridges, then test one representative per family.
+
+Good — 4 PASS. Let me diagnose the failures (g9 probe, g16/g3 imports).
+
+Three issues: (1) g9 shared ts==tp tid needs both sm+pm shapes, (2/3) import computation is incomplete. For regression, the robust fix for imports is to reuse the original bridge's import lines. Let me implement that.
+
+Now update the probe to use all original imports (needed so pm/sm are defined).
+
+Let me read the actual files rather than guess at their structure.
+
+Now fix the call site to pass the full imports list, and verify `_eval_line` exists in probe.py.
+
+Now the g9 shape issue. Let me read the relevant renderer.py functions.
+
+The fix: a tid that is both a prereq's `ts` and its `tp` (single-tp upstream) needs BOTH sm and pm shape vars. Currently the tp assignment overwrites ts. Let me add a `ts_tp` kind.
+
+Now handle `ts_tp` in shape_proof_block: generate both sm (ts) and pm (tp) shapes.
+
+Now let me re-test g16, g9, g3. Let me check regress.py usage first.
+
+g16 PASS (import fix works). But g9 compile timed out at 900s and the uncaught exception crashed the harness — g9 may not have been restored. Let me check for pollution immediately.
+
+g9 restored fine. Now fix regress.py to catch compile timeouts gracefully, then investigate why g9 is slow.
+
+Now investigate g9 slowness. Let me generate it to a scratch path and inspect vs original.
+
+Generated g9 looks correct. It may just be inherently slow (native_decide over 64-node graph). Let me compile it with a longer timeout to confirm it passes.
+
+Over 1300s — g9 is pathologically slow. The timeout is 1500s; let me wait for it to hit and trigger the restore.
+
+Restored OK. Key insight: the original g9 uses targeted `applyNode_skip` instead of my `repeat rw [applyNode_eq_of_not_mem_outs]`, which is pathologically slow here. Let me see the original's denote_pm fully.
+
+Now I understand: g9 is "replicated" (all 4 mini nodes write 577). The original uses `applyNode_fw_view_out` THEN `repeat rw [applyNode_skip _ _ _ 572 (by decide)]`. My generated version uses the wrong lemma `applyNode_eq_of_not_mem_outs` with metavariables, making `by decide` pathologically slow. Let me look at renderer_uni's denote_pm logic.
+
+The slowness is `applyNode_eq_of_not_mem_outs (h := by decide)` with metavariables. The original uses explicit `applyNode_skip _ _ _ <tid> (by decide)`. Let me check both lemma signatures.
+
+Both lemmas are equivalent statements. Let me time the ORIGINAL g9 standalone to establish a baseline — maybe g9 is just inherently slow.
+
+Confirmed: original g9 compiles in **51s** but my generated version exceeds 1500s. The culprit is `repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]` with metavariables on a replicated graph. The original uses explicit-tid `applyNode_skip _ _ _ 572 (by decide)`. 
+
+Let me fix denote_pm_block: when the pointwise final has only leaf inputs (no mids), use the fast explicit-tid template (covers g9 replicated + g30 family A), keeping the metavar path for mid-input cases (g6/g28 which already pass).
+
+Now regress g9, g30 (to ensure fast path doesn't break family A), and g3.
+
+g30 still PASS (fast path OK). But g9 STILL times out. Let me check what denote_pm got generated now.
+
+denote_pm now matches the original's fast form. But still times out — so another part differs. Let me diff my generated g9 against the original.
+
+The files are nearly identical now, yet mine times out. Let me compile gen2 with the profiler to pinpoint the slow declaration.
+
+The profiler line broke imports. Let me insert it after the imports instead.
+
+Profiler output is buffered (lost on kill). Let me bisect: compile only the lemma sections (A–F) without the big cut_to_full assembly, to isolate the hang.
+
+Lemmas A–F compile in **3s** — the hang is in the `cut_to_full` assembly. Let me bisect within it. First truncate cut_to_full right after the shape proofs (replace the rest with `sorry`).
+
+Already >300s up to line 123 — hang is in the shape-proof region. Let me wait for restore, then bisect earlier.
+
+Let me bisect faster — truncate right after `have hnr` (line 99), before any shape proofs.
+
+Through hnr + prereq haves = 3s. Hang is in lines 100–123 (shape proofs). Let me truncate after line 104 (the obtain), before hSM9/hPM9.
+
+>120s through line 104 — hang is in lines 100–104, specifically the new `obtain` block (102–104). Let me wait for restore.
+
+Found it! Lines 100–101 (h572_smsh) = 4s, but the hang is the `obtain ⟨h572_pmsh⟩ := h6tp` on a **single** equation (single-tp goal_6 yields a bare `Eq`, not a conjunction — `obtain ⟨x⟩` on `Eq` diverges). The original avoids `obtain` for single-tp. Fix: when the upstream goal is single-tp, emit the direct `exact h` form. Let me add `n_tps` to InputSource.
+
+Now set `n_tps` in emit.py's trace, for both tp and ts_tp sources:
+
+Now update shape_proof_block: when the upstream goal is single-tp (`n_tps == 1`), emit the direct `exact h` form instead of `obtain`.
+
+Now regress g9 with the fix.
+
+g9 PASS! But a tracked file `Goal10Bridge.lean` shows modified — that's concerning. Let me investigate whether I caused it.
+
+This is an **external** process (shared environment, as warned) — Goal10Bridge was modified at 14:47 and Goal62 created at 14:50 by another agent, not me. My regress.py only touches the goal under test. Let me confirm the other untracked/modified files aren't from my tooling, then launch the full regression.
+
+78 tracked bridges. Let me get the goal list and launch the full regression in the background.
+
+77 goals (3–61 main chain + 257–293 residual/multiref). Let me launch the full regression in the background. I'll write a wrapper that logs progress.
+
+Launched. Let me monitor progress while it runs.
+

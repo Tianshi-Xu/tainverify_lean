@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""Bridge emitter — UNIVERSAL renderer (per-node, no family classification).
+
+Key insight (validated on all 74 hand-written bridges):
+  * Every bridge has exactly ONE sm node.
+  * The PM mini-graph is a linear list of nodes; each node is either:
+      - a "mid" node (its output is an intermediate tensor)  -> one `pm_full_<out>` thm
+      - a "final" node (output ∈ lineage.tps)                -> folded into `pm_frame_<out>`
+  * A node's proof segment is determined ONLY by (op, ins, outs, rank, node_idx).
+    Collective ops (AllToAll/AllGather/AllReduce/Chunk) render ins as
+    `(List.range K).map (fun r => BASE + r)`; pointwise ops render literal ins.
+  * The ONLY global connection: the final `pm_frame` rewrites all `pm_full_*`
+    in reverse-topological order to unfold the nested expression.
+
+This generalizes to ANY topology: single/multi tp, any #mid layers, any op mix.
+"""
+import re
+from dataclasses import dataclass
+
+# ---------------- operator metadata ----------------
+# pointwise/elementwise ops: ins are literal, applyNode helper = applyNode_fw_<op>_out
+# collective ops: ins are (List.range K).map, special denote functions
+COLLECTIVE_OPS = {
+    "AllToAllPrim":   {"fn": "allToAllPrimWithDims", "lemma": "applyNode_allToAllPrimWithDims_out", "ranked": True, "dimargs": "params2"},
+    "AllGatherPrim":  {"fn": "allGatherPrimDimN",    "lemma": "applyNode_allGatherPrimDimN_out_thm", "ranked": True, "dimargs": "param1"},
+    "AllReducePrim":  {"fn": "allReducePrim",        "lemma": "applyNode_allReducePrim_out",         "ranked": True, "dimargs": "none"},
+    "ChunkPrim":      {"fn": "chunkPrimDimN",        "lemma": "applyNode_chunkPrimDimN_out",          "ranked": True, "dimargs": "param1"},
+}
+
+# pointwise op -> (denote fn name, applyNode lemma). multiref handled specially.
+POINTWISE_LEMMA = {
+    "FW_layernorm": "applyNode_fw_layernorm_out",
+    "FW_gelu":      "applyNode_fw_gelu_out",
+    "FW_view":      "applyNode_fw_view_out",
+    "FW_transpose": "applyNode_fw_transpose_out",
+    "FW_contiguous":"applyNode_fw_contiguous_out",
+    "FW_add":       "applyNode_fw_add2_out",
+    "FW_matmul":    "applyNode_fw_matmul_out",
+    "FW_linear":    "applyNode_fw_linear_out",
+    "FW_softmax":   "applyNode_fw_softmax_out",
+    "FW_div":       "applyNode_fw_div_out",
+    "FW_embedding": "applyNode_fw_embedding_out",
+}
+
+def pointwise_fn(op: str) -> str:
+    return op.replace("FW_", "fw_").lower()
+
+def is_collective(op: str) -> bool:
+    return op in COLLECTIVE_OPS
+
+# ---------------- denote-expression builder ----------------
+# Build the RHS expression for a node's output, as a function of a store-access
+# string `acc` (e.g. "s" or "denoteGraph pm initPM"). Recursively inlines mid
+# nodes so the final expression is fully nested (matches denote_pm_goal_N_<final>).
+
+@dataclass
+class PMNode:
+    rank: int
+    op: str
+    ins: list
+    outs: list
+    params: list
+    node_idx: int = -1   # filled by probe
+
+def _collective_ins(acc: str, ins: list) -> str:
+    return "[" + ", ".join(f"{acc} {t}" for t in ins) + "]"
+
+def node_expr(node: PMNode, acc: str, inline_map: dict, K: int) -> str:
+    """Render the denote expression for `node`'s output.
+    inline_map: tid -> PMNode for mid tensors we should inline (recursive).
+    For inlined inputs, recurse; for leaf inputs, render `acc tid`."""
+    def arg(tid):
+        if tid in inline_map:
+            return "(" + node_expr(inline_map[tid], acc, inline_map, K) + ")"
+        return f"{acc} {tid}"
+    if is_collective(node.op):
+        meta = COLLECTIVE_OPS[node.op]
+        fn = meta["fn"]
+        # ranked collectives take (K rank [ins...] dimargs)
+        inner = "[" + ", ".join(arg(t) for t in node.ins) + "]"
+        if meta["dimargs"] == "params2":
+            d = f"{node.params[0]} {node.params[1]}"
+            return f"{fn} {K} {node.rank} {inner} {d}"
+        elif meta["dimargs"] == "param1":
+            d = f"{node.params[0]}"
+            # allGather form: allGatherPrimDimN DIM K 0 [..]
+            if node.op == "AllGatherPrim":
+                return f"{fn} {node.params[0]} {K} 0 {inner}"
+            if node.op == "ChunkPrim":
+                return f"{fn} {node.params[0]} {K} {node.rank} {inner}"
+            return f"{fn} {K} {node.rank} {inner} {d}"
+        else:  # none (AllReduce)
+            return f"{fn} {K} {node.rank} {inner}"
+    else:
+        # pointwise / multiref
+        fn = pointwise_fn(node.op)
+        args = " ".join(arg(t) for t in node.ins)
+        return f"{fn} {args}"
+
+# ---------------- per-node frame segment (pm_full_<out>) ----------------
+def pm_full_segment(n: int, node: PMNode, K: int) -> str:
+    """Render one `pm_full_<out>` theorem for a MID node.
+    RHS uses `denoteGraph pm initPM` directly on the node's immediate inputs
+    (NOT inlined — chaining happens in the final frame)."""
+    out = node.outs[0]
+    acc = "denoteGraph pm initPM"
+    # RHS = op applied to immediate inputs (one level, not nested)
+    rhs = node_expr(PMNode(node.rank, node.op, node.ins, node.outs, node.params),
+                    acc, inline_map={}, K=K)
+    if is_collective(node.op):
+        meta = COLLECTIVE_OPS[node.op]
+        ins_show = f"((List.range {K}).map (fun r => {node.ins[0]} + r))" \
+                   if _is_range(node.ins) else str(node.ins)
+        params_show = f", params := {node.params}" if node.params else ""
+        prefix_rws = ",\n      ".join(
+            f"pm_prefix_eq initPM {node.node_idx} {t} (by native_decide)" for t in node.ins)
+        range_simp = "\n  simp only [List.range, List.range.loop, List.map]" \
+                     if _is_range(node.ins) else ""
+        return (
+f"""theorem pm_full_{out} (initPM : Store) :
+    denoteGraph pm initPM {out}
+      = {rhs} := by
+  rw [pm_val initPM {node.node_idx} {out} (by native_decide) (by native_decide)]
+  rw [show pm.nodes[{node.node_idx}]'(by native_decide)
+      = {{ rank := {node.rank}, op := "OpName.{node.op}",
+          ins := {ins_show}, outs := [{out}]{params_show} }}
+      from by native_decide]
+  rw [{meta['lemma']}]{range_simp}
+  rw [{prefix_rws}]
+
+"""
+        )
+    else:
+        helper = POINTWISE_LEMMA[node.op]
+        ins_str = ", ".join(str(x) for x in node.ins)
+        prefix_rws = ",\n      ".join(
+            f"pm_prefix_eq initPM {node.node_idx} {t} (by native_decide)" for t in node.ins)
+        return (
+f"""theorem pm_full_{out} (initPM : Store) :
+    denoteGraph pm initPM {out}
+      = {rhs} := by
+  rw [pm_val initPM {node.node_idx} {out} (by native_decide) (by native_decide)]
+  rw [show pm.nodes[{node.node_idx}]'(by native_decide)
+      = {{ rank := {node.rank}, op := "OpName.{node.op}", ins := [{ins_str}], outs := [{out}] }}
+      from by native_decide]
+  rw [{helper}]
+  rw [{prefix_rws}]
+
+"""
+        )
+
+def _is_range(ins: list) -> bool:
+    """True if ins == [b, b+1, b+2, b+3] consecutive (collective range form)."""
+    return len(ins) >= 2 and all(ins[i] == ins[0] + i for i in range(len(ins)))
+
+# NOTE: this module is being assembled incrementally; full pipeline glue in emit2.py
+if __name__ == "__main__":
+    print("universal renderer fragments; driven by emit2.py")

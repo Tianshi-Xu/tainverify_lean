@@ -164,6 +164,7 @@ set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 set_option linter.unusedVariables false
 set_option linter.style.show false
+set_option linter.style.emptyLine false
 set_option linter.style.setOption false
 set_option linter.unnecessarySeqFocus false
 set_option linter.flexible false
@@ -177,8 +178,7 @@ private theorem evalOp_bw_div_loc (numParts rank : Nat) (params : List Nat) (g x
       [bw_div ((params.head?.getD 1 : Nat) : Scalar) g] := rfl
 private theorem applyNode_bw_div_out_loc
     (gr : GraphDecl) (s : Store) (rank : Nat) (params : List Nat) (gTid xTid outTid : Tid) :
-    applyNode gr s { rank := rank, op := "OpName.BW_div", ins := [gTid, xTid],
-                    outs := [outTid], params := params } outTid =
+    applyNode gr s { rank := rank, op := "OpName.BW_div", ins := [gTid, xTid], outs := [outTid], params := params } outTid =
       bw_div ((params.head?.getD 1 : Nat) : Scalar) (s gTid) := by
   unfold applyNode
   rw [show ([gTid, xTid] : List Tid).map s = [s gTid, s xTid] from rfl, evalOp_bw_div_loc]
@@ -353,7 +353,7 @@ theorem pm_frame_3010_self (initPM : Store) :
       pm_prefix_eq initPM 903 3035 (by native_decide),
       pm_prefix_eq initPM 903 3037 (by native_decide),
       pm_prefix_eq initPM 903 3039 (by native_decide)]
-  rw [pm_full_g233_3039, pm_full_g233_3037, pm_full_g233_3035, pm_full_g233_3033, pm_full_g233_3020, pm_full_g233_3019, pm_full_g233_3018, pm_full_g233_3017]
+  rw [pm_full_g233_3039, pm_full_g233_3037, pm_full_g233_3035, pm_full_g233_3033]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_3012_self (initPM : Store) :
@@ -369,7 +369,7 @@ theorem pm_frame_3012_self (initPM : Store) :
       pm_prefix_eq initPM 904 3035 (by native_decide),
       pm_prefix_eq initPM 904 3037 (by native_decide),
       pm_prefix_eq initPM 904 3039 (by native_decide)]
-  rw [pm_full_g233_3039, pm_full_g233_3037, pm_full_g233_3035, pm_full_g233_3033, pm_full_g233_3020, pm_full_g233_3019, pm_full_g233_3018, pm_full_g233_3017]
+  rw [pm_full_g233_3039, pm_full_g233_3037, pm_full_g233_3035, pm_full_g233_3033]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_3014_self (initPM : Store) :
@@ -385,7 +385,7 @@ theorem pm_frame_3014_self (initPM : Store) :
       pm_prefix_eq initPM 905 3035 (by native_decide),
       pm_prefix_eq initPM 905 3037 (by native_decide),
       pm_prefix_eq initPM 905 3039 (by native_decide)]
-  rw [pm_full_g233_3039, pm_full_g233_3037, pm_full_g233_3035, pm_full_g233_3033, pm_full_g233_3020, pm_full_g233_3019, pm_full_g233_3018, pm_full_g233_3017]
+  rw [pm_full_g233_3039, pm_full_g233_3037, pm_full_g233_3035, pm_full_g233_3033]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_3016_self (initPM : Store) :
@@ -401,7 +401,7 @@ theorem pm_frame_3016_self (initPM : Store) :
       pm_prefix_eq initPM 906 3035 (by native_decide),
       pm_prefix_eq initPM 906 3037 (by native_decide),
       pm_prefix_eq initPM 906 3039 (by native_decide)]
-  rw [pm_full_g233_3039, pm_full_g233_3037, pm_full_g233_3035, pm_full_g233_3033, pm_full_g233_3020, pm_full_g233_3019, pm_full_g233_3018, pm_full_g233_3017]
+  rw [pm_full_g233_3039, pm_full_g233_3037, pm_full_g233_3035, pm_full_g233_3033]
   rw [show pm.numRanks = 4 from by native_decide]
 
 -- ========== helper: hInitCut separate lemma (heartbeat workaround) ==========

@@ -163,6 +163,7 @@ set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 set_option linter.unusedVariables false
 set_option linter.style.show false
+set_option linter.style.emptyLine false
 set_option linter.style.setOption false
 set_option linter.unnecessarySeqFocus false
 set_option linter.flexible false
@@ -175,8 +176,7 @@ private theorem evalOp_bw_softmax_loc (numParts rank : Nat) (params : List Nat) 
     evalOp numParts rank "OpName.BW_softmax" params [g, y] = [bw_softmax g y] := rfl
 private theorem applyNode_bw_softmax_out_loc
     (gr : GraphDecl) (s : Store) (rank : Nat) (gTid yTid outTid : Tid) (params : List Nat) :
-    applyNode gr s { rank := rank, op := "OpName.BW_softmax", ins := [gTid, yTid],
-                    outs := [outTid], params := params } outTid = bw_softmax (s gTid) (s yTid) := by
+    applyNode gr s { rank := rank, op := "OpName.BW_softmax", ins := [gTid, yTid], outs := [outTid], params := params } outTid = bw_softmax (s gTid) (s yTid) := by
   unfold applyNode
   rw [show ([gTid, yTid] : List Tid).map s = [s gTid, s yTid] from rfl, evalOp_bw_softmax_loc]
   change storeSet s [(outTid, bw_softmax (s gTid) (s yTid))] outTid = _

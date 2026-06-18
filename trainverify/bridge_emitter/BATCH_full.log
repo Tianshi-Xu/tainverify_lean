@@ -1,0 +1,18 @@
+[67] PASS (124s, 24739c)
+[68] PASS (127s, 24567c)
+[69] PASS (142s, 34212c)
+[71] FAIL_EMIT (33s): 
+[77] FAIL_EMIT (1s): 
+[91] FAIL_EMIT (1s): 
+[92] FAIL_EMIT (2s): 
+[93] FAIL_EMIT (1s): 
+[94] FAIL_EMIT (1s): 
+[96] FAIL_EMIT (1s): 
+[110] FAIL_EMIT (2s): 
+[114] FAIL_EMIT (1s): 
+[128] FAIL_EMIT (1s): 
+[129] FAIL_EMIT (1s): 
+[132] FAIL_EMIT (6s): 
+[136] FAIL_EMIT (3s): 
+[137] FAIL_EMIT (4s): 
+[143] FAIL_EMIT (5s): 

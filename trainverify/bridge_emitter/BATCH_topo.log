@@ -1,0 +1,31 @@
+[72] PASS (111s, 22457c)
+[73] PASS (123s, 28418c)
+[74] PASS (135s, 29182c)
+[75] FAIL_EMIT (1s): 
+[76] FAIL_EMIT (2s): 
+[78] FAIL_EMIT (1s): 
+[79] FAIL_EMIT (1s): 
+[80] FAIL_EMIT (1s): 
+[81] FAIL_EMIT (1s): 
+[82] FAIL_EMIT (2s): 
+[83] FAIL_EMIT (1s): 
+[84] FAIL_EMIT (1s): 
+[85] FAIL_EMIT (1s): 
+[86] FAIL_EMIT (2s): 
+[87] FAIL_EMIT (1s): 
+[88] FAIL_EMIT (1s): 
+[89] FAIL_EMIT (1s): 
+[90] FAIL_EMIT (2s): 
+[95] FAIL_EMIT (1s): 
+[97] FAIL_EMIT (1s): 
+[98] FAIL_EMIT (1s): 
+[99] FAIL_EMIT (1s): 
+[100] FAIL_EMIT (2s): 
+[101] FAIL_EMIT (1s): 
+[102] FAIL_EMIT (1s): 
+[103] FAIL_EMIT (1s): 
+[104] FAIL_EMIT (2s): 
+[105] FAIL_EMIT (1s): 
+[106] FAIL_EMIT (1s): 
+[1] FAIL_EMIT (1s): 
+[256] FAIL_EMIT (2s): 

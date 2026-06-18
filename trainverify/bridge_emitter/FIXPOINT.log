@@ -1,0 +1,6 @@
+===== PASS 1 =====
+[p1][76] PASS
+----- pass 1: progressed=1 remaining_at_start=138 -----
+===== PASS 2 =====
+----- pass 2: progressed=0 remaining_at_start=137 -----
+================ FIXPOINT DONE: 6/143 built, passes=2 ================
