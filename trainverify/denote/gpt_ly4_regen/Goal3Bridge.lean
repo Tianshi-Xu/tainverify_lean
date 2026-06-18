@@ -172,4 +172,24 @@ theorem goal_3_cut_to_full (h : goal_3_stmt_cut) : goal_3_stmt := by
   simp only [goal_3, List.map] at hcut
   exact hcut
 
+-- ========== base-bridge intermediates (goal_2/goal_3) ==========
+-- goal_2/goal_3 在 SpikeBridge/本文以 goal_N_cut_to_full 形式证明，没有 _intermediate 包装。
+-- 下游以 goal_2/goal_3 为 prereq 的桥需要 InitGoalHolds 形式，这里统一提供。
+-- (goal_2_cut_to_full 来自 SpikeBridge import；goal_3_cut_to_full 在本文上方)
+theorem goal_2_intermediate (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks goal_2 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hfull : goal_2_stmt := goal_2_cut_to_full prove_goal_2_cut
+  have := hfull initSM initPM hSM hPM hInit
+  simpa [InitGoalHolds, goal_2] using this
+
+theorem goal_3_intermediate (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks goal_3 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hfull : goal_3_stmt := goal_3_cut_to_full prove_goal_3_cut
+  have := hfull initSM initPM hSM hPM hInit
+  simpa [InitGoalHolds, goal_3] using this
+
 end TrainVerify.Denote.GeneratedGoals

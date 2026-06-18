@@ -9,14 +9,7 @@ set_option maxHeartbeats 4000000
 namespace TrainVerify.Denote.GeneratedGoals
 open TrainVerify.Denote TrainVerify.Denote.Generated
 
--- prereq goal_263 的 intermediate 形式 (从 cut_to_full 提取)
-theorem goal_263_intermediate (initSM initPM : Store)
-    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
-    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
-    InitGoalHolds pm.numRanks goal_263 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
-  have hfull : goal_263_stmt := goal_263_cut_to_full prove_goal_263_cut
-  have := hfull initSM initPM hSM hPM hInit
-  simpa [InitGoalHolds, goal_263] using this
+-- goal_263_intermediate 已移至 Goal263Bridge (import 获得)
 
 -- ========== 迷你图 sm_goal_7 算 574 (FW_linear) ==========
 theorem denote_sm_goal_7_574 (s : Store) :

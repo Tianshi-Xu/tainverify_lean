@@ -167,4 +167,13 @@ theorem goal_263_cut_to_full (h : goal_263_stmt_cut) : goal_263_stmt := by
   rw [hsmf, hpm1201, hpm1202, hpm1203, hpm1204]
   exact hcut
 
+-- goal_263 以 cut_to_full 形式证明，补 _intermediate 包装供下游以它为 prereq 的桥引用。
+theorem goal_263_intermediate (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks goal_263 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hfull : goal_263_stmt := goal_263_cut_to_full prove_goal_263_cut
+  have := hfull initSM initPM hSM hPM hInit
+  simpa [InitGoalHolds, goal_263] using this
+
 end TrainVerify.Denote.GeneratedGoals

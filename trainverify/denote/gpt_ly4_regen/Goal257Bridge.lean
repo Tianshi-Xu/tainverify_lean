@@ -1,6 +1,7 @@
 /- goal_257 桥 (非 base case, prereqs=[goal_2,goal_3,goal_4])。
    算子: SM=FW_multiref(903); PM=FW_multiref(3413..)→AllToAll(1141..)。
    复用 Goal4Bridge 的通用齿轮 pm_val/pm_prefix_eq/initGoals_preserved + goal_2/3/4_intermediate。 -/
+import denote.gpt_ly4_regen.BridgeKit
 import denote.gpt_ly4_regen.Goal4Bridge
 import denote.gpt_ly4_regen.Goal_257
 
@@ -54,28 +55,7 @@ theorem denote_sm_goal_257_903 (s : Store) :
   simp only [sm_goal_257, denoteGraph, List.foldl]
   rw [applyNode_fw_multiref2_first_out]
 
--- ========== SM 通用齿轮 (类似 Goal4Bridge 的 pm_val/pm_prefix_eq, 针对 full sm) ==========
-theorem sm_val (initSM : Store) (k : Nat) (out : Tid) (hk : k < sm.nodes.length)
-    (hdrop : ∀ n ∈ sm.nodes.drop (k+1), out ∉ n.outs) :
-    denoteGraph sm initSM out
-      = applyNode sm (denoteGraph { sm with nodes := sm.nodes.take k } initSM) sm.nodes[k] out := by
-  have e1 : denoteGraph sm initSM out
-      = denoteGraph { sm with nodes := sm.nodes.take (k+1) } initSM out :=
-    denoteGraph_tid_eq_of_suffix_no_writes sm initSM out (sm.nodes.take (k+1)) (sm.nodes.drop (k+1))
-      (List.take_append_drop (k+1) sm.nodes).symm hdrop
-  have hfn : applyNode { sm with nodes := sm.nodes.take (k+1) } = applyNode sm :=
-    applyNode_congr_numRanks _ _ rfl
-  have hfn' : applyNode { sm with nodes := sm.nodes.take k } = applyNode sm :=
-    applyNode_congr_numRanks _ _ rfl
-  rw [e1]
-  simp only [denoteGraph, hfn, hfn']
-  exact congrFun (foldl_take_succ (applyNode sm) sm.nodes initSM k hk) out
-
-theorem sm_prefix_eq (initSM : Store) (k : Nat) (tid : Tid)
-    (hdrop : ∀ n ∈ sm.nodes.drop k, tid ∉ n.outs) :
-    denoteGraph { sm with nodes := sm.nodes.take k } initSM tid = denoteGraph sm initSM tid :=
-  (denoteGraph_tid_eq_of_suffix_no_writes sm initSM tid (sm.nodes.take k) (sm.nodes.drop k)
-    (List.take_append_drop k sm.nodes).symm hdrop).symm
+-- ========== SM 通用齿轮 sm_val/sm_prefix_eq 已移至 BridgeKit ==========
 
 -- ========== SM self-frame: full 算 903 = 迷你图以 full store 为 init 算 903 ==========
 -- full sm node 3 = FW_multiref ins=[567] outs=[903,907]; 567 由 node 2 (FW_add) 写
