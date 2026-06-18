@@ -405,6 +405,37 @@ import denote.gpt_ly4_regen.Goal51Bridge    -- goal_51_cut_to_full (column-paral
 import denote.gpt_ly4_regen.Goal52Bridge    -- goal_52_cut_to_full (FW_gelu over AllToAll-reshard dim2->1 + AllGather dim1 -> single-tp 634; SM node 56 FW_gelu(633)->634 [1,8,128]; PM nodes 367-370 4xAllToAll(range 2117,params[2,1])->2141-2144, nodes 371-374 4xFW_gelu->2145-2148, node 375 AllGather(range 2145,params[1])->634; input 633/2117-2120 from goal_51 gatherDim=2; template Goal46Bridge verbatim adapt op FW_contiguous->FW_gelu, AllToAll dim3->2 => 2->1, AllGather dim2->1; 63 prereqs)
 import denote.gpt_ly4_regen.Goal53Bridge    -- goal_53_cut_to_full (column-parallel FW_linear, multi-tps gatherDim=2, no collective tail; SM node 57 FW_linear(634,635)->636 [1,8,32]; PM nodes 376-379 4xFW_linear(634,2165+r)->2169+r each [1,8,8]; data 634 shared/replicated from goal_52 single-tp [1,8,128], weight 635 from initGoal_635 column-sharded [32,128]->4x[8,128] tps 2165-2168; output reconstruct dim2 4x[1,8,8]->[1,8,32]; template Goal51Bridge verbatim remap tid/node/shape; 64 prereqs adds goal_51/52)
 import denote.gpt_ly4_regen.Goal54Bridge    -- goal_54_cut_to_full (FW_add over AllToAll-reshard dim2->1, multi-tps gatherDim=1; SM node 58 FW_add(981,636)->637 [1,8,32]; PM nodes 380-383 4xAllToAll(range 2169,params[2,1])->2197-2200 + nodes 384-387 4xFW_add(2193+r,2197+r)->2201-2204 [1,2,32]; input 636 from goal_53 dim2-shard tps 2169-2172, 981 from goal_283 dim1-shard tps 2193-2196; template Goal29Bridge verbatim adapt AllToAll dim1->2 (params[1,2]) => dim2->1 (params[2,1]); 66 prereqs [2..53,257-283 odd]; needs goal_283 done)
+import denote.gpt_ly4_regen.Goal66Bridge  -- goal_66_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal67Bridge  -- goal_67_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal68Bridge  -- goal_68_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal69Bridge  -- goal_69_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal71Bridge  -- goal_71_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal77Bridge  -- goal_77_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal91Bridge  -- goal_91_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal92Bridge  -- goal_92_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal93Bridge  -- goal_93_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal94Bridge  -- goal_94_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal96Bridge  -- goal_96_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal241Bridge  -- goal_241_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal242Bridge  -- goal_242_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal245Bridge  -- goal_245_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal246Bridge  -- goal_246_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal248Bridge  -- goal_248_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal249Bridge  -- goal_249_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal250Bridge  -- goal_250_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal287Bridge  -- goal_287_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal295Bridge  -- goal_295_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal297Bridge  -- goal_297_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal299Bridge  -- goal_299_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal301Bridge  -- goal_301_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal302Bridge  -- goal_302_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal303Bridge  -- goal_303_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal305Bridge  -- goal_305_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal307Bridge  -- goal_307_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal309Bridge  -- goal_309_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal310Bridge  -- goal_310_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal311Bridge  -- goal_311_cut_to_full (wired by wire.py)
+import denote.gpt_ly4_regen.Goal312Bridge  -- goal_312_cut_to_full (wired by wire.py)
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 4000000
@@ -655,18 +686,18 @@ theorem goal_62_full : goal_62_stmt := goal_62_cut_to_full prove_goal_62_cut
 theorem goal_63_full : goal_63_stmt := goal_63_cut_to_full prove_goal_63_cut
 theorem goal_64_full : goal_64_stmt := goal_64_cut_to_full prove_goal_64_cut
 theorem goal_65_full : goal_65_stmt := goal_65_cut_to_full prove_goal_65_cut
-theorem goal_66_full : goal_66_stmt := by sorry  -- cut-form not yet proven
-theorem goal_67_full : goal_67_stmt := by sorry  -- cut-form not yet proven
-theorem goal_68_full : goal_68_stmt := by sorry  -- cut-form not yet proven
-theorem goal_69_full : goal_69_stmt := by sorry  -- cut-form not yet proven
+theorem goal_66_full : goal_66_stmt := goal_66_cut_to_full prove_goal_66_cut
+theorem goal_67_full : goal_67_stmt := goal_67_cut_to_full prove_goal_67_cut
+theorem goal_68_full : goal_68_stmt := goal_68_cut_to_full prove_goal_68_cut
+theorem goal_69_full : goal_69_stmt := goal_69_cut_to_full prove_goal_69_cut
 theorem goal_70_full : goal_70_stmt := goal_70_cut_to_full prove_goal_70_cut
-theorem goal_71_full : goal_71_stmt := by sorry  -- cut-form not yet proven
+theorem goal_71_full : goal_71_stmt := goal_71_cut_to_full prove_goal_71_cut
 theorem goal_72_full : goal_72_stmt := goal_72_cut_to_full prove_goal_72_cut
 theorem goal_73_full : goal_73_stmt := goal_73_cut_to_full prove_goal_73_cut
 theorem goal_74_full : goal_74_stmt := goal_74_cut_to_full prove_goal_74_cut
 theorem goal_75_full : goal_75_stmt := goal_75_cut_to_full prove_goal_75_cut
 theorem goal_76_full : goal_76_stmt := goal_76_cut_to_full prove_goal_76_cut
-theorem goal_77_full : goal_77_stmt := by sorry  -- cut-form not yet proven
+theorem goal_77_full : goal_77_stmt := goal_77_cut_to_full prove_goal_77_cut
 theorem goal_78_full : goal_78_stmt := goal_78_cut_to_full prove_goal_78_cut
 theorem goal_79_full : goal_79_stmt := goal_79_cut_to_full prove_goal_79_cut
 theorem goal_80_full : goal_80_stmt := goal_80_cut_to_full prove_goal_80_cut
@@ -680,12 +711,12 @@ theorem goal_87_full : goal_87_stmt := goal_87_cut_to_full prove_goal_87_cut
 theorem goal_88_full : goal_88_stmt := goal_88_cut_to_full prove_goal_88_cut
 theorem goal_89_full : goal_89_stmt := goal_89_cut_to_full prove_goal_89_cut
 theorem goal_90_full : goal_90_stmt := goal_90_cut_to_full prove_goal_90_cut
-theorem goal_91_full : goal_91_stmt := by sorry  -- cut-form not yet proven
-theorem goal_92_full : goal_92_stmt := by sorry  -- cut-form not yet proven
-theorem goal_93_full : goal_93_stmt := by sorry  -- cut-form not yet proven
-theorem goal_94_full : goal_94_stmt := by sorry  -- cut-form not yet proven
+theorem goal_91_full : goal_91_stmt := goal_91_cut_to_full prove_goal_91_cut
+theorem goal_92_full : goal_92_stmt := goal_92_cut_to_full prove_goal_92_cut
+theorem goal_93_full : goal_93_stmt := goal_93_cut_to_full prove_goal_93_cut
+theorem goal_94_full : goal_94_stmt := goal_94_cut_to_full prove_goal_94_cut
 theorem goal_95_full : goal_95_stmt := goal_95_cut_to_full prove_goal_95_cut
-theorem goal_96_full : goal_96_stmt := by sorry  -- cut-form not yet proven
+theorem goal_96_full : goal_96_stmt := goal_96_cut_to_full prove_goal_96_cut
 theorem goal_97_full : goal_97_stmt := goal_97_cut_to_full prove_goal_97_cut
 theorem goal_98_full : goal_98_stmt := goal_98_cut_to_full prove_goal_98_cut
 theorem goal_99_full : goal_99_stmt := goal_99_cut_to_full prove_goal_99_cut
@@ -830,16 +861,16 @@ theorem goal_237_full : goal_237_stmt := goal_237_cut_to_full prove_goal_237_cut
 theorem goal_238_full : goal_238_stmt := goal_238_cut_to_full prove_goal_238_cut
 theorem goal_239_full : goal_239_stmt := goal_239_cut_to_full prove_goal_239_cut
 theorem goal_240_full : goal_240_stmt := goal_240_cut_to_full prove_goal_240_cut
-theorem goal_241_full : goal_241_stmt := by sorry  -- cut-form not yet proven
-theorem goal_242_full : goal_242_stmt := by sorry  -- cut-form not yet proven
+theorem goal_241_full : goal_241_stmt := goal_241_cut_to_full prove_goal_241_cut
+theorem goal_242_full : goal_242_stmt := goal_242_cut_to_full prove_goal_242_cut
 theorem goal_243_full : goal_243_stmt := goal_243_cut_to_full prove_goal_243_cut
 theorem goal_244_full : goal_244_stmt := goal_244_cut_to_full prove_goal_244_cut
-theorem goal_245_full : goal_245_stmt := by sorry  -- cut-form not yet proven
-theorem goal_246_full : goal_246_stmt := by sorry  -- cut-form not yet proven
+theorem goal_245_full : goal_245_stmt := goal_245_cut_to_full prove_goal_245_cut
+theorem goal_246_full : goal_246_stmt := goal_246_cut_to_full prove_goal_246_cut
 theorem goal_247_full : goal_247_stmt := goal_247_cut_to_full prove_goal_247_cut
-theorem goal_248_full : goal_248_stmt := by sorry  -- cut-form not yet proven
-theorem goal_249_full : goal_249_stmt := by sorry  -- cut-form not yet proven
-theorem goal_250_full : goal_250_stmt := by sorry  -- cut-form not yet proven
+theorem goal_248_full : goal_248_stmt := goal_248_cut_to_full prove_goal_248_cut
+theorem goal_249_full : goal_249_stmt := goal_249_cut_to_full prove_goal_249_cut
+theorem goal_250_full : goal_250_stmt := goal_250_cut_to_full prove_goal_250_cut
 theorem goal_251_full : goal_251_stmt := goal_251_cut_to_full prove_goal_251_cut
 theorem goal_252_full : goal_252_stmt := goal_252_cut_to_full prove_goal_252_cut
 theorem goal_253_full : goal_253_stmt := goal_253_cut_to_full prove_goal_253_cut
@@ -876,7 +907,7 @@ theorem goal_283_full : goal_283_stmt := goal_283_cut_to_full prove_goal_283_cut
 theorem goal_284_full : goal_284_stmt := by sorry  -- cut-form not yet proven
 theorem goal_285_full : goal_285_stmt := goal_285_cut_to_full prove_goal_285_cut
 theorem goal_286_full : goal_286_stmt := by sorry  -- cut-form not yet proven
-theorem goal_287_full : goal_287_stmt := by sorry  -- cut-form not yet proven
+theorem goal_287_full : goal_287_stmt := goal_287_cut_to_full prove_goal_287_cut
 theorem goal_288_full : goal_288_stmt := by sorry  -- cut-form not yet proven
 theorem goal_289_full : goal_289_stmt := goal_289_cut_to_full prove_goal_289_cut
 theorem goal_290_full : goal_290_stmt := goal_290_cut_to_full prove_goal_290_cut
@@ -884,24 +915,24 @@ theorem goal_291_full : goal_291_stmt := goal_291_cut_to_full prove_goal_291_cut
 theorem goal_292_full : goal_292_stmt := by sorry  -- cut-form not yet proven
 theorem goal_293_full : goal_293_stmt := goal_293_cut_to_full prove_goal_293_cut
 theorem goal_294_full : goal_294_stmt := by sorry  -- cut-form not yet proven
-theorem goal_295_full : goal_295_stmt := by sorry  -- cut-form not yet proven
+theorem goal_295_full : goal_295_stmt := goal_295_cut_to_full prove_goal_295_cut
 theorem goal_296_full : goal_296_stmt := goal_296_cut_to_full prove_goal_296_cut
-theorem goal_297_full : goal_297_stmt := by sorry  -- cut-form not yet proven
+theorem goal_297_full : goal_297_stmt := goal_297_cut_to_full prove_goal_297_cut
 theorem goal_298_full : goal_298_stmt := by sorry  -- cut-form not yet proven
-theorem goal_299_full : goal_299_stmt := by sorry  -- cut-form not yet proven
+theorem goal_299_full : goal_299_stmt := goal_299_cut_to_full prove_goal_299_cut
 theorem goal_300_full : goal_300_stmt := by sorry  -- cut-form not yet proven
-theorem goal_301_full : goal_301_stmt := by sorry  -- cut-form not yet proven
-theorem goal_302_full : goal_302_stmt := by sorry  -- cut-form not yet proven
-theorem goal_303_full : goal_303_stmt := by sorry  -- cut-form not yet proven
+theorem goal_301_full : goal_301_stmt := goal_301_cut_to_full prove_goal_301_cut
+theorem goal_302_full : goal_302_stmt := goal_302_cut_to_full prove_goal_302_cut
+theorem goal_303_full : goal_303_stmt := goal_303_cut_to_full prove_goal_303_cut
 theorem goal_304_full : goal_304_stmt := by sorry  -- cut-form not yet proven
-theorem goal_305_full : goal_305_stmt := by sorry  -- cut-form not yet proven
+theorem goal_305_full : goal_305_stmt := goal_305_cut_to_full prove_goal_305_cut
 theorem goal_306_full : goal_306_stmt := by sorry  -- cut-form not yet proven
-theorem goal_307_full : goal_307_stmt := by sorry  -- cut-form not yet proven
+theorem goal_307_full : goal_307_stmt := goal_307_cut_to_full prove_goal_307_cut
 theorem goal_308_full : goal_308_stmt := by sorry  -- cut-form not yet proven
-theorem goal_309_full : goal_309_stmt := by sorry  -- cut-form not yet proven
-theorem goal_310_full : goal_310_stmt := by sorry  -- cut-form not yet proven
-theorem goal_311_full : goal_311_stmt := by sorry  -- cut-form not yet proven
-theorem goal_312_full : goal_312_stmt := by sorry  -- cut-form not yet proven
+theorem goal_309_full : goal_309_stmt := goal_309_cut_to_full prove_goal_309_cut
+theorem goal_310_full : goal_310_stmt := goal_310_cut_to_full prove_goal_310_cut
+theorem goal_311_full : goal_311_stmt := goal_311_cut_to_full prove_goal_311_cut
+theorem goal_312_full : goal_312_stmt := goal_312_cut_to_full prove_goal_312_cut
 
 /-! ## Per-goal predicate + per-chunk lemmas (8 goals each, 39 chunks) -/
 abbrev P (g : LineageGoal) : Prop := CoarseLineageHoldsWithInit sm pm g smInitEnv pmInitEnv initGoals
