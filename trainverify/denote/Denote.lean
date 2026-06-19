@@ -2711,40 +2711,78 @@ theorem applyNode_skip (g : GraphDecl) (s : Store) (n : NodeDecl) (tid : Tid)
   simp only [Prod.fst] at heq; subst heq
   exact (List.of_mem_zip hmem_zip).1
 
-axiom applyNode_fw_sum_out
+/-- applyNode for FW_sum with singleton output. (Was an axiom; now proven — same
+    template as `applyNode_fw_gelu_out`, removes it from the trusted axiom base.) -/
+theorem applyNode_fw_sum_out
     (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid) :
     applyNode g s { rank := rank, op := "OpName.FW_sum", ins := [inTid], outs := [outTid] } outTid =
-      fw_sum (s inTid)
+      fw_sum (s inTid) := by
+  unfold applyNode
+  rw [show ([inTid] : List Tid).map s = [s inTid] from rfl]
+  change storeSet s [(outTid, fw_sum (s inTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
 
-axiom applyNode_fw_linear_out
+/-- applyNode for FW_linear with singleton output. (Was an axiom; now proven.) -/
+theorem applyNode_fw_linear_out
     (g : GraphDecl) (s : Store) (rank : Nat) (xTid wTid outTid : Tid) :
     applyNode g s { rank := rank, op := "OpName.FW_linear", ins := [xTid, wTid], outs := [outTid] } outTid =
-      fw_linear (s xTid) (s wTid)
+      fw_linear (s xTid) (s wTid) := by
+  unfold applyNode
+  rw [show ([xTid, wTid] : List Tid).map s = [s xTid, s wTid] from rfl]
+  change storeSet s [(outTid, fw_linear (s xTid) (s wTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
 
-/-- applyNode for bw_sum with singleton output. -/
-axiom applyNode_bw_sum_out
+/-- applyNode for bw_sum with singleton output. (Was an axiom; now proven.) -/
+theorem applyNode_bw_sum_out
     (g : GraphDecl) (s : Store) (rank : Nat) (gTid xTid outTid : Tid) :
     applyNode g s { rank := rank, op := "OpName.BW_sum", ins := [gTid, xTid], outs := [outTid] } outTid =
-      bw_sum (s gTid) (s xTid)
+      bw_sum (s gTid) (s xTid) := by
+  unfold applyNode
+  rw [show ([gTid, xTid] : List Tid).map s = [s gTid, s xTid] from rfl]
+  change storeSet s [(outTid, bw_sum (s gTid) (s xTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
 
-axiom applyNode_allGatherPrimDimN_out
+/-- applyNode for AllGatherPrim with singleton output and `params := [dim]`.
+    (Was an axiom; now proven — `evalOp` reduces definitionally for the `[dim]` case.) -/
+theorem applyNode_allGatherPrimDimN_out
     (g : GraphDecl) (s : Store) (rank : Nat) (ins : List Tid) (outTid : Tid) (dim : Nat) :
     applyNode g s { rank := rank, op := "OpName.AllGatherPrim", ins := ins, outs := [outTid], params := [dim] } outTid =
-      allGatherPrimDimN dim g.numRanks rank (ins.map s)
+      allGatherPrimDimN dim g.numRanks rank (ins.map s) := by
+  unfold applyNode
+  change storeSet s [(outTid, allGatherPrimDimN dim g.numRanks rank (ins.map s))] outTid = _
+  unfold storeSet
+  simp [List.find?]
 
-/-- applyNode for bw_linear first output (dx). -/
-axiom applyNode_bw_linear_fst_out
+/-- applyNode for bw_linear first output (dx). (Was an axiom; now proven — two-output
+    `storeSet` resolved via `List.find?` on the leading entry.) -/
+theorem applyNode_bw_linear_fst_out
     (g : GraphDecl) (s : Store) (rank : Nat) (gTid xTid wTid dxTid dwTid : Tid)
     (_ : dxTid ≠ dwTid) :
     applyNode g s { rank := rank, op := "OpName.BW_linear", ins := [gTid, xTid, wTid], outs := [dxTid, dwTid] } dxTid =
-      (bw_linear (s gTid) (s xTid) (s wTid)).1
+      (bw_linear (s gTid) (s xTid) (s wTid)).1 := by
+  unfold applyNode
+  rw [show ([gTid, xTid, wTid] : List Tid).map s = [s gTid, s xTid, s wTid] from rfl]
+  change storeSet s [(dxTid, (bw_linear (s gTid) (s xTid) (s wTid)).1),
+                     (dwTid, (bw_linear (s gTid) (s xTid) (s wTid)).2)] dxTid = _
+  unfold storeSet
+  simp [List.find?]
 
-/-- applyNode for bw_linear second output (dw). -/
-axiom applyNode_bw_linear_snd_out
+/-- applyNode for bw_linear second output (dw). (Was an axiom; now proven — needs the
+    `dxTid ≠ dwTid` hypothesis to skip the first `find?` entry.) -/
+theorem applyNode_bw_linear_snd_out
     (g : GraphDecl) (s : Store) (rank : Nat) (gTid xTid wTid dxTid dwTid : Tid)
     (hne : dxTid ≠ dwTid) :
     applyNode g s { rank := rank, op := "OpName.BW_linear", ins := [gTid, xTid, wTid], outs := [dxTid, dwTid] } dwTid =
-      (bw_linear (s gTid) (s xTid) (s wTid)).2
+      (bw_linear (s gTid) (s xTid) (s wTid)).2 := by
+  unfold applyNode
+  rw [show ([gTid, xTid, wTid] : List Tid).map s = [s gTid, s xTid, s wTid] from rfl]
+  change storeSet s [(dxTid, (bw_linear (s gTid) (s xTid) (s wTid)).1),
+                     (dwTid, (bw_linear (s gTid) (s xTid) (s wTid)).2)] dwTid = _
+  unfold storeSet
+  simp [List.find?, hne]
 
 /-- Unfolding lemma for `evalOp` on `FW_embedding` with empty params. -/
 theorem evalOp_fw_embedding_empty (numParts rank : Nat) (ids w : Tensor) :
