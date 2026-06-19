@@ -8003,30 +8003,46 @@ theorem applyNode_allGatherPrimDimN_out_thm
   simp [List.find?]
 
 set_option maxHeartbeats 3200000 in
+/-- General dimension-parametric version of `transposeAxes 1 2` value-indexing for any
+    4D shape `[d0,d1,d2,d3]`. The concrete `transposeAxes_1_2_valAt_*` lemmas below are
+    derived as corollaries. The batch term `idx/(d2*d1*d3)*(d1*d2*d3)` accounts for d0>1
+    (the old per-shape lemmas all had d0=1 and silently dropped it). -/
+theorem transposeAxes_1_2_valAt_gen
+    (x : Tensor) (d0 d1 d2 d3 idx : Nat)
+    (hx : x.shape = [d0, d1, d2, d3])
+    (hd1 : d1 ≠ 0) (hd2 : d2 ≠ 0) (hd3 : d3 ≠ 0)
+    (hidx : idx < d0 * d2 * d1 * d3) :
+    valAt (transposeAxes 1 2 x) idx =
+      valAt x (idx / (d2 * d1 * d3) * (d1 * d2 * d3)
+        + idx % (d2 * d1 * d3) % (d1 * d3) / d3 * (d2 * d3)
+        + idx % (d2 * d1 * d3) / (d1 * d3) * d3
+        + idx % (d2 * d1 * d3) % (d1 * d3) % d3) := by
+  have hresult_shape : (transposeAxes 1 2 x).shape = [d0, d2, d1, d3] := by
+    simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
+  have hprodeq : prodShape (transposeAxes 1 2 x).shape = d0 * d2 * d1 * d3 := by
+    rw [hresult_shape]; simp [prodShape]
+  have hprod : idx < prodShape (transposeAxes 1 2 x).shape := by
+    rw [hprodeq]; exact hidx
+  rw [valAt_of_lt _ _ hprod]
+  simp only [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  congr 1
+  have e213 : d2 * d1 * d3 ≠ 0 := Nat.mul_ne_zero (Nat.mul_ne_zero hd2 hd1) hd3
+  have e13 : d1 * d3 ≠ 0 := Nat.mul_ne_zero hd1 hd3
+  simp only [flatToMulti, multiToFlat, prodShape, List.foldl,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
+    List.set, Nat.div_one, Nat.mul_one, Nat.one_mul,
+    e213, e13, hd3, if_false, if_neg, Nat.add_zero, reduceIte,
+    Nat.one_ne_zero, Nat.reduceEqDiff]
+  ring
+
+set_option maxHeartbeats 3200000 in
 theorem transposeAxes_1_2_valAt_1_8_4_8 (x : Tensor) (idx : Nat)
     (hx : x.shape = [1, 8, 4, 8]) (hidx : idx < 256) :
     valAt (transposeAxes 1 2 x) idx =
       valAt x ((idx % 64) / 8 * 32 + (idx / 64) * 8 + idx % 8) := by
-  have hresult_shape : (transposeAxes 1 2 x).shape = [1, 4, 8, 8] := by
-    simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
-  have hprod : idx < prodShape (transposeAxes 1 2 x).shape := by
-    rw [hresult_shape]
-    simp [prodShape]
-    exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    flatToMulti, multiToFlat, prodShape, List.foldl, List.drop,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
-    show (32 : Nat) ≠ 0 from by omega, show (64 : Nat) ≠ 0 from by omega,
-    show (256 : Nat) ≠ 0 from by omega, ite_false]
-  have hm256 : idx % 256 = idx := Nat.mod_eq_of_lt hidx
-  have hd256 : idx / 256 = 0 := Nat.div_eq_of_lt hidx
-  rw [hm256, hd256]
-  simp [multiToFlat, prodShape, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm,
-    Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+  rw [transposeAxes_1_2_valAt_gen x 1 8 4 8 idx hx (by decide) (by decide) (by decide) (by omega)]
+  congr 1 <;> omega
 
 set_option maxHeartbeats 3200000 in
 theorem chunkPrimDimN_3_4_valAt_1_8_4_8 (x : Tensor) (r idx : Nat)
@@ -8057,26 +8073,8 @@ theorem transposeAxes_1_2_valAt_1_8_4_2 (x : Tensor) (idx : Nat)
     (hx : x.shape = [1, 8, 4, 2]) (hidx : idx < 64) :
     valAt (transposeAxes 1 2 x) idx =
       valAt x ((idx % 16) / 2 * 8 + (idx / 16) * 2 + idx % 2) := by
-  have hresult_shape : (transposeAxes 1 2 x).shape = [1, 4, 8, 2] := by
-    simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
-  have hprod : idx < prodShape (transposeAxes 1 2 x).shape := by
-    rw [hresult_shape]
-    simp [prodShape]
-    exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    flatToMulti, multiToFlat, prodShape, List.foldl, List.drop,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
-    show (2 : Nat) ≠ 0 from by omega, show (16 : Nat) ≠ 0 from by omega,
-    show (64 : Nat) ≠ 0 from by omega, ite_false]
-  have hm64 : idx % 64 = idx := Nat.mod_eq_of_lt hidx
-  have hd64 : idx / 64 = 0 := Nat.div_eq_of_lt hidx
-  rw [hm64, hd64]
-  simp [multiToFlat, prodShape, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm,
-    Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+  rw [transposeAxes_1_2_valAt_gen x 1 8 4 2 idx hx (by decide) (by decide) (by decide) (by omega)]
+  congr 1 <;> omega
 
 set_option maxHeartbeats 3200000 in
 theorem allGatherPrimDimN_3_4_valAt_1_4_8_2 (xs : List Tensor) (idx : Nat)
@@ -8127,31 +8125,12 @@ theorem chunkPrimDimN_2_4_valAt_1_8_4_8 (x : Tensor) (r idx : Nat)
 
 set_option maxHeartbeats 3200000 in
 -- large arithmetic proof
+set_option maxHeartbeats 3200000 in
 theorem transposeAxes_1_2_valAt_1_8_1_8 (x : Tensor) (idx : Nat)
     (hx : x.shape = [1, 8, 1, 8]) (hidx : idx < 64) :
     valAt (transposeAxes 1 2 x) idx = valAt x idx := by
-  have hresult_shape : (transposeAxes 1 2 x).shape = [1, 1, 8, 8] := by
-    simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
-  have hprod : idx < prodShape (transposeAxes 1 2 x).shape := by
-    rw [hresult_shape]
-    simp [prodShape]
-    exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    flatToMulti, multiToFlat, prodShape, List.foldl, List.drop,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (64 : Nat) ≠ 0 from by omega, ite_false]
-  have hm64 : idx % 64 = idx := Nat.mod_eq_of_lt hidx
-  have hd64 : idx / 64 = 0 := Nat.div_eq_of_lt hidx
-  rw [hm64, hd64]
-  simp [multiToFlat, prodShape, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm,
-    Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
-  have hdiv : idx % 64 / 8 = idx / 8 := by rw [hm64]
-  rw [hdiv]
-  have hnorm : idx % 8 + 8 * (idx / 8) = idx := by omega
-  rw [hnorm]
+  rw [transposeAxes_1_2_valAt_gen x 1 8 1 8 idx hx (by decide) (by decide) (by decide) (by omega)]
+  congr 1 <;> omega
 
 set_option maxHeartbeats 3200000 in
 -- large arithmetic proof
@@ -8310,30 +8289,13 @@ theorem chunkPrimDimN_1_4_valAt_1_8_4_8 (x : Tensor) (r idx : Nat)
 
 set_option maxHeartbeats 3200000 in
 -- large arithmetic proof
+set_option maxHeartbeats 3200000 in
 theorem transposeAxes_1_2_valAt_1_2_4_8 (x : Tensor) (idx : Nat)
     (hx : x.shape = [1, 2, 4, 8]) (hidx : idx < 64) :
     valAt (transposeAxes 1 2 x) idx =
       valAt x ((idx % 16) / 8 * 32 + (idx / 16) * 8 + idx % 8) := by
-  have hresult_shape : (transposeAxes 1 2 x).shape = [1, 4, 2, 8] := by
-    simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
-  have hprod : idx < prodShape (transposeAxes 1 2 x).shape := by
-    rw [hresult_shape]
-    simp [prodShape]
-    exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    flatToMulti, multiToFlat, prodShape, List.foldl, List.drop,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
-    show (2 : Nat) ≠ 0 from by omega, show (16 : Nat) ≠ 0 from by omega,
-    show (64 : Nat) ≠ 0 from by omega, ite_false]
-  have hm64 : idx % 64 = idx := Nat.mod_eq_of_lt hidx
-  have hd64 : idx / 64 = 0 := Nat.div_eq_of_lt hidx
-  rw [hm64, hd64]
-  simp [multiToFlat, prodShape, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm,
-    Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+  rw [transposeAxes_1_2_valAt_gen x 1 2 4 8 idx hx (by decide) (by decide) (by decide) (by omega)]
+  congr 1 <;> omega
 
 set_option maxHeartbeats 3200000 in
 -- large arithmetic proof
@@ -8430,30 +8392,13 @@ theorem fw_transpose12_split_dim1_4_1_8_4_8 (x : Tensor) (hx : x.shape = [1, 8, 
 
 set_option maxHeartbeats 3200000 in
 -- large arithmetic proof
+set_option maxHeartbeats 3200000 in
 theorem transposeAxes_1_2_valAt_1_4_8_8 (x : Tensor) (idx : Nat)
     (hx : x.shape = [1, 4, 8, 8]) (hidx : idx < 256) :
     valAt (transposeAxes 1 2 x) idx =
       valAt x ((idx % 32) / 8 * 64 + (idx / 32) * 8 + idx % 8) := by
-  have hresult_shape : (transposeAxes 1 2 x).shape = [1, 8, 4, 8] := by
-    simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
-  have hprod : idx < prodShape (transposeAxes 1 2 x).shape := by
-    rw [hresult_shape]
-    simp [prodShape]
-    exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    flatToMulti, multiToFlat, prodShape, List.foldl, List.drop,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
-    show (32 : Nat) ≠ 0 from by omega, show (64 : Nat) ≠ 0 from by omega,
-    show (256 : Nat) ≠ 0 from by omega, ite_false]
-  have hm256 : idx % 256 = idx := Nat.mod_eq_of_lt hidx
-  have hd256 : idx / 256 = 0 := Nat.div_eq_of_lt hidx
-  rw [hm256, hd256]
-  simp [multiToFlat, prodShape, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm,
-    Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+  rw [transposeAxes_1_2_valAt_gen x 1 4 8 8 idx hx (by decide) (by decide) (by decide) (by omega)]
+  congr 1 <;> omega
 
 set_option maxHeartbeats 3200000 in
 -- large arithmetic proof
@@ -8482,30 +8427,13 @@ theorem chunkPrimDimN_3_4_valAt_1_4_8_8 (x : Tensor) (r idx : Nat)
 
 set_option maxHeartbeats 3200000 in
 -- large arithmetic proof
+set_option maxHeartbeats 3200000 in
 theorem transposeAxes_1_2_valAt_1_4_8_2 (x : Tensor) (idx : Nat)
     (hx : x.shape = [1, 4, 8, 2]) (hidx : idx < 64) :
     valAt (transposeAxes 1 2 x) idx =
       valAt x ((idx % 8) / 2 * 16 + (idx / 8) * 2 + idx % 2) := by
-  have hresult_shape : (transposeAxes 1 2 x).shape = [1, 8, 4, 2] := by
-    simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
-  have hprod : idx < prodShape (transposeAxes 1 2 x).shape := by
-    rw [hresult_shape]
-    simp [prodShape]
-    exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    flatToMulti, multiToFlat, prodShape, List.foldl, List.drop,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
-    show (2 : Nat) ≠ 0 from by omega, show (16 : Nat) ≠ 0 from by omega,
-    show (64 : Nat) ≠ 0 from by omega, ite_false]
-  have hm64 : idx % 64 = idx := Nat.mod_eq_of_lt hidx
-  have hd64 : idx / 64 = 0 := Nat.div_eq_of_lt hidx
-  rw [hm64, hd64]
-  simp [multiToFlat, prodShape, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm,
-    Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+  rw [transposeAxes_1_2_valAt_gen x 1 4 8 2 idx hx (by decide) (by decide) (by decide) (by omega)]
+  congr 1 <;> omega
 
 set_option maxHeartbeats 3200000 in
 -- large arithmetic proof
@@ -8599,95 +8527,31 @@ theorem transposeAxes_1_2_valAt_1_4_8_8_dup (x : Tensor) (idx : Nat)
     (hx : x.shape = [1, 4, 8, 8]) (hidx : idx < 256) :
     valAt (transposeAxes 1 2 x) idx =
       valAt x ((idx % 32) / 8 * 64 + (idx / 32) * 8 + idx % 8) := by
-  have hresult_shape : (transposeAxes 1 2 x).shape = [1, 8, 4, 8] := by
-    simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
-  have hprod : idx < prodShape (transposeAxes 1 2 x).shape := by
-    rw [hresult_shape]; simp [prodShape]; exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    flatToMulti, multiToFlat, prodShape, List.foldl, List.drop,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
-    show (32 : Nat) ≠ 0 from by omega, show (64 : Nat) ≠ 0 from by omega,
-    show (256 : Nat) ≠ 0 from by omega, ite_false]
-  have hm256 : idx % 256 = idx := Nat.mod_eq_of_lt hidx
-  have hd256 : idx / 256 = 0 := Nat.div_eq_of_lt hidx
-  rw [hm256, hd256]
-  simp [multiToFlat, prodShape, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm,
-    Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+  rw [transposeAxes_1_2_valAt_gen x 1 4 8 8 idx hx (by decide) (by decide) (by decide) (by omega)]
+  congr 1 <;> omega
 
 set_option maxHeartbeats 3200000 in
 theorem transposeAxes_1_2_valAt_1_1_8_8 (x : Tensor) (idx : Nat)
     (hx : x.shape = [1, 1, 8, 8]) (hidx : idx < 64) :
     valAt (transposeAxes 1 2 x) idx = valAt x idx := by
-  have hresult_shape : (transposeAxes 1 2 x).shape = [1, 8, 1, 8] := by
-    simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
-  have hprod : idx < prodShape (transposeAxes 1 2 x).shape := by
-    rw [hresult_shape]; simp [prodShape]; exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    flatToMulti, multiToFlat, prodShape, List.foldl, List.drop,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (64 : Nat) ≠ 0 from by omega, ite_false]
-  have hm64 : idx % 64 = idx := Nat.mod_eq_of_lt hidx
-  have hd64 : idx / 64 = 0 := Nat.div_eq_of_lt hidx
-  rw [hm64, hd64]
-  simp [multiToFlat, prodShape, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm,
-    Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
-  have hnorm : idx % 8 + 8 * (idx / 8) = idx := by omega
-  rw [hnorm]
+  rw [transposeAxes_1_2_valAt_gen x 1 1 8 8 idx hx (by decide) (by decide) (by decide) (by omega)]
+  congr 1 <;> omega
 
 set_option maxHeartbeats 3200000 in
 theorem transposeAxes_1_2_valAt_1_4_2_8 (x : Tensor) (idx : Nat)
     (hx : x.shape = [1, 4, 2, 8]) (hidx : idx < 64) :
     valAt (transposeAxes 1 2 x) idx =
       valAt x (((idx % 32) / 8) * 16 + (idx / 32) * 8 + idx % 8) := by
-  have hresult_shape : (transposeAxes 1 2 x).shape = [1, 2, 4, 8] := by
-    simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
-  have hprod : idx < prodShape (transposeAxes 1 2 x).shape := by
-    rw [hresult_shape]; simp [prodShape]; exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    flatToMulti, multiToFlat, prodShape, List.foldl, List.drop,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (2 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
-    show (8 : Nat) ≠ 0 from by omega, show (16 : Nat) ≠ 0 from by omega,
-    show (32 : Nat) ≠ 0 from by omega, show (64 : Nat) ≠ 0 from by omega, ite_false]
-  have hm64 : idx % 64 = idx := Nat.mod_eq_of_lt hidx
-  have hd64 : idx / 64 = 0 := Nat.div_eq_of_lt hidx
-  rw [hm64, hd64]
-  simp [multiToFlat, prodShape, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm,
-    Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+  rw [transposeAxes_1_2_valAt_gen x 1 4 2 8 idx hx (by decide) (by decide) (by decide) (by omega)]
+  congr 1 <;> omega
 
 set_option maxHeartbeats 3200000 in
 theorem transposeAxes_1_2_valAt_1_4_8_2_dup (x : Tensor) (idx : Nat)
     (hx : x.shape = [1, 4, 8, 2]) (hidx : idx < 64) :
     valAt (transposeAxes 1 2 x) idx =
       valAt x ((idx % 8) / 2 * 16 + (idx / 8) * 2 + idx % 2) := by
-  have hresult_shape : (transposeAxes 1 2 x).shape = [1, 8, 4, 2] := by
-    simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
-  have hprod : idx < prodShape (transposeAxes 1 2 x).shape := by
-    rw [hresult_shape]; simp [prodShape]; exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    flatToMulti, multiToFlat, prodShape, List.foldl, List.drop,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (2 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
-    show (8 : Nat) ≠ 0 from by omega, show (16 : Nat) ≠ 0 from by omega,
-    show (64 : Nat) ≠ 0 from by omega, ite_false]
-  have hm64 : idx % 64 = idx := Nat.mod_eq_of_lt hidx
-  have hd64 : idx / 64 = 0 := Nat.div_eq_of_lt hidx
-  rw [hm64, hd64]
-  simp [multiToFlat, prodShape, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm,
-    Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+  rw [transposeAxes_1_2_valAt_gen x 1 4 8 2 idx hx (by decide) (by decide) (by decide) (by omega)]
+  congr 1 <;> omega
 
 set_option maxHeartbeats 3200000 in
 theorem allGatherPrimDimN_1_4_valAt_1_1_8_8 (xs : List Tensor) (idx : Nat)
@@ -9231,27 +9095,46 @@ theorem chunk3_gather3_roundtrip_1_8_4_2 (c0 c1 c2 c3 : Tensor)
 
 -- transposeAxes 2 3 valAt for shape [1,4,8,8]
 set_option maxHeartbeats 3200000 in
+/-- General dimension-parametric version of `transposeAxes 2 3` value-indexing for any
+    4D shape `[d0,d1,d2,d3]` (swaps last two axes). The concrete
+    `transposeAxes_2_3_valAt_*` lemmas below are derived as corollaries. -/
+theorem transposeAxes_2_3_valAt_gen
+    (x : Tensor) (d0 d1 d2 d3 idx : Nat)
+    (hx : x.shape = [d0, d1, d2, d3])
+    (hd1 : d1 ≠ 0) (hd2 : d2 ≠ 0) (hd3 : d3 ≠ 0)
+    (hidx : idx < d0 * d1 * d3 * d2) :
+    valAt (transposeAxes 2 3 x) idx =
+      valAt x (idx / (d1 * d3 * d2) * (d1 * d3 * d2)
+        + idx % (d1 * d3 * d2) / (d3 * d2) * (d3 * d2)
+        + idx % (d1 * d3 * d2) % (d3 * d2) % d2 * d3
+        + idx % (d1 * d3 * d2) % (d3 * d2) / d2) := by
+  have hresult_shape : (transposeAxes 2 3 x).shape = [d0, d1, d3, d2] := by
+    simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
+  have hprodeq : prodShape (transposeAxes 2 3 x).shape = d0 * d1 * d3 * d2 := by
+    rw [hresult_shape]; simp [prodShape]
+  have hprod : idx < prodShape (transposeAxes 2 3 x).shape := by
+    rw [hprodeq]; exact hidx
+  rw [valAt_of_lt _ _ hprod]
+  simp only [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
+  congr 1
+  have e32 : d3 * d2 ≠ 0 := Nat.mul_ne_zero hd3 hd2
+  have e132 : d1 * d3 * d2 ≠ 0 := Nat.mul_ne_zero (Nat.mul_ne_zero hd1 hd3) hd2
+  simp only [flatToMulti, multiToFlat, prodShape, List.foldl,
+    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
+    List.set, Nat.div_one, Nat.mul_one, Nat.one_mul,
+    e32, e132, hd1, hd2, hd3, if_false, if_neg, Nat.add_zero, reduceIte,
+    Nat.one_ne_zero, Nat.reduceEqDiff]
+  ring
+
+-- transposeAxes 2 3 valAt for shape [1,4,8,8]
+set_option maxHeartbeats 3200000 in
 theorem transposeAxes_2_3_valAt_1_4_8_8 (x : Tensor) (idx : Nat)
     (hx : x.shape = [1, 4, 8, 8]) (hidx : idx < 256) :
     valAt (transposeAxes 2 3 x) idx =
       valAt x ((idx / 64) * 64 + (idx % 64 % 8) * 8 + (idx % 64) / 8) := by
-  have hresult_shape : (transposeAxes 2 3 x).shape = [1, 4, 8, 8] := by
-    simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
-  have hprod : idx < prodShape (transposeAxes 2 3 x).shape := by
-    rw [hresult_shape]; simp [prodShape]; exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    flatToMulti, multiToFlat, prodShape, List.foldl, List.drop,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
-    show (64 : Nat) ≠ 0 from by omega, show (256 : Nat) ≠ 0 from by omega, ite_false]
-  have hm256 : idx % 256 = idx := Nat.mod_eq_of_lt hidx
-  have hd256 : idx / 256 = 0 := Nat.div_eq_of_lt hidx
-  rw [hm256, hd256]
-  simp [multiToFlat, prodShape, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm,
-    Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+  rw [transposeAxes_2_3_valAt_gen x 1 4 8 8 idx hx (by decide) (by decide) (by decide) (by omega)]
+  congr 1 <;> omega
 
 -- transposeAxes 2 3 valAt for shape [1,4,8,2]
 set_option maxHeartbeats 3200000 in
@@ -9259,26 +9142,8 @@ theorem transposeAxes_2_3_valAt_1_4_8_2 (x : Tensor) (idx : Nat)
     (hx : x.shape = [1, 4, 8, 2]) (hidx : idx < 64) :
     valAt (transposeAxes 2 3 x) idx =
       valAt x ((idx / 16) * 16 + (idx % 8) * 2 + (idx % 16) / 8) := by
-  have hresult_shape : (transposeAxes 2 3 x).shape = [1, 4, 2, 8] := by
-    simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
-  have hprod : idx < prodShape (transposeAxes 2 3 x).shape := by
-    rw [hresult_shape]; simp [prodShape]; exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    flatToMulti, multiToFlat, prodShape, List.foldl, List.drop,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
-    show (2 : Nat) ≠ 0 from by omega, show (16 : Nat) ≠ 0 from by omega,
-    show (64 : Nat) ≠ 0 from by omega, ite_false]
-  have hm64 : idx % 64 = idx := Nat.mod_eq_of_lt hidx
-  have hd64 : idx / 64 = 0 := Nat.div_eq_of_lt hidx
-  rw [hm64, hd64]
-  simp [multiToFlat, prodShape, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm,
-    Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
-
--- Bridge: transpose(2,3) distributes over chunk(dim=3, nranks=4) with gather(dim=2)
+  rw [transposeAxes_2_3_valAt_gen x 1 4 8 2 idx hx (by decide) (by decide) (by decide) (by omega)]
+  congr 1 <;> omega
 set_option maxHeartbeats 4000000 in
 theorem fw_transpose23_split_dim3_4_1_4_8_8 (x : Tensor) (hx : x.shape = [1, 4, 8, 8]) :
     transposeAxes 2 3 x = allGatherPrimDimN 2 4 0
@@ -9359,28 +9224,8 @@ theorem transposeAxes_2_3_valAt_1_1_8_8 (x : Tensor) (idx : Nat)
     (hx : x.shape = [1, 1, 8, 8]) (hidx : idx < 64) :
     valAt (transposeAxes 2 3 x) idx =
       valAt x ((idx % 8) * 8 + idx / 8) := by
-  have hresult_shape : (transposeAxes 2 3 x).shape = [1, 1, 8, 8] := by
-    simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
-  have hprod : idx < prodShape (transposeAxes 2 3 x).shape := by
-    rw [hresult_shape]
-    simp [prodShape]
-    exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    flatToMulti, multiToFlat, prodShape, List.foldl, List.drop,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (64 : Nat) ≠ 0 from by omega, ite_false]
-  have hm64 : idx % 64 = idx := Nat.mod_eq_of_lt hidx
-  have hd64 : idx / 64 = 0 := Nat.div_eq_of_lt hidx
-  rw [hm64, hd64]
-  simp [multiToFlat, prodShape, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm,
-    Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
-  have hdiv : idx % 64 / 8 = idx / 8 := by
-    rw [hm64]
-  rw [hdiv]
-  simp [Nat.add_comm]
+  rw [transposeAxes_2_3_valAt_gen x 1 1 8 8 idx hx (by decide) (by decide) (by decide) (by omega)]
+  congr 1 <;> omega
 
 set_option maxHeartbeats 3200000 in
 theorem chunk1_gather1_roundtrip_1_2_4_8 (c0 c1 c2 c3 : Tensor)
@@ -9486,26 +9331,8 @@ theorem transposeAxes_2_3_valAt_1_4_2_8 (x : Tensor) (idx : Nat)
     (hx : x.shape = [1, 4, 2, 8]) (hidx : idx < 64) :
     valAt (transposeAxes 2 3 x) idx =
       valAt x ((idx / 16) * 16 + (idx % 2) * 8 + (idx % 16) / 2) := by
-  have hresult_shape : (transposeAxes 2 3 x).shape = [1, 4, 8, 2] := by
-    simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
-  have hprod : idx < prodShape (transposeAxes 2 3 x).shape := by
-    rw [hresult_shape]
-    simp [prodShape]
-    exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set,
-    List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
-    flatToMulti, multiToFlat, prodShape, List.foldl, List.drop,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
-    show (2 : Nat) ≠ 0 from by omega, show (16 : Nat) ≠ 0 from by omega,
-    show (64 : Nat) ≠ 0 from by omega, ite_false]
-  have hm64 : idx % 64 = idx := Nat.mod_eq_of_lt hidx
-  have hd64 : idx / 64 = 0 := Nat.div_eq_of_lt hidx
-  rw [hm64, hd64]
-  simp [multiToFlat, prodShape, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm,
-    Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+  rw [transposeAxes_2_3_valAt_gen x 1 4 2 8 idx hx (by decide) (by decide) (by decide) (by omega)]
+  congr 1 <;> omega
 
 set_option maxHeartbeats 4000000 in
 theorem fw_transpose23_split_dim1_4_1_4_8_8 (x : Tensor) (hx : x.shape = [1, 4, 8, 8]) :
