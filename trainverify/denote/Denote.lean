@@ -8044,29 +8044,102 @@ theorem transposeAxes_1_2_valAt_1_8_4_8 (x : Tensor) (idx : Nat)
   rw [transposeAxes_1_2_valAt_gen x 1 8 4 8 idx hx (by decide) (by decide) (by decide) (by omega)]
   congr 1 <;> omega
 
+/- General dimension-parametric chunkPrimDimN value-indexing mother theorems.
+   The concrete `chunkPrimDimN_{1,2,3}_4_valAt_*` lemmas below are derived as corollaries. -/
+-- chunkPrimDimN 1 4 (chunk axis 1, d1=4*cs)
+set_option maxHeartbeats 3200000 in
+theorem chunkPrimDimN_1_4_valAt_gen
+    (x : Tensor) (d0 cs d2 d3 r idx : Nat)
+    (hx : x.shape = [d0, 4 * cs, d2, d3])
+    (hcs : cs ≠ 0) (hd2 : d2 ≠ 0) (hd3 : d3 ≠ 0) (hr : r < 4)
+    (hidx : idx < d0 * cs * d2 * d3) :
+    valAt (chunkPrimDimN 1 4 r x) idx =
+      valAt x (idx / (cs * (d2 * d3)) * (4 * (cs * (d2 * d3)))
+        + (r * (cs * (d2 * d3)) + idx % (cs * (d2 * d3)))) := by
+  have hshard : (4 * cs) / 4 = cs := by omega
+  have hresult_shape : (chunkPrimDimN 1 4 r x).shape = [d0, cs, d2, d3] := by
+    rw [chunkPrimDimN_shape 1 4 r _ _ hx (by omega)]
+    simp [List.set, List.getD, hshard]
+  have hprod : idx < prodShape (chunkPrimDimN 1 4 r x).shape := by
+    rw [hresult_shape]; simp [prodShape]
+    have heq : d0 * (cs * (d2 * d3)) = d0 * cs * d2 * d3 := by ring
+    omega
+  rw [valAt_of_lt _ _ hprod]
+  have e_csd2d3 : cs * (d2 * d3) ≠ 0 := Nat.mul_ne_zero hcs (Nat.mul_ne_zero hd2 hd3)
+  have e_d2d3 : d2 * d3 ≠ 0 := Nat.mul_ne_zero hd2 hd3
+  have hrm : r % 4 = r := Nat.mod_eq_of_lt hr
+  simp only [chunkPrimDimN, Tensor.mkShape, hx, List.getD, List.getElem?_cons_zero,
+    List.getElem?_cons_succ, Option.getD_some, List.drop, List.foldl,
+    Nat.mod_one, Nat.mul_one, Nat.one_mul, Nat.add_zero,
+    hshard, hrm, if_false, reduceIte, Nat.one_ne_zero, Nat.reduceEqDiff,
+    eq_false e_csd2d3, eq_false e_d2d3, eq_false hd3]
+  congr 1
+  have hrecon : d2 * d3 * (idx % (cs * (d2 * d3)) / (d2 * d3)) + idx % (cs * (d2 * d3)) % (d2 * d3)
+                = idx % (cs * (d2 * d3)) := Nat.div_add_mod _ _
+  conv_rhs => rw [← hrecon]
+  ring
+
+-- chunkPrimDimN 2 4 (chunk axis 2, d2=4*cs)
+set_option maxHeartbeats 3200000 in
+theorem chunkPrimDimN_2_4_valAt_gen
+    (x : Tensor) (d0 d1 cs d3 r idx : Nat)
+    (hx : x.shape = [d0, d1, 4 * cs, d3])
+    (hcs : cs ≠ 0) (hd3 : d3 ≠ 0) (hr : r < 4) (hidx : idx < d0 * d1 * cs * d3) :
+    valAt (chunkPrimDimN 2 4 r x) idx =
+      valAt x (idx / (cs * d3) * (4 * cs * d3) + r * (cs * d3) + idx % (cs * d3)) := by
+  have hshard : (4 * cs) / 4 = cs := by omega
+  have hresult_shape : (chunkPrimDimN 2 4 r x).shape = [d0, d1, cs, d3] := by
+    rw [chunkPrimDimN_shape 2 4 r _ _ hx (by omega)]
+    simp [List.set, List.getD, hshard]
+  have hprod : idx < prodShape (chunkPrimDimN 2 4 r x).shape := by
+    rw [hresult_shape]; simp [prodShape]; rw [Nat.mul_assoc] at hidx ⊢; exact hidx
+  rw [valAt_of_lt _ _ hprod]
+  have e_csd3 : cs * d3 ≠ 0 := Nat.mul_ne_zero hcs hd3
+  have hrm : r % 4 = r := Nat.mod_eq_of_lt hr
+  simp only [chunkPrimDimN, Tensor.mkShape, hx, List.getD, List.getElem?_cons_zero,
+    List.getElem?_cons_succ, Option.getD_some, List.drop, List.foldl,
+    Nat.mod_one, Nat.mul_one, Nat.one_mul, Nat.add_zero,
+    hshard, hrm, if_false, reduceIte, Nat.one_ne_zero, Nat.reduceEqDiff,
+    eq_false e_csd3, eq_false hd3]
+  congr 1
+  -- reconstruct: d3*(m/d3) + m%d3 = m  where m = idx%(cs*d3)
+  have hrecon : d3 * (idx % (cs * d3) / d3) + idx % (cs * d3) % d3 = idx % (cs * d3) :=
+    Nat.div_add_mod _ _
+  -- substitute the reconstruct on the RHS and close by ring
+  conv_rhs => rw [← hrecon]
+  ring
+
+-- chunkPrimDimN 3 4 (chunk axis 3, d3=4*cs)
+set_option maxHeartbeats 3200000 in
+theorem chunkPrimDimN_3_4_valAt_gen
+    (x : Tensor) (d0 d1 d2 cs r idx : Nat)
+    (hx : x.shape = [d0, d1, d2, 4 * cs])
+    (hcs : cs ≠ 0) (hr : r < 4) (hidx : idx < d0 * d1 * d2 * cs) :
+    valAt (chunkPrimDimN 3 4 r x) idx =
+      valAt x (idx / cs * (4 * cs) + r * cs + idx % cs) := by
+  have hshard : (4 * cs) / 4 = cs := by omega
+  have hresult_shape : (chunkPrimDimN 3 4 r x).shape = [d0, d1, d2, cs] := by
+    rw [chunkPrimDimN_shape 3 4 r _ _ hx (by omega)]
+    simp [List.set, List.getD, hshard]
+  have hprod : idx < prodShape (chunkPrimDimN 3 4 r x).shape := by
+    rw [hresult_shape]; simp [prodShape]; exact hidx
+  rw [valAt_of_lt _ _ hprod]
+  have e_cs : cs ≠ 0 := hcs
+  have hrm : r % 4 = r := Nat.mod_eq_of_lt hr
+  simp only [chunkPrimDimN, Tensor.mkShape, hx, List.getD, List.getElem?_cons_zero,
+    List.getElem?_cons_succ, Option.getD_some, List.drop, List.foldl,
+    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
+    hshard, hrm, e_cs, if_false, reduceIte, Nat.one_ne_zero,
+    Nat.reduceEqDiff]
+  congr 1
+  ring
+
 set_option maxHeartbeats 3200000 in
 theorem chunkPrimDimN_3_4_valAt_1_8_4_8 (x : Tensor) (r idx : Nat)
     (hx : x.shape = [1, 8, 4, 8]) (hr : r < 4) (hidx : idx < 64) :
     valAt (chunkPrimDimN 3 4 r x) idx =
       valAt x ((idx / 2) * 8 + r * 2 + idx % 2) := by
-  have hresult_shape : (chunkPrimDimN 3 4 r x).shape = [1, 8, 4, 2] := by
-    rw [chunkPrimDimN_shape 3 4 r _ _ hx (by omega)]
-    simp [List.set, List.getD]
-  have hprod : idx < prodShape (chunkPrimDimN 3 4 r x).shape := by
-    rw [hresult_shape]
-    simp [prodShape]
-    exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [chunkPrimDimN, Tensor.mkShape, hx, List.getD, List.getElem?_cons_zero,
-    List.getElem?_cons_succ, Option.getD_some, List.drop, List.foldl,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
-    show (2 : Nat) ≠ 0 from by omega, show (64 : Nat) ≠ 0 from by omega,
-    show (4 / 4 : Nat) = 1 by norm_num, ite_false]
-  have hrm : r % 4 = r := Nat.mod_eq_of_lt hr
-  rw [hrm]
-  simp [Nat.add_assoc]
+  rw [chunkPrimDimN_3_4_valAt_gen x 1 8 4 2 r idx hx (by decide) (by omega) (by omega)]
 
 set_option maxHeartbeats 3200000 in
 theorem transposeAxes_1_2_valAt_1_8_4_2 (x : Tensor) (idx : Nat)
@@ -8100,28 +8173,12 @@ theorem allGatherPrimDimN_3_4_valAt_1_4_8_2 (xs : List Tensor) (idx : Nat)
 
 set_option maxHeartbeats 3200000 in
 -- large arithmetic proof
+set_option maxHeartbeats 3200000 in
 theorem chunkPrimDimN_2_4_valAt_1_8_4_8 (x : Tensor) (r idx : Nat)
     (hx : x.shape = [1, 8, 4, 8]) (hr : r < 4) (hidx : idx < 64) :
     valAt (chunkPrimDimN 2 4 r x) idx =
       valAt x ((idx / 8) * 32 + r * 8 + idx % 8) := by
-  have hresult_shape : (chunkPrimDimN 2 4 r x).shape = [1, 8, 1, 8] := by
-    rw [chunkPrimDimN_shape 2 4 r _ _ hx (by omega)]
-    simp [List.set, List.getD]
-  have hprod : idx < prodShape (chunkPrimDimN 2 4 r x).shape := by
-    rw [hresult_shape]
-    simp [prodShape]
-    exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [chunkPrimDimN, Tensor.mkShape, hx, List.getD, List.getElem?_cons_zero,
-    List.getElem?_cons_succ, Option.getD_some, List.drop, List.foldl,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
-    show (1 : Nat) ≠ 0 from by omega, show (64 : Nat) ≠ 0 from by omega,
-    show (4 / 4 : Nat) = 1 by norm_num, ite_false]
-  have hrm : r % 4 = r := Nat.mod_eq_of_lt hr
-  rw [hrm]
-  simp [Nat.add_assoc]
+  rw [chunkPrimDimN_2_4_valAt_gen x 1 8 1 8 r idx hx (by decide) (by decide) (by omega) (by omega)]
 
 set_option maxHeartbeats 3200000 in
 -- large arithmetic proof
@@ -8261,31 +8318,13 @@ theorem fw_transpose12_split_dim3_4_1_8_4_8 (x : Tensor) (hx : x.shape = [1, 8, 
 
 set_option maxHeartbeats 3200000 in
 -- large arithmetic proof
+set_option maxHeartbeats 3200000 in
 theorem chunkPrimDimN_1_4_valAt_1_8_4_8 (x : Tensor) (r idx : Nat)
     (hx : x.shape = [1, 8, 4, 8]) (hr : r < 4) (hidx : idx < 64) :
     valAt (chunkPrimDimN 1 4 r x) idx =
       valAt x ((r * 2 + idx / 32) * 32 + idx % 32) := by
-  have hresult_shape : (chunkPrimDimN 1 4 r x).shape = [1, 2, 4, 8] := by
-    rw [chunkPrimDimN_shape 1 4 r _ _ hx (by omega)]
-    simp [List.set, List.getD]
-  have hprod : idx < prodShape (chunkPrimDimN 1 4 r x).shape := by
-    rw [hresult_shape]
-    simp [prodShape]
-    exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [chunkPrimDimN, Tensor.mkShape, hx, List.getD, List.getElem?_cons_zero,
-    List.getElem?_cons_succ, Option.getD_some, List.drop, List.foldl,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
-    show (2 : Nat) ≠ 0 from by omega, show (32 : Nat) ≠ 0 from by omega,
-    show (64 : Nat) ≠ 0 from by omega, show (4 / 4 : Nat) = 1 by norm_num, ite_false]
-  have hrm : r % 4 = r := Nat.mod_eq_of_lt hr
-  rw [hrm]
-  have hm64 : idx % 64 = idx := Nat.mod_eq_of_lt hidx
-  have hd64 : idx / 64 = 0 := Nat.div_eq_of_lt hidx
-  rw [hm64, hd64]
-  simp [Nat.add_assoc]
+  rw [chunkPrimDimN_1_4_valAt_gen x 1 2 4 8 r idx hx (by decide) (by decide) (by decide) (by omega) (by omega)]
+  congr 1 <;> omega
 
 set_option maxHeartbeats 3200000 in
 -- large arithmetic proof
@@ -8402,28 +8441,12 @@ theorem transposeAxes_1_2_valAt_1_4_8_8 (x : Tensor) (idx : Nat)
 
 set_option maxHeartbeats 3200000 in
 -- large arithmetic proof
+set_option maxHeartbeats 3200000 in
 theorem chunkPrimDimN_3_4_valAt_1_4_8_8 (x : Tensor) (r idx : Nat)
     (hx : x.shape = [1, 4, 8, 8]) (hr : r < 4) (hidx : idx < 64) :
     valAt (chunkPrimDimN 3 4 r x) idx =
       valAt x ((idx / 2) * 8 + r * 2 + idx % 2) := by
-  have hresult_shape : (chunkPrimDimN 3 4 r x).shape = [1, 4, 8, 2] := by
-    rw [chunkPrimDimN_shape 3 4 r _ _ hx (by omega)]
-    simp [List.set, List.getD]
-  have hprod : idx < prodShape (chunkPrimDimN 3 4 r x).shape := by
-    rw [hresult_shape]
-    simp [prodShape]
-    exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [chunkPrimDimN, Tensor.mkShape, hx, List.getD, List.getElem?_cons_zero,
-    List.getElem?_cons_succ, Option.getD_some, List.drop, List.foldl,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
-    show (2 : Nat) ≠ 0 from by omega, show (64 : Nat) ≠ 0 from by omega,
-    show (4 / 4 : Nat) = 1 by norm_num, ite_false]
-  have hrm : r % 4 = r := Nat.mod_eq_of_lt hr
-  rw [hrm]
-  simp [Nat.add_assoc]
+  rw [chunkPrimDimN_3_4_valAt_gen x 1 4 8 2 r idx hx (by decide) (by omega) (by omega)]
 
 set_option maxHeartbeats 3200000 in
 -- large arithmetic proof
@@ -9000,26 +9023,7 @@ theorem chunkPrimDimN_2_4_valAt_1_4_8_8 (x : Tensor) (r idx : Nat)
     (hx : x.shape = [1, 4, 8, 8]) (hr : r < 4) (hidx : idx < 64) :
     valAt (chunkPrimDimN 2 4 r x) idx =
       valAt x ((idx / 16) * 64 + r * 16 + idx % 16) := by
-  have hresult_shape : (chunkPrimDimN 2 4 r x).shape = [1, 4, 2, 8] := by
-    rw [chunkPrimDimN_shape 2 4 r _ _ hx (by omega)]
-    simp [List.set, List.getD]
-  have hprod : idx < prodShape (chunkPrimDimN 2 4 r x).shape := by
-    rw [hresult_shape]
-    simp [prodShape]
-    exact hidx
-  rw [valAt_of_lt _ _ hprod]
-  simp only [chunkPrimDimN, Tensor.mkShape, hx, List.getD, List.getElem?_cons_zero,
-    List.getElem?_cons_succ, Option.getD_some, List.drop, List.foldl,
-    Nat.reduceMul, Nat.reduceAdd, Nat.reduceDiv, Nat.reduceMod,
-    Nat.div_one, Nat.mod_one, Nat.mul_one, Nat.add_zero, Nat.zero_add,
-    show (8 : Nat) ≠ 0 from by omega, show (4 : Nat) ≠ 0 from by omega,
-    show (2 : Nat) ≠ 0 from by omega, show (16 : Nat) ≠ 0 from by omega,
-    show (64 : Nat) ≠ 0 from by omega, show (8 / 4 : Nat) = 2 by norm_num,
-    ite_false]
-  have hrm : r % 4 = r := Nat.mod_eq_of_lt hr
-  rw [hrm]
-  congr 1
-  omega
+  rw [chunkPrimDimN_2_4_valAt_gen x 1 4 2 8 r idx hx (by decide) (by decide) (by omega) (by omega)]
 
 set_option maxHeartbeats 3200000 in
 theorem chunk2_gather2_roundtrip_1_4_2_8 (c0 c1 c2 c3 : Tensor)
