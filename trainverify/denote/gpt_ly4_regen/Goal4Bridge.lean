@@ -243,11 +243,13 @@ lemma goal_4_hInitCut_helper (Ssm Spm : Store)
 -- ========== Assembly: goal_4_cut_to_full ==========
 theorem goal_4_cut_to_full (h : goal_4_stmt_cut) : goal_4_stmt := by
   intro initSM initPM hSM hPM hInit
-  set Ssm := denoteGraph sm initSM with hSsm
-  set Spm := denoteGraph pm initPM with hSpm
+  obtain ⟨Ssm, hSsm⟩ : ∃ S, S = denoteGraph sm initSM := ⟨_, rfl⟩
+  obtain ⟨Spm, hSpm⟩ : ∃ S, S = denoteGraph pm initPM := ⟨_, rfl⟩
+  rw [← hSsm, ← hSpm]
   have hg2 := goal_2_intermediate initSM initPM hSM hPM hInit
   have hg3 := goal_3_intermediate initSM initPM hSM hPM hInit
   have hinitC := initGoals_preserved initSM initPM hInit
+  rw [← hSsm, ← hSpm] at hg2 hg3 hinitC
   have hnr : pm_goal_4.numRanks = pm.numRanks := by native_decide
   have h564_smsh : (Ssm 564).shape = [1, 8, 32] := by
     have h := hg2.1; simp only [goal_2] at h; exact h
@@ -305,7 +307,6 @@ theorem goal_4_intermediate (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
     InitGoalHolds pm.numRanks goal_4 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
   have hfull : goal_4_stmt := goal_4_cut_to_full prove_goal_4_cut
-  have := hfull initSM initPM hSM hPM hInit
-  simpa [InitGoalHolds, goal_4] using this
+  exact hfull initSM initPM hSM hPM hInit
 
 end TrainVerify.Denote.GeneratedGoals

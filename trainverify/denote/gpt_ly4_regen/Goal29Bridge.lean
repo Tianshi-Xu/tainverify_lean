@@ -332,8 +332,9 @@ lemma goal_29_hInitCut_helper (Ssm Spm : Store)
 -- ========== 总装 ==========
 theorem goal_29_cut_to_full (h : goal_29_stmt_cut) : goal_29_stmt := by
   intro initSM initPM hSM hPM hInit
-  set Ssm := denoteGraph sm initSM with hSsm
-  set Spm := denoteGraph pm initPM with hSpm
+  obtain ⟨Ssm, hSsm⟩ : ∃ S, S = denoteGraph sm initSM := ⟨_, rfl⟩
+  obtain ⟨Spm, hSpm⟩ : ∃ S, S = denoteGraph pm initPM := ⟨_, rfl⟩
+  rw [← hSsm, ← hSpm]
   have hg2 := goal_2_intermediate initSM initPM hSM hPM hInit
   have hg3 := goal_3_intermediate initSM initPM hSM hPM hInit
   have hg4 := goal_4_intermediate initSM initPM hSM hPM hInit
@@ -369,6 +370,7 @@ theorem goal_29_cut_to_full (h : goal_29_stmt_cut) : goal_29_stmt := by
   have hg267 := goal_267_intermediate initSM initPM hSM hPM hInit
   have hg269 := goal_269_intermediate initSM initPM hSM hPM hInit
   have hinitC := initGoals_preserved initSM initPM hInit
+  rw [← hSsm, ← hSpm] at hg2 hg3 hg4 hg5 hg6 hg7 hg8 hg9 hg10 hg11 hg12 hg13 hg14 hg15 hg16 hg17 hg18 hg19 hg20 hg21 hg22 hg23 hg24 hg25 hg26 hg27 hg28 hg257 hg259 hg261 hg263 hg265 hg267 hg269 hinitC
   have hnr : pm_goal_29.numRanks = pm.numRanks := by native_decide
   -- 938 = goal_269.ts [1,8,32]; 1629-1632 = goal_269 tps [1,8,8]; 601 = goal_28.ts [1,8,32]; 1605-1608 = goal_28 tps [1,2,32]
   have h938_smsh : (Ssm 938).shape = [1, 8, 32] := by
@@ -429,7 +431,6 @@ theorem goal_29_intermediate (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
     InitGoalHolds pm.numRanks goal_29 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
   have hfull : goal_29_stmt := goal_29_cut_to_full prove_goal_29_cut
-  have := hfull initSM initPM hSM hPM hInit
-  simpa [InitGoalHolds, goal_29] using this
+  exact hfull initSM initPM hSM hPM hInit
 
 end TrainVerify.Denote.GeneratedGoals

@@ -441,8 +441,9 @@ lemma goal_80_hInitCut_helper (Ssm Spm : Store)
 -- ========== Assembly: goal_80_cut_to_full ==========
 theorem goal_80_cut_to_full (h : goal_80_stmt_cut) : goal_80_stmt := by
   intro initSM initPM hSM hPM hInit
-  set Ssm := denoteGraph sm initSM with hSsm
-  set Spm := denoteGraph pm initPM with hSpm
+  obtain ⟨Ssm, hSsm⟩ : ∃ S, S = denoteGraph sm initSM := ⟨_, rfl⟩
+  obtain ⟨Spm, hSpm⟩ : ∃ S, S = denoteGraph pm initPM := ⟨_, rfl⟩
+  rw [← hSsm, ← hSpm]
   have hg2 := goal_2_intermediate initSM initPM hSM hPM hInit
   have hg3 := goal_3_intermediate initSM initPM hSM hPM hInit
   have hg4 := goal_4_intermediate initSM initPM hSM hPM hInit
@@ -544,6 +545,7 @@ theorem goal_80_cut_to_full (h : goal_80_stmt_cut) : goal_80_stmt := by
   have hg297 := goal_297_intermediate initSM initPM hSM hPM hInit
   have hg299 := goal_299_intermediate initSM initPM hSM hPM hInit
   have hinitC := initGoals_preserved initSM initPM hInit
+  rw [← hSsm, ← hSpm] at hg2 hg3 hg4 hg5 hg6 hg7 hg8 hg9 hg10 hg11 hg12 hg13 hg14 hg15 hg16 hg17 hg18 hg19 hg20 hg21 hg22 hg23 hg24 hg25 hg26 hg27 hg28 hg29 hg30 hg31 hg32 hg33 hg34 hg35 hg36 hg37 hg38 hg39 hg40 hg41 hg42 hg43 hg44 hg45 hg46 hg47 hg48 hg49 hg50 hg51 hg52 hg53 hg54 hg55 hg56 hg57 hg58 hg59 hg60 hg61 hg62 hg63 hg64 hg65 hg66 hg67 hg68 hg69 hg70 hg71 hg72 hg73 hg74 hg75 hg76 hg77 hg78 hg79 hg257 hg259 hg261 hg263 hg265 hg267 hg269 hg271 hg273 hg275 hg277 hg279 hg281 hg283 hg285 hg287 hg289 hg291 hg293 hg295 hg297 hg299 hinitC
   have hnr : pm_goal_80.numRanks = pm.numRanks := by native_decide
   have hg673 := hinitC initGoal_673 (by simp only [initGoals]; decide)
   have hg674 := hinitC initGoal_674 (by simp only [initGoals]; decide)
@@ -609,7 +611,6 @@ theorem goal_80_intermediate (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
     InitGoalHolds pm.numRanks goal_80 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
   have hfull : goal_80_stmt := goal_80_cut_to_full prove_goal_80_cut
-  have := hfull initSM initPM hSM hPM hInit
-  simpa [InitGoalHolds, goal_80] using this
+  exact hfull initSM initPM hSM hPM hInit
 
 end TrainVerify.Denote.GeneratedGoals

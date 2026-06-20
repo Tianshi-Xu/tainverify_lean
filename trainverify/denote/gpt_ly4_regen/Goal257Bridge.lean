@@ -169,13 +169,15 @@ theorem pm_frame_1144_self (initPM : Store) :
 -- ========== 总装: goal_257_cut_to_full ==========
 theorem goal_257_cut_to_full (h : goal_257_stmt_cut) : goal_257_stmt := by
   intro initSM initPM hSM hPM hInit
-  set Ssm := denoteGraph sm initSM with hSsm
-  set Spm := denoteGraph pm initPM with hSpm
+  obtain ⟨Ssm, hSsm⟩ : ∃ S, S = denoteGraph sm initSM := ⟨_, rfl⟩
+  obtain ⟨Spm, hSpm⟩ : ∃ S, S = denoteGraph pm initPM := ⟨_, rfl⟩
+  rw [← hSsm, ← hSpm]
   -- 拓扑归纳: goal_2/3/4 在 computed store 上的 InitGoalHolds
-  have hg2 : InitGoalHolds pm.numRanks goal_2 Ssm Spm := goal_2_intermediate initSM initPM hSM hPM hInit
-  have hg3 : InitGoalHolds pm.numRanks goal_3 Ssm Spm := goal_3_intermediate initSM initPM hSM hPM hInit
-  have hg4 : InitGoalHolds pm.numRanks goal_4 Ssm Spm := goal_4_intermediate initSM initPM hSM hPM hInit
-  have hinitC : InitGoalsHold pm.numRanks initGoals Ssm Spm := initGoals_preserved initSM initPM hInit
+  have hg2 := goal_2_intermediate initSM initPM hSM hPM hInit
+  have hg3 := goal_3_intermediate initSM initPM hSM hPM hInit
+  have hg4 := goal_4_intermediate initSM initPM hSM hPM hInit
+  have hinitC := initGoals_preserved initSM initPM hInit
+  rw [← hSsm, ← hSpm] at hg2 hg3 hg4 hinitC
   have hnr : pm_goal_257.numRanks = pm.numRanks := by native_decide
   -- cut 要的 InitGoalsHold (initGoals ++ [goal_2,goal_3,goal_4]) 在 computed store
   have hInitCut : InitGoalsHold pm_goal_257.numRanks goal_257_cut_initGoals Ssm Spm := by
@@ -241,7 +243,6 @@ theorem goal_257_intermediate (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
     InitGoalHolds pm.numRanks goal_257 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
   have hfull : goal_257_stmt := goal_257_cut_to_full prove_goal_257_cut
-  have := hfull initSM initPM hSM hPM hInit
-  simpa [InitGoalHolds, goal_257] using this
+  exact hfull initSM initPM hSM hPM hInit
 
 end TrainVerify.Denote.GeneratedGoals

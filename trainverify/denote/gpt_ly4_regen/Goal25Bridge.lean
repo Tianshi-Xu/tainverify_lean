@@ -136,8 +136,9 @@ theorem denote_pm_goal_25_596 (s : Store) :
 -- ========== 总装: goal_25_cut_to_full ==========
 theorem goal_25_cut_to_full (h : goal_25_stmt_cut) : goal_25_stmt := by
   intro initSM initPM hSM hPM hInit
-  set Ssm := denoteGraph sm initSM with hSsm
-  set Spm := denoteGraph pm initPM with hSpm
+  obtain ⟨Ssm, hSsm⟩ : ∃ S, S = denoteGraph sm initSM := ⟨_, rfl⟩
+  obtain ⟨Spm, hSpm⟩ : ∃ S, S = denoteGraph pm initPM := ⟨_, rfl⟩
+  rw [← hSsm, ← hSpm]
   have hg2 := goal_2_intermediate initSM initPM hSM hPM hInit
   have hg3 := goal_3_intermediate initSM initPM hSM hPM hInit
   have hg4 := goal_4_intermediate initSM initPM hSM hPM hInit
@@ -168,6 +169,7 @@ theorem goal_25_cut_to_full (h : goal_25_stmt_cut) : goal_25_stmt := by
   have hg265 := goal_265_intermediate initSM initPM hSM hPM hInit
   have hg267 := goal_267_intermediate initSM initPM hSM hPM hInit
   have hinitC := initGoals_preserved initSM initPM hInit
+  rw [← hSsm, ← hSpm] at hg2 hg3 hg4 hg5 hg6 hg7 hg8 hg9 hg10 hg11 hg12 hg13 hg14 hg15 hg16 hg17 hg18 hg19 hg20 hg21 hg22 hg23 hg24 hg257 hg259 hg261 hg263 hg265 hg267 hinitC
   have hnr : pm_goal_25.numRanks = pm.numRanks := by native_decide
   -- 934=goal_267.ts [1,8,32] (gathered dim1); 1525-1528=goal_267.tps [1,2,32].
   have h934_smsh : (Ssm 934).shape = [1, 8, 32] := by
@@ -208,14 +210,12 @@ theorem goal_25_cut_to_full (h : goal_25_stmt_cut) : goal_25_stmt := by
     have h := h594_full.2.2
     simp only [initGoal_594, List.map] at h
     rw [reconstructWithDim_singleton] at h
-    -- h : Ssm 594 = Spm 594  (both as denoteGraph forms)
-    show (denoteGraph pm initPM 594).shape = [32]
+    -- h : Ssm 594 = Spm 594  (opaque forms); goal already (Spm 594).shape
     rw [← h]; exact h594_smsh
   have h595_pmsh : (Spm 595).shape = [32] := by
     have h := h595_full.2.2
     simp only [initGoal_595, List.map] at h
     rw [reconstructWithDim_singleton] at h
-    show (denoteGraph pm initPM 595).shape = [32]
     rw [← h]; exact h595_smsh
   have hPM25 : StoreShapesHold Spm pm_goal_25InitEnv := by
     intro tid sh hsh
@@ -285,7 +285,6 @@ theorem goal_25_intermediate (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
     InitGoalHolds pm.numRanks goal_25 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
   have hfull : goal_25_stmt := goal_25_cut_to_full prove_goal_25_cut
-  have := hfull initSM initPM hSM hPM hInit
-  simpa [InitGoalHolds, goal_25] using this
+  exact hfull initSM initPM hSM hPM hInit
 
 end TrainVerify.Denote.GeneratedGoals

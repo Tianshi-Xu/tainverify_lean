@@ -126,8 +126,9 @@ theorem pm_frame_2052_self (initPM : Store) :
 -- ========== 总装: goal_273_cut_to_full ==========
 theorem goal_273_cut_to_full (h : goal_273_stmt_cut) : goal_273_stmt := by
   intro initSM initPM hSM hPM hInit
-  set Ssm := denoteGraph sm initSM with hSsm
-  set Spm := denoteGraph pm initPM with hSpm
+  obtain ⟨Ssm, hSsm⟩ : ∃ S, S = denoteGraph sm initSM := ⟨_, rfl⟩
+  obtain ⟨Spm, hSpm⟩ : ∃ S, S = denoteGraph pm initPM := ⟨_, rfl⟩
+  rw [← hSsm, ← hSpm]
   have hg2 := goal_2_intermediate initSM initPM hSM hPM hInit
   have hg3 := goal_3_intermediate initSM initPM hSM hPM hInit
   have hg4 := goal_4_intermediate initSM initPM hSM hPM hInit
@@ -164,6 +165,7 @@ theorem goal_273_cut_to_full (h : goal_273_stmt_cut) : goal_273_stmt := by
   have hg267 := goal_267_intermediate initSM initPM hSM hPM hInit
   have hg269 := goal_269_intermediate initSM initPM hSM hPM hInit
   have hinitC := initGoals_preserved initSM initPM hInit
+  rw [← hSsm, ← hSpm] at hg2 hg3 hg4 hg5 hg6 hg7 hg8 hg9 hg10 hg11 hg12 hg13 hg14 hg15 hg16 hg17 hg18 hg19 hg20 hg21 hg22 hg23 hg24 hg25 hg26 hg27 hg28 hg29 hg257 hg259 hg261 hg263 hg265 hg267 hg269 hinitC
   have hnr : pm_goal_273.numRanks = pm.numRanks := by native_decide
   -- shape 弱化: 602=goal_29.ts [1,8,32]; 1637-1640=goal_29.tps [1,8,8] (obtain 规避 whnf)
   have h602_smsh : (Ssm 602).shape = [1, 8, 32] := by
@@ -254,7 +256,6 @@ theorem goal_273_intermediate (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
     InitGoalHolds pm.numRanks goal_273 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
   have hfull : goal_273_stmt := goal_273_cut_to_full prove_goal_273_cut
-  have := hfull initSM initPM hSM hPM hInit
-  simpa [InitGoalHolds, goal_273] using this
+  exact hfull initSM initPM hSM hPM hInit
 
 end TrainVerify.Denote.GeneratedGoals
