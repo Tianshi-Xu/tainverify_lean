@@ -180,33 +180,11 @@ theorem goal_19_cut_to_full (h : goal_19_stmt_cut) : goal_19_stmt := by
     · exact h1311_pmsh
     · exact h1312_pmsh
   have hInitCut : InitGoalsHold pm_goal_19.numRanks goal_19_cut_initGoals Ssm Spm := by
-    rw [hnr]; intro g hg
-    simp only [goal_19_cut_initGoals, goal_19_prereqs, List.mem_append] at hg
-    rcases hg with hg | hg
-    · exact hinitC g hg
-    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
-      rcases hg with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-      · exact hg2
-      · exact hg3
-      · exact hg4
-      · exact hg5
-      · exact hg6
-      · exact hg7
-      · exact hg8
-      · exact hg9
-      · exact hg10
-      · exact hg11
-      · exact hg12
-      · exact hg13
-      · exact hg14
-      · exact hg15
-      · exact hg16
-      · exact hg17
-      · exact hg18
-      · exact hg257
-      · exact hg261
-      · exact hg263
-      · exact hg265
+    rw [hnr]
+    simp only [InitGoalsHold] at hinitC ⊢
+    simp only [goal_19_cut_initGoals, goal_19_prereqs, List.forall_mem_append,
+      List.forall_mem_cons, List.forall_mem_nil, and_true]
+    exact ⟨hinitC, hg2, hg3, hg4, hg5, hg6, hg7, hg8, hg9, hg10, hg11, hg12, hg13, hg14, hg15, hg16, hg17, hg18, hg257, hg261, hg263, hg265, List.forall_mem_nil _⟩
   have hcut := h Ssm Spm hSM19 hPM19 hInitCut
   -- Frame: 587 (sm), 1413-1416 (pm)
   have hsmf : Ssm 587 = denoteGraph sm_goal_19 Ssm 587 := by

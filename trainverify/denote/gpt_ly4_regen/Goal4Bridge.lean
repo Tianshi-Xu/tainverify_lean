@@ -231,14 +231,11 @@ lemma goal_4_hInitCut_helper (Ssm Spm : Store)
     (hg3 : InitGoalHolds pm.numRanks goal_3 Ssm Spm) :
     InitGoalsHold pm_goal_4.numRanks goal_4_cut_initGoals Ssm Spm := by
   have hnr : pm_goal_4.numRanks = pm.numRanks := by native_decide
-  rw [hnr]; intro g hg
-  simp only [goal_4_cut_initGoals, goal_4_prereqs, List.mem_append] at hg
-  rcases hg with hg | hg
-  · exact hinitC g hg
-  · simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
-    rcases hg with rfl | rfl
-    · exact hg2
-    · exact hg3
+  rw [hnr]
+  simp only [InitGoalsHold] at hinitC ⊢
+  simp only [goal_4_cut_initGoals, goal_4_prereqs, List.forall_mem_append,
+    List.forall_mem_cons, List.forall_mem_nil, and_true]
+  exact ⟨hinitC, hg2, hg3, List.forall_mem_nil _⟩
 
 -- ========== Assembly: goal_4_cut_to_full ==========
 theorem goal_4_cut_to_full (h : goal_4_stmt_cut) : goal_4_stmt := by

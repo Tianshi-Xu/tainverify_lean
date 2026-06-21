@@ -62,19 +62,11 @@ theorem goal_11_cut_to_full (h : goal_11_stmt_cut) : goal_11_stmt := by
   rw [← hSsm, ← hSpm] at hg2 hg3 hg4 hg5 hg7 hg257 hg263 hinitC
   have hnr : pm_goal_11.numRanks = pm.numRanks := by native_decide
   have hInitCut : InitGoalsHold pm_goal_11.numRanks goal_11_cut_initGoals Ssm Spm := by
-    rw [hnr]; intro g hg
-    simp only [goal_11_cut_initGoals, goal_11_prereqs, List.mem_append] at hg
-    rcases hg with hg | hg
-    · exact hinitC g hg
-    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
-      rcases hg with rfl | rfl | rfl | rfl | rfl | rfl | rfl
-      · exact hg2
-      · exact hg3
-      · exact hg4
-      · exact hg5
-      · exact hg7
-      · exact hg257
-      · exact hg263
+    rw [hnr]
+    simp only [InitGoalsHold] at hinitC ⊢
+    simp only [goal_11_cut_initGoals, goal_11_prereqs, List.forall_mem_append,
+      List.forall_mem_cons, List.forall_mem_nil, and_true]
+    exact ⟨hinitC, hg2, hg3, hg4, hg5, hg7, hg257, hg263, List.forall_mem_nil _⟩
   -- 574 = goal_7.ts; (Ssm 574).shape = [1,8,32] (from hg7)
   have h574_smsh : (Ssm 574).shape = [1, 8, 32] := by
     have h := hg7.1; simp only [goal_7] at h; exact h

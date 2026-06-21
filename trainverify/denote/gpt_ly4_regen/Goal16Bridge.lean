@@ -130,26 +130,11 @@ theorem goal_16_cut_to_full (h : goal_16_stmt_cut) : goal_16_stmt := by
   rw [← hSsm, ← hSpm] at hg2 hg3 hg4 hg5 hg6 hg7 hg9 hg10 hg11 hg12 hg15 hg257 hg261 hg263 hinitC
   have hnr : pm_goal_16.numRanks = pm.numRanks := by native_decide
   have hInitCut : InitGoalsHold pm_goal_16.numRanks goal_16_cut_initGoals Ssm Spm := by
-    rw [hnr]; intro g hg
-    simp only [goal_16_cut_initGoals, goal_16_prereqs, List.mem_append] at hg
-    rcases hg with hg | hg
-    · exact hinitC g hg
-    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
-      rcases hg with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-      · exact hg2
-      · exact hg3
-      · exact hg4
-      · exact hg5
-      · exact hg6
-      · exact hg7
-      · exact hg9
-      · exact hg10
-      · exact hg11
-      · exact hg12
-      · exact hg15
-      · exact hg257
-      · exact hg261
-      · exact hg263
+    rw [hnr]
+    simp only [InitGoalsHold] at hinitC ⊢
+    simp only [goal_16_cut_initGoals, goal_16_prereqs, List.forall_mem_append,
+      List.forall_mem_cons, List.forall_mem_nil, and_true]
+    exact ⟨hinitC, hg2, hg3, hg4, hg5, hg6, hg7, hg9, hg10, hg11, hg12, hg15, hg257, hg261, hg263, List.forall_mem_nil _⟩
   -- shape envs for sm_goal_16 (578,583) and pm_goal_16 (1261-1264, 1333-1336)
   -- 578 = goal_10.ts, 1261-1264 = goal_10.tps; 583 = goal_15.ts, 1333-1336 = goal_15.tps
   have h578_smsh : (Ssm 578).shape = [1, 4, 8, 8] := by

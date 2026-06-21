@@ -158,50 +158,11 @@ theorem goal_32_cut_to_full (h : goal_32_stmt_cut) : goal_32_stmt := by
   rw [← hSsm, ← hSpm] at hg2 hg3 hg4 hg5 hg6 hg7 hg8 hg9 hg10 hg11 hg12 hg13 hg14 hg15 hg16 hg17 hg18 hg19 hg20 hg21 hg22 hg23 hg24 hg25 hg26 hg27 hg28 hg29 hg30 hg257 hg259 hg261 hg263 hg265 hg267 hg269 hg271 hg277 hinitC
   have hnr : pm_goal_32.numRanks = pm.numRanks := by native_decide
   have hInitCut : InitGoalsHold pm_goal_32.numRanks goal_32_cut_initGoals Ssm Spm := by
-    rw [hnr]; intro g hg
-    simp only [goal_32_cut_initGoals, goal_32_prereqs, List.mem_append] at hg
-    rcases hg with hg | hg
-    · exact hinitC g hg
-    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
-      rcases hg with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-      · exact hg2
-      · exact hg3
-      · exact hg4
-      · exact hg5
-      · exact hg6
-      · exact hg7
-      · exact hg8
-      · exact hg9
-      · exact hg10
-      · exact hg11
-      · exact hg12
-      · exact hg13
-      · exact hg14
-      · exact hg15
-      · exact hg16
-      · exact hg17
-      · exact hg18
-      · exact hg19
-      · exact hg20
-      · exact hg21
-      · exact hg22
-      · exact hg23
-      · exact hg24
-      · exact hg25
-      · exact hg26
-      · exact hg27
-      · exact hg28
-      · exact hg29
-      · exact hg30
-      · exact hg257
-      · exact hg259
-      · exact hg261
-      · exact hg263
-      · exact hg265
-      · exact hg267
-      · exact hg269
-      · exact hg271
-      · exact hg277
+    rw [hnr]
+    simp only [InitGoalsHold] at hinitC ⊢
+    simp only [goal_32_cut_initGoals, goal_32_prereqs, List.forall_mem_append,
+      List.forall_mem_cons, List.forall_mem_nil, and_true]
+    exact ⟨hinitC, hg2, hg3, hg4, hg5, hg6, hg7, hg8, hg9, hg10, hg11, hg12, hg13, hg14, hg15, hg16, hg17, hg18, hg19, hg20, hg21, hg22, hg23, hg24, hg25, hg26, hg27, hg28, hg29, hg30, hg257, hg259, hg261, hg263, hg265, hg267, hg269, hg271, hg277, List.forall_mem_nil _⟩
   -- SM input shapes: 965 = goal_277.ts [1,8,32]; 608 = initGoal_608.ts [32,32]
   have h965_smsh : (Ssm 965).shape = [1, 8, 32] := by
     have h := hg277.1; simp only [goal_277] at h; exact h

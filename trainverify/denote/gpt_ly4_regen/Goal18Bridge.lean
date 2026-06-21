@@ -254,28 +254,11 @@ theorem goal_18_cut_to_full (h : goal_18_stmt_cut) : goal_18_stmt := by
     · exact h1371_pmsh
     · exact h1372_pmsh
   have hInitCut : InitGoalsHold pm_goal_18.numRanks goal_18_cut_initGoals Ssm Spm := by
-    rw [hnr]; intro g hg
-    simp only [goal_18_cut_initGoals, goal_18_prereqs, List.mem_append] at hg
-    rcases hg with hg | hg
-    · exact hinitC g hg
-    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
-      rcases hg with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-      · exact hg2
-      · exact hg3
-      · exact hg4
-      · exact hg5
-      · exact hg6
-      · exact hg7
-      · exact hg9
-      · exact hg10
-      · exact hg11
-      · exact hg12
-      · exact hg15
-      · exact hg16
-      · exact hg17
-      · exact hg257
-      · exact hg261
-      · exact hg263
+    rw [hnr]
+    simp only [InitGoalsHold] at hinitC ⊢
+    simp only [goal_18_cut_initGoals, goal_18_prereqs, List.forall_mem_append,
+      List.forall_mem_cons, List.forall_mem_nil, and_true]
+    exact ⟨hinitC, hg2, hg3, hg4, hg5, hg6, hg7, hg9, hg10, hg11, hg12, hg15, hg16, hg17, hg257, hg261, hg263, List.forall_mem_nil _⟩
   have hcut := h Ssm Spm hSM18 hPM18 hInitCut
   -- Frame: 586 (sm) 与 586 (pm) 对齐到 mini-graph
   have hsmf : Ssm 586 = denoteGraph sm_goal_18 Ssm 586 := by

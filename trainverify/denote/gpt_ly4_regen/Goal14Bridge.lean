@@ -152,20 +152,11 @@ theorem goal_14_cut_to_full (h : goal_14_stmt_cut) : goal_14_stmt := by
   rw [← hSsm, ← hSpm] at hg2 hg3 hg4 hg5 hg8 hg13 hg257 hg265 hinitC
   have hnr : pm_goal_14.numRanks = pm.numRanks := by native_decide
   have hInitCut : InitGoalsHold pm_goal_14.numRanks goal_14_cut_initGoals Ssm Spm := by
-    rw [hnr]; intro g hg
-    simp only [goal_14_cut_initGoals, goal_14_prereqs, List.mem_append] at hg
-    rcases hg with hg | hg
-    · exact hinitC g hg
-    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
-      rcases hg with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-      · exact hg2
-      · exact hg3
-      · exact hg4
-      · exact hg5
-      · exact hg8
-      · exact hg13
-      · exact hg257
-      · exact hg265
+    rw [hnr]
+    simp only [InitGoalsHold] at hinitC ⊢
+    simp only [goal_14_cut_initGoals, goal_14_prereqs, List.forall_mem_append,
+      List.forall_mem_cons, List.forall_mem_nil, and_true]
+    exact ⟨hinitC, hg2, hg3, hg4, hg5, hg8, hg13, hg257, hg265, List.forall_mem_nil _⟩
   -- shape: 581 = goal_13.ts/tps (single), shape [1,8,4,8]
   have h581_smsh : (Ssm 581).shape = [1, 8, 4, 8] := by
     have h := hg13.1; simp only [goal_13] at h; exact h

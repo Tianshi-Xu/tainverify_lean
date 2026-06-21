@@ -117,18 +117,11 @@ theorem goal_6_cut_to_full (h : goal_6_stmt_cut) : goal_6_stmt := by
   rw [← hSsm, ← hSpm] at hg2 hg3 hg4 hg5 hg257 hg261 hinitC
   have hnr : pm_goal_6.numRanks = pm.numRanks := by native_decide
   have hInitCut : InitGoalsHold pm_goal_6.numRanks goal_6_cut_initGoals Ssm Spm := by
-    rw [hnr]; intro g hg
-    simp only [goal_6_cut_initGoals, goal_6_prereqs, List.mem_append] at hg
-    rcases hg with hg | hg
-    · exact hinitC g hg
-    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
-      rcases hg with rfl | rfl | rfl | rfl | rfl | rfl
-      · exact hg2
-      · exact hg3
-      · exact hg4
-      · exact hg5
-      · exact hg257
-      · exact hg261
+    rw [hnr]
+    simp only [InitGoalsHold] at hinitC ⊢
+    simp only [goal_6_cut_initGoals, goal_6_prereqs, List.forall_mem_append,
+      List.forall_mem_cons, List.forall_mem_nil, and_true]
+    exact ⟨hinitC, hg2, hg3, hg4, hg5, hg257, hg261, List.forall_mem_nil _⟩
   -- 918 = goal_261.ts; 1173-1176 = goal_261.tps; 571 = weight init
   have h918_smsh : (Ssm 918).shape = [1, 8, 32] := by
     have h := hg261.1; simp only [goal_261] at h; exact h

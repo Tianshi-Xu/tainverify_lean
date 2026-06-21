@@ -336,71 +336,11 @@ theorem goal_49_cut_to_full (h : goal_49_stmt_cut) : goal_49_stmt := by
   rw [← hSsm, ← hSpm] at hg2 hg3 hg4 hg5 hg6 hg7 hg8 hg9 hg10 hg11 hg12 hg13 hg14 hg15 hg16 hg17 hg18 hg19 hg20 hg21 hg22 hg23 hg24 hg25 hg26 hg27 hg28 hg29 hg30 hg31 hg32 hg33 hg34 hg35 hg36 hg37 hg38 hg39 hg40 hg41 hg42 hg43 hg44 hg45 hg46 hg47 hg48 hg257 hg259 hg261 hg263 hg265 hg267 hg269 hg271 hg273 hg275 hg277 hg279 hinitC
   have hnr : pm_goal_49.numRanks = pm.numRanks := by native_decide
   have hInitCut : InitGoalsHold pm_goal_49.numRanks goal_49_cut_initGoals Ssm Spm := by
-    rw [hnr]; intro g hg
-    simp only [goal_49_cut_initGoals, goal_49_prereqs, List.mem_append] at hg
-    rcases hg with hg | hg
-    · exact hinitC g hg
-    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
-      rcases hg with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-      · exact hg2
-      · exact hg3
-      · exact hg4
-      · exact hg5
-      · exact hg6
-      · exact hg7
-      · exact hg8
-      · exact hg9
-      · exact hg10
-      · exact hg11
-      · exact hg12
-      · exact hg13
-      · exact hg14
-      · exact hg15
-      · exact hg16
-      · exact hg17
-      · exact hg18
-      · exact hg19
-      · exact hg20
-      · exact hg21
-      · exact hg22
-      · exact hg23
-      · exact hg24
-      · exact hg25
-      · exact hg26
-      · exact hg27
-      · exact hg28
-      · exact hg29
-      · exact hg30
-      · exact hg31
-      · exact hg32
-      · exact hg33
-      · exact hg34
-      · exact hg35
-      · exact hg36
-      · exact hg37
-      · exact hg38
-      · exact hg39
-      · exact hg40
-      · exact hg41
-      · exact hg42
-      · exact hg43
-      · exact hg44
-      · exact hg45
-      · exact hg46
-      · exact hg47
-      · exact hg48
-      · exact hg257
-      · exact hg259
-      · exact hg261
-      · exact hg263
-      · exact hg265
-      · exact hg267
-      · exact hg269
-      · exact hg271
-      · exact hg273
-      · exact hg275
-      · exact hg277
-      · exact hg279
+    rw [hnr]
+    simp only [InitGoalsHold] at hinitC ⊢
+    simp only [goal_49_cut_initGoals, goal_49_prereqs, List.forall_mem_append,
+      List.forall_mem_cons, List.forall_mem_nil, and_true]
+    exact ⟨hinitC, hg2, hg3, hg4, hg5, hg6, hg7, hg8, hg9, hg10, hg11, hg12, hg13, hg14, hg15, hg16, hg17, hg18, hg19, hg20, hg21, hg22, hg23, hg24, hg25, hg26, hg27, hg28, hg29, hg30, hg31, hg32, hg33, hg34, hg35, hg36, hg37, hg38, hg39, hg40, hg41, hg42, hg43, hg44, hg45, hg46, hg47, hg48, hg257, hg259, hg261, hg263, hg265, hg267, hg269, hg271, hg273, hg275, hg277, hg279, List.forall_mem_nil _⟩
   -- 627 = goal_48.ts (single-tp on SM, shape [1,8,32]); tps 2025-2028 each [1,2,32]
   have h627_smsh : (Ssm 627).shape = [1, 8, 32] := by
     have h := hg48.1; simp only [goal_48] at h; exact h
