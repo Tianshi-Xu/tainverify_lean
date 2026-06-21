@@ -112,15 +112,10 @@ theorem goal_259_cut_to_full (h : goal_259_stmt_cut) : goal_259_stmt := by
   have hnr : pm_goal_259.numRanks = pm.numRanks := by native_decide
   have hInitCut : InitGoalsHold pm_goal_259.numRanks goal_259_cut_initGoals Ssm Spm := by
     rw [hnr]
-    intro g hg
-    simp only [goal_259_cut_initGoals, goal_259_prereqs, List.mem_append] at hg
-    rcases hg with hg | hg
-    · exact hinitC g hg
-    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
-      rcases hg with rfl | rfl | rfl
-      · exact hg2
-      · exact hg3
-      · exact hg4
+    simp only [InitGoalsHold] at hinitC ⊢
+    simp only [goal_259_cut_initGoals, goal_259_prereqs, List.forall_mem_append,
+      List.forall_mem_cons, List.forall_mem_nil, and_true]
+    exact ⟨hinitC, hg2, hg3, hg4, List.forall_mem_nil _⟩
   -- shape 全从 hg4 抽 (567=goal_4.ts; 1117-1120=goal_4.tps)
   have h567_smsh : (Ssm 567).shape = [1, 8, 32] := by
     have h := hg4.1; simp only [goal_4] at h; exact h
