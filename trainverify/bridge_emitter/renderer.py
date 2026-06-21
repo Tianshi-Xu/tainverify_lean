@@ -160,22 +160,26 @@ lemma goal_{n}_hInitCut_helper (Ssm Spm : Store)
         f"(hg{m} : InitGoalHolds pm.numRanks goal_{m} Ssm Spm)"
         for m in prereqs
     )
-    rcases_pat = " | ".join(["rfl"] * len(prereqs))
-    exacts = "\n    ".join(f"· exact hg{m}" for m in prereqs)
+    # forall_mem form: InitGoalsHold cut_initGoals = (∀ g ∈ initGoals ++ prereqs, ...).
+    # `List.forall_mem_append` splits off the initGoals block (= hinitC) and the
+    # `forall_mem_cons`/`forall_mem_nil` chain reduces the prereq tail to a tuple.
+    # This replaces the old O(n^2) `rcases hg with rfl | rfl | ...` membership split
+    # (≈250s on large bridges) with an O(n) simp + a single anonymous-constructor
+    # term (≈40-66s). Tuple order = hinitC, then prereqs in `goal_N_prereqs` order,
+    # closed by `List.forall_mem_nil _`.
+    tuple = ", ".join(["hinitC"] + [f"hg{m}" for m in prereqs] + ["List.forall_mem_nil _"])
     return (
-f"""-- ========== helper: hInitCut separate lemma (heartbeat workaround) ==========
+f"""-- ========== helper: hInitCut separate lemma (forall_mem, O(n)) ==========
 lemma goal_{n}_hInitCut_helper (Ssm Spm : Store)
     (hinitC : InitGoalsHold pm.numRanks initGoals Ssm Spm)
     {args} :
     InitGoalsHold pm_goal_{n}.numRanks goal_{n}_cut_initGoals Ssm Spm := by
   have hnr : pm_goal_{n}.numRanks = pm.numRanks := by native_decide
-  rw [hnr]; intro g hg
-  simp only [goal_{n}_cut_initGoals, goal_{n}_prereqs, List.mem_append] at hg
-  rcases hg with hg | hg
-  · exact hinitC g hg
-  · simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
-    rcases hg with {rcases_pat}
-    {exacts}
+  rw [hnr]
+  simp only [InitGoalsHold] at hinitC ⊢
+  simp only [goal_{n}_cut_initGoals, goal_{n}_prereqs, List.forall_mem_append,
+    List.forall_mem_cons, List.forall_mem_nil, and_true]
+  exact ⟨{tuple}⟩
 
 """
     )
