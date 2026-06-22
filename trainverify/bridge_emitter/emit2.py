@@ -123,19 +123,23 @@ def main():
 
     imports = compute_imports(ir.prereqs)
     imports.append(f"denote.gpt_ly4_regen.Goal_{n}")
-    # For regression robustness we ALSO union-in the ORIGINAL bridge's imports if a
-    # GoalNBridge.lean already exists (covers any base-infra import a handwritten
-    # original had). We must NOT *replace* with orig_imports: a stale auto-generated
-    # original (e.g. from an earlier run with a buggy import filter) can be MISSING
-    # prereq-bridge imports that compute_imports() correctly derives from ir.prereqs.
-    # Replacing would perpetuate the stale (broken) import list => unknown-identifier
-    # errors for dropped `goal_K_intermediate`. Union keeps both; Lean dedupes.
+    # NOTE (prereq-trim 2026-06-21): we used to ALSO union-in the ORIGINAL bridge's
+    # imports for regression robustness. That is now HARMFUL: the renderer body only
+    # references `goal_M_intermediate` for M in ir.prereqs (the *trimmed* prereq set),
+    # so compute_imports(ir.prereqs) already lists exactly the GoalNBridge imports the
+    # body needs. Unioning the stale original imports perpetuates the old fat (~264)
+    # import list and defeats the whole DAG-trim. We therefore only union NON-bridge
+    # imports from the original (rare base-infra a handwritten original may have had);
+    # any `GoalNBridge` import the body doesn't reference is intentionally dropped.
     orig = os.path.join(TV, DENOTE, f"Goal{n}Bridge.lean")
     if os.path.exists(orig):
         orig_imports = [l.split(None, 1)[1].strip()
                         for l in open(orig) if l.startswith("import ")]
         seen = set(imports)
         for m in orig_imports:
+            # skip GoalNBridge imports: those must come from compute_imports(ir.prereqs)
+            if re.match(r"denote\.gpt_ly4_regen\.Goal\d+Bridge$", m):
+                continue
             if m not in seen:
                 imports.append(m); seen.add(m)
 
