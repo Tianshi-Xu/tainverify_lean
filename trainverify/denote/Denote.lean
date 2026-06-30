@@ -867,6 +867,31 @@ def bw_swiglu_up (g gate up : Tensor) : Tensor :=
 def bw_swiglu (g gate up : Tensor) : Tensor × Tensor :=
   (bw_swiglu_gate g gate up, bw_swiglu_up g gate up)
 
+/-- Plain GLU (gated linear unit) per llm-train `arch/attention.py`:
+
+    `glu(x, gate) = x ⊙ sigmoid(gate)`, shape `[*, d] → [*, d]`.
+
+    The `register_op` signature there is `'l d, l d -> l d'` so both inputs
+    have the same shape as the output. -/
+
+def fw_glu (x gate : Tensor) : Tensor :=
+  Tensor.mkShape x.shape (fun i =>
+    valAt x i.1 * sigmoidScalar (valAt gate i.1))
+
+/-- Gradient w.r.t. `x`: `g ⊙ sigmoid(gate)`. -/
+def bw_glu_x (g x gate : Tensor) : Tensor :=
+  Tensor.mkShape x.shape (fun i =>
+    valAt g i.1 * sigmoidScalar (valAt gate i.1))
+
+/-- Gradient w.r.t. `gate`: `g ⊙ x ⊙ sigmoid(gate) ⊙ (1 - sigmoid(gate))`. -/
+def bw_glu_gate (g x gate : Tensor) : Tensor :=
+  Tensor.mkShape gate.shape (fun i =>
+    let s := sigmoidScalar (valAt gate i.1)
+    valAt g i.1 * valAt x i.1 * s * (1 - s))
+
+def bw_glu (g x gate : Tensor) : Tensor × Tensor :=
+  (bw_glu_x g x gate, bw_glu_gate g x gate)
+
 /-! ### RMSNorm (per-row, scale by trainable weight)
 
     `rms_norm(x, w)[row, j] = x[row,j] / sqrt(mean(x[row]²) + eps) · w[j]`.
@@ -3422,6 +3447,10 @@ def opOutShapes (numParts : Nat) (op : String) (params : List Nat) (inShapes : L
       some [up]
   | "OpName.BW_swiglu", [_g, gate, up] =>
       some [gate, up]
+  | "OpName.FW_glu", [x, _gate] =>
+      some [x]
+  | "OpName.BW_glu", [_g, x, _gate] =>
+      some [x, x]
   -- RoPE: 4 inputs (csCache, positions, q, k), 2 outputs (q', k') shape-preserving on q/k
   | "OpName.FW_rotary_embedding", [_csCache, _positions, q, k] =>
       some [q, k]
@@ -3659,6 +3688,10 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
   | "OpName.BW_swiglu", [g, gate, up] =>
       let (dg, du) := bw_swiglu g gate up
       [dg, du]
+  | "OpName.FW_glu", [x, gate] => [fw_glu x gate]
+  | "OpName.BW_glu", [g, x, gate] =>
+      let (dx, dgate) := bw_glu g x gate
+      [dx, dgate]
   -- RoPE: params encode `[qh, kh]` (number of query / key heads).
   | "OpName.FW_rotary_embedding", [csCache, positions, q, k] =>
       let qh := params.head?.getD 1

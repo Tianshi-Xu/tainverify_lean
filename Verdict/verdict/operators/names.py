@@ -109,6 +109,10 @@ class OpName(Enum):
     BW_rms_norm = ("rms_norm_func", False)
     FW_swiglu = ("swiglu", True)
     BW_swiglu = ("swiglu", False)
+    # Plain GLU: x * sigmoid(gate). Used by YOCO-3B dense (not in MoE-A0.4B).
+    # llm-train/llm/arch/attention.py:22 — registered with `'l d, l d -> l d'`.
+    FW_glu = ("glu", True)
+    BW_glu = ("glu", False)
 
     # P1 RoPE: chunk-style rotary embedding (llm-train arch.rotary_embedding)
     FW_rotary_embedding = ("rotary_embedding_func", True)

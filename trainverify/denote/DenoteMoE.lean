@@ -55,6 +55,15 @@ theorem evalOp_bw_swiglu (numParts rank : Nat) (params : List Nat) (g gate up : 
       [ (bw_swiglu g gate up).1, (bw_swiglu g gate up).2 ] := by
   rfl
 
+theorem evalOp_fw_glu (numParts rank : Nat) (params : List Nat) (x gate : Tensor) :
+    evalOp numParts rank "OpName.FW_glu" params [x, gate] = [fw_glu x gate] := by
+  rfl
+
+theorem evalOp_bw_glu (numParts rank : Nat) (params : List Nat) (g x gate : Tensor) :
+    evalOp numParts rank "OpName.BW_glu" params [g, x, gate] =
+      [ (bw_glu g x gate).1, (bw_glu g x gate).2 ] := by
+  rfl
+
 /-! ## `applyNode` lemmas: singleton-out forms used by bridge generation
 
     The shape `applyNode g s {..., ins := [...], outs := [outTid], ...} outTid`
@@ -129,6 +138,18 @@ theorem applyNode_fw_swiglu_out
   rw [show ([gateTid, upTid] : List Tid).map s = [s gateTid, s upTid] from rfl,
       evalOp_fw_swiglu]
   change storeSet s [(outTid, fw_swiglu (s gateTid) (s upTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+theorem applyNode_fw_glu_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid gateTid outTid : Tid) (params : List Nat) :
+    applyNode g s { rank := rank, op := "OpName.FW_glu",
+                    ins := [xTid, gateTid], outs := [outTid], params := params } outTid =
+      fw_glu (s xTid) (s gateTid) := by
+  unfold applyNode
+  rw [show ([xTid, gateTid] : List Tid).map s = [s xTid, s gateTid] from rfl,
+      evalOp_fw_glu]
+  change storeSet s [(outTid, fw_glu (s xTid) (s gateTid))] outTid = _
   unfold storeSet
   simp [List.find?]
 
@@ -521,6 +542,11 @@ theorem fw_silu_shape (x : Tensor) : (fw_silu x).shape = x.shape := by
 theorem fw_swiglu_shape (gate up : Tensor) :
     (fw_swiglu gate up).shape = up.shape := by
   unfold fw_swiglu
+  simp [Tensor.mkShape]
+
+theorem fw_glu_shape (x gate : Tensor) :
+    (fw_glu x gate).shape = x.shape := by
+  unfold fw_glu
   simp [Tensor.mkShape]
 
 theorem bw_sigmoid_shape (g x : Tensor) : (bw_sigmoid g x).shape = x.shape := by

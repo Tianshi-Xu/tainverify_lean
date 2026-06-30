@@ -252,6 +252,15 @@ def _set_node_opname(cells: List[Cell]) -> List[Cell]:
                 (PTypes.AllReduceAllReducePrim, False): OpName.AllReducePrim,
                 (PTypes.AllReducePrim, True): OpName.AllReducePrim,
                 (PTypes.AllReducePrim, False): OpName.AllReducePrim,
+                # ReduceScatterAllGatherPrim = RS + AG fused, semantically equivalent
+                # to AllReduce on the full tensor. YOCO-3B PM (dp_sharded + tp=2)
+                # uses this for weight grad sync.
+                (PTypes.ReduceScatterAllGatherPrim, True): OpName.AllReducePrim,
+                (PTypes.ReduceScatterAllGatherPrim, False): OpName.AllReducePrim,
+                # AllGatherReduceScatterPrim = AG + RS fused, also AllReduce-equivalent
+                # on the sliced/sharded view (used in dp_sharded backward paths).
+                (PTypes.AllGatherReduceScatterPrim, True): OpName.AllReducePrim,
+                (PTypes.AllGatherReduceScatterPrim, False): OpName.AllReducePrim,
                 (PTypes.IdentityAllreducePrim, True): OpName.IdentityPrim,
                 (PTypes.IdentityAllreducePrim, False): OpName.AllReducePrim,
                 (PTypes.BroadcastPrim, True): OpName.BroadcastPrim,
@@ -501,7 +510,13 @@ def _set_wred_local_grads(cells: List[Cell]) -> List[Cell]:
     # correct semantics for IRWeightReducer, which only specify the
     # fw weights, while actually consumes their gradient tensors
     # essentially, it want to avoid grad accum for irs with different tids
-    wid2gid: Dict[int, int] = {}
+    # `wid2gid` was `Dict[int, int]` (1-1 weight↔grad). YOCO-3B violates that:
+    # a shared RMSNorm weight is used by ~3 modules → 3 distinct partial grad
+    # tids before sum. We keep the mapping 1-many (list, dedup-preserving insertion
+    # order) and let downstream consumers pick the last entry (the IR's final
+    # written grad after sum-reduction). MoE-A0.4B is unaffected: every weight
+    # there has exactly one grad tid so the list has length 1.
+    wid2gid: Dict[int, List[int]] = {}
     gid2wid: Dict[int, int] = {}
     tid2maxv: Dict[int, int] = {}
     ret: List[Cell] = []
@@ -515,8 +530,11 @@ def _set_wred_local_grads(cells: List[Cell]) -> List[Cell]:
                     grad: IRSubTensor = input_ir.grad
                     weight_tid = input_ir.tid
                     grad_tid = grad.tid
-                    # register the 1-1-mapping
-                    idempotent_update(wid2gid, {weight_tid: grad_tid})
+                    # weight -> grads list (preserve order, dedup)
+                    existing = wid2gid.setdefault(weight_tid, [])
+                    if grad_tid not in existing:
+                        existing.append(grad_tid)
+                    # grad -> weight stays 1-1 (each grad tid uniquely identifies its weight)
                     idempotent_update(gid2wid, {grad_tid: weight_tid})
                     cell._gid2wid[grad_tid] = weight_tid
         elif isinstance(cell.ir, IRBpOperation):
@@ -536,7 +554,11 @@ def _set_wred_local_grads(cells: List[Cell]) -> List[Cell]:
             assert cell.outputs == []
             for w, w_ir in zip(cell.inputs, cell._input_irs):
                 new_cell = copy(cell)
-                grad_tid = wid2gid[w.tid]
+                # `wid2gid[w.tid]` is now a list (1-many for shared weights, e.g.
+                # YOCO-3B RMSNorm). Take the LAST grad — that's the IR's
+                # post-sum-reduction final grad. For weights with only one grad
+                # (e.g. MoE-A0.4B everywhere) this is just that one element.
+                grad_tid = wid2gid[w.tid][-1]
                 grad_v = tid2maxv[grad_tid]
                 local_grad = Tensor(w.wtype, new_cell.rank, -1, grad_tid, grad_v)
                 # output_tensor
