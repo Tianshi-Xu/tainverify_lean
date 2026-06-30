@@ -4,7 +4,6 @@
    theorem is meant to depend on reusable pattern proofs only.
 -/
 import denote.yoco_goals.Pattern_1
-
 import denote.yoco_goals.Pattern_2
 import denote.yoco_goals.Pattern_3
 import denote.yoco_goals.Pattern_4

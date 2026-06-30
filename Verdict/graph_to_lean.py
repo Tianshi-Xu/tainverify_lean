@@ -602,7 +602,14 @@ def compute_goal_dependencies(
 	- Dict of intermediate tensors that need their own lineage goals
 	"""
 	# Build producer index: tid -> node index (for non-DATALOADER nodes)
-	nodes = [n for n in G.nodes() if "DATALOADER" not in _safe_str_op(G.node_opname(n))]
+	# Also drop FW_pyfunc / BW_pyfunc — these are nnscaler Python helper ops
+	# (getitem on a sample dict, etc.) which are dataloader-side and should be
+	# treated like DATALOADER: their outputs become initial assumptions, not
+	# things to be proven.
+	def _is_dataloader_like(opname: Any) -> bool:
+		s = _safe_str_op(opname)
+		return ("DATALOADER" in s) or ("pyfunc" in s.lower())
+	nodes = [n for n in G.nodes() if not _is_dataloader_like(G.node_opname(n))]
 	tid_to_node_idx: Dict[int, int] = {}
 	for i, n in enumerate(nodes):
 		for t in G.node_outputs(n):
@@ -2117,7 +2124,8 @@ def main() -> None:
 	_preliminary_sm_needed_set = set(_preliminary_sm_needed)
 	_preliminary_sm_nodes = [n for n in GsE.nodes() if any(
 		int(t.tid) in _preliminary_sm_needed_set for t in GsE.node_outputs(n)
-	) and "DATALOADER" not in _safe_str_op(GsE.node_opname(n))]
+	) and "DATALOADER" not in _safe_str_op(GsE.node_opname(n))
+	   and "pyfunc" not in _safe_str_op(GsE.node_opname(n)).lower()]
 	sm_init_tids_preliminary = set(_init_tids_from_kept_nodes(GsE, _preliminary_sm_nodes))
 	print(f"[graph_to_lean] computed preliminary SM boundary in {time.perf_counter() - t0:.2f}s", flush=True)
 
@@ -2158,9 +2166,10 @@ def main() -> None:
 		kept: List[Any] = []
 		for n in G.nodes():
 			outs = [int(t.tid) for t in G.node_outputs(n)]
-			# Skip DATALOADER in denotational semantics: treat those tensors as coming from init store.
+			# Skip DATALOADER / pyfunc in denotational semantics: treat those
+			# tensors as coming from init store.
 			opname = _safe_str_op(G.node_opname(n))
-			if "DATALOADER" in opname:
+			if "DATALOADER" in opname or "pyfunc" in opname.lower():
 				continue
 			if stop_tids is None:
 				if any(tid in needed_tids for tid in outs):
@@ -2325,7 +2334,8 @@ def main() -> None:
 	def _make_backward_closure_until(G: Any):
 		prod_inputs: Dict[int, List[List[int]]] = {}
 		for n in G.nodes():
-			if "DATALOADER" in _safe_str_op(G.node_opname(n)):
+			_op = _safe_str_op(G.node_opname(n))
+			if "DATALOADER" in _op or "pyfunc" in _op.lower():
 				continue
 			input_tids = [int(t.tid) for t in G.node_inputs(n)]
 			for t in G.node_outputs(n):

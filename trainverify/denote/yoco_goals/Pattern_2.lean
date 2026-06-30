@@ -7,7 +7,6 @@ import denote.GeneratedYOCOMoE
 
 set_option maxRecDepth 100000
 
-
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 

@@ -1,12 +1,11 @@
 /- Auto-generated pattern proof file.
    Pattern: 3
-   Hash: dc38b9f34465f3a0
+   Hash: b3365746c5960899
    Goals: 3
 -/
 import denote.GeneratedYOCOMoE
 
 set_option maxRecDepth 100000
-
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated

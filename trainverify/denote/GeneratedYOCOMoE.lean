@@ -14,70 +14,6 @@ namespace TrainVerify.Denote.Generated
 def sm : GraphDecl := by
   refine { numRanks := 1, nodes := ?_ }
   exact [
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4677] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4678] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4690] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4694] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4695] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4745] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4748] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4749] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4799] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4802] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4803] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4853] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4856] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4857] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4907] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4910] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4911] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4961] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4964] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4965] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5015] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5018] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5019] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5069] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5072] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5073] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5123] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5126] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5127] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5177] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5180] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5181] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5231] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5234] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5235] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5285] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5288] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5289] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5337] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5345] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5346] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5394] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5395] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5443] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5444] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5492] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5493] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5541] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5542] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5590] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5591] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5639] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5640] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5688] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5689] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5737] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5738] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5786] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5787] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5835] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5836] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5884] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5885] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5927] },
     { rank := 0, op := "OpName.FW_embedding", ins := [4677, 4679], outs := [4680] },
     { rank := 0, op := "OpName.FW_float", ins := [4680], outs := [4681] },
     { rank := 0, op := "OpName.FW_multiref", ins := [4681], outs := [7383, 7387], params := [2] },
@@ -1010,160 +946,32 @@ def sm : GraphDecl := by
 def pm : GraphDecl := by
   refine { numRanks := 2, nodes := ?_ }
   exact [
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4677] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4678] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4690] },
-    { rank := 0, op := "OpName.FW_multiref", ins := [4691], outs := ((List.range 12).map (fun r => 11853 + r)), params := [12] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4694] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4695] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4745] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4748] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4749] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4799] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4802] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4803] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4853] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4856] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4857] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4907] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4910] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4911] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4961] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4964] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [4965] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5015] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5018] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5019] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5069] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5072] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5073] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5123] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5126] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5127] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5177] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5180] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5181] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5231] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5234] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5235] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5285] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5288] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5289] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5337] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5345] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5346] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5394] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5395] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5443] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5444] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5492] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5493] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5541] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5542] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5590] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5591] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5639] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5640] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5688] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5689] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5737] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5738] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5786] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5787] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5835] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5836] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5884] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5885] },
-    { rank := 0, op := "OpName.FW_pyfunc", ins := [], outs := [5927] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4677] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4678] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4690] },
-    { rank := 1, op := "OpName.FW_multiref", ins := [4691], outs := ((List.range 12).map (fun r => 11853 + r)), params := [12] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4694] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4695] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4745] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4748] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4749] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4799] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4802] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4803] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4853] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4856] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4857] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4907] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4910] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4911] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4961] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4964] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [4965] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5015] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5018] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5019] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5069] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5072] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5073] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5123] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5126] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5127] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5177] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5180] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5181] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5231] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5234] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5235] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5285] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5288] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5289] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5337] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5345] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5346] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5394] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5395] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5443] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5444] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5492] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5493] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5541] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5542] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5590] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5591] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5639] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5640] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5688] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5689] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5737] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5738] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5786] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5787] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5835] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5836] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5884] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5885] },
-    { rank := 1, op := "OpName.FW_pyfunc", ins := [], outs := [5927] },
     { rank := 0, op := "OpName.FW_embedding", ins := [4677, 7389], outs := [7391], params := [0] },
-    { rank := 1, op := "OpName.FW_embedding", ins := [4677, 7390], outs := [7392], params := [77440] },
-    { rank := 0, op := "OpName.ChunkPrim", ins := [4678], outs := [11835], params := [0] },
-    { rank := 1, op := "OpName.ChunkPrim", ins := [4678], outs := [11836], params := [0] },
+    { rank := 0, op := "OpName.FW_multiref", ins := [4691], outs := ((List.range 12).map (fun r => 11853 + r)), params := [12] },
     { rank := 0, op := "OpName.ChunkPrim", ins := [4799], outs := [7803], params := [0] },
-    { rank := 1, op := "OpName.ChunkPrim", ins := [4799], outs := [7804], params := [0] },
     { rank := 0, op := "OpName.ChunkPrim", ins := [4853], outs := [7989], params := [0] },
-    { rank := 1, op := "OpName.ChunkPrim", ins := [4853], outs := [7990], params := [0] },
     { rank := 0, op := "OpName.ChunkPrim", ins := [4907], outs := [8175], params := [0] },
-    { rank := 1, op := "OpName.ChunkPrim", ins := [4907], outs := [8176], params := [0] },
     { rank := 0, op := "OpName.ChunkPrim", ins := [4961], outs := [8361], params := [0] },
-    { rank := 1, op := "OpName.ChunkPrim", ins := [4961], outs := [8362], params := [0] },
     { rank := 0, op := "OpName.ChunkPrim", ins := [5015], outs := [8547], params := [0] },
-    { rank := 1, op := "OpName.ChunkPrim", ins := [5015], outs := [8548], params := [0] },
     { rank := 0, op := "OpName.ChunkPrim", ins := [5069], outs := [8733], params := [0] },
-    { rank := 1, op := "OpName.ChunkPrim", ins := [5069], outs := [8734], params := [0] },
     { rank := 0, op := "OpName.ChunkPrim", ins := [5123], outs := [8919], params := [0] },
-    { rank := 1, op := "OpName.ChunkPrim", ins := [5123], outs := [8920], params := [0] },
     { rank := 0, op := "OpName.ChunkPrim", ins := [5177], outs := [9105], params := [0] },
-    { rank := 1, op := "OpName.ChunkPrim", ins := [5177], outs := [9106], params := [0] },
     { rank := 0, op := "OpName.ChunkPrim", ins := [5231], outs := [9291], params := [0] },
-    { rank := 1, op := "OpName.ChunkPrim", ins := [5231], outs := [9292], params := [0] },
     { rank := 0, op := "OpName.ChunkPrim", ins := [5285], outs := [9477], params := [0] },
+    { rank := 0, op := "OpName.ChunkPrim", ins := [4678], outs := [11835], params := [0] },
+    { rank := 1, op := "OpName.FW_embedding", ins := [4677, 7390], outs := [7392], params := [77440] },
+    { rank := 1, op := "OpName.FW_multiref", ins := [4691], outs := ((List.range 12).map (fun r => 11853 + r)), params := [12] },
+    { rank := 1, op := "OpName.ChunkPrim", ins := [4799], outs := [7804], params := [0] },
+    { rank := 1, op := "OpName.ChunkPrim", ins := [4853], outs := [7990], params := [0] },
+    { rank := 1, op := "OpName.ChunkPrim", ins := [4907], outs := [8176], params := [0] },
+    { rank := 1, op := "OpName.ChunkPrim", ins := [4961], outs := [8362], params := [0] },
+    { rank := 1, op := "OpName.ChunkPrim", ins := [5015], outs := [8548], params := [0] },
+    { rank := 1, op := "OpName.ChunkPrim", ins := [5069], outs := [8734], params := [0] },
+    { rank := 1, op := "OpName.ChunkPrim", ins := [5123], outs := [8920], params := [0] },
+    { rank := 1, op := "OpName.ChunkPrim", ins := [5177], outs := [9106], params := [0] },
+    { rank := 1, op := "OpName.ChunkPrim", ins := [5231], outs := [9292], params := [0] },
     { rank := 1, op := "OpName.ChunkPrim", ins := [5285], outs := [9478], params := [0] },
+    { rank := 1, op := "OpName.ChunkPrim", ins := [4678], outs := [11836], params := [0] },
     { rank := 0, op := "OpName.AllReducePrim", ins := [7391, 7392], outs := [4680] },
     { rank := 0, op := "OpName.FW_float", ins := [4680], outs := [4681] },
     { rank := 1, op := "OpName.FW_float", ins := [4680], outs := [4681] },
@@ -11681,6 +11489,12 @@ def pmInitShapes : List (Tid × Shape) := [
 
 def pmInitEnv : ShapeEnv := shapeEnvOfList pmInitShapes
 
+def initGoal_4677 : LineageGoal :=
+  { ts := 4677, tsShape := [4096], tps := [{ rank := 0, tid := 4677 }], tpShapes := [[4096]] }
+
+def initGoal_4678 : LineageGoal :=
+  { ts := 4678, tsShape := [4096], tps := [{ rank := 0, tid := 4678 }], tpShapes := [[4096]] }
+
 def initGoal_4679 : LineageGoal :=
   { ts := 4679, tsShape := [154880, 1024], tps := [{ rank := 0, tid := 7389 }, { rank := 1, tid := 7390 }], tpShapes := [[77440, 1024], [77440, 1024]] }
 
@@ -11696,8 +11510,17 @@ def initGoal_4686 : LineageGoal :=
 def initGoal_4688 : LineageGoal :=
   { ts := 4688, tsShape := [4, 64, 1024], tps := [{ rank := 0, tid := 4688 }], tpShapes := [[4, 64, 1024]] }
 
+def initGoal_4690 : LineageGoal :=
+  { ts := 4690, tsShape := [4096], tps := [{ rank := 0, tid := 4690 }], tpShapes := [[4096]] }
+
 def initGoal_4691 : LineageGoal :=
   { ts := 4691, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11853 }], tpShapes := [[4096, 64]] }
+
+def initGoal_4694 : LineageGoal :=
+  { ts := 4694, tsShape := [2], tps := [{ rank := 0, tid := 4694 }], tpShapes := [[2]] }
+
+def initGoal_4695 : LineageGoal :=
+  { ts := 4695, tsShape := [2], tps := [{ rank := 0, tid := 4695 }], tpShapes := [[2]] }
 
 def initGoal_4699 : LineageGoal :=
   { ts := 4699, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 4699 }], tpShapes := [[1024, 1024]] }
@@ -11738,6 +11561,15 @@ def initGoal_4741 : LineageGoal :=
 def initGoal_4743 : LineageGoal :=
   { ts := 4743, tsShape := [4, 64, 1024], tps := [{ rank := 0, tid := 4743 }], tpShapes := [[4, 64, 1024]] }
 
+def initGoal_4745 : LineageGoal :=
+  { ts := 4745, tsShape := [4096], tps := [{ rank := 0, tid := 4745 }], tpShapes := [[4096]] }
+
+def initGoal_4748 : LineageGoal :=
+  { ts := 4748, tsShape := [2], tps := [{ rank := 0, tid := 4748 }], tpShapes := [[2]] }
+
+def initGoal_4749 : LineageGoal :=
+  { ts := 4749, tsShape := [2], tps := [{ rank := 0, tid := 4749 }], tpShapes := [[2]] }
+
 def initGoal_4753 : LineageGoal :=
   { ts := 4753, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 4753 }], tpShapes := [[1024, 1024]] }
 
@@ -11776,6 +11608,15 @@ def initGoal_4795 : LineageGoal :=
 
 def initGoal_4797 : LineageGoal :=
   { ts := 4797, tsShape := [4, 64, 1024], tps := [{ rank := 0, tid := 4797 }], tpShapes := [[4, 64, 1024]] }
+
+def initGoal_4799 : LineageGoal :=
+  { ts := 4799, tsShape := [4096], tps := [{ rank := 0, tid := 4799 }], tpShapes := [[4096]] }
+
+def initGoal_4802 : LineageGoal :=
+  { ts := 4802, tsShape := [2], tps := [{ rank := 0, tid := 4802 }], tpShapes := [[2]] }
+
+def initGoal_4803 : LineageGoal :=
+  { ts := 4803, tsShape := [2], tps := [{ rank := 0, tid := 4803 }], tpShapes := [[2]] }
 
 def initGoal_4807 : LineageGoal :=
   { ts := 4807, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 4807 }], tpShapes := [[1024, 1024]] }
@@ -11816,6 +11657,15 @@ def initGoal_4849 : LineageGoal :=
 def initGoal_4851 : LineageGoal :=
   { ts := 4851, tsShape := [4, 64, 1024], tps := [{ rank := 0, tid := 4851 }], tpShapes := [[4, 64, 1024]] }
 
+def initGoal_4853 : LineageGoal :=
+  { ts := 4853, tsShape := [4096], tps := [{ rank := 0, tid := 4853 }], tpShapes := [[4096]] }
+
+def initGoal_4856 : LineageGoal :=
+  { ts := 4856, tsShape := [2], tps := [{ rank := 0, tid := 4856 }], tpShapes := [[2]] }
+
+def initGoal_4857 : LineageGoal :=
+  { ts := 4857, tsShape := [2], tps := [{ rank := 0, tid := 4857 }], tpShapes := [[2]] }
+
 def initGoal_4861 : LineageGoal :=
   { ts := 4861, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 4861 }], tpShapes := [[1024, 1024]] }
 
@@ -11854,6 +11704,15 @@ def initGoal_4903 : LineageGoal :=
 
 def initGoal_4905 : LineageGoal :=
   { ts := 4905, tsShape := [4, 64, 1024], tps := [{ rank := 0, tid := 4905 }], tpShapes := [[4, 64, 1024]] }
+
+def initGoal_4907 : LineageGoal :=
+  { ts := 4907, tsShape := [4096], tps := [{ rank := 0, tid := 4907 }], tpShapes := [[4096]] }
+
+def initGoal_4910 : LineageGoal :=
+  { ts := 4910, tsShape := [2], tps := [{ rank := 0, tid := 4910 }], tpShapes := [[2]] }
+
+def initGoal_4911 : LineageGoal :=
+  { ts := 4911, tsShape := [2], tps := [{ rank := 0, tid := 4911 }], tpShapes := [[2]] }
 
 def initGoal_4915 : LineageGoal :=
   { ts := 4915, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 4915 }], tpShapes := [[1024, 1024]] }
@@ -11894,6 +11753,15 @@ def initGoal_4957 : LineageGoal :=
 def initGoal_4959 : LineageGoal :=
   { ts := 4959, tsShape := [4, 64, 1024], tps := [{ rank := 0, tid := 4959 }], tpShapes := [[4, 64, 1024]] }
 
+def initGoal_4961 : LineageGoal :=
+  { ts := 4961, tsShape := [4096], tps := [{ rank := 0, tid := 4961 }], tpShapes := [[4096]] }
+
+def initGoal_4964 : LineageGoal :=
+  { ts := 4964, tsShape := [2], tps := [{ rank := 0, tid := 4964 }], tpShapes := [[2]] }
+
+def initGoal_4965 : LineageGoal :=
+  { ts := 4965, tsShape := [2], tps := [{ rank := 0, tid := 4965 }], tpShapes := [[2]] }
+
 def initGoal_4969 : LineageGoal :=
   { ts := 4969, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 4969 }], tpShapes := [[1024, 1024]] }
 
@@ -11932,6 +11800,15 @@ def initGoal_5011 : LineageGoal :=
 
 def initGoal_5013 : LineageGoal :=
   { ts := 5013, tsShape := [4, 64, 1024], tps := [{ rank := 0, tid := 5013 }], tpShapes := [[4, 64, 1024]] }
+
+def initGoal_5015 : LineageGoal :=
+  { ts := 5015, tsShape := [4096], tps := [{ rank := 0, tid := 5015 }], tpShapes := [[4096]] }
+
+def initGoal_5018 : LineageGoal :=
+  { ts := 5018, tsShape := [2], tps := [{ rank := 0, tid := 5018 }], tpShapes := [[2]] }
+
+def initGoal_5019 : LineageGoal :=
+  { ts := 5019, tsShape := [2], tps := [{ rank := 0, tid := 5019 }], tpShapes := [[2]] }
 
 def initGoal_5023 : LineageGoal :=
   { ts := 5023, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5023 }], tpShapes := [[1024, 1024]] }
@@ -11972,6 +11849,15 @@ def initGoal_5065 : LineageGoal :=
 def initGoal_5067 : LineageGoal :=
   { ts := 5067, tsShape := [4, 64, 1024], tps := [{ rank := 0, tid := 5067 }], tpShapes := [[4, 64, 1024]] }
 
+def initGoal_5069 : LineageGoal :=
+  { ts := 5069, tsShape := [4096], tps := [{ rank := 0, tid := 5069 }], tpShapes := [[4096]] }
+
+def initGoal_5072 : LineageGoal :=
+  { ts := 5072, tsShape := [2], tps := [{ rank := 0, tid := 5072 }], tpShapes := [[2]] }
+
+def initGoal_5073 : LineageGoal :=
+  { ts := 5073, tsShape := [2], tps := [{ rank := 0, tid := 5073 }], tpShapes := [[2]] }
+
 def initGoal_5077 : LineageGoal :=
   { ts := 5077, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5077 }], tpShapes := [[1024, 1024]] }
 
@@ -12010,6 +11896,15 @@ def initGoal_5119 : LineageGoal :=
 
 def initGoal_5121 : LineageGoal :=
   { ts := 5121, tsShape := [4, 64, 1024], tps := [{ rank := 0, tid := 5121 }], tpShapes := [[4, 64, 1024]] }
+
+def initGoal_5123 : LineageGoal :=
+  { ts := 5123, tsShape := [4096], tps := [{ rank := 0, tid := 5123 }], tpShapes := [[4096]] }
+
+def initGoal_5126 : LineageGoal :=
+  { ts := 5126, tsShape := [2], tps := [{ rank := 0, tid := 5126 }], tpShapes := [[2]] }
+
+def initGoal_5127 : LineageGoal :=
+  { ts := 5127, tsShape := [2], tps := [{ rank := 0, tid := 5127 }], tpShapes := [[2]] }
 
 def initGoal_5131 : LineageGoal :=
   { ts := 5131, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5131 }], tpShapes := [[1024, 1024]] }
@@ -12050,6 +11945,15 @@ def initGoal_5173 : LineageGoal :=
 def initGoal_5175 : LineageGoal :=
   { ts := 5175, tsShape := [4, 64, 1024], tps := [{ rank := 0, tid := 5175 }], tpShapes := [[4, 64, 1024]] }
 
+def initGoal_5177 : LineageGoal :=
+  { ts := 5177, tsShape := [4096], tps := [{ rank := 0, tid := 5177 }], tpShapes := [[4096]] }
+
+def initGoal_5180 : LineageGoal :=
+  { ts := 5180, tsShape := [2], tps := [{ rank := 0, tid := 5180 }], tpShapes := [[2]] }
+
+def initGoal_5181 : LineageGoal :=
+  { ts := 5181, tsShape := [2], tps := [{ rank := 0, tid := 5181 }], tpShapes := [[2]] }
+
 def initGoal_5185 : LineageGoal :=
   { ts := 5185, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5185 }], tpShapes := [[1024, 1024]] }
 
@@ -12088,6 +11992,15 @@ def initGoal_5227 : LineageGoal :=
 
 def initGoal_5229 : LineageGoal :=
   { ts := 5229, tsShape := [4, 64, 1024], tps := [{ rank := 0, tid := 5229 }], tpShapes := [[4, 64, 1024]] }
+
+def initGoal_5231 : LineageGoal :=
+  { ts := 5231, tsShape := [4096], tps := [{ rank := 0, tid := 5231 }], tpShapes := [[4096]] }
+
+def initGoal_5234 : LineageGoal :=
+  { ts := 5234, tsShape := [2], tps := [{ rank := 0, tid := 5234 }], tpShapes := [[2]] }
+
+def initGoal_5235 : LineageGoal :=
+  { ts := 5235, tsShape := [2], tps := [{ rank := 0, tid := 5235 }], tpShapes := [[2]] }
 
 def initGoal_5239 : LineageGoal :=
   { ts := 5239, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5239 }], tpShapes := [[1024, 1024]] }
@@ -12128,6 +12041,15 @@ def initGoal_5281 : LineageGoal :=
 def initGoal_5283 : LineageGoal :=
   { ts := 5283, tsShape := [4, 64, 1024], tps := [{ rank := 0, tid := 5283 }], tpShapes := [[4, 64, 1024]] }
 
+def initGoal_5285 : LineageGoal :=
+  { ts := 5285, tsShape := [4096], tps := [{ rank := 0, tid := 5285 }], tpShapes := [[4096]] }
+
+def initGoal_5288 : LineageGoal :=
+  { ts := 5288, tsShape := [2], tps := [{ rank := 0, tid := 5288 }], tpShapes := [[2]] }
+
+def initGoal_5289 : LineageGoal :=
+  { ts := 5289, tsShape := [2], tps := [{ rank := 0, tid := 5289 }], tpShapes := [[2]] }
+
 def initGoal_5293 : LineageGoal :=
   { ts := 5293, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5293 }], tpShapes := [[1024, 1024]] }
 
@@ -12164,11 +12086,20 @@ def initGoal_5333 : LineageGoal :=
 def initGoal_5335 : LineageGoal :=
   { ts := 5335, tsShape := [4, 64, 1024], tps := [{ rank := 0, tid := 5335 }], tpShapes := [[4, 64, 1024]] }
 
+def initGoal_5337 : LineageGoal :=
+  { ts := 5337, tsShape := [2], tps := [{ rank := 0, tid := 5337 }], tpShapes := [[2]] }
+
 def initGoal_5339 : LineageGoal :=
   { ts := 5339, tsShape := [1024], tps := [{ rank := 0, tid := 5339 }], tpShapes := [[1024]] }
 
 def initGoal_5341 : LineageGoal :=
   { ts := 5341, tsShape := [16, 64, 1024], tps := [{ rank := 0, tid := 5341 }], tpShapes := [[16, 64, 1024]] }
+
+def initGoal_5345 : LineageGoal :=
+  { ts := 5345, tsShape := [2], tps := [{ rank := 0, tid := 5345 }], tpShapes := [[2]] }
+
+def initGoal_5346 : LineageGoal :=
+  { ts := 5346, tsShape := [2], tps := [{ rank := 0, tid := 5346 }], tpShapes := [[2]] }
 
 def initGoal_5350 : LineageGoal :=
   { ts := 5350, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5350 }], tpShapes := [[1024, 1024]] }
@@ -12203,6 +12134,12 @@ def initGoal_5388 : LineageGoal :=
 def initGoal_5390 : LineageGoal :=
   { ts := 5390, tsShape := [16, 64, 1024], tps := [{ rank := 0, tid := 5390 }], tpShapes := [[16, 64, 1024]] }
 
+def initGoal_5394 : LineageGoal :=
+  { ts := 5394, tsShape := [2], tps := [{ rank := 0, tid := 5394 }], tpShapes := [[2]] }
+
+def initGoal_5395 : LineageGoal :=
+  { ts := 5395, tsShape := [2], tps := [{ rank := 0, tid := 5395 }], tpShapes := [[2]] }
+
 def initGoal_5399 : LineageGoal :=
   { ts := 5399, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5399 }], tpShapes := [[1024, 1024]] }
 
@@ -12235,6 +12172,12 @@ def initGoal_5437 : LineageGoal :=
 
 def initGoal_5439 : LineageGoal :=
   { ts := 5439, tsShape := [16, 64, 1024], tps := [{ rank := 0, tid := 5439 }], tpShapes := [[16, 64, 1024]] }
+
+def initGoal_5443 : LineageGoal :=
+  { ts := 5443, tsShape := [2], tps := [{ rank := 0, tid := 5443 }], tpShapes := [[2]] }
+
+def initGoal_5444 : LineageGoal :=
+  { ts := 5444, tsShape := [2], tps := [{ rank := 0, tid := 5444 }], tpShapes := [[2]] }
 
 def initGoal_5448 : LineageGoal :=
   { ts := 5448, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5448 }], tpShapes := [[1024, 1024]] }
@@ -12269,6 +12212,12 @@ def initGoal_5486 : LineageGoal :=
 def initGoal_5488 : LineageGoal :=
   { ts := 5488, tsShape := [16, 64, 1024], tps := [{ rank := 0, tid := 5488 }], tpShapes := [[16, 64, 1024]] }
 
+def initGoal_5492 : LineageGoal :=
+  { ts := 5492, tsShape := [2], tps := [{ rank := 0, tid := 5492 }], tpShapes := [[2]] }
+
+def initGoal_5493 : LineageGoal :=
+  { ts := 5493, tsShape := [2], tps := [{ rank := 0, tid := 5493 }], tpShapes := [[2]] }
+
 def initGoal_5497 : LineageGoal :=
   { ts := 5497, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5497 }], tpShapes := [[1024, 1024]] }
 
@@ -12301,6 +12250,12 @@ def initGoal_5535 : LineageGoal :=
 
 def initGoal_5537 : LineageGoal :=
   { ts := 5537, tsShape := [16, 64, 1024], tps := [{ rank := 0, tid := 5537 }], tpShapes := [[16, 64, 1024]] }
+
+def initGoal_5541 : LineageGoal :=
+  { ts := 5541, tsShape := [2], tps := [{ rank := 0, tid := 5541 }], tpShapes := [[2]] }
+
+def initGoal_5542 : LineageGoal :=
+  { ts := 5542, tsShape := [2], tps := [{ rank := 0, tid := 5542 }], tpShapes := [[2]] }
 
 def initGoal_5546 : LineageGoal :=
   { ts := 5546, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5546 }], tpShapes := [[1024, 1024]] }
@@ -12335,6 +12290,12 @@ def initGoal_5584 : LineageGoal :=
 def initGoal_5586 : LineageGoal :=
   { ts := 5586, tsShape := [16, 64, 1024], tps := [{ rank := 0, tid := 5586 }], tpShapes := [[16, 64, 1024]] }
 
+def initGoal_5590 : LineageGoal :=
+  { ts := 5590, tsShape := [2], tps := [{ rank := 0, tid := 5590 }], tpShapes := [[2]] }
+
+def initGoal_5591 : LineageGoal :=
+  { ts := 5591, tsShape := [2], tps := [{ rank := 0, tid := 5591 }], tpShapes := [[2]] }
+
 def initGoal_5595 : LineageGoal :=
   { ts := 5595, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5595 }], tpShapes := [[1024, 1024]] }
 
@@ -12367,6 +12328,12 @@ def initGoal_5633 : LineageGoal :=
 
 def initGoal_5635 : LineageGoal :=
   { ts := 5635, tsShape := [16, 64, 1024], tps := [{ rank := 0, tid := 5635 }], tpShapes := [[16, 64, 1024]] }
+
+def initGoal_5639 : LineageGoal :=
+  { ts := 5639, tsShape := [2], tps := [{ rank := 0, tid := 5639 }], tpShapes := [[2]] }
+
+def initGoal_5640 : LineageGoal :=
+  { ts := 5640, tsShape := [2], tps := [{ rank := 0, tid := 5640 }], tpShapes := [[2]] }
 
 def initGoal_5644 : LineageGoal :=
   { ts := 5644, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5644 }], tpShapes := [[1024, 1024]] }
@@ -12401,6 +12368,12 @@ def initGoal_5682 : LineageGoal :=
 def initGoal_5684 : LineageGoal :=
   { ts := 5684, tsShape := [16, 64, 1024], tps := [{ rank := 0, tid := 5684 }], tpShapes := [[16, 64, 1024]] }
 
+def initGoal_5688 : LineageGoal :=
+  { ts := 5688, tsShape := [2], tps := [{ rank := 0, tid := 5688 }], tpShapes := [[2]] }
+
+def initGoal_5689 : LineageGoal :=
+  { ts := 5689, tsShape := [2], tps := [{ rank := 0, tid := 5689 }], tpShapes := [[2]] }
+
 def initGoal_5693 : LineageGoal :=
   { ts := 5693, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5693 }], tpShapes := [[1024, 1024]] }
 
@@ -12433,6 +12406,12 @@ def initGoal_5731 : LineageGoal :=
 
 def initGoal_5733 : LineageGoal :=
   { ts := 5733, tsShape := [16, 64, 1024], tps := [{ rank := 0, tid := 5733 }], tpShapes := [[16, 64, 1024]] }
+
+def initGoal_5737 : LineageGoal :=
+  { ts := 5737, tsShape := [2], tps := [{ rank := 0, tid := 5737 }], tpShapes := [[2]] }
+
+def initGoal_5738 : LineageGoal :=
+  { ts := 5738, tsShape := [2], tps := [{ rank := 0, tid := 5738 }], tpShapes := [[2]] }
 
 def initGoal_5742 : LineageGoal :=
   { ts := 5742, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5742 }], tpShapes := [[1024, 1024]] }
@@ -12467,6 +12446,12 @@ def initGoal_5780 : LineageGoal :=
 def initGoal_5782 : LineageGoal :=
   { ts := 5782, tsShape := [16, 64, 1024], tps := [{ rank := 0, tid := 5782 }], tpShapes := [[16, 64, 1024]] }
 
+def initGoal_5786 : LineageGoal :=
+  { ts := 5786, tsShape := [2], tps := [{ rank := 0, tid := 5786 }], tpShapes := [[2]] }
+
+def initGoal_5787 : LineageGoal :=
+  { ts := 5787, tsShape := [2], tps := [{ rank := 0, tid := 5787 }], tpShapes := [[2]] }
+
 def initGoal_5791 : LineageGoal :=
   { ts := 5791, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5791 }], tpShapes := [[1024, 1024]] }
 
@@ -12499,6 +12484,12 @@ def initGoal_5829 : LineageGoal :=
 
 def initGoal_5831 : LineageGoal :=
   { ts := 5831, tsShape := [16, 64, 1024], tps := [{ rank := 0, tid := 5831 }], tpShapes := [[16, 64, 1024]] }
+
+def initGoal_5835 : LineageGoal :=
+  { ts := 5835, tsShape := [2], tps := [{ rank := 0, tid := 5835 }], tpShapes := [[2]] }
+
+def initGoal_5836 : LineageGoal :=
+  { ts := 5836, tsShape := [2], tps := [{ rank := 0, tid := 5836 }], tpShapes := [[2]] }
 
 def initGoal_5840 : LineageGoal :=
   { ts := 5840, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5840 }], tpShapes := [[1024, 1024]] }
@@ -12533,6 +12524,12 @@ def initGoal_5878 : LineageGoal :=
 def initGoal_5880 : LineageGoal :=
   { ts := 5880, tsShape := [16, 64, 1024], tps := [{ rank := 0, tid := 5880 }], tpShapes := [[16, 64, 1024]] }
 
+def initGoal_5884 : LineageGoal :=
+  { ts := 5884, tsShape := [2], tps := [{ rank := 0, tid := 5884 }], tpShapes := [[2]] }
+
+def initGoal_5885 : LineageGoal :=
+  { ts := 5885, tsShape := [2], tps := [{ rank := 0, tid := 5885 }], tpShapes := [[2]] }
+
 def initGoal_5889 : LineageGoal :=
   { ts := 5889, tsShape := [1024, 1024], tps := [{ rank := 0, tid := 5889 }], tpShapes := [[1024, 1024]] }
 
@@ -12560,15 +12557,18 @@ def initGoal_5915 : LineageGoal :=
 def initGoal_5920 : LineageGoal :=
   { ts := 5920, tsShape := [1024, 512], tps := [{ rank := 0, tid := 5920 }], tpShapes := [[1024, 512]] }
 
+def initGoal_5927 : LineageGoal :=
+  { ts := 5927, tsShape := [2], tps := [{ rank := 0, tid := 5927 }], tpShapes := [[2]] }
+
 def initGoal_5929 : LineageGoal :=
   { ts := 5929, tsShape := [1024], tps := [{ rank := 0, tid := 5929 }], tpShapes := [[1024]] }
 
 def initGoal_5931 : LineageGoal :=
   { ts := 5931, tsShape := [154880, 1024], tps := [{ rank := 0, tid := 5931 }], tpShapes := [[154880, 1024]] }
 
-def initGoals : List LineageGoal := [initGoal_4679, initGoal_4682, initGoal_4684, initGoal_4686, initGoal_4688, initGoal_4691, initGoal_4699, initGoal_4704, initGoal_4707, initGoal_4712, initGoal_4713, initGoal_4716, initGoal_4721, initGoal_4725, initGoal_4730, initGoal_4737, initGoal_4739, initGoal_4741, initGoal_4743, initGoal_4753, initGoal_4758, initGoal_4761, initGoal_4766, initGoal_4767, initGoal_4770, initGoal_4775, initGoal_4779, initGoal_4784, initGoal_4791, initGoal_4793, initGoal_4795, initGoal_4797, initGoal_4807, initGoal_4812, initGoal_4815, initGoal_4820, initGoal_4821, initGoal_4824, initGoal_4829, initGoal_4833, initGoal_4838, initGoal_4845, initGoal_4847, initGoal_4849, initGoal_4851, initGoal_4861, initGoal_4866, initGoal_4869, initGoal_4874, initGoal_4875, initGoal_4878, initGoal_4883, initGoal_4887, initGoal_4892, initGoal_4899, initGoal_4901, initGoal_4903, initGoal_4905, initGoal_4915, initGoal_4920, initGoal_4923, initGoal_4928, initGoal_4929, initGoal_4932, initGoal_4937, initGoal_4941, initGoal_4946, initGoal_4953, initGoal_4955, initGoal_4957, initGoal_4959, initGoal_4969, initGoal_4974, initGoal_4977, initGoal_4982, initGoal_4983, initGoal_4986, initGoal_4991, initGoal_4995, initGoal_5000, initGoal_5007, initGoal_5009, initGoal_5011, initGoal_5013, initGoal_5023, initGoal_5028, initGoal_5031, initGoal_5036, initGoal_5037, initGoal_5040, initGoal_5045, initGoal_5049, initGoal_5054, initGoal_5061, initGoal_5063, initGoal_5065, initGoal_5067, initGoal_5077, initGoal_5082, initGoal_5085, initGoal_5090, initGoal_5091, initGoal_5094, initGoal_5099, initGoal_5103, initGoal_5108, initGoal_5115, initGoal_5117, initGoal_5119, initGoal_5121, initGoal_5131, initGoal_5136, initGoal_5139, initGoal_5144, initGoal_5145, initGoal_5148, initGoal_5153, initGoal_5157, initGoal_5162, initGoal_5169, initGoal_5171, initGoal_5173, initGoal_5175, initGoal_5185, initGoal_5190, initGoal_5193, initGoal_5198, initGoal_5199, initGoal_5202, initGoal_5207, initGoal_5211, initGoal_5216, initGoal_5223, initGoal_5225, initGoal_5227, initGoal_5229, initGoal_5239, initGoal_5244, initGoal_5247, initGoal_5252, initGoal_5253, initGoal_5256, initGoal_5261, initGoal_5265, initGoal_5270, initGoal_5277, initGoal_5279, initGoal_5281, initGoal_5283, initGoal_5293, initGoal_5298, initGoal_5301, initGoal_5306, initGoal_5307, initGoal_5310, initGoal_5315, initGoal_5319, initGoal_5324, initGoal_5331, initGoal_5333, initGoal_5335, initGoal_5339, initGoal_5341, initGoal_5350, initGoal_5355, initGoal_5358, initGoal_5363, initGoal_5364, initGoal_5367, initGoal_5372, initGoal_5376, initGoal_5381, initGoal_5388, initGoal_5390, initGoal_5399, initGoal_5404, initGoal_5407, initGoal_5412, initGoal_5413, initGoal_5416, initGoal_5421, initGoal_5425, initGoal_5430, initGoal_5437, initGoal_5439, initGoal_5448, initGoal_5453, initGoal_5456, initGoal_5461, initGoal_5462, initGoal_5465, initGoal_5470, initGoal_5474, initGoal_5479, initGoal_5486, initGoal_5488, initGoal_5497, initGoal_5502, initGoal_5505, initGoal_5510, initGoal_5511, initGoal_5514, initGoal_5519, initGoal_5523, initGoal_5528, initGoal_5535, initGoal_5537, initGoal_5546, initGoal_5551, initGoal_5554, initGoal_5559, initGoal_5560, initGoal_5563, initGoal_5568, initGoal_5572, initGoal_5577, initGoal_5584, initGoal_5586, initGoal_5595, initGoal_5600, initGoal_5603, initGoal_5608, initGoal_5609, initGoal_5612, initGoal_5617, initGoal_5621, initGoal_5626, initGoal_5633, initGoal_5635, initGoal_5644, initGoal_5649, initGoal_5652, initGoal_5657, initGoal_5658, initGoal_5661, initGoal_5666, initGoal_5670, initGoal_5675, initGoal_5682, initGoal_5684, initGoal_5693, initGoal_5698, initGoal_5701, initGoal_5706, initGoal_5707, initGoal_5710, initGoal_5715, initGoal_5719, initGoal_5724, initGoal_5731, initGoal_5733, initGoal_5742, initGoal_5747, initGoal_5750, initGoal_5755, initGoal_5756, initGoal_5759, initGoal_5764, initGoal_5768, initGoal_5773, initGoal_5780, initGoal_5782, initGoal_5791, initGoal_5796, initGoal_5799, initGoal_5804, initGoal_5805, initGoal_5808, initGoal_5813, initGoal_5817, initGoal_5822, initGoal_5829, initGoal_5831, initGoal_5840, initGoal_5845, initGoal_5848, initGoal_5853, initGoal_5854, initGoal_5857, initGoal_5862, initGoal_5866, initGoal_5871, initGoal_5878, initGoal_5880, initGoal_5889, initGoal_5894, initGoal_5897, initGoal_5902, initGoal_5903, initGoal_5906, initGoal_5911, initGoal_5915, initGoal_5920, initGoal_5929, initGoal_5931]
+def initGoals : List LineageGoal := [initGoal_4677, initGoal_4678, initGoal_4679, initGoal_4682, initGoal_4684, initGoal_4686, initGoal_4688, initGoal_4690, initGoal_4691, initGoal_4694, initGoal_4695, initGoal_4699, initGoal_4704, initGoal_4707, initGoal_4712, initGoal_4713, initGoal_4716, initGoal_4721, initGoal_4725, initGoal_4730, initGoal_4737, initGoal_4739, initGoal_4741, initGoal_4743, initGoal_4745, initGoal_4748, initGoal_4749, initGoal_4753, initGoal_4758, initGoal_4761, initGoal_4766, initGoal_4767, initGoal_4770, initGoal_4775, initGoal_4779, initGoal_4784, initGoal_4791, initGoal_4793, initGoal_4795, initGoal_4797, initGoal_4799, initGoal_4802, initGoal_4803, initGoal_4807, initGoal_4812, initGoal_4815, initGoal_4820, initGoal_4821, initGoal_4824, initGoal_4829, initGoal_4833, initGoal_4838, initGoal_4845, initGoal_4847, initGoal_4849, initGoal_4851, initGoal_4853, initGoal_4856, initGoal_4857, initGoal_4861, initGoal_4866, initGoal_4869, initGoal_4874, initGoal_4875, initGoal_4878, initGoal_4883, initGoal_4887, initGoal_4892, initGoal_4899, initGoal_4901, initGoal_4903, initGoal_4905, initGoal_4907, initGoal_4910, initGoal_4911, initGoal_4915, initGoal_4920, initGoal_4923, initGoal_4928, initGoal_4929, initGoal_4932, initGoal_4937, initGoal_4941, initGoal_4946, initGoal_4953, initGoal_4955, initGoal_4957, initGoal_4959, initGoal_4961, initGoal_4964, initGoal_4965, initGoal_4969, initGoal_4974, initGoal_4977, initGoal_4982, initGoal_4983, initGoal_4986, initGoal_4991, initGoal_4995, initGoal_5000, initGoal_5007, initGoal_5009, initGoal_5011, initGoal_5013, initGoal_5015, initGoal_5018, initGoal_5019, initGoal_5023, initGoal_5028, initGoal_5031, initGoal_5036, initGoal_5037, initGoal_5040, initGoal_5045, initGoal_5049, initGoal_5054, initGoal_5061, initGoal_5063, initGoal_5065, initGoal_5067, initGoal_5069, initGoal_5072, initGoal_5073, initGoal_5077, initGoal_5082, initGoal_5085, initGoal_5090, initGoal_5091, initGoal_5094, initGoal_5099, initGoal_5103, initGoal_5108, initGoal_5115, initGoal_5117, initGoal_5119, initGoal_5121, initGoal_5123, initGoal_5126, initGoal_5127, initGoal_5131, initGoal_5136, initGoal_5139, initGoal_5144, initGoal_5145, initGoal_5148, initGoal_5153, initGoal_5157, initGoal_5162, initGoal_5169, initGoal_5171, initGoal_5173, initGoal_5175, initGoal_5177, initGoal_5180, initGoal_5181, initGoal_5185, initGoal_5190, initGoal_5193, initGoal_5198, initGoal_5199, initGoal_5202, initGoal_5207, initGoal_5211, initGoal_5216, initGoal_5223, initGoal_5225, initGoal_5227, initGoal_5229, initGoal_5231, initGoal_5234, initGoal_5235, initGoal_5239, initGoal_5244, initGoal_5247, initGoal_5252, initGoal_5253, initGoal_5256, initGoal_5261, initGoal_5265, initGoal_5270, initGoal_5277, initGoal_5279, initGoal_5281, initGoal_5283, initGoal_5285, initGoal_5288, initGoal_5289, initGoal_5293, initGoal_5298, initGoal_5301, initGoal_5306, initGoal_5307, initGoal_5310, initGoal_5315, initGoal_5319, initGoal_5324, initGoal_5331, initGoal_5333, initGoal_5335, initGoal_5337, initGoal_5339, initGoal_5341, initGoal_5345, initGoal_5346, initGoal_5350, initGoal_5355, initGoal_5358, initGoal_5363, initGoal_5364, initGoal_5367, initGoal_5372, initGoal_5376, initGoal_5381, initGoal_5388, initGoal_5390, initGoal_5394, initGoal_5395, initGoal_5399, initGoal_5404, initGoal_5407, initGoal_5412, initGoal_5413, initGoal_5416, initGoal_5421, initGoal_5425, initGoal_5430, initGoal_5437, initGoal_5439, initGoal_5443, initGoal_5444, initGoal_5448, initGoal_5453, initGoal_5456, initGoal_5461, initGoal_5462, initGoal_5465, initGoal_5470, initGoal_5474, initGoal_5479, initGoal_5486, initGoal_5488, initGoal_5492, initGoal_5493, initGoal_5497, initGoal_5502, initGoal_5505, initGoal_5510, initGoal_5511, initGoal_5514, initGoal_5519, initGoal_5523, initGoal_5528, initGoal_5535, initGoal_5537, initGoal_5541, initGoal_5542, initGoal_5546, initGoal_5551, initGoal_5554, initGoal_5559, initGoal_5560, initGoal_5563, initGoal_5568, initGoal_5572, initGoal_5577, initGoal_5584, initGoal_5586, initGoal_5590, initGoal_5591, initGoal_5595, initGoal_5600, initGoal_5603, initGoal_5608, initGoal_5609, initGoal_5612, initGoal_5617, initGoal_5621, initGoal_5626, initGoal_5633, initGoal_5635, initGoal_5639, initGoal_5640, initGoal_5644, initGoal_5649, initGoal_5652, initGoal_5657, initGoal_5658, initGoal_5661, initGoal_5666, initGoal_5670, initGoal_5675, initGoal_5682, initGoal_5684, initGoal_5688, initGoal_5689, initGoal_5693, initGoal_5698, initGoal_5701, initGoal_5706, initGoal_5707, initGoal_5710, initGoal_5715, initGoal_5719, initGoal_5724, initGoal_5731, initGoal_5733, initGoal_5737, initGoal_5738, initGoal_5742, initGoal_5747, initGoal_5750, initGoal_5755, initGoal_5756, initGoal_5759, initGoal_5764, initGoal_5768, initGoal_5773, initGoal_5780, initGoal_5782, initGoal_5786, initGoal_5787, initGoal_5791, initGoal_5796, initGoal_5799, initGoal_5804, initGoal_5805, initGoal_5808, initGoal_5813, initGoal_5817, initGoal_5822, initGoal_5829, initGoal_5831, initGoal_5835, initGoal_5836, initGoal_5840, initGoal_5845, initGoal_5848, initGoal_5853, initGoal_5854, initGoal_5857, initGoal_5862, initGoal_5866, initGoal_5871, initGoal_5878, initGoal_5880, initGoal_5884, initGoal_5885, initGoal_5889, initGoal_5894, initGoal_5897, initGoal_5902, initGoal_5903, initGoal_5906, initGoal_5911, initGoal_5915, initGoal_5920, initGoal_5927, initGoal_5929, initGoal_5931]
 
-def obsTids : List Nat := [4673, 4674, 4675, 4676, 4677]
+def obsTids : List Nat := [4673, 4674, 4675, 4676, 4680]
 
 def goal_1 : LineageGoal :=
   { ts := 4673, tsShape := [4096], tps := [{ rank := 0, tid := 4673 }], tpShapes := [[4096]] }
@@ -12583,7 +12583,7 @@ def goal_4 : LineageGoal :=
   { ts := 4676, tsShape := [24, 4096, 64], tps := [{ rank := 0, tid := 4676 }], tpShapes := [[24, 4096, 64]] }
 
 def goal_5 : LineageGoal :=
-  { ts := 4677, tsShape := [4096], tps := [{ rank := 0, tid := 4677 }], tpShapes := [[4096]] }
+  { ts := 4680, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 4680 }], tpShapes := [[4096, 1024]] }
 
 def goalChunk_1 : List LineageGoal := [goal_1, goal_2, goal_3, goal_4, goal_5]
 def goals : List LineageGoal := goalChunk_1
@@ -12591,12 +12591,6 @@ def goals : List LineageGoal := goalChunk_1
 -- Auto shape/dimension checks skipped for this large generated graph.
 
 -- Intermediate tensor lineage goals (not already regular goals)
-def intermediateGoal_4678 : LineageGoal :=
-  { ts := 4678, tsShape := [4096], tps := [{ rank := 0, tid := 4678 }], tpShapes := [[4096]] }
-
-def intermediateGoal_4680 : LineageGoal :=
-  { ts := 4680, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 4680 }], tpShapes := [[4096, 1024]] }
-
 def intermediateGoal_4681 : LineageGoal :=
   { ts := 4681, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 4681 }], tpShapes := [[4096, 1024]] }
 
@@ -12612,20 +12606,11 @@ def intermediateGoal_4687 : LineageGoal :=
 def intermediateGoal_4689 : LineageGoal :=
   { ts := 4689, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 4689 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_4690 : LineageGoal :=
-  { ts := 4690, tsShape := [4096], tps := [{ rank := 0, tid := 4690 }], tpShapes := [[4096]] }
-
 def intermediateGoal_4692 : LineageGoal :=
   { ts := 4692, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 4692 }], tpShapes := [[4096, 16, 64]] }
 
 def intermediateGoal_4693 : LineageGoal :=
   { ts := 4693, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 4693 }], tpShapes := [[4096, 4, 64]] }
-
-def intermediateGoal_4694 : LineageGoal :=
-  { ts := 4694, tsShape := [2], tps := [{ rank := 0, tid := 4694 }], tpShapes := [[2]] }
-
-def intermediateGoal_4695 : LineageGoal :=
-  { ts := 4695, tsShape := [2], tps := [{ rank := 0, tid := 4695 }], tpShapes := [[2]] }
 
 def intermediateGoal_4696 : LineageGoal :=
   { ts := 4696, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 7437 }, { rank := 1, tid := 7438 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -12732,20 +12717,11 @@ def intermediateGoal_4742 : LineageGoal :=
 def intermediateGoal_4744 : LineageGoal :=
   { ts := 4744, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 4744 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_4745 : LineageGoal :=
-  { ts := 4745, tsShape := [4096], tps := [{ rank := 0, tid := 4745 }], tpShapes := [[4096]] }
-
 def intermediateGoal_4746 : LineageGoal :=
   { ts := 4746, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 4746 }], tpShapes := [[4096, 16, 64]] }
 
 def intermediateGoal_4747 : LineageGoal :=
   { ts := 4747, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 4747 }], tpShapes := [[4096, 4, 64]] }
-
-def intermediateGoal_4748 : LineageGoal :=
-  { ts := 4748, tsShape := [2], tps := [{ rank := 0, tid := 4748 }], tpShapes := [[2]] }
-
-def intermediateGoal_4749 : LineageGoal :=
-  { ts := 4749, tsShape := [2], tps := [{ rank := 0, tid := 4749 }], tpShapes := [[2]] }
 
 def intermediateGoal_4750 : LineageGoal :=
   { ts := 4750, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 7623 }, { rank := 1, tid := 7624 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -12852,20 +12828,11 @@ def intermediateGoal_4796 : LineageGoal :=
 def intermediateGoal_4798 : LineageGoal :=
   { ts := 4798, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 7793 }, { rank := 1, tid := 7794 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
 
-def intermediateGoal_4799 : LineageGoal :=
-  { ts := 4799, tsShape := [4096], tps := [{ rank := 0, tid := 4799 }], tpShapes := [[4096]] }
-
 def intermediateGoal_4800 : LineageGoal :=
   { ts := 4800, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 7805 }, { rank := 1, tid := 7806 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
 def intermediateGoal_4801 : LineageGoal :=
   { ts := 4801, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 7807 }, { rank := 1, tid := 7808 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
-
-def intermediateGoal_4802 : LineageGoal :=
-  { ts := 4802, tsShape := [2], tps := [{ rank := 0, tid := 4802 }], tpShapes := [[2]] }
-
-def intermediateGoal_4803 : LineageGoal :=
-  { ts := 4803, tsShape := [2], tps := [{ rank := 0, tid := 4803 }], tpShapes := [[2]] }
 
 def intermediateGoal_4804 : LineageGoal :=
   { ts := 4804, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 7809 }, { rank := 1, tid := 7810 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -12972,20 +12939,11 @@ def intermediateGoal_4850 : LineageGoal :=
 def intermediateGoal_4852 : LineageGoal :=
   { ts := 4852, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 7979 }, { rank := 1, tid := 7980 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
 
-def intermediateGoal_4853 : LineageGoal :=
-  { ts := 4853, tsShape := [4096], tps := [{ rank := 0, tid := 4853 }], tpShapes := [[4096]] }
-
 def intermediateGoal_4854 : LineageGoal :=
   { ts := 4854, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 7991 }, { rank := 1, tid := 7992 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
 def intermediateGoal_4855 : LineageGoal :=
   { ts := 4855, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 7993 }, { rank := 1, tid := 7994 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
-
-def intermediateGoal_4856 : LineageGoal :=
-  { ts := 4856, tsShape := [2], tps := [{ rank := 0, tid := 4856 }], tpShapes := [[2]] }
-
-def intermediateGoal_4857 : LineageGoal :=
-  { ts := 4857, tsShape := [2], tps := [{ rank := 0, tid := 4857 }], tpShapes := [[2]] }
 
 def intermediateGoal_4858 : LineageGoal :=
   { ts := 4858, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 7995 }, { rank := 1, tid := 7996 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -13092,20 +13050,11 @@ def intermediateGoal_4904 : LineageGoal :=
 def intermediateGoal_4906 : LineageGoal :=
   { ts := 4906, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 8165 }, { rank := 1, tid := 8166 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
 
-def intermediateGoal_4907 : LineageGoal :=
-  { ts := 4907, tsShape := [4096], tps := [{ rank := 0, tid := 4907 }], tpShapes := [[4096]] }
-
 def intermediateGoal_4908 : LineageGoal :=
   { ts := 4908, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 8177 }, { rank := 1, tid := 8178 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
 def intermediateGoal_4909 : LineageGoal :=
   { ts := 4909, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 8179 }, { rank := 1, tid := 8180 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
-
-def intermediateGoal_4910 : LineageGoal :=
-  { ts := 4910, tsShape := [2], tps := [{ rank := 0, tid := 4910 }], tpShapes := [[2]] }
-
-def intermediateGoal_4911 : LineageGoal :=
-  { ts := 4911, tsShape := [2], tps := [{ rank := 0, tid := 4911 }], tpShapes := [[2]] }
 
 def intermediateGoal_4912 : LineageGoal :=
   { ts := 4912, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 8181 }, { rank := 1, tid := 8182 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -13212,20 +13161,11 @@ def intermediateGoal_4958 : LineageGoal :=
 def intermediateGoal_4960 : LineageGoal :=
   { ts := 4960, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 8351 }, { rank := 1, tid := 8352 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
 
-def intermediateGoal_4961 : LineageGoal :=
-  { ts := 4961, tsShape := [4096], tps := [{ rank := 0, tid := 4961 }], tpShapes := [[4096]] }
-
 def intermediateGoal_4962 : LineageGoal :=
   { ts := 4962, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 8363 }, { rank := 1, tid := 8364 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
 def intermediateGoal_4963 : LineageGoal :=
   { ts := 4963, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 8365 }, { rank := 1, tid := 8366 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
-
-def intermediateGoal_4964 : LineageGoal :=
-  { ts := 4964, tsShape := [2], tps := [{ rank := 0, tid := 4964 }], tpShapes := [[2]] }
-
-def intermediateGoal_4965 : LineageGoal :=
-  { ts := 4965, tsShape := [2], tps := [{ rank := 0, tid := 4965 }], tpShapes := [[2]] }
 
 def intermediateGoal_4966 : LineageGoal :=
   { ts := 4966, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 8367 }, { rank := 1, tid := 8368 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -13332,20 +13272,11 @@ def intermediateGoal_5012 : LineageGoal :=
 def intermediateGoal_5014 : LineageGoal :=
   { ts := 5014, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 8537 }, { rank := 1, tid := 8538 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
 
-def intermediateGoal_5015 : LineageGoal :=
-  { ts := 5015, tsShape := [4096], tps := [{ rank := 0, tid := 5015 }], tpShapes := [[4096]] }
-
 def intermediateGoal_5016 : LineageGoal :=
   { ts := 5016, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 8549 }, { rank := 1, tid := 8550 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
 def intermediateGoal_5017 : LineageGoal :=
   { ts := 5017, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 8551 }, { rank := 1, tid := 8552 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
-
-def intermediateGoal_5018 : LineageGoal :=
-  { ts := 5018, tsShape := [2], tps := [{ rank := 0, tid := 5018 }], tpShapes := [[2]] }
-
-def intermediateGoal_5019 : LineageGoal :=
-  { ts := 5019, tsShape := [2], tps := [{ rank := 0, tid := 5019 }], tpShapes := [[2]] }
 
 def intermediateGoal_5020 : LineageGoal :=
   { ts := 5020, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 8553 }, { rank := 1, tid := 8554 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -13452,20 +13383,11 @@ def intermediateGoal_5066 : LineageGoal :=
 def intermediateGoal_5068 : LineageGoal :=
   { ts := 5068, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 8723 }, { rank := 1, tid := 8724 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
 
-def intermediateGoal_5069 : LineageGoal :=
-  { ts := 5069, tsShape := [4096], tps := [{ rank := 0, tid := 5069 }], tpShapes := [[4096]] }
-
 def intermediateGoal_5070 : LineageGoal :=
   { ts := 5070, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 8735 }, { rank := 1, tid := 8736 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
 def intermediateGoal_5071 : LineageGoal :=
   { ts := 5071, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 8737 }, { rank := 1, tid := 8738 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
-
-def intermediateGoal_5072 : LineageGoal :=
-  { ts := 5072, tsShape := [2], tps := [{ rank := 0, tid := 5072 }], tpShapes := [[2]] }
-
-def intermediateGoal_5073 : LineageGoal :=
-  { ts := 5073, tsShape := [2], tps := [{ rank := 0, tid := 5073 }], tpShapes := [[2]] }
 
 def intermediateGoal_5074 : LineageGoal :=
   { ts := 5074, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 8739 }, { rank := 1, tid := 8740 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -13572,20 +13494,11 @@ def intermediateGoal_5120 : LineageGoal :=
 def intermediateGoal_5122 : LineageGoal :=
   { ts := 5122, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 8909 }, { rank := 1, tid := 8910 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
 
-def intermediateGoal_5123 : LineageGoal :=
-  { ts := 5123, tsShape := [4096], tps := [{ rank := 0, tid := 5123 }], tpShapes := [[4096]] }
-
 def intermediateGoal_5124 : LineageGoal :=
   { ts := 5124, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 8921 }, { rank := 1, tid := 8922 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
 def intermediateGoal_5125 : LineageGoal :=
   { ts := 5125, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 8923 }, { rank := 1, tid := 8924 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
-
-def intermediateGoal_5126 : LineageGoal :=
-  { ts := 5126, tsShape := [2], tps := [{ rank := 0, tid := 5126 }], tpShapes := [[2]] }
-
-def intermediateGoal_5127 : LineageGoal :=
-  { ts := 5127, tsShape := [2], tps := [{ rank := 0, tid := 5127 }], tpShapes := [[2]] }
 
 def intermediateGoal_5128 : LineageGoal :=
   { ts := 5128, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 8925 }, { rank := 1, tid := 8926 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -13692,20 +13605,11 @@ def intermediateGoal_5174 : LineageGoal :=
 def intermediateGoal_5176 : LineageGoal :=
   { ts := 5176, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 9095 }, { rank := 1, tid := 9096 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
 
-def intermediateGoal_5177 : LineageGoal :=
-  { ts := 5177, tsShape := [4096], tps := [{ rank := 0, tid := 5177 }], tpShapes := [[4096]] }
-
 def intermediateGoal_5178 : LineageGoal :=
   { ts := 5178, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9107 }, { rank := 1, tid := 9108 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
 def intermediateGoal_5179 : LineageGoal :=
   { ts := 5179, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 9109 }, { rank := 1, tid := 9110 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
-
-def intermediateGoal_5180 : LineageGoal :=
-  { ts := 5180, tsShape := [2], tps := [{ rank := 0, tid := 5180 }], tpShapes := [[2]] }
-
-def intermediateGoal_5181 : LineageGoal :=
-  { ts := 5181, tsShape := [2], tps := [{ rank := 0, tid := 5181 }], tpShapes := [[2]] }
 
 def intermediateGoal_5182 : LineageGoal :=
   { ts := 5182, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9111 }, { rank := 1, tid := 9112 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -13812,20 +13716,11 @@ def intermediateGoal_5228 : LineageGoal :=
 def intermediateGoal_5230 : LineageGoal :=
   { ts := 5230, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 9281 }, { rank := 1, tid := 9282 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
 
-def intermediateGoal_5231 : LineageGoal :=
-  { ts := 5231, tsShape := [4096], tps := [{ rank := 0, tid := 5231 }], tpShapes := [[4096]] }
-
 def intermediateGoal_5232 : LineageGoal :=
   { ts := 5232, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9293 }, { rank := 1, tid := 9294 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
 def intermediateGoal_5233 : LineageGoal :=
   { ts := 5233, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 9295 }, { rank := 1, tid := 9296 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
-
-def intermediateGoal_5234 : LineageGoal :=
-  { ts := 5234, tsShape := [2], tps := [{ rank := 0, tid := 5234 }], tpShapes := [[2]] }
-
-def intermediateGoal_5235 : LineageGoal :=
-  { ts := 5235, tsShape := [2], tps := [{ rank := 0, tid := 5235 }], tpShapes := [[2]] }
 
 def intermediateGoal_5236 : LineageGoal :=
   { ts := 5236, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9297 }, { rank := 1, tid := 9298 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -13932,20 +13827,11 @@ def intermediateGoal_5282 : LineageGoal :=
 def intermediateGoal_5284 : LineageGoal :=
   { ts := 5284, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 9467 }, { rank := 1, tid := 9468 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
 
-def intermediateGoal_5285 : LineageGoal :=
-  { ts := 5285, tsShape := [4096], tps := [{ rank := 0, tid := 5285 }], tpShapes := [[4096]] }
-
 def intermediateGoal_5286 : LineageGoal :=
   { ts := 5286, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9479 }, { rank := 1, tid := 9480 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
 def intermediateGoal_5287 : LineageGoal :=
   { ts := 5287, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 9481 }, { rank := 1, tid := 9482 }], tpShapes := [[2048, 4, 64], [2048, 4, 64]] }
-
-def intermediateGoal_5288 : LineageGoal :=
-  { ts := 5288, tsShape := [2], tps := [{ rank := 0, tid := 5288 }], tpShapes := [[2]] }
-
-def intermediateGoal_5289 : LineageGoal :=
-  { ts := 5289, tsShape := [2], tps := [{ rank := 0, tid := 5289 }], tpShapes := [[2]] }
 
 def intermediateGoal_5290 : LineageGoal :=
   { ts := 5290, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9483 }, { rank := 1, tid := 9484 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -14049,9 +13935,6 @@ def intermediateGoal_5334 : LineageGoal :=
 def intermediateGoal_5336 : LineageGoal :=
   { ts := 5336, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5336 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5337 : LineageGoal :=
-  { ts := 5337, tsShape := [2], tps := [{ rank := 0, tid := 5337 }], tpShapes := [[2]] }
-
 def intermediateGoal_5338 : LineageGoal :=
   { ts := 5338, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9655 }, { rank := 1, tid := 9656 }], tpShapes := [[2048, 1024], [2048, 1024]] }
 
@@ -14066,12 +13949,6 @@ def intermediateGoal_5343 : LineageGoal :=
 
 def intermediateGoal_5344 : LineageGoal :=
   { ts := 5344, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5344 }], tpShapes := [[4096, 4, 64]] }
-
-def intermediateGoal_5345 : LineageGoal :=
-  { ts := 5345, tsShape := [2], tps := [{ rank := 0, tid := 5345 }], tpShapes := [[2]] }
-
-def intermediateGoal_5346 : LineageGoal :=
-  { ts := 5346, tsShape := [2], tps := [{ rank := 0, tid := 5346 }], tpShapes := [[2]] }
 
 def intermediateGoal_5347 : LineageGoal :=
   { ts := 5347, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9687 }, { rank := 1, tid := 9688 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -14178,12 +14055,6 @@ def intermediateGoal_5392 : LineageGoal :=
 def intermediateGoal_5393 : LineageGoal :=
   { ts := 5393, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5393 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5394 : LineageGoal :=
-  { ts := 5394, tsShape := [2], tps := [{ rank := 0, tid := 5394 }], tpShapes := [[2]] }
-
-def intermediateGoal_5395 : LineageGoal :=
-  { ts := 5395, tsShape := [2], tps := [{ rank := 0, tid := 5395 }], tpShapes := [[2]] }
-
 def intermediateGoal_5396 : LineageGoal :=
   { ts := 5396, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9859 }, { rank := 1, tid := 9860 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
@@ -14288,12 +14159,6 @@ def intermediateGoal_5441 : LineageGoal :=
 
 def intermediateGoal_5442 : LineageGoal :=
   { ts := 5442, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5442 }], tpShapes := [[4096, 4, 64]] }
-
-def intermediateGoal_5443 : LineageGoal :=
-  { ts := 5443, tsShape := [2], tps := [{ rank := 0, tid := 5443 }], tpShapes := [[2]] }
-
-def intermediateGoal_5444 : LineageGoal :=
-  { ts := 5444, tsShape := [2], tps := [{ rank := 0, tid := 5444 }], tpShapes := [[2]] }
 
 def intermediateGoal_5445 : LineageGoal :=
   { ts := 5445, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10031 }, { rank := 1, tid := 10032 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -14400,12 +14265,6 @@ def intermediateGoal_5490 : LineageGoal :=
 def intermediateGoal_5491 : LineageGoal :=
   { ts := 5491, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5491 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5492 : LineageGoal :=
-  { ts := 5492, tsShape := [2], tps := [{ rank := 0, tid := 5492 }], tpShapes := [[2]] }
-
-def intermediateGoal_5493 : LineageGoal :=
-  { ts := 5493, tsShape := [2], tps := [{ rank := 0, tid := 5493 }], tpShapes := [[2]] }
-
 def intermediateGoal_5494 : LineageGoal :=
   { ts := 5494, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10203 }, { rank := 1, tid := 10204 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
@@ -14510,12 +14369,6 @@ def intermediateGoal_5539 : LineageGoal :=
 
 def intermediateGoal_5540 : LineageGoal :=
   { ts := 5540, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5540 }], tpShapes := [[4096, 4, 64]] }
-
-def intermediateGoal_5541 : LineageGoal :=
-  { ts := 5541, tsShape := [2], tps := [{ rank := 0, tid := 5541 }], tpShapes := [[2]] }
-
-def intermediateGoal_5542 : LineageGoal :=
-  { ts := 5542, tsShape := [2], tps := [{ rank := 0, tid := 5542 }], tpShapes := [[2]] }
 
 def intermediateGoal_5543 : LineageGoal :=
   { ts := 5543, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10375 }, { rank := 1, tid := 10376 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -14622,12 +14475,6 @@ def intermediateGoal_5588 : LineageGoal :=
 def intermediateGoal_5589 : LineageGoal :=
   { ts := 5589, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5589 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5590 : LineageGoal :=
-  { ts := 5590, tsShape := [2], tps := [{ rank := 0, tid := 5590 }], tpShapes := [[2]] }
-
-def intermediateGoal_5591 : LineageGoal :=
-  { ts := 5591, tsShape := [2], tps := [{ rank := 0, tid := 5591 }], tpShapes := [[2]] }
-
 def intermediateGoal_5592 : LineageGoal :=
   { ts := 5592, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10547 }, { rank := 1, tid := 10548 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
@@ -14732,12 +14579,6 @@ def intermediateGoal_5637 : LineageGoal :=
 
 def intermediateGoal_5638 : LineageGoal :=
   { ts := 5638, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5638 }], tpShapes := [[4096, 4, 64]] }
-
-def intermediateGoal_5639 : LineageGoal :=
-  { ts := 5639, tsShape := [2], tps := [{ rank := 0, tid := 5639 }], tpShapes := [[2]] }
-
-def intermediateGoal_5640 : LineageGoal :=
-  { ts := 5640, tsShape := [2], tps := [{ rank := 0, tid := 5640 }], tpShapes := [[2]] }
 
 def intermediateGoal_5641 : LineageGoal :=
   { ts := 5641, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10719 }, { rank := 1, tid := 10720 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -14844,12 +14685,6 @@ def intermediateGoal_5686 : LineageGoal :=
 def intermediateGoal_5687 : LineageGoal :=
   { ts := 5687, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5687 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5688 : LineageGoal :=
-  { ts := 5688, tsShape := [2], tps := [{ rank := 0, tid := 5688 }], tpShapes := [[2]] }
-
-def intermediateGoal_5689 : LineageGoal :=
-  { ts := 5689, tsShape := [2], tps := [{ rank := 0, tid := 5689 }], tpShapes := [[2]] }
-
 def intermediateGoal_5690 : LineageGoal :=
   { ts := 5690, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10891 }, { rank := 1, tid := 10892 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
@@ -14954,12 +14789,6 @@ def intermediateGoal_5735 : LineageGoal :=
 
 def intermediateGoal_5736 : LineageGoal :=
   { ts := 5736, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5736 }], tpShapes := [[4096, 4, 64]] }
-
-def intermediateGoal_5737 : LineageGoal :=
-  { ts := 5737, tsShape := [2], tps := [{ rank := 0, tid := 5737 }], tpShapes := [[2]] }
-
-def intermediateGoal_5738 : LineageGoal :=
-  { ts := 5738, tsShape := [2], tps := [{ rank := 0, tid := 5738 }], tpShapes := [[2]] }
 
 def intermediateGoal_5739 : LineageGoal :=
   { ts := 5739, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11063 }, { rank := 1, tid := 11064 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -15066,12 +14895,6 @@ def intermediateGoal_5784 : LineageGoal :=
 def intermediateGoal_5785 : LineageGoal :=
   { ts := 5785, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5785 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5786 : LineageGoal :=
-  { ts := 5786, tsShape := [2], tps := [{ rank := 0, tid := 5786 }], tpShapes := [[2]] }
-
-def intermediateGoal_5787 : LineageGoal :=
-  { ts := 5787, tsShape := [2], tps := [{ rank := 0, tid := 5787 }], tpShapes := [[2]] }
-
 def intermediateGoal_5788 : LineageGoal :=
   { ts := 5788, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11235 }, { rank := 1, tid := 11236 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
@@ -15176,12 +14999,6 @@ def intermediateGoal_5833 : LineageGoal :=
 
 def intermediateGoal_5834 : LineageGoal :=
   { ts := 5834, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5834 }], tpShapes := [[4096, 4, 64]] }
-
-def intermediateGoal_5835 : LineageGoal :=
-  { ts := 5835, tsShape := [2], tps := [{ rank := 0, tid := 5835 }], tpShapes := [[2]] }
-
-def intermediateGoal_5836 : LineageGoal :=
-  { ts := 5836, tsShape := [2], tps := [{ rank := 0, tid := 5836 }], tpShapes := [[2]] }
 
 def intermediateGoal_5837 : LineageGoal :=
   { ts := 5837, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11407 }, { rank := 1, tid := 11408 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
@@ -15288,12 +15105,6 @@ def intermediateGoal_5882 : LineageGoal :=
 def intermediateGoal_5883 : LineageGoal :=
   { ts := 5883, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5883 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5884 : LineageGoal :=
-  { ts := 5884, tsShape := [2], tps := [{ rank := 0, tid := 5884 }], tpShapes := [[2]] }
-
-def intermediateGoal_5885 : LineageGoal :=
-  { ts := 5885, tsShape := [2], tps := [{ rank := 0, tid := 5885 }], tpShapes := [[2]] }
-
 def intermediateGoal_5886 : LineageGoal :=
   { ts := 5886, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11579 }, { rank := 1, tid := 11580 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
@@ -15386,9 +15197,6 @@ def intermediateGoal_5925 : LineageGoal :=
 
 def intermediateGoal_5926 : LineageGoal :=
   { ts := 5926, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11721 }, { rank := 1, tid := 11722 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_5927 : LineageGoal :=
-  { ts := 5927, tsShape := [2], tps := [{ rank := 0, tid := 5927 }], tpShapes := [[2]] }
 
 def intermediateGoal_5928 : LineageGoal :=
   { ts := 5928, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11727 }, { rank := 1, tid := 11728 }], tpShapes := [[2048, 1024], [2048, 1024]] }
@@ -16238,12 +16046,6 @@ def intermediateGoal_8603 : LineageGoal :=
 
 
 -- Proof obligations (intermediate goals)
-def intermediateGoal_4678_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4678 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_4680_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4680 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_4681_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4681 smInitEnv pmInitEnv initGoals
 
@@ -16259,20 +16061,11 @@ def intermediateGoal_4687_stmt : Prop :=
 def intermediateGoal_4689_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4689 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_4690_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4690 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_4692_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4692 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_4693_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4693 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_4694_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4694 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_4695_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4695 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_4696_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4696 smInitEnv pmInitEnv initGoals
@@ -16379,20 +16172,11 @@ def intermediateGoal_4742_stmt : Prop :=
 def intermediateGoal_4744_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4744 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_4745_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4745 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_4746_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4746 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_4747_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4747 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_4748_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4748 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_4749_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4749 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_4750_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4750 smInitEnv pmInitEnv initGoals
@@ -16499,20 +16283,11 @@ def intermediateGoal_4796_stmt : Prop :=
 def intermediateGoal_4798_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4798 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_4799_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4799 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_4800_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4800 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_4801_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4801 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_4802_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4802 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_4803_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4803 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_4804_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4804 smInitEnv pmInitEnv initGoals
@@ -16619,20 +16394,11 @@ def intermediateGoal_4850_stmt : Prop :=
 def intermediateGoal_4852_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4852 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_4853_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4853 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_4854_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4854 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_4855_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4855 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_4856_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4856 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_4857_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4857 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_4858_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4858 smInitEnv pmInitEnv initGoals
@@ -16739,20 +16505,11 @@ def intermediateGoal_4904_stmt : Prop :=
 def intermediateGoal_4906_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4906 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_4907_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4907 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_4908_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4908 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_4909_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4909 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_4910_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4910 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_4911_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4911 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_4912_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4912 smInitEnv pmInitEnv initGoals
@@ -16859,20 +16616,11 @@ def intermediateGoal_4958_stmt : Prop :=
 def intermediateGoal_4960_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4960 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_4961_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4961 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_4962_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4962 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_4963_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4963 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_4964_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4964 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_4965_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_4965 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_4966_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_4966 smInitEnv pmInitEnv initGoals
@@ -16979,20 +16727,11 @@ def intermediateGoal_5012_stmt : Prop :=
 def intermediateGoal_5014_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5014 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5015_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5015 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5016_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5016 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5017_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5017 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5018_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5018 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5019_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5019 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5020_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5020 smInitEnv pmInitEnv initGoals
@@ -17099,20 +16838,11 @@ def intermediateGoal_5066_stmt : Prop :=
 def intermediateGoal_5068_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5068 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5069_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5069 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5070_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5070 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5071_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5071 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5072_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5072 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5073_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5073 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5074_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5074 smInitEnv pmInitEnv initGoals
@@ -17219,20 +16949,11 @@ def intermediateGoal_5120_stmt : Prop :=
 def intermediateGoal_5122_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5122 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5123_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5123 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5124_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5124 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5125_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5125 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5126_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5126 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5127_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5127 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5128_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5128 smInitEnv pmInitEnv initGoals
@@ -17339,20 +17060,11 @@ def intermediateGoal_5174_stmt : Prop :=
 def intermediateGoal_5176_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5176 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5177_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5177 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5178_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5178 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5179_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5179 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5180_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5180 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5181_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5181 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5182_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5182 smInitEnv pmInitEnv initGoals
@@ -17459,20 +17171,11 @@ def intermediateGoal_5228_stmt : Prop :=
 def intermediateGoal_5230_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5230 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5231_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5231 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5232_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5232 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5233_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5233 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5234_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5234 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5235_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5235 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5236_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5236 smInitEnv pmInitEnv initGoals
@@ -17579,20 +17282,11 @@ def intermediateGoal_5282_stmt : Prop :=
 def intermediateGoal_5284_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5284 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5285_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5285 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5286_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5286 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5287_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5287 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5288_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5288 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5289_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5289 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5290_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5290 smInitEnv pmInitEnv initGoals
@@ -17696,9 +17390,6 @@ def intermediateGoal_5334_stmt : Prop :=
 def intermediateGoal_5336_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5336 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5337_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5337 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5338_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5338 smInitEnv pmInitEnv initGoals
 
@@ -17713,12 +17404,6 @@ def intermediateGoal_5343_stmt : Prop :=
 
 def intermediateGoal_5344_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5344 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5345_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5345 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5346_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5346 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5347_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5347 smInitEnv pmInitEnv initGoals
@@ -17825,12 +17510,6 @@ def intermediateGoal_5392_stmt : Prop :=
 def intermediateGoal_5393_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5393 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5394_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5394 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5395_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5395 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5396_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5396 smInitEnv pmInitEnv initGoals
 
@@ -17935,12 +17614,6 @@ def intermediateGoal_5441_stmt : Prop :=
 
 def intermediateGoal_5442_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5442 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5443_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5443 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5444_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5444 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5445_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5445 smInitEnv pmInitEnv initGoals
@@ -18047,12 +17720,6 @@ def intermediateGoal_5490_stmt : Prop :=
 def intermediateGoal_5491_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5491 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5492_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5492 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5493_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5493 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5494_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5494 smInitEnv pmInitEnv initGoals
 
@@ -18157,12 +17824,6 @@ def intermediateGoal_5539_stmt : Prop :=
 
 def intermediateGoal_5540_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5540 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5541_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5541 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5542_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5542 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5543_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5543 smInitEnv pmInitEnv initGoals
@@ -18269,12 +17930,6 @@ def intermediateGoal_5588_stmt : Prop :=
 def intermediateGoal_5589_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5589 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5590_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5590 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5591_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5591 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5592_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5592 smInitEnv pmInitEnv initGoals
 
@@ -18379,12 +18034,6 @@ def intermediateGoal_5637_stmt : Prop :=
 
 def intermediateGoal_5638_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5638 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5639_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5639 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5640_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5640 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5641_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5641 smInitEnv pmInitEnv initGoals
@@ -18491,12 +18140,6 @@ def intermediateGoal_5686_stmt : Prop :=
 def intermediateGoal_5687_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5687 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5688_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5688 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5689_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5689 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5690_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5690 smInitEnv pmInitEnv initGoals
 
@@ -18601,12 +18244,6 @@ def intermediateGoal_5735_stmt : Prop :=
 
 def intermediateGoal_5736_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5736 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5737_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5737 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5738_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5738 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5739_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5739 smInitEnv pmInitEnv initGoals
@@ -18713,12 +18350,6 @@ def intermediateGoal_5784_stmt : Prop :=
 def intermediateGoal_5785_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5785 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5786_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5786 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5787_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5787 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5788_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5788 smInitEnv pmInitEnv initGoals
 
@@ -18823,12 +18454,6 @@ def intermediateGoal_5833_stmt : Prop :=
 
 def intermediateGoal_5834_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5834 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5835_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5835 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5836_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5836 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5837_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5837 smInitEnv pmInitEnv initGoals
@@ -18935,12 +18560,6 @@ def intermediateGoal_5882_stmt : Prop :=
 def intermediateGoal_5883_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5883 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5884_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5884 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5885_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5885 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5886_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5886 smInitEnv pmInitEnv initGoals
 
@@ -19033,9 +18652,6 @@ def intermediateGoal_5925_stmt : Prop :=
 
 def intermediateGoal_5926_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5926 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5927_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5927 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5928_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5928 smInitEnv pmInitEnv initGoals
@@ -19904,7 +19520,7 @@ def all_goals_stmt : Prop :=
 /-!
 ## PM init tids
 
-The following tids are PM init tids (not written by any PM node): [4682, 4684, 4686, 4688, 4691, 4699, 4704, 4707, 4716, 4721, 4725, 4730, 4737, 4739, 4741, 4743, 4753, 4758, 4761, 4770, 4775, 4779, 4784, 4791, 4793, 4795, 4797, 4807, 4812, 4815, 4824, 4829, 4833, 4838, 4845, 4847, 4849, 4851, 4861, 4866, 4869, 4878, 4883, 4887, 4892, 4899, 4901, 4903, 4905, 4915, 4920, 4923, 4932, 4937, 4941, 4946, 4953, 4955, 4957, 4959, 4969, 4974, 4977, 4986, 4991, 4995, 5000, 5007, 5009, 5011, 5013, 5023, 5028, 5031, 5040, 5045, 5049, 5054, 5061, 5063, 5065, 5067, 5077, 5082, 5085, 5094, 5099, 5103, 5108, 5115, 5117, 5119, 5121, 5131, 5136, 5139, 5148, 5153, 5157, 5162, 5169, 5171, 5173, 5175, 5185, 5190, 5193, 5202, 5207, 5211, 5216, 5223, 5225, 5227, 5229, 5239, 5244, 5247, 5256, 5261, 5265, 5270, 5277, 5279, 5281, 5283, 5293, 5298, 5301, 5310, 5315, 5319, 5324, 5331, 5333, 5335, 5339, 5341, 5350, 5355, 5358, 5367, 5372, 5376, 5381, 5388, 5390, 5399, 5404, 5407, 5416, 5421, 5425, 5430, 5437, 5439, 5448, 5453, 5456, 5465, 5470, 5474, 5479, 5486, 5488, 5497, 5502, 5505, 5514, 5519, 5523, 5528, 5535, 5537, 5546, 5551, 5554, 5563, 5568, 5572, 5577, 5584, 5586, 5595, 5600, 5603, 5612, 5617, 5621, 5626, 5633, 5635, 5644, 5649, 5652, 5661, 5666, 5670, 5675, 5682, 5684, 5693, 5698, 5701, 5710, 5715, 5719, 5724, 5731, 5733, 5742, 5747, 5750, 5759, 5764, 5768, 5773, 5780, 5782, 5791, 5796, 5799, 5808, 5813, 5817, 5822, 5829, 5831, 5840, 5845, 5848, 5857, 5862, 5866, 5871, 5878, 5880, 5889, 5894, 5897, 5906, 5911, 5915, 5920, 5929, 5931, 7389, 7390, 7487, 7488, 7489, 7490, 7673, 7674, 7675, 7676, 7859, 7860, 7861, 7862, 8045, 8046, 8047, 8048, 8231, 8232, 8233, 8234, 8417, 8418, 8419, 8420, 8603, 8604, 8605, 8606, 8789, 8790, 8791, 8792, 8975, 8976, 8977, 8978, 9161, 9162, 9163, 9164, 9347, 9348, 9349, 9350, 9533, 9534, 9535, 9536, 9737, 9738, 9739, 9740, 9909, 9910, 9911, 9912, 10081, 10082, 10083, 10084, 10253, 10254, 10255, 10256, 10425, 10426, 10427, 10428, 10597, 10598, 10599, 10600, 10769, 10770, 10771, 10772, 10941, 10942, 10943, 10944, 11113, 11114, 11115, 11116, 11285, 11286, 11287, 11288, 11457, 11458, 11459, 11460, 11629, 11630, 11631, 11632]
+The following tids are PM init tids (not written by any PM node): [4677, 4678, 4682, 4684, 4686, 4688, 4690, 4691, 4694, 4695, 4699, 4704, 4707, 4716, 4721, 4725, 4730, 4737, 4739, 4741, 4743, 4745, 4748, 4749, 4753, 4758, 4761, 4770, 4775, 4779, 4784, 4791, 4793, 4795, 4797, 4799, 4802, 4803, 4807, 4812, 4815, 4824, 4829, 4833, 4838, 4845, 4847, 4849, 4851, 4853, 4856, 4857, 4861, 4866, 4869, 4878, 4883, 4887, 4892, 4899, 4901, 4903, 4905, 4907, 4910, 4911, 4915, 4920, 4923, 4932, 4937, 4941, 4946, 4953, 4955, 4957, 4959, 4961, 4964, 4965, 4969, 4974, 4977, 4986, 4991, 4995, 5000, 5007, 5009, 5011, 5013, 5015, 5018, 5019, 5023, 5028, 5031, 5040, 5045, 5049, 5054, 5061, 5063, 5065, 5067, 5069, 5072, 5073, 5077, 5082, 5085, 5094, 5099, 5103, 5108, 5115, 5117, 5119, 5121, 5123, 5126, 5127, 5131, 5136, 5139, 5148, 5153, 5157, 5162, 5169, 5171, 5173, 5175, 5177, 5180, 5181, 5185, 5190, 5193, 5202, 5207, 5211, 5216, 5223, 5225, 5227, 5229, 5231, 5234, 5235, 5239, 5244, 5247, 5256, 5261, 5265, 5270, 5277, 5279, 5281, 5283, 5285, 5288, 5289, 5293, 5298, 5301, 5310, 5315, 5319, 5324, 5331, 5333, 5335, 5337, 5339, 5341, 5345, 5346, 5350, 5355, 5358, 5367, 5372, 5376, 5381, 5388, 5390, 5394, 5395, 5399, 5404, 5407, 5416, 5421, 5425, 5430, 5437, 5439, 5443, 5444, 5448, 5453, 5456, 5465, 5470, 5474, 5479, 5486, 5488, 5492, 5493, 5497, 5502, 5505, 5514, 5519, 5523, 5528, 5535, 5537, 5541, 5542, 5546, 5551, 5554, 5563, 5568, 5572, 5577, 5584, 5586, 5590, 5591, 5595, 5600, 5603, 5612, 5617, 5621, 5626, 5633, 5635, 5639, 5640, 5644, 5649, 5652, 5661, 5666, 5670, 5675, 5682, 5684, 5688, 5689, 5693, 5698, 5701, 5710, 5715, 5719, 5724, 5731, 5733, 5737, 5738, 5742, 5747, 5750, 5759, 5764, 5768, 5773, 5780, 5782, 5786, 5787, 5791, 5796, 5799, 5808, 5813, 5817, 5822, 5829, 5831, 5835, 5836, 5840, 5845, 5848, 5857, 5862, 5866, 5871, 5878, 5880, 5884, 5885, 5889, 5894, 5897, 5906, 5911, 5915, 5920, 5927, 5929, 5931, 7389, 7390, 7487, 7488, 7489, 7490, 7673, 7674, 7675, 7676, 7859, 7860, 7861, 7862, 8045, 8046, 8047, 8048, 8231, 8232, 8233, 8234, 8417, 8418, 8419, 8420, 8603, 8604, 8605, 8606, 8789, 8790, 8791, 8792, 8975, 8976, 8977, 8978, 9161, 9162, 9163, 9164, 9347, 9348, 9349, 9350, 9533, 9534, 9535, 9536, 9737, 9738, 9739, 9740, 9909, 9910, 9911, 9912, 10081, 10082, 10083, 10084, 10253, 10254, 10255, 10256, 10425, 10426, 10427, 10428, 10597, 10598, 10599, 10600, 10769, 10770, 10771, 10772, 10941, 10942, 10943, 10944, 11113, 11114, 11115, 11116, 11285, 11286, 11287, 11288, 11457, 11458, 11459, 11460, 11629, 11630, 11631, 11632]
 
 To prove `(denoteGraph pm init) tid = init tid` for an init tid,
 use `denoteGraph_tid_eq_of_forall_not_mem_outs` with `native_decide`
@@ -19914,7 +19530,7 @@ to show no node outputs that tid.
 /-!
 ## Goal Dependency Structure
 
-- goal_5 (tid=4677) has no prerequisites (base case)
+- goal_5 (tid=4680) has no prerequisites (base case)
 - goal_3 (tid=4675) depends on goals: [5]
 - goal_4 (tid=4676) depends on goals: [5]
 - goal_1 (tid=4673) depends on goals: [5]

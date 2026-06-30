@@ -4,7 +4,6 @@
 import denote.yoco_goals.Instances
 
 set_option maxRecDepth 100000
-
 set_option linter.style.emptyLine false
 
 open TrainVerify.Denote
