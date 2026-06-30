@@ -903,5 +903,173 @@ theorem bw_norm_linear_snd_shape
   have hwr : w.shape.reverse = [kw, n] := by rw [hw]; rfl
   rw [hx, hwr]
   simp [Tensor.mkShape]
+/-! ### MoE: top-k routing — evalOp unfolding + applyNode lemmas
+
+    `FW_topk_routing` has 1 input (`logits`) and 3 outputs
+    `(routing_probs, routing_map, gate_scores)`, all sharing the shape
+    `[l, e]`. Params encode `[top_k, numExperts]`. -/
+
+theorem evalOp_fw_topk_routing
+    (numParts rank top_k numExperts : Nat) (logits : Tensor) :
+    evalOp numParts rank "OpName.FW_topk_routing" [top_k, numExperts] [logits] =
+      [ (fw_topk_routing logits top_k numExperts).1,
+        (fw_topk_routing logits top_k numExperts).2.1,
+        (fw_topk_routing logits top_k numExperts).2.2 ] := by
+  rfl
+
+/-- `applyNode` for `FW_topk_routing` 1st output (`routing_probs`). -/
+theorem applyNode_fw_topk_routing_fst_out
+    (g : GraphDecl) (s : Store) (rank top_k numExperts : Nat)
+    (logitsTid t1 t2 t3 : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_topk_routing",
+                    ins := [logitsTid], outs := [t1, t2, t3],
+                    params := [top_k, numExperts] } t1 =
+      (fw_topk_routing (s logitsTid) top_k numExperts).1 := by
+  unfold applyNode
+  rw [show ([logitsTid] : List Tid).map s = [s logitsTid] from rfl,
+      evalOp_fw_topk_routing]
+  change storeSet s
+    [(t1, (fw_topk_routing (s logitsTid) top_k numExperts).1),
+     (t2, (fw_topk_routing (s logitsTid) top_k numExperts).2.1),
+     (t3, (fw_topk_routing (s logitsTid) top_k numExperts).2.2)] t1 = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `applyNode` for `FW_topk_routing` 2nd output (`routing_map`). -/
+theorem applyNode_fw_topk_routing_snd_out
+    (g : GraphDecl) (s : Store) (rank top_k numExperts : Nat)
+    (logitsTid t1 t2 t3 : Tid) (hne12 : t1 ≠ t2) :
+    applyNode g s { rank := rank, op := "OpName.FW_topk_routing",
+                    ins := [logitsTid], outs := [t1, t2, t3],
+                    params := [top_k, numExperts] } t2 =
+      (fw_topk_routing (s logitsTid) top_k numExperts).2.1 := by
+  unfold applyNode
+  rw [show ([logitsTid] : List Tid).map s = [s logitsTid] from rfl,
+      evalOp_fw_topk_routing]
+  change storeSet s
+    [(t1, (fw_topk_routing (s logitsTid) top_k numExperts).1),
+     (t2, (fw_topk_routing (s logitsTid) top_k numExperts).2.1),
+     (t3, (fw_topk_routing (s logitsTid) top_k numExperts).2.2)] t2 = _
+  unfold storeSet
+  simp [List.find?, show ¬ (t1 = t2) from hne12]
+
+/-- `applyNode` for `FW_topk_routing` 3rd output (`gate_scores`). -/
+theorem applyNode_fw_topk_routing_thd_out
+    (g : GraphDecl) (s : Store) (rank top_k numExperts : Nat)
+    (logitsTid t1 t2 t3 : Tid) (hne13 : t1 ≠ t3) (hne23 : t2 ≠ t3) :
+    applyNode g s { rank := rank, op := "OpName.FW_topk_routing",
+                    ins := [logitsTid], outs := [t1, t2, t3],
+                    params := [top_k, numExperts] } t3 =
+      (fw_topk_routing (s logitsTid) top_k numExperts).2.2 := by
+  unfold applyNode
+  rw [show ([logitsTid] : List Tid).map s = [s logitsTid] from rfl,
+      evalOp_fw_topk_routing]
+  change storeSet s
+    [(t1, (fw_topk_routing (s logitsTid) top_k numExperts).1),
+     (t2, (fw_topk_routing (s logitsTid) top_k numExperts).2.1),
+     (t3, (fw_topk_routing (s logitsTid) top_k numExperts).2.2)] t3 = _
+  unfold storeSet
+  simp [List.find?, show ¬ (t1 = t3) from hne13, show ¬ (t2 = t3) from hne23]
+
+/-! ### MoE: all2all + grouped MM expert layer — evalOp unfolding + applyNode
+
+    `FW_all2all_moe_gmm` has 5 inputs `(input, routing_probs, routing_map,
+    w13, w2)` and 1 output `[l, h_model]`. Params encode
+    `[num_experts, local_expert_start, local_expert_end, top_k,
+      swiglu_limit_int]`.
+
+    Note: `fw_all2all_moe_gmm` currently has a `zeroTensor` stub body — see
+    Denote.lean. The evalOp/applyNode/shape lemmas here are real proofs and
+    will keep working when the body is replaced with the full expansion. -/
+
+theorem evalOp_fw_all2all_moe_gmm
+    (numParts rank numExperts localExpertStart localExpertEnd topK
+     swigluLimitInt : Nat)
+    (input rp rm w13 w2 : Tensor) :
+    evalOp numParts rank "OpName.FW_all2all_moe_gmm"
+        [numExperts, localExpertStart, localExpertEnd, topK, swigluLimitInt]
+        [input, rp, rm, w13, w2] =
+      [ fw_all2all_moe_gmm input rp rm w13 w2 numExperts localExpertStart
+          localExpertEnd topK ((swigluLimitInt : Nat) : Scalar) ] := by
+  rfl
+
+theorem applyNode_fw_all2all_moe_gmm_out
+    (g : GraphDecl) (s : Store)
+    (rank numExperts localExpertStart localExpertEnd topK swigluLimitInt : Nat)
+    (inputTid rpTid rmTid w13Tid w2Tid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_all2all_moe_gmm",
+                    ins := [inputTid, rpTid, rmTid, w13Tid, w2Tid],
+                    outs := [outTid],
+                    params := [numExperts, localExpertStart, localExpertEnd,
+                               topK, swigluLimitInt] } outTid =
+      fw_all2all_moe_gmm (s inputTid) (s rpTid) (s rmTid) (s w13Tid) (s w2Tid)
+        numExperts localExpertStart localExpertEnd topK
+        ((swigluLimitInt : Nat) : Scalar) := by
+  unfold applyNode
+  rw [show ([inputTid, rpTid, rmTid, w13Tid, w2Tid] : List Tid).map s =
+            [s inputTid, s rpTid, s rmTid, s w13Tid, s w2Tid] from rfl,
+      evalOp_fw_all2all_moe_gmm]
+  change storeSet s
+    [(outTid, fw_all2all_moe_gmm (s inputTid) (s rpTid) (s rmTid) (s w13Tid)
+        (s w2Tid) numExperts localExpertStart localExpertEnd topK
+        ((swigluLimitInt : Nat) : Scalar))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-! ### MoE shape preservation
+
+    Both outputs of `fw_topk_routing` and `fw_all2all_moe_gmm` have shapes
+    that depend only on the input shapes (`lDim`, `numExperts`, `hModel`),
+    so the shape lemmas are direct rewrites of `Tensor.mkShape`. -/
+
+/-- `fw_topk_routing` 1st output (`routing_probs`) has shape `[lDim, numExperts]`
+    where `lDim = logits.shape.head`. -/
+theorem fw_topk_routing_fst_shape
+    (logits : Tensor) (top_k numExperts : Nat) (lDim : Nat)
+    (hL : logits.shape.head? = some lDim) :
+    (fw_topk_routing logits top_k numExperts).1.shape = [lDim, numExperts] := by
+  unfold fw_topk_routing
+  have hh : (logits.shape.head?).getD 0 = lDim := by rw [hL]; rfl
+  simp [hh, Tensor.mkShape]
+
+/-- `fw_topk_routing` 2nd output (`routing_map`) has shape `[lDim, numExperts]`. -/
+theorem fw_topk_routing_snd_shape
+    (logits : Tensor) (top_k numExperts : Nat) (lDim : Nat)
+    (hL : logits.shape.head? = some lDim) :
+    (fw_topk_routing logits top_k numExperts).2.1.shape = [lDim, numExperts] := by
+  unfold fw_topk_routing
+  have hh : (logits.shape.head?).getD 0 = lDim := by rw [hL]; rfl
+  simp [hh, Tensor.mkShape]
+
+/-- `fw_topk_routing` 3rd output (`gate_scores`) has the same shape as `logits`
+    (it's the unmodified softmax output). -/
+theorem fw_topk_routing_thd_shape
+    (logits : Tensor) (top_k numExperts : Nat) :
+    (fw_topk_routing logits top_k numExperts).2.2.shape = logits.shape := by
+  unfold fw_topk_routing
+  -- gate_scores = softmax logits, which preserves shape.
+  unfold softmax
+  cases h : logits.shape.reverse with
+  | nil => simp
+  | cons d rest => simp [Tensor.mkShape]
+
+/-- `fw_all2all_moe_gmm` output has shape `[lDim, hModel]` where
+    `lDim = input.shape.head` and `hModel = w2.shape.last`. -/
+theorem fw_all2all_moe_gmm_shape
+    (input rp rm w13 w2 : Tensor)
+    (numExperts localExpertStart localExpertEnd topK : Nat)
+    (swigluLimit : Scalar)
+    (lDim hModel : Nat)
+    (hL : input.shape.head? = some lDim)
+    (hH : w2.shape.reverse.head? = some hModel) :
+    (fw_all2all_moe_gmm input rp rm w13 w2 numExperts localExpertStart
+        localExpertEnd topK swigluLimit).shape = [lDim, hModel] := by
+  unfold fw_all2all_moe_gmm
+  have hl : (input.shape.head?).getD 0 = lDim := by rw [hL]; rfl
+  have hh : (w2.shape.reverse.head?).getD 0 = hModel := by rw [hH]; rfl
+  show (zeroTensor [(input.shape.head?).getD 0,
+                    (w2.shape.reverse.head?).getD 0]).shape = [lDim, hModel]
+  rw [hl, hh]
+  simp [zeroTensor, Tensor.mkShape]
 
 end TrainVerify.Denote

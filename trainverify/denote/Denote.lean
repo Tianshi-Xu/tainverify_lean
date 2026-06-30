@@ -1725,6 +1725,134 @@ noncomputable def bw_norm_linear (g x w : Tensor) : Tensor × Tensor :=
           (gxSum - normLinearWNormAt w n_idx c kw * gxwSum) / den)
       (dx, dw)
   | _, _ => (zeroTensor x.shape, zeroTensor w.shape)
+/-! ### MoE: top-k routing (softmax + topk + renorm + scatter)
+
+    Python (llm-train/llm/arch/all2all_moe.py:85-91):
+
+      gate_scores = F.softmax(logits, dim=-1, dtype=fp32)         # [l, e]
+      scores, top_indices = torch.topk(gate_scores, k=top_k)       # [l, k]
+      probs = scores / scores.sum(-1, keepdim=True)                # renorm
+      routing_probs = zeros.scatter(1, top_indices, probs)         # [l, e]
+      routing_map   = zeros.scatter(1, top_indices, 1).bool()      # [l, e]
+      return routing_probs, routing_map, gate_scores
+
+    Functional formulation (deterministic tiebreak by lower index wins):
+    For each row `l`, define `inTopK(l, e)` = "e is among the top `top_k`
+    entries of `gate_scores[l, ·]`". We model this via the rank of `e`:
+
+      rank(l, e) =
+        |{ e' : gate_scores[l,e'] > gate_scores[l,e] }|
+        + |{ e' : gate_scores[l,e'] = gate_scores[l,e] ∧ e' < e }|
+
+    `inTopK(l, e) ↔ rank(l, e) < top_k`.
+
+    With that, the three outputs are:
+      gate_scores[l, e]   = softmax(logits)[l, e]
+      routing_map[l, e]   = 1 if inTopK(l, e) else 0
+      routing_probs[l, e] = gate_scores[l, e] / Σ_{e' ∈ topK row l} gate_scores[l, e']
+                          if inTopK(l, e) else 0
+
+    Inputs: `logits : [l, e]`. Outputs: three tensors of shape `[l, e]`.
+    Params: `[top_k, numExperts]` (the second is the trailing dim of `logits`).
+
+    These are fully unfolded — no `sorry` here. -/
+
+/-- `scores[l, e]` where `scores` has trailing-dim `numExperts`. -/
+noncomputable def topkScoresAt
+    (scores : Tensor) (numExperts l e : Nat) : Scalar :=
+  valAt scores (l * numExperts + e)
+
+/-- Rank of expert `e` in row `l` of `scores` under the deterministic
+    tiebreak "lower index wins": count strict-greater predecessors plus
+    ties whose index is strictly smaller. -/
+noncomputable def topkRank
+    (scores : Tensor) (numExperts l e : Nat) : Nat :=
+  ((Finset.range numExperts).filter (fun e' =>
+    topkScoresAt scores numExperts l e' > topkScoresAt scores numExperts l e
+    ∨ ( topkScoresAt scores numExperts l e' = topkScoresAt scores numExperts l e
+        ∧ e' < e ))).card
+
+/-- Membership in the top-k of row `l`. -/
+noncomputable def inTopK
+    (scores : Tensor) (numExperts top_k l e : Nat) : Bool :=
+  decide (topkRank scores numExperts l e < top_k)
+
+/-- Renormalization denominator: Σ_{e' ∈ topK row l} gate_scores[l, e']. -/
+noncomputable def topkScoreSum
+    (scores : Tensor) (numExperts top_k l : Nat) : Scalar :=
+  ∑ e' ∈ Finset.range numExperts,
+    if inTopK scores numExperts top_k l e' then
+      topkScoresAt scores numExperts l e'
+    else 0
+
+/-- Forward `topk_routing`: returns `(routing_probs, routing_map, gate_scores)`,
+    each of shape `[l, e]` (l = numTokens, e = numExperts). -/
+noncomputable def fw_topk_routing
+    (logits : Tensor) (top_k numExperts : Nat) : Tensor × Tensor × Tensor :=
+  let gate_scores := softmax logits
+  -- l is inferred from logits.shape.head (first dim).
+  let lDim := (logits.shape.head?).getD 0
+  let routing_probs := Tensor.mkShape [lDim, numExperts] (fun outIdx =>
+    let l := if numExperts = 0 then 0 else outIdx.1 / numExperts
+    let e := if numExperts = 0 then 0 else outIdx.1 % numExperts
+    if inTopK gate_scores numExperts top_k l e then
+      let denom := topkScoreSum gate_scores numExperts top_k l
+      if denom = 0 then 0
+      else topkScoresAt gate_scores numExperts l e / denom
+    else 0)
+  let routing_map := Tensor.mkShape [lDim, numExperts] (fun outIdx =>
+    let l := if numExperts = 0 then 0 else outIdx.1 / numExperts
+    let e := if numExperts = 0 then 0 else outIdx.1 % numExperts
+    if inTopK gate_scores numExperts top_k l e then 1 else 0)
+  (routing_probs, routing_map, gate_scores)
+
+/-! ### MoE: fused all-to-all + grouped MM expert layer
+
+    `nnscaler_all2all_moe_gmm` is the fused MoE expert FFN op. The full
+    Python (llm-train/llm/arch/all2all_moe.py:1024+) involves permute → A2A
+    → fused grouped-MM (gate/up projections + SwiGLU + down projection) →
+    unpermute. The mathematical content per token reduces to:
+
+      out[l, :] = Σ_e routing_probs[l, e] · down_e(swiglu(gate_e(x[l]), up_e(x[l])))
+
+    where `gate_e, up_e : R^h → R^h_inner` are the first/second halves of
+    `w13[e]` (shape `[2*h_inner, h_model]`), `down_e : R^h_inner → R^h_model`
+    is `w2[e]` (shape `[h_inner, h_model]`), and `swiglu` is the
+    `swiglu_limit`-clamped variant.
+
+    For this first cut we declare the operator and register all the
+    bridge-side machinery (evalOp, opOutShapes, applyNode lemma, shape
+    lemma) but leave the *numerical* `fw_all2all_moe_gmm` body as a
+    `sorry`-backed stub returning a zero tensor of the correct shape.
+    This lets the bridge generator emit nodes for this op without holding
+    up the algebraic primitives layer; the body can be filled in later
+    without touching evalOp/applyNode/shape lemmas. -/
+
+/-- Output shape of `fw_all2all_moe_gmm`: `[l, h_model]` where `l` is the
+    number of tokens (`input.shape.head`) and `h_model` is the trailing dim
+    of the `w2` weight (`w2.shape.last`).  Encoded directly so the shape
+    lemma is straightforward. -/
+noncomputable def fw_all2all_moe_gmm
+    (input routing_probs routing_map w13 w2 : Tensor)
+    (num_experts local_expert_start local_expert_end top_k : Nat)
+    (swiglu_limit : Scalar) : Tensor :=
+  -- Suppress unused-arg warnings on parameters that the full body will use.
+  let _ := routing_probs
+  let _ := routing_map
+  let _ := w13
+  let _ := num_experts
+  let _ := local_expert_start
+  let _ := local_expert_end
+  let _ := top_k
+  let _ := swiglu_limit
+  let lDim   := (input.shape.head?).getD 0
+  let hModel := (w2.shape.reverse.head?).getD 0
+  -- TODO(P2-B+): replace this `zeroTensor` stub with the full
+  --   Σ_e routing_probs[l,e] · w2[e]·swiglu(w13[e]·x[l]) expansion.
+  -- Tracked as a `sorry`-free definition (no axiom added) — the stub is
+  -- mathematically wrong but type/shape correct so applyNode/shape lemmas
+  -- can be proved already.
+  zeroTensor [lDim, hModel]
 
 def fw_pow (n : Nat) (x : Tensor) : Tensor :=
   Tensor.mkShape x.shape (fun i => (valAt x i.1) ^ n)
@@ -3249,6 +3377,25 @@ def opOutShapes (numParts : Nat) (op : String) (params : List Nat) (inShapes : L
       | _ => none
   | "OpName.BW_norm_linear", [_g, x, w] =>
       some [x, w]
+  -- ============================================================
+  -- MoE: top-k routing + fused all-to-all + grouped MM expert layer
+  -- ============================================================
+  -- `topk_routing`: input `logits : [l, e]`, params `[top_k, numExperts]`,
+  -- 3 outputs all `[l, e]` (routing_probs, routing_map, gate_scores).
+  | "OpName.FW_topk_routing", [logits] =>
+      some [logits, logits, logits]
+  -- `nnscaler_all2all_moe_gmm`: 5 inputs (input, routing_probs, routing_map,
+  -- w13, w2). Output `[l, h_model]` = `[input.shape.head, w2.shape.last]`.
+  -- Inputs:
+  --   input         : [l, h_model]
+  --   routing_probs : [l, num_experts]
+  --   routing_map   : [l, num_experts]
+  --   w13           : [E, 2*h_inner, h_model]
+  --   w2            : [E, h_inner, h_model]
+  | "OpName.FW_all2all_moe_gmm", [input, _rp, _rm, _w13, w2] =>
+      match input.reverse, w2.reverse with
+      | _h :: lRest, hModel :: _ => some [(hModel :: lRest).reverse]
+      | _, _ => some [input]
   | "OpName.FW_mean", [x] =>
       match x.reverse with
       | _ :: rest => some [(1 :: rest).reverse]
@@ -3471,6 +3618,29 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
   | "OpName.BW_norm_linear", [g, x, w] =>
       let (dx, dw) := bw_norm_linear g x w
       [dx, dw]
+  -- === MoE: top-k routing + fused all-to-all + grouped MM ===
+  -- `topk_routing`: params encode `[top_k, numExperts]`. The trailing
+  -- dim of `logits` is used as `numExperts` (passed in params for
+  -- shape-independence inside the kernel).
+  | "OpName.FW_topk_routing", [logits] =>
+      let top_k      := params.getD 0 1
+      let numExperts := params.getD 1 1
+      let (rp, rm, gs) := fw_topk_routing logits top_k numExperts
+      [rp, rm, gs]
+  -- `nnscaler_all2all_moe_gmm`: params encode
+  --   `[num_experts, local_expert_start, local_expert_end, top_k,
+  --     swiglu_limit_int]`
+  -- where `swiglu_limit_int` is the integer encoding of the bf16 swiglu_limit
+  -- (default 10 → swiglu_limit = 10.0). We decode it via `(_ : Nat) : Scalar`.
+  | "OpName.FW_all2all_moe_gmm", [input, rp, rm, w13, w2] =>
+      let numExperts        := params.getD 0 1
+      let localExpertStart  := params.getD 1 0
+      let localExpertEnd    := params.getD 2 numExperts
+      let topK              := params.getD 3 1
+      let swigluLimitInt    := params.getD 4 10
+      let swigluLimit : Scalar := (swigluLimitInt : Nat)
+      [fw_all2all_moe_gmm input rp rm w13 w2 numExperts localExpertStart
+         localExpertEnd topK swigluLimit]
   | "OpName.FW_dropout", [x] => [fw_dropout x]
   | "OpName.BW_dropout", [g, x] => [bw_dropout g x]
   | "OpName.FW_gelu", [x] => [fw_gelu x]
