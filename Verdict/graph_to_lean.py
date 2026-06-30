@@ -22,7 +22,12 @@ Run (must be in conda env verdict):
 
   conda run -n verdict python Verdict/graph_to_lean.py \
 	--sm-pkl <single.pkl> --pm-pkl <tp.pkl> \
-	--out trainverify/denote/GeneratedData.lean
+	--out trainverify/denote/gpt_ly4_regen/GeneratedData.lean \
+	--module denote.gpt_ly4_regen.GeneratedData
+
+Both --out and --module are required; pick the active model's emit dir
+(e.g. `gpt_ly4_regen/`, `yoco_goals/`) so you don't overwrite another
+model's snapshot.
 """
 
 from __future__ import annotations
@@ -40,7 +45,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULT_SM_GRAPH = ROOT / "genmodel" / "mgeners" / "attn_mgener_dp1_pp1_tp1_nm1_gbs16_dim128_seq64_nh8_ly1.pkl"
 DEFAULT_PM_GRAPH = ROOT / "genmodel" / "mgeners" / "attn_mgener_dp1_pp1_tp4_nm1_gbs16_dim128_seq64_nh8_ly1.pkl"
-DEFAULT_OUT = ROOT / "trainverify" / "denote" / "GeneratedData.lean"
+# DO NOT add a DEFAULT_OUT. The previous default (`trainverify/denote/GeneratedData.lean`)
+# silently overwrote the ly1 GeneratedData snapshot (now in `_archive/ly1/`), which made it
+# easy to clobber the active model's generated graph by accident. Callers must pass --out.
 
 
 def parse_args() -> argparse.Namespace:
@@ -49,13 +56,13 @@ def parse_args() -> argparse.Namespace:
 	p.add_argument("--pm-pkl", default=str(DEFAULT_PM_GRAPH), help="Path to PM graph pickle")
 	p.add_argument(
 		"--out",
-		default=str(DEFAULT_OUT),
-		help="Output Lean file path (e.g. trainverify/denote/GeneratedData.lean)",
+		required=True,
+		help="REQUIRED. Output Lean file path (e.g. trainverify/denote/gpt_ly4_regen/GeneratedData.lean).",
 	)
 	p.add_argument(
 		"--module",
-		default="trainverify.denote.GeneratedData",
-		help="Lean module name used in the generated file header comment",
+		required=True,
+		help="REQUIRED. Lean module name used in the generated file header comment (must match --out path).",
 	)
 	p.add_argument(
 		"--emit-spec-template",
