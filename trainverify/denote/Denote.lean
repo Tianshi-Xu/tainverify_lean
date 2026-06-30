@@ -1025,6 +1025,227 @@ def bw_rotary_embedding
   (bw_rotary_apply csCache positions gq qh,
    bw_rotary_apply csCache positions gk kh)
 
+/-! ### Sequence shuffle / unshuffle for ring context-parallel attention
+
+    YOCO's cross-attn layers use **zigzag context parallelism** (zigzag-CP) for
+    load balancing under causal attention: instead of partitioning a packed
+    sequence linearly (rank r ↔ tokens [r·c, (r+1)·c)) it interleaves a
+    "front slice" and "back slice" per sequence per rank. This balances the
+    O(j) attention cost between early/late tokens.
+
+    The pair `(wrap_maybe_shuffle, wrap_maybe_unshuffle)` converts between
+    linear and zigzag layouts. Both are pure **deterministic integer
+    permutations** of the token (= sequence dim) axis, determined entirely by
+    `(cu_seqlens_padded, cp_size, cp_rank)` metadata — no learned data flows
+    through them, only buffer/index inputs.
+
+    The mathematical content is in `varlen_utils._compute_a2a_metadata`
+    (nnscaler/customized_ops/ring_attention/varlen_utils.py:79-138). We model
+    them as TrainVerify collective primitives (à la `allToAllPrim`): take a
+    list of per-rank local inputs `xs : List Tensor`, return rank `cp_rank`'s
+    local output after the permutation.
+
+    ### Permutation derivation
+
+    Given `cu_seqlens_padded[0..num_seqs]` with `total_tokens = cu_seqlens[-1]`,
+    `chunk_size = total_tokens / cp_size`, `total_slices = 2 * cp_size`:
+
+    * For each sequence `s`, slice size `sl[s] = seq_lens[s] / total_slices`.
+    * Each rank holds, from each sequence, two `sl[s]`-sized slices:
+      - the **front** at offset `cp_rank * sl[s]`
+      - the **back**  at offset `(total_slices - cp_rank - 1) * sl[s]`
+
+    So local zigzag position `k ∈ [0, chunk_size)` for rank `cp_rank` maps to
+    a global position `zigzagPos(cu, cp_size, cp_rank, k)`.
+
+    `shuffle` reads from linear layout: `out[r, k] = lin[r', k']` where
+    `g = zigzagPos(cu, cp_size, r, k)`, `r' = g / chunk_size`, `k' = g % chunk_size`.
+
+    `unshuffle` reads from zigzag layout: rank `r`'s local token `i` lives at
+    global position `g = r * chunk_size + i`; the source is the rank that holds
+    `g` in zigzag — computed by `destRank` from the same metadata.
+-/
+
+/-- Decode a packed integer tensor of cumulative seqlens into a `List Nat`. -/
+noncomputable def decodeCuSeqlens (cu : Tensor) : List Nat :=
+  (List.range (prodShape cu.shape)).map (fun i => scalarToNat (valAt cu i))
+
+/-- Sum of an integer list; used as a `chunk_size` fallback. -/
+def listLast! (xs : List Nat) : Nat := xs.getLast?.getD 0
+
+/-- Per-sequence slice size for zigzag CP: `seq_lens[s] / total_slices`.
+    `cu = cu_seqlens_padded`; index `s ∈ [0, num_seqs)`. -/
+noncomputable def sliceSizeAt (cu : List Nat) (totalSlices s : Nat) : Nat :=
+  let seqLen := cu.getD (s + 1) 0 - cu.getD s 0
+  seqLen / totalSlices
+
+/-- Recursive walker: given local zigzag offset `k` remaining and current seq `s`,
+    return the global position. Each seq contributes `2 * sliceSize` tokens to
+    `cpRank`'s local chunk (front + back). -/
+noncomputable def zigzagPosAux
+    (cu : List Nat) (totalSlices cpRank : Nat) :
+    Nat →  -- remaining k
+    Nat →  -- current seq index s
+    Nat →  -- fuel (recursion bound)
+    Nat
+  | _, _, 0 => 0
+  | k, s, Nat.succ fuel =>
+      let sl := sliceSizeAt cu totalSlices s
+      let seqStart := cu.getD s 0
+      if k < sl then
+        -- front slice of seq s
+        seqStart + cpRank * sl + k
+      else if k < 2 * sl then
+        -- back slice of seq s
+        seqStart + (totalSlices - cpRank - 1) * sl + (k - sl)
+      else
+        -- skip this seq, advance to next
+        zigzagPosAux cu totalSlices cpRank (k - 2 * sl) (s + 1) fuel
+
+/-- Global token position of rank `cpRank`'s local zigzag-CP token `k`.
+
+    `k ∈ [0, chunk_size)` is the local index; the return value is the position
+    `∈ [0, total_tokens)` in the packed linear layout. -/
+noncomputable def zigzagPos
+    (cu : List Nat) (cpSize cpRank k : Nat) : Nat :=
+  let totalSlices := 2 * cpSize
+  let numSeqs := cu.length - 1
+  -- fuel = numSeqs is enough: each step either returns or advances `s` by 1.
+  zigzagPosAux cu totalSlices cpRank k 0 numSeqs
+
+/-- Per-element gather: `output[k] = (xs.get sourceRank)[k']` where
+    `(sourceRank, k') = (globalPos / chunk, globalPos % chunk)`. -/
+noncomputable def gatherFromRank
+    (xs : List Tensor) (chunkSize hiddenStride globalPos h : Nat) : Scalar :=
+  let srcRank := globalPos / chunkSize
+  let kInSrc := globalPos % chunkSize
+  let src := xs.getD srcRank (zeroTensor [])
+  valAt src (kInSrc * hiddenStride + h)
+
+/-- Forward `wrap_maybe_shuffle`: convert rank `cpRank`'s linear chunk into its
+    zigzag chunk. `xs : List Tensor` is all `cpSize` ranks' linear inputs
+    (each of shape `[chunkSize, hidden...]`); the output is rank `cpRank`'s
+    zigzag-ordered local chunk, same shape as the first input. -/
+noncomputable def fw_maybe_shuffle
+    (cu : Tensor) (cpSize cpRank : Nat) (xs : List Tensor) : Tensor :=
+  let firstShape := (xs.head?.map (fun t => t.shape)).getD []
+  match firstShape with
+  | [] => zeroTensor []
+  | chunkSize :: rest =>
+      let hiddenStride := prodShape rest
+      let cuList := decodeCuSeqlens cu
+      Tensor.mkShape firstShape (fun outIdx =>
+        let k := outIdx.1 / hiddenStride
+        let h := outIdx.1 % hiddenStride
+        let g := zigzagPos cuList cpSize cpRank k
+        gatherFromRank xs chunkSize hiddenStride g h)
+
+/-- Compute which rank holds global position `globalPos` in the zigzag layout.
+
+    Mirrors `dest_rank` in varlen_utils.py line 108:
+        seq_idx = bisect(cu, globalPos)
+        pos_in_seq = globalPos - cu[seq_idx]
+        slice_idx = pos_in_seq / slice_size[seq_idx]
+        dest_rank = slice_idx                   if slice_idx < cpSize
+                  = total_slices - 1 - slice_idx otherwise
+-/
+noncomputable def destRankAux
+    (cu : List Nat) (totalSlices cpSize globalPos : Nat) :
+    Nat →  -- current seq index s
+    Nat →  -- fuel
+    Nat
+  | _, 0 => 0
+  | s, Nat.succ fuel =>
+      let seqStart := cu.getD s 0
+      let seqEnd := cu.getD (s + 1) seqStart
+      if globalPos < seqEnd then
+        let sl := sliceSizeAt cu totalSlices s
+        let posInSeq := globalPos - seqStart
+        let sliceIdx := if sl = 0 then 0 else posInSeq / sl
+        if sliceIdx < cpSize then sliceIdx
+        else totalSlices - 1 - sliceIdx
+      else
+        destRankAux cu totalSlices cpSize globalPos (s + 1) fuel
+
+noncomputable def destRank
+    (cu : List Nat) (cpSize globalPos : Nat) : Nat :=
+  let totalSlices := 2 * cpSize
+  let numSeqs := cu.length - 1
+  destRankAux cu totalSlices cpSize globalPos 0 numSeqs
+
+/-- Given a global position `g` in linear layout, find the local zigzag offset
+    `k` such that `zigzagPos(cu, cpSize, destRank(g), k) = g`.
+
+    Mirrors the inversion logic: in the destination rank's chunk, this token
+    sits at the offset accumulated from prior sequences plus the within-slice
+    position. -/
+noncomputable def zigzagInvOffsetAux
+    (cu : List Nat) (totalSlices cpSize cpRank globalPos : Nat) :
+    Nat →  -- accumulated offset
+    Nat →  -- current seq s
+    Nat →  -- fuel
+    Nat
+  | _, _, 0 => 0
+  | acc, s, Nat.succ fuel =>
+      let seqStart := cu.getD s 0
+      let seqEnd := cu.getD (s + 1) seqStart
+      let sl := sliceSizeAt cu totalSlices s
+      if globalPos < seqEnd then
+        let posInSeq := globalPos - seqStart
+        let sliceIdx := if sl = 0 then 0 else posInSeq / sl
+        let withinSlice := posInSeq - sliceIdx * sl
+        if sliceIdx < cpSize then
+          -- front of seq s; offset = acc + withinSlice
+          acc + withinSlice
+        else
+          -- back of seq s; offset = acc + sl + withinSlice
+          acc + sl + withinSlice
+      else
+        zigzagInvOffsetAux cu totalSlices cpSize cpRank globalPos (acc + 2 * sl) (s + 1) fuel
+
+noncomputable def zigzagInvOffset
+    (cu : List Nat) (cpSize cpRank globalPos : Nat) : Nat :=
+  let totalSlices := 2 * cpSize
+  let numSeqs := cu.length - 1
+  zigzagInvOffsetAux cu totalSlices cpSize cpRank globalPos 0 0 numSeqs
+
+/-- Forward `wrap_maybe_unshuffle`: convert rank `cpRank`'s zigzag chunk back
+    into its linear chunk. `xs : List Tensor` is all `cpSize` ranks' zigzag
+    inputs; output is rank `cpRank`'s linear-ordered local chunk.
+
+    For local linear position `i`, the global position is `g = cpRank * chunk + i`.
+    The source rank in zigzag layout is `destRank(g)`, and its local offset is
+    `zigzagInvOffset(g)`. -/
+noncomputable def fw_maybe_unshuffle
+    (cu : Tensor) (cpSize cpRank : Nat) (xs : List Tensor) : Tensor :=
+  let firstShape := (xs.head?.map (fun t => t.shape)).getD []
+  match firstShape with
+  | [] => zeroTensor []
+  | chunkSize :: rest =>
+      let hiddenStride := prodShape rest
+      let cuList := decodeCuSeqlens cu
+      Tensor.mkShape firstShape (fun outIdx =>
+        let i := outIdx.1 / hiddenStride
+        let h := outIdx.1 % hiddenStride
+        let g := cpRank * chunkSize + i
+        let srcRank := destRank cuList cpSize g
+        let srcOffset := zigzagInvOffset cuList cpSize srcRank g
+        let src := xs.getD srcRank (zeroTensor [])
+        valAt src (srcOffset * hiddenStride + h))
+
+/-- Backward shuffle: since shuffle is a deterministic permutation, the
+    backward pass is exactly the forward pass of `unshuffle` (the two are
+    inverse). Given the upstream gradient `gs` at rank `cpRank` (zigzag-shaped),
+    return the linear-shaped local gradient. -/
+noncomputable def bw_maybe_shuffle
+    (cu : Tensor) (cpSize cpRank : Nat) (gs : List Tensor) : Tensor :=
+  fw_maybe_unshuffle cu cpSize cpRank gs
+
+/-- Backward unshuffle: symmetric to `bw_maybe_shuffle`. -/
+noncomputable def bw_maybe_unshuffle
+    (cu : Tensor) (cpSize cpRank : Nat) (gs : List Tensor) : Tensor :=
+  fw_maybe_shuffle cu cpSize cpRank gs
+
 def fw_pow (n : Nat) (x : Tensor) : Tensor :=
   Tensor.mkShape x.shape (fun i => (valAt x i.1) ^ n)
 
@@ -2502,6 +2723,17 @@ def opOutShapes (numParts : Nat) (op : String) (params : List Nat) (inShapes : L
       some [q, k]
   | "OpName.BW_rotary_embedding", [_csCache, _positions, gq, gk] =>
       some [gq, gk]
+  -- Shuffle / unshuffle: collective primitives; first input is cu_seqlens,
+  -- followed by `cpSize` per-rank local tensors. Output shape = first per-rank
+  -- input shape.
+  | "OpName.FW_maybe_shuffle", _cu :: x0 :: _rest =>
+      some [x0]
+  | "OpName.FW_maybe_unshuffle", _cu :: x0 :: _rest =>
+      some [x0]
+  | "OpName.BW_maybe_shuffle", _cu :: g0 :: _rest =>
+      some [g0]
+  | "OpName.BW_maybe_unshuffle", _cu :: g0 :: _rest =>
+      some [g0]
   | "OpName.FW_mean", [x] =>
       match x.reverse with
       | _ :: rest => some [(1 :: rest).reverse]
@@ -2672,6 +2904,24 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       let kh := (params.drop 1).head?.getD 1
       let (dq, dk) := bw_rotary_embedding csCache positions gq gk qh kh
       [dq, dk]
+  -- Shuffle / unshuffle: collective primitives with `cpSize` per-rank inputs.
+  -- Inputs layout: `[cu, x0, x1, ..., x_{cpSize-1}]`. Params: `[cpSize, cpRank]`.
+  | "OpName.FW_maybe_shuffle", cu :: xs =>
+      let cpSize := params.head?.getD 1
+      let cpRank := (params.drop 1).head?.getD 0
+      [fw_maybe_shuffle cu cpSize cpRank xs]
+  | "OpName.FW_maybe_unshuffle", cu :: xs =>
+      let cpSize := params.head?.getD 1
+      let cpRank := (params.drop 1).head?.getD 0
+      [fw_maybe_unshuffle cu cpSize cpRank xs]
+  | "OpName.BW_maybe_shuffle", cu :: gs =>
+      let cpSize := params.head?.getD 1
+      let cpRank := (params.drop 1).head?.getD 0
+      [bw_maybe_shuffle cu cpSize cpRank gs]
+  | "OpName.BW_maybe_unshuffle", cu :: gs =>
+      let cpSize := params.head?.getD 1
+      let cpRank := (params.drop 1).head?.getD 0
+      [bw_maybe_unshuffle cu cpSize cpRank gs]
   | "OpName.FW_dropout", [x] => [fw_dropout x]
   | "OpName.BW_dropout", [g, x] => [bw_dropout g x]
   | "OpName.FW_gelu", [x] => [fw_gelu x]

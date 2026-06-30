@@ -293,6 +293,98 @@ theorem applyNode_bw_rotary_embedding_snd_out
   unfold storeSet
   simp [List.find?, show ¬ (t1 = t2) from hne]
 
+/-! ### Shuffle / unshuffle: evalOp unfolding + applyNode lemmas
+
+    Shuffle/unshuffle nodes take `cpSize + 1` inputs (one `cu_seqlens` plus
+    one tensor per CP rank) and a single output, with `params := [cpSize, cpRank]`.
+    The evalOp/applyNode lemmas mirror the `allToAllPrim` pattern. -/
+
+theorem evalOp_fw_maybe_shuffle
+    (numParts rank cpSize cpRank : Nat) (cu : Tensor) (xs : List Tensor) :
+    evalOp numParts rank "OpName.FW_maybe_shuffle" [cpSize, cpRank] (cu :: xs) =
+      [fw_maybe_shuffle cu cpSize cpRank xs] := by
+  rfl
+
+theorem evalOp_fw_maybe_unshuffle
+    (numParts rank cpSize cpRank : Nat) (cu : Tensor) (xs : List Tensor) :
+    evalOp numParts rank "OpName.FW_maybe_unshuffle" [cpSize, cpRank] (cu :: xs) =
+      [fw_maybe_unshuffle cu cpSize cpRank xs] := by
+  rfl
+
+theorem evalOp_bw_maybe_shuffle
+    (numParts rank cpSize cpRank : Nat) (cu : Tensor) (gs : List Tensor) :
+    evalOp numParts rank "OpName.BW_maybe_shuffle" [cpSize, cpRank] (cu :: gs) =
+      [bw_maybe_shuffle cu cpSize cpRank gs] := by
+  rfl
+
+theorem evalOp_bw_maybe_unshuffle
+    (numParts rank cpSize cpRank : Nat) (cu : Tensor) (gs : List Tensor) :
+    evalOp numParts rank "OpName.BW_maybe_unshuffle" [cpSize, cpRank] (cu :: gs) =
+      [bw_maybe_unshuffle cu cpSize cpRank gs] := by
+  rfl
+
+/-- `applyNode` for `FW_maybe_shuffle`: inputs `[cuTid, x0Tid, x1Tid, ...]`,
+    output `outTid`. -/
+theorem applyNode_fw_maybe_shuffle_out
+    (g : GraphDecl) (s : Store) (rank cpSize cpRank : Nat)
+    (cuTid : Tid) (xTids : List Tid) (outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_maybe_shuffle",
+                    ins := cuTid :: xTids,
+                    outs := [outTid], params := [cpSize, cpRank] } outTid =
+      fw_maybe_shuffle (s cuTid) cpSize cpRank (xTids.map s) := by
+  unfold applyNode
+  rw [show (cuTid :: xTids : List Tid).map s = s cuTid :: xTids.map s from rfl,
+      evalOp_fw_maybe_shuffle]
+  change storeSet s [(outTid, fw_maybe_shuffle (s cuTid) cpSize cpRank (xTids.map s))]
+    outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+theorem applyNode_fw_maybe_unshuffle_out
+    (g : GraphDecl) (s : Store) (rank cpSize cpRank : Nat)
+    (cuTid : Tid) (xTids : List Tid) (outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_maybe_unshuffle",
+                    ins := cuTid :: xTids,
+                    outs := [outTid], params := [cpSize, cpRank] } outTid =
+      fw_maybe_unshuffle (s cuTid) cpSize cpRank (xTids.map s) := by
+  unfold applyNode
+  rw [show (cuTid :: xTids : List Tid).map s = s cuTid :: xTids.map s from rfl,
+      evalOp_fw_maybe_unshuffle]
+  change storeSet s [(outTid, fw_maybe_unshuffle (s cuTid) cpSize cpRank (xTids.map s))]
+    outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+theorem applyNode_bw_maybe_shuffle_out
+    (g : GraphDecl) (s : Store) (rank cpSize cpRank : Nat)
+    (cuTid : Tid) (gTids : List Tid) (outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.BW_maybe_shuffle",
+                    ins := cuTid :: gTids,
+                    outs := [outTid], params := [cpSize, cpRank] } outTid =
+      bw_maybe_shuffle (s cuTid) cpSize cpRank (gTids.map s) := by
+  unfold applyNode
+  rw [show (cuTid :: gTids : List Tid).map s = s cuTid :: gTids.map s from rfl,
+      evalOp_bw_maybe_shuffle]
+  change storeSet s [(outTid, bw_maybe_shuffle (s cuTid) cpSize cpRank (gTids.map s))]
+    outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+theorem applyNode_bw_maybe_unshuffle_out
+    (g : GraphDecl) (s : Store) (rank cpSize cpRank : Nat)
+    (cuTid : Tid) (gTids : List Tid) (outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.BW_maybe_unshuffle",
+                    ins := cuTid :: gTids,
+                    outs := [outTid], params := [cpSize, cpRank] } outTid =
+      bw_maybe_unshuffle (s cuTid) cpSize cpRank (gTids.map s) := by
+  unfold applyNode
+  rw [show (cuTid :: gTids : List Tid).map s = s cuTid :: gTids.map s from rfl,
+      evalOp_bw_maybe_unshuffle]
+  change storeSet s [(outTid, bw_maybe_unshuffle (s cuTid) cpSize cpRank (gTids.map s))]
+    outTid = _
+  unfold storeSet
+  simp [List.find?]
+
 /-! ## Shape preservation (used in shape-obligation proofs) -/
 
 theorem fw_sigmoid_shape (x : Tensor) : (fw_sigmoid x).shape = x.shape := by
@@ -361,5 +453,47 @@ theorem bw_rotary_embedding_snd_shape
     (bw_rotary_embedding csCache positions gq gk qh kh).2.shape = gk.shape := by
   unfold bw_rotary_embedding
   exact bw_rotary_apply_shape csCache positions gk kh
+
+/-! ### Shuffle / unshuffle shape preservation
+
+    Each variant returns a tensor with the same shape as the first per-rank
+    input (`xs.head?`); since the inputs are equal-shaped local chunks, this is
+    a single representative shape. -/
+
+theorem fw_maybe_shuffle_shape
+    (cu : Tensor) (cpSize cpRank : Nat) (xs : List Tensor)
+    (x0 : Tensor) (h : xs.head? = some x0) :
+    (fw_maybe_shuffle cu cpSize cpRank xs).shape = x0.shape := by
+  unfold fw_maybe_shuffle
+  have hshape : (xs.head?.map (fun t => t.shape)).getD [] = x0.shape := by
+    rw [h]; rfl
+  cases hsh : x0.shape with
+  | nil => simp [hshape, hsh, zeroTensor, Tensor.mkShape]
+  | cons d rest => simp [hshape, hsh, Tensor.mkShape]
+
+theorem fw_maybe_unshuffle_shape
+    (cu : Tensor) (cpSize cpRank : Nat) (xs : List Tensor)
+    (x0 : Tensor) (h : xs.head? = some x0) :
+    (fw_maybe_unshuffle cu cpSize cpRank xs).shape = x0.shape := by
+  unfold fw_maybe_unshuffle
+  have hshape : (xs.head?.map (fun t => t.shape)).getD [] = x0.shape := by
+    rw [h]; rfl
+  cases hsh : x0.shape with
+  | nil => simp [hshape, hsh, zeroTensor, Tensor.mkShape]
+  | cons d rest => simp [hshape, hsh, Tensor.mkShape]
+
+theorem bw_maybe_shuffle_shape
+    (cu : Tensor) (cpSize cpRank : Nat) (gs : List Tensor)
+    (g0 : Tensor) (h : gs.head? = some g0) :
+    (bw_maybe_shuffle cu cpSize cpRank gs).shape = g0.shape := by
+  unfold bw_maybe_shuffle
+  exact fw_maybe_unshuffle_shape cu cpSize cpRank gs g0 h
+
+theorem bw_maybe_unshuffle_shape
+    (cu : Tensor) (cpSize cpRank : Nat) (gs : List Tensor)
+    (g0 : Tensor) (h : gs.head? = some g0) :
+    (bw_maybe_unshuffle cu cpSize cpRank gs).shape = g0.shape := by
+  unfold bw_maybe_unshuffle
+  exact fw_maybe_shuffle_shape cu cpSize cpRank gs g0 h
 
 end TrainVerify.Denote
