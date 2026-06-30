@@ -1072,4 +1072,90 @@ theorem fw_all2all_moe_gmm_shape
   rw [hl, hh]
   simp [zeroTensor, Tensor.mkShape]
 
+/-! ### YOCO loss kernel: `inner_chunk_linear_cross_entropy`
+
+    `FW_inner_chunk_ce` has 3 inputs `(x, w, y)` and 2 outputs `(losses, z_losses)`,
+    both of shape `[L]` where `L = x.shape.head`.  Params layout is
+    `[chunkSize, zLossScaleInt]` (where `chunkSize` is engineering-only and
+    `zLossScaleInt` is the integer encoding of the bf16 z-loss scale; defaults to
+    `0` when absent, matching the PM trace). -/
+
+theorem evalOp_fw_inner_chunk_ce
+    (numParts rank chunkSize zLossScaleInt : Nat) (x w y : Tensor) :
+    evalOp numParts rank "OpName.FW_inner_chunk_ce" [chunkSize, zLossScaleInt]
+        [x, w, y] =
+      [ (fw_inner_chunk_ce x w y ((w.shape.head?).getD 0)
+            ((zLossScaleInt : Nat) : Scalar)).1,
+        (fw_inner_chunk_ce x w y ((w.shape.head?).getD 0)
+            ((zLossScaleInt : Nat) : Scalar)).2 ] := by
+  rfl
+
+/-- `applyNode` for `FW_inner_chunk_ce` 1st output (`losses`). -/
+theorem applyNode_fw_inner_chunk_ce_fst_out
+    (g : GraphDecl) (s : Store) (rank chunkSize zLossScaleInt : Nat)
+    (xTid wTid yTid t1 t2 : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_inner_chunk_ce",
+                    ins := [xTid, wTid, yTid], outs := [t1, t2],
+                    params := [chunkSize, zLossScaleInt] } t1 =
+      (fw_inner_chunk_ce (s xTid) (s wTid) (s yTid)
+          (((s wTid).shape.head?).getD 0)
+          ((zLossScaleInt : Nat) : Scalar)).1 := by
+  unfold applyNode
+  rw [show ([xTid, wTid, yTid] : List Tid).map s =
+            [s xTid, s wTid, s yTid] from rfl,
+      evalOp_fw_inner_chunk_ce]
+  change storeSet s
+    [(t1, (fw_inner_chunk_ce (s xTid) (s wTid) (s yTid)
+              (((s wTid).shape.head?).getD 0)
+              ((zLossScaleInt : Nat) : Scalar)).1),
+     (t2, (fw_inner_chunk_ce (s xTid) (s wTid) (s yTid)
+              (((s wTid).shape.head?).getD 0)
+              ((zLossScaleInt : Nat) : Scalar)).2)] t1 = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `applyNode` for `FW_inner_chunk_ce` 2nd output (`z_losses`). -/
+theorem applyNode_fw_inner_chunk_ce_snd_out
+    (g : GraphDecl) (s : Store) (rank chunkSize zLossScaleInt : Nat)
+    (xTid wTid yTid t1 t2 : Tid)
+    (hne : t1 ≠ t2) :
+    applyNode g s { rank := rank, op := "OpName.FW_inner_chunk_ce",
+                    ins := [xTid, wTid, yTid], outs := [t1, t2],
+                    params := [chunkSize, zLossScaleInt] } t2 =
+      (fw_inner_chunk_ce (s xTid) (s wTid) (s yTid)
+          (((s wTid).shape.head?).getD 0)
+          ((zLossScaleInt : Nat) : Scalar)).2 := by
+  unfold applyNode
+  rw [show ([xTid, wTid, yTid] : List Tid).map s =
+            [s xTid, s wTid, s yTid] from rfl,
+      evalOp_fw_inner_chunk_ce]
+  change storeSet s
+    [(t1, (fw_inner_chunk_ce (s xTid) (s wTid) (s yTid)
+              (((s wTid).shape.head?).getD 0)
+              ((zLossScaleInt : Nat) : Scalar)).1),
+     (t2, (fw_inner_chunk_ce (s xTid) (s wTid) (s yTid)
+              (((s wTid).shape.head?).getD 0)
+              ((zLossScaleInt : Nat) : Scalar)).2)] t2 = _
+  unfold storeSet
+  simp [List.find?, show ¬ (t1 = t2) from hne]
+
+/-- `fw_inner_chunk_ce` 1st output (`losses`) has shape `[lDim]` where
+    `lDim = x.shape.head`. -/
+theorem fw_inner_chunk_ce_fst_shape
+    (x w y : Tensor) (vocab : Nat) (zLossScale : Scalar) (lDim : Nat)
+    (hL : x.shape.head? = some lDim) :
+    (fw_inner_chunk_ce x w y vocab zLossScale).1.shape = [lDim] := by
+  unfold fw_inner_chunk_ce
+  have hh : (x.shape.head?).getD 0 = lDim := by rw [hL]; rfl
+  simp [hh, Tensor.mkShape]
+
+/-- `fw_inner_chunk_ce` 2nd output (`z_losses`) has shape `[lDim]`. -/
+theorem fw_inner_chunk_ce_snd_shape
+    (x w y : Tensor) (vocab : Nat) (zLossScale : Scalar) (lDim : Nat)
+    (hL : x.shape.head? = some lDim) :
+    (fw_inner_chunk_ce x w y vocab zLossScale).2.shape = [lDim] := by
+  unfold fw_inner_chunk_ce
+  have hh : (x.shape.head?).getD 0 = lDim := by rw [hL]; rfl
+  simp [hh, Tensor.mkShape]
+
 end TrainVerify.Denote

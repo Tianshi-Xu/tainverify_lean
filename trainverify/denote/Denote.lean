@@ -9,6 +9,7 @@ import Mathlib.Data.Real.Archimedean
 import Mathlib.Algebra.Order.Floor.Semiring
 import Mathlib.Tactic.Ring
 import Mathlib.Analysis.SpecialFunctions.Exp
+import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Analysis.SpecialFunctions.Sigmoid
 import Mathlib.Data.Real.Sqrt
 import Mathlib.Analysis.SpecialFunctions.Trigonometric.Basic
@@ -1854,6 +1855,78 @@ noncomputable def fw_all2all_moe_gmm
   -- can be proved already.
   zeroTensor [lDim, hModel]
 
+/-! ### YOCO loss kernel: `inner_chunk_linear_cross_entropy`
+
+    Source: `llm/kernel/vocab_parallel_cross_entropy.py:16`. The full kernel
+    composes a linear projection, a log-softmax, a per-row cross-entropy, and
+    an optional z-loss term:
+
+      inner_chunk_linear_cross_entropy(x, w, y, chunk_size, ...) =
+        chunked iteration of linear_cross_entropy(x_chunk, w, y_chunk, z_loss_scale)
+      linear_cross_entropy(x, w, y, z_loss_scale) =
+        logits = mix_precision_linear(x, w)
+        (loss, z_loss) = cross_entropy_loss(logits, y, lse_square_scale=z_loss_scale)
+      cross_entropy_loss(logits, labels, lse_square_scale) =
+        for each row i:
+          lse[i]    = log (Σ_v exp logits[i, v])
+          loss[i]   = lse[i] - logits[i, labels[i]]
+          z_loss[i] = lse_square_scale * lse[i]^2
+
+    `chunk_size` is engineering-only — partitioning the token axis and
+    concatenating per-chunk outputs is mathematically a no-op, so we model the
+    whole thing as one fused op over the full `L`-axis tensor. We also
+    deliberately omit `ignore_index`, `label_smoothing`, and TP/vocab-parallel
+    slicing: the PM trace this denotation backs only registers the simplest
+    case (`z_loss_scale` may be nonzero, all other knobs at defaults). -/
+
+/-- `log` for log-sum-exp, bound to mathlib's `Real.log`.
+    Matches the `expFn`/`sqrtFn`/`piScalar`/`erfFn` style used elsewhere in
+    this file: a `def` rather than an `axiom`, so the trust base is unchanged. -/
+noncomputable def logFn (x : Scalar) : Scalar := Real.log x
+
+/-- Per-row log-sum-exp:
+    `xentLogSumExp logits i vocab = log (Σ_{v ∈ [0, vocab)} exp logits[i, v])`.
+    Indexing follows the row-major `[L, vocab]` layout used by `fw_linear`. -/
+noncomputable def xentLogSumExp (logits : Tensor) (i vocab : Nat) : Scalar :=
+  logFn (∑ v ∈ Finset.range vocab, expFn (valAt logits (i * vocab + v)))
+
+/-- Forward `inner_chunk_linear_cross_entropy` (chunk-flattened math model).
+
+    Inputs:
+      * `x : [L, h_model]`        (token embeddings)
+      * `w : [vocab, h_model]`    (output projection)
+      * `y : [L]`                 (integer label ids, stored as Scalar in the
+                                   uniform `ℝ` payload, decoded with `scalarToNat`)
+      * `vocab` : the trailing dim of `w` (i.e. `vocab = w.shape.head` since
+        `w : [vocab, h_model]`). Passed explicitly so the kernel does not
+        case-split on `w.shape` internally.
+      * `zLossScale` : scalar coefficient for the z-loss term (defaults to 0
+        at the dispatch site if Verdict does not extract it from kwargs).
+
+    Outputs:
+      * `losses   : [L]` with `losses[l]   = lse[l] - logits[l, y[l]]`
+      * `z_losses : [L]` with `z_losses[l] = zLossScale * lse[l]^2`
+
+    where `logits[l, v] = Σ_d x[l, d] * w[v, d]` (the `fw_linear` formula,
+    inlined here so the helper doesn't need a materialized `[L, vocab]`
+    intermediate tensor — `vocab` is the row count of `w`, which `fw_linear`
+    accepts as the output dim). -/
+noncomputable def fw_inner_chunk_ce
+    (x w y : Tensor) (vocab : Nat) (zLossScale : Scalar) : Tensor × Tensor :=
+  let lDim := (x.shape.head?).getD 0
+  -- Materialize logits via fw_linear: input `x : [L, h_model]`,
+  -- weight `w : [vocab, h_model]` → output `[L, vocab]`.
+  let logits := fw_linear x w
+  let lseAt : Nat → Scalar := fun l => xentLogSumExp logits l vocab
+  let losses := Tensor.mkShape [lDim] (fun outIdx =>
+    let l := outIdx.1
+    let labelIdx := scalarToNat (valAt y l)
+    lseAt l - valAt logits (l * vocab + labelIdx))
+  let zLosses := Tensor.mkShape [lDim] (fun outIdx =>
+    let l := outIdx.1
+    zLossScale * (lseAt l) ^ 2)
+  (losses, zLosses)
+
 def fw_pow (n : Nat) (x : Tensor) : Tensor :=
   Tensor.mkShape x.shape (fun i => (valAt x i.1) ^ n)
 
@@ -3396,6 +3469,14 @@ def opOutShapes (numParts : Nat) (op : String) (params : List Nat) (inShapes : L
       match input.reverse, w2.reverse with
       | _h :: lRest, hModel :: _ => some [(hModel :: lRest).reverse]
       | _, _ => some [input]
+  -- `inner_chunk_linear_cross_entropy`: 3 inputs (x, w, y), 2 outputs
+  -- both of shape `[L]` where `L = x.shape.head`.
+  --   x : [L, h_model], w : [vocab, h_model], y : [L]
+  --   losses, z_losses : [L]
+  | "OpName.FW_inner_chunk_ce", [x, _w, _y] =>
+      match x with
+      | l :: _ => some [[l], [l]]
+      | _ => none
   | "OpName.FW_mean", [x] =>
       match x.reverse with
       | _ :: rest => some [(1 :: rest).reverse]
@@ -3641,6 +3722,19 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       let swigluLimit : Scalar := (swigluLimitInt : Nat)
       [fw_all2all_moe_gmm input rp rm w13 w2 numExperts localExpertStart
          localExpertEnd topK swigluLimit]
+  -- `inner_chunk_linear_cross_entropy`: 3 inputs (x, w, y), 2 outputs (losses, z_losses).
+  -- Params layout: `[chunkSize, zLossScaleInt]` (Verdict currently only emits
+  -- `[chunkSize]`; if `zLossScaleInt` is missing it defaults to 0, matching
+  -- the PM trace where the kwarg `z_loss_scale = 0.0`). `chunkSize` is
+  -- mathematically a no-op (chunking is engineering-only) so we accept it
+  -- and discard it.  `vocab = w.shape.head` is read off the weight tensor.
+  | "OpName.FW_inner_chunk_ce", [x, w, y] =>
+      let _chunkSize     := params.getD 0 1
+      let zLossScaleInt  := params.getD 1 0
+      let zLossScale : Scalar := (zLossScaleInt : Nat)
+      let vocab          := (w.shape.head?).getD 0
+      let (losses, zLosses) := fw_inner_chunk_ce x w y vocab zLossScale
+      [losses, zLosses]
   | "OpName.FW_dropout", [x] => [fw_dropout x]
   | "OpName.BW_dropout", [g, x] => [bw_dropout g x]
   | "OpName.FW_gelu", [x] => [fw_gelu x]
