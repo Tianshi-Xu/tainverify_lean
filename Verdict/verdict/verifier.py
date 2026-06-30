@@ -212,7 +212,12 @@ class StageParallelVerifier:
             try:
                 with open(cache_path, "rb") as f:
                     loginfo("📀 Loading cached graph.", wtype=wtype.value)
-                    ret = pickle.load(f)
+                    try:
+                        ret = pickle.load(f)
+                    except (AttributeError, ModuleNotFoundError, EOFError, pickle.UnpicklingError):
+                        import dill as _dill
+                        f.seek(0)
+                        ret = _dill.load(f)
                     return ret
             except Exception as e:
                 logwarn("Fail to load graph cache.", path=cache_path, err=str(e))
@@ -225,10 +230,39 @@ class StageParallelVerifier:
         dfg = load_graph(G_path, W_path, wtype)
         timer.end(f"load G{wtype.value}")
 
+        if not cfg.use_cache_nodes:
+            # Skip cache write when caching is disabled — saves IO and avoids
+            # crashing on closure-laden cells (nnscaler register_op udfops
+            # blow up stdlib pickle and recursion-bomb dill).
+            return dfg
+
         cache_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
         with open(cache_path, "wb") as f:
             loginfo(f"💾 Caching G{wtype.value}.")
-            pickle.dump(dfg, f)
+            # nnscaler register_op closures defeat stdlib pickle; fall back to
+            # dill. If even dill fails (e.g. recursion-rich graphs), skip the
+            # cache entirely rather than aborting the whole pipeline.
+            try:
+                pickle.dump(dfg, f)
+            except (AttributeError, TypeError, pickle.PicklingError):
+                f.seek(0); f.truncate()
+                try:
+                    import sys as _sys
+                    import dill as _dill
+                    _saved = _sys.getrecursionlimit()
+                    _sys.setrecursionlimit(50000)
+                    try:
+                        _dill.dump(dfg, f, protocol=_dill.HIGHEST_PROTOCOL, recurse=True)
+                    finally:
+                        _sys.setrecursionlimit(_saved)
+                except Exception as cache_err:
+                    logwarn("Failed to cache graph; continuing without cache.",
+                            path=str(cache_path), err=str(cache_err))
+                    f.close()
+                    try:
+                        cache_path.unlink()
+                    except FileNotFoundError:
+                        pass
         return dfg
 
     def cut_stages_w_cache(self, Gs: DFG, Gp: DFG) -> List[Stage]:
