@@ -99,6 +99,55 @@ class OpName(Enum):
     
     FW_nns_moe_gmm = ("nnscaler_moe_gmm", True)
     BW_nns_moe_gmm = ("nnscaler_moe_gmm", False)
+
+    # ── YOCO-MoE-A0.4B novel ops (added 2026-06-30 for llm-train audit) ──
+
+    # P0: scalar / elementwise primitives
+    FW_sigmoid = ("sigmoid", True)
+    BW_sigmoid = ("sigmoid", False)
+    FW_rms_norm = ("rms_norm_func", True)
+    BW_rms_norm = ("rms_norm_func", False)
+    FW_swiglu = ("swiglu", True)
+    BW_swiglu = ("swiglu", False)
+
+    # P1 RoPE: chunk-style rotary embedding (llm-train arch.rotary_embedding)
+    FW_rotary_embedding = ("rotary_embedding_func", True)
+    BW_rotary_embedding = ("rotary_embedding_func", False)
+
+    # P1 D-1: zigzag CP sequence shuffle (varlen)
+    FW_maybe_shuffle = ("wrap_maybe_shuffle", True)
+    BW_maybe_shuffle = ("wrap_maybe_shuffle", False)
+    FW_maybe_unshuffle = ("wrap_maybe_unshuffle", True)
+    BW_maybe_unshuffle = ("wrap_maybe_unshuffle", False)
+
+    # P1 D-2: varlen attention with causal + (optional) sliding window
+    # sliding_window_attn_func (self-attn, window=(W,0)) and
+    # zigzag_allgather_attn_varlen_func (cross-attn, window=(-1,-1)) share the
+    # same fw_attn_varlen Lean op; the difference is just (causal, windowLeft)
+    # params.
+    FW_attn_sliding_window = ("wrap_sliding_window_attn_func", True)
+    BW_attn_sliding_window = ("wrap_sliding_window_attn_func", False)
+    FW_attn_zigzag = ("wrap_zigzag_allgather_attn_varlen_func", True)
+    BW_attn_zigzag = ("wrap_zigzag_allgather_attn_varlen_func", False)
+
+    # P2-A linear variants (datawise equivalent to FW_linear but with a
+    # distinct op name in the nnscaler trace; share the same denotation)
+    FW_mix_precision_linear = ("mix_precision_linear", True)
+    BW_mix_precision_linear = ("mix_precision_linear", False)
+    FW_per_head_mix_precision_linear = ("per_head_mix_precision_linear", True)
+    BW_per_head_mix_precision_linear = ("per_head_mix_precision_linear", False)
+    FW_norm_linear = ("norm_linear", True)
+    BW_norm_linear = ("norm_linear", False)
+
+    # P2-B MoE: top-k routing + fused MoE GMM
+    FW_topk_routing = ("topk_routing", True)
+    BW_topk_routing = ("topk_routing", False)
+    FW_all2all_moe_gmm = ("nnscaler_all2all_moe_gmm", True)
+    BW_all2all_moe_gmm = ("nnscaler_all2all_moe_gmm", False)
+
+    # P2-C: vocab-parallel chunked cross-entropy loss
+    FW_inner_chunk_ce = ("inner_chunk_linear_cross_entropy", True)
+    BW_inner_chunk_ce = ("inner_chunk_linear_cross_entropy", False)
     
 
     # COMMUNICATION PRIM

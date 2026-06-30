@@ -408,6 +408,88 @@ def _get_node_params(G: Any, n: Any, num_parts: int = 0) -> Optional[List[int]]:
 			dim = _infer_gather_dim(shard_shape, full_shape, num_parts)
 			if dim is not None:
 				return [dim]
+	# ── YOCO-MoE-A0.4B novel ops (added 2026-06-30) ──
+	elif "FW_rotary_embedding" in op or "BW_rotary_embedding" in op:
+		# params: [qh, kh] (#query heads, #key heads, supports GQA).
+		# Inputs (FW): [csCache, positions, q, k] — q.shape = [..., qh, d]
+		ins = G.node_inputs(n)
+		if len(ins) >= 4:
+			q_shape = list(int(d) for d in G.tensor_shape(ins[2]))
+			k_shape = list(int(d) for d in G.tensor_shape(ins[3]))
+			if len(q_shape) >= 2 and len(k_shape) >= 2:
+				qh = q_shape[-2]
+				kh = k_shape[-2]
+				return [qh, kh]
+	elif "FW_maybe_shuffle" in op or "BW_maybe_shuffle" in op \
+		or "FW_maybe_unshuffle" in op or "BW_maybe_unshuffle" in op:
+		# params: [cpSize, cpRank]. cpSize = num_parts (CP world size at this rank).
+		cp_size = max(num_parts, 1)
+		cp_rank = _node_rank(n) % cp_size
+		return [cp_size, cp_rank]
+	elif "FW_attn_sliding_window" in op or "BW_attn_sliding_window" in op:
+		# params: [qh, kvh, d, vd, causal(1), windowLeft]
+		# Inputs: q, k, v, cuQ, cuK; q.shape = [L, qh, d], v.shape = [L, kvh, vd]
+		ins = G.node_inputs(n)
+		kwargs = G.node_kwargs(n)
+		if len(ins) >= 3:
+			q_shape = list(int(d) for d in G.tensor_shape(ins[0]))
+			k_shape = list(int(d) for d in G.tensor_shape(ins[1]))
+			v_shape = list(int(d) for d in G.tensor_shape(ins[2]))
+			if len(q_shape) >= 3 and len(k_shape) >= 3 and len(v_shape) >= 3:
+				qh = q_shape[-2]
+				kvh = k_shape[-2]
+				d_ = q_shape[-1]
+				vd = v_shape[-1]
+				# sliding_window_attn_func: causal=True, window=(W, 0)
+				causal_nat = 1 if kwargs.get("causal", True) else 0
+				window = kwargs.get("window_size", (-1, 0))
+				try:
+					window_left = int(window[0]) if window[0] > 0 else 0
+				except (IndexError, TypeError):
+					window_left = 0
+				return [qh, kvh, d_, vd, causal_nat, window_left]
+	elif "FW_attn_zigzag" in op or "BW_attn_zigzag" in op:
+		# params: same as above. zigzag uses windowLeft=0 (no sliding window).
+		ins = G.node_inputs(n)
+		kwargs = G.node_kwargs(n)
+		if len(ins) >= 3:
+			q_shape = list(int(d) for d in G.tensor_shape(ins[0]))
+			k_shape = list(int(d) for d in G.tensor_shape(ins[1]))
+			v_shape = list(int(d) for d in G.tensor_shape(ins[2]))
+			if len(q_shape) >= 3 and len(k_shape) >= 3 and len(v_shape) >= 3:
+				qh = q_shape[-2]
+				kvh = k_shape[-2]
+				d_ = q_shape[-1]
+				vd = v_shape[-1]
+				causal_nat = 1 if kwargs.get("causal", True) else 0
+				# zigzag passes window=(-1,-1) → no window
+				return [qh, kvh, d_, vd, causal_nat, 0]
+	elif "FW_per_head_mix_precision_linear" in op or "BW_per_head_mix_precision_linear" in op:
+		# Same params as FW_linear (no special encoding needed); leave empty
+		# unless the Lean def requires shape hints.
+		return None
+	elif "FW_norm_linear" in op or "BW_norm_linear" in op:
+		return None
+	elif "FW_mix_precision_linear" in op or "BW_mix_precision_linear" in op:
+		return None
+	elif "FW_topk_routing" in op or "BW_topk_routing" in op:
+		# params: [top_k]
+		kwargs = G.node_kwargs(n)
+		top_k = int(kwargs.get("top_k", 1))
+		return [top_k]
+	elif "FW_all2all_moe_gmm" in op or "BW_all2all_moe_gmm" in op:
+		# params: [num_experts, local_expert_start, local_expert_end, topk]
+		kwargs = G.node_kwargs(n)
+		num_experts = int(kwargs.get("num_experts", 1))
+		local_start = int(kwargs.get("local_expert_start", 0))
+		local_end = int(kwargs.get("local_expert_end", num_experts))
+		topk = int(kwargs.get("topk", 1))
+		return [num_experts, local_start, local_end, topk]
+	elif "FW_inner_chunk_ce" in op or "BW_inner_chunk_ce" in op:
+		# params: [chunk_size]
+		kwargs = G.node_kwargs(n)
+		chunk_size = int(kwargs.get("chunk_size", 1024))
+		return [chunk_size]
 	return None
 
 
