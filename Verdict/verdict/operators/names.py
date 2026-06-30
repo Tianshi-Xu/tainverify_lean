@@ -148,6 +148,21 @@ class OpName(Enum):
     # P2-C: vocab-parallel chunked cross-entropy loss
     FW_inner_chunk_ce = ("inner_chunk_linear_cross_entropy", True)
     BW_inner_chunk_ce = ("inner_chunk_linear_cross_entropy", False)
+
+    # ── nnscaler dataloader-side Python helper ops ──
+    # IRPyFunc cells (e.g. `getitem` extracting tensor entries from the sample
+    # dict). Treated as identity-like / not subject to audit equivalence checks
+    # (these are pre-graph data shuffling, not learned transformations).
+    FW_pyfunc = ("pyfunc", True)
+    BW_pyfunc = ("pyfunc", False)
+
+    # ── nnscaler graph-internal ops not yet covered (no Lean denotation yet) ──
+    # Reshape: like view but allowed non-contiguous; same input/output element
+    # count, shape change only. Stack: concat-along-new-axis of N tensors.
+    FW_reshape = ("reshape", True)
+    BW_reshape = ("reshape", False)
+    FW_stack = ("stack", True)
+    BW_stack = ("stack", False)
     
 
     # COMMUNICATION PRIM

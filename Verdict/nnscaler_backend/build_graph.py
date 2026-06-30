@@ -5,6 +5,10 @@ from typing import List, Dict, Tuple, Set, Hashable, Any
 from collections import defaultdict
 from copy import copy
 from multiprocessing import Pool
+# Keep a stable reference to the genuine multiprocessing Pool so we can detect
+# when callers (e.g. test harnesses) monkey-patch `Pool` at module level for a
+# sequential single-process run. See `build_graph` below.
+_MPPool = Pool
 from tqdm import tqdm
 from pathlib import Path
 import pickle
@@ -16,6 +20,7 @@ from nnscaler.ir.operator import IRDataOperation, IRBpOperation, IRFwOperation
 from nnscaler.ir.adapter.prim import ChunkPrim, IRAdapterPrim
 from nnscaler.graph.graph import IRSegment
 from nnscaler.graph.function.dimops import IRDimops
+from nnscaler.graph.function.pyfunc import IRPyFunc
 from nnscaler.codegen.module.module import ModuleCodeGen
 from nnscaler.execplan.execplan import ExeReuseCell, IRCell
 from nnscaler.ir.tensor import IRSubTensor, IRFullTensor
@@ -202,7 +207,7 @@ def _assert_check_ir_types(cells: List[Cell]) -> List[Cell]:
     for cell in cells:
         assert isinstance(
             cell.ir,
-            (IRDataOperation, IRDimops, IRBpOperation, IRAdapterPrim, IRWeightReducer),
+            (IRDataOperation, IRDimops, IRBpOperation, IRAdapterPrim, IRWeightReducer, IRPyFunc),
         ), f"Unexpected IR type: {type(cell.ir)} of {cell.ir}"
     return cells
 
@@ -263,7 +268,16 @@ def _set_node_opname(cells: List[Cell]) -> List[Cell]:
             else:
                 name = cell.ir.name
                 fw = cell.ir.isfw()
-            cell.opname = OpName((name, fw))
+            # IRPyFunc cells (dataloader Python helpers like `getitem` /
+            # `getattr` extracting tensor entries from the sample dict) have
+            # varied `name` values that aren't in OpName's registry. Collapse
+            # them into a single `FW_pyfunc` / `BW_pyfunc` enum so audit can
+            # treat them uniformly (they're not learned ops and don't carry
+            # bridge obligations).
+            if isinstance(cell.ir, IRPyFunc):
+                cell.opname = OpName.FW_pyfunc if fw else OpName.BW_pyfunc
+            else:
+                cell.opname = OpName((name, fw))
     return cells
 
 
@@ -289,7 +303,18 @@ def _extract_dataflow_irs(cells: List[Cell]) -> List[Cell]:
                     cell._input_irs.append(t)
                 else:
                     cell._input_consts.append(t)
-            cell._output_irs = cell.ir.outputs()
+            # IRPyFunc and other Python-helper ops may emit IRObject (scalars,
+            # dict entries, etc.) alongside IRSubTensor outputs. Only the
+            # tensor outputs participate in the dataflow graph; IRObject
+            # outputs are tracked as consts but don't get shape entries.
+            for t in cell.ir.outputs():
+                if isinstance(t, IRSubTensor):
+                    cell._output_irs.append(t)
+                else:
+                    # No `_output_consts` field exists; just drop non-tensor
+                    # outputs from the dataflow — Verdict's audit model
+                    # only reasons about IRSubTensors.
+                    pass
             if is_bwop and not is_identity_multiref:
                 # bw ops need its fw inputs for gradient computation
                 for t in cell.ir.mirror.inputs():
@@ -732,6 +757,8 @@ def _init_pool(mg_obj, w_obj):
     _GLOBAL_W = w_obj
     
 
+_CELLS_INMEMORY: Dict[int, List[Cell]] = {}
+
 def _prepare_rank_cell_worker(args):
     rank, path = args
     cells: List[Cell] = _prepare_rank_cells(_GLOBAL_W, _GLOBAL_MG, rank)
@@ -745,8 +772,26 @@ def _prepare_rank_cell_worker(args):
         del cell._wred_wid
         del cell._grad_accum_transition
         del cell._input_consts
-    with open(path, "wb") as fp:
-        pickle.dump(cells, fp, protocol=pickle.HIGHEST_PROTOCOL)
+    # nnscaler's register_op produces local closure functions that stdlib
+    # pickle cannot serialize. If the user's session monkey-patched Pool
+    # to run sequentially (single process), store cells in-memory and skip
+    # the file dance entirely (path = sentinel). Otherwise attempt pickle.
+    if path is None:
+        _CELLS_INMEMORY[rank] = cells
+        return
+    try:
+        with open(path, "wb") as fp:
+            pickle.dump(cells, fp, protocol=pickle.HIGHEST_PROTOCOL)
+    except (AttributeError, TypeError, pickle.PicklingError):
+        import sys as _sys
+        import dill as _dill
+        _saved = _sys.getrecursionlimit()
+        _sys.setrecursionlimit(50000)
+        try:
+            with open(path, "wb") as fp:
+                _dill.dump(cells, fp, protocol=_dill.HIGHEST_PROTOCOL, recurse=True)
+        finally:
+            _sys.setrecursionlimit(_saved)
 
 def build_graph(W: World, mg: ModuleCodeGen, G_path: str) -> NNScalerDFG:
     dfg = NNScalerDFG(W)
@@ -756,19 +801,38 @@ def build_graph(W: World, mg: ModuleCodeGen, G_path: str) -> NNScalerDFG:
     G_stem = Path(G_path).stem
     cells_dir: Path = Config.cache_dir / G_stem / "cells" 
     cells_dir.mkdir(parents=True, exist_ok=True)
-    rank_paths = {
-        r: cells_dir / f"r{r}.pkl" for r in ranks
-    }
+    # If the active Pool is single-threaded (caller monkey-patched to bypass
+    # multiprocessing), use the in-memory path to dodge the udfop pickle issue.
+    use_inmem = (Pool is not _MPPool)
+    if use_inmem:
+        # No file paths — workers stash cells in _CELLS_INMEMORY.
+        _CELLS_INMEMORY.clear()
+        rank_paths = {r: None for r in ranks}
+    else:
+        rank_paths = {
+            r: cells_dir / f"r{r}.pkl" for r in ranks
+        }
     args_list = [(r, rank_paths[r]) for r in ranks]
     with Pool(
         processes=Config.max_ser_proc, initializer=_init_pool, initargs=(mg,W)
     ) as pool:
         pool.map(_prepare_rank_cell_worker, args_list)
     cells: List[Cell] = []
-    for path in tqdm(rank_paths.values(), desc="Collecting ranks."):
-        with open(path, "rb") as fp:
-            rank_cells = pickle.load(fp)
-            cells.extend(rank_cells)
+    if use_inmem:
+        for r in ranks:
+            cells.extend(_CELLS_INMEMORY[r])
+        _CELLS_INMEMORY.clear()
+    else:
+        for path in tqdm(rank_paths.values(), desc="Collecting ranks."):
+            with open(path, "rb") as fp:
+                try:
+                    rank_cells = pickle.load(fp)
+                except (AttributeError, ModuleNotFoundError, EOFError, pickle.UnpicklingError):
+                    # Worker wrote with dill (fallback for closure-laden cells)
+                    import dill as _dill
+                    fp.seek(0)
+                    rank_cells = _dill.load(fp)
+                cells.extend(rank_cells)
     cells, shared_tensor_list = _fuse_collective_inputs(cells)
     _emit_graph(dfg, cells)
     tid2lv_updates = _inverse_prop_multiref_valmap(cells, dfg._tid2lv)
