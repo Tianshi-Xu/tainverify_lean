@@ -385,6 +385,129 @@ theorem applyNode_bw_maybe_unshuffle_out
   unfold storeSet
   simp [List.find?]
 
+/-! ### Attention: evalOp unfolding + applyNode lemmas
+
+    `FW_attn_varlen` takes 5 inputs `(q, k, v, cuQ, cuK)` and 1 output;
+    `BW_attn_varlen` takes 6 inputs `(gO, q, k, v, cuQ, cuK)` and 3 outputs
+    `(dQ, dK, dV)`. Params encode `[qh, kvh, d, vd, causalNat, windowLeft]`. -/
+
+theorem evalOp_fw_attn_varlen
+    (numParts rank qh kvh d vd causalNat windowLeft : Nat)
+    (q k v cuQ cuK : Tensor) :
+    evalOp numParts rank "OpName.FW_attn_varlen"
+        [qh, kvh, d, vd, causalNat, windowLeft] [q, k, v, cuQ, cuK] =
+      [fw_attn_varlen q k v cuQ cuK qh kvh d vd
+        (decide (causalNat ≠ 0)) windowLeft] := by
+  rfl
+
+theorem evalOp_bw_attn_varlen
+    (numParts rank qh kvh d vd causalNat windowLeft : Nat)
+    (gO q k v cuQ cuK : Tensor) :
+    evalOp numParts rank "OpName.BW_attn_varlen"
+        [qh, kvh, d, vd, causalNat, windowLeft] [gO, q, k, v, cuQ, cuK] =
+      [ (bw_attn_varlen gO q k v cuQ cuK qh kvh d vd
+          (decide (causalNat ≠ 0)) windowLeft).1,
+        (bw_attn_varlen gO q k v cuQ cuK qh kvh d vd
+          (decide (causalNat ≠ 0)) windowLeft).2.1,
+        (bw_attn_varlen gO q k v cuQ cuK qh kvh d vd
+          (decide (causalNat ≠ 0)) windowLeft).2.2 ] := by
+  rfl
+
+/-- `applyNode` for `FW_attn_varlen`: inputs `[qTid, kTid, vTid, cuQTid, cuKTid]`,
+    single output. -/
+theorem applyNode_fw_attn_varlen_out
+    (g : GraphDecl) (s : Store) (rank qh kvh d vd causalNat windowLeft : Nat)
+    (qTid kTid vTid cuQTid cuKTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_attn_varlen",
+                    ins := [qTid, kTid, vTid, cuQTid, cuKTid],
+                    outs := [outTid],
+                    params := [qh, kvh, d, vd, causalNat, windowLeft] } outTid =
+      fw_attn_varlen (s qTid) (s kTid) (s vTid) (s cuQTid) (s cuKTid)
+        qh kvh d vd (decide (causalNat ≠ 0)) windowLeft := by
+  unfold applyNode
+  rw [show ([qTid, kTid, vTid, cuQTid, cuKTid] : List Tid).map s =
+            [s qTid, s kTid, s vTid, s cuQTid, s cuKTid] from rfl,
+      evalOp_fw_attn_varlen]
+  change storeSet s
+    [(outTid, fw_attn_varlen (s qTid) (s kTid) (s vTid) (s cuQTid) (s cuKTid)
+        qh kvh d vd (decide (causalNat ≠ 0)) windowLeft)] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `applyNode` for `BW_attn_varlen` first output (dQ). -/
+theorem applyNode_bw_attn_varlen_dq_out
+    (g : GraphDecl) (s : Store) (rank qh kvh d vd causalNat windowLeft : Nat)
+    (gOTid qTid kTid vTid cuQTid cuKTid t1 t2 t3 : Tid) :
+    applyNode g s { rank := rank, op := "OpName.BW_attn_varlen",
+                    ins := [gOTid, qTid, kTid, vTid, cuQTid, cuKTid],
+                    outs := [t1, t2, t3],
+                    params := [qh, kvh, d, vd, causalNat, windowLeft] } t1 =
+      (bw_attn_varlen (s gOTid) (s qTid) (s kTid) (s vTid) (s cuQTid) (s cuKTid)
+        qh kvh d vd (decide (causalNat ≠ 0)) windowLeft).1 := by
+  unfold applyNode
+  rw [show ([gOTid, qTid, kTid, vTid, cuQTid, cuKTid] : List Tid).map s =
+            [s gOTid, s qTid, s kTid, s vTid, s cuQTid, s cuKTid] from rfl,
+      evalOp_bw_attn_varlen]
+  change storeSet s
+    [(t1, (bw_attn_varlen (s gOTid) (s qTid) (s kTid) (s vTid) (s cuQTid) (s cuKTid)
+            qh kvh d vd (decide (causalNat ≠ 0)) windowLeft).1),
+     (t2, (bw_attn_varlen (s gOTid) (s qTid) (s kTid) (s vTid) (s cuQTid) (s cuKTid)
+            qh kvh d vd (decide (causalNat ≠ 0)) windowLeft).2.1),
+     (t3, (bw_attn_varlen (s gOTid) (s qTid) (s kTid) (s vTid) (s cuQTid) (s cuKTid)
+            qh kvh d vd (decide (causalNat ≠ 0)) windowLeft).2.2)] t1 = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `applyNode` for `BW_attn_varlen` second output (dK). -/
+theorem applyNode_bw_attn_varlen_dk_out
+    (g : GraphDecl) (s : Store) (rank qh kvh d vd causalNat windowLeft : Nat)
+    (gOTid qTid kTid vTid cuQTid cuKTid t1 t2 t3 : Tid)
+    (hne12 : t1 ≠ t2) :
+    applyNode g s { rank := rank, op := "OpName.BW_attn_varlen",
+                    ins := [gOTid, qTid, kTid, vTid, cuQTid, cuKTid],
+                    outs := [t1, t2, t3],
+                    params := [qh, kvh, d, vd, causalNat, windowLeft] } t2 =
+      (bw_attn_varlen (s gOTid) (s qTid) (s kTid) (s vTid) (s cuQTid) (s cuKTid)
+        qh kvh d vd (decide (causalNat ≠ 0)) windowLeft).2.1 := by
+  unfold applyNode
+  rw [show ([gOTid, qTid, kTid, vTid, cuQTid, cuKTid] : List Tid).map s =
+            [s gOTid, s qTid, s kTid, s vTid, s cuQTid, s cuKTid] from rfl,
+      evalOp_bw_attn_varlen]
+  change storeSet s
+    [(t1, (bw_attn_varlen (s gOTid) (s qTid) (s kTid) (s vTid) (s cuQTid) (s cuKTid)
+            qh kvh d vd (decide (causalNat ≠ 0)) windowLeft).1),
+     (t2, (bw_attn_varlen (s gOTid) (s qTid) (s kTid) (s vTid) (s cuQTid) (s cuKTid)
+            qh kvh d vd (decide (causalNat ≠ 0)) windowLeft).2.1),
+     (t3, (bw_attn_varlen (s gOTid) (s qTid) (s kTid) (s vTid) (s cuQTid) (s cuKTid)
+            qh kvh d vd (decide (causalNat ≠ 0)) windowLeft).2.2)] t2 = _
+  unfold storeSet
+  simp [List.find?, show ¬ (t1 = t2) from hne12]
+
+/-- `applyNode` for `BW_attn_varlen` third output (dV). -/
+theorem applyNode_bw_attn_varlen_dv_out
+    (g : GraphDecl) (s : Store) (rank qh kvh d vd causalNat windowLeft : Nat)
+    (gOTid qTid kTid vTid cuQTid cuKTid t1 t2 t3 : Tid)
+    (hne13 : t1 ≠ t3) (hne23 : t2 ≠ t3) :
+    applyNode g s { rank := rank, op := "OpName.BW_attn_varlen",
+                    ins := [gOTid, qTid, kTid, vTid, cuQTid, cuKTid],
+                    outs := [t1, t2, t3],
+                    params := [qh, kvh, d, vd, causalNat, windowLeft] } t3 =
+      (bw_attn_varlen (s gOTid) (s qTid) (s kTid) (s vTid) (s cuQTid) (s cuKTid)
+        qh kvh d vd (decide (causalNat ≠ 0)) windowLeft).2.2 := by
+  unfold applyNode
+  rw [show ([gOTid, qTid, kTid, vTid, cuQTid, cuKTid] : List Tid).map s =
+            [s gOTid, s qTid, s kTid, s vTid, s cuQTid, s cuKTid] from rfl,
+      evalOp_bw_attn_varlen]
+  change storeSet s
+    [(t1, (bw_attn_varlen (s gOTid) (s qTid) (s kTid) (s vTid) (s cuQTid) (s cuKTid)
+            qh kvh d vd (decide (causalNat ≠ 0)) windowLeft).1),
+     (t2, (bw_attn_varlen (s gOTid) (s qTid) (s kTid) (s vTid) (s cuQTid) (s cuKTid)
+            qh kvh d vd (decide (causalNat ≠ 0)) windowLeft).2.1),
+     (t3, (bw_attn_varlen (s gOTid) (s qTid) (s kTid) (s vTid) (s cuQTid) (s cuKTid)
+            qh kvh d vd (decide (causalNat ≠ 0)) windowLeft).2.2)] t3 = _
+  unfold storeSet
+  simp [List.find?, show ¬ (t1 = t3) from hne13, show ¬ (t2 = t3) from hne23]
+
 /-! ## Shape preservation (used in shape-obligation proofs) -/
 
 theorem fw_sigmoid_shape (x : Tensor) : (fw_sigmoid x).shape = x.shape := by
@@ -495,5 +618,51 @@ theorem bw_maybe_unshuffle_shape
     (bw_maybe_unshuffle cu cpSize cpRank gs).shape = g0.shape := by
   unfold bw_maybe_unshuffle
   exact fw_maybe_shuffle_shape cu cpSize cpRank gs g0 h
+
+/-! ### Attention shape preservation
+
+    Forward: `fw_attn_varlen` produces `[L_q, qh, vd]` where `L_q = q.shape.head`.
+    Backward components: dQ matches q.shape, dK matches k.shape, dV matches
+    `[L_k, kvh, vd]`. The shape lemmas state these explicitly. -/
+
+theorem fw_attn_varlen_shape
+    (q k v cuQ cuK : Tensor) (qh kvh d vd : Nat)
+    (causal : Bool) (windowLeft : Nat) (lQ : Nat)
+    (hQ : q.shape.head? = some lQ) :
+    (fw_attn_varlen q k v cuQ cuK qh kvh d vd causal windowLeft).shape =
+      [lQ, qh, vd] := by
+  unfold fw_attn_varlen
+  have hh : (q.shape.head?).getD 0 = lQ := by rw [hQ]; rfl
+  simp [hh, Tensor.mkShape]
+
+theorem bw_attn_dq_shape
+    (gO q k v cuQ cuK : Tensor) (qh kvh d vd : Nat)
+    (causal : Bool) (windowLeft : Nat) (lQ : Nat)
+    (hQ : q.shape.head? = some lQ) :
+    (bw_attn_dq gO q k v cuQ cuK qh kvh d vd causal windowLeft).shape =
+      [lQ, qh, d] := by
+  unfold bw_attn_dq
+  have hh : (q.shape.head?).getD 0 = lQ := by rw [hQ]; rfl
+  simp [hh, Tensor.mkShape]
+
+theorem bw_attn_dk_shape
+    (gO q k v cuQ cuK : Tensor) (qh kvh d vd lQ : Nat)
+    (causal : Bool) (windowLeft : Nat) (lK : Nat)
+    (hK : k.shape.head? = some lK) :
+    (bw_attn_dk gO q k v cuQ cuK qh kvh d vd lQ causal windowLeft).shape =
+      [lK, kvh, d] := by
+  unfold bw_attn_dk
+  have hh : (k.shape.head?).getD 0 = lK := by rw [hK]; rfl
+  simp [hh, Tensor.mkShape]
+
+theorem bw_attn_dv_shape
+    (gO q k cuQ cuK : Tensor) (qh kvh d vd lQ : Nat)
+    (causal : Bool) (windowLeft : Nat) (lK : Nat)
+    (hK : k.shape.head? = some lK) :
+    (bw_attn_dv gO q k cuQ cuK qh kvh d vd lQ causal windowLeft).shape =
+      [lK, kvh, vd] := by
+  unfold bw_attn_dv
+  have hh : (k.shape.head?).getD 0 = lK := by rw [hK]; rfl
+  simp [hh, Tensor.mkShape]
 
 end TrainVerify.Denote

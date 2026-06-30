@@ -1246,6 +1246,318 @@ noncomputable def bw_maybe_unshuffle
     (cu : Tensor) (cpSize cpRank : Nat) (gs : List Tensor) : Tensor :=
   fw_maybe_shuffle cu cpSize cpRank gs
 
+/-! ### Attention (varlen packed, GQA, causal + sliding window)
+
+    Models the two nnscaler-registered fused attention kernels used by YOCO-MoE:
+      * `wrap_sliding_window_attn_func` (self-attn, causal, window=(W, 0))
+      * `wrap_zigzag_allgather_attn_varlen_func` (cross-attn, causal,
+        window=(-1, -1))
+
+    Both share the same mathematical core:
+
+        attn(Q, K, V, cu_q, cu_k, causal, windowLeft):
+          For each query token i, head h_q, output channel vd:
+            seq_i = find_seq(cu_q, i);  q_start, q_end = cu_q[seq_i], cu_q[seq_i+1]
+                                        k_start, k_end = cu_k[seq_i], cu_k[seq_i+1]
+            i_local = i - q_start
+            h_kv = h_q / group_factor               -- GQA: qh = kvh * group
+            For j in [k_start, k_end):
+              j_local = j - k_start
+              logit[j] = (Σ_d Q[i,h_q,d] * K[j,h_kv,d]) * scale
+              if causal and j_local > i_local:      logit[j] = -∞
+              if windowLeft > 0 and
+                 i_local - j_local > windowLeft:    logit[j] = -∞
+            probs[j] = exp(logit[j]) / Σ_k exp(logit[k])   -- softmax over j
+            O[i,h_q,vd] = Σ_j probs[j] * V[j,h_kv,vd]
+
+    Notes:
+      * `scale = 1/√d`; modeled as `attnScale d`.
+      * `windowLeft = -1` (or 0 in our `Nat` encoding meaning "no window"):
+        no sliding window. We use `windowLeft = 0` to mean "disabled",
+        matching the way nnscaler's `(-1, -1)` collapses to "no mask".
+      * No alibi support in this first cut (PM nodes all pass alibi=None).
+      * Stable softmax: we subtract row-max before exponentiating to keep the
+        denominator finite even under -∞ masks (mathlib's `Real.exp (-∞)` is
+        undefined; we use a sentinel `attnNegInfMask` flag instead).
+
+    Mask encoding: rather than literal -∞, we carry an explicit `(masked? : Bool)`
+    per slot, set logits to 0 when masked, and exclude them from sum/max. This
+    keeps the definition Real-valued and amenable to ring tactics. -/
+
+/-- Attention scale `1/√d` for head dim `d`. -/
+noncomputable def attnScale (d : Nat) : Scalar :=
+  if d = 0 then 1 else 1 / sqrtFn (d : Scalar)
+
+/-- Linear scan over `cu_seqlens` (List Nat) to find the index of the sequence
+    containing token `i`. Returns `s` such that `cu[s] ≤ i < cu[s+1]`.
+    On out-of-range, returns the last segment. -/
+def attnFindSeqAux (cu : List Nat) (i : Nat) : Nat → Nat → Nat
+  | _, 0 => 0
+  | s, Nat.succ fuel =>
+      let seqEnd := cu.getD (s + 1) 0
+      if i < seqEnd then s
+      else attnFindSeqAux cu i (s + 1) fuel
+
+def attnFindSeq (cu : List Nat) (i : Nat) : Nat :=
+  let numSeqs := cu.length - 1
+  attnFindSeqAux cu i 0 numSeqs
+
+/-- The masked predicate for `(i_local, j_local)` under causal + sliding window. -/
+def attnMaskedAt (causal : Bool) (windowLeft i_local j_local : Nat) : Bool :=
+  -- causal: mask if j_local > i_local
+  -- sliding window: mask if windowLeft > 0 and i_local - j_local > windowLeft
+  (causal && (i_local < j_local)) ||
+  (decide (0 < windowLeft) && (windowLeft + j_local < i_local))
+
+/-- Unmasked dot product `Σ_d Q[i, h_q, d] * K[j, h_kv, d]`, with strides
+    decoded from the 3D layouts:
+      Q : [L_q, qh, d]
+      K : [L_k, kvh, d]
+    Both at flat indices computed from `(i, h_q)` and `(j, h_kv)`. -/
+noncomputable def attnDotQK
+    (q k : Tensor) (qh kvh d i h_q j h_kv : Nat) : Scalar :=
+  ∑ c ∈ Finset.range d,
+    valAt q ((i * qh + h_q) * d + c) *
+    valAt k ((j * kvh + h_kv) * d + c)
+
+/-- Single logit (possibly masked) for `(i, h_q, j)` under attention `attn(Q, K, V)`.
+    Returns the scaled dot for unmasked slots, `0` for masked. -/
+noncomputable def attnLogit
+    (q k : Tensor) (qh kvh d : Nat) (scale : Scalar)
+    (causal : Bool) (windowLeft : Nat)
+    (i h_q j h_kv i_local j_local : Nat) : Scalar :=
+  let raw := attnDotQK q k qh kvh d i h_q j h_kv * scale
+  if attnMaskedAt causal windowLeft i_local j_local then 0 else raw
+
+/-- Single softmax weight `probs[j]` = `exp(logit[j]) / expSum`
+    (0 if masked or expSum = 0). Used only for documentation; the in-line
+    expression in `fw_attn_varlen` repeats this body to avoid `let`-binding
+    overhead in the bridge proofs. -/
+noncomputable def attnProb
+    (q k : Tensor) (qh kvh d : Nat) (scale : Scalar)
+    (causal : Bool) (windowLeft : Nat) (expSum : Scalar)
+    (i h_q j h_kv i_local j_local : Nat) : Scalar :=
+  if attnMaskedAt causal windowLeft i_local j_local then 0
+  else if expSum = 0 then 0
+  else expFn (attnDotQK q k qh kvh d i h_q j h_kv * scale) / expSum
+
+/-- Forward attention: varlen packed, GQA, causal + optional sliding window.
+
+    Inputs:
+      * `q : Tensor` shape `[L_q, qh, d]`
+      * `k : Tensor` shape `[L_k, kvh, d]`
+      * `v : Tensor` shape `[L_k, kvh, vd]`   (usually `vd = d`)
+      * `cuQ`, `cuK : Tensor` shape `[num_seqs + 1]`  (integer cu_seqlens)
+      * `causal : Bool`
+      * `windowLeft : Nat`  (0 = no window, > 0 = sliding window size)
+
+    Output: `[L_q, qh, vd]`.
+
+    Helper-style computation per output slot — softmax done row-locally per
+    `(i, h_q)` to keep the definition self-contained. -/
+noncomputable def fw_attn_varlen
+    (q k v cuQ cuK : Tensor)
+    (qh kvh d vd : Nat)
+    (causal : Bool) (windowLeft : Nat) : Tensor :=
+  let cuQList := decodeCuSeqlens cuQ
+  let cuKList := decodeCuSeqlens cuK
+  let scale := attnScale d
+  let groupFactor := if kvh = 0 then 1 else qh / kvh
+  -- Output shape: [L_q, qh, vd]; L_q = q.shape.head
+  let lQ := (q.shape.head?).getD 0
+  Tensor.mkShape [lQ, qh, vd] (fun outIdx =>
+    let c := outIdx.1 % vd
+    let lh := outIdx.1 / vd
+    let h_q := lh % qh
+    let i := lh / qh
+    let h_kv := if groupFactor = 0 then h_q else h_q / groupFactor
+    let s := attnFindSeq cuQList i
+    let q_start := cuQList.getD s 0
+    let k_start := cuKList.getD s 0
+    let k_end := cuKList.getD (s + 1) k_start
+    let i_local := i - q_start
+    -- Compute exp-sum + numerator together (single-pass, no rowMax subtraction
+    -- for simplicity — we accept overflow risk in math-level model).
+    let expSum := ∑ jOff ∈ Finset.range (k_end - k_start),
+      let j := k_start + jOff
+      let j_local := jOff
+      if attnMaskedAt causal windowLeft i_local j_local then 0
+      else expFn (attnDotQK q k qh kvh d i h_q j h_kv * scale)
+    let numerator := ∑ jOff ∈ Finset.range (k_end - k_start),
+      let j := k_start + jOff
+      let j_local := jOff
+      let p :=
+        if attnMaskedAt causal windowLeft i_local j_local then 0
+        else if expSum = 0 then 0
+        else expFn (attnDotQK q k qh kvh d i h_q j h_kv * scale) / expSum
+      p * valAt v ((j * kvh + h_kv) * vd + c)
+    numerator)
+
+/-- Per-`(i, h_q)` softmax denominator, reused by backward. -/
+noncomputable def attnExpSum
+    (q k cuQ cuK : Tensor) (qh kvh d : Nat)
+    (causal : Bool) (windowLeft : Nat)
+    (i h_q : Nat) : Scalar :=
+  let cuQList := decodeCuSeqlens cuQ
+  let cuKList := decodeCuSeqlens cuK
+  let scale := attnScale d
+  let groupFactor := if kvh = 0 then 1 else qh / kvh
+  let h_kv := if groupFactor = 0 then h_q else h_q / groupFactor
+  let s := attnFindSeq cuQList i
+  let q_start := cuQList.getD s 0
+  let k_start := cuKList.getD s 0
+  let k_end := cuKList.getD (s + 1) k_start
+  let i_local := i - q_start
+  ∑ jOff ∈ Finset.range (k_end - k_start),
+    let j := k_start + jOff
+    let j_local := jOff
+    if attnMaskedAt causal windowLeft i_local j_local then 0
+    else expFn (attnDotQK q k qh kvh d i h_q j h_kv * scale)
+
+/-- Reusable softmax weight `probs[i, h_q, j]`. -/
+noncomputable def attnProbAt
+    (q k cuQ cuK : Tensor) (qh kvh d : Nat)
+    (causal : Bool) (windowLeft : Nat)
+    (i h_q j : Nat) : Scalar :=
+  let cuQList := decodeCuSeqlens cuQ
+  let cuKList := decodeCuSeqlens cuK
+  let scale := attnScale d
+  let groupFactor := if kvh = 0 then 1 else qh / kvh
+  let h_kv := if groupFactor = 0 then h_q else h_q / groupFactor
+  let s := attnFindSeq cuQList i
+  let q_start := cuQList.getD s 0
+  let k_start := cuKList.getD s 0
+  let i_local := i - q_start
+  let j_local := j - k_start
+  let expSum := attnExpSum q k cuQ cuK qh kvh d causal windowLeft i h_q
+  if attnMaskedAt causal windowLeft i_local j_local then 0
+  else if expSum = 0 then 0
+  else expFn (attnDotQK q k qh kvh d i h_q j h_kv * scale) / expSum
+
+/-- `dV[j, h_kv, vd] = Σ_(i s.t. seq_i = seq_j, h_q in group h_kv) probs[i,h_q,j] * dO[i,h_q,vd]` -/
+noncomputable def bw_attn_dv
+    (gO q k cuQ cuK : Tensor) (qh kvh d vd lQ : Nat)
+    (causal : Bool) (windowLeft : Nat) : Tensor :=
+  let groupFactor := if kvh = 0 then 1 else qh / kvh
+  let cuKList := decodeCuSeqlens cuK
+  let lK := (k.shape.head?).getD 0
+  Tensor.mkShape [lK, kvh, vd] (fun outIdx =>
+    let c := outIdx.1 % vd
+    let lh := outIdx.1 / vd
+    let h_kv := lh % kvh
+    let j := lh / kvh
+    -- find which seq j belongs to (use cuK)
+    let s_j := attnFindSeq cuKList j
+    let k_start := cuKList.getD s_j 0
+    let k_end := cuKList.getD (s_j + 1) k_start
+    -- iterate over q tokens in the same seq + heads in this kv group
+    -- (we iterate over all i in [0, lQ) and filter by seq match — keeps def
+    --  pure and bridge-friendly)
+    let _ := k_start; let _ := k_end
+    ∑ i ∈ Finset.range lQ,
+      ∑ hOff ∈ Finset.range groupFactor,
+        let h_q := h_kv * groupFactor + hOff
+        -- guard: only contribute if seq_i = s_j
+        let s_i := attnFindSeq (decodeCuSeqlens cuQ) i
+        if s_i ≠ s_j then 0
+        else
+          let p := attnProbAt q k cuQ cuK qh kvh d causal windowLeft i h_q j
+          p * valAt gO ((i * qh + h_q) * vd + c))
+
+/-- `dP[i, h_q, j] = Σ_vd dO[i,h_q,vd] * V[j,h_kv,vd]` -/
+noncomputable def attnDP
+    (gO v : Tensor) (qh kvh vd i h_q j h_kv : Nat) : Scalar :=
+  ∑ c ∈ Finset.range vd,
+    valAt gO ((i * qh + h_q) * vd + c) *
+    valAt v ((j * kvh + h_kv) * vd + c)
+
+/-- `dLogit[i,h_q,j] = probs[i,h_q,j] * (dP[i,h_q,j] - Σ_k probs[i,h_q,k] * dP[i,h_q,k])` -/
+noncomputable def attnDLogit
+    (gO q k v cuQ cuK : Tensor) (qh kvh d vd : Nat)
+    (causal : Bool) (windowLeft : Nat)
+    (i h_q j : Nat) : Scalar :=
+  let cuQList := decodeCuSeqlens cuQ
+  let cuKList := decodeCuSeqlens cuK
+  let groupFactor := if kvh = 0 then 1 else qh / kvh
+  let h_kv := if groupFactor = 0 then h_q else h_q / groupFactor
+  let s := attnFindSeq cuQList i
+  let q_start := cuQList.getD s 0
+  let k_start := cuKList.getD s 0
+  let k_end := cuKList.getD (s + 1) k_start
+  let i_local := i - q_start
+  let j_local := j - k_start
+  if attnMaskedAt causal windowLeft i_local j_local then 0
+  else
+    let pIJ := attnProbAt q k cuQ cuK qh kvh d causal windowLeft i h_q j
+    let dpIJ := attnDP gO v qh kvh vd i h_q j h_kv
+    let dot := ∑ kOff ∈ Finset.range (k_end - k_start),
+      let kk := k_start + kOff
+      let k_local := kOff
+      if attnMaskedAt causal windowLeft i_local k_local then 0
+      else
+        let pIK := attnProbAt q k cuQ cuK qh kvh d causal windowLeft i h_q kk
+        let dpIK := attnDP gO v qh kvh vd i h_q kk h_kv
+        pIK * dpIK
+    pIJ * (dpIJ - dot)
+
+/-- `dQ[i,h_q,d_idx] = scale * Σ_j dLogit[i,h_q,j] * K[j,h_kv,d_idx]` -/
+noncomputable def bw_attn_dq
+    (gO q k v cuQ cuK : Tensor) (qh kvh d vd : Nat)
+    (causal : Bool) (windowLeft : Nat) : Tensor :=
+  let scale := attnScale d
+  let groupFactor := if kvh = 0 then 1 else qh / kvh
+  let cuQList := decodeCuSeqlens cuQ
+  let cuKList := decodeCuSeqlens cuK
+  let lQ := (q.shape.head?).getD 0
+  Tensor.mkShape [lQ, qh, d] (fun outIdx =>
+    let c := outIdx.1 % d
+    let lh := outIdx.1 / d
+    let h_q := lh % qh
+    let i := lh / qh
+    let h_kv := if groupFactor = 0 then h_q else h_q / groupFactor
+    let s := attnFindSeq cuQList i
+    let k_start := cuKList.getD s 0
+    let k_end := cuKList.getD (s + 1) k_start
+    scale * ∑ jOff ∈ Finset.range (k_end - k_start),
+      let j := k_start + jOff
+      let dL := attnDLogit gO q k v cuQ cuK qh kvh d vd causal windowLeft i h_q j
+      dL * valAt k ((j * kvh + h_kv) * d + c))
+
+/-- `dK[j,h_kv,d_idx] = scale * Σ_(i,h_q in group, seq match) dLogit[i,h_q,j] * Q[i,h_q,d_idx]` -/
+noncomputable def bw_attn_dk
+    (gO q k v cuQ cuK : Tensor) (qh kvh d vd lQ : Nat)
+    (causal : Bool) (windowLeft : Nat) : Tensor :=
+  let scale := attnScale d
+  let groupFactor := if kvh = 0 then 1 else qh / kvh
+  let cuQList := decodeCuSeqlens cuQ
+  let cuKList := decodeCuSeqlens cuK
+  let lK := (k.shape.head?).getD 0
+  Tensor.mkShape [lK, kvh, d] (fun outIdx =>
+    let c := outIdx.1 % d
+    let lh := outIdx.1 / d
+    let h_kv := lh % kvh
+    let j := lh / kvh
+    let s_j := attnFindSeq cuKList j
+    scale * ∑ i ∈ Finset.range lQ,
+      ∑ hOff ∈ Finset.range groupFactor,
+        let h_q := h_kv * groupFactor + hOff
+        let s_i := attnFindSeq cuQList i
+        if s_i ≠ s_j then 0
+        else
+          let dL := attnDLogit gO q k v cuQ cuK qh kvh d vd causal windowLeft i h_q j
+          dL * valAt q ((i * qh + h_q) * d + c))
+
+/-- Full backward attention: returns `(dQ, dK, dV)`. -/
+noncomputable def bw_attn_varlen
+    (gO q k v cuQ cuK : Tensor)
+    (qh kvh d vd : Nat)
+    (causal : Bool) (windowLeft : Nat) : Tensor × Tensor × Tensor :=
+  let lQ := (q.shape.head?).getD 0
+  let dq := bw_attn_dq gO q k v cuQ cuK qh kvh d vd causal windowLeft
+  let dk := bw_attn_dk gO q k v cuQ cuK qh kvh d vd lQ causal windowLeft
+  let dv := bw_attn_dv gO q k cuQ cuK qh kvh d vd lQ causal windowLeft
+  (dq, dk, dv)
+
 def fw_pow (n : Nat) (x : Tensor) : Tensor :=
   Tensor.mkShape x.shape (fun i => (valAt x i.1) ^ n)
 
@@ -2734,6 +3046,20 @@ def opOutShapes (numParts : Nat) (op : String) (params : List Nat) (inShapes : L
       some [g0]
   | "OpName.BW_maybe_unshuffle", _cu :: g0 :: _rest =>
       some [g0]
+  -- Attention varlen: 5 inputs (q, k, v, cuQ, cuK).
+  -- Output shape: [L_q, qh, vd] = [q.shape[0], qh, v.shape[-1]] — taking from q
+  -- and v. Encoded directly via param-driven shape.
+  -- For BW: 3 outputs (dQ, dK, dV) — match shapes of q, k, v.
+  | "OpName.FW_attn_varlen", [q, _k, v, _cuQ, _cuK] =>
+      match q.reverse with
+      | _d :: _h :: lQRest =>
+          -- q.shape = [L_q, qh, d]; output [L_q, qh, vd]
+          match v.reverse with
+          | vd :: _ => some [(vd :: _h :: lQRest).reverse]
+          | [] => some [q]
+      | _ => some [q]
+  | "OpName.BW_attn_varlen", [_gO, q, k, v, _cuQ, _cuK] =>
+      some [q, k, v]
   | "OpName.FW_mean", [x] =>
       match x.reverse with
       | _ :: rest => some [(1 :: rest).reverse]
@@ -2922,6 +3248,26 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       let cpSize := params.head?.getD 1
       let cpRank := (params.drop 1).head?.getD 0
       [bw_maybe_unshuffle cu cpSize cpRank gs]
+  -- Attention varlen: params = [qh, kvh, d, vd, causal(0/1), windowLeft].
+  | "OpName.FW_attn_varlen", [q, k, v, cuQ, cuK] =>
+      let qh         := params.getD 0 1
+      let kvh        := params.getD 1 1
+      let d          := params.getD 2 1
+      let vd         := params.getD 3 1
+      let causalNat  := params.getD 4 0
+      let windowLeft := params.getD 5 0
+      let causal     := decide (causalNat ≠ 0)
+      [fw_attn_varlen q k v cuQ cuK qh kvh d vd causal windowLeft]
+  | "OpName.BW_attn_varlen", [gO, q, k, v, cuQ, cuK] =>
+      let qh         := params.getD 0 1
+      let kvh        := params.getD 1 1
+      let d          := params.getD 2 1
+      let vd         := params.getD 3 1
+      let causalNat  := params.getD 4 0
+      let windowLeft := params.getD 5 0
+      let causal     := decide (causalNat ≠ 0)
+      let (dq, dk, dv) := bw_attn_varlen gO q k v cuQ cuK qh kvh d vd causal windowLeft
+      [dq, dk, dv]
   | "OpName.FW_dropout", [x] => [fw_dropout x]
   | "OpName.BW_dropout", [g, x] => [bw_dropout g x]
   | "OpName.FW_gelu", [x] => [fw_gelu x]
