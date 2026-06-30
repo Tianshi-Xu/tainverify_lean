@@ -111,7 +111,8 @@ private theorem evalOp_fw_div_loc (numParts rank : Nat) (params : List Nat) (x :
       [fw_div ((params.head?.getD 1 : Nat) : Scalar) x] := rfl
 private theorem applyNode_fw_div_out_loc
     (g : GraphDecl) (s : Store) (rank : Nat) (params : List Nat) (inTid outTid : Tid) :
-    applyNode g s { rank := rank, op := "OpName.FW_div", ins := [inTid], outs := [outTid], params := params } outTid =
+    applyNode g s { rank := rank, op := "OpName.FW_div", ins := [inTid],
+                    outs := [outTid], params := params } outTid =
       fw_div ((params.head?.getD 1 : Nat) : Scalar) (s inTid) := by
   unfold applyNode
   rw [show ([inTid] : List Tid).map s = [s inTid] from rfl, evalOp_fw_div_loc]

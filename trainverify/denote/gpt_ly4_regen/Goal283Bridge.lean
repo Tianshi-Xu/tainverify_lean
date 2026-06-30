@@ -20,6 +20,7 @@ set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 set_option linter.unusedVariables false
 set_option linter.style.show false
+set_option linter.style.emptyLine false
 set_option linter.style.setOption false
 set_option linter.unnecessarySeqFocus false
 set_option linter.flexible false
@@ -42,7 +43,7 @@ theorem sm_frame_981_self (initSM : Store) :
   rw [applyNode_fw_multiref2_second_out_g283 _ _ _ 628 977 981 (by decide)]
   rw [sm_prefix_eq initSM 53 628 (by native_decide)]
 
-theorem pm_full_3559 (initPM : Store) :
+theorem pm_full_g283_3559 (initPM : Store) :
     denoteGraph pm initPM 3559 = denoteGraph pm initPM 2057 := by
   rw [pm_val initPM 346 3559 (by native_decide) (by native_decide)]
   rw [show pm.nodes[346]'(by native_decide)
@@ -51,7 +52,7 @@ theorem pm_full_3559 (initPM : Store) :
   rw [applyNode_fw_multiref2_second_out_g283 _ _ _ 2057 3557 3559 (by decide)]
   rw [pm_prefix_eq initPM 346 2057 (by native_decide)]
 
-theorem pm_full_3567 (initPM : Store) :
+theorem pm_full_g283_3567 (initPM : Store) :
     denoteGraph pm initPM 3567 = denoteGraph pm initPM 2058 := by
   rw [pm_val initPM 347 3567 (by native_decide) (by native_decide)]
   rw [show pm.nodes[347]'(by native_decide)
@@ -60,7 +61,7 @@ theorem pm_full_3567 (initPM : Store) :
   rw [applyNode_fw_multiref2_second_out_g283 _ _ _ 2058 3565 3567 (by decide)]
   rw [pm_prefix_eq initPM 347 2058 (by native_decide)]
 
-theorem pm_full_3575 (initPM : Store) :
+theorem pm_full_g283_3575 (initPM : Store) :
     denoteGraph pm initPM 3575 = denoteGraph pm initPM 2059 := by
   rw [pm_val initPM 348 3575 (by native_decide) (by native_decide)]
   rw [show pm.nodes[348]'(by native_decide)
@@ -69,7 +70,7 @@ theorem pm_full_3575 (initPM : Store) :
   rw [applyNode_fw_multiref2_second_out_g283 _ _ _ 2059 3573 3575 (by decide)]
   rw [pm_prefix_eq initPM 348 2059 (by native_decide)]
 
-theorem pm_full_3583 (initPM : Store) :
+theorem pm_full_g283_3583 (initPM : Store) :
     denoteGraph pm initPM 3583 = denoteGraph pm initPM 2060 := by
   rw [pm_val initPM 349 3583 (by native_decide) (by native_decide)]
   rw [show pm.nodes[349]'(by native_decide)
@@ -78,7 +79,7 @@ theorem pm_full_3583 (initPM : Store) :
   rw [applyNode_fw_multiref2_second_out_g283 _ _ _ 2060 3581 3583 (by decide)]
   rw [pm_prefix_eq initPM 349 2060 (by native_decide)]
 
-theorem pm_full_2193 (initPM : Store) :
+theorem pm_full_g283_2193 (initPM : Store) :
     denoteGraph pm initPM 2193
       = allToAllPrimWithDims pm.numRanks 0
           [denoteGraph pm initPM 3559, denoteGraph pm initPM 3567,
@@ -95,7 +96,7 @@ theorem pm_full_2193 (initPM : Store) :
       pm_prefix_eq initPM 351 3575 (by native_decide),
       pm_prefix_eq initPM 351 3583 (by native_decide)]
 
-theorem pm_full_2194 (initPM : Store) :
+theorem pm_full_g283_2194 (initPM : Store) :
     denoteGraph pm initPM 2194
       = allToAllPrimWithDims pm.numRanks 1
           [denoteGraph pm initPM 3559, denoteGraph pm initPM 3567,
@@ -112,7 +113,7 @@ theorem pm_full_2194 (initPM : Store) :
       pm_prefix_eq initPM 353 3575 (by native_decide),
       pm_prefix_eq initPM 353 3583 (by native_decide)]
 
-theorem pm_full_2195 (initPM : Store) :
+theorem pm_full_g283_2195 (initPM : Store) :
     denoteGraph pm initPM 2195
       = allToAllPrimWithDims pm.numRanks 2
           [denoteGraph pm initPM 3559, denoteGraph pm initPM 3567,
@@ -129,7 +130,7 @@ theorem pm_full_2195 (initPM : Store) :
       pm_prefix_eq initPM 355 3575 (by native_decide),
       pm_prefix_eq initPM 355 3583 (by native_decide)]
 
-theorem pm_full_2196 (initPM : Store) :
+theorem pm_full_g283_2196 (initPM : Store) :
     denoteGraph pm initPM 2196
       = allToAllPrimWithDims pm.numRanks 3
           [denoteGraph pm initPM 3559, denoteGraph pm initPM 3567,
@@ -205,29 +206,29 @@ theorem denote_pm_goal_283_2196 (s : Store) :
 theorem pm_frame_2193_self (initPM : Store) :
     denoteGraph pm initPM 2193 = denoteGraph pm_goal_283 (denoteGraph pm initPM) 2193 := by
   rw [denote_pm_goal_283_2193]
-  rw [pm_full_2193]
-  rw [pm_full_3559, pm_full_3567, pm_full_3575, pm_full_3583]
+  rw [pm_full_g283_2193]
+  rw [pm_full_g283_3559, pm_full_g283_3567, pm_full_g283_3575, pm_full_g283_3583]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_2194_self (initPM : Store) :
     denoteGraph pm initPM 2194 = denoteGraph pm_goal_283 (denoteGraph pm initPM) 2194 := by
   rw [denote_pm_goal_283_2194]
-  rw [pm_full_2194]
-  rw [pm_full_3559, pm_full_3567, pm_full_3575, pm_full_3583]
+  rw [pm_full_g283_2194]
+  rw [pm_full_g283_3559, pm_full_g283_3567, pm_full_g283_3575, pm_full_g283_3583]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_2195_self (initPM : Store) :
     denoteGraph pm initPM 2195 = denoteGraph pm_goal_283 (denoteGraph pm initPM) 2195 := by
   rw [denote_pm_goal_283_2195]
-  rw [pm_full_2195]
-  rw [pm_full_3559, pm_full_3567, pm_full_3575, pm_full_3583]
+  rw [pm_full_g283_2195]
+  rw [pm_full_g283_3559, pm_full_g283_3567, pm_full_g283_3575, pm_full_g283_3583]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_2196_self (initPM : Store) :
     denoteGraph pm initPM 2196 = denoteGraph pm_goal_283 (denoteGraph pm initPM) 2196 := by
   rw [denote_pm_goal_283_2196]
-  rw [pm_full_2196]
-  rw [pm_full_3559, pm_full_3567, pm_full_3575, pm_full_3583]
+  rw [pm_full_g283_2196]
+  rw [pm_full_g283_3559, pm_full_g283_3567, pm_full_g283_3575, pm_full_g283_3583]
   rw [show pm.numRanks = 4 from by native_decide]
 
 lemma goal_283_hInitCut_helper (Ssm Spm : Store)

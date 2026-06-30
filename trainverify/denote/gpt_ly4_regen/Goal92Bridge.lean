@@ -125,6 +125,7 @@ set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 set_option linter.unusedVariables false
 set_option linter.style.show false
+set_option linter.style.emptyLine false
 set_option linter.style.setOption false
 set_option linter.unnecessarySeqFocus false
 set_option linter.flexible false
@@ -167,7 +168,7 @@ theorem sm_frame_690_self (initSM : Store) :
   norm_num
 
 -- ========== pm_full (mid tensors) ==========
-theorem pm_full_3017 (initPM : Store) :
+theorem pm_full_g92_3017 (initPM : Store) :
     denoteGraph pm initPM 3017
       = allToAllPrimWithDims pm.numRanks 0 [denoteGraph pm initPM 2997, denoteGraph pm initPM 2998, denoteGraph pm initPM 2999, denoteGraph pm initPM 3000] 1 2 := by
   rw [pm_val initPM 661 3017 (by native_decide) (by native_decide)]
@@ -181,7 +182,7 @@ theorem pm_full_3017 (initPM : Store) :
       pm_prefix_eq initPM 661 2999 (by native_decide),
       pm_prefix_eq initPM 661 3000 (by native_decide)]
 
-theorem pm_full_3018 (initPM : Store) :
+theorem pm_full_g92_3018 (initPM : Store) :
     denoteGraph pm initPM 3018
       = allToAllPrimWithDims pm.numRanks 1 [denoteGraph pm initPM 2997, denoteGraph pm initPM 2998, denoteGraph pm initPM 2999, denoteGraph pm initPM 3000] 1 2 := by
   rw [pm_val initPM 662 3018 (by native_decide) (by native_decide)]
@@ -195,7 +196,7 @@ theorem pm_full_3018 (initPM : Store) :
       pm_prefix_eq initPM 662 2999 (by native_decide),
       pm_prefix_eq initPM 662 3000 (by native_decide)]
 
-theorem pm_full_3019 (initPM : Store) :
+theorem pm_full_g92_3019 (initPM : Store) :
     denoteGraph pm initPM 3019
       = allToAllPrimWithDims pm.numRanks 2 [denoteGraph pm initPM 2997, denoteGraph pm initPM 2998, denoteGraph pm initPM 2999, denoteGraph pm initPM 3000] 1 2 := by
   rw [pm_val initPM 663 3019 (by native_decide) (by native_decide)]
@@ -209,7 +210,7 @@ theorem pm_full_3019 (initPM : Store) :
       pm_prefix_eq initPM 663 2999 (by native_decide),
       pm_prefix_eq initPM 663 3000 (by native_decide)]
 
-theorem pm_full_3020 (initPM : Store) :
+theorem pm_full_g92_3020 (initPM : Store) :
     denoteGraph pm initPM 3020
       = allToAllPrimWithDims pm.numRanks 3 [denoteGraph pm initPM 2997, denoteGraph pm initPM 2998, denoteGraph pm initPM 2999, denoteGraph pm initPM 3000] 1 2 := by
   rw [pm_val initPM 664 3020 (by native_decide) (by native_decide)]
@@ -266,7 +267,7 @@ theorem pm_frame_3021_self (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_div_out_loc]
   rw [pm_prefix_eq initPM 665 3017 (by native_decide)]
-  rw [pm_full_3017]
+  rw [pm_full_g92_3017]
   rw [show pm.numRanks = 4 from by native_decide]
   norm_num
 
@@ -279,7 +280,7 @@ theorem pm_frame_3022_self (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_div_out_loc]
   rw [pm_prefix_eq initPM 666 3018 (by native_decide)]
-  rw [pm_full_3018]
+  rw [pm_full_g92_3018]
   rw [show pm.numRanks = 4 from by native_decide]
   norm_num
 
@@ -292,7 +293,7 @@ theorem pm_frame_3023_self (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_div_out_loc]
   rw [pm_prefix_eq initPM 667 3019 (by native_decide)]
-  rw [pm_full_3019]
+  rw [pm_full_g92_3019]
   rw [show pm.numRanks = 4 from by native_decide]
   norm_num
 
@@ -305,7 +306,7 @@ theorem pm_frame_3024_self (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_div_out_loc]
   rw [pm_prefix_eq initPM 668 3020 (by native_decide)]
-  rw [pm_full_3020]
+  rw [pm_full_g92_3020]
   rw [show pm.numRanks = 4 from by native_decide]
   norm_num
 

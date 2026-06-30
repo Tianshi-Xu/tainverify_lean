@@ -54,7 +54,7 @@ theorem sm_frame_624_self (initSM : Store) :
   rw [sm_prefix_eq initSM 49 623 (by native_decide)]
 
 -- ========== full pm: AllToAll 输出 1997-2000 (node 317-320, ins=range 1977, params [3,2]) ==========
-theorem pm_full_1997 (initPM : Store) :
+theorem pm_full_g46_1997 (initPM : Store) :
     denoteGraph pm initPM 1997
       = allToAllPrimWithDims pm.numRanks 0
           [denoteGraph pm initPM 1977, denoteGraph pm initPM 1978,
@@ -71,7 +71,7 @@ theorem pm_full_1997 (initPM : Store) :
       pm_prefix_eq initPM 317 1979 (by native_decide),
       pm_prefix_eq initPM 317 1980 (by native_decide)]
 
-theorem pm_full_1998 (initPM : Store) :
+theorem pm_full_g46_1998 (initPM : Store) :
     denoteGraph pm initPM 1998
       = allToAllPrimWithDims pm.numRanks 1
           [denoteGraph pm initPM 1977, denoteGraph pm initPM 1978,
@@ -88,7 +88,7 @@ theorem pm_full_1998 (initPM : Store) :
       pm_prefix_eq initPM 318 1979 (by native_decide),
       pm_prefix_eq initPM 318 1980 (by native_decide)]
 
-theorem pm_full_1999 (initPM : Store) :
+theorem pm_full_g46_1999 (initPM : Store) :
     denoteGraph pm initPM 1999
       = allToAllPrimWithDims pm.numRanks 2
           [denoteGraph pm initPM 1977, denoteGraph pm initPM 1978,
@@ -105,7 +105,7 @@ theorem pm_full_1999 (initPM : Store) :
       pm_prefix_eq initPM 319 1979 (by native_decide),
       pm_prefix_eq initPM 319 1980 (by native_decide)]
 
-theorem pm_full_2000 (initPM : Store) :
+theorem pm_full_g46_2000 (initPM : Store) :
     denoteGraph pm initPM 2000
       = allToAllPrimWithDims pm.numRanks 3
           [denoteGraph pm initPM 1977, denoteGraph pm initPM 1978,
@@ -123,7 +123,7 @@ theorem pm_full_2000 (initPM : Store) :
       pm_prefix_eq initPM 320 1980 (by native_decide)]
 
 -- ========== full pm: FW_contiguous 输出 2001-2004 (node 321-324) ==========
-theorem pm_full_2001 (initPM : Store) :
+theorem pm_full_g46_2001 (initPM : Store) :
     denoteGraph pm initPM 2001
       = fw_contiguous
           (allToAllPrimWithDims pm.numRanks 0
@@ -135,9 +135,9 @@ theorem pm_full_2001 (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_contiguous_out_g46]
   rw [pm_prefix_eq initPM 321 1997 (by native_decide)]
-  rw [pm_full_1997]
+  rw [pm_full_g46_1997]
 
-theorem pm_full_2002 (initPM : Store) :
+theorem pm_full_g46_2002 (initPM : Store) :
     denoteGraph pm initPM 2002
       = fw_contiguous
           (allToAllPrimWithDims pm.numRanks 1
@@ -149,9 +149,9 @@ theorem pm_full_2002 (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_contiguous_out_g46]
   rw [pm_prefix_eq initPM 322 1998 (by native_decide)]
-  rw [pm_full_1998]
+  rw [pm_full_g46_1998]
 
-theorem pm_full_2003 (initPM : Store) :
+theorem pm_full_g46_2003 (initPM : Store) :
     denoteGraph pm initPM 2003
       = fw_contiguous
           (allToAllPrimWithDims pm.numRanks 2
@@ -163,9 +163,9 @@ theorem pm_full_2003 (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_contiguous_out_g46]
   rw [pm_prefix_eq initPM 323 1999 (by native_decide)]
-  rw [pm_full_1999]
+  rw [pm_full_g46_1999]
 
-theorem pm_full_2004 (initPM : Store) :
+theorem pm_full_g46_2004 (initPM : Store) :
     denoteGraph pm initPM 2004
       = fw_contiguous
           (allToAllPrimWithDims pm.numRanks 3
@@ -177,7 +177,7 @@ theorem pm_full_2004 (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_contiguous_out_g46]
   rw [pm_prefix_eq initPM 324 2000 (by native_decide)]
-  rw [pm_full_2000]
+  rw [pm_full_g46_2000]
 
 -- ========== full pm: AllGather → 624 (node 325, single-tp output) ==========
 theorem pm_frame_624_self (initPM : Store) :
@@ -210,7 +210,7 @@ theorem pm_frame_624_self (initPM : Store) :
       pm_prefix_eq initPM 325 2002 (by native_decide),
       pm_prefix_eq initPM 325 2003 (by native_decide),
       pm_prefix_eq initPM 325 2004 (by native_decide)]
-  rw [pm_full_2001, pm_full_2002, pm_full_2003, pm_full_2004]
+  rw [pm_full_g46_2001, pm_full_g46_2002, pm_full_g46_2003, pm_full_g46_2004]
 
 -- ========== 总装 ==========
 theorem goal_46_cut_to_full (h : goal_46_stmt_cut) : goal_46_stmt := by

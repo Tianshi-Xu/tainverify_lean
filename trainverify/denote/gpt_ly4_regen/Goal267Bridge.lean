@@ -85,7 +85,7 @@ theorem sm_frame_934_self (initSM : Store) :
   rw [sm_prefix_eq initSM 25 593 (by native_decide)]
 
 -- ========== full pm: multiref 第一输出 3469/3475/3481/3487 (node 152-155) = s 1505..1508 ==========
-theorem pm_full_3469 (initPM : Store) :
+theorem pm_full_g267_3469 (initPM : Store) :
     denoteGraph pm initPM 3469 = denoteGraph pm initPM 1505 := by
   rw [pm_val initPM 152 3469 (by native_decide) (by native_decide)]
   rw [show pm.nodes[152]'(by native_decide)
@@ -94,7 +94,7 @@ theorem pm_full_3469 (initPM : Store) :
   rw [applyNode_fw_multiref2_first_out]
   rw [pm_prefix_eq initPM 152 1505 (by native_decide)]
 
-theorem pm_full_3475 (initPM : Store) :
+theorem pm_full_g267_3475 (initPM : Store) :
     denoteGraph pm initPM 3475 = denoteGraph pm initPM 1506 := by
   rw [pm_val initPM 153 3475 (by native_decide) (by native_decide)]
   rw [show pm.nodes[153]'(by native_decide)
@@ -103,7 +103,7 @@ theorem pm_full_3475 (initPM : Store) :
   rw [applyNode_fw_multiref2_first_out]
   rw [pm_prefix_eq initPM 153 1506 (by native_decide)]
 
-theorem pm_full_3481 (initPM : Store) :
+theorem pm_full_g267_3481 (initPM : Store) :
     denoteGraph pm initPM 3481 = denoteGraph pm initPM 1507 := by
   rw [pm_val initPM 154 3481 (by native_decide) (by native_decide)]
   rw [show pm.nodes[154]'(by native_decide)
@@ -112,7 +112,7 @@ theorem pm_full_3481 (initPM : Store) :
   rw [applyNode_fw_multiref2_first_out]
   rw [pm_prefix_eq initPM 154 1507 (by native_decide)]
 
-theorem pm_full_3487 (initPM : Store) :
+theorem pm_full_g267_3487 (initPM : Store) :
     denoteGraph pm initPM 3487 = denoteGraph pm initPM 1508 := by
   rw [pm_val initPM 155 3487 (by native_decide) (by native_decide)]
   rw [show pm.nodes[155]'(by native_decide)
@@ -138,7 +138,7 @@ theorem pm_frame_1525_self (initPM : Store) :
       pm_prefix_eq initPM 156 3475 (by native_decide),
       pm_prefix_eq initPM 156 3481 (by native_decide),
       pm_prefix_eq initPM 156 3487 (by native_decide)]
-  rw [pm_full_3469, pm_full_3475, pm_full_3481, pm_full_3487]
+  rw [pm_full_g267_3469, pm_full_g267_3475, pm_full_g267_3481, pm_full_g267_3487]
 
 theorem pm_frame_1526_self (initPM : Store) :
     denoteGraph pm initPM 1526
@@ -156,7 +156,7 @@ theorem pm_frame_1526_self (initPM : Store) :
       pm_prefix_eq initPM 157 3475 (by native_decide),
       pm_prefix_eq initPM 157 3481 (by native_decide),
       pm_prefix_eq initPM 157 3487 (by native_decide)]
-  rw [pm_full_3469, pm_full_3475, pm_full_3481, pm_full_3487]
+  rw [pm_full_g267_3469, pm_full_g267_3475, pm_full_g267_3481, pm_full_g267_3487]
 
 theorem pm_frame_1527_self (initPM : Store) :
     denoteGraph pm initPM 1527
@@ -174,7 +174,7 @@ theorem pm_frame_1527_self (initPM : Store) :
       pm_prefix_eq initPM 158 3475 (by native_decide),
       pm_prefix_eq initPM 158 3481 (by native_decide),
       pm_prefix_eq initPM 158 3487 (by native_decide)]
-  rw [pm_full_3469, pm_full_3475, pm_full_3481, pm_full_3487]
+  rw [pm_full_g267_3469, pm_full_g267_3475, pm_full_g267_3481, pm_full_g267_3487]
 
 theorem pm_frame_1528_self (initPM : Store) :
     denoteGraph pm initPM 1528
@@ -192,7 +192,7 @@ theorem pm_frame_1528_self (initPM : Store) :
       pm_prefix_eq initPM 159 3475 (by native_decide),
       pm_prefix_eq initPM 159 3481 (by native_decide),
       pm_prefix_eq initPM 159 3487 (by native_decide)]
-  rw [pm_full_3469, pm_full_3475, pm_full_3481, pm_full_3487]
+  rw [pm_full_g267_3469, pm_full_g267_3475, pm_full_g267_3481, pm_full_g267_3487]
 
 -- ========== 总装: goal_267_cut_to_full ==========
 theorem goal_267_cut_to_full (h : goal_267_stmt_cut) : goal_267_stmt := by

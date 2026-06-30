@@ -64,7 +64,7 @@ theorem sm_frame_622_self (initSM : Store) :
       sm_prefix_eq initSM 47 617 (by native_decide)]
 
 -- ========== full pm: AllToAll x 输出 1945-1948 (node 300-303, ins=range 1929, params [2,3]) ==========
-theorem pm_full_1945 (initPM : Store) :
+theorem pm_full_g44_1945 (initPM : Store) :
     denoteGraph pm initPM 1945
       = allToAllPrimWithDims pm.numRanks 0
           [denoteGraph pm initPM 1929, denoteGraph pm initPM 1930,
@@ -81,7 +81,7 @@ theorem pm_full_1945 (initPM : Store) :
       pm_prefix_eq initPM 300 1931 (by native_decide),
       pm_prefix_eq initPM 300 1932 (by native_decide)]
 
-theorem pm_full_1946 (initPM : Store) :
+theorem pm_full_g44_1946 (initPM : Store) :
     denoteGraph pm initPM 1946
       = allToAllPrimWithDims pm.numRanks 1
           [denoteGraph pm initPM 1929, denoteGraph pm initPM 1930,
@@ -98,7 +98,7 @@ theorem pm_full_1946 (initPM : Store) :
       pm_prefix_eq initPM 301 1931 (by native_decide),
       pm_prefix_eq initPM 301 1932 (by native_decide)]
 
-theorem pm_full_1947 (initPM : Store) :
+theorem pm_full_g44_1947 (initPM : Store) :
     denoteGraph pm initPM 1947
       = allToAllPrimWithDims pm.numRanks 2
           [denoteGraph pm initPM 1929, denoteGraph pm initPM 1930,
@@ -115,7 +115,7 @@ theorem pm_full_1947 (initPM : Store) :
       pm_prefix_eq initPM 302 1931 (by native_decide),
       pm_prefix_eq initPM 302 1932 (by native_decide)]
 
-theorem pm_full_1948 (initPM : Store) :
+theorem pm_full_g44_1948 (initPM : Store) :
     denoteGraph pm initPM 1948
       = allToAllPrimWithDims pm.numRanks 3
           [denoteGraph pm initPM 1929, denoteGraph pm initPM 1930,
@@ -133,7 +133,7 @@ theorem pm_full_1948 (initPM : Store) :
       pm_prefix_eq initPM 303 1932 (by native_decide)]
 
 -- ========== full pm: AllToAll y 输出 1949-1952 (node 276-279, ins=range 1829, params [3,2]) ==========
-theorem pm_full_1949 (initPM : Store) :
+theorem pm_full_g44_1949 (initPM : Store) :
     denoteGraph pm initPM 1949
       = allToAllPrimWithDims pm.numRanks 0
           [denoteGraph pm initPM 1829, denoteGraph pm initPM 1830,
@@ -150,7 +150,7 @@ theorem pm_full_1949 (initPM : Store) :
       pm_prefix_eq initPM 276 1831 (by native_decide),
       pm_prefix_eq initPM 276 1832 (by native_decide)]
 
-theorem pm_full_1950 (initPM : Store) :
+theorem pm_full_g44_1950 (initPM : Store) :
     denoteGraph pm initPM 1950
       = allToAllPrimWithDims pm.numRanks 1
           [denoteGraph pm initPM 1829, denoteGraph pm initPM 1830,
@@ -167,7 +167,7 @@ theorem pm_full_1950 (initPM : Store) :
       pm_prefix_eq initPM 277 1831 (by native_decide),
       pm_prefix_eq initPM 277 1832 (by native_decide)]
 
-theorem pm_full_1951 (initPM : Store) :
+theorem pm_full_g44_1951 (initPM : Store) :
     denoteGraph pm initPM 1951
       = allToAllPrimWithDims pm.numRanks 2
           [denoteGraph pm initPM 1829, denoteGraph pm initPM 1830,
@@ -184,7 +184,7 @@ theorem pm_full_1951 (initPM : Store) :
       pm_prefix_eq initPM 278 1831 (by native_decide),
       pm_prefix_eq initPM 278 1832 (by native_decide)]
 
-theorem pm_full_1952 (initPM : Store) :
+theorem pm_full_g44_1952 (initPM : Store) :
     denoteGraph pm initPM 1952
       = allToAllPrimWithDims pm.numRanks 3
           [denoteGraph pm initPM 1829, denoteGraph pm initPM 1830,
@@ -202,7 +202,7 @@ theorem pm_full_1952 (initPM : Store) :
       pm_prefix_eq initPM 279 1832 (by native_decide)]
 
 -- ========== full pm: FW_matmul 输出 1953-1956 (node 304-307) ==========
-theorem pm_full_1953 (initPM : Store) :
+theorem pm_full_g44_1953 (initPM : Store) :
     denoteGraph pm initPM 1953
       = fw_matmul (denoteGraph pm initPM 1945) (denoteGraph pm initPM 1949) := by
   rw [pm_val initPM 304 1953 (by native_decide) (by native_decide)]
@@ -213,7 +213,7 @@ theorem pm_full_1953 (initPM : Store) :
   rw [pm_prefix_eq initPM 304 1945 (by native_decide),
       pm_prefix_eq initPM 304 1949 (by native_decide)]
 
-theorem pm_full_1954 (initPM : Store) :
+theorem pm_full_g44_1954 (initPM : Store) :
     denoteGraph pm initPM 1954
       = fw_matmul (denoteGraph pm initPM 1946) (denoteGraph pm initPM 1950) := by
   rw [pm_val initPM 305 1954 (by native_decide) (by native_decide)]
@@ -224,7 +224,7 @@ theorem pm_full_1954 (initPM : Store) :
   rw [pm_prefix_eq initPM 305 1946 (by native_decide),
       pm_prefix_eq initPM 305 1950 (by native_decide)]
 
-theorem pm_full_1955 (initPM : Store) :
+theorem pm_full_g44_1955 (initPM : Store) :
     denoteGraph pm initPM 1955
       = fw_matmul (denoteGraph pm initPM 1947) (denoteGraph pm initPM 1951) := by
   rw [pm_val initPM 306 1955 (by native_decide) (by native_decide)]
@@ -235,7 +235,7 @@ theorem pm_full_1955 (initPM : Store) :
   rw [pm_prefix_eq initPM 306 1947 (by native_decide),
       pm_prefix_eq initPM 306 1951 (by native_decide)]
 
-theorem pm_full_1956 (initPM : Store) :
+theorem pm_full_g44_1956 (initPM : Store) :
     denoteGraph pm initPM 1956
       = fw_matmul (denoteGraph pm initPM 1948) (denoteGraph pm initPM 1952) := by
   rw [pm_val initPM 307 1956 (by native_decide) (by native_decide)]
@@ -281,9 +281,9 @@ theorem pm_frame_622_self (initPM : Store) :
       pm_prefix_eq initPM 308 1954 (by native_decide),
       pm_prefix_eq initPM 308 1955 (by native_decide),
       pm_prefix_eq initPM 308 1956 (by native_decide)]
-  rw [pm_full_1953, pm_full_1954, pm_full_1955, pm_full_1956]
-  rw [pm_full_1945, pm_full_1946, pm_full_1947, pm_full_1948,
-      pm_full_1949, pm_full_1950, pm_full_1951, pm_full_1952]
+  rw [pm_full_g44_1953, pm_full_g44_1954, pm_full_g44_1955, pm_full_g44_1956]
+  rw [pm_full_g44_1945, pm_full_g44_1946, pm_full_g44_1947, pm_full_g44_1948,
+      pm_full_g44_1949, pm_full_g44_1950, pm_full_g44_1951, pm_full_g44_1952]
   rw [show pm.numRanks = 4 from by native_decide]
 
 -- ========== 总装 ==========

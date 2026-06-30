@@ -41,7 +41,7 @@ theorem sm_frame_596_self (initSM : Store) :
       sm_prefix_eq initSM 26 595 (by native_decide)]
 
 -- ========== full pm: FW_layernorm 输出 1529-1532 (node 160-163) ==========
-theorem pm_full_1529 (initPM : Store) :
+theorem pm_full_g25_1529 (initPM : Store) :
     denoteGraph pm initPM 1529
       = fw_layernorm (denoteGraph pm initPM 1525) (denoteGraph pm initPM 594)
           (denoteGraph pm initPM 595) := by
@@ -54,7 +54,7 @@ theorem pm_full_1529 (initPM : Store) :
       pm_prefix_eq initPM 160 594 (by native_decide),
       pm_prefix_eq initPM 160 595 (by native_decide)]
 
-theorem pm_full_1530 (initPM : Store) :
+theorem pm_full_g25_1530 (initPM : Store) :
     denoteGraph pm initPM 1530
       = fw_layernorm (denoteGraph pm initPM 1526) (denoteGraph pm initPM 594)
           (denoteGraph pm initPM 595) := by
@@ -67,7 +67,7 @@ theorem pm_full_1530 (initPM : Store) :
       pm_prefix_eq initPM 161 594 (by native_decide),
       pm_prefix_eq initPM 161 595 (by native_decide)]
 
-theorem pm_full_1531 (initPM : Store) :
+theorem pm_full_g25_1531 (initPM : Store) :
     denoteGraph pm initPM 1531
       = fw_layernorm (denoteGraph pm initPM 1527) (denoteGraph pm initPM 594)
           (denoteGraph pm initPM 595) := by
@@ -80,7 +80,7 @@ theorem pm_full_1531 (initPM : Store) :
       pm_prefix_eq initPM 162 594 (by native_decide),
       pm_prefix_eq initPM 162 595 (by native_decide)]
 
-theorem pm_full_1532 (initPM : Store) :
+theorem pm_full_g25_1532 (initPM : Store) :
     denoteGraph pm initPM 1532
       = fw_layernorm (denoteGraph pm initPM 1528) (denoteGraph pm initPM 594)
           (denoteGraph pm initPM 595) := by
@@ -116,7 +116,7 @@ theorem pm_frame_596_self (initPM : Store) :
       pm_prefix_eq initPM 164 1530 (by native_decide),
       pm_prefix_eq initPM 164 1531 (by native_decide),
       pm_prefix_eq initPM 164 1532 (by native_decide)]
-  rw [pm_full_1529, pm_full_1530, pm_full_1531, pm_full_1532]
+  rw [pm_full_g25_1529, pm_full_g25_1530, pm_full_g25_1531, pm_full_g25_1532]
   rw [show pm.numRanks = 4 from by native_decide]
 
 -- ========== 迷你图 pm_goal_25 算 596 ==========

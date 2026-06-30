@@ -36,7 +36,7 @@ theorem sm_frame_589_self (initSM : Store) :
   rw [sm_prefix_eq initSM 21 588 (by native_decide)]
 
 -- ========== full pm: AllToAll 输出 1449-1452 (node 131-134) ==========
-theorem pm_full_1449 (initPM : Store) :
+theorem pm_full_g21_1449 (initPM : Store) :
     denoteGraph pm initPM 1449
       = allToAllPrimWithDims pm.numRanks 0
           [denoteGraph pm initPM 1433, denoteGraph pm initPM 1434,
@@ -53,7 +53,7 @@ theorem pm_full_1449 (initPM : Store) :
       pm_prefix_eq initPM 131 1435 (by native_decide),
       pm_prefix_eq initPM 131 1436 (by native_decide)]
 
-theorem pm_full_1450 (initPM : Store) :
+theorem pm_full_g21_1450 (initPM : Store) :
     denoteGraph pm initPM 1450
       = allToAllPrimWithDims pm.numRanks 1
           [denoteGraph pm initPM 1433, denoteGraph pm initPM 1434,
@@ -70,7 +70,7 @@ theorem pm_full_1450 (initPM : Store) :
       pm_prefix_eq initPM 132 1435 (by native_decide),
       pm_prefix_eq initPM 132 1436 (by native_decide)]
 
-theorem pm_full_1451 (initPM : Store) :
+theorem pm_full_g21_1451 (initPM : Store) :
     denoteGraph pm initPM 1451
       = allToAllPrimWithDims pm.numRanks 2
           [denoteGraph pm initPM 1433, denoteGraph pm initPM 1434,
@@ -87,7 +87,7 @@ theorem pm_full_1451 (initPM : Store) :
       pm_prefix_eq initPM 133 1435 (by native_decide),
       pm_prefix_eq initPM 133 1436 (by native_decide)]
 
-theorem pm_full_1452 (initPM : Store) :
+theorem pm_full_g21_1452 (initPM : Store) :
     denoteGraph pm initPM 1452
       = allToAllPrimWithDims pm.numRanks 3
           [denoteGraph pm initPM 1433, denoteGraph pm initPM 1434,
@@ -105,7 +105,7 @@ theorem pm_full_1452 (initPM : Store) :
       pm_prefix_eq initPM 134 1436 (by native_decide)]
 
 -- ========== full pm: FW_contiguous 输出 1453-1456 (node 135-138) = AllToAll out (恒等) ==========
-theorem pm_full_1453 (initPM : Store) :
+theorem pm_full_g21_1453 (initPM : Store) :
     denoteGraph pm initPM 1453
       = allToAllPrimWithDims pm.numRanks 0
           [denoteGraph pm initPM 1433, denoteGraph pm initPM 1434,
@@ -116,9 +116,9 @@ theorem pm_full_1453 (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_contiguous_out_g21]
   rw [pm_prefix_eq initPM 135 1449 (by native_decide)]
-  rw [pm_full_1449]
+  rw [pm_full_g21_1449]
 
-theorem pm_full_1454 (initPM : Store) :
+theorem pm_full_g21_1454 (initPM : Store) :
     denoteGraph pm initPM 1454
       = allToAllPrimWithDims pm.numRanks 1
           [denoteGraph pm initPM 1433, denoteGraph pm initPM 1434,
@@ -129,9 +129,9 @@ theorem pm_full_1454 (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_contiguous_out_g21]
   rw [pm_prefix_eq initPM 136 1450 (by native_decide)]
-  rw [pm_full_1450]
+  rw [pm_full_g21_1450]
 
-theorem pm_full_1455 (initPM : Store) :
+theorem pm_full_g21_1455 (initPM : Store) :
     denoteGraph pm initPM 1455
       = allToAllPrimWithDims pm.numRanks 2
           [denoteGraph pm initPM 1433, denoteGraph pm initPM 1434,
@@ -142,9 +142,9 @@ theorem pm_full_1455 (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_contiguous_out_g21]
   rw [pm_prefix_eq initPM 137 1451 (by native_decide)]
-  rw [pm_full_1451]
+  rw [pm_full_g21_1451]
 
-theorem pm_full_1456 (initPM : Store) :
+theorem pm_full_g21_1456 (initPM : Store) :
     denoteGraph pm initPM 1456
       = allToAllPrimWithDims pm.numRanks 3
           [denoteGraph pm initPM 1433, denoteGraph pm initPM 1434,
@@ -155,7 +155,7 @@ theorem pm_full_1456 (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_contiguous_out_g21]
   rw [pm_prefix_eq initPM 138 1452 (by native_decide)]
-  rw [pm_full_1452]
+  rw [pm_full_g21_1452]
 
 -- ========== PM self-frame: 589 (AllGather node 139, 单 tp) ==========
 theorem pm_frame_589_self (initPM : Store) :
@@ -184,7 +184,7 @@ theorem pm_frame_589_self (initPM : Store) :
       pm_prefix_eq initPM 139 1454 (by native_decide),
       pm_prefix_eq initPM 139 1455 (by native_decide),
       pm_prefix_eq initPM 139 1456 (by native_decide)]
-  rw [pm_full_1453, pm_full_1454, pm_full_1455, pm_full_1456]
+  rw [pm_full_g21_1453, pm_full_g21_1454, pm_full_g21_1455, pm_full_g21_1456]
   rw [show pm.numRanks = 4 from by native_decide]
 
 -- ========== 迷你图 pm_goal_21 算 589 ==========

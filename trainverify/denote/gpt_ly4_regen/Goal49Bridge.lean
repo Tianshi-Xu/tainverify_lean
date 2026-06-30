@@ -116,7 +116,7 @@ theorem sm_frame_628_self (initSM : Store) :
   rw [sm_prefix_eq initSM 52 627 (by native_decide)]
 
 -- ========== full pm: AllToAll 输出 2053-2056 (node 338-341, ins=range 2025, params=[1,2]) ==========
-theorem pm_full_2053 (initPM : Store) :
+theorem pm_full_g49_2053 (initPM : Store) :
     denoteGraph pm initPM 2053
       = allToAllPrimWithDims pm.numRanks 0
           [denoteGraph pm initPM 2025, denoteGraph pm initPM 2026,
@@ -133,7 +133,7 @@ theorem pm_full_2053 (initPM : Store) :
       pm_prefix_eq initPM 338 2027 (by native_decide),
       pm_prefix_eq initPM 338 2028 (by native_decide)]
 
-theorem pm_full_2054 (initPM : Store) :
+theorem pm_full_g49_2054 (initPM : Store) :
     denoteGraph pm initPM 2054
       = allToAllPrimWithDims pm.numRanks 1
           [denoteGraph pm initPM 2025, denoteGraph pm initPM 2026,
@@ -150,7 +150,7 @@ theorem pm_full_2054 (initPM : Store) :
       pm_prefix_eq initPM 339 2027 (by native_decide),
       pm_prefix_eq initPM 339 2028 (by native_decide)]
 
-theorem pm_full_2055 (initPM : Store) :
+theorem pm_full_g49_2055 (initPM : Store) :
     denoteGraph pm initPM 2055
       = allToAllPrimWithDims pm.numRanks 2
           [denoteGraph pm initPM 2025, denoteGraph pm initPM 2026,
@@ -167,7 +167,7 @@ theorem pm_full_2055 (initPM : Store) :
       pm_prefix_eq initPM 340 2027 (by native_decide),
       pm_prefix_eq initPM 340 2028 (by native_decide)]
 
-theorem pm_full_2056 (initPM : Store) :
+theorem pm_full_g49_2056 (initPM : Store) :
     denoteGraph pm initPM 2056
       = allToAllPrimWithDims pm.numRanks 3
           [denoteGraph pm initPM 2025, denoteGraph pm initPM 2026,
@@ -198,7 +198,7 @@ theorem pm_frame_2057_self (initPM : Store) :
   rw [applyNode_fw_add2_out]
   rw [pm_prefix_eq initPM 342 2049 (by native_decide)]
   rw [pm_prefix_eq initPM 342 2053 (by native_decide)]
-  rw [pm_full_2053]
+  rw [pm_full_g49_2053]
 
 theorem pm_frame_2058_self (initPM : Store) :
     denoteGraph pm initPM 2058
@@ -213,7 +213,7 @@ theorem pm_frame_2058_self (initPM : Store) :
   rw [applyNode_fw_add2_out]
   rw [pm_prefix_eq initPM 343 2050 (by native_decide)]
   rw [pm_prefix_eq initPM 343 2054 (by native_decide)]
-  rw [pm_full_2054]
+  rw [pm_full_g49_2054]
 
 theorem pm_frame_2059_self (initPM : Store) :
     denoteGraph pm initPM 2059
@@ -228,7 +228,7 @@ theorem pm_frame_2059_self (initPM : Store) :
   rw [applyNode_fw_add2_out]
   rw [pm_prefix_eq initPM 344 2051 (by native_decide)]
   rw [pm_prefix_eq initPM 344 2055 (by native_decide)]
-  rw [pm_full_2055]
+  rw [pm_full_g49_2055]
 
 theorem pm_frame_2060_self (initPM : Store) :
     denoteGraph pm initPM 2060
@@ -243,7 +243,7 @@ theorem pm_frame_2060_self (initPM : Store) :
   rw [applyNode_fw_add2_out]
   rw [pm_prefix_eq initPM 345 2052 (by native_decide)]
   rw [pm_prefix_eq initPM 345 2056 (by native_decide)]
-  rw [pm_full_2056]
+  rw [pm_full_g49_2056]
 
 -- ========== PM self-frame to mini: 2057-2060 ==========
 -- mini-graph 把 2025-2028, 2049-2052 当 init 读取 (s tid)，full pm frame 也归约到 denoteGraph pm initPM tid。

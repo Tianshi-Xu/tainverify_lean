@@ -137,6 +137,7 @@ set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 set_option linter.unusedVariables false
 set_option linter.style.show false
+set_option linter.style.emptyLine false
 set_option linter.style.setOption false
 set_option linter.unnecessarySeqFocus false
 set_option linter.flexible false
@@ -163,7 +164,7 @@ theorem sm_frame_698_self (initSM : Store) :
       sm_prefix_eq initSM 108 697 (by native_decide)]
 
 -- ========== pm_full (mid tensors) ==========
-theorem pm_full_3173 (initPM : Store) :
+theorem pm_full_g99_3173 (initPM : Store) :
     denoteGraph pm initPM 3173
       = chunkPrimDimN 1 pm.numRanks 0 (denoteGraph pm initPM 697) := by
   rw [pm_val initPM 712 3173 (by native_decide) (by native_decide)]
@@ -173,7 +174,7 @@ theorem pm_full_3173 (initPM : Store) :
   rw [applyNode_chunkPrimDimN_out]
   rw [pm_prefix_eq initPM 712 697 (by native_decide)]
 
-theorem pm_full_3174 (initPM : Store) :
+theorem pm_full_g99_3174 (initPM : Store) :
     denoteGraph pm initPM 3174
       = chunkPrimDimN 1 pm.numRanks 1 (denoteGraph pm initPM 697) := by
   rw [pm_val initPM 713 3174 (by native_decide) (by native_decide)]
@@ -183,7 +184,7 @@ theorem pm_full_3174 (initPM : Store) :
   rw [applyNode_chunkPrimDimN_out]
   rw [pm_prefix_eq initPM 713 697 (by native_decide)]
 
-theorem pm_full_3175 (initPM : Store) :
+theorem pm_full_g99_3175 (initPM : Store) :
     denoteGraph pm initPM 3175
       = chunkPrimDimN 1 pm.numRanks 2 (denoteGraph pm initPM 697) := by
   rw [pm_val initPM 714 3175 (by native_decide) (by native_decide)]
@@ -193,7 +194,7 @@ theorem pm_full_3175 (initPM : Store) :
   rw [applyNode_chunkPrimDimN_out]
   rw [pm_prefix_eq initPM 714 697 (by native_decide)]
 
-theorem pm_full_3176 (initPM : Store) :
+theorem pm_full_g99_3176 (initPM : Store) :
     denoteGraph pm initPM 3176
       = chunkPrimDimN 1 pm.numRanks 3 (denoteGraph pm initPM 697) := by
   rw [pm_val initPM 715 3176 (by native_decide) (by native_decide)]
@@ -247,7 +248,7 @@ theorem pm_frame_3177_self (initPM : Store) :
   rw [applyNode_fw_add2_out]
   rw [pm_prefix_eq initPM 716 3169 (by native_decide),
       pm_prefix_eq initPM 716 3173 (by native_decide)]
-  rw [pm_full_3173]
+  rw [pm_full_g99_3173]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_3178_self (initPM : Store) :
@@ -260,7 +261,7 @@ theorem pm_frame_3178_self (initPM : Store) :
   rw [applyNode_fw_add2_out]
   rw [pm_prefix_eq initPM 717 3170 (by native_decide),
       pm_prefix_eq initPM 717 3174 (by native_decide)]
-  rw [pm_full_3174]
+  rw [pm_full_g99_3174]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_3179_self (initPM : Store) :
@@ -273,7 +274,7 @@ theorem pm_frame_3179_self (initPM : Store) :
   rw [applyNode_fw_add2_out]
   rw [pm_prefix_eq initPM 718 3171 (by native_decide),
       pm_prefix_eq initPM 718 3175 (by native_decide)]
-  rw [pm_full_3175]
+  rw [pm_full_g99_3175]
   rw [show pm.numRanks = 4 from by native_decide]
 
 theorem pm_frame_3180_self (initPM : Store) :
@@ -286,7 +287,7 @@ theorem pm_frame_3180_self (initPM : Store) :
   rw [applyNode_fw_add2_out]
   rw [pm_prefix_eq initPM 719 3172 (by native_decide),
       pm_prefix_eq initPM 719 3176 (by native_decide)]
-  rw [pm_full_3176]
+  rw [pm_full_g99_3176]
   rw [show pm.numRanks = 4 from by native_decide]
 
 -- ========== helper: hInitCut separate lemma (heartbeat workaround) ==========

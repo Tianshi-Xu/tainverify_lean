@@ -38,7 +38,7 @@ theorem sm_frame_926_self (initSM : Store) :
 
 -- ========== full pm 算 multiref 第3输出 3439-3463 (node 37-40) = Spm 1145-1148 ==========
 -- 3439 由 node 37 写, 输入 1145 (node 33 写). full pm 算 3439 = full pm 算 1145.
-theorem pm_full_3439 (initPM : Store) :
+theorem pm_full_g265_3439 (initPM : Store) :
     denoteGraph pm initPM 3439 = denoteGraph pm initPM 1145 := by
   rw [pm_val initPM 37 3439 (by native_decide) (by native_decide)]
   rw [show pm.nodes[37]'(by native_decide)
@@ -47,7 +47,7 @@ theorem pm_full_3439 (initPM : Store) :
   rw [applyNode_fw_multiref3_third_out_g265 _ _ _ _ _ _ _ (by decide) (by decide)]
   rw [pm_prefix_eq initPM 37 1145 (by native_decide)]
 
-theorem pm_full_3447 (initPM : Store) :
+theorem pm_full_g265_3447 (initPM : Store) :
     denoteGraph pm initPM 3447 = denoteGraph pm initPM 1146 := by
   rw [pm_val initPM 38 3447 (by native_decide) (by native_decide)]
   rw [show pm.nodes[38]'(by native_decide)
@@ -56,7 +56,7 @@ theorem pm_full_3447 (initPM : Store) :
   rw [applyNode_fw_multiref3_third_out_g265 _ _ _ _ _ _ _ (by decide) (by decide)]
   rw [pm_prefix_eq initPM 38 1146 (by native_decide)]
 
-theorem pm_full_3455 (initPM : Store) :
+theorem pm_full_g265_3455 (initPM : Store) :
     denoteGraph pm initPM 3455 = denoteGraph pm initPM 1147 := by
   rw [pm_val initPM 39 3455 (by native_decide) (by native_decide)]
   rw [show pm.nodes[39]'(by native_decide)
@@ -65,7 +65,7 @@ theorem pm_full_3455 (initPM : Store) :
   rw [applyNode_fw_multiref3_third_out_g265 _ _ _ _ _ _ _ (by decide) (by decide)]
   rw [pm_prefix_eq initPM 39 1147 (by native_decide)]
 
-theorem pm_full_3463 (initPM : Store) :
+theorem pm_full_g265_3463 (initPM : Store) :
     denoteGraph pm initPM 3463 = denoteGraph pm initPM 1148 := by
   rw [pm_val initPM 40 3463 (by native_decide) (by native_decide)]
   rw [show pm.nodes[40]'(by native_decide)
@@ -91,7 +91,7 @@ theorem pm_frame_917_self (initPM : Store) :
       pm_prefix_eq initPM 47 3447 (by native_decide),
       pm_prefix_eq initPM 47 3455 (by native_decide),
       pm_prefix_eq initPM 47 3463 (by native_decide)]
-  rw [pm_full_3439, pm_full_3447, pm_full_3455, pm_full_3463]
+  rw [pm_full_g265_3439, pm_full_g265_3447, pm_full_g265_3455, pm_full_g265_3463]
   rw [show pm.numRanks = 4 from by native_decide]
 
 -- ========== 总装 ==========

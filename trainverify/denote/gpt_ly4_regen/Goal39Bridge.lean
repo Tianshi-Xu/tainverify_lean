@@ -59,7 +59,7 @@ theorem sm_frame_617_self (initSM : Store) :
   rw [sm_prefix_eq initSM 42 616 (by native_decide)]
 
 -- ========== PM full: 1825-1828 (4 ChunkPrim dim=3, node 252-255) ==========
-theorem pm_full_1825 (initPM : Store) :
+theorem pm_full_g39_1825 (initPM : Store) :
     denoteGraph pm initPM 1825 = chunkPrimDimN 3 pm.numRanks 0 (denoteGraph pm initPM 616) := by
   rw [pm_val initPM 252 1825 (by native_decide) (by native_decide)]
   rw [show pm.nodes[252]'(by native_decide)
@@ -68,7 +68,7 @@ theorem pm_full_1825 (initPM : Store) :
   rw [applyNode_chunkPrimDimN_out]
   rw [pm_prefix_eq initPM 252 616 (by native_decide)]
 
-theorem pm_full_1826 (initPM : Store) :
+theorem pm_full_g39_1826 (initPM : Store) :
     denoteGraph pm initPM 1826 = chunkPrimDimN 3 pm.numRanks 1 (denoteGraph pm initPM 616) := by
   rw [pm_val initPM 253 1826 (by native_decide) (by native_decide)]
   rw [show pm.nodes[253]'(by native_decide)
@@ -77,7 +77,7 @@ theorem pm_full_1826 (initPM : Store) :
   rw [applyNode_chunkPrimDimN_out]
   rw [pm_prefix_eq initPM 253 616 (by native_decide)]
 
-theorem pm_full_1827 (initPM : Store) :
+theorem pm_full_g39_1827 (initPM : Store) :
     denoteGraph pm initPM 1827 = chunkPrimDimN 3 pm.numRanks 2 (denoteGraph pm initPM 616) := by
   rw [pm_val initPM 254 1827 (by native_decide) (by native_decide)]
   rw [show pm.nodes[254]'(by native_decide)
@@ -86,7 +86,7 @@ theorem pm_full_1827 (initPM : Store) :
   rw [applyNode_chunkPrimDimN_out]
   rw [pm_prefix_eq initPM 254 616 (by native_decide)]
 
-theorem pm_full_1828 (initPM : Store) :
+theorem pm_full_g39_1828 (initPM : Store) :
     denoteGraph pm initPM 1828 = chunkPrimDimN 3 pm.numRanks 3 (denoteGraph pm initPM 616) := by
   rw [pm_val initPM 255 1828 (by native_decide) (by native_decide)]
   rw [show pm.nodes[255]'(by native_decide)
@@ -104,7 +104,7 @@ theorem pm_frame_1829_self (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_transposeAxes_out]
   rw [pm_prefix_eq initPM 264 1825 (by native_decide)]
-  rw [pm_full_1825]
+  rw [pm_full_g39_1825]
 
 theorem pm_frame_1830_self (initPM : Store) :
     denoteGraph pm initPM 1830 = transposeAxes 1 2 (chunkPrimDimN 3 pm.numRanks 1 (denoteGraph pm initPM 616)) := by
@@ -114,7 +114,7 @@ theorem pm_frame_1830_self (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_transposeAxes_out]
   rw [pm_prefix_eq initPM 265 1826 (by native_decide)]
-  rw [pm_full_1826]
+  rw [pm_full_g39_1826]
 
 theorem pm_frame_1831_self (initPM : Store) :
     denoteGraph pm initPM 1831 = transposeAxes 1 2 (chunkPrimDimN 3 pm.numRanks 2 (denoteGraph pm initPM 616)) := by
@@ -124,7 +124,7 @@ theorem pm_frame_1831_self (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_transposeAxes_out]
   rw [pm_prefix_eq initPM 266 1827 (by native_decide)]
-  rw [pm_full_1827]
+  rw [pm_full_g39_1827]
 
 theorem pm_frame_1832_self (initPM : Store) :
     denoteGraph pm initPM 1832 = transposeAxes 1 2 (chunkPrimDimN 3 pm.numRanks 3 (denoteGraph pm initPM 616)) := by
@@ -134,7 +134,7 @@ theorem pm_frame_1832_self (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_transposeAxes_out]
   rw [pm_prefix_eq initPM 267 1828 (by native_decide)]
-  rw [pm_full_1828]
+  rw [pm_full_g39_1828]
 
 -- ========== 总装 ==========
 theorem goal_39_cut_to_full (h : goal_39_stmt_cut) : goal_39_stmt := by

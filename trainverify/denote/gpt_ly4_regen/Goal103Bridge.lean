@@ -142,6 +142,7 @@ set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 set_option linter.unusedVariables false
 set_option linter.style.show false
+set_option linter.style.emptyLine false
 set_option linter.style.setOption false
 set_option linter.unnecessarySeqFocus false
 set_option linter.flexible false
@@ -168,7 +169,7 @@ theorem sm_frame_706_self (initSM : Store) :
       sm_prefix_eq initSM 113 705 (by native_decide)]
 
 -- ========== pm_full (mid tensors) ==========
-theorem pm_full_3285 (initPM : Store) :
+theorem pm_full_g103_3285 (initPM : Store) :
     denoteGraph pm initPM 3285
       = allToAllPrimWithDims pm.numRanks 0 [denoteGraph pm initPM 3265, denoteGraph pm initPM 3266, denoteGraph pm initPM 3267, denoteGraph pm initPM 3268] 1 2 := by
   rw [pm_val initPM 745 3285 (by native_decide) (by native_decide)]
@@ -182,7 +183,7 @@ theorem pm_full_3285 (initPM : Store) :
       pm_prefix_eq initPM 745 3267 (by native_decide),
       pm_prefix_eq initPM 745 3268 (by native_decide)]
 
-theorem pm_full_3286 (initPM : Store) :
+theorem pm_full_g103_3286 (initPM : Store) :
     denoteGraph pm initPM 3286
       = allToAllPrimWithDims pm.numRanks 1 [denoteGraph pm initPM 3265, denoteGraph pm initPM 3266, denoteGraph pm initPM 3267, denoteGraph pm initPM 3268] 1 2 := by
   rw [pm_val initPM 746 3286 (by native_decide) (by native_decide)]
@@ -196,7 +197,7 @@ theorem pm_full_3286 (initPM : Store) :
       pm_prefix_eq initPM 746 3267 (by native_decide),
       pm_prefix_eq initPM 746 3268 (by native_decide)]
 
-theorem pm_full_3287 (initPM : Store) :
+theorem pm_full_g103_3287 (initPM : Store) :
     denoteGraph pm initPM 3287
       = allToAllPrimWithDims pm.numRanks 2 [denoteGraph pm initPM 3265, denoteGraph pm initPM 3266, denoteGraph pm initPM 3267, denoteGraph pm initPM 3268] 1 2 := by
   rw [pm_val initPM 747 3287 (by native_decide) (by native_decide)]
@@ -210,7 +211,7 @@ theorem pm_full_3287 (initPM : Store) :
       pm_prefix_eq initPM 747 3267 (by native_decide),
       pm_prefix_eq initPM 747 3268 (by native_decide)]
 
-theorem pm_full_3288 (initPM : Store) :
+theorem pm_full_g103_3288 (initPM : Store) :
     denoteGraph pm initPM 3288
       = allToAllPrimWithDims pm.numRanks 3 [denoteGraph pm initPM 3265, denoteGraph pm initPM 3266, denoteGraph pm initPM 3267, denoteGraph pm initPM 3268] 1 2 := by
   rw [pm_val initPM 748 3288 (by native_decide) (by native_decide)]
@@ -224,7 +225,7 @@ theorem pm_full_3288 (initPM : Store) :
       pm_prefix_eq initPM 748 3267 (by native_decide),
       pm_prefix_eq initPM 748 3268 (by native_decide)]
 
-theorem pm_full_3293 (initPM : Store) :
+theorem pm_full_g103_3293 (initPM : Store) :
     denoteGraph pm initPM 3293
       = fw_linear (denoteGraph pm initPM 3285) (denoteGraph pm initPM 3289) := by
   rw [pm_val initPM 749 3293 (by native_decide) (by native_decide)]
@@ -235,7 +236,7 @@ theorem pm_full_3293 (initPM : Store) :
   rw [pm_prefix_eq initPM 749 3285 (by native_decide),
       pm_prefix_eq initPM 749 3289 (by native_decide)]
 
-theorem pm_full_3294 (initPM : Store) :
+theorem pm_full_g103_3294 (initPM : Store) :
     denoteGraph pm initPM 3294
       = fw_linear (denoteGraph pm initPM 3286) (denoteGraph pm initPM 3290) := by
   rw [pm_val initPM 750 3294 (by native_decide) (by native_decide)]
@@ -246,7 +247,7 @@ theorem pm_full_3294 (initPM : Store) :
   rw [pm_prefix_eq initPM 750 3286 (by native_decide),
       pm_prefix_eq initPM 750 3290 (by native_decide)]
 
-theorem pm_full_3295 (initPM : Store) :
+theorem pm_full_g103_3295 (initPM : Store) :
     denoteGraph pm initPM 3295
       = fw_linear (denoteGraph pm initPM 3287) (denoteGraph pm initPM 3291) := by
   rw [pm_val initPM 751 3295 (by native_decide) (by native_decide)]
@@ -257,7 +258,7 @@ theorem pm_full_3295 (initPM : Store) :
   rw [pm_prefix_eq initPM 751 3287 (by native_decide),
       pm_prefix_eq initPM 751 3291 (by native_decide)]
 
-theorem pm_full_3296 (initPM : Store) :
+theorem pm_full_g103_3296 (initPM : Store) :
     denoteGraph pm initPM 3296
       = fw_linear (denoteGraph pm initPM 3288) (denoteGraph pm initPM 3292) := by
   rw [pm_val initPM 752 3296 (by native_decide) (by native_decide)]
@@ -272,6 +273,7 @@ theorem pm_full_3296 (initPM : Store) :
 theorem denote_pm_goal_103_706 (s : Store) :
     denoteGraph pm_goal_103 s 706 = allReducePrim 4 0 [fw_linear (allToAllPrimWithDims 4 0 [s 3265, s 3266, s 3267, s 3268] 1 2) (s 3289), fw_linear (allToAllPrimWithDims 4 1 [s 3265, s 3266, s 3267, s 3268] 1 2) (s 3290), fw_linear (allToAllPrimWithDims 4 2 [s 3265, s 3266, s 3267, s 3268] 1 2) (s 3291), fw_linear (allToAllPrimWithDims 4 3 [s 3265, s 3266, s 3267, s 3268] 1 2) (s 3292)] := by
   simp only [pm_goal_103, denoteGraph, List.foldl]
+  repeat rw [applyNode_skip _ _ _ 706 (by decide)]
   rw [applyNode_allReducePrim_out]
   simp only [List.map]
   try (set_option maxHeartbeats 800000 in congr 1)
@@ -290,7 +292,7 @@ theorem pm_frame_706_self (initPM : Store) :
       pm_prefix_eq initPM 753 3294 (by native_decide),
       pm_prefix_eq initPM 753 3295 (by native_decide),
       pm_prefix_eq initPM 753 3296 (by native_decide)]
-  rw [pm_full_3296, pm_full_3295, pm_full_3294, pm_full_3293, pm_full_3288, pm_full_3287, pm_full_3286, pm_full_3285]
+  rw [pm_full_g103_3296, pm_full_g103_3295, pm_full_g103_3294, pm_full_g103_3293, pm_full_g103_3288, pm_full_g103_3287, pm_full_g103_3286, pm_full_g103_3285]
   rw [show pm.numRanks = 4 from by native_decide]
 
 -- ========== helper: hInitCut separate lemma (heartbeat workaround) ==========

@@ -69,7 +69,7 @@ theorem sm_frame_627_self (initSM : Store) :
   rw [sm_prefix_eq initSM 51 626 (by native_decide)]
 
 -- ========== PM full: 2021-2024 (4 ChunkPrim dim=1, node 330-333) ==========
-theorem pm_full_2021 (initPM : Store) :
+theorem pm_full_g48_2021 (initPM : Store) :
     denoteGraph pm initPM 2021 = chunkPrimDimN 1 pm.numRanks 0 (denoteGraph pm initPM 625) := by
   rw [pm_val initPM 330 2021 (by native_decide) (by native_decide)]
   rw [show pm.nodes[330]'(by native_decide)
@@ -78,7 +78,7 @@ theorem pm_full_2021 (initPM : Store) :
   rw [applyNode_chunkPrimDimN_out]
   rw [pm_prefix_eq initPM 330 625 (by native_decide)]
 
-theorem pm_full_2022 (initPM : Store) :
+theorem pm_full_g48_2022 (initPM : Store) :
     denoteGraph pm initPM 2022 = chunkPrimDimN 1 pm.numRanks 1 (denoteGraph pm initPM 625) := by
   rw [pm_val initPM 331 2022 (by native_decide) (by native_decide)]
   rw [show pm.nodes[331]'(by native_decide)
@@ -87,7 +87,7 @@ theorem pm_full_2022 (initPM : Store) :
   rw [applyNode_chunkPrimDimN_out]
   rw [pm_prefix_eq initPM 331 625 (by native_decide)]
 
-theorem pm_full_2023 (initPM : Store) :
+theorem pm_full_g48_2023 (initPM : Store) :
     denoteGraph pm initPM 2023 = chunkPrimDimN 1 pm.numRanks 2 (denoteGraph pm initPM 625) := by
   rw [pm_val initPM 332 2023 (by native_decide) (by native_decide)]
   rw [show pm.nodes[332]'(by native_decide)
@@ -96,7 +96,7 @@ theorem pm_full_2023 (initPM : Store) :
   rw [applyNode_chunkPrimDimN_out]
   rw [pm_prefix_eq initPM 332 625 (by native_decide)]
 
-theorem pm_full_2024 (initPM : Store) :
+theorem pm_full_g48_2024 (initPM : Store) :
     denoteGraph pm initPM 2024 = chunkPrimDimN 1 pm.numRanks 3 (denoteGraph pm initPM 625) := by
   rw [pm_val initPM 333 2024 (by native_decide) (by native_decide)]
   rw [show pm.nodes[333]'(by native_decide)
@@ -117,7 +117,7 @@ theorem pm_frame_2025_self (initPM : Store) :
   rw [applyNode_fw_linear_out]
   rw [pm_prefix_eq initPM 334 2021 (by native_decide)]
   rw [pm_prefix_eq initPM 334 626 (by native_decide)]
-  rw [pm_full_2021]
+  rw [pm_full_g48_2021]
 
 theorem pm_frame_2026_self (initPM : Store) :
     denoteGraph pm initPM 2026
@@ -130,7 +130,7 @@ theorem pm_frame_2026_self (initPM : Store) :
   rw [applyNode_fw_linear_out]
   rw [pm_prefix_eq initPM 335 2022 (by native_decide)]
   rw [pm_prefix_eq initPM 335 626 (by native_decide)]
-  rw [pm_full_2022]
+  rw [pm_full_g48_2022]
 
 theorem pm_frame_2027_self (initPM : Store) :
     denoteGraph pm initPM 2027
@@ -143,7 +143,7 @@ theorem pm_frame_2027_self (initPM : Store) :
   rw [applyNode_fw_linear_out]
   rw [pm_prefix_eq initPM 336 2023 (by native_decide)]
   rw [pm_prefix_eq initPM 336 626 (by native_decide)]
-  rw [pm_full_2023]
+  rw [pm_full_g48_2023]
 
 theorem pm_frame_2028_self (initPM : Store) :
     denoteGraph pm initPM 2028
@@ -156,7 +156,7 @@ theorem pm_frame_2028_self (initPM : Store) :
   rw [applyNode_fw_linear_out]
   rw [pm_prefix_eq initPM 337 2024 (by native_decide)]
   rw [pm_prefix_eq initPM 337 626 (by native_decide)]
-  rw [pm_full_2024]
+  rw [pm_full_g48_2024]
 
 -- ========== 总装 ==========
 theorem goal_48_cut_to_full (h : goal_48_stmt_cut) : goal_48_stmt := by

@@ -138,6 +138,7 @@ set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 set_option linter.unusedVariables false
 set_option linter.style.show false
+set_option linter.style.emptyLine false
 set_option linter.style.setOption false
 set_option linter.unnecessarySeqFocus false
 set_option linter.flexible false
@@ -184,6 +185,7 @@ theorem denote_pm_goal_311_3315 (s : Store) :
 theorem denote_pm_goal_311_3316 (s : Store) :
     denoteGraph pm_goal_311 s 3316 = s 3180 := by
   simp only [pm_goal_311, denoteGraph, List.foldl]
+  rw [applyNode_skip _ _ _ 3313 (by decide),
   rw [applyNode_fw_multiref2_second_out_loc _ _ 3 3180 3204 3316 (by decide),
       applyNode_skip _ _ _ 3180 (by decide),
       applyNode_skip _ _ _ 3180 (by decide),

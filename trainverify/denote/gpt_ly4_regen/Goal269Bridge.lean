@@ -71,7 +71,7 @@ theorem sm_frame_938_self (initSM : Store) :
   rw [sm_prefix_eq initSM 25 593 (by native_decide)]
 
 -- ========== full pm: multiref 第二输出 1629 (node 152) = s 1505 ==========
-theorem pm_full_1629 (initPM : Store) :
+theorem pm_full_g269_1629 (initPM : Store) :
     denoteGraph pm initPM 1629 = denoteGraph pm initPM 1505 := by
   rw [pm_val initPM 152 1629 (by native_decide) (by native_decide)]
   rw [show pm.nodes[152]'(by native_decide)
@@ -81,7 +81,7 @@ theorem pm_full_1629 (initPM : Store) :
   rw [pm_prefix_eq initPM 152 1505 (by native_decide)]
 
 -- ========== full pm: multiref 第二输出 1630 (node 153) = s 1506 ==========
-theorem pm_full_1630 (initPM : Store) :
+theorem pm_full_g269_1630 (initPM : Store) :
     denoteGraph pm initPM 1630 = denoteGraph pm initPM 1506 := by
   rw [pm_val initPM 153 1630 (by native_decide) (by native_decide)]
   rw [show pm.nodes[153]'(by native_decide)
@@ -91,7 +91,7 @@ theorem pm_full_1630 (initPM : Store) :
   rw [pm_prefix_eq initPM 153 1506 (by native_decide)]
 
 -- ========== full pm: multiref 第二输出 1631 (node 154) = s 1507 ==========
-theorem pm_full_1631 (initPM : Store) :
+theorem pm_full_g269_1631 (initPM : Store) :
     denoteGraph pm initPM 1631 = denoteGraph pm initPM 1507 := by
   rw [pm_val initPM 154 1631 (by native_decide) (by native_decide)]
   rw [show pm.nodes[154]'(by native_decide)
@@ -101,7 +101,7 @@ theorem pm_full_1631 (initPM : Store) :
   rw [pm_prefix_eq initPM 154 1507 (by native_decide)]
 
 -- ========== full pm: multiref 第二输出 1632 (node 155) = s 1508 ==========
-theorem pm_full_1632 (initPM : Store) :
+theorem pm_full_g269_1632 (initPM : Store) :
     denoteGraph pm initPM 1632 = denoteGraph pm initPM 1508 := by
   rw [pm_val initPM 155 1632 (by native_decide) (by native_decide)]
   rw [show pm.nodes[155]'(by native_decide)
@@ -113,22 +113,22 @@ theorem pm_full_1632 (initPM : Store) :
 theorem pm_frame_1629_self (initPM : Store) :
     denoteGraph pm initPM 1629 = denoteGraph pm_goal_269 (denoteGraph pm initPM) 1629 := by
   rw [denote_pm_goal_269_1629]
-  exact pm_full_1629 initPM
+  exact pm_full_g269_1629 initPM
 
 theorem pm_frame_1630_self (initPM : Store) :
     denoteGraph pm initPM 1630 = denoteGraph pm_goal_269 (denoteGraph pm initPM) 1630 := by
   rw [denote_pm_goal_269_1630]
-  exact pm_full_1630 initPM
+  exact pm_full_g269_1630 initPM
 
 theorem pm_frame_1631_self (initPM : Store) :
     denoteGraph pm initPM 1631 = denoteGraph pm_goal_269 (denoteGraph pm initPM) 1631 := by
   rw [denote_pm_goal_269_1631]
-  exact pm_full_1631 initPM
+  exact pm_full_g269_1631 initPM
 
 theorem pm_frame_1632_self (initPM : Store) :
     denoteGraph pm initPM 1632 = denoteGraph pm_goal_269 (denoteGraph pm initPM) 1632 := by
   rw [denote_pm_goal_269_1632]
-  exact pm_full_1632 initPM
+  exact pm_full_g269_1632 initPM
 
 -- ========== 总装: goal_269_cut_to_full ==========
 theorem goal_269_cut_to_full (h : goal_269_stmt_cut) : goal_269_stmt := by

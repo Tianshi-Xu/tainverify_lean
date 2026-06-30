@@ -48,7 +48,7 @@ theorem sm_frame_609_self (initSM : Store) :
       sm_prefix_eq initSM 35 608 (by native_decide)]
 
 -- ========== full pm 算 FW_linear 输出 1725-1728 (node 205/206/207/215 — rank3 跳!) ==========
-theorem pm_full_1725 (initPM : Store) :
+theorem pm_full_g32_1725 (initPM : Store) :
     denoteGraph pm initPM 1725 = fw_linear (denoteGraph pm initPM 1721) (denoteGraph pm initPM 608) := by
   rw [pm_val initPM 205 1725 (by native_decide) (by native_decide)]
   rw [show pm.nodes[205]'(by native_decide)
@@ -58,7 +58,7 @@ theorem pm_full_1725 (initPM : Store) :
   rw [pm_prefix_eq initPM 205 1721 (by native_decide),
       pm_prefix_eq initPM 205 608 (by native_decide)]
 
-theorem pm_full_1726 (initPM : Store) :
+theorem pm_full_g32_1726 (initPM : Store) :
     denoteGraph pm initPM 1726 = fw_linear (denoteGraph pm initPM 1722) (denoteGraph pm initPM 608) := by
   rw [pm_val initPM 206 1726 (by native_decide) (by native_decide)]
   rw [show pm.nodes[206]'(by native_decide)
@@ -68,7 +68,7 @@ theorem pm_full_1726 (initPM : Store) :
   rw [pm_prefix_eq initPM 206 1722 (by native_decide),
       pm_prefix_eq initPM 206 608 (by native_decide)]
 
-theorem pm_full_1727 (initPM : Store) :
+theorem pm_full_g32_1727 (initPM : Store) :
     denoteGraph pm initPM 1727 = fw_linear (denoteGraph pm initPM 1723) (denoteGraph pm initPM 608) := by
   rw [pm_val initPM 207 1727 (by native_decide) (by native_decide)]
   rw [show pm.nodes[207]'(by native_decide)
@@ -78,7 +78,7 @@ theorem pm_full_1727 (initPM : Store) :
   rw [pm_prefix_eq initPM 207 1723 (by native_decide),
       pm_prefix_eq initPM 207 608 (by native_decide)]
 
-theorem pm_full_1728 (initPM : Store) :
+theorem pm_full_g32_1728 (initPM : Store) :
     denoteGraph pm initPM 1728 = fw_linear (denoteGraph pm initPM 1724) (denoteGraph pm initPM 608) := by
   rw [pm_val initPM 215 1728 (by native_decide) (by native_decide)]
   rw [show pm.nodes[215]'(by native_decide)
@@ -107,7 +107,7 @@ theorem pm_frame_609_self (initPM : Store) :
       pm_prefix_eq initPM 224 1726 (by native_decide),
       pm_prefix_eq initPM 224 1727 (by native_decide),
       pm_prefix_eq initPM 224 1728 (by native_decide)]
-  rw [pm_full_1725, pm_full_1726, pm_full_1727, pm_full_1728]
+  rw [pm_full_g32_1725, pm_full_g32_1726, pm_full_g32_1727, pm_full_g32_1728]
   rw [show pm.numRanks = 4 from by native_decide]
 
 -- ========== 总装 ==========

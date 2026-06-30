@@ -77,7 +77,7 @@ theorem sm_frame_620_self (initSM : Store) :
   rw [sm_prefix_eq initSM 45 619 (by native_decide)]
 
 -- ========== full pm: AllToAll 输出 1905-1908 (node 288-291, ins=range 1881, params=[1,2]) ==========
-theorem pm_full_1905 (initPM : Store) :
+theorem pm_full_g42_1905 (initPM : Store) :
     denoteGraph pm initPM 1905
       = allToAllPrimWithDims pm.numRanks 0
           [denoteGraph pm initPM 1881, denoteGraph pm initPM 1882,
@@ -94,7 +94,7 @@ theorem pm_full_1905 (initPM : Store) :
       pm_prefix_eq initPM 288 1883 (by native_decide),
       pm_prefix_eq initPM 288 1884 (by native_decide)]
 
-theorem pm_full_1906 (initPM : Store) :
+theorem pm_full_g42_1906 (initPM : Store) :
     denoteGraph pm initPM 1906
       = allToAllPrimWithDims pm.numRanks 1
           [denoteGraph pm initPM 1881, denoteGraph pm initPM 1882,
@@ -111,7 +111,7 @@ theorem pm_full_1906 (initPM : Store) :
       pm_prefix_eq initPM 289 1883 (by native_decide),
       pm_prefix_eq initPM 289 1884 (by native_decide)]
 
-theorem pm_full_1907 (initPM : Store) :
+theorem pm_full_g42_1907 (initPM : Store) :
     denoteGraph pm initPM 1907
       = allToAllPrimWithDims pm.numRanks 2
           [denoteGraph pm initPM 1881, denoteGraph pm initPM 1882,
@@ -128,7 +128,7 @@ theorem pm_full_1907 (initPM : Store) :
       pm_prefix_eq initPM 290 1883 (by native_decide),
       pm_prefix_eq initPM 290 1884 (by native_decide)]
 
-theorem pm_full_1908 (initPM : Store) :
+theorem pm_full_g42_1908 (initPM : Store) :
     denoteGraph pm initPM 1908
       = allToAllPrimWithDims pm.numRanks 3
           [denoteGraph pm initPM 1881, denoteGraph pm initPM 1882,
@@ -158,7 +158,7 @@ theorem pm_frame_1909_self (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_div_out_g42]
   rw [pm_prefix_eq initPM 292 1905 (by native_decide)]
-  rw [pm_full_1905]
+  rw [pm_full_g42_1905]
 
 theorem pm_frame_1910_self (initPM : Store) :
     denoteGraph pm initPM 1910
@@ -172,7 +172,7 @@ theorem pm_frame_1910_self (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_div_out_g42]
   rw [pm_prefix_eq initPM 293 1906 (by native_decide)]
-  rw [pm_full_1906]
+  rw [pm_full_g42_1906]
 
 theorem pm_frame_1911_self (initPM : Store) :
     denoteGraph pm initPM 1911
@@ -186,7 +186,7 @@ theorem pm_frame_1911_self (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_div_out_g42]
   rw [pm_prefix_eq initPM 294 1907 (by native_decide)]
-  rw [pm_full_1907]
+  rw [pm_full_g42_1907]
 
 theorem pm_frame_1912_self (initPM : Store) :
     denoteGraph pm initPM 1912
@@ -200,7 +200,7 @@ theorem pm_frame_1912_self (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_div_out_g42]
   rw [pm_prefix_eq initPM 295 1908 (by native_decide)]
-  rw [pm_full_1908]
+  rw [pm_full_g42_1908]
 
 -- ========== PM self-frame: 1909-1912 (组合 AllToAll + FW_div) ==========
 theorem pm_frame_1909_to_mini (initPM : Store) :

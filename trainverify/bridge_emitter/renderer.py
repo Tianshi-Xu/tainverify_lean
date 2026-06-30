@@ -169,7 +169,7 @@ lemma goal_{n}_hInitCut_helper (Ssm Spm : Store)
     # closed by `List.forall_mem_nil _`.
     tuple = ", ".join(["hinitC"] + [f"hg{m}" for m in prereqs] + ["List.forall_mem_nil _"])
     return (
-f"""-- ========== helper: hInitCut separate lemma (forall_mem, O(n)) ==========
+f"""-- ========== helper: hInitCut separate lemma (heartbeat workaround) ==========
 lemma goal_{n}_hInitCut_helper (Ssm Spm : Store)
     (hinitC : InitGoalsHold pm.numRanks initGoals Ssm Spm)
     {args} :
@@ -417,8 +417,7 @@ theorem goal_{n}_intermediate (initSM initPM : Store)
   simpa [InitGoalHolds, goal_{n}] using this
 
 end TrainVerify.Denote.GeneratedGoals
-"""
-    )
+""")
 
 def render_family_a(n: int, ir, topo, probe_map, input_sources, prereqs_in_order: list,
                     imports: list) -> str:

@@ -60,7 +60,7 @@ theorem sm_frame_585_self (initSM : Store) :
   norm_num
 
 -- ========== PM full: 1365-1368 (4 ChunkPrim, node 106-109) ==========
-theorem pm_full_1365 (initPM : Store) :
+theorem pm_full_g17_1365 (initPM : Store) :
     denoteGraph pm initPM 1365 = chunkPrimDimN 1 pm.numRanks 0 (denoteGraph pm initPM 584) := by
   rw [pm_val initPM 106 1365 (by native_decide) (by native_decide)]
   rw [show pm.nodes[106]'(by native_decide)
@@ -69,7 +69,7 @@ theorem pm_full_1365 (initPM : Store) :
   rw [applyNode_chunkPrimDimN_out]
   rw [pm_prefix_eq initPM 106 584 (by native_decide)]
 
-theorem pm_full_1366 (initPM : Store) :
+theorem pm_full_g17_1366 (initPM : Store) :
     denoteGraph pm initPM 1366 = chunkPrimDimN 1 pm.numRanks 1 (denoteGraph pm initPM 584) := by
   rw [pm_val initPM 107 1366 (by native_decide) (by native_decide)]
   rw [show pm.nodes[107]'(by native_decide)
@@ -78,7 +78,7 @@ theorem pm_full_1366 (initPM : Store) :
   rw [applyNode_chunkPrimDimN_out]
   rw [pm_prefix_eq initPM 107 584 (by native_decide)]
 
-theorem pm_full_1367 (initPM : Store) :
+theorem pm_full_g17_1367 (initPM : Store) :
     denoteGraph pm initPM 1367 = chunkPrimDimN 1 pm.numRanks 2 (denoteGraph pm initPM 584) := by
   rw [pm_val initPM 108 1367 (by native_decide) (by native_decide)]
   rw [show pm.nodes[108]'(by native_decide)
@@ -87,7 +87,7 @@ theorem pm_full_1367 (initPM : Store) :
   rw [applyNode_chunkPrimDimN_out]
   rw [pm_prefix_eq initPM 108 584 (by native_decide)]
 
-theorem pm_full_1368 (initPM : Store) :
+theorem pm_full_g17_1368 (initPM : Store) :
     denoteGraph pm initPM 1368 = chunkPrimDimN 1 pm.numRanks 3 (denoteGraph pm initPM 584) := by
   rw [pm_val initPM 109 1368 (by native_decide) (by native_decide)]
   rw [show pm.nodes[109]'(by native_decide)
@@ -105,7 +105,7 @@ theorem pm_frame_1369_self (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_div_out_g17]
   rw [pm_prefix_eq initPM 110 1365 (by native_decide)]
-  rw [pm_full_1365]
+  rw [pm_full_g17_1365]
   norm_num
 
 theorem pm_frame_1370_self (initPM : Store) :
@@ -116,7 +116,7 @@ theorem pm_frame_1370_self (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_div_out_g17]
   rw [pm_prefix_eq initPM 111 1366 (by native_decide)]
-  rw [pm_full_1366]
+  rw [pm_full_g17_1366]
   norm_num
 
 theorem pm_frame_1371_self (initPM : Store) :
@@ -127,7 +127,7 @@ theorem pm_frame_1371_self (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_div_out_g17]
   rw [pm_prefix_eq initPM 112 1367 (by native_decide)]
-  rw [pm_full_1367]
+  rw [pm_full_g17_1367]
   norm_num
 
 theorem pm_frame_1372_self (initPM : Store) :
@@ -138,7 +138,7 @@ theorem pm_frame_1372_self (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_div_out_g17]
   rw [pm_prefix_eq initPM 113 1368 (by native_decide)]
-  rw [pm_full_1368]
+  rw [pm_full_g17_1368]
   norm_num
 
 -- ========== 总装 ==========

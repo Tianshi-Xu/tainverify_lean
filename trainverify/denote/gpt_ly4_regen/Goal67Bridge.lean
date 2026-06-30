@@ -93,6 +93,7 @@ set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 set_option linter.unusedVariables false
 set_option linter.style.show false
+set_option linter.style.emptyLine false
 set_option linter.style.setOption false
 set_option linter.unnecessarySeqFocus false
 set_option linter.flexible false
@@ -305,9 +306,8 @@ lemma goal_67_hInitCut_helper (Ssm Spm : Store)
 -- ========== Assembly: goal_67_cut_to_full ==========
 theorem goal_67_cut_to_full (h : goal_67_stmt_cut) : goal_67_stmt := by
   intro initSM initPM hSM hPM hInit
-  obtain ⟨Ssm, hSsm⟩ : ∃ S, S = denoteGraph sm initSM := ⟨_, rfl⟩
-  obtain ⟨Spm, hSpm⟩ : ∃ S, S = denoteGraph pm initPM := ⟨_, rfl⟩
-  rw [← hSsm, ← hSpm]
+  set Ssm := denoteGraph sm initSM with hSsm
+  set Spm := denoteGraph pm initPM with hSpm
   have hg2 := goal_2_intermediate initSM initPM hSM hPM hInit
   have hg3 := goal_3_intermediate initSM initPM hSM hPM hInit
   have hg4 := goal_4_intermediate initSM initPM hSM hPM hInit
@@ -388,7 +388,6 @@ theorem goal_67_cut_to_full (h : goal_67_stmt_cut) : goal_67_stmt := by
   have hg289 := goal_289_intermediate initSM initPM hSM hPM hInit
   have hg291 := goal_291_intermediate initSM initPM hSM hPM hInit
   have hinitC := initGoals_preserved initSM initPM hInit
-  rw [← hSsm, ← hSpm] at hg2 hg3 hg4 hg5 hg6 hg7 hg8 hg9 hg10 hg11 hg12 hg13 hg14 hg15 hg16 hg17 hg18 hg19 hg20 hg21 hg22 hg23 hg24 hg25 hg26 hg27 hg28 hg29 hg30 hg31 hg32 hg33 hg34 hg35 hg36 hg37 hg38 hg39 hg40 hg41 hg42 hg43 hg44 hg45 hg46 hg47 hg48 hg49 hg50 hg51 hg52 hg53 hg54 hg55 hg56 hg57 hg59 hg60 hg61 hg62 hg65 hg66 hg257 hg259 hg261 hg263 hg265 hg267 hg269 hg271 hg273 hg275 hg277 hg279 hg281 hg283 hg285 hg289 hg291 hinitC
   have hnr : pm_goal_67.numRanks = pm.numRanks := by native_decide
   have h654_smsh : (Ssm 654).shape = [1, 4, 8, 8] := by
     have h := hg66.1; simp only [goal_66] at h; exact h
@@ -438,6 +437,7 @@ theorem goal_67_intermediate (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
     InitGoalHolds pm.numRanks goal_67 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
   have hfull : goal_67_stmt := goal_67_cut_to_full prove_goal_67_cut
-  exact hfull initSM initPM hSM hPM hInit
+  have := hfull initSM initPM hSM hPM hInit
+  simpa [InitGoalHolds, goal_67] using this
 
 end TrainVerify.Denote.GeneratedGoals

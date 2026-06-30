@@ -38,7 +38,7 @@ theorem sm_frame_601_self (initSM : Store) :
   rw [sm_prefix_eq initSM 29 599 (by native_decide),
       sm_prefix_eq initSM 29 600 (by native_decide)]
 
-theorem pm_full_1601 (initPM : Store) :
+theorem pm_full_g28_1601 (initPM : Store) :
     denoteGraph pm initPM 1601
       = allToAllPrimWithDims pm.numRanks 0
           [denoteGraph pm initPM 1585, denoteGraph pm initPM 1586,
@@ -55,7 +55,7 @@ theorem pm_full_1601 (initPM : Store) :
       pm_prefix_eq initPM 173 1587 (by native_decide),
       pm_prefix_eq initPM 173 1588 (by native_decide)]
 
-theorem pm_full_1602 (initPM : Store) :
+theorem pm_full_g28_1602 (initPM : Store) :
     denoteGraph pm initPM 1602
       = allToAllPrimWithDims pm.numRanks 1
           [denoteGraph pm initPM 1585, denoteGraph pm initPM 1586,
@@ -72,7 +72,7 @@ theorem pm_full_1602 (initPM : Store) :
       pm_prefix_eq initPM 174 1587 (by native_decide),
       pm_prefix_eq initPM 174 1588 (by native_decide)]
 
-theorem pm_full_1603 (initPM : Store) :
+theorem pm_full_g28_1603 (initPM : Store) :
     denoteGraph pm initPM 1603
       = allToAllPrimWithDims pm.numRanks 2
           [denoteGraph pm initPM 1585, denoteGraph pm initPM 1586,
@@ -89,7 +89,7 @@ theorem pm_full_1603 (initPM : Store) :
       pm_prefix_eq initPM 175 1587 (by native_decide),
       pm_prefix_eq initPM 175 1588 (by native_decide)]
 
-theorem pm_full_1604 (initPM : Store) :
+theorem pm_full_g28_1604 (initPM : Store) :
     denoteGraph pm initPM 1604
       = allToAllPrimWithDims pm.numRanks 3
           [denoteGraph pm initPM 1585, denoteGraph pm initPM 1586,
@@ -106,7 +106,7 @@ theorem pm_full_1604 (initPM : Store) :
       pm_prefix_eq initPM 176 1587 (by native_decide),
       pm_prefix_eq initPM 176 1588 (by native_decide)]
 
-theorem pm_full_1605 (initPM : Store) :
+theorem pm_full_g28_1605 (initPM : Store) :
     denoteGraph pm initPM 1605
       = fw_linear
           (allToAllPrimWithDims pm.numRanks 0
@@ -120,9 +120,9 @@ theorem pm_full_1605 (initPM : Store) :
   rw [applyNode_fw_linear_out]
   rw [pm_prefix_eq initPM 177 1601 (by native_decide),
       pm_prefix_eq initPM 177 600 (by native_decide)]
-  rw [pm_full_1601]
+  rw [pm_full_g28_1601]
 
-theorem pm_full_1606 (initPM : Store) :
+theorem pm_full_g28_1606 (initPM : Store) :
     denoteGraph pm initPM 1606
       = fw_linear
           (allToAllPrimWithDims pm.numRanks 1
@@ -136,9 +136,9 @@ theorem pm_full_1606 (initPM : Store) :
   rw [applyNode_fw_linear_out]
   rw [pm_prefix_eq initPM 178 1602 (by native_decide),
       pm_prefix_eq initPM 178 600 (by native_decide)]
-  rw [pm_full_1602]
+  rw [pm_full_g28_1602]
 
-theorem pm_full_1607 (initPM : Store) :
+theorem pm_full_g28_1607 (initPM : Store) :
     denoteGraph pm initPM 1607
       = fw_linear
           (allToAllPrimWithDims pm.numRanks 2
@@ -152,9 +152,9 @@ theorem pm_full_1607 (initPM : Store) :
   rw [applyNode_fw_linear_out]
   rw [pm_prefix_eq initPM 179 1603 (by native_decide),
       pm_prefix_eq initPM 179 600 (by native_decide)]
-  rw [pm_full_1603]
+  rw [pm_full_g28_1603]
 
-theorem pm_full_1608 (initPM : Store) :
+theorem pm_full_g28_1608 (initPM : Store) :
     denoteGraph pm initPM 1608
       = fw_linear
           (allToAllPrimWithDims pm.numRanks 3
@@ -168,7 +168,7 @@ theorem pm_full_1608 (initPM : Store) :
   rw [applyNode_fw_linear_out]
   rw [pm_prefix_eq initPM 180 1604 (by native_decide),
       pm_prefix_eq initPM 180 600 (by native_decide)]
-  rw [pm_full_1604]
+  rw [pm_full_g28_1604]
 
 theorem denote_pm_goal_28_1605 (s : Store) :
     denoteGraph pm_goal_28 s 1605
@@ -210,25 +210,25 @@ theorem pm_frame_1605_self (initPM : Store) :
     denoteGraph pm initPM 1605 = denoteGraph pm_goal_28 (denoteGraph pm initPM) 1605 := by
   rw [denote_pm_goal_28_1605]
   rw [show (4 : Nat) = pm.numRanks from by native_decide]
-  exact pm_full_1605 initPM
+  exact pm_full_g28_1605 initPM
 
 theorem pm_frame_1606_self (initPM : Store) :
     denoteGraph pm initPM 1606 = denoteGraph pm_goal_28 (denoteGraph pm initPM) 1606 := by
   rw [denote_pm_goal_28_1606]
   rw [show (4 : Nat) = pm.numRanks from by native_decide]
-  exact pm_full_1606 initPM
+  exact pm_full_g28_1606 initPM
 
 theorem pm_frame_1607_self (initPM : Store) :
     denoteGraph pm initPM 1607 = denoteGraph pm_goal_28 (denoteGraph pm initPM) 1607 := by
   rw [denote_pm_goal_28_1607]
   rw [show (4 : Nat) = pm.numRanks from by native_decide]
-  exact pm_full_1607 initPM
+  exact pm_full_g28_1607 initPM
 
 theorem pm_frame_1608_self (initPM : Store) :
     denoteGraph pm initPM 1608 = denoteGraph pm_goal_28 (denoteGraph pm initPM) 1608 := by
   rw [denote_pm_goal_28_1608]
   rw [show (4 : Nat) = pm.numRanks from by native_decide]
-  exact pm_full_1608 initPM
+  exact pm_full_g28_1608 initPM
 
 -- ========== 总装 ==========
 theorem goal_28_cut_to_full (h : goal_28_stmt_cut) : goal_28_stmt := by

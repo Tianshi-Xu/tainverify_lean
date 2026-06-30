@@ -36,7 +36,7 @@ theorem sm_frame_586_self (initSM : Store) :
   rw [sm_prefix_eq initSM 18 585 (by native_decide)]
 
 -- ========== full pm: AllToAll 输出 1389-1392 (node 114-117, ins=computed range) ==========
-theorem pm_full_1389 (initPM : Store) :
+theorem pm_full_g18_1389 (initPM : Store) :
     denoteGraph pm initPM 1389
       = allToAllPrimWithDims pm.numRanks 0
           [denoteGraph pm initPM 1369, denoteGraph pm initPM 1370,
@@ -53,7 +53,7 @@ theorem pm_full_1389 (initPM : Store) :
       pm_prefix_eq initPM 114 1371 (by native_decide),
       pm_prefix_eq initPM 114 1372 (by native_decide)]
 
-theorem pm_full_1390 (initPM : Store) :
+theorem pm_full_g18_1390 (initPM : Store) :
     denoteGraph pm initPM 1390
       = allToAllPrimWithDims pm.numRanks 1
           [denoteGraph pm initPM 1369, denoteGraph pm initPM 1370,
@@ -70,7 +70,7 @@ theorem pm_full_1390 (initPM : Store) :
       pm_prefix_eq initPM 115 1371 (by native_decide),
       pm_prefix_eq initPM 115 1372 (by native_decide)]
 
-theorem pm_full_1391 (initPM : Store) :
+theorem pm_full_g18_1391 (initPM : Store) :
     denoteGraph pm initPM 1391
       = allToAllPrimWithDims pm.numRanks 2
           [denoteGraph pm initPM 1369, denoteGraph pm initPM 1370,
@@ -87,7 +87,7 @@ theorem pm_full_1391 (initPM : Store) :
       pm_prefix_eq initPM 116 1371 (by native_decide),
       pm_prefix_eq initPM 116 1372 (by native_decide)]
 
-theorem pm_full_1392 (initPM : Store) :
+theorem pm_full_g18_1392 (initPM : Store) :
     denoteGraph pm initPM 1392
       = allToAllPrimWithDims pm.numRanks 3
           [denoteGraph pm initPM 1369, denoteGraph pm initPM 1370,
@@ -105,7 +105,7 @@ theorem pm_full_1392 (initPM : Store) :
       pm_prefix_eq initPM 117 1372 (by native_decide)]
 
 -- ========== full pm: FW_softmax 输出 1393-1396 (node 118-121) = fw_softmax(AllToAll out) ==========
-theorem pm_full_1393 (initPM : Store) :
+theorem pm_full_g18_1393 (initPM : Store) :
     denoteGraph pm initPM 1393
       = fw_softmax (allToAllPrimWithDims pm.numRanks 0
           [denoteGraph pm initPM 1369, denoteGraph pm initPM 1370,
@@ -116,9 +116,9 @@ theorem pm_full_1393 (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_softmax_out_g18]
   rw [pm_prefix_eq initPM 118 1389 (by native_decide)]
-  rw [pm_full_1389]
+  rw [pm_full_g18_1389]
 
-theorem pm_full_1394 (initPM : Store) :
+theorem pm_full_g18_1394 (initPM : Store) :
     denoteGraph pm initPM 1394
       = fw_softmax (allToAllPrimWithDims pm.numRanks 1
           [denoteGraph pm initPM 1369, denoteGraph pm initPM 1370,
@@ -129,9 +129,9 @@ theorem pm_full_1394 (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_softmax_out_g18]
   rw [pm_prefix_eq initPM 119 1390 (by native_decide)]
-  rw [pm_full_1390]
+  rw [pm_full_g18_1390]
 
-theorem pm_full_1395 (initPM : Store) :
+theorem pm_full_g18_1395 (initPM : Store) :
     denoteGraph pm initPM 1395
       = fw_softmax (allToAllPrimWithDims pm.numRanks 2
           [denoteGraph pm initPM 1369, denoteGraph pm initPM 1370,
@@ -142,9 +142,9 @@ theorem pm_full_1395 (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_softmax_out_g18]
   rw [pm_prefix_eq initPM 120 1391 (by native_decide)]
-  rw [pm_full_1391]
+  rw [pm_full_g18_1391]
 
-theorem pm_full_1396 (initPM : Store) :
+theorem pm_full_g18_1396 (initPM : Store) :
     denoteGraph pm initPM 1396
       = fw_softmax (allToAllPrimWithDims pm.numRanks 3
           [denoteGraph pm initPM 1369, denoteGraph pm initPM 1370,
@@ -155,7 +155,7 @@ theorem pm_full_1396 (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_softmax_out_g18]
   rw [pm_prefix_eq initPM 121 1392 (by native_decide)]
-  rw [pm_full_1392]
+  rw [pm_full_g18_1392]
 
 -- ========== PM self-frame: 586 (AllGather node 122, ins=computed range, 单 tp) ==========
 theorem pm_frame_586_self (initPM : Store) :
@@ -184,7 +184,7 @@ theorem pm_frame_586_self (initPM : Store) :
       pm_prefix_eq initPM 122 1394 (by native_decide),
       pm_prefix_eq initPM 122 1395 (by native_decide),
       pm_prefix_eq initPM 122 1396 (by native_decide)]
-  rw [pm_full_1393, pm_full_1394, pm_full_1395, pm_full_1396]
+  rw [pm_full_g18_1393, pm_full_g18_1394, pm_full_g18_1395, pm_full_g18_1396]
   rw [show pm.numRanks = 4 from by native_decide]
 
 -- ========== 迷你图 pm_goal_18 算 586 (4×AllToAll → 4×softmax → AllGather) ==========

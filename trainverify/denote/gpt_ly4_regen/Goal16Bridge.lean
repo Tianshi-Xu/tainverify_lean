@@ -44,7 +44,7 @@ theorem sm_frame_584_self (initSM : Store) :
       sm_prefix_eq initSM 16 583 (by native_decide)]
 
 -- ========== full pm 算 FW_matmul 输出 1353-1356 (node 101-104) = fw_matmul(Spm 1261+r, Spm 1333+r) ==========
-theorem pm_full_1353 (initPM : Store) :
+theorem pm_full_g16_1353 (initPM : Store) :
     denoteGraph pm initPM 1353 = fw_matmul (denoteGraph pm initPM 1261) (denoteGraph pm initPM 1333) := by
   rw [pm_val initPM 101 1353 (by native_decide) (by native_decide)]
   rw [show pm.nodes[101]'(by native_decide)
@@ -54,7 +54,7 @@ theorem pm_full_1353 (initPM : Store) :
   rw [pm_prefix_eq initPM 101 1261 (by native_decide),
       pm_prefix_eq initPM 101 1333 (by native_decide)]
 
-theorem pm_full_1354 (initPM : Store) :
+theorem pm_full_g16_1354 (initPM : Store) :
     denoteGraph pm initPM 1354 = fw_matmul (denoteGraph pm initPM 1262) (denoteGraph pm initPM 1334) := by
   rw [pm_val initPM 102 1354 (by native_decide) (by native_decide)]
   rw [show pm.nodes[102]'(by native_decide)
@@ -64,7 +64,7 @@ theorem pm_full_1354 (initPM : Store) :
   rw [pm_prefix_eq initPM 102 1262 (by native_decide),
       pm_prefix_eq initPM 102 1334 (by native_decide)]
 
-theorem pm_full_1355 (initPM : Store) :
+theorem pm_full_g16_1355 (initPM : Store) :
     denoteGraph pm initPM 1355 = fw_matmul (denoteGraph pm initPM 1263) (denoteGraph pm initPM 1335) := by
   rw [pm_val initPM 103 1355 (by native_decide) (by native_decide)]
   rw [show pm.nodes[103]'(by native_decide)
@@ -74,7 +74,7 @@ theorem pm_full_1355 (initPM : Store) :
   rw [pm_prefix_eq initPM 103 1263 (by native_decide),
       pm_prefix_eq initPM 103 1335 (by native_decide)]
 
-theorem pm_full_1356 (initPM : Store) :
+theorem pm_full_g16_1356 (initPM : Store) :
     denoteGraph pm initPM 1356 = fw_matmul (denoteGraph pm initPM 1264) (denoteGraph pm initPM 1336) := by
   rw [pm_val initPM 104 1356 (by native_decide) (by native_decide)]
   rw [show pm.nodes[104]'(by native_decide)
@@ -103,7 +103,7 @@ theorem pm_frame_584_self (initPM : Store) :
       pm_prefix_eq initPM 105 1354 (by native_decide),
       pm_prefix_eq initPM 105 1355 (by native_decide),
       pm_prefix_eq initPM 105 1356 (by native_decide)]
-  rw [pm_full_1353, pm_full_1354, pm_full_1355, pm_full_1356]
+  rw [pm_full_g16_1353, pm_full_g16_1354, pm_full_g16_1355, pm_full_g16_1356]
   rw [show pm.numRanks = 4 from by native_decide]
 
 -- ========== 总装 ==========

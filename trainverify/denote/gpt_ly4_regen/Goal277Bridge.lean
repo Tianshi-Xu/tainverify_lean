@@ -30,6 +30,7 @@ set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 set_option linter.unusedVariables false
 set_option linter.style.show false
+set_option linter.style.emptyLine false
 set_option linter.style.setOption false
 set_option linter.unnecessarySeqFocus false
 set_option linter.flexible false
@@ -84,7 +85,7 @@ theorem sm_frame_965_self (initSM : Store) :
   rw [sm_prefix_eq initSM 33 605 (by native_decide)]
 
 -- ========== full pm: multiref 第二输出 1721 (node 201) = s 1665 ==========
-theorem pm_full_1721 (initPM : Store) :
+theorem pm_full_g277_1721 (initPM : Store) :
     denoteGraph pm initPM 1721 = denoteGraph pm initPM 1665 := by
   rw [pm_val initPM 201 1721 (by native_decide) (by native_decide)]
   rw [show pm.nodes[201]'(by native_decide)
@@ -94,7 +95,7 @@ theorem pm_full_1721 (initPM : Store) :
   rw [pm_prefix_eq initPM 201 1665 (by native_decide)]
 
 -- ========== full pm: multiref 第二输出 1722 (node 202) = s 1666 ==========
-theorem pm_full_1722 (initPM : Store) :
+theorem pm_full_g277_1722 (initPM : Store) :
     denoteGraph pm initPM 1722 = denoteGraph pm initPM 1666 := by
   rw [pm_val initPM 202 1722 (by native_decide) (by native_decide)]
   rw [show pm.nodes[202]'(by native_decide)
@@ -104,7 +105,7 @@ theorem pm_full_1722 (initPM : Store) :
   rw [pm_prefix_eq initPM 202 1666 (by native_decide)]
 
 -- ========== full pm: multiref 第二输出 1723 (node 203) = s 1667 ==========
-theorem pm_full_1723 (initPM : Store) :
+theorem pm_full_g277_1723 (initPM : Store) :
     denoteGraph pm initPM 1723 = denoteGraph pm initPM 1667 := by
   rw [pm_val initPM 203 1723 (by native_decide) (by native_decide)]
   rw [show pm.nodes[203]'(by native_decide)
@@ -114,7 +115,7 @@ theorem pm_full_1723 (initPM : Store) :
   rw [pm_prefix_eq initPM 203 1667 (by native_decide)]
 
 -- ========== full pm: multiref 第二输出 1724 (node 204) = s 1668 ==========
-theorem pm_full_1724 (initPM : Store) :
+theorem pm_full_g277_1724 (initPM : Store) :
     denoteGraph pm initPM 1724 = denoteGraph pm initPM 1668 := by
   rw [pm_val initPM 204 1724 (by native_decide) (by native_decide)]
   rw [show pm.nodes[204]'(by native_decide)
@@ -126,22 +127,22 @@ theorem pm_full_1724 (initPM : Store) :
 theorem pm_frame_1721_self (initPM : Store) :
     denoteGraph pm initPM 1721 = denoteGraph pm_goal_277 (denoteGraph pm initPM) 1721 := by
   rw [denote_pm_goal_277_1721]
-  exact pm_full_1721 initPM
+  exact pm_full_g277_1721 initPM
 
 theorem pm_frame_1722_self (initPM : Store) :
     denoteGraph pm initPM 1722 = denoteGraph pm_goal_277 (denoteGraph pm initPM) 1722 := by
   rw [denote_pm_goal_277_1722]
-  exact pm_full_1722 initPM
+  exact pm_full_g277_1722 initPM
 
 theorem pm_frame_1723_self (initPM : Store) :
     denoteGraph pm initPM 1723 = denoteGraph pm_goal_277 (denoteGraph pm initPM) 1723 := by
   rw [denote_pm_goal_277_1723]
-  exact pm_full_1723 initPM
+  exact pm_full_g277_1723 initPM
 
 theorem pm_frame_1724_self (initPM : Store) :
     denoteGraph pm initPM 1724 = denoteGraph pm_goal_277 (denoteGraph pm initPM) 1724 := by
   rw [denote_pm_goal_277_1724]
-  exact pm_full_1724 initPM
+  exact pm_full_g277_1724 initPM
 
 -- ========== 总装: goal_277_cut_to_full ==========
 theorem goal_277_cut_to_full (h : goal_277_stmt_cut) : goal_277_stmt := by

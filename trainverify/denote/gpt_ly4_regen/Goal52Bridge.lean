@@ -52,7 +52,7 @@ theorem sm_frame_634_self (initSM : Store) :
   rw [sm_prefix_eq initSM 56 633 (by native_decide)]
 
 -- ========== full pm: AllToAll 输出 2141-2144 (node 367-370, ins=range 2117, params [2,1]) ==========
-theorem pm_full_2141 (initPM : Store) :
+theorem pm_full_g52_2141 (initPM : Store) :
     denoteGraph pm initPM 2141
       = allToAllPrimWithDims pm.numRanks 0
           [denoteGraph pm initPM 2117, denoteGraph pm initPM 2118,
@@ -69,7 +69,7 @@ theorem pm_full_2141 (initPM : Store) :
       pm_prefix_eq initPM 367 2119 (by native_decide),
       pm_prefix_eq initPM 367 2120 (by native_decide)]
 
-theorem pm_full_2142 (initPM : Store) :
+theorem pm_full_g52_2142 (initPM : Store) :
     denoteGraph pm initPM 2142
       = allToAllPrimWithDims pm.numRanks 1
           [denoteGraph pm initPM 2117, denoteGraph pm initPM 2118,
@@ -86,7 +86,7 @@ theorem pm_full_2142 (initPM : Store) :
       pm_prefix_eq initPM 368 2119 (by native_decide),
       pm_prefix_eq initPM 368 2120 (by native_decide)]
 
-theorem pm_full_2143 (initPM : Store) :
+theorem pm_full_g52_2143 (initPM : Store) :
     denoteGraph pm initPM 2143
       = allToAllPrimWithDims pm.numRanks 2
           [denoteGraph pm initPM 2117, denoteGraph pm initPM 2118,
@@ -103,7 +103,7 @@ theorem pm_full_2143 (initPM : Store) :
       pm_prefix_eq initPM 369 2119 (by native_decide),
       pm_prefix_eq initPM 369 2120 (by native_decide)]
 
-theorem pm_full_2144 (initPM : Store) :
+theorem pm_full_g52_2144 (initPM : Store) :
     denoteGraph pm initPM 2144
       = allToAllPrimWithDims pm.numRanks 3
           [denoteGraph pm initPM 2117, denoteGraph pm initPM 2118,
@@ -121,7 +121,7 @@ theorem pm_full_2144 (initPM : Store) :
       pm_prefix_eq initPM 370 2120 (by native_decide)]
 
 -- ========== full pm: FW_gelu 输出 2145-2148 (node 371-374) ==========
-theorem pm_full_2145 (initPM : Store) :
+theorem pm_full_g52_2145 (initPM : Store) :
     denoteGraph pm initPM 2145
       = fw_gelu
           (allToAllPrimWithDims pm.numRanks 0
@@ -133,9 +133,9 @@ theorem pm_full_2145 (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_gelu_out]
   rw [pm_prefix_eq initPM 371 2141 (by native_decide)]
-  rw [pm_full_2141]
+  rw [pm_full_g52_2141]
 
-theorem pm_full_2146 (initPM : Store) :
+theorem pm_full_g52_2146 (initPM : Store) :
     denoteGraph pm initPM 2146
       = fw_gelu
           (allToAllPrimWithDims pm.numRanks 1
@@ -147,9 +147,9 @@ theorem pm_full_2146 (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_gelu_out]
   rw [pm_prefix_eq initPM 372 2142 (by native_decide)]
-  rw [pm_full_2142]
+  rw [pm_full_g52_2142]
 
-theorem pm_full_2147 (initPM : Store) :
+theorem pm_full_g52_2147 (initPM : Store) :
     denoteGraph pm initPM 2147
       = fw_gelu
           (allToAllPrimWithDims pm.numRanks 2
@@ -161,9 +161,9 @@ theorem pm_full_2147 (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_gelu_out]
   rw [pm_prefix_eq initPM 373 2143 (by native_decide)]
-  rw [pm_full_2143]
+  rw [pm_full_g52_2143]
 
-theorem pm_full_2148 (initPM : Store) :
+theorem pm_full_g52_2148 (initPM : Store) :
     denoteGraph pm initPM 2148
       = fw_gelu
           (allToAllPrimWithDims pm.numRanks 3
@@ -175,7 +175,7 @@ theorem pm_full_2148 (initPM : Store) :
       from by native_decide]
   rw [applyNode_fw_gelu_out]
   rw [pm_prefix_eq initPM 374 2144 (by native_decide)]
-  rw [pm_full_2144]
+  rw [pm_full_g52_2144]
 
 -- ========== full pm: AllGather → 634 (node 375, single-tp output) ==========
 theorem pm_frame_634_self (initPM : Store) :
@@ -208,7 +208,7 @@ theorem pm_frame_634_self (initPM : Store) :
       pm_prefix_eq initPM 375 2146 (by native_decide),
       pm_prefix_eq initPM 375 2147 (by native_decide),
       pm_prefix_eq initPM 375 2148 (by native_decide)]
-  rw [pm_full_2145, pm_full_2146, pm_full_2147, pm_full_2148]
+  rw [pm_full_g52_2145, pm_full_g52_2146, pm_full_g52_2147, pm_full_g52_2148]
 
 -- ========== 总装 ==========
 theorem goal_52_cut_to_full (h : goal_52_stmt_cut) : goal_52_stmt := by

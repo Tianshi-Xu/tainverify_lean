@@ -19,6 +19,7 @@ set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 set_option linter.unusedVariables false
 set_option linter.style.show false
+set_option linter.style.emptyLine false
 set_option linter.style.setOption false
 set_option linter.unnecessarySeqFocus false
 set_option linter.flexible false
@@ -54,7 +55,7 @@ theorem sm_frame_1008_self (initSM : Store) :
   rw [sm_prefix_eq initSM 61 640 (by native_decide)]
 
 -- ========== full pm computes multiref 2nd-out [3609, 3619, 3629, 3639] (node 396-399) ==========
-theorem pm_full_3609 (initPM : Store) :
+theorem pm_full_g291_3609 (initPM : Store) :
     denoteGraph pm initPM 3609 = denoteGraph pm initPM 2229 := by
   rw [pm_val initPM 396 3609 (by native_decide) (by native_decide)]
   rw [show pm.nodes[396]'(by native_decide)
@@ -63,7 +64,7 @@ theorem pm_full_3609 (initPM : Store) :
   rw [applyNode_fw_multiref3_second_out_g291 (h := by decide)]
   rw [pm_prefix_eq initPM 396 2229 (by native_decide)]
 
-theorem pm_full_3619 (initPM : Store) :
+theorem pm_full_g291_3619 (initPM : Store) :
     denoteGraph pm initPM 3619 = denoteGraph pm initPM 2230 := by
   rw [pm_val initPM 397 3619 (by native_decide) (by native_decide)]
   rw [show pm.nodes[397]'(by native_decide)
@@ -72,7 +73,7 @@ theorem pm_full_3619 (initPM : Store) :
   rw [applyNode_fw_multiref3_second_out_g291 (h := by decide)]
   rw [pm_prefix_eq initPM 397 2230 (by native_decide)]
 
-theorem pm_full_3629 (initPM : Store) :
+theorem pm_full_g291_3629 (initPM : Store) :
     denoteGraph pm initPM 3629 = denoteGraph pm initPM 2231 := by
   rw [pm_val initPM 398 3629 (by native_decide) (by native_decide)]
   rw [show pm.nodes[398]'(by native_decide)
@@ -81,7 +82,7 @@ theorem pm_full_3629 (initPM : Store) :
   rw [applyNode_fw_multiref3_second_out_g291 (h := by decide)]
   rw [pm_prefix_eq initPM 398 2231 (by native_decide)]
 
-theorem pm_full_3639 (initPM : Store) :
+theorem pm_full_g291_3639 (initPM : Store) :
     denoteGraph pm initPM 3639 = denoteGraph pm initPM 2232 := by
   rw [pm_val initPM 399 3639 (by native_decide) (by native_decide)]
   rw [show pm.nodes[399]'(by native_decide)
@@ -104,7 +105,7 @@ theorem pm_frame_1000_self (initPM : Store) :
       pm_prefix_eq initPM 404 3619 (by native_decide),
       pm_prefix_eq initPM 404 3629 (by native_decide),
       pm_prefix_eq initPM 404 3639 (by native_decide)]
-  rw [pm_full_3609, pm_full_3619, pm_full_3629, pm_full_3639]
+  rw [pm_full_g291_3609, pm_full_g291_3619, pm_full_g291_3629, pm_full_g291_3639]
   rw [show pm.numRanks = 4 from by native_decide]
 
 lemma goal_291_hInitCut_helper (Ssm Spm : Store)
