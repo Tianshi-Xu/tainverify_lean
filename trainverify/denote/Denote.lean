@@ -1558,6 +1558,174 @@ noncomputable def bw_attn_varlen
   let dv := bw_attn_dv gO q k cuQ cuK qh kvh d vd lQ causal windowLeft
   (dq, dk, dv)
 
+/-! ### Mix-precision linear / per-head mix-precision linear / norm-linear
+
+    Three additional linear-family kernels emitted by the llm-train MoE plan.
+
+    * `mix_precision_linear(input, weight)` is mathematically identical to
+      `F.linear(input, weight)`: only the BF16/FP32 cast pattern around the
+      multiply differs at runtime. We therefore register it as an *alias* to
+      `fw_linear` / `bw_linear` in `evalOp` (see below) rather than duplicating
+      the definition.
+    * `per_head_mix_precision_linear(input, weight)` views the weight as a
+      3-D tensor `[h, d, k]` and reshapes the result back to `[*, h, d]`:
+          out[i, h_idx, d_idx] = Σ_c input[i, c] * weight[h_idx, d_idx, c]
+    * `norm_linear(input, weight)` first L2-row-normalises the weight
+      (clamped from below by `normLinearEps = 1e-6`) and then runs
+      `F.linear`:
+          wNorm[n, k] = weight[n, k] / max(sqrt(Σ_k w[n,k]²), eps)
+          out[i, n] = Σ_k input[i, k] * wNorm[n, k]
+-/
+
+/-! #### Per-head linear
+
+    `x : [*, k]`, `w : [h, d, k]`, `out : [*, h, d]`.
+    We treat the leading `*` as a single dimension `b` (the generator's nnscaler
+    anno `'* k+, h d^ k+ -> * h d^'` confirms the `*` is shape-polymorphic; in
+    the PM trace it is always `b = 4096`). For 1-D input `[k]` we fall back to
+    `b = 1`. Flat-index convention matches the rest of the file: output index
+    `idx = i*h*d + h_idx*d + d_idx`. -/
+
+def fw_per_head_linear (x w : Tensor) : Tensor :=
+  match x.shape.reverse, w.shape.reverse with
+  | k :: rest, kw :: dW :: hW :: _ =>
+      -- x.shape = (rest.reverse ++ [k]), w.shape = [hW, dW, kw]
+      -- output shape: (rest.reverse ++ [hW, dW])
+      let outShape := rest.reverse ++ [hW, dW]
+      let b := prodShape rest          -- collapsed leading dims
+      let hd := hW * dW
+      Tensor.mkShape outShape (fun outIdx =>
+        let flat := outIdx.1
+        let i := if hd = 0 then 0 else flat / hd
+        let rem := if hd = 0 then 0 else flat % hd
+        let h_idx := if dW = 0 then 0 else rem / dW
+        let d_idx := if dW = 0 then 0 else rem % dW
+        -- w[h_idx, d_idx, c] flat = (h_idx * dW + d_idx) * kw + c
+        -- x[i, c] flat = i * k + c
+        let _ := b   -- silence unused-binder warning; b is implicit in shape
+        ∑ c ∈ Finset.range k,
+          (valAt x (i * k + c)) *
+            (valAt w ((h_idx * dW + d_idx) * kw + c)))
+  | _, _ => Tensor.mkShape [] (fun _ => 0)
+
+/-- Backward for per-head linear. Returns `(dX, dW)`.
+
+    From `out[i, h_idx, d_idx] = Σ_c x[i, c] * w[h_idx, d_idx, c]`,
+        dX[i, c]                = Σ_{h_idx, d_idx} g[i, h_idx, d_idx] * w[h_idx, d_idx, c]
+        dW[h_idx, d_idx, c]     = Σ_i g[i, h_idx, d_idx] * x[i, c]
+    where `g : [*, h, d]` is the upstream gradient. -/
+def bw_per_head_linear (g x w : Tensor) : Tensor × Tensor :=
+  match x.shape.reverse, w.shape.reverse with
+  | k :: rest, kw :: dW :: hW :: _ =>
+      let b := prodShape rest
+      let hd := hW * dW
+      let dx := Tensor.mkShape x.shape (fun outIdx =>
+        let flat := outIdx.1
+        let i := if k = 0 then 0 else flat / k
+        let c := if k = 0 then 0 else flat % k
+        ∑ h_idx ∈ Finset.range hW,
+          ∑ d_idx ∈ Finset.range dW,
+            (valAt g (i * hd + h_idx * dW + d_idx)) *
+              (valAt w ((h_idx * dW + d_idx) * kw + c)))
+      let dw := Tensor.mkShape w.shape (fun outIdx =>
+        let flat := outIdx.1
+        -- w flat layout: (h_idx * dW + d_idx) * kw + c
+        let c := if kw = 0 then 0 else flat % kw
+        let hd_flat := if kw = 0 then 0 else flat / kw
+        let h_idx := if dW = 0 then 0 else hd_flat / dW
+        let d_idx := if dW = 0 then 0 else hd_flat % dW
+        ∑ i ∈ Finset.range b,
+          (valAt g (i * hd + h_idx * dW + d_idx)) *
+            (valAt x (i * k + c)))
+      (dx, dw)
+  | _, _ => (zeroTensor x.shape, zeroTensor w.shape)
+
+/-! #### Norm-linear
+
+    Numerical eps matches torch default for the llm-train layer (1e-6). -/
+
+def normLinearEps : Scalar := (1 : Scalar) / 1000000
+
+/-- Row-`n` L2 norm of `w` viewed as `[n, k]`, i.e. `sqrt(Σ_k w[n, k]²)`. -/
+noncomputable def normLinearRowNorm (w : Tensor) (n_idx k : Nat) : Scalar :=
+  sqrtFn (∑ c ∈ Finset.range k, (valAt w (n_idx * k + c)) ^ 2)
+
+/-- The clamped row-norm denominator: `max(rowNorm, eps)`. -/
+noncomputable def normLinearDenom (w : Tensor) (n_idx k : Nat) : Scalar :=
+  let r := normLinearRowNorm w n_idx k
+  if r < normLinearEps then normLinearEps else r
+
+/-- Normalised weight entry `w[n, k] / max(rowNorm, eps)`. -/
+noncomputable def normLinearWNormAt (w : Tensor) (n_idx c k : Nat) : Scalar :=
+  valAt w (n_idx * k + c) / normLinearDenom w n_idx k
+
+/-- Forward `norm_linear`. `x : [*, k]`, `w : [n, k]`, `out : [*, n]`.
+    The 1-D weight branch is the only one we exercise (PM emits `w : [n, k]`
+    with `n = 64, k = 1024`); the leading `*` of `x` collapses to one
+    `b` dim in the same way as `fw_linear`. -/
+noncomputable def fw_norm_linear (x w : Tensor) : Tensor :=
+  match x.shape.reverse, w.shape.reverse with
+  | k :: rest, kw :: n :: _ =>
+      let outShape := rest.reverse ++ [n]
+      Tensor.mkShape outShape (fun outIdx =>
+        let flat := outIdx.1
+        let i := if n = 0 then 0 else flat / n
+        let n_idx := if n = 0 then 0 else flat % n
+        ∑ c ∈ Finset.range k,
+          (valAt x (i * k + c)) * normLinearWNormAt w n_idx c kw)
+  | _, _ => Tensor.mkShape [] (fun _ => 0)
+
+/-- Backward for norm-linear.  Returns `(dX, dW)`.
+
+    Let `r = rowNorm(w, n)`, `den = max(r, eps)`, `wHat[n, c] = w[n, c] / den`.
+    Then
+        out[i, n] = Σ_c x[i, c] * wHat[n, c]
+
+    Input gradient (independent of how `den` depends on `w`):
+        dX[i, c] = Σ_n g[i, n] * wHat[n, c]
+
+    Weight gradient: when `den = r` (the active branch — `eps` is below the
+    smallest tolerable scale and only blocks division-by-zero), the dependence
+    of `wHat` on `w` is the standard normalised-vector chain
+        ∂wHat[n,c]/∂w[n,c'] = (δ_{c=c'} − wHat[n,c]·wHat[n,c']) / den
+    giving
+        dW[n, c] = (1/den) · ( Σ_i g[i,n]·x[i,c]
+                              − wHat[n, c] · Σ_{i,c'} g[i,n] · x[i,c'] · wHat[n,c'] )
+
+    For the clamped branch `den = eps` (constant in `w`) the second term
+    vanishes; we wrap the closed-form via `if r < eps then ... else ...` so the
+    two branches are visibly separated and `simp`-amenable. -/
+noncomputable def bw_norm_linear (g x w : Tensor) : Tensor × Tensor :=
+  match x.shape.reverse, w.shape.reverse with
+  | k :: rest, kw :: n :: _ =>
+      let b := prodShape rest
+      let dx := Tensor.mkShape x.shape (fun outIdx =>
+        let flat := outIdx.1
+        let i := if k = 0 then 0 else flat / k
+        let c := if k = 0 then 0 else flat % k
+        ∑ n_idx ∈ Finset.range n,
+          (valAt g (i * n + n_idx)) * normLinearWNormAt w n_idx c kw)
+      let dw := Tensor.mkShape w.shape (fun outIdx =>
+        let flat := outIdx.1
+        let n_idx := if kw = 0 then 0 else flat / kw
+        let c := if kw = 0 then 0 else flat % kw
+        let r := normLinearRowNorm w n_idx kw
+        let den := normLinearDenom w n_idx kw
+        let gxSum  : Scalar :=
+          ∑ i ∈ Finset.range b, (valAt g (i * n + n_idx)) * (valAt x (i * k + c))
+        let gxwSum : Scalar :=
+          ∑ i ∈ Finset.range b,
+            ∑ cp ∈ Finset.range kw,
+              (valAt g (i * n + n_idx)) * (valAt x (i * k + cp)) *
+                normLinearWNormAt w n_idx cp kw
+        if r < normLinearEps then
+          -- Clamped branch: den = eps (constant in w), only the linear term.
+          gxSum / den
+        else
+          (gxSum - normLinearWNormAt w n_idx c kw * gxwSum) / den)
+      (dx, dw)
+  | _, _ => (zeroTensor x.shape, zeroTensor w.shape)
+
 def fw_pow (n : Nat) (x : Tensor) : Tensor :=
   Tensor.mkShape x.shape (fun i => (valAt x i.1) ^ n)
 
@@ -3060,6 +3228,27 @@ def opOutShapes (numParts : Nat) (op : String) (params : List Nat) (inShapes : L
       | _ => some [q]
   | "OpName.BW_attn_varlen", [_gO, q, k, v, _cuQ, _cuK] =>
       some [q, k, v]
+  -- Mix-precision linear: numerically identical to FW_linear; alias.
+  | "OpName.FW_mix_precision_linear", [x, [o, _i2]] =>
+      match x.reverse with
+      | _i :: rest => some [(o :: rest).reverse]
+      | _ => none
+  | "OpName.BW_mix_precision_linear", [_g, x, w] =>
+      some [x, w]
+  -- Per-head mix-precision linear: `x : [*, k], w : [h, d, k] -> [*, h, d]`.
+  | "OpName.FW_per_head_mix_precision_linear", [x, [hW, dW, _k2]] =>
+      match x.reverse with
+      | _k :: rest => some [(dW :: hW :: rest).reverse]
+      | _ => none
+  | "OpName.BW_per_head_mix_precision_linear", [_g, x, w] =>
+      some [x, w]
+  -- Norm linear: same input/output shapes as FW_linear (weight is row-normalised).
+  | "OpName.FW_norm_linear", [x, [n, _i2]] =>
+      match x.reverse with
+      | _k :: rest => some [(n :: rest).reverse]
+      | _ => none
+  | "OpName.BW_norm_linear", [_g, x, w] =>
+      some [x, w]
   | "OpName.FW_mean", [x] =>
       match x.reverse with
       | _ :: rest => some [(1 :: rest).reverse]
@@ -3268,6 +3457,20 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       let causal     := decide (causalNat ≠ 0)
       let (dq, dk, dv) := bw_attn_varlen gO q k v cuQ cuK qh kvh d vd causal windowLeft
       [dq, dk, dv]
+  -- === Mix-precision / per-head / norm linear (P2-A) ===
+  -- `mix_precision_linear` is BF16-cast wrapping around `F.linear`; dispatch to fw_linear/bw_linear.
+  | "OpName.FW_mix_precision_linear", [x, w] => [fw_linear x w]
+  | "OpName.BW_mix_precision_linear", [g, x, w] =>
+      let (dx, dw) := bw_linear g x w
+      [dx, dw]
+  | "OpName.FW_per_head_mix_precision_linear", [x, w] => [fw_per_head_linear x w]
+  | "OpName.BW_per_head_mix_precision_linear", [g, x, w] =>
+      let (dx, dw) := bw_per_head_linear g x w
+      [dx, dw]
+  | "OpName.FW_norm_linear", [x, w] => [fw_norm_linear x w]
+  | "OpName.BW_norm_linear", [g, x, w] =>
+      let (dx, dw) := bw_norm_linear g x w
+      [dx, dw]
   | "OpName.FW_dropout", [x] => [fw_dropout x]
   | "OpName.BW_dropout", [g, x] => [bw_dropout g x]
   | "OpName.FW_gelu", [x] => [fw_gelu x]

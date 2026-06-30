@@ -665,4 +665,243 @@ theorem bw_attn_dv_shape
   have hh : (k.shape.head?).getD 0 = lK := by rw [hK]; rfl
   simp [hh, Tensor.mkShape]
 
+/-! ## Mix-precision linear (P2-A)
+
+    `mix_precision_linear` is mathematically `fw_linear`; the evalOp branch is
+    a direct alias, so the unfolding lemmas reduce to `fw_linear` / `bw_linear`
+    in exactly the same shape as `applyNode_fw_linear_out` in `Denote.lean`. -/
+
+theorem evalOp_fw_mix_precision_linear
+    (numParts rank : Nat) (params : List Nat) (x w : Tensor) :
+    evalOp numParts rank "OpName.FW_mix_precision_linear" params [x, w] =
+      [fw_linear x w] := by
+  rfl
+
+theorem evalOp_bw_mix_precision_linear
+    (numParts rank : Nat) (params : List Nat) (g x w : Tensor) :
+    evalOp numParts rank "OpName.BW_mix_precision_linear" params [g, x, w] =
+      [ (bw_linear g x w).1, (bw_linear g x w).2 ] := by
+  rfl
+
+theorem applyNode_fw_mix_precision_linear_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid wTid outTid : Tid)
+    (params : List Nat) :
+    applyNode g s { rank := rank, op := "OpName.FW_mix_precision_linear",
+                    ins := [xTid, wTid], outs := [outTid], params := params } outTid =
+      fw_linear (s xTid) (s wTid) := by
+  unfold applyNode
+  rw [show ([xTid, wTid] : List Tid).map s = [s xTid, s wTid] from rfl,
+      evalOp_fw_mix_precision_linear]
+  change storeSet s [(outTid, fw_linear (s xTid) (s wTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+theorem applyNode_bw_mix_precision_linear_fst_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (gTid xTid wTid t1 t2 : Tid)
+    (params : List Nat) :
+    applyNode g s { rank := rank, op := "OpName.BW_mix_precision_linear",
+                    ins := [gTid, xTid, wTid], outs := [t1, t2], params := params } t1 =
+      (bw_linear (s gTid) (s xTid) (s wTid)).1 := by
+  unfold applyNode
+  rw [show ([gTid, xTid, wTid] : List Tid).map s = [s gTid, s xTid, s wTid] from rfl,
+      evalOp_bw_mix_precision_linear]
+  change storeSet s [(t1, (bw_linear (s gTid) (s xTid) (s wTid)).1),
+                     (t2, (bw_linear (s gTid) (s xTid) (s wTid)).2)] t1 = _
+  unfold storeSet
+  simp [List.find?]
+
+theorem applyNode_bw_mix_precision_linear_snd_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (gTid xTid wTid t1 t2 : Tid)
+    (params : List Nat)
+    (hne : t1 ≠ t2) :
+    applyNode g s { rank := rank, op := "OpName.BW_mix_precision_linear",
+                    ins := [gTid, xTid, wTid], outs := [t1, t2], params := params } t2 =
+      (bw_linear (s gTid) (s xTid) (s wTid)).2 := by
+  unfold applyNode
+  rw [show ([gTid, xTid, wTid] : List Tid).map s = [s gTid, s xTid, s wTid] from rfl,
+      evalOp_bw_mix_precision_linear]
+  change storeSet s [(t1, (bw_linear (s gTid) (s xTid) (s wTid)).1),
+                     (t2, (bw_linear (s gTid) (s xTid) (s wTid)).2)] t2 = _
+  unfold storeSet
+  simp [List.find?, show ¬ (t1 = t2) from hne]
+
+/-! ## Per-head mix-precision linear (P2-A) -/
+
+theorem evalOp_fw_per_head_mix_precision_linear
+    (numParts rank : Nat) (params : List Nat) (x w : Tensor) :
+    evalOp numParts rank "OpName.FW_per_head_mix_precision_linear" params [x, w] =
+      [fw_per_head_linear x w] := by
+  rfl
+
+theorem evalOp_bw_per_head_mix_precision_linear
+    (numParts rank : Nat) (params : List Nat) (g x w : Tensor) :
+    evalOp numParts rank "OpName.BW_per_head_mix_precision_linear" params [g, x, w] =
+      [ (bw_per_head_linear g x w).1, (bw_per_head_linear g x w).2 ] := by
+  rfl
+
+theorem applyNode_fw_per_head_mix_precision_linear_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid wTid outTid : Tid)
+    (params : List Nat) :
+    applyNode g s { rank := rank, op := "OpName.FW_per_head_mix_precision_linear",
+                    ins := [xTid, wTid], outs := [outTid], params := params } outTid =
+      fw_per_head_linear (s xTid) (s wTid) := by
+  unfold applyNode
+  rw [show ([xTid, wTid] : List Tid).map s = [s xTid, s wTid] from rfl,
+      evalOp_fw_per_head_mix_precision_linear]
+  change storeSet s [(outTid, fw_per_head_linear (s xTid) (s wTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+theorem applyNode_bw_per_head_mix_precision_linear_fst_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (gTid xTid wTid t1 t2 : Tid)
+    (params : List Nat) :
+    applyNode g s { rank := rank, op := "OpName.BW_per_head_mix_precision_linear",
+                    ins := [gTid, xTid, wTid], outs := [t1, t2], params := params } t1 =
+      (bw_per_head_linear (s gTid) (s xTid) (s wTid)).1 := by
+  unfold applyNode
+  rw [show ([gTid, xTid, wTid] : List Tid).map s = [s gTid, s xTid, s wTid] from rfl,
+      evalOp_bw_per_head_mix_precision_linear]
+  change storeSet s [(t1, (bw_per_head_linear (s gTid) (s xTid) (s wTid)).1),
+                     (t2, (bw_per_head_linear (s gTid) (s xTid) (s wTid)).2)] t1 = _
+  unfold storeSet
+  simp [List.find?]
+
+theorem applyNode_bw_per_head_mix_precision_linear_snd_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (gTid xTid wTid t1 t2 : Tid)
+    (params : List Nat)
+    (hne : t1 ≠ t2) :
+    applyNode g s { rank := rank, op := "OpName.BW_per_head_mix_precision_linear",
+                    ins := [gTid, xTid, wTid], outs := [t1, t2], params := params } t2 =
+      (bw_per_head_linear (s gTid) (s xTid) (s wTid)).2 := by
+  unfold applyNode
+  rw [show ([gTid, xTid, wTid] : List Tid).map s = [s gTid, s xTid, s wTid] from rfl,
+      evalOp_bw_per_head_mix_precision_linear]
+  change storeSet s [(t1, (bw_per_head_linear (s gTid) (s xTid) (s wTid)).1),
+                     (t2, (bw_per_head_linear (s gTid) (s xTid) (s wTid)).2)] t2 = _
+  unfold storeSet
+  simp [List.find?, show ¬ (t1 = t2) from hne]
+
+/-! ## Norm linear (P2-A) -/
+
+theorem evalOp_fw_norm_linear
+    (numParts rank : Nat) (params : List Nat) (x w : Tensor) :
+    evalOp numParts rank "OpName.FW_norm_linear" params [x, w] =
+      [fw_norm_linear x w] := by
+  rfl
+
+theorem evalOp_bw_norm_linear
+    (numParts rank : Nat) (params : List Nat) (g x w : Tensor) :
+    evalOp numParts rank "OpName.BW_norm_linear" params [g, x, w] =
+      [ (bw_norm_linear g x w).1, (bw_norm_linear g x w).2 ] := by
+  rfl
+
+theorem applyNode_fw_norm_linear_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid wTid outTid : Tid)
+    (params : List Nat) :
+    applyNode g s { rank := rank, op := "OpName.FW_norm_linear",
+                    ins := [xTid, wTid], outs := [outTid], params := params } outTid =
+      fw_norm_linear (s xTid) (s wTid) := by
+  unfold applyNode
+  rw [show ([xTid, wTid] : List Tid).map s = [s xTid, s wTid] from rfl,
+      evalOp_fw_norm_linear]
+  change storeSet s [(outTid, fw_norm_linear (s xTid) (s wTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+theorem applyNode_bw_norm_linear_fst_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (gTid xTid wTid t1 t2 : Tid)
+    (params : List Nat) :
+    applyNode g s { rank := rank, op := "OpName.BW_norm_linear",
+                    ins := [gTid, xTid, wTid], outs := [t1, t2], params := params } t1 =
+      (bw_norm_linear (s gTid) (s xTid) (s wTid)).1 := by
+  unfold applyNode
+  rw [show ([gTid, xTid, wTid] : List Tid).map s = [s gTid, s xTid, s wTid] from rfl,
+      evalOp_bw_norm_linear]
+  change storeSet s [(t1, (bw_norm_linear (s gTid) (s xTid) (s wTid)).1),
+                     (t2, (bw_norm_linear (s gTid) (s xTid) (s wTid)).2)] t1 = _
+  unfold storeSet
+  simp [List.find?]
+
+theorem applyNode_bw_norm_linear_snd_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (gTid xTid wTid t1 t2 : Tid)
+    (params : List Nat)
+    (hne : t1 ≠ t2) :
+    applyNode g s { rank := rank, op := "OpName.BW_norm_linear",
+                    ins := [gTid, xTid, wTid], outs := [t1, t2], params := params } t2 =
+      (bw_norm_linear (s gTid) (s xTid) (s wTid)).2 := by
+  unfold applyNode
+  rw [show ([gTid, xTid, wTid] : List Tid).map s = [s gTid, s xTid, s wTid] from rfl,
+      evalOp_bw_norm_linear]
+  change storeSet s [(t1, (bw_norm_linear (s gTid) (s xTid) (s wTid)).1),
+                     (t2, (bw_norm_linear (s gTid) (s xTid) (s wTid)).2)] t2 = _
+  unfold storeSet
+  simp [List.find?, show ¬ (t1 = t2) from hne]
+
+/-! ### Shape preservation for P2-A linear kernels
+
+    All three operators produce concretely-derived output shapes from the
+    `Tensor.mkShape` head; the lemmas state them as functions of the input
+    shapes. -/
+
+theorem fw_per_head_linear_shape
+    (x w : Tensor) (hW dW kw : Nat) (rest : List Nat)
+    (hx : x.shape.reverse = (kw :: rest))
+    (hw : w.shape = [hW, dW, kw]) :
+    (fw_per_head_linear x w).shape = rest.reverse ++ [hW, dW] := by
+  unfold fw_per_head_linear
+  -- w.shape.reverse = [kw, dW, hW]
+  have hwr : w.shape.reverse = [kw, dW, hW] := by rw [hw]; rfl
+  rw [hx, hwr]
+  simp [Tensor.mkShape]
+
+theorem bw_per_head_linear_fst_shape
+    (g x w : Tensor) (hW dW kw : Nat) (rest : List Nat)
+    (hx : x.shape.reverse = (kw :: rest))
+    (hw : w.shape = [hW, dW, kw]) :
+    (bw_per_head_linear g x w).1.shape = x.shape := by
+  unfold bw_per_head_linear
+  have hwr : w.shape.reverse = [kw, dW, hW] := by rw [hw]; rfl
+  rw [hx, hwr]
+  simp [Tensor.mkShape]
+
+theorem bw_per_head_linear_snd_shape
+    (g x w : Tensor) (hW dW kw : Nat) (rest : List Nat)
+    (hx : x.shape.reverse = (kw :: rest))
+    (hw : w.shape = [hW, dW, kw]) :
+    (bw_per_head_linear g x w).2.shape = w.shape := by
+  unfold bw_per_head_linear
+  have hwr : w.shape.reverse = [kw, dW, hW] := by rw [hw]; rfl
+  rw [hx, hwr]
+  simp [Tensor.mkShape]
+
+theorem fw_norm_linear_shape
+    (x w : Tensor) (n kw : Nat) (rest : List Nat)
+    (hx : x.shape.reverse = (kw :: rest))
+    (hw : w.shape = [n, kw]) :
+    (fw_norm_linear x w).shape = rest.reverse ++ [n] := by
+  unfold fw_norm_linear
+  have hwr : w.shape.reverse = [kw, n] := by rw [hw]; rfl
+  rw [hx, hwr]
+  simp [Tensor.mkShape]
+
+theorem bw_norm_linear_fst_shape
+    (g x w : Tensor) (n kw : Nat) (rest : List Nat)
+    (hx : x.shape.reverse = (kw :: rest))
+    (hw : w.shape = [n, kw]) :
+    (bw_norm_linear g x w).1.shape = x.shape := by
+  unfold bw_norm_linear
+  have hwr : w.shape.reverse = [kw, n] := by rw [hw]; rfl
+  rw [hx, hwr]
+  simp [Tensor.mkShape]
+
+theorem bw_norm_linear_snd_shape
+    (g x w : Tensor) (n kw : Nat) (rest : List Nat)
+    (hx : x.shape.reverse = (kw :: rest))
+    (hw : w.shape = [n, kw]) :
+    (bw_norm_linear g x w).2.shape = w.shape := by
+  unfold bw_norm_linear
+  have hwr : w.shape.reverse = [kw, n] := by rw [hw]; rfl
+  rw [hx, hwr]
+  simp [Tensor.mkShape]
+
 end TrainVerify.Denote
