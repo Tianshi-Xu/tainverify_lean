@@ -1837,23 +1837,46 @@ noncomputable def fw_all2all_moe_gmm
     (input routing_probs routing_map w13 w2 : Tensor)
     (num_experts local_expert_start local_expert_end top_k : Nat)
     (swiglu_limit : Scalar) : Tensor :=
-  -- Suppress unused-arg warnings on parameters that the full body will use.
-  let _ := routing_probs
-  let _ := routing_map
-  let _ := w13
   let _ := num_experts
-  let _ := local_expert_start
-  let _ := local_expert_end
   let _ := top_k
-  let _ := swiglu_limit
   let lDim   := (input.shape.head?).getD 0
   let hModel := (w2.shape.reverse.head?).getD 0
-  -- TODO(P2-B+): replace this `zeroTensor` stub with the full
-  --   Σ_e routing_probs[l,e] · w2[e]·swiglu(w13[e]·x[l]) expansion.
-  -- Tracked as a `sorry`-free definition (no axiom added) — the stub is
-  -- mathematically wrong but type/shape correct so applyNode/shape lemmas
-  -- can be proved already.
-  zeroTensor [lDim, hModel]
+  -- Decode hidden dims from weight shapes.
+  -- w13 shape = [E_local, 2*h_inner, h_model]  (gate ⊕ up packed)
+  -- w2  shape = [E_local, h_inner,   h_model]  (down projection)
+  -- routing_probs / routing_map shape = [l, num_experts]
+  let w13Mid     := (w13.shape.drop 1).head?.getD 0   -- 2 * h_inner
+  let h_inner   := w13Mid / 2
+  let numExp     := (routing_probs.shape.drop 1).head?.getD 0
+  Tensor.mkShape [lDim, hModel] (fun outIdx =>
+    let h := outIdx.1 % hModel
+    let l := outIdx.1 / hModel
+    -- Σ over experts in [local_expert_start, local_expert_end) for which
+    -- routing_map[l, e] = 1: contribute routing_probs[l, e] · down(swiglu(gate, up)).
+    let localCount := local_expert_end - local_expert_start
+    ∑ eLocal ∈ Finset.range localCount,
+      let e := local_expert_start + eLocal
+      -- routing_map mask: 0 if not selected for token l.
+      let mask := valAt routing_map (l * numExp + e)
+      if mask = 0 then 0
+      else
+        let prob := valAt routing_probs (l * numExp + e)
+        -- Inner activations: gate[d] = Σ_h input[l, h] * w13[eLocal, d, h]
+        --                    up[d]   = Σ_h input[l, h] * w13[eLocal, h_inner + d, h]
+        -- SwiGLU(gate, up) = silu(clamp_max(swiglu_limit, gate))
+        --                     * clamp_minmax(-swiglu_limit, swiglu_limit, up)
+        -- Then down[h] = Σ_d swiglu_d * w2[eLocal, d, h]
+        prob * ∑ d ∈ Finset.range h_inner,
+          let gateRaw := ∑ k ∈ Finset.range hModel,
+            valAt input (l * hModel + k) *
+            valAt w13 ((eLocal * w13Mid + d) * hModel + k)
+          let upRaw := ∑ k ∈ Finset.range hModel,
+            valAt input (l * hModel + k) *
+            valAt w13 ((eLocal * w13Mid + (h_inner + d)) * hModel + k)
+          let gateClamped := min swiglu_limit gateRaw
+          let upClamped   := max (-swiglu_limit) (min swiglu_limit upRaw)
+          let swigluVal   := siluScalar gateClamped * upClamped
+          swigluVal * valAt w2 ((eLocal * h_inner + d) * hModel + h))
 
 /-! ### YOCO loss kernel: `inner_chunk_linear_cross_entropy`
 
