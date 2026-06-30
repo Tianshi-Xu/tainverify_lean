@@ -21,3 +21,4 @@ name = "Trainverify"
 [[lean_lib]]
 name = "denote"
 roots = ["denote"]
+moreLeanArgs = ["--tstack=65536"]
