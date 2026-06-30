@@ -8,6 +8,11 @@ import Mathlib.Data.Real.Basic
 import Mathlib.Data.Real.Archimedean
 import Mathlib.Algebra.Order.Floor.Semiring
 import Mathlib.Tactic.Ring
+import Mathlib.Analysis.SpecialFunctions.Exp
+import Mathlib.Analysis.SpecialFunctions.Sigmoid
+import Mathlib.Data.Real.Sqrt
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.Basic
+import Mathlib.MeasureTheory.Integral.IntervalIntegral.Basic
 
 namespace TrainVerify.Denote
 
@@ -405,18 +410,30 @@ def scalarMul (c : Scalar) (x : Tensor) : Tensor :=
 def scalarDiv (x : Tensor) (c : Scalar) : Tensor :=
   Tensor.mkShape x.shape (fun i => valAt x i.1 / c)
 
-/-- Abstract exp for softmax (axiom to avoid mathlib deps) -/
-axiom expFn : Scalar → Scalar
+/-- `exp` for softmax, defined as `Real.exp` (used to live as `axiom`; now
+    grounded in mathlib's exponential so it no longer enlarges the trust base). -/
+noncomputable def expFn (x : Scalar) : Scalar := Real.exp x
 
 /-- Scalar special functions used by exact neural-network kernels.
 
-They are kept as scalar primitives in the denotation, similar to `expFn` above:
-the tensor operators are fully defined in terms of these scalar functions, while
-analysis of the scalar library itself is out of scope for graph-equivalence proofs.
+    Previously axiomatised "to avoid mathlib deps"; now bound to the mathlib
+    `Real.*` definitions. All bridge proofs treat these as opaque scalar
+    functions, so binding them to concrete `def`s does not change any existing
+    proof — but it removes them from the `#print axioms` output, leaving only
+    the kernel axioms (`propext / Classical.choice / Quot.sound`) as the trust
+    base for the equivalence chain.
 -/
-axiom sqrtFn : Scalar → Scalar
-axiom erfFn : Scalar → Scalar
-axiom piScalar : Scalar
+noncomputable def sqrtFn (x : Scalar) : Scalar := Real.sqrt x
+
+noncomputable def piScalar : Scalar := Real.pi
+
+/-- Error function: `erf(x) = (2/√π) · ∫₀ˣ exp(-t²) dt`. mathlib does not
+    ship `Real.erf` as of v4.27, so we build it directly from the integral
+    of `Real.exp ∘ neg ∘ (·^2)`. All `bw_gelu` / `fw_gelu` bridge proofs treat
+    `erfFn` as an opaque scalar, so the explicit definition is purely for
+    trust-base accounting — no analytical property of `erf` is required. -/
+noncomputable def erfFn (x : Scalar) : Scalar :=
+  (2 / Real.sqrt Real.pi) * ∫ t in (0 : ℝ)..x, Real.exp (-(t * t))
 
 /-- Decode a scalar payload to a natural-number index.
 
@@ -775,6 +792,238 @@ def fw_gelu (x : Tensor) : Tensor :=
 
 def bw_gelu (g x : Tensor) : Tensor :=
   Tensor.mkShape x.shape (fun i => valAt g i.1 * geluDerivScalar (valAt x i.1))
+
+/-!
+## MoE / YOCO algebraic primitives (added for llm-train YOCO-MoE-A0.4B audit)
+
+These four scalar/elementwise primitives are introduced for parity with
+`fw_layernorm` / `fw_gelu`: each `fw_X` has a corresponding `bw_X` that
+takes upstream gradient `g`. They cover the rms_norm / silu / swiglu /
+sigmoid kernels that nnscaler emits for the MoE training plan.
+-/
+
+/-- Numerical floor matching torch RMSNorm default `eps = 1e-6`. -/
+def rmsNormEps : Scalar := (1 : Scalar) / 1000000
+
+/-- Sigmoid as a scalar primitive. Bound to mathlib's `Real.sigmoid`, which is
+    defined as `(1 + exp(-x))⁻¹` — definitionally equal to `1 / (1 + expFn(-x))`
+    that we used before, but routed through mathlib so the trust base stays
+    minimal. All downstream `siluScalar` / `bw_sigmoid` lemmas treat this as an
+    opaque scalar function, so the swap is transparent. -/
+noncomputable def sigmoidScalar (x : Scalar) : Scalar := Real.sigmoid x
+
+/-- `silu(x) = x * sigmoid(x)`. -/
+def siluScalar (x : Scalar) : Scalar :=
+  x * sigmoidScalar x
+
+/-- `silu'(x) = σ(x) + x · σ(x) · (1 - σ(x))`. -/
+def siluDerivScalar (x : Scalar) : Scalar :=
+  let s := sigmoidScalar x
+  s + x * s * (1 - s)
+
+/-! ### Sigmoid (elementwise) -/
+
+def fw_sigmoid (x : Tensor) : Tensor :=
+  Tensor.mkShape x.shape (fun i => sigmoidScalar (valAt x i.1))
+
+/-- `bw_sigmoid g x = g ⊙ σ(x) ⊙ (1 - σ(x))`. -/
+def bw_sigmoid (g x : Tensor) : Tensor :=
+  Tensor.mkShape x.shape (fun i =>
+    let s := sigmoidScalar (valAt x i.1)
+    valAt g i.1 * s * (1 - s))
+
+/-! ### Silu (elementwise) -/
+
+def fw_silu (x : Tensor) : Tensor :=
+  Tensor.mkShape x.shape (fun i => siluScalar (valAt x i.1))
+
+def bw_silu (g x : Tensor) : Tensor :=
+  Tensor.mkShape x.shape (fun i => valAt g i.1 * siluDerivScalar (valAt x i.1))
+
+/-! ### Swiglu (gated SiLU FFN activation)
+
+    `swiglu(gate, up) = silu(gate) ⊙ up`, shape `[*, d] → [*, d]`.
+    llm-train applies an optional `swiglu_limit` clamp on the activations
+    (default 10.0) before the multiply; for the denotation we model the
+    *unclamped* form, mirroring how trainverify treats GELU.  The clamp is a
+    monotonic post-processing step that can be added later as a separate
+    primitive if a goal needs it. -/
+
+def fw_swiglu (gate up : Tensor) : Tensor :=
+  Tensor.mkShape up.shape (fun i =>
+    siluScalar (valAt gate i.1) * valAt up i.1)
+
+/-- Gradient w.r.t. `gate`: `g ⊙ up ⊙ silu'(gate)`. -/
+def bw_swiglu_gate (g gate up : Tensor) : Tensor :=
+  Tensor.mkShape gate.shape (fun i =>
+    valAt g i.1 * valAt up i.1 * siluDerivScalar (valAt gate i.1))
+
+/-- Gradient w.r.t. `up`: `g ⊙ silu(gate)`. -/
+def bw_swiglu_up (g gate up : Tensor) : Tensor :=
+  Tensor.mkShape up.shape (fun i =>
+    valAt g i.1 * siluScalar (valAt gate i.1))
+
+def bw_swiglu (g gate up : Tensor) : Tensor × Tensor :=
+  (bw_swiglu_gate g gate up, bw_swiglu_up g gate up)
+
+/-! ### RMSNorm (per-row, scale by trainable weight)
+
+    `rms_norm(x, w)[row, j] = x[row,j] / sqrt(mean(x[row]²) + eps) · w[j]`.
+    Pure scaling, no bias and no centering — that is the distinction from
+    `fw_layernorm`. We reuse `layerNormMeanAt`-style indexing along the last
+    axis: rows are flattened batches of size `d = x.shape.reverse.head!`. -/
+
+/-- Mean of squares along the last axis of `x` at flat-row `row`. -/
+def rmsMeanSqAt (x : Tensor) (row d : Nat) : Scalar :=
+  (∑ k ∈ Finset.range d, (valAt x (row * d + k)) ^ 2) / (d : Scalar)
+
+def fw_rms_norm (x weight : Tensor) : Tensor :=
+  match x.shape.reverse with
+  | d :: _ =>
+      Tensor.mkShape x.shape (fun outIdx =>
+        let row := outIdx.1 / d
+        let j := outIdx.1 % d
+        let invRms := 1 / sqrtFn (rmsMeanSqAt x row d + rmsNormEps)
+        (valAt x outIdx.1 * invRms) * valAt weight j)
+  | [] => x
+
+/-- Backward pass for RMSNorm.  Returns `(dx, dw)`.
+
+    Letting `r = sqrt(mean(x²) + eps)` and `xhat[j] = x[j] / r`, the input
+    gradient at column `j` of a row is
+        `dx[j] = (w[j] · g[j] - xhat[j] · (∑ₖ w[k] · g[k] · xhat[k]) / d) / r`.
+    Weight gradient is `dw[j] = ∑_row xhat[row, j] · g[row, j]`. -/
+def bw_rms_norm (g x weight : Tensor) : Tensor × Tensor :=
+  match x.shape.reverse with
+  | d :: _ =>
+      let dx := Tensor.mkShape x.shape (fun outIdx =>
+        let row := outIdx.1 / d
+        let j := outIdx.1 % d
+        let invRms := 1 / sqrtFn (rmsMeanSqAt x row d + rmsNormEps)
+        let xhat := valAt x outIdx.1 * invRms
+        let sumWgxhat := ∑ k ∈ Finset.range d,
+          valAt weight k * valAt g (row * d + k) *
+            ((valAt x (row * d + k)) * invRms)
+        (valAt weight j * valAt g outIdx.1 -
+            xhat * sumWgxhat / (d : Scalar)) * invRms)
+      let dw := Tensor.mkShape weight.shape (fun wIdx =>
+        let j := wIdx.1
+        ∑ row ∈ Finset.range (prodShape x.shape / d),
+          let invRms := 1 / sqrtFn (rmsMeanSqAt x row d + rmsNormEps)
+          let xhat := valAt x (row * d + j) * invRms
+          xhat * valAt g (row * d + j))
+      (dx, dw)
+  | [] => (zeroTensor x.shape, zeroTensor weight.shape)
+
+/-! ### Rotary positional embedding (RoPE, chunk-style)
+
+    nnscaler register_op signature:
+        `c^ e^, l, l a^ h^, l b^ h^ -> l a^ h^, l b^ h^`
+    where
+      * `cos_sin_cache : Tensor[max_pos, d]`  (front d/2 = cos, back d/2 = sin)
+      * `positions : Tensor[L]`                (integer position ids)
+      * `q : Tensor[L, qh, d]`, `k : Tensor[L, kh, d]`
+
+    The chunk-style variant (matches `llm/arch/rotary_embedding.py`) splits the
+    last axis in half — first half is `x1`, second half is `x2` — then computes
+        y1 = x1·cos - x2·sin
+        y2 = x2·cos + x1·sin
+    and concatenates `(y1, y2)`. We model it as a single fused op so the
+    bridge generator can match the nnscaler-emitted node 1-to-1.
+
+    `cos`/`sin` are not new axioms: they live inside the `cos_sin_cache` buffer
+    tensor that the embedding layer pre-computes, so RoPE is purely algebraic
+    in the four tensor inputs. -/
+
+/-- Read `cos_sin_cache[pos, j]`, the *cos* half (low-half index `j < d/2`). -/
+def ropeCosAt (csCache : Tensor) (d pos jLow : Nat) : Scalar :=
+  valAt csCache (pos * d + jLow)
+
+/-- Read `cos_sin_cache[pos, j + d/2]`, the *sin* half. -/
+def ropeSinAt (csCache : Tensor) (d pos jLow : Nat) : Scalar :=
+  valAt csCache (pos * d + jLow + d / 2)
+
+/-- Apply RoPE rotation to a single tensor (`q` or `k`).
+    `numHeads` = `qh` for query, `kh` for key (so this is reused for both). -/
+def fw_rotary_apply
+    (csCache positions x : Tensor) (numHeads : Nat) : Tensor :=
+  match x.shape.reverse with
+  | d :: _ =>
+      let halfD := d / 2
+      Tensor.mkShape x.shape (fun outIdx =>
+        -- Decode outIdx -> (l, h, j) in the [L, numHeads, d] layout.
+        let j := outIdx.1 % d
+        let lh := outIdx.1 / d
+        let h := lh % numHeads
+        let l := lh / numHeads
+        -- Look up position id and the paired indices.
+        let pos := scalarToNat (valAt positions l)
+        let baseLH := (l * numHeads + h) * d
+        if j < halfD then
+          -- Low half: y1[j] = x1[j]·cos[j] - x2[j]·sin[j]
+          --   where x1[j] = x[l,h,j], x2[j] = x[l,h,j+d/2]
+          let c := ropeCosAt csCache d pos j
+          let s := ropeSinAt csCache d pos j
+          let x1 := valAt x outIdx.1
+          let x2 := valAt x (baseLH + j + halfD)
+          x1 * c - x2 * s
+        else
+          -- High half: y2[j-d/2] = x2[j-d/2]·cos + x1[j-d/2]·sin
+          let jLow := j - halfD
+          let c := ropeCosAt csCache d pos jLow
+          let s := ropeSinAt csCache d pos jLow
+          let x2 := valAt x outIdx.1
+          let x1 := valAt x (baseLH + jLow)
+          x2 * c + x1 * s)
+  | [] => x
+
+/-- Forward RoPE for the combined `(query, key)` pair, mirroring
+    `rotary_embedding_func(cos_sin_cache, positions, query, key) -> (q', k')`. -/
+def fw_rotary_embedding
+    (csCache positions q k : Tensor) (qh kh : Nat) : Tensor × Tensor :=
+  (fw_rotary_apply csCache positions q qh,
+   fw_rotary_apply csCache positions k kh)
+
+/-- Backward RoPE on a single tensor. Since RoPE is linear in the input with
+    coefficients `(cos, sin)` that depend only on `positions` / cache, the
+    gradient is the transposed rotation:
+        dx1[j] =  dy1[j]·cos + dy2[j]·sin
+        dx2[j] = -dy1[j]·sin + dy2[j]·cos
+    No gradient flows back into `csCache` or `positions` (they are buffers). -/
+def bw_rotary_apply
+    (csCache positions g : Tensor) (numHeads : Nat) : Tensor :=
+  match g.shape.reverse with
+  | d :: _ =>
+      let halfD := d / 2
+      Tensor.mkShape g.shape (fun outIdx =>
+        let j := outIdx.1 % d
+        let lh := outIdx.1 / d
+        let h := lh % numHeads
+        let l := lh / numHeads
+        let pos := scalarToNat (valAt positions l)
+        let baseLH := (l * numHeads + h) * d
+        if j < halfD then
+          -- dx1[j] = dy1[j]·cos + dy2[j]·sin
+          let c := ropeCosAt csCache d pos j
+          let s := ropeSinAt csCache d pos j
+          let dy1 := valAt g outIdx.1
+          let dy2 := valAt g (baseLH + j + halfD)
+          dy1 * c + dy2 * s
+        else
+          -- dx2[j-d/2] = -dy1[j-d/2]·sin + dy2[j-d/2]·cos
+          let jLow := j - halfD
+          let c := ropeCosAt csCache d pos jLow
+          let s := ropeSinAt csCache d pos jLow
+          let dy1 := valAt g (baseLH + jLow)
+          let dy2 := valAt g outIdx.1
+          dy2 * c - dy1 * s)
+  | [] => g
+
+/-- Backward RoPE for the combined `(dq, dk)` pair. -/
+def bw_rotary_embedding
+    (csCache positions gq gk : Tensor) (qh kh : Nat) : Tensor × Tensor :=
+  (bw_rotary_apply csCache positions gq qh,
+   bw_rotary_apply csCache positions gk kh)
 
 def fw_pow (n : Nat) (x : Tensor) : Tensor :=
   Tensor.mkShape x.shape (fun i => (valAt x i.1) ^ n)
@@ -2231,6 +2480,28 @@ def opOutShapes (numParts : Nat) (op : String) (params : List Nat) (inShapes : L
       some [x]
   | "OpName.BW_pow", [g, _x] =>
       some [g]
+  -- MoE / YOCO primitives
+  | "OpName.FW_rms_norm", [x, _w] =>
+      some [x]
+  | "OpName.BW_rms_norm", [_g, x, w] =>
+      some [x, w]
+  | "OpName.FW_sigmoid", [x] =>
+      some [x]
+  | "OpName.BW_sigmoid", [g, _x] =>
+      some [g]
+  | "OpName.FW_silu", [x] =>
+      some [x]
+  | "OpName.BW_silu", [g, _x] =>
+      some [g]
+  | "OpName.FW_swiglu", [_gate, up] =>
+      some [up]
+  | "OpName.BW_swiglu", [_g, gate, up] =>
+      some [gate, up]
+  -- RoPE: 4 inputs (csCache, positions, q, k), 2 outputs (q', k') shape-preserving on q/k
+  | "OpName.FW_rotary_embedding", [_csCache, _positions, q, k] =>
+      some [q, k]
+  | "OpName.BW_rotary_embedding", [_csCache, _positions, gq, gk] =>
+      some [gq, gk]
   | "OpName.FW_mean", [x] =>
       match x.reverse with
       | _ :: rest => some [(1 :: rest).reverse]
@@ -2377,6 +2648,30 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
   | "OpName.BW_layernorm", [g, x, weight, bias] =>
       let (dx, dw, db) := bw_layernorm g x weight bias
       [dx, dw, db]
+  -- === MoE / YOCO primitives (introduced for llm-train YOCO-MoE-A0.4B) ===
+  | "OpName.FW_rms_norm", [x, weight] => [fw_rms_norm x weight]
+  | "OpName.BW_rms_norm", [g, x, weight] =>
+      let (dx, dw) := bw_rms_norm g x weight
+      [dx, dw]
+  | "OpName.FW_sigmoid", [x] => [fw_sigmoid x]
+  | "OpName.BW_sigmoid", [g, x] => [bw_sigmoid g x]
+  | "OpName.FW_silu", [x] => [fw_silu x]
+  | "OpName.BW_silu", [g, x] => [bw_silu g x]
+  | "OpName.FW_swiglu", [gate, up] => [fw_swiglu gate up]
+  | "OpName.BW_swiglu", [g, gate, up] =>
+      let (dg, du) := bw_swiglu g gate up
+      [dg, du]
+  -- RoPE: params encode `[qh, kh]` (number of query / key heads).
+  | "OpName.FW_rotary_embedding", [csCache, positions, q, k] =>
+      let qh := params.head?.getD 1
+      let kh := (params.drop 1).head?.getD 1
+      let (qOut, kOut) := fw_rotary_embedding csCache positions q k qh kh
+      [qOut, kOut]
+  | "OpName.BW_rotary_embedding", [csCache, positions, gq, gk] =>
+      let qh := params.head?.getD 1
+      let kh := (params.drop 1).head?.getD 1
+      let (dq, dk) := bw_rotary_embedding csCache positions gq gk qh kh
+      [dq, dk]
   | "OpName.FW_dropout", [x] => [fw_dropout x]
   | "OpName.BW_dropout", [g, x] => [bw_dropout g x]
   | "OpName.FW_gelu", [x] => [fw_gelu x]
