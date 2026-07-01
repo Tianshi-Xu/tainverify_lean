@@ -140,6 +140,10 @@ def trace_input_sources(ir: GoalIR) -> list:
 
     sources = []
     missing = []
+    # Build expected-shape map from IR (SM/PM InitShapes tell us the true expected shape)
+    expected_shape = {}
+    for tid, sh in ir.sm_shapes + ir.pm_shapes:
+        expected_shape[tid] = sh
     for tid in leaf_inputs:
         origin = tid_to_origin.get(tid)
         # A bare `ts` origin is only an SM-side coincidence (this tid happens to be some
@@ -148,8 +152,20 @@ def trace_input_sources(ir: GoalIR) -> list:
         # provenance and must win over the coincidental ts. (Same precedence rule as the
         # ts-vs-tp guard above; fixes goal_107 vocab shards 1067/1068 mis-tagged as
         # goal_311/312 ts instead of initGoal_563 rank2/rank3 chunks.)
+        # HOWEVER: if the init source's shape does NOT match the expected shape (e.g. tid
+        # 1067 in goal_104 is a reshaped view [1,8,32] not the raw shard [32,32]), the
+        # `ts` origin is the correct one — the tid has been transformed. Only override
+        # `ts` -> init_tp when the init shape actually matches. Fixes g104/g242/g250/g312.
         if origin is not None and origin.kind == "ts" and (tid in init_tp_map or tid in init_map):
-            origin = None
+            exp = expected_shape.get(tid)
+            init_shape = None
+            if tid in init_map:
+                init_shape = init_map[tid][1]
+            elif tid in init_tp_map:
+                init_shape = init_tp_map[tid][2]
+            if exp is not None and init_shape is not None and exp == init_shape:
+                origin = None  # let init_tp/init win (goal_107 case)
+            # else: keep the `ts` origin (goal_104 case)
         if origin is not None:
             sources.append(origin)
         elif tid in init_map:
