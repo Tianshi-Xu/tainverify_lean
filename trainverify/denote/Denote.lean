@@ -4153,6 +4153,18 @@ theorem applyNode_fw_embedding_out
   unfold storeSet
   simp [List.find?]
 
+/-- `applyNode` for `FW_embedding` with `params := [offset]` (vocab-parallel semantics). -/
+theorem applyNode_fw_embedding_offset_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (offset : Nat) (idsTid wTid outTid : Tid) :
+    applyNode g s { rank := rank, op := "OpName.FW_embedding", ins := [idsTid, wTid], outs := [outTid], params := [offset] } outTid =
+      fw_embedding_offset offset (s idsTid) (s wTid) := by
+  unfold applyNode
+  rw [show ([idsTid, wTid] : List Tid).map s = [s idsTid, s wTid] from rfl,
+      evalOp_fw_embedding_offset]
+  change storeSet s [(outTid, fw_embedding_offset offset (s idsTid) (s wTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
 /-- `applyNode` for `BW_embedding` with empty params (legacy semantics). -/
 theorem applyNode_bw_embedding_out
     (g : GraphDecl) (s : Store) (rank : Nat) (gTid idsTid wTid outTid : Tid) :

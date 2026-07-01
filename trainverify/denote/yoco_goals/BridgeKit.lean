@@ -79,4 +79,32 @@ theorem pm_prefix_eq (initPM : Store) (k : Nat) (tid : Tid)
 theorem all_initGoal_ts_not_written :
     ∀ g ∈ initGoals, ∀ n ∈ sm.nodes, g.ts ∉ n.outs := by native_decide
 
+-- ------------------------------------------------------------------------
+-- Prefix-of-prefix reduction: computing on `take K` graph but only needing tid
+-- written at position k < K, and no nodes in K's suffix write it.
+-- ------------------------------------------------------------------------
+theorem pm_val_prefix (initPM : Store) (K k : Nat)
+    (hKlen : K ≤ pm.nodes.length) (hk : k < K)
+    (out : Tid)
+    (hdrop : ∀ n ∈ (pm.nodes.take K).drop (k+1), out ∉ n.outs) :
+    denoteGraph {pm with nodes := pm.nodes.take K} initPM out
+      = applyNode pm
+          (denoteGraph {pm with nodes := (pm.nodes.take K).take k} initPM)
+          ((pm.nodes.take K)[k]'(by change k < (pm.nodes.take K).length; rw [List.length_take]; omega)) out := by
+  set g' : GraphDecl := {pm with nodes := pm.nodes.take K} with hg'
+  have hg'_len : k < g'.nodes.length := by
+    change k < (pm.nodes.take K).length
+    rw [List.length_take]; omega
+  have e1 : denoteGraph g' initPM out
+      = denoteGraph {g' with nodes := g'.nodes.take (k+1)} initPM out :=
+    denoteGraph_tid_eq_of_suffix_no_writes g' initPM out (g'.nodes.take (k+1))
+      (g'.nodes.drop (k+1)) (List.take_append_drop (k+1) g'.nodes).symm hdrop
+  have hfn : applyNode {g' with nodes := g'.nodes.take (k+1)} = applyNode pm :=
+    applyNode_congr_numRanks _ _ rfl
+  have hfn' : applyNode {g' with nodes := g'.nodes.take k} = applyNode pm :=
+    applyNode_congr_numRanks _ _ rfl
+  rw [e1]
+  simp only [denoteGraph, hfn, hfn']
+  exact congrFun (foldl_take_succ (applyNode pm) g'.nodes initPM k hg'_len) out
+
 end TrainVerify.Denote.GeneratedPatterns
