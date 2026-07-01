@@ -387,6 +387,22 @@ f"""  have hpm{tp} : Spm {tp} = denoteGraph pm_goal_{n} Spm {tp} := by
 f"""  have hsmf : Ssm {sm_out} = denoteGraph sm_goal_{n} Ssm {sm_out} := by
     rw [hSsm]; exact sm_frame_{sm_out}_self initSM""")
     rw_args = "hsmf, " + ", ".join(frame_rws)
+    # goal_2 is a base case: goal_2_cut_to_full is in SpikeBridge and has no bridge
+    # file of its own, so we emit its `_intermediate` shim inside goal_3's bridge
+    # (the earliest bridge that references goal_2 as a prereq).
+    goal_2_shim = ""
+    if n == 3:
+        goal_2_shim = """
+theorem goal_2_intermediate (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks goal_2 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hfull : goal_2_stmt := goal_2_cut_to_full prove_goal_2_cut
+  have := hfull initSM initPM hSM hPM hInit
+  unfold InitGoalHolds
+  simp only [goal_2]
+  exact this
+"""
     return (
 f"""-- ========== Assembly: goal_{n}_cut_to_full ==========
 theorem goal_{n}_cut_to_full (h : goal_{n}_stmt_cut) : goal_{n}_stmt := by
@@ -421,7 +437,7 @@ theorem goal_{n}_intermediate (initSM initPM : Store)
   unfold InitGoalHolds
   simp only [goal_{n}]
   exact this
-
+{goal_2_shim}
 end TrainVerify.Denote.GeneratedGoals
 """)
 
