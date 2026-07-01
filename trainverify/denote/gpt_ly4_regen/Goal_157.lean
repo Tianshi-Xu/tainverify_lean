@@ -179,34 +179,66 @@ theorem prove_goal_157_cut : goal_157_stmt_cut := by
       batchedMatmul (chunkPrimDimN 1 4 3 (initSM 786)) (transpose2d (chunkPrimDimN 1 4 3 (initSM 618))) := by
     rw [hbw3, hy_chunk3, ← hg_chunk3]
   -- Final AllToAll: gather BW outputs on dim 1, rechunk on dim 2
-  have hpm0base : (denoteGraph pm_goal_157 initPM) 1794 =
-      allToAllPrimWithDims 4 0 [(denoteGraph pm_goal_157 initPM) 1893, (denoteGraph pm_goal_157 initPM) 1896,
-        (denoteGraph pm_goal_157 initPM) 1899, (denoteGraph pm_goal_157 initPM) 1902] 1 2 := by
-    simp only [pm_goal_157, denoteGraph, GraphDecl.nodes, List.foldl]
-    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
-    rw [applyNode_allToAllPrimWithDims_out]
-    congr 1 <;> repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
-  have hpm1base : (denoteGraph pm_goal_157 initPM) 1796 =
-      allToAllPrimWithDims 4 1 [(denoteGraph pm_goal_157 initPM) 1893, (denoteGraph pm_goal_157 initPM) 1896,
-        (denoteGraph pm_goal_157 initPM) 1899, (denoteGraph pm_goal_157 initPM) 1902] 1 2 := by
-    simp only [pm_goal_157, denoteGraph, GraphDecl.nodes, List.foldl]
-    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
-    rw [applyNode_allToAllPrimWithDims_out]
-    congr 1 <;> repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
-  have hpm2base : (denoteGraph pm_goal_157 initPM) 1798 =
-      allToAllPrimWithDims 4 2 [(denoteGraph pm_goal_157 initPM) 1893, (denoteGraph pm_goal_157 initPM) 1896,
-        (denoteGraph pm_goal_157 initPM) 1899, (denoteGraph pm_goal_157 initPM) 1902] 1 2 := by
-    simp only [pm_goal_157, denoteGraph, GraphDecl.nodes, List.foldl]
-    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
-    rw [applyNode_allToAllPrimWithDims_out]
-    congr 1 <;> repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
-  have hpm3base : (denoteGraph pm_goal_157 initPM) 1800 =
-      allToAllPrimWithDims 4 3 [(denoteGraph pm_goal_157 initPM) 1893, (denoteGraph pm_goal_157 initPM) 1896,
-        (denoteGraph pm_goal_157 initPM) 1899, (denoteGraph pm_goal_157 initPM) 1902] 1 2 := by
-    simp only [pm_goal_157, denoteGraph, GraphDecl.nodes, List.foldl]
-    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
-    rw [applyNode_allToAllPrimWithDims_out]
-    congr 1 <;> repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  have hpm0base : (denoteGraph pm_goal_157 initPM) 1794 = allToAllPrimWithDims 4 0 [(denoteGraph pm_goal_157 initPM) 1893, (denoteGraph pm_goal_157 initPM) 1896, (denoteGraph pm_goal_157 initPM) 1899, (denoteGraph pm_goal_157 initPM) 1902] 1 2 := by
+    have hL : denoteGraph pm_goal_157 initPM 1794
+            = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 13} initPM 1794 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1794 _ _ (List.take_append_drop 13 _).symm (by decide)
+    have hR1893 : denoteGraph pm_goal_157 initPM 1893 = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 12} initPM 1893 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1893 _ _ (List.take_append_drop 12 _).symm (by decide)
+    have hR1896 : denoteGraph pm_goal_157 initPM 1896 = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 12} initPM 1896 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1896 _ _ (List.take_append_drop 12 _).symm (by decide)
+    have hR1899 : denoteGraph pm_goal_157 initPM 1899 = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 12} initPM 1899 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1899 _ _ (List.take_append_drop 12 _).symm (by decide)
+    have hR1902 : denoteGraph pm_goal_157 initPM 1902 = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 12} initPM 1902 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1902 _ _ (List.take_append_drop 12 _).symm (by decide)
+    rw [hL, hR1893, hR1896, hR1899, hR1902]
+    simp only [pm_goal_157, denoteGraph, GraphDecl.nodes, List.take, List.foldl]
+    rfl
+  have hpm1base : (denoteGraph pm_goal_157 initPM) 1796 = allToAllPrimWithDims 4 1 [(denoteGraph pm_goal_157 initPM) 1893, (denoteGraph pm_goal_157 initPM) 1896, (denoteGraph pm_goal_157 initPM) 1899, (denoteGraph pm_goal_157 initPM) 1902] 1 2 := by
+    have hL : denoteGraph pm_goal_157 initPM 1796
+            = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 14} initPM 1796 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1796 _ _ (List.take_append_drop 14 _).symm (by decide)
+    have hR1893 : denoteGraph pm_goal_157 initPM 1893 = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 12} initPM 1893 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1893 _ _ (List.take_append_drop 12 _).symm (by decide)
+    have hR1896 : denoteGraph pm_goal_157 initPM 1896 = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 12} initPM 1896 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1896 _ _ (List.take_append_drop 12 _).symm (by decide)
+    have hR1899 : denoteGraph pm_goal_157 initPM 1899 = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 12} initPM 1899 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1899 _ _ (List.take_append_drop 12 _).symm (by decide)
+    have hR1902 : denoteGraph pm_goal_157 initPM 1902 = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 12} initPM 1902 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1902 _ _ (List.take_append_drop 12 _).symm (by decide)
+    rw [hL, hR1893, hR1896, hR1899, hR1902]
+    simp only [pm_goal_157, denoteGraph, GraphDecl.nodes, List.take, List.foldl]
+    rfl
+  have hpm2base : (denoteGraph pm_goal_157 initPM) 1798 = allToAllPrimWithDims 4 2 [(denoteGraph pm_goal_157 initPM) 1893, (denoteGraph pm_goal_157 initPM) 1896, (denoteGraph pm_goal_157 initPM) 1899, (denoteGraph pm_goal_157 initPM) 1902] 1 2 := by
+    have hL : denoteGraph pm_goal_157 initPM 1798
+            = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 15} initPM 1798 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1798 _ _ (List.take_append_drop 15 _).symm (by decide)
+    have hR1893 : denoteGraph pm_goal_157 initPM 1893 = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 12} initPM 1893 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1893 _ _ (List.take_append_drop 12 _).symm (by decide)
+    have hR1896 : denoteGraph pm_goal_157 initPM 1896 = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 12} initPM 1896 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1896 _ _ (List.take_append_drop 12 _).symm (by decide)
+    have hR1899 : denoteGraph pm_goal_157 initPM 1899 = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 12} initPM 1899 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1899 _ _ (List.take_append_drop 12 _).symm (by decide)
+    have hR1902 : denoteGraph pm_goal_157 initPM 1902 = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 12} initPM 1902 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1902 _ _ (List.take_append_drop 12 _).symm (by decide)
+    rw [hL, hR1893, hR1896, hR1899, hR1902]
+    simp only [pm_goal_157, denoteGraph, GraphDecl.nodes, List.take, List.foldl]
+    rfl
+  have hpm3base : (denoteGraph pm_goal_157 initPM) 1800 = allToAllPrimWithDims 4 3 [(denoteGraph pm_goal_157 initPM) 1893, (denoteGraph pm_goal_157 initPM) 1896, (denoteGraph pm_goal_157 initPM) 1899, (denoteGraph pm_goal_157 initPM) 1902] 1 2 := by
+    have hL : denoteGraph pm_goal_157 initPM 1800
+            = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 16} initPM 1800 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1800 _ _ (List.take_append_drop 16 _).symm (by decide)
+    have hR1893 : denoteGraph pm_goal_157 initPM 1893 = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 12} initPM 1893 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1893 _ _ (List.take_append_drop 12 _).symm (by decide)
+    have hR1896 : denoteGraph pm_goal_157 initPM 1896 = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 12} initPM 1896 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1896 _ _ (List.take_append_drop 12 _).symm (by decide)
+    have hR1899 : denoteGraph pm_goal_157 initPM 1899 = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 12} initPM 1899 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1899 _ _ (List.take_append_drop 12 _).symm (by decide)
+    have hR1902 : denoteGraph pm_goal_157 initPM 1902 = denoteGraph {pm_goal_157 with nodes := pm_goal_157.nodes.take 12} initPM 1902 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_157 initPM 1902 _ _ (List.take_append_drop 12 _).symm (by decide)
+    rw [hL, hR1893, hR1896, hR1899, hR1902]
+    simp only [pm_goal_157, denoteGraph, GraphDecl.nodes, List.take, List.foldl]
+    rfl
   -- Main distribution: batchedMatmul g yᵀ = gather_dim1 of the per-shard products
   have hVsplit : batchedMatmul (initSM 786) (transpose2d (initSM 618)) =
       allGatherPrimDimN 1 4 0
