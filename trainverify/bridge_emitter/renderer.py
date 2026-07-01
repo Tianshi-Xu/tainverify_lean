@@ -414,7 +414,13 @@ theorem goal_{n}_intermediate (initSM initPM : Store)
     InitGoalHolds pm.numRanks goal_{n} (denoteGraph sm initSM) (denoteGraph pm initPM) := by
   have hfull : goal_{n}_stmt := goal_{n}_cut_to_full prove_goal_{n}_cut
   have := hfull initSM initPM hSM hPM hInit
-  simpa [InitGoalHolds, goal_{n}] using this
+  -- [OPTIMIZATION] `simpa [InitGoalHolds, goal_{n}] using this` was ~31s (spike 001,
+  -- 2026-07-01): simpa normalizes the entire goal_N_stmt statement including
+  -- denoteGraph terms. `unfold InitGoalHolds; simp only [goal_N]; exact this` is
+  -- surgical (~sub-second) and equivalent since goal_N is a simple record literal.
+  unfold InitGoalHolds
+  simp only [goal_{n}]
+  exact this
 
 end TrainVerify.Denote.GeneratedGoals
 """)

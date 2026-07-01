@@ -632,6 +632,8 @@ theorem goal_104_intermediate (initSM initPM : Store)
     InitGoalHolds pm.numRanks goal_104 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
   have hfull : goal_104_stmt := goal_104_cut_to_full prove_goal_104_cut
   have := hfull initSM initPM hSM hPM hInit
-  simpa [InitGoalHolds, goal_104] using this
+  unfold InitGoalHolds
+  simp only [goal_104]
+  exact this
 
 end TrainVerify.Denote.GeneratedGoals

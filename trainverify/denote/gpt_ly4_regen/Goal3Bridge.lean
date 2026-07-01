@@ -182,7 +182,9 @@ theorem goal_2_intermediate (initSM initPM : Store)
     InitGoalHolds pm.numRanks goal_2 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
   have hfull : goal_2_stmt := goal_2_cut_to_full prove_goal_2_cut
   have := hfull initSM initPM hSM hPM hInit
-  simpa [InitGoalHolds, goal_2] using this
+  unfold InitGoalHolds
+  simp only [goal_2]
+  exact this
 
 theorem goal_3_intermediate (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
@@ -190,6 +192,8 @@ theorem goal_3_intermediate (initSM initPM : Store)
     InitGoalHolds pm.numRanks goal_3 (denoteGraph sm initSM) (denoteGraph pm initPM) := by
   have hfull : goal_3_stmt := goal_3_cut_to_full prove_goal_3_cut
   have := hfull initSM initPM hSM hPM hInit
-  simpa [InitGoalHolds, goal_3] using this
+  unfold InitGoalHolds
+  simp only [goal_3]
+  exact this
 
 end TrainVerify.Denote.GeneratedGoals
