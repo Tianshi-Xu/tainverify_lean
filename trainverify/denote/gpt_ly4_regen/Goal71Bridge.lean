@@ -240,6 +240,7 @@ theorem pm_full_g71_2560 (initPM : Store) :
 theorem denote_pm_goal_71_659 (s : Store) :
     denoteGraph pm_goal_71 s 659 = allGatherPrimDimN 3 4 0 [fw_contiguous (allToAllPrimWithDims 4 0 [s 2533, s 2534, s 2535, s 2536] 1 3), fw_contiguous (allToAllPrimWithDims 4 1 [s 2533, s 2534, s 2535, s 2536] 1 3), fw_contiguous (allToAllPrimWithDims 4 2 [s 2533, s 2534, s 2535, s 2536] 1 3), fw_contiguous (allToAllPrimWithDims 4 3 [s 2533, s 2534, s 2535, s 2536] 1 3)] := by
   simp only [pm_goal_71, denoteGraph, List.foldl]
+  repeat rw [applyNode_skip _ _ _ 659 (by decide)]
   rw [applyNode_allGatherPrimDimN_out]
   simp only [List.map]
   try (set_option maxHeartbeats 800000 in congr 1)

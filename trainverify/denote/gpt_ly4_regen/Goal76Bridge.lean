@@ -239,6 +239,7 @@ theorem pm_full_g76_2680 (initPM : Store) :
 theorem denote_pm_goal_76_668 (s : Store) :
     denoteGraph pm_goal_76 s 668 = allReducePrim 4 0 [fw_linear (allToAllPrimWithDims 4 0 [s 2641, s 2642, s 2643, s 2644] 1 2) (s 2673), fw_linear (allToAllPrimWithDims 4 1 [s 2641, s 2642, s 2643, s 2644] 1 2) (s 2674), fw_linear (allToAllPrimWithDims 4 2 [s 2641, s 2642, s 2643, s 2644] 1 2) (s 2675), fw_linear (allToAllPrimWithDims 4 3 [s 2641, s 2642, s 2643, s 2644] 1 2) (s 2676)] := by
   simp only [pm_goal_76, denoteGraph, List.foldl]
+  repeat rw [applyNode_skip _ _ _ 668 (by decide)]
   rw [applyNode_allReducePrim_out]
   simp only [List.map]
   try (set_option maxHeartbeats 800000 in congr 1)

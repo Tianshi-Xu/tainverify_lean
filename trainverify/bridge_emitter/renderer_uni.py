@@ -84,7 +84,8 @@ private theorem evalOp_fw_softmax_loc (numParts rank : Nat) (params : List Nat) 
     evalOp numParts rank "OpName.FW_softmax" params [x] = [fw_softmax x] := rfl
 private theorem applyNode_fw_softmax_out_loc
     (g : GraphDecl) (s : Store) (rank : Nat) (xTid outTid : Tid) (params : List Nat) :
-    applyNode g s { rank := rank, op := "OpName.FW_softmax", ins := [xTid], outs := [outTid], params := params } outTid = fw_softmax (s xTid) := by
+    applyNode g s { rank := rank, op := "OpName.FW_softmax", ins := [xTid],
+                    outs := [outTid], params := params } outTid = fw_softmax (s xTid) := by
   unfold applyNode
   rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_softmax_loc]
   change storeSet s [(outTid, fw_softmax (s xTid))] outTid = _
@@ -97,7 +98,8 @@ private theorem evalOp_fw_contiguous_loc (numParts rank : Nat) (params : List Na
     evalOp numParts rank "OpName.FW_contiguous" params [x] = [fw_contiguous x] := rfl
 private theorem applyNode_fw_contiguous_out_loc
     (g : GraphDecl) (s : Store) (rank : Nat) (xTid outTid : Tid) (params : List Nat) :
-    applyNode g s { rank := rank, op := "OpName.FW_contiguous", ins := [xTid], outs := [outTid], params := params } outTid = fw_contiguous (s xTid) := by
+    applyNode g s { rank := rank, op := "OpName.FW_contiguous", ins := [xTid],
+                    outs := [outTid], params := params } outTid = fw_contiguous (s xTid) := by
   unfold applyNode
   rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_contiguous_loc]
   change storeSet s [(outTid, fw_contiguous (s xTid))] outTid = _
@@ -996,7 +998,8 @@ MULTIREF2_SECOND_LOCAL = '''\
 -- [EMITTER] local generic multiref-2-output second-out lemma (goal-agnostic).
 private theorem applyNode_fw_multiref2_second_out_loc
     (g : GraphDecl) (s : Store) (rank : Nat) (xTid t1 t2 : Tid) (hne : t1 ≠ t2) :
-    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid], outs := [t1, t2], params := [2] } t2 = s xTid := by
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid],
+                    outs := [t1, t2], params := [2] } t2 = s xTid := by
   unfold applyNode
   rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_multiref]
   change storeSet s ([t1, t2].zip (List.replicate 2 (s xTid))) t2 = _

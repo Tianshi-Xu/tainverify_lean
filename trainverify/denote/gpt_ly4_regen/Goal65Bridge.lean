@@ -158,6 +158,7 @@ theorem pm_full_g65_2420 (initPM : Store) :
 theorem denote_pm_goal_65_653 (s : Store) :
     denoteGraph pm_goal_65 s 653 = allGatherPrimDimN 1 4 0 [transposeAxes 2 3 (allToAllPrimWithDims 4 0 [s 2369, s 2370, s 2371, s 2372] 3 1), transposeAxes 2 3 (allToAllPrimWithDims 4 1 [s 2369, s 2370, s 2371, s 2372] 3 1), transposeAxes 2 3 (allToAllPrimWithDims 4 2 [s 2369, s 2370, s 2371, s 2372] 3 1), transposeAxes 2 3 (allToAllPrimWithDims 4 3 [s 2369, s 2370, s 2371, s 2372] 3 1)] := by
   simp only [pm_goal_65, denoteGraph, List.foldl]
+  repeat rw [applyNode_skip _ _ _ 653 (by decide)]
   rw [applyNode_allGatherPrimDimN_out]
   simp only [List.map]
   try (set_option maxHeartbeats 800000 in congr 1)

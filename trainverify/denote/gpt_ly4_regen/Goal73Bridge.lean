@@ -218,6 +218,7 @@ theorem pm_full_g73_2588 (initPM : Store) :
 theorem denote_pm_goal_73_662 (s : Store) :
     denoteGraph pm_goal_73 s 662 = allReducePrim 4 0 [fw_linear (chunkPrimDimN 2 4 0 (s 660)) (s 2581), fw_linear (chunkPrimDimN 2 4 1 (s 660)) (s 2582), fw_linear (chunkPrimDimN 2 4 2 (s 660)) (s 2583), fw_linear (chunkPrimDimN 2 4 3 (s 660)) (s 2584)] := by
   simp only [pm_goal_73, denoteGraph, List.foldl]
+  repeat rw [applyNode_skip _ _ _ 662 (by decide)]
   rw [applyNode_allReducePrim_out]
   simp only [List.map]
   try (set_option maxHeartbeats 800000 in congr 1)
