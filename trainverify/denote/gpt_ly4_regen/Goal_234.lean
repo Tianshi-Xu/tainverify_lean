@@ -148,30 +148,42 @@ theorem prove_goal_234_cut : goal_234_stmt_cut := by
   have hY3 : (denoteGraph pm_goal_234 initPM) 3044 = chunkPrimDimN 1 4 3 (initSM 690) := by
     rw [hAA3, hrec690]; rfl
   -- Layer 2: BW_softmax producing 3057..3063.
-  have hbw0 : (denoteGraph pm_goal_234 initPM) 3057 =
-      bw_softmax (initPM 3058) ((denoteGraph pm_goal_234 initPM) 3041) := by
-    simp only [pm_goal_234, denoteGraph, GraphDecl.nodes, List.foldl]
-    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
-    rw [applyNode_bw_softmax_out_g234]
-    congr 1 <;> repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
-  have hbw1 : (denoteGraph pm_goal_234 initPM) 3059 =
-      bw_softmax (initPM 3060) ((denoteGraph pm_goal_234 initPM) 3042) := by
-    simp only [pm_goal_234, denoteGraph, GraphDecl.nodes, List.foldl]
-    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
-    rw [applyNode_bw_softmax_out_g234]
-    congr 1 <;> repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
-  have hbw2 : (denoteGraph pm_goal_234 initPM) 3061 =
-      bw_softmax (initPM 3062) ((denoteGraph pm_goal_234 initPM) 3043) := by
-    simp only [pm_goal_234, denoteGraph, GraphDecl.nodes, List.foldl]
-    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
-    rw [applyNode_bw_softmax_out_g234]
-    congr 1 <;> repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
-  have hbw3 : (denoteGraph pm_goal_234 initPM) 3063 =
-      bw_softmax (initPM 3064) ((denoteGraph pm_goal_234 initPM) 3044) := by
-    simp only [pm_goal_234, denoteGraph, GraphDecl.nodes, List.foldl]
-    repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
-    rw [applyNode_bw_softmax_out_g234]
-    congr 1 <;> repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+  have hbw0 : denoteGraph pm_goal_234 initPM 3057 = bw_softmax (initPM 3058) ((denoteGraph pm_goal_234 initPM) 3041) := by
+    have hL : denoteGraph pm_goal_234 initPM 3057
+            = denoteGraph {pm_goal_234 with nodes := pm_goal_234.nodes.take 5} initPM 3057 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_234 initPM 3057 _ _ (List.take_append_drop 5 _).symm (by decide)
+    have hR3041 : denoteGraph pm_goal_234 initPM 3041 = denoteGraph {pm_goal_234 with nodes := pm_goal_234.nodes.take 1} initPM 3041 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_234 initPM 3041 _ _ (List.take_append_drop 1 _).symm (by decide)
+    rw [hL, hR3041]
+    simp only [pm_goal_234, denoteGraph, GraphDecl.nodes, List.take, List.foldl]
+    rfl
+  have hbw1 : denoteGraph pm_goal_234 initPM 3059 = bw_softmax (initPM 3060) ((denoteGraph pm_goal_234 initPM) 3042) := by
+    have hL : denoteGraph pm_goal_234 initPM 3059
+            = denoteGraph {pm_goal_234 with nodes := pm_goal_234.nodes.take 6} initPM 3059 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_234 initPM 3059 _ _ (List.take_append_drop 6 _).symm (by decide)
+    have hR3042 : denoteGraph pm_goal_234 initPM 3042 = denoteGraph {pm_goal_234 with nodes := pm_goal_234.nodes.take 2} initPM 3042 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_234 initPM 3042 _ _ (List.take_append_drop 2 _).symm (by decide)
+    rw [hL, hR3042]
+    simp only [pm_goal_234, denoteGraph, GraphDecl.nodes, List.take, List.foldl]
+    rfl
+  have hbw2 : denoteGraph pm_goal_234 initPM 3061 = bw_softmax (initPM 3062) ((denoteGraph pm_goal_234 initPM) 3043) := by
+    have hL : denoteGraph pm_goal_234 initPM 3061
+            = denoteGraph {pm_goal_234 with nodes := pm_goal_234.nodes.take 7} initPM 3061 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_234 initPM 3061 _ _ (List.take_append_drop 7 _).symm (by decide)
+    have hR3043 : denoteGraph pm_goal_234 initPM 3043 = denoteGraph {pm_goal_234 with nodes := pm_goal_234.nodes.take 3} initPM 3043 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_234 initPM 3043 _ _ (List.take_append_drop 3 _).symm (by decide)
+    rw [hL, hR3043]
+    simp only [pm_goal_234, denoteGraph, GraphDecl.nodes, List.take, List.foldl]
+    rfl
+  have hbw3 : denoteGraph pm_goal_234 initPM 3063 = bw_softmax (initPM 3064) ((denoteGraph pm_goal_234 initPM) 3044) := by
+    have hL : denoteGraph pm_goal_234 initPM 3063
+            = denoteGraph {pm_goal_234 with nodes := pm_goal_234.nodes.take 8} initPM 3063 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_234 initPM 3063 _ _ (List.take_append_drop 8 _).symm (by decide)
+    have hR3044 : denoteGraph pm_goal_234 initPM 3044 = denoteGraph {pm_goal_234 with nodes := pm_goal_234.nodes.take 4} initPM 3044 :=
+      denoteGraph_tid_eq_of_suffix_no_writes pm_goal_234 initPM 3044 _ _ (List.take_append_drop 4 _).symm (by decide)
+    rw [hL, hR3044]
+    simp only [pm_goal_234, denoteGraph, GraphDecl.nodes, List.take, List.foldl]
+    rfl
   -- 3057_r = bw_softmax (chunk_1_r 872) (chunk_1_r 690)
   have hS0 : (denoteGraph pm_goal_234 initPM) 3057 =
       bw_softmax (chunkPrimDimN 1 4 0 (initSM 872)) (chunkPrimDimN 1 4 0 (initSM 690)) := by
