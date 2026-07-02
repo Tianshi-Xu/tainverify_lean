@@ -4643,6 +4643,65 @@ theorem applyNode_fw_mix_precision_linear_out
   unfold storeSet
   simp [List.find?]
 
+/-- applyNode for `FW_topk_routing` first output (probs = .fst). -/
+theorem applyNode_fw_topk_routing_probs_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (logitsTid probsTid mapTid scoresTid : Tid)
+    (params : List Nat) :
+    applyNode g s
+      { rank := rank, op := "OpName.FW_topk_routing", ins := [logitsTid],
+        outs := [probsTid, mapTid, scoresTid], params := params } probsTid =
+      (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).fst := by
+  unfold applyNode
+  change storeSet s
+    [(probsTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).fst),
+     (mapTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).snd.fst),
+     (scoresTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).snd.snd)] probsTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- applyNode for `FW_multiref` with 5 outputs at position 1 (t2). -/
+theorem applyNode_fw_multiref5_at_pos1_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid t1 t2 t3 t4 t5 : Tid) (h12 : t1 ≠ t2) :
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid], outs := [t1, t2, t3, t4, t5], params := [5] } t2 = s xTid := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_multiref]
+  change storeSet s ([t1, t2, t3, t4, t5].zip (List.replicate 5 (s xTid))) t2 = _
+  unfold storeSet
+  simp [List.zip, List.zipWith, List.replicate, List.find?, h12]
+
+/-- applyNode for `FW_multiref` with 5 outputs at position 2 (t3). -/
+theorem applyNode_fw_multiref5_at_pos2_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid t1 t2 t3 t4 t5 : Tid)
+    (h13 : t1 ≠ t3) (h23 : t2 ≠ t3) :
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid], outs := [t1, t2, t3, t4, t5], params := [5] } t3 = s xTid := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_multiref]
+  change storeSet s ([t1, t2, t3, t4, t5].zip (List.replicate 5 (s xTid))) t3 = _
+  unfold storeSet
+  simp [List.zip, List.zipWith, List.replicate, List.find?, h13, h23]
+
+/-- applyNode for `FW_multiref` with 5 outputs at position 3 (t4). -/
+theorem applyNode_fw_multiref5_at_pos3_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid t1 t2 t3 t4 t5 : Tid)
+    (h14 : t1 ≠ t4) (h24 : t2 ≠ t4) (h34 : t3 ≠ t4) :
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid], outs := [t1, t2, t3, t4, t5], params := [5] } t4 = s xTid := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_multiref]
+  change storeSet s ([t1, t2, t3, t4, t5].zip (List.replicate 5 (s xTid))) t4 = _
+  unfold storeSet
+  simp [List.zip, List.zipWith, List.replicate, List.find?, h14, h24, h34]
+
+/-- applyNode for `FW_multiref` with 5 outputs at position 4 (t5). -/
+theorem applyNode_fw_multiref5_at_pos4_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid t1 t2 t3 t4 t5 : Tid)
+    (h15 : t1 ≠ t5) (h25 : t2 ≠ t5) (h35 : t3 ≠ t5) (h45 : t4 ≠ t5) :
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid], outs := [t1, t2, t3, t4, t5], params := [5] } t5 = s xTid := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_multiref]
+  change storeSet s ([t1, t2, t3, t4, t5].zip (List.replicate 5 (s xTid))) t5 = _
+  unfold storeSet
+  simp [List.zip, List.zipWith, List.replicate, List.find?, h15, h25, h35, h45]
+
 /-- Unfolding lemma for `evalOp` on `FW_maybe_unshuffle` (2-input case: `[cu, x]`). -/
 theorem evalOp_fw_maybe_unshuffle_2 (numParts rank : Nat) (params : List Nat) (cu x : Tensor) :
     evalOp numParts rank "OpName.FW_maybe_unshuffle" params [cu, x] =
