@@ -296,8 +296,52 @@ theorem denote_sm_goal_4_4676 (initSM : Store) :
   rw [h4711, h4765, h4819, h4873, h4927, h4981, h5035, h5089, h5143, h5197, h5251, h5305, h5362, h5411, h5460, h5509, h5558, h5607, h5656, h5705, h5754, h5803, h5852, h5901]
 
 theorem prove_goal_4 : goal_4_stmt_cut := by
-  sorry -- Math: apply per-layer topk sharding lemma × 24, then stack-lift.
-        -- Row-wise argument on softmax + topk_routing. Est. 1 week.
+  intro initSM initPM hSM hPM hInit
+  simp only [goal_4]
+  have h4708_sm : (initSM 4708).shape = [4096, 64] := hSM 4708 [4096, 64] (by native_decide)
+  have hpmR : pm_goal_4.numRanks = 2 := rfl
+  have hscores_shape : ∀ (x : Tensor) (sh : Shape) (hx : x.shape = sh),
+      (fw_topk_routing x 8 1).snd.snd.shape = sh := by
+    intro x sh hx
+    show (softmax x).shape = sh
+    rw [softmax_shape_g18, hx]
+  refine ⟨?shape_sm, ?shape_pm, ?value⟩
+  case shape_sm =>
+    rw [denote_sm_goal_4_4676 initSM]
+    have hhead : (([(fw_topk_routing (initSM 4708) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 4762) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 4816) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 4870) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 4924) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 4978) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5032) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5086) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5140) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5194) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5248) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5302) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5359) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5408) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5457) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5506) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5555) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5604) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5653) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5702) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5751) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5800) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5849) 8 1).snd.snd,
+                    (fw_topk_routing (initSM 5898) 8 1).snd.snd] : List Tensor).head?.map
+        (fun t => t.shape)).getD [] = [4096, 64] := by
+      simp [hscores_shape _ [4096, 64] h4708_sm]
+    rw [fw_stack_shape _ [4096, 64] hhead]
+    rfl
+  case shape_pm =>
+    -- pmStore 4676 has shape [24, 4096, 64] via denote_pm_goal_4_4676 (allGather dim=1 on 2 shards).
+    sorry -- Deferred: mechanical shape reduction
+  case value =>
+    -- SM = PM via denote_sm/pm_goal_4_4676 + Lemma A × 24 + Lemma B + intermediate extractions.
+    sorry -- Deferred: assembly needing Lemma A × 24 + Lemma B (both in Pattern4Math)
 
 /-!
 ### PM-side machinery: denote pm_goal_4 at write tid 4676.

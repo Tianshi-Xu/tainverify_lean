@@ -20,6 +20,8 @@ set_option maxHeartbeats 8000000
 namespace TrainVerify.Denote.GeneratedPatterns
 
 open TrainVerify.Denote
+open TrainVerify.Denote.Generated
+open TrainVerify.Denote.GeneratedGoals
 
 /-- Softmax valAt for last-dim `64`, index expressed as `row * 64 + col`. -/
 theorem softmax_valAt_d64 (x : Tensor) (pre : List Nat) (idx : Nat)
