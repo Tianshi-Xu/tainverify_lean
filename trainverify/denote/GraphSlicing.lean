@@ -368,6 +368,56 @@ def IsTopoSorted (nodes : List NodeDecl) : Prop :=
     (∀ n ∈ nodes, tid ∉ n.outs) ∨
     (∃ i, ∃ (hij : i < j), tid ∈ (nodes[i]'(Nat.lt_trans hij hj)).outs)
 
+/-- Decidable version: for every node index `j` in the list, and every read tid,
+    it's either in the prefix's outs or nowhere. Bool-valued so native_decide works. -/
+def IsTopoSortedBool (nodes : List NodeDecl) : Bool :=
+  nodes.zipIdx.all (fun (n, j) =>
+    n.ins.all (fun tid =>
+      -- Written by some earlier node OR unwritten by all nodes.
+      ((nodes.take j).any (fun n' => n'.outs.contains tid)) ||
+      (nodes.all (fun n' => !n'.outs.contains tid))))
+
+/-- Bridge from bool form to Prop form. -/
+theorem isTopoSorted_of_bool (nodes : List NodeDecl)
+    (h : IsTopoSortedBool nodes = true) : IsTopoSorted nodes := by
+  intro j hj tid htid
+  unfold IsTopoSortedBool at h
+  rw [List.all_eq_true] at h
+  -- Get the fact for (nodes[j], j) ∈ nodes.zipIdx.
+  have h_pair_mem : (nodes[j]'hj, j) ∈ nodes.zipIdx := by
+    rw [List.mem_zipIdx_iff_getElem?]
+    rw [List.getElem?_eq_getElem hj]
+  have h_j := h _ h_pair_mem
+  simp only at h_j
+  rw [List.all_eq_true] at h_j
+  have h_tid := h_j tid htid
+  rw [Bool.or_eq_true] at h_tid
+  rcases h_tid with h_earlier | h_never
+  · right
+    rw [List.any_eq_true] at h_earlier
+    rcases h_earlier with ⟨n', hn'_mem, hn'_out⟩
+    rcases List.getElem_of_mem hn'_mem with ⟨i, hi_take, hi_eq⟩
+    have hi_lt_j : i < j := by
+      rw [List.length_take] at hi_take
+      omega
+    have hi_lt : i < nodes.length := Nat.lt_trans hi_lt_j hj
+    have hget_take : (nodes.take j)[i]'hi_take = nodes[i]'hi_lt :=
+      List.getElem_take
+    have h_n'_eq : n' = nodes[i]'hi_lt := hget_take ▸ hi_eq.symm
+    refine ⟨i, hi_lt_j, ?_⟩
+    rw [← h_n'_eq]
+    exact List.mem_of_elem_eq_true hn'_out
+  · left
+    intro n' hn'_mem
+    rw [List.all_eq_true] at h_never
+    have h_bool := h_never n' hn'_mem
+    -- h_bool : (! n'.outs.contains tid) = true
+    intro hcontra
+    have h_true : n'.outs.contains tid = true := List.elem_eq_true_of_mem hcontra
+    rw [h_true] at h_bool
+    -- h_bool : (!true) = true is False
+    simp at h_bool
+
 /-- Helper: for `tid ∈ n.outs` with `evalOp` producing enough entries,
     `applyNode g s n tid` depends only on `n.ins.map s`. -/
 theorem applyNode_at_out_congr_of_ins_agree
@@ -453,6 +503,44 @@ def AgreementFrontier (g : GraphDecl) (nodes : List NodeDecl)
 def OutsDisjoint (nodes : List NodeDecl) : Prop :=
   ∀ n₁ ∈ nodes, ∀ n₂ ∈ nodes, n₁ ≠ n₂ →
     ∀ tid, tid ∈ n₁.outs → tid ∉ n₂.outs
+
+/-- Reduction: `OutsDisjoint` follows from `Pairwise disjoint` on the list of
+    outs. This form is `native_decide`-able per concrete graph. -/
+theorem outsDisjoint_of_pairwise_disjoint
+    (nodes : List NodeDecl)
+    (h : nodes.Pairwise (fun a b => a.outs.Disjoint b.outs)) :
+    OutsDisjoint nodes := by
+  intro n₁ hn₁ n₂ hn₂ hne tid ht₁ ht₂
+  rcases List.getElem_of_mem hn₁ with ⟨i, hi, hi_eq⟩
+  rcases List.getElem_of_mem hn₂ with ⟨j, hj, hj_eq⟩
+  have hij : i ≠ j := by
+    intro heq
+    apply hne
+    subst heq
+    rw [← hi_eq, ← hj_eq]
+  rw [List.pairwise_iff_getElem] at h
+  rcases Nat.lt_or_gt_of_ne hij with hlt | hgt
+  · have h_disj := h i j hi hj hlt
+    have := h_disj (a := tid)
+    exact this (hi_eq ▸ ht₁) (hj_eq ▸ ht₂)
+  · have h_disj := h j i hj hi hgt
+    have := h_disj (a := tid)
+    exact this (hj_eq ▸ ht₂) (hi_eq ▸ ht₁)
+
+/-- Direct scalable form: `OutsDisjoint` follows from `Nodup` on the flattened
+    outs lists. This is directly `native_decide`-able per concrete graph. -/
+theorem outsDisjoint_of_flatten_nodup
+    (nodes : List NodeDecl)
+    (h : (nodes.map (·.outs)).flatten.Nodup) :
+    OutsDisjoint nodes := by
+  apply outsDisjoint_of_pairwise_disjoint
+  -- Extract pairwise disjointness from flatten nodup.
+  rw [List.nodup_flatten] at h
+  obtain ⟨_hind, h_pw⟩ := h
+  -- h_pw : (nodes.map (·.outs)).Pairwise List.Disjoint
+  -- Convert to nodes.Pairwise via pairwise_map.
+  rw [List.pairwise_map] at h_pw
+  exact h_pw
 
 /-- Main fold-induction lemma (invariant version).
 
