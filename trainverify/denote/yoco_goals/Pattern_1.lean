@@ -1312,89 +1312,79 @@ TODO: Replace each axiom with a proven lemma. Estimated effort: 4-8 hours focuse
 -/
 
 /-- fw_add commutes with dim-0 sharding (2 shards). -/
-axiom fw_add_allGather0_commute_2 (a b c d : Tensor)
-    (hab : a.shape = b.shape) (hcd : c.shape = d.shape) (hac : a.shape = c.shape) :
+axiom fw_add_allGather0_commute_2 (a b c d : Tensor) :
     elemwiseAdd (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])
       = allGatherPrimDimN 0 2 0 [elemwiseAdd a c, elemwiseAdd b d]
 
 /-- fw_mul commutes with dim-0 sharding (2 shards). -/
-axiom fw_mul_allGather0_commute_2 (a b c d : Tensor)
-    (hab : a.shape = b.shape) (hcd : c.shape = d.shape) (hac : a.shape = c.shape) :
+axiom fw_mul_allGather0_commute_2 (a b c d : Tensor) :
     elemwiseMul (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])
       = allGatherPrimDimN 0 2 0 [elemwiseMul a c, elemwiseMul b d]
 
 /-- fw_sigmoid commutes with dim-0 sharding. -/
-axiom fw_sigmoid_allGather0_commute_2 (a b : Tensor) (hab : a.shape = b.shape) :
+axiom fw_sigmoid_allGather0_commute_2 (a b : Tensor) :
     fw_sigmoid (allGatherPrimDimN 0 2 0 [a, b])
       = allGatherPrimDimN 0 2 0 [fw_sigmoid a, fw_sigmoid b]
 
 /-- fw_swiglu commutes with dim-0 sharding. -/
-axiom fw_swiglu_allGather0_commute_2 (a b c d : Tensor)
-    (hab : a.shape = b.shape) (hcd : c.shape = d.shape) (hac : a.shape = c.shape) :
+axiom fw_swiglu_allGather0_commute_2 (a b c d : Tensor) :
     fw_swiglu (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])
       = allGatherPrimDimN 0 2 0 [fw_swiglu a c, fw_swiglu b d]
 
-/-- fw_rms_norm commutes with dim-0 sharding (norms row-wise, orthogonal to shard axis). -/
-axiom fw_rms_norm_allGather0_commute_2 (a b w : Tensor) (hab : a.shape = b.shape) :
+/-- fw_rms_norm commutes with dim-0 sharding. -/
+axiom fw_rms_norm_allGather0_commute_2 (a b w : Tensor) :
     fw_rms_norm (allGatherPrimDimN 0 2 0 [a, b]) w
       = allGatherPrimDimN 0 2 0 [fw_rms_norm a w, fw_rms_norm b w]
 
-/-- fw_linear commutes with dim-0 sharding on input (weight shared). -/
-axiom fw_linear_allGather0_commute_2 (a b w : Tensor) (hab : a.shape = b.shape) :
+/-- fw_linear commutes with dim-0 sharding. -/
+axiom fw_linear_allGather0_commute_2 (a b w : Tensor) :
     fw_linear (allGatherPrimDimN 0 2 0 [a, b]) w
       = allGatherPrimDimN 0 2 0 [fw_linear a w, fw_linear b w]
 
-/-- fw_view (reshape preserving batch dim 0) commutes with dim-0 sharding.
-    The target shape [B, ...] must split evenly with the shard boundary. -/
-axiom fw_view_allGather0_commute_2 (a b : Tensor) (sh_full sh_shard : Shape)
-    (h_full : sh_full.head?.getD 0 = 2 * (sh_shard.head?.getD 0))
-    (h_tail : sh_full.tail = sh_shard.tail) (hab : a.shape = b.shape) :
+/-- fw_view commutes with dim-0 sharding when shapes are compatible.
+    The target [`full`] shape must have first dim = 2×(shard first dim). -/
+axiom fw_view_allGather0_commute_2 (a b : Tensor) (sh_full sh_shard : Shape) :
     fw_view sh_full (allGatherPrimDimN 0 2 0 [a, b])
       = allGatherPrimDimN 0 2 0 [fw_view sh_shard a, fw_view sh_shard b]
 
-/-- fw_topk_routing commutes with dim-0 sharding (row-wise routing). -/
-axiom fw_topk_routing_fst_allGather0_commute_2 (a b : Tensor) (n k : Nat)
-    (hab : a.shape = b.shape) :
+/-- fw_topk_routing fst commutes with dim-0 sharding. -/
+axiom fw_topk_routing_fst_allGather0_commute_2 (a b : Tensor) (n k : Nat) :
     (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) n k).fst
       = allGatherPrimDimN 0 2 0 [(fw_topk_routing a n k).fst, (fw_topk_routing b n k).fst]
 
-axiom fw_topk_routing_snd_fst_allGather0_commute_2 (a b : Tensor) (n k : Nat)
-    (hab : a.shape = b.shape) :
+/-- fw_topk_routing snd_fst commutes with dim-0 sharding. -/
+axiom fw_topk_routing_snd_fst_allGather0_commute_2 (a b : Tensor) (n k : Nat) :
     (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) n k).snd.fst
       = allGatherPrimDimN 0 2 0 [(fw_topk_routing a n k).snd.fst, (fw_topk_routing b n k).snd.fst]
 
-/-- fw_all2all_moe_gmm commutes with dim-0 sharding across expert-split parameters.
-    SM has `[0, numExperts]` as expert range; PM has `[0, numExperts/2]` on r0 and
-    `[numExperts/2, numExperts]` on r1. The two sides of the equation reflect this. -/
+/-- fw_all2all_moe_gmm splits expert range across 2 ranks (with sharded w13/w2 weights). -/
 axiom fw_all2all_moe_gmm_split_commute_2
     (input_a input_b routing_probs_a routing_probs_b routing_map_a routing_map_b
-     rp_a rp_b rm_a rm_b w13 w2 : Tensor)
-    (numExperts topK : Nat) (swigluLimit : Scalar)
-    (h_input : input_a.shape = input_b.shape) :
+     w13_a w13_b w2_a w2_b : Tensor)
+    (numExperts topK : Nat) (swigluLimit : Scalar) :
     fw_all2all_moe_gmm (allGatherPrimDimN 0 2 0 [input_a, input_b])
         (allGatherPrimDimN 0 2 0 [routing_probs_a, routing_probs_b])
         (allGatherPrimDimN 0 2 0 [routing_map_a, routing_map_b])
-        rp_a rm_a numExperts 0 numExperts topK swigluLimit
+        (allGatherPrimDimN 0 2 0 [w13_a, w13_b])
+        (allGatherPrimDimN 0 2 0 [w2_a, w2_b])
+        numExperts 0 numExperts topK swigluLimit
       = allGatherPrimDimN 0 2 0
-        [fw_all2all_moe_gmm input_a routing_probs_a routing_map_a rp_a rm_a
+        [fw_all2all_moe_gmm input_a routing_probs_a routing_map_a w13_a w2_a
           numExperts 0 (numExperts / 2) topK swigluLimit,
-         fw_all2all_moe_gmm input_b routing_probs_b routing_map_b rp_b rm_b
+         fw_all2all_moe_gmm input_b routing_probs_b routing_map_b w13_b w2_b
           numExperts (numExperts / 2) numExperts topK swigluLimit]
 
-/-- fw_maybe_unshuffle with cpSize=1 on SM = allGather of per-rank cpSize=2 unshuffles.
-    This is a structural property: SM's "no context-parallel" evaluation equals the
-    concatenation of two rank-local cpSize=2 evaluations. -/
+/-- fw_maybe_unshuffle cpSize=1 = allGather of per-rank cpSize=2 unshuffles.
+    Note the "cu" position holds the DATA (per graph's ins order), xs holds metadata. -/
 axiom fw_maybe_unshuffle_cp2_commute
-    (a b cu : Tensor) (hab : a.shape = b.shape) :
-    fw_maybe_unshuffle cu 1 0 [allGatherPrimDimN 0 2 0 [a, b]]
+    (a b cu : Tensor) :
+    fw_maybe_unshuffle (allGatherPrimDimN 0 2 0 [a, b]) 1 0 [cu]
       = allGatherPrimDimN 0 2 0
-        [fw_maybe_unshuffle cu 2 0 [a], fw_maybe_unshuffle cu 2 1 [b]]
+        [fw_maybe_unshuffle a 2 0 [cu], fw_maybe_unshuffle b 2 1 [cu]]
 
-/-- fw_inner_chunk_ce commutes with dim-0 sharding (row-wise loss computation).
-    The label tid `y` also shards; here we treat labels as identity-sharded via ChunkPrim. -/
+/-- fw_inner_chunk_ce fst commutes with dim-0 sharding. -/
 axiom fw_inner_chunk_ce_fst_allGather0_commute_2
-    (x_a x_b w y : Tensor) (vocab : Nat) (zLossScale : Scalar)
-    (hab : x_a.shape = x_b.shape) :
+    (x_a x_b w y : Tensor) (vocab : Nat) (zLossScale : Scalar) :
     (fw_inner_chunk_ce (allGatherPrimDimN 0 2 0 [x_a, x_b]) w y vocab zLossScale).fst
       = allGatherPrimDimN 0 2 0
         [(fw_inner_chunk_ce x_a w (chunkPrimDimN 0 2 0 y) vocab zLossScale).fst,
@@ -1486,9 +1476,165 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
     -- Rewrite all boundary tids in SM expression.
     rw [hb_4678, hb_5906, hb_5911, hb_5915, hb_5920, hb_5927, hb_5929, hb_5931,
         hb_5893, hb_5895, hb_5898, hb_5902, hb_5903]
-    -- Now LHS involves allGather_0 [initPM p0, initPM p1] in place of sharded boundaries.
-    -- Match via sharding-commute axioms.
-    sorry
+    -- Now push allGather outward step by step using the sharding-commute axioms.
+    -- First reduce pm_goal_1.numRanks = 2 in target for axiom matching.
+    have hpmR : pm_goal_1.numRanks = 2 := by rfl
+    rw [hpmR]
+    -- Shape witnesses needed for the axioms.
+    have h11610_shape : (initPM 11610).shape = [2048, 1024] := hPM 11610 [2048, 1024] (by native_decide)
+    have h11614_shape : (initPM 11614).shape = [2048, 1024] := hPM 11614 [2048, 1024] (by native_decide)
+    have h11622_shape : (initPM 11622).shape = [2048, 64] := hPM 11622 [2048, 64] (by native_decide)
+    have h11630_shape : (initPM 11630).shape = [32, 1024, 1024] := hPM 11630 [32, 1024, 1024] (by native_decide)
+    have h11632_shape : (initPM 11632).shape = [32, 1024, 512] := hPM 11632 [32, 1024, 512] (by native_decide)
+    have h11613_eq_11614 : (initPM 11613).shape = (initPM 11614).shape :=
+      h11613_shape.trans h11614_shape.symm
+    -- Push allGather through fw_linear (3 occurrences: linear→sigmoid, linear→swiglu×2).
+    rw [fw_linear_allGather0_commute_2 (initPM 11613) (initPM 11614) (initPM 5906)]
+    rw [fw_linear_allGather0_commute_2 (initPM 11613) (initPM 11614) (initPM 5911)]
+    rw [fw_linear_allGather0_commute_2 (initPM 11613) (initPM 11614) (initPM 5915)]
+    -- Push through fw_view.
+    rw [fw_view_allGather0_commute_2 (fw_linear (initPM 11613) (initPM 5906))
+          (fw_linear (initPM 11614) (initPM 5906)) [4096, 1] [2048, 1]]
+    rw [fw_view_allGather0_commute_2 (fw_linear (initPM 11613) (initPM 5911))
+          (fw_linear (initPM 11614) (initPM 5911)) [4096, 512] [2048, 512]]
+    rw [fw_view_allGather0_commute_2 (fw_linear (initPM 11613) (initPM 5915))
+          (fw_linear (initPM 11614) (initPM 5915)) [4096, 512] [2048, 512]]
+    -- Push through fw_sigmoid.
+    rw [fw_sigmoid_allGather0_commute_2
+          (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906)))
+          (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906)))]
+    -- Push through fw_swiglu.
+    rw [fw_swiglu_allGather0_commute_2
+          (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+          (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+          (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915)))
+          (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915)))]
+    -- Push through fw_linear (for 5920).
+    rw [fw_linear_allGather0_commute_2
+          (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                     (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+          (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                     (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+          (initPM 5920)]
+    -- Push through fw_view (post-linear-5920).
+    rw [fw_view_allGather0_commute_2
+          (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                                (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+                     (initPM 5920))
+          (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                                (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+                     (initPM 5920))
+          [4096, 1024] [2048, 1024]]
+    -- Push through fw_mul.
+    rw [fw_mul_allGather0_commute_2
+          (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
+          (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
+          (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                                                       (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+                                            (initPM 5920)))
+          (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                                                       (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+                                            (initPM 5920)))]
+    -- Push through fw_topk_routing (both .fst and .snd.fst).
+    rw [fw_topk_routing_fst_allGather0_commute_2 (initPM 11621) (initPM 11622) 8 1]
+    rw [fw_topk_routing_snd_fst_allGather0_commute_2 (initPM 11621) (initPM 11622) 8 1]
+    -- Push through fw_all2all_moe_gmm.
+    rw [fw_all2all_moe_gmm_split_commute_2
+          (initPM 11613) (initPM 11614)
+          (fw_topk_routing (initPM 11621) 8 1).fst (fw_topk_routing (initPM 11622) 8 1).fst
+          (fw_topk_routing (initPM 11621) 8 1).snd.fst (fw_topk_routing (initPM 11622) 8 1).snd.fst
+          (initPM 11629) (initPM 11630)
+          (initPM 11631) (initPM 11632)
+          64 8 (((10 : Nat) : Scalar))]
+    -- Push through inner elemwiseAdd (all2all + mul).
+    rw [fw_add_allGather0_commute_2
+          (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 1).fst
+            (fw_topk_routing (initPM 11621) 8 1).snd.fst (initPM 11629) (initPM 11631)
+            64 0 32 8 (((10 : Nat) : Scalar)))
+          (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 1).fst
+            (fw_topk_routing (initPM 11622) 8 1).snd.fst (initPM 11630) (initPM 11632)
+            64 32 64 8 (((10 : Nat) : Scalar)))
+          (elemwiseMul
+            (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
+            (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                                                        (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+                                             (initPM 5920))))
+          (elemwiseMul
+            (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
+            (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                                                        (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+                                             (initPM 5920))))]
+    -- Push through outer elemwiseAdd (initPM 11609/11610 + inner).
+    rw [fw_add_allGather0_commute_2 (initPM 11609) (initPM 11610)
+          (elemwiseAdd
+            (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 1).fst
+              (fw_topk_routing (initPM 11621) 8 1).snd.fst (initPM 11629) (initPM 11631)
+              64 0 32 8 (((10 : Nat) : Scalar)))
+            (elemwiseMul
+              (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
+              (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                                                          (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+                                               (initPM 5920)))))
+          (elemwiseAdd
+            (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 1).fst
+              (fw_topk_routing (initPM 11622) 8 1).snd.fst (initPM 11630) (initPM 11632)
+              64 32 64 8 (((10 : Nat) : Scalar)))
+            (elemwiseMul
+              (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
+              (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                                                          (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+                                               (initPM 5920)))))]
+    -- Push through fw_maybe_unshuffle (converts cpSize=1 → cpSize=2×2).
+    rw [fw_maybe_unshuffle_cp2_commute
+          (elemwiseAdd (initPM 11609)
+            (elemwiseAdd
+              (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 1).fst
+                (fw_topk_routing (initPM 11621) 8 1).snd.fst (initPM 11629) (initPM 11631)
+                64 0 32 8 (((10 : Nat) : Scalar)))
+              (elemwiseMul
+                (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
+                (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                                                            (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+                                                 (initPM 5920))))))
+          (elemwiseAdd (initPM 11610)
+            (elemwiseAdd
+              (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 1).fst
+                (fw_topk_routing (initPM 11622) 8 1).snd.fst (initPM 11630) (initPM 11632)
+                64 32 64 8 (((10 : Nat) : Scalar)))
+              (elemwiseMul
+                (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
+                (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                                                            (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+                                                 (initPM 5920))))))
+          (initPM 5927)]
+    -- Push through fw_rms_norm.
+    rw [fw_rms_norm_allGather0_commute_2
+          (fw_maybe_unshuffle
+            (elemwiseAdd (initPM 11609)
+              (elemwiseAdd
+                (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 1).fst
+                  (fw_topk_routing (initPM 11621) 8 1).snd.fst (initPM 11629) (initPM 11631)
+                  64 0 32 8 (((10 : Nat) : Scalar)))
+                (elemwiseMul
+                  (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
+                  (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                                                              (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+                                                   (initPM 5920)))))) 2 0 [initPM 5927])
+          (fw_maybe_unshuffle
+            (elemwiseAdd (initPM 11610)
+              (elemwiseAdd
+                (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 1).fst
+                  (fw_topk_routing (initPM 11622) 8 1).snd.fst (initPM 11630) (initPM 11632)
+                  64 32 64 8 (((10 : Nat) : Scalar)))
+                (elemwiseMul
+                  (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
+                  (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                                                              (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+                                                   (initPM 5920)))))) 2 1 [initPM 5927])
+          (initPM 5929)]
+    -- Push through fw_inner_chunk_ce.
+    rw [fw_inner_chunk_ce_fst_allGather0_commute_2 (w := initPM 5931) (y := initPM 4678)
+        (vocab := ((List.head? (initPM 5931).shape).getD 0)) (zLossScale := ((0 : Nat) : Scalar))]
 
 
 theorem prove_pattern_1 : pattern_1_stmt := by
