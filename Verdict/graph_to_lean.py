@@ -1086,6 +1086,45 @@ def _emit_cut_to_full(
 	_emit_no_interference("pm", pm_name, pm_tids, sl.pm_nodes, pm_graph)
 
 	# --- Main theorem ---
+	if prereq_gids:
+		# NON-BASE case (has prereqs from earlier goals). The auto-generated
+		# cut_to_full requires a `denoteGraph_slice_self_agrees` lemma that
+		# isn't yet proven (needs a fixed-point induction on g.nodes not
+		# covered by denoteGraph_slice_agrees). Skip emitting the theorem;
+		# users must hand-write it via sm_frame_*_self / pm_frame_*_self
+		# helpers (see denote/gpt_ly4_regen/Goal*Bridge.lean examples).
+		lines.append("/-")
+		lines.append(
+			f"NON-BASE goal (has {len(prereq_gids)} prereqs). Auto-generation of"
+		)
+		lines.append(
+			"`goal_{gid}_cut_to_full` is not yet supported for non-base goals;"
+		)
+		lines.append(
+			"it requires the `denoteGraph_slice_self_agrees` lemma which needs"
+		)
+		lines.append(
+			"an unproven fixed-point-on-writes property of `denoteGraph g`."
+		)
+		lines.append("")
+		lines.append(
+			"See `denote/GraphSlicing.lean` (Non-base cut_to_full note) for the"
+		)
+		lines.append("open sub-lemma statement.")
+		lines.append("")
+		lines.append(
+			"To finish this goal manually, write per-goal `sm_frame_*_self` /"
+		)
+		lines.append(
+			"`pm_frame_*_self` helpers (see gpt_ly4_regen Goal*Bridge.lean for"
+		)
+		lines.append("examples), then assemble cut_to_full using them + the "
+		            "sublist/nodup/no-interference facts already emitted above.")
+		lines.append("-/")
+		lines.append("")
+		lines.append("end TrainVerify.Denote.GeneratedGoals")
+		return lines
+	# BASE case: emit the full auto-generated cut_to_full theorem.
 	lines.append(f"theorem goal_{gid}_cut_to_full (h : goal_{gid}_stmt_cut) : goal_{gid}_stmt := by")
 	lines.append("  intro initSM initPM hSM hPM hInit")
 	# StoreShapesHold for local envs.
@@ -1135,7 +1174,9 @@ def _emit_cut_to_full(
 	lines.append(f"    have hnr : {pm_name}.numRanks = pm.numRanks := {pm_name}_numRanks_eq.symm")
 	lines.append("    rw [hnr]")
 	if prereq_gids:
-		# initGoals ++ goal_gid_prereqs
+		# initGoals ++ goal_gid_prereqs — this branch is DEAD (we early-return
+		# above for non-base goals). Kept as a placeholder for future re-enable
+		# once denoteGraph_slice_self_agrees is proven.
 		lines.append("    apply InitGoalsHold_append")
 		lines.append("    · exact hInit")
 		lines.append(f"    · simp only [goal_{gid}_prereqs, InitGoalsHold]")

@@ -291,4 +291,38 @@ theorem denoteGraph_slice_agrees
   exact denoteGraph_slice_agrees_aux g P g.nodes g_local.nodes hSublist hNodup
     hIns hNoInterference initGlobal initLocal hInit tid hP_tid
 
+/-!
+### Convenience: cut-input-derivation lemmas
+
+For cut_to_full bridges. Once we know a tid is an init tid of `g` (not
+written by any node in `g`), we can trade the raw store for the computed
+store at that tid.
+
+**Non-base cut_to_full note (2026-07-02)**: fully generic cut_to_full for
+non-base goals (whose `cut_initGoals` contain intermediateGoals defined
+on computed stores) needs a **fixed-point-on-writes** lemma of the form:
+
+```
+denoteGraph g (denoteGraph g initGlobal) tid = denoteGraph g initGlobal tid
+    -- for tid ∈ graphWrites g, given g.nodes.Nodup + topological order
+```
+
+That lemma requires a fresh induction over `g.nodes` (topological order
+preservation) — it is NOT a corollary of `denoteGraph_slice_agrees`.
+It's not yet proven; without it, the M2 emitter can only handle base-case
+goals (whose `cut_initGoals = initGoals`). Non-base goals fall back to
+hand-written per-goal `sm_frame_*_self` / `pm_frame_*_self` helpers (see
+`denote/gpt_ly4_regen/GoalNNBridge.lean` for the existing hand-written
+patterns).
+-/
+
+/-- If `tid` is not written by any node in `g`, then
+    `denoteGraph g init tid = init tid`. -/
+theorem denoteGraph_at_init_tid
+    (g : GraphDecl) (init : Store) (tid : Tid)
+    (h : ∀ n ∈ g.nodes, tid ∉ n.outs) :
+    denoteGraph g init tid = init tid := by
+  unfold denoteGraph
+  exact denoteGraph_tid_eq_of_forall_not_mem_outs g g.nodes init tid h
+
 end TrainVerify.Denote
