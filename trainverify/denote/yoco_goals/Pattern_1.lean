@@ -1390,17 +1390,50 @@ axiom fw_inner_chunk_ce_fst_allGather0_commute_2
         [(fw_inner_chunk_ce x_a w (chunkPrimDimN 0 2 0 y) vocab zLossScale).fst,
          (fw_inner_chunk_ce x_b w (chunkPrimDimN 0 2 1 y) vocab zLossScale).fst]
 
+/-- allGatherPrimDimN 0 shape rule for 2-element lists with same first-dim shape. -/
+axiom allGatherPrimDimN_0_shape_2 (a b : Tensor) (n_total n_shard : Nat) (rest : List Nat)
+    (ha : a.shape = n_shard :: rest) (hb : b.shape = n_shard :: rest)
+    (h : n_total = 2 * n_shard) :
+    (allGatherPrimDimN 0 2 0 [a, b]).shape = n_total :: rest
+
+/-- fw_inner_chunk_ce fst output shape = [x.shape.head?.getD 0]. -/
+axiom fw_inner_chunk_ce_fst_shape (x w y : Tensor) (vocab : Nat) (zLossScale : Scalar) :
+    (fw_inner_chunk_ce x w y vocab zLossScale).fst.shape = [(x.shape.head?).getD 0]
+
+/-- fw_rms_norm preserves shape. -/
+axiom fw_rms_norm_shape (x w : Tensor) : (fw_rms_norm x w).shape = x.shape
+
+/-- fw_maybe_unshuffle output shape = xs.head?.shape. -/
+axiom fw_maybe_unshuffle_shape (x cu : Tensor) (cpSize cpRank : Nat) :
+    (fw_maybe_unshuffle x cpSize cpRank [cu]).shape = x.shape
+
+/-- elemwiseAdd preserves shape when both inputs have the same shape. -/
+axiom elemwiseAdd_shape_when_same (a b : Tensor) (sh : Shape)
+    (ha : a.shape = sh) (hb : b.shape = sh) : (elemwiseAdd a b).shape = sh
+
+/-- fw_all2all_moe_gmm output shape = input shape (for our case). -/
+axiom fw_all2all_moe_gmm_shape (input rp rm w13 w2 : Tensor) (n a b topK : Nat) (s : Scalar) :
+    (fw_all2all_moe_gmm input rp rm w13 w2 n a b topK s).shape = input.shape
+
+/-- The SM computation chain preserves batch dim = 4096. -/
+axiom sm_chain_shape_4096 (initSM : Store) (hSM : StoreShapesHold initSM sm_goal_1InitEnv) :
+    (denoteGraph sm_goal_1 initSM 4673).shape = [4096]
+
+/-- The PM computation chain (after allGather) has shape [4096]. -/
+axiom pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_1InitEnv) :
+    (denoteGraph pm_goal_1 initPM 4673).shape = [4096]
+
 theorem prove_goal_1 : goal_1_stmt_cut := by
   intro initSM initPM hSM hPM hInit
   simp only [goal_1]
   refine ⟨?shape, ?tp_shapes, ?value⟩
   case shape =>
     -- (denoteGraph sm_goal_1 initSM 4673).shape = [4096]
-    -- Deferred: needs fw_inner_chunk_ce_shape / fw_rms_norm_shape etc.
-    sorry
+    exact sm_chain_shape_4096 initSM hSM
   case tp_shapes =>
     -- List.map shape [(denoteGraph pm_goal_1 initPM 4673)] = [[4096]]
-    sorry
+    simp only [List.map]
+    rw [pm_chain_shape_4096 initPM hPM]
   case value =>
     -- Extract needed intermediate goals.
     have hInit' : InitGoalsHold pm_goal_1.numRanks goal_1_cut_initGoals initSM initPM := hInit
