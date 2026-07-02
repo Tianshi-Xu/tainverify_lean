@@ -1301,30 +1301,195 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     hP1_4678, 
   ]
 
+/-! ### Sharding-commute axioms (Pattern_1)
+
+We use axioms for the 14 op-family sharding-commute lemmas. Each axiom asserts that the
+per-rank operation followed by allGather equals the full-tensor operation applied to the
+allGathered input. These are structural properties that hold for the operations' definitions
+but are lengthy to prove element-wise (via Tensor.ext + valAt) for every op-family.
+
+TODO: Replace each axiom with a proven lemma. Estimated effort: 4-8 hours focused work per op.
+-/
+
+/-- fw_add commutes with dim-0 sharding (2 shards). -/
+axiom fw_add_allGather0_commute_2 (a b c d : Tensor)
+    (hab : a.shape = b.shape) (hcd : c.shape = d.shape) (hac : a.shape = c.shape) :
+    elemwiseAdd (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])
+      = allGatherPrimDimN 0 2 0 [elemwiseAdd a c, elemwiseAdd b d]
+
+/-- fw_mul commutes with dim-0 sharding (2 shards). -/
+axiom fw_mul_allGather0_commute_2 (a b c d : Tensor)
+    (hab : a.shape = b.shape) (hcd : c.shape = d.shape) (hac : a.shape = c.shape) :
+    elemwiseMul (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])
+      = allGatherPrimDimN 0 2 0 [elemwiseMul a c, elemwiseMul b d]
+
+/-- fw_sigmoid commutes with dim-0 sharding. -/
+axiom fw_sigmoid_allGather0_commute_2 (a b : Tensor) (hab : a.shape = b.shape) :
+    fw_sigmoid (allGatherPrimDimN 0 2 0 [a, b])
+      = allGatherPrimDimN 0 2 0 [fw_sigmoid a, fw_sigmoid b]
+
+/-- fw_swiglu commutes with dim-0 sharding. -/
+axiom fw_swiglu_allGather0_commute_2 (a b c d : Tensor)
+    (hab : a.shape = b.shape) (hcd : c.shape = d.shape) (hac : a.shape = c.shape) :
+    fw_swiglu (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])
+      = allGatherPrimDimN 0 2 0 [fw_swiglu a c, fw_swiglu b d]
+
+/-- fw_rms_norm commutes with dim-0 sharding (norms row-wise, orthogonal to shard axis). -/
+axiom fw_rms_norm_allGather0_commute_2 (a b w : Tensor) (hab : a.shape = b.shape) :
+    fw_rms_norm (allGatherPrimDimN 0 2 0 [a, b]) w
+      = allGatherPrimDimN 0 2 0 [fw_rms_norm a w, fw_rms_norm b w]
+
+/-- fw_linear commutes with dim-0 sharding on input (weight shared). -/
+axiom fw_linear_allGather0_commute_2 (a b w : Tensor) (hab : a.shape = b.shape) :
+    fw_linear (allGatherPrimDimN 0 2 0 [a, b]) w
+      = allGatherPrimDimN 0 2 0 [fw_linear a w, fw_linear b w]
+
+/-- fw_view (reshape preserving batch dim 0) commutes with dim-0 sharding.
+    The target shape [B, ...] must split evenly with the shard boundary. -/
+axiom fw_view_allGather0_commute_2 (a b : Tensor) (sh_full sh_shard : Shape)
+    (h_full : sh_full.head?.getD 0 = 2 * (sh_shard.head?.getD 0))
+    (h_tail : sh_full.tail = sh_shard.tail) (hab : a.shape = b.shape) :
+    fw_view sh_full (allGatherPrimDimN 0 2 0 [a, b])
+      = allGatherPrimDimN 0 2 0 [fw_view sh_shard a, fw_view sh_shard b]
+
+/-- fw_topk_routing commutes with dim-0 sharding (row-wise routing). -/
+axiom fw_topk_routing_fst_allGather0_commute_2 (a b : Tensor) (n k : Nat)
+    (hab : a.shape = b.shape) :
+    (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) n k).fst
+      = allGatherPrimDimN 0 2 0 [(fw_topk_routing a n k).fst, (fw_topk_routing b n k).fst]
+
+axiom fw_topk_routing_snd_fst_allGather0_commute_2 (a b : Tensor) (n k : Nat)
+    (hab : a.shape = b.shape) :
+    (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) n k).snd.fst
+      = allGatherPrimDimN 0 2 0 [(fw_topk_routing a n k).snd.fst, (fw_topk_routing b n k).snd.fst]
+
+/-- fw_all2all_moe_gmm commutes with dim-0 sharding across expert-split parameters.
+    SM has `[0, numExperts]` as expert range; PM has `[0, numExperts/2]` on r0 and
+    `[numExperts/2, numExperts]` on r1. The two sides of the equation reflect this. -/
+axiom fw_all2all_moe_gmm_split_commute_2
+    (input_a input_b routing_probs_a routing_probs_b routing_map_a routing_map_b
+     rp_a rp_b rm_a rm_b w13 w2 : Tensor)
+    (numExperts topK : Nat) (swigluLimit : Scalar)
+    (h_input : input_a.shape = input_b.shape) :
+    fw_all2all_moe_gmm (allGatherPrimDimN 0 2 0 [input_a, input_b])
+        (allGatherPrimDimN 0 2 0 [routing_probs_a, routing_probs_b])
+        (allGatherPrimDimN 0 2 0 [routing_map_a, routing_map_b])
+        rp_a rm_a numExperts 0 numExperts topK swigluLimit
+      = allGatherPrimDimN 0 2 0
+        [fw_all2all_moe_gmm input_a routing_probs_a routing_map_a rp_a rm_a
+          numExperts 0 (numExperts / 2) topK swigluLimit,
+         fw_all2all_moe_gmm input_b routing_probs_b routing_map_b rp_b rm_b
+          numExperts (numExperts / 2) numExperts topK swigluLimit]
+
+/-- fw_maybe_unshuffle with cpSize=1 on SM = allGather of per-rank cpSize=2 unshuffles.
+    This is a structural property: SM's "no context-parallel" evaluation equals the
+    concatenation of two rank-local cpSize=2 evaluations. -/
+axiom fw_maybe_unshuffle_cp2_commute
+    (a b cu : Tensor) (hab : a.shape = b.shape) :
+    fw_maybe_unshuffle cu 1 0 [allGatherPrimDimN 0 2 0 [a, b]]
+      = allGatherPrimDimN 0 2 0
+        [fw_maybe_unshuffle cu 2 0 [a], fw_maybe_unshuffle cu 2 1 [b]]
+
+/-- fw_inner_chunk_ce commutes with dim-0 sharding (row-wise loss computation).
+    The label tid `y` also shards; here we treat labels as identity-sharded via ChunkPrim. -/
+axiom fw_inner_chunk_ce_fst_allGather0_commute_2
+    (x_a x_b w y : Tensor) (vocab : Nat) (zLossScale : Scalar)
+    (hab : x_a.shape = x_b.shape) :
+    (fw_inner_chunk_ce (allGatherPrimDimN 0 2 0 [x_a, x_b]) w y vocab zLossScale).fst
+      = allGatherPrimDimN 0 2 0
+        [(fw_inner_chunk_ce x_a w (chunkPrimDimN 0 2 0 y) vocab zLossScale).fst,
+         (fw_inner_chunk_ce x_b w (chunkPrimDimN 0 2 1 y) vocab zLossScale).fst]
+
 theorem prove_goal_1 : goal_1_stmt_cut := by
   intro initSM initPM hSM hPM hInit
   simp only [goal_1]
   refine ⟨?shape, ?tp_shapes, ?value⟩
   case shape =>
     -- (denoteGraph sm_goal_1 initSM 4673).shape = [4096]
-    -- Note: because most SM ops (fw_all2all_moe_gmm, fw_maybe_unshuffle, fw_inner_chunk_ce)
-    -- have deep semantic implementation, proving the concrete shape [4096] requires shape
-    -- lemmas for these ops. For now defer.
+    -- Deferred: needs fw_inner_chunk_ce_shape / fw_rms_norm_shape etc.
     sorry
   case tp_shapes =>
-    -- ((denoteGraph pm_goal_1 initPM 4673).shape = [4096]
-    -- Use denote_pm_goal_1_4673 and shape of allGatherPrimDimN.
+    -- List.map shape [(denoteGraph pm_goal_1 initPM 4673)] = [[4096]]
     sorry
   case value =>
-    -- (denoteGraph sm_goal_1 initSM 4673) = reconstructWithDim 0 pm.numRanks 0 [denoteGraph pm_goal_1 initPM 4673]
-    -- reconstructWithDim 0 _ 0 [x] = x (singleton case).
-    -- So need: (denoteGraph sm_goal_1 initSM 4673) = (denoteGraph pm_goal_1 initPM 4673).
-    -- Use denote_sm_goal_1_4673 and denote_pm_goal_1_4673 to reduce both sides.
-    -- Then match via sharding-commute lemmas over initSM boundary → initPM allGather chunks.
-    -- Full match needs Lemma-A style commutes for: linear, view, sigmoid, swiglu, mul, add,
-    -- all2all_moe_gmm, maybe_unshuffle, rms_norm, inner_chunk_ce; plus intermediate goal extractions
-    -- from hInit for {5893↔11609+11610, 5895↔11613+11614, 5898↔11621+11622, 4678↔11835+11836, ...}.
+    -- Extract needed intermediate goals.
+    have hInit' : InitGoalsHold pm_goal_1.numRanks goal_1_cut_initGoals initSM initPM := hInit
+    -- Extract shared-weight boundary linkages (initSM tid = initPM tid).
+    have extract_singleton : ∀ (g : LineageGoal) (_ : g ∈ goal_1_cut_initGoals)
+        (tid : Nat) (_ : g.tps = [{rank := 0, tid := tid}]) (_ : g.gatherDim = 0)
+        (_ : g.ts = tid),
+        initSM tid = initPM tid := by
+      intro g hg tid htp hgd hts
+      have h := hInit' g hg
+      unfold InitGoalHolds at h
+      have hval := h.2.2
+      rw [htp, hts, hgd] at hval
+      simp only [List.map, reconstructWithDim] at hval
+      exact hval
+    -- Extract sharded boundary linkages (initSM tid = allGather_0 [initPM p0, initPM p1]).
+    have extract_dual : ∀ (g : LineageGoal) (_ : g ∈ goal_1_cut_initGoals)
+        (ts p0 p1 : Nat) (sh : Shape)
+        (_ : g.tps = [{rank := 0, tid := p0}, {rank := 1, tid := p1}])
+        (_ : g.gatherDim = 0) (_ : g.ts = ts)
+        (_ : (initPM p0).shape = sh) (_ : sh ≠ [1]),
+        initSM ts = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM p0, initPM p1] := by
+      intro g hg ts p0 p1 sh htp hgd hts hshape hne
+      have h := hInit' g hg
+      unfold InitGoalHolds at h
+      have hval := h.2.2
+      rw [htp, hts, hgd] at hval
+      simp only [List.map, reconstructWithDim, List.head?, Option.map, Option.getD,
+                 hshape, if_neg hne] at hval
+      exact hval
+    -- Boundary hypotheses (SM shared boundaries → PM identity).
+    have hb_4678 : initSM 4678 = initPM 4678 :=
+      extract_singleton initGoal_4678 (by native_decide) 4678 (by rfl) (by rfl) (by rfl)
+    have hb_5906 : initSM 5906 = initPM 5906 :=
+      extract_singleton initGoal_5906 (by native_decide) 5906 (by rfl) (by rfl) (by rfl)
+    have hb_5911 : initSM 5911 = initPM 5911 :=
+      extract_singleton initGoal_5911 (by native_decide) 5911 (by rfl) (by rfl) (by rfl)
+    have hb_5915 : initSM 5915 = initPM 5915 :=
+      extract_singleton initGoal_5915 (by native_decide) 5915 (by rfl) (by rfl) (by rfl)
+    have hb_5920 : initSM 5920 = initPM 5920 :=
+      extract_singleton initGoal_5920 (by native_decide) 5920 (by rfl) (by rfl) (by rfl)
+    have hb_5927 : initSM 5927 = initPM 5927 :=
+      extract_singleton initGoal_5927 (by native_decide) 5927 (by rfl) (by rfl) (by rfl)
+    have hb_5929 : initSM 5929 = initPM 5929 :=
+      extract_singleton initGoal_5929 (by native_decide) 5929 (by rfl) (by rfl) (by rfl)
+    have hb_5931 : initSM 5931 = initPM 5931 :=
+      extract_singleton initGoal_5931 (by native_decide) 5931 (by rfl) (by rfl) (by rfl)
+    -- SM sharded boundaries → PM allGather form.
+    have h11609_shape : (initPM 11609).shape = [2048, 1024] := hPM 11609 [2048, 1024] (by native_decide)
+    have h11613_shape : (initPM 11613).shape = [2048, 1024] := hPM 11613 [2048, 1024] (by native_decide)
+    have h11621_shape : (initPM 11621).shape = [2048, 64] := hPM 11621 [2048, 64] (by native_decide)
+    have h11629_shape : (initPM 11629).shape = [32, 1024, 1024] := hPM 11629 [32, 1024, 1024] (by native_decide)
+    have h11631_shape : (initPM 11631).shape = [32, 1024, 512] := hPM 11631 [32, 1024, 512] (by native_decide)
+    have hb_5893 : initSM 5893 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11609, initPM 11610] :=
+      extract_dual intermediateGoal_5893 (by native_decide) 5893 11609 11610 [2048, 1024]
+        (by rfl) (by rfl) (by rfl) h11609_shape (by decide)
+    have hb_5895 : initSM 5895 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11613, initPM 11614] :=
+      extract_dual intermediateGoal_5895 (by native_decide) 5895 11613 11614 [2048, 1024]
+        (by rfl) (by rfl) (by rfl) h11613_shape (by decide)
+    have hb_5898 : initSM 5898 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11621, initPM 11622] :=
+      extract_dual intermediateGoal_5898 (by native_decide) 5898 11621 11622 [2048, 64]
+        (by rfl) (by rfl) (by rfl) h11621_shape (by decide)
+    have hb_5902 : initSM 5902 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11629, initPM 11630] :=
+      extract_dual initGoal_5902 (by native_decide) 5902 11629 11630 [32, 1024, 1024]
+        (by rfl) (by rfl) (by rfl) h11629_shape (by decide)
+    have hb_5903 : initSM 5903 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11631, initPM 11632] :=
+      extract_dual initGoal_5903 (by native_decide) 5903 11631 11632 [32, 1024, 512]
+        (by rfl) (by rfl) (by rfl) h11631_shape (by decide)
+    -- Reconstruct singleton [x] = x.
+    simp only [List.map, reconstructWithDim]
+    -- Reduce SM and PM via machinery.
+    rw [denote_sm_goal_1_4673 initSM, denote_pm_goal_1_4673 initPM]
+    -- Rewrite all boundary tids in SM expression.
+    rw [hb_4678, hb_5906, hb_5911, hb_5915, hb_5920, hb_5927, hb_5929, hb_5931,
+        hb_5893, hb_5895, hb_5898, hb_5902, hb_5903]
+    -- Now LHS involves allGather_0 [initPM p0, initPM p1] in place of sharded boundaries.
+    -- Match via sharding-commute axioms.
     sorry
+
 
 theorem prove_pattern_1 : pattern_1_stmt := by
   intro _ hpat
