@@ -544,15 +544,15 @@ theorem outsDisjoint_of_flatten_nodup
 
 /-- Main fold-induction lemma (invariant version).
 
-    Under `IsWellFormedGraph g`, `IsTopoSorted g.nodes`, `OutsDisjoint g.nodes`,
-    `g.nodes.Nodup`, and `hInit` (agreement on unwritten tids), at every prefix
-    step `k` the two folds agree on all "settled" tids. -/
+    Under `IsWellFormedGraph g`, `IsTopoSorted g.nodes`, and `hInit` (agreement
+    on unwritten tids), at every prefix step `k` the two folds agree on all
+    "settled" tids. **Note: `OutsDisjoint` is NOT required** — even when two
+    nodes write the same tid, the proof still goes through because each write
+    step re-derives the value from settled ins (via ins-agreement + IH). -/
 theorem foldl_applyNode_frontier_holds
     (g : GraphDecl) (s₁ s₂ : Store)
     (hwf : IsWellFormedGraph g)
     (htopo : IsTopoSorted g.nodes)
-    (hdisj : OutsDisjoint g.nodes)
-    (hnodup : g.nodes.Nodup)
     (hInit : ∀ tid, (∀ n ∈ g.nodes, tid ∉ n.outs) → s₁ tid = s₂ tid) :
     ∀ k, AgreementFrontier g g.nodes s₁ s₂ k := by
   intro k
@@ -661,16 +661,13 @@ theorem denoteGraph_agrees_on_writes
     (g : GraphDecl) (s₁ s₂ : Store)
     (hwf : IsWellFormedGraph g)
     (htopo : IsTopoSorted g.nodes)
-    (hdisj : OutsDisjoint g.nodes)
-    (hnodup : g.nodes.Nodup)
     (hInit : ∀ tid, (∀ n ∈ g.nodes, tid ∉ n.outs) → s₁ tid = s₂ tid)
     (tid : Tid) (hset : (∃ n ∈ g.nodes, tid ∈ n.outs) ∨
                         (∀ n ∈ g.nodes, tid ∉ n.outs)) :
     denoteGraph g s₁ tid = denoteGraph g s₂ tid := by
   unfold denoteGraph
-  have h_frontier := foldl_applyNode_frontier_holds g s₁ s₂ hwf htopo hdisj hnodup hInit
+  have h_frontier := foldl_applyNode_frontier_holds g s₁ s₂ hwf htopo hInit
     g.nodes.length
-  -- Rewrite take length = whole list.
   have h_take_all : g.nodes.take g.nodes.length = g.nodes := by
     exact List.take_of_length_le (Nat.le_refl _)
   rw [← h_take_all]
@@ -689,29 +686,23 @@ theorem denoteGraph_fixed_point_on_writes
     (g : GraphDecl) (init : Store)
     (hwf : IsWellFormedGraph g)
     (htopo : IsTopoSorted g.nodes)
-    (hdisj : OutsDisjoint g.nodes)
-    (hnodup : g.nodes.Nodup)
     (tid : Tid)
     (hset : (∃ n ∈ g.nodes, tid ∈ n.outs) ∨ (∀ n ∈ g.nodes, tid ∉ n.outs)) :
     denoteGraph g (denoteGraph g init) tid = denoteGraph g init tid := by
-  -- Apply `denoteGraph_agrees_on_writes` with s₁ := denoteGraph g init, s₂ := init.
-  -- They agree on unwritten tids because denoteGraph g init tid = init tid for
-  -- unwritten tids (foldl_applyNode_at_not_written on the whole nodes list).
   have hInit_agree : ∀ tid, (∀ n ∈ g.nodes, tid ∉ n.outs) →
       (denoteGraph g init) tid = init tid := by
     intro t h
     unfold denoteGraph
     exact foldl_applyNode_at_not_written g g.nodes init t h
-  -- Symmetric: (init) ≠ (denoteGraph g init) at writes generally, but we only
-  -- need agreement on unwritten tids for the outer call.
   have h_apply := denoteGraph_agrees_on_writes g (denoteGraph g init) init
-    hwf htopo hdisj hnodup hInit_agree tid hset
+    hwf htopo hInit_agree tid hset
   exact h_apply
 
 /-- **`denoteGraph_slice_self_agrees`**: the M2 non-base unblocker. For a slice
-    `g_local ⊆ g` that's well-formed + topologically sorted + outs-disjoint +
-    nodup, and shares g's structural properties, `denoteGraph g_local` applied
-    to the computed store equals `denoteGraph g` at slice-write tids. -/
+    `g_local ⊆ g` that's well-formed + topologically sorted (`OutsDisjoint` is
+    NOT needed — multi-rank replicated graphs like pm work fine!), and shares
+    g's structural properties, `denoteGraph g_local` applied to the computed
+    store equals `denoteGraph g` at slice-write tids. -/
 theorem denoteGraph_slice_self_agrees
     (g g_local : GraphDecl)
     (hRanks : g.numRanks = g_local.numRanks)
@@ -719,27 +710,22 @@ theorem denoteGraph_slice_self_agrees
     (hNodup_g : g.nodes.Nodup)
     (hwf_g : IsWellFormedGraph g)
     (htopo_g : IsTopoSorted g.nodes)
-    (hdisj_g : OutsDisjoint g.nodes)
     (hNoInterference :
       ∀ n ∈ g.nodes, n ∉ g_local.nodes →
         ∀ tid, graphTids g_local tid → tid ∉ n.outs)
     (initGlobal : Store) (tid : Tid) (hOut : graphWrites g_local tid) :
     denoteGraph g_local (denoteGraph g initGlobal) tid =
     denoteGraph g initGlobal tid := by
-  -- Step 1: apply slice_agrees with initLocal = initGlobal' := denoteGraph g initGlobal.
-  -- StoreAgreesOn is trivial (same store).
   have h_agree : StoreAgreesOn (denoteGraph g initGlobal) (denoteGraph g initGlobal)
       (graphTids g_local) := fun _ _ => rfl
   have h_slice := denoteGraph_slice_agrees g g_local hRanks hSublist hNodup_g
     (denoteGraph g initGlobal) (denoteGraph g initGlobal) h_agree
     hNoInterference tid hOut
   rw [h_slice]
-  -- Step 2: apply fixed-point-on-writes to fold on the RHS.
-  -- tid ∈ graphWrites g_local ⊆ graphWrites g (via hSublist).
   have h_in_g : ∃ n ∈ g.nodes, tid ∈ n.outs := by
     rcases hOut with ⟨n, hn_local, hn_out⟩
     exact ⟨n, hSublist.subset hn_local, hn_out⟩
-  exact denoteGraph_fixed_point_on_writes g initGlobal hwf_g htopo_g hdisj_g
-    hNodup_g tid (Or.inl h_in_g)
+  exact denoteGraph_fixed_point_on_writes g initGlobal hwf_g htopo_g
+    tid (Or.inl h_in_g)
 
 end TrainVerify.Denote
