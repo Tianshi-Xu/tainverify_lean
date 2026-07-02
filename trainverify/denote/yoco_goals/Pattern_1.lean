@@ -1301,7 +1301,34 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     hP1_4678, 
   ]
 
+theorem prove_goal_1 : goal_1_stmt_cut := by
+  intro initSM initPM hSM hPM hInit
+  simp only [goal_1]
+  refine ⟨?shape, ?tp_shapes, ?value⟩
+  case shape =>
+    -- (denoteGraph sm_goal_1 initSM 4673).shape = [4096]
+    -- Note: because most SM ops (fw_all2all_moe_gmm, fw_maybe_unshuffle, fw_inner_chunk_ce)
+    -- have deep semantic implementation, proving the concrete shape [4096] requires shape
+    -- lemmas for these ops. For now defer.
+    sorry
+  case tp_shapes =>
+    -- ((denoteGraph pm_goal_1 initPM 4673).shape = [4096]
+    -- Use denote_pm_goal_1_4673 and shape of allGatherPrimDimN.
+    sorry
+  case value =>
+    -- (denoteGraph sm_goal_1 initSM 4673) = reconstructWithDim 0 pm.numRanks 0 [denoteGraph pm_goal_1 initPM 4673]
+    -- reconstructWithDim 0 _ 0 [x] = x (singleton case).
+    -- So need: (denoteGraph sm_goal_1 initSM 4673) = (denoteGraph pm_goal_1 initPM 4673).
+    -- Use denote_sm_goal_1_4673 and denote_pm_goal_1_4673 to reduce both sides.
+    -- Then match via sharding-commute lemmas over initSM boundary → initPM allGather chunks.
+    -- Full match needs Lemma-A style commutes for: linear, view, sigmoid, swiglu, mul, add,
+    -- all2all_moe_gmm, maybe_unshuffle, rms_norm, inner_chunk_ce; plus intermediate goal extractions
+    -- from hInit for {5893↔11609+11610, 5895↔11613+11614, 5898↔11621+11622, 4678↔11835+11836, ...}.
+    sorry
+
 theorem prove_pattern_1 : pattern_1_stmt := by
-  sorry -- WIP
+  intro _ hpat
+  cases hpat
+  exact prove_goal_1
 
 end TrainVerify.Denote.GeneratedPatterns
