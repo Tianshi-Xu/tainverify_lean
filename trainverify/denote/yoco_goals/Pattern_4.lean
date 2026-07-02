@@ -1739,12 +1739,160 @@ theorem prove_goal_4 : goal_4_stmt_cut := by
     -- Now apply per-layer transforms.
     rw [hL0, hL1, hL2, hL3, hL4, hL5, hL6, hL7, hL8, hL9, hL10, hL11,
         hL12, hL13, hL14, hL15, hL16, hL17, hL18, hL19, hL20, hL21, hL22, hL23]
-    -- Now LHS is: fw_stack [allGather_0 [softmax A, softmax B]] × 24 layers
-    -- And RHS is: allGather_1 [fw_stack [softmax A_r0 × 24], fw_stack [softmax B_r1 × 24]]
-    -- Apply Lemma B in reverse.
-    -- Actually Lemma B says: fw_stack (zipWith f as bs) = allGather_1 [fw_stack as, fw_stack bs].
-    -- We need the reverse direction.
-    sorry
+    -- LHS: fw_stack of 24 allGather_0 pairs.
+    -- RHS: allGather_1 [fw_stack r0_24, fw_stack r1_24].
+    -- Apply Lemma B: fw_stack (zipWith f as bs) = allGather_1 [fw_stack as, fw_stack bs].
+    -- First rewrite LHS in zipWith form.
+    set as := [softmax (chunkPrimDimN 0 2 0 (initPM 4708)),
+               softmax (chunkPrimDimN 0 2 0 (initPM 4762)),
+               softmax (initPM 7851), softmax (initPM 8037), softmax (initPM 8223),
+               softmax (initPM 8409), softmax (initPM 8595), softmax (initPM 8781),
+               softmax (initPM 8967), softmax (initPM 9153), softmax (initPM 9339),
+               softmax (initPM 9525), softmax (initPM 9729), softmax (initPM 9901),
+               softmax (initPM 10073), softmax (initPM 10245), softmax (initPM 10417),
+               softmax (initPM 10589), softmax (initPM 10761), softmax (initPM 10933),
+               softmax (initPM 11105), softmax (initPM 11277), softmax (initPM 11449),
+               softmax (initPM 11621)] with has_def
+    set bs := [softmax (chunkPrimDimN 0 2 1 (initPM 4708)),
+               softmax (chunkPrimDimN 0 2 1 (initPM 4762)),
+               softmax (initPM 7852), softmax (initPM 8038), softmax (initPM 8224),
+               softmax (initPM 8410), softmax (initPM 8596), softmax (initPM 8782),
+               softmax (initPM 8968), softmax (initPM 9154), softmax (initPM 9340),
+               softmax (initPM 9526), softmax (initPM 9730), softmax (initPM 9902),
+               softmax (initPM 10074), softmax (initPM 10246), softmax (initPM 10418),
+               softmax (initPM 10590), softmax (initPM 10762), softmax (initPM 10934),
+               softmax (initPM 11106), softmax (initPM 11278), softmax (initPM 11450),
+               softmax (initPM 11622)] with hbs_def
+    -- Show that the LHS's 24 allGather_0 pairs equal zipWith (allGather_0) as bs.
+    have h_zip_eq : List.zipWith (fun a b => allGatherPrimDimN 0 2 0 [a, b]) as bs
+        = [allGatherPrimDimN 0 2 0 [softmax (chunkPrimDimN 0 2 0 (initPM 4708)),
+                                    softmax (chunkPrimDimN 0 2 1 (initPM 4708))],
+           allGatherPrimDimN 0 2 0 [softmax (chunkPrimDimN 0 2 0 (initPM 4762)),
+                                    softmax (chunkPrimDimN 0 2 1 (initPM 4762))],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 7851), softmax (initPM 7852)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 8037), softmax (initPM 8038)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 8223), softmax (initPM 8224)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 8409), softmax (initPM 8410)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 8595), softmax (initPM 8596)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 8781), softmax (initPM 8782)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 8967), softmax (initPM 8968)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 9153), softmax (initPM 9154)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 9339), softmax (initPM 9340)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 9525), softmax (initPM 9526)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 9729), softmax (initPM 9730)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 9901), softmax (initPM 9902)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 10073), softmax (initPM 10074)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 10245), softmax (initPM 10246)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 10417), softmax (initPM 10418)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 10589), softmax (initPM 10590)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 10761), softmax (initPM 10762)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 10933), softmax (initPM 10934)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 11105), softmax (initPM 11106)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 11277), softmax (initPM 11278)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 11449), softmax (initPM 11450)],
+           allGatherPrimDimN 0 2 0 [softmax (initPM 11621), softmax (initPM 11622)]] := by
+      rw [has_def, hbs_def]; rfl
+    -- Show that as and bs have length 24 and all elements have shape [2048, 64].
+    have has_len : as.length = 24 := by rw [has_def]; rfl
+    have hbs_len : bs.length = 24 := by rw [hbs_def]; rfl
+    have hlen_eq : as.length = bs.length := by rw [has_len, hbs_len]
+    have has_ne : as ≠ [] := by rw [has_def]; simp
+    -- All as elements: shape [2048, 64] (via softmax_shape_g18 + chunk shape / initPM shape).
+    have h_smshape : ∀ (x : Tensor), x.shape = [2048, 64] → (softmax x).shape = [2048, 64] := by
+      intro x hx; rw [softmax_shape_g18, hx]
+    have h_chunk_shape_r : ∀ (r : Nat) (t : Tensor), t.shape = [4096, 64] →
+        (chunkPrimDimN 0 2 r t).shape = [2048, 64] := by
+      intro r t ht
+      rw [chunkPrimDimN_shape 0 2 r _ [4096, 64] ht (by omega)]; rfl
+    have hAs : ∀ a ∈ as, a.shape = [2048, 64] := by
+      intro a ha
+      rw [has_def] at ha
+      simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at ha
+      rcases ha with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h
+      all_goals (rw [h]; apply h_smshape)
+      · exact h_chunk_shape_r 0 _ h4708_pm
+      · exact h_chunk_shape_r 0 _ h4762_pm
+      · exact h7851_pm
+      · exact h8037_pm
+      · exact h8223_pm
+      · exact h8409_pm
+      · exact h8595_pm
+      · exact h8781_pm
+      · exact h8967_pm
+      · exact h9153_pm
+      · exact h9339_pm
+      · exact h9525_pm
+      · exact h9729_pm
+      · exact h9901_pm
+      · exact h10073_pm
+      · exact h10245_pm
+      · exact h10417_pm
+      · exact h10589_pm
+      · exact h10761_pm
+      · exact h10933_pm
+      · exact h11105_pm
+      · exact h11277_pm
+      · exact h11449_pm
+      · exact h11621_pm
+    have hBs : ∀ b ∈ bs, b.shape = [2048, 64] := by
+      intro b hb
+      rw [hbs_def] at hb
+      simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hb
+      have h7852_pm : (initPM 7852).shape = [2048, 64] := hPM 7852 [2048, 64] (by native_decide)
+      have h8038_pm : (initPM 8038).shape = [2048, 64] := hPM 8038 [2048, 64] (by native_decide)
+      have h8224_pm : (initPM 8224).shape = [2048, 64] := hPM 8224 [2048, 64] (by native_decide)
+      have h8410_pm : (initPM 8410).shape = [2048, 64] := hPM 8410 [2048, 64] (by native_decide)
+      have h8596_pm : (initPM 8596).shape = [2048, 64] := hPM 8596 [2048, 64] (by native_decide)
+      have h8782_pm : (initPM 8782).shape = [2048, 64] := hPM 8782 [2048, 64] (by native_decide)
+      have h8968_pm : (initPM 8968).shape = [2048, 64] := hPM 8968 [2048, 64] (by native_decide)
+      have h9154_pm : (initPM 9154).shape = [2048, 64] := hPM 9154 [2048, 64] (by native_decide)
+      have h9340_pm : (initPM 9340).shape = [2048, 64] := hPM 9340 [2048, 64] (by native_decide)
+      have h9526_pm : (initPM 9526).shape = [2048, 64] := hPM 9526 [2048, 64] (by native_decide)
+      have h9730_pm : (initPM 9730).shape = [2048, 64] := hPM 9730 [2048, 64] (by native_decide)
+      have h9902_pm : (initPM 9902).shape = [2048, 64] := hPM 9902 [2048, 64] (by native_decide)
+      have h10074_pm : (initPM 10074).shape = [2048, 64] := hPM 10074 [2048, 64] (by native_decide)
+      have h10246_pm : (initPM 10246).shape = [2048, 64] := hPM 10246 [2048, 64] (by native_decide)
+      have h10418_pm : (initPM 10418).shape = [2048, 64] := hPM 10418 [2048, 64] (by native_decide)
+      have h10590_pm : (initPM 10590).shape = [2048, 64] := hPM 10590 [2048, 64] (by native_decide)
+      have h10762_pm : (initPM 10762).shape = [2048, 64] := hPM 10762 [2048, 64] (by native_decide)
+      have h10934_pm : (initPM 10934).shape = [2048, 64] := hPM 10934 [2048, 64] (by native_decide)
+      have h11106_pm : (initPM 11106).shape = [2048, 64] := hPM 11106 [2048, 64] (by native_decide)
+      have h11278_pm : (initPM 11278).shape = [2048, 64] := hPM 11278 [2048, 64] (by native_decide)
+      have h11450_pm : (initPM 11450).shape = [2048, 64] := hPM 11450 [2048, 64] (by native_decide)
+      have h11622_pm : (initPM 11622).shape = [2048, 64] := hPM 11622 [2048, 64] (by native_decide)
+      rcases hb with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h
+      all_goals (rw [h]; apply h_smshape)
+      · exact h_chunk_shape_r 1 _ h4708_pm
+      · exact h_chunk_shape_r 1 _ h4762_pm
+      · exact h7852_pm
+      · exact h8038_pm
+      · exact h8224_pm
+      · exact h8410_pm
+      · exact h8596_pm
+      · exact h8782_pm
+      · exact h8968_pm
+      · exact h9154_pm
+      · exact h9340_pm
+      · exact h9526_pm
+      · exact h9730_pm
+      · exact h9902_pm
+      · exact h10074_pm
+      · exact h10246_pm
+      · exact h10418_pm
+      · exact h10590_pm
+      · exact h10762_pm
+      · exact h10934_pm
+      · exact h11106_pm
+      · exact h11278_pm
+      · exact h11450_pm
+      · exact h11622_pm
+    -- Now apply Lemma B.
+    have hLemmaB := stack_allGather_commute_generic_2048_64 as bs hlen_eq has_ne hAs hBs
+    -- hLemmaB : fw_stack (zipWith ...) = allGather_1 [fw_stack as, fw_stack bs].
+    -- Convert LHS from fw_stack [24 allGathers] to fw_stack (zipWith).
+    rw [← h_zip_eq]
+    -- Now goal is: fw_stack (zipWith f as bs) = allGather_1 [fw_stack as, fw_stack bs].
+    exact hLemmaB
 
 theorem prove_pattern_4 : pattern_4_stmt := by
   intro target h
