@@ -476,6 +476,27 @@ def tensorSum (xs : List Tensor) : Tensor :=
   | [] => Tensor.mkShape [] (fun _ => 0)
   | t :: _ => Tensor.mkShape t.shape (fun i => xs.foldl (fun acc x => acc + valAt x i.1) 0)
 
+/-- **`fw_stack`**: stack a list of tensors along a NEW leading dim of size `n`.
+    All input tensors are assumed to have the same shape `s`; output shape is
+    `[n] ++ s` where `n = xs.length`. Element `(i, idx...) = xs[i].valAt idx`. -/
+def fw_stack (xs : List Tensor) : Tensor :=
+  let shardShape := (xs.head?.map (fun t => t.shape)).getD []
+  let n := xs.length
+  let outShape := n :: shardShape
+  let shardSize := prodShape shardShape
+  Tensor.mkShape outShape (fun outIdx =>
+    let idx := outIdx.1
+    let r := if shardSize = 0 then 0 else idx / shardSize
+    let localIdx := if shardSize = 0 then 0 else idx % shardSize
+    let piece := xs.getD r (zeroTensor shardShape)
+    valAt piece localIdx)
+
+/-- Shape lemma for `fw_stack`. -/
+theorem fw_stack_shape (xs : List Tensor) (shardShape : Shape)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = shardShape) :
+    (fw_stack xs).shape = xs.length :: shardShape := by
+  simp only [fw_stack, Tensor.mkShape, hhead]
+
 /-- Shape-preserving unary elementwise operator. -/
 def elemwiseId (x : Tensor) : Tensor := x
 
@@ -3816,6 +3837,7 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
   | "OpName.FW_rsqrt", [x] => [fw_rsqrt x]
   | "OpName.BW_rsqrt", [g, x] => [bw_rsqrt g x]
   | "OpName.BW_multiref", xs => [tensorSum xs]
+  | "OpName.FW_stack", xs => [fw_stack xs]
   | _, _ => []
 
 /-!
@@ -3917,6 +3939,16 @@ theorem applyNode_allGatherPrimDimN_out
       allGatherPrimDimN dim g.numRanks rank (ins.map s) := by
   unfold applyNode
   change storeSet s [(outTid, allGatherPrimDimN dim g.numRanks rank (ins.map s))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- applyNode for `FW_stack`: stack `ins.length` tensors along a new leading dim. -/
+theorem applyNode_fw_stack_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (ins : List Tid) (outTid : Tid) (params : List Nat) :
+    applyNode g s { rank := rank, op := "OpName.FW_stack", ins := ins, outs := [outTid], params := params } outTid =
+      fw_stack (ins.map s) := by
+  unfold applyNode
+  change storeSet s [(outTid, fw_stack (ins.map s))] outTid = _
   unfold storeSet
   simp [List.find?]
 
