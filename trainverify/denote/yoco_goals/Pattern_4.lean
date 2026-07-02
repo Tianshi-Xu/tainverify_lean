@@ -1274,6 +1274,95 @@ theorem stack_allGather_commute_generic_2048_64
            valAt (fw_stack bs) (layer * 131072 + jL * 64 + col)
       rw [hfs_valAt bs hbs_head h_layer_lt_bs]
 
+/-- Chunk-gather round-trip for shape `[4096, 64]`, dim 0, 2 shards. -/
+theorem allGather0_chunk0_id_4096_64 (x : Tensor) (hx : x.shape = [4096, 64]) :
+    allGatherPrimDimN 0 2 0 [chunkPrimDimN 0 2 0 x, chunkPrimDimN 0 2 1 x] = x := by
+  have hchunk_shape : ∀ r, (chunkPrimDimN 0 2 r x).shape = [2048, 64] := by
+    intro r
+    rw [chunkPrimDimN_shape 0 2 r _ [4096, 64] hx (by omega)]
+    rfl
+  have hhead : (([chunkPrimDimN 0 2 0 x, chunkPrimDimN 0 2 1 x] : List Tensor).head?.map
+      (fun t => t.shape)).getD [] = [2048, 64] := by
+    simp [hchunk_shape 0]
+  have hG_shape : (allGatherPrimDimN 0 2 0 [chunkPrimDimN 0 2 0 x, chunkPrimDimN 0 2 1 x]).shape
+      = [4096, 64] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [2048, 64] hhead]
+    simp [List.set, List.getD]
+  apply Tensor.ext
+  · rw [hG_shape, hx]
+  · intro idx hidx
+    rw [hG_shape] at hidx
+    have hidx_bound : idx < 262144 := by simpa [prodShape] using hidx
+    have hx_prod : idx < prodShape x.shape := by rw [hx]; simpa [prodShape] using hidx_bound
+    set row := idx / 64 with hrow_def
+    set col := idx % 64 with hcol_def
+    have hrow_lt : row < 4096 := by rw [hrow_def]; omega
+    have hcol_lt : col < 64 := by rw [hcol_def]; omega
+    set r := row / 2048 with hr_def
+    set jL := row % 2048 with hjL_def
+    have hr_lt : r < 2 := by rw [hr_def]; omega
+    have hjL_lt : jL < 2048 := by rw [hjL_def]; omega
+    have hidx_eq : idx = (r * 2048 + jL) * 64 + col := by
+      rw [hr_def, hjL_def, hcol_def, hrow_def]; omega
+    -- LHS: valAt gather at idx.
+    have h_hyp : ∀ r' (_ : r' < 2),
+        ([chunkPrimDimN 0 2 0 x, chunkPrimDimN 0 2 1 x].getD r' (zeroTensor [2048, 64])).shape
+          = [2048, 64] := by
+      intro r' _
+      rcases (by omega : r' = 0 ∨ r' = 1) with h | h <;> rw [h] <;>
+        simp [List.getD, hchunk_shape 0, hchunk_shape 1]
+    rw [hidx_eq]
+    rw [allGatherPrimDimN0_valAt 2 2048 64 [chunkPrimDimN 0 2 0 x, chunkPrimDimN 0 2 1 x]
+        (by omega) (by omega) (by omega) hhead h_hyp r hr_lt jL hjL_lt col hcol_lt]
+    -- RHS side: valAt x at ((r*2048+jL)*64+col).
+    have hgetD_chunk : [chunkPrimDimN 0 2 0 x, chunkPrimDimN 0 2 1 x].getD r
+        (zeroTensor [2048, 64]) = chunkPrimDimN 0 2 r x := by
+      rcases (by omega : r = 0 ∨ r = 1) with h | h <;> rw [h] <;> simp [List.getD]
+    rw [hgetD_chunk]
+    -- Now: valAt (chunkPrimDimN 0 2 r x) (jL * 64 + col) = valAt x ((r*2048+jL)*64+col).
+    have hchunk_prod : jL * 64 + col < prodShape (chunkPrimDimN 0 2 r x).shape := by
+      rw [hchunk_shape r]
+      simp only [prodShape, List.foldl_cons, List.foldl_nil]
+      nlinarith [hjL_lt, hcol_lt]
+    rw [valAt_of_lt _ _ hchunk_prod]
+    unfold chunkPrimDimN
+    simp only [Tensor.mkShape, hx]
+    -- Simplify concrete arithmetic.
+    -- shape = [4096, 64], dimSize = 4096, numParts = 2, shardSize = 2048, postStride = 64,
+    -- dimStride = 4096*64 = 262144, shardDimStride = 2048*64 = 131072.
+    have h1 : ([4096, 64] : List Nat).getD 0 0 = 4096 := by rfl
+    have h2 : List.drop (0 + 1) ([4096, 64] : List Nat) = [64] := by rfl
+    have h3 : List.foldl (fun x1 x2 => x1 * x2) 1 ([64] : List Nat) = 64 := by rfl
+    simp only [h1, h2, h3]
+    -- Reduce ifs.
+    simp only [show (2 : Nat) = 0 ↔ False by decide, show (64 : Nat) = 0 ↔ False by decide,
+               show (2048 * 64 : Nat) = 0 ↔ False by decide,
+               ↓reduceIte, iff_false]
+    -- Now the chunkPrimDimN val closure: r' = 0 % 2 = 0, wait no — the closure uses "rank" param.
+    -- The lemma is chunkPrimDimN 0 2 r x with r being 0 or 1.
+    -- r_param = if 2 = 0 then r else r % 2 = r % 2 = r (since r < 2).
+    have hr_mod : r % 2 = r := Nat.mod_eq_of_lt hr_lt
+    simp only [hr_mod]
+    -- Now valAt x (0 * 262144 + (r * 2048 + (jL * 64 + col) / 64) * 64 + (jL * 64 + col) % 64)
+    -- We need = valAt x ((r*2048+jL)*64+col).
+    have h_local_div : (jL * 64 + col) / 64 = jL := by omega
+    have h_local_mod : (jL * 64 + col) % 64 = col := by omega
+    -- After simp, the val closure is preIdx * dimStride + jFull * postStride + k
+    -- where preIdx = (jL*64+col) / 131072 = 0, remainder = (jL*64+col) % 131072 = jL*64+col
+    -- jLocal = (jL*64+col) / 64 = jL, k = (jL*64+col) % 64 = col
+    -- jFull = r * 2048 + jL
+    -- valAt x (0 * 262144 + (r * 2048 + jL) * 64 + col) = valAt x ((r*2048+jL)*64+col) ✓
+    have hjLcol : jL * 64 + col < 131072 := by nlinarith [hjL_lt, hcol_lt]
+    have hDivBig : (jL * 64 + col) / 131072 = 0 := by omega
+    have hModBig : (jL * 64 + col) % 131072 = jL * 64 + col := by omega
+    have hjc_div : (jL * 64 + col) / 64 = jL := h_local_div
+    have hjc_mod : (jL * 64 + col) % 64 = col := h_local_mod
+    -- The if-conditions from chunkPrimDimN.
+    simp only [show (131072 : Nat) = 0 ↔ False by decide, ↓reduceIte, iff_false,
+               hDivBig, hModBig, hjc_div, hjc_mod]
+    ring_nf
+
+
 theorem prove_goal_4 : goal_4_stmt_cut := by
   intro initSM initPM hSM hPM hInit
   simp only [goal_4]
