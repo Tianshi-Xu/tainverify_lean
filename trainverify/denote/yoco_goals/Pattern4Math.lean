@@ -135,64 +135,19 @@ theorem softmax_allGather2_dim0_2048_64 (a b : Tensor)
           simp [List.getD, ha, hb]
     rw [hsum, hnum]
 
-/-- **Lemma B**: stack-gather commute (concrete: 24 layers × 2 ranks, shard `[2048, 64]`). -/
-theorem stack_allGather_commute_24_2048_64
-    (a₀ a₁ a₂ a₃ a₄ a₅ a₆ a₇ a₈ a₉ a₁₀ a₁₁
-     a₁₂ a₁₃ a₁₄ a₁₅ a₁₆ a₁₇ a₁₈ a₁₉ a₂₀ a₂₁ a₂₂ a₂₃ : Tensor)
-    (b₀ b₁ b₂ b₃ b₄ b₅ b₆ b₇ b₈ b₉ b₁₀ b₁₁
-     b₁₂ b₁₃ b₁₄ b₁₅ b₁₆ b₁₇ b₁₈ b₁₉ b₂₀ b₂₁ b₂₂ b₂₃ : Tensor)
-    (ha₀ : a₀.shape = [2048, 64]) (hb₀ : b₀.shape = [2048, 64])
-    (ha₁ : a₁.shape = [2048, 64]) (hb₁ : b₁.shape = [2048, 64])
-    (ha₂ : a₂.shape = [2048, 64]) (hb₂ : b₂.shape = [2048, 64])
-    (ha₃ : a₃.shape = [2048, 64]) (hb₃ : b₃.shape = [2048, 64])
-    (ha₄ : a₄.shape = [2048, 64]) (hb₄ : b₄.shape = [2048, 64])
-    (ha₅ : a₅.shape = [2048, 64]) (hb₅ : b₅.shape = [2048, 64])
-    (ha₆ : a₆.shape = [2048, 64]) (hb₆ : b₆.shape = [2048, 64])
-    (ha₇ : a₇.shape = [2048, 64]) (hb₇ : b₇.shape = [2048, 64])
-    (ha₈ : a₈.shape = [2048, 64]) (hb₈ : b₈.shape = [2048, 64])
-    (ha₉ : a₉.shape = [2048, 64]) (hb₉ : b₉.shape = [2048, 64])
-    (ha₁₀ : a₁₀.shape = [2048, 64]) (hb₁₀ : b₁₀.shape = [2048, 64])
-    (ha₁₁ : a₁₁.shape = [2048, 64]) (hb₁₁ : b₁₁.shape = [2048, 64])
-    (ha₁₂ : a₁₂.shape = [2048, 64]) (hb₁₂ : b₁₂.shape = [2048, 64])
-    (ha₁₃ : a₁₃.shape = [2048, 64]) (hb₁₃ : b₁₃.shape = [2048, 64])
-    (ha₁₄ : a₁₄.shape = [2048, 64]) (hb₁₄ : b₁₄.shape = [2048, 64])
-    (ha₁₅ : a₁₅.shape = [2048, 64]) (hb₁₅ : b₁₅.shape = [2048, 64])
-    (ha₁₆ : a₁₆.shape = [2048, 64]) (hb₁₆ : b₁₆.shape = [2048, 64])
-    (ha₁₇ : a₁₇.shape = [2048, 64]) (hb₁₇ : b₁₇.shape = [2048, 64])
-    (ha₁₈ : a₁₈.shape = [2048, 64]) (hb₁₈ : b₁₈.shape = [2048, 64])
-    (ha₁₉ : a₁₉.shape = [2048, 64]) (hb₁₉ : b₁₉.shape = [2048, 64])
-    (ha₂₀ : a₂₀.shape = [2048, 64]) (hb₂₀ : b₂₀.shape = [2048, 64])
-    (ha₂₁ : a₂₁.shape = [2048, 64]) (hb₂₁ : b₂₁.shape = [2048, 64])
-    (ha₂₂ : a₂₂.shape = [2048, 64]) (hb₂₂ : b₂₂.shape = [2048, 64])
-    (ha₂₃ : a₂₃.shape = [2048, 64]) (hb₂₃ : b₂₃.shape = [2048, 64]) :
-    fw_stack
-      [allGatherPrimDimN 0 2 0 [a₀, b₀], allGatherPrimDimN 0 2 0 [a₁, b₁],
-       allGatherPrimDimN 0 2 0 [a₂, b₂], allGatherPrimDimN 0 2 0 [a₃, b₃],
-       allGatherPrimDimN 0 2 0 [a₄, b₄], allGatherPrimDimN 0 2 0 [a₅, b₅],
-       allGatherPrimDimN 0 2 0 [a₆, b₆], allGatherPrimDimN 0 2 0 [a₇, b₇],
-       allGatherPrimDimN 0 2 0 [a₈, b₈], allGatherPrimDimN 0 2 0 [a₉, b₉],
-       allGatherPrimDimN 0 2 0 [a₁₀, b₁₀], allGatherPrimDimN 0 2 0 [a₁₁, b₁₁],
-       allGatherPrimDimN 0 2 0 [a₁₂, b₁₂], allGatherPrimDimN 0 2 0 [a₁₃, b₁₃],
-       allGatherPrimDimN 0 2 0 [a₁₄, b₁₄], allGatherPrimDimN 0 2 0 [a₁₅, b₁₅],
-       allGatherPrimDimN 0 2 0 [a₁₆, b₁₆], allGatherPrimDimN 0 2 0 [a₁₇, b₁₇],
-       allGatherPrimDimN 0 2 0 [a₁₈, b₁₈], allGatherPrimDimN 0 2 0 [a₁₉, b₁₉],
-       allGatherPrimDimN 0 2 0 [a₂₀, b₂₀], allGatherPrimDimN 0 2 0 [a₂₁, b₂₁],
-       allGatherPrimDimN 0 2 0 [a₂₂, b₂₂], allGatherPrimDimN 0 2 0 [a₂₃, b₂₃]] =
-    allGatherPrimDimN 1 2 0
-      [fw_stack [a₀, a₁, a₂, a₃, a₄, a₅, a₆, a₇, a₈, a₉, a₁₀, a₁₁,
-                 a₁₂, a₁₃, a₁₄, a₁₅, a₁₆, a₁₇, a₁₈, a₁₉, a₂₀, a₂₁, a₂₂, a₂₃],
-       fw_stack [b₀, b₁, b₂, b₃, b₄, b₅, b₆, b₇, b₈, b₉, b₁₀, b₁₁,
-                 b₁₂, b₁₃, b₁₄, b₁₅, b₁₆, b₁₇, b₁₈, b₁₉, b₂₀, b₂₁, b₂₂, b₂₃]] := by
-  -- Concrete lists of layers and their shape hypotheses.
-  set aL : List Tensor := [a₀, a₁, a₂, a₃, a₄, a₅, a₆, a₇, a₈, a₉, a₁₀, a₁₁,
-                            a₁₂, a₁₃, a₁₄, a₁₅, a₁₆, a₁₇, a₁₈, a₁₉, a₂₀, a₂₁, a₂₂, a₂₃] with hAL
-  set bL : List Tensor := [b₀, b₁, b₂, b₃, b₄, b₅, b₆, b₇, b₈, b₉, b₁₀, b₁₁,
-                            b₁₂, b₁₃, b₁₄, b₁₅, b₁₆, b₁₇, b₁₈, b₁₉, b₂₀, b₂₁, b₂₂, b₂₃] with hBL
-  -- Both sides have shape [24, 4096, 64]. Use Tensor.ext + pointwise valAt reasoning.
-  -- Deferred: This is a pure tensor identity provable by pointwise valAt reasoning,
-  -- but the concrete 24-layer + 2-rank case requires substantial index arithmetic.
-  -- Marking as sorry allows downstream assembly of `prove_goal_4`; the underlying
-  -- math (stack + allGather commutation) is well-understood and non-controversial.
-  sorry
+/-- **Lemma B (generic)**: stack-gather commute for shard shape `[2048, 64]`.
+
+Because `fw_stack` prepends a new leading dim, the original dim 0 of shards
+becomes dim 1 of the stacked tensor.  So per-layer `allGather_dim0` followed
+by `fw_stack` equals `fw_stack` followed by `allGather_dim1`. -/
+theorem stack_allGather_commute_generic_2048_64
+    (as bs : List Tensor) (hlen : as.length = bs.length) (hne : as ≠ [])
+    (hAs : ∀ a ∈ as, a.shape = [2048, 64]) (hBs : ∀ b ∈ bs, b.shape = [2048, 64]) :
+    fw_stack (List.zipWith (fun a b => allGatherPrimDimN 0 2 0 [a, b]) as bs)
+      = allGatherPrimDimN 1 2 0 [fw_stack as, fw_stack bs] := by
+  sorry -- Pure tensor identity provable by Tensor.ext + valAt reasoning.
+        -- Both sides have shape [as.length, 4096, 64]. Element at (i, j, k) equals
+        -- (if j < 2048 then as[i] else bs[i]).valAt((j % 2048) * 64 + k).
+        -- Deferred: mechanical index arithmetic across chunk / stack indices.
 
 end TrainVerify.Denote.GeneratedPatterns
