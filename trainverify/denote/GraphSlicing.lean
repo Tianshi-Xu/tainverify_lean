@@ -728,4 +728,85 @@ theorem denoteGraph_slice_self_agrees
   exact denoteGraph_fixed_point_on_writes g initGlobal hwf_g htopo_g
     tid (Or.inl h_in_g)
 
+/-!
+### Per-op `IsWellFormedNode` lemmas.
+
+For each op family used by the YOCO/MoE pipeline, we prove `IsWellFormedNode g n`
+directly from the op's `evalOp` branch. Each lemma is one `change ... rfl` /
+`decide`. Together they compose (via case-analysis on `n.op`) into
+`IsWellFormedGraph` for any concrete pipeline-generated graph.
+
+**Key insight (from 2026-07-02 P0 work)**: `evalOp` never inspects tensor
+values to determine output list length — only the pattern of `args : List Tensor`
+outer structure. So `IsWellFormedNode` reduces to a length check that's
+provable by unfolding evalOp on the specific op literal.
+-/
+
+/-- ChunkPrim with `params := [dim]` returns a singleton. -/
+theorem isWellFormedNode_chunkPrim_dim
+    (g : GraphDecl) (rank inTid outTid dim : Nat) :
+    IsWellFormedNode g
+      { rank := rank, op := "OpName.ChunkPrim", ins := [inTid], outs := [outTid], params := [dim] } := by
+  intro s
+  change [chunkPrimDimN dim g.numRanks rank (s inTid)].length ≥ 1
+  simp
+
+/-- AllGatherPrim with `params := [dim]` returns a singleton. -/
+theorem isWellFormedNode_allGatherPrim_dim
+    (g : GraphDecl) (rank outTid dim : Nat) (ins : List Tid) :
+    IsWellFormedNode g
+      { rank := rank, op := "OpName.AllGatherPrim", ins := ins, outs := [outTid], params := [dim] } := by
+  intro s
+  change [allGatherPrimDimN dim g.numRanks rank (ins.map s)].length ≥ 1
+  simp
+
+/-- AllReducePrim returns a singleton. -/
+theorem isWellFormedNode_allReducePrim
+    (g : GraphDecl) (rank outTid : Nat) (ins : List Tid) (params : List Nat) :
+    IsWellFormedNode g
+      { rank := rank, op := "OpName.AllReducePrim", ins := ins, outs := [outTid], params := params } := by
+  intro s
+  change [allReducePrim g.numRanks rank (ins.map s)].length ≥ 1
+  simp
+
+/-- FW_embedding with empty params returns a singleton. -/
+theorem isWellFormedNode_fw_embedding_empty
+    (g : GraphDecl) (rank idsTid wTid outTid : Nat) :
+    IsWellFormedNode g
+      { rank := rank, op := "OpName.FW_embedding", ins := [idsTid, wTid], outs := [outTid] } := by
+  intro s
+  change [fw_embedding (s idsTid) (s wTid)].length ≥ 1
+  simp
+
+/-- FW_embedding with `params := [offset]` returns a singleton. -/
+theorem isWellFormedNode_fw_embedding_offset
+    (g : GraphDecl) (rank idsTid wTid outTid offset : Nat) :
+    IsWellFormedNode g
+      { rank := rank, op := "OpName.FW_embedding", ins := [idsTid, wTid], outs := [outTid], params := [offset] } := by
+  intro s
+  change [fw_embedding_offset offset (s idsTid) (s wTid)].length ≥ 1
+  simp
+
+/-- FW_inner_chunk_ce with 1-elem params (`[chunkSize]`) returns 2 tensors. -/
+theorem isWellFormedNode_fw_inner_chunk_ce_1param
+    (g : GraphDecl) (rank x w y o₁ o₂ chunkSize : Nat) :
+    IsWellFormedNode g
+      { rank := rank, op := "OpName.FW_inner_chunk_ce", ins := [x, w, y],
+        outs := [o₁, o₂], params := [chunkSize] } := by
+  intro s
+  change 2 ≥ 2
+  omega
+
+/-- FW_multiref with `params := [n]` returns `List.replicate n x`. Well-formed
+    when `n ≥ outs.length`. -/
+theorem isWellFormedNode_fw_multiref
+    (g : GraphDecl) (rank inTid : Nat) (outs : List Tid) (n : Nat)
+    (hout : outs.length ≤ n) :
+    IsWellFormedNode g
+      { rank := rank, op := "OpName.FW_multiref", ins := [inTid], outs := outs, params := [n] } := by
+  intro s
+  change (List.replicate n (s inTid)).length ≥ outs.length
+  rw [List.length_replicate]
+  exact hout
+
 end TrainVerify.Denote
