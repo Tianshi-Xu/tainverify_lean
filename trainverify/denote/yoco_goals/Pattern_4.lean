@@ -1502,8 +1502,75 @@ theorem prove_goal_4 : goal_4_stmt_cut := by
     rw [allGatherPrimDimN_shape 1 2 _ [24, 2048, 64] hRHS_head]
     rfl
   case value =>
-    -- SM = PM via denote_sm/pm_goal_4_4676 + Lemma A × 24 + Lemma B + intermediate extractions.
-    sorry -- Deferred: assembly needing Lemma A × 24 + Lemma B (both in Pattern4Math)
+    -- Unfold reconstructWithDim (singleton → identity).
+    simp only [List.map, reconstructWithDim]
+    -- Unfold LHS via SM machinery.
+    rw [denote_sm_goal_4_4676 initSM]
+    -- Unfold RHS via PM machinery.
+    rw [denote_pm_goal_4_4676 initPM]
+    rw [hpmR]
+    -- Set up shape hypotheses for all initPM tids used in PM (layers 0/1 use initPM 4708/4762
+    -- with shape [4096, 64]; layers 2..23 use initPM 7851, 7852, ..., 11621, 11622 with [2048, 64]).
+    have h4708_pm : (initPM 4708).shape = [4096, 64] := hPM 4708 [4096, 64] (by native_decide)
+    have h4762_pm : (initPM 4762).shape = [4096, 64] := hPM 4762 [4096, 64] (by native_decide)
+    -- Extract intermediate goals: 24 total (2 singleton + 22 dual).
+    have hInit' : InitGoalsHold pm_goal_4.numRanks goal_4_cut_initGoals initSM initPM := hInit
+    -- Helper: extract initSM tid = expected value from intermediate goal, singleton case (layers 0/1).
+    have extract_singleton : ∀ (g : LineageGoal) (_ : g ∈ goal_4_cut_initGoals)
+        (tps_val : List Tensor) (h_ne : tps_val ≠ [])
+        (_ : g.tps.map (fun p => initPM p.tid) = tps_val)
+        (_ : tps_val.length = 1),
+        initSM g.ts = tps_val.head h_ne := by
+      intro g hg tps_val h_ne htps_eq hlen
+      have hgoal := hInit' g hg
+      unfold InitGoalHolds at hgoal
+      obtain ⟨_, _, hval⟩ := hgoal
+      rw [htps_eq] at hval
+      match tps_val, h_ne, hlen with
+      | [x], _, _ =>
+        simp only [reconstructWithDim, List.head] at hval ⊢
+        exact hval
+    -- Layer 0 boundary: initSM 4708 = initPM 4708.
+    have hb_4708 : initSM 4708 = initPM 4708 := by
+      have := extract_singleton intermediateGoal_4708 (by native_decide) [initPM 4708]
+        (by simp) (by simp [intermediateGoal_4708]) (by rfl)
+      simpa [intermediateGoal_4708, List.head] using this
+    have hb_4762 : initSM 4762 = initPM 4762 := by
+      have := extract_singleton intermediateGoal_4762 (by native_decide) [initPM 4762]
+        (by simp) (by simp [intermediateGoal_4762]) (by rfl)
+      simpa [intermediateGoal_4762, List.head] using this
+    -- Helper for dual-piece (layers 2..23): initSM tid = allGather_0 [initPM p0, initPM p1].
+    have extract_dual : ∀ (g : LineageGoal) (_ : g ∈ goal_4_cut_initGoals)
+        (p0 p1 : Nat)
+        (_ : g.tps.map (fun p => initPM p.tid) = [initPM p0, initPM p1])
+        (_ : g.gatherDim = 0)
+        (_ : g.tpShapes = [[2048, 64], [2048, 64]])
+        (_ : (initPM p0).shape = [2048, 64]),
+        initSM g.ts = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM p0, initPM p1] := by
+      intro g hg p0 p1 htps hdim hshapes hp0_shape
+      have hgoal := hInit' g hg
+      unfold InitGoalHolds at hgoal
+      obtain ⟨_, _, hval⟩ := hgoal
+      rw [htps, hdim] at hval
+      -- reconstructWithDim on 2 elements with head shape ≠ [1] gives allGather.
+      have hrec : reconstructWithDim 0 pm_goal_4.numRanks 0 [initPM p0, initPM p1]
+          = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM p0, initPM p1] := by
+        unfold reconstructWithDim
+        -- Match unfolds; head/head?.map . shape = some [2048, 64].
+        simp only [List.head?, Option.map_some, Option.getD_some, hp0_shape,
+                   show ([2048, 64] : List Nat) = [1] ↔ False by decide, ↓reduceIte, iff_false]
+      rw [hrec] at hval
+      exact hval
+    -- Layers 2..23 boundaries.
+    have h7851_pm : (initPM 7851).shape = [2048, 64] := hPM 7851 [2048, 64] (by native_decide)
+    have hb_4816 : initSM 4816 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 7851, initPM 7852] :=
+      extract_dual intermediateGoal_4816 (by native_decide) 7851 7852
+        (by simp [intermediateGoal_4816]) (by rfl) (by rfl) h7851_pm
+    -- The rest of the layers follow the same pattern. Building the full assembly requires
+    -- 22 more extract_dual calls + the actual fw_stack + allGather manipulation.
+    -- For now, this scaffolds the layer 0 / 1 / 2 boundary conditions.
+    -- Full assembly is in progress; commit for daily checkpoint.
+    sorry
 
 theorem prove_pattern_4 : pattern_4_stmt := by
   intro target h
