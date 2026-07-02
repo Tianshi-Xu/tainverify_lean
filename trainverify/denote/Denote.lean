@@ -3952,6 +3952,40 @@ theorem applyNode_fw_stack_out
   unfold storeSet
   simp [List.find?]
 
+/-- applyNode for `FW_topk_routing` third output (gate_scores = .snd.snd). -/
+theorem applyNode_fw_topk_routing_scores_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (logitsTid probsTid mapTid scoresTid : Tid)
+    (params : List Nat)
+    (h_pne_s : probsTid ≠ scoresTid) (h_mne_s : mapTid ≠ scoresTid) :
+    applyNode g s
+      { rank := rank, op := "OpName.FW_topk_routing", ins := [logitsTid],
+        outs := [probsTid, mapTid, scoresTid], params := params } scoresTid =
+      (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).snd.snd := by
+  unfold applyNode
+  change storeSet s
+    [(probsTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).fst),
+     (mapTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).snd.fst),
+     (scoresTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).snd.snd)] scoresTid = _
+  unfold storeSet
+  simp [List.find?, h_pne_s, h_mne_s]
+
+/-- applyNode for `FW_topk_routing` second output (routing_map = .snd.fst). -/
+theorem applyNode_fw_topk_routing_map_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (logitsTid probsTid mapTid scoresTid : Tid)
+    (params : List Nat)
+    (h_pne_m : probsTid ≠ mapTid) :
+    applyNode g s
+      { rank := rank, op := "OpName.FW_topk_routing", ins := [logitsTid],
+        outs := [probsTid, mapTid, scoresTid], params := params } mapTid =
+      (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).snd.fst := by
+  unfold applyNode
+  change storeSet s
+    [(probsTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).fst),
+     (mapTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).snd.fst),
+     (scoresTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).snd.snd)] mapTid = _
+  unfold storeSet
+  simp [List.find?, h_pne_m]
+
 /-- applyNode for bw_linear first output (dx). (Was an axiom; now proven — two-output
     `storeSet` resolved via `List.find?` on the leading entry.) -/
 theorem applyNode_bw_linear_fst_out
