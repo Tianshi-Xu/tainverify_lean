@@ -48,6 +48,43 @@ def graphTids (g : GraphDecl) : Tid → Prop :=
   fun tid => graphReads g tid ∨ graphWrites g tid
 
 /-!
+### Auxiliary: `shapeEnvOfList` lookup lemma
+
+Used by cut_to_full bridges to reduce `StoreShapesHold init env` to
+membership facts about `env`'s underlying list.
+-/
+
+theorem mem_of_shapeEnvOfList_eq_some {xs : List (Tid × Shape)} {tid sh}
+    (h : shapeEnvOfList xs tid = some sh) : (tid, sh) ∈ xs := by
+  unfold shapeEnvOfList at h
+  cases hf : xs.find? (fun p => p.1 = tid) with
+  | none => rw [hf] at h; simp at h
+  | some pair =>
+    rw [hf] at h
+    obtain ⟨t, s⟩ := pair
+    simp only [Option.some.injEq] at h
+    subst h
+    have hmem := List.mem_of_find?_eq_some hf
+    have hpred := List.find?_some hf
+    simp only [decide_eq_true_eq] at hpred
+    subst hpred
+    exact hmem
+
+/-- InitGoalsHold distributes over list concatenation. Used by cut_to_full
+    bridges to combine the global `initGoals` with per-goal `prereqs`
+    intermediate proofs. -/
+theorem InitGoalsHold_append {numParts : Nat} {xs ys : List LineageGoal}
+    {Sm Pm : Store}
+    (hxs : InitGoalsHold numParts xs Sm Pm)
+    (hys : InitGoalsHold numParts ys Sm Pm) :
+    InitGoalsHold numParts (xs ++ ys) Sm Pm := by
+  intro g hg
+  rcases List.mem_append.mp hg with h | h
+  · exact hxs g h
+  · exact hys g h
+
+
+/-!
 ### Supporting lemma — pointwise applyNode congruence
 -/
 
