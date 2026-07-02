@@ -3838,6 +3838,14 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
   | "OpName.BW_rsqrt", [g, x] => [bw_rsqrt g x]
   | "OpName.BW_multiref", xs => [tensorSum xs]
   | "OpName.FW_stack", xs => [fw_stack xs]
+  -- `FW_reshape`: identity in Denote (semantic shape unchanged for these graphs; the
+  -- pipeline may perform an actual reshape, but for graphs where target shape == input shape
+  -- this is a no-op). All Pattern_1/2/4 reshapes in yoco_goals preserve shape.
+  | "OpName.FW_reshape", [x] => [x]
+  -- `FW_float`: dtype cast to float. Since Scalar = ℝ, this is identity.
+  | "OpName.FW_float", [x] => [x]
+  -- `FW_to`: dtype conversion. Also identity in Scalar = ℝ.
+  | "OpName.FW_to", [x] => [x]
   | _, _ => []
 
 /-!
