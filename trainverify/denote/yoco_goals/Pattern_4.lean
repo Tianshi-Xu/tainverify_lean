@@ -1561,15 +1561,189 @@ theorem prove_goal_4 : goal_4_stmt_cut := by
                    show ([2048, 64] : List Nat) = [1] ↔ False by decide, ↓reduceIte, iff_false]
       rw [hrec] at hval
       exact hval
-    -- Layers 2..23 boundaries.
+    -- Layers 2..23 boundaries — 22 more extract_dual calls.
     have h7851_pm : (initPM 7851).shape = [2048, 64] := hPM 7851 [2048, 64] (by native_decide)
     have hb_4816 : initSM 4816 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 7851, initPM 7852] :=
       extract_dual intermediateGoal_4816 (by native_decide) 7851 7852
         (by simp [intermediateGoal_4816]) (by rfl) (by rfl) h7851_pm
-    -- The rest of the layers follow the same pattern. Building the full assembly requires
-    -- 22 more extract_dual calls + the actual fw_stack + allGather manipulation.
-    -- For now, this scaffolds the layer 0 / 1 / 2 boundary conditions.
-    -- Full assembly is in progress; commit for daily checkpoint.
+    have h8037_pm : (initPM 8037).shape = [2048, 64] := hPM 8037 [2048, 64] (by native_decide)
+    have hb_4870 : initSM 4870 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 8037, initPM 8038] :=
+      extract_dual intermediateGoal_4870 (by native_decide) 8037 8038
+        (by simp [intermediateGoal_4870]) (by rfl) (by rfl) h8037_pm
+    have h8223_pm : (initPM 8223).shape = [2048, 64] := hPM 8223 [2048, 64] (by native_decide)
+    have hb_4924 : initSM 4924 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 8223, initPM 8224] :=
+      extract_dual intermediateGoal_4924 (by native_decide) 8223 8224
+        (by simp [intermediateGoal_4924]) (by rfl) (by rfl) h8223_pm
+    have h8409_pm : (initPM 8409).shape = [2048, 64] := hPM 8409 [2048, 64] (by native_decide)
+    have hb_4978 : initSM 4978 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 8409, initPM 8410] :=
+      extract_dual intermediateGoal_4978 (by native_decide) 8409 8410
+        (by simp [intermediateGoal_4978]) (by rfl) (by rfl) h8409_pm
+    have h8595_pm : (initPM 8595).shape = [2048, 64] := hPM 8595 [2048, 64] (by native_decide)
+    have hb_5032 : initSM 5032 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 8595, initPM 8596] :=
+      extract_dual intermediateGoal_5032 (by native_decide) 8595 8596
+        (by simp [intermediateGoal_5032]) (by rfl) (by rfl) h8595_pm
+    have h8781_pm : (initPM 8781).shape = [2048, 64] := hPM 8781 [2048, 64] (by native_decide)
+    have hb_5086 : initSM 5086 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 8781, initPM 8782] :=
+      extract_dual intermediateGoal_5086 (by native_decide) 8781 8782
+        (by simp [intermediateGoal_5086]) (by rfl) (by rfl) h8781_pm
+    have h8967_pm : (initPM 8967).shape = [2048, 64] := hPM 8967 [2048, 64] (by native_decide)
+    have hb_5140 : initSM 5140 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 8967, initPM 8968] :=
+      extract_dual intermediateGoal_5140 (by native_decide) 8967 8968
+        (by simp [intermediateGoal_5140]) (by rfl) (by rfl) h8967_pm
+    have h9153_pm : (initPM 9153).shape = [2048, 64] := hPM 9153 [2048, 64] (by native_decide)
+    have hb_5194 : initSM 5194 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 9153, initPM 9154] :=
+      extract_dual intermediateGoal_5194 (by native_decide) 9153 9154
+        (by simp [intermediateGoal_5194]) (by rfl) (by rfl) h9153_pm
+    have h9339_pm : (initPM 9339).shape = [2048, 64] := hPM 9339 [2048, 64] (by native_decide)
+    have hb_5248 : initSM 5248 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 9339, initPM 9340] :=
+      extract_dual intermediateGoal_5248 (by native_decide) 9339 9340
+        (by simp [intermediateGoal_5248]) (by rfl) (by rfl) h9339_pm
+    have h9525_pm : (initPM 9525).shape = [2048, 64] := hPM 9525 [2048, 64] (by native_decide)
+    have hb_5302 : initSM 5302 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 9525, initPM 9526] :=
+      extract_dual intermediateGoal_5302 (by native_decide) 9525 9526
+        (by simp [intermediateGoal_5302]) (by rfl) (by rfl) h9525_pm
+    have h9729_pm : (initPM 9729).shape = [2048, 64] := hPM 9729 [2048, 64] (by native_decide)
+    have hb_5359 : initSM 5359 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 9729, initPM 9730] :=
+      extract_dual intermediateGoal_5359 (by native_decide) 9729 9730
+        (by simp [intermediateGoal_5359]) (by rfl) (by rfl) h9729_pm
+    have h9901_pm : (initPM 9901).shape = [2048, 64] := hPM 9901 [2048, 64] (by native_decide)
+    have hb_5408 : initSM 5408 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 9901, initPM 9902] :=
+      extract_dual intermediateGoal_5408 (by native_decide) 9901 9902
+        (by simp [intermediateGoal_5408]) (by rfl) (by rfl) h9901_pm
+    have h10073_pm : (initPM 10073).shape = [2048, 64] := hPM 10073 [2048, 64] (by native_decide)
+    have hb_5457 : initSM 5457 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10073, initPM 10074] :=
+      extract_dual intermediateGoal_5457 (by native_decide) 10073 10074
+        (by simp [intermediateGoal_5457]) (by rfl) (by rfl) h10073_pm
+    have h10245_pm : (initPM 10245).shape = [2048, 64] := hPM 10245 [2048, 64] (by native_decide)
+    have hb_5506 : initSM 5506 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10245, initPM 10246] :=
+      extract_dual intermediateGoal_5506 (by native_decide) 10245 10246
+        (by simp [intermediateGoal_5506]) (by rfl) (by rfl) h10245_pm
+    have h10417_pm : (initPM 10417).shape = [2048, 64] := hPM 10417 [2048, 64] (by native_decide)
+    have hb_5555 : initSM 5555 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10417, initPM 10418] :=
+      extract_dual intermediateGoal_5555 (by native_decide) 10417 10418
+        (by simp [intermediateGoal_5555]) (by rfl) (by rfl) h10417_pm
+    have h10589_pm : (initPM 10589).shape = [2048, 64] := hPM 10589 [2048, 64] (by native_decide)
+    have hb_5604 : initSM 5604 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10589, initPM 10590] :=
+      extract_dual intermediateGoal_5604 (by native_decide) 10589 10590
+        (by simp [intermediateGoal_5604]) (by rfl) (by rfl) h10589_pm
+    have h10761_pm : (initPM 10761).shape = [2048, 64] := hPM 10761 [2048, 64] (by native_decide)
+    have hb_5653 : initSM 5653 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10761, initPM 10762] :=
+      extract_dual intermediateGoal_5653 (by native_decide) 10761 10762
+        (by simp [intermediateGoal_5653]) (by rfl) (by rfl) h10761_pm
+    have h10933_pm : (initPM 10933).shape = [2048, 64] := hPM 10933 [2048, 64] (by native_decide)
+    have hb_5702 : initSM 5702 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10933, initPM 10934] :=
+      extract_dual intermediateGoal_5702 (by native_decide) 10933 10934
+        (by simp [intermediateGoal_5702]) (by rfl) (by rfl) h10933_pm
+    have h11105_pm : (initPM 11105).shape = [2048, 64] := hPM 11105 [2048, 64] (by native_decide)
+    have hb_5751 : initSM 5751 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 11105, initPM 11106] :=
+      extract_dual intermediateGoal_5751 (by native_decide) 11105 11106
+        (by simp [intermediateGoal_5751]) (by rfl) (by rfl) h11105_pm
+    have h11277_pm : (initPM 11277).shape = [2048, 64] := hPM 11277 [2048, 64] (by native_decide)
+    have hb_5800 : initSM 5800 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 11277, initPM 11278] :=
+      extract_dual intermediateGoal_5800 (by native_decide) 11277 11278
+        (by simp [intermediateGoal_5800]) (by rfl) (by rfl) h11277_pm
+    have h11449_pm : (initPM 11449).shape = [2048, 64] := hPM 11449 [2048, 64] (by native_decide)
+    have hb_5849 : initSM 5849 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 11449, initPM 11450] :=
+      extract_dual intermediateGoal_5849 (by native_decide) 11449 11450
+        (by simp [intermediateGoal_5849]) (by rfl) (by rfl) h11449_pm
+    have h11621_pm : (initPM 11621).shape = [2048, 64] := hPM 11621 [2048, 64] (by native_decide)
+    have hb_5898 : initSM 5898 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 11621, initPM 11622] :=
+      extract_dual intermediateGoal_5898 (by native_decide) 11621 11622
+        (by simp [intermediateGoal_5898]) (by rfl) (by rfl) h11621_pm
+    -- Layer 0/1 special: rewrite initSM 4708/4762 = initPM 4708/4762, then softmax → allGather form.
+    rw [hb_4708, hb_4762]
+    -- Layer 2..23: rewrite initSM = allGather.
+    rw [hb_4816, hb_4870, hb_4924, hb_4978, hb_5032, hb_5086, hb_5140, hb_5194,
+        hb_5248, hb_5302, hb_5359, hb_5408, hb_5457, hb_5506, hb_5555, hb_5604,
+        hb_5653, hb_5702, hb_5751, hb_5800, hb_5849, hb_5898]
+    rw [hpmR]
+    -- For layers 0/1, apply softmax_allGather2 after chunk-gather round-trip.
+    -- softmax (initPM 4708) = softmax (allGather_0 [chunk_0 initPM 4708, chunk_1 initPM 4708])
+    --                       = allGather_0 [softmax (chunk_0 initPM 4708), softmax (chunk_1 initPM 4708)]
+    have hL0 : softmax (initPM 4708) =
+        allGatherPrimDimN 0 2 0 [softmax (chunkPrimDimN 0 2 0 (initPM 4708)),
+                                  softmax (chunkPrimDimN 0 2 1 (initPM 4708))] := by
+      have hchunk0 : (chunkPrimDimN 0 2 0 (initPM 4708)).shape = [2048, 64] := by
+        rw [chunkPrimDimN_shape 0 2 0 _ [4096, 64] h4708_pm (by omega)]; rfl
+      have hchunk1 : (chunkPrimDimN 0 2 1 (initPM 4708)).shape = [2048, 64] := by
+        rw [chunkPrimDimN_shape 0 2 1 _ [4096, 64] h4708_pm (by omega)]; rfl
+      -- softmax (initPM 4708) = softmax (allGather ...) (using round-trip only on LHS).
+      conv_lhs => rw [← allGather0_chunk0_id_4096_64 (initPM 4708) h4708_pm]
+      exact softmax_allGather2_dim0_2048_64 _ _ hchunk0 hchunk1
+    have hL1 : softmax (initPM 4762) =
+        allGatherPrimDimN 0 2 0 [softmax (chunkPrimDimN 0 2 0 (initPM 4762)),
+                                  softmax (chunkPrimDimN 0 2 1 (initPM 4762))] := by
+      have hchunk0 : (chunkPrimDimN 0 2 0 (initPM 4762)).shape = [2048, 64] := by
+        rw [chunkPrimDimN_shape 0 2 0 _ [4096, 64] h4762_pm (by omega)]; rfl
+      have hchunk1 : (chunkPrimDimN 0 2 1 (initPM 4762)).shape = [2048, 64] := by
+        rw [chunkPrimDimN_shape 0 2 1 _ [4096, 64] h4762_pm (by omega)]; rfl
+      conv_lhs => rw [← allGather0_chunk0_id_4096_64 (initPM 4762) h4762_pm]
+      exact softmax_allGather2_dim0_2048_64 _ _ hchunk0 hchunk1
+    -- For layers 2..23, apply softmax_allGather2 directly.
+    have hL2 := softmax_allGather2_dim0_2048_64 _ _ h7851_pm
+                    (show (initPM 7852).shape = [2048, 64] from hPM 7852 [2048, 64] (by native_decide))
+    have hL3 := softmax_allGather2_dim0_2048_64 _ _ h8037_pm
+                    (show (initPM 8038).shape = [2048, 64] from hPM 8038 [2048, 64] (by native_decide))
+    have hL4 := softmax_allGather2_dim0_2048_64 _ _ h8223_pm
+                    (show (initPM 8224).shape = [2048, 64] from hPM 8224 [2048, 64] (by native_decide))
+    have hL5 := softmax_allGather2_dim0_2048_64 _ _ h8409_pm
+                    (show (initPM 8410).shape = [2048, 64] from hPM 8410 [2048, 64] (by native_decide))
+    have hL6 := softmax_allGather2_dim0_2048_64 _ _ h8595_pm
+                    (show (initPM 8596).shape = [2048, 64] from hPM 8596 [2048, 64] (by native_decide))
+    have hL7 := softmax_allGather2_dim0_2048_64 _ _ h8781_pm
+                    (show (initPM 8782).shape = [2048, 64] from hPM 8782 [2048, 64] (by native_decide))
+    have hL8 := softmax_allGather2_dim0_2048_64 _ _ h8967_pm
+                    (show (initPM 8968).shape = [2048, 64] from hPM 8968 [2048, 64] (by native_decide))
+    have hL9 := softmax_allGather2_dim0_2048_64 _ _ h9153_pm
+                    (show (initPM 9154).shape = [2048, 64] from hPM 9154 [2048, 64] (by native_decide))
+    have hL10 := softmax_allGather2_dim0_2048_64 _ _ h9339_pm
+                    (show (initPM 9340).shape = [2048, 64] from hPM 9340 [2048, 64] (by native_decide))
+    have hL11 := softmax_allGather2_dim0_2048_64 _ _ h9525_pm
+                    (show (initPM 9526).shape = [2048, 64] from hPM 9526 [2048, 64] (by native_decide))
+    have hL12 := softmax_allGather2_dim0_2048_64 _ _ h9729_pm
+                    (show (initPM 9730).shape = [2048, 64] from hPM 9730 [2048, 64] (by native_decide))
+    have hL13 := softmax_allGather2_dim0_2048_64 _ _ h9901_pm
+                    (show (initPM 9902).shape = [2048, 64] from hPM 9902 [2048, 64] (by native_decide))
+    have hL14 := softmax_allGather2_dim0_2048_64 _ _ h10073_pm
+                    (show (initPM 10074).shape = [2048, 64] from hPM 10074 [2048, 64] (by native_decide))
+    have hL15 := softmax_allGather2_dim0_2048_64 _ _ h10245_pm
+                    (show (initPM 10246).shape = [2048, 64] from hPM 10246 [2048, 64] (by native_decide))
+    have hL16 := softmax_allGather2_dim0_2048_64 _ _ h10417_pm
+                    (show (initPM 10418).shape = [2048, 64] from hPM 10418 [2048, 64] (by native_decide))
+    have hL17 := softmax_allGather2_dim0_2048_64 _ _ h10589_pm
+                    (show (initPM 10590).shape = [2048, 64] from hPM 10590 [2048, 64] (by native_decide))
+    have hL18 := softmax_allGather2_dim0_2048_64 _ _ h10761_pm
+                    (show (initPM 10762).shape = [2048, 64] from hPM 10762 [2048, 64] (by native_decide))
+    have hL19 := softmax_allGather2_dim0_2048_64 _ _ h10933_pm
+                    (show (initPM 10934).shape = [2048, 64] from hPM 10934 [2048, 64] (by native_decide))
+    have hL20 := softmax_allGather2_dim0_2048_64 _ _ h11105_pm
+                    (show (initPM 11106).shape = [2048, 64] from hPM 11106 [2048, 64] (by native_decide))
+    have hL21 := softmax_allGather2_dim0_2048_64 _ _ h11277_pm
+                    (show (initPM 11278).shape = [2048, 64] from hPM 11278 [2048, 64] (by native_decide))
+    have hL22 := softmax_allGather2_dim0_2048_64 _ _ h11449_pm
+                    (show (initPM 11450).shape = [2048, 64] from hPM 11450 [2048, 64] (by native_decide))
+    have hL23 := softmax_allGather2_dim0_2048_64 _ _ h11621_pm
+                    (show (initPM 11622).shape = [2048, 64] from hPM 11622 [2048, 64] (by native_decide))
+    -- Rewrite fw_topk_routing .snd.snd = softmax on LHS.
+    -- Then apply hL0..hL23 to convert each SM softmax to allGather form.
+    -- Note: (fw_topk_routing x 8 1).snd.snd = softmax x (by unfold).
+    -- Wait — we've already applied hb_XXX to substitute initSM → initPM/allGather.
+    -- Now LHS is: fw_stack [(fw_topk_routing (initPM 4708) 8 1).snd.snd,
+    --                       (fw_topk_routing (initPM 4762) 8 1).snd.snd,
+    --                       (fw_topk_routing (allGather_0 [initPM 7851, initPM 7852]) 8 1).snd.snd, ...]
+    -- Need to unfold .snd.snd = softmax and then apply hL0..hL23.
+    -- Let me first show softmax = .snd.snd equality generically then rewrite.
+    have hunf : ∀ x : Tensor, (fw_topk_routing x 8 1).snd.snd = softmax x := by
+      intro x; rfl
+    simp only [hunf]
+    -- Now apply per-layer transforms.
+    rw [hL0, hL1, hL2, hL3, hL4, hL5, hL6, hL7, hL8, hL9, hL10, hL11,
+        hL12, hL13, hL14, hL15, hL16, hL17, hL18, hL19, hL20, hL21, hL22, hL23]
+    -- Now LHS is: fw_stack [allGather_0 [softmax A, softmax B]] × 24 layers
+    -- And RHS is: allGather_1 [fw_stack [softmax A_r0 × 24], fw_stack [softmax B_r1 × 24]]
+    -- Apply Lemma B in reverse.
+    -- Actually Lemma B says: fw_stack (zipWith f as bs) = allGather_1 [fw_stack as, fw_stack bs].
+    -- We need the reverse direction.
     sorry
 
 theorem prove_pattern_4 : pattern_4_stmt := by
