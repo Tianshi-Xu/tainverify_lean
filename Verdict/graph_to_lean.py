@@ -2031,7 +2031,7 @@ def emit_lean_spec(
 			pattern_file_lines.append(f"def pattern_{pid}_goalIds : List Nat := [{', '.join(members)}]")
 			pattern_file_lines.append(f"inductive pattern_{pid}_target : Prop → Prop")
 			for gid in members:
-				pattern_file_lines.append(f"  | goal_{gid} : pattern_{pid}_target goal_{gid}_stmt")
+				pattern_file_lines.append(f"  | goal_{gid} : pattern_{pid}_target goal_{gid}_stmt_cut")
 			pattern_file_lines.append("")
 			pattern_file_lines.append(f"def pattern_{pid}_stmt : Prop :=")
 			pattern_file_lines.append(f"  ∀ {{target : Prop}}, pattern_{pid}_target target → target")
@@ -2087,7 +2087,7 @@ def emit_lean_spec(
 		for sl in goal_slices:
 			gid = _goal_id(int(sl.goal.ts))
 			pid = pattern_by_key[_pattern_key(sl)]
-			instance_lines.append(f"theorem prove_goal_{gid}_from_pattern_{pid} : goal_{gid}_stmt := by")
+			instance_lines.append(f"theorem prove_goal_{gid}_from_pattern_{pid} : goal_{gid}_stmt_cut := by")
 			instance_lines.append(f"  exact prove_pattern_{pid} pattern_{pid}_target.goal_{gid}")
 			instance_lines.append("")
 		instance_lines.append("end TrainVerify.Denote.GeneratedPatternInstances")
