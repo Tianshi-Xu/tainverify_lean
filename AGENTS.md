@@ -17,3 +17,4 @@
 17.rw 里的 `zLossScale := 0` 不匹配 target 里的 `↑0`：需要 `zLossScale := ((0 : Nat) : Scalar)` 显式指定 Nat→Scalar coercion。
 18.extract_dual 需要 shape witness 处理 reconstructWithDim 的 `if sh = [1] then allReduce else allGather`：simp with `hshape, if_neg hne` 关掉 if 分支。
 19.生成 25+ 节点 machinery lemma：用 Python 脚本自动生成 per-tid 归约的 haves（Boundary → foldl_applyNode_at_not_written + fin_cases <;> decide; Written → split-take + applyNode_XXX_out helper; Fast-forward → foldl_take_split_at_not_written）。最终 rw 链末尾可能需要 `rfl` 处理 numeric normalization（如 `[k].getD 1 0 = 0`）。
+20.**Axiom audit 强制**（2026-07-03 血教训）：每写完一个 sharding-commute axiom，立刻写 witness file 验证 LHS.shape = RHS.shape（Denote 语义下）。如果 shape 不等，axiom 是 inconsistent，能推 False，导致所有依赖它的定理 vacuous。**Pattern_1 的 `fw_maybe_unshuffle_cp2_commute` 就是这个坑**（LHS.shape=[2] vs RHS.shape=[4] because Denote 用 xs.head?.shape 不是 data.shape）。参考 `UnshuffleInconsistent.lean` 的 witness 模板。**必须做完 audit 才能声称 Pattern 已证**。
