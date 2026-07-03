@@ -22,3 +22,8 @@
 22.**Subagent iteration budget（~45 tool calls）不够修复 Lean 证明**（2026-07-03 教训）：3 个 subagent 尝试修 softmaxBwd chain 全部 timeout / iterated to death without finishing。Lean 证明修复需要多轮 build-error-fix 循环。**长手工任务不 delegate，或切成 <30 tool call 的原子子任务**（比如只 "rename 3 处 identifier + build verify"）。
 23.**Lean `/-- ... -/` docstring 不能后跟 `set_option ... in`**（2026-07-03 教训）：`set_option ... in` 只接受紧跟着的 declaration，不接受 docstring 作 gap。改用 `-- ...` line comment 或把 docstring 移到 `set_option ... in` 之后紧接 `theorem`。
 24.**跨 rank op 用 identity 模型**（2026-07-03 pattern1-fix 教训）：如果一个 op 的真实语义需要观察其他 rank 的 tensor 值（比如 CP zigzag shuffle 需要看所有 rank 的输入才能算本 rank 的输出），但 Denote 的 per-rank evalOp 只能看 local store，就把它模型化成 `def op (data _cu ...) : Tensor := data`（在 data 上恒等）。这在 `cpSize=1` 时精确（匹配 Python 的 early-return branch），在 `cpSize>1` 时**shape-correct 但 value-lossy**。**这比给个错的非 identity 模型好**——错的模型（比如从 metadata 派生 output shape）会让 sharding-commute axiom 变 inconsistent，静默毒化整个 proof chain（Pattern_1 v5 vacuous 教训）。**文档里明确写 fidelity note**。
+25.**上游忠实性优先，下游成功是假的**（2026-07-03 子鱼铁令）：Denote 层任何跟 Python authority 不符的语义 bug，**必须先修上游**，才能证下游。下游 pattern 证明再多，只要上游算子语义错了，全都是"vacuous over garbage"。规则：
+    - 每加一个 Denote op / 修一个 Denote def 前：**先跟 Python source 对照** input shape / output shape / value semantics
+    - 上游 audit 未过之前，下游 sharding-commute axiom 不允许当 "TODO" 遗留 — 遇到就立刻上溯查 Denote 是不是错了
+    - 陷阱：`fw_all2all_moe_gmm` 的 `hModel = w2.shape.reverse.head?` 错取了 w2 的 last dim（512），应用 `input.shape.reverse.head?` 取 x 的 last dim（d_model=1024）匹配 Python
+    - 教训：Pattern_1 我先证下游 chain shape + rms_norm commute，遇到 fw_add 才发现 outer_add 是 broadcast garbage，回头查才发现是 fw_all2all_moe_gmm hModel bug。**顺序反了**

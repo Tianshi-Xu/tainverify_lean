@@ -1890,11 +1890,21 @@ noncomputable def fw_all2all_moe_gmm
   let _ := num_experts
   let _ := top_k
   let lDim   := (input.shape.head?).getD 0
-  let hModel := (w2.shape.reverse.head?).getD 0
-  -- Decode hidden dims from weight shapes.
-  -- w13 shape = [E_local, 2*h_inner, h_model]  (gate ⊕ up packed)
-  -- w2  shape = [E_local, h_inner,   h_model]  (down projection)
-  -- routing_probs / routing_map shape = [l, num_experts]
+  -- Python op signature (nnscaler.register_op in llm/arch/all2all_moe.py L1249):
+  --   'l h^, l m^, l m^, E t^ h^, E h^ d^ -> l h^'
+  -- So:
+  --   input : [l, h]       (h = d_model = embed_dim)
+  --   w13   : [E, 2*h_inner, h]   (t = 2*h_inner)
+  --   w2    : [E, h, d]           (d = h_inner = moe_ffn_dim)
+  --   output: [l, h]       (matches input's hidden dim — required for residual add)
+  --
+  -- BUG FIX (2026-07-03): previously used `hModel = w2.shape.reverse.head?` which
+  -- picked w2's LAST dim = h_inner (e.g. 512 for YOCO-MoE-A0.4B), NOT the intended
+  -- d_model. This caused output shape `[l, h_inner]` instead of `[l, d_model]`, so
+  -- downstream residual adds became mismatched-shape broadcasts of garbage. Now we
+  -- take h from input directly, matching the Python signature.
+  let hModel := (input.shape.reverse.head?).getD 0
+  -- Weight-shape decoding (matches Python (E, embed_dim, moe_ffn_dim) for w2).
   let w13Mid     := (w13.shape.drop 1).head?.getD 0   -- 2 * h_inner
   let h_inner   := w13Mid / 2
   let numExp     := (routing_probs.shape.drop 1).head?.getD 0
@@ -1915,7 +1925,7 @@ noncomputable def fw_all2all_moe_gmm
         --                    up[d]   = Σ_h input[l, h] * w13[eLocal, h_inner + d, h]
         -- SwiGLU(gate, up) = silu(clamp_max(swiglu_limit, gate))
         --                     * clamp_minmax(-swiglu_limit, swiglu_limit, up)
-        -- Then down[h] = Σ_d swiglu_d * w2[eLocal, d, h]
+        -- Then down[h] = Σ_d swiglu_d * w2[eLocal, h, d]  (note new indexing: w2 is [E, h, d])
         prob * ∑ d ∈ Finset.range h_inner,
           let gateRaw := ∑ k ∈ Finset.range hModel,
             valAt input (l * hModel + k) *
@@ -1926,7 +1936,8 @@ noncomputable def fw_all2all_moe_gmm
           let gateClamped := min swiglu_limit gateRaw
           let upClamped   := max (-swiglu_limit) (min swiglu_limit upRaw)
           let swigluVal   := siluScalar gateClamped * upClamped
-          swigluVal * valAt w2 ((eLocal * h_inner + d) * hModel + h))
+          -- w2 indexing: [E=eLocal, h_model=h, h_inner=d] → flat = (eLocal * hModel + h) * h_inner + d
+          swigluVal * valAt w2 ((eLocal * hModel + h) * h_inner + d))
 
 /-! ### YOCO loss kernel: `inner_chunk_linear_cross_entropy`
 

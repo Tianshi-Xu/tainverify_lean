@@ -1062,21 +1062,22 @@ theorem fw_topk_routing_thd_shape
   | cons d rest => simp [Tensor.mkShape]
 
 /-- `fw_all2all_moe_gmm` output has shape `[lDim, hModel]` where
-    `lDim = input.shape.head` and `hModel = w2.shape.last`. -/
+    `lDim = input.shape.head` and `hModel = input.shape.last` (matching Python signature
+    `'l h^, ..., E h^ d^ -> l h^'` where output hidden dim = input hidden dim). -/
 theorem fw_all2all_moe_gmm_shape
     (input rp rm w13 w2 : Tensor)
     (numExperts localExpertStart localExpertEnd topK : Nat)
     (swigluLimit : Scalar)
     (lDim hModel : Nat)
     (hL : input.shape.head? = some lDim)
-    (hH : w2.shape.reverse.head? = some hModel) :
+    (hH : input.shape.reverse.head? = some hModel) :
     (fw_all2all_moe_gmm input rp rm w13 w2 numExperts localExpertStart
         localExpertEnd topK swigluLimit).shape = [lDim, hModel] := by
   unfold fw_all2all_moe_gmm
   have hl : (input.shape.head?).getD 0 = lDim := by rw [hL]; rfl
-  have hh : (w2.shape.reverse.head?).getD 0 = hModel := by rw [hH]; rfl
+  have hh : (input.shape.reverse.head?).getD 0 = hModel := by rw [hH]; rfl
   show (zeroTensor [(input.shape.head?).getD 0,
-                    (w2.shape.reverse.head?).getD 0]).shape = [lDim, hModel]
+                    (input.shape.reverse.head?).getD 0]).shape = [lDim, hModel]
   rw [hl, hh]
   simp [zeroTensor, Tensor.mkShape]
 

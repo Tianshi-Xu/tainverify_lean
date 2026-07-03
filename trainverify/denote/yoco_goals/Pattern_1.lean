@@ -1864,10 +1864,10 @@ theorem sm_chain_shape_4096 (initSM : Store) (hSM : StoreShapesHold initSM sm_go
             ((fw_topk_routing (initSM 5898) 8 1).fst)
             ((fw_topk_routing (initSM 5898) 8 1).snd.fst)
             (initSM 5902) (initSM 5903) 64 0 64 8 ((((10 : Nat) : Scalar)))).shape
-        = [4096, 512] :=
+        = [4096, 1024] :=
     TrainVerify.Denote.fw_all2all_moe_gmm_shape
-      _ _ _ _ _ _ _ _ _ _ 4096 512
-      (by rw [h5895]; rfl) (by rw [h5903]; decide)
+      _ _ _ _ _ _ _ _ _ _ 4096 1024
+      (by rw [h5895]; rfl) (by rw [h5895]; rfl)
   -- elemwiseMul(sigmoid(view [4096,1] ...), view [4096, 1024] ...): outShape2 picks first arg
   -- fw_view [4096, 1] X has shape [4096, 1]; fw_sigmoid preserves shape → [4096, 1].
   -- outShape2 [4096, 1] [4096, 1024] = [4096, 1] (first wins since ≥).
@@ -1905,7 +1905,7 @@ theorem sm_chain_shape_4096 (initSM : Store) (hSM : StoreShapesHold initSM sm_go
               (fw_swiglu
                 (fw_view [4096, 512] (fw_linear (initSM 5895) (initSM 5911)))
                 (fw_view [4096, 512] (fw_linear (initSM 5895) (initSM 5915))))
-              (initSM 5920))))).shape = [4096, 512] := by
+              (initSM 5920))))).shape = [4096, 1024] := by
     show (Tensor.mkShape (outShape2 _ _) _).shape = _
     simp only [Tensor.mkShape, outShape2, hall2all_shape, hmul_shape]
     decide
@@ -1976,10 +1976,10 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
         ((fw_topk_routing (initPM 11621) 8 1).fst)
         ((fw_topk_routing (initPM 11621) 8 1).snd.fst)
         (initPM 11629) (initPM 11631) 64 0 32 8 ((((10 : Nat) : Scalar)))).shape
-        = [2048, 512] :=
+        = [2048, 1024] :=
     TrainVerify.Denote.fw_all2all_moe_gmm_shape
-      _ _ _ _ _ _ _ _ _ _ 2048 512
-      (by rw [h11613]; rfl) (by rw [h11631]; decide)
+      _ _ _ _ _ _ _ _ _ _ 2048 1024
+      (by rw [h11613]; rfl) (by rw [h11613]; rfl)
   have hmul0_shape :
       (elemwiseMul
         (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
@@ -2013,7 +2013,7 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
               (fw_swiglu
                 (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
                 (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
-              (initPM 5920))))).shape = [2048, 512] := by
+              (initPM 5920))))).shape = [2048, 1024] := by
     show (Tensor.mkShape (outShape2 _ _) _).shape = _
     simp only [Tensor.mkShape, outShape2, hgmm0, hmul0_shape]
     decide
@@ -2066,10 +2066,10 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
         ((fw_topk_routing (initPM 11622) 8 1).fst)
         ((fw_topk_routing (initPM 11622) 8 1).snd.fst)
         (initPM 11630) (initPM 11632) 64 32 64 8 ((((10 : Nat) : Scalar)))).shape
-        = [2048, 512] :=
+        = [2048, 1024] :=
     TrainVerify.Denote.fw_all2all_moe_gmm_shape
-      _ _ _ _ _ _ _ _ _ _ 2048 512
-      (by rw [h11614]; rfl) (by rw [h11632]; decide)
+      _ _ _ _ _ _ _ _ _ _ 2048 1024
+      (by rw [h11614]; rfl) (by rw [h11614]; rfl)
   have hmul1_shape :
       (elemwiseMul
         (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
@@ -2103,7 +2103,7 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
               (fw_swiglu
                 (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
                 (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
-              (initPM 5920))))).shape = [2048, 512] := by
+              (initPM 5920))))).shape = [2048, 1024] := by
     show (Tensor.mkShape (outShape2 _ _) _).shape = _
     simp only [Tensor.mkShape, outShape2, hgmm1, hmul1_shape]
     decide
@@ -2404,10 +2404,10 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
           (fw_topk_routing (initPM 11621) 8 1).fst
           (fw_topk_routing (initPM 11621) 8 1).snd.fst
           (initPM 11629) (initPM 11631) 64 0 32 8 (((10 : Nat) : Scalar))).shape
-          = [2048, 512] :=
+          = [2048, 1024] :=
       TrainVerify.Denote.fw_all2all_moe_gmm_shape
-        _ _ _ _ _ _ _ _ _ _ 2048 512
-        (by rw [h11613]; rfl) (by rw [h11631]; decide)
+        _ _ _ _ _ _ _ _ _ _ 2048 1024
+        (by rw [h11613]; rfl) (by rw [h11613]; rfl)
     have hmul0_shape :
         (elemwiseMul
           (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
@@ -2441,7 +2441,7 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
                 (fw_swiglu
                   (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
                   (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
-                (initPM 5920))))).shape = [2048, 512] := by
+                (initPM 5920))))).shape = [2048, 1024] := by
       show (Tensor.mkShape (outShape2 _ _) _).shape = _
       simp only [Tensor.mkShape, outShape2, hgmm0_shape, hmul0_shape]
       decide
@@ -2486,10 +2486,10 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
           (fw_topk_routing (initPM 11622) 8 1).fst
           (fw_topk_routing (initPM 11622) 8 1).snd.fst
           (initPM 11630) (initPM 11632) 64 32 64 8 (((10 : Nat) : Scalar))).shape
-          = [2048, 512] :=
+          = [2048, 1024] :=
       TrainVerify.Denote.fw_all2all_moe_gmm_shape
-        _ _ _ _ _ _ _ _ _ _ 2048 512
-        (by rw [h11614]; rfl) (by rw [h11632]; decide)
+        _ _ _ _ _ _ _ _ _ _ 2048 1024
+        (by rw [h11614]; rfl) (by rw [h11614]; rfl)
     have hmul1_shape :
         (elemwiseMul
           (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
@@ -2523,7 +2523,7 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
                 (fw_swiglu
                   (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
                   (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
-                (initPM 5920))))).shape = [2048, 512] := by
+                (initPM 5920))))).shape = [2048, 1024] := by
       show (Tensor.mkShape (outShape2 _ _) _).shape = _
       simp only [Tensor.mkShape, outShape2, hgmm1_shape, hmul1_shape]
       decide
