@@ -2494,6 +2494,110 @@ theorem fw_topk_routing_snd_fst_allGather0_commute_2_of (a b : Tensor) (S n k : 
 axiom Pattern_1_labelsAxiom : ∀ (y : Tensor) (vocab : Nat) (l : Nat) (_ : True),
     scalarToNat (valAt y l) < vocab
 
+/-- 3-D variant of `allGatherPrimDimN0_valAt` for shape `[E, h, d]`:
+    at flat idx `((r * E + eLocal) * h + hi) * d + di`, reads shard r at local flat
+    `(eLocal * h + hi) * d + di`. Direct unfold proof. -/
+private theorem allGatherPrimDimN0_valAt_3d (E h d : Nat) (hE : 0 < E) (hh : 0 < h) (hd : 0 < d)
+    (Ws : List Tensor)
+    (hhead : (Ws.head?.map (fun t => t.shape)).getD [] = [E, h, d])
+    (r : Nat) (hr : r < 2) (eLocal : Nat) (heLocal : eLocal < E)
+    (hi : Nat) (hi_lt : hi < h) (di : Nat) (hdi_lt : di < d) :
+    valAt (allGatherPrimDimN 0 2 0 Ws) (((r * E + eLocal) * h + hi) * d + di)
+      = valAt (Ws.getD r (zeroTensor [E, h, d])) ((eLocal * h + hi) * d + di) := by
+  unfold allGatherPrimDimN
+  rw [hhead]
+  simp only [List.drop, List.foldl, List.getD]
+  -- shape after set = [E * 2, h, d]
+  have hout_bound : ((r * E + eLocal) * h + hi) * d + di < E * 2 * h * d := by
+    have hstep1 : ((r * E + eLocal) * h + hi) * d + di
+        < ((r * E + eLocal) * h + hi + 1) * d := by
+      calc ((r * E + eLocal) * h + hi) * d + di
+          < ((r * E + eLocal) * h + hi) * d + d := by omega
+        _ = ((r * E + eLocal) * h + hi + 1) * d := by ring
+    have hstep2 : (r * E + eLocal) * h + hi + 1 ≤ (r * E + eLocal + 1) * h := by
+      have : (r * E + eLocal + 1) * h = (r * E + eLocal) * h + h := by ring
+      omega
+    have hstep3 : (r * E + eLocal + 1) ≤ E * 2 := by
+      calc r * E + eLocal + 1 ≤ r * E + E := by omega
+        _ = (r + 1) * E := by ring
+        _ ≤ 2 * E := Nat.mul_le_mul_right _ (by omega)
+        _ = E * 2 := by ring
+    calc ((r * E + eLocal) * h + hi) * d + di
+        < ((r * E + eLocal) * h + hi + 1) * d := hstep1
+      _ ≤ (r * E + eLocal + 1) * h * d := by
+        have := Nat.mul_le_mul_right d hstep2
+        nlinarith
+      _ ≤ E * 2 * h * d := by
+        have := Nat.mul_le_mul_right (h * d) hstep3
+        nlinarith
+  rw [valAt_of_lt _ _ (by
+    show ((r * E + eLocal) * h + hi) * d + di < prodShape ([E, h, d].set 0 (([E, h, d].getD 0 0) * 2))
+    simp [prodShape, List.set, List.getD, List.foldl]
+    linarith [hout_bound])]
+  simp [Tensor.mkShape, List.set, List.getD, List.drop, List.foldl]
+  -- The mkShape function computes valAt (Ws.getD r' _) (preIdx * dimStride + jLocal * postStride + k)
+  -- shardShape=[E,h,d], gatherDim=0.
+  -- dimSize = E, fullDimSize = E*2, postStride = h*d, dimStride = E*h*d, fullDimStride = E*2*h*d
+  set idx := ((r * E + eLocal) * h + hi) * d + di with hidx_def
+  have hE_ne : E ≠ 0 := Nat.pos_iff_ne_zero.mp hE
+  have hh_ne : h ≠ 0 := Nat.pos_iff_ne_zero.mp hh
+  have hd_ne : d ≠ 0 := Nat.pos_iff_ne_zero.mp hd
+  have hE2_ne : E * 2 ≠ 0 := Nat.mul_ne_zero hE_ne (by omega)
+  have hhd_ne : h * d ≠ 0 := Nat.mul_ne_zero hh_ne hd_ne
+  have hEhd_ne : E * 2 * (h * d) ≠ 0 := Nat.mul_ne_zero hE2_ne hhd_ne
+  -- Show: idx / (E*2*(h*d)) = 0 (since idx < E*2*h*d)
+  have hidx_bound2 : idx < E * 2 * (h * d) := by
+    rw [hidx_def]; simp only [Nat.mul_assoc]; convert hout_bound using 1; ring
+  have hpre_div : idx / (E * 2 * (h * d)) = 0 := Nat.div_eq_of_lt hidx_bound2
+  have hpre_mod : idx % (E * 2 * (h * d)) = idx := Nat.mod_eq_of_lt hidx_bound2
+  -- jFull = idx / (h*d)
+  have hjFull_val : idx / (h * d) = r * E + eLocal := by
+    rw [hidx_def]
+    have h1 : ((r * E + eLocal) * h + hi) * d + di
+        = ((r * E + eLocal) * h + hi) * d + di := rfl
+    have h2 : ((r * E + eLocal) * h + hi) * d + di = (r * E + eLocal) * (h * d) + (hi * d + di) := by
+      ring
+    rw [h2]
+    have h_small_lt : hi * d + di < h * d := by
+      calc hi * d + di < hi * d + d := by omega
+        _ = (hi + 1) * d := by ring
+        _ ≤ h * d := Nat.mul_le_mul_right _ (by omega)
+    have h_div : ((r * E + eLocal) * (h * d) + (hi * d + di)) / (h * d)
+        = (hi * d + di) / (h * d) + (r * E + eLocal) := by
+      rw [Nat.add_comm, Nat.add_mul_div_right _ _ (by positivity)]
+    rw [h_div, Nat.div_eq_of_lt h_small_lt]; ring
+  -- k = idx % (h*d)
+  have hk_val : idx % (h * d) = hi * d + di := by
+    rw [hidx_def]
+    have h2 : ((r * E + eLocal) * h + hi) * d + di = (r * E + eLocal) * (h * d) + (hi * d + di) := by
+      ring
+    rw [h2]
+    have h_small_lt : hi * d + di < h * d := by
+      calc hi * d + di < hi * d + d := by omega
+        _ = (hi + 1) * d := by ring
+        _ ≤ h * d := Nat.mul_le_mul_right _ (by omega)
+    have h_mod : ((r * E + eLocal) * (h * d) + (hi * d + di)) % (h * d)
+        = (hi * d + di) % (h * d) := by
+      rw [Nat.add_comm, Nat.add_mul_mod_self_right]
+    rw [h_mod, Nat.mod_eq_of_lt h_small_lt]
+  -- r' = jFull / E = r (since eLocal < E)
+  have hr'_val : (r * E + eLocal) / E = r := by
+    have h1 : (r * E + eLocal) / E = eLocal / E + r := by
+      rw [Nat.add_comm, Nat.add_mul_div_right eLocal r hE]
+    rw [h1, Nat.div_eq_of_lt heLocal]; ring
+  -- jLocal = jFull % E = eLocal
+  have hjLocal_val : (r * E + eLocal) % E = eLocal := by
+    have h1 : (r * E + eLocal) % E = eLocal % E := by
+      rw [Nat.add_comm, Nat.add_mul_mod_self_right]
+    rw [h1, Nat.mod_eq_of_lt heLocal]
+  -- Also idx % (E * 2 * (h * d)) / (h * d) = idx / (h * d) since idx < E*2*(h*d)
+  -- And idx % (E * 2 * (h * d)) % (h * d) = idx % (h * d) similarly
+  simp [hE_ne, hh_ne, hd_ne, hE2_ne, hhd_ne, hEhd_ne, hpre_div, hpre_mod, hjFull_val, hk_val,
+        hr'_val, hjLocal_val]
+  -- Remaining: valAt (Ws.getD r _) (0 * (E * (h * d)) + eLocal * (h * d) + (hi * d + di))
+  --        =? valAt (Ws.getD r _) ((eLocal * h + hi) * d + di)
+  ring_nf
+
 /-- fw_topk_routing fst commutes with dim-0 sharding.
     LEGACY axiom form; prefer `fw_topk_routing_fst_allGather0_commute_2_of` for actual proofs. -/
 axiom fw_topk_routing_fst_allGather0_commute_2 (a b : Tensor) (n k : Nat) :
