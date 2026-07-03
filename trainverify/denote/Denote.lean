@@ -18699,6 +18699,24 @@ theorem gather_2_4_1_4_2_8_term_g164 (xs : List Tensor) (idx j : Nat)
       ((idx / 64) * 16 + (idx % 16) / 8 * 8 + idx % 8) / 8 * 8 + j := by omega
   rw [hi1, hi2]
 
+/-- Shape lemma for `bw_softmax g y` when `y.shape = [1,4,8,8]`.  Under corrected
+    semantics, `bw_softmax g y = softmaxBwdFromOutput g (softmax y)` and
+    `(softmax y).shape = y.shape`, so this equals the shape claim on softmaxBwdFromOutput. -/
+theorem bw_softmax_shape_1_4_8_8_g164 (g y : Tensor) (hy : y.shape = [1, 4, 8, 8]) :
+    (bw_softmax g y).shape = [1, 4, 8, 8] := by
+  unfold bw_softmax softmaxBwd
+  exact softmaxBwdFromOutput_shape_1_4_8_8_g164 g (softmax y)
+    (by rw [softmax_shape_g18, hy])
+
+/-- Shape lemma for `bw_softmax g y` when `y.shape = [1,4,2,8]`.  Under corrected
+    semantics, `bw_softmax g y = softmaxBwdFromOutput g (softmax y)` and
+    `(softmax y).shape = y.shape`, so this equals the shape claim on softmaxBwdFromOutput. -/
+theorem bw_softmax_shape_1_4_2_8_g164 (g y : Tensor) (hy : y.shape = [1, 4, 2, 8]) :
+    (bw_softmax g y).shape = [1, 4, 2, 8] := by
+  unfold bw_softmax softmaxBwd
+  exact softmaxBwdFromOutput_shape_1_4_2_8_g164 g (softmax y)
+    (by rw [softmax_shape_g18, hy])
+
 /-- `softmaxBwdFromOutput` distributes over `allGatherPrimDimN` on dim 2 for `[1,4,2,8]` shards
     gathered to `[1,4,8,8]`.  This is the "pure" form: takes softmax OUTPUT tensors directly. -/
 theorem softmaxBwdFromOutput_distribute_allGatherPrimDimN_dim2_4_1_4_2_8_g164
@@ -19731,6 +19749,16 @@ theorem softmaxBwdFromOutput_shape_d8_g234 (g y : Tensor) (a b c : Nat)
   rw [softmaxBwdFromOutput_eq_mk_d8_g234 g y a b c hy]
   simp only [Tensor.mkShape]
   exact hy
+
+/-- Shape lemma for `bw_softmax g y` when `y.shape = [a, b, c, 8]`.  Under corrected
+    semantics, `bw_softmax g y = softmaxBwdFromOutput g (softmax y)` and
+    `(softmax y).shape = y.shape`, so this equals the shape claim on softmaxBwdFromOutput. -/
+theorem bw_softmax_shape_d8_g234 (g y : Tensor) (a b c : Nat)
+    (hy : y.shape = [a, b, c, 8]) :
+    (bw_softmax g y).shape = [a, b, c, 8] := by
+  unfold bw_softmax softmaxBwd
+  exact softmaxBwdFromOutput_shape_d8_g234 g (softmax y) a b c
+    (by rw [softmax_shape_g18, hy])
 
 -- `valAt` of `softmaxBwdFromOutput g y` when the last dimension is `8`:
 -- `dx_i = y_i * (g_i - Σ_j y_j g_j)` summed over the contiguous last-dim block.

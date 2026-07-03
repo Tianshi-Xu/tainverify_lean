@@ -280,7 +280,7 @@ theorem prove_goal_234_cut : goal_234_stmt_cut := by
     rw [hpm3base, hS0, hS1, hS2, hS3]; unfold allToAllPrimWithDims; rw [hSplit]
   -- shapes
   have hbwshape : (bw_softmax (initSM 872) (initSM 690)).shape = [1, 4, 8, 8] :=
-    softmaxBwd_shape_d8_g234 (initSM 872) (initSM 690) 1 4 8 h690_shape
+    bw_softmax_shape_d8_g234 (initSM 872) (initSM 690) 1 4 8 h690_shape
   have htp_shape : ∀ r, r < 4 →
       (chunkPrimDimN 2 4 r (bw_softmax (initSM 872) (initSM 690))).shape = [1, 4, 2, 8] := by
     intro r hr

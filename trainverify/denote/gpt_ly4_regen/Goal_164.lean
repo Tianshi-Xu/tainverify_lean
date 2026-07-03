@@ -157,21 +157,21 @@ theorem prove_goal_164_cut : goal_164_stmt_cut := by
   refine ⟨?_, ?_, ?_⟩
   · -- SM shape: [1, 4, 8, 8]
     rw [hsm, h788_gather, h620_gather]
-    exact softmaxBwd_shape_1_4_8_8_g164 _ _ (by
+    exact bw_softmax_shape_1_4_8_8_g164 _ _ (by
       rw [allGatherPrimDimN_shape 2 4 _ [1, 4, 2, 8] (by simp [h1909_shape])]; simp [List.set, List.getD])
   · -- PM tp shapes: [[1,4,2,8] × 4]
     rw [hpm0, hpm1, hpm2, hpm3]
-    have hs0 := softmaxBwd_shape_1_4_2_8_g164 (initPM 1941) (initPM 1909) h1909_shape
-    have hs1 := softmaxBwd_shape_1_4_2_8_g164 (initPM 1942) (initPM 1910) h1910_shape
-    have hs2 := softmaxBwd_shape_1_4_2_8_g164 (initPM 1943) (initPM 1911) h1911_shape
-    have hs3 := softmaxBwd_shape_1_4_2_8_g164 (initPM 1944) (initPM 1912) h1912_shape
+    have hs0 := bw_softmax_shape_1_4_2_8_g164 (initPM 1941) (initPM 1909) h1909_shape
+    have hs1 := bw_softmax_shape_1_4_2_8_g164 (initPM 1942) (initPM 1910) h1910_shape
+    have hs2 := bw_softmax_shape_1_4_2_8_g164 (initPM 1943) (initPM 1911) h1911_shape
+    have hs3 := bw_softmax_shape_1_4_2_8_g164 (initPM 1944) (initPM 1912) h1912_shape
     simp [hs0, hs1, hs2, hs3]
   · -- Value equality: smStore 787 = reconstructWithDim 2 4 0 [pmStore 1922,...,1928]
     rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
     symm
     apply reconstructWithDim_cons_cons_nonscalar
     rw [hpm0]
-    rw [softmaxBwd_shape_1_4_2_8_g164 (initPM 1941) (initPM 1909) h1909_shape]
+    rw [bw_softmax_shape_1_4_2_8_g164 (initPM 1941) (initPM 1909) h1909_shape]
     decide
 
 end TrainVerify.Denote.GeneratedGoals
