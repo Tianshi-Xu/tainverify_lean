@@ -1332,6 +1332,124 @@ theorem elemwiseMul_shape_broadcast (x y : Tensor) (sh : Shape)
   simp [outShape2, hlong, hx, hy]
 
 
+/-- Value at a specific flat index for elemwiseAdd of two [2048, 1024] tensors. -/
+private theorem elemwiseAdd_valAt_2048_1024 (x y : Tensor) (idx : Nat)
+    (hx : x.shape = [2048, 1024]) (hy : y.shape = [2048, 1024]) (hidx : idx < 2048 * 1024) :
+    valAt (elemwiseAdd x y) idx = valAt x idx + valAt y idx := by
+  have hout : (elemwiseAdd x y).shape = [2048, 1024] := by
+    simp [elemwiseAdd, Tensor.mkShape, outShape2, hx, hy]
+  rw [valAt_of_lt _ _ (by simpa [hout, prodShape] using hidx)]
+  simp [elemwiseAdd, Tensor.mkShape, outShape2, hx, hy, broadcastValAtShape,
+    alignedMultiIndex, flatToMulti, multiToFlat, prodShape]
+  have hnorm : idx / 1024 * 1024 + idx % 1024 = idx := by omega
+  rw [hnorm]
+
+/-- Value at a specific flat index for elemwiseAdd of two [4096, 1024] tensors. -/
+private theorem elemwiseAdd_valAt_4096_1024 (x y : Tensor) (idx : Nat)
+    (hx : x.shape = [4096, 1024]) (hy : y.shape = [4096, 1024]) (hidx : idx < 4096 * 1024) :
+    valAt (elemwiseAdd x y) idx = valAt x idx + valAt y idx := by
+  have hout : (elemwiseAdd x y).shape = [4096, 1024] := by
+    simp [elemwiseAdd, Tensor.mkShape, outShape2, hx, hy]
+  rw [valAt_of_lt _ _ (by simpa [hout, prodShape] using hidx)]
+  simp [elemwiseAdd, Tensor.mkShape, outShape2, hx, hy, broadcastValAtShape,
+    alignedMultiIndex, flatToMulti, multiToFlat, prodShape]
+  have hnorm : idx / 1024 * 1024 + idx % 1024 = idx := by omega
+  rw [hnorm]
+
+/-- fw_add commutes with dim-0 sharding (2 shards) — same-shape [2048, 1024] version. -/
+theorem fw_add_allGather0_commute_2_2048_1024 (a b c d : Tensor)
+    (ha : a.shape = [2048, 1024]) (hb : b.shape = [2048, 1024])
+    (hc : c.shape = [2048, 1024]) (hd : d.shape = [2048, 1024]) :
+    elemwiseAdd (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])
+      = allGatherPrimDimN 0 2 0 [elemwiseAdd a c, elemwiseAdd b d] := by
+  have hhead_ab : (([a, b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [2048, 1024] := by
+    simp [ha]
+  have hhead_cd : (([c, d] : List Tensor).head?.map (fun t => t.shape)).getD [] = [2048, 1024] := by
+    simp [hc]
+  have hG_ab : (allGatherPrimDimN 0 2 0 [a, b]).shape = [4096, 1024] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [2048, 1024] hhead_ab]; simp [List.set, List.getD]
+  have hG_cd : (allGatherPrimDimN 0 2 0 [c, d]).shape = [4096, 1024] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [2048, 1024] hhead_cd]; simp [List.set, List.getD]
+  have hadd_ac : (elemwiseAdd a c).shape = [2048, 1024] := by
+    simp [elemwiseAdd, Tensor.mkShape, outShape2, ha, hc]
+  have hadd_bd : (elemwiseAdd b d).shape = [2048, 1024] := by
+    simp [elemwiseAdd, Tensor.mkShape, outShape2, hb, hd]
+  have hhead_add : (([elemwiseAdd a c, elemwiseAdd b d] : List Tensor).head?.map (fun t => t.shape)).getD [] = [2048, 1024] := by
+    simp [hadd_ac]
+  have hRHS_shape : (allGatherPrimDimN 0 2 0 [elemwiseAdd a c, elemwiseAdd b d]).shape = [4096, 1024] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [2048, 1024] hhead_add]; simp [List.set, List.getD]
+  have hLHS_shape : (elemwiseAdd (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])).shape = [4096, 1024] := by
+    simp [elemwiseAdd, Tensor.mkShape, outShape2, hG_ab, hG_cd]
+  apply Tensor.ext
+  · rw [hLHS_shape, hRHS_shape]
+  · intro idx hidx
+    rw [hLHS_shape] at hidx
+    have hidx_bound : idx < 4096 * 1024 := by simpa [prodShape] using hidx
+    set row := idx / 1024 with hrow_def
+    set j := idx % 1024 with hj_def
+    have hj_lt : j < 1024 := by rw [hj_def]; exact Nat.mod_lt _ (by omega)
+    have hrow_lt : row < 4096 := by
+      rw [hrow_def]
+      have : idx / 1024 < 4096 := by
+        rw [Nat.div_lt_iff_lt_mul (by omega)]; linarith
+      exact this
+    set r := row / 2048 with hr_def
+    set i := row % 2048 with hi_def
+    have hi_lt : i < 2048 := by rw [hi_def]; exact Nat.mod_lt _ (by omega)
+    have hr_lt : r < 2 := by
+      rw [hr_def]
+      have : row / 2048 < 2 := by rw [Nat.div_lt_iff_lt_mul (by omega)]; linarith
+      exact this
+    have hidx_eq : idx = (r * 2048 + i) * 1024 + j := by
+      subst r i j row
+      have h1 : idx / 1024 = 2048 * (idx / 1024 / 2048) + idx / 1024 % 2048 :=
+        (Nat.div_add_mod _ 2048).symm
+      have h2 : idx = 1024 * (idx / 1024) + idx % 1024 :=
+        (Nat.div_add_mod idx 1024).symm
+      omega
+    have hLHS_val : valAt (elemwiseAdd (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])) idx
+        = valAt (allGatherPrimDimN 0 2 0 [a, b]) idx + valAt (allGatherPrimDimN 0 2 0 [c, d]) idx := by
+      apply elemwiseAdd_valAt_4096_1024 _ _ idx hG_ab hG_cd
+      linarith
+    rw [hLHS_val]
+    have hshapes_add : ∀ r' (_ : r' < 2),
+        (([elemwiseAdd a c, elemwiseAdd b d].getD r' (zeroTensor [2048, 1024]))).shape = [2048, 1024] := by
+      intro r' hr'
+      have : r' = 0 ∨ r' = 1 := by omega
+      rcases this with h | h <;> rw [h] <;> simp [List.getD, hadd_ac, hadd_bd]
+    have hshapes_ab : ∀ r' (_ : r' < 2),
+        (([a, b].getD r' (zeroTensor [2048, 1024]))).shape = [2048, 1024] := by
+      intro r' hr'
+      have : r' = 0 ∨ r' = 1 := by omega
+      rcases this with h | h <;> rw [h] <;> simp [List.getD, ha, hb]
+    have hshapes_cd : ∀ r' (_ : r' < 2),
+        (([c, d].getD r' (zeroTensor [2048, 1024]))).shape = [2048, 1024] := by
+      intro r' hr'
+      have : r' = 0 ∨ r' = 1 := by omega
+      rcases this with h | h <;> rw [h] <;> simp [List.getD, hc, hd]
+    rw [hidx_eq]
+    rw [allGatherPrimDimN0_valAt 2 2048 1024 [elemwiseAdd a c, elemwiseAdd b d]
+          (by omega) (by omega) (by omega) hhead_add hshapes_add r hr_lt i hi_lt j hj_lt]
+    rw [allGatherPrimDimN0_valAt 2 2048 1024 [a, b]
+          (by omega) (by omega) (by omega) hhead_ab hshapes_ab r hr_lt i hi_lt j hj_lt]
+    rw [allGatherPrimDimN0_valAt 2 2048 1024 [c, d]
+          (by omega) (by omega) (by omega) hhead_cd hshapes_cd r hr_lt i hi_lt j hj_lt]
+    have hr_cases : r = 0 ∨ r = 1 := by omega
+    have hgetD_add : [elemwiseAdd a c, elemwiseAdd b d].getD r (zeroTensor [2048, 1024]) =
+        elemwiseAdd ([a, b].getD r (zeroTensor [2048, 1024])) ([c, d].getD r (zeroTensor [2048, 1024])) := by
+      rcases hr_cases with h | h <;> rw [h] <;> simp [List.getD]
+    rw [hgetD_add]
+    set ea := [a, b].getD r (zeroTensor [2048, 1024])
+    set ec := [c, d].getD r (zeroTensor [2048, 1024])
+    have hea_shape : ea.shape = [2048, 1024] := hshapes_ab r hr_lt
+    have hec_shape : ec.shape = [2048, 1024] := hshapes_cd r hr_lt
+    have hloc_lt : i * 1024 + j < 2048 * 1024 := by
+      have h1 : i * 1024 + j < i * 1024 + 1024 := by omega
+      have h2 : i * 1024 + 1024 = (i + 1) * 1024 := by ring
+      have h3 : (i + 1) * 1024 ≤ 2048 * 1024 := Nat.mul_le_mul_right _ (by omega)
+      omega
+    exact (elemwiseAdd_valAt_2048_1024 ea ec _ hea_shape hec_shape hloc_lt).symm
+
 /-- fw_add commutes with dim-0 sharding (2 shards).
     NOTE: Left as an axiom because usage sites include mismatched-shape cases
     (elemwiseAdd of full-shape all2all output with broadcast-shape elemwiseMul output).
