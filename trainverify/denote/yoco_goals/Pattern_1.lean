@@ -1456,6 +1456,172 @@ axiom fw_mul_allGather0_commute_2 (a b c d : Tensor) :
     elemwiseMul (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])
       = allGatherPrimDimN 0 2 0 [elemwiseMul a c, elemwiseMul b d]
 
+/-- Helper: valAt of elemwiseMul with same-shape `[S, H]` operands. -/
+private theorem elemwiseMul_valAt_S_H (a c : Tensor) (S H : Nat) (idx : Nat)
+    (ha : a.shape = [S, H]) (hc : c.shape = [S, H])
+    (hS : 0 < S) (hH : 0 < H) (hS_ne1 : S ≠ 1) (hH_ne1 : H ≠ 1)
+    (hidx : idx < S * H) :
+    valAt (elemwiseMul a c) idx = valAt a idx * valAt c idx := by
+  have hH_ne : H ≠ 0 := Nat.pos_iff_ne_zero.mp hH
+  have hout : (elemwiseMul a c).shape = [S, H] := by
+    simp [elemwiseMul, Tensor.mkShape, outShape2, ha, hc]
+  rw [valAt_of_lt _ _ (by simpa [hout, prodShape] using hidx)]
+  simp [elemwiseMul, Tensor.mkShape, outShape2, ha, hc, broadcastValAtShape,
+    alignedMultiIndex, flatToMulti, multiToFlat, prodShape, hS_ne1, hH_ne1, hH_ne]
+  have hnorm : idx / H * H + idx % H = idx := by
+    conv_lhs => rw [Nat.mul_comm (idx / H) H]
+    exact Nat.div_add_mod idx H
+  rw [hnorm]
+
+/-- Helper: valAt of elemwiseMul where a has broadcasting shape `[S, 1]` and c has `[S, H]`.
+    Values: at flat idx of output [S, H], reads a at row (idx/H), c at idx. -/
+private theorem elemwiseMul_valAt_broadcast_S1_SH (a c : Tensor) (S H : Nat) (idx : Nat)
+    (ha : a.shape = [S, 1]) (hc : c.shape = [S, H])
+    (hS : 0 < S) (hH : 0 < H) (hS_ne1 : S ≠ 1) (hH_ne1 : H ≠ 1)
+    (hidx : idx < S * H) :
+    valAt (elemwiseMul a c) idx = valAt a (idx / H) * valAt c idx := by
+  have hH_ge_1 : 1 ≤ H := hH
+  have hH_ne : H ≠ 0 := Nat.pos_iff_ne_zero.mp hH
+  have hout : (elemwiseMul a c).shape = [S, H] := by
+    simp [elemwiseMul, Tensor.mkShape, outShape2, ha, hc,
+      Nat.max_eq_right hH_ge_1]
+  rw [valAt_of_lt _ _ (by simpa [hout, prodShape] using hidx)]
+  simp [elemwiseMul, Tensor.mkShape, outShape2, ha, hc, broadcastValAtShape,
+    alignedMultiIndex, flatToMulti, multiToFlat, prodShape,
+    Nat.max_eq_right hH_ge_1, hS_ne1, hH_ne1, hH_ne]
+  left
+  congr 1
+  conv_lhs => rw [Nat.mul_comm (idx / H) H]
+  exact Nat.div_add_mod idx H
+
+/-- fw_mul commutes with dim-0 sharding — 2-shard broadcast [S,1] * [S,H] version. -/
+theorem fw_mul_allGather0_commute_2_of_broadcast (a b c d : Tensor) (shard H : Nat)
+    (hshard : 0 < shard) (hH : 0 < H) (hshard_ne1 : shard ≠ 1) (hshard2_ne1 : shard * 2 ≠ 1)
+    (hH_ne1 : H ≠ 1)
+    (ha : a.shape = [shard, 1]) (hb : b.shape = [shard, 1])
+    (hc : c.shape = [shard, H]) (hd : d.shape = [shard, H]) :
+    elemwiseMul (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])
+      = allGatherPrimDimN 0 2 0 [elemwiseMul a c, elemwiseMul b d] := by
+  have hhead_ab : (([a, b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [shard, 1] := by
+    simp [ha]
+  have hhead_cd : (([c, d] : List Tensor).head?.map (fun t => t.shape)).getD [] = [shard, H] := by
+    simp [hc]
+  have hG_ab : (allGatherPrimDimN 0 2 0 [a, b]).shape = [shard * 2, 1] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [shard, 1] hhead_ab]; simp [List.set, List.getD]
+  have hG_cd : (allGatherPrimDimN 0 2 0 [c, d]).shape = [shard * 2, H] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [shard, H] hhead_cd]; simp [List.set, List.getD]
+  have hH_ge_1 : 1 ≤ H := hH
+  have hmul_ac : (elemwiseMul a c).shape = [shard, H] := by
+    simp [elemwiseMul, Tensor.mkShape, outShape2, ha, hc,
+      Nat.max_self, Nat.max_eq_right hH_ge_1]
+  have hmul_bd : (elemwiseMul b d).shape = [shard, H] := by
+    simp [elemwiseMul, Tensor.mkShape, outShape2, hb, hd,
+      Nat.max_self, Nat.max_eq_right hH_ge_1]
+  have hhead_mul : (([elemwiseMul a c, elemwiseMul b d] : List Tensor).head?.map (fun t => t.shape)).getD [] = [shard, H] := by
+    simp [hmul_ac]
+  have hRHS_shape : (allGatherPrimDimN 0 2 0 [elemwiseMul a c, elemwiseMul b d]).shape = [shard * 2, H] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [shard, H] hhead_mul]; simp [List.set, List.getD]
+  have hLHS_shape : (elemwiseMul (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])).shape = [shard * 2, H] := by
+    simp [elemwiseMul, Tensor.mkShape, outShape2, hG_ab, hG_cd,
+      Nat.max_self, Nat.max_eq_right hH_ge_1]
+  apply Tensor.ext
+  · rw [hLHS_shape, hRHS_shape]
+  · intro idx hidx
+    rw [hLHS_shape] at hidx
+    have hidx_bound : idx < shard * 2 * H := by simpa [prodShape] using hidx
+    set row := idx / H with hrow_def
+    set j := idx % H with hj_def
+    have hj_lt : j < H := by rw [hj_def]; exact Nat.mod_lt _ hH
+    have hrow_lt : row < shard * 2 := by
+      rw [hrow_def]; rw [Nat.div_lt_iff_lt_mul hH]; linarith
+    set r := row / shard with hr_def
+    set i := row % shard with hi_def
+    have hi_lt : i < shard := by rw [hi_def]; exact Nat.mod_lt _ hshard
+    have hr_lt : r < 2 := by
+      rw [hr_def]; rw [Nat.div_lt_iff_lt_mul hshard]; linarith
+    have hidx_eq : idx = (r * shard + i) * H + j := by
+      subst r i j row
+      have h1 : shard * (idx / H / shard) + idx / H % shard = idx / H := Nat.div_add_mod (idx / H) shard
+      have h2 : H * (idx / H) + idx % H = idx := Nat.div_add_mod idx H
+      have h3 : (idx / H / shard * shard + idx / H % shard) * H + idx % H
+              = H * (shard * (idx / H / shard)) + H * (idx / H % shard) + idx % H := by ring
+      calc idx = H * (idx / H) + idx % H := h2.symm
+        _ = H * (shard * (idx / H / shard) + idx / H % shard) + idx % H := by rw [h1]
+        _ = H * (shard * (idx / H / shard)) + H * (idx / H % shard) + idx % H := by ring
+        _ = (idx / H / shard * shard + idx / H % shard) * H + idx % H := by ring
+    -- LHS: broadcast mul at idx = (valAt gather_ab (idx/H)) * (valAt gather_cd idx)
+    have hLHS_val :
+        valAt (elemwiseMul (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])) idx
+          = valAt (allGatherPrimDimN 0 2 0 [a, b]) (idx / H)
+            * valAt (allGatherPrimDimN 0 2 0 [c, d]) idx := by
+      exact elemwiseMul_valAt_broadcast_S1_SH _ _ (shard * 2) H idx hG_ab hG_cd (by omega) hH hshard2_ne1 hH_ne1 hidx_bound
+    rw [hLHS_val]
+    -- Shape witnesses for allGatherPrimDimN0_valAt
+    have hshapes_ab : ∀ r' (_ : r' < 2),
+        (([a, b].getD r' (zeroTensor [shard, 1]))).shape = [shard, 1] := by
+      intro r' hr'
+      have : r' = 0 ∨ r' = 1 := by omega
+      rcases this with h | h <;> rw [h] <;> simp [List.getD, ha, hb]
+    have hshapes_cd : ∀ r' (_ : r' < 2),
+        (([c, d].getD r' (zeroTensor [shard, H]))).shape = [shard, H] := by
+      intro r' hr'
+      have : r' = 0 ∨ r' = 1 := by omega
+      rcases this with h | h <;> rw [h] <;> simp [List.getD, hc, hd]
+    have hshapes_mul : ∀ r' (_ : r' < 2),
+        (([elemwiseMul a c, elemwiseMul b d].getD r' (zeroTensor [shard, H]))).shape = [shard, H] := by
+      intro r' hr'
+      have : r' = 0 ∨ r' = 1 := by omega
+      rcases this with h | h <;> rw [h] <;> simp [List.getD, hmul_ac, hmul_bd]
+    -- Unfold RHS gather.
+    rw [hidx_eq]
+    rw [allGatherPrimDimN0_valAt 2 shard H [elemwiseMul a c, elemwiseMul b d]
+          (by omega) hshard hH hhead_mul hshapes_mul r hr_lt i hi_lt j hj_lt]
+    -- LHS a: after subst idx via hidx_eq, ((r*shard+i)*H+j)/H = r*shard+i
+    have hidx_div_H' : ((r * shard + i) * H + j) / H = r * shard + i := by
+      have h1 : ((r * shard + i) * H + j) / H = j / H + (r * shard + i) := by
+        rw [Nat.add_comm, Nat.add_mul_div_right j (r * shard + i) hH]
+      rw [h1, Nat.div_eq_of_lt hj_lt]; ring
+    rw [hidx_div_H']
+    -- allGatherPrimDimN0_valAt on cd first (matches directly), then rewrite ab for H=1 form.
+    rw [allGatherPrimDimN0_valAt 2 shard H [c, d]
+          (by omega) hshard hH hhead_cd hshapes_cd r hr_lt i hi_lt j hj_lt]
+    -- Now target only has valAt on ab side to touch; rewrite (r*shard+i) → (r*shard+i)*1+0
+    conv_lhs => lhs; rw [show r * shard + i = (r * shard + i) * 1 + 0 from by ring]
+    rw [allGatherPrimDimN0_valAt 2 shard 1 [a, b]
+          (by omega) hshard (by omega) hhead_ab hshapes_ab r hr_lt i hi_lt 0 (by omega)]
+    -- getD for mul on RHS = elemwiseMul (getD ab) (getD cd)
+    have hr_cases : r = 0 ∨ r = 1 := by
+      interval_cases r
+      · left; rfl
+      · right; rfl
+    have hgetD_mul :
+        [elemwiseMul a c, elemwiseMul b d].getD r (zeroTensor [shard, H]) =
+        elemwiseMul ([a, b].getD r (zeroTensor [shard, 1])) ([c, d].getD r (zeroTensor [shard, H])) := by
+      rcases hr_cases with h | h <;> rw [h] <;> simp [List.getD]
+    rw [hgetD_mul]
+    set ea := [a, b].getD r (zeroTensor [shard, 1])
+    set ec := [c, d].getD r (zeroTensor [shard, H])
+    have hea_shape : ea.shape = [shard, 1] := hshapes_ab r hr_lt
+    have hec_shape : ec.shape = [shard, H] := hshapes_cd r hr_lt
+    have hloc_lt : i * H + j < shard * H := by
+      have h1 : i * H + j < i * H + H := by omega
+      have h2 : i * H + H = (i + 1) * H := by ring
+      have h3 : (i + 1) * H ≤ shard * H := Nat.mul_le_mul_right _ (by omega)
+      omega
+    -- RHS local mul at (i*H + j) = (valAt ea ((i*H+j)/H)) * (valAt ec (i*H+j))
+    have hRHS_local :
+        valAt (elemwiseMul ea ec) (i * H + j)
+          = valAt ea ((i * H + j) / H) * valAt ec (i * H + j) := by
+      exact elemwiseMul_valAt_broadcast_S1_SH ea ec shard H (i * H + j) hea_shape hec_shape hshard hH hshard_ne1 hH_ne1 hloc_lt
+    rw [hRHS_local]
+    have hij_div : (i * H + j) / H = i := by
+      have h1 : (i * H + j) / H = j / H + i := by
+        rw [Nat.add_comm, Nat.add_mul_div_right j i hH]
+      rw [h1, Nat.div_eq_of_lt hj_lt]; ring
+    rw [hij_div]
+    -- Now normalize: ea normalized as (i*1+0) matches expected form
+    ring_nf
+
 /-- fw_sigmoid commutes with dim-0 sharding. -/
 theorem fw_sigmoid_allGather0_commute_2 (a b : Tensor) (shard hidden : Nat)
     (hshard : 0 < shard) (hhid : 0 < hidden)
@@ -2360,8 +2526,18 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
                                 (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
                      (initPM 5920))
           2048 1024 (by omega) hlin_5920_a hlin_5920_b]
-    -- Push through fw_mul.
-    rw [fw_mul_allGather0_commute_2
+    -- Push through fw_mul. Broadcast [2048, 1] * [2048, 1024] version.
+    have hsig_a_shape : (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906)))).shape = [2048, 1] := by
+      rw [TrainVerify.Denote.fw_sigmoid_shape]; rfl
+    have hsig_b_shape : (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906)))).shape = [2048, 1] := by
+      rw [TrainVerify.Denote.fw_sigmoid_shape]; rfl
+    have hview_c_shape : (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                                                       (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+                                            (initPM 5920))).shape = [2048, 1024] := rfl
+    have hview_d_shape : (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                                                       (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+                                            (initPM 5920))).shape = [2048, 1024] := rfl
+    rw [fw_mul_allGather0_commute_2_of_broadcast
           (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
           (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
           (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
@@ -2369,7 +2545,9 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
                                             (initPM 5920)))
           (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
                                                        (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
-                                            (initPM 5920)))]
+                                            (initPM 5920)))
+          2048 1024 (by omega) (by omega) (by omega) (by omega) (by omega)
+          hsig_a_shape hsig_b_shape hview_c_shape hview_d_shape]
     -- Push through fw_topk_routing (both .fst and .snd.fst).
     rw [fw_topk_routing_fst_allGather0_commute_2 (initPM 11621) (initPM 11622) 8 1]
     rw [fw_topk_routing_snd_fst_allGather0_commute_2 (initPM 11621) (initPM 11622) 8 1]
