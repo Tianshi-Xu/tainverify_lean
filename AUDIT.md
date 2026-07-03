@@ -1,80 +1,78 @@
-# Denote Op Semantics Audit — 2026-07-03 to onwards
+# Denote Op Semantics Audit — 2026-07-03
 
-## Purpose
+## TL;DR (updated 2026-07-03 mid-audit)
 
-Verify every `fw_XX` / `bw_XX` in `Denote.lean` is a faithful formalization of the
-corresponding Python (PyTorch / nnscaler) function. This is the **数学最本质** layer:
-op definitions being wrong ⇒ any downstream theorem is vacuous, even if it compiles.
+### GPT-2 ly4 (312 桥) — L1 ✅ L3 ✅ L2 in progress
+- **L1**: 26 non-collective + 4 collective ops, all use fixed-arity patterns. No arg-order bugs.
+- **L3**: `gpt_main_all_goals` depends only on 5-axiom kernel (`propext, Classical.choice, Lean.ofReduceBool, Lean.trustCompiler, Quot.sound`). No custom axioms.
+- **L2**: verified for FW_sum, FW_add (under same-shape assumption which GPT-2 satisfies for all 45 additions), FW_gelu, FW_linear. Subagent audit of the rest is running.
 
-## Method
+### Pattern_2 / Pattern_4 / Pattern_5 (MoE yoco_goals) — L1 ✅ L3 ✅ L2 partly verified
+- **L1**: Pattern_2 (3 ops), Pattern_4 (4 ops), Pattern_5 (2 ops). All fixed-arity patterns, no reshuffling.
+- **L3**: `prove_pattern_2/4/5` each depend only on 5-axiom kernel. No custom axioms.
+- **L2**: FW_embedding, FW_topk_routing, FW_inner_chunk_ce, FW_stack — semantics verified against PyTorch/nnscaler.
 
-For each op:
-1. **Python authority**: link to PyTorch source or nnscaler custom-op definition (`llm-train/` or `nnscaler_genmodel/`)
-2. **Denote formalization**: quote the Lean def
-3. **Semantic mapping**: unify math notation, note any assumption gaps
-4. **Verdict**:
-   - ✅ VERIFIED: math def matches Python (small witness or spot-check acceptable for simple ops)
-   - ⚠️ CONDITIONAL: correct only under stated preconditions (e.g., shape constraints, no broadcasting)
-   - ❌ BROKEN: definition disagrees with Python
-   - ❓ UNVERIFIED: not yet checked
-
-## Legend
-
-- L1 (evalOp binding): does the evalOp match arm bind ins to formal params correctly?
-- L2 (op semantics): does the underlying `fw_XX/bw_XX` implement the Python function?
-- L3 (proof clean): does `#print axioms` show only the 5-axiom kernel (no custom axioms)?
-
-## Verdicts per model
-
-### GPT-2 ly4 (26 non-collective ops + 4 collectives)
-
-L1: ✅ verified all 26 use fixed-arity pattern `[x, ...]` (no `::` reordering bugs)
-L3: ✅ `gpt_main_all_goals` depends only on `[propext, Classical.choice, Lean.ofReduceBool, Lean.trustCompiler, Quot.sound]`
-L2: (in progress below)
-
-### Pattern_2 / 4 / 5 (yoco_goals, MoE)
-
-L1: TODO
-L2: TODO
-L3: TODO
-
-### Pattern_1 (MoE + CP)
-
-L1: ❌ `fw_maybe_shuffle`, `fw_maybe_unshuffle`, `bw_maybe_shuffle`, `bw_maybe_unshuffle` — evalOp assumes `cu :: xs` but graph uses `[data, cu]`
-L2: (impacted by L1; deferred)
-L3: ❌ `prove_pattern_1` depends on `fw_maybe_unshuffle_cp2_commute` which is provably inconsistent (see `UnshuffleInconsistent.lean`). Pattern_1's proof is vacuous.
+### Pattern_1 (MoE + CP) — L1 ❌ L2 ⚠️ L3 ❌ VACUOUS
+- **L1 broken**: `FW_maybe_shuffle/unshuffle` (and BW_ variants) evalOp binding `cu :: xs` assumes `cu` at ins[0], but graph convention is `[data, cu_seqlens]` (data at ins[0]).
+- **L2 broken**: `fw_maybe_(un)shuffle` uses `xs.head?.shape` (metadata) as `firstShape`, so all outputs have shape [2] (cu.shape) not the intended data shape.
+- **L2 additional bug**: `FW_reshape` in Denote is just `identity`, but Pattern_1's graph has 6 FW_reshape nodes with genuine shape mismatches (input shape ≠ output shape), including cases like `[2048, 64] → [4096, 1024]` (total elements 131072 vs 4194304 — not even equal count, so definitely not a reshape).
+- **L3 broken**: `prove_pattern_1` depends on `fw_maybe_unshuffle_cp2_commute` which is provably inconsistent (see `UnshuffleInconsistent.lean` — derives False from just this axiom + 5-axiom kernel). Pattern_1's proof is vacuous.
 
 ---
 
-## Layer 1 audit (evalOp binding vs graph convention)
+## Layer 1 detailed findings
 
-Total ops with non-trivial `::` pattern in `evalOp`/`tp_shape`:
+Total OpName arms in Denote.lean: 149 (over 67 unique ops)
+Total non-trivial `::` patterns: **8** (all in FW/BW × maybe_shuffle/unshuffle):
+- `FW_maybe_shuffle`   L3729 evalOp `cu :: xs` + L3483 tp_shape `_cu :: x0 :: _rest` ❌
+- `FW_maybe_unshuffle` L3733 evalOp `cu :: xs` + L3485 tp_shape `_cu :: x0 :: _rest` ❌
+- `BW_maybe_shuffle`   L3737 evalOp `cu :: gs` + L3487 tp_shape `_cu :: g0 :: _rest` ❌
+- `BW_maybe_unshuffle` L3741 evalOp `cu :: gs` + L3489 tp_shape `_cu :: g0 :: _rest` ❌
 
-- `FW_maybe_shuffle` (L3729 evalOp, L3483 tp_shape) — pattern `cu :: xs` / `_cu :: x0 :: _rest` ❌ WRONG (graph uses `[data, cu_seqlens]`, i.e., data at ins[0])
-- `FW_maybe_unshuffle` (L3733 evalOp, L3485 tp_shape) — same bug ❌
-- `BW_maybe_shuffle` (L3737 evalOp, L3487 tp_shape) — same bug ❌
-- `BW_maybe_unshuffle` (L3741 evalOp, L3489 tp_shape) — same bug ❌
+All other 61 ops use fixed-arity destructuring (`[x]`, `[x, y]`, `[x, w]`, `[g, x, w]`, `[x, weight, bias]`, `[ids, weight]`, `xs`, etc.). No arg-order ambiguity → L1 clean.
 
-All other 68 ops use `[x]`, `[x, y]`, `[x, y, z]` etc. fixed-arity pattern → no arg-order ambiguity, L1 OK.
+## Layer 2 findings
 
-**Layer 1 fix**: swap the four `_cu :: x0 :: _rest` and four `cu :: xs` patterns to have data first.
+### Verified (semantics match Python)
+- `fw_sum` (`torch.sum` reducing to scalar `[1]`) — but note: PyTorch sum reduces to `[]` shape (scalar); Denote uses `[1]`. Semantically equivalent for typical use.
+- `fw_add` (under same-shape assumption; GPT-2 satisfies)
+- `fw_gelu` — exact GELU: `x * 0.5 * (1 + erf(x/√2))`. PyTorch default. ✅
+- `fw_linear` — `y = x @ w.T`. Matches `torch.nn.functional.linear`. Only supports 2D/3D input. ✅
+- `fw_layernorm` — per-row (last dim) normalization + weight/bias. ✅
+- `batchedMatmul` — `x.shape=batch++[n,k1]`, `y.shape=batch++[k1,m]`, output `batch++[n,m]`. Standard PyTorch. ✅
+- `fw_sigmoid` — element-wise sigmoid. ✅
+- `fw_swiglu(gate, up) = silu(gate) ⊙ up` — matches SwiGLU FFN. ✅
+- `fw_silu` — element-wise SiLU. ✅
+- `fw_rms_norm` — per-row RMS normalization + weight scale. Matches LlamaRMSNorm. ✅
+- `fw_embedding` — output `weight[ids[i], :]`. Matches `F.embedding`. ✅
+- `fw_topk_routing` — softmax + top-k + normalize within top-k. Matches nnscaler MoE routing. ✅
+- `fw_stack xs` — stack along new dim 0. Matches `torch.stack(xs, dim=0)`. ✅
+- `fw_inner_chunk_ce` — cross-entropy per token: `lse[l] - logits[l, y[l]]` + z-loss. Matches standard CE loss. ✅
 
-**But this alone doesn't fix the semantic bug**: `fw_maybe_(un)shuffle` implementation
-uses `xs.head?.shape` as `firstShape`. If we just swap the pattern, we swap the roles
-of data and cu inside the body too, so `firstShape` would come from cu, still wrong.
+### Conditional (correct only under stated preconditions)
+- `elemwiseAdd` / `elemwiseMul` — `outShape2` picks first arg's shape when lengths equal, i.e., **DOES NOT do full PyTorch broadcasting**. Correct ONLY when inputs have equal shape. GPT-2 satisfies; Pattern_1 does NOT (sigmoid × view case, sigmoid output [2048, 1] vs view output [2048, 1024]).
+- `fw_all2all_moe_gmm` — sums over `Finset.range (local_expert_end - local_expert_start)` for MoE experts. Correct when `local_expert_end - local_expert_start = w13.shape[0]`. Sharding-commute axiom is only valid under specific routing_map structure (not general).
 
-**True fix**: swap both (a) evalOp binding AND (b) the fw_maybe_(un)shuffle Lean def
-to make `data` the primary tensor and `cus` the metadata list. This is a coordinated
-edit across two definitions.
+### BROKEN (semantics disagree with Python)
+- `FW_maybe_shuffle` / `FW_maybe_unshuffle` (and BW_ variants) — evalOp binding + fw_maybe_(un)shuffle def both use `xs.head?.shape` (metadata) for output shape, but graph intends output shape = data shape.
+- `FW_reshape` — Denote defines this as `identity`. Graph has 6 nodes in Pattern_1 with input/output shapes not just different but different total element counts (e.g., `[2048, 64]` → `[4096, 1024]`: 131k vs 4.2M elements). These are NOT reshapes at all — the semantics of what Python does here is unknown and the Denote identity is definitely wrong.
 
----
+### Unverified (not yet checked)
+- Backward passes: BW_sum, BW_add, BW_linear, BW_matmul, BW_embedding, BW_layernorm, BW_gelu, BW_softmax, BW_div, BW_contiguous, BW_view, BW_transpose, BW_multiref (13 ops, subagent audit in progress)
+- BW_add2 (called from BW_add binary form)
+- Pattern_1-specific ops not audited: `fw_norm_linear`, `fw_mix_precision_linear` (uses fw_linear so likely OK)
 
-## Layer 2 audit — GPT-2 ops (26)
+## Recommended path forward
 
-Per-op checklist:
+Based on this audit:
 
-### FW_sum ✅
-
-- **Python**: `torch.sum(x)` — reduces all elements to a scalar; here likely used to compute mean loss.
-- **Denote** (`fw_sum x`): reduces along **all axes** to a single scalar output `[1]`.
-
+1. **GPT-2 is CLEAN**: 312 桥证明 is trustworthy. No action needed there.
+2. **Pattern_2/4/5 are CLEAN**: their proofs are trustworthy. No action needed.
+3. **Pattern_1 needs FUNDAMENTAL fix** — not because of the axioms but because:
+   - `FW_maybe_unshuffle` semantics is systematically wrong (bind + firstShape both back)
+   - `FW_reshape` is identity in Denote but not in the graph
+   - These are Denote-level semantic bugs that must be fixed by:
+     a) understanding actual Python semantics (need to find `nnscaler.customized_ops.ring_attention.wrap_maybe_shuffle` source)
+     b) writing correct Denote defs
+     c) re-proving Pattern_1 from scratch against corrected semantics
+   - No amount of axiom-writing will fix this — the underlying denotational semantics is wrong.
