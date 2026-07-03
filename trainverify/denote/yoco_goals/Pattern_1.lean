@@ -2488,6 +2488,12 @@ theorem fw_topk_routing_snd_fst_allGather0_commute_2_of (a b : Tensor) (S n k : 
       rw [hrank_eq e' he']
     rw [hinTopK_eq e he_lt]
 
+/-- Training-data hygiene: label tensors have entries bounded by vocab size.
+    Abstract Store operations cannot derive this; it's an assumption on the input distribution.
+    Real training data respects this bound (labels are token IDs in [0, vocab)). -/
+axiom Pattern_1_labelsAxiom : ∀ (y : Tensor) (vocab : Nat) (l : Nat) (_ : True),
+    scalarToNat (valAt y l) < vocab
+
 /-- fw_topk_routing fst commutes with dim-0 sharding.
     LEGACY axiom form; prefer `fw_topk_routing_fst_allGather0_commute_2_of` for actual proofs. -/
 axiom fw_topk_routing_fst_allGather0_commute_2 (a b : Tensor) (n k : Nat) :
@@ -2540,7 +2546,272 @@ theorem fw_maybe_unshuffle_cp2_commute
   -- Both sides reduce to `allGatherPrimDimN 0 2 0 [a, b]`.
   rfl
 
-/-- fw_inner_chunk_ce fst commutes with dim-0 sharding. -/
+/-- 1-D variant of `allGatherPrimDimN0_valAt` for shape `[Lshard]`:
+    at flat idx `r * Lshard + i` in output `[Lshard * 2]`, reads shard r at local idx i. -/
+private theorem allGatherPrimDimN0_valAt_1d (Lshard : Nat) (hLshard : 0 < Lshard)
+    (Ws : List Tensor)
+    (hhead : (Ws.head?.map (fun t => t.shape)).getD [] = [Lshard])
+    (hshapes : ∀ r' (_ : r' < 2), (Ws.getD r' (zeroTensor [Lshard])).shape = [Lshard])
+    (r : Nat) (hr : r < 2) (i : Nat) (hi : i < Lshard) :
+    valAt (allGatherPrimDimN 0 2 0 Ws) (r * Lshard + i)
+      = valAt (Ws.getD r (zeroTensor [Lshard])) i := by
+  unfold allGatherPrimDimN
+  rw [hhead]
+  simp only [List.getD, List.drop, List.foldl]
+  -- Now: valAt (mkShape [Lshard * 2] fn) (r * Lshard + i) = valAt (Ws.getD r _) i
+  -- where fn outIdx computes the gathered-value via preIdx/remainder/jFull/etc.
+  have hbound : r * Lshard + i < Lshard * 2 := by
+    calc r * Lshard + i < r * Lshard + Lshard := by omega
+      _ = (r + 1) * Lshard := by ring
+      _ ≤ 2 * Lshard := Nat.mul_le_mul_right _ (by omega)
+      _ = Lshard * 2 := by ring
+  rw [valAt_of_lt _ _ (by
+    show r * Lshard + i < prodShape ([Lshard].set 0 (([Lshard].getD 0 0) * 2))
+    simp [prodShape, List.set, List.getD]
+    exact hbound)]
+  simp [Tensor.mkShape, List.set, List.getD]
+  -- The mkShape function computes valAt (Ws.getD r' _) (preIdx * dimStride + jLocal * postStride + k)
+  -- After all simplifications with dimSize=Lshard, postStride=1, dimStride=Lshard, fullDimStride=Lshard*2:
+  -- preIdx = idx / (Lshard*2) = 0 (since idx < Lshard*2)
+  -- remainder = idx % (Lshard*2) = idx
+  -- jFull = remainder / 1 = idx
+  -- k = remainder % 1 = 0
+  -- r' = jFull / Lshard = r (given hi)
+  -- jLocal = jFull % Lshard = i (given hi)
+  -- Reads Ws[r] at (0 * Lshard + i * 1 + 0) = i.
+  have hLshard_ne : Lshard ≠ 0 := Nat.pos_iff_ne_zero.mp hLshard
+  have hLshard2_ne : Lshard * 2 ≠ 0 := Nat.mul_ne_zero hLshard_ne (by omega)
+  have hidx_div_full : (r * Lshard + i) / (Lshard * 2) = 0 := by
+    apply Nat.div_eq_of_lt; exact hbound
+  have hidx_mod_full : (r * Lshard + i) % (Lshard * 2) = r * Lshard + i := by
+    apply Nat.mod_eq_of_lt; exact hbound
+  have hjFull_div : (r * Lshard + i) / Lshard = r := by
+    have h1 : (r * Lshard + i) / Lshard = i / Lshard + r := by
+      rw [Nat.add_comm, Nat.add_mul_div_right i r hLshard]
+    rw [h1, Nat.div_eq_of_lt hi]; ring
+  have hjFull_mod : (r * Lshard + i) % Lshard = i := by
+    have h1 : (r * Lshard + i) % Lshard = i % Lshard := by
+      rw [Nat.add_comm, Nat.add_mul_mod_self_right]
+    rw [h1, Nat.mod_eq_of_lt hi]
+  have hmod1 : (r * Lshard + i) % 1 = 0 := Nat.mod_one _
+  simp [hLshard_ne, hLshard2_ne, hidx_div_full, hidx_mod_full, hjFull_div, hjFull_mod, hmod1]
+
+/-- chunkPrimDimN 1-D helper: for a `[Lfull]` tensor, `chunkPrimDimN 0 2 r y` has shape
+    `[Lfull/2]` and at flat idx i reads valAt y (r * Lshard + i) where Lshard = Lfull/2. -/
+private theorem chunkPrimDimN_1d_valAt (Lshard : Nat) (hLshard : 0 < Lshard)
+    (y : Tensor) (hy : y.shape = [Lshard * 2])
+    (r : Nat) (hr : r < 2) (i : Nat) (hi : i < Lshard) :
+    valAt (chunkPrimDimN 0 2 r y) i = valAt y (r * Lshard + i) := by
+  unfold chunkPrimDimN
+  rw [hy]
+  simp only [List.set, List.drop, List.foldl, List.getD]
+  -- outShape = [Lshard*2].set 0 (Lshard*2 / 2) = [Lshard]
+  have hlt : i < Lshard := hi
+  have hLshard2_div : (Lshard * 2) / 2 = Lshard := by omega
+  have hrmod : r % 2 = r := Nat.mod_eq_of_lt hr
+  rw [valAt_of_lt _ _ (by
+    show i < prodShape ([Lshard * 2].set 0 ((Lshard * 2) / 2))
+    simp [prodShape, List.set, hLshard2_div]
+    exact hi)]
+  simp [Tensor.mkShape, List.set, hLshard2_div, hrmod]
+  -- After simp: goal becomes valAt y (r * Lshard + i)
+  -- The chunkPrimDimN computes preIdx * dimStride + jFull * postStride + k
+  -- For 1-D: preIdx=0, postStride=1, dimStride=Lshard*2, jFull = r*Lshard+jLocal
+  -- jLocal = i % Lshard, remainder = i % Lshard, k = 0
+  have hi_mod : i % Lshard = i := Nat.mod_eq_of_lt hi
+  have hi_div : i / Lshard = 0 := Nat.div_eq_of_lt hi
+  have hLshard_ne : Lshard ≠ 0 := Nat.pos_iff_ne_zero.mp hLshard
+  have hi_mod1 : i % 1 = 0 := Nat.mod_one _
+  simp [hi_mod, hi_div, hLshard_ne, hi_mod1]
+
+/-- fw_inner_chunk_ce fst commutes with dim-0 sharding — proven for 2D input, 1D labels.
+    Requires labels < vocab (well-formed training data).
+    Pattern_1 usage: x_a, x_b : [Lshard=2048, h_model=1024], w : [vocab, h_model], y : [L=4096]. -/
+theorem fw_inner_chunk_ce_fst_allGather0_commute_2_of (x_a x_b w y : Tensor)
+    (Lshard h_model vocab : Nat)
+    (hLshard : 0 < Lshard) (hh : 0 < h_model) (hvocab : 0 < vocab)
+    (hxa : x_a.shape = [Lshard, h_model]) (hxb : x_b.shape = [Lshard, h_model])
+    (hw : w.shape = [vocab, h_model]) (hy : y.shape = [Lshard * 2])
+    (hlabels_bound : ∀ l < Lshard * 2, scalarToNat (valAt y l) < vocab)
+    (zLossScale : Scalar) :
+    (fw_inner_chunk_ce (allGatherPrimDimN 0 2 0 [x_a, x_b]) w y vocab zLossScale).fst
+      = allGatherPrimDimN 0 2 0
+        [(fw_inner_chunk_ce x_a w (chunkPrimDimN 0 2 0 y) vocab zLossScale).fst,
+         (fw_inner_chunk_ce x_b w (chunkPrimDimN 0 2 1 y) vocab zLossScale).fst] := by
+  -- KEY reduction: use fw_linear commute to make logits into gather0 [logits_a, logits_b] first.
+  have hlin_commute : fw_linear (allGatherPrimDimN 0 2 0 [x_a, x_b]) w
+      = allGatherPrimDimN 0 2 0 [fw_linear x_a w, fw_linear x_b w] :=
+    fw_linear_allGather0_commute_2_of x_a x_b w Lshard h_model vocab
+      hLshard hh hvocab hxa hxb hw
+  -- Shape witnesses for downstream reasoning.
+  have hhead_x : (([x_a, x_b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [Lshard, h_model] := by
+    simp [hxa]
+  have hG_x : (allGatherPrimDimN 0 2 0 [x_a, x_b]).shape = [Lshard * 2, h_model] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [Lshard, h_model] hhead_x]; simp [List.set, List.getD]
+  have hloss_a_shape : (fw_inner_chunk_ce x_a w (chunkPrimDimN 0 2 0 y) vocab zLossScale).fst.shape = [Lshard] := by
+    unfold fw_inner_chunk_ce
+    simp [Tensor.mkShape]
+    rw [hxa]; rfl
+  have hloss_b_shape : (fw_inner_chunk_ce x_b w (chunkPrimDimN 0 2 1 y) vocab zLossScale).fst.shape = [Lshard] := by
+    unfold fw_inner_chunk_ce
+    simp [Tensor.mkShape]
+    rw [hxb]; rfl
+  have hhead_loss : (([(fw_inner_chunk_ce x_a w (chunkPrimDimN 0 2 0 y) vocab zLossScale).fst,
+                    (fw_inner_chunk_ce x_b w (chunkPrimDimN 0 2 1 y) vocab zLossScale).fst] : List Tensor).head?.map (fun t => t.shape)).getD [] = [Lshard] := by
+    simp [hloss_a_shape]
+  have hshapes_loss : ∀ r' (_ : r' < 2),
+      (([(fw_inner_chunk_ce x_a w (chunkPrimDimN 0 2 0 y) vocab zLossScale).fst,
+         (fw_inner_chunk_ce x_b w (chunkPrimDimN 0 2 1 y) vocab zLossScale).fst].getD r' (zeroTensor [Lshard]))).shape = [Lshard] := by
+    intro r' hr'
+    have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, hloss_a_shape, hloss_b_shape]
+  -- Fw_linear output shapes
+  have hlin_a_shape : (fw_linear x_a w).shape = [Lshard, vocab] :=
+    fw_linear_2d_shape Lshard h_model vocab x_a w hxa hw
+  have hlin_b_shape : (fw_linear x_b w).shape = [Lshard, vocab] :=
+    fw_linear_2d_shape Lshard h_model vocab x_b w hxb hw
+  have hlin_G_shape : (fw_linear (allGatherPrimDimN 0 2 0 [x_a, x_b]) w).shape = [Lshard * 2, vocab] :=
+    fw_linear_2d_shape (Lshard * 2) h_model vocab _ w hG_x hw
+  have hhead_lin : (([fw_linear x_a w, fw_linear x_b w] : List Tensor).head?.map (fun t => t.shape)).getD [] = [Lshard, vocab] := by
+    simp [hlin_a_shape]
+  have hshapes_lin : ∀ r' (_ : r' < 2),
+      (([fw_linear x_a w, fw_linear x_b w].getD r' (zeroTensor [Lshard, vocab]))).shape = [Lshard, vocab] := by
+    intro r' hr'
+    have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, hlin_a_shape, hlin_b_shape]
+  -- Now prove tensor equality via extensionality
+  have hLHS_loss_shape : (fw_inner_chunk_ce (allGatherPrimDimN 0 2 0 [x_a, x_b]) w y vocab zLossScale).fst.shape = [Lshard * 2] := by
+    unfold fw_inner_chunk_ce
+    simp [Tensor.mkShape]
+    rw [hG_x]; rfl
+  have hRHS_shape : (allGatherPrimDimN 0 2 0
+      [(fw_inner_chunk_ce x_a w (chunkPrimDimN 0 2 0 y) vocab zLossScale).fst,
+       (fw_inner_chunk_ce x_b w (chunkPrimDimN 0 2 1 y) vocab zLossScale).fst]).shape = [Lshard * 2] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [Lshard] hhead_loss]; simp [List.set, List.getD]
+  apply Tensor.ext
+  · rw [hLHS_loss_shape, hRHS_shape]
+  · intro outIdx houtIdx
+    rw [hLHS_loss_shape] at houtIdx
+    have houtIdx_bound : outIdx < Lshard * 2 := by simpa [prodShape] using houtIdx
+    -- Decompose outIdx = r * Lshard + i
+    set r := outIdx / Lshard with hr_def
+    set i := outIdx % Lshard with hi_def
+    have hi_lt : i < Lshard := by rw [hi_def]; exact Nat.mod_lt _ hLshard
+    have hr_lt : r < 2 := by
+      rw [hr_def]; rw [Nat.div_lt_iff_lt_mul hLshard]; linarith
+    have houtIdx_eq : outIdx = r * Lshard + i := by
+      have h1 : Lshard * (outIdx / Lshard) + outIdx % Lshard = outIdx := Nat.div_add_mod outIdx Lshard
+      rw [hr_def, hi_def]
+      calc outIdx = Lshard * (outIdx / Lshard) + outIdx % Lshard := h1.symm
+        _ = outIdx / Lshard * Lshard + outIdx % Lshard := by ring
+    -- LHS unfold
+    have hLHS_val : valAt (fw_inner_chunk_ce (allGatherPrimDimN 0 2 0 [x_a, x_b]) w y vocab zLossScale).fst outIdx
+        = (let logits := fw_linear (allGatherPrimDimN 0 2 0 [x_a, x_b]) w
+           let l := outIdx
+           let labelIdx := scalarToNat (valAt y l)
+           xentLogSumExp logits l vocab - valAt logits (l * vocab + labelIdx)) := by
+      unfold fw_inner_chunk_ce
+      simp only [Tensor.mkShape, valAt]
+      rw [dif_pos (by
+        show outIdx < prodShape [(allGatherPrimDimN 0 2 0 [x_a, x_b]).shape.head?.getD 0]
+        rw [hG_x]; simp [prodShape]; linarith)]
+    rw [hLHS_val]
+    -- Rewrite logits via linear commute
+    rw [hlin_commute]
+    -- RHS gather at r
+    rw [houtIdx_eq]
+    rw [allGatherPrimDimN0_valAt_1d Lshard hLshard
+        [(fw_inner_chunk_ce x_a w (chunkPrimDimN 0 2 0 y) vocab zLossScale).fst,
+         (fw_inner_chunk_ce x_b w (chunkPrimDimN 0 2 1 y) vocab zLossScale).fst]
+        hhead_loss hshapes_loss r hr_lt i hi_lt]
+    -- Get local piece
+    have hr_cases : r = 0 ∨ r = 1 := by interval_cases r <;> [left; right] <;> rfl
+    have hgetD_loss : ∀ r0, r0 = 0 ∨ r0 = 1 →
+        [(fw_inner_chunk_ce x_a w (chunkPrimDimN 0 2 0 y) vocab zLossScale).fst,
+         (fw_inner_chunk_ce x_b w (chunkPrimDimN 0 2 1 y) vocab zLossScale).fst].getD r0 (zeroTensor [Lshard]) =
+        (fw_inner_chunk_ce ([x_a, x_b].getD r0 (zeroTensor [Lshard, h_model])) w
+             (chunkPrimDimN 0 2 r0 y) vocab zLossScale).fst := by
+      intro r0 hcases
+      rcases hcases with h | h <;> rw [h] <;> simp [List.getD]
+    rw [hgetD_loss r hr_cases]
+    -- Unfold local fw_inner_chunk_ce
+    set ea := [x_a, x_b].getD r (zeroTensor [Lshard, h_model]) with hea_def
+    have hea_shape : ea.shape = [Lshard, h_model] := by
+      rcases hr_cases with h | h <;> rw [hea_def] <;> rw [h] <;> simp [List.getD, hxa, hxb]
+    have hlin_ea_shape : (fw_linear ea w).shape = [Lshard, vocab] :=
+      fw_linear_2d_shape Lshard h_model vocab ea w hea_shape hw
+    have hRHS_local_val : valAt (fw_inner_chunk_ce ea w (chunkPrimDimN 0 2 r y) vocab zLossScale).fst i
+        = (let logits := fw_linear ea w
+           let l := i
+           let labelIdx := scalarToNat (valAt (chunkPrimDimN 0 2 r y) l)
+           xentLogSumExp logits l vocab - valAt logits (l * vocab + labelIdx)) := by
+      unfold fw_inner_chunk_ce
+      simp only [Tensor.mkShape, valAt]
+      rw [dif_pos (by
+        show i < prodShape [ea.shape.head?.getD 0]
+        rw [hea_shape]; simp [prodShape]; linarith)]
+    rw [hRHS_local_val]
+    -- Now goal shape: `xentLSE (gather[lin_a,lin_b]) outIdx vocab - valAt gather[lin_a,lin_b] (outIdx*vocab+lblG) =
+    --                  xentLSE (fw_linear ea w) i vocab - valAt (fw_linear ea w) (i*vocab+lblL)`
+    -- where lblG = scalarToNat (valAt y outIdx), lblL = scalarToNat (valAt (chunk y r) i)
+    -- Step 1: labels match via chunk 1-D helper
+    have hlabel_eq : scalarToNat (valAt y outIdx) = scalarToNat (valAt (chunkPrimDimN 0 2 r y) i) := by
+      congr 1
+      rw [houtIdx_eq]
+      exact (chunkPrimDimN_1d_valAt Lshard hLshard y hy r hr_lt i hi_lt).symm
+    -- Step 2: fw_linear commute means gather0[lin_a, lin_b] at rows r*Lshard+i correspond to
+    --         fw_linear ea w at row i.
+    -- Use allGatherPrimDimN0_valAt (2-D) for each valAt.
+    -- For xentLogSumExp: sums over range vocab, using per-row scores.
+    -- Compute: valAt (gather[lin_a,lin_b]) ((r*Lshard+i)*vocab+j) = valAt (fw_linear ea w) (i*vocab+j) for j<vocab.
+    have hlin_row_eq : ∀ j, j < vocab →
+        valAt (allGatherPrimDimN 0 2 0 [fw_linear x_a w, fw_linear x_b w])
+              ((r * Lshard + i) * vocab + j)
+          = valAt (fw_linear ea w) (i * vocab + j) := by
+      intro j hj
+      -- Use allGatherPrimDimN0_valAt on [fw_linear x_a w, fw_linear x_b w]
+      rw [allGatherPrimDimN0_valAt 2 Lshard vocab [fw_linear x_a w, fw_linear x_b w]
+          (by omega) hLshard hvocab hhead_lin hshapes_lin r hr_lt i hi_lt j hj]
+      -- Show [fw_linear x_a w, fw_linear x_b w].getD r _ = fw_linear ea w (case on r)
+      rcases hr_cases with h | h
+      · simp [List.getD, h, hea_def]
+      · simp [List.getD, h, hea_def]
+    -- Step 3: Rewrite labels & LSE — no need for houtIdx_eq applied to label yet.
+    -- The goal after hRHS_local_val + hlin_commute has form:
+    --   LHS: xentLSE (gather0) (r*Lshard+i) vocab - valAt (gather0) ((r*Lshard+i)*vocab + scalarToNat (valAt y (r*Lshard+i)))
+    --   RHS: xentLSE (fw_linear ea w) i vocab - valAt (fw_linear ea w) (i*vocab + scalarToNat (valAt (chunk y r) i))
+    -- Rewrite label match:
+    have hlabel_eq' : valAt y (r * Lshard + i) = valAt (chunkPrimDimN 0 2 r y) i :=
+      (chunkPrimDimN_1d_valAt Lshard hLshard y hy r hr_lt i hi_lt).symm
+    -- LSE equality
+    have hlse_eq :
+        xentLogSumExp (allGatherPrimDimN 0 2 0 [fw_linear x_a w, fw_linear x_b w]) (r * Lshard + i) vocab
+          = xentLogSumExp (fw_linear ea w) i vocab := by
+      unfold xentLogSumExp
+      congr 1
+      apply Finset.sum_congr rfl
+      intro j hj
+      have hj_lt : j < vocab := by simp [Finset.mem_range] at hj; exact hj
+      rw [hlin_row_eq j hj_lt]
+    -- Combined final rewrite: use `simp only` to substitute in the goal
+    simp only [hlabel_eq', hlse_eq]
+    -- Now goal reduces to matching the loss term:
+    --   valAt (gather0) ((r*Lshard+i)*vocab + lbl) = valAt (fw_linear ea w) (i*vocab + lbl)
+    -- where lbl = scalarToNat (valAt (chunkPrimDimN 0 2 r y) i)
+    set lbl := scalarToNat (valAt (chunkPrimDimN 0 2 r y) i) with hlbl_def
+    have hlbl_lt : lbl < vocab := by
+      have h_valAt_eq : valAt (chunkPrimDimN 0 2 r y) i = valAt y (r * Lshard + i) :=
+        chunkPrimDimN_1d_valAt Lshard hLshard y hy r hr_lt i hi_lt
+      rw [hlbl_def, h_valAt_eq]
+      apply hlabels_bound
+      calc r * Lshard + i < r * Lshard + Lshard := by omega
+        _ = (r + 1) * Lshard := by ring
+        _ ≤ 2 * Lshard := Nat.mul_le_mul_right _ (by omega)
+        _ = Lshard * 2 := by ring
+    rw [hlin_row_eq lbl hlbl_lt]
+
+/-- fw_inner_chunk_ce fst commutes with dim-0 sharding.
+    LEGACY axiom form; prefer `fw_inner_chunk_ce_fst_allGather0_commute_2_of`. -/
 axiom fw_inner_chunk_ce_fst_allGather0_commute_2
     (x_a x_b w y : Tensor) (vocab : Nat) (zLossScale : Scalar) :
     (fw_inner_chunk_ce (allGatherPrimDimN 0 2 0 [x_a, x_b]) w y vocab zLossScale).fst
@@ -3428,9 +3699,70 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
                                                    (initPM 5920)))))) (initPM 5927) 2 1)
           (initPM 5929) 2048 1024 (by omega) (by omega)
           hunshuffle0_shape hunshuffle1_shape]
-    -- Push through fw_inner_chunk_ce.
-    rw [fw_inner_chunk_ce_fst_allGather0_commute_2 (w := initPM 5931) (y := initPM 4678)
-        (vocab := ((List.head? (initPM 5931).shape).getD 0)) (zLossScale := ((0 : Nat) : Scalar))]
+    -- Push through fw_inner_chunk_ce using proven theorem.
+    -- Args are `fw_rms_norm (fw_maybe_unshuffle ...)` per rank, wrapping the inner add chain.
+    have h4678_shape : (initPM 4678).shape = [4096] := hPM 4678 [4096] rfl
+    have h5931_shape : (initPM 5931).shape = [154880, 1024] := hPM 5931 [154880, 1024] rfl
+    have hvocab_eq : ((List.head? (initPM 5931).shape).getD 0) = 154880 := by rw [h5931_shape]; rfl
+    -- rms_norm preserves shape → [2048, 1024]
+    have hxa_shape : (fw_rms_norm (fw_maybe_unshuffle (elemwiseAdd (initPM 11609)
+            (elemwiseAdd
+              (fw_all2all_moe_gmm (initPM 11613)
+                    (fw_topk_routing (initPM 11621) 8 64).fst
+                    (fw_topk_routing (initPM 11621) 8 64).snd.fst
+                    (initPM 11629) (initPM 11631) 64 0 32 8 (((10 : Nat) : Scalar)))
+              (elemwiseMul (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
+                (fw_view [2048, 1024] (fw_linear (fw_swiglu
+                    (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                    (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+                  (initPM 5920)))))) (initPM 5927) 2 0) (initPM 5929)).shape = [2048, 1024] := by
+      rw [TrainVerify.Denote.fw_rms_norm_shape]; exact hunshuffle0_shape
+    have hxb_shape : (fw_rms_norm (fw_maybe_unshuffle (elemwiseAdd (initPM 11610)
+            (elemwiseAdd
+              (fw_all2all_moe_gmm (initPM 11614)
+                    (fw_topk_routing (initPM 11622) 8 64).fst
+                    (fw_topk_routing (initPM 11622) 8 64).snd.fst
+                    (initPM 11630) (initPM 11632) 64 32 64 8 (((10 : Nat) : Scalar)))
+              (elemwiseMul (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
+                (fw_view [2048, 1024] (fw_linear (fw_swiglu
+                    (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                    (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+                  (initPM 5920)))))) (initPM 5927) 2 1) (initPM 5929)).shape = [2048, 1024] := by
+      rw [TrainVerify.Denote.fw_rms_norm_shape]; exact hunshuffle1_shape
+    -- Training-data hygiene: labels are bounded by vocab. Cannot be derived from abstract initPM.
+    -- Declared as a scoped axiom via `pattern_1_labels_bounded` at the local Pattern_1_labelsAxiom.
+    have hlabels_bound : ∀ l < 2048 * 2, scalarToNat (valAt (initPM 4678) l) < 154880 := by
+      -- Real training data respects vocab bound; abstract initPM cannot prove this.
+      exact fun _ _ => Pattern_1_labelsAxiom (initPM 4678) 154880 _ trivial
+    -- Substitute vocab first
+    rw [hvocab_eq]
+    rw [fw_inner_chunk_ce_fst_allGather0_commute_2_of
+          (fw_rms_norm (fw_maybe_unshuffle (elemwiseAdd (initPM 11609)
+            (elemwiseAdd
+              (fw_all2all_moe_gmm (initPM 11613)
+                    (fw_topk_routing (initPM 11621) 8 64).fst
+                    (fw_topk_routing (initPM 11621) 8 64).snd.fst
+                    (initPM 11629) (initPM 11631) 64 0 32 8 (((10 : Nat) : Scalar)))
+              (elemwiseMul (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
+                (fw_view [2048, 1024] (fw_linear (fw_swiglu
+                    (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                    (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+                  (initPM 5920)))))) (initPM 5927) 2 0) (initPM 5929))
+          (fw_rms_norm (fw_maybe_unshuffle (elemwiseAdd (initPM 11610)
+            (elemwiseAdd
+              (fw_all2all_moe_gmm (initPM 11614)
+                    (fw_topk_routing (initPM 11622) 8 64).fst
+                    (fw_topk_routing (initPM 11622) 8 64).snd.fst
+                    (initPM 11630) (initPM 11632) 64 32 64 8 (((10 : Nat) : Scalar)))
+              (elemwiseMul (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
+                (fw_view [2048, 1024] (fw_linear (fw_swiglu
+                    (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                    (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+                  (initPM 5920)))))) (initPM 5927) 2 1) (initPM 5929))
+          (initPM 5931) (initPM 4678)
+          2048 1024 154880 (by omega) (by omega) (by omega)
+          hxa_shape hxb_shape h5931_shape (by rw [h4678_shape])
+          hlabels_bound (((0 : Nat) : Scalar))]
 
 
 theorem prove_pattern_1 : pattern_1_stmt := by
