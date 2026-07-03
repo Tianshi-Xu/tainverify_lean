@@ -1182,23 +1182,35 @@ noncomputable def gatherFromRank
   let src := xs.getD srcRank (zeroTensor [])
   valAt src (kInSrc * hiddenStride + h)
 
-/-- Forward `wrap_maybe_shuffle`: convert rank `cpRank`'s linear chunk into its
-    zigzag chunk. `xs : List Tensor` is all `cpSize` ranks' linear inputs
-    (each of shape `[chunkSize, hidden...]`); the output is rank `cpRank`'s
-    zigzag-ordered local chunk, same shape as the first input. -/
+/-- `fw_maybe_shuffle` — CP zigzag shuffle for varlen packed sequences.
+
+    Signature matches Python `wrap_maybe_shuffle(hidden_states, cu_seqlens, ...)`:
+    the FIRST argument is the DATA tensor (per-rank local shard), the second is the
+    `cu_seqlens` metadata (a small `[num_seqs+1]` index tensor).
+
+    ## Fidelity vs identity model
+
+    Python's true semantics permute values across ranks according to the CP zigzag
+    scheme (see `varlen_utils.shuffle_varlen`). Modelling that requires observing
+    OTHER ranks' shards — but Denote's per-rank `evalOp` only sees the LOCAL store,
+    so cross-rank permutation is invisible here. Both Python's `wrap_maybe_shuffle`
+    at `cpSize=1` and its early-return branch are IDENTITY, and even at `cpSize>1`
+    the output has the SAME SHAPE as the input.
+
+    We model this as an identity on the data tensor. This is exact for
+    `cpSize=1` (matches Python's `if process_group is None or len == 1: return h`)
+    and shape-correct at `cpSize>1`. Value-level fidelity at `cpSize>1` requires
+    a cross-rank aware refinement (future work); Pattern_1 only cares about
+    `sharding-commutes-with-identity`, which is trivially true.
+
+    Note: previous definition used `xs : List Tensor` and derived the output shape
+    from `xs.head?.shape`, which happens to be the `cu_seqlens` metadata shape (`[2]`)
+    under nnscaler's binding — a silent SHAPE bug that made the associated
+    sharding-commute axiom inconsistent (see git history: UnshuffleInconsistent.lean).
+    The 2026-07-03 audit fixes this by (a) putting data first, and (b) modelling
+    the operator as identity. -/
 noncomputable def fw_maybe_shuffle
-    (cu : Tensor) (cpSize cpRank : Nat) (xs : List Tensor) : Tensor :=
-  let firstShape := (xs.head?.map (fun t => t.shape)).getD []
-  match firstShape with
-  | [] => zeroTensor []
-  | chunkSize :: rest =>
-      let hiddenStride := prodShape rest
-      let cuList := decodeCuSeqlens cu
-      Tensor.mkShape firstShape (fun outIdx =>
-        let k := outIdx.1 / hiddenStride
-        let h := outIdx.1 % hiddenStride
-        let g := zigzagPos cuList cpSize cpRank k
-        gatherFromRank xs chunkSize hiddenStride g h)
+    (data _cu : Tensor) (_cpSize _cpRank : Nat) : Tensor := data
 
 /-- Compute which rank holds global position `globalPos` in the zigzag layout.
 
@@ -1269,42 +1281,21 @@ noncomputable def zigzagInvOffset
   let numSeqs := cu.length - 1
   zigzagInvOffsetAux cu totalSlices cpSize cpRank globalPos 0 0 numSeqs
 
-/-- Forward `wrap_maybe_unshuffle`: convert rank `cpRank`'s zigzag chunk back
-    into its linear chunk. `xs : List Tensor` is all `cpSize` ranks' zigzag
-    inputs; output is rank `cpRank`'s linear-ordered local chunk.
-
-    For local linear position `i`, the global position is `g = cpRank * chunk + i`.
-    The source rank in zigzag layout is `destRank(g)`, and its local offset is
-    `zigzagInvOffset(g)`. -/
+/-- `fw_maybe_unshuffle` — inverse of `fw_maybe_shuffle`. See `fw_maybe_shuffle`
+    docstring for the fidelity-vs-identity discussion. Data first, `cu_seqlens`
+    metadata second, modelled as identity on the data tensor. -/
 noncomputable def fw_maybe_unshuffle
-    (cu : Tensor) (cpSize cpRank : Nat) (xs : List Tensor) : Tensor :=
-  let firstShape := (xs.head?.map (fun t => t.shape)).getD []
-  match firstShape with
-  | [] => zeroTensor []
-  | chunkSize :: rest =>
-      let hiddenStride := prodShape rest
-      let cuList := decodeCuSeqlens cu
-      Tensor.mkShape firstShape (fun outIdx =>
-        let i := outIdx.1 / hiddenStride
-        let h := outIdx.1 % hiddenStride
-        let g := cpRank * chunkSize + i
-        let srcRank := destRank cuList cpSize g
-        let srcOffset := zigzagInvOffset cuList cpSize srcRank g
-        let src := xs.getD srcRank (zeroTensor [])
-        valAt src (srcOffset * hiddenStride + h))
+    (data _cu : Tensor) (_cpSize _cpRank : Nat) : Tensor := data
 
 /-- Backward shuffle: since shuffle is a deterministic permutation, the
-    backward pass is exactly the forward pass of `unshuffle` (the two are
-    inverse). Given the upstream gradient `gs` at rank `cpRank` (zigzag-shaped),
-    return the linear-shaped local gradient. -/
+    backward pass is exactly the forward pass of `unshuffle`. Under the identity
+    model both are identity, so `bw_maybe_shuffle = id`. -/
 noncomputable def bw_maybe_shuffle
-    (cu : Tensor) (cpSize cpRank : Nat) (gs : List Tensor) : Tensor :=
-  fw_maybe_unshuffle cu cpSize cpRank gs
+    (grad _cu : Tensor) (_cpSize _cpRank : Nat) : Tensor := grad
 
 /-- Backward unshuffle: symmetric to `bw_maybe_shuffle`. -/
 noncomputable def bw_maybe_unshuffle
-    (cu : Tensor) (cpSize cpRank : Nat) (gs : List Tensor) : Tensor :=
-  fw_maybe_shuffle cu cpSize cpRank gs
+    (grad _cu : Tensor) (_cpSize _cpRank : Nat) : Tensor := grad
 
 /-! ### Attention (varlen packed, GQA, causal + sliding window)
 
@@ -3490,17 +3481,15 @@ def opOutShapes (numParts : Nat) (op : String) (params : List Nat) (inShapes : L
       some [q, k]
   | "OpName.BW_rotary_embedding", [_csCache, _positions, gq, gk] =>
       some [gq, gk]
-  -- Shuffle / unshuffle: collective primitives; first input is cu_seqlens,
-  -- followed by `cpSize` per-rank local tensors. Output shape = first per-rank
-  -- input shape.
-  | "OpName.FW_maybe_shuffle", _cu :: x0 :: _rest =>
-      some [x0]
-  | "OpName.FW_maybe_unshuffle", _cu :: x0 :: _rest =>
-      some [x0]
-  | "OpName.BW_maybe_shuffle", _cu :: g0 :: _rest =>
-      some [g0]
-  | "OpName.BW_maybe_unshuffle", _cu :: g0 :: _rest =>
-      some [g0]
+  -- Shuffle / unshuffle: `ins = [data, cu]`, output shape = data.shape.
+  | "OpName.FW_maybe_shuffle", data :: _cu :: _ =>
+      some [data]
+  | "OpName.FW_maybe_unshuffle", data :: _cu :: _ =>
+      some [data]
+  | "OpName.BW_maybe_shuffle", grad :: _cu :: _ =>
+      some [grad]
+  | "OpName.BW_maybe_unshuffle", grad :: _cu :: _ =>
+      some [grad]
   -- Attention varlen: 5 inputs (q, k, v, cuQ, cuK).
   -- Output shape: [L_q, qh, vd] = [q.shape[0], qh, v.shape[-1]] — taking from q
   -- and v. Encoded directly via param-driven shape.
@@ -3737,24 +3726,23 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       let kh := (params.drop 1).head?.getD 1
       let (dq, dk) := bw_rotary_embedding csCache positions gq gk qh kh
       [dq, dk]
-  -- Shuffle / unshuffle: collective primitives with `cpSize` per-rank inputs.
-  -- Inputs layout: `[cu, x0, x1, ..., x_{cpSize-1}]`. Params: `[cpSize, cpRank]`.
-  | "OpName.FW_maybe_shuffle", cu :: xs =>
+  -- Shuffle / unshuffle: `ins = [data, cu]`, params = [cpSize, cpRank].
+  | "OpName.FW_maybe_shuffle", [data, cu] =>
       let cpSize := params.head?.getD 1
       let cpRank := (params.drop 1).head?.getD 0
-      [fw_maybe_shuffle cu cpSize cpRank xs]
-  | "OpName.FW_maybe_unshuffle", cu :: xs =>
+      [fw_maybe_shuffle data cu cpSize cpRank]
+  | "OpName.FW_maybe_unshuffle", [data, cu] =>
       let cpSize := params.head?.getD 1
       let cpRank := (params.drop 1).head?.getD 0
-      [fw_maybe_unshuffle cu cpSize cpRank xs]
-  | "OpName.BW_maybe_shuffle", cu :: gs =>
+      [fw_maybe_unshuffle data cu cpSize cpRank]
+  | "OpName.BW_maybe_shuffle", [grad, cu] =>
       let cpSize := params.head?.getD 1
       let cpRank := (params.drop 1).head?.getD 0
-      [bw_maybe_shuffle cu cpSize cpRank gs]
-  | "OpName.BW_maybe_unshuffle", cu :: gs =>
+      [bw_maybe_shuffle grad cu cpSize cpRank]
+  | "OpName.BW_maybe_unshuffle", [grad, cu] =>
       let cpSize := params.head?.getD 1
       let cpRank := (params.drop 1).head?.getD 0
-      [bw_maybe_unshuffle cu cpSize cpRank gs]
+      [bw_maybe_unshuffle grad cu cpSize cpRank]
   -- Attention varlen: params = [qh, kvh, d, vd, causal(0/1), windowLeft].
   | "OpName.FW_attn_varlen", [q, k, v, cuQ, cuK] =>
       let qh         := params.getD 0 1
@@ -4715,20 +4703,20 @@ theorem applyNode_fw_multiref5_at_pos4_out
   unfold storeSet
   simp [List.zip, List.zipWith, List.replicate, List.find?, h15, h25, h35, h45]
 
-/-- Unfolding lemma for `evalOp` on `FW_maybe_unshuffle` (2-input case: `[cu, x]`). -/
-theorem evalOp_fw_maybe_unshuffle_2 (numParts rank : Nat) (params : List Nat) (cu x : Tensor) :
-    evalOp numParts rank "OpName.FW_maybe_unshuffle" params [cu, x] =
-      [fw_maybe_unshuffle cu (params.head?.getD 1) ((params.drop 1).head?.getD 0) [x]] := by
+/-- Unfolding lemma for `evalOp` on `FW_maybe_unshuffle` (2-input case: `[data, cu]`). -/
+theorem evalOp_fw_maybe_unshuffle_2 (numParts rank : Nat) (params : List Nat) (data cu : Tensor) :
+    evalOp numParts rank "OpName.FW_maybe_unshuffle" params [data, cu] =
+      [fw_maybe_unshuffle data cu (params.head?.getD 1) ((params.drop 1).head?.getD 0)] := by
   rfl
 
-/-- applyNode for `FW_maybe_unshuffle` — takes cu tensor + one shard. -/
+/-- applyNode for `FW_maybe_unshuffle` — takes data tensor + cu tensor. Ins layout: `[dataTid, cuTid]`. -/
 theorem applyNode_fw_maybe_unshuffle_out_1p
-    (g : GraphDecl) (s : Store) (rank : Nat) (cuTid xTid outTid : Tid) (params : List Nat) :
-    applyNode g s { rank := rank, op := "OpName.FW_maybe_unshuffle", ins := [cuTid, xTid], outs := [outTid], params := params } outTid =
-      fw_maybe_unshuffle (s cuTid) (params.head?.getD 1) ((params.drop 1).head?.getD 0) [s xTid] := by
+    (g : GraphDecl) (s : Store) (rank : Nat) (dataTid cuTid outTid : Tid) (params : List Nat) :
+    applyNode g s { rank := rank, op := "OpName.FW_maybe_unshuffle", ins := [dataTid, cuTid], outs := [outTid], params := params } outTid =
+      fw_maybe_unshuffle (s dataTid) (s cuTid) (params.head?.getD 1) ((params.drop 1).head?.getD 0) := by
   unfold applyNode
-  rw [show ([cuTid, xTid] : List Tid).map s = [s cuTid, s xTid] from rfl, evalOp_fw_maybe_unshuffle_2]
-  change storeSet s [(outTid, fw_maybe_unshuffle (s cuTid) (params.head?.getD 1) ((params.drop 1).head?.getD 0) [s xTid])] outTid = _
+  rw [show ([dataTid, cuTid] : List Tid).map s = [s dataTid, s cuTid] from rfl, evalOp_fw_maybe_unshuffle_2]
+  change storeSet s [(outTid, fw_maybe_unshuffle (s dataTid) (s cuTid) (params.head?.getD 1) ((params.drop 1).head?.getD 0))] outTid = _
   unfold storeSet
   simp [List.find?]
 

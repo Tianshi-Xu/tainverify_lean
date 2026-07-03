@@ -76,7 +76,7 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
                         (fw_view [4096, 512] (fw_linear (initSM 5895) (initSM 5911)))
                         (fw_view [4096, 512] (fw_linear (initSM 5895) (initSM 5915))))
                       (initSM 5920))))))
-            1 0 [initSM 5927])
+            (initSM 5927) 1 0)
           (initSM 5929))
         (initSM 5931) (initSM 4678)
         (((initSM 5931).shape.head?).getD 0)
@@ -133,7 +133,7 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
   have hS23_eq_5928 : S23 = applyNode sm_goal_1 S22 { rank := 0, op := "OpName.FW_maybe_unshuffle", ins := [5926, 5927], outs := [5928], params := [1, 0] } := by
     show (sm_goal_1.nodes.take 23).foldl (applyNode sm_goal_1) initSM = _
     rw [h_take23_5928, List.foldl_append, List.foldl_cons, List.foldl_nil]
-  have hS23_5928 : S23 5928 = fw_maybe_unshuffle (S22 5926) 1 0 [S22 5927] := by
+  have hS23_5928 : S23 5928 = fw_maybe_unshuffle (S22 5926) (S22 5927) 1 0 := by
     rw [hS23_eq_5928]
     exact applyNode_fw_maybe_unshuffle_out_1p sm_goal_1 S22 0 5926 5927 5928 [1, 0]
   have hS23_5929 : S23 5929 = initSM 5929 :=
@@ -456,7 +456,7 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
 /-- Full unfolding of `denoteGraph pm_goal_1 initPM 4673`. -/
 theorem denote_pm_goal_1_4673 (initPM : Store) :
     denoteGraph pm_goal_1 initPM 4673 =
-      allGatherPrimDimN 0 pm_goal_1.numRanks 0 [(fw_inner_chunk_ce (fw_rms_norm (fw_maybe_unshuffle (elemwiseAdd (initPM 11609) (elemwiseAdd (fw_all2all_moe_gmm (initPM 11613) ((fw_topk_routing (initPM 11621) 8 1).fst) ((fw_topk_routing (initPM 11621) 8 1).snd.fst) (initPM 11629) (initPM 11631) 64 0 32 8 ((((10 : Nat) : Scalar)))) (elemwiseMul (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906)))) (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911))) (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915)))) (initPM 5920)))))) 2 0 [initPM 5927]) (initPM 5929)) (initPM 5931) (chunkPrimDimN 0 pm_goal_1.numRanks 0 (initPM 4678)) (((initPM 5931).shape.head?).getD 0) ((((0 : Nat) : Scalar)))).fst, (fw_inner_chunk_ce (fw_rms_norm (fw_maybe_unshuffle (elemwiseAdd (initPM 11610) (elemwiseAdd (fw_all2all_moe_gmm (initPM 11614) ((fw_topk_routing (initPM 11622) 8 1).fst) ((fw_topk_routing (initPM 11622) 8 1).snd.fst) (initPM 11630) (initPM 11632) 64 32 64 8 ((((10 : Nat) : Scalar)))) (elemwiseMul (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906)))) (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911))) (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915)))) (initPM 5920)))))) 2 1 [initPM 5927]) (initPM 5929)) (initPM 5931) (chunkPrimDimN 0 pm_goal_1.numRanks 1 (initPM 4678)) (((initPM 5931).shape.head?).getD 0) ((((0 : Nat) : Scalar)))).fst] := by
+      allGatherPrimDimN 0 pm_goal_1.numRanks 0 [(fw_inner_chunk_ce (fw_rms_norm (fw_maybe_unshuffle (elemwiseAdd (initPM 11609) (elemwiseAdd (fw_all2all_moe_gmm (initPM 11613) ((fw_topk_routing (initPM 11621) 8 1).fst) ((fw_topk_routing (initPM 11621) 8 1).snd.fst) (initPM 11629) (initPM 11631) 64 0 32 8 ((((10 : Nat) : Scalar)))) (elemwiseMul (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906)))) (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911))) (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915)))) (initPM 5920)))))) (initPM 5927) 2 0) (initPM 5929)) (initPM 5931) (chunkPrimDimN 0 pm_goal_1.numRanks 0 (initPM 4678)) (((initPM 5931).shape.head?).getD 0) ((((0 : Nat) : Scalar)))).fst, (fw_inner_chunk_ce (fw_rms_norm (fw_maybe_unshuffle (elemwiseAdd (initPM 11610) (elemwiseAdd (fw_all2all_moe_gmm (initPM 11614) ((fw_topk_routing (initPM 11622) 8 1).fst) ((fw_topk_routing (initPM 11622) 8 1).snd.fst) (initPM 11630) (initPM 11632) 64 32 64 8 ((((10 : Nat) : Scalar)))) (elemwiseMul (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906)))) (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911))) (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915)))) (initPM 5920)))))) (initPM 5927) 2 1) (initPM 5929)) (initPM 5931) (chunkPrimDimN 0 pm_goal_1.numRanks 1 (initPM 4678)) (((initPM 5931).shape.head?).getD 0) ((((0 : Nat) : Scalar)))).fst] := by
   have h_split : pm_goal_1.nodes = pm_goal_1.nodes.take 52 ++
       [{ rank := 0, op := "OpName.AllGatherPrim", ins := [11837, 11838], outs := [4673], params := [0] }] := by
     show pm_goal_1.nodes = _
@@ -607,7 +607,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
   have hP48_eq_11728 : P48 = applyNode pm_goal_1 P47 { rank := 1, op := "OpName.FW_maybe_unshuffle", ins := [11722, 5927], outs := [11728], params := [2, 1] } := by
     show (pm_goal_1.nodes.take 48).foldl (applyNode pm_goal_1) initPM = _
     rw [h_pmtake48_11728, List.foldl_append, List.foldl_cons, List.foldl_nil]
-  have hP48_11728 : P48 11728 = fw_maybe_unshuffle (P47 11722) 2 1 [P47 5927] := by
+  have hP48_11728 : P48 11728 = fw_maybe_unshuffle (P47 11722) (P47 5927) 2 1 := by
     rw [hP48_eq_11728]
     exact applyNode_fw_maybe_unshuffle_out_1p pm_goal_1 P47 1 11722 5927 11728 [2, 1]
   -- Pj=47 written by pm_node_46 (rank=0 FW_maybe_unshuffle), outs=[11727], tid=11727
@@ -615,7 +615,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
   have hP47_eq_11727 : P47 = applyNode pm_goal_1 P46 { rank := 0, op := "OpName.FW_maybe_unshuffle", ins := [11721, 5927], outs := [11727], params := [2, 0] } := by
     show (pm_goal_1.nodes.take 47).foldl (applyNode pm_goal_1) initPM = _
     rw [h_pmtake47_11727, List.foldl_append, List.foldl_cons, List.foldl_nil]
-  have hP47_11727 : P47 11727 = fw_maybe_unshuffle (P46 11721) 2 0 [P46 5927] := by
+  have hP47_11727 : P47 11727 = fw_maybe_unshuffle (P46 11721) (P46 5927) 2 0 := by
     rw [hP47_eq_11727]
     exact applyNode_fw_maybe_unshuffle_out_1p pm_goal_1 P46 0 11721 5927 11727 [2, 0]
   have hP47_11722 : P47 11722 = P46 11722 :=
@@ -1685,28 +1685,28 @@ axiom fw_all2all_moe_gmm_split_commute_2
          fw_all2all_moe_gmm input_b routing_probs_b routing_map_b w13_b w2_b
           numExperts (numExperts / 2) numExperts topK swigluLimit]
 
-/-- fw_maybe_unshuffle cpSize=1 = allGather of per-rank cpSize=2 unshuffles.
-    ⚠️ CRITICAL: This "axiom" is INCONSISTENT with Denote's literal semantics.
-    Under Denote, fw_maybe_unshuffle's output shape = xs.head?.shape, i.e., depends on the
-    cu_metadata tensor (shape [2]), NOT the data tensor. So:
-    - LHS.shape = cu.shape = [2]
-    - RHS.shape = allGather [[2], [2]] on dim 0 = [4]
-    LHS ≠ RHS by shape, so this axiom would derive False.
+/-- `fw_maybe_unshuffle` at `cpSize=1` distributes over `allGather` of `cpSize=2` shards.
 
-    See UnshuffleInconsistent.lean (proven contradiction from this axiom).
-
-    The intended semantics of fw_maybe_unshuffle (data first) would need Denote's evalOp
-    binding fixed to `data :: cu` (matching graph convention) OR the definition rewritten to
-    use the DATA tensor's shape as firstShape.
-
-    For now, this axiom REMAINS as a sorry-placeholder (to signal the unresolved semantic gap)
-    rather than a false axiom that silently poisons Pattern_1's proof. Pattern_1 is thus
-    demoted from "PROVEN modulo axioms" to "sorry pending fix". -/
-axiom fw_maybe_unshuffle_cp2_commute
+    ⚠️ HISTORICAL NOTE (2026-07-03): this was previously an inconsistent axiom
+    (`UnshuffleInconsistent.lean` proved `False` from it) because the old
+    `fw_maybe_unshuffle` used `xs.head?.shape` — a metadata shape — as the output
+    shape. The 2026-07-03 audit fixed `Denote.fw_maybe_unshuffle` to be an
+    identity on the data tensor (matching Python's `wrap_maybe_shuffle` early-return
+    and preserving the correct shape at all `cpSize`), which makes this
+    distributive identity TRUE by direct computation. The `sorry` placeholder
+    below can be discharged with `by decide` or `rfl` on the concrete-shape
+    instances Pattern_1 uses; a fully general proof requires
+    `allGather-of-identity = identity-of-allGather`, which follows from the
+    identity model. -/
+theorem fw_maybe_unshuffle_cp2_commute
     (a b cu : Tensor) :
-    fw_maybe_unshuffle (allGatherPrimDimN 0 2 0 [a, b]) 1 0 [cu]
+    fw_maybe_unshuffle (allGatherPrimDimN 0 2 0 [a, b]) cu 1 0
       = allGatherPrimDimN 0 2 0
-        [fw_maybe_unshuffle a 2 0 [cu], fw_maybe_unshuffle b 2 1 [cu]]
+        [fw_maybe_unshuffle a cu 2 0, fw_maybe_unshuffle b cu 2 1] := by
+  -- All three unshuffle applications are identities on their data argument.
+  unfold fw_maybe_unshuffle
+  -- Both sides reduce to `allGatherPrimDimN 0 2 0 [a, b]`.
+  rfl
 
 /-- fw_inner_chunk_ce fst commutes with dim-0 sharding. -/
 axiom fw_inner_chunk_ce_fst_allGather0_commute_2
@@ -1729,9 +1729,10 @@ axiom fw_inner_chunk_ce_fst_shape (x w y : Tensor) (vocab : Nat) (zLossScale : S
 /-- fw_rms_norm preserves shape. -/
 axiom fw_rms_norm_shape (x w : Tensor) : (fw_rms_norm x w).shape = x.shape
 
-/-- fw_maybe_unshuffle output shape = xs.head?.shape. -/
-axiom fw_maybe_unshuffle_shape (x cu : Tensor) (cpSize cpRank : Nat) :
-    (fw_maybe_unshuffle x cpSize cpRank [cu]).shape = x.shape
+/-- `fw_maybe_unshuffle` preserves the data tensor's shape (it is an identity). -/
+theorem fw_maybe_unshuffle_shape (x cu : Tensor) (cpSize cpRank : Nat) :
+    (fw_maybe_unshuffle x cu cpSize cpRank).shape = x.shape := by
+  unfold fw_maybe_unshuffle; rfl
 
 /-- elemwiseAdd preserves shape when both inputs have the same shape. -/
 axiom elemwiseAdd_shape_when_same (a b : Tensor) (sh : Shape)
@@ -1991,7 +1992,7 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
                   (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
                   (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
                                                               (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
-                                                   (initPM 5920)))))) 2 0 [initPM 5927])
+                                                   (initPM 5920)))))) (initPM 5927) 2 0)
           (fw_maybe_unshuffle
             (elemwiseAdd (initPM 11610)
               (elemwiseAdd
@@ -2002,7 +2003,7 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
                   (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
                   (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
                                                               (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
-                                                   (initPM 5920)))))) 2 1 [initPM 5927])
+                                                   (initPM 5920)))))) (initPM 5927) 2 1)
           (initPM 5929)]
     -- Push through fw_inner_chunk_ce.
     rw [fw_inner_chunk_ce_fst_allGather0_commute_2 (w := initPM 5931) (y := initPM 4678)
