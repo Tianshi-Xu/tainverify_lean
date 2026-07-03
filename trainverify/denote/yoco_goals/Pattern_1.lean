@@ -1841,8 +1841,209 @@ theorem sm_chain_shape_4096 (initSM : Store) (hSM : StoreShapesHold initSM sm_go
     _ _ _ _ _ 4096 hL
 
 /-- The PM computation chain (after allGather) has shape [4096]. -/
-axiom pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_1InitEnv) :
-    (denoteGraph pm_goal_1 initPM 4673).shape = [4096]
+theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_1InitEnv) :
+    (denoteGraph pm_goal_1 initPM 4673).shape = [4096] := by
+  -- Boundary shape witnesses from the PM init env.
+  have h11609 : (initPM 11609).shape = [2048, 1024] := hPM 11609 [2048, 1024] rfl
+  have h11610 : (initPM 11610).shape = [2048, 1024] := hPM 11610 [2048, 1024] rfl
+  have h11613 : (initPM 11613).shape = [2048, 1024] := hPM 11613 [2048, 1024] rfl
+  have h11614 : (initPM 11614).shape = [2048, 1024] := hPM 11614 [2048, 1024] rfl
+  have h11631 : (initPM 11631).shape = [32, 1024, 512] := hPM 11631 [32, 1024, 512] rfl
+  have h11632 : (initPM 11632).shape = [32, 1024, 512] := hPM 11632 [32, 1024, 512] rfl
+  -- Per-rank shape reasoning is symmetric between rank 0 and rank 1.
+  -- Show each per-rank fw_inner_chunk_ce(...).fst has shape [2048].
+  -- Rank 0 (uses initPM 11609/11613/11631):
+  have hgmm0 :
+      (fw_all2all_moe_gmm (initPM 11613)
+        ((fw_topk_routing (initPM 11621) 8 1).fst)
+        ((fw_topk_routing (initPM 11621) 8 1).snd.fst)
+        (initPM 11629) (initPM 11631) 64 0 32 8 ((((10 : Nat) : Scalar)))).shape
+        = [2048, 512] :=
+    TrainVerify.Denote.fw_all2all_moe_gmm_shape
+      _ _ _ _ _ _ _ _ _ _ 2048 512
+      (by rw [h11613]; rfl) (by rw [h11631]; decide)
+  have hmul0_shape :
+      (elemwiseMul
+        (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
+        (fw_view [2048, 1024]
+          (fw_linear
+            (fw_swiglu
+              (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+              (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+            (initPM 5920)))).shape = [2048, 1] := by
+    have hleft : (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906)))).shape = [2048, 1] := by
+      rw [TrainVerify.Denote.fw_sigmoid_shape]; rfl
+    have hright : (fw_view [2048, 1024]
+              (fw_linear
+                (fw_swiglu
+                  (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                  (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+                (initPM 5920))).shape = [2048, 1024] := rfl
+    show (Tensor.mkShape (outShape2 _ _) _).shape = _
+    simp only [Tensor.mkShape, outShape2, hleft, hright]
+    decide
+  have hinner_add0 :
+      (elemwiseAdd
+        (fw_all2all_moe_gmm (initPM 11613)
+              ((fw_topk_routing (initPM 11621) 8 1).fst)
+              ((fw_topk_routing (initPM 11621) 8 1).snd.fst)
+              (initPM 11629) (initPM 11631) 64 0 32 8 ((((10 : Nat) : Scalar))))
+        (elemwiseMul
+          (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
+          (fw_view [2048, 1024]
+            (fw_linear
+              (fw_swiglu
+                (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+              (initPM 5920))))).shape = [2048, 512] := by
+    show (Tensor.mkShape (outShape2 _ _) _).shape = _
+    simp only [Tensor.mkShape, outShape2, hgmm0, hmul0_shape]
+    decide
+  have houter_add0 :
+      (elemwiseAdd (initPM 11609)
+        (elemwiseAdd
+          (fw_all2all_moe_gmm (initPM 11613)
+                ((fw_topk_routing (initPM 11621) 8 1).fst)
+                ((fw_topk_routing (initPM 11621) 8 1).snd.fst)
+                (initPM 11629) (initPM 11631) 64 0 32 8 ((((10 : Nat) : Scalar))))
+          (elemwiseMul
+            (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
+            (fw_view [2048, 1024]
+              (fw_linear
+                (fw_swiglu
+                  (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                  (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+                (initPM 5920)))))).shape = [2048, 1024] := by
+    show (Tensor.mkShape (outShape2 _ _) _).shape = _
+    simp only [Tensor.mkShape, outShape2, h11609, hinner_add0]
+    decide
+  have hrms0 :
+      (fw_rms_norm
+        (fw_maybe_unshuffle (elemwiseAdd (initPM 11609)
+            (elemwiseAdd
+              (fw_all2all_moe_gmm (initPM 11613)
+                    ((fw_topk_routing (initPM 11621) 8 1).fst)
+                    ((fw_topk_routing (initPM 11621) 8 1).snd.fst)
+                    (initPM 11629) (initPM 11631) 64 0 32 8 ((((10 : Nat) : Scalar))))
+              (elemwiseMul
+                (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
+                (fw_view [2048, 1024]
+                  (fw_linear
+                    (fw_swiglu
+                      (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                      (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+                    (initPM 5920))))))
+          (initPM 5927) 2 0)
+        (initPM 5929)).shape = [2048, 1024] := by
+    rw [TrainVerify.Denote.fw_rms_norm_shape,
+        TrainVerify.Denote.fw_maybe_unshuffle_shape,
+        houter_add0]
+  have hL0 : _ = some 2048 := congrArg List.head? hrms0
+  have hfst0 : (fw_inner_chunk_ce _ (initPM 5931) (chunkPrimDimN 0 pm_goal_1.numRanks 0 (initPM 4678))
+      (((initPM 5931).shape.head?).getD 0) ((((0 : Nat) : Scalar)))).fst.shape = [2048] :=
+    TrainVerify.Denote.fw_inner_chunk_ce_fst_shape _ _ _ _ _ 2048 hL0
+  -- Rank 1 (uses initPM 11610/11614/11632 with different expert slice range):
+  have hgmm1 :
+      (fw_all2all_moe_gmm (initPM 11614)
+        ((fw_topk_routing (initPM 11622) 8 1).fst)
+        ((fw_topk_routing (initPM 11622) 8 1).snd.fst)
+        (initPM 11630) (initPM 11632) 64 32 64 8 ((((10 : Nat) : Scalar)))).shape
+        = [2048, 512] :=
+    TrainVerify.Denote.fw_all2all_moe_gmm_shape
+      _ _ _ _ _ _ _ _ _ _ 2048 512
+      (by rw [h11614]; rfl) (by rw [h11632]; decide)
+  have hmul1_shape :
+      (elemwiseMul
+        (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
+        (fw_view [2048, 1024]
+          (fw_linear
+            (fw_swiglu
+              (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+              (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+            (initPM 5920)))).shape = [2048, 1] := by
+    have hleft : (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906)))).shape = [2048, 1] := by
+      rw [TrainVerify.Denote.fw_sigmoid_shape]; rfl
+    have hright : (fw_view [2048, 1024]
+              (fw_linear
+                (fw_swiglu
+                  (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                  (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+                (initPM 5920))).shape = [2048, 1024] := rfl
+    show (Tensor.mkShape (outShape2 _ _) _).shape = _
+    simp only [Tensor.mkShape, outShape2, hleft, hright]
+    decide
+  have hinner_add1 :
+      (elemwiseAdd
+        (fw_all2all_moe_gmm (initPM 11614)
+              ((fw_topk_routing (initPM 11622) 8 1).fst)
+              ((fw_topk_routing (initPM 11622) 8 1).snd.fst)
+              (initPM 11630) (initPM 11632) 64 32 64 8 ((((10 : Nat) : Scalar))))
+        (elemwiseMul
+          (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
+          (fw_view [2048, 1024]
+            (fw_linear
+              (fw_swiglu
+                (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+              (initPM 5920))))).shape = [2048, 512] := by
+    show (Tensor.mkShape (outShape2 _ _) _).shape = _
+    simp only [Tensor.mkShape, outShape2, hgmm1, hmul1_shape]
+    decide
+  have houter_add1 :
+      (elemwiseAdd (initPM 11610)
+        (elemwiseAdd
+          (fw_all2all_moe_gmm (initPM 11614)
+                ((fw_topk_routing (initPM 11622) 8 1).fst)
+                ((fw_topk_routing (initPM 11622) 8 1).snd.fst)
+                (initPM 11630) (initPM 11632) 64 32 64 8 ((((10 : Nat) : Scalar))))
+          (elemwiseMul
+            (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
+            (fw_view [2048, 1024]
+              (fw_linear
+                (fw_swiglu
+                  (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                  (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+                (initPM 5920)))))).shape = [2048, 1024] := by
+    show (Tensor.mkShape (outShape2 _ _) _).shape = _
+    simp only [Tensor.mkShape, outShape2, h11610, hinner_add1]
+    decide
+  have hrms1 :
+      (fw_rms_norm
+        (fw_maybe_unshuffle (elemwiseAdd (initPM 11610)
+            (elemwiseAdd
+              (fw_all2all_moe_gmm (initPM 11614)
+                    ((fw_topk_routing (initPM 11622) 8 1).fst)
+                    ((fw_topk_routing (initPM 11622) 8 1).snd.fst)
+                    (initPM 11630) (initPM 11632) 64 32 64 8 ((((10 : Nat) : Scalar))))
+              (elemwiseMul
+                (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
+                (fw_view [2048, 1024]
+                  (fw_linear
+                    (fw_swiglu
+                      (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                      (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+                    (initPM 5920))))))
+          (initPM 5927) 2 1)
+        (initPM 5929)).shape = [2048, 1024] := by
+    rw [TrainVerify.Denote.fw_rms_norm_shape,
+        TrainVerify.Denote.fw_maybe_unshuffle_shape,
+        houter_add1]
+  have hL1 : _ = some 2048 := congrArg List.head? hrms1
+  have hfst1 : (fw_inner_chunk_ce _ (initPM 5931) (chunkPrimDimN 0 pm_goal_1.numRanks 1 (initPM 4678))
+      (((initPM 5931).shape.head?).getD 0) ((((0 : Nat) : Scalar)))).fst.shape = [2048] :=
+    TrainVerify.Denote.fw_inner_chunk_ce_fst_shape _ _ _ _ _ 2048 hL1
+  -- allGatherPrimDimN 0 2 0 [T0, T1] where T0.shape = [2048], T1.shape = [2048]:
+  -- output shape = [2048].set 0 (2048 * 2) = [4096]
+  rw [denote_pm_goal_1_4673]
+  have hpn : pm_goal_1.numRanks = 2 := rfl
+  rw [hpn]
+  -- Apply allGatherPrimDimN_shape with shardShape = [2048].
+  -- The first list element is a fw_inner_chunk_ce(...).fst whose shape is [2048] (by hfst0).
+  rw [allGatherPrimDimN_shape 0 2 _ [2048] (by
+    show (Option.map (fun (t : Tensor) => t.shape) (some _)).getD [] = [2048]
+    simp only [Option.map_some, Option.getD_some]
+    exact hfst0)]
+  decide
 
 theorem prove_goal_1 : goal_1_stmt_cut := by
   intro initSM initPM hSM hPM hInit
