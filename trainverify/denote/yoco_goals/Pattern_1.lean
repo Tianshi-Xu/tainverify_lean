@@ -1765,6 +1765,37 @@ axiom fw_view_allGather0_commute_2 (a b : Tensor) (sh_full sh_shard : Shape) :
     fw_view sh_full (allGatherPrimDimN 0 2 0 [a, b])
       = allGatherPrimDimN 0 2 0 [fw_view sh_shard a, fw_view sh_shard b]
 
+/-- 2-D fw_linear shape: `[b, i] × [o, i] → [b, o]`. -/
+private theorem fw_linear_2d_shape (b i o : Nat) (x w : Tensor)
+    (hx : x.shape = [b, i]) (hw : w.shape = [o, i]) :
+    (fw_linear x w).shape = [b, o] := by
+  rw [TrainVerify.Denote.fw_linear_is_matmul b i o x w hx hw]
+  rfl
+
+/-- Trivial: `fw_view` with the tensor's own shape is the identity. -/
+private theorem fw_view_self_eq (t : Tensor) (sh : Shape) (hsh : t.shape = sh) :
+    fw_view sh t = t := by
+  apply Tensor.ext
+  · show sh = t.shape; exact hsh.symm
+  · intro k hk
+    have hkt : k < prodShape t.shape := by rw [hsh]; exact hk
+    have hksh : k < prodShape sh := by rw [← hsh]; exact hkt
+    simp [fw_view, Tensor.mkShape, valAt, dif_pos hksh, dif_pos hkt]
+
+/-- fw_view commutes with dim-0 sharding — 2-shard version with shape-compatibility hypothesis.
+    Both a, b have shape [shard, H], sh_shard = [shard, H], sh_full = [shard*2, H]. -/
+theorem fw_view_allGather0_commute_2_of (a b : Tensor) (shard H : Nat)
+    (hshard : 0 < shard)
+    (ha : a.shape = [shard, H]) (hb : b.shape = [shard, H]) :
+    fw_view [shard * 2, H] (allGatherPrimDimN 0 2 0 [a, b])
+      = allGatherPrimDimN 0 2 0 [fw_view [shard, H] a, fw_view [shard, H] b] := by
+  rw [fw_view_self_eq a [shard, H] ha, fw_view_self_eq b [shard, H] hb]
+  have hhead_ab : (([a, b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [shard, H] := by
+    simp [ha]
+  have hG_shape : (allGatherPrimDimN 0 2 0 [a, b]).shape = [shard * 2, H] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [shard, H] hhead_ab]; simp [List.set, List.getD]
+  exact fw_view_self_eq (allGatherPrimDimN 0 2 0 [a, b]) [shard * 2, H] hG_shape
+
 /-- fw_topk_routing fst commutes with dim-0 sharding.
     VERIFIED-TRUE: softmax + topk_rank/inTopK/topkScoreSum all row-local (per input row l).
     Sharding on dim 0 splits rows independently, so per-row computations are preserved.
@@ -2257,13 +2288,29 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
     rw [fw_linear_allGather0_commute_2 (initPM 11613) (initPM 11614) (initPM 5906)]
     rw [fw_linear_allGather0_commute_2 (initPM 11613) (initPM 11614) (initPM 5911)]
     rw [fw_linear_allGather0_commute_2 (initPM 11613) (initPM 11614) (initPM 5915)]
-    -- Push through fw_view.
-    rw [fw_view_allGather0_commute_2 (fw_linear (initPM 11613) (initPM 5906))
-          (fw_linear (initPM 11614) (initPM 5906)) [4096, 1] [2048, 1]]
-    rw [fw_view_allGather0_commute_2 (fw_linear (initPM 11613) (initPM 5911))
-          (fw_linear (initPM 11614) (initPM 5911)) [4096, 512] [2048, 512]]
-    rw [fw_view_allGather0_commute_2 (fw_linear (initPM 11613) (initPM 5915))
-          (fw_linear (initPM 11614) (initPM 5915)) [4096, 512] [2048, 512]]
+    -- Push through fw_view. Use the proven `fw_view_allGather0_commute_2_of` with shape witnesses.
+    have h5906_shape : (initPM 5906).shape = [1, 1024] := hPM 5906 [1, 1024] rfl
+    have h5911_shape : (initPM 5911).shape = [512, 1024] := hPM 5911 [512, 1024] rfl
+    have h5915_shape : (initPM 5915).shape = [512, 1024] := hPM 5915 [512, 1024] rfl
+    have h5920_shape : (initPM 5920).shape = [1024, 512] := hPM 5920 [1024, 512] rfl
+    have hlin_5906_a : (fw_linear (initPM 11613) (initPM 5906)).shape = [2048, 1] :=
+      fw_linear_2d_shape 2048 1024 1 _ _ h11613_shape h5906_shape
+    have hlin_5906_b : (fw_linear (initPM 11614) (initPM 5906)).shape = [2048, 1] :=
+      fw_linear_2d_shape 2048 1024 1 _ _ (hPM 11614 [2048, 1024] rfl) h5906_shape
+    have hlin_5911_a : (fw_linear (initPM 11613) (initPM 5911)).shape = [2048, 512] :=
+      fw_linear_2d_shape 2048 1024 512 _ _ h11613_shape h5911_shape
+    have hlin_5911_b : (fw_linear (initPM 11614) (initPM 5911)).shape = [2048, 512] :=
+      fw_linear_2d_shape 2048 1024 512 _ _ (hPM 11614 [2048, 1024] rfl) h5911_shape
+    have hlin_5915_a : (fw_linear (initPM 11613) (initPM 5915)).shape = [2048, 512] :=
+      fw_linear_2d_shape 2048 1024 512 _ _ h11613_shape h5915_shape
+    have hlin_5915_b : (fw_linear (initPM 11614) (initPM 5915)).shape = [2048, 512] :=
+      fw_linear_2d_shape 2048 1024 512 _ _ (hPM 11614 [2048, 1024] rfl) h5915_shape
+    rw [fw_view_allGather0_commute_2_of (fw_linear (initPM 11613) (initPM 5906))
+          (fw_linear (initPM 11614) (initPM 5906)) 2048 1 (by omega) hlin_5906_a hlin_5906_b]
+    rw [fw_view_allGather0_commute_2_of (fw_linear (initPM 11613) (initPM 5911))
+          (fw_linear (initPM 11614) (initPM 5911)) 2048 512 (by omega) hlin_5911_a hlin_5911_b]
+    rw [fw_view_allGather0_commute_2_of (fw_linear (initPM 11613) (initPM 5915))
+          (fw_linear (initPM 11614) (initPM 5915)) 2048 512 (by omega) hlin_5915_a hlin_5915_b]
     -- Push through fw_sigmoid.
     have h_view_5906_shape : ∀ x : Tensor, (fw_view [2048, 1] x).shape = [2048, 1] := by
       intro x; unfold fw_view Tensor.mkShape; rfl
@@ -2291,14 +2338,28 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
                      (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
           (initPM 5920)]
     -- Push through fw_view (post-linear-5920).
-    rw [fw_view_allGather0_commute_2
+    have hswiglu_a_shape : (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                                       (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915)))).shape = [2048, 512] := by
+      rw [TrainVerify.Denote.fw_swiglu_shape]; rfl
+    have hswiglu_b_shape : (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                                       (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915)))).shape = [2048, 512] := by
+      rw [TrainVerify.Denote.fw_swiglu_shape]; rfl
+    have hlin_5920_a : (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                                              (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+                                   (initPM 5920)).shape = [2048, 1024] :=
+      fw_linear_2d_shape 2048 512 1024 _ _ hswiglu_a_shape h5920_shape
+    have hlin_5920_b : (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                                              (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+                                   (initPM 5920)).shape = [2048, 1024] :=
+      fw_linear_2d_shape 2048 512 1024 _ _ hswiglu_b_shape h5920_shape
+    rw [fw_view_allGather0_commute_2_of
           (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
                                 (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
                      (initPM 5920))
           (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
                                 (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
                      (initPM 5920))
-          [4096, 1024] [2048, 1024]]
+          2048 1024 (by omega) hlin_5920_a hlin_5920_b]
     -- Push through fw_mul.
     rw [fw_mul_allGather0_commute_2
           (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
