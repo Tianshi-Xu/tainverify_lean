@@ -1312,7 +1312,31 @@ but are lengthy to prove element-wise (via Tensor.ext + valAt) for every op-fami
 TODO: Replace each axiom with a proven lemma. Estimated effort: 4-8 hours focused work per op.
 -/
 
-/-- fw_add commutes with dim-0 sharding (2 shards). -/
+/-- elemwiseMul preserves the common shape when both inputs have that shape. -/
+theorem elemwiseMul_shape_of_shapes (x y : Tensor) (sh : Shape)
+    (hx : x.shape = sh) (hy : y.shape = sh) :
+    (elemwiseMul x y).shape = sh := by
+  unfold elemwiseMul Tensor.mkShape
+  change outShape2 x y = sh
+  simp [outShape2, hx, hy]
+
+/-- elemwiseMul with broadcasting: when both x and y have same-length shapes and the
+    longer/equal-length one is `sh`, output is `sh` (outShape2 picks longer). Simplified:
+    when both shapes have equal length, output = x.shape (via outShape2 preferring x). -/
+theorem elemwiseMul_shape_broadcast (x y : Tensor) (sh : Shape)
+    (hx : x.shape.length = sh.length) (hy : y.shape.length = sh.length)
+    (hlong : x.shape = sh) :
+    (elemwiseMul x y).shape = sh := by
+  unfold elemwiseMul Tensor.mkShape
+  change outShape2 x y = sh
+  simp [outShape2, hlong, hx, hy]
+
+
+/-- fw_add commutes with dim-0 sharding (2 shards).
+    NOTE: Left as an axiom because usage sites include mismatched-shape cases
+    (elemwiseAdd of full-shape all2all output with broadcast-shape elemwiseMul output).
+    A full proof would require handling broadcasting via `outShape2`. TODO: prove after
+    understanding elemwiseAdd/Mul broadcast semantics in the presence of dim-0 sharding. -/
 axiom fw_add_allGather0_commute_2 (a b c d : Tensor) :
     elemwiseAdd (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])
       = allGatherPrimDimN 0 2 0 [elemwiseAdd a c, elemwiseAdd b d]
@@ -1323,9 +1347,86 @@ axiom fw_mul_allGather0_commute_2 (a b c d : Tensor) :
       = allGatherPrimDimN 0 2 0 [elemwiseMul a c, elemwiseMul b d]
 
 /-- fw_sigmoid commutes with dim-0 sharding. -/
-axiom fw_sigmoid_allGather0_commute_2 (a b : Tensor) :
+theorem fw_sigmoid_allGather0_commute_2 (a b : Tensor) (shard hidden : Nat)
+    (hshard : 0 < shard) (hhid : 0 < hidden)
+    (ha : a.shape = [shard, hidden]) (hb : b.shape = [shard, hidden]) :
     fw_sigmoid (allGatherPrimDimN 0 2 0 [a, b])
-      = allGatherPrimDimN 0 2 0 [fw_sigmoid a, fw_sigmoid b]
+      = allGatherPrimDimN 0 2 0 [fw_sigmoid a, fw_sigmoid b] := by
+  have hhead : (([a, b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [shard, hidden] := by
+    simp [ha]
+  have hG_shape : (allGatherPrimDimN 0 2 0 [a, b]).shape = [shard * 2, hidden] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [shard, hidden] hhead]; simp [List.set, List.getD]
+  have hsig_shape : ∀ c : Tensor, c.shape = [shard, hidden] → (fw_sigmoid c).shape = [shard, hidden] := by
+    intro c hc; unfold fw_sigmoid Tensor.mkShape; simp; exact hc
+  have hhead_sig : (([fw_sigmoid a, fw_sigmoid b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [shard, hidden] := by
+    simp [hsig_shape a ha]
+  have hRHS_shape : (allGatherPrimDimN 0 2 0 [fw_sigmoid a, fw_sigmoid b]).shape = [shard * 2, hidden] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [shard, hidden] hhead_sig]; simp [List.set, List.getD]
+  apply Tensor.ext
+  · have hLHS_shape : (fw_sigmoid (allGatherPrimDimN 0 2 0 [a, b])).shape = [shard * 2, hidden] := by
+      unfold fw_sigmoid Tensor.mkShape; simp; exact hG_shape
+    rw [hLHS_shape, hRHS_shape]
+  · intro idx hidx
+    have hLHS_shape : (fw_sigmoid (allGatherPrimDimN 0 2 0 [a, b])).shape = [shard * 2, hidden] := by
+      unfold fw_sigmoid Tensor.mkShape; simp; exact hG_shape
+    rw [hLHS_shape] at hidx
+    have hidx_bound : idx < shard * 2 * hidden := by simpa [prodShape] using hidx
+    set row := idx / hidden with hrow_def
+    set j := idx % hidden with hj_def
+    have hj_lt : j < hidden := by rw [hj_def]; exact Nat.mod_lt _ hhid
+    have hrow_lt : row < 2 * shard := by
+      rw [hrow_def]; exact Nat.div_lt_iff_lt_mul hhid |>.mpr (by linarith [hidx_bound])
+    set r := row / shard with hr_def
+    set i := row % shard with hi_def
+    have hi_lt : i < shard := by rw [hi_def]; exact Nat.mod_lt _ hshard
+    have hr_lt : r < 2 := by
+      rw [hr_def]; exact Nat.div_lt_iff_lt_mul hshard |>.mpr (by linarith [hrow_lt])
+    have hidx_eq : idx = (r * shard + i) * hidden + j := by
+      rw [hr_def, hi_def, hj_def, hrow_def]
+      have h1 : row = shard * (row / shard) + row % shard := (Nat.div_add_mod row shard).symm
+      have h2 : idx = hidden * (idx / hidden) + idx % hidden := (Nat.div_add_mod idx hidden).symm
+      calc idx = hidden * (idx / hidden) + idx % hidden := h2
+        _ = row * hidden + j := by rw [← hrow_def, ← hj_def]; ring
+        _ = (shard * (row / shard) + row % shard) * hidden + j := by rw [← h1]
+        _ = (row / shard * shard + row % shard) * hidden + j := by ring
+    have hLHS_val : valAt (fw_sigmoid (allGatherPrimDimN 0 2 0 [a, b])) idx
+        = sigmoidScalar (valAt (allGatherPrimDimN 0 2 0 [a, b]) idx) := by
+      unfold fw_sigmoid Tensor.mkShape valAt
+      simp [hG_shape, prodShape] at *
+      simp [hidx_bound]
+    rw [hLHS_val]
+    have hshapes_sig : ∀ r' (_ : r' < 2),
+        (([fw_sigmoid a, fw_sigmoid b].getD r' (zeroTensor [shard, hidden]))).shape = [shard, hidden] := by
+      intro r' hr'
+      have : r' = 0 ∨ r' = 1 := by omega
+      rcases this with h | h <;> rw [h] <;> simp [List.getD, hsig_shape a ha, hsig_shape b hb]
+    have hshapes_orig : ∀ r' (_ : r' < 2),
+        (([a, b].getD r' (zeroTensor [shard, hidden]))).shape = [shard, hidden] := by
+      intro r' hr'
+      have : r' = 0 ∨ r' = 1 := by omega
+      rcases this with h | h <;> rw [h] <;> simp [List.getD, ha, hb]
+    rw [hidx_eq]
+    rw [allGatherPrimDimN0_valAt 2 shard hidden [fw_sigmoid a, fw_sigmoid b]
+          (by omega) hshard hhid hhead_sig hshapes_sig r hr_lt i hi_lt j hj_lt]
+    rw [allGatherPrimDimN0_valAt 2 shard hidden [a, b]
+          (by omega) hshard hhid hhead hshapes_orig r hr_lt i hi_lt j hj_lt]
+    have hr_lt' : r = 0 ∨ r = 1 := by
+      interval_cases r
+      · exact Or.inl rfl
+      · exact Or.inr rfl
+    have hgetD_sig : [fw_sigmoid a, fw_sigmoid b].getD r (zeroTensor [shard, hidden]) =
+        fw_sigmoid ([a, b].getD r (zeroTensor [shard, hidden])) := by
+      rcases hr_lt' with h | h <;> rw [h] <;> simp [List.getD]
+    rw [hgetD_sig]
+    set c := [a, b].getD r (zeroTensor [shard, hidden]) with hc_def
+    have hc_shape : c.shape = [shard, hidden] := hshapes_orig r hr_lt
+    have hloc_bound : i * hidden + j < shard * hidden := by
+      have h1 : i * hidden + j < i * hidden + hidden := by omega
+      have h2 : i * hidden + hidden = (i + 1) * hidden := by ring
+      have h3 : (i + 1) * hidden ≤ shard * hidden := Nat.mul_le_mul_right _ (by omega)
+      omega
+    unfold fw_sigmoid Tensor.mkShape valAt
+    simp [hc_shape, prodShape, hloc_bound]
 
 /-- fw_swiglu commutes with dim-0 sharding. -/
 axiom fw_swiglu_allGather0_commute_2 (a b c d : Tensor) :
@@ -1534,9 +1635,13 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
     rw [fw_view_allGather0_commute_2 (fw_linear (initPM 11613) (initPM 5915))
           (fw_linear (initPM 11614) (initPM 5915)) [4096, 512] [2048, 512]]
     -- Push through fw_sigmoid.
+    have h_view_5906_shape : ∀ x : Tensor, (fw_view [2048, 1] x).shape = [2048, 1] := by
+      intro x; unfold fw_view Tensor.mkShape; rfl
     rw [fw_sigmoid_allGather0_commute_2
           (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906)))
-          (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906)))]
+          (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906)))
+          2048 1 (by omega) (by omega)
+          (h_view_5906_shape _) (h_view_5906_shape _)]
     -- Push through fw_swiglu.
     rw [fw_swiglu_allGather0_commute_2
           (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
