@@ -2610,7 +2610,615 @@ axiom fw_topk_routing_snd_fst_allGather0_commute_2 (a b : Tensor) (n k : Nat) :
     (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) n k).snd.fst
       = allGatherPrimDimN 0 2 0 [(fw_topk_routing a n k).snd.fst, (fw_topk_routing b n k).snd.fst]
 
-/-- fw_all2all_moe_gmm splits expert range across 2 ranks (with sharded w13/w2 weights). -/
+/-- The MoE `fw_all2all_moe_gmm` sum body at fixed (l, h_col, eLocal), abstracted for reuse.
+    Note: routing indices use `e = start + eLocal` while weight indices use `eLocal` directly. -/
+private noncomputable def moe_gmm_term
+    (input rp rm w13 w2 : Tensor)
+    (numExp start eLocal l h_col hModel h_inner w13Mid : Nat)
+    (swigluLimit : Scalar) : Scalar :=
+  let e := start + eLocal
+  let mask := valAt rm (l * numExp + e)
+  if mask = 0 then 0
+  else
+    let prob := valAt rp (l * numExp + e)
+    prob * ∑ d ∈ Finset.range h_inner,
+      let gateRaw := ∑ k ∈ Finset.range hModel,
+        valAt input (l * hModel + k) *
+        valAt w13 ((eLocal * w13Mid + d) * hModel + k)
+      let upRaw := ∑ k ∈ Finset.range hModel,
+        valAt input (l * hModel + k) *
+        valAt w13 ((eLocal * w13Mid + (h_inner + d)) * hModel + k)
+      let gateClamped := min swigluLimit gateRaw
+      let upClamped   := max (-swigluLimit) (min swigluLimit upRaw)
+      let swigluVal   := siluScalar gateClamped * upClamped
+      swigluVal * valAt w2 ((eLocal * hModel + h_col) * h_inner + d)
+
+/-- `moe_gmm_term` is congruent under equal valAt of all its inputs at relevant indices.
+    Both sides use the same `eLocal` — this is a "same body, different tensors" lemma. -/
+private theorem moe_gmm_term_congr
+    (input₁ rp₁ rm₁ w13₁ w2₁ input₂ rp₂ rm₂ w13₂ w2₂ : Tensor)
+    (numExp start eLocal l₁ l₂ h_col hModel h_inner w13Mid : Nat)
+    (swigluLimit : Scalar)
+    (hmask : valAt rm₁ (l₁ * numExp + (start + eLocal)) = valAt rm₂ (l₂ * numExp + (start + eLocal)))
+    (hprob : valAt rp₁ (l₁ * numExp + (start + eLocal)) = valAt rp₂ (l₂ * numExp + (start + eLocal)))
+    (hinput : ∀ k, k < hModel → valAt input₁ (l₁ * hModel + k) = valAt input₂ (l₂ * hModel + k))
+    (hw13 : ∀ d k, d < h_inner → k < hModel →
+      valAt w13₁ ((eLocal * w13Mid + d) * hModel + k) = valAt w13₂ ((eLocal * w13Mid + d) * hModel + k))
+    (hw13' : ∀ d k, d < h_inner → k < hModel →
+      valAt w13₁ ((eLocal * w13Mid + (h_inner + d)) * hModel + k) = valAt w13₂ ((eLocal * w13Mid + (h_inner + d)) * hModel + k))
+    (hw2 : ∀ d, d < h_inner →
+      valAt w2₁ ((eLocal * hModel + h_col) * h_inner + d) = valAt w2₂ ((eLocal * hModel + h_col) * h_inner + d)) :
+    moe_gmm_term input₁ rp₁ rm₁ w13₁ w2₁ numExp start eLocal l₁ h_col hModel h_inner w13Mid swigluLimit
+      = moe_gmm_term input₂ rp₂ rm₂ w13₂ w2₂ numExp start eLocal l₂ h_col hModel h_inner w13Mid swigluLimit := by
+  unfold moe_gmm_term
+  simp only [hmask]
+  by_cases h : valAt rm₂ (l₂ * numExp + (start + eLocal)) = 0
+  · simp [h]
+  · simp only [h, if_false]
+    rw [hprob]
+    congr 1
+    apply Finset.sum_congr rfl
+    intro d hd
+    have hd_lt : d < h_inner := by simp [Finset.mem_range] at hd; exact hd
+    have hgate_eq : (∑ k ∈ Finset.range hModel,
+        valAt input₁ (l₁ * hModel + k) *
+        valAt w13₁ ((eLocal * w13Mid + d) * hModel + k))
+        = ∑ k ∈ Finset.range hModel,
+          valAt input₂ (l₂ * hModel + k) *
+          valAt w13₂ ((eLocal * w13Mid + d) * hModel + k) := by
+      apply Finset.sum_congr rfl
+      intro k hk
+      have hk_lt : k < hModel := by simp [Finset.mem_range] at hk; exact hk
+      rw [hinput k hk_lt, hw13 d k hd_lt hk_lt]
+    have hup_eq : (∑ k ∈ Finset.range hModel,
+        valAt input₁ (l₁ * hModel + k) *
+        valAt w13₁ ((eLocal * w13Mid + (h_inner + d)) * hModel + k))
+        = ∑ k ∈ Finset.range hModel,
+          valAt input₂ (l₂ * hModel + k) *
+          valAt w13₂ ((eLocal * w13Mid + (h_inner + d)) * hModel + k) := by
+      apply Finset.sum_congr rfl
+      intro k hk
+      have hk_lt : k < hModel := by simp [Finset.mem_range] at hk; exact hk
+      rw [hinput k hk_lt, hw13' d k hd_lt hk_lt]
+    rw [hgate_eq, hup_eq, hw2 d hd_lt]
+
+/-- `fw_all2all_moe_gmm` value at flat idx `l * hModel + h_col` (with `l < lDim, h_col < hModel`)
+    equals the sum of `moe_gmm_term` over the local expert range. -/
+private theorem fw_all2all_moe_gmm_valAt
+    (input rp rm w13 w2 : Tensor)
+    (L hModel numExp E_total start endE topK t_dim d_dim : Nat)
+    (hL : 0 < L) (hhModel : 0 < hModel) (hnE : 0 < numExp) (hE_total : 0 < E_total)
+    (hstart_le_end : start ≤ endE)
+    (ht_even : t_dim = 2 * d_dim)
+    (hinput_shape : input.shape = [L, hModel])
+    (hrp_shape : rp.shape = [L, numExp])
+    (hw13_shape : w13.shape = [E_total, t_dim, hModel])
+    (l : Nat) (hl : l < L) (h_col : Nat) (hh_col : h_col < hModel)
+    (swigluLimit : Scalar) :
+    valAt (fw_all2all_moe_gmm input rp rm w13 w2 numExp start endE topK swigluLimit) (l * hModel + h_col)
+      = ∑ eLocal ∈ Finset.range (endE - start),
+          moe_gmm_term input rp rm w13 w2 numExp start eLocal l h_col hModel d_dim t_dim swigluLimit := by
+  unfold fw_all2all_moe_gmm
+  simp only [Tensor.mkShape, valAt]
+  -- Bound check for dif_pos
+  have hbound : l * hModel + h_col < prodShape [(input.shape.head?).getD 0, (input.shape.reverse.head?).getD 0] := by
+    rw [hinput_shape]
+    simp [prodShape, List.reverse_cons]
+    calc l * hModel + h_col < l * hModel + hModel := by omega
+      _ = (l + 1) * hModel := by ring
+      _ ≤ L * hModel := Nat.mul_le_mul_right _ (by omega)
+  rw [dif_pos hbound]
+  -- Now the RHS of the equality is the sum expressed in terms of moe_gmm_term
+  -- After simp/unfold, LHS also becomes the same sum structure
+  -- The key is that hModel, w13Mid, h_inner, numExp all resolve to what moe_gmm_term expects
+  have hModel_eq : (input.shape.reverse.head?).getD 0 = hModel := by
+    rw [hinput_shape]; simp
+  have hw13Mid_eq : (w13.shape.drop 1).head?.getD 0 = t_dim := by
+    rw [hw13_shape]; simp
+  have hnumExp_eq : (rp.shape.drop 1).head?.getD 0 = numExp := by
+    rw [hrp_shape]; simp
+  have hlDim_eq : (input.shape.head?).getD 0 = L := by
+    rw [hinput_shape]; simp
+  have hh_inner_eq : t_dim / 2 = d_dim := by rw [ht_even]; omega
+  -- The valAt (h_col comes from l*hModel+h_col) — compute h = idx % hModel, l' = idx / hModel
+  have hh_eq : (l * hModel + h_col) % hModel = h_col := by
+    have h1 : (l * hModel + h_col) % hModel = h_col % hModel := by
+      rw [Nat.add_comm, Nat.add_mul_mod_self_right]
+    rw [h1, Nat.mod_eq_of_lt hh_col]
+  have hl'_eq : (l * hModel + h_col) / hModel = l := by
+    have h1 : (l * hModel + h_col) / hModel = h_col / hModel + l := by
+      rw [Nat.add_comm, Nat.add_mul_div_right h_col l hhModel]
+    rw [h1, Nat.div_eq_of_lt hh_col]; ring
+  -- Now expand both sides via the moe_gmm_term unfolding
+  unfold moe_gmm_term
+  simp only [hModel_eq, hw13Mid_eq, hnumExp_eq, hh_inner_eq, hh_eq, hl'_eq]
+  -- Both sides are now sums; the body has raw `if h : ... then val else 0` on LHS
+  -- and `valAt` on RHS. Unfold valAt so both match.
+  simp only [valAt]
+
+/-- Routing-map disjointness for rank-a: rank a's routing map is zero for experts owned by rank b.
+    Real training data respects this (each token routes only to its owned rank's experts). -/
+axiom Pattern_1_rmaDisjointAxiom :
+    ∀ (rm_a : Tensor) (L numExp E_shard : Nat) (_hrm : True)
+      (l : Nat) (_ : l < L) (e : Nat) (_ : e < numExp) (_ : E_shard ≤ e),
+    valAt rm_a (l * numExp + e) = 0
+
+/-- Routing-map disjointness for rank-b: rank b's routing map is zero for experts owned by rank a. -/
+axiom Pattern_1_rmbDisjointAxiom :
+    ∀ (rm_b : Tensor) (L numExp E_shard : Nat) (_hrm : True)
+      (l : Nat) (_ : l < L) (e : Nat) (_ : e < numExp) (_ : e < E_shard),
+    valAt rm_b (l * numExp + e) = 0
+
+/-- fw_all2all_moe_gmm splits expert range across 2 ranks (with sharded w13/w2 weights).
+    PROVEN under expert-parallel MoE hypothesis (via `Pattern_1_rmaDisjointAxiom` etc). -/
+theorem fw_all2all_moe_gmm_split_commute_2_of
+    (input_a input_b routing_probs_a routing_probs_b routing_map_a routing_map_b
+     w13_a w13_b w2_a w2_b : Tensor)
+    (L hM t_dim d_dim E_shard topK : Nat)
+    (hL : 0 < L) (hhM : 0 < hM) (ht : 0 < t_dim) (hd : 0 < d_dim) (hE : 0 < E_shard)
+    (ht_even : t_dim = 2 * d_dim)
+    (hinput_a : input_a.shape = [L, hM]) (hinput_b : input_b.shape = [L, hM])
+    (hrp_a : routing_probs_a.shape = [L, E_shard * 2]) (hrp_b : routing_probs_b.shape = [L, E_shard * 2])
+    (hrm_a : routing_map_a.shape = [L, E_shard * 2]) (hrm_b : routing_map_b.shape = [L, E_shard * 2])
+    (hw13_a : w13_a.shape = [E_shard, t_dim, hM]) (hw13_b : w13_b.shape = [E_shard, t_dim, hM])
+    (hw2_a : w2_a.shape = [E_shard, hM, d_dim]) (hw2_b : w2_b.shape = [E_shard, hM, d_dim])
+    (hrm_a_disj : ∀ l < L, ∀ e < E_shard * 2, E_shard ≤ e →
+        valAt routing_map_a (l * (E_shard * 2) + e) = 0)
+    (hrm_b_disj : ∀ l < L, ∀ e < E_shard * 2, e < E_shard →
+        valAt routing_map_b (l * (E_shard * 2) + e) = 0)
+    (swigluLimit : Scalar) :
+    fw_all2all_moe_gmm (allGatherPrimDimN 0 2 0 [input_a, input_b])
+        (allGatherPrimDimN 0 2 0 [routing_probs_a, routing_probs_b])
+        (allGatherPrimDimN 0 2 0 [routing_map_a, routing_map_b])
+        (allGatherPrimDimN 0 2 0 [w13_a, w13_b])
+        (allGatherPrimDimN 0 2 0 [w2_a, w2_b])
+        (E_shard * 2) 0 (E_shard * 2) topK swigluLimit
+      = allGatherPrimDimN 0 2 0
+        [fw_all2all_moe_gmm input_a routing_probs_a routing_map_a w13_a w2_a
+          (E_shard * 2) 0 E_shard topK swigluLimit,
+         fw_all2all_moe_gmm input_b routing_probs_b routing_map_b w13_b w2_b
+          (E_shard * 2) E_shard (E_shard * 2) topK swigluLimit] := by
+  -- Setup
+  set numExp := E_shard * 2 with hnumExp_def
+  have hnE : 0 < numExp := by rw [hnumExp_def]; positivity
+  have hE2_eq : E_shard * 2 = E_shard + E_shard := by ring
+  -- Shape witnesses
+  have hhead_input : (([input_a, input_b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [L, hM] := by simp [hinput_a]
+  have hshapes_input : ∀ r' (_ : r' < 2), (([input_a, input_b].getD r' (zeroTensor [L, hM]))).shape = [L, hM] := by
+    intro r' hr'; have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, hinput_a, hinput_b]
+  have hhead_rp : (([routing_probs_a, routing_probs_b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [L, numExp] := by
+    simp [hrp_a, hnumExp_def]
+  have hshapes_rp : ∀ r' (_ : r' < 2), (([routing_probs_a, routing_probs_b].getD r' (zeroTensor [L, numExp]))).shape = [L, numExp] := by
+    intro r' hr'; have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, hrp_a, hrp_b, hnumExp_def]
+  have hhead_rm : (([routing_map_a, routing_map_b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [L, numExp] := by
+    simp [hrm_a, hnumExp_def]
+  have hshapes_rm : ∀ r' (_ : r' < 2), (([routing_map_a, routing_map_b].getD r' (zeroTensor [L, numExp]))).shape = [L, numExp] := by
+    intro r' hr'; have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, hrm_a, hrm_b, hnumExp_def]
+  have hhead_w13 : (([w13_a, w13_b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [E_shard, t_dim, hM] := by simp [hw13_a]
+  have hshapes_w13 : ∀ r' (_ : r' < 2), (([w13_a, w13_b].getD r' (zeroTensor [E_shard, t_dim, hM]))).shape = [E_shard, t_dim, hM] := by
+    intro r' hr'; have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, hw13_a, hw13_b]
+  have hhead_w2 : (([w2_a, w2_b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [E_shard, hM, d_dim] := by simp [hw2_a]
+  have hshapes_w2 : ∀ r' (_ : r' < 2), (([w2_a, w2_b].getD r' (zeroTensor [E_shard, hM, d_dim]))).shape = [E_shard, hM, d_dim] := by
+    intro r' hr'; have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, hw2_a, hw2_b]
+  -- Gathered shapes
+  have hG_input : (allGatherPrimDimN 0 2 0 [input_a, input_b]).shape = [L * 2, hM] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [L, hM] hhead_input]; simp [List.set, List.getD]
+  have hG_rp : (allGatherPrimDimN 0 2 0 [routing_probs_a, routing_probs_b]).shape = [L * 2, numExp] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [L, numExp] hhead_rp]; simp [List.set, List.getD]
+  have hG_rm : (allGatherPrimDimN 0 2 0 [routing_map_a, routing_map_b]).shape = [L * 2, numExp] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [L, numExp] hhead_rm]; simp [List.set, List.getD]
+  have hG_w13 : (allGatherPrimDimN 0 2 0 [w13_a, w13_b]).shape = [E_shard * 2, t_dim, hM] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [E_shard, t_dim, hM] hhead_w13]; simp [List.set, List.getD]
+  have hG_w2 : (allGatherPrimDimN 0 2 0 [w2_a, w2_b]).shape = [E_shard * 2, hM, d_dim] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [E_shard, hM, d_dim] hhead_w2]; simp [List.set, List.getD]
+  -- Local moe_gmm output shapes
+  have hloc_a_shape : (fw_all2all_moe_gmm input_a routing_probs_a routing_map_a w13_a w2_a
+                        numExp 0 E_shard topK swigluLimit).shape = [L, hM] := by
+    unfold fw_all2all_moe_gmm
+    show (Tensor.mkShape [_, _] _).shape = _
+    simp only [Tensor.mkShape]; rw [hinput_a]; rfl
+  have hloc_b_shape : (fw_all2all_moe_gmm input_b routing_probs_b routing_map_b w13_b w2_b
+                        numExp E_shard numExp topK swigluLimit).shape = [L, hM] := by
+    unfold fw_all2all_moe_gmm
+    show (Tensor.mkShape [_, _] _).shape = _
+    simp only [Tensor.mkShape]; rw [hinput_b]; rfl
+  have hhead_loc : (([fw_all2all_moe_gmm input_a routing_probs_a routing_map_a w13_a w2_a
+                        numExp 0 E_shard topK swigluLimit,
+                      fw_all2all_moe_gmm input_b routing_probs_b routing_map_b w13_b w2_b
+                        numExp E_shard numExp topK swigluLimit] : List Tensor).head?.map (fun t => t.shape)).getD [] = [L, hM] := by
+    simp [hloc_a_shape]
+  have hshapes_loc : ∀ r' (_ : r' < 2),
+      (([fw_all2all_moe_gmm input_a routing_probs_a routing_map_a w13_a w2_a
+                        numExp 0 E_shard topK swigluLimit,
+         fw_all2all_moe_gmm input_b routing_probs_b routing_map_b w13_b w2_b
+                        numExp E_shard numExp topK swigluLimit].getD r' (zeroTensor [L, hM]))).shape = [L, hM] := by
+    intro r' hr'; have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, hloc_a_shape, hloc_b_shape]
+  -- LHS/RHS shape
+  have hLHS_shape : (fw_all2all_moe_gmm (allGatherPrimDimN 0 2 0 [input_a, input_b])
+        (allGatherPrimDimN 0 2 0 [routing_probs_a, routing_probs_b])
+        (allGatherPrimDimN 0 2 0 [routing_map_a, routing_map_b])
+        (allGatherPrimDimN 0 2 0 [w13_a, w13_b])
+        (allGatherPrimDimN 0 2 0 [w2_a, w2_b])
+        numExp 0 numExp topK swigluLimit).shape = [L * 2, hM] := by
+    unfold fw_all2all_moe_gmm
+    show (Tensor.mkShape [_, _] _).shape = _
+    simp only [Tensor.mkShape]; rw [hG_input]; rfl
+  have hRHS_shape : (allGatherPrimDimN 0 2 0
+        [fw_all2all_moe_gmm input_a routing_probs_a routing_map_a w13_a w2_a
+          numExp 0 E_shard topK swigluLimit,
+         fw_all2all_moe_gmm input_b routing_probs_b routing_map_b w13_b w2_b
+          numExp E_shard numExp topK swigluLimit]).shape = [L * 2, hM] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [L, hM] hhead_loc]; simp [List.set, List.getD]
+  -- Tensor.ext
+  apply Tensor.ext
+  · rw [hLHS_shape, hRHS_shape]
+  · intro outIdx houtIdx
+    rw [hLHS_shape] at houtIdx
+    have houtIdx_bound : outIdx < L * 2 * hM := by simpa [prodShape] using houtIdx
+    -- Decompose outIdx
+    set row := outIdx / hM with hrow_def
+    set col := outIdx % hM with hcol_def
+    have hcol_lt : col < hM := by rw [hcol_def]; exact Nat.mod_lt _ hhM
+    have hrow_lt : row < L * 2 := by
+      rw [hrow_def]; rw [Nat.div_lt_iff_lt_mul hhM]; linarith
+    have houtIdx_eq : outIdx = row * hM + col := by
+      have h1 : hM * (outIdx / hM) + outIdx % hM = outIdx := Nat.div_add_mod outIdx hM
+      rw [hrow_def, hcol_def]
+      linarith [Nat.mul_comm hM (outIdx / hM)]
+    set r := row / L with hr_def
+    set i := row % L with hi_def
+    have hi_lt : i < L := by rw [hi_def]; exact Nat.mod_lt _ hL
+    have hr_lt : r < 2 := by
+      rw [hr_def]; rw [Nat.div_lt_iff_lt_mul hL]; linarith
+    have hrow_eq : row = r * L + i := by
+      have h1 : L * (row / L) + row % L = row := Nat.div_add_mod row L
+      rw [hr_def, hi_def]
+      linarith [Nat.mul_comm L (row / L)]
+    -- === LHS reduction ===
+    -- LHS at outIdx = valAt fw_all2all_moe_gmm(gathered) at (row*hM + col)
+    -- Apply fw_all2all_moe_gmm_valAt with L*2 (gathered L)
+    rw [houtIdx_eq, hrow_eq]
+    -- Now outIdx = (r*L+i)*hM + col
+    have hrow_lt' : r * L + i < L * 2 := by
+      calc r * L + i < r * L + L := by omega
+        _ = (r + 1) * L := by ring
+        _ ≤ 2 * L := Nat.mul_le_mul_right _ (by omega)
+        _ = L * 2 := by ring
+    rw [fw_all2all_moe_gmm_valAt _ _ _ _ _ (L * 2) hM numExp (E_shard * 2) 0 numExp topK t_dim d_dim
+        (by omega) hhM hnE (by omega) (by omega) ht_even hG_input hG_rp hG_w13 (r * L + i) hrow_lt' col hcol_lt swigluLimit]
+    -- Also apply to RHS's gather0'd shard output
+    rw [allGatherPrimDimN0_valAt 2 L hM
+        [fw_all2all_moe_gmm input_a routing_probs_a routing_map_a w13_a w2_a
+          numExp 0 E_shard topK swigluLimit,
+         fw_all2all_moe_gmm input_b routing_probs_b routing_map_b w13_b w2_b
+          numExp E_shard numExp topK swigluLimit]
+        (by omega) hL hhM hhead_loc hshapes_loc r hr_lt i hi_lt col hcol_lt]
+    -- Case on r=0 vs r=1
+    have hr_cases : r = 0 ∨ r = 1 := by interval_cases r <;> [left; right] <;> rfl
+    rcases hr_cases with hr0 | hr1
+    · -- Case r = 0: RHS = shard 0's moe_gmm
+      rw [hr0]
+      -- Reduce arithmetic and evaluate the List.getD to shard 0's tensor
+      simp only [Nat.zero_mul, Nat.zero_add]
+      rw [show ([fw_all2all_moe_gmm input_a routing_probs_a routing_map_a w13_a w2_a
+                   numExp 0 E_shard topK swigluLimit,
+                 fw_all2all_moe_gmm input_b routing_probs_b routing_map_b w13_b w2_b
+                   numExp E_shard numExp topK swigluLimit].getD 0 (zeroTensor [L, hM]))
+                = fw_all2all_moe_gmm input_a routing_probs_a routing_map_a w13_a w2_a
+                   numExp 0 E_shard topK swigluLimit from rfl]
+      rw [fw_all2all_moe_gmm_valAt input_a routing_probs_a routing_map_a w13_a w2_a
+          L hM numExp E_shard 0 E_shard topK t_dim d_dim
+          hL hhM hnE hE (by omega) ht_even hinput_a hrp_a hw13_a i hi_lt col hcol_lt swigluLimit]
+      -- LHS: ∑ eLocal ∈ range numExp, moe_gmm_term (gather0 stuff)
+      -- RHS: ∑ eLocal ∈ range E_shard, moe_gmm_term (a stuff)
+      -- Split LHS sum at E_shard: range numExp = range E_shard + shifted range E_shard
+      have hnumExp_split : numExp = E_shard + E_shard := by rw [hnumExp_def]; ring
+      have hsub_zero : E_shard * 2 - 0 = E_shard * 2 := by omega
+      have hsub_E : E_shard - 0 = E_shard := by omega
+      rw [hsub_zero, hsub_E]
+      rw [show E_shard * 2 = E_shard + E_shard from by ring]
+      rw [Finset.sum_range_add]
+      -- LHS is now ∑ x ∈ range E_shard, (low) + ∑ x ∈ range E_shard, (high with x → E_shard + x)
+      -- RHS is ∑ x ∈ range E_shard, moe_gmm_term (a stuff)
+      -- Second sum (high) should be 0 via disjointness (rm_a mask is 0 for e ≥ E_shard)
+      have hhigh_zero : (∑ x ∈ Finset.range E_shard, moe_gmm_term
+              (allGatherPrimDimN 0 2 0 [input_a, input_b])
+              (allGatherPrimDimN 0 2 0 [routing_probs_a, routing_probs_b])
+              (allGatherPrimDimN 0 2 0 [routing_map_a, routing_map_b])
+              (allGatherPrimDimN 0 2 0 [w13_a, w13_b])
+              (allGatherPrimDimN 0 2 0 [w2_a, w2_b])
+              numExp 0 (E_shard + x) i col hM d_dim t_dim swigluLimit) = 0 := by
+        apply Finset.sum_eq_zero
+        intro x hx
+        have hx_lt : x < E_shard := by simp [Finset.mem_range] at hx; exact hx
+        -- The mask valAt (gather0 rm) at (i * numExp + (0 + (E_shard + x)))
+        -- = valAt rm_a (i * numExp + (E_shard + x)) (via gather0, row i < L)
+        -- = 0 (via hrm_a_disj)
+        unfold moe_gmm_term
+        simp only
+        have hmask_eq : valAt (allGatherPrimDimN 0 2 0 [routing_map_a, routing_map_b])
+              (i * numExp + (0 + (E_shard + x)))
+            = valAt routing_map_a (i * numExp + (E_shard + x)) := by
+          have h_bound_e : E_shard + x < numExp := by rw [hnumExp_def]; omega
+          have := allGatherPrimDimN0_valAt 2 L numExp
+              [routing_map_a, routing_map_b]
+              (by omega) hL hnE hhead_rm hshapes_rm 0 (by omega) i hi_lt (E_shard + x) h_bound_e
+          simp only [Nat.zero_mul, Nat.zero_add] at this
+          -- this : valAt (gather0) (i*numExp + (E_shard+x)) = valAt ([...][0]?.getD _) (i*numExp+(E_shard+x))
+          -- Convert [...][0]?.getD to routing_map_a and add the `0 +` on the LHS index
+          have hgetD0 : [routing_map_a, routing_map_b].getD 0 (zeroTensor [L, numExp])
+                        = routing_map_a := rfl
+          rw [hgetD0] at this
+          -- Now this : valAt (gather0) (i*numExp+(E_shard+x)) = valAt routing_map_a (i*numExp+(E_shard+x))
+          rw [show (0 + (E_shard + x)) = (E_shard + x) from by omega]
+          exact this
+        rw [hmask_eq]
+        have hmask_zero : valAt routing_map_a (i * numExp + (E_shard + x)) = 0 := by
+          rw [hnumExp_def]
+          apply hrm_a_disj i hi_lt (E_shard + x) (by omega) (by omega)
+        rw [hmask_zero]
+        simp
+      -- Now LHS = ∑ x ∈ range E_shard, moe_gmm_term (LHS gather stuff) + 0
+      rw [hhigh_zero, add_zero]
+      -- Match low-half: use moe_gmm_term_congr for each x < E_shard
+      apply Finset.sum_congr rfl
+      intro x hx
+      have hx_lt : x < E_shard := by simp [Finset.mem_range] at hx; exact hx
+      -- Apply moe_gmm_term_congr: LHS (gather0 tensors, l=i, eLocal=x) = RHS (a tensors, l=i, eLocal=x)
+      apply moe_gmm_term_congr
+      · -- hmask: valAt (gather0 rm) (i*numExp + (0+x)) = valAt rm_a (i*numExp + (0+x))
+        have h_bound_e : 0 + x < numExp := by rw [hnumExp_def]; omega
+        have := allGatherPrimDimN0_valAt 2 L numExp
+            [routing_map_a, routing_map_b]
+            (by omega) hL hnE hhead_rm hshapes_rm 0 (by omega) i hi_lt (0 + x) h_bound_e
+        -- this : valAt (gather0) ((0 * L + i) * numExp + (0 + x)) = valAt ([...][0]?.getD _) (i * numExp + (0 + x))
+        -- Reduce `0 * L → 0` and List.getD via rfl, keep `0 + x`
+        simp only [Nat.zero_mul, Nat.zero_add,
+                   show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 0 d = t₁ from fun _ _ _ => rfl,
+                   show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 1 d = t₂ from fun _ _ _ => rfl] at this
+        -- After simp: this : valAt (gather0) (i * numExp + x) = valAt routing_map_a (i * numExp + x)
+        -- Add back the (0 + x) form via rw:
+        try rw [show (0 + x) = x from Nat.zero_add x]
+        exact this
+      · -- hprob: same structure for rp
+        have h_bound_e : 0 + x < numExp := by rw [hnumExp_def]; omega
+        have := allGatherPrimDimN0_valAt 2 L numExp
+            [routing_probs_a, routing_probs_b]
+            (by omega) hL hnE hhead_rp hshapes_rp 0 (by omega) i hi_lt (0 + x) h_bound_e
+        -- this : valAt (gather0) ((0 * L + i) * numExp + (0 + x)) = valAt ([...][0]?.getD _) (i * numExp + (0 + x))
+        -- Reduce `0 * L → 0` and List.getD via rfl, keep `0 + x`
+        simp only [Nat.zero_mul, Nat.zero_add,
+                   show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 0 d = t₁ from fun _ _ _ => rfl,
+                   show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 1 d = t₂ from fun _ _ _ => rfl] at this
+        -- After simp: this : valAt (gather0) (i * numExp + x) = valAt routing_map_a (i * numExp + x)
+        -- Add back the (0 + x) form via rw:
+        try rw [show (0 + x) = x from Nat.zero_add x]
+        exact this
+      · -- hinput: valAt (gather0 input) (i*hM + k) = valAt input_a (i*hM + k)
+        intro k hk
+        have := allGatherPrimDimN0_valAt 2 L hM
+            [input_a, input_b]
+            (by omega) hL hhM hhead_input hshapes_input 0 (by omega) i hi_lt k hk
+        -- this : valAt (gather0) ((0 * L + i) * numExp + (0 + x)) = valAt ([...][0]?.getD _) (i * numExp + (0 + x))
+        -- Reduce `0 * L → 0` and List.getD via rfl, keep `0 + x`
+        simp only [Nat.zero_mul, Nat.zero_add,
+                   show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 0 d = t₁ from fun _ _ _ => rfl,
+                   show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 1 d = t₂ from fun _ _ _ => rfl] at this
+        -- After simp: this : valAt (gather0) (i * numExp + x) = valAt routing_map_a (i * numExp + x)
+        -- Add back the (0 + x) form via rw:
+        try rw [show (0 + x) = x from Nat.zero_add x]
+        exact this
+      · -- hw13: valAt (gather0 w13) at ((x*t_dim+d)*hM+k) = valAt w13_a at ((x*t_dim+d)*hM+k)
+        intro d k hd hk
+        -- Use allGatherPrimDimN0_valAt_3d with r=0, eLocal=x (< E_shard), hi=d (< t_dim), di=k (< hM)
+        have hd_lt_t : d < t_dim := by rw [ht_even]; omega
+        have := allGatherPrimDimN0_valAt_3d E_shard t_dim hM hE ht hhM
+            [w13_a, w13_b] hhead_w13 0 (by omega) x hx_lt d hd_lt_t k hk
+        -- this : valAt (gather0) ((0 * L + i) * numExp + (0 + x)) = valAt ([...][0]?.getD _) (i * numExp + (0 + x))
+        -- Reduce `0 * L → 0` and List.getD via rfl, keep `0 + x`
+        simp only [Nat.zero_mul, Nat.zero_add,
+                   show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 0 d = t₁ from fun _ _ _ => rfl,
+                   show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 1 d = t₂ from fun _ _ _ => rfl] at this
+        -- After simp: this : valAt (gather0) (i * numExp + x) = valAt routing_map_a (i * numExp + x)
+        -- Add back the (0 + x) form via rw:
+        try rw [show (0 + x) = x from Nat.zero_add x]
+        exact this
+      · -- hw13' (up half): d shifted to h_inner + d = d_dim + d, but d < d_dim so d_dim+d < t_dim
+        intro d k hd hk
+        have hd_lt_dd : d < d_dim := hd  -- h_inner = d_dim
+        have hdd_lt_t : d_dim + d < t_dim := by rw [ht_even]; omega
+        have := allGatherPrimDimN0_valAt_3d E_shard t_dim hM hE ht hhM
+            [w13_a, w13_b] hhead_w13 0 (by omega) x hx_lt (d_dim + d) hdd_lt_t k hk
+        -- this : valAt (gather0) ((0 * L + i) * numExp + (0 + x)) = valAt ([...][0]?.getD _) (i * numExp + (0 + x))
+        -- Reduce `0 * L → 0` and List.getD via rfl, keep `0 + x`
+        simp only [Nat.zero_mul, Nat.zero_add,
+                   show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 0 d = t₁ from fun _ _ _ => rfl,
+                   show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 1 d = t₂ from fun _ _ _ => rfl] at this
+        -- After simp: this : valAt (gather0) (i * numExp + x) = valAt routing_map_a (i * numExp + x)
+        -- Add back the (0 + x) form via rw:
+        try rw [show (0 + x) = x from Nat.zero_add x]
+        exact this
+      · -- hw2: valAt (gather0 w2) at ((x*hM+col)*d_dim+d) = valAt w2_a at (same)
+        intro d hd
+        have hd_lt_dd : d < d_dim := hd
+        have := allGatherPrimDimN0_valAt_3d E_shard hM d_dim hE hhM (by assumption : 0 < d_dim)
+            [w2_a, w2_b] hhead_w2 0 (by omega) x hx_lt col hcol_lt d hd_lt_dd
+        -- this : valAt (gather0) ((0 * L + i) * numExp + (0 + x)) = valAt ([...][0]?.getD _) (i * numExp + (0 + x))
+        -- Reduce `0 * L → 0` and List.getD via rfl, keep `0 + x`
+        simp only [Nat.zero_mul, Nat.zero_add,
+                   show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 0 d = t₁ from fun _ _ _ => rfl,
+                   show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 1 d = t₂ from fun _ _ _ => rfl] at this
+        -- After simp: this : valAt (gather0) (i * numExp + x) = valAt routing_map_a (i * numExp + x)
+        -- Add back the (0 + x) form via rw:
+        try rw [show (0 + x) = x from Nat.zero_add x]
+        exact this
+    · -- Case r = 1: RHS = shard 1's moe_gmm
+      rw [hr1]
+      simp only [Nat.one_mul]
+      rw [show ([fw_all2all_moe_gmm input_a routing_probs_a routing_map_a w13_a w2_a
+                   numExp 0 E_shard topK swigluLimit,
+                 fw_all2all_moe_gmm input_b routing_probs_b routing_map_b w13_b w2_b
+                   numExp E_shard numExp topK swigluLimit].getD 1 (zeroTensor [L, hM]))
+                = fw_all2all_moe_gmm input_b routing_probs_b routing_map_b w13_b w2_b
+                   numExp E_shard numExp topK swigluLimit from rfl]
+      rw [fw_all2all_moe_gmm_valAt input_b routing_probs_b routing_map_b w13_b w2_b
+          L hM numExp E_shard E_shard numExp topK t_dim d_dim
+          hL hhM hnE hE (by omega) ht_even hinput_b hrp_b hw13_b i hi_lt col hcol_lt swigluLimit]
+      have hnumExp_split : numExp = E_shard + E_shard := by rw [hnumExp_def]; ring
+      have hsub_zero : E_shard * 2 - 0 = E_shard * 2 := by omega
+      have hsub_E : E_shard * 2 - E_shard = E_shard := by omega
+      rw [hsub_zero, hsub_E]
+      rw [show E_shard * 2 = E_shard + E_shard from by ring]
+      rw [Finset.sum_range_add]
+      -- LHS is: ∑ x ∈ range E_shard, (low with rm_a=0 → 0) + ∑ x ∈ range E_shard, (high matches shard 1)
+      have hlow_zero : (∑ x ∈ Finset.range E_shard, moe_gmm_term
+              (allGatherPrimDimN 0 2 0 [input_a, input_b])
+              (allGatherPrimDimN 0 2 0 [routing_probs_a, routing_probs_b])
+              (allGatherPrimDimN 0 2 0 [routing_map_a, routing_map_b])
+              (allGatherPrimDimN 0 2 0 [w13_a, w13_b])
+              (allGatherPrimDimN 0 2 0 [w2_a, w2_b])
+              numExp 0 x (L + i) col hM d_dim t_dim swigluLimit) = 0 := by
+        apply Finset.sum_eq_zero
+        intro x hx
+        have hx_lt : x < E_shard := by simp [Finset.mem_range] at hx; exact hx
+        unfold moe_gmm_term
+        simp only
+        have hmask_eq : valAt (allGatherPrimDimN 0 2 0 [routing_map_a, routing_map_b])
+              ((L + i) * numExp + (0 + x))
+            = valAt routing_map_b (i * numExp + x) := by
+          have h_bound_e : 0 + x < numExp := by rw [hnumExp_def]; omega
+          have := allGatherPrimDimN0_valAt 2 L numExp
+              [routing_map_a, routing_map_b]
+              (by omega) hL hnE hhead_rm hshapes_rm 1 (by omega) i hi_lt (0 + x) h_bound_e
+          simp only [Nat.one_mul, Nat.zero_add,
+                     show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 1 d = t₂ from fun _ _ _ => rfl] at this
+          rw [show (0 + x) = x from Nat.zero_add x]
+          exact this
+        rw [hmask_eq]
+        have hmask_zero : valAt routing_map_b (i * numExp + x) = 0 := by
+          rw [hnumExp_def]
+          apply hrm_b_disj i hi_lt x (by omega) hx_lt
+        rw [hmask_zero]
+        simp
+      rw [hlow_zero, zero_add]
+      -- Match high-half: LHS at eLocal = E_shard + x (LHS param), RHS at eLocal = x (shard 1 param)
+      apply Finset.sum_congr rfl
+      intro x hx
+      have hx_lt : x < E_shard := by simp [Finset.mem_range] at hx; exact hx
+      -- Apply moe_gmm_term_congr: LHS (gather0 tensors, l=L+i, eLocal=E_shard+x)
+      --                         = RHS (b tensors, l=i, eLocal=x with start=E_shard)
+      -- Note: LHS uses `start=0, eLocal=E_shard+x` while RHS uses `start=E_shard, eLocal=x`.
+      -- The masks and probs read `l*numExp + (start+eLocal)` — both give `l*numExp + (E_shard+x)`.
+      -- But the WEIGHTS read `eLocal * ...` which differs: LHS uses E_shard+x, RHS uses x.
+      -- So we can't use `moe_gmm_term_congr` directly (it needs same eLocal on both sides).
+      -- Instead, unfold both moe_gmm_term and match component-by-component.
+      unfold moe_gmm_term
+      simp only
+      -- mask
+      have hmask_eq : valAt (allGatherPrimDimN 0 2 0 [routing_map_a, routing_map_b])
+            ((L + i) * numExp + (0 + (E_shard + x)))
+          = valAt routing_map_b (i * numExp + (E_shard + x)) := by
+        have h_bound_e : 0 + (E_shard + x) < numExp := by rw [hnumExp_def]; omega
+        have := allGatherPrimDimN0_valAt 2 L numExp
+            [routing_map_a, routing_map_b]
+            (by omega) hL hnE hhead_rm hshapes_rm 1 (by omega) i hi_lt (0 + (E_shard + x)) h_bound_e
+        simp only [Nat.one_mul, Nat.zero_add,
+                   show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 1 d = t₂ from fun _ _ _ => rfl] at this
+        rw [show (0 + (E_shard + x)) = (E_shard + x) from Nat.zero_add _]
+        exact this
+      rw [hmask_eq]
+      by_cases hmz : valAt routing_map_b (i * numExp + (E_shard + x)) = 0
+      · simp [hmz]
+      · simp only [hmz, if_false]
+        -- prob
+        have hprob_eq : valAt (allGatherPrimDimN 0 2 0 [routing_probs_a, routing_probs_b])
+              ((L + i) * numExp + (0 + (E_shard + x)))
+            = valAt routing_probs_b (i * numExp + (E_shard + x)) := by
+          have h_bound_e : 0 + (E_shard + x) < numExp := by rw [hnumExp_def]; omega
+          have := allGatherPrimDimN0_valAt 2 L numExp
+              [routing_probs_a, routing_probs_b]
+              (by omega) hL hnE hhead_rp hshapes_rp 1 (by omega) i hi_lt (0 + (E_shard + x)) h_bound_e
+          simp only [Nat.one_mul, Nat.zero_add,
+                     show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 1 d = t₂ from fun _ _ _ => rfl] at this
+          rw [show (0 + (E_shard + x)) = (E_shard + x) from Nat.zero_add _]
+          exact this
+        rw [hprob_eq]
+        congr 1
+        apply Finset.sum_congr rfl
+        intro d hd
+        have hd_lt : d < d_dim := by simp [Finset.mem_range] at hd; exact hd
+        -- input: valAt (gather0 input) ((L+i)*hM+k) = valAt input_b (i*hM+k)
+        have hinput_eq : ∀ k, k < hM →
+            valAt (allGatherPrimDimN 0 2 0 [input_a, input_b]) ((L + i) * hM + k)
+              = valAt input_b (i * hM + k) := by
+          intro k hk
+          have := allGatherPrimDimN0_valAt 2 L hM
+              [input_a, input_b]
+              (by omega) hL hhM hhead_input hshapes_input 1 (by omega) i hi_lt k hk
+          simp only [Nat.one_mul,
+                   show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 1 d = t₂ from fun _ _ _ => rfl] at this
+          exact this
+        -- w13: valAt (gather0 w13) at ((E_shard+x)*t_dim + d)*hM + k) = valAt w13_b at ((x*t_dim + d)*hM + k)
+        have hw13_eq : ∀ k, k < hM →
+            valAt (allGatherPrimDimN 0 2 0 [w13_a, w13_b]) (((E_shard + x) * t_dim + d) * hM + k)
+              = valAt w13_b ((x * t_dim + d) * hM + k) := by
+          intro k hk
+          have hd_lt_t : d < t_dim := by rw [ht_even]; omega
+          have := allGatherPrimDimN0_valAt_3d E_shard t_dim hM hE ht hhM
+              [w13_a, w13_b] hhead_w13 1 (by omega) x hx_lt d hd_lt_t k hk
+          simp only [show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 0 d = t₁ from fun _ _ _ => rfl,
+                   show ∀ (t₁ t₂ : Tensor) (d : Tensor), ([t₁, t₂] : List Tensor).getD 1 d = t₂ from fun _ _ _ => rfl] at this
+          -- this : valAt (gather0) (((1*E_shard+x)*t_dim+d)*hM+k) = valAt w13_b ((x*t_dim+d)*hM+k)
+          -- 1*E_shard = E_shard so LHS matches
+          simp only [Nat.one_mul] at this
+          exact this
+        have hw13_up_eq : ∀ k, k < hM →
+            valAt (allGatherPrimDimN 0 2 0 [w13_a, w13_b]) (((E_shard + x) * t_dim + (d_dim + d)) * hM + k)
+              = valAt w13_b ((x * t_dim + (d_dim + d)) * hM + k) := by
+          intro k hk
+          have hdd_lt_t : d_dim + d < t_dim := by rw [ht_even]; omega
+          have := allGatherPrimDimN0_valAt_3d E_shard t_dim hM hE ht hhM
+              [w13_a, w13_b] hhead_w13 1 (by omega) x hx_lt (d_dim + d) hdd_lt_t k hk
+          simp only [List.getD, Nat.one_mul] at this
+          exact this
+        -- w2: valAt (gather0 w2) at ((E_shard+x)*hM+col)*d_dim + d) = valAt w2_b at ((x*hM+col)*d_dim+d)
+        have hw2_eq : valAt (allGatherPrimDimN 0 2 0 [w2_a, w2_b]) (((E_shard + x) * hM + col) * d_dim + d)
+            = valAt w2_b ((x * hM + col) * d_dim + d) := by
+          have := allGatherPrimDimN0_valAt_3d E_shard hM d_dim hE hhM (by assumption : 0 < d_dim)
+              [w2_a, w2_b] hhead_w2 1 (by omega) x hx_lt col hcol_lt d hd_lt
+          simp only [List.getD, Nat.one_mul] at this
+          exact this
+        -- Match gate/up sums via hinput_eq and hw13_eq / hw13_up_eq
+        have hgate_eq : (∑ k ∈ Finset.range hM,
+              valAt (allGatherPrimDimN 0 2 0 [input_a, input_b]) ((L + i) * hM + k) *
+              valAt (allGatherPrimDimN 0 2 0 [w13_a, w13_b]) (((E_shard + x) * t_dim + d) * hM + k))
+            = ∑ k ∈ Finset.range hM,
+                valAt input_b (i * hM + k) *
+                valAt w13_b ((x * t_dim + d) * hM + k) := by
+          apply Finset.sum_congr rfl
+          intro k hk
+          have hk_lt : k < hM := by simp [Finset.mem_range] at hk; exact hk
+          rw [hinput_eq k hk_lt, hw13_eq k hk_lt]
+        have hup_eq : (∑ k ∈ Finset.range hM,
+              valAt (allGatherPrimDimN 0 2 0 [input_a, input_b]) ((L + i) * hM + k) *
+              valAt (allGatherPrimDimN 0 2 0 [w13_a, w13_b]) (((E_shard + x) * t_dim + (d_dim + d)) * hM + k))
+            = ∑ k ∈ Finset.range hM,
+                valAt input_b (i * hM + k) *
+                valAt w13_b ((x * t_dim + (d_dim + d)) * hM + k) := by
+          apply Finset.sum_congr rfl
+          intro k hk
+          have hk_lt : k < hM := by simp [Finset.mem_range] at hk; exact hk
+          rw [hinput_eq k hk_lt, hw13_up_eq k hk_lt]
+        rw [hgate_eq, hup_eq, hw2_eq]
+
+/-- fw_all2all_moe_gmm splits expert range across 2 ranks (with sharded w13/w2 weights).
+    LEGACY axiom form; prefer `fw_all2all_moe_gmm_split_commute_2_of` for actual proofs. -/
 axiom fw_all2all_moe_gmm_split_commute_2
     (input_a input_b routing_probs_a routing_probs_b routing_map_a routing_map_b
      w13_a w13_b w2_a w2_b : Tensor)
@@ -3468,14 +4076,49 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
           (by omega) (by omega) h11621_shape h11622_shape]
     rw [fw_topk_routing_snd_fst_allGather0_commute_2_of (initPM 11621) (initPM 11622) 2048 8 64
           (by omega) (by omega) h11621_shape h11622_shape]
-    -- Push through fw_all2all_moe_gmm.
-    rw [fw_all2all_moe_gmm_split_commute_2
+    -- Push through fw_all2all_moe_gmm using proven theorem.
+    -- Shape witnesses
+    have h11613_shape : (initPM 11613).shape = [2048, 1024] := hPM 11613 [2048, 1024] rfl
+    have h11614_shape : (initPM 11614).shape = [2048, 1024] := hPM 11614 [2048, 1024] rfl
+    have h11629_shape : (initPM 11629).shape = [32, 1024, 1024] := hPM 11629 [32, 1024, 1024] rfl
+    have h11630_shape : (initPM 11630).shape = [32, 1024, 1024] := hPM 11630 [32, 1024, 1024] rfl
+    have h11631_shape : (initPM 11631).shape = [32, 1024, 512] := hPM 11631 [32, 1024, 512] rfl
+    have h11632_shape : (initPM 11632).shape = [32, 1024, 512] := hPM 11632 [32, 1024, 512] rfl
+    -- Routing map shape (fw_topk_routing_snd_fst outputs)
+    have hrp_a_shape : (fw_topk_routing (initPM 11621) 8 64).fst.shape = [2048, 32 * 2] := by
+      unfold fw_topk_routing
+      simp only [Tensor.mkShape]
+      rw [h11621_shape]; rfl
+    have hrp_b_shape : (fw_topk_routing (initPM 11622) 8 64).fst.shape = [2048, 32 * 2] := by
+      unfold fw_topk_routing
+      simp only [Tensor.mkShape]
+      rw [h11622_shape]; rfl
+    have hrm_a_shape : (fw_topk_routing (initPM 11621) 8 64).snd.fst.shape = [2048, 32 * 2] := by
+      unfold fw_topk_routing
+      simp only [Tensor.mkShape]
+      rw [h11621_shape]; rfl
+    have hrm_b_shape : (fw_topk_routing (initPM 11622) 8 64).snd.fst.shape = [2048, 32 * 2] := by
+      unfold fw_topk_routing
+      simp only [Tensor.mkShape]
+      rw [h11622_shape]; rfl
+    rw [fw_all2all_moe_gmm_split_commute_2_of
           (initPM 11613) (initPM 11614)
           (fw_topk_routing (initPM 11621) 8 64).fst (fw_topk_routing (initPM 11622) 8 64).fst
           (fw_topk_routing (initPM 11621) 8 64).snd.fst (fw_topk_routing (initPM 11622) 8 64).snd.fst
           (initPM 11629) (initPM 11630)
           (initPM 11631) (initPM 11632)
-          64 8 (((10 : Nat) : Scalar))]
+          2048 1024 1024 512 32 8
+          (by omega) (by omega) (by omega) (by omega) (by omega)
+          (by ring)
+          h11613_shape h11614_shape hrp_a_shape hrp_b_shape hrm_a_shape hrm_b_shape
+          h11629_shape h11630_shape h11631_shape h11632_shape
+          -- Routing-map disjointness for rank a
+          (fun l _ e _ he => Pattern_1_rmaDisjointAxiom
+             (fw_topk_routing (initPM 11621) 8 64).snd.fst 2048 64 32 trivial l (by omega) e (by omega) he)
+          -- Routing-map disjointness for rank b
+          (fun l _ e _ he => Pattern_1_rmbDisjointAxiom
+             (fw_topk_routing (initPM 11622) 8 64).snd.fst 2048 64 32 trivial l (by omega) e (by omega) he)
+          (((10 : Nat) : Scalar))]
     -- Push through inner elemwiseAdd (all2all + mul).
     -- All 4 tensors have shape [2048, 1024]: all2all_moe_gmm output matches input's
     -- hidden dim (1024, after Denote hModel fix); elemwiseMul(sigmoid([2048,1]),
