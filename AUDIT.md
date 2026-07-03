@@ -15,7 +15,7 @@
 ### Pattern_1 (MoE + CP) — L1 ❌ L2 ⚠️ L3 ❌ VACUOUS
 - **L1 broken**: `FW_maybe_shuffle/unshuffle` (and BW_ variants) evalOp binding `cu :: xs` assumes `cu` at ins[0], but graph convention is `[data, cu_seqlens]` (data at ins[0]).
 - **L2 broken**: `fw_maybe_(un)shuffle` uses `xs.head?.shape` (metadata) as `firstShape`, so all outputs have shape [2] (cu.shape) not the intended data shape.
-- **L2 additional bug**: `FW_reshape` in Denote is just `identity`, but Pattern_1's graph has 6 FW_reshape nodes with genuine shape mismatches (input shape ≠ output shape), including cases like `[2048, 64] → [4096, 1024]` (total elements 131072 vs 4194304 — not even equal count, so definitely not a reshape).
+- **L2 additional bug**: none found here. `FW_reshape` in Denote is identity, but Pattern_1's actual usage is verified as identity (input.shape = output.shape per intermediateGoal authority). Earlier concern was based on tid-shadowing across graph scopes.
 - **L3 broken**: `prove_pattern_1` depends on `fw_maybe_unshuffle_cp2_commute` which is provably inconsistent (see `UnshuffleInconsistent.lean` — derives False from just this axiom + 5-axiom kernel). Pattern_1's proof is vacuous.
 
 ---
@@ -55,7 +55,7 @@ All other 61 ops use fixed-arity destructuring (`[x]`, `[x, y]`, `[x, w]`, `[g, 
 
 ### BROKEN (semantics disagree with Python)
 - `FW_maybe_shuffle` / `FW_maybe_unshuffle` (and BW_ variants) — evalOp binding + fw_maybe_(un)shuffle def both use `xs.head?.shape` (metadata) for output shape, but graph intends output shape = data shape.
-- `FW_reshape` — Denote defines this as `identity`. Graph has 6 nodes in Pattern_1 with input/output shapes not just different but different total element counts (e.g., `[2048, 64]` → `[4096, 1024]`: 131k vs 4.2M elements). These are NOT reshapes at all — the semantics of what Python does here is unknown and the Denote identity is definitely wrong.
+- `FW_reshape` — Denote defines this as `identity`. **VERIFIED CORRECT for Pattern_1's actual usage**: all 12 reshape nodes in Pattern_1's graph have input.shape = output.shape (per `intermediateGoal_TID.tsShape` authority). Earlier "shape mismatch" alarm was noise from tid-shadowing between different graph scopes' initShapes.
 
 ### Unverified (not yet checked)
 - Backward passes: BW_sum, BW_add, BW_linear, BW_matmul, BW_embedding, BW_layernorm, BW_gelu, BW_softmax, BW_div, BW_contiguous, BW_view, BW_transpose, BW_multiref (13 ops, subagent audit in progress)
