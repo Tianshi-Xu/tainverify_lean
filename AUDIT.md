@@ -1,12 +1,115 @@
-# Denote Op Semantics Audit — 2026-07-03 (v3, subagent-augmented)
+# Denote Op Semantics Audit — 2026-07-03 (v4, softmaxBwd fix WIP)
 
-## TL;DR
+## Status snapshot (2026-07-03, 6ffb70bxx build)
 
-**GPT-2 (312 桥) audit 结果**：**层次 3 clean（0 custom axiom）**，但 subagent 深入 audit 发现 **1 个真实 semantic mismatch bug（`bw_softmax`）**+ 多个 CONDITIONAL 前提。
+### GPT-2 ly4 (312 桥)
+- **L1**: ✅ (26 non-collective + 4 collective ops, all fixed-arity patterns)
+- **L3**: ✅ (`gpt_main_all_goals` depends only on 5-axiom kernel)
+- **L2 issues found**:
+  - ⚠️ **`softmaxBwd` semantic mismatch**: Denote assumes 2nd arg = softmax output y (docstring says `dx_i = y_i * (g_i - Σ y_j*g_j)`), but nnscaler graphs pass softmax INPUT x (from FW_div, not FW_softmax outputs). 20/20 GPT-2 BW_softmax nodes exhibit this pattern.
+  - Others verified or CONDITIONAL on premises GPT-2 satisfies (see v3).
 
-**Pattern_2/4/5**：L1 ✅ L3 ✅ L2 主要 ops (embedding, topk_routing, inner_chunk_ce, stack) verified。
+### Pattern_2 / Pattern_4 / Pattern_5 (MoE yoco_goals)
+- **L1** ✅ **L3** ✅ **L2**: main ops verified
 
-**Pattern_1**：仍然 vacuous。
+### Pattern_1 (MoE + CP)
+- **L1** ❌ **L2** ❌ **L3** ❌ VACUOUS (fw_maybe_unshuffle_cp2_commute inconsistent)
+
+---
+
+## softmaxBwd fix — WIP status
+
+**Attempted fix** (commits `cc34190`, `31e6135` context):
+
+Approach: rename old `softmaxBwd g y` → `softmaxBwdFromOutput g y` (unchanged code, honest name); introduce new `softmaxBwd g x = softmaxBwdFromOutput g (softmax x)` that matches nnscaler convention; keep `bw_softmax := softmaxBwd`.
+
+Result: **Build broke at 7 sites** (5 auxiliary lemmas + 2 direct uses). All 4 downstream
+bridges (Goal_129/164/199/234) would need re-proof under the new semantics because:
+
+- Auxiliary lemmas assert `softmaxBwd g y = <formula involving valAt y>` (was TRUE under old
+  semantics; FALSE under new semantics where `softmaxBwd g y` internally computes with
+  `softmax y`).
+- Bridge tactic scripts unfold `softmaxBwd` then match old formula.
+
+**Bridge theorems (equalities) themselves would remain TRUE** under the corrected semantics
+because both LHS and RHS of the equality use `bw_softmax`, and softmax commutes with the
+dim-2 gather. But the proofs need re-writing.
+
+**Decision (2026-07-03)**: reverted the code fix — kept the old `softmaxBwd` (semantic
+misnomer) with an explicit ⚠️ warning docstring pointing to `softmaxBwdFromInput` as the
+canonical corrected form. `softmaxBwdFromInput g x = softmaxBwd g (softmax x)` is provided
+as a companion definition for future refactors, but is NOT yet wired into evalOp.
+
+**Full build passes (7746 jobs)** with warning docstring in place.
+
+**Remaining work** to fully close this semantic gap: 4 bridges + ~6 aux lemmas
+re-proof (estimated 10-20h focused work).
+
+---
+
+## Layer 1 detailed findings
+
+Total OpName arms in Denote.lean: 149 (over 67 unique ops)
+Total non-trivial `::` patterns: **8** (all in FW/BW × maybe_shuffle/unshuffle):
+- `FW_maybe_shuffle`   L3729 evalOp `cu :: xs` + L3483 tp_shape `_cu :: x0 :: _rest` ❌
+- `FW_maybe_unshuffle` L3733 evalOp `cu :: xs` + L3485 tp_shape `_cu :: x0 :: _rest` ❌
+- `BW_maybe_shuffle`   L3737 evalOp `cu :: gs` + L3487 tp_shape `_cu :: g0 :: _rest` ❌
+- `BW_maybe_unshuffle` L3741 evalOp `cu :: gs` + L3489 tp_shape `_cu :: g0 :: _rest` ❌
+
+All other 61 ops use fixed-arity destructuring (`[x]`, `[x, y]`, `[x, w]`, `[g, x, w]`, `[x, weight, bias]`, `[ids, weight]`, `xs`, etc.). No arg-order ambiguity → L1 clean.
+
+## Layer 2 findings (from subagent audit + Iroha spot-checks)
+
+### VERIFIED (semantics match Python for target usage)
+
+- `fw_sum` / `bw_sum` (shape `[1]` differs from PyTorch `()` cosmetically)
+- `fw_gelu` / `bw_gelu` — exact GELU (matches nanogpt fixture using `F.gelu` default)
+- `fw_linear` / `bw_linear` — `y = x @ w.T`, 2D/3D only
+- `fw_matmul` / `bw_matmul` — batch strict alignment required, GPT-2 satisfies
+- `fw_softmax` — standard softmax (VERIFIED)
+- `fw_multiref` — `List.replicate n x`
+- `fw_contiguous` / `bw_contiguous` — identity (correct)
+- `fw_transpose` / `bw_transpose` — swap dims (correct)
+- `fw_view` — numel-preserving reshape (GPT-2 always numel-preserving)
+- `fw_layernorm` / `bw_layernorm` — single-last-dim normalization, eps=1e-5 hardcoded (matches typical usage)
+- `fw_embedding` / `bw_embedding` — weight[ids] lookup
+- `fw_topk_routing` / `fw_inner_chunk_ce` / `fw_stack` (Pattern_2/4/5) — verified
+
+### CONDITIONAL
+
+- `elemwiseAdd/elemwiseMul` — `outShape2` only picks longer-length shape; NOT full PyTorch
+  broadcasting. GPT-2 all same-shape, satisfies. Pattern_1 uses broadcast → mismatch there.
+- `fw_div/bw_div` — divisor restricted to `Nat` (can't express `1/√d_k`). GPT-2 uses `params=[2]`, satisfies.
+- `bw_add2` — needs `g.shape` = true broadcast shape. Same-shape case verified.
+- `bw_multiref` / `tensorSum` — assumes all input shapes same (holds for typical multiref BW).
+- `bw_view` — 0 usage in generated graphs, statement structurally correct but unchecked.
+
+### ⚠️ SEMANTIC MISMATCH
+
+- `softmaxBwd` (aka `bw_softmax`) — Denote assumes 2nd arg = softmax OUTPUT y;
+  nnscaler graphs pass INPUT x. **See "softmaxBwd fix WIP" section above.**
+
+### BROKEN (Pattern_1 only)
+
+- `fw_maybe_shuffle` / `fw_maybe_unshuffle` (and BW_ variants) — evalOp binds `cu :: xs` but
+  graph puts data at ins[0], cu_seqlens at ins[1]. Also `firstShape := xs.head?.shape` uses
+  metadata not data.
+
+---
+
+## Recommended path forward
+
+1. **Short term**: `softmaxBwd` semantic warning documented in code. Full build passes.
+   Pattern_2/4/5 & GPT-2 bridges technically valid (internal consistency).
+2. **Medium term**: Fix `softmaxBwd` semantics + re-prove 4 bridges (~10-20h). This closes
+   the softmax layer's PyTorch alignment gap.
+3. **Long term**: Pattern_1 requires:
+   - Fix Denote `fw_maybe_(un)shuffle` def to use data (ins[0]) not cu (ins[1]) for shape;
+   - Fix evalOp binding accordingly;
+   - Rewrite Pattern_1's 200-line proof (previous proof was VACUOUS due to inconsistent axiom).
+
+Estimated total effort: 30-60h.
+
 
 ---
 
