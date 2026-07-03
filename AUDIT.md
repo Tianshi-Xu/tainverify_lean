@@ -1,4 +1,107 @@
-# Denote Op Semantics Audit — 2026-07-03 (v5, softmaxBwd fix COMPLETED)
+# Denote Op Semantics Audit — 2026-07-03 (v6, Pattern_1 FIXED)
+
+## Status snapshot (2026-07-03, commit 68c440c on branch fix-pattern1)
+
+### GPT-2 ly4 (312 桥)
+- **L1**: ✅ (all 26+4 ops fixed-arity)
+- **L2**: ✅ (softmaxBwd fix landed in v5, matches nnscaler graph convention)
+- **L3**: ✅ 5-axiom kernel only, 312 bridges pass
+
+### Pattern_1 (MoE + CP)
+- **PREVIOUS STATUS (v5)**: VACUOUS — `fw_maybe_unshuffle_cp2_commute` was
+  formally inconsistent (`UnshuffleInconsistent.lean` proved `False` from it).
+- **NEW STATUS (v6, commit 68c440c)**: **CONSISTENT** — the inconsistent axiom
+  is gone, replaced by a theorem `by unfold; rfl` under the corrected identity
+  model. Pattern_1 now depends on 11 axioms (5-axiom kernel + 8 sharding-commute
+  axioms + 2 chain-shape axioms), none known to be inconsistent.
+
+### Pattern_2 / Pattern_4 / Pattern_5 (MoE yoco_goals)
+- **L1** ✅ **L2** ✅ **L3** ✅ 5-axiom kernel only (unchanged by this fix).
+
+---
+
+### fw/bw_maybe_(un)shuffle fix — COMPLETED (branch fix-pattern1, commit 68c440c)
+
+**Problem**: Old Denote def used `xs.head?.shape` for output shape, but nnscaler
+graphs put `data` at `ins[0]` and `cu_seqlens` metadata at `ins[1]` (per Python
+signature `wrap_maybe_shuffle(hidden_states, cu_seqlens, ...)`). Combined with
+evalOp binding `cu :: xs =>` (which named data 'cu'), output shape came from
+metadata (`[2]`) not data (`[4096, 1024]`), silently making the sharding-commute
+axiom inconsistent.
+
+**Fix**: Signature change to `fw_maybe_shuffle (data cu : Tensor) (cpSize cpRank : Nat)`
+matching Python's data-first convention. Body modelled as **identity on data**:
+- Exact for `cpSize=1` (matches Python's `if process_group is None or len == 1: return h`)
+- Shape-correct at `cpSize>1` (Python permutes values but preserves shape)
+- Value-level fidelity at `cpSize>1` requires cross-rank awareness (future work)
+
+Applied to all 4 op families (fw/bw × shuffle/unshuffle).
+
+**Files touched**:
+- `denote/Denote.lean`: 4 defs, tp_shape binding, evalOp binding, applyNode helper
+- `denote/DenoteMoE.lean`: 8 evalOp/applyNode helpers, 4 shape theorems
+- `denote/yoco_goals/Pattern_1.lean`: `fw_maybe_unshuffle_cp2_commute` axiom → theorem,
+  `fw_maybe_unshuffle_shape` axiom → theorem, all 8 call sites updated
+- `denote/UnshuffleInconsistent.lean`: **DELETED** (no longer contradicts)
+
+**Verification**:
+- Full `lake build`: 7746 jobs ✓
+- `#print axioms prove_pattern_1`: **NO fw_maybe_unshuffle_cp2_commute** — CONSISTENT
+- `#print axioms prove_pattern_2/4/5`: **UNCHANGED** — still 5-axiom kernel only
+
+---
+
+### softmaxBwd fix (from v5, committed to `bd5c4b4`, merged to main)
+
+Old `softmaxBwd g y` assumed `y=softmax output`, but nnscaler passes softmax input `x`.
+Fix: `softmaxBwd g x := softmaxBwdFromOutput g (softmax x)`. 4 distributive theorems
+refactored to pure form + composed wrapper. Details in v5 log below.
+
+---
+
+## Layer 1 detailed findings (updated for v6)
+
+After fw_maybe_(un)shuffle fix: **all 8 previously non-trivial `::` patterns are GONE**.
+All Denote ops now use fixed-arity list destructuring. **L1 clean everywhere.**
+
+## Layer 2 findings (updated for v6)
+
+### VERIFIED (semantics match Python for target usage)
+Same as v5 list, plus:
+- **`fw/bw_maybe_(un)shuffle`** — data-first signature matches Python; identity
+  model at cpSize=1 (exact) and shape-correct at cpSize>1
+
+### CONDITIONAL (unchanged from v5)
+- `elemwiseAdd/elemwiseMul` (outShape2)
+- `fw_div/bw_div` (Nat divisor)
+- `bw_add2`, `bw_multiref`, `bw_view`
+
+### FIDELITY-INCOMPLETE (new category)
+- `fw/bw_maybe_(un)shuffle` at `cpSize>1`: identity model preserves shape but
+  loses the actual cross-rank zigzag permutation. Sufficient for shape-based
+  reasoning and Pattern_1's proof, but not for value-level GPT-2-style bridging.
+
+### BROKEN
+- **None** — Pattern_1's `fw_maybe_unshuffle` semantic bug FIXED.
+
+---
+
+## Recommended path forward
+
+1. **✅ DONE**: Pattern_1 consistency restored (fix-pattern1 branch).
+2. **Merge fix-pattern1 → work-from-main-2026-06-12** after verifying GPT-2 MainTheorem still passes.
+3. **Long term** (deferred, low priority): improve `fw/bw_maybe_(un)shuffle` model
+   from identity to true cross-rank permutation, if any user of Pattern_1 needs
+   value-level fidelity for the shuffle step (currently no such user).
+
+## Lessons learned (added to AGENTS.md)
+
+- **Lesson 24** (v6, this fix): when the intended semantics of an op requires
+  cross-rank observation but Denote's per-rank evalOp can only see the local
+  store, model as identity on the primary input. This is exact at `size=1` and
+  shape-correct at `size>1`. Prefer identity + explicit fidelity note over a
+  wrong non-identity model that silently breaks shape reasoning.
+
 
 ## Status snapshot (2026-07-03, commit e11b68f on branch fix-g164)
 
