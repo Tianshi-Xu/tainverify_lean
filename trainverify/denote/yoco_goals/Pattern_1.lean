@@ -1925,18 +1925,145 @@ axiom fw_linear_allGather0_commute_2 (a b w : Tensor) :
     fw_linear (allGatherPrimDimN 0 2 0 [a, b]) w
       = allGatherPrimDimN 0 2 0 [fw_linear a w, fw_linear b w]
 
+/-- 2-D fw_linear shape: `[b, i] × [o, i] → [b, o]`. Moved up so subsequent theorems can use it. -/
+private theorem fw_linear_2d_shape (b i o : Nat) (x w : Tensor)
+    (hx : x.shape = [b, i]) (hw : w.shape = [o, i]) :
+    (fw_linear x w).shape = [b, o] := by
+  rw [TrainVerify.Denote.fw_linear_is_matmul b i o x w hx hw]
+  rfl
+
+/-- fw_linear commutes with dim-0 sharding — 2-shard 2D version with shape hypothesis.
+    Both a, b have shape [bshard, i], w has shape [o, i]. -/
+theorem fw_linear_allGather0_commute_2_of (a b w : Tensor) (bshard i o : Nat)
+    (hbshard : 0 < bshard) (hi : 0 < i) (ho : 0 < o)
+    (ha : a.shape = [bshard, i]) (hb : b.shape = [bshard, i])
+    (hw : w.shape = [o, i]) :
+    fw_linear (allGatherPrimDimN 0 2 0 [a, b]) w
+      = allGatherPrimDimN 0 2 0 [fw_linear a w, fw_linear b w] := by
+  -- Shape facts
+  have hhead_ab : (([a, b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [bshard, i] := by
+    simp [ha]
+  have hG_ab : (allGatherPrimDimN 0 2 0 [a, b]).shape = [bshard * 2, i] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [bshard, i] hhead_ab]; simp [List.set, List.getD]
+  have hlin_a : (fw_linear a w).shape = [bshard, o] := fw_linear_2d_shape bshard i o a w ha hw
+  have hlin_b : (fw_linear b w).shape = [bshard, o] := fw_linear_2d_shape bshard i o b w hb hw
+  have hhead_lin : (([fw_linear a w, fw_linear b w] : List Tensor).head?.map (fun t => t.shape)).getD [] = [bshard, o] := by
+    simp [hlin_a]
+  have hRHS_shape : (allGatherPrimDimN 0 2 0 [fw_linear a w, fw_linear b w]).shape = [bshard * 2, o] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [bshard, o] hhead_lin]; simp [List.set, List.getD]
+  have hLHS_shape : (fw_linear (allGatherPrimDimN 0 2 0 [a, b]) w).shape = [bshard * 2, o] :=
+    fw_linear_2d_shape (bshard * 2) i o _ w hG_ab hw
+  apply Tensor.ext
+  · rw [hLHS_shape, hRHS_shape]
+  · intro outIdx houtIdx
+    rw [hLHS_shape] at houtIdx
+    have houtIdx_bound : outIdx < bshard * 2 * o := by simpa [prodShape] using houtIdx
+    -- Compute both sides via k_matmul.
+    have hLHS_val : valAt (fw_linear (allGatherPrimDimN 0 2 0 [a, b]) w) outIdx
+        = k_matmul (bshard * 2) o i (allGatherPrimDimN 0 2 0 [a, b]) w
+            ⟨outIdx, by show outIdx < prodShape [bshard * 2, o]; simp [prodShape]; linarith⟩ := by
+      rw [TrainVerify.Denote.fw_linear_is_matmul (bshard * 2) i o _ w hG_ab hw]
+      rw [valAt_of_lt _ _ (by show outIdx < prodShape [bshard * 2, o]; simp [prodShape]; linarith)]
+      rfl
+    rw [hLHS_val]
+    -- Row-major decomposition of outIdx
+    set row := outIdx / o with hrow_def
+    set c := outIdx % o with hc_def
+    have hc_lt : c < o := by rw [hc_def]; exact Nat.mod_lt _ ho
+    have hrow_lt : row < bshard * 2 := by
+      rw [hrow_def]; rw [Nat.div_lt_iff_lt_mul ho]; linarith
+    set r := row / bshard with hr_def
+    set il := row % bshard with hil_def
+    have hil_lt : il < bshard := by rw [hil_def]; exact Nat.mod_lt _ hbshard
+    have hr_lt : r < 2 := by
+      rw [hr_def]; rw [Nat.div_lt_iff_lt_mul hbshard]; linarith
+    have houtIdx_eq : outIdx = (r * bshard + il) * o + c := by
+      subst r il c row
+      have h1 : bshard * (outIdx / o / bshard) + outIdx / o % bshard = outIdx / o :=
+        Nat.div_add_mod (outIdx / o) bshard
+      have h2 : o * (outIdx / o) + outIdx % o = outIdx := Nat.div_add_mod outIdx o
+      calc outIdx = o * (outIdx / o) + outIdx % o := h2.symm
+        _ = o * (bshard * (outIdx / o / bshard) + outIdx / o % bshard) + outIdx % o := by rw [h1]
+        _ = (outIdx / o / bshard * bshard + outIdx / o % bshard) * o + outIdx % o := by ring
+    -- k_matmul unfolds to a Finset sum. The KEY is that gather0's valAt at (row * i + j) reads
+    -- from shard `r` at local (il * i + j). So both sides get same sum.
+    simp [k_matmul, prodShape]
+    -- Row for LHS: outIdx / o = r * bshard + il (from houtIdx_eq)
+    have hout_div : outIdx / o = r * bshard + il := by
+      rw [houtIdx_eq]
+      have h1 : ((r * bshard + il) * o + c) / o = c / o + (r * bshard + il) := by
+        rw [Nat.add_comm, Nat.add_mul_div_right c (r * bshard + il) ho]
+      rw [h1, Nat.div_eq_of_lt hc_lt]; ring
+    have hout_mod : outIdx % o = c := by
+      rw [houtIdx_eq]
+      have h1 : ((r * bshard + il) * o + c) % o = c % o := by
+        rw [Nat.add_comm, Nat.add_mul_mod_self_right]
+      rw [h1, Nat.mod_eq_of_lt hc_lt]
+    rw [hout_div, hout_mod]
+    -- Now compute RHS at outIdx
+    have hRHS_val : valAt (allGatherPrimDimN 0 2 0 [fw_linear a w, fw_linear b w]) outIdx
+        = valAt ([fw_linear a w, fw_linear b w].getD r (zeroTensor [bshard, o])) (il * o + c) := by
+      rw [houtIdx_eq]
+      have hshapes_lin : ∀ r' (_ : r' < 2),
+          (([fw_linear a w, fw_linear b w].getD r' (zeroTensor [bshard, o]))).shape = [bshard, o] := by
+        intro r' hr'
+        have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+        rcases this with h | h <;> rw [h] <;> simp [List.getD, hlin_a, hlin_b]
+      exact allGatherPrimDimN0_valAt 2 bshard o [fw_linear a w, fw_linear b w]
+              (by omega) hbshard ho hhead_lin hshapes_lin r hr_lt il hil_lt c hc_lt
+    rw [hRHS_val]
+    -- getD r resolves to fw_linear a w or fw_linear b w
+    have hr_cases : r = 0 ∨ r = 1 := by interval_cases r <;> [left; right] <;> rfl
+    have hgetD_lin :
+        [fw_linear a w, fw_linear b w].getD r (zeroTensor [bshard, o]) =
+        fw_linear ([a, b].getD r (zeroTensor [bshard, i])) w := by
+      rcases hr_cases with h | h <;> rw [h] <;> simp [List.getD]
+    rw [hgetD_lin]
+    -- Now RHS = valAt (fw_linear e_r w) (il * o + c) where e_r = [a,b].getD r ...
+    set ear := [a, b].getD r (zeroTensor [bshard, i])
+    have hear_shape : ear.shape = [bshard, i] := by
+      show ([a, b].getD r (zeroTensor [bshard, i])).shape = [bshard, i]
+      rcases hr_cases with h | h <;> rw [h] <;> simp [List.getD, ha, hb]
+    have hloc_bound : il * o + c < bshard * o := by
+      have h1 : il * o + c < il * o + o := by omega
+      have h2 : il * o + o = (il + 1) * o := by ring
+      have h3 : (il + 1) * o ≤ bshard * o := Nat.mul_le_mul_right _ (by omega)
+      omega
+    have hRHS_lin_val : valAt (fw_linear ear w) (il * o + c)
+        = k_matmul bshard o i ear w ⟨il * o + c, by show il * o + c < prodShape [bshard, o]; simp [prodShape]; linarith⟩ := by
+      rw [TrainVerify.Denote.fw_linear_is_matmul bshard i o ear w hear_shape hw]
+      rw [valAt_of_lt _ _ (by show il * o + c < prodShape [bshard, o]; simp [prodShape]; linarith)]
+      rfl
+    rw [hRHS_lin_val]
+    -- Now both sides are k_matmul sums. Show they equal term-by-term.
+    simp [k_matmul, prodShape]
+    -- LHS row index: r*bshard+il; RHS row index: il (divisor bshard already gives il)
+    have hil_div : (il * o + c) / o = il := by
+      have h1 : (il * o + c) / o = c / o + il := by
+        rw [Nat.add_comm, Nat.add_mul_div_right c il ho]
+      rw [h1, Nat.div_eq_of_lt hc_lt]; ring
+    have hc_mod' : c % o = c := Nat.mod_eq_of_lt hc_lt
+    rw [hil_div, hc_mod']
+    -- Now sum indices align. valAt gather0[a,b] ((r*bshard+il) * i + j) = valAt ear (il * i + j)
+    apply Finset.sum_congr rfl
+    intro j hj
+    have hj_lt : j < i := by simp [Finset.mem_range] at hj; exact hj
+    have hshapes_ab : ∀ r' (_ : r' < 2),
+        (([a, b].getD r' (zeroTensor [bshard, i]))).shape = [bshard, i] := by
+      intro r' hr'
+      have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+      rcases this with h | h <;> rw [h] <;> simp [List.getD, ha, hb]
+    congr 1
+    rw [allGatherPrimDimN0_valAt 2 bshard i [a, b]
+          (by omega) hbshard hi hhead_ab hshapes_ab r hr_lt il hil_lt j hj_lt]
+
 /-- fw_view commutes with dim-0 sharding when shapes are compatible.
     The target [`full`] shape must have first dim = 2×(shard first dim). -/
 axiom fw_view_allGather0_commute_2 (a b : Tensor) (sh_full sh_shard : Shape) :
     fw_view sh_full (allGatherPrimDimN 0 2 0 [a, b])
       = allGatherPrimDimN 0 2 0 [fw_view sh_shard a, fw_view sh_shard b]
 
-/-- 2-D fw_linear shape: `[b, i] × [o, i] → [b, o]`. -/
-private theorem fw_linear_2d_shape (b i o : Nat) (x w : Tensor)
-    (hx : x.shape = [b, i]) (hw : w.shape = [o, i]) :
-    (fw_linear x w).shape = [b, o] := by
-  rw [TrainVerify.Denote.fw_linear_is_matmul b i o x w hx hw]
-  rfl
+-- (fw_linear_2d_shape moved earlier so fw_linear_allGather0_commute_2_of can use it.)
 
 /-- Trivial: `fw_view` with the tensor's own shape is the identity. -/
 private theorem fw_view_self_eq (t : Tensor) (sh : Shape) (hsh : t.shape = sh) :
@@ -2450,15 +2577,20 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
     have h11632_shape : (initPM 11632).shape = [32, 1024, 512] := hPM 11632 [32, 1024, 512] (by native_decide)
     have h11613_eq_11614 : (initPM 11613).shape = (initPM 11614).shape :=
       h11613_shape.trans h11614_shape.symm
-    -- Push allGather through fw_linear (3 occurrences: linear→sigmoid, linear→swiglu×2).
-    rw [fw_linear_allGather0_commute_2 (initPM 11613) (initPM 11614) (initPM 5906)]
-    rw [fw_linear_allGather0_commute_2 (initPM 11613) (initPM 11614) (initPM 5911)]
-    rw [fw_linear_allGather0_commute_2 (initPM 11613) (initPM 11614) (initPM 5915)]
-    -- Push through fw_view. Use the proven `fw_view_allGather0_commute_2_of` with shape witnesses.
+    -- Shape witnesses for the fw_linear weights (moved up so fw_linear_of can use).
     have h5906_shape : (initPM 5906).shape = [1, 1024] := hPM 5906 [1, 1024] rfl
     have h5911_shape : (initPM 5911).shape = [512, 1024] := hPM 5911 [512, 1024] rfl
     have h5915_shape : (initPM 5915).shape = [512, 1024] := hPM 5915 [512, 1024] rfl
     have h5920_shape : (initPM 5920).shape = [1024, 512] := hPM 5920 [1024, 512] rfl
+    -- Push allGather through fw_linear (3 occurrences: linear→sigmoid, linear→swiglu×2).
+    rw [fw_linear_allGather0_commute_2_of (initPM 11613) (initPM 11614) (initPM 5906)
+          2048 1024 1 (by omega) (by omega) (by omega) h11613_shape h11614_shape h5906_shape]
+    rw [fw_linear_allGather0_commute_2_of (initPM 11613) (initPM 11614) (initPM 5911)
+          2048 1024 512 (by omega) (by omega) (by omega) h11613_shape h11614_shape h5911_shape]
+    rw [fw_linear_allGather0_commute_2_of (initPM 11613) (initPM 11614) (initPM 5915)
+          2048 1024 512 (by omega) (by omega) (by omega) h11613_shape h11614_shape h5915_shape]
+    -- Push through fw_view. Use the proven `fw_view_allGather0_commute_2_of` with shape witnesses.
+    -- (h5906/5911/5915/5920_shape already established above.)
     have hlin_5906_a : (fw_linear (initPM 11613) (initPM 5906)).shape = [2048, 1] :=
       fw_linear_2d_shape 2048 1024 1 _ _ h11613_shape h5906_shape
     have hlin_5906_b : (fw_linear (initPM 11614) (initPM 5906)).shape = [2048, 1] :=
@@ -2496,13 +2628,20 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
           (by unfold fw_view Tensor.mkShape; rfl)
           (by unfold fw_view Tensor.mkShape; rfl)
           (by unfold fw_view Tensor.mkShape; rfl)]
-    -- Push through fw_linear (for 5920).
-    rw [fw_linear_allGather0_commute_2
+    -- Push through fw_linear (for 5920). Input is swiglu output [2048, 512], weight 5920 = [1024, 512].
+    have hswiglu_a_shape_pre : (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                                          (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915)))).shape = [2048, 512] := by
+      rw [TrainVerify.Denote.fw_swiglu_shape]; rfl
+    have hswiglu_b_shape_pre : (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                                          (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915)))).shape = [2048, 512] := by
+      rw [TrainVerify.Denote.fw_swiglu_shape]; rfl
+    rw [fw_linear_allGather0_commute_2_of
           (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
                      (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
           (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
                      (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
-          (initPM 5920)]
+          (initPM 5920) 2048 512 1024 (by omega) (by omega) (by omega)
+          hswiglu_a_shape_pre hswiglu_b_shape_pre h5920_shape]
     -- Push through fw_view (post-linear-5920).
     have hswiglu_a_shape : (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
                                        (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915)))).shape = [2048, 512] := by
