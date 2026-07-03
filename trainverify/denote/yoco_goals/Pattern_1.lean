@@ -4,6 +4,7 @@
 -/
 import denote.yoco_goals.Goal_1
 import denote.yoco_goals.Pattern_4  -- reuse topk_routing helpers
+import denote.DenoteMoE  -- MoE-specific applyNode/evalOp helpers (rms_norm, sigmoid, swiglu, maybe_unshuffle, all2all_moe_gmm, mix_precision_linear, inner_chunk_ce)
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 8000000
@@ -88,7 +89,7 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
   unfold denoteGraph
   rw [h_split, List.foldl_append, List.foldl_cons, List.foldl_nil]
   set S24 : Store := (sm_goal_1.nodes.take 24).foldl (applyNode sm_goal_1) initSM
-  rw [applyNode_fw_inner_chunk_ce_fst_out sm_goal_1 S24 0 5930 5931 4678 4673 4674 [1024]]
+  rw [applyNode_fw_inner_chunk_ce_fst_out_1p sm_goal_1 S24 0 5930 5931 4678 4673 4674 [1024]]
   set S1 : Store := (sm_goal_1.nodes.take 1).foldl (applyNode sm_goal_1) initSM with hS1_def
   set S2 : Store := (sm_goal_1.nodes.take 2).foldl (applyNode sm_goal_1) initSM with hS2_def
   set S3 : Store := (sm_goal_1.nodes.take 3).foldl (applyNode sm_goal_1) initSM with hS3_def
@@ -120,7 +121,7 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
     rw [h_take24_5930, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hS24_5930 : S24 5930 = fw_rms_norm (S23 5928) (S23 5929) := by
     rw [hS24_eq_5930]
-    exact applyNode_fw_rms_norm_out sm_goal_1 S23 0 5928 5929 5930
+    exact applyNode_fw_rms_norm_out_1p sm_goal_1 S23 0 5928 5929 5930
   have hS24_5931 : S24 5931 = initSM 5931 :=
     foldl_applyNode_at_not_written sm_goal_1 (sm_goal_1.nodes.take 24) initSM 5931
       (by intro n hn; fin_cases hn <;> decide)
@@ -134,7 +135,7 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
     rw [h_take23_5928, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hS23_5928 : S23 5928 = fw_maybe_unshuffle (S22 5926) 1 0 [S22 5927] := by
     rw [hS23_eq_5928]
-    exact applyNode_fw_maybe_unshuffle_out sm_goal_1 S22 0 5926 5927 5928 [1, 0]
+    exact applyNode_fw_maybe_unshuffle_out_1p sm_goal_1 S22 0 5926 5927 5928 [1, 0]
   have hS23_5929 : S23 5929 = initSM 5929 :=
     foldl_applyNode_at_not_written sm_goal_1 (sm_goal_1.nodes.take 23) initSM 5929
       (by intro n hn; fin_cases hn <;> decide)
@@ -195,7 +196,7 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
     rw [h_take13_5904, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hS13_5904 : S13 5904 = fw_all2all_moe_gmm (S12 8591) (S12 5899) (S12 5900) (S12 5902) (S12 5903) 64 0 64 8 ((((10 : Nat) : Scalar))) := by
     rw [hS13_eq_5904]
-    exact applyNode_fw_all2all_moe_gmm_out sm_goal_1 S12 0 8591 5899 5900 5902 5903 5904 [64, 0, 64, 8]
+    exact applyNode_fw_all2all_moe_gmm_out_1p sm_goal_1 S12 0 8591 5899 5900 5902 5903 5904 [64, 0, 64, 8]
   have hS18_5909 : S18 5909 = S14 5909 :=
     foldl_take_split_at_not_written sm_goal_1 sm_goal_1.nodes initSM 5909 14 18 (by omega)
       (by intro n hn; fin_cases hn <;> decide)
@@ -229,7 +230,7 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
     rw [h_take14_5909, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hS14_5909 : S14 5909 = fw_sigmoid (S13 5908) := by
     rw [hS14_eq_5909]
-    exact applyNode_fw_sigmoid_out sm_goal_1 S13 0 5908 5909
+    exact applyNode_fw_sigmoid_out_1p sm_goal_1 S13 0 5908 5909
   -- Sj=17 written by node_16 (FW_mix_precision_linear), outs=[5921], tid=5921
   have h_take17_5921 : sm_goal_1.nodes.take 17 = sm_goal_1.nodes.take 16 ++ [{ rank := 0, op := "OpName.FW_mix_precision_linear", ins := [5919, 5920], outs := [5921] }] := by rfl
   have hS17_eq_5921 : S17 = applyNode sm_goal_1 S16 { rank := 0, op := "OpName.FW_mix_precision_linear", ins := [5919, 5920], outs := [5921] } := by
@@ -237,7 +238,7 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
     rw [h_take17_5921, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hS17_5921 : S17 5921 = fw_linear (S16 5919) (S16 5920) := by
     rw [hS17_eq_5921]
-    exact applyNode_fw_mix_precision_linear_out sm_goal_1 S16 0 5919 5920 5921
+    exact applyNode_fw_mix_precision_linear_out_1p sm_goal_1 S16 0 5919 5920 5921
   -- Sj=2 written by node_1 (FW_multiref), outs=[8587, 8591, 8595, 8599, 8603], tid=8591
   have h_take2_8591 : sm_goal_1.nodes.take 2 = sm_goal_1.nodes.take 1 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [5895], outs := [8587, 8591, 8595, 8599, 8603], params := [5] }] := by rfl
   have hS2_eq_8591 : S2 = applyNode sm_goal_1 S1 { rank := 0, op := "OpName.FW_multiref", ins := [5895], outs := [8587, 8591, 8595, 8599, 8603], params := [5] } := by
@@ -297,7 +298,7 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
     rw [h_take15_5918, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hS15_5918 : S15 5918 = fw_swiglu (S14 5913) (S14 5917) := by
     rw [hS15_eq_5918]
-    exact applyNode_fw_swiglu_out sm_goal_1 S14 0 5913 5917 5918
+    exact applyNode_fw_swiglu_out_1p sm_goal_1 S14 0 5913 5917 5918
   have hS9_5907 : S9 5907 = S6 5907 :=
     foldl_take_split_at_not_written sm_goal_1 sm_goal_1.nodes initSM 5907 6 9 (by omega)
       (by intro n hn; fin_cases hn <;> decide)
@@ -314,7 +315,7 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
     rw [h_take6_5907, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hS6_5907 : S6 5907 = fw_linear (S5 5905) (S5 5906) := by
     rw [hS6_eq_5907]
-    exact applyNode_fw_mix_precision_linear_out sm_goal_1 S5 0 5905 5906 5907
+    exact applyNode_fw_mix_precision_linear_out_1p sm_goal_1 S5 0 5905 5906 5907
   -- Sj=11 written by node_10 (FW_view), outs=[5913], tid=5913
   have h_take11_5913 : sm_goal_1.nodes.take 11 = sm_goal_1.nodes.take 10 ++ [{ rank := 0, op := "OpName.FW_view", ins := [5912], outs := [5913], params := [4096, 512] }] := by rfl
   have hS11_eq_5913 : S11 = applyNode sm_goal_1 S10 { rank := 0, op := "OpName.FW_view", ins := [5912], outs := [5913], params := [4096, 512] } := by
@@ -358,7 +359,7 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
     rw [h_take7_5912, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hS7_5912 : S7 5912 = fw_linear (S6 5910) (S6 5911) := by
     rw [hS7_eq_5912]
-    exact applyNode_fw_mix_precision_linear_out sm_goal_1 S6 0 5910 5911 5912
+    exact applyNode_fw_mix_precision_linear_out_1p sm_goal_1 S6 0 5910 5911 5912
   -- Sj=8 written by node_7 (FW_mix_precision_linear), outs=[5916], tid=5916
   have h_take8_5916 : sm_goal_1.nodes.take 8 = sm_goal_1.nodes.take 7 ++ [{ rank := 0, op := "OpName.FW_mix_precision_linear", ins := [5914, 5915], outs := [5916] }] := by rfl
   have hS8_eq_5916 : S8 = applyNode sm_goal_1 S7 { rank := 0, op := "OpName.FW_mix_precision_linear", ins := [5914, 5915], outs := [5916] } := by
@@ -366,7 +367,7 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
     rw [h_take8_5916, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hS8_5916 : S8 5916 = fw_linear (S7 5914) (S7 5915) := by
     rw [hS8_eq_5916]
-    exact applyNode_fw_mix_precision_linear_out sm_goal_1 S7 0 5914 5915 5916
+    exact applyNode_fw_mix_precision_linear_out_1p sm_goal_1 S7 0 5914 5915 5916
   -- Sj=2 written by node_1 (FW_multiref), outs=[8587, 8591, 8595, 8599, 8603], tid=8595
   have h_take2_8595 : sm_goal_1.nodes.take 2 = sm_goal_1.nodes.take 1 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [5895], outs := [8587, 8591, 8595, 8599, 8603], params := [5] }] := by rfl
   have hS2_eq_8595 : S2 = applyNode sm_goal_1 S1 { rank := 0, op := "OpName.FW_multiref", ins := [5895], outs := [8587, 8591, 8595, 8599, 8603], params := [5] } := by
@@ -526,7 +527,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake52_11838, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP52_11838 : P52 11838 = (fw_inner_chunk_ce (P51 11834) (P51 5931) (P51 11836) ((((P51 5931).shape.head?).getD 0)) ((((0 : Nat) : Scalar)))).fst := by
     rw [hP52_eq_11838]
-    exact applyNode_fw_inner_chunk_ce_fst_out pm_goal_1 P51 1 11834 5931 11836 11838 11840 [1024]
+    exact applyNode_fw_inner_chunk_ce_fst_out_1p pm_goal_1 P51 1 11834 5931 11836 11838 11840 [1024]
   -- Pj=51 written by pm_node_50 (rank=0 FW_inner_chunk_ce), outs=[11837, 11839], tid=11837
   have h_pmtake51_11837 : pm_goal_1.nodes.take 51 = pm_goal_1.nodes.take 50 ++ [{ rank := 0, op := "OpName.FW_inner_chunk_ce", ins := [11833, 5931, 11835], outs := [11837, 11839], params := [1024] }] := by rfl
   have hP51_eq_11837 : P51 = applyNode pm_goal_1 P50 { rank := 0, op := "OpName.FW_inner_chunk_ce", ins := [11833, 5931, 11835], outs := [11837, 11839], params := [1024] } := by
@@ -534,7 +535,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake51_11837, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP51_11837 : P51 11837 = (fw_inner_chunk_ce (P50 11833) (P50 5931) (P50 11835) ((((P50 5931).shape.head?).getD 0)) ((((0 : Nat) : Scalar)))).fst := by
     rw [hP51_eq_11837]
-    exact applyNode_fw_inner_chunk_ce_fst_out pm_goal_1 P50 0 11833 5931 11835 11837 11839 [1024]
+    exact applyNode_fw_inner_chunk_ce_fst_out_1p pm_goal_1 P50 0 11833 5931 11835 11837 11839 [1024]
   have hP51_11834 : P51 11834 = P50 11834 :=
     foldl_take_split_at_not_written pm_goal_1 pm_goal_1.nodes initPM 11834 50 51 (by omega)
       (by intro n hn; fin_cases hn <;> decide)
@@ -560,7 +561,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake50_11834, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP50_11834 : P50 11834 = fw_rms_norm (P49 11728) (P49 5929) := by
     rw [hP50_eq_11834]
-    exact applyNode_fw_rms_norm_out pm_goal_1 P49 1 11728 5929 11834
+    exact applyNode_fw_rms_norm_out_1p pm_goal_1 P49 1 11728 5929 11834
   -- Pj=2 written by pm_node_1 (rank=1 ChunkPrim), outs=[11836], tid=11836
   have h_pmtake2_11836 : pm_goal_1.nodes.take 2 = pm_goal_1.nodes.take 1 ++ [{ rank := 1, op := "OpName.ChunkPrim", ins := [4678], outs := [11836], params := [0] }] := by rfl
   have hP2_eq_11836 : P2 = applyNode pm_goal_1 P1 { rank := 1, op := "OpName.ChunkPrim", ins := [4678], outs := [11836], params := [0] } := by
@@ -576,7 +577,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake49_11833, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP49_11833 : P49 11833 = fw_rms_norm (P48 11727) (P48 5929) := by
     rw [hP49_eq_11833]
-    exact applyNode_fw_rms_norm_out pm_goal_1 P48 0 11727 5929 11833
+    exact applyNode_fw_rms_norm_out_1p pm_goal_1 P48 0 11727 5929 11833
   -- Pj=1 written by pm_node_0 (rank=0 ChunkPrim), outs=[11835], tid=11835
   have h_pmtake1_11835 : pm_goal_1.nodes.take 1 = pm_goal_1.nodes.take 0 ++ [{ rank := 0, op := "OpName.ChunkPrim", ins := [4678], outs := [11835], params := [0] }] := by rfl
   have hP1_eq_11835 : P1 = applyNode pm_goal_1 initPM { rank := 0, op := "OpName.ChunkPrim", ins := [4678], outs := [11835], params := [0] } := by
@@ -608,7 +609,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake48_11728, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP48_11728 : P48 11728 = fw_maybe_unshuffle (P47 11722) 2 1 [P47 5927] := by
     rw [hP48_eq_11728]
-    exact applyNode_fw_maybe_unshuffle_out pm_goal_1 P47 1 11722 5927 11728 [2, 1]
+    exact applyNode_fw_maybe_unshuffle_out_1p pm_goal_1 P47 1 11722 5927 11728 [2, 1]
   -- Pj=47 written by pm_node_46 (rank=0 FW_maybe_unshuffle), outs=[11727], tid=11727
   have h_pmtake47_11727 : pm_goal_1.nodes.take 47 = pm_goal_1.nodes.take 46 ++ [{ rank := 0, op := "OpName.FW_maybe_unshuffle", ins := [11721, 5927], outs := [11727], params := [2, 0] }] := by rfl
   have hP47_eq_11727 : P47 = applyNode pm_goal_1 P46 { rank := 0, op := "OpName.FW_maybe_unshuffle", ins := [11721, 5927], outs := [11727], params := [2, 0] } := by
@@ -616,7 +617,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake47_11727, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP47_11727 : P47 11727 = fw_maybe_unshuffle (P46 11721) 2 0 [P46 5927] := by
     rw [hP47_eq_11727]
-    exact applyNode_fw_maybe_unshuffle_out pm_goal_1 P46 0 11721 5927 11727 [2, 0]
+    exact applyNode_fw_maybe_unshuffle_out_1p pm_goal_1 P46 0 11721 5927 11727 [2, 0]
   have hP47_11722 : P47 11722 = P46 11722 :=
     foldl_take_split_at_not_written pm_goal_1 pm_goal_1.nodes initPM 11722 46 47 (by omega)
       (by intro n hn; fin_cases hn <;> decide)
@@ -736,7 +737,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake30_11634, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP30_11634 : P30 11634 = fw_all2all_moe_gmm (P29 16889) (P29 11624) (P29 11626) (P29 11630) (P29 11632) 64 32 64 8 ((((10 : Nat) : Scalar))) := by
     rw [hP30_eq_11634]
-    exact applyNode_fw_all2all_moe_gmm_out pm_goal_1 P29 1 16889 11624 11626 11630 11632 11634 [64, 32, 64, 8]
+    exact applyNode_fw_all2all_moe_gmm_out_1p pm_goal_1 P29 1 16889 11624 11626 11630 11632 11634 [64, 32, 64, 8]
   -- Pj=40 written by pm_node_39 (rank=1 FW_mul), outs=[11708], tid=11708
   have h_pmtake40_11708 : pm_goal_1.nodes.take 40 = pm_goal_1.nodes.take 39 ++ [{ rank := 1, op := "OpName.FW_mul", ins := [11648, 11704], outs := [11708] }] := by rfl
   have hP40_eq_11708 : P40 = applyNode pm_goal_1 P39 { rank := 1, op := "OpName.FW_mul", ins := [11648, 11704], outs := [11708] } := by
@@ -752,7 +753,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake27_11633, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP27_11633 : P27 11633 = fw_all2all_moe_gmm (P26 16866) (P26 11623) (P26 11625) (P26 11629) (P26 11631) 64 0 32 8 ((((10 : Nat) : Scalar))) := by
     rw [hP27_eq_11633]
-    exact applyNode_fw_all2all_moe_gmm_out pm_goal_1 P26 0 16866 11623 11625 11629 11631 11633 [64, 0, 32, 8]
+    exact applyNode_fw_all2all_moe_gmm_out_1p pm_goal_1 P26 0 16866 11623 11625 11629 11631 11633 [64, 0, 32, 8]
   -- Pj=39 written by pm_node_38 (rank=0 FW_mul), outs=[11707], tid=11707
   have h_pmtake39_11707 : pm_goal_1.nodes.take 39 = pm_goal_1.nodes.take 38 ++ [{ rank := 0, op := "OpName.FW_mul", ins := [11647, 11703], outs := [11707] }] := by rfl
   have hP39_eq_11707 : P39 = applyNode pm_goal_1 P38 { rank := 0, op := "OpName.FW_mul", ins := [11647, 11703], outs := [11707] } := by
@@ -834,7 +835,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake31_11648, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP31_11648 : P31 11648 = fw_sigmoid (P30 11646) := by
     rw [hP31_eq_11648]
-    exact applyNode_fw_sigmoid_out pm_goal_1 P30 1 11646 11648
+    exact applyNode_fw_sigmoid_out_1p pm_goal_1 P30 1 11646 11648
   -- Pj=38 written by pm_node_37 (rank=1 FW_view), outs=[11704], tid=11704
   have h_pmtake38_11704 : pm_goal_1.nodes.take 38 = pm_goal_1.nodes.take 37 ++ [{ rank := 1, op := "OpName.FW_view", ins := [11694], outs := [11704], params := [2048, 1024] }] := by rfl
   have hP38_eq_11704 : P38 = applyNode pm_goal_1 P37 { rank := 1, op := "OpName.FW_view", ins := [11694], outs := [11704], params := [2048, 1024] } := by
@@ -874,7 +875,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake28_11647, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP28_11647 : P28 11647 = fw_sigmoid (P27 11645) := by
     rw [hP28_eq_11647]
-    exact applyNode_fw_sigmoid_out pm_goal_1 P27 0 11645 11647
+    exact applyNode_fw_sigmoid_out_1p pm_goal_1 P27 0 11645 11647
   -- Pj=37 written by pm_node_36 (rank=0 FW_view), outs=[11703], tid=11703
   have h_pmtake37_11703 : pm_goal_1.nodes.take 37 = pm_goal_1.nodes.take 36 ++ [{ rank := 0, op := "OpName.FW_view", ins := [11693], outs := [11703], params := [2048, 1024] }] := by rfl
   have hP37_eq_11703 : P37 = applyNode pm_goal_1 P36 { rank := 0, op := "OpName.FW_view", ins := [11693], outs := [11703], params := [2048, 1024] } := by
@@ -922,7 +923,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake36_11694, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP36_11694 : P36 11694 = fw_linear (P35 11688) (P35 5920) := by
     rw [hP36_eq_11694]
-    exact applyNode_fw_mix_precision_linear_out pm_goal_1 P35 1 11688 5920 11694
+    exact applyNode_fw_mix_precision_linear_out_1p pm_goal_1 P35 1 11688 5920 11694
   -- Pj=20 written by pm_node_19 (rank=0 FW_view), outs=[11645], tid=11645
   have h_pmtake20_11645 : pm_goal_1.nodes.take 20 = pm_goal_1.nodes.take 19 ++ [{ rank := 0, op := "OpName.FW_view", ins := [11639], outs := [11645], params := [2048, 1] }] := by rfl
   have hP20_eq_11645 : P20 = applyNode pm_goal_1 P19 { rank := 0, op := "OpName.FW_view", ins := [11639], outs := [11645], params := [2048, 1] } := by
@@ -938,7 +939,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake35_11693, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP35_11693 : P35 11693 = fw_linear (P34 11687) (P34 5920) := by
     rw [hP35_eq_11693]
-    exact applyNode_fw_mix_precision_linear_out pm_goal_1 P34 0 11687 5920 11693
+    exact applyNode_fw_mix_precision_linear_out_1p pm_goal_1 P34 0 11687 5920 11693
   have hP23_11640 : P23 11640 = P16 11640 :=
     foldl_take_split_at_not_written pm_goal_1 pm_goal_1.nodes initPM 11640 16 23 (by omega)
       (by intro n hn; fin_cases hn <;> decide)
@@ -964,7 +965,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake16_11640, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP16_11640 : P16 11640 = fw_linear (P15 11636) (P15 5906) := by
     rw [hP16_eq_11640]
-    exact applyNode_fw_mix_precision_linear_out pm_goal_1 P15 1 11636 5906 11640
+    exact applyNode_fw_mix_precision_linear_out_1p pm_goal_1 P15 1 11636 5906 11640
   -- Pj=34 written by pm_node_33 (rank=1 FW_reshape), outs=[11688], tid=11688
   have h_pmtake34_11688 : pm_goal_1.nodes.take 34 = pm_goal_1.nodes.take 33 ++ [{ rank := 1, op := "OpName.FW_reshape", ins := [11686], outs := [11688] }] := by rfl
   have hP34_eq_11688 : P34 = applyNode pm_goal_1 P33 { rank := 1, op := "OpName.FW_reshape", ins := [11686], outs := [11688] } := by
@@ -980,7 +981,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake13_11639, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP13_11639 : P13 11639 = fw_linear (P12 11635) (P12 5906) := by
     rw [hP13_eq_11639]
-    exact applyNode_fw_mix_precision_linear_out pm_goal_1 P12 0 11635 5906 11639
+    exact applyNode_fw_mix_precision_linear_out_1p pm_goal_1 P12 0 11635 5906 11639
   -- Pj=33 written by pm_node_32 (rank=0 FW_reshape), outs=[11687], tid=11687
   have h_pmtake33_11687 : pm_goal_1.nodes.take 33 = pm_goal_1.nodes.take 32 ++ [{ rank := 0, op := "OpName.FW_reshape", ins := [11685], outs := [11687] }] := by rfl
   have hP33_eq_11687 : P33 = applyNode pm_goal_1 P32 { rank := 0, op := "OpName.FW_reshape", ins := [11685], outs := [11687] } := by
@@ -1022,7 +1023,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake32_11686, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP32_11686 : P32 11686 = fw_swiglu (P31 11664) (P31 11682) := by
     rw [hP32_eq_11686]
-    exact applyNode_fw_swiglu_out pm_goal_1 P31 1 11664 11682 11686
+    exact applyNode_fw_swiglu_out_1p pm_goal_1 P31 1 11664 11682 11686
   -- Pj=7 written by pm_node_6 (rank=0 FW_reshape), outs=[11635], tid=11635
   have h_pmtake7_11635 : pm_goal_1.nodes.take 7 = pm_goal_1.nodes.take 6 ++ [{ rank := 0, op := "OpName.FW_reshape", ins := [16870], outs := [11635] }] := by rfl
   have hP7_eq_11635 : P7 = applyNode pm_goal_1 P6 { rank := 0, op := "OpName.FW_reshape", ins := [16870], outs := [11635] } := by
@@ -1038,7 +1039,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake29_11685, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP29_11685 : P29 11685 = fw_swiglu (P28 11663) (P28 11681) := by
     rw [hP29_eq_11685]
-    exact applyNode_fw_swiglu_out pm_goal_1 P28 0 11663 11681 11685
+    exact applyNode_fw_swiglu_out_1p pm_goal_1 P28 0 11663 11681 11685
   have hP9_16893 : P9 16893 = P6 16893 :=
     foldl_take_split_at_not_written pm_goal_1 pm_goal_1.nodes initPM 16893 6 9 (by omega)
       (by intro n hn; fin_cases hn <;> decide)
@@ -1124,7 +1125,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake17_11654, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP17_11654 : P17 11654 = fw_linear (P16 11650) (P16 5911) := by
     rw [hP17_eq_11654]
-    exact applyNode_fw_mix_precision_linear_out pm_goal_1 P16 1 11650 5911 11654
+    exact applyNode_fw_mix_precision_linear_out_1p pm_goal_1 P16 1 11650 5911 11654
   -- Pj=18 written by pm_node_17 (rank=1 FW_mix_precision_linear), outs=[11672], tid=11672
   have h_pmtake18_11672 : pm_goal_1.nodes.take 18 = pm_goal_1.nodes.take 17 ++ [{ rank := 1, op := "OpName.FW_mix_precision_linear", ins := [11668, 5915], outs := [11672] }] := by rfl
   have hP18_eq_11672 : P18 = applyNode pm_goal_1 P17 { rank := 1, op := "OpName.FW_mix_precision_linear", ins := [11668, 5915], outs := [11672] } := by
@@ -1132,7 +1133,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake18_11672, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP18_11672 : P18 11672 = fw_linear (P17 11668) (P17 5915) := by
     rw [hP18_eq_11672]
-    exact applyNode_fw_mix_precision_linear_out pm_goal_1 P17 1 11668 5915 11672
+    exact applyNode_fw_mix_precision_linear_out_1p pm_goal_1 P17 1 11668 5915 11672
   -- Pj=14 written by pm_node_13 (rank=0 FW_mix_precision_linear), outs=[11653], tid=11653
   have h_pmtake14_11653 : pm_goal_1.nodes.take 14 = pm_goal_1.nodes.take 13 ++ [{ rank := 0, op := "OpName.FW_mix_precision_linear", ins := [11649, 5911], outs := [11653] }] := by rfl
   have hP14_eq_11653 : P14 = applyNode pm_goal_1 P13 { rank := 0, op := "OpName.FW_mix_precision_linear", ins := [11649, 5911], outs := [11653] } := by
@@ -1140,7 +1141,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake14_11653, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP14_11653 : P14 11653 = fw_linear (P13 11649) (P13 5911) := by
     rw [hP14_eq_11653]
-    exact applyNode_fw_mix_precision_linear_out pm_goal_1 P13 0 11649 5911 11653
+    exact applyNode_fw_mix_precision_linear_out_1p pm_goal_1 P13 0 11649 5911 11653
   -- Pj=15 written by pm_node_14 (rank=0 FW_mix_precision_linear), outs=[11671], tid=11671
   have h_pmtake15_11671 : pm_goal_1.nodes.take 15 = pm_goal_1.nodes.take 14 ++ [{ rank := 0, op := "OpName.FW_mix_precision_linear", ins := [11667, 5915], outs := [11671] }] := by rfl
   have hP15_eq_11671 : P15 = applyNode pm_goal_1 P14 { rank := 0, op := "OpName.FW_mix_precision_linear", ins := [11667, 5915], outs := [11671] } := by
@@ -1148,7 +1149,7 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [h_pmtake15_11671, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP15_11671 : P15 11671 = fw_linear (P14 11667) (P14 5915) := by
     rw [hP15_eq_11671]
-    exact applyNode_fw_mix_precision_linear_out pm_goal_1 P14 0 11667 5915 11671
+    exact applyNode_fw_mix_precision_linear_out_1p pm_goal_1 P14 0 11667 5915 11671
   have hP16_11650 : P16 11650 = P11 11650 :=
     foldl_take_split_at_not_written pm_goal_1 pm_goal_1.nodes initPM 11650 11 16 (by omega)
       (by intro n hn; fin_cases hn <;> decide)

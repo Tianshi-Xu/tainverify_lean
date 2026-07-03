@@ -4536,22 +4536,22 @@ theorem evalOp_fw_mul2 (numParts rank : Nat) (params : List Nat) (x y : Tensor) 
   rfl
 
 /-- Unfolding lemma for `evalOp` on `FW_sigmoid`. -/
-theorem evalOp_fw_sigmoid (numParts rank : Nat) (params : List Nat) (x : Tensor) :
+theorem evalOp_fw_sigmoid_iroha (numParts rank : Nat) (params : List Nat) (x : Tensor) :
     evalOp numParts rank "OpName.FW_sigmoid" params [x] = [fw_sigmoid x] := by
   rfl
 
 /-- Unfolding lemma for `evalOp` on `FW_swiglu`. -/
-theorem evalOp_fw_swiglu (numParts rank : Nat) (params : List Nat) (gate up : Tensor) :
+theorem evalOp_fw_swiglu_iroha (numParts rank : Nat) (params : List Nat) (gate up : Tensor) :
     evalOp numParts rank "OpName.FW_swiglu" params [gate, up] = [fw_swiglu gate up] := by
   rfl
 
 /-- Unfolding lemma for `evalOp` on `FW_rms_norm`. -/
-theorem evalOp_fw_rms_norm (numParts rank : Nat) (params : List Nat) (x w : Tensor) :
+theorem evalOp_fw_rms_norm_iroha (numParts rank : Nat) (params : List Nat) (x w : Tensor) :
     evalOp numParts rank "OpName.FW_rms_norm" params [x, w] = [fw_rms_norm x w] := by
   rfl
 
 /-- Unfolding lemma for `evalOp` on `FW_mix_precision_linear`. -/
-theorem evalOp_fw_mix_precision_linear (numParts rank : Nat) (params : List Nat) (x w : Tensor) :
+theorem evalOp_fw_mix_precision_linear_iroha (numParts rank : Nat) (params : List Nat) (x w : Tensor) :
     evalOp numParts rank "OpName.FW_mix_precision_linear" params [x, w] = [fw_linear x w] := by
   rfl
 
@@ -4600,45 +4600,45 @@ theorem applyNode_fw_mul_out
   simp [List.find?]
 
 /-- applyNode for `FW_sigmoid` with singleton output. -/
-theorem applyNode_fw_sigmoid_out
+theorem applyNode_fw_sigmoid_out_1p
     (g : GraphDecl) (s : Store) (rank : Nat) (xTid outTid : Tid) :
     applyNode g s { rank := rank, op := "OpName.FW_sigmoid", ins := [xTid], outs := [outTid] } outTid =
       fw_sigmoid (s xTid) := by
   unfold applyNode
-  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_sigmoid]
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_sigmoid_iroha]
   change storeSet s [(outTid, fw_sigmoid (s xTid))] outTid = _
   unfold storeSet
   simp [List.find?]
 
 /-- applyNode for `FW_swiglu` with singleton output. -/
-theorem applyNode_fw_swiglu_out
+theorem applyNode_fw_swiglu_out_1p
     (g : GraphDecl) (s : Store) (rank : Nat) (gateTid upTid outTid : Tid) :
     applyNode g s { rank := rank, op := "OpName.FW_swiglu", ins := [gateTid, upTid], outs := [outTid] } outTid =
       fw_swiglu (s gateTid) (s upTid) := by
   unfold applyNode
-  rw [show ([gateTid, upTid] : List Tid).map s = [s gateTid, s upTid] from rfl, evalOp_fw_swiglu]
+  rw [show ([gateTid, upTid] : List Tid).map s = [s gateTid, s upTid] from rfl, evalOp_fw_swiglu_iroha]
   change storeSet s [(outTid, fw_swiglu (s gateTid) (s upTid))] outTid = _
   unfold storeSet
   simp [List.find?]
 
 /-- applyNode for `FW_rms_norm` with singleton output. -/
-theorem applyNode_fw_rms_norm_out
+theorem applyNode_fw_rms_norm_out_1p
     (g : GraphDecl) (s : Store) (rank : Nat) (xTid wTid outTid : Tid) :
     applyNode g s { rank := rank, op := "OpName.FW_rms_norm", ins := [xTid, wTid], outs := [outTid] } outTid =
       fw_rms_norm (s xTid) (s wTid) := by
   unfold applyNode
-  rw [show ([xTid, wTid] : List Tid).map s = [s xTid, s wTid] from rfl, evalOp_fw_rms_norm]
+  rw [show ([xTid, wTid] : List Tid).map s = [s xTid, s wTid] from rfl, evalOp_fw_rms_norm_iroha]
   change storeSet s [(outTid, fw_rms_norm (s xTid) (s wTid))] outTid = _
   unfold storeSet
   simp [List.find?]
 
 /-- applyNode for `FW_mix_precision_linear` (aliased to fw_linear in evalOp). -/
-theorem applyNode_fw_mix_precision_linear_out
+theorem applyNode_fw_mix_precision_linear_out_1p
     (g : GraphDecl) (s : Store) (rank : Nat) (xTid wTid outTid : Tid) :
     applyNode g s { rank := rank, op := "OpName.FW_mix_precision_linear", ins := [xTid, wTid], outs := [outTid] } outTid =
       fw_linear (s xTid) (s wTid) := by
   unfold applyNode
-  rw [show ([xTid, wTid] : List Tid).map s = [s xTid, s wTid] from rfl, evalOp_fw_mix_precision_linear]
+  rw [show ([xTid, wTid] : List Tid).map s = [s xTid, s wTid] from rfl, evalOp_fw_mix_precision_linear_iroha]
   change storeSet s [(outTid, fw_linear (s xTid) (s wTid))] outTid = _
   unfold storeSet
   simp [List.find?]
@@ -4709,7 +4709,7 @@ theorem evalOp_fw_maybe_unshuffle_2 (numParts rank : Nat) (params : List Nat) (c
   rfl
 
 /-- applyNode for `FW_maybe_unshuffle` — takes cu tensor + one shard. -/
-theorem applyNode_fw_maybe_unshuffle_out
+theorem applyNode_fw_maybe_unshuffle_out_1p
     (g : GraphDecl) (s : Store) (rank : Nat) (cuTid xTid outTid : Tid) (params : List Nat) :
     applyNode g s { rank := rank, op := "OpName.FW_maybe_unshuffle", ins := [cuTid, xTid], outs := [outTid], params := params } outTid =
       fw_maybe_unshuffle (s cuTid) (params.head?.getD 1) ((params.drop 1).head?.getD 0) [s xTid] := by
@@ -4720,7 +4720,7 @@ theorem applyNode_fw_maybe_unshuffle_out
   simp [List.find?]
 
 /-- Unfolding lemma for `evalOp` on `FW_all2all_moe_gmm`. -/
-theorem evalOp_fw_all2all_moe_gmm (numParts rank : Nat) (params : List Nat) (input rp rm w13 w2 : Tensor) :
+theorem evalOp_fw_all2all_moe_gmm_iroha (numParts rank : Nat) (params : List Nat) (input rp rm w13 w2 : Tensor) :
     evalOp numParts rank "OpName.FW_all2all_moe_gmm" params [input, rp, rm, w13, w2] =
       [fw_all2all_moe_gmm input rp rm w13 w2
         (params.getD 0 1) (params.getD 1 0) (params.getD 2 (params.getD 0 1))
@@ -4728,7 +4728,7 @@ theorem evalOp_fw_all2all_moe_gmm (numParts rank : Nat) (params : List Nat) (inp
   rfl
 
 /-- applyNode for `FW_all2all_moe_gmm` — 5-input MoE gemm op with singleton output. -/
-theorem applyNode_fw_all2all_moe_gmm_out
+theorem applyNode_fw_all2all_moe_gmm_out_1p
     (g : GraphDecl) (s : Store) (rank : Nat) (inputTid rpTid rmTid w13Tid w2Tid outTid : Tid)
     (params : List Nat) :
     applyNode g s { rank := rank, op := "OpName.FW_all2all_moe_gmm", ins := [inputTid, rpTid, rmTid, w13Tid, w2Tid], outs := [outTid], params := params } outTid =
@@ -4737,7 +4737,7 @@ theorem applyNode_fw_all2all_moe_gmm_out
         (params.getD 3 1) ((((params.getD 4 10) : Nat) : Scalar)) := by
   unfold applyNode
   rw [show ([inputTid, rpTid, rmTid, w13Tid, w2Tid] : List Tid).map s =
-      [s inputTid, s rpTid, s rmTid, s w13Tid, s w2Tid] from rfl, evalOp_fw_all2all_moe_gmm]
+      [s inputTid, s rpTid, s rmTid, s w13Tid, s w2Tid] from rfl, evalOp_fw_all2all_moe_gmm_iroha]
   change storeSet s [(outTid, fw_all2all_moe_gmm (s inputTid) (s rpTid) (s rmTid) (s w13Tid) (s w2Tid)
         (params.getD 0 1) (params.getD 1 0) (params.getD 2 (params.getD 0 1))
         (params.getD 3 1) ((((params.getD 4 10) : Nat) : Scalar)))] outTid = _
@@ -4745,7 +4745,7 @@ theorem applyNode_fw_all2all_moe_gmm_out
   simp [List.find?]
 
 /-- Unfolding lemma for `evalOp` on `FW_inner_chunk_ce`. -/
-theorem evalOp_fw_inner_chunk_ce (numParts rank : Nat) (params : List Nat) (x w y : Tensor) :
+theorem evalOp_fw_inner_chunk_ce_iroha (numParts rank : Nat) (params : List Nat) (x w y : Tensor) :
     evalOp numParts rank "OpName.FW_inner_chunk_ce" params [x, w, y] =
       let vocab := (w.shape.head?).getD 0
       let zLossScale : Scalar := (((params.getD 1 0) : Nat) : Scalar)
@@ -4754,7 +4754,7 @@ theorem evalOp_fw_inner_chunk_ce (numParts rank : Nat) (params : List Nat) (x w 
   rfl
 
 /-- applyNode for `FW_inner_chunk_ce` — retrieve first output (losses). -/
-theorem applyNode_fw_inner_chunk_ce_fst_out
+theorem applyNode_fw_inner_chunk_ce_fst_out_1p
     (g : GraphDecl) (s : Store) (rank : Nat) (xTid wTid yTid lossesTid zLossesTid : Tid)
     (params : List Nat) :
     applyNode g s { rank := rank, op := "OpName.FW_inner_chunk_ce", ins := [xTid, wTid, yTid], outs := [lossesTid, zLossesTid], params := params } lossesTid =
@@ -4763,7 +4763,7 @@ theorem applyNode_fw_inner_chunk_ce_fst_out
         ((((params.getD 1 0) : Nat) : Scalar))).fst := by
   unfold applyNode
   rw [show ([xTid, wTid, yTid] : List Tid).map s = [s xTid, s wTid, s yTid] from rfl,
-      evalOp_fw_inner_chunk_ce]
+      evalOp_fw_inner_chunk_ce_iroha]
   change storeSet s [(lossesTid, (fw_inner_chunk_ce (s xTid) (s wTid) (s yTid)
         (((s wTid).shape.head?).getD 0)
         ((((params.getD 1 0) : Nat) : Scalar))).fst),
