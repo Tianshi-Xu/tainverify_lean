@@ -480,10 +480,26 @@ def _get_node_params(G: Any, n: Any, num_parts: int = 0) -> Optional[List[int]]:
 	elif "FW_mix_precision_linear" in op or "BW_mix_precision_linear" in op:
 		return None
 	elif "FW_topk_routing" in op or "BW_topk_routing" in op:
-		# params: [top_k]
+		# params: [top_k, num_experts]
+		# num_experts must match the logits' expert dimension (logits.shape[-1]).
+		# Otherwise the Denote-side `fw_topk_routing`'s output shape [lDim, numExperts]
+		# won't align with `topkScoresAt` reading `valAt scores (l * numExperts + e)`
+		# from `softmax(logits) : [lDim, logits.shape[-1]]`, and the sharding-commute
+		# axiom becomes inconsistent (values from wrong rows are read on LHS vs RHS).
+		# Regression fix 2026-07-03 (Iroha): previously only [top_k] was emitted, so
+		# `numExperts` defaulted to 1 via `params.getD 1 1`, making the axiom vacuous.
 		kwargs = G.node_kwargs(n)
 		top_k = int(kwargs.get("top_k", 1))
-		return [top_k]
+		num_experts = int(kwargs.get("num_experts", 1))
+		# Derive num_experts from logits shape when not present in kwargs (safer fallback).
+		if "num_experts" not in kwargs:
+			ins = list(G.node_ins(n)) if hasattr(G, "node_ins") else []
+			if ins:
+				logits_tid = ins[0]
+				logits_shape = G.tid_shape(logits_tid) if hasattr(G, "tid_shape") else None
+				if logits_shape and len(logits_shape) >= 1:
+					num_experts = int(logits_shape[-1])
+		return [top_k, num_experts]
 	elif "FW_all2all_moe_gmm" in op or "BW_all2all_moe_gmm" in op:
 		# params: [num_experts, local_expert_start, local_expert_end, topk]
 		kwargs = G.node_kwargs(n)

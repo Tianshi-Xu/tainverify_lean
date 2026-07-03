@@ -65,8 +65,8 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
           (fw_maybe_unshuffle (elemwiseAdd (initSM 5893)
               (elemwiseAdd
                 (fw_all2all_moe_gmm (initSM 5895)
-                  ((fw_topk_routing (initSM 5898) 8 1).fst)
-                  ((fw_topk_routing (initSM 5898) 8 1).snd.fst)
+                  ((fw_topk_routing (initSM 5898) 8 64).fst)
+                  ((fw_topk_routing (initSM 5898) 8 64).snd.fst)
                   (initSM 5902) (initSM 5903) 64 0 64 8 ((((10 : Nat) : Scalar))))
                 (elemwiseMul
                   (fw_sigmoid (fw_view [4096, 1] (fw_linear (initSM 5895) (initSM 5906))))
@@ -248,21 +248,21 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
     rw [hS2_eq_8591]
     exact applyNode_fw_multiref5_at_pos1_out sm_goal_1 S1 0 5895 8587 8591 8595 8599 8603 (by decide)
   -- Sj=9 written by node_8 (FW_topk_routing), outs=[5899, 5900, 5901], tid=5899
-  have h_take9_5899 : sm_goal_1.nodes.take 9 = sm_goal_1.nodes.take 8 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [5898], outs := [5899, 5900, 5901], params := [8] }] := by rfl
-  have hS9_eq_5899 : S9 = applyNode sm_goal_1 S8 { rank := 0, op := "OpName.FW_topk_routing", ins := [5898], outs := [5899, 5900, 5901], params := [8] } := by
+  have h_take9_5899 : sm_goal_1.nodes.take 9 = sm_goal_1.nodes.take 8 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [5898], outs := [5899, 5900, 5901], params := [8, 64] }] := by rfl
+  have hS9_eq_5899 : S9 = applyNode sm_goal_1 S8 { rank := 0, op := "OpName.FW_topk_routing", ins := [5898], outs := [5899, 5900, 5901], params := [8, 64] } := by
     show (sm_goal_1.nodes.take 9).foldl (applyNode sm_goal_1) initSM = _
     rw [h_take9_5899, List.foldl_append, List.foldl_cons, List.foldl_nil]
-  have hS9_5899 : S9 5899 = (fw_topk_routing (S8 5898) 8 1).fst := by
+  have hS9_5899 : S9 5899 = (fw_topk_routing (S8 5898) 8 64).fst := by
     rw [hS9_eq_5899]
-    exact applyNode_fw_topk_routing_probs_out sm_goal_1 S8 0 5898 5899 5900 5901 [8]
+    exact applyNode_fw_topk_routing_probs_out sm_goal_1 S8 0 5898 5899 5900 5901 [8, 64]
   -- Sj=9 written by node_8 (FW_topk_routing), outs=[5899, 5900, 5901], tid=5900
-  have h_take9_5900 : sm_goal_1.nodes.take 9 = sm_goal_1.nodes.take 8 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [5898], outs := [5899, 5900, 5901], params := [8] }] := by rfl
-  have hS9_eq_5900 : S9 = applyNode sm_goal_1 S8 { rank := 0, op := "OpName.FW_topk_routing", ins := [5898], outs := [5899, 5900, 5901], params := [8] } := by
+  have h_take9_5900 : sm_goal_1.nodes.take 9 = sm_goal_1.nodes.take 8 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [5898], outs := [5899, 5900, 5901], params := [8, 64] }] := by rfl
+  have hS9_eq_5900 : S9 = applyNode sm_goal_1 S8 { rank := 0, op := "OpName.FW_topk_routing", ins := [5898], outs := [5899, 5900, 5901], params := [8, 64] } := by
     show (sm_goal_1.nodes.take 9).foldl (applyNode sm_goal_1) initSM = _
     rw [h_take9_5900, List.foldl_append, List.foldl_cons, List.foldl_nil]
-  have hS9_5900 : S9 5900 = (fw_topk_routing (S8 5898) 8 1).snd.fst := by
+  have hS9_5900 : S9 5900 = (fw_topk_routing (S8 5898) 8 64).snd.fst := by
     rw [hS9_eq_5900]
-    exact applyNode_fw_topk_routing_map_out sm_goal_1 S8 0 5898 5899 5900 5901 [8] (by decide)
+    exact applyNode_fw_topk_routing_map_out sm_goal_1 S8 0 5898 5899 5900 5901 [8, 64] (by decide)
   have hS13_5908 : S13 5908 = S10 5908 :=
     foldl_take_split_at_not_written sm_goal_1 sm_goal_1.nodes initSM 5908 10 13 (by omega)
       (by intro n hn; fin_cases hn <;> decide)
@@ -456,7 +456,7 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
 /-- Full unfolding of `denoteGraph pm_goal_1 initPM 4673`. -/
 theorem denote_pm_goal_1_4673 (initPM : Store) :
     denoteGraph pm_goal_1 initPM 4673 =
-      allGatherPrimDimN 0 pm_goal_1.numRanks 0 [(fw_inner_chunk_ce (fw_rms_norm (fw_maybe_unshuffle (elemwiseAdd (initPM 11609) (elemwiseAdd (fw_all2all_moe_gmm (initPM 11613) ((fw_topk_routing (initPM 11621) 8 1).fst) ((fw_topk_routing (initPM 11621) 8 1).snd.fst) (initPM 11629) (initPM 11631) 64 0 32 8 ((((10 : Nat) : Scalar)))) (elemwiseMul (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906)))) (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911))) (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915)))) (initPM 5920)))))) (initPM 5927) 2 0) (initPM 5929)) (initPM 5931) (chunkPrimDimN 0 pm_goal_1.numRanks 0 (initPM 4678)) (((initPM 5931).shape.head?).getD 0) ((((0 : Nat) : Scalar)))).fst, (fw_inner_chunk_ce (fw_rms_norm (fw_maybe_unshuffle (elemwiseAdd (initPM 11610) (elemwiseAdd (fw_all2all_moe_gmm (initPM 11614) ((fw_topk_routing (initPM 11622) 8 1).fst) ((fw_topk_routing (initPM 11622) 8 1).snd.fst) (initPM 11630) (initPM 11632) 64 32 64 8 ((((10 : Nat) : Scalar)))) (elemwiseMul (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906)))) (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911))) (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915)))) (initPM 5920)))))) (initPM 5927) 2 1) (initPM 5929)) (initPM 5931) (chunkPrimDimN 0 pm_goal_1.numRanks 1 (initPM 4678)) (((initPM 5931).shape.head?).getD 0) ((((0 : Nat) : Scalar)))).fst] := by
+      allGatherPrimDimN 0 pm_goal_1.numRanks 0 [(fw_inner_chunk_ce (fw_rms_norm (fw_maybe_unshuffle (elemwiseAdd (initPM 11609) (elemwiseAdd (fw_all2all_moe_gmm (initPM 11613) ((fw_topk_routing (initPM 11621) 8 64).fst) ((fw_topk_routing (initPM 11621) 8 64).snd.fst) (initPM 11629) (initPM 11631) 64 0 32 8 ((((10 : Nat) : Scalar)))) (elemwiseMul (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906)))) (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911))) (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915)))) (initPM 5920)))))) (initPM 5927) 2 0) (initPM 5929)) (initPM 5931) (chunkPrimDimN 0 pm_goal_1.numRanks 0 (initPM 4678)) (((initPM 5931).shape.head?).getD 0) ((((0 : Nat) : Scalar)))).fst, (fw_inner_chunk_ce (fw_rms_norm (fw_maybe_unshuffle (elemwiseAdd (initPM 11610) (elemwiseAdd (fw_all2all_moe_gmm (initPM 11614) ((fw_topk_routing (initPM 11622) 8 64).fst) ((fw_topk_routing (initPM 11622) 8 64).snd.fst) (initPM 11630) (initPM 11632) 64 32 64 8 ((((10 : Nat) : Scalar)))) (elemwiseMul (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906)))) (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911))) (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915)))) (initPM 5920)))))) (initPM 5927) 2 1) (initPM 5929)) (initPM 5931) (chunkPrimDimN 0 pm_goal_1.numRanks 1 (initPM 4678)) (((initPM 5931).shape.head?).getD 0) ((((0 : Nat) : Scalar)))).fst] := by
   have h_split : pm_goal_1.nodes = pm_goal_1.nodes.take 52 ++
       [{ rank := 0, op := "OpName.AllGatherPrim", ins := [11837, 11838], outs := [4673], params := [0] }] := by
     show pm_goal_1.nodes = _
@@ -813,21 +813,21 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [hP6_eq_16889]
     exact applyNode_fw_multiref5_at_pos1_out pm_goal_1 P5 1 11614 16885 16889 16893 16897 16901 (by decide)
   -- Pj=23 written by pm_node_22 (rank=1 FW_topk_routing), outs=[11624, 11626, 11628], tid=11624
-  have h_pmtake23_11624 : pm_goal_1.nodes.take 23 = pm_goal_1.nodes.take 22 ++ [{ rank := 1, op := "OpName.FW_topk_routing", ins := [11622], outs := [11624, 11626, 11628], params := [8] }] := by rfl
-  have hP23_eq_11624 : P23 = applyNode pm_goal_1 P22 { rank := 1, op := "OpName.FW_topk_routing", ins := [11622], outs := [11624, 11626, 11628], params := [8] } := by
+  have h_pmtake23_11624 : pm_goal_1.nodes.take 23 = pm_goal_1.nodes.take 22 ++ [{ rank := 1, op := "OpName.FW_topk_routing", ins := [11622], outs := [11624, 11626, 11628], params := [8, 64] }] := by rfl
+  have hP23_eq_11624 : P23 = applyNode pm_goal_1 P22 { rank := 1, op := "OpName.FW_topk_routing", ins := [11622], outs := [11624, 11626, 11628], params := [8, 64] } := by
     show (pm_goal_1.nodes.take 23).foldl (applyNode pm_goal_1) initPM = _
     rw [h_pmtake23_11624, List.foldl_append, List.foldl_cons, List.foldl_nil]
-  have hP23_11624 : P23 11624 = (fw_topk_routing (P22 11622) 8 1).fst := by
+  have hP23_11624 : P23 11624 = (fw_topk_routing (P22 11622) 8 64).fst := by
     rw [hP23_eq_11624]
-    exact applyNode_fw_topk_routing_probs_out pm_goal_1 P22 1 11622 11624 11626 11628 [8]
+    exact applyNode_fw_topk_routing_probs_out pm_goal_1 P22 1 11622 11624 11626 11628 [8, 64]
   -- Pj=23 written by pm_node_22 (rank=1 FW_topk_routing), outs=[11624, 11626, 11628], tid=11626
-  have h_pmtake23_11626 : pm_goal_1.nodes.take 23 = pm_goal_1.nodes.take 22 ++ [{ rank := 1, op := "OpName.FW_topk_routing", ins := [11622], outs := [11624, 11626, 11628], params := [8] }] := by rfl
-  have hP23_eq_11626 : P23 = applyNode pm_goal_1 P22 { rank := 1, op := "OpName.FW_topk_routing", ins := [11622], outs := [11624, 11626, 11628], params := [8] } := by
+  have h_pmtake23_11626 : pm_goal_1.nodes.take 23 = pm_goal_1.nodes.take 22 ++ [{ rank := 1, op := "OpName.FW_topk_routing", ins := [11622], outs := [11624, 11626, 11628], params := [8, 64] }] := by rfl
+  have hP23_eq_11626 : P23 = applyNode pm_goal_1 P22 { rank := 1, op := "OpName.FW_topk_routing", ins := [11622], outs := [11624, 11626, 11628], params := [8, 64] } := by
     show (pm_goal_1.nodes.take 23).foldl (applyNode pm_goal_1) initPM = _
     rw [h_pmtake23_11626, List.foldl_append, List.foldl_cons, List.foldl_nil]
-  have hP23_11626 : P23 11626 = (fw_topk_routing (P22 11622) 8 1).snd.fst := by
+  have hP23_11626 : P23 11626 = (fw_topk_routing (P22 11622) 8 64).snd.fst := by
     rw [hP23_eq_11626]
-    exact applyNode_fw_topk_routing_map_out pm_goal_1 P22 1 11622 11624 11626 11628 [8] (by decide)
+    exact applyNode_fw_topk_routing_map_out pm_goal_1 P22 1 11622 11624 11626 11628 [8, 64] (by decide)
   -- Pj=31 written by pm_node_30 (rank=1 FW_sigmoid), outs=[11648], tid=11648
   have h_pmtake31_11648 : pm_goal_1.nodes.take 31 = pm_goal_1.nodes.take 30 ++ [{ rank := 1, op := "OpName.FW_sigmoid", ins := [11646], outs := [11648] }] := by rfl
   have hP31_eq_11648 : P31 = applyNode pm_goal_1 P30 { rank := 1, op := "OpName.FW_sigmoid", ins := [11646], outs := [11648] } := by
@@ -853,21 +853,21 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [hP5_eq_16866]
     exact applyNode_fw_multiref5_at_pos1_out pm_goal_1 P4 0 11613 16862 16866 16870 16874 16878 (by decide)
   -- Pj=19 written by pm_node_18 (rank=0 FW_topk_routing), outs=[11623, 11625, 11627], tid=11623
-  have h_pmtake19_11623 : pm_goal_1.nodes.take 19 = pm_goal_1.nodes.take 18 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [11621], outs := [11623, 11625, 11627], params := [8] }] := by rfl
-  have hP19_eq_11623 : P19 = applyNode pm_goal_1 P18 { rank := 0, op := "OpName.FW_topk_routing", ins := [11621], outs := [11623, 11625, 11627], params := [8] } := by
+  have h_pmtake19_11623 : pm_goal_1.nodes.take 19 = pm_goal_1.nodes.take 18 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [11621], outs := [11623, 11625, 11627], params := [8, 64] }] := by rfl
+  have hP19_eq_11623 : P19 = applyNode pm_goal_1 P18 { rank := 0, op := "OpName.FW_topk_routing", ins := [11621], outs := [11623, 11625, 11627], params := [8, 64] } := by
     show (pm_goal_1.nodes.take 19).foldl (applyNode pm_goal_1) initPM = _
     rw [h_pmtake19_11623, List.foldl_append, List.foldl_cons, List.foldl_nil]
-  have hP19_11623 : P19 11623 = (fw_topk_routing (P18 11621) 8 1).fst := by
+  have hP19_11623 : P19 11623 = (fw_topk_routing (P18 11621) 8 64).fst := by
     rw [hP19_eq_11623]
-    exact applyNode_fw_topk_routing_probs_out pm_goal_1 P18 0 11621 11623 11625 11627 [8]
+    exact applyNode_fw_topk_routing_probs_out pm_goal_1 P18 0 11621 11623 11625 11627 [8, 64]
   -- Pj=19 written by pm_node_18 (rank=0 FW_topk_routing), outs=[11623, 11625, 11627], tid=11625
-  have h_pmtake19_11625 : pm_goal_1.nodes.take 19 = pm_goal_1.nodes.take 18 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [11621], outs := [11623, 11625, 11627], params := [8] }] := by rfl
-  have hP19_eq_11625 : P19 = applyNode pm_goal_1 P18 { rank := 0, op := "OpName.FW_topk_routing", ins := [11621], outs := [11623, 11625, 11627], params := [8] } := by
+  have h_pmtake19_11625 : pm_goal_1.nodes.take 19 = pm_goal_1.nodes.take 18 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [11621], outs := [11623, 11625, 11627], params := [8, 64] }] := by rfl
+  have hP19_eq_11625 : P19 = applyNode pm_goal_1 P18 { rank := 0, op := "OpName.FW_topk_routing", ins := [11621], outs := [11623, 11625, 11627], params := [8, 64] } := by
     show (pm_goal_1.nodes.take 19).foldl (applyNode pm_goal_1) initPM = _
     rw [h_pmtake19_11625, List.foldl_append, List.foldl_cons, List.foldl_nil]
-  have hP19_11625 : P19 11625 = (fw_topk_routing (P18 11621) 8 1).snd.fst := by
+  have hP19_11625 : P19 11625 = (fw_topk_routing (P18 11621) 8 64).snd.fst := by
     rw [hP19_eq_11625]
-    exact applyNode_fw_topk_routing_map_out pm_goal_1 P18 0 11621 11623 11625 11627 [8] (by decide)
+    exact applyNode_fw_topk_routing_map_out pm_goal_1 P18 0 11621 11623 11625 11627 [8, 64] (by decide)
   -- Pj=28 written by pm_node_27 (rank=0 FW_sigmoid), outs=[11647], tid=11647
   have h_pmtake28_11647 : pm_goal_1.nodes.take 28 = pm_goal_1.nodes.take 27 ++ [{ rank := 0, op := "OpName.FW_sigmoid", ins := [11645], outs := [11647] }] := by rfl
   have hP28_eq_11647 : P28 = applyNode pm_goal_1 P27 { rank := 0, op := "OpName.FW_sigmoid", ins := [11645], outs := [11647] } := by
@@ -2089,15 +2089,413 @@ theorem fw_view_allGather0_commute_2_of (a b : Tensor) (shard H : Nat)
     rw [allGatherPrimDimN_shape 0 2 _ [shard, H] hhead_ab]; simp [List.set, List.getD]
   exact fw_view_self_eq (allGatherPrimDimN 0 2 0 [a, b]) [shard * 2, H] hG_shape
 
+/-- Softmax commutes with dim-0 sharding on 2-D `[S, E]` tensors, in the sense that
+    row `(r*S + i)` of `softmax (gather0 [a, b])` equals row `i` of `softmax (a_or_b)`.
+    Stated at the flat-value level: at flat index `(r*S + i) * E + e`, both are equal. -/
+private theorem softmax_gather0_valAt (a b : Tensor) (S E : Nat)
+    (hS : 0 < S) (hE : 0 < E)
+    (ha : a.shape = [S, E]) (hb : b.shape = [S, E])
+    (r : Nat) (hr : r < 2) (i : Nat) (hi : i < S) (e : Nat) (he : e < E) :
+    valAt (softmax (allGatherPrimDimN 0 2 0 [a, b])) ((r * S + i) * E + e)
+      = valAt (softmax ([a, b].getD r (zeroTensor [S, E]))) (i * E + e) := by
+  have hhead_ab : (([a, b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [S, E] := by
+    simp [ha]
+  have hG_ab : (allGatherPrimDimN 0 2 0 [a, b]).shape = [S * 2, E] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [S, E] hhead_ab]; simp [List.set, List.getD]
+  have hshapes_ab : ∀ r' (_ : r' < 2),
+      (([a, b].getD r' (zeroTensor [S, E]))).shape = [S, E] := by
+    intro r' hr'
+    have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, ha, hb]
+  set ea := [a, b].getD r (zeroTensor [S, E]) with hea_def
+  have hea_shape : ea.shape = [S, E] := hshapes_ab r hr
+  have hbound_G : (r * S + i) * E + e < prodShape [S * 2, E] := by
+    simp [prodShape]
+    have h1 : (r * S + i) * E + e < (r * S + i) * E + E := by omega
+    have h2 : (r * S + i) * E + E = (r * S + i + 1) * E := by ring
+    have h3 : (r * S + i + 1) * E ≤ S * 2 * E := Nat.mul_le_mul_right E (by nlinarith)
+    linarith
+  have hbound_ea : i * E + e < prodShape [S, E] := by
+    simp [prodShape]
+    have h1 : i * E + e < i * E + E := by omega
+    have h2 : i * E + E = (i + 1) * E := by ring
+    have h3 : (i + 1) * E ≤ S * E := Nat.mul_le_mul_right E (by omega)
+    linarith
+  have he_mod : e % E = e := Nat.mod_eq_of_lt he
+  have hLHS : valAt (softmax (allGatherPrimDimN 0 2 0 [a, b])) ((r * S + i) * E + e)
+      = (if hexp : (∑ j ∈ Finset.range E, expFn
+              (valAt (allGatherPrimDimN 0 2 0 [a, b]) ((r * S + i) * E + j))) = 0 then 0
+         else expFn (valAt (allGatherPrimDimN 0 2 0 [a, b]) ((r * S + i) * E + e))
+              / (∑ j ∈ Finset.range E, expFn
+                  (valAt (allGatherPrimDimN 0 2 0 [a, b]) ((r * S + i) * E + j)))) := by
+    unfold softmax
+    rw [hG_ab]
+    rw [valAt_of_lt _ _ (by simp [Tensor.mkShape, prodShape]; simpa [prodShape] using hbound_G)]
+    simp [Tensor.mkShape, List.reverse]
+    have hE_ne : E ≠ 0 := Nat.pos_iff_ne_zero.mp hE
+    have hdiv : ((r * S + i) * E + e) / E = r * S + i := by
+      have h1 : ((r * S + i) * E + e) / E = e / E + (r * S + i) := by
+        rw [Nat.add_comm, Nat.add_mul_div_right e (r * S + i) hE]
+      rw [h1, Nat.div_eq_of_lt he]; ring
+    have hmod : ((r * S + i) * E + e) % E = e := by
+      have h1 : ((r * S + i) * E + e) % E = e % E := by
+        rw [Nat.add_comm, Nat.add_mul_mod_self_right]
+      rw [h1, Nat.mod_eq_of_lt he]
+    simp [hE_ne, hdiv, hmod, he_mod]
+  have hRHS : valAt (softmax ea) (i * E + e)
+      = (if hexp : (∑ j ∈ Finset.range E, expFn (valAt ea (i * E + j))) = 0 then 0
+         else expFn (valAt ea (i * E + e))
+              / (∑ j ∈ Finset.range E, expFn (valAt ea (i * E + j)))) := by
+    unfold softmax
+    rw [hea_shape]
+    rw [valAt_of_lt _ _ (by simp [Tensor.mkShape, prodShape]; simpa [prodShape] using hbound_ea)]
+    simp [Tensor.mkShape, List.reverse]
+    have hE_ne : E ≠ 0 := Nat.pos_iff_ne_zero.mp hE
+    have hdiv : (i * E + e) / E = i := by
+      have h1 : (i * E + e) / E = e / E + i := by
+        rw [Nat.add_comm, Nat.add_mul_div_right e i hE]
+      rw [h1, Nat.div_eq_of_lt he]; ring
+    have hmod : (i * E + e) % E = e := by
+      have h1 : (i * E + e) % E = e % E := by
+        rw [Nat.add_comm, Nat.add_mul_mod_self_right]
+      rw [h1, Nat.mod_eq_of_lt he]
+    simp [hE_ne, hdiv, hmod, he_mod]
+  have hgather_eq : ∀ j, j < E →
+      valAt (allGatherPrimDimN 0 2 0 [a, b]) ((r * S + i) * E + j) = valAt ea (i * E + j) := by
+    intro j hj
+    rw [hea_def]
+    exact allGatherPrimDimN0_valAt 2 S E [a, b]
+      (by omega) hS hE hhead_ab hshapes_ab r hr i hi j hj
+  rw [hLHS, hRHS]
+  have hbase_eq : (∑ j ∈ Finset.range E, expFn (valAt (allGatherPrimDimN 0 2 0 [a, b]) ((r * S + i) * E + j)))
+        = ∑ j ∈ Finset.range E, expFn (valAt ea (i * E + j)) := by
+    apply Finset.sum_congr rfl
+    intro j hj
+    have hj_lt : j < E := by simp [Finset.mem_range] at hj; exact hj
+    rw [hgather_eq j hj_lt]
+  have he_eq : valAt (allGatherPrimDimN 0 2 0 [a, b]) ((r * S + i) * E + e) = valAt ea (i * E + e) :=
+    hgather_eq e he
+  rw [hbase_eq, he_eq]
+
+/-- fw_topk_routing fst commutes with dim-0 sharding — proven under E = numExperts hypothesis.
+    Pattern_1 usage: a.shape = b.shape = [S=2048, 64], top_k=n=8, numExperts=k=64. -/
+theorem fw_topk_routing_fst_allGather0_commute_2_of (a b : Tensor) (S n k : Nat)
+    (hS : 0 < S) (hk : 0 < k)
+    (ha : a.shape = [S, k]) (hb : b.shape = [S, k]) :
+    (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) n k).fst
+      = allGatherPrimDimN 0 2 0
+          [(fw_topk_routing a n k).fst, (fw_topk_routing b n k).fst] := by
+  have hhead_ab : (([a, b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [S, k] := by
+    simp [ha]
+  have hG_ab : (allGatherPrimDimN 0 2 0 [a, b]).shape = [S * 2, k] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [S, k] hhead_ab]; simp [List.set, List.getD]
+  have hshapes_ab : ∀ r' (_ : r' < 2),
+      (([a, b].getD r' (zeroTensor [S, k]))).shape = [S, k] := by
+    intro r' hr'
+    have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, ha, hb]
+  have hprobs_a_shape : (fw_topk_routing a n k).fst.shape = [S, k] := by
+    unfold fw_topk_routing
+    simp [Tensor.mkShape]
+    rw [ha]; rfl
+  have hprobs_b_shape : (fw_topk_routing b n k).fst.shape = [S, k] := by
+    unfold fw_topk_routing
+    simp [Tensor.mkShape]
+    rw [hb]; rfl
+  have hhead_probs : (([(fw_topk_routing a n k).fst, (fw_topk_routing b n k).fst] : List Tensor).head?.map (fun t => t.shape)).getD [] = [S, k] := by
+    simp [hprobs_a_shape]
+  have hRHS_shape : (allGatherPrimDimN 0 2 0 [(fw_topk_routing a n k).fst, (fw_topk_routing b n k).fst]).shape = [S * 2, k] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [S, k] hhead_probs]; simp [List.set, List.getD]
+  have hLHS_shape : (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) n k).fst.shape = [S * 2, k] := by
+    unfold fw_topk_routing
+    simp [Tensor.mkShape]
+    rw [hG_ab]; rfl
+  apply Tensor.ext
+  · rw [hLHS_shape, hRHS_shape]
+  · intro outIdx houtIdx
+    rw [hLHS_shape] at houtIdx
+    have houtIdx_bound : outIdx < S * 2 * k := by simpa [prodShape] using houtIdx
+    set row := outIdx / k with hrow_def
+    set e := outIdx % k with he_def
+    have he_lt : e < k := by rw [he_def]; exact Nat.mod_lt _ hk
+    have hrow_lt : row < S * 2 := by
+      rw [hrow_def]; rw [Nat.div_lt_iff_lt_mul hk]; linarith
+    set r := row / S with hr_def
+    set i := row % S with hi_def
+    have hi_lt : i < S := by rw [hi_def]; exact Nat.mod_lt _ hS
+    have hr_lt : r < 2 := by
+      rw [hr_def]; rw [Nat.div_lt_iff_lt_mul hS]; linarith
+    have houtIdx_eq : outIdx = (r * S + i) * k + e := by
+      subst r i e row
+      have h1 : S * (outIdx / k / S) + outIdx / k % S = outIdx / k := Nat.div_add_mod (outIdx / k) S
+      have h2 : k * (outIdx / k) + outIdx % k = outIdx := Nat.div_add_mod outIdx k
+      calc outIdx = k * (outIdx / k) + outIdx % k := h2.symm
+        _ = k * (S * (outIdx / k / S) + outIdx / k % S) + outIdx % k := by rw [h1]
+        _ = (outIdx / k / S * S + outIdx / k % S) * k + outIdx % k := by ring
+    have hLHS_val : valAt (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) n k).fst outIdx
+        = (let gate_scores := softmax (allGatherPrimDimN 0 2 0 [a, b])
+           let l := if k = 0 then 0 else outIdx / k
+           let e' := if k = 0 then 0 else outIdx % k
+           if inTopK gate_scores k n l e' then
+             let denom := topkScoreSum gate_scores k n l
+             if denom = 0 then 0
+             else topkScoresAt gate_scores k l e' / denom
+           else 0) := by
+      unfold fw_topk_routing
+      simp only [Tensor.mkShape, valAt]
+      rw [dif_pos (by
+        show outIdx < prodShape [(allGatherPrimDimN 0 2 0 [a, b]).shape.head?.getD 0, k]
+        rw [hG_ab]
+        simp [prodShape]; linarith)]
+    have hRHS_val : valAt (allGatherPrimDimN 0 2 0 [(fw_topk_routing a n k).fst, (fw_topk_routing b n k).fst]) outIdx
+        = valAt ([(fw_topk_routing a n k).fst, (fw_topk_routing b n k).fst].getD r
+            (zeroTensor [S, k])) (i * k + e) := by
+      rw [houtIdx_eq]
+      have hshapes_probs : ∀ r' (_ : r' < 2),
+          (([(fw_topk_routing a n k).fst, (fw_topk_routing b n k).fst].getD r' (zeroTensor [S, k]))).shape = [S, k] := by
+        intro r' hr'
+        have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+        rcases this with h | h <;> rw [h] <;> simp [List.getD, hprobs_a_shape, hprobs_b_shape]
+      exact allGatherPrimDimN0_valAt 2 S k [(fw_topk_routing a n k).fst, (fw_topk_routing b n k).fst]
+        (by omega) hS hk hhead_probs hshapes_probs r hr_lt i hi_lt e he_lt
+    rw [hRHS_val]
+    have hr_cases : r = 0 ∨ r = 1 := by interval_cases r <;> [left; right] <;> rfl
+    have hgetD_probs :
+        [(fw_topk_routing a n k).fst, (fw_topk_routing b n k).fst].getD r (zeroTensor [S, k]) =
+        (fw_topk_routing ([a, b].getD r (zeroTensor [S, k])) n k).fst := by
+      rcases hr_cases with h | h <;> rw [h] <;> simp [List.getD]
+    rw [hgetD_probs]
+    set ea := [a, b].getD r (zeroTensor [S, k]) with hea_def
+    have hea_shape : ea.shape = [S, k] := hshapes_ab r hr_lt
+    have hlocal_bound : i * k + e < S * k := by
+      have h1 : i * k + e < i * k + k := by omega
+      have h2 : i * k + k = (i + 1) * k := by ring
+      have h3 : (i + 1) * k ≤ S * k := Nat.mul_le_mul_right _ (by omega)
+      omega
+    have hRHS_local_val : valAt (fw_topk_routing ea n k).fst (i * k + e)
+        = (let gate_scores := softmax ea
+           let l := if k = 0 then 0 else (i * k + e) / k
+           let e' := if k = 0 then 0 else (i * k + e) % k
+           if inTopK gate_scores k n l e' then
+             let denom := topkScoreSum gate_scores k n l
+             if denom = 0 then 0
+             else topkScoresAt gate_scores k l e' / denom
+           else 0) := by
+      unfold fw_topk_routing
+      simp only [Tensor.mkShape, valAt]
+      rw [dif_pos (by
+        show i * k + e < prodShape [ea.shape.head?.getD 0, k]
+        rw [hea_shape]; simp [prodShape]; linarith)]
+    rw [hLHS_val, hRHS_local_val]
+    have hk_ne : k ≠ 0 := Nat.pos_iff_ne_zero.mp hk
+    have hout_div : outIdx / k = r * S + i := by
+      rw [houtIdx_eq]
+      have h1 : ((r * S + i) * k + e) / k = e / k + (r * S + i) := by
+        rw [Nat.add_comm, Nat.add_mul_div_right e (r * S + i) hk]
+      rw [h1, Nat.div_eq_of_lt he_lt]; ring
+    have hout_mod : outIdx % k = e := by
+      rw [houtIdx_eq]
+      have h1 : ((r * S + i) * k + e) % k = e % k := by
+        rw [Nat.add_comm, Nat.add_mul_mod_self_right]
+      rw [h1, Nat.mod_eq_of_lt he_lt]
+    have hloc_div : (i * k + e) / k = i := by
+      have h1 : (i * k + e) / k = e / k + i := by
+        rw [Nat.add_comm, Nat.add_mul_div_right e i hk]
+      rw [h1, Nat.div_eq_of_lt he_lt]; ring
+    have hloc_mod : (i * k + e) % k = e := by
+      have h1 : (i * k + e) % k = e % k := by
+        rw [Nat.add_comm, Nat.add_mul_mod_self_right]
+      rw [h1, Nat.mod_eq_of_lt he_lt]
+    simp only [hk_ne, hout_div, hout_mod, hloc_div, hloc_mod, if_false]
+    -- Row-local reductions via softmax_gather0_valAt.
+    have hscores_eq : ∀ e' < k,
+        topkScoresAt (softmax (allGatherPrimDimN 0 2 0 [a, b])) k (r * S + i) e'
+          = topkScoresAt (softmax ea) k i e' := by
+      intro e' he'
+      unfold topkScoresAt
+      rw [hea_def]
+      exact softmax_gather0_valAt a b S k hS hk ha hb r hr_lt i hi_lt e' he'
+    have hrank_eq : ∀ e' < k,
+        topkRank (softmax (allGatherPrimDimN 0 2 0 [a, b])) k (r * S + i) e'
+          = topkRank (softmax ea) k i e' := by
+      intro e' he'
+      unfold topkRank
+      congr 1
+      apply Finset.filter_congr
+      intro e'' he''
+      have he''_lt : e'' < k := by simp [Finset.mem_range] at he''; exact he''
+      rw [hscores_eq e'' he''_lt, hscores_eq e' he']
+    have hinTopK_eq : ∀ e' < k,
+        inTopK (softmax (allGatherPrimDimN 0 2 0 [a, b])) k n (r * S + i) e'
+          = inTopK (softmax ea) k n i e' := by
+      intro e' he'
+      unfold inTopK
+      rw [hrank_eq e' he']
+    have hsum_eq :
+        topkScoreSum (softmax (allGatherPrimDimN 0 2 0 [a, b])) k n (r * S + i)
+          = topkScoreSum (softmax ea) k n i := by
+      unfold topkScoreSum
+      apply Finset.sum_congr rfl
+      intro e' he'
+      have he'_lt : e' < k := by simp [Finset.mem_range] at he'; exact he'
+      rw [hinTopK_eq e' he'_lt, hscores_eq e' he'_lt]
+    rw [hscores_eq e he_lt, hinTopK_eq e he_lt, hsum_eq]
+
+/-- fw_topk_routing snd_fst commutes with dim-0 sharding — proven under E = numExperts.
+    Analogous to fw_topk_routing_fst_allGather0_commute_2_of. -/
+theorem fw_topk_routing_snd_fst_allGather0_commute_2_of (a b : Tensor) (S n k : Nat)
+    (hS : 0 < S) (hk : 0 < k)
+    (ha : a.shape = [S, k]) (hb : b.shape = [S, k]) :
+    (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) n k).snd.fst
+      = allGatherPrimDimN 0 2 0
+          [(fw_topk_routing a n k).snd.fst, (fw_topk_routing b n k).snd.fst] := by
+  have hhead_ab : (([a, b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [S, k] := by
+    simp [ha]
+  have hG_ab : (allGatherPrimDimN 0 2 0 [a, b]).shape = [S * 2, k] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [S, k] hhead_ab]; simp [List.set, List.getD]
+  have hshapes_ab : ∀ r' (_ : r' < 2),
+      (([a, b].getD r' (zeroTensor [S, k]))).shape = [S, k] := by
+    intro r' hr'
+    have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, ha, hb]
+  have hmap_a_shape : (fw_topk_routing a n k).snd.fst.shape = [S, k] := by
+    unfold fw_topk_routing
+    simp [Tensor.mkShape]
+    rw [ha]; rfl
+  have hmap_b_shape : (fw_topk_routing b n k).snd.fst.shape = [S, k] := by
+    unfold fw_topk_routing
+    simp [Tensor.mkShape]
+    rw [hb]; rfl
+  have hhead_map : (([(fw_topk_routing a n k).snd.fst, (fw_topk_routing b n k).snd.fst] : List Tensor).head?.map (fun t => t.shape)).getD [] = [S, k] := by
+    simp [hmap_a_shape]
+  have hRHS_shape : (allGatherPrimDimN 0 2 0 [(fw_topk_routing a n k).snd.fst, (fw_topk_routing b n k).snd.fst]).shape = [S * 2, k] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [S, k] hhead_map]; simp [List.set, List.getD]
+  have hLHS_shape : (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) n k).snd.fst.shape = [S * 2, k] := by
+    unfold fw_topk_routing
+    simp [Tensor.mkShape]
+    rw [hG_ab]; rfl
+  apply Tensor.ext
+  · rw [hLHS_shape, hRHS_shape]
+  · intro outIdx houtIdx
+    rw [hLHS_shape] at houtIdx
+    have houtIdx_bound : outIdx < S * 2 * k := by simpa [prodShape] using houtIdx
+    set row := outIdx / k with hrow_def
+    set e := outIdx % k with he_def
+    have he_lt : e < k := by rw [he_def]; exact Nat.mod_lt _ hk
+    have hrow_lt : row < S * 2 := by
+      rw [hrow_def]; rw [Nat.div_lt_iff_lt_mul hk]; linarith
+    set r := row / S with hr_def
+    set i := row % S with hi_def
+    have hi_lt : i < S := by rw [hi_def]; exact Nat.mod_lt _ hS
+    have hr_lt : r < 2 := by
+      rw [hr_def]; rw [Nat.div_lt_iff_lt_mul hS]; linarith
+    have houtIdx_eq : outIdx = (r * S + i) * k + e := by
+      subst r i e row
+      have h1 : S * (outIdx / k / S) + outIdx / k % S = outIdx / k := Nat.div_add_mod (outIdx / k) S
+      have h2 : k * (outIdx / k) + outIdx % k = outIdx := Nat.div_add_mod outIdx k
+      calc outIdx = k * (outIdx / k) + outIdx % k := h2.symm
+        _ = k * (S * (outIdx / k / S) + outIdx / k % S) + outIdx % k := by rw [h1]
+        _ = (outIdx / k / S * S + outIdx / k % S) * k + outIdx % k := by ring
+    have hLHS_val : valAt (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) n k).snd.fst outIdx
+        = (let gate_scores := softmax (allGatherPrimDimN 0 2 0 [a, b])
+           let l := if k = 0 then 0 else outIdx / k
+           let e' := if k = 0 then 0 else outIdx % k
+           if inTopK gate_scores k n l e' then (1 : Scalar) else 0) := by
+      unfold fw_topk_routing
+      simp only [Tensor.mkShape, valAt]
+      rw [dif_pos (by
+        show outIdx < prodShape [(allGatherPrimDimN 0 2 0 [a, b]).shape.head?.getD 0, k]
+        rw [hG_ab]
+        simp [prodShape]; linarith)]
+    have hRHS_val : valAt (allGatherPrimDimN 0 2 0 [(fw_topk_routing a n k).snd.fst, (fw_topk_routing b n k).snd.fst]) outIdx
+        = valAt ([(fw_topk_routing a n k).snd.fst, (fw_topk_routing b n k).snd.fst].getD r
+            (zeroTensor [S, k])) (i * k + e) := by
+      rw [houtIdx_eq]
+      have hshapes_map : ∀ r' (_ : r' < 2),
+          (([(fw_topk_routing a n k).snd.fst, (fw_topk_routing b n k).snd.fst].getD r' (zeroTensor [S, k]))).shape = [S, k] := by
+        intro r' hr'
+        have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+        rcases this with h | h <;> rw [h] <;> simp [List.getD, hmap_a_shape, hmap_b_shape]
+      exact allGatherPrimDimN0_valAt 2 S k [(fw_topk_routing a n k).snd.fst, (fw_topk_routing b n k).snd.fst]
+        (by omega) hS hk hhead_map hshapes_map r hr_lt i hi_lt e he_lt
+    rw [hRHS_val]
+    have hr_cases : r = 0 ∨ r = 1 := by interval_cases r <;> [left; right] <;> rfl
+    have hgetD_map :
+        [(fw_topk_routing a n k).snd.fst, (fw_topk_routing b n k).snd.fst].getD r (zeroTensor [S, k]) =
+        (fw_topk_routing ([a, b].getD r (zeroTensor [S, k])) n k).snd.fst := by
+      rcases hr_cases with h | h <;> rw [h] <;> simp [List.getD]
+    rw [hgetD_map]
+    set ea := [a, b].getD r (zeroTensor [S, k]) with hea_def
+    have hea_shape : ea.shape = [S, k] := hshapes_ab r hr_lt
+    have hlocal_bound : i * k + e < S * k := by
+      have h1 : i * k + e < i * k + k := by omega
+      have h2 : i * k + k = (i + 1) * k := by ring
+      have h3 : (i + 1) * k ≤ S * k := Nat.mul_le_mul_right _ (by omega)
+      omega
+    have hRHS_local_val : valAt (fw_topk_routing ea n k).snd.fst (i * k + e)
+        = (let gate_scores := softmax ea
+           let l := if k = 0 then 0 else (i * k + e) / k
+           let e' := if k = 0 then 0 else (i * k + e) % k
+           if inTopK gate_scores k n l e' then (1 : Scalar) else 0) := by
+      unfold fw_topk_routing
+      simp only [Tensor.mkShape, valAt]
+      rw [dif_pos (by
+        show i * k + e < prodShape [ea.shape.head?.getD 0, k]
+        rw [hea_shape]; simp [prodShape]; linarith)]
+    rw [hLHS_val, hRHS_local_val]
+    have hk_ne : k ≠ 0 := Nat.pos_iff_ne_zero.mp hk
+    have hout_div : outIdx / k = r * S + i := by
+      rw [houtIdx_eq]
+      have h1 : ((r * S + i) * k + e) / k = e / k + (r * S + i) := by
+        rw [Nat.add_comm, Nat.add_mul_div_right e (r * S + i) hk]
+      rw [h1, Nat.div_eq_of_lt he_lt]; ring
+    have hout_mod : outIdx % k = e := by
+      rw [houtIdx_eq]
+      have h1 : ((r * S + i) * k + e) % k = e % k := by
+        rw [Nat.add_comm, Nat.add_mul_mod_self_right]
+      rw [h1, Nat.mod_eq_of_lt he_lt]
+    have hloc_div : (i * k + e) / k = i := by
+      have h1 : (i * k + e) / k = e / k + i := by
+        rw [Nat.add_comm, Nat.add_mul_div_right e i hk]
+      rw [h1, Nat.div_eq_of_lt he_lt]; ring
+    have hloc_mod : (i * k + e) % k = e := by
+      have h1 : (i * k + e) % k = e % k := by
+        rw [Nat.add_comm, Nat.add_mul_mod_self_right]
+      rw [h1, Nat.mod_eq_of_lt he_lt]
+    simp only [hk_ne, hout_div, hout_mod, hloc_div, hloc_mod, if_false]
+    have hscores_eq : ∀ e' < k,
+        topkScoresAt (softmax (allGatherPrimDimN 0 2 0 [a, b])) k (r * S + i) e'
+          = topkScoresAt (softmax ea) k i e' := by
+      intro e' he'
+      unfold topkScoresAt
+      rw [hea_def]
+      exact softmax_gather0_valAt a b S k hS hk ha hb r hr_lt i hi_lt e' he'
+    have hrank_eq : ∀ e' < k,
+        topkRank (softmax (allGatherPrimDimN 0 2 0 [a, b])) k (r * S + i) e'
+          = topkRank (softmax ea) k i e' := by
+      intro e' he'
+      unfold topkRank
+      congr 1
+      apply Finset.filter_congr
+      intro e'' he''
+      have he''_lt : e'' < k := by simp [Finset.mem_range] at he''; exact he''
+      rw [hscores_eq e'' he''_lt, hscores_eq e' he']
+    have hinTopK_eq : ∀ e' < k,
+        inTopK (softmax (allGatherPrimDimN 0 2 0 [a, b])) k n (r * S + i) e'
+          = inTopK (softmax ea) k n i e' := by
+      intro e' he'
+      unfold inTopK
+      rw [hrank_eq e' he']
+    rw [hinTopK_eq e he_lt]
+
 /-- fw_topk_routing fst commutes with dim-0 sharding.
-    VERIFIED-TRUE: softmax + topk_rank/inTopK/topkScoreSum all row-local (per input row l).
-    Sharding on dim 0 splits rows independently, so per-row computations are preserved.
-    Axiom left for now; proof is analogous to Pattern_4's softmax_allGather2 Lemma A. -/
+    LEGACY axiom form; prefer `fw_topk_routing_fst_allGather0_commute_2_of` for actual proofs. -/
 axiom fw_topk_routing_fst_allGather0_commute_2 (a b : Tensor) (n k : Nat) :
     (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) n k).fst
       = allGatherPrimDimN 0 2 0 [(fw_topk_routing a n k).fst, (fw_topk_routing b n k).fst]
 
-/-- fw_topk_routing snd_fst commutes with dim-0 sharding. -/
+/-- fw_topk_routing snd_fst commutes with dim-0 sharding.
+    LEGACY axiom form; prefer `fw_topk_routing_snd_fst_allGather0_commute_2_of` for actual proofs. -/
 axiom fw_topk_routing_snd_fst_allGather0_commute_2 (a b : Tensor) (n k : Nat) :
     (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) n k).snd.fst
       = allGatherPrimDimN 0 2 0 [(fw_topk_routing a n k).snd.fst, (fw_topk_routing b n k).snd.fst]
@@ -2177,8 +2575,8 @@ theorem sm_chain_shape_4096 (initSM : Store) (hSM : StoreShapesHold initSM sm_go
   -- (w2 = initSM 5903 has shape [64, 1024, 512], so .reverse.head? = some 512).
   have hall2all_shape :
       (fw_all2all_moe_gmm (initSM 5895)
-            ((fw_topk_routing (initSM 5898) 8 1).fst)
-            ((fw_topk_routing (initSM 5898) 8 1).snd.fst)
+            ((fw_topk_routing (initSM 5898) 8 64).fst)
+            ((fw_topk_routing (initSM 5898) 8 64).snd.fst)
             (initSM 5902) (initSM 5903) 64 0 64 8 ((((10 : Nat) : Scalar)))).shape
         = [4096, 1024] :=
     TrainVerify.Denote.fw_all2all_moe_gmm_shape
@@ -2211,8 +2609,8 @@ theorem sm_chain_shape_4096 (initSM : Store) (hSM : StoreShapesHold initSM sm_go
   have hinner_add_shape :
       (elemwiseAdd
         (fw_all2all_moe_gmm (initSM 5895)
-              ((fw_topk_routing (initSM 5898) 8 1).fst)
-              ((fw_topk_routing (initSM 5898) 8 1).snd.fst)
+              ((fw_topk_routing (initSM 5898) 8 64).fst)
+              ((fw_topk_routing (initSM 5898) 8 64).snd.fst)
               (initSM 5902) (initSM 5903) 64 0 64 8 ((((10 : Nat) : Scalar))))
         (elemwiseMul
           (fw_sigmoid (fw_view [4096, 1] (fw_linear (initSM 5895) (initSM 5906))))
@@ -2230,8 +2628,8 @@ theorem sm_chain_shape_4096 (initSM : Store) (hSM : StoreShapesHold initSM sm_go
       (elemwiseAdd (initSM 5893)
         (elemwiseAdd
           (fw_all2all_moe_gmm (initSM 5895)
-                ((fw_topk_routing (initSM 5898) 8 1).fst)
-                ((fw_topk_routing (initSM 5898) 8 1).snd.fst)
+                ((fw_topk_routing (initSM 5898) 8 64).fst)
+                ((fw_topk_routing (initSM 5898) 8 64).snd.fst)
                 (initSM 5902) (initSM 5903) 64 0 64 8 ((((10 : Nat) : Scalar))))
           (elemwiseMul
             (fw_sigmoid (fw_view [4096, 1] (fw_linear (initSM 5895) (initSM 5906))))
@@ -2252,8 +2650,8 @@ theorem sm_chain_shape_4096 (initSM : Store) (hSM : StoreShapesHold initSM sm_go
         (fw_maybe_unshuffle (elemwiseAdd (initSM 5893)
             (elemwiseAdd
               (fw_all2all_moe_gmm (initSM 5895)
-                ((fw_topk_routing (initSM 5898) 8 1).fst)
-                ((fw_topk_routing (initSM 5898) 8 1).snd.fst)
+                ((fw_topk_routing (initSM 5898) 8 64).fst)
+                ((fw_topk_routing (initSM 5898) 8 64).snd.fst)
                 (initSM 5902) (initSM 5903) 64 0 64 8 ((((10 : Nat) : Scalar))))
               (elemwiseMul
                 (fw_sigmoid (fw_view [4096, 1] (fw_linear (initSM 5895) (initSM 5906))))
@@ -2289,8 +2687,8 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
   -- Rank 0 (uses initPM 11609/11613/11631):
   have hgmm0 :
       (fw_all2all_moe_gmm (initPM 11613)
-        ((fw_topk_routing (initPM 11621) 8 1).fst)
-        ((fw_topk_routing (initPM 11621) 8 1).snd.fst)
+        ((fw_topk_routing (initPM 11621) 8 64).fst)
+        ((fw_topk_routing (initPM 11621) 8 64).snd.fst)
         (initPM 11629) (initPM 11631) 64 0 32 8 ((((10 : Nat) : Scalar)))).shape
         = [2048, 1024] :=
     TrainVerify.Denote.fw_all2all_moe_gmm_shape
@@ -2319,8 +2717,8 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
   have hinner_add0 :
       (elemwiseAdd
         (fw_all2all_moe_gmm (initPM 11613)
-              ((fw_topk_routing (initPM 11621) 8 1).fst)
-              ((fw_topk_routing (initPM 11621) 8 1).snd.fst)
+              ((fw_topk_routing (initPM 11621) 8 64).fst)
+              ((fw_topk_routing (initPM 11621) 8 64).snd.fst)
               (initPM 11629) (initPM 11631) 64 0 32 8 ((((10 : Nat) : Scalar))))
         (elemwiseMul
           (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
@@ -2337,8 +2735,8 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
       (elemwiseAdd (initPM 11609)
         (elemwiseAdd
           (fw_all2all_moe_gmm (initPM 11613)
-                ((fw_topk_routing (initPM 11621) 8 1).fst)
-                ((fw_topk_routing (initPM 11621) 8 1).snd.fst)
+                ((fw_topk_routing (initPM 11621) 8 64).fst)
+                ((fw_topk_routing (initPM 11621) 8 64).snd.fst)
                 (initPM 11629) (initPM 11631) 64 0 32 8 ((((10 : Nat) : Scalar))))
           (elemwiseMul
             (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
@@ -2356,8 +2754,8 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
         (fw_maybe_unshuffle (elemwiseAdd (initPM 11609)
             (elemwiseAdd
               (fw_all2all_moe_gmm (initPM 11613)
-                    ((fw_topk_routing (initPM 11621) 8 1).fst)
-                    ((fw_topk_routing (initPM 11621) 8 1).snd.fst)
+                    ((fw_topk_routing (initPM 11621) 8 64).fst)
+                    ((fw_topk_routing (initPM 11621) 8 64).snd.fst)
                     (initPM 11629) (initPM 11631) 64 0 32 8 ((((10 : Nat) : Scalar))))
               (elemwiseMul
                 (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
@@ -2379,8 +2777,8 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
   -- Rank 1 (uses initPM 11610/11614/11632 with different expert slice range):
   have hgmm1 :
       (fw_all2all_moe_gmm (initPM 11614)
-        ((fw_topk_routing (initPM 11622) 8 1).fst)
-        ((fw_topk_routing (initPM 11622) 8 1).snd.fst)
+        ((fw_topk_routing (initPM 11622) 8 64).fst)
+        ((fw_topk_routing (initPM 11622) 8 64).snd.fst)
         (initPM 11630) (initPM 11632) 64 32 64 8 ((((10 : Nat) : Scalar)))).shape
         = [2048, 1024] :=
     TrainVerify.Denote.fw_all2all_moe_gmm_shape
@@ -2409,8 +2807,8 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
   have hinner_add1 :
       (elemwiseAdd
         (fw_all2all_moe_gmm (initPM 11614)
-              ((fw_topk_routing (initPM 11622) 8 1).fst)
-              ((fw_topk_routing (initPM 11622) 8 1).snd.fst)
+              ((fw_topk_routing (initPM 11622) 8 64).fst)
+              ((fw_topk_routing (initPM 11622) 8 64).snd.fst)
               (initPM 11630) (initPM 11632) 64 32 64 8 ((((10 : Nat) : Scalar))))
         (elemwiseMul
           (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
@@ -2427,8 +2825,8 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
       (elemwiseAdd (initPM 11610)
         (elemwiseAdd
           (fw_all2all_moe_gmm (initPM 11614)
-                ((fw_topk_routing (initPM 11622) 8 1).fst)
-                ((fw_topk_routing (initPM 11622) 8 1).snd.fst)
+                ((fw_topk_routing (initPM 11622) 8 64).fst)
+                ((fw_topk_routing (initPM 11622) 8 64).snd.fst)
                 (initPM 11630) (initPM 11632) 64 32 64 8 ((((10 : Nat) : Scalar))))
           (elemwiseMul
             (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
@@ -2446,8 +2844,8 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
         (fw_maybe_unshuffle (elemwiseAdd (initPM 11610)
             (elemwiseAdd
               (fw_all2all_moe_gmm (initPM 11614)
-                    ((fw_topk_routing (initPM 11622) 8 1).fst)
-                    ((fw_topk_routing (initPM 11622) 8 1).snd.fst)
+                    ((fw_topk_routing (initPM 11622) 8 64).fst)
+                    ((fw_topk_routing (initPM 11622) 8 64).snd.fst)
                     (initPM 11630) (initPM 11632) 64 32 64 8 ((((10 : Nat) : Scalar))))
               (elemwiseMul
                 (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
@@ -2687,14 +3085,19 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
                                             (initPM 5920)))
           2048 1024 (by omega) (by omega) (by omega) (by omega) (by omega)
           hsig_a_shape hsig_b_shape hview_c_shape hview_d_shape]
-    -- Push through fw_topk_routing (both .fst and .snd.fst).
-    rw [fw_topk_routing_fst_allGather0_commute_2 (initPM 11621) (initPM 11622) 8 1]
-    rw [fw_topk_routing_snd_fst_allGather0_commute_2 (initPM 11621) (initPM 11622) 8 1]
+    -- Push through fw_topk_routing (both .fst and .snd.fst) — using consistent theorem forms.
+    -- Requires h11621_shape / h11622_shape witnesses: [2048, 64] (S=2048, numExperts=k=64).
+    have h11621_shape : (initPM 11621).shape = [2048, 64] := hPM 11621 [2048, 64] rfl
+    have h11622_shape : (initPM 11622).shape = [2048, 64] := hPM 11622 [2048, 64] rfl
+    rw [fw_topk_routing_fst_allGather0_commute_2_of (initPM 11621) (initPM 11622) 2048 8 64
+          (by omega) (by omega) h11621_shape h11622_shape]
+    rw [fw_topk_routing_snd_fst_allGather0_commute_2_of (initPM 11621) (initPM 11622) 2048 8 64
+          (by omega) (by omega) h11621_shape h11622_shape]
     -- Push through fw_all2all_moe_gmm.
     rw [fw_all2all_moe_gmm_split_commute_2
           (initPM 11613) (initPM 11614)
-          (fw_topk_routing (initPM 11621) 8 1).fst (fw_topk_routing (initPM 11622) 8 1).fst
-          (fw_topk_routing (initPM 11621) 8 1).snd.fst (fw_topk_routing (initPM 11622) 8 1).snd.fst
+          (fw_topk_routing (initPM 11621) 8 64).fst (fw_topk_routing (initPM 11622) 8 64).fst
+          (fw_topk_routing (initPM 11621) 8 64).snd.fst (fw_topk_routing (initPM 11622) 8 64).snd.fst
           (initPM 11629) (initPM 11630)
           (initPM 11631) (initPM 11632)
           64 8 (((10 : Nat) : Scalar))]
@@ -2702,13 +3105,13 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
     -- All 4 tensors have shape [2048, 1024]: all2all_moe_gmm output matches input's
     -- hidden dim (1024, after Denote hModel fix); elemwiseMul(sigmoid([2048,1]),
     -- view([2048,1024])) broadcasts to [2048, 1024] (per-dim max, after Denote outShape2 fix).
-    have hgmm0_local : (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 1).fst
-              (fw_topk_routing (initPM 11621) 8 1).snd.fst (initPM 11629) (initPM 11631)
+    have hgmm0_local : (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 64).fst
+              (fw_topk_routing (initPM 11621) 8 64).snd.fst (initPM 11629) (initPM 11631)
               64 0 32 8 (((10 : Nat) : Scalar))).shape = [2048, 1024] :=
       TrainVerify.Denote.fw_all2all_moe_gmm_shape _ _ _ _ _ _ _ _ _ _ 2048 1024
         (by rw [h11613_shape]; rfl) (by rw [h11613_shape]; rfl)
-    have hgmm1_local : (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 1).fst
-              (fw_topk_routing (initPM 11622) 8 1).snd.fst (initPM 11630) (initPM 11632)
+    have hgmm1_local : (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 64).fst
+              (fw_topk_routing (initPM 11622) 8 64).snd.fst (initPM 11630) (initPM 11632)
               64 32 64 8 (((10 : Nat) : Scalar))).shape = [2048, 1024] :=
       TrainVerify.Denote.fw_all2all_moe_gmm_shape _ _ _ _ _ _ _ _ _ _ 2048 1024
         (by rw [h11614_shape]; rfl) (by rw [h11614_shape]; rfl)
@@ -2739,11 +3142,11 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
       simp only [Tensor.mkShape, outShape2, hleft, hright]
       decide
     rw [fw_add_allGather0_commute_2_2048_1024
-          (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 1).fst
-            (fw_topk_routing (initPM 11621) 8 1).snd.fst (initPM 11629) (initPM 11631)
+          (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 64).fst
+            (fw_topk_routing (initPM 11621) 8 64).snd.fst (initPM 11629) (initPM 11631)
             64 0 32 8 (((10 : Nat) : Scalar)))
-          (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 1).fst
-            (fw_topk_routing (initPM 11622) 8 1).snd.fst (initPM 11630) (initPM 11632)
+          (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 64).fst
+            (fw_topk_routing (initPM 11622) 8 64).snd.fst (initPM 11630) (initPM 11632)
             64 32 64 8 (((10 : Nat) : Scalar)))
           (elemwiseMul
             (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
@@ -2760,8 +3163,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
     -- All 4 args have shape [2048, 1024].
     have hinner_add0_local :
         (elemwiseAdd
-          (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 1).fst
-            (fw_topk_routing (initPM 11621) 8 1).snd.fst (initPM 11629) (initPM 11631)
+          (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 64).fst
+            (fw_topk_routing (initPM 11621) 8 64).snd.fst (initPM 11629) (initPM 11631)
             64 0 32 8 (((10 : Nat) : Scalar)))
           (elemwiseMul
             (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
@@ -2773,8 +3176,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
       decide
     have hinner_add1_local :
         (elemwiseAdd
-          (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 1).fst
-            (fw_topk_routing (initPM 11622) 8 1).snd.fst (initPM 11630) (initPM 11632)
+          (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 64).fst
+            (fw_topk_routing (initPM 11622) 8 64).snd.fst (initPM 11630) (initPM 11632)
             64 32 64 8 (((10 : Nat) : Scalar)))
           (elemwiseMul
             (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
@@ -2786,8 +3189,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
       decide
     rw [fw_add_allGather0_commute_2_2048_1024 (initPM 11609) (initPM 11610)
           (elemwiseAdd
-            (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 1).fst
-              (fw_topk_routing (initPM 11621) 8 1).snd.fst (initPM 11629) (initPM 11631)
+            (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 64).fst
+              (fw_topk_routing (initPM 11621) 8 64).snd.fst (initPM 11629) (initPM 11631)
               64 0 32 8 (((10 : Nat) : Scalar)))
             (elemwiseMul
               (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
@@ -2795,8 +3198,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
                                                           (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
                                                (initPM 5920)))))
           (elemwiseAdd
-            (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 1).fst
-              (fw_topk_routing (initPM 11622) 8 1).snd.fst (initPM 11630) (initPM 11632)
+            (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 64).fst
+              (fw_topk_routing (initPM 11622) 8 64).snd.fst (initPM 11630) (initPM 11632)
               64 32 64 8 (((10 : Nat) : Scalar)))
             (elemwiseMul
               (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
@@ -2808,8 +3211,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
     rw [fw_maybe_unshuffle_cp2_commute
           (elemwiseAdd (initPM 11609)
             (elemwiseAdd
-              (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 1).fst
-                (fw_topk_routing (initPM 11621) 8 1).snd.fst (initPM 11629) (initPM 11631)
+              (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 64).fst
+                (fw_topk_routing (initPM 11621) 8 64).snd.fst (initPM 11629) (initPM 11631)
                 64 0 32 8 (((10 : Nat) : Scalar)))
               (elemwiseMul
                 (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
@@ -2818,8 +3221,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
                                                  (initPM 5920))))))
           (elemwiseAdd (initPM 11610)
             (elemwiseAdd
-              (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 1).fst
-                (fw_topk_routing (initPM 11622) 8 1).snd.fst (initPM 11630) (initPM 11632)
+              (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 64).fst
+                (fw_topk_routing (initPM 11622) 8 64).snd.fst (initPM 11630) (initPM 11632)
                 64 32 64 8 (((10 : Nat) : Scalar)))
               (elemwiseMul
                 (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
@@ -2839,8 +3242,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
     -- Rank 0's input to fw_maybe_unshuffle has shape [2048, 1024].
     have hgmm0_shape :
         (fw_all2all_moe_gmm (initPM 11613)
-          (fw_topk_routing (initPM 11621) 8 1).fst
-          (fw_topk_routing (initPM 11621) 8 1).snd.fst
+          (fw_topk_routing (initPM 11621) 8 64).fst
+          (fw_topk_routing (initPM 11621) 8 64).snd.fst
           (initPM 11629) (initPM 11631) 64 0 32 8 (((10 : Nat) : Scalar))).shape
           = [2048, 1024] :=
       TrainVerify.Denote.fw_all2all_moe_gmm_shape
@@ -2869,8 +3272,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
     have hinner_add0_shape :
         (elemwiseAdd
           (fw_all2all_moe_gmm (initPM 11613)
-                (fw_topk_routing (initPM 11621) 8 1).fst
-                (fw_topk_routing (initPM 11621) 8 1).snd.fst
+                (fw_topk_routing (initPM 11621) 8 64).fst
+                (fw_topk_routing (initPM 11621) 8 64).snd.fst
                 (initPM 11629) (initPM 11631) 64 0 32 8 (((10 : Nat) : Scalar)))
           (elemwiseMul
             (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
@@ -2887,8 +3290,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
         (elemwiseAdd (initPM 11609)
           (elemwiseAdd
             (fw_all2all_moe_gmm (initPM 11613)
-                  (fw_topk_routing (initPM 11621) 8 1).fst
-                  (fw_topk_routing (initPM 11621) 8 1).snd.fst
+                  (fw_topk_routing (initPM 11621) 8 64).fst
+                  (fw_topk_routing (initPM 11621) 8 64).snd.fst
                   (initPM 11629) (initPM 11631) 64 0 32 8 (((10 : Nat) : Scalar)))
             (elemwiseMul
               (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
@@ -2905,8 +3308,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
         (fw_maybe_unshuffle (elemwiseAdd (initPM 11609)
             (elemwiseAdd
               (fw_all2all_moe_gmm (initPM 11613)
-                    (fw_topk_routing (initPM 11621) 8 1).fst
-                    (fw_topk_routing (initPM 11621) 8 1).snd.fst
+                    (fw_topk_routing (initPM 11621) 8 64).fst
+                    (fw_topk_routing (initPM 11621) 8 64).snd.fst
                     (initPM 11629) (initPM 11631) 64 0 32 8 (((10 : Nat) : Scalar)))
               (elemwiseMul
                 (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
@@ -2921,8 +3324,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
     -- Rank 1 (mirror of rank 0):
     have hgmm1_shape :
         (fw_all2all_moe_gmm (initPM 11614)
-          (fw_topk_routing (initPM 11622) 8 1).fst
-          (fw_topk_routing (initPM 11622) 8 1).snd.fst
+          (fw_topk_routing (initPM 11622) 8 64).fst
+          (fw_topk_routing (initPM 11622) 8 64).snd.fst
           (initPM 11630) (initPM 11632) 64 32 64 8 (((10 : Nat) : Scalar))).shape
           = [2048, 1024] :=
       TrainVerify.Denote.fw_all2all_moe_gmm_shape
@@ -2951,8 +3354,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
     have hinner_add1_shape :
         (elemwiseAdd
           (fw_all2all_moe_gmm (initPM 11614)
-                (fw_topk_routing (initPM 11622) 8 1).fst
-                (fw_topk_routing (initPM 11622) 8 1).snd.fst
+                (fw_topk_routing (initPM 11622) 8 64).fst
+                (fw_topk_routing (initPM 11622) 8 64).snd.fst
                 (initPM 11630) (initPM 11632) 64 32 64 8 (((10 : Nat) : Scalar)))
           (elemwiseMul
             (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
@@ -2969,8 +3372,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
         (elemwiseAdd (initPM 11610)
           (elemwiseAdd
             (fw_all2all_moe_gmm (initPM 11614)
-                  (fw_topk_routing (initPM 11622) 8 1).fst
-                  (fw_topk_routing (initPM 11622) 8 1).snd.fst
+                  (fw_topk_routing (initPM 11622) 8 64).fst
+                  (fw_topk_routing (initPM 11622) 8 64).snd.fst
                   (initPM 11630) (initPM 11632) 64 32 64 8 (((10 : Nat) : Scalar)))
             (elemwiseMul
               (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
@@ -2987,8 +3390,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
         (fw_maybe_unshuffle (elemwiseAdd (initPM 11610)
             (elemwiseAdd
               (fw_all2all_moe_gmm (initPM 11614)
-                    (fw_topk_routing (initPM 11622) 8 1).fst
-                    (fw_topk_routing (initPM 11622) 8 1).snd.fst
+                    (fw_topk_routing (initPM 11622) 8 64).fst
+                    (fw_topk_routing (initPM 11622) 8 64).snd.fst
                     (initPM 11630) (initPM 11632) 64 32 64 8 (((10 : Nat) : Scalar)))
               (elemwiseMul
                 (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
@@ -3004,8 +3407,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
           (fw_maybe_unshuffle
             (elemwiseAdd (initPM 11609)
               (elemwiseAdd
-                (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 1).fst
-                  (fw_topk_routing (initPM 11621) 8 1).snd.fst (initPM 11629) (initPM 11631)
+                (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 64).fst
+                  (fw_topk_routing (initPM 11621) 8 64).snd.fst (initPM 11629) (initPM 11631)
                   64 0 32 8 (((10 : Nat) : Scalar)))
                 (elemwiseMul
                   (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
@@ -3015,8 +3418,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
           (fw_maybe_unshuffle
             (elemwiseAdd (initPM 11610)
               (elemwiseAdd
-                (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 1).fst
-                  (fw_topk_routing (initPM 11622) 8 1).snd.fst (initPM 11630) (initPM 11632)
+                (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 64).fst
+                  (fw_topk_routing (initPM 11622) 8 64).snd.fst (initPM 11630) (initPM 11632)
                   64 32 64 8 (((10 : Nat) : Scalar)))
                 (elemwiseMul
                   (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
