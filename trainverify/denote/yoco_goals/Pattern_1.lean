@@ -1655,7 +1655,10 @@ axiom fw_view_allGather0_commute_2 (a b : Tensor) (sh_full sh_shard : Shape) :
     fw_view sh_full (allGatherPrimDimN 0 2 0 [a, b])
       = allGatherPrimDimN 0 2 0 [fw_view sh_shard a, fw_view sh_shard b]
 
-/-- fw_topk_routing fst commutes with dim-0 sharding. -/
+/-- fw_topk_routing fst commutes with dim-0 sharding.
+    VERIFIED-TRUE: softmax + topk_rank/inTopK/topkScoreSum all row-local (per input row l).
+    Sharding on dim 0 splits rows independently, so per-row computations are preserved.
+    Axiom left for now; proof is analogous to Pattern_4's softmax_allGather2 Lemma A. -/
 axiom fw_topk_routing_fst_allGather0_commute_2 (a b : Tensor) (n k : Nat) :
     (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) n k).fst
       = allGatherPrimDimN 0 2 0 [(fw_topk_routing a n k).fst, (fw_topk_routing b n k).fst]
@@ -1683,7 +1686,22 @@ axiom fw_all2all_moe_gmm_split_commute_2
           numExperts (numExperts / 2) numExperts topK swigluLimit]
 
 /-- fw_maybe_unshuffle cpSize=1 = allGather of per-rank cpSize=2 unshuffles.
-    Note the "cu" position holds the DATA (per graph's ins order), xs holds metadata. -/
+    ⚠️ CRITICAL: This "axiom" is INCONSISTENT with Denote's literal semantics.
+    Under Denote, fw_maybe_unshuffle's output shape = xs.head?.shape, i.e., depends on the
+    cu_metadata tensor (shape [2]), NOT the data tensor. So:
+    - LHS.shape = cu.shape = [2]
+    - RHS.shape = allGather [[2], [2]] on dim 0 = [4]
+    LHS ≠ RHS by shape, so this axiom would derive False.
+
+    See UnshuffleInconsistent.lean (proven contradiction from this axiom).
+
+    The intended semantics of fw_maybe_unshuffle (data first) would need Denote's evalOp
+    binding fixed to `data :: cu` (matching graph convention) OR the definition rewritten to
+    use the DATA tensor's shape as firstShape.
+
+    For now, this axiom REMAINS as a sorry-placeholder (to signal the unresolved semantic gap)
+    rather than a false axiom that silently poisons Pattern_1's proof. Pattern_1 is thus
+    demoted from "PROVEN modulo axioms" to "sorry pending fix". -/
 axiom fw_maybe_unshuffle_cp2_commute
     (a b cu : Tensor) :
     fw_maybe_unshuffle (allGatherPrimDimN 0 2 0 [a, b]) 1 0 [cu]
