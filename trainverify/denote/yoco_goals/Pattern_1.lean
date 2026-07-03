@@ -2321,7 +2321,46 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
           (initPM 11631) (initPM 11632)
           64 8 (((10 : Nat) : Scalar))]
     -- Push through inner elemwiseAdd (all2all + mul).
-    rw [fw_add_allGather0_commute_2
+    -- All 4 tensors have shape [2048, 1024]: all2all_moe_gmm output matches input's
+    -- hidden dim (1024, after Denote hModel fix); elemwiseMul(sigmoid([2048,1]),
+    -- view([2048,1024])) broadcasts to [2048, 1024] (per-dim max, after Denote outShape2 fix).
+    have hgmm0_local : (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 1).fst
+              (fw_topk_routing (initPM 11621) 8 1).snd.fst (initPM 11629) (initPM 11631)
+              64 0 32 8 (((10 : Nat) : Scalar))).shape = [2048, 1024] :=
+      TrainVerify.Denote.fw_all2all_moe_gmm_shape _ _ _ _ _ _ _ _ _ _ 2048 1024
+        (by rw [h11613_shape]; rfl) (by rw [h11613_shape]; rfl)
+    have hgmm1_local : (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 1).fst
+              (fw_topk_routing (initPM 11622) 8 1).snd.fst (initPM 11630) (initPM 11632)
+              64 32 64 8 (((10 : Nat) : Scalar))).shape = [2048, 1024] :=
+      TrainVerify.Denote.fw_all2all_moe_gmm_shape _ _ _ _ _ _ _ _ _ _ 2048 1024
+        (by rw [h11614_shape]; rfl) (by rw [h11614_shape]; rfl)
+    have hmul0_local : (elemwiseMul
+            (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
+            (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                                                        (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+                                             (initPM 5920)))).shape = [2048, 1024] := by
+      have hleft : (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906)))).shape = [2048, 1] := by
+        rw [TrainVerify.Denote.fw_sigmoid_shape]; rfl
+      have hright : (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                                                        (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+                                             (initPM 5920))).shape = [2048, 1024] := rfl
+      show (Tensor.mkShape (outShape2 _ _) _).shape = _
+      simp only [Tensor.mkShape, outShape2, hleft, hright]
+      decide
+    have hmul1_local : (elemwiseMul
+            (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
+            (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                                                        (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+                                             (initPM 5920)))).shape = [2048, 1024] := by
+      have hleft : (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906)))).shape = [2048, 1] := by
+        rw [TrainVerify.Denote.fw_sigmoid_shape]; rfl
+      have hright : (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                                                        (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+                                             (initPM 5920))).shape = [2048, 1024] := rfl
+      show (Tensor.mkShape (outShape2 _ _) _).shape = _
+      simp only [Tensor.mkShape, outShape2, hleft, hright]
+      decide
+    rw [fw_add_allGather0_commute_2_2048_1024
           (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 1).fst
             (fw_topk_routing (initPM 11621) 8 1).snd.fst (initPM 11629) (initPM 11631)
             64 0 32 8 (((10 : Nat) : Scalar)))
@@ -2337,9 +2376,37 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
             (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
             (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
                                                         (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
-                                             (initPM 5920))))]
+                                             (initPM 5920))))
+          hgmm0_local hgmm1_local hmul0_local hmul1_local]
     -- Push through outer elemwiseAdd (initPM 11609/11610 + inner).
-    rw [fw_add_allGather0_commute_2 (initPM 11609) (initPM 11610)
+    -- All 4 args have shape [2048, 1024].
+    have hinner_add0_local :
+        (elemwiseAdd
+          (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 1).fst
+            (fw_topk_routing (initPM 11621) 8 1).snd.fst (initPM 11629) (initPM 11631)
+            64 0 32 8 (((10 : Nat) : Scalar)))
+          (elemwiseMul
+            (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906))))
+            (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
+                                                        (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
+                                             (initPM 5920))))).shape = [2048, 1024] := by
+      show (Tensor.mkShape (outShape2 _ _) _).shape = _
+      simp only [Tensor.mkShape, outShape2, hgmm0_local, hmul0_local]
+      decide
+    have hinner_add1_local :
+        (elemwiseAdd
+          (fw_all2all_moe_gmm (initPM 11614) (fw_topk_routing (initPM 11622) 8 1).fst
+            (fw_topk_routing (initPM 11622) 8 1).snd.fst (initPM 11630) (initPM 11632)
+            64 32 64 8 (((10 : Nat) : Scalar)))
+          (elemwiseMul
+            (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
+            (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
+                                                        (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
+                                             (initPM 5920))))).shape = [2048, 1024] := by
+      show (Tensor.mkShape (outShape2 _ _) _).shape = _
+      simp only [Tensor.mkShape, outShape2, hgmm1_local, hmul1_local]
+      decide
+    rw [fw_add_allGather0_commute_2_2048_1024 (initPM 11609) (initPM 11610)
           (elemwiseAdd
             (fw_all2all_moe_gmm (initPM 11613) (fw_topk_routing (initPM 11621) 8 1).fst
               (fw_topk_routing (initPM 11621) 8 1).snd.fst (initPM 11629) (initPM 11631)
@@ -2357,7 +2424,8 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
               (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906))))
               (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
                                                           (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
-                                               (initPM 5920)))))]
+                                               (initPM 5920)))))
+          h11609_shape h11610_shape hinner_add0_local hinner_add1_local]
     -- Push through fw_maybe_unshuffle (converts cpSize=1 → cpSize=2×2).
     rw [fw_maybe_unshuffle_cp2_commute
           (elemwiseAdd (initPM 11609)
