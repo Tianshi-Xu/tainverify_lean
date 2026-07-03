@@ -1716,35 +1716,129 @@ axiom fw_inner_chunk_ce_fst_allGather0_commute_2
         [(fw_inner_chunk_ce x_a w (chunkPrimDimN 0 2 0 y) vocab zLossScale).fst,
          (fw_inner_chunk_ce x_b w (chunkPrimDimN 0 2 1 y) vocab zLossScale).fst]
 
-/-- allGatherPrimDimN 0 shape rule for 2-element lists with same first-dim shape. -/
-axiom allGatherPrimDimN_0_shape_2 (a b : Tensor) (n_total n_shard : Nat) (rest : List Nat)
-    (ha : a.shape = n_shard :: rest) (hb : b.shape = n_shard :: rest)
-    (h : n_total = 2 * n_shard) :
-    (allGatherPrimDimN 0 2 0 [a, b]).shape = n_total :: rest
+-- allGatherPrimDimN_0_shape_2 axiom removed as unused
 
-/-- fw_inner_chunk_ce fst output shape = [x.shape.head?.getD 0]. -/
-axiom fw_inner_chunk_ce_fst_shape (x w y : Tensor) (vocab : Nat) (zLossScale : Scalar) :
-    (fw_inner_chunk_ce x w y vocab zLossScale).fst.shape = [(x.shape.head?).getD 0]
+-- fw_inner_chunk_ce_fst_shape axiom removed as unused (proof uses TrainVerify.Denote.fw_inner_chunk_ce_fst_shape)
 
-/-- fw_rms_norm preserves shape. -/
-axiom fw_rms_norm_shape (x w : Tensor) : (fw_rms_norm x w).shape = x.shape
+-- fw_rms_norm_shape axiom removed as unused (proof uses TrainVerify.Denote.fw_rms_norm_shape)
 
 /-- `fw_maybe_unshuffle` preserves the data tensor's shape (it is an identity). -/
 theorem fw_maybe_unshuffle_shape (x cu : Tensor) (cpSize cpRank : Nat) :
     (fw_maybe_unshuffle x cu cpSize cpRank).shape = x.shape := by
   unfold fw_maybe_unshuffle; rfl
 
-/-- elemwiseAdd preserves shape when both inputs have the same shape. -/
-axiom elemwiseAdd_shape_when_same (a b : Tensor) (sh : Shape)
-    (ha : a.shape = sh) (hb : b.shape = sh) : (elemwiseAdd a b).shape = sh
+-- elemwiseAdd_shape_when_same axiom removed as unused
 
-/-- fw_all2all_moe_gmm output shape = input shape (for our case). -/
-axiom fw_all2all_moe_gmm_shape (input rp rm w13 w2 : Tensor) (n a b topK : Nat) (s : Scalar) :
-    (fw_all2all_moe_gmm input rp rm w13 w2 n a b topK s).shape = input.shape
+-- fw_all2all_moe_gmm_shape axiom removed as unused (proof uses TrainVerify.Denote.fw_all2all_moe_gmm_shape)
 
 /-- The SM computation chain preserves batch dim = 4096. -/
-axiom sm_chain_shape_4096 (initSM : Store) (hSM : StoreShapesHold initSM sm_goal_1InitEnv) :
-    (denoteGraph sm_goal_1 initSM 4673).shape = [4096]
+theorem sm_chain_shape_4096 (initSM : Store) (hSM : StoreShapesHold initSM sm_goal_1InitEnv) :
+    (denoteGraph sm_goal_1 initSM 4673).shape = [4096] := by
+  -- Shapes we need from the store hypothesis.
+  have h5893 : (initSM 5893).shape = [4096, 1024] := hSM 5893 [4096, 1024] rfl
+  have h5895 : (initSM 5895).shape = [4096, 1024] := hSM 5895 [4096, 1024] rfl
+  have h5903 : (initSM 5903).shape = [64, 1024, 512] := hSM 5903 [64, 1024, 512] rfl
+  -- Innermost: fw_all2all_moe_gmm output shape = [lDim, hModel] where
+  -- lDim = input.shape.head? = 4096; hModel = w2.shape.reverse.head? = 512
+  -- (w2 = initSM 5903 has shape [64, 1024, 512], so .reverse.head? = some 512).
+  have hall2all_shape :
+      (fw_all2all_moe_gmm (initSM 5895)
+            ((fw_topk_routing (initSM 5898) 8 1).fst)
+            ((fw_topk_routing (initSM 5898) 8 1).snd.fst)
+            (initSM 5902) (initSM 5903) 64 0 64 8 ((((10 : Nat) : Scalar)))).shape
+        = [4096, 512] :=
+    TrainVerify.Denote.fw_all2all_moe_gmm_shape
+      _ _ _ _ _ _ _ _ _ _ 4096 512
+      (by rw [h5895]; rfl) (by rw [h5903]; decide)
+  -- elemwiseMul(sigmoid(view [4096,1] ...), view [4096, 1024] ...): outShape2 picks first arg
+  -- fw_view [4096, 1] X has shape [4096, 1]; fw_sigmoid preserves shape → [4096, 1].
+  -- outShape2 [4096, 1] [4096, 1024] = [4096, 1] (first wins since ≥).
+  have hmul_shape :
+      (elemwiseMul
+        (fw_sigmoid (fw_view [4096, 1] (fw_linear (initSM 5895) (initSM 5906))))
+        (fw_view [4096, 1024]
+          (fw_linear
+            (fw_swiglu
+              (fw_view [4096, 512] (fw_linear (initSM 5895) (initSM 5911)))
+              (fw_view [4096, 512] (fw_linear (initSM 5895) (initSM 5915))))
+            (initSM 5920)))).shape = [4096, 1] := by
+    have hleft : (fw_sigmoid (fw_view [4096, 1] (fw_linear (initSM 5895) (initSM 5906)))).shape = [4096, 1] := by
+      rw [TrainVerify.Denote.fw_sigmoid_shape]; rfl
+    have hright : (fw_view [4096, 1024]
+              (fw_linear
+                (fw_swiglu
+                  (fw_view [4096, 512] (fw_linear (initSM 5895) (initSM 5911)))
+                  (fw_view [4096, 512] (fw_linear (initSM 5895) (initSM 5915))))
+                (initSM 5920))).shape = [4096, 1024] := rfl
+    show (Tensor.mkShape (outShape2 _ _) _).shape = _
+    simp only [Tensor.mkShape, outShape2, hleft, hright]
+    decide
+  -- Inner elemwiseAdd(all2all_moe_gmm [4096, 512], elemwiseMul [4096, 1]): outShape2 = [4096, 512]
+  have hinner_add_shape :
+      (elemwiseAdd
+        (fw_all2all_moe_gmm (initSM 5895)
+              ((fw_topk_routing (initSM 5898) 8 1).fst)
+              ((fw_topk_routing (initSM 5898) 8 1).snd.fst)
+              (initSM 5902) (initSM 5903) 64 0 64 8 ((((10 : Nat) : Scalar))))
+        (elemwiseMul
+          (fw_sigmoid (fw_view [4096, 1] (fw_linear (initSM 5895) (initSM 5906))))
+          (fw_view [4096, 1024]
+            (fw_linear
+              (fw_swiglu
+                (fw_view [4096, 512] (fw_linear (initSM 5895) (initSM 5911)))
+                (fw_view [4096, 512] (fw_linear (initSM 5895) (initSM 5915))))
+              (initSM 5920))))).shape = [4096, 512] := by
+    show (Tensor.mkShape (outShape2 _ _) _).shape = _
+    simp only [Tensor.mkShape, outShape2, hall2all_shape, hmul_shape]
+    decide
+  -- Outer elemwiseAdd(initSM 5893 [4096, 1024], inner_add [4096, 512]): outShape2 = [4096, 1024]
+  have houter_add_shape :
+      (elemwiseAdd (initSM 5893)
+        (elemwiseAdd
+          (fw_all2all_moe_gmm (initSM 5895)
+                ((fw_topk_routing (initSM 5898) 8 1).fst)
+                ((fw_topk_routing (initSM 5898) 8 1).snd.fst)
+                (initSM 5902) (initSM 5903) 64 0 64 8 ((((10 : Nat) : Scalar))))
+          (elemwiseMul
+            (fw_sigmoid (fw_view [4096, 1] (fw_linear (initSM 5895) (initSM 5906))))
+            (fw_view [4096, 1024]
+              (fw_linear
+                (fw_swiglu
+                  (fw_view [4096, 512] (fw_linear (initSM 5895) (initSM 5911)))
+                  (fw_view [4096, 512] (fw_linear (initSM 5895) (initSM 5915))))
+                (initSM 5920)))))).shape = [4096, 1024] := by
+    show (Tensor.mkShape (outShape2 _ _) _).shape = _
+    simp only [Tensor.mkShape, outShape2, h5893, hinner_add_shape]
+    decide
+  -- Now compute x_rms.shape = [4096, 1024]:
+  -- fw_maybe_unshuffle (data, cu, 1, 0).shape = data.shape (identity model)
+  -- fw_rms_norm preserves shape.
+  have hx_shape :
+      (fw_rms_norm
+        (fw_maybe_unshuffle (elemwiseAdd (initSM 5893)
+            (elemwiseAdd
+              (fw_all2all_moe_gmm (initSM 5895)
+                ((fw_topk_routing (initSM 5898) 8 1).fst)
+                ((fw_topk_routing (initSM 5898) 8 1).snd.fst)
+                (initSM 5902) (initSM 5903) 64 0 64 8 ((((10 : Nat) : Scalar))))
+              (elemwiseMul
+                (fw_sigmoid (fw_view [4096, 1] (fw_linear (initSM 5895) (initSM 5906))))
+                (fw_view [4096, 1024]
+                  (fw_linear
+                    (fw_swiglu
+                      (fw_view [4096, 512] (fw_linear (initSM 5895) (initSM 5911)))
+                      (fw_view [4096, 512] (fw_linear (initSM 5895) (initSM 5915))))
+                    (initSM 5920))))))
+          (initSM 5927) 1 0)
+        (initSM 5929)).shape = [4096, 1024] := by
+    rw [TrainVerify.Denote.fw_rms_norm_shape,
+        TrainVerify.Denote.fw_maybe_unshuffle_shape,
+        houter_add_shape]
+  -- fw_inner_chunk_ce.fst.shape = [x.shape.head?.getD 0]
+  have hL : _ = some 4096 := congrArg List.head? hx_shape
+  rw [denote_sm_goal_1_4673]
+  exact TrainVerify.Denote.fw_inner_chunk_ce_fst_shape
+    _ _ _ _ _ 4096 hL
 
 /-- The PM computation chain (after allGather) has shape [4096]. -/
 axiom pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_1InitEnv) :
