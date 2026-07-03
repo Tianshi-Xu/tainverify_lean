@@ -1320,16 +1320,8 @@ theorem elemwiseMul_shape_of_shapes (x y : Tensor) (sh : Shape)
   change outShape2 x y = sh
   simp [outShape2, hx, hy]
 
-/-- elemwiseMul with broadcasting: when both x and y have same-length shapes and the
-    longer/equal-length one is `sh`, output is `sh` (outShape2 picks longer). Simplified:
-    when both shapes have equal length, output = x.shape (via outShape2 preferring x). -/
-theorem elemwiseMul_shape_broadcast (x y : Tensor) (sh : Shape)
-    (hx : x.shape.length = sh.length) (hy : y.shape.length = sh.length)
-    (hlong : x.shape = sh) :
-    (elemwiseMul x y).shape = sh := by
-  unfold elemwiseMul Tensor.mkShape
-  change outShape2 x y = sh
-  simp [outShape2, hlong, hx, hy]
+-- (Removed: elemwiseMul_shape_broadcast — was based on old first-wins outShape2 rule.
+--  With PyTorch-correct per-dim max broadcast, that stale lemma is no longer meaningful.)
 
 
 /-- Value at a specific flat index for elemwiseAdd of two [2048, 1024] tensors. -/
@@ -1879,7 +1871,7 @@ theorem sm_chain_shape_4096 (initSM : Store) (hSM : StoreShapesHold initSM sm_go
             (fw_swiglu
               (fw_view [4096, 512] (fw_linear (initSM 5895) (initSM 5911)))
               (fw_view [4096, 512] (fw_linear (initSM 5895) (initSM 5915))))
-            (initSM 5920)))).shape = [4096, 1] := by
+            (initSM 5920)))).shape = [4096, 1024] := by
     have hleft : (fw_sigmoid (fw_view [4096, 1] (fw_linear (initSM 5895) (initSM 5906)))).shape = [4096, 1] := by
       rw [TrainVerify.Denote.fw_sigmoid_shape]; rfl
     have hright : (fw_view [4096, 1024]
@@ -1988,7 +1980,7 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
             (fw_swiglu
               (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
               (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
-            (initPM 5920)))).shape = [2048, 1] := by
+            (initPM 5920)))).shape = [2048, 1024] := by
     have hleft : (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906)))).shape = [2048, 1] := by
       rw [TrainVerify.Denote.fw_sigmoid_shape]; rfl
     have hright : (fw_view [2048, 1024]
@@ -2078,7 +2070,7 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
             (fw_swiglu
               (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
               (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
-            (initPM 5920)))).shape = [2048, 1] := by
+            (initPM 5920)))).shape = [2048, 1024] := by
     have hleft : (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906)))).shape = [2048, 1] := by
       rw [TrainVerify.Denote.fw_sigmoid_shape]; rfl
     have hright : (fw_view [2048, 1024]
@@ -2416,7 +2408,7 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
               (fw_swiglu
                 (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911)))
                 (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915))))
-              (initPM 5920)))).shape = [2048, 1] := by
+              (initPM 5920)))).shape = [2048, 1024] := by
       have hleft : (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906)))).shape = [2048, 1] := by
         rw [TrainVerify.Denote.fw_sigmoid_shape]; rfl
       have hright : (fw_view [2048, 1024]
@@ -2498,7 +2490,7 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
               (fw_swiglu
                 (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911)))
                 (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
-              (initPM 5920)))).shape = [2048, 1] := by
+              (initPM 5920)))).shape = [2048, 1024] := by
       have hleft : (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906)))).shape = [2048, 1] := by
         rw [TrainVerify.Denote.fw_sigmoid_shape]; rfl
       have hright : (fw_view [2048, 1024]

@@ -526,8 +526,26 @@ def multiToFlat : Shape → List Nat → Nat
   | _ :: srest, i :: irest => i * prodShape srest + multiToFlat srest irest
   | _, _ => 0
 
+/-- NumPy/PyTorch-style broadcast shape.
+
+    Rule: align two shapes from the RIGHT (pad the shorter with 1s on the left),
+    then take the per-dim maximum. Per-dim compatibility requires each dim to be
+    equal or one of them to be 1; this def does not enforce compatibility (returns
+    a valid PyTorch broadcast shape only when inputs are broadcast-compatible).
+
+    Previously this was `if x.shape.length >= y.shape.length then x.shape else y.shape`
+    (first-wins on tie), which is INCORRECT for cases like `[2048, 1024] * [2048, 1]`
+    where PyTorch broadcasts to `[2048, 1024]` but the old rule gave `[2048, 1024]`
+    if `x=[2048,1024]` first, or `[2048, 1]` if `x=[2048,1]` first. Fix (2026-07-03):
+    take per-dim max after right-alignment, matching Python semantics. -/
 def outShape2 (x y : Tensor) : Shape :=
-  if x.shape.length >= y.shape.length then x.shape else y.shape
+  let xLen := x.shape.length
+  let yLen := y.shape.length
+  let maxLen := max xLen yLen
+  -- Right-align: pad each shape on the left with 1s to `maxLen`.
+  let xPadded := List.replicate (maxLen - xLen) 1 ++ x.shape
+  let yPadded := List.replicate (maxLen - yLen) 1 ++ y.shape
+  List.zipWith max xPadded yPadded
 
 def alignedMultiIndex (outShape inShape : Shape) (outFlat : Nat) : List Nat :=
   let outMI := flatToMulti outShape outFlat
