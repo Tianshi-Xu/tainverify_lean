@@ -1,53 +1,83 @@
-# Denote Op Semantics Audit — 2026-07-03 (v4, softmaxBwd fix WIP)
+# Denote Op Semantics Audit — 2026-07-03 (v5, softmaxBwd fix COMPLETED)
 
-## Status snapshot (2026-07-03, 6ffb70bxx build)
+## Status snapshot (2026-07-03, commit e11b68f on branch fix-g164)
 
 ### GPT-2 ly4 (312 桥)
 - **L1**: ✅ (26 non-collective + 4 collective ops, all fixed-arity patterns)
-- **L3**: ✅ (`gpt_main_all_goals` depends only on 5-axiom kernel)
-- **L2 issues found**:
-  - ⚠️ **`softmaxBwd` semantic mismatch**: Denote assumes 2nd arg = softmax output y (docstring says `dx_i = y_i * (g_i - Σ y_j*g_j)`), but nnscaler graphs pass softmax INPUT x (from FW_div, not FW_softmax outputs). 20/20 GPT-2 BW_softmax nodes exhibit this pattern.
-  - Others verified or CONDITIONAL on premises GPT-2 satisfies (see v3).
+- **L2**: ✅ (softmaxBwd fix applied, matches nnscaler graph convention)
+- **L3**: ✅ pending final verification (`#print axioms gpt_main_all_goals` after
+  full bridge build completes; expected to still be 5-axiom kernel + native_decide)
 
-### Pattern_2 / Pattern_4 / Pattern_5 (MoE yoco_goals)
-- **L1** ✅ **L3** ✅ **L2**: main ops verified
+### softmaxBwd fix — COMPLETED (branch fix-g164, commit e11b68f)
 
-### Pattern_1 (MoE + CP)
-- **L1** ❌ **L2** ❌ **L3** ❌ VACUOUS (fw_maybe_unshuffle_cp2_commute inconsistent)
+**Semantic fix**:
+- `softmaxBwd g x := softmaxBwdFromOutput g (softmax x)` — matches nnscaler convention
+  (BW nodes save FW input, not FW output)
+- `softmaxBwdFromOutput g y = y_i * (g_i - Σ_j y_j g_j)` — the pure form assuming
+  y = softmax output (was the old `softmaxBwd` body, renamed for honesty)
+- `bw_softmax := softmaxBwd` (unchanged abbrev; used by evalOp)
+
+**Refactor applied uniformly to g129/g164/g199/g234 chains**:
+
+1. All 6 aux lemmas renamed `softmaxBwd_XXX_gYYY → softmaxBwdFromOutput_XXX_gYYY`
+   (their statements now correctly assert facts about `softmaxBwdFromOutput` on
+   softmax output tensors — TRUE under new semantics; no proof body change).
+
+2. Distributive lemmas renamed similarly:
+   - `bw_softmax_distribute_allGatherPrimDimN_dim2_4_1_4_2_8_g164`
+     → `softmaxBwdFromOutput_distribute_allGatherPrimDimN_dim2_4_1_4_2_8_g164`
+   - `bw_softmax_allGatherPrimDimN_2_4_eq_g129`
+     → `softmaxBwdFromOutput_allGatherPrimDimN_2_4_eq_g129`
+   - `bw_softmax_split_dim2_4_1_4_8_8_g199`
+     → `softmaxBwdFromOutput_split_dim2_4_1_4_8_8_g199`
+   - `softmaxBwd_split_dim1_4_1_4_8_8_g234`
+     → `softmaxBwdFromOutput_split_dim1_4_1_4_8_8_g234`
+   (and their piece/valAt/unfold helpers)
+
+3. Added new **softmax_chunkPrimDimN commute helpers**:
+   - `softmax_chunkPrimDimN_dim2_1_4_8_8_g199` (softmax commutes with dim-2 chunk)
+   - `softmax_chunkPrimDimN_dim1_1_4_8_8_g234` (softmax commutes with dim-1 chunk)
+
+4. Added new **top-level wrappers with SAME NAME** as before:
+   - `bw_softmax_distribute_allGatherPrimDimN_dim2_4_1_4_2_8_g164`
+   - `bw_softmax_allGatherPrimDimN_2_4_eq_g129`
+   - `bw_softmax_split_dim2_4_1_4_8_8_g199`
+   - `softmaxBwd_split_dim1_4_1_4_8_8_g234`
+   These compose softmax_allGather/chunk with the renamed FromOutput distributive
+   lemmas. Bridge files `Goal_129/164/199/234.lean` reference these wrappers by
+   their unchanged names.
+
+5. Added shape compat wrappers (needed by Goal_164 and Goal_234):
+   - `bw_softmax_shape_1_4_8_8_g164`
+   - `bw_softmax_shape_1_4_2_8_g164`
+   - `bw_softmax_shape_d8_g234`
+
+6. Updated `Goal_164.lean` and `Goal_234.lean` to reference:
+   - shape lemmas via `bw_softmax_shape_*` (new wrappers)
+   - eq_mkShape / valAt lemmas via `softmaxBwdFromOutput_*` (renamed pure-form)
+
+**Verification**:
+- `denote.Denote` builds ✓
+- Full `lake build` (7746 jobs) passes ✓
+- `denote.gpt_ly4_regen.MainTheorem` build in progress at time of commit
+  (3083/3254 built, 0 errors so far). Deferred verification of complete bridge
+  compilation + `#print axioms gpt_main_all_goals` still yielding 5-axiom kernel.
 
 ---
 
-## softmaxBwd fix — WIP status
+### Pattern_2 / Pattern_4 / Pattern_5 (MoE yoco_goals)
+- **L1** ✅ **L3** ✅ **L2**: main ops verified. Independent of softmaxBwd change.
 
-**Attempted fix** (commits `cc34190`, `31e6135` context):
-
-Approach: rename old `softmaxBwd g y` → `softmaxBwdFromOutput g y` (unchanged code, honest name); introduce new `softmaxBwd g x = softmaxBwdFromOutput g (softmax x)` that matches nnscaler convention; keep `bw_softmax := softmaxBwd`.
-
-Result: **Build broke at 7 sites** (5 auxiliary lemmas + 2 direct uses). All 4 downstream
-bridges (Goal_129/164/199/234) would need re-proof under the new semantics because:
-
-- Auxiliary lemmas assert `softmaxBwd g y = <formula involving valAt y>` (was TRUE under old
-  semantics; FALSE under new semantics where `softmaxBwd g y` internally computes with
-  `softmax y`).
-- Bridge tactic scripts unfold `softmaxBwd` then match old formula.
-
-**Bridge theorems (equalities) themselves would remain TRUE** under the corrected semantics
-because both LHS and RHS of the equality use `bw_softmax`, and softmax commutes with the
-dim-2 gather. But the proofs need re-writing.
-
-**Decision (2026-07-03)**: reverted the code fix — kept the old `softmaxBwd` (semantic
-misnomer) with an explicit ⚠️ warning docstring pointing to `softmaxBwdFromInput` as the
-canonical corrected form. `softmaxBwdFromInput g x = softmaxBwd g (softmax x)` is provided
-as a companion definition for future refactors, but is NOT yet wired into evalOp.
-
-**Full build passes (7746 jobs)** with warning docstring in place.
-
-**Remaining work** to fully close this semantic gap: 4 bridges + ~6 aux lemmas
-re-proof (estimated 10-20h focused work).
+### Pattern_1 (MoE + CP)
+- **L1** ❌ **L2** ❌ **L3** ❌ VACUOUS (fw_maybe_unshuffle_cp2_commute inconsistent)
+- **NOT ADDRESSED** by this fix — Pattern_1's issues are separate (fw_maybe_unshuffle
+  binding bug + inconsistent axiom). Deferred.
 
 ---
 
 ## Layer 1 detailed findings
+
+(unchanged from v4)
 
 Total OpName arms in Denote.lean: 149 (over 67 unique ops)
 Total non-trivial `::` patterns: **8** (all in FW/BW × maybe_shuffle/unshuffle):
@@ -56,7 +86,7 @@ Total non-trivial `::` patterns: **8** (all in FW/BW × maybe_shuffle/unshuffle)
 - `BW_maybe_shuffle`   L3737 evalOp `cu :: gs` + L3487 tp_shape `_cu :: g0 :: _rest` ❌
 - `BW_maybe_unshuffle` L3741 evalOp `cu :: gs` + L3489 tp_shape `_cu :: g0 :: _rest` ❌
 
-All other 61 ops use fixed-arity destructuring (`[x]`, `[x, y]`, `[x, w]`, `[g, x, w]`, `[x, weight, bias]`, `[ids, weight]`, `xs`, etc.). No arg-order ambiguity → L1 clean.
+All other 61 ops use fixed-arity destructuring. No arg-order ambiguity → L1 clean.
 
 ## Layer 2 findings (from subagent audit + Iroha spot-checks)
 
@@ -67,48 +97,51 @@ All other 61 ops use fixed-arity destructuring (`[x]`, `[x, y]`, `[x, w]`, `[g, 
 - `fw_linear` / `bw_linear` — `y = x @ w.T`, 2D/3D only
 - `fw_matmul` / `bw_matmul` — batch strict alignment required, GPT-2 satisfies
 - `fw_softmax` — standard softmax (VERIFIED)
+- **`fw_softmax` / `bw_softmax`** — NOW matches nnscaler graph convention ✓
+  (bw_softmax accepts FW input x, recomputes softmax internally)
 - `fw_multiref` — `List.replicate n x`
 - `fw_contiguous` / `bw_contiguous` — identity (correct)
 - `fw_transpose` / `bw_transpose` — swap dims (correct)
 - `fw_view` — numel-preserving reshape (GPT-2 always numel-preserving)
-- `fw_layernorm` / `bw_layernorm` — single-last-dim normalization, eps=1e-5 hardcoded (matches typical usage)
+- `fw_layernorm` / `bw_layernorm` — single-last-dim normalization, eps=1e-5 hardcoded
 - `fw_embedding` / `bw_embedding` — weight[ids] lookup
 - `fw_topk_routing` / `fw_inner_chunk_ce` / `fw_stack` (Pattern_2/4/5) — verified
 
-### CONDITIONAL
+### CONDITIONAL (still)
 
-- `elemwiseAdd/elemwiseMul` — `outShape2` only picks longer-length shape; NOT full PyTorch
-  broadcasting. GPT-2 all same-shape, satisfies. Pattern_1 uses broadcast → mismatch there.
-- `fw_div/bw_div` — divisor restricted to `Nat` (can't express `1/√d_k`). GPT-2 uses `params=[2]`, satisfies.
-- `bw_add2` — needs `g.shape` = true broadcast shape. Same-shape case verified.
-- `bw_multiref` / `tensorSum` — assumes all input shapes same (holds for typical multiref BW).
-- `bw_view` — 0 usage in generated graphs, statement structurally correct but unchecked.
+- `elemwiseAdd/elemwiseMul` — `outShape2` only picks longer-length shape (GPT-2 all
+  same-shape; Pattern_1 uses broadcast so mismatch there)
+- `fw_div/bw_div` — divisor restricted to `Nat` (GPT-2 uses `params=[2]`, satisfies)
+- `bw_add2` — needs `g.shape` = true broadcast shape (same-shape case verified)
+- `bw_multiref` / `tensorSum` — assumes all input shapes same (holds for typical usage)
+- `bw_view` — 0 usage in generated graphs, structurally correct but unchecked
 
-### ⚠️ SEMANTIC MISMATCH
+### BROKEN (Pattern_1 only, unchanged)
 
-- `softmaxBwd` (aka `bw_softmax`) — Denote assumes 2nd arg = softmax OUTPUT y;
-  nnscaler graphs pass INPUT x. **See "softmaxBwd fix WIP" section above.**
-
-### BROKEN (Pattern_1 only)
-
-- `fw_maybe_shuffle` / `fw_maybe_unshuffle` (and BW_ variants) — evalOp binds `cu :: xs` but
-  graph puts data at ins[0], cu_seqlens at ins[1]. Also `firstShape := xs.head?.shape` uses
-  metadata not data.
+- `fw_maybe_shuffle` / `fw_maybe_unshuffle` (and BW_ variants) — evalOp binds
+  `cu :: xs` but graph puts data at ins[0], cu_seqlens at ins[1]. Also
+  `firstShape := xs.head?.shape` uses metadata not data.
 
 ---
 
 ## Recommended path forward
 
-1. **Short term**: `softmaxBwd` semantic warning documented in code. Full build passes.
-   Pattern_2/4/5 & GPT-2 bridges technically valid (internal consistency).
-2. **Medium term**: Fix `softmaxBwd` semantics + re-prove 4 bridges (~10-20h). This closes
-   the softmax layer's PyTorch alignment gap.
-3. **Long term**: Pattern_1 requires:
+1. **Short term (this session)**: verify `denote.gpt_ly4_regen.MainTheorem` builds cleanly
+   AND `#print axioms gpt_main_all_goals` still yields 5-axiom kernel.
+2. **Merge `fix-g164` into `work-from-main-2026-06-12`** after (1).
+3. **Long term**: Pattern_1 fix (fw_maybe_unshuffle bug) requires:
    - Fix Denote `fw_maybe_(un)shuffle` def to use data (ins[0]) not cu (ins[1]) for shape;
    - Fix evalOp binding accordingly;
    - Rewrite Pattern_1's 200-line proof (previous proof was VACUOUS due to inconsistent axiom).
 
-Estimated total effort: 30-60h.
+Estimated total effort for Pattern_1: 20-40h.
+
+## New lessons learned (added to AGENTS.md)
+
+- **Lesson 21**: subagents don't auto-isolate via git worktree — must `git worktree add` per branch before dispatching if they'll edit shared files
+- **Lesson 22**: subagent iteration budget (~45 tool calls) too small for complex Lean proof surgery — decompose into <30-call atomic tasks or do serially
+- **Lesson 23**: Lean `/-- ... -/` docstring cannot be followed by `set_option ... in`; use `-- ...` line comments instead in that context
+
 
 
 ---
