@@ -458,8 +458,11 @@ def softmax (x : Tensor) : Tensor :=
         if expSum = 0 then 0 else expFn (valAt x (base + idx)) / expSum)
   | [] => x
 
-/-- Softmax backward: dx_i = y_i * (g_i - Σ_j y_j * g_j) -/
-def softmaxBwd (g y : Tensor) : Tensor :=
+/-- Softmax backward, given the softmax **output** `y` directly.
+    `dx_i = y_i * (g_i - Σ_j y_j * g_j)`.
+    This is the "pure" backward — the version PyTorch autograd wants when saved_tensor
+    is the softmax output. -/
+def softmaxBwdFromOutput (g y : Tensor) : Tensor :=
   match y.shape.reverse with
   | d :: _ =>
       Tensor.mkShape y.shape (fun outIdx =>
@@ -469,6 +472,13 @@ def softmaxBwd (g y : Tensor) : Tensor :=
         let dot := ∑ j ∈ Finset.range d, (valAt y (base + j)) * (valAt g (base + j))
         (valAt y (base + idx)) * (valAt g (base + idx) - dot))
   | [] => g
+
+/-- Softmax backward as invoked from graph BW_softmax nodes.
+    The second argument is the softmax **input** `x` (nnscaler convention:
+    BW node saves FW input, not FW output).  We recompute `y = softmax x` internally.
+    Result: `dx_i = softmax(x)_i * (g_i - Σ_j softmax(x)_j * g_j)`. -/
+def softmaxBwd (g x : Tensor) : Tensor :=
+  softmaxBwdFromOutput g (softmax x)
 
 /-- Sum reduction (element-wise sum of list of tensors) -/
 def tensorSum (xs : List Tensor) : Tensor :=
@@ -17689,11 +17699,18 @@ redistribution gather dimension is *not* the last dimension, the per-shard
 pointwise op — but the proof must respect the per-row reduction. -/
 
 /-- `bw_softmax` preserves the shape of its second input, when that shape has a
-nonempty (cons) reversal. -/
+nonempty (cons) reversal.
+    Note: `bw_softmax g x = softmaxBwdFromOutput g (softmax x)`, and `softmax` preserves
+    shape, so the output shape follows from `x.shape`. -/
 theorem bw_softmax_shape_of_g129 (g y : Tensor) (sh : Shape) (d : Nat) (rest : List Nat)
     (hy : y.shape = sh) (hrev : sh.reverse = d :: rest) :
     (bw_softmax g y).shape = sh := by
-  simp only [bw_softmax, softmaxBwd, hy, hrev, Tensor.mkShape]
+  have hsoft : (softmax y).shape = y.shape := by
+    unfold softmax
+    cases hrevY : y.shape.reverse with
+    | nil => rfl
+    | cons d' t => rfl
+  simp only [bw_softmax, softmaxBwd, softmaxBwdFromOutput, hsoft, hy, hrev, Tensor.mkShape]
 
 /-- Unfolding lemma for `evalOp` on `BW_softmax`. -/
 theorem evalOp_bw_softmax_g129 (numParts rank : Nat) (g y : Tensor) :
