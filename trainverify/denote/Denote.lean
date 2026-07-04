@@ -21059,6 +21059,90 @@ theorem chunkPrimDimN_one_valAt (chunkDim : Nat) (x : Tensor)
       congr 1
       exact Fin.mk.injEq .. |>.mpr hkey'
 
+/-- `allGatherPrimDimN gatherDim 1 0 [x]` is value-equal to `x` at every in-bounds index,
+    when gatherDim is a valid axis. -/
+theorem allGatherPrimDimN_singleton_valAt (gatherDim : Nat) (x : Tensor)
+    (hgd : gatherDim < x.shape.length) (idx : Nat)
+    (hbound : idx < prodShape x.shape) :
+    valAt (allGatherPrimDimN gatherDim 1 0 [x]) idx = valAt x idx := by
+  have hshape_lhs := allGatherPrimDimN_singleton_shape gatherDim x
+  have hbound_lhs : idx < prodShape (allGatherPrimDimN gatherDim 1 0 [x]).shape := by
+    rw [hshape_lhs]; exact hbound
+  rw [valAt_of_lt _ _ hbound_lhs, valAt_of_lt _ _ hbound]
+  unfold allGatherPrimDimN
+  simp only [Tensor.mkShape, Nat.mul_one, List.head?, Option.map, Option.getD,
+             List.getD_cons_zero]
+  set sh := x.shape with hsh_def
+  set postStride := (sh.drop (gatherDim + 1)).foldl (· * ·) 1 with hps_def
+  set dimSize := sh.getD gatherDim 0 with hdim_def
+  set dimStride := dimSize * postStride with hstride_def
+  by_cases hps : postStride = 0
+  · exfalso
+    have : prodShape sh = 0 := prodShape_zero_of_suffix_zero sh gatherDim hps
+    omega
+  · have hps_pos : 0 < postStride := Nat.pos_of_ne_zero hps
+    by_cases hdim : dimSize = 0
+    · exfalso
+      have hzero_at : sh[gatherDim]'hgd = 0 := by
+        have heq : sh.getD gatherDim 0 = sh[gatherDim]'hgd := by
+          simp [List.getD, List.getElem?_eq_getElem hgd]
+        rw [← heq]; exact hdim
+      have h0 : 0 ∈ sh := by rw [← hzero_at]; exact List.getElem_mem hgd
+      have : prodShape sh = 0 := by
+        unfold prodShape; exact foldl_mul_eq_zero_of_mem_zero sh 1 h0
+      omega
+    · have hdim_pos : 0 < dimSize := Nat.pos_of_ne_zero hdim
+      have hstride_pos : 0 < dimStride := Nat.mul_pos hdim_pos hps_pos
+      have hstride_ne : dimStride ≠ 0 := Nat.ne_of_gt hstride_pos
+      have hds : dimSize * postStride ≠ 0 := Nat.mul_ne_zero hdim hps
+      -- Key: jFull = idx % dimStride / postStride, and jFull < dimSize
+      -- So r = jFull / dimSize = 0, jLocal = jFull % dimSize = jFull.
+      have hjFull_lt : idx % dimStride / postStride < dimSize := by
+        -- idx % dimStride < dimStride = dimSize * postStride
+        -- so idx % dimStride / postStride < dimSize (using Nat.div_lt_iff or bound)
+        have h1 : idx % dimStride < dimSize * postStride := by
+          rw [hstride_def] at *
+          exact Nat.mod_lt idx (Nat.mul_pos hdim_pos hps_pos)
+        exact Nat.div_lt_of_lt_mul (by rw [Nat.mul_comm]; exact h1)
+      -- Set up reconstruction similar to chunk lemma
+      have hkey :
+        idx / dimStride * dimStride
+          + idx % dimStride / postStride * postStride
+          + idx % dimStride % postStride = idx := by
+        have hstep1 :
+          idx % dimStride / postStride * postStride
+            + idx % dimStride % postStride = idx % dimStride := by
+          have := Nat.div_add_mod (idx % dimStride) postStride
+          rw [Nat.mul_comm postStride] at this
+          exact this
+        have hstep2 :
+          idx / dimStride * dimStride + idx % dimStride = idx := by
+          have := Nat.div_add_mod idx dimStride
+          rw [Nat.mul_comm dimStride] at this
+          exact this
+        calc idx / dimStride * dimStride
+              + idx % dimStride / postStride * postStride
+              + idx % dimStride % postStride
+            = idx / dimStride * dimStride
+              + (idx % dimStride / postStride * postStride
+                  + idx % dimStride % postStride) := by ring
+          _ = idx / dimStride * dimStride + idx % dimStride := by rw [hstep1]
+          _ = idx := hstep2
+      have h1_ne_0 : (1 : Nat) ≠ 0 := one_ne_zero
+      simp only [h1_ne_0, ↓reduceIte, if_false, Nat.zero_mul, Nat.zero_add,
+                 hds, hps, hdim, hstride_ne]
+      -- Reduce r and jLocal (need jFull < dimSize)
+      have hr : idx % dimStride / postStride / dimSize = 0 := by
+        apply Nat.div_eq_of_lt; exact hjFull_lt
+      have hjLoc : idx % dimStride / postStride % dimSize
+                    = idx % dimStride / postStride := by
+        apply Nat.mod_eq_of_lt; exact hjFull_lt
+      rw [hr, hjLoc]
+      simp only [List.getD_cons_zero]
+      rw [valAt_of_lt _ _ (by rw [hkey]; exact hbound)]
+      congr 1
+      exact Fin.mk.injEq .. |>.mpr hkey
+
 /-- Ring-attention–aware variant of `applyNode`. Intercepts `FW_attn_zigzag`
     and dispatches to `applyNodeRingAttn_zigzag` (cross-rank ring semantics);
     all other ops behave identically to `applyNode`. -/
