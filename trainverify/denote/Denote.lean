@@ -21712,4 +21712,723 @@ theorem fw_stack_allGather0_dim1_commute_2
       rw [fw_stack_valAt ys [Lshard, d1, d2] hyhead hxyshard_pos i
           (by rw [hylen]; exact hi) (((row - Lshard) * d1 + col) * d2 + inner) (hbnd _ hrsub)]
 
+/-! ### Phase C2a: per-op sharding-commute lemmas for Pattern_3
+
+    These lemmas establish that each of the following ops commutes with dim-0
+    (token/sequence-dim) sharding across two ranks, matching the canonical
+    Pattern_1 form `OP (allGather [a, b]) = allGather [OP a, OP b]`.  They are
+    the missing per-op building blocks Pattern_3's 24-layer chain consumes but
+    that Pattern_1 never established.
+
+    Categories:
+      * pure identity (`FW_float`, `FW_reshape`, `FW_to`) — `evalOp` returns
+        its input unchanged, so the single output commutes trivially;
+      * cross-rank identity model (`FW_maybe_shuffle`, per AGENTS.md #24) —
+        `fw_maybe_shuffle` is modelled as identity on its data argument;
+      * structural (`FW_multiref`) — replicates its input into `n` outputs;
+      * per-token matmul family (`FW_mix_precision_linear`,
+        `FW_per_head_mix_precision_linear`, `FW_norm_linear`) — each row of the
+        output depends only on the corresponding row of the (dim-0-sharded)
+        input, hence commutes;
+      * per-token pointwise (`FW_rotary_embedding`) — the RoPE rotation of token
+        `l` reads only row `l` of the input and its shared `positions` entry;
+      * intra-rank sliding-window attention (`FW_attn_sliding_window`). -/
+
+/-- `FW_float` (a BF16/FP cast, identity in the `Scalar = ℝ` model) commutes with
+    dim-0 sharding: the single output of the op on the gathered input equals the
+    dim-0 all-gather of the two per-rank outputs. -/
+theorem fw_float_allGather0_commute_2
+    (numParts rank : Nat) (params : List Nat) (a b : Tensor) :
+    (evalOp numParts rank "OpName.FW_float" params [allGatherPrimDimN 0 2 0 [a, b]]).headD (zeroTensor [])
+      = allGatherPrimDimN 0 2 0
+          [(evalOp numParts rank "OpName.FW_float" params [a]).headD (zeroTensor []),
+           (evalOp numParts rank "OpName.FW_float" params [b]).headD (zeroTensor [])] := by
+  rw [evalOp_fw_float, evalOp_fw_float, evalOp_fw_float]
+  rfl
+
+/-- `FW_reshape` (identity on the flat buffer under matching total size) commutes
+    with dim-0 sharding. -/
+theorem fw_reshape_allGather0_commute_2
+    (numParts rank : Nat) (params : List Nat) (a b : Tensor) :
+    (evalOp numParts rank "OpName.FW_reshape" params [allGatherPrimDimN 0 2 0 [a, b]]).headD (zeroTensor [])
+      = allGatherPrimDimN 0 2 0
+          [(evalOp numParts rank "OpName.FW_reshape" params [a]).headD (zeroTensor []),
+           (evalOp numParts rank "OpName.FW_reshape" params [b]).headD (zeroTensor [])] := by
+  rw [evalOp_fw_reshape, evalOp_fw_reshape, evalOp_fw_reshape]
+  rfl
+
+/-- `FW_to` (dtype/device cast, identity in the model) commutes with dim-0 sharding. -/
+theorem fw_to_allGather0_commute_2
+    (numParts rank : Nat) (params : List Nat) (a b : Tensor) :
+    (evalOp numParts rank "OpName.FW_to" params [allGatherPrimDimN 0 2 0 [a, b]]).headD (zeroTensor [])
+      = allGatherPrimDimN 0 2 0
+          [(evalOp numParts rank "OpName.FW_to" params [a]).headD (zeroTensor []),
+           (evalOp numParts rank "OpName.FW_to" params [b]).headD (zeroTensor [])] := by
+  rw [evalOp_fw_to, evalOp_fw_to, evalOp_fw_to]
+  rfl
+
+/-- `fw_maybe_shuffle` is modelled as identity on its data argument (AGENTS.md
+    #24: a cross-rank permutation whose true semantics need all ranks' data, so
+    Denote's per-rank `evalOp` uses the shape-correct identity model).  Being
+    identity on data, it commutes with dim-0 sharding. -/
+theorem fw_maybe_shuffle_allGather0_commute_2
+    (a b cu : Tensor) (cpSize cpRank : Nat) :
+    fw_maybe_shuffle (allGatherPrimDimN 0 2 0 [a, b]) cu cpSize cpRank
+      = allGatherPrimDimN 0 2 0
+          [fw_maybe_shuffle a cu cpSize cpRank, fw_maybe_shuffle b cu cpSize cpRank] := by
+  unfold fw_maybe_shuffle
+  rfl
+/-- `FW_multiref` replicates its input into `n` outputs.  Each output commutes
+    with dim-0 sharding (indeed each is the gathered input). -/
+theorem fw_multiref_allGather0_commute_2
+    (numParts rank n j : Nat) (hj : j < n) (a b : Tensor) :
+    (evalOp numParts rank "OpName.FW_multiref" [n] [allGatherPrimDimN 0 2 0 [a, b]]).getD j (zeroTensor [])
+      = allGatherPrimDimN 0 2 0
+          [(evalOp numParts rank "OpName.FW_multiref" [n] [a]).getD j (zeroTensor []),
+           (evalOp numParts rank "OpName.FW_multiref" [n] [b]).getD j (zeroTensor [])] := by
+  rw [evalOp_fw_multiref, evalOp_fw_multiref, evalOp_fw_multiref]
+  simp only [List.getD_eq_getElem?_getD, List.getElem?_replicate, hj, if_true, Option.getD_some]
+
+/-- 2-D `fw_linear` shape helper (local to Phase C2a): `[b, i] × [o, i] → [b, o]`. -/
+private theorem fw_linear_2d_shape_c2a (b i o : Nat) (x w : Tensor)
+    (hx : x.shape = [b, i]) (hw : w.shape = [o, i]) :
+    (fw_linear x w).shape = [b, o] := by
+  rw [fw_linear_is_matmul b i o x w hx hw]; rfl
+
+/-- `fw_linear` commutes with dim-0 sharding — 2-shard 2D version with shape
+    hypotheses.  Both `a`, `b` have shape `[bshard, i]`, `w` has shape `[o, i]`.
+    This is the sharding-commute lemma backing `FW_mix_precision_linear`, whose
+    `evalOp` dispatches to `[fw_linear x w]` (see `evalOp_fw_mix_precision_linear_iroha`). -/
+theorem fw_mix_precision_linear_allGather0_commute_2 (a b w : Tensor) (bshard i o : Nat)
+    (hbshard : 0 < bshard) (hi : 0 < i) (ho : 0 < o)
+    (ha : a.shape = [bshard, i]) (hb : b.shape = [bshard, i])
+    (hw : w.shape = [o, i]) :
+    fw_linear (allGatherPrimDimN 0 2 0 [a, b]) w
+      = allGatherPrimDimN 0 2 0 [fw_linear a w, fw_linear b w] := by
+  have hhead_ab : (([a, b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [bshard, i] := by
+    simp [ha]
+  have hG_ab : (allGatherPrimDimN 0 2 0 [a, b]).shape = [bshard * 2, i] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [bshard, i] hhead_ab]; simp [List.set, List.getD]
+  have hlin_a : (fw_linear a w).shape = [bshard, o] := fw_linear_2d_shape_c2a bshard i o a w ha hw
+  have hlin_b : (fw_linear b w).shape = [bshard, o] := fw_linear_2d_shape_c2a bshard i o b w hb hw
+  have hhead_lin : (([fw_linear a w, fw_linear b w] : List Tensor).head?.map (fun t => t.shape)).getD [] = [bshard, o] := by
+    simp [hlin_a]
+  have hRHS_shape : (allGatherPrimDimN 0 2 0 [fw_linear a w, fw_linear b w]).shape = [bshard * 2, o] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [bshard, o] hhead_lin]; simp [List.set, List.getD]
+  have hLHS_shape : (fw_linear (allGatherPrimDimN 0 2 0 [a, b]) w).shape = [bshard * 2, o] :=
+    fw_linear_2d_shape_c2a (bshard * 2) i o _ w hG_ab hw
+  apply Tensor.ext
+  · rw [hLHS_shape, hRHS_shape]
+  · intro outIdx houtIdx
+    rw [hLHS_shape] at houtIdx
+    have houtIdx_bound : outIdx < bshard * 2 * o := by simpa [prodShape] using houtIdx
+    have hLHS_val : valAt (fw_linear (allGatherPrimDimN 0 2 0 [a, b]) w) outIdx
+        = k_matmul (bshard * 2) o i (allGatherPrimDimN 0 2 0 [a, b]) w
+            ⟨outIdx, by show outIdx < prodShape [bshard * 2, o]; simp [prodShape]; linarith⟩ := by
+      rw [fw_linear_is_matmul (bshard * 2) i o _ w hG_ab hw]
+      rw [valAt_of_lt _ _ (by show outIdx < prodShape [bshard * 2, o]; simp [prodShape]; linarith)]
+      rfl
+    rw [hLHS_val]
+    set row := outIdx / o with hrow_def
+    set c := outIdx % o with hc_def
+    have hc_lt : c < o := by rw [hc_def]; exact Nat.mod_lt _ ho
+    have hrow_lt : row < bshard * 2 := by
+      rw [hrow_def]; rw [Nat.div_lt_iff_lt_mul ho]; linarith
+    set r := row / bshard with hr_def
+    set il := row % bshard with hil_def
+    have hil_lt : il < bshard := by rw [hil_def]; exact Nat.mod_lt _ hbshard
+    have hr_lt : r < 2 := by
+      rw [hr_def]; rw [Nat.div_lt_iff_lt_mul hbshard]; linarith
+    have houtIdx_eq : outIdx = (r * bshard + il) * o + c := by
+      subst r il c row
+      have h1 : bshard * (outIdx / o / bshard) + outIdx / o % bshard = outIdx / o :=
+        Nat.div_add_mod (outIdx / o) bshard
+      have h2 : o * (outIdx / o) + outIdx % o = outIdx := Nat.div_add_mod outIdx o
+      calc outIdx = o * (outIdx / o) + outIdx % o := h2.symm
+        _ = o * (bshard * (outIdx / o / bshard) + outIdx / o % bshard) + outIdx % o := by rw [h1]
+        _ = (outIdx / o / bshard * bshard + outIdx / o % bshard) * o + outIdx % o := by ring
+    simp [k_matmul, prodShape]
+    have hout_div : outIdx / o = r * bshard + il := by
+      rw [houtIdx_eq]
+      have h1 : ((r * bshard + il) * o + c) / o = c / o + (r * bshard + il) := by
+        rw [Nat.add_comm, Nat.add_mul_div_right c (r * bshard + il) ho]
+      rw [h1, Nat.div_eq_of_lt hc_lt]; ring
+    have hout_mod : outIdx % o = c := by
+      rw [houtIdx_eq]
+      have h1 : ((r * bshard + il) * o + c) % o = c % o := by
+        rw [Nat.add_comm, Nat.add_mul_mod_self_right]
+      rw [h1, Nat.mod_eq_of_lt hc_lt]
+    rw [hout_div, hout_mod]
+    have hRHS_val : valAt (allGatherPrimDimN 0 2 0 [fw_linear a w, fw_linear b w]) outIdx
+        = valAt ([fw_linear a w, fw_linear b w].getD r (zeroTensor [bshard, o])) (il * o + c) := by
+      rw [houtIdx_eq]
+      have hshapes_lin : ∀ r' (_ : r' < 2),
+          (([fw_linear a w, fw_linear b w].getD r' (zeroTensor [bshard, o]))).shape = [bshard, o] := by
+        intro r' hr'
+        have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+        rcases this with h | h <;> rw [h] <;> simp [List.getD, hlin_a, hlin_b]
+      exact allGatherPrimDimN0_valAt 2 bshard o [fw_linear a w, fw_linear b w]
+              (by omega) hbshard ho hhead_lin hshapes_lin r hr_lt il hil_lt c hc_lt
+    rw [hRHS_val]
+    have hr_cases : r = 0 ∨ r = 1 := by interval_cases r <;> [left; right] <;> rfl
+    have hgetD_lin :
+        [fw_linear a w, fw_linear b w].getD r (zeroTensor [bshard, o]) =
+        fw_linear ([a, b].getD r (zeroTensor [bshard, i])) w := by
+      rcases hr_cases with h | h <;> rw [h] <;> simp [List.getD]
+    rw [hgetD_lin]
+    set ear := [a, b].getD r (zeroTensor [bshard, i])
+    have hear_shape : ear.shape = [bshard, i] := by
+      show ([a, b].getD r (zeroTensor [bshard, i])).shape = [bshard, i]
+      rcases hr_cases with h | h <;> rw [h] <;> simp [List.getD, ha, hb]
+    have hloc_bound : il * o + c < bshard * o := by
+      have h1 : il * o + c < il * o + o := by omega
+      have h2 : il * o + o = (il + 1) * o := by ring
+      have h3 : (il + 1) * o ≤ bshard * o := Nat.mul_le_mul_right _ (by omega)
+      omega
+    have hRHS_lin_val : valAt (fw_linear ear w) (il * o + c)
+        = k_matmul bshard o i ear w ⟨il * o + c, by show il * o + c < prodShape [bshard, o]; simp [prodShape]; linarith⟩ := by
+      rw [fw_linear_is_matmul bshard i o ear w hear_shape hw]
+      rw [valAt_of_lt _ _ (by show il * o + c < prodShape [bshard, o]; simp [prodShape]; linarith)]
+      rfl
+    rw [hRHS_lin_val]
+    simp [k_matmul, prodShape]
+    have hil_div : (il * o + c) / o = il := by
+      have h1 : (il * o + c) / o = c / o + il := by
+        rw [Nat.add_comm, Nat.add_mul_div_right c il ho]
+      rw [h1, Nat.div_eq_of_lt hc_lt]; ring
+    have hc_mod' : c % o = c := Nat.mod_eq_of_lt hc_lt
+    rw [hil_div, hc_mod']
+    apply Finset.sum_congr rfl
+    intro j hj
+    have hj_lt : j < i := by simp [Finset.mem_range] at hj; exact hj
+    have hshapes_ab : ∀ r' (_ : r' < 2),
+        (([a, b].getD r' (zeroTensor [bshard, i]))).shape = [bshard, i] := by
+      intro r' hr'
+      have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+      rcases this with h | h <;> rw [h] <;> simp [List.getD, ha, hb]
+    congr 1
+    rw [allGatherPrimDimN0_valAt 2 bshard i [a, b]
+          (by omega) hbshard hi hhead_ab hshapes_ab r hr_lt il hil_lt j hj_lt]
+
+/-- Reduced form of `fw_norm_linear` for the 2-D weight branch (`x : [b, k]`,
+    `w : [n, k]`, `out : [b, n]`), used by the sharding-commute proof. -/
+private theorem fw_norm_linear_is_2d_c2a (b k n : Nat) (x w : Tensor) (hn : 0 < n)
+    (hx : x.shape = [b, k]) (hw : w.shape = [n, k]) :
+    fw_norm_linear x w = Tensor.mkShape [b, n]
+      (fun outIdx => ∑ c ∈ Finset.range k,
+        valAt x ((outIdx.1 / n) * k + c) * normLinearWNormAt w (outIdx.1 % n) c k) := by
+  have hn' : n ≠ 0 := Nat.pos_iff_ne_zero.mp hn
+  unfold fw_norm_linear
+  rw [hx, hw]
+  simp only [List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append,
+    if_neg hn']
+  rfl
+
+private theorem fw_norm_linear_2d_shape_c2a (b k n : Nat) (x w : Tensor) (hn : 0 < n)
+    (hx : x.shape = [b, k]) (hw : w.shape = [n, k]) :
+    (fw_norm_linear x w).shape = [b, n] := by
+  rw [fw_norm_linear_is_2d_c2a b k n x w hn hx hw]; rfl
+
+/-- `fw_norm_linear` commutes with dim-0 sharding (2 shards).  `w : [n, k]` is
+    replicated; each output row depends only on the matching input row, so
+    sharding the rows commutes.  Backs `FW_norm_linear`. -/
+theorem fw_norm_linear_allGather0_commute_2 (a b w : Tensor) (bshard k n : Nat)
+    (hbshard : 0 < bshard) (hk : 0 < k) (hn : 0 < n)
+    (ha : a.shape = [bshard, k]) (hb : b.shape = [bshard, k])
+    (hw : w.shape = [n, k]) :
+    fw_norm_linear (allGatherPrimDimN 0 2 0 [a, b]) w
+      = allGatherPrimDimN 0 2 0 [fw_norm_linear a w, fw_norm_linear b w] := by
+  have hhead_ab : (([a, b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [bshard, k] := by
+    simp [ha]
+  have hG_ab : (allGatherPrimDimN 0 2 0 [a, b]).shape = [bshard * 2, k] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [bshard, k] hhead_ab]; simp [List.set, List.getD]
+  have hnl_a : (fw_norm_linear a w).shape = [bshard, n] := fw_norm_linear_2d_shape_c2a bshard k n a w hn ha hw
+  have hnl_b : (fw_norm_linear b w).shape = [bshard, n] := fw_norm_linear_2d_shape_c2a bshard k n b w hn hb hw
+  have hhead_nl : (([fw_norm_linear a w, fw_norm_linear b w] : List Tensor).head?.map (fun t => t.shape)).getD [] = [bshard, n] := by
+    simp [hnl_a]
+  have hRHS_shape : (allGatherPrimDimN 0 2 0 [fw_norm_linear a w, fw_norm_linear b w]).shape = [bshard * 2, n] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [bshard, n] hhead_nl]; simp [List.set, List.getD]
+  have hLHS_shape : (fw_norm_linear (allGatherPrimDimN 0 2 0 [a, b]) w).shape = [bshard * 2, n] :=
+    fw_norm_linear_2d_shape_c2a (bshard * 2) k n _ w hn hG_ab hw
+  apply Tensor.ext
+  · rw [hLHS_shape, hRHS_shape]
+  · intro outIdx houtIdx
+    rw [hLHS_shape] at houtIdx
+    have houtIdx_bound : outIdx < bshard * 2 * n := by simpa [prodShape] using houtIdx
+    have hLHS_val : valAt (fw_norm_linear (allGatherPrimDimN 0 2 0 [a, b]) w) outIdx
+        = ∑ c ∈ Finset.range k,
+            valAt (allGatherPrimDimN 0 2 0 [a, b]) ((outIdx / n) * k + c) * normLinearWNormAt w (outIdx % n) c k := by
+      rw [fw_norm_linear_is_2d_c2a (bshard * 2) k n _ w hn hG_ab hw]
+      rw [valAt_of_lt _ _ (by show outIdx < prodShape [bshard * 2, n]; simp [prodShape]; linarith)]
+      rfl
+    rw [hLHS_val]
+    set row := outIdx / n with hrow_def
+    set c0 := outIdx % n with hc_def
+    have hc_lt : c0 < n := by rw [hc_def]; exact Nat.mod_lt _ hn
+    have hrow_lt : row < bshard * 2 := by
+      rw [hrow_def]; rw [Nat.div_lt_iff_lt_mul hn]; linarith
+    set r := row / bshard with hr_def
+    set il := row % bshard with hil_def
+    have hil_lt : il < bshard := by rw [hil_def]; exact Nat.mod_lt _ hbshard
+    have hr_lt : r < 2 := by
+      rw [hr_def]; rw [Nat.div_lt_iff_lt_mul hbshard]; linarith
+    have houtIdx_eq : outIdx = (r * bshard + il) * n + c0 := by
+      subst r il c0 row
+      have h1 : bshard * (outIdx / n / bshard) + outIdx / n % bshard = outIdx / n :=
+        Nat.div_add_mod (outIdx / n) bshard
+      have h2 : n * (outIdx / n) + outIdx % n = outIdx := Nat.div_add_mod outIdx n
+      calc outIdx = n * (outIdx / n) + outIdx % n := h2.symm
+        _ = n * (bshard * (outIdx / n / bshard) + outIdx / n % bshard) + outIdx % n := by rw [h1]
+        _ = (outIdx / n / bshard * bshard + outIdx / n % bshard) * n + outIdx % n := by ring
+    have hout_div : outIdx / n = r * bshard + il := by
+      rw [houtIdx_eq]
+      have h1 : ((r * bshard + il) * n + c0) / n = c0 / n + (r * bshard + il) := by
+        rw [Nat.add_comm, Nat.add_mul_div_right c0 (r * bshard + il) hn]
+      rw [h1, Nat.div_eq_of_lt hc_lt]; ring
+    have hout_mod : outIdx % n = c0 := by
+      rw [houtIdx_eq]
+      have h1 : ((r * bshard + il) * n + c0) % n = c0 % n := by
+        rw [Nat.add_comm, Nat.add_mul_mod_self_right]
+      rw [h1, Nat.mod_eq_of_lt hc_lt]
+    rw [hrow_def, hout_div]
+    have hRHS_val : valAt (allGatherPrimDimN 0 2 0 [fw_norm_linear a w, fw_norm_linear b w]) outIdx
+        = valAt ([fw_norm_linear a w, fw_norm_linear b w].getD r (zeroTensor [bshard, n])) (il * n + c0) := by
+      rw [houtIdx_eq]
+      have hshapes_nl : ∀ r' (_ : r' < 2),
+          (([fw_norm_linear a w, fw_norm_linear b w].getD r' (zeroTensor [bshard, n]))).shape = [bshard, n] := by
+        intro r' hr'
+        have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+        rcases this with h | h <;> rw [h] <;> simp [List.getD, hnl_a, hnl_b]
+      exact allGatherPrimDimN0_valAt 2 bshard n [fw_norm_linear a w, fw_norm_linear b w]
+              (by omega) hbshard hn hhead_nl hshapes_nl r hr_lt il hil_lt c0 hc_lt
+    rw [hRHS_val]
+    have hr_cases : r = 0 ∨ r = 1 := by interval_cases r <;> [left; right] <;> rfl
+    have hgetD_nl :
+        [fw_norm_linear a w, fw_norm_linear b w].getD r (zeroTensor [bshard, n]) =
+        fw_norm_linear ([a, b].getD r (zeroTensor [bshard, k])) w := by
+      rcases hr_cases with h | h <;> rw [h] <;> simp [List.getD]
+    rw [hgetD_nl]
+    set ear := [a, b].getD r (zeroTensor [bshard, k])
+    have hear_shape : ear.shape = [bshard, k] := by
+      show ([a, b].getD r (zeroTensor [bshard, k])).shape = [bshard, k]
+      rcases hr_cases with h | h <;> rw [h] <;> simp [List.getD, ha, hb]
+    have hloc_bound : il * n + c0 < bshard * n := by
+      have h1 : il * n + c0 < il * n + n := by omega
+      have h2 : il * n + n = (il + 1) * n := by ring
+      have h3 : (il + 1) * n ≤ bshard * n := Nat.mul_le_mul_right _ (by omega)
+      omega
+    have hRHS_nl_val : valAt (fw_norm_linear ear w) (il * n + c0)
+        = ∑ c ∈ Finset.range k,
+            valAt ear ((il * n + c0) / n * k + c) * normLinearWNormAt w ((il * n + c0) % n) c k := by
+      rw [fw_norm_linear_is_2d_c2a bshard k n ear w hn hear_shape hw]
+      rw [valAt_of_lt _ _ (by show il * n + c0 < prodShape [bshard, n]; simp [prodShape]; linarith)]
+      rfl
+    rw [hRHS_nl_val]
+    have hil_div : (il * n + c0) / n = il := by
+      have h1 : (il * n + c0) / n = c0 / n + il := by
+        rw [Nat.add_comm, Nat.add_mul_div_right c0 il hn]
+      rw [h1, Nat.div_eq_of_lt hc_lt]; ring
+    have hc0_mod : (il * n + c0) % n = c0 := by
+      have h1 : (il * n + c0) % n = c0 % n := by
+        rw [Nat.add_comm, Nat.add_mul_mod_self_right]
+      rw [h1, Nat.mod_eq_of_lt hc_lt]
+    rw [hil_div, hc0_mod]
+    apply Finset.sum_congr rfl
+    intro j hj
+    have hj_lt : j < k := by simp [Finset.mem_range] at hj; exact hj
+    have hshapes_ab : ∀ r' (_ : r' < 2),
+        (([a, b].getD r' (zeroTensor [bshard, k]))).shape = [bshard, k] := by
+      intro r' hr'
+      have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+      rcases this with h | h <;> rw [h] <;> simp [List.getD, ha, hb]
+    congr 1
+    rw [allGatherPrimDimN0_valAt 2 bshard k [a, b]
+          (by omega) hbshard hk hhead_ab hshapes_ab r hr_lt il hil_lt j hj_lt]
+
+/-- Reduced form of `fw_per_head_linear` for the 2-D input / 3-D weight branch
+    (`x : [b, k]`, `w : [hW, dW, k]`, `out : [b, hW, dW]`). -/
+private theorem fw_per_head_linear_is_3d_c2a (b k hW dW : Nat) (x w : Tensor)
+    (hhd : hW * dW ≠ 0) (hdW : dW ≠ 0)
+    (hx : x.shape = [b, k]) (hw : w.shape = [hW, dW, k]) :
+    fw_per_head_linear x w = Tensor.mkShape [b, hW, dW]
+      (fun outIdx => ∑ c ∈ Finset.range k,
+        valAt x (outIdx.1 / (hW * dW) * k + c) *
+          valAt w ((outIdx.1 % (hW * dW) / dW * dW + outIdx.1 % (hW * dW) % dW) * k + c)) := by
+  unfold fw_per_head_linear
+  rw [hx, hw]
+  simp only [List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append,
+    if_neg hhd, if_neg hdW]
+  rfl
+
+private theorem fw_per_head_linear_3d_shape_c2a (b k hW dW : Nat) (x w : Tensor)
+    (hhd : hW * dW ≠ 0) (hdW : dW ≠ 0)
+    (hx : x.shape = [b, k]) (hw : w.shape = [hW, dW, k]) :
+    (fw_per_head_linear x w).shape = [b, hW, dW] := by
+  rw [fw_per_head_linear_is_3d_c2a b k hW dW x w hhd hdW hx hw]; rfl
+
+/-- `fw_per_head_linear` commutes with dim-0 sharding (2 shards).  `w : [hW, dW, k]`
+    is replicated; each output row (token) depends only on the matching input
+    row, so sharding the rows commutes.  Backs `FW_per_head_mix_precision_linear`. -/
+theorem fw_per_head_mix_precision_linear_allGather0_commute_2
+    (a b w : Tensor) (bshard k hW dW : Nat)
+    (hbshard : 0 < bshard) (hk : 0 < k) (hW0 : 0 < hW) (hdW0 : 0 < dW)
+    (ha : a.shape = [bshard, k]) (hb : b.shape = [bshard, k]) (hw : w.shape = [hW, dW, k]) :
+    fw_per_head_linear (allGatherPrimDimN 0 2 0 [a, b]) w
+      = allGatherPrimDimN 0 2 0 [fw_per_head_linear a w, fw_per_head_linear b w] := by
+  have hhd : hW * dW ≠ 0 := by positivity
+  have hdW : dW ≠ 0 := Nat.pos_iff_ne_zero.mp hdW0
+  have hhd0 : 0 < hW * dW := Nat.pos_of_ne_zero hhd
+  have hhead_ab : (([a, b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [bshard, k] := by
+    simp [ha]
+  have hG_ab : (allGatherPrimDimN 0 2 0 [a, b]).shape = [bshard * 2, k] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [bshard, k] hhead_ab]; simp [List.set, List.getD]
+  have hph_a : (fw_per_head_linear a w).shape = [bshard, hW, dW] :=
+    fw_per_head_linear_3d_shape_c2a bshard k hW dW a w hhd hdW ha hw
+  have hph_b : (fw_per_head_linear b w).shape = [bshard, hW, dW] :=
+    fw_per_head_linear_3d_shape_c2a bshard k hW dW b w hhd hdW hb hw
+  have hhead_ph : (([fw_per_head_linear a w, fw_per_head_linear b w] : List Tensor).head?.map (fun t => t.shape)).getD [] = [bshard, hW, dW] := by
+    simp [hph_a]
+  have hRHS_shape : (allGatherPrimDimN 0 2 0 [fw_per_head_linear a w, fw_per_head_linear b w]).shape = [bshard * 2, hW, dW] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [bshard, hW, dW] hhead_ph]; simp [List.set, List.getD]
+  have hLHS_shape : (fw_per_head_linear (allGatherPrimDimN 0 2 0 [a, b]) w).shape = [bshard * 2, hW, dW] :=
+    fw_per_head_linear_3d_shape_c2a (bshard * 2) k hW dW _ w hhd hdW hG_ab hw
+  apply Tensor.ext
+  · rw [hLHS_shape, hRHS_shape]
+  · intro outIdx houtIdx
+    rw [hLHS_shape] at houtIdx
+    have houtIdx_bound : outIdx < bshard * 2 * hW * dW := by simpa [prodShape] using houtIdx
+    -- decompose outIdx into (row, col, inner) then row into (r, il)
+    set inner := outIdx % dW with hinner_def
+    set col := outIdx / dW % hW with hcol_def
+    set row := outIdx / dW / hW % (bshard * 2) with hrow_def
+    have hinner_lt : inner < dW := by rw [hinner_def]; exact Nat.mod_lt _ hdW0
+    have hcol_lt : col < hW := by rw [hcol_def]; exact Nat.mod_lt _ hW0
+    have hrow_lt : row < bshard * 2 := by rw [hrow_def]; exact Nat.mod_lt _ (by omega)
+    have hrowfull : outIdx / dW / hW < bshard * 2 := by
+      rw [Nat.div_div_eq_div_mul, Nat.div_lt_iff_lt_mul (by positivity : 0 < dW * hW)]
+      calc outIdx < bshard * 2 * hW * dW := houtIdx_bound
+        _ = bshard * 2 * (dW * hW) := by ring
+    have hrow_eq : outIdx / dW / hW = row := by
+      rw [hrow_def, Nat.mod_eq_of_lt hrowfull]
+    set r := row / bshard with hr_def
+    set il := row % bshard with hil_def
+    have hil_lt : il < bshard := by rw [hil_def]; exact Nat.mod_lt _ hbshard
+    have hr_lt : r < 2 := by rw [hr_def]; rw [Nat.div_lt_iff_lt_mul hbshard]; linarith
+    have hrow_ri : row = r * bshard + il := by
+      rw [hr_def, hil_def]
+      conv_lhs => rw [← Nat.div_add_mod row bshard]
+      ring
+    -- key decomposition of outIdx
+    have hd0 : outIdx = ((r * bshard + il) * hW + col) * dW + inner := by
+      have e1 : outIdx = dW * (outIdx / dW) + inner := by
+        rw [hinner_def]; exact (Nat.div_add_mod outIdx dW).symm
+      have e2 : outIdx / dW = hW * (outIdx / dW / hW) + col := by
+        rw [hcol_def]; exact (Nat.div_add_mod (outIdx / dW) hW).symm
+      rw [e1, e2, hrow_eq, hrow_ri]; ring
+    -- rem := outIdx % (hW*dW) = col*dW+inner
+    have hcolinner_lt : col * dW + inner < hW * dW := by
+      calc col * dW + inner < col * dW + dW := by omega
+        _ = (col + 1) * dW := by ring
+        _ ≤ hW * dW := Nat.mul_le_mul_right _ (by omega)
+    have hrem_eq : outIdx % (hW * dW) = col * dW + inner := by
+      rw [hd0]
+      have hre : ((r * bshard + il) * hW + col) * dW + inner
+           = hW * dW * (r * bshard + il) + (col * dW + inner) := by ring
+      rw [hre, Nat.mul_add_mod, Nat.mod_eq_of_lt hcolinner_lt]
+    have hdiv_hwdw : outIdx / (hW * dW) = r * bshard + il := by
+      rw [hd0]
+      have hre : ((r * bshard + il) * hW + col) * dW + inner
+           = hW * dW * (r * bshard + il) + (col * dW + inner) := by ring
+      rw [hre, Nat.mul_add_div hhd0, Nat.div_eq_of_lt hcolinner_lt, Nat.add_zero]
+    -- weight-index simplification: rem/dW = col, rem%dW = inner
+    have hremdiv : outIdx % (hW * dW) / dW = col := by
+      rw [hrem_eq]
+      rw [Nat.add_comm, Nat.add_mul_div_right _ _ hdW0, Nat.div_eq_of_lt hinner_lt]; ring
+    have hremmod : outIdx % (hW * dW) % dW = inner := by
+      rw [hrem_eq]
+      rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hinner_lt]
+    -- LHS
+    have hLHS_val : valAt (fw_per_head_linear (allGatherPrimDimN 0 2 0 [a, b]) w) outIdx
+        = ∑ c ∈ Finset.range k,
+            valAt (allGatherPrimDimN 0 2 0 [a, b]) (outIdx / (hW * dW) * k + c) *
+              valAt w ((outIdx % (hW * dW) / dW * dW + outIdx % (hW * dW) % dW) * k + c) := by
+      rw [fw_per_head_linear_is_3d_c2a (bshard * 2) k hW dW _ w hhd hdW hG_ab hw]
+      rw [valAt_of_lt _ _ (by show outIdx < prodShape [bshard * 2, hW, dW]; simp [prodShape]; linarith)]
+      rfl
+    rw [hLHS_val, hdiv_hwdw, hrem_eq]
+    -- RHS
+    have hph_shapes : ∀ r' (_ : r' < 2),
+        (([fw_per_head_linear a w, fw_per_head_linear b w].getD r' (zeroTensor [bshard, hW, dW]))).shape = [bshard, hW, dW] := by
+      intro r' hr'
+      have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+      rcases this with h | h <;> rw [h] <;> simp [List.getD, hph_a, hph_b]
+    have hRHS_val : valAt (allGatherPrimDimN 0 2 0 [fw_per_head_linear a w, fw_per_head_linear b w]) outIdx
+        = valAt ([fw_per_head_linear a w, fw_per_head_linear b w].getD r (zeroTensor [bshard, hW, dW]))
+            ((il * hW + col) * dW + inner) := by
+      rw [show outIdx = ((r * bshard + il) * hW + col) * dW + inner from hd0]
+      exact allGatherPrimDimN0_3d_valAt 2 bshard hW dW
+              [fw_per_head_linear a w, fw_per_head_linear b w]
+              (by omega) hbshard hW0 hdW0 hhead_ph hph_shapes r hr_lt il hil_lt col hcol_lt inner hinner_lt
+    rw [hRHS_val]
+    have hr_cases : r = 0 ∨ r = 1 := by interval_cases r <;> [left; right] <;> rfl
+    have hgetD_ph :
+        [fw_per_head_linear a w, fw_per_head_linear b w].getD r (zeroTensor [bshard, hW, dW]) =
+        fw_per_head_linear ([a, b].getD r (zeroTensor [bshard, k])) w := by
+      rcases hr_cases with h | h <;> rw [h] <;> simp [List.getD]
+    rw [hgetD_ph]
+    set ear := [a, b].getD r (zeroTensor [bshard, k])
+    have hear_shape : ear.shape = [bshard, k] := by
+      show ([a, b].getD r (zeroTensor [bshard, k])).shape = [bshard, k]
+      rcases hr_cases with h | h <;> rw [h] <;> simp [List.getD, ha, hb]
+    have hidx3_lt : (il * hW + col) * dW + inner < bshard * hW * dW := by
+      have hrow'_lt : il * hW + col < bshard * hW := by
+        calc il * hW + col < il * hW + hW := by omega
+          _ = (il + 1) * hW := by ring
+          _ ≤ bshard * hW := Nat.mul_le_mul_right _ (by omega)
+      calc (il * hW + col) * dW + inner < (il * hW + col) * dW + dW := by omega
+        _ = (il * hW + col + 1) * dW := by ring
+        _ ≤ (bshard * hW) * dW := Nat.mul_le_mul_right _ (by omega)
+        _ = bshard * hW * dW := by ring
+    have hidx3_div : ((il * hW + col) * dW + inner) / (hW * dW) = il := by
+      have hre : (il * hW + col) * dW + inner = hW * dW * il + (col * dW + inner) := by ring
+      rw [hre, Nat.mul_add_div hhd0, Nat.div_eq_of_lt hcolinner_lt, Nat.add_zero]
+    have hidx3_rem : ((il * hW + col) * dW + inner) % (hW * dW) = col * dW + inner := by
+      have hre : (il * hW + col) * dW + inner = hW * dW * il + (col * dW + inner) := by ring
+      rw [hre, Nat.mul_add_mod, Nat.mod_eq_of_lt hcolinner_lt]
+    have hRHS_ph_val : valAt (fw_per_head_linear ear w) ((il * hW + col) * dW + inner)
+        = ∑ c ∈ Finset.range k,
+            valAt ear (((il * hW + col) * dW + inner) / (hW * dW) * k + c) *
+              valAt w ((((il * hW + col) * dW + inner) % (hW * dW) / dW * dW
+                        + ((il * hW + col) * dW + inner) % (hW * dW) % dW) * k + c) := by
+      rw [fw_per_head_linear_is_3d_c2a bshard k hW dW ear w hhd hdW hear_shape hw]
+      rw [valAt_of_lt _ _ (by show (il * hW + col) * dW + inner < prodShape [bshard, hW, dW]; simp [prodShape]; linarith)]
+      rfl
+    rw [hRHS_ph_val, hidx3_div, hidx3_rem]
+    apply Finset.sum_congr rfl
+    intro j hj
+    have hj_lt : j < k := by simp [Finset.mem_range] at hj; exact hj
+    have hshapes_ab : ∀ r' (_ : r' < 2),
+        (([a, b].getD r' (zeroTensor [bshard, k]))).shape = [bshard, k] := by
+      intro r' hr'
+      have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+      rcases this with h | h <;> rw [h] <;> simp [List.getD, ha, hb]
+    congr 1
+    rw [allGatherPrimDimN0_valAt 2 bshard k [a, b]
+          (by omega) hbshard hk hhead_ab hshapes_ab r hr_lt il hil_lt j hj_lt]
+
+/-- Canonical reduction of `fw_rotary_apply` on a rank-3 `[L, nh, d]` tensor. -/
+theorem fw_rotary_apply_reduce_c2a (cs pos x : Tensor) (L nh d : Nat)
+    (hx : x.shape = [L, nh, d]) :
+    fw_rotary_apply cs pos x nh
+      = Tensor.mkShape [L, nh, d] (fun outIdx =>
+          let j := outIdx.1 % d
+          let lh := outIdx.1 / d
+          let h := lh % nh
+          let l := lh / nh
+          let posv := scalarToNat (valAt pos l)
+          let baseLH := (l * nh + h) * d
+          if j < d / 2 then
+            valAt x outIdx.1 * ropeCosAt cs d posv j
+              - valAt x (baseLH + j + d / 2) * ropeSinAt cs d posv j
+          else
+            let jLow := j - d / 2
+            valAt x outIdx.1 * ropeCosAt cs d posv jLow
+              + valAt x (baseLH + jLow) * ropeSinAt cs d posv jLow) := by
+  unfold fw_rotary_apply
+  rw [hx]
+  simp only [List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append]
+
+/-- Shape of `fw_rotary_apply` equals the input shape. -/
+theorem fw_rotary_apply_shape_c2a (cs pos x : Tensor) (L nh d : Nat)
+    (hx : x.shape = [L, nh, d]) :
+    (fw_rotary_apply cs pos x nh).shape = [L, nh, d] := by
+  rw [fw_rotary_apply_reduce_c2a cs pos x L nh d hx]; simp [Tensor.mkShape]
+
+/-- `fw_rotary_apply` commutes with dim-0 (token) sharding when the position
+    ids are gathered along the token dim as well. -/
+theorem fw_rotary_apply_allGather0_commute_2
+    (a b pa pb cs : Tensor) (L nh d : Nat)
+    (hL : 0 < L) (hnh : 0 < nh) (hd : 0 < d)
+    (ha : a.shape = [L, nh, d]) (hb : b.shape = [L, nh, d])
+    (hpa : pa.shape = [L, 1]) (hpb : pb.shape = [L, 1]) :
+    fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pa, pb]) (allGatherPrimDimN 0 2 0 [a, b]) nh
+      = allGatherPrimDimN 0 2 0
+          [fw_rotary_apply cs pa a nh, fw_rotary_apply cs pb b nh] := by
+  -- head?/shape facts for the two gathers
+  have hhead_ab : (([a, b].head?.map (fun t => t.shape)).getD []) = [L, nh, d] := by simp [ha]
+  have hhead_pab : (([pa, pb].head?.map (fun t => t.shape)).getD []) = [L, 1] := by simp [hpa]
+  have hgq_shape : (allGatherPrimDimN 0 2 0 [a, b]).shape = [L * 2, nh, d] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [L, nh, d] hhead_ab]; simp [List.set, List.getD]
+  have hgp_shape : (allGatherPrimDimN 0 2 0 [pa, pb]).shape = [L * 2, 1] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [L, 1] hhead_pab]; simp [List.set, List.getD]
+  set gq := allGatherPrimDimN 0 2 0 [a, b] with hgq_def
+  set gp := allGatherPrimDimN 0 2 0 [pa, pb] with hgp_def
+  -- shapes of the per-rank rotary outputs
+  have hra_shape : (fw_rotary_apply cs pa a nh).shape = [L, nh, d] :=
+    fw_rotary_apply_shape_c2a cs pa a L nh d ha
+  have hrb_shape : (fw_rotary_apply cs pb b nh).shape = [L, nh, d] :=
+    fw_rotary_apply_shape_c2a cs pb b L nh d hb
+  have hhead_r : (([fw_rotary_apply cs pa a nh, fw_rotary_apply cs pb b nh].head?.map
+      (fun t => t.shape)).getD []) = [L, nh, d] := by simp [hra_shape]
+  have hr_shapes : ∀ r (_ : r < 2),
+      (([fw_rotary_apply cs pa a nh, fw_rotary_apply cs pb b nh].getD r
+          (zeroTensor [L, nh, d])).shape) = [L, nh, d] := by
+    intro r hr
+    have : r = 0 ∨ r = 1 := by interval_cases r <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, hra_shape, hrb_shape]
+  have hab_shapes : ∀ r (_ : r < 2),
+      (([a, b].getD r (zeroTensor [L, nh, d])).shape) = [L, nh, d] := by
+    intro r hr
+    have : r = 0 ∨ r = 1 := by interval_cases r <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, ha, hb]
+  have hpab_shapes : ∀ r (_ : r < 2),
+      (([pa, pb].getD r (zeroTensor [L, 1])).shape) = [L, 1] := by
+    intro r hr
+    have : r = 0 ∨ r = 1 := by interval_cases r <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, hpa, hpb]
+  have hRHS_shape : (allGatherPrimDimN 0 2 0
+      [fw_rotary_apply cs pa a nh, fw_rotary_apply cs pb b nh]).shape = [L * 2, nh, d] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [L, nh, d] hhead_r]; simp [List.set, List.getD]
+  -- reduce the LHS rotary
+  rw [fw_rotary_apply_reduce_c2a cs gp gq (L * 2) nh d hgq_shape]
+  apply Tensor.ext
+  · rw [hRHS_shape]; simp [Tensor.mkShape]
+  · intro outIdx houtIdx
+    -- decode outIdx in the [L*2, nh, d] layout
+    have hprod : prodShape [L * 2, nh, d] = L * 2 * nh * d := by simp [prodShape]
+    have hbound : outIdx < L * 2 * nh * d := by
+      have := houtIdx; simp only [Tensor.mkShape] at this; rw [hprod] at this; exact this
+    set j := outIdx % d with hj_def
+    set lh := outIdx / d with hlh_def
+    set h := lh % nh with hh_def
+    set l := lh / nh with hl_def
+    have hj_lt : j < d := Nat.mod_lt _ hd
+    have hh_lt : h < nh := Nat.mod_lt _ hnh
+    have hlh_lt : lh < L * 2 * nh := by
+      rw [hlh_def]; rw [Nat.div_lt_iff_lt_mul hd]
+      calc outIdx < L * 2 * nh * d := hbound
+        _ = L * 2 * nh * d := rfl
+    have hl_lt : l < L * 2 := by
+      rw [hl_def]; rw [Nat.div_lt_iff_lt_mul hnh]; exact hlh_lt
+    set r := l / L with hr_def
+    set il := l % L with hil_def
+    have hil_lt : il < L := Nat.mod_lt _ hL
+    have hr_lt : r < 2 := by rw [hr_def]; rw [Nat.div_lt_iff_lt_mul hL]; linarith [hl_lt]
+    have hl_ri : l = r * L + il := by
+      rw [hr_def, hil_def, Nat.mul_comm (l / L) L]; exact (Nat.div_add_mod l L).symm
+    have hlh_ri : lh = l * nh + h := by
+      rw [hh_def, hl_def, Nat.mul_comm (lh / nh) nh]; exact (Nat.div_add_mod lh nh).symm
+    have hout_ri : outIdx = lh * d + j := by
+      rw [hj_def, hlh_def, Nat.mul_comm (outIdx / d) d]; exact (Nat.div_add_mod outIdx d).symm
+    -- outIdx as full 3D index
+    have hout_full : outIdx = ((r * L + il) * nh + h) * d + j := by
+      rw [hout_ri, hlh_ri, hl_ri]
+    -- local (per-rank) index
+    set lidx := (il * nh + h) * d + j with hlidx_def
+    have hlidx_lt : lidx < L * nh * d := by
+      have hrow : il * nh + h < L * nh := by
+        calc il * nh + h < il * nh + nh := by omega
+          _ = (il + 1) * nh := by ring
+          _ ≤ L * nh := Nat.mul_le_mul_right _ (by omega)
+      calc lidx < (il * nh + h) * d + d := by rw [hlidx_def]; omega
+        _ = (il * nh + h + 1) * d := by ring
+        _ ≤ (L * nh) * d := Nat.mul_le_mul_right _ (by omega)
+        _ = L * nh * d := by ring
+    -- RHS value
+    have hRHS_val : valAt (allGatherPrimDimN 0 2 0
+          [fw_rotary_apply cs pa a nh, fw_rotary_apply cs pb b nh]) outIdx
+        = valAt ([fw_rotary_apply cs pa a nh, fw_rotary_apply cs pb b nh].getD r
+            (zeroTensor [L, nh, d])) lidx := by
+      rw [hout_full]
+      exact allGatherPrimDimN0_3d_valAt 2 L nh d
+              [fw_rotary_apply cs pa a nh, fw_rotary_apply cs pb b nh]
+              (by omega) hL hnh hd hhead_r hr_shapes r hr_lt il hil_lt h hh_lt j hj_lt
+    rw [hRHS_val]
+    -- pick out the per-rank rotary
+    have hr_cases : r = 0 ∨ r = 1 := by interval_cases r <;> [left; right] <;> rfl
+    have hgetD_r :
+        [fw_rotary_apply cs pa a nh, fw_rotary_apply cs pb b nh].getD r (zeroTensor [L, nh, d]) =
+        fw_rotary_apply cs ([pa, pb].getD r (zeroTensor [L, 1]))
+          ([a, b].getD r (zeroTensor [L, nh, d])) nh := by
+      rcases hr_cases with h' | h' <;> rw [h'] <;> simp [List.getD]
+    rw [hgetD_r]
+    set xr := [a, b].getD r (zeroTensor [L, nh, d]) with hxr_def
+    set pr := [pa, pb].getD r (zeroTensor [L, 1]) with hpr_def
+    have hxr_shape : xr.shape = [L, nh, d] := hab_shapes r hr_lt
+    -- reduce the per-rank rotary
+    rw [fw_rotary_apply_reduce_c2a cs pr xr L nh d hxr_shape]
+    -- atomic read equalities (gather -> per-rank)
+    have hread_pos : scalarToNat (valAt gp l) = scalarToNat (valAt pr il) := by
+      congr 1
+      rw [hgp_def, hpr_def]
+      have := allGatherPrimDimN0_valAt 2 L 1 [pa, pb] (by omega) hL (by omega)
+                hhead_pab hpab_shapes r hr_lt il hil_lt 0 (by omega)
+      simpa [hl_ri] using this
+    have hread_x0 : valAt gq outIdx = valAt xr lidx := by
+      rw [hgq_def, hxr_def, hout_full, hlidx_def]
+      exact allGatherPrimDimN0_3d_valAt 2 L nh d [a, b]
+              (by omega) hL hnh hd hhead_ab hab_shapes r hr_lt il hil_lt h hh_lt j hj_lt
+    have hread_xlow : ∀ (m : Nat) (_ : m < d),
+        valAt gq (((r * L + il) * nh + h) * d + m) = valAt xr ((il * nh + h) * d + m) := by
+      intro m hm
+      rw [hgq_def, hxr_def]
+      exact allGatherPrimDimN0_3d_valAt 2 L nh d [a, b]
+              (by omega) hL hnh hd hhead_ab hab_shapes r hr_lt il hil_lt h hh_lt m hm
+    -- decode facts for the LHS body
+    have hlval : outIdx / d / nh = l := by rw [hl_def, hlh_def]
+    have hhval : outIdx / d % nh = h := by rw [hh_def, hlh_def]
+    have hjval : outIdx % d = j := hj_def.symm
+    have hbaseLH : (l * nh + h) * d = ((r * L + il) * nh + h) * d := by rw [hl_ri]
+    -- decode facts for the RHS body (per-rank, index lidx)
+    have hlidx_j : lidx % d = j := by
+      rw [hlidx_def, show (il * nh + h) * d + j = j + d * (il * nh + h) from by ring,
+          Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hj_lt]
+    have hlidx_lh : lidx / d = il * nh + h := by
+      rw [hlidx_def, show (il * nh + h) * d + j = j + d * (il * nh + h) from by ring,
+          Nat.add_mul_div_left _ _ hd, Nat.div_eq_of_lt hj_lt, Nat.zero_add]
+    have hlidx_h : lidx / d % nh = h := by
+      rw [hlidx_lh, show il * nh + h = h + nh * il from by ring,
+          Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hh_lt]
+    have hlidx_l : lidx / d / nh = il := by
+      rw [hlidx_lh, show il * nh + h = h + nh * il from by ring,
+          Nat.add_mul_div_left _ _ hnh, Nat.div_eq_of_lt hh_lt, Nat.zero_add]
+    -- reduce both `valAt (mkShape ..) ..` to the lambda bodies
+    rw [valAt_of_lt _ _ houtIdx]
+    rw [valAt_of_lt _ _ (show lidx < prodShape [L, nh, d] from by
+          simpa [prodShape] using hlidx_lt)]
+    simp only [Tensor.mkShape]
+    by_cases hlow : j < d / 2
+    · -- low half branch
+      have hj2_lt : j + d / 2 < d := by omega
+      simp only [hlval, hhval, hjval, if_pos hlow]
+      rw [hread_pos, hread_x0, hbaseLH,
+          show ((r * L + il) * nh + h) * d + j + d / 2
+            = ((r * L + il) * nh + h) * d + (j + d / 2) from by ring,
+          hread_xlow (j + d / 2) hj2_lt]
+      simp only [hlidx_j, hlidx_h, hlidx_l, if_pos hlow]
+      rw [show (il * nh + h) * d + j + d / 2 = (il * nh + h) * d + (j + d / 2) from by ring]
+    · -- high half branch
+      have hjLow_lt : j - d / 2 < d := by omega
+      simp only [hlval, hhval, hjval, if_neg hlow]
+      rw [hread_pos, hread_x0, hbaseLH, hread_xlow (j - d / 2) hjLow_lt]
+      simp only [hlidx_j, hlidx_h, hlidx_l, if_neg hlow]
+
+/-- `fw_rotary_embedding` (the `(q', k')` pair) commutes with dim-0 (token)
+    sharding when position ids are gathered along the token dim as well. -/
+theorem fw_rotary_embedding_allGather0_commute_2
+    (qa qb ka kb pa pb cs : Tensor) (L qh kh d : Nat)
+    (hL : 0 < L) (hqh : 0 < qh) (hkh : 0 < kh) (hd : 0 < d)
+    (hqa : qa.shape = [L, qh, d]) (hqb : qb.shape = [L, qh, d])
+    (hka : ka.shape = [L, kh, d]) (hkb : kb.shape = [L, kh, d])
+    (hpa : pa.shape = [L, 1]) (hpb : pb.shape = [L, 1]) :
+    fw_rotary_embedding cs (allGatherPrimDimN 0 2 0 [pa, pb])
+        (allGatherPrimDimN 0 2 0 [qa, qb]) (allGatherPrimDimN 0 2 0 [ka, kb]) qh kh
+      = (allGatherPrimDimN 0 2 0
+            [fw_rotary_apply cs pa qa qh, fw_rotary_apply cs pb qb qh],
+         allGatherPrimDimN 0 2 0
+            [fw_rotary_apply cs pa ka kh, fw_rotary_apply cs pb kb kh]) := by
+  unfold fw_rotary_embedding
+  rw [fw_rotary_apply_allGather0_commute_2 qa qb pa pb cs L qh d hL hqh hd hqa hqb hpa hpb,
+      fw_rotary_apply_allGather0_commute_2 ka kb pa pb cs L kh d hL hkh hd hka hkb hpa hpb]
+
 end TrainVerify.Denote
