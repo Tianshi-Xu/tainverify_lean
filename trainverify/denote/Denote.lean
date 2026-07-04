@@ -21143,6 +21143,56 @@ theorem allGatherPrimDimN_singleton_valAt (gatherDim : Nat) (x : Tensor)
       congr 1
       exact Fin.mk.injEq .. |>.mpr hkey
 
+/-- Combined tensor-level singleton collapse for allGather. Equivalent to
+    `allGatherPrimDimN_singleton_shape` + pointwise `allGatherPrimDimN_singleton_valAt`. -/
+theorem allGatherPrimDimN_singleton_eq (gatherDim : Nat) (x : Tensor)
+    (hgd : gatherDim < x.shape.length) :
+    allGatherPrimDimN gatherDim 1 0 [x] = x := by
+  apply Tensor.ext (allGatherPrimDimN_singleton_shape gatherDim x)
+  intro idx hidx
+  rw [allGatherPrimDimN_singleton_shape gatherDim x] at hidx
+  exact allGatherPrimDimN_singleton_valAt gatherDim x hgd idx hidx
+
+/-- Combined tensor-level singleton collapse for chunk. Equivalent to
+    `chunkPrimDimN_one_shape` + pointwise `chunkPrimDimN_one_valAt`. -/
+theorem chunkPrimDimN_one_eq (chunkDim : Nat) (x : Tensor)
+    (hcd : chunkDim < x.shape.length) :
+    chunkPrimDimN chunkDim 1 0 x = x := by
+  apply Tensor.ext (chunkPrimDimN_one_shape chunkDim x)
+  intro idx hidx
+  rw [chunkPrimDimN_one_shape chunkDim x] at hidx
+  exact chunkPrimDimN_one_valAt chunkDim x hcd idx hidx
+
+/-- Singleton collapse for `applyNodeRingAttn_zigzag`: when `n` is its only
+    ring-attn buddy (numShards=1 case), the ring machinery reduces to plain
+    `fw_attn_varlen`. This is the Denote-level analogue of Python's
+    `if process_group is None or len==1: flash_attn_func(q, k, v)`. -/
+theorem applyNodeRingAttn_zigzag_singleton (g : GraphDecl) (s : Store) (n : NodeDecl)
+    (hbuddy : ringAttnBuddies g n = [n])
+    (hq : 0 < (s (n.ins.getD 0 0)).shape.length)
+    (hk : 0 < (s (n.ins.getD 1 0)).shape.length)
+    (hv : 0 < (s (n.ins.getD 2 0)).shape.length)
+    (hout : 0 < (fw_attn_varlen (s (n.ins.getD 0 0)) (s (n.ins.getD 1 0)) (s (n.ins.getD 2 0))
+        (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
+        (n.params.getD 0 1) (n.params.getD 1 1) (n.params.getD 2 1) (n.params.getD 3 1)
+        (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0)).shape.length) :
+    applyNodeRingAttn_zigzag g s n =
+      fw_attn_varlen (s (n.ins.getD 0 0)) (s (n.ins.getD 1 0)) (s (n.ins.getD 2 0))
+        (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
+        (n.params.getD 0 1) (n.params.getD 1 1) (n.params.getD 2 1) (n.params.getD 3 1)
+        (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0) := by
+  unfold applyNodeRingAttn_zigzag
+  rw [hbuddy]
+  -- Compute myIdx: findIdx? on singleton [n] with predicate m.rank = n.rank succeeds at 0
+  have hmyIdx : ((List.findIdx? (fun m => m.rank = n.rank) [n]).getD 0) = 0 := by
+    simp [List.findIdx?, List.findIdx?.go]
+  simp only [List.map, List.length_singleton, hmyIdx]
+  -- After simp, we have gather-of-singleton on q,k,v then attn then chunk-of-1
+  rw [allGatherPrimDimN_singleton_eq 0 _ hq,
+      allGatherPrimDimN_singleton_eq 0 _ hk,
+      allGatherPrimDimN_singleton_eq 0 _ hv,
+      chunkPrimDimN_one_eq 0 _ hout]
+
 /-- Ring-attention–aware variant of `applyNode`. Intercepts `FW_attn_zigzag`
     and dispatches to `applyNodeRingAttn_zigzag` (cross-rank ring semantics);
     all other ops behave identically to `applyNode`. -/
