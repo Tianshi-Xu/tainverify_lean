@@ -20920,6 +20920,145 @@ theorem chunkPrimDimN_one_shape (chunkDim : Nat) (x : Tensor) :
   rw [hshape, Nat.div_one]
   exact List.set_getD_self x.shape chunkDim
 
+/-- `foldl (·*·) 0 l = 0` for any list. -/
+private theorem foldl_mul_from_zero (l : List Nat) :
+    l.foldl (· * ·) 0 = 0 := by
+  induction l with
+  | nil => rfl
+  | cons hd tl ih => simp only [List.foldl_cons, Nat.zero_mul]; exact ih
+
+/-- If `0 ∈ l`, then `l.foldl (·*·) init = 0` for any init. -/
+private theorem foldl_mul_eq_zero_of_mem_zero (l : List Nat) (init : Nat)
+    (hmem : 0 ∈ l) : l.foldl (· * ·) init = 0 := by
+  induction l generalizing init with
+  | nil => contradiction
+  | cons hd tl ih =>
+    simp only [List.foldl_cons]
+    rcases List.mem_cons.mp hmem with rfl | h2
+    · rw [Nat.mul_zero]; exact foldl_mul_from_zero tl
+    · exact ih (init * hd) h2
+
+/-- If `foldl (·*·) init l = 0` and `init ≠ 0`, then `0 ∈ l`. -/
+private theorem mem_zero_of_foldl_mul_eq_zero (l : List Nat) (init : Nat)
+    (hne : init ≠ 0) (heq : l.foldl (· * ·) init = 0) : 0 ∈ l := by
+  induction l generalizing init with
+  | nil => simp at heq; exact absurd heq hne
+  | cons hd tl ih =>
+    simp only [List.foldl_cons] at heq
+    by_cases hhd : hd = 0
+    · exact List.mem_cons.mpr (Or.inl hhd.symm)
+    · apply List.mem_cons.mpr
+      right
+      have hne' : init * hd ≠ 0 := Nat.mul_ne_zero hne hhd
+      exact ih (init * hd) hne' heq
+
+/-- If a suffix of `sh` has zero product, so does `sh`. -/
+private theorem prodShape_zero_of_suffix_zero (sh : List Nat) (chunkDim : Nat)
+    (h : (sh.drop (chunkDim + 1)).foldl (· * ·) 1 = 0) : prodShape sh = 0 := by
+  have hmem : 0 ∈ sh.drop (chunkDim + 1) :=
+    mem_zero_of_foldl_mul_eq_zero _ 1 one_ne_zero h
+  have hmem' : 0 ∈ sh := List.mem_of_mem_drop hmem
+  unfold prodShape
+  exact foldl_mul_eq_zero_of_mem_zero sh 1 hmem'
+
+/-- `chunkPrimDimN chunkDim 1 0 x` is value-equal to `x` at every in-bounds index,
+    when chunkDim is a valid axis. -/
+theorem chunkPrimDimN_one_valAt (chunkDim : Nat) (x : Tensor)
+    (hcd : chunkDim < x.shape.length) (idx : Nat)
+    (hbound : idx < prodShape x.shape) :
+    valAt (chunkPrimDimN chunkDim 1 0 x) idx = valAt x idx := by
+  have hshape_lhs := chunkPrimDimN_one_shape chunkDim x
+  have hbound_lhs : idx < prodShape (chunkPrimDimN chunkDim 1 0 x).shape := by
+    rw [hshape_lhs]; exact hbound
+  rw [valAt_of_lt _ _ hbound_lhs, valAt_of_lt _ _ hbound]
+  unfold chunkPrimDimN
+  simp only [Tensor.mkShape, Nat.div_one, Nat.zero_mod, Nat.zero_mul, Nat.zero_add]
+  -- Set up
+  set sh := x.shape with hsh_def
+  set postStride := (sh.drop (chunkDim + 1)).foldl (· * ·) 1 with hps_def
+  set dimSize := sh.getD chunkDim 0 with hdim_def
+  set dimStride := dimSize * postStride with hstride_def
+  -- Case: postStride = 0
+  by_cases hps : postStride = 0
+  · exfalso
+    have : prodShape sh = 0 := prodShape_zero_of_suffix_zero sh chunkDim hps
+    omega
+  · -- postStride > 0
+    have hps_pos : 0 < postStride := Nat.pos_of_ne_zero hps
+    -- Case: dimSize = 0 (i.e., dimStride = 0 even though postStride > 0)
+    by_cases hdim : dimSize = 0
+    · exfalso
+      -- chunkDim < sh.length AND dimSize = sh.getD chunkDim 0 = 0
+      -- → sh[chunkDim] = 0 → 0 ∈ sh → prodShape sh = 0
+      have : sh[chunkDim]'hcd = 0 := by
+        have heq : sh.getD chunkDim 0 = sh[chunkDim]'hcd := by
+          simp [List.getD, List.getElem?_eq_getElem hcd]
+        rw [← heq]; exact hdim
+      have h0 : 0 ∈ sh := by rw [← this]; exact List.getElem_mem hcd
+      have : prodShape sh = 0 := by
+        unfold prodShape
+        exact foldl_mul_eq_zero_of_mem_zero sh 1 h0
+      omega
+    · -- Main case: dimSize > 0 and postStride > 0 → dimStride > 0
+      have hdim_pos : 0 < dimSize := Nat.pos_of_ne_zero hdim
+      have hstride_pos : 0 < dimStride := Nat.mul_pos hdim_pos hps_pos
+      have hstride_ne : dimStride ≠ 0 := Nat.ne_of_gt hstride_pos
+      -- We want to show: valAt (mkShape sh' fn) ⟨idx, _⟩ ... = x.val ⟨idx, _⟩
+      -- After unfolding, the RHS of the applied fn should reduce to
+      --   valAt x (preIdx * dimStride + jLocal * postStride + k)
+      -- where the sum equals idx by Nat.div_add_mod twice.
+      -- Use `congr` and then arithmetic.
+      have hkey :
+        (idx / dimStride) * dimStride
+          + (idx % dimStride / postStride) * postStride
+          + (idx % dimStride % postStride) = idx := by
+        have hstep1 :
+          (idx % dimStride / postStride) * postStride
+            + (idx % dimStride % postStride) = idx % dimStride := by
+          have := Nat.div_add_mod (idx % dimStride) postStride
+          -- has type: postStride * ((idx % dimStride) / postStride) + (idx % dimStride) % postStride
+          --          = idx % dimStride
+          -- but we want div/mod-then-mul: (idx % dimStride / postStride) * postStride + ...
+          rw [Nat.mul_comm postStride] at this
+          exact this
+        have hstep2 :
+          (idx / dimStride) * dimStride + idx % dimStride = idx := by
+          have := Nat.div_add_mod idx dimStride
+          rw [Nat.mul_comm dimStride] at this
+          exact this
+        calc (idx / dimStride) * dimStride
+              + (idx % dimStride / postStride) * postStride
+              + (idx % dimStride % postStride)
+            = (idx / dimStride) * dimStride
+              + ((idx % dimStride / postStride) * postStride
+                  + (idx % dimStride % postStride)) := by ring
+          _ = (idx / dimStride) * dimStride + idx % dimStride := by rw [hstep1]
+          _ = idx := hstep2
+      -- Now let's compute what the anonymous mkShape function evaluates to.
+      -- After the simp only above, jFull collapse leaves: fn i = valAt x (preIdx*dimStride + jLocal*postStride + k)
+      -- with preIdx = if dimStride = 0 then 0 else i/dimStride,
+      -- remainder = if dimStride = 0 then 0 else i%dimStride,
+      -- jLocal = if postStride = 0 then 0 else remainder/postStride,
+      -- k = if postStride = 0 then 0 else remainder%postStride,
+      -- and shardDimStride = dimSize * postStride = dimStride.
+      -- So preIdx = idx/dimStride, remainder = idx%dimStride, jLocal = remainder/postStride, k = remainder%postStride.
+      -- The reconstructed index is exactly `hkey`.
+      -- Use `simp` with the pos hypotheses to close.
+      have hshardStride_eq : dimSize * postStride = dimStride := rfl
+      have hds : dimSize * postStride ≠ 0 := Nat.mul_ne_zero hdim hps
+      have h1_ne_0 : (1 : Nat) ≠ 0 := one_ne_zero
+      simp only [h1_ne_0, ↓reduceIte, if_false, Nat.zero_mul, Nat.zero_add,
+                 hds, hps]
+      have hkey' :
+        idx / (dimSize * postStride) * dimStride
+          + idx % (dimSize * postStride) / postStride * postStride
+          + idx % (dimSize * postStride) % postStride = idx := by
+        rw [show (dimSize * postStride) = dimStride from rfl]
+        exact hkey
+      rw [valAt_of_lt _ _ (by rw [hkey']; exact hbound)]
+      congr 1
+      exact Fin.mk.injEq .. |>.mpr hkey'
+
 /-- Ring-attention–aware variant of `applyNode`. Intercepts `FW_attn_zigzag`
     and dispatches to `applyNodeRingAttn_zigzag` (cross-rank ring semantics);
     all other ops behave identically to `applyNode`. -/
