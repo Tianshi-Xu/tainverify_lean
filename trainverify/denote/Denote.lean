@@ -21294,4 +21294,43 @@ theorem fw_stack_shape_3d (xs : List Tensor) (n Lshard d1 d2 : Nat)
   rw [hlen] at this
   exact this
 
+/-- Value-at lemma for fw_stack: reading position (r * shardSize + localIdx) reads
+    xs[r] at localIdx. Requires shardSize > 0. -/
+theorem fw_stack_valAt (xs : List Tensor) (shardShape : Shape)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = shardShape)
+    (hshard_pos : 0 < prodShape shardShape)
+    (r : Nat) (hr : r < xs.length)
+    (localIdx : Nat) (hlocal : localIdx < prodShape shardShape) :
+    valAt (fw_stack xs) (r * prodShape shardShape + localIdx) =
+      valAt (xs.getD r (zeroTensor shardShape)) localIdx := by
+  have hs_ne : prodShape shardShape ≠ 0 := Nat.ne_of_gt hshard_pos
+  have hbound : r * prodShape shardShape + localIdx <
+                xs.length * prodShape shardShape := by
+    have h1 : r * prodShape shardShape + localIdx <
+              r * prodShape shardShape + prodShape shardShape :=
+      Nat.add_lt_add_left hlocal _
+    have h2 : r * prodShape shardShape + prodShape shardShape =
+              (r + 1) * prodShape shardShape := by ring
+    have h3 : (r + 1) * prodShape shardShape ≤
+              xs.length * prodShape shardShape :=
+      Nat.mul_le_mul_right _ hr
+    calc r * prodShape shardShape + localIdx
+        < r * prodShape shardShape + prodShape shardShape := h1
+      _ = (r + 1) * prodShape shardShape := h2
+      _ ≤ xs.length * prodShape shardShape := h3
+  have hstack_shape : (fw_stack xs).shape = xs.length :: shardShape :=
+    fw_stack_shape xs shardShape hhead
+  have hbound_flat : r * prodShape shardShape + localIdx <
+                     prodShape (fw_stack xs).shape := by
+    rw [hstack_shape, prodShape_cons]
+    exact hbound
+  have hdiv : (r * prodShape shardShape + localIdx) / prodShape shardShape = r := by
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ (Nat.pos_of_ne_zero hs_ne),
+        Nat.div_eq_of_lt hlocal, Nat.zero_add]
+  have hmod : (r * prodShape shardShape + localIdx) % prodShape shardShape = localIdx := by
+    rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hlocal]
+  rw [valAt_of_lt _ _ hbound_flat]
+  unfold fw_stack
+  simp only [hhead, Tensor.mkShape, hs_ne, if_false, hdiv, hmod]
+
 end TrainVerify.Denote
