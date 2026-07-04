@@ -3591,6 +3591,39 @@ def opOutShapes (numParts : Nat) (op : String) (params : List Nat) (inShapes : L
       | _ => some [q]
   | "OpName.BW_attn_varlen", [_gO, q, k, v, _cuQ, _cuK] =>
       some [q, k, v]
+  -- FW_attn_sliding_window: same signature/shape as attn_varlen with a
+  -- windowLeft param. Python calls `wrap_sliding_window_attn_func` which
+  -- computes flash-attn with `window_size=(w, 0)`. From Denote's per-rank
+  -- perspective this is `fw_attn_varlen` with `windowLeft = params[5]`
+  -- (see AGENTS.md #24 fidelity note: shape-correct, value-faithful for
+  -- non-sharded intra-rank computation).
+  | "OpName.FW_attn_sliding_window", [q, _k, v, _cuQ, _cuK] =>
+      match q.reverse with
+      | _d :: _h :: lQRest =>
+          match v.reverse with
+          | vd :: _ => some [(vd :: _h :: lQRest).reverse]
+          | [] => some [q]
+      | _ => some [q]
+  | "OpName.BW_attn_sliding_window", [_gO, q, k, v, _cuQ, _cuK] =>
+      some [q, k, v]
+  -- FW_attn_zigzag: same signature. Python calls `wrap_zigzag_allgather_attn_varlen_func`
+  -- which internally does `allgather` across a ring-attention process group before
+  -- computing attention. From single-rank Denote's perspective (sm_goal_N has
+  -- numRanks=1; per-rank pm_goal computation) this is identical to attn_varlen.
+  -- Fidelity note (AGENTS.md #24): shape-correct always; value-faithful iff the
+  -- caller has already assembled the full q/k/v tensor before the op (which is
+  -- the case for Pattern_3's YOCO cross-attention where allgather happens
+  -- *inside* wrap_zigzag but appears as identity from Denote's view since we
+  -- model post-allgather q/k/v).
+  | "OpName.FW_attn_zigzag", [q, _k, v, _cuQ, _cuK] =>
+      match q.reverse with
+      | _d :: _h :: lQRest =>
+          match v.reverse with
+          | vd :: _ => some [(vd :: _h :: lQRest).reverse]
+          | [] => some [q]
+      | _ => some [q]
+  | "OpName.BW_attn_zigzag", [_gO, q, k, v, _cuQ, _cuK] =>
+      some [q, k, v]
   -- Mix-precision linear: numerically identical to FW_linear; alias.
   | "OpName.FW_mix_precision_linear", [x, [o, _i2]] =>
       match x.reverse with
@@ -3849,6 +3882,48 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       let causal     := decide (causalNat ≠ 0)
       [fw_attn_varlen q k v cuQ cuK qh kvh d vd causal windowLeft]
   | "OpName.BW_attn_varlen", [gO, q, k, v, cuQ, cuK] =>
+      let qh         := params.getD 0 1
+      let kvh        := params.getD 1 1
+      let d          := params.getD 2 1
+      let vd         := params.getD 3 1
+      let causalNat  := params.getD 4 0
+      let windowLeft := params.getD 5 0
+      let causal     := decide (causalNat ≠ 0)
+      let (dq, dk, dv) := bw_attn_varlen gO q k v cuQ cuK qh kvh d vd causal windowLeft
+      [dq, dk, dv]
+  -- FW/BW_attn_sliding_window: alias to attn_varlen (windowLeft ≠ 0 encodes window).
+  -- Pattern_3 uses params = [qh=16, kvh=4, d=64, vd=64, causal=1, windowLeft=512].
+  | "OpName.FW_attn_sliding_window", [q, k, v, cuQ, cuK] =>
+      let qh         := params.getD 0 1
+      let kvh        := params.getD 1 1
+      let d          := params.getD 2 1
+      let vd         := params.getD 3 1
+      let causalNat  := params.getD 4 0
+      let windowLeft := params.getD 5 0
+      let causal     := decide (causalNat ≠ 0)
+      [fw_attn_varlen q k v cuQ cuK qh kvh d vd causal windowLeft]
+  | "OpName.BW_attn_sliding_window", [gO, q, k, v, cuQ, cuK] =>
+      let qh         := params.getD 0 1
+      let kvh        := params.getD 1 1
+      let d          := params.getD 2 1
+      let vd         := params.getD 3 1
+      let causalNat  := params.getD 4 0
+      let windowLeft := params.getD 5 0
+      let causal     := decide (causalNat ≠ 0)
+      let (dq, dk, dv) := bw_attn_varlen gO q k v cuQ cuK qh kvh d vd causal windowLeft
+      [dq, dk, dv]
+  -- FW/BW_attn_zigzag: alias to attn_varlen. See fidelity note above.
+  -- Pattern_3 uses params = [qh=16, kvh=4, d=64, vd=64, causal=1, windowLeft=0].
+  | "OpName.FW_attn_zigzag", [q, k, v, cuQ, cuK] =>
+      let qh         := params.getD 0 1
+      let kvh        := params.getD 1 1
+      let d          := params.getD 2 1
+      let vd         := params.getD 3 1
+      let causalNat  := params.getD 4 0
+      let windowLeft := params.getD 5 0
+      let causal     := decide (causalNat ≠ 0)
+      [fw_attn_varlen q k v cuQ cuK qh kvh d vd causal windowLeft]
+  | "OpName.BW_attn_zigzag", [gO, q, k, v, cuQ, cuK] =>
       let qh         := params.getD 0 1
       let kvh        := params.getD 1 1
       let d          := params.getD 2 1
