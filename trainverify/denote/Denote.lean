@@ -21277,4 +21277,21 @@ def CoarseLineageHoldsWithInit_ringAttn (sm pm : GraphDecl) (goal : LineageGoal)
       (tps.map (fun t => t.shape)) = goal.tpShapes ∧
       ts = reconstructWithDim goal.gatherDim pm.numRanks 0 tps
 
+/-! ### Stack-Gather Commutation (Pattern_3)
+
+    Key structural lemma: if each layer L has a sharding-commute
+      `layer_L_full = allGatherPrimDimN 0 2 0 [layer_L_r0, layer_L_r1]`
+    then stacking commutes with per-rank stack + outer allGather on dim 1.
+-/
+
+/-- Shape lemma: fw_stack of n tensors each of shape `[Lshard, d1, d2]` has
+    shape `[n, Lshard, d1, d2]`. -/
+theorem fw_stack_shape_3d (xs : List Tensor) (n Lshard d1 d2 : Nat)
+    (hlen : xs.length = n)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [Lshard, d1, d2]) :
+    (fw_stack xs).shape = [n, Lshard, d1, d2] := by
+  have := fw_stack_shape xs [Lshard, d1, d2] hhead
+  rw [hlen] at this
+  exact this
+
 end TrainVerify.Denote
