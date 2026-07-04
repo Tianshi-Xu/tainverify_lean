@@ -4853,6 +4853,57 @@ theorem applyNode_fw_all2all_moe_gmm_out_1p
   unfold storeSet
   simp [List.find?]
 
+/-- Unfolding lemma for `evalOp` on `FW_all2all_moe_gmm_full` at numRanks = 2
+    (7 inputs: `[input, rp, rm, w13_a, w13_b, w2_a, w2_b]`). Specialised so
+    the variable-length `weightArgs.take/drop 2` reduce definitionally. -/
+theorem evalOp_fw_all2all_moe_gmm_full_r2
+    (numParts rank : Nat) (params : List Nat)
+    (input rp rm w13_a w13_b w2_a w2_b : Tensor) :
+    evalOp numParts rank "OpName.FW_all2all_moe_gmm_full" params
+        [input, rp, rm, w13_a, w13_b, w2_a, w2_b] =
+      [fw_all2all_moe_gmm_full input rp rm [w13_a, w13_b] [w2_a, w2_b]
+        (params.getD 0 1) (params.getD 1 1) ((((params.getD 2 10) : Nat) : Scalar))] := by
+  -- Unfold evalOp definitionally, then reduce List.length / take / drop by rfl.
+  show [fw_all2all_moe_gmm_full input rp rm
+          (List.take (([w13_a, w13_b, w2_a, w2_b] : List Tensor).length / 2)
+                     ([w13_a, w13_b, w2_a, w2_b] : List Tensor))
+          (List.drop (([w13_a, w13_b, w2_a, w2_b] : List Tensor).length / 2)
+                     ([w13_a, w13_b, w2_a, w2_b] : List Tensor))
+          (params.getD 0 1) (params.getD 1 1)
+          ((((params.getD 2 10) : Nat) : Scalar))] =
+        [fw_all2all_moe_gmm_full input rp rm [w13_a, w13_b] [w2_a, w2_b]
+          (params.getD 0 1) (params.getD 1 1)
+          ((((params.getD 2 10) : Nat) : Scalar))]
+  have hlen : ([w13_a, w13_b, w2_a, w2_b] : List Tensor).length / 2 = 2 := by
+    simp only [List.length_cons, List.length_nil]
+  rw [hlen]
+  rfl
+
+/-- applyNode for `FW_all2all_moe_gmm_full` at numRanks = 2. Ins layout:
+    `[input, rp, rm, w13_a, w13_b, w2_a, w2_b]`; singleton output. -/
+theorem applyNode_fw_all2all_moe_gmm_full_out_1p_r2
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (inputTid rpTid rmTid w13aTid w13bTid w2aTid w2bTid outTid : Tid)
+    (params : List Nat) :
+    applyNode g s
+      { rank := rank, op := "OpName.FW_all2all_moe_gmm_full",
+        ins := [inputTid, rpTid, rmTid, w13aTid, w13bTid, w2aTid, w2bTid],
+        outs := [outTid], params := params } outTid =
+      fw_all2all_moe_gmm_full (s inputTid) (s rpTid) (s rmTid)
+        [s w13aTid, s w13bTid] [s w2aTid, s w2bTid]
+        (params.getD 0 1) (params.getD 1 1)
+        ((((params.getD 2 10) : Nat) : Scalar)) := by
+  unfold applyNode
+  rw [show ([inputTid, rpTid, rmTid, w13aTid, w13bTid, w2aTid, w2bTid] : List Tid).map s =
+      [s inputTid, s rpTid, s rmTid, s w13aTid, s w13bTid, s w2aTid, s w2bTid] from rfl,
+     evalOp_fw_all2all_moe_gmm_full_r2]
+  change storeSet s [(outTid, fw_all2all_moe_gmm_full (s inputTid) (s rpTid) (s rmTid)
+        [s w13aTid, s w13bTid] [s w2aTid, s w2bTid]
+        (params.getD 0 1) (params.getD 1 1)
+        ((((params.getD 2 10) : Nat) : Scalar)))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
 /-- Unfolding lemma for `evalOp` on `FW_inner_chunk_ce`. -/
 theorem evalOp_fw_inner_chunk_ce_iroha (numParts rank : Nat) (params : List Nat) (x w y : Tensor) :
     evalOp numParts rank "OpName.FW_inner_chunk_ce" params [x, w, y] =
