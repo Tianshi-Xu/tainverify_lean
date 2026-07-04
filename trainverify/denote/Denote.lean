@@ -20921,4 +20921,23 @@ theorem denoteGraph_ringAttn_eq_denoteGraph_of_no_zigzag
     rw [hstep]
     exact ih (applyNode g s hd) htl
 
+/-- Ring-attention–aware variant of `CoarseLineageHoldsWithInit`. Uses
+    `denoteGraph_ringAttn` (which models Python's `ZigZagRingFlashAttnFunc`)
+    for both SM and PM sides. For graphs without `FW_attn_zigzag` nodes,
+    coincides with `CoarseLineageHoldsWithInit` (see
+    `denoteGraph_ringAttn_eq_denoteGraph_of_no_zigzag`). -/
+def CoarseLineageHoldsWithInit_ringAttn (sm pm : GraphDecl) (goal : LineageGoal)
+    (smInit pmInit : ShapeEnv) (initGoals : List LineageGoal) : Prop :=
+  ∀ (initSM initPM : Store),
+    StoreShapesHold initSM smInit →
+    StoreShapesHold initPM pmInit →
+    InitGoalsHold pm.numRanks initGoals initSM initPM →
+    let smStore := denoteGraph_ringAttn sm initSM
+    let pmStore := denoteGraph_ringAttn pm initPM
+    let ts := smStore goal.ts
+    let tps := goal.tps.map (fun p => pmStore p.tid)
+    ts.shape = goal.tsShape ∧
+      (tps.map (fun t => t.shape)) = goal.tpShapes ∧
+      ts = reconstructWithDim goal.gatherDim pm.numRanks 0 tps
+
 end TrainVerify.Denote
