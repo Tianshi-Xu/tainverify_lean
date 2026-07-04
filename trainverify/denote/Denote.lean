@@ -1957,6 +1957,11 @@ noncomputable def fw_all2all_moe_gmm
           -- w2 indexing: [E=eLocal, h_model=h, h_inner=d] → flat = (eLocal * hModel + h) * h_inner + d
           swigluVal * valAt w2 ((eLocal * hModel + h) * h_inner + d))
 
+-- NB: `fw_all2all_moe_gmm_full` — the upstream-faithful variant that gathers
+-- all-rank w13/w2 shards — is defined further below, right after
+-- `allGatherPrimDimN` (its dependency), around the "Cross-rank collective
+-- helpers" section.
+
 /-! ### YOCO loss kernel: `inner_chunk_linear_cross_entropy`
 
     Source: `llm/kernel/vocab_parallel_cross_entropy.py:16`. The full kernel
@@ -2342,6 +2347,58 @@ theorem chunkPrimDimN_shape (chunkDim numParts rank : Nat) (x : Tensor)
     (chunkPrimDimN chunkDim numParts rank x).shape =
       sh.set chunkDim (sh.getD chunkDim 0 / numParts) := by
   simp only [chunkPrimDimN, Tensor.mkShape, hsh, hnz, ite_false]
+
+-- NB: `fw_all2all_moe_gmm_full` — the upstream-faithful all2all_moe_gmm variant
+-- that gathers all-rank w13/w2 shards — is defined right below. Its shape lemma
+-- is proven inline (via `fw_all2all_moe_gmm` shape structure), and dedicated
+-- evalOp/applyNode lemmas live in DenoteMoE.lean.
+
+/-- Upstream-faithful `fw_all2all_moe_gmm` variant.
+
+`fw_all2all_moe_gmm` (defined earlier) is a **per-rank partial** view that
+only sums the local expert range `[local_expert_start, local_expert_end)`
+using ONE rank's `w13`/`w2` shard. The actual Python `nnscaler_all2all_moe_gmm`
+(`llm/arch/all2all_moe.py:1024`) performs `permute → all_to_all(dispatch) →
+local_fused_ffn → all_to_all(combine) → unpermute`, so each rank's output is
+the **complete** combined result over ALL experts for its own tokens.
+
+`fw_all2all_moe_gmm_full` gathers all-rank `w13`/`w2` shards via
+`allGatherPrimDimN 0` and sums over `[0, numExp)` — precisely matching Python
+`output[l, h] = Σ_{e ∈ [0, numExp)} rm[l,e] * rp[l,e] * ffn(input[l],
+w13_full[e], w2_full[e])`.  The sharding-commute theorem is provable WITHOUT
+any `rma/rmb` disjointness axioms — the "each rank owns disjoint experts"
+constraint is encoded by-construction in the allGather layout.
+
+Arguments:
+- `input rp rm : Tensor` — per-rank local input/routing_probs/routing_map.
+  `rm` is indexed over the FULL expert range, matching Python's `[L, numExp]`
+  routing_map layout.
+- `w13s w2s : List Tensor` — one shard per rank; total experts along dim-0 =
+  `numExp = E_shard * numRanks`. -/
+noncomputable def fw_all2all_moe_gmm_full
+    (input rp rm : Tensor) (w13s w2s : List Tensor)
+    (numExp topK : Nat) (swigluLimit : Scalar) : Tensor :=
+  let numRanks := w13s.length
+  let w13_full := allGatherPrimDimN 0 numRanks 0 w13s
+  let w2_full  := allGatherPrimDimN 0 numRanks 0 w2s
+  fw_all2all_moe_gmm input rp rm w13_full w2_full numExp 0 numExp topK swigluLimit
+
+/-- Shape of `fw_all2all_moe_gmm_full`: `[lDim, hModel]` — matches Python
+    `l h^` signature. Delegates to `fw_all2all_moe_gmm`'s shape via unfold. -/
+theorem fw_all2all_moe_gmm_full_shape
+    (input rp rm : Tensor) (w13s w2s : List Tensor)
+    (numExp topK : Nat) (swigluLimit : Scalar)
+    (lDim hModel : Nat)
+    (hL : input.shape.head? = some lDim)
+    (hH : input.shape.reverse.head? = some hModel) :
+    (fw_all2all_moe_gmm_full input rp rm w13s w2s numExp topK swigluLimit).shape
+      = [lDim, hModel] := by
+  unfold fw_all2all_moe_gmm_full fw_all2all_moe_gmm
+  have hl : (input.shape.head?).getD 0 = lDim := by rw [hL]; rfl
+  have hh : (input.shape.reverse.head?).getD 0 = hModel := by rw [hH]; rfl
+  show (Tensor.mkShape [(input.shape.head?).getD 0,
+                        (input.shape.reverse.head?).getD 0] _).shape = _
+  rw [hl, hh]; simp [Tensor.mkShape]
 
 /-! ## Generic elementwise/add split helpers
 
@@ -3573,6 +3630,14 @@ def opOutShapes (numParts : Nat) (op : String) (params : List Nat) (inShapes : L
       match input.reverse, w2.reverse with
       | _h :: lRest, hModel :: _ => some [(hModel :: lRest).reverse]
       | _, _ => some [input]
+  -- `FW_all2all_moe_gmm_full`: same output shape as `FW_all2all_moe_gmm`
+  -- (`[l, h_model]` = `[input.shape.head, input.shape.last]` — matches Python
+  -- signature `l h^ -> l h^`, so hModel = input's last dim not w2's).
+  -- Inputs are variable-length: 3 (input, rp, rm) + 2*numRanks (w13s ++ w2s).
+  | "OpName.FW_all2all_moe_gmm_full", input :: _rp :: _rm :: _weightShapes =>
+      match input.reverse with
+      | hModel :: lRest => some [(hModel :: lRest).reverse]
+      | _ => some [input]
   -- `inner_chunk_linear_cross_entropy`: 3 inputs (x, w, y), 2 outputs
   -- both of shape `[L]` where `L = x.shape.head`.
   --   x : [L, h_model], w : [vocab, h_model], y : [L]
@@ -3829,6 +3894,20 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       let swigluLimit : Scalar := (swigluLimitInt : Nat)
       [fw_all2all_moe_gmm input rp rm w13 w2 numExperts localExpertStart
          localExpertEnd topK swigluLimit]
+  -- Upstream-faithful `FW_all2all_moe_gmm_full`: gathers all-rank w13/w2 shards.
+  -- Args layout: `[input, rp, rm, w13_0, w13_1, ..., w2_0, w2_1, ...]` (3 + 2*numRanks).
+  -- After the leading 3 tensors, the next `numRanks` are w13s and the last
+  -- `numRanks` are w2s. numRanks is derived from `weightArgs.length / 2`.
+  -- Params layout: `[numExp, topK, swigluLimitInt]`.
+  | "OpName.FW_all2all_moe_gmm_full", input :: rp :: rm :: weightArgs =>
+      let numExp          := params.getD 0 1
+      let topK            := params.getD 1 1
+      let swigluLimitInt  := params.getD 2 10
+      let swigluLimit : Scalar := (swigluLimitInt : Nat)
+      let numRanks := weightArgs.length / 2
+      let w13s := weightArgs.take numRanks
+      let w2s  := weightArgs.drop numRanks
+      [fw_all2all_moe_gmm_full input rp rm w13s w2s numExp topK swigluLimit]
   -- `inner_chunk_linear_cross_entropy`: 3 inputs (x, w, y), 2 outputs (losses, z_losses).
   -- Params layout: `[chunkSize, zLossScaleInt]` (Verdict currently only emits
   -- `[chunkSize]`; if `zLossScaleInt` is missing it defaults to 0, matching
