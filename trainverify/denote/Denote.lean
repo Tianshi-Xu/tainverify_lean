@@ -20881,6 +20881,45 @@ noncomputable def applyNodeRingAttn_zigzag (g : GraphDecl) (s : Store) (n : Node
   -- Chunk on seq dim (dim 0) to get this rank's shard.
   chunkPrimDimN 0 numShards myIdx fullOut
 
+/-! ### Singleton-collapse lemmas for ring semantics on numShards=1
+
+    When there's only one rank (i.e. only one FW_attn_zigzag buddy), the ring
+    machinery reduces to plain `fw_attn_varlen` because:
+      * `allGatherPrimDimN d 1 0 [x]` reproduces `x` value-wise (up to shape)
+      * `chunkPrimDimN d 1 0 x` reproduces `x` value-wise
+    These two facts let us collapse SM-side (numRanks=1) ring semantics back
+    to plain attention, which is the Denote-level analogue of Python's
+    `if process_group is None or len==1: flash_attn_func(q, k, v)`.
+-/
+
+/-- List helper: `l.set n (l.getD n 0) = l`. -/
+theorem List.set_getD_self (l : List Nat) (n : Nat) :
+    l.set n (l.getD n 0) = l := by
+  induction l generalizing n with
+  | nil => cases n <;> simp [List.set]
+  | cons hd tl ih =>
+    cases n with
+    | zero => simp [List.set, List.getD]
+    | succ k =>
+      simp only [List.set, List.getD_cons_succ]
+      exact congrArg (hd :: ·) (ih k)
+
+/-- `allGatherPrimDimN` shape on singleton list: shape = shard × 1 = shard. -/
+theorem allGatherPrimDimN_singleton_shape (gatherDim : Nat) (x : Tensor) :
+    (allGatherPrimDimN gatherDim 1 0 [x]).shape = x.shape := by
+  have hhead : (([x] : List Tensor).head?.map (fun t => t.shape)).getD [] = x.shape := by
+    simp
+  have hshape := allGatherPrimDimN_shape gatherDim 1 [x] x.shape hhead
+  rw [hshape, Nat.mul_one]
+  exact List.set_getD_self x.shape gatherDim
+
+/-- `chunkPrimDimN` shape with numParts=1: shape = x.shape / 1 = x.shape. -/
+theorem chunkPrimDimN_one_shape (chunkDim : Nat) (x : Tensor) :
+    (chunkPrimDimN chunkDim 1 0 x).shape = x.shape := by
+  have hshape := chunkPrimDimN_shape chunkDim 1 0 x x.shape rfl (by omega)
+  rw [hshape, Nat.div_one]
+  exact List.set_getD_self x.shape chunkDim
+
 /-- Ring-attention–aware variant of `applyNode`. Intercepts `FW_attn_zigzag`
     and dispatches to `applyNodeRingAttn_zigzag` (cross-rank ring semantics);
     all other ops behave identically to `applyNode`. -/
