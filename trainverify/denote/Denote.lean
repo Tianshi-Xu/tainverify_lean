@@ -21333,4 +21333,383 @@ theorem fw_stack_valAt (xs : List Tensor) (shardShape : Shape)
   unfold fw_stack
   simp only [hhead, Tensor.mkShape, hs_ne, if_false, hdiv, hmod]
 
+private theorem allGatherPrimDimN0_3d_valAt
+    (numParts Lshard d1 d2 : Nat)
+    (Ws : List Tensor)
+    (hparts : 0 < numParts) (hL : 0 < Lshard) (hd1 : 0 < d1) (hd2 : 0 < d2)
+    (hhead : (Ws.head?.map (fun t => t.shape)).getD [] = [Lshard, d1, d2])
+    (hWs_shape : ∀ r (_ : r < numParts),
+        (Ws.getD r (zeroTensor [Lshard, d1, d2])).shape = [Lshard, d1, d2])
+    (r : Nat) (hr : r < numParts)
+    (row : Nat) (hrow : row < Lshard)
+    (col : Nat) (hcol : col < d1)
+    (inner : Nat) (hinner : inner < d2) :
+    valAt (allGatherPrimDimN 0 numParts 0 Ws)
+          (((r * Lshard + row) * d1 + col) * d2 + inner) =
+      valAt (Ws.getD r (zeroTensor [Lshard, d1, d2]))
+            ((row * d1 + col) * d2 + inner) := by
+  have hP_pos : 0 < d1 * d2 := Nat.mul_pos hd1 hd2
+  have hP_ne : d1 * d2 ≠ 0 := Nat.ne_of_gt hP_pos
+  have hL_ne : Lshard ≠ 0 := Nat.ne_of_gt hL
+  have hE_pos : 0 < Lshard * numParts * (d1 * d2) :=
+    Nat.mul_pos (Nat.mul_pos hL hparts) hP_pos
+  have hE_ne : Lshard * numParts * (d1 * d2) ≠ 0 := Nat.ne_of_gt hE_pos
+  have hlow : col * d2 + inner < d1 * d2 := by
+    calc col * d2 + inner < col * d2 + d2 := by omega
+      _ = (col + 1) * d2 := by ring
+      _ ≤ d1 * d2 := Nat.mul_le_mul_right _ (by omega)
+  have hrr : r * Lshard + row < Lshard * numParts := by
+    have hsi : r * Lshard + row < (r + 1) * Lshard := by
+      calc r * Lshard + row < r * Lshard + Lshard := by omega
+        _ = (r + 1) * Lshard := by ring
+    have hle : (r + 1) * Lshard ≤ numParts * Lshard := Nat.mul_le_mul_right _ hr
+    calc r * Lshard + row < (r + 1) * Lshard := hsi
+      _ ≤ numParts * Lshard := hle
+      _ = Lshard * numParts := by ring
+  have hidx_eq : ((r * Lshard + row) * d1 + col) * d2 + inner
+      = (col * d2 + inner) + (d1 * d2) * (r * Lshard + row) := by ring
+  have hidx_lt_E : ((r * Lshard + row) * d1 + col) * d2 + inner
+      < Lshard * numParts * (d1 * d2) := by
+    rw [hidx_eq]
+    calc (col * d2 + inner) + (d1 * d2) * (r * Lshard + row)
+        < (d1 * d2) + (d1 * d2) * (r * Lshard + row) := by omega
+      _ = (d1 * d2) * (r * Lshard + row + 1) := by ring
+      _ ≤ (d1 * d2) * (Lshard * numParts) := Nat.mul_le_mul_left _ (by omega)
+      _ = Lshard * numParts * (d1 * d2) := by ring
+  have hdiv_E : (((r * Lshard + row) * d1 + col) * d2 + inner)
+      / (Lshard * numParts * (d1 * d2)) = 0 := Nat.div_eq_of_lt hidx_lt_E
+  have hmod_E : (((r * Lshard + row) * d1 + col) * d2 + inner)
+      % (Lshard * numParts * (d1 * d2))
+      = ((r * Lshard + row) * d1 + col) * d2 + inner := Nat.mod_eq_of_lt hidx_lt_E
+  have hdiv_P : (((r * Lshard + row) * d1 + col) * d2 + inner) / (d1 * d2)
+      = r * Lshard + row := by
+    rw [hidx_eq, Nat.add_mul_div_left _ _ hP_pos, Nat.div_eq_of_lt hlow, Nat.zero_add]
+  have hmod_P : (((r * Lshard + row) * d1 + col) * d2 + inner) % (d1 * d2)
+      = col * d2 + inner := by
+    rw [hidx_eq, Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hlow]
+  have hdiv_L : (r * Lshard + row) / Lshard = r := by
+    rw [show r * Lshard + row = row + Lshard * r from by ring,
+        Nat.add_mul_div_left _ _ hL, Nat.div_eq_of_lt hrow, Nat.zero_add]
+  have hmod_L : (r * Lshard + row) % Lshard = row := by
+    rw [show r * Lshard + row = row + Lshard * r from by ring,
+        Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hrow]
+  have hshape_out : (allGatherPrimDimN 0 numParts 0 Ws).shape
+      = [Lshard * numParts, d1, d2] := by
+    have := allGatherPrimDimN_shape 0 numParts Ws [Lshard, d1, d2] hhead
+    simpa using this
+  have hidx_lt_prod : ((r * Lshard + row) * d1 + col) * d2 + inner
+      < prodShape (allGatherPrimDimN 0 numParts 0 Ws).shape := by
+    rw [hshape_out]
+    have hpe : prodShape [Lshard * numParts, d1, d2] = Lshard * numParts * (d1 * d2) := by
+      simp [prodShape]; ring
+    rw [hpe]; exact hidx_lt_E
+  have hWr_shape : (Ws.getD r (zeroTensor [Lshard, d1, d2])).shape = [Lshard, d1, d2] :=
+    hWs_shape r hr
+  have hWr_prod : prodShape (Ws.getD r (zeroTensor [Lshard, d1, d2])).shape
+      = Lshard * (d1 * d2) := by
+    rw [hWr_shape]; simp [prodShape]; ring
+  have hidx_lt_Wr : (row * d1 + col) * d2 + inner
+      < prodShape (Ws.getD r (zeroTensor [Lshard, d1, d2])).shape := by
+    rw [hWr_prod]
+    calc (row * d1 + col) * d2 + inner
+        = (col * d2 + inner) + (d1 * d2) * row := by ring
+      _ < (d1 * d2) + (d1 * d2) * row := by omega
+      _ = (d1 * d2) * (row + 1) := by ring
+      _ ≤ (d1 * d2) * Lshard := Nat.mul_le_mul_left _ (by omega)
+      _ = Lshard * (d1 * d2) := by ring
+  have h0 : valAt (allGatherPrimDimN 0 numParts 0 Ws)
+        (((r * Lshard + row) * d1 + col) * d2 + inner)
+      = (allGatherPrimDimN 0 numParts 0 Ws).val
+          ⟨((r * Lshard + row) * d1 + col) * d2 + inner, hidx_lt_prod⟩ := by
+    simp [valAt, hidx_lt_prod]
+  rw [h0]
+  simp only [allGatherPrimDimN, Tensor.mkShape, hhead,
+    List.getD_cons_zero, List.drop, List.foldl, Nat.one_mul,
+    hP_ne, hL_ne, hE_ne, ite_false]
+  rw [hmod_E, hdiv_E, hdiv_P, hmod_P, hdiv_L, hmod_L]
+  rw [show 0 * (Lshard * (d1 * d2)) + row * (d1 * d2) + (col * d2 + inner)
+        = (row * d1 + col) * d2 + inner from by ring]
+
+private theorem allGatherPrimDimN1_of_stack_valAt
+    (n Lshard d1 d2 : Nat) (as : List Tensor)
+    (_hn : 0 < n) (hL : 0 < Lshard) (hd1 : 0 < d1) (hd2 : 0 < d2)
+    (hhead : (as.head?.map (fun t => t.shape)).getD [] = [n, Lshard, d1, d2])
+    (hshapes : ∀ r (_ : r < 2),
+        (as.getD r (zeroTensor [n, Lshard, d1, d2])).shape = [n, Lshard, d1, d2])
+    (i : Nat) (hi : i < n)
+    (r : Nat) (hr : r < 2)
+    (row : Nat) (hrow : row < Lshard)
+    (col : Nat) (hcol : col < d1)
+    (inner : Nat) (hinner : inner < d2) :
+    valAt (allGatherPrimDimN 1 2 0 as)
+          (((i * (2 * Lshard) + (r * Lshard + row)) * d1 + col) * d2 + inner) =
+      valAt (as.getD r (zeroTensor [n, Lshard, d1, d2]))
+            (((i * Lshard + row) * d1 + col) * d2 + inner) := by
+  have hP_pos : 0 < d1 * d2 := Nat.mul_pos hd1 hd2
+  have hP_ne : d1 * d2 ≠ 0 := Nat.ne_of_gt hP_pos
+  have hL_ne : Lshard ≠ 0 := Nat.ne_of_gt hL
+  -- fullDimStride form as produced by the kernel: (Lshard * 2) * (d1 * d2)
+  have hE_pos : 0 < Lshard * 2 * (d1 * d2) :=
+    Nat.mul_pos (Nat.mul_pos hL (by omega)) hP_pos
+  have hE_ne : Lshard * 2 * (d1 * d2) ≠ 0 := Nat.ne_of_gt hE_pos
+  have hlow : col * d2 + inner < d1 * d2 := by
+    calc col * d2 + inner < col * d2 + d2 := by omega
+      _ = (col + 1) * d2 := by ring
+      _ ≤ d1 * d2 := Nat.mul_le_mul_right _ (by omega)
+  have hR : r * Lshard + row < 2 * Lshard := by
+    have hsi : r * Lshard + row < (r + 1) * Lshard := by
+      calc r * Lshard + row < r * Lshard + Lshard := by omega
+        _ = (r + 1) * Lshard := by ring
+    have hle : (r + 1) * Lshard ≤ 2 * Lshard := Nat.mul_le_mul_right _ (by omega)
+    exact lt_of_lt_of_le hsi hle
+  -- M := (r*Lshard+row)*(d1*d2) + (col*d2+inner) < Lshard*2*(d1*d2)
+  have hmid_lt : (r * Lshard + row) * (d1 * d2) + (col * d2 + inner)
+      < Lshard * 2 * (d1 * d2) := by
+    calc (r * Lshard + row) * (d1 * d2) + (col * d2 + inner)
+        < (r * Lshard + row) * (d1 * d2) + (d1 * d2) := by omega
+      _ = (r * Lshard + row + 1) * (d1 * d2) := by ring
+      _ ≤ (2 * Lshard) * (d1 * d2) := Nat.mul_le_mul_right _ (by omega)
+      _ = Lshard * 2 * (d1 * d2) := by ring
+  have hidx_eq_E :
+      ((i * (2 * Lshard) + (r * Lshard + row)) * d1 + col) * d2 + inner
+      = ((r * Lshard + row) * (d1 * d2) + (col * d2 + inner))
+        + (Lshard * 2 * (d1 * d2)) * i := by ring
+  have hdiv_E :
+      (((i * (2 * Lshard) + (r * Lshard + row)) * d1 + col) * d2 + inner)
+        / (Lshard * 2 * (d1 * d2)) = i := by
+    rw [hidx_eq_E, Nat.add_mul_div_left _ _ hE_pos, Nat.div_eq_of_lt hmid_lt, Nat.zero_add]
+  have hmod_E :
+      (((i * (2 * Lshard) + (r * Lshard + row)) * d1 + col) * d2 + inner)
+        % (Lshard * 2 * (d1 * d2))
+      = (r * Lshard + row) * (d1 * d2) + (col * d2 + inner) := by
+    rw [hidx_eq_E, Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hmid_lt]
+  have hM_eq : (r * Lshard + row) * (d1 * d2) + (col * d2 + inner)
+      = (col * d2 + inner) + (d1 * d2) * (r * Lshard + row) := by ring
+  have hdiv_P : ((r * Lshard + row) * (d1 * d2) + (col * d2 + inner)) / (d1 * d2)
+      = r * Lshard + row := by
+    rw [hM_eq, Nat.add_mul_div_left _ _ hP_pos, Nat.div_eq_of_lt hlow, Nat.zero_add]
+  have hmod_P : ((r * Lshard + row) * (d1 * d2) + (col * d2 + inner)) % (d1 * d2)
+      = col * d2 + inner := by
+    rw [hM_eq, Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hlow]
+  have hdiv_L : (r * Lshard + row) / Lshard = r := by
+    rw [show r * Lshard + row = row + Lshard * r from by ring,
+        Nat.add_mul_div_left _ _ hL, Nat.div_eq_of_lt hrow, Nat.zero_add]
+  have hmod_L : (r * Lshard + row) % Lshard = row := by
+    rw [show r * Lshard + row = row + Lshard * r from by ring,
+        Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hrow]
+  have hshape_out : (allGatherPrimDimN 1 2 0 as).shape = [n, Lshard * 2, d1, d2] := by
+    have := allGatherPrimDimN_shape 1 2 as [n, Lshard, d1, d2] hhead
+    simpa [List.set] using this
+  have hidx_lt_prod :
+      ((i * (2 * Lshard) + (r * Lshard + row)) * d1 + col) * d2 + inner
+      < prodShape (allGatherPrimDimN 1 2 0 as).shape := by
+    rw [hshape_out]
+    have hpe : prodShape [n, Lshard * 2, d1, d2] = n * (Lshard * 2 * (d1 * d2)) := by
+      simp [prodShape]; ring
+    rw [hpe, hidx_eq_E]
+    calc ((r * Lshard + row) * (d1 * d2) + (col * d2 + inner))
+            + (Lshard * 2 * (d1 * d2)) * i
+        < (Lshard * 2 * (d1 * d2)) + (Lshard * 2 * (d1 * d2)) * i := by omega
+      _ = (Lshard * 2 * (d1 * d2)) * (i + 1) := by ring
+      _ ≤ (Lshard * 2 * (d1 * d2)) * n := Nat.mul_le_mul_left _ (by omega)
+      _ = n * (Lshard * 2 * (d1 * d2)) := by ring
+  have har_shape : (as.getD r (zeroTensor [n, Lshard, d1, d2])).shape = [n, Lshard, d1, d2] :=
+    hshapes r hr
+  have har_prod : prodShape (as.getD r (zeroTensor [n, Lshard, d1, d2])).shape
+      = n * (Lshard * (d1 * d2)) := by
+    rw [har_shape]; simp [prodShape]; ring
+  have hidx_lt_ar : ((i * Lshard + row) * d1 + col) * d2 + inner
+      < prodShape (as.getD r (zeroTensor [n, Lshard, d1, d2])).shape := by
+    rw [har_prod]
+    have hrowlow : row * (d1 * d2) + (col * d2 + inner) < Lshard * (d1 * d2) := by
+      calc row * (d1 * d2) + (col * d2 + inner)
+          < row * (d1 * d2) + (d1 * d2) := by omega
+        _ = (row + 1) * (d1 * d2) := by ring
+        _ ≤ Lshard * (d1 * d2) := Nat.mul_le_mul_right _ (by omega)
+    calc ((i * Lshard + row) * d1 + col) * d2 + inner
+        = (Lshard * (d1 * d2)) * i + (row * (d1 * d2) + (col * d2 + inner)) := by ring
+      _ < (Lshard * (d1 * d2)) * i + Lshard * (d1 * d2) := by omega
+      _ = (Lshard * (d1 * d2)) * (i + 1) := by ring
+      _ ≤ (Lshard * (d1 * d2)) * n := Nat.mul_le_mul_left _ (by omega)
+      _ = n * (Lshard * (d1 * d2)) := by ring
+  have h0 : valAt (allGatherPrimDimN 1 2 0 as)
+        (((i * (2 * Lshard) + (r * Lshard + row)) * d1 + col) * d2 + inner)
+      = (allGatherPrimDimN 1 2 0 as).val
+          ⟨((i * (2 * Lshard) + (r * Lshard + row)) * d1 + col) * d2 + inner, hidx_lt_prod⟩ := by
+    simp [valAt, hidx_lt_prod]
+  rw [h0]
+  simp only [allGatherPrimDimN, Tensor.mkShape, hhead,
+    List.getD_cons_succ, List.getD_cons_zero, List.drop, List.foldl, Nat.one_mul,
+    hP_ne, hL_ne, hE_ne, ite_false]
+  rw [hmod_E, hdiv_E, hdiv_P, hmod_P, hdiv_L, hmod_L]
+  rw [show i * (Lshard * (d1 * d2)) + row * (d1 * d2) + (col * d2 + inner)
+        = ((i * Lshard + row) * d1 + col) * d2 + inner from by ring]
+
+
+
+theorem fw_stack_allGather0_dim1_commute_2
+    (n Lshard d1 d2 : Nat)
+    (hL : 0 < Lshard) (hd1 : 0 < d1) (hd2 : 0 < d2)
+    (xs ys zs : List Tensor)
+    (hxlen : xs.length = n) (hylen : ys.length = n) (hzlen : zs.length = n)
+    (hxhead : (xs.head?.map (fun t => t.shape)).getD [] = [Lshard, d1, d2])
+    (hyhead : (ys.head?.map (fun t => t.shape)).getD [] = [Lshard, d1, d2])
+    (hzhead : (zs.head?.map (fun t => t.shape)).getD [] = [2 * Lshard, d1, d2])
+    (hxshapes : ∀ i (_ : i < n),
+      (xs.getD i (zeroTensor [Lshard, d1, d2])).shape = [Lshard, d1, d2])
+    (hyshapes : ∀ i (_ : i < n),
+      (ys.getD i (zeroTensor [Lshard, d1, d2])).shape = [Lshard, d1, d2])
+    (hzshapes : ∀ i (_ : i < n),
+      (zs.getD i (zeroTensor [2 * Lshard, d1, d2])).shape = [2 * Lshard, d1, d2])
+    (hcommute : ∀ i (_ : i < n),
+      zs.getD i (zeroTensor [2 * Lshard, d1, d2]) =
+      allGatherPrimDimN 0 2 0
+        [xs.getD i (zeroTensor [Lshard, d1, d2]),
+         ys.getD i (zeroTensor [Lshard, d1, d2])]) :
+    fw_stack zs =
+      allGatherPrimDimN 1 2 0 [fw_stack xs, fw_stack ys] := by
+  -- shape facts
+  have hLHS_shape : (fw_stack zs).shape = [n, 2 * Lshard, d1, d2] :=
+    fw_stack_shape_3d zs n (2 * Lshard) d1 d2 hzlen hzhead
+  have hxstack_shape : (fw_stack xs).shape = [n, Lshard, d1, d2] :=
+    fw_stack_shape_3d xs n Lshard d1 d2 hxlen hxhead
+  have hystack_shape : (fw_stack ys).shape = [n, Lshard, d1, d2] :=
+    fw_stack_shape_3d ys n Lshard d1 d2 hylen hyhead
+  have hhead2 : (([fw_stack xs, fw_stack ys].head?.map (fun t => t.shape)).getD [])
+      = [n, Lshard, d1, d2] := by simp [hxstack_shape]
+  have hRHS_shape : (allGatherPrimDimN 1 2 0 [fw_stack xs, fw_stack ys]).shape
+      = [n, 2 * Lshard, d1, d2] := by
+    rw [allGatherPrimDimN_shape 1 2 _ [n, Lshard, d1, d2] hhead2]
+    simp only [List.set, List.getD_cons_succ, List.getD_cons_zero]
+    rw [Nat.mul_comm Lshard 2]
+  -- product-shape constants
+  have hprod : prodShape [n, 2 * Lshard, d1, d2] = n * (2 * Lshard) * d1 * d2 := by
+    simp [prodShape]
+  have hps3 : prodShape [2 * Lshard, d1, d2] = 2 * Lshard * d1 * d2 := by
+    simp [prodShape]
+  have hps3xy : prodShape [Lshard, d1, d2] = Lshard * d1 * d2 := by
+    simp [prodShape]
+  have hzshard_pos : 0 < prodShape [2 * Lshard, d1, d2] := by
+    rw [hps3]; positivity
+  have hxyshard_pos : 0 < prodShape [Lshard, d1, d2] := by
+    rw [hps3xy]; positivity
+  -- shape preconditions for the gathers
+  have hshapes2 : ∀ r (_ : r < 2),
+      ([fw_stack xs, fw_stack ys].getD r (zeroTensor [n, Lshard, d1, d2])).shape
+        = [n, Lshard, d1, d2] := by
+    intro r hr; interval_cases r
+    · simpa [List.getD] using hxstack_shape
+    · simpa [List.getD] using hystack_shape
+  apply Tensor.ext
+  · rw [hLHS_shape, hRHS_shape]
+  · intro flatIdx hflat
+    rw [hLHS_shape] at hflat
+    rw [hprod] at hflat
+    set inner := flatIdx % d2 with hinner_def
+    set col := (flatIdx / d2) % d1 with hcol_def
+    set row := (flatIdx / d2 / d1) % (2 * Lshard) with hrow_def
+    set i := flatIdx / d2 / d1 / (2 * Lshard) with hi_def
+    have hinner : inner < d2 := by rw [hinner_def]; exact Nat.mod_lt _ hd2
+    have hcol : col < d1 := by rw [hcol_def]; exact Nat.mod_lt _ hd1
+    have hrow : row < 2 * Lshard := by rw [hrow_def]; exact Nat.mod_lt _ (by omega)
+    have hi : i < n := by
+      rw [hi_def]
+      apply Nat.div_lt_of_lt_mul
+      apply Nat.div_lt_of_lt_mul
+      apply Nat.div_lt_of_lt_mul
+      calc flatIdx < n * (2 * Lshard) * d1 * d2 := hflat
+        _ = d2 * (d1 * (2 * Lshard * n)) := by ring
+    have hnpos : 0 < n := lt_of_le_of_lt (Nat.zero_le i) hi
+    -- decomposition
+    have hL2 : flatIdx = d2 * (flatIdx / d2) + inner := by
+      rw [hinner_def]; exact (Nat.div_add_mod flatIdx d2).symm
+    have hL1 : flatIdx / d2 = d1 * (flatIdx / d2 / d1) + col := by
+      rw [hcol_def]; exact (Nat.div_add_mod (flatIdx / d2) d1).symm
+    have hL0 : flatIdx / d2 / d1 = (2 * Lshard) * i + row := by
+      rw [hrow_def, hi_def]; exact (Nat.div_add_mod (flatIdx / d2 / d1) (2 * Lshard)).symm
+    have hdecomp : flatIdx = ((i * (2 * Lshard) + row) * d1 + col) * d2 + inner := by
+      rw [hL2, hL1, hL0]; ring
+    -- auxiliary bounds
+    have hcolinner : col * d2 + inner < d1 * d2 := by
+      calc col * d2 + inner < col * d2 + d2 := by omega
+        _ = (col + 1) * d2 := by ring
+        _ ≤ d1 * d2 := Nat.mul_le_mul_right _ (by omega)
+    have hlocal : (row * d1 + col) * d2 + inner < prodShape [2 * Lshard, d1, d2] := by
+      rw [hps3]
+      calc (row * d1 + col) * d2 + inner = (d1 * d2) * row + (col * d2 + inner) := by ring
+        _ < (d1 * d2) * row + d1 * d2 := by omega
+        _ = (d1 * d2) * (row + 1) := by ring
+        _ ≤ (d1 * d2) * (2 * Lshard) := Nat.mul_le_mul_left _ (by omega)
+        _ = 2 * Lshard * d1 * d2 := by ring
+    have hbnd : ∀ w, w < Lshard → (w * d1 + col) * d2 + inner < prodShape [Lshard, d1, d2] := by
+      intro w hw; rw [hps3xy]
+      calc (w * d1 + col) * d2 + inner = (d1 * d2) * w + (col * d2 + inner) := by ring
+        _ < (d1 * d2) * w + d1 * d2 := by omega
+        _ = (d1 * d2) * (w + 1) := by ring
+        _ ≤ (d1 * d2) * Lshard := Nat.mul_le_mul_left _ (by omega)
+        _ = Lshard * d1 * d2 := by ring
+    -- inner-gather shape preconditions
+    have hxi_shape : (xs.getD i (zeroTensor [Lshard, d1, d2])).shape = [Lshard, d1, d2] :=
+      hxshapes i hi
+    have hyi_shape : (ys.getD i (zeroTensor [Lshard, d1, d2])).shape = [Lshard, d1, d2] :=
+      hyshapes i hi
+    have hhead_inner : (([xs.getD i (zeroTensor [Lshard, d1, d2]),
+          ys.getD i (zeroTensor [Lshard, d1, d2])].head?.map (fun t => t.shape)).getD [])
+        = [Lshard, d1, d2] := by
+      simp only [List.head?, Option.map, Option.getD]; exact hxi_shape
+    have hshapes_inner : ∀ r (_ : r < 2),
+        ([xs.getD i (zeroTensor [Lshard, d1, d2]),
+          ys.getD i (zeroTensor [Lshard, d1, d2])].getD r (zeroTensor [Lshard, d1, d2])).shape
+          = [Lshard, d1, d2] := by
+      intro r hr; interval_cases r
+      · simpa [List.getD] using hxi_shape
+      · simpa [List.getD] using hyi_shape
+    -- transform LHS
+    rw [hdecomp]
+    conv_lhs => rw [show ((i * (2 * Lshard) + row) * d1 + col) * d2 + inner
+        = i * prodShape [2 * Lshard, d1, d2] + ((row * d1 + col) * d2 + inner)
+        from by rw [hps3]; ring]
+    rw [fw_stack_valAt zs [2 * Lshard, d1, d2] hzhead hzshard_pos i
+        (by rw [hzlen]; exact hi) ((row * d1 + col) * d2 + inner) hlocal]
+    rw [hcommute i hi]
+    -- case split on row
+    by_cases hrl : row < Lshard
+    · -- r = 0
+      conv_lhs => rw [show (row * d1 + col) * d2 + inner
+          = ((0 * Lshard + row) * d1 + col) * d2 + inner from by ring]
+      rw [allGatherPrimDimN0_3d_valAt 2 Lshard d1 d2
+          [xs.getD i (zeroTensor [Lshard, d1, d2]), ys.getD i (zeroTensor [Lshard, d1, d2])]
+          (by omega) hL hd1 hd2 hhead_inner hshapes_inner 0 (by omega) row hrl col hcol inner hinner]
+      conv_rhs => rw [show ((i * (2 * Lshard) + row) * d1 + col) * d2 + inner
+          = ((i * (2 * Lshard) + (0 * Lshard + row)) * d1 + col) * d2 + inner from by ring]
+      rw [allGatherPrimDimN1_of_stack_valAt n Lshard d1 d2 [fw_stack xs, fw_stack ys]
+          hnpos hL hd1 hd2 hhead2 hshapes2 i hi 0 (by omega) row hrl col hcol inner hinner]
+      simp only [List.getD_cons_zero]
+      rw [show ((i * Lshard + row) * d1 + col) * d2 + inner
+          = i * prodShape [Lshard, d1, d2] + ((row * d1 + col) * d2 + inner)
+          from by rw [hps3xy]; ring]
+      rw [fw_stack_valAt xs [Lshard, d1, d2] hxhead hxyshard_pos i
+          (by rw [hxlen]; exact hi) ((row * d1 + col) * d2 + inner) (hbnd row hrl)]
+    · -- r = 1
+      have hrsub : row - Lshard < Lshard := by omega
+      conv_lhs => rw [show (row * d1 + col) * d2 + inner
+          = ((1 * Lshard + (row - Lshard)) * d1 + col) * d2 + inner
+          from by rw [show 1 * Lshard + (row - Lshard) = row from by omega]]
+      rw [allGatherPrimDimN0_3d_valAt 2 Lshard d1 d2
+          [xs.getD i (zeroTensor [Lshard, d1, d2]), ys.getD i (zeroTensor [Lshard, d1, d2])]
+          (by omega) hL hd1 hd2 hhead_inner hshapes_inner 1 (by omega)
+          (row - Lshard) hrsub col hcol inner hinner]
+      conv_rhs => rw [show ((i * (2 * Lshard) + row) * d1 + col) * d2 + inner
+          = ((i * (2 * Lshard) + (1 * Lshard + (row - Lshard))) * d1 + col) * d2 + inner
+          from by rw [show 1 * Lshard + (row - Lshard) = row from by omega]]
+      rw [allGatherPrimDimN1_of_stack_valAt n Lshard d1 d2 [fw_stack xs, fw_stack ys]
+          hnpos hL hd1 hd2 hhead2 hshapes2 i hi 1 (by omega)
+          (row - Lshard) hrsub col hcol inner hinner]
+      simp only [List.getD_cons_succ, List.getD_cons_zero]
+      rw [show ((i * Lshard + (row - Lshard)) * d1 + col) * d2 + inner
+          = i * prodShape [Lshard, d1, d2] + (((row - Lshard) * d1 + col) * d2 + inner)
+          from by rw [hps3xy]; ring]
+      rw [fw_stack_valAt ys [Lshard, d1, d2] hyhead hxyshard_pos i
+          (by rw [hylen]; exact hi) (((row - Lshard) * d1 + col) * d2 + inner) (hbnd _ hrsub)]
+
 end TrainVerify.Denote
