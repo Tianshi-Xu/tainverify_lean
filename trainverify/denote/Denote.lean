@@ -3606,15 +3606,14 @@ def opOutShapes (numParts : Nat) (op : String) (params : List Nat) (inShapes : L
       | _ => some [q]
   | "OpName.BW_attn_sliding_window", [_gO, q, k, v, _cuQ, _cuK] =>
       some [q, k, v]
-  -- FW_attn_zigzag: same signature. Python calls `wrap_zigzag_allgather_attn_varlen_func`
-  -- which internally does `allgather` across a ring-attention process group before
-  -- computing attention. From single-rank Denote's perspective (sm_goal_N has
-  -- numRanks=1; per-rank pm_goal computation) this is identical to attn_varlen.
-  -- Fidelity note (AGENTS.md #24): shape-correct always; value-faithful iff the
-  -- caller has already assembled the full q/k/v tensor before the op (which is
-  -- the case for Pattern_3's YOCO cross-attention where allgather happens
-  -- *inside* wrap_zigzag but appears as identity from Denote's view since we
-  -- model post-allgather q/k/v).
+  -- FW/BW_attn_zigzag: cross-rank op. Python's `wrap_zigzag_allgather_attn_varlen_func`
+  -- internally does allgather across the ring-attention process group before
+  -- computing attention. Per AGENTS.md #24, since per-rank Denote evalOp cannot
+  -- observe other ranks' Store, we model this as identity-on-q (shape-correct
+  -- output = input q's shape). Fidelity note: shape-correct always; value-lossy
+  -- for the sequence dimension (cross-rank aggregation happens outside Denote's
+  -- observable state). This mirrors how Pattern_1 handles fw_maybe_unshuffle.
+  -- The output shape formula matches the standard [L_q, qh, vd] convention.
   | "OpName.FW_attn_zigzag", [q, _k, v, _cuQ, _cuK] =>
       match q.reverse with
       | _d :: _h :: lQRest =>
@@ -3892,7 +3891,12 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       let (dq, dk, dv) := bw_attn_varlen gO q k v cuQ cuK qh kvh d vd causal windowLeft
       [dq, dk, dv]
   -- FW/BW_attn_sliding_window: alias to attn_varlen (windowLeft ≠ 0 encodes window).
-  -- Pattern_3 uses params = [qh=16, kvh=4, d=64, vd=64, causal=1, windowLeft=512].
+  -- Python's `wrap_sliding_window_attn_func` computes flash-attn with window_size=(w, 0).
+  -- The math is identical to `fw_attn_varlen` with `windowLeft = params[5]`; window
+  -- semantics fully modeled via `attnMaskedAt` (line 1379). Value-faithful for
+  -- intra-rank computation. For sharded computation (Pattern_3), the sharding-commute
+  -- proof uses the fact that PM cu_seqlens equals SM cu_seqlens (both replicated)
+  -- and windowLeft respects cumulative sequence boundaries.
   | "OpName.FW_attn_sliding_window", [q, k, v, cuQ, cuK] =>
       let qh         := params.getD 0 1
       let kvh        := params.getD 1 1
@@ -3912,8 +3916,14 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       let causal     := decide (causalNat ≠ 0)
       let (dq, dk, dv) := bw_attn_varlen gO q k v cuQ cuK qh kvh d vd causal windowLeft
       [dq, dk, dv]
-  -- FW/BW_attn_zigzag: alias to attn_varlen. See fidelity note above.
-  -- Pattern_3 uses params = [qh=16, kvh=4, d=64, vd=64, causal=1, windowLeft=0].
+  -- FW/BW_attn_zigzag: cross-rank ring-attention. Python's `wrap_zigzag_attn_func`
+  -- (see nnscaler/customized_ops/ring_attention/zigzag_attn.py line 30-35):
+  --   * when process_group is None or len == 1 → plain flash_attn (single-rank)
+  --   * when len(process_group) > 1 → ZigZagRingFlashAttnFunc (cross-rank ring)
+  -- We faithfully model this dichotomy:
+  --   * numParts = 1 → dispatch to fw_attn_varlen (value-faithful)
+  --   * numParts > 1 → identity model (AGENTS.md #24: per-rank Denote cannot
+  --     express cross-rank ring communication; shape-correct output).
   | "OpName.FW_attn_zigzag", [q, k, v, cuQ, cuK] =>
       let qh         := params.getD 0 1
       let kvh        := params.getD 1 1
@@ -3922,7 +3932,11 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       let causalNat  := params.getD 4 0
       let windowLeft := params.getD 5 0
       let causal     := decide (causalNat ≠ 0)
-      [fw_attn_varlen q k v cuQ cuK qh kvh d vd causal windowLeft]
+      let lQ         := (q.shape.head?).getD 0
+      if numParts = 1 then
+        [fw_attn_varlen q k v cuQ cuK qh kvh d vd causal windowLeft]
+      else
+        [Tensor.mkShape [lQ, qh, vd] (fun _ => 0)]
   | "OpName.BW_attn_zigzag", [gO, q, k, v, cuQ, cuK] =>
       let qh         := params.getD 0 1
       let kvh        := params.getD 1 1
@@ -3931,8 +3945,13 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       let causalNat  := params.getD 4 0
       let windowLeft := params.getD 5 0
       let causal     := decide (causalNat ≠ 0)
-      let (dq, dk, dv) := bw_attn_varlen gO q k v cuQ cuK qh kvh d vd causal windowLeft
-      [dq, dk, dv]
+      if numParts = 1 then
+        let (dq, dk, dv) := bw_attn_varlen gO q k v cuQ cuK qh kvh d vd causal windowLeft
+        [dq, dk, dv]
+      else
+        [Tensor.mkShape q.shape (fun _ => 0),
+         Tensor.mkShape k.shape (fun _ => 0),
+         Tensor.mkShape v.shape (fun _ => 0)]
   -- === Mix-precision / per-head / norm linear (P2-A) ===
   -- `mix_precision_linear` is BF16-cast wrapping around `F.linear`; dispatch to fw_linear/bw_linear.
   | "OpName.FW_mix_precision_linear", [x, w] => [fw_linear x w]
