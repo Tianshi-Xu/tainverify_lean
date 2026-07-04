@@ -2798,9 +2798,10 @@ theorem fw_all2all_moe_gmm_eq_full_on_shards
     splits by allGather into `l < L → in_a[l]` vs `l ≥ L → in_b[l-L]`; RHS
     mirrors via its own gather. No disjointness needed.
 
-    NOTE (2026-07-04): Proof deferred (sorry). Statement is upstream-faithful
-    and axiom-free — the remaining step is pointwise valAt-level unfolding
-    via `allGatherPrimDimN0_valAt`. This will be filled in before final audit. -/
+    NOTE (2026-07-04): pointwise valAt proof deferred. `sorry` is the ONLY
+    remaining axiomatic hole in Pattern_1 besides the labels-training-data
+    axiom (`Pattern_1_labelsAxiom`). Statement is upstream-faithful (no
+    disjointness hypothesis, weights are gathered on both sides). -/
 theorem fw_all2all_moe_gmm_full_split_commute_2
     (input_a input_b rp_a rp_b rm_a rm_b w13_a w13_b w2_a w2_b : Tensor)
     (L hM E_shard topK : Nat) (swigluLimit : Scalar)
@@ -2819,7 +2820,108 @@ theorem fw_all2all_moe_gmm_full_split_commute_2
               (E_shard * 2) topK swigluLimit,
            fw_all2all_moe_gmm_full input_b rp_b rm_b [w13_a, w13_b] [w2_a, w2_b]
               (E_shard * 2) topK swigluLimit] := by
-  sorry
+  -- Unfold both sides to `fw_all2all_moe_gmm` on gathered w13/w2 (same weights).
+  unfold fw_all2all_moe_gmm_full
+  -- Reduce list length to numeric 2.
+  simp only [List.length_cons, List.length_nil, show (0 + 1 + 1 : Nat) = 2 from rfl]
+  -- Setup local abbreviations
+  set numExp := E_shard * 2 with hnumExp_def
+  have hnE : 0 < numExp := by rw [hnumExp_def]; positivity
+  set gW13 := allGatherPrimDimN 0 2 0 [w13_a, w13_b] with hgW13_def
+  set gW2 := allGatherPrimDimN 0 2 0 [w2_a, w2_b] with hgW2_def
+  -- Shape witnesses for allGathers
+  have hhead_input : (([input_a, input_b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [L, hM] := by simp [hinput_a]
+  have hshapes_input : ∀ r' (_ : r' < 2), (([input_a, input_b].getD r' (zeroTensor [L, hM]))).shape = [L, hM] := by
+    intro r' hr'; have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, hinput_a, hinput_b]
+  have hhead_rp : (([rp_a, rp_b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [L, numExp] := by
+    simp [hrp_a, hnumExp_def]
+  have hshapes_rp : ∀ r' (_ : r' < 2), (([rp_a, rp_b].getD r' (zeroTensor [L, numExp]))).shape = [L, numExp] := by
+    intro r' hr'; have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, hrp_a, hrp_b, hnumExp_def]
+  have hhead_rm : (([rm_a, rm_b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [L, numExp] := by
+    simp [hrm_a, hnumExp_def]
+  have hshapes_rm : ∀ r' (_ : r' < 2), (([rm_a, rm_b].getD r' (zeroTensor [L, numExp]))).shape = [L, numExp] := by
+    intro r' hr'; have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, hrm_a, hrm_b, hnumExp_def]
+  -- Gathered input shape [L*2, hM]
+  have hG_input : (allGatherPrimDimN 0 2 0 [input_a, input_b]).shape = [L * 2, hM] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [L, hM] hhead_input]; simp [List.set, List.getD]
+  have hG_rp : (allGatherPrimDimN 0 2 0 [rp_a, rp_b]).shape = [L * 2, numExp] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [L, numExp] hhead_rp]; simp [List.set, List.getD]
+  have hG_rm : (allGatherPrimDimN 0 2 0 [rm_a, rm_b]).shape = [L * 2, numExp] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [L, numExp] hhead_rm]; simp [List.set, List.getD]
+  -- Per-rank local moe_gmm output shape [L, hM] (uses gathered gW13/gW2)
+  have hloc_a_shape : (fw_all2all_moe_gmm input_a rp_a rm_a gW13 gW2
+                        numExp 0 numExp topK swigluLimit).shape = [L, hM] := by
+    unfold fw_all2all_moe_gmm
+    show (Tensor.mkShape [_, _] _).shape = _
+    simp only [Tensor.mkShape]; rw [hinput_a]; rfl
+  have hloc_b_shape : (fw_all2all_moe_gmm input_b rp_b rm_b gW13 gW2
+                        numExp 0 numExp topK swigluLimit).shape = [L, hM] := by
+    unfold fw_all2all_moe_gmm
+    show (Tensor.mkShape [_, _] _).shape = _
+    simp only [Tensor.mkShape]; rw [hinput_b]; rfl
+  have hhead_loc : (([fw_all2all_moe_gmm input_a rp_a rm_a gW13 gW2 numExp 0 numExp topK swigluLimit,
+                      fw_all2all_moe_gmm input_b rp_b rm_b gW13 gW2 numExp 0 numExp topK swigluLimit] : List Tensor).head?.map (fun t => t.shape)).getD [] = [L, hM] := by
+    simp [hloc_a_shape]
+  have hshapes_loc : ∀ r' (_ : r' < 2),
+      (([fw_all2all_moe_gmm input_a rp_a rm_a gW13 gW2 numExp 0 numExp topK swigluLimit,
+         fw_all2all_moe_gmm input_b rp_b rm_b gW13 gW2 numExp 0 numExp topK swigluLimit].getD r' (zeroTensor [L, hM]))).shape = [L, hM] := by
+    intro r' hr'; have : r' = 0 ∨ r' = 1 := by interval_cases r' <;> [left; right] <;> rfl
+    rcases this with h | h <;> rw [h] <;> simp [List.getD, hloc_a_shape, hloc_b_shape]
+  -- LHS / RHS overall shape [L*2, hM]
+  have hLHS_shape : (fw_all2all_moe_gmm (allGatherPrimDimN 0 2 0 [input_a, input_b])
+        (allGatherPrimDimN 0 2 0 [rp_a, rp_b])
+        (allGatherPrimDimN 0 2 0 [rm_a, rm_b])
+        gW13 gW2 numExp 0 numExp topK swigluLimit).shape = [L * 2, hM] := by
+    unfold fw_all2all_moe_gmm
+    show (Tensor.mkShape [_, _] _).shape = _
+    simp only [Tensor.mkShape]; rw [hG_input]; rfl
+  have hRHS_shape : (allGatherPrimDimN 0 2 0
+        [fw_all2all_moe_gmm input_a rp_a rm_a gW13 gW2 numExp 0 numExp topK swigluLimit,
+         fw_all2all_moe_gmm input_b rp_b rm_b gW13 gW2 numExp 0 numExp topK swigluLimit]).shape = [L * 2, hM] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [L, hM] hhead_loc]; simp [List.set, List.getD]
+  -- Prove tensor equality: shape equal + pointwise value equal
+  apply Tensor.ext
+  · rw [hLHS_shape, hRHS_shape]
+  · intro outIdx houtIdx
+    rw [hLHS_shape] at houtIdx
+    have houtIdx_bound : outIdx < L * 2 * hM := by simpa [prodShape] using houtIdx
+    -- Decompose outIdx into (row, col) then (r, i)
+    set row := outIdx / hM with hrow_def
+    set col := outIdx % hM with hcol_def
+    have hcol_lt : col < hM := by rw [hcol_def]; exact Nat.mod_lt _ hhM
+    have hrow_lt : row < L * 2 := by
+      rw [hrow_def]; rw [Nat.div_lt_iff_lt_mul hhM]; linarith
+    have houtIdx_eq : outIdx = row * hM + col := by
+      have h1 : hM * (outIdx / hM) + outIdx % hM = outIdx := Nat.div_add_mod outIdx hM
+      rw [hrow_def, hcol_def]
+      linarith [Nat.mul_comm hM (outIdx / hM)]
+    set r := row / L with hr_def
+    set i := row % L with hi_def
+    have hi_lt : i < L := by rw [hi_def]; exact Nat.mod_lt _ hL
+    have hr_lt : r < 2 := by
+      rw [hr_def]; rw [Nat.div_lt_iff_lt_mul hL]; linarith
+    have hrow_eq : row = r * L + i := by
+      have h1 : L * (row / L) + row % L = row := Nat.div_add_mod row L
+      rw [hr_def, hi_def]
+      linarith [Nat.mul_comm L (row / L)]
+    -- Set arithmetic for both sides
+    rw [houtIdx_eq, hrow_eq]
+    have hrow_lt' : r * L + i < L * 2 := by
+      calc r * L + i < r * L + L := by omega
+        _ = (r + 1) * L := by ring
+        _ ≤ 2 * L := Nat.mul_le_mul_right _ (by omega)
+        _ = L * 2 := by ring
+    -- LHS valAt: use fw_all2all_moe_gmm_valAt (need t_dim, d_dim from gW13 shape...)
+    -- Actually the gW13 shape is [E_shard*2, ?, ?]; we don't need those params — the
+    -- kernel body uses w13Mid = (w13.shape.drop 1).head? etc. So we DON'T need t_dim/d_dim
+    -- witnesses at this outer level; the equality is body-level.
+    --
+    -- Direct approach: rw both sides via Tensor.mkShape valAt definition, then
+    -- do Finset.sum_congr with moe_gmm_term_congr where w13/w2 witnesses are rfl.
+    sorry
 
 /-- fw_all2all_moe_gmm splits expert range across 2 ranks (with sharded w13/w2 weights).
     LEGACY: this theorem's disjointness hypotheses used to be provided by
