@@ -59,4 +59,45 @@ theorem prove_pattern_3 : pattern_3_stmt := by
   cases ht
   exact prove_goal_3
 
+/-! ### Phase C1: concrete `ringAttnBuddies` structure lemmas.
+
+    The graphs `sm_goal_3` / `pm_goal_3` are concrete literal node lists, so the
+    buddy structure of every `FW_attn_zigzag` node is fully computational. We
+    package the fact as a decidable bounded quantifier over the (finite) node
+    list and discharge it with `native_decide`. -/
+
+/-- Auxiliary (decidable, computational): every zigzag node in the SM graph is
+    its own unique ring-attention buddy. -/
+theorem sm_goal_3_zigzag_buddies_singleton_aux :
+    ∀ n ∈ sm_goal_3.nodes,
+      n.op = "OpName.FW_attn_zigzag" → ringAttnBuddies sm_goal_3 n = [n] := by
+  native_decide
+
+/-- For sm_goal_3 (numRanks=1), each FW_attn_zigzag node in the graph is its own
+    unique ring-attention buddy (buddies list = [node itself]). -/
+theorem sm_goal_3_zigzag_buddies_singleton (n : NodeDecl)
+    (hn_mem : n ∈ sm_goal_3.nodes)
+    (hn_op : n.op = "OpName.FW_attn_zigzag") :
+    ringAttnBuddies sm_goal_3 n = [n] :=
+  sm_goal_3_zigzag_buddies_singleton_aux n hn_mem hn_op
+
+/-- Auxiliary (decidable, computational): every zigzag node in the PM graph has
+    exactly two ring-attention buddies and is a member of its own buddy list. -/
+theorem pm_goal_3_zigzag_buddies_pair_aux :
+    ∀ n ∈ pm_goal_3.nodes,
+      n.op = "OpName.FW_attn_zigzag" →
+        (ringAttnBuddies pm_goal_3 n).length = 2
+        ∧ n ∈ ringAttnBuddies pm_goal_3 n := by
+  native_decide
+
+/-- For pm_goal_3 (numRanks=2), each FW_attn_zigzag node has exactly one other
+    buddy (the partner at the matching layer with different rank). The buddies
+    list has length 2 and includes n itself. -/
+theorem pm_goal_3_zigzag_buddies_pair (n : NodeDecl)
+    (hn_mem : n ∈ pm_goal_3.nodes)
+    (hn_op : n.op = "OpName.FW_attn_zigzag") :
+    (ringAttnBuddies pm_goal_3 n).length = 2
+    ∧ n ∈ ringAttnBuddies pm_goal_3 n :=
+  pm_goal_3_zigzag_buddies_pair_aux n hn_mem hn_op
+
 end TrainVerify.Denote.GeneratedPatterns
