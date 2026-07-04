@@ -110,12 +110,12 @@ theorem prove_goal_91_cut : goal_91_stmt_cut := by
     intro r hr
     rw [h683_gather]
     exact chunk1_gather1_roundtrip_1_1_8_8 _ _ _ _ h2901_shape
-      (by have := htp683; simp only [List.map] at this;
-          have h := congrArg (fun l => l.getD 1 []) this; simpa using h)
-      (by have := htp683; simp only [List.map] at this;
-          have h := congrArg (fun l => l.getD 2 []) this; simpa using h)
-      (by have := htp683; simp only [List.map] at this;
-          have h := congrArg (fun l => l.getD 3 []) this; simpa using h)
+      (by have := htp683; (try simp only [List.map] at this);
+          have h := congrArg (fun l => l.getD 1 []) this; exact h)
+      (by have := htp683; (try simp only [List.map] at this);
+          have h := congrArg (fun l => l.getD 2 []) this; exact h)
+      (by have := htp683; (try simp only [List.map] at this);
+          have h := congrArg (fun l => l.getD 3 []) this; exact h)
       r hr
   have h2901 : chunkPrimDimN 1 4 0 (initSM 683) = initPM 2901 := by
     rw [hchunk683 0 (by omega)]; rfl

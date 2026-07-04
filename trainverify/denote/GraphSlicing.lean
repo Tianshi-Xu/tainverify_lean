@@ -210,7 +210,7 @@ theorem denoteGraph_slice_agrees_aux
     rw [List.foldl_cons]
     -- Apply IH with sG := applyNode g sG a, sL := sL.
     exact ih hNodupTail hIns hNI' _ sL hAgree' tid hP
-  | @cons₂ l₁ l₂ a hSub' ih =>
+  | @cons_cons l₁ l₂ a hSub' ih =>
     -- gl_nodes = a :: l₁, G_nodes = a :: l₂.
     -- Both sides process `a` first.
     intro hNodup hIns hNI sG sL hAgree tid hP

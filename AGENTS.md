@@ -38,3 +38,13 @@
     - **Vacuity witness 必写**：`theorem pattern_N_hypothesis_witness : ∃ initPM, hlabels initPM := ...` — 构造具体 store（如 `fun _ => zeroTensor [...]`）证明 hypothesis 可满足。避免陷阱 2 (stmt := False → X = trivially True)。
     - 效果：信任转移到 verifier caller 的 well-formed-input contract（Python 那边加 runtime `assert labels < vocab`）——**不是** verifier 内部的 axiom
     - Vacuity 三陷阱要审：(1) axiom vacuous（老 rma 那种 ∀ vocab), (2) stmt vacuous (hypothesis 从不成立), (3) hypothesis 隐含 False。三者都可用 existence witness 证否。
+30.**Lean toolchain 升级 v4.27→v4.31 breakage patterns**（2026-07-04 升级教训）：mathlib v4.27→v4.31 主要打破点：(a) `simpa [lemma] using h` 类型对齐更严 → 用 `rw [lemma]; exact h` 代替; (b) `List.Sublist.cons₂` 改名为 `cons_cons`; (c) `simp made no progress` 在 v4.31 是硬 error 不是 warning → 用 `try simp only [...]`; (d) 部分 `simp only [valAt]` 触发 isDefEq heartbeat 溢出 → 加 `set_option maxHeartbeats 800000 in` 到 theorem 前 (line comment 而非 `/-- -/` docstring 因为 set_option in 不吃 docstring gap). 升级流程：改 `lean-toolchain` + `lakefile.toml` mathlib rev → `lake update` (ulimit -n 65535 避免 file descriptor 耗尽) → `lake exe cache get` (自动下 mathlib olean cache) → `lake build <target>` 逐项目验证。若 lake 报 "some modules have bad imports"，通常是 `_archive/**` 类死代码 import 了不存在的模块。
+31.**Comparator honesty audit 全流程**（2026-07-04 首次跑通）：Lean FRO `leanprover/comparator` 是官方可信裁判，验证 3 件事：(a) Solution theorem statement 和 Challenge byte-for-byte 匹配（防 def sneaky 换定义），(b) Solution 只用 permitted_axioms，(c) Lean kernel 接受。setup：
+    - toolchain: 项目 + comparator + lean4export 必须匹配同一 Lean version（v4.31+ 内置 leanchecker，之前版本有 native_decide bug）
+    - landrun 沙箱可用 `scripts/fake-landrun.sh` 替代（audit 自己的项目时安全够用）
+    - Challenge.lean: `theorem X : STMT := by sorry`；Solution.lean: `theorem X : STMT := actual_proof` — 两侧 statement 必须完全一致
+    - lakefile.toml 里加 `[[lean_lib]] name = "Challenge"` / `[[lean_lib]] name = "Solution"`
+    - config.json: `challenge_module` / `solution_module` / `theorem_names` / `permitted_axioms`
+    - **native_decide 会生成 per-caller axioms** `foo._native.native_decide.ax_N_M`，必须一一加入 permitted_axioms（未来考虑用 wildcard 支持）。用 `python3` 解析 `lean4export Solution -- theorem_name` 的 JSON 输出提取名字：resolve hier-name graph, filter `_native.native_decide.ax`。
+    - 成功输出: `Your solution is okay!`
+    - **额外**：v4.31 内置 `leanchecker` (`lake env leanchecker <module>`) 独立 kernel replay，`--fresh` mode 是最严格审计 — Pattern_1 全通过.

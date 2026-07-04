@@ -2994,7 +2994,8 @@ theorem sum_val_eq_sum_range_valAt (x : Tensor) :
 theorem fw_sum_valAt0_eq_sum_range_valAt (x : Tensor) :
     valAt (fw_sum x) 0 = ∑ k ∈ Finset.range (prodShape x.shape), valAt x k := by
   -- Combine `fw_sum`'s Fin-sum characterization with the `Fin`↔`range` bridge.
-  simpa [fw_sum_valAt0] using (sum_val_eq_sum_range_valAt x)
+  rw [fw_sum_valAt0]
+  exact sum_val_eq_sum_range_valAt x
 
 theorem allReducePrim_valAt0_of_pos (numParts rank : Nat) (xs : List Tensor)
     (hpos : 0 < prodShape (allReducePrim numParts rank xs).shape) :
@@ -17878,9 +17879,10 @@ theorem applyNode_bw_softmax_out_g129
   unfold storeSet
   simp [List.find?]
 
-/-- If the last-dimension rows (of size 8) of `(g, y)` at `idx` agree with the
-rows of `(g', y')` at `mapped`, and the in-row offsets match, then `softmaxBwdFromOutput`
-produces equal values.  `softmaxBwdFromOutput` only reads within a single length-8 row. -/
+-- If the last-dimension rows (of size 8) of `(g, y)` at `idx` agree with the
+-- rows of `(g', y')` at `mapped`, and the in-row offsets match, then `softmaxBwdFromOutput`
+-- produces equal values.  `softmaxBwdFromOutput` only reads within a single length-8 row.
+set_option maxHeartbeats 800000 in
 private theorem softmaxBwdFromOutput_valAt_batch_eq_8_g129
     (g y g' y' : Tensor) (idx mapped : Nat)
     (hidx : idx < prodShape y.shape) (hmapped : mapped < prodShape y'.shape)
