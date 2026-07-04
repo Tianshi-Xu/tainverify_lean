@@ -20818,4 +20818,107 @@ theorem allGatherPrimDimN_chunkPrimDimN_id_dim2_4_1_8_4_8_g237 (x : Tensor)
   congr 1
   omega
 
+/-!
+## Ring-attention semantics (Pattern_3)
+
+`FW_attn_zigzag` under Python's `wrap_zigzag_attn_func` (nnScaler
+`customized_ops/ring_attention/zigzag_attn.py` line 30-35):
+  * `process_group is None or len(process_group) == 1` → plain `flash_attn_func`
+    (i.e. `fw_attn_varlen` on the given q, k, v)
+  * `len(process_group) > 1` → `ZigZagRingFlashAttnFunc.apply(q, k, v, ...)`, which
+    performs ring communication across the process group so the effective attention
+    is `flash_attn_func(allgather(q_shards), allgather(k_shards), allgather(v_shards))`,
+    then returns each rank's shard of the output.
+
+Per-rank `evalOp` cannot express ring communication (it only sees local `args`).
+`applyNode`, however, has access to the whole `Store` and the whole `GraphDecl`,
+so we can implement a *ring-aware* variant of `applyNode` that intercepts
+`FW_attn_zigzag` nodes, gathers buddy shards across ranks from the graph, and
+computes full attention. `denoteGraph_ringAttn` folds this variant.
+
+Non-`FW_attn_zigzag` ops are unchanged, so `denoteGraph_ringAttn = denoteGraph`
+whenever the graph contains no zigzag nodes (Pattern_1/2/4/5 unaffected).
+
+Buddy detection: two `FW_attn_zigzag` nodes are buddies iff they share the same
+`op`, `params`, `cuQ` (ins.getD 3 0), and `cuK` (ins.getD 4 0). Buddies are sorted
+by `rank` so shard ordering is deterministic.
+-/
+
+/-- The list of `FW_attn_zigzag` nodes in `g.nodes` that are buddies of `n`
+    (share op, params, cuQ, cuK). Sorted ascending by `rank`. Includes `n` itself. -/
+def ringAttnBuddies (g : GraphDecl) (n : NodeDecl) : List NodeDecl :=
+  let cuQ := n.ins.getD 3 0
+  let cuK := n.ins.getD 4 0
+  let candidates := g.nodes.filter fun m =>
+    m.op = n.op && m.params = n.params &&
+    m.ins.getD 3 0 = cuQ && m.ins.getD 4 0 = cuK
+  candidates.mergeSort (fun a b => a.rank ≤ b.rank)
+
+/-- Reconstruct the full q, k, v tensors by allgather over buddy shards,
+    then compute `fw_attn_varlen`, then chunk back to this rank's shard.
+    This exactly models Python's ring-attention semantics. -/
+noncomputable def applyNodeRingAttn_zigzag (g : GraphDecl) (s : Store) (n : NodeDecl) : Tensor :=
+  let buddies := ringAttnBuddies g n
+  let myIdx := (buddies.findIdx? (fun m => m.rank = n.rank)).getD 0
+  let qShards := buddies.map (fun m => s (m.ins.getD 0 0))
+  let kShards := buddies.map (fun m => s (m.ins.getD 1 0))
+  let vShards := buddies.map (fun m => s (m.ins.getD 2 0))
+  let numShards := buddies.length
+  -- Sequence dim is dim 0 in [L, h, d] convention.
+  let fullQ := allGatherPrimDimN 0 numShards 0 qShards
+  let fullK := allGatherPrimDimN 0 numShards 0 kShards
+  let fullV := allGatherPrimDimN 0 numShards 0 vShards
+  let cuQ := s (n.ins.getD 3 0)
+  let cuK := s (n.ins.getD 4 0)
+  let qh         := n.params.getD 0 1
+  let kvh        := n.params.getD 1 1
+  let d          := n.params.getD 2 1
+  let vd         := n.params.getD 3 1
+  let causalNat  := n.params.getD 4 0
+  let windowLeft := n.params.getD 5 0
+  let causal     := decide (causalNat ≠ 0)
+  let fullOut := fw_attn_varlen fullQ fullK fullV cuQ cuK qh kvh d vd causal windowLeft
+  -- Chunk on seq dim (dim 0) to get this rank's shard.
+  chunkPrimDimN 0 numShards myIdx fullOut
+
+/-- Ring-attention–aware variant of `applyNode`. Intercepts `FW_attn_zigzag`
+    and dispatches to `applyNodeRingAttn_zigzag` (cross-rank ring semantics);
+    all other ops behave identically to `applyNode`. -/
+noncomputable def applyNodeRingAttn (g : GraphDecl) (s : Store) (n : NodeDecl) : Store :=
+  if n.op = "OpName.FW_attn_zigzag" then
+    let out := applyNodeRingAttn_zigzag g s n
+    storeSet s [(n.outs.getD 0 0, out)]
+  else
+    applyNode g s n
+
+/-- Ring-attention–aware denotation. Folds `applyNodeRingAttn` over graph nodes. -/
+noncomputable def denoteGraph_ringAttn (g : GraphDecl) (init : Store) : Store :=
+  g.nodes.foldl (applyNodeRingAttn g) init
+
+/-- If the graph has no `FW_attn_zigzag` nodes, ring-attention denotation coincides
+    with regular denotation. This ensures Pattern_1/2/4/5 (no zigzag) are unaffected. -/
+theorem denoteGraph_ringAttn_eq_denoteGraph_of_no_zigzag
+    (g : GraphDecl) (init : Store)
+    (hno : ∀ n ∈ g.nodes, n.op ≠ "OpName.FW_attn_zigzag") :
+    denoteGraph_ringAttn g init = denoteGraph g init := by
+  unfold denoteGraph_ringAttn denoteGraph
+  suffices h : ∀ (nodes : List NodeDecl) (s : Store),
+      (∀ n ∈ nodes, n.op ≠ "OpName.FW_attn_zigzag") →
+      nodes.foldl (applyNodeRingAttn g) s = nodes.foldl (applyNode g) s by
+    exact h g.nodes init hno
+  intro nodes
+  induction nodes with
+  | nil => intro s _; rfl
+  | cons hd tl ih =>
+    intro s hstop
+    have hhd : hd.op ≠ "OpName.FW_attn_zigzag" := hstop hd (by simp)
+    have htl : ∀ n ∈ tl, n.op ≠ "OpName.FW_attn_zigzag" := by
+      intro n hn; exact hstop n (List.mem_cons_of_mem _ hn)
+    simp only [List.foldl_cons]
+    have hstep : applyNodeRingAttn g s hd = applyNode g s hd := by
+      unfold applyNodeRingAttn
+      simp [hhd]
+    rw [hstep]
+    exact ih (applyNode g s hd) htl
+
 end TrainVerify.Denote
