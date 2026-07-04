@@ -21203,6 +21203,31 @@ noncomputable def applyNodeRingAttn (g : GraphDecl) (s : Store) (n : NodeDecl) :
   else
     applyNode g s n
 
+/-- When `applyNodeRingAttn` intercepts a zigzag node with singleton buddy,
+    it stores `fw_attn_varlen`-of-inputs at the output tid, matching what
+    the plain (numParts-conditional) evalOp does for numRanks=1. -/
+theorem applyNodeRingAttn_zigzag_of_singleton
+    (g : GraphDecl) (s : Store) (n : NodeDecl)
+    (hop : n.op = "OpName.FW_attn_zigzag")
+    (hbuddy : ringAttnBuddies g n = [n])
+    (hq : 0 < (s (n.ins.getD 0 0)).shape.length)
+    (hk : 0 < (s (n.ins.getD 1 0)).shape.length)
+    (hv : 0 < (s (n.ins.getD 2 0)).shape.length)
+    (hout : 0 < (fw_attn_varlen (s (n.ins.getD 0 0)) (s (n.ins.getD 1 0)) (s (n.ins.getD 2 0))
+        (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
+        (n.params.getD 0 1) (n.params.getD 1 1) (n.params.getD 2 1) (n.params.getD 3 1)
+        (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0)).shape.length) :
+    applyNodeRingAttn g s n =
+      storeSet s [(n.outs.getD 0 0,
+        fw_attn_varlen (s (n.ins.getD 0 0)) (s (n.ins.getD 1 0)) (s (n.ins.getD 2 0))
+          (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
+          (n.params.getD 0 1) (n.params.getD 1 1) (n.params.getD 2 1) (n.params.getD 3 1)
+          (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0))] := by
+  unfold applyNodeRingAttn
+  simp only [hop, if_true]
+  have hexp := applyNodeRingAttn_zigzag_singleton g s n hbuddy hq hk hv hout
+  rw [hexp]
+
 /-- Ring-attention–aware denotation. Folds `applyNodeRingAttn` over graph nodes. -/
 noncomputable def denoteGraph_ringAttn (g : GraphDecl) (init : Store) : Store :=
   g.nodes.foldl (applyNodeRingAttn g) init
