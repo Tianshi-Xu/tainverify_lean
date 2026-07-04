@@ -16,11 +16,73 @@ open TrainVerify.Denote.GeneratedGoals
 namespace TrainVerify.Denote.GeneratedPatterns
 
 def pattern_1_goalIds : List Nat := [1]
+
+/-- Wrapped Pattern_1 goal statement with explicit labels hypothesis.
+
+    `goal_1_stmt_cut` unfolds to `∀ initSM initPM, hSM → hPM → hInit → conclusion`.
+    Pattern_1's proof previously required a `Pattern_1_labelsAxiom` — an unconstrained
+    axiom `∀ y vocab l, valAt y l < vocab` (vacuous: take vocab=0 → False).
+
+    Here we surface that hypothesis as a *statement-level* parameter. The verifier's
+    caller (Python autodist / training pipeline) must supply a `hlabels` witness
+    (typically via a runtime `assert (labels < vocab).all()`) alongside `initPM`.
+
+    Non-vacuity: the hypothesis quantifies over the SPECIFIC `initPM 4678` tensor
+    (not `∀ tensor`) and uses SPECIFIC bounds (Lshard=2048, vocab=154880), so it
+    cannot be trivially satisfied by picking pathological values. Existence is
+    witnessed by `pattern_1_labels_hypothesis_witness` below (e.g. zeroTensor). -/
+def goal_1_stmt_with_labels : Prop :=
+  ∀ (initSM initPM : Store),
+    StoreShapesHold initSM sm_goal_1InitEnv →
+    StoreShapesHold initPM pm_goal_1InitEnv →
+    InitGoalsHold pm_goal_1.numRanks goal_1_cut_initGoals initSM initPM →
+    (∀ l : Nat, l < 4096 → scalarToNat (valAt (initPM 4678) l) < 154880) →
+    let smStore := denoteGraph sm_goal_1 initSM
+    let pmStore := denoteGraph pm_goal_1 initPM
+    let ts := smStore goal_1.ts
+    let tps := goal_1.tps.map (fun p => pmStore p.tid)
+    ts.shape = goal_1.tsShape ∧
+      (tps.map (fun t => t.shape)) = goal_1.tpShapes ∧
+      ts = reconstructWithDim goal_1.gatherDim pm_goal_1.numRanks 0 tps
+
 inductive pattern_1_target : Prop → Prop
-  | goal_1 : pattern_1_target goal_1_stmt_cut
+  | goal_1 : pattern_1_target goal_1_stmt_with_labels
 
 def pattern_1_stmt : Prop :=
   ∀ {target : Prop}, pattern_1_target target → target
+
+/-- Vacuity witness for `goal_1_stmt_with_labels`'s hypothesis.
+
+    Purpose: prove the labels-bounded hypothesis is NOT logically false. If it
+    were (e.g. from a bad axiom like `∀ y vocab, valAt y < vocab` with vocab=0),
+    then `stmt := hyp → conclusion` becomes vacuously True and Pattern_1 says
+    nothing about actual training runs.
+
+    This witness explicitly constructs a `Store` (namely `fun _ => zeroTensor [4096]`)
+    that satisfies the hypothesis: `valAt (zeroTensor [4096]) l = 0` by definition
+    of `Tensor.mkShape sh (fun _ => 0)`, and `scalarToNat 0 = ⌊0⌋₊ = 0 < 154880`.
+
+    Because the hypothesis IS satisfiable, `stmt := hyp → conclusion` is a genuine
+    implication (not `False → conclusion`), and `prove_pattern_1` gives real content. -/
+theorem pattern_1_labels_hypothesis_witness :
+    ∃ (initPM : Store), (∀ l : Nat, l < 4096 →
+      scalarToNat (valAt (initPM 4678) l) < 154880) := by
+  refine ⟨fun _ => zeroTensor [4096], ?_⟩
+  intro l _hl
+  -- valAt (zeroTensor [4096]) l = 0 for any l:
+  -- - if l < prodShape [4096] = 4096, valAt returns .val ⟨l, _⟩ = (fun _ => 0) _ = 0
+  -- - otherwise, valAt returns 0 (else branch)
+  have hval : valAt (zeroTensor [4096]) l = 0 := by
+    unfold valAt zeroTensor
+    by_cases h : l < prodShape (Tensor.mkShape [4096] (fun _ => (0 : Scalar))).shape
+    · simp [h, Tensor.mkShape]
+    · simp [h]
+  rw [hval]
+  -- scalarToNat 0 = 0
+  have : scalarToNat (0 : Scalar) = 0 := by
+    unfold scalarToNat; simp
+  rw [this]
+  omega
 
 /-- If tid X isn't written by any node in the suffix, then folding the suffix
     preserves the value of X. -/
@@ -2504,11 +2566,9 @@ theorem fw_topk_routing_snd_fst_allGather0_commute_2_of (a b : Tensor) (S n k : 
       rw [hrank_eq e' he']
     rw [hinTopK_eq e he_lt]
 
-/-- Training-data hygiene: label tensors have entries bounded by vocab size.
-    Abstract Store operations cannot derive this; it's an assumption on the input distribution.
-    Real training data respects this bound (labels are token IDs in [0, vocab)). -/
-axiom Pattern_1_labelsAxiom : ∀ (y : Tensor) (vocab : Nat) (l : Nat) (_ : True),
-    scalarToNat (valAt y l) < vocab
+-- DELETED (2026-07-04): `Pattern_1_labelsAxiom` — was `∀ (y : Tensor) (vocab l : Nat), valAt y l < vocab`,
+-- a vacuous axiom (take vocab=0 → False). Replaced by statement-level hypothesis
+-- `hlabels_from_caller` in `goal_1_stmt_with_labels` (surfaced to verifier caller).
 
 /-- 3-D variant of `allGatherPrimDimN0_valAt` for shape `[E, h, d]`:
     at flat idx `((r * E + eLocal) * h + hi) * d + di`, reads shard r at local flat
@@ -4145,8 +4205,8 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
     exact hfst0)]
   decide
 
-theorem prove_goal_1 : goal_1_stmt_cut := by
-  intro initSM initPM hSM hPM hInit
+theorem prove_goal_1 : goal_1_stmt_with_labels := by
+  intro initSM initPM hSM hPM hInit hlabels_from_caller
   simp only [goal_1]
   refine ⟨?shape, ?tp_shapes, ?value⟩
   case shape =>
@@ -4763,11 +4823,12 @@ theorem prove_goal_1 : goal_1_stmt_cut := by
                     (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915))))
                   (initPM 5920)))))) (initPM 5927) 2 1) (initPM 5929)).shape = [2048, 1024] := by
       rw [TrainVerify.Denote.fw_rms_norm_shape]; exact hunshuffle1_shape
-    -- Training-data hygiene: labels are bounded by vocab. Cannot be derived from abstract initPM.
-    -- Declared as a scoped axiom via `pattern_1_labels_bounded` at the local Pattern_1_labelsAxiom.
+    -- Training-data hygiene: labels are bounded by vocab. Provided by caller as
+    -- a statement-level hypothesis (`hlabels_from_caller`); previously an unsound
+    -- axiom `Pattern_1_labelsAxiom` (now removed).
     have hlabels_bound : ∀ l < 2048 * 2, scalarToNat (valAt (initPM 4678) l) < 154880 := by
-      -- Real training data respects vocab bound; abstract initPM cannot prove this.
-      exact fun _ _ => Pattern_1_labelsAxiom (initPM 4678) 154880 _ trivial
+      intro l hl
+      exact hlabels_from_caller l (by omega)
     -- Substitute vocab first
     rw [hvocab_eq]
     rw [fw_inner_chunk_ce_fst_allGather0_commute_2_of
