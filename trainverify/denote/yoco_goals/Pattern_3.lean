@@ -39892,6 +39892,85 @@ theorem denote_pm_goal_3_vproj_0_r1 (initPM : Store) :
   rw [hval_4689, hval_14640, hval_4683, hval_14611, hval_4681]
   try rfl
 
+-- L0 K-projection reconstruction commute: the SM full K-projection output (rotary .2)
+-- equals the allGather of the two per-rank PM chunks.  Mirrors `sm_pm_qproj_L0_commute`.
+-- Weight boundary equalities extracted from `InitGoalsHold`; closed by
+-- `allGather0_reconstruct_chunks_3d`.  Kernel-only axioms.
+theorem sm_pm_kproj_L0_commute
+    (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (hT : ((fw_rotary_embedding (initPM 4691) (initPM 4690)
+              (fw_per_head_linear (fw_rms_norm (initPM 4680) (initPM 4682)) (initPM 4684))
+              (fw_per_head_linear (fw_rms_norm (initPM 4680) (initPM 4682)) (initPM 4686)) 16 4).2).shape
+            = [2 * 2048, 4, 64]) :
+    denoteGraph_ringAttn sm_goal_3 initSM 4693
+      = allGatherPrimDimN 0 2 0
+          [ denoteGraph_ringAttn pm_goal_3 initPM 7435,
+            denoteGraph_ringAttn pm_goal_3 initPM 7436 ] := by
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM := by
+    intro g hg
+    exact hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have h4682 : initSM 4682 = initPM 4682 := hb initGoal_4682 (by decide) rfl
+  have h4684 : initSM 4684 = initPM 4684 := hb initGoal_4684 (by decide) rfl
+  have h4686 : initSM 4686 = initPM 4686 := hb initGoal_4686 (by decide) rfl
+  have h4690 : initSM 4690 = initPM 4690 := hb initGoal_4690 (by decide) rfl
+  have h4691 : initSM 4691 = initPM 4691 := hb initGoal_4691 (by decide) rfl
+  have h4680 : initSM 4680 = initPM 4680 := by
+    have hg := hInit goal_5
+      (by unfold goal_3_cut_initGoals goal_3_prereqs; exact List.mem_append_right _ (by simp))
+    unfold InitGoalHolds at hg
+    obtain ⟨_, _, hval⟩ := hg
+    simpa [goal_5, List.map, reconstructWithDim_singleton] using hval
+  rw [denote_sm_goal_3_kproj_0, denote_pm_goal_3_kproj_0_r0, denote_pm_goal_3_kproj_0_r1]
+  rw [h4680, h4682, h4684, h4686, h4690, h4691]
+  rw [show pm_goal_3.numRanks = 2 from rfl]
+  exact (allGather0_reconstruct_chunks_3d 2048 4 64 (by omega) (by omega) (by omega) _ hT).symm
+
+-- L0 V-projection reconstruction commute: the SM full V-projection output
+-- (`fw_per_head_linear` of the rms-normed hidden, no rotary) equals the allGather of the
+-- two per-rank PM chunks.  Mirrors `sm_pm_qproj_L0_commute`; only weights 4680/4682/4688
+-- participate.  Kernel-only axioms.
+theorem sm_pm_vproj_L0_commute
+    (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (hT : (fw_per_head_linear (fw_rms_norm (initPM 4680) (initPM 4682)) (initPM 4688)).shape
+            = [2 * 2048, 4, 64]) :
+    denoteGraph_ringAttn sm_goal_3 initSM 4689
+      = allGatherPrimDimN 0 2 0
+          [ denoteGraph_ringAttn pm_goal_3 initPM 7421,
+            denoteGraph_ringAttn pm_goal_3 initPM 7422 ] := by
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM := by
+    intro g hg
+    exact hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have h4682 : initSM 4682 = initPM 4682 := hb initGoal_4682 (by decide) rfl
+  have h4688 : initSM 4688 = initPM 4688 := hb initGoal_4688 (by decide) rfl
+  have h4680 : initSM 4680 = initPM 4680 := by
+    have hg := hInit goal_5
+      (by unfold goal_3_cut_initGoals goal_3_prereqs; exact List.mem_append_right _ (by simp))
+    unfold InitGoalHolds at hg
+    obtain ⟨_, _, hval⟩ := hg
+    simpa [goal_5, List.map, reconstructWithDim_singleton] using hval
+  rw [denote_sm_goal_3_vproj_0, denote_pm_goal_3_vproj_0_r0, denote_pm_goal_3_vproj_0_r1]
+  rw [h4680, h4682, h4688]
+  rw [show pm_goal_3.numRanks = 2 from rfl]
+  exact (allGather0_reconstruct_chunks_3d 2048 4 64 (by omega) (by omega) (by omega) _ hT).symm
+
 set_option maxHeartbeats 8000000 in
 theorem denote_sm_goal_3_qproj_1 (initSM : Store) :
     denoteGraph_ringAttn sm_goal_3 initSM 4746 =
