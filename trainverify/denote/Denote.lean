@@ -21211,6 +21211,80 @@ theorem applyNodeRingAttn_zigzag_singleton (g : GraphDecl) (s : Store) (n : Node
       allGatherPrimDimN_singleton_eq 0 _ hk,
       allGatherPrimDimN_singleton_eq 0 _ hv,
       chunkPrimDimN_one_eq 0 _ hout]
+/-! ### Ring semantics for `FW_attn_sliding_window`.
+
+`FW_attn_sliding_window` under Python's `wrap_sliding_window_attn_func`
+(nnScaler `customized_ops/ring_attention/sliding_window_attn.py`):
+  * `process_group is None or len == 1 or not enable_ring` → plain
+    `flash_attn_varlen_func` with `window_size = (windowLeft, 0)`
+    (i.e. `fw_attn_varlen` on the given q, k, v with `windowLeft`)
+  * `len(process_group) > 1` → single-hop all-to-all communication that
+    brings each rank the neighbouring window of keys/values, so the effective
+    attention is `flash_attn_varlen_func` with `window_size = (windowLeft, 0)`
+    over the *concatenated* sequence, then each rank keeps its own output shard.
+
+Because a sliding window is a *local* attention pattern already parameterised by
+`windowLeft`, gathering all q/k/v shards, running `fw_attn_varlen` with the same
+`windowLeft`, and chunking the output back to each rank exactly reproduces the
+Python single-hop A2A semantics (every query attends to the same window of keys
+whether they live on the local rank or a neighbour). This is the identical
+reconstruction shape used for `FW_attn_zigzag`, so we mirror that machinery. -/
+
+/-- Reconstruct full q, k, v by allgather over sliding-window buddy shards,
+    compute `fw_attn_varlen` with `windowLeft`, then chunk back to this rank's
+    shard. Exactly models Python's single-hop A2A sliding-window semantics. -/
+noncomputable def applyNodeRingAttn_sliding_window (g : GraphDecl) (s : Store) (n : NodeDecl) : Tensor :=
+  let buddies := ringAttnBuddies g n
+  let myIdx := (buddies.findIdx? (fun m => m.rank = n.rank)).getD 0
+  let qShards := buddies.map (fun m => s (m.ins.getD 0 0))
+  let kShards := buddies.map (fun m => s (m.ins.getD 1 0))
+  let vShards := buddies.map (fun m => s (m.ins.getD 2 0))
+  let numShards := buddies.length
+  -- Sequence dim is dim 0 in [L, h, d] convention.
+  let fullQ := allGatherPrimDimN 0 numShards 0 qShards
+  let fullK := allGatherPrimDimN 0 numShards 0 kShards
+  let fullV := allGatherPrimDimN 0 numShards 0 vShards
+  let cuQ := s (n.ins.getD 3 0)
+  let cuK := s (n.ins.getD 4 0)
+  let qh         := n.params.getD 0 1
+  let kvh        := n.params.getD 1 1
+  let d          := n.params.getD 2 1
+  let vd         := n.params.getD 3 1
+  let causalNat  := n.params.getD 4 0
+  let windowLeft := n.params.getD 5 0
+  let causal     := decide (causalNat ≠ 0)
+  let fullOut := fw_attn_varlen fullQ fullK fullV cuQ cuK qh kvh d vd causal windowLeft
+  -- Chunk on seq dim (dim 0) to get this rank's shard.
+  chunkPrimDimN 0 numShards myIdx fullOut
+
+/-- Singleton collapse for `applyNodeRingAttn_sliding_window`: when `n` is its
+    only ring-attn buddy (numShards=1 case), the ring machinery reduces to plain
+    `fw_attn_varlen`. This is the Denote-level analogue of Python's
+    `if process_group is None or len==1: flash_attn_varlen_func(q, k, v)`. -/
+theorem applyNodeRingAttn_sliding_window_singleton (g : GraphDecl) (s : Store) (n : NodeDecl)
+    (hbuddy : ringAttnBuddies g n = [n])
+    (hq : 0 < (s (n.ins.getD 0 0)).shape.length)
+    (hk : 0 < (s (n.ins.getD 1 0)).shape.length)
+    (hv : 0 < (s (n.ins.getD 2 0)).shape.length)
+    (hout : 0 < (fw_attn_varlen (s (n.ins.getD 0 0)) (s (n.ins.getD 1 0)) (s (n.ins.getD 2 0))
+        (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
+        (n.params.getD 0 1) (n.params.getD 1 1) (n.params.getD 2 1) (n.params.getD 3 1)
+        (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0)).shape.length) :
+    applyNodeRingAttn_sliding_window g s n =
+      fw_attn_varlen (s (n.ins.getD 0 0)) (s (n.ins.getD 1 0)) (s (n.ins.getD 2 0))
+        (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
+        (n.params.getD 0 1) (n.params.getD 1 1) (n.params.getD 2 1) (n.params.getD 3 1)
+        (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0) := by
+  unfold applyNodeRingAttn_sliding_window
+  rw [hbuddy]
+  have hmyIdx : ((List.findIdx? (fun m => m.rank = n.rank) [n]).getD 0) = 0 := by
+    simp [List.findIdx?, List.findIdx?.go]
+  simp only [List.map, List.length_singleton, hmyIdx]
+  rw [allGatherPrimDimN_singleton_eq 0 _ hq,
+      allGatherPrimDimN_singleton_eq 0 _ hk,
+      allGatherPrimDimN_singleton_eq 0 _ hv,
+      chunkPrimDimN_one_eq 0 _ hout]
+
 
 /-- Ring-attention–aware variant of `applyNode`. Intercepts `FW_attn_zigzag`
     and dispatches to `applyNodeRingAttn_zigzag` (cross-rank ring semantics);
@@ -21218,6 +21292,9 @@ theorem applyNodeRingAttn_zigzag_singleton (g : GraphDecl) (s : Store) (n : Node
 noncomputable def applyNodeRingAttn (g : GraphDecl) (s : Store) (n : NodeDecl) : Store :=
   if n.op = "OpName.FW_attn_zigzag" then
     let out := applyNodeRingAttn_zigzag g s n
+    storeSet s [(n.outs.getD 0 0, out)]
+  else if n.op = "OpName.FW_attn_sliding_window" then
+    let out := applyNodeRingAttn_sliding_window g s n
     storeSet s [(n.outs.getD 0 0, out)]
   else
     applyNode g s n
@@ -21247,19 +21324,47 @@ theorem applyNodeRingAttn_zigzag_of_singleton
   have hexp := applyNodeRingAttn_zigzag_singleton g s n hbuddy hq hk hv hout
   rw [hexp]
 
+/-- When `applyNodeRingAttn` intercepts a sliding-window node with singleton
+    buddy, it stores `fw_attn_varlen`-of-inputs at the output tid, matching what
+    the plain (numParts-conditional) evalOp does for numRanks=1. -/
+theorem applyNodeRingAttn_sliding_window_of_singleton
+    (g : GraphDecl) (s : Store) (n : NodeDecl)
+    (hop : n.op = "OpName.FW_attn_sliding_window")
+    (hbuddy : ringAttnBuddies g n = [n])
+    (hq : 0 < (s (n.ins.getD 0 0)).shape.length)
+    (hk : 0 < (s (n.ins.getD 1 0)).shape.length)
+    (hv : 0 < (s (n.ins.getD 2 0)).shape.length)
+    (hout : 0 < (fw_attn_varlen (s (n.ins.getD 0 0)) (s (n.ins.getD 1 0)) (s (n.ins.getD 2 0))
+        (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
+        (n.params.getD 0 1) (n.params.getD 1 1) (n.params.getD 2 1) (n.params.getD 3 1)
+        (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0)).shape.length) :
+    applyNodeRingAttn g s n =
+      storeSet s [(n.outs.getD 0 0,
+        fw_attn_varlen (s (n.ins.getD 0 0)) (s (n.ins.getD 1 0)) (s (n.ins.getD 2 0))
+          (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
+          (n.params.getD 0 1) (n.params.getD 1 1) (n.params.getD 2 1) (n.params.getD 3 1)
+          (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0))] := by
+  unfold applyNodeRingAttn
+  have hne : ¬ (n.op = "OpName.FW_attn_zigzag") := by rw [hop]; decide
+  rw [if_neg hne, if_pos hop]
+  have hexp := applyNodeRingAttn_sliding_window_singleton g s n hbuddy hq hk hv hout
+  rw [hexp]
+
 /-- Ring-attention–aware denotation. Folds `applyNodeRingAttn` over graph nodes. -/
 noncomputable def denoteGraph_ringAttn (g : GraphDecl) (init : Store) : Store :=
   g.nodes.foldl (applyNodeRingAttn g) init
 
-/-- If the graph has no `FW_attn_zigzag` nodes, ring-attention denotation coincides
-    with regular denotation. This ensures Pattern_1/2/4/5 (no zigzag) are unaffected. -/
-theorem denoteGraph_ringAttn_eq_denoteGraph_of_no_zigzag
+/-- If the graph has no `FW_attn_zigzag` and no `FW_attn_sliding_window` nodes,
+    ring-attention denotation coincides with regular denotation. This ensures
+    Pattern_1/2/4/5 (no ring-attention ops) are unaffected. -/
+theorem denoteGraph_ringAttn_eq_denoteGraph_of_no_ring_attn
     (g : GraphDecl) (init : Store)
-    (hno : ∀ n ∈ g.nodes, n.op ≠ "OpName.FW_attn_zigzag") :
+    (hno : ∀ n ∈ g.nodes,
+      n.op ≠ "OpName.FW_attn_zigzag" ∧ n.op ≠ "OpName.FW_attn_sliding_window") :
     denoteGraph_ringAttn g init = denoteGraph g init := by
   unfold denoteGraph_ringAttn denoteGraph
   suffices h : ∀ (nodes : List NodeDecl) (s : Store),
-      (∀ n ∈ nodes, n.op ≠ "OpName.FW_attn_zigzag") →
+      (∀ n ∈ nodes, n.op ≠ "OpName.FW_attn_zigzag" ∧ n.op ≠ "OpName.FW_attn_sliding_window") →
       nodes.foldl (applyNodeRingAttn g) s = nodes.foldl (applyNode g) s by
     exact h g.nodes init hno
   intro nodes
@@ -21267,13 +21372,15 @@ theorem denoteGraph_ringAttn_eq_denoteGraph_of_no_zigzag
   | nil => intro s _; rfl
   | cons hd tl ih =>
     intro s hstop
-    have hhd : hd.op ≠ "OpName.FW_attn_zigzag" := hstop hd (by simp)
-    have htl : ∀ n ∈ tl, n.op ≠ "OpName.FW_attn_zigzag" := by
+    have hhd : hd.op ≠ "OpName.FW_attn_zigzag" ∧ hd.op ≠ "OpName.FW_attn_sliding_window" :=
+      hstop hd (by simp)
+    have htl : ∀ n ∈ tl,
+        n.op ≠ "OpName.FW_attn_zigzag" ∧ n.op ≠ "OpName.FW_attn_sliding_window" := by
       intro n hn; exact hstop n (List.mem_cons_of_mem _ hn)
     simp only [List.foldl_cons]
     have hstep : applyNodeRingAttn g s hd = applyNode g s hd := by
       unfold applyNodeRingAttn
-      simp [hhd]
+      simp [hhd.1, hhd.2]
     rw [hstep]
     exact ih (applyNode g s hd) htl
 
@@ -21281,7 +21388,7 @@ theorem denoteGraph_ringAttn_eq_denoteGraph_of_no_zigzag
     `denoteGraph_ringAttn` (which models Python's `ZigZagRingFlashAttnFunc`)
     for both SM and PM sides. For graphs without `FW_attn_zigzag` nodes,
     coincides with `CoarseLineageHoldsWithInit` (see
-    `denoteGraph_ringAttn_eq_denoteGraph_of_no_zigzag`). -/
+    `denoteGraph_ringAttn_eq_denoteGraph_of_no_ring_attn`). -/
 def CoarseLineageHoldsWithInit_ringAttn (sm pm : GraphDecl) (goal : LineageGoal)
     (smInit pmInit : ShapeEnv) (initGoals : List LineageGoal) : Prop :=
   ∀ (initSM initPM : Store),

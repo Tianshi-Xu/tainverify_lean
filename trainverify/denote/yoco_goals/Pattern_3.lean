@@ -100,6 +100,47 @@ theorem pm_goal_3_zigzag_buddies_pair (n : NodeDecl)
     ∧ n ∈ ringAttnBuddies pm_goal_3 n :=
   pm_goal_3_zigzag_buddies_pair_aux n hn_mem hn_op
 
+/-! ### Phase A revised (sliding_window): concrete `ringAttnBuddies` structure.
+
+    The same buddy-structure facts, but for `FW_attn_sliding_window` nodes. These
+    feed the sliding-window ring semantics (`applyNodeRingAttn_sliding_window`)
+    the way the zigzag lemmas above feed `applyNodeRingAttn_zigzag`. -/
+
+/-- Auxiliary (decidable, computational): every sliding-window node in the SM
+    graph is its own unique ring-attention buddy. -/
+theorem sm_goal_3_sliding_window_buddies_singleton_aux :
+    ∀ n ∈ sm_goal_3.nodes,
+      n.op = "OpName.FW_attn_sliding_window" → ringAttnBuddies sm_goal_3 n = [n] := by
+  native_decide
+
+/-- For sm_goal_3 (numRanks=1), each FW_attn_sliding_window node in the graph is
+    its own unique ring-attention buddy (buddies list = [node itself]). -/
+theorem sm_goal_3_sliding_window_buddies_singleton (n : NodeDecl)
+    (hn_mem : n ∈ sm_goal_3.nodes)
+    (hn_op : n.op = "OpName.FW_attn_sliding_window") :
+    ringAttnBuddies sm_goal_3 n = [n] :=
+  sm_goal_3_sliding_window_buddies_singleton_aux n hn_mem hn_op
+
+/-- Auxiliary (decidable, computational): every sliding-window node in the PM
+    graph has exactly two ring-attention buddies and is a member of its own
+    buddy list. -/
+theorem pm_goal_3_sliding_window_buddies_pair_aux :
+    ∀ n ∈ pm_goal_3.nodes,
+      n.op = "OpName.FW_attn_sliding_window" →
+        (ringAttnBuddies pm_goal_3 n).length = 2
+        ∧ n ∈ ringAttnBuddies pm_goal_3 n := by
+  native_decide
+
+/-- For pm_goal_3 (numRanks=2), each FW_attn_sliding_window node has exactly one
+    other buddy (the partner at the matching layer with different rank). The
+    buddies list has length 2 and includes n itself. -/
+theorem pm_goal_3_sliding_window_buddies_pair (n : NodeDecl)
+    (hn_mem : n ∈ pm_goal_3.nodes)
+    (hn_op : n.op = "OpName.FW_attn_sliding_window") :
+    (ringAttnBuddies pm_goal_3 n).length = 2
+    ∧ n ∈ ringAttnBuddies pm_goal_3 n :=
+  pm_goal_3_sliding_window_buddies_pair_aux n hn_mem hn_op
+
 /-! ### Phase C2b: ring-attention chunk-gather reconstruction (numShards = 2).
 
     Core building block for the `FW_attn_zigzag` per-rank commute: gathering the
