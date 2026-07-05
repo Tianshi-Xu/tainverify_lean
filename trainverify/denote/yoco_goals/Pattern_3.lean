@@ -22,6 +22,7 @@
    FW_attn_zigzag which would make the goal false (SM=full attn ≠ PM=identity).
 -/
 import denote.yoco_goals.Goal_3
+import denote.yoco_goals.Pattern_1  -- reuse fw_topk_routing_snd_fst_allGather0_commute_2_of (routing_map commute)
 
 set_option maxRecDepth 100000
 
@@ -371,5 +372,203 @@ theorem allGather0_reconstruct_chunks_3d
     exact chunk0_3d_valAt Lshard d1 d2 hL hd1 hd2 T hT r hr row hrow col hcol inner hinner
 
 
+/-! ### Deliverable 1 (routing_map seq-chunk commute): usability of the existing lemma.
+
+    Pattern_3 issues 24 `FW_topk_routing` nodes per rank. Each takes a logits
+    tensor sharded on the sequence/token dim (dim 0). The routing_map output
+    (`.snd.fst`, shape `[S, numExperts]`) is *row-local*: each token's top-k pick
+    depends only on that token's score row (`inTopK` reads a single row `l`).
+    Therefore the general shape-`[S, k]` lemma
+    `Pattern_1`'s `fw_topk_routing_snd_fst_allGather0_commute_2_of` applies
+    **directly** at Pattern_3's per-layer routing input shape — no specialized
+    variant is needed. We record a concrete-shape `example` witnessing that the
+    existing lemma type-checks at a representative Pattern_3 shape
+    (per-rank shard `S = 2048`, `top_k = 8`, `numExperts = 8`). -/
+
+example (a b : Tensor)
+    (ha : a.shape = [2048, 8]) (hb : b.shape = [2048, 8]) :
+    (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) 8 8).snd.fst
+      = allGatherPrimDimN 0 2 0
+          [(fw_topk_routing a 8 8).snd.fst, (fw_topk_routing b 8 8).snd.fst] :=
+  fw_topk_routing_snd_fst_allGather0_commute_2_of a b 2048 8 8
+    (by norm_num) (by norm_num) ha hb
+
+/-! ### Deliverable 2: per-attention reconstruction primitives.
+
+    These lift a single ring-attention node from SM (numRanks=1, singleton buddy)
+    to the buddy *pair* on PM (numRanks=2), showing that the SM full-attention
+    output equals the all-gather of the two PM per-rank output shards. This is the
+    key per-layer step that lets the 24-layer induction proceed: given the
+    previous layer's commute (SM q/k/v = allGather of PM q/k/v shards), the
+    attention output commutes with the sequence-dim sharding.
+
+    Structure: SM side collapses to plain `fw_attn_varlen` (singleton lemma); PM
+    side reconstructs the full output from the two seq-dim chunks
+    (`allGather0_reconstruct_chunks_3d`). The two full outputs coincide by the
+    bridge hypotheses. Proved separately for `FW_attn_zigzag` and
+    `FW_attn_sliding_window` since the two `applyNodeRingAttn_*` defs, while
+    structurally identical, are distinct constants. -/
+
+/-- PM-side buddy-pair unfold for `applyNodeRingAttn_zigzag`: a node whose buddy
+    list is `[n0, n1]` computes the seq-dim chunk (index `idx = myIdx`) of the
+    full attention over the all-gathered q/k/v shards. -/
+theorem applyNodeRingAttn_zigzag_pair_eq_chunk
+    (g : GraphDecl) (s : Store) (n n0 n1 : NodeDecl)
+    (idx : Nat)
+    (hbuddy : ringAttnBuddies g n = [n0, n1])
+    (hmyIdx : (([n0, n1].findIdx? (fun m => m.rank = n.rank)).getD 0) = idx) :
+    applyNodeRingAttn_zigzag g s n =
+      chunkPrimDimN 0 2 idx
+        (fw_attn_varlen
+          (allGatherPrimDimN 0 2 0 [s (n0.ins.getD 0 0), s (n1.ins.getD 0 0)])
+          (allGatherPrimDimN 0 2 0 [s (n0.ins.getD 1 0), s (n1.ins.getD 1 0)])
+          (allGatherPrimDimN 0 2 0 [s (n0.ins.getD 2 0), s (n1.ins.getD 2 0)])
+          (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
+          (n.params.getD 0 1) (n.params.getD 1 1) (n.params.getD 2 1) (n.params.getD 3 1)
+          (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0)) := by
+  unfold applyNodeRingAttn_zigzag
+  rw [hbuddy]
+  simp only [List.map, List.length_cons, List.length_nil, hmyIdx]
+
+/-- PM-side buddy-pair unfold for `applyNodeRingAttn_sliding_window` (mirror of
+    the zigzag version — identical reconstruction shape). -/
+theorem applyNodeRingAttn_sliding_window_pair_eq_chunk
+    (g : GraphDecl) (s : Store) (n n0 n1 : NodeDecl)
+    (idx : Nat)
+    (hbuddy : ringAttnBuddies g n = [n0, n1])
+    (hmyIdx : (([n0, n1].findIdx? (fun m => m.rank = n.rank)).getD 0) = idx) :
+    applyNodeRingAttn_sliding_window g s n =
+      chunkPrimDimN 0 2 idx
+        (fw_attn_varlen
+          (allGatherPrimDimN 0 2 0 [s (n0.ins.getD 0 0), s (n1.ins.getD 0 0)])
+          (allGatherPrimDimN 0 2 0 [s (n0.ins.getD 1 0), s (n1.ins.getD 1 0)])
+          (allGatherPrimDimN 0 2 0 [s (n0.ins.getD 2 0), s (n1.ins.getD 2 0)])
+          (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
+          (n.params.getD 0 1) (n.params.getD 1 1) (n.params.getD 2 1) (n.params.getD 3 1)
+          (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0)) := by
+  unfold applyNodeRingAttn_sliding_window
+  rw [hbuddy]
+  simp only [List.map, List.length_cons, List.length_nil, hmyIdx]
+
+/-- **Per-attention reconstruction (zigzag).** Given an SM ring-attention node
+    `n_sm` (singleton buddy, numRanks=1) and its PM buddy pair `n_pm_r0`,
+    `n_pm_r1` (numRanks=2), together with the bridge hypotheses that SM's q/k/v
+    equal the all-gather of PM's q/k/v shards (from the previous layer's commute),
+    the shared cu-seqlens, and matching params, the SM ring-attention output
+    equals the all-gather of the two PM per-rank ring-attention outputs. -/
+theorem applyNodeRingAttn_zigzag_reconstruction_2_of_buddy_pair
+    (g_sm g_pm : GraphDecl) (s_sm s_pm : Store)
+    (n_sm n_pm_r0 n_pm_r1 : NodeDecl)
+    (Lshard qh vd : Nat)
+    (hL : 0 < Lshard) (hqh : 0 < qh) (hvd : 0 < vd)
+    (hbuddy_sm : ringAttnBuddies g_sm n_sm = [n_sm])
+    (hbuddy_pm : ringAttnBuddies g_pm n_pm_r0 = [n_pm_r0, n_pm_r1])
+    (hbuddy_pm' : ringAttnBuddies g_pm n_pm_r1 = [n_pm_r0, n_pm_r1])
+    (hmyIdx0 : (([n_pm_r0, n_pm_r1].findIdx? (fun m => m.rank = n_pm_r0.rank)).getD 0) = 0)
+    (hmyIdx1 : (([n_pm_r0, n_pm_r1].findIdx? (fun m => m.rank = n_pm_r1.rank)).getD 0) = 1)
+    (hq_sm : 0 < (s_sm (n_sm.ins.getD 0 0)).shape.length)
+    (hk_sm : 0 < (s_sm (n_sm.ins.getD 1 0)).shape.length)
+    (hv_sm : 0 < (s_sm (n_sm.ins.getD 2 0)).shape.length)
+    (hq_full : s_sm (n_sm.ins.getD 0 0) =
+        allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 0 0), s_pm (n_pm_r1.ins.getD 0 0)])
+    (hk_full : s_sm (n_sm.ins.getD 1 0) =
+        allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 1 0), s_pm (n_pm_r1.ins.getD 1 0)])
+    (hv_full : s_sm (n_sm.ins.getD 2 0) =
+        allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 2 0), s_pm (n_pm_r1.ins.getD 2 0)])
+    (hcuQ_sm_pm : s_sm (n_sm.ins.getD 3 0) = s_pm (n_pm_r0.ins.getD 3 0))
+    (hcuK_sm_pm : s_sm (n_sm.ins.getD 4 0) = s_pm (n_pm_r0.ins.getD 4 0))
+    (hcuQ_same : s_pm (n_pm_r0.ins.getD 3 0) = s_pm (n_pm_r1.ins.getD 3 0))
+    (hcuK_same : s_pm (n_pm_r0.ins.getD 4 0) = s_pm (n_pm_r1.ins.getD 4 0))
+    (hparams_sm : n_sm.params = n_pm_r0.params)
+    (hparams_same : n_pm_r0.params = n_pm_r1.params)
+    (hfull_shape :
+        (fw_attn_varlen
+          (allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 0 0), s_pm (n_pm_r1.ins.getD 0 0)])
+          (allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 1 0), s_pm (n_pm_r1.ins.getD 1 0)])
+          (allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 2 0), s_pm (n_pm_r1.ins.getD 2 0)])
+          (s_pm (n_pm_r0.ins.getD 3 0)) (s_pm (n_pm_r0.ins.getD 4 0))
+          (n_pm_r0.params.getD 0 1) (n_pm_r0.params.getD 1 1) (n_pm_r0.params.getD 2 1)
+          (n_pm_r0.params.getD 3 1)
+          (decide (n_pm_r0.params.getD 4 0 ≠ 0)) (n_pm_r0.params.getD 5 0)).shape
+        = [2 * Lshard, qh, vd]) :
+    applyNodeRingAttn_zigzag g_sm s_sm n_sm =
+      allGatherPrimDimN 0 2 0
+        [applyNodeRingAttn_zigzag g_pm s_pm n_pm_r0,
+         applyNodeRingAttn_zigzag g_pm s_pm n_pm_r1] := by
+  -- SM full-output shape length > 0 (needed for the singleton chunk collapse).
+  have hout_sm : 0 < (fw_attn_varlen (s_sm (n_sm.ins.getD 0 0)) (s_sm (n_sm.ins.getD 1 0))
+      (s_sm (n_sm.ins.getD 2 0)) (s_sm (n_sm.ins.getD 3 0)) (s_sm (n_sm.ins.getD 4 0))
+      (n_sm.params.getD 0 1) (n_sm.params.getD 1 1) (n_sm.params.getD 2 1) (n_sm.params.getD 3 1)
+      (decide (n_sm.params.getD 4 0 ≠ 0)) (n_sm.params.getD 5 0)).shape.length := by
+    rw [hq_full, hk_full, hv_full, hcuQ_sm_pm, hcuK_sm_pm, hparams_sm, hfull_shape]
+    simp
+  -- SM side: singleton collapse, then bridge SM inputs into the PM full attention.
+  rw [applyNodeRingAttn_zigzag_singleton g_sm s_sm n_sm hbuddy_sm hq_sm hk_sm hv_sm hout_sm,
+      hq_full, hk_full, hv_full, hcuQ_sm_pm, hcuK_sm_pm, hparams_sm]
+  -- PM side: unfold each rank's node to its seq-dim chunk of the full output.
+  rw [applyNodeRingAttn_zigzag_pair_eq_chunk g_pm s_pm n_pm_r0 n_pm_r0 n_pm_r1 0 hbuddy_pm hmyIdx0,
+      applyNodeRingAttn_zigzag_pair_eq_chunk g_pm s_pm n_pm_r1 n_pm_r0 n_pm_r1 1 hbuddy_pm' hmyIdx1]
+  -- Normalize rank-1's cu-seqlens/params to rank-0's so both chunks share one full output.
+  rw [← hcuQ_same, ← hcuK_same, ← hparams_same]
+  -- Reconstruct the full output from its two seq-dim chunks.
+  rw [allGather0_reconstruct_chunks_3d Lshard qh vd hL hqh hvd _ hfull_shape]
+
+/-- **Per-attention reconstruction (sliding_window).** Mirror of the zigzag
+    version for `FW_attn_sliding_window` nodes (identical reconstruction shape;
+    the sliding window is a local attention pattern already parameterised by
+    `windowLeft`, so gather-then-attend-then-chunk reproduces per-rank shards). -/
+theorem applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair
+    (g_sm g_pm : GraphDecl) (s_sm s_pm : Store)
+    (n_sm n_pm_r0 n_pm_r1 : NodeDecl)
+    (Lshard qh vd : Nat)
+    (hL : 0 < Lshard) (hqh : 0 < qh) (hvd : 0 < vd)
+    (hbuddy_sm : ringAttnBuddies g_sm n_sm = [n_sm])
+    (hbuddy_pm : ringAttnBuddies g_pm n_pm_r0 = [n_pm_r0, n_pm_r1])
+    (hbuddy_pm' : ringAttnBuddies g_pm n_pm_r1 = [n_pm_r0, n_pm_r1])
+    (hmyIdx0 : (([n_pm_r0, n_pm_r1].findIdx? (fun m => m.rank = n_pm_r0.rank)).getD 0) = 0)
+    (hmyIdx1 : (([n_pm_r0, n_pm_r1].findIdx? (fun m => m.rank = n_pm_r1.rank)).getD 0) = 1)
+    (hq_sm : 0 < (s_sm (n_sm.ins.getD 0 0)).shape.length)
+    (hk_sm : 0 < (s_sm (n_sm.ins.getD 1 0)).shape.length)
+    (hv_sm : 0 < (s_sm (n_sm.ins.getD 2 0)).shape.length)
+    (hq_full : s_sm (n_sm.ins.getD 0 0) =
+        allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 0 0), s_pm (n_pm_r1.ins.getD 0 0)])
+    (hk_full : s_sm (n_sm.ins.getD 1 0) =
+        allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 1 0), s_pm (n_pm_r1.ins.getD 1 0)])
+    (hv_full : s_sm (n_sm.ins.getD 2 0) =
+        allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 2 0), s_pm (n_pm_r1.ins.getD 2 0)])
+    (hcuQ_sm_pm : s_sm (n_sm.ins.getD 3 0) = s_pm (n_pm_r0.ins.getD 3 0))
+    (hcuK_sm_pm : s_sm (n_sm.ins.getD 4 0) = s_pm (n_pm_r0.ins.getD 4 0))
+    (hcuQ_same : s_pm (n_pm_r0.ins.getD 3 0) = s_pm (n_pm_r1.ins.getD 3 0))
+    (hcuK_same : s_pm (n_pm_r0.ins.getD 4 0) = s_pm (n_pm_r1.ins.getD 4 0))
+    (hparams_sm : n_sm.params = n_pm_r0.params)
+    (hparams_same : n_pm_r0.params = n_pm_r1.params)
+    (hfull_shape :
+        (fw_attn_varlen
+          (allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 0 0), s_pm (n_pm_r1.ins.getD 0 0)])
+          (allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 1 0), s_pm (n_pm_r1.ins.getD 1 0)])
+          (allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 2 0), s_pm (n_pm_r1.ins.getD 2 0)])
+          (s_pm (n_pm_r0.ins.getD 3 0)) (s_pm (n_pm_r0.ins.getD 4 0))
+          (n_pm_r0.params.getD 0 1) (n_pm_r0.params.getD 1 1) (n_pm_r0.params.getD 2 1)
+          (n_pm_r0.params.getD 3 1)
+          (decide (n_pm_r0.params.getD 4 0 ≠ 0)) (n_pm_r0.params.getD 5 0)).shape
+        = [2 * Lshard, qh, vd]) :
+    applyNodeRingAttn_sliding_window g_sm s_sm n_sm =
+      allGatherPrimDimN 0 2 0
+        [applyNodeRingAttn_sliding_window g_pm s_pm n_pm_r0,
+         applyNodeRingAttn_sliding_window g_pm s_pm n_pm_r1] := by
+  have hout_sm : 0 < (fw_attn_varlen (s_sm (n_sm.ins.getD 0 0)) (s_sm (n_sm.ins.getD 1 0))
+      (s_sm (n_sm.ins.getD 2 0)) (s_sm (n_sm.ins.getD 3 0)) (s_sm (n_sm.ins.getD 4 0))
+      (n_sm.params.getD 0 1) (n_sm.params.getD 1 1) (n_sm.params.getD 2 1) (n_sm.params.getD 3 1)
+      (decide (n_sm.params.getD 4 0 ≠ 0)) (n_sm.params.getD 5 0)).shape.length := by
+    rw [hq_full, hk_full, hv_full, hcuQ_sm_pm, hcuK_sm_pm, hparams_sm, hfull_shape]
+    simp
+  rw [applyNodeRingAttn_sliding_window_singleton g_sm s_sm n_sm hbuddy_sm hq_sm hk_sm hv_sm hout_sm,
+      hq_full, hk_full, hv_full, hcuQ_sm_pm, hcuK_sm_pm, hparams_sm]
+  rw [applyNodeRingAttn_sliding_window_pair_eq_chunk g_pm s_pm n_pm_r0 n_pm_r0 n_pm_r1 0
+        hbuddy_pm hmyIdx0,
+      applyNodeRingAttn_sliding_window_pair_eq_chunk g_pm s_pm n_pm_r1 n_pm_r0 n_pm_r1 1
+        hbuddy_pm' hmyIdx1]
+  rw [← hcuQ_same, ← hcuK_same, ← hparams_same]
+  rw [allGather0_reconstruct_chunks_3d Lshard qh vd hL hqh hvd _ hfull_shape]
 
 end TrainVerify.Denote.GeneratedPatterns
