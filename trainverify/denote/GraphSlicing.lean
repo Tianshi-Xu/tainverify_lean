@@ -465,6 +465,35 @@ theorem foldl_applyNode_at_not_written
     · exact applyNode_eq_of_not_mem_outs g s a tid (h a List.mem_cons_self)
     · intro n hn; exact h n (List.mem_cons_of_mem _ hn)
 
+/-- Ring-fold analogue of `applyNode_eq_of_not_mem_outs`: if `tid ∉ n.outs`
+    (and `n.outs ≠ []`, so the ring branches' write target `n.outs.getD 0 0`
+    lies inside `n.outs`), then `applyNodeRingAttn g s n tid = s tid`. -/
+theorem applyNodeRingAttn_eq_of_not_mem_outs
+    (g : GraphDecl) (s : Store) (n : NodeDecl) (tid : Tid)
+    (hne : n.outs ≠ [])
+    (h : tid ∉ n.outs) :
+    applyNodeRingAttn g s n tid = s tid :=
+  applyNodeRingAttn_skip g s n tid hne h
+
+/-- Ring-fold analogue of `foldl_applyNode_at_not_written`: if `tid` is not
+    written by any node in a prefix `pre` (and every node emits at least one
+    output), then the `applyNodeRingAttn` fold preserves `s tid`. Enables
+    walking graph nodes through the `denoteGraph_ringAttn` fold. -/
+theorem foldl_applyNodeRingAttn_at_not_written
+    (g : GraphDecl) (pre : List NodeDecl) (s : Store) (tid : Tid)
+    (hnil : ∀ n ∈ pre, n.outs ≠ [])
+    (h : ∀ n ∈ pre, tid ∉ n.outs) :
+    (pre.foldl (applyNodeRingAttn g) s) tid = s tid := by
+  induction pre generalizing s with
+  | nil => simp [List.foldl]
+  | cons a l ih =>
+    simp only [List.foldl]
+    rw [ih]
+    · exact applyNodeRingAttn_eq_of_not_mem_outs g s a tid
+        (hnil a List.mem_cons_self) (h a List.mem_cons_self)
+    · intro n hn; exact hnil n (List.mem_cons_of_mem _ hn)
+    · intro n hn; exact h n (List.mem_cons_of_mem _ hn)
+
 /-- **`writesOfPrefix`**: tids written by any node in the prefix `pre`. -/
 def writesOfPrefix (pre : List NodeDecl) (tid : Tid) : Prop :=
   ∃ n ∈ pre, tid ∈ n.outs

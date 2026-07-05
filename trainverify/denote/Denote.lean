@@ -21350,6 +21350,94 @@ theorem applyNodeRingAttn_sliding_window_of_singleton
   have hexp := applyNodeRingAttn_sliding_window_singleton g s n hbuddy hq hk hv hout
   rw [hexp]
 
+/-!
+## Ring-fold reduction machinery
+
+Parallel to the `applyNode` reduction helpers (`applyNode_skip`,
+`applyNode_XXX_out`, `applyNode_eq_of_not_mem_outs`): these let downstream
+per-tid unfolding lemmas walk graph nodes through the `applyNodeRingAttn`
+fold used by `denoteGraph_ringAttn`.
+-/
+
+/-- **Generic bridge**: for any node whose op is neither `FW_attn_zigzag` nor
+    `FW_attn_sliding_window`, `applyNodeRingAttn` coincides pointwise with the
+    plain `applyNode`. Lets downstream users reuse ALL existing
+    `applyNode_XXX_out` lemmas for non-ring ops without per-op wrappers. -/
+theorem applyNodeRingAttn_eq_applyNode_of_not_ring
+    (g : GraphDecl) (s : Store) (n : NodeDecl)
+    (hz : n.op ≠ "OpName.FW_attn_zigzag")
+    (hsw : n.op ≠ "OpName.FW_attn_sliding_window") :
+    applyNodeRingAttn g s n = applyNode g s n := by
+  unfold applyNodeRingAttn
+  rw [if_neg hz, if_neg hsw]
+
+/-- Looking up `tid` in `applyNodeRingAttn g s n` when `tid ∉ n.outs` falls
+    through to `s tid` (parallel to `applyNode_skip`). The `n.outs ≠ []` guard
+    handles the ring branches, which write at `n.outs.getD 0 0` (default `0`
+    when `outs = []`); real graph nodes always emit at least one output. -/
+theorem applyNodeRingAttn_skip (g : GraphDecl) (s : Store) (n : NodeDecl) (tid : Tid)
+    (hne : n.outs ≠ [])
+    (h : tid ∉ n.outs) :
+    applyNodeRingAttn g s n tid = s tid := by
+  have hmem0 : n.outs.getD 0 0 ∈ n.outs := by
+    cases hl : n.outs with
+    | nil => exact absurd hl hne
+    | cons a rest => rw [List.getD_cons_zero]; exact List.mem_cons_self
+  have hneq : tid ≠ n.outs.getD 0 0 := fun heq => h (heq ▸ hmem0)
+  unfold applyNodeRingAttn
+  by_cases hz : n.op = "OpName.FW_attn_zigzag"
+  · rw [if_pos hz]
+    apply storeSet_eq_of_not_mem_fst
+    simpa using hneq
+  · rw [if_neg hz]
+    by_cases hsw : n.op = "OpName.FW_attn_sliding_window"
+    · rw [if_pos hsw]
+      apply storeSet_eq_of_not_mem_fst
+      simpa using hneq
+    · rw [if_neg hsw]
+      exact applyNode_skip g s n tid h
+
+/-- `applyNodeRingAttn` on a zigzag node with singleton output reads out the
+    ring-attn zigzag semantics at the output tid (specialized ring-case `_out`
+    helper, parallel to the `applyNode_XXX_out` family). -/
+theorem applyNodeRingAttn_zigzag_out
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (qTid kTid vTid cuQTid cuKTid outTid : Tid) (params : List Nat) :
+    applyNodeRingAttn g s
+      { rank := rank, op := "OpName.FW_attn_zigzag",
+        ins := [qTid, kTid, vTid, cuQTid, cuKTid],
+        outs := [outTid], params := params } outTid =
+    applyNodeRingAttn_zigzag g s
+      { rank := rank, op := "OpName.FW_attn_zigzag",
+        ins := [qTid, kTid, vTid, cuQTid, cuKTid],
+        outs := [outTid], params := params } := by
+  unfold applyNodeRingAttn
+  rw [if_pos (rfl : ("OpName.FW_attn_zigzag" : String) = "OpName.FW_attn_zigzag")]
+  change storeSet s [(outTid, _)] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- `applyNodeRingAttn` on a sliding-window node with singleton output reads out
+    the ring-attn sliding-window semantics at the output tid (specialized
+    ring-case `_out` helper). -/
+theorem applyNodeRingAttn_sliding_window_out
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (qTid kTid vTid cuQTid cuKTid outTid : Tid) (params : List Nat) :
+    applyNodeRingAttn g s
+      { rank := rank, op := "OpName.FW_attn_sliding_window",
+        ins := [qTid, kTid, vTid, cuQTid, cuKTid],
+        outs := [outTid], params := params } outTid =
+    applyNodeRingAttn_sliding_window g s
+      { rank := rank, op := "OpName.FW_attn_sliding_window",
+        ins := [qTid, kTid, vTid, cuQTid, cuKTid],
+        outs := [outTid], params := params } := by
+  unfold applyNodeRingAttn
+  have hz : ¬ (("OpName.FW_attn_sliding_window" : String) = "OpName.FW_attn_zigzag") := by decide
+  rw [if_neg hz, if_pos (rfl : ("OpName.FW_attn_sliding_window" : String) = "OpName.FW_attn_sliding_window")]
+  change storeSet s [(outTid, _)] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
 /-- Ring-attention–aware denotation. Folds `applyNodeRingAttn` over graph nodes. -/
 noncomputable def denoteGraph_ringAttn (g : GraphDecl) (init : Store) : Store :=
   g.nodes.foldl (applyNodeRingAttn g) init
