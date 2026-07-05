@@ -60,6 +60,53 @@ theorem prove_pattern_3 : pattern_3_stmt := by
   cases ht
   exact prove_goal_3
 
+/-! ### Phase 1 (fold-bridge): ring-fold prefix bridges for per-tid evaluation.
+
+    Parallel to Pattern_1's `foldl_take_split_at_not_written` (which is stated
+    for the plain `applyNode` fold), these bridge the `applyNodeRingAttn` fold
+    used by `denoteGraph_ringAttn`. They let the per-tid unfolding of
+    `denoteGraph_ringAttn sm_goal_3 / pm_goal_3` walk graph nodes:
+
+    * `foldl_prefix_eq_full_ringAttn` — the single ENTRY bridge: the value of a
+      tid in the full-graph ring-fold equals its value after the prefix
+      `nodes.take k`, provided no node in the suffix writes it. Used once to jump
+      from the (huge) full graph down to the small dependency-cone prefix.
+    * `foldl_take_split_at_not_written_ringAttn` — the BODY bridge (small
+      windows): post-writer preservation across a `(take k).drop j` span, exactly
+      like Pattern_1's helper but for the ring fold. -/
+
+/-- Ring-fold analogue of Pattern_1's `foldl_take_split_at_not_written`: after
+    the writer of `tid` (inside `nodes.take j`), applying more non-writing nodes
+    up to `k` preserves the value. The extra `hnil` hypothesis handles the ring
+    branches (which write at `n.outs.getD 0 0`); every real graph node emits at
+    least one output, so it is always dischargeable. -/
+theorem foldl_take_split_at_not_written_ringAttn
+    (g : GraphDecl) (nodes : List NodeDecl)
+    (s : Store) (tid : Tid) (j k : Nat) (hjk : j ≤ k)
+    (hnil : ∀ n ∈ (nodes.take k).drop j, n.outs ≠ [])
+    (h : ∀ n ∈ (nodes.take k).drop j, tid ∉ n.outs) :
+    (nodes.take k).foldl (applyNodeRingAttn g) s tid =
+      (nodes.take j).foldl (applyNodeRingAttn g) s tid := by
+  have h_split : nodes.take k = nodes.take j ++ (nodes.take k).drop j := by
+    rw [show nodes.take j = (nodes.take k).take j by rw [List.take_take, min_eq_left hjk]]
+    rw [List.take_append_drop]
+  rw [h_split, List.foldl_append]
+  exact foldl_applyNodeRingAttn_at_not_written g _ _ tid hnil h
+
+/-- Entry bridge: the value at `tid` in the full-graph ring-fold equals its
+    value after the prefix `nodes.take k`, provided no node in the suffix
+    `nodes.drop k` writes `tid`. Used once per target tid to jump from the full
+    903/1866-node graph down to the small dependency-cone prefix, after which
+    `foldl_take_split_at_not_written_ringAttn` handles the body. -/
+theorem foldl_prefix_eq_full_ringAttn
+    (g : GraphDecl) (nodes : List NodeDecl) (s : Store) (tid : Tid) (k : Nat)
+    (hnil : ∀ n ∈ nodes.drop k, n.outs ≠ [])
+    (h : ∀ n ∈ nodes.drop k, tid ∉ n.outs) :
+    nodes.foldl (applyNodeRingAttn g) s tid =
+      (nodes.take k).foldl (applyNodeRingAttn g) s tid := by
+  conv_lhs => rw [← List.take_append_drop k nodes, List.foldl_append]
+  exact foldl_applyNodeRingAttn_at_not_written g _ _ tid hnil h
+
 /-! ### Phase C1: concrete `ringAttnBuddies` structure lemmas.
 
     The graphs `sm_goal_3` / `pm_goal_3` are concrete literal node lists, so the
