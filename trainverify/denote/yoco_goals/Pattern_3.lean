@@ -1253,4 +1253,407 @@ theorem layer_moe_block_commute
   exact moe_combine_tail_commute r0 r1 _ _ _ _ _ _
     hr0 hr1 hmoe0 hmoe1 hgate0 hgate1 hswp0 hswp1
 
+set_option maxHeartbeats 2000000 in
+/-- **Single-layer residual step commute (Pattern_3 layer induction).**
+
+    Composes the attention sub-block residual commute (`layer_attn_block_commute`)
+    with the MoE sub-block residual commute (`layer_moe_block_commute`) into the
+    full layer L → L+1 residual invariant.  Given a residual input at layer L
+    whose PM shards gather to the SM residual (`allGatherPrimDimN 0 2 0 [r0, r1]`)
+    plus replicated weights, the residual output at layer L+1 also PM-shards:
+    the SM layer step (attention residual add, then MoE residual add) equals the
+    dim-0 gather of the two per-rank layer steps.  Unified over both attention
+    types (zigzag / sliding_window) since both reduce to `fw_attn_varlen`.
+    Proof: rewrite the attention intermediate via `layer_attn_block_commute`,
+    then apply `layer_moe_block_commute` to the two per-rank intermediate shards
+    (whose `[2048,1024]` shapes are discharged locally). -/
+theorem layer_step_commute
+    (r0 r1 : Tensor)
+    (wn_a wq wk wv_a cs pos0 pos1 wo cuQ cuK : Tensor)
+    (wn_m wr wg wu wv_m wd w13a w13b w2a w2b : Tensor)
+    (qh kh d vd : Nat) (causal : Bool) (windowLeft : Nat)
+    (E_shard topK t_dim d_dim dInner : Nat) (swigluLimit : Scalar)
+    (hqh : 0 < qh) (hkh : 0 < kh) (hd : 0 < d) (hvd : 0 < vd)
+    (hE : 0 < E_shard) (ht : 0 < t_dim) (hd_dim : 0 < d_dim) (hdI : 0 < dInner)
+    (ht_even : t_dim = 2 * d_dim)
+    (hr0 : r0.shape = [2048, 1024]) (hr1 : r1.shape = [2048, 1024])
+    (hwn_a : wn_a.shape = [1024])
+    (hwq : wq.shape = [qh, d, 1024]) (hwk : wk.shape = [kh, d, 1024])
+    (hwv_a : wv_a.shape = [kh, vd, 1024])
+    (hpos0 : pos0.shape = [2048, 1]) (hpos1 : pos1.shape = [2048, 1])
+    (hwo : wo.shape = [1024, qh * vd])
+    (hwr : wr.shape = [E_shard * 2, 1024]) (hwg : wg.shape = [1, 1024])
+    (hwu : wu.shape = [dInner, 1024]) (hwv_m : wv_m.shape = [dInner, 1024])
+    (hwd : wd.shape = [1024, dInner])
+    (hw13a : w13a.shape = [E_shard, t_dim, 1024]) (hw13b : w13b.shape = [E_shard, t_dim, 1024])
+    (hw2a : w2a.shape = [E_shard, 1024, d_dim]) (hw2b : w2b.shape = [E_shard, 1024, d_dim])
+    (haf : (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft).shape = [2 * 2048, qh, vd]) :
+    (elemwiseAdd (elemwiseAdd (allGatherPrimDimN 0 2 0 [r0, r1])
+        (fw_linear (fw_view [2 * 2048, qh * vd]
+          (fw_attn_varlen
+            (fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+              (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wq) qh)
+            (fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+              (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wk) kh)
+            (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wv_a)
+            cuQ cuK qh kh d vd causal windowLeft)) wo))
+        (elemwiseAdd
+          (fw_all2all_moe_gmm_full
+            (fw_rms_norm (elemwiseAdd (allGatherPrimDimN 0 2 0 [r0, r1])
+        (fw_linear (fw_view [2 * 2048, qh * vd]
+          (fw_attn_varlen
+            (fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+              (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wq) qh)
+            (fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+              (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wk) kh)
+            (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wv_a)
+            cuQ cuK qh kh d vd causal windowLeft)) wo)) wn_m)
+            ((fw_topk_routing
+                (fw_norm_linear (fw_rms_norm (elemwiseAdd (allGatherPrimDimN 0 2 0 [r0, r1])
+        (fw_linear (fw_view [2 * 2048, qh * vd]
+          (fw_attn_varlen
+            (fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+              (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wq) qh)
+            (fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+              (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wk) kh)
+            (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wv_a)
+            cuQ cuK qh kh d vd causal windowLeft)) wo)) wn_m) wr)
+                topK (E_shard * 2)).fst)
+            ((fw_topk_routing
+                (fw_norm_linear (fw_rms_norm (elemwiseAdd (allGatherPrimDimN 0 2 0 [r0, r1])
+        (fw_linear (fw_view [2 * 2048, qh * vd]
+          (fw_attn_varlen
+            (fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+              (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wq) qh)
+            (fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+              (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wk) kh)
+            (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wv_a)
+            cuQ cuK qh kh d vd causal windowLeft)) wo)) wn_m) wr)
+                topK (E_shard * 2)).snd.fst)
+            [w13a, w13b] [w2a, w2b] (E_shard * 2) topK swigluLimit)
+          (elemwiseMul
+            (fw_sigmoid (fw_view [2048 * 2, 1]
+              (fw_linear (fw_rms_norm (elemwiseAdd (allGatherPrimDimN 0 2 0 [r0, r1])
+        (fw_linear (fw_view [2 * 2048, qh * vd]
+          (fw_attn_varlen
+            (fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+              (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wq) qh)
+            (fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+              (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wk) kh)
+            (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wv_a)
+            cuQ cuK qh kh d vd causal windowLeft)) wo)) wn_m) wg)))
+            (fw_view [2048 * 2, 1024]
+              (fw_linear (fw_swiglu
+                (fw_view [2048 * 2, dInner]
+                  (fw_linear (fw_rms_norm (elemwiseAdd (allGatherPrimDimN 0 2 0 [r0, r1])
+        (fw_linear (fw_view [2 * 2048, qh * vd]
+          (fw_attn_varlen
+            (fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+              (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wq) qh)
+            (fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+              (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wk) kh)
+            (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wv_a)
+            cuQ cuK qh kh d vd causal windowLeft)) wo)) wn_m) wu))
+                (fw_view [2048 * 2, dInner]
+                  (fw_linear (fw_rms_norm (elemwiseAdd (allGatherPrimDimN 0 2 0 [r0, r1])
+        (fw_linear (fw_view [2 * 2048, qh * vd]
+          (fw_attn_varlen
+            (fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+              (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wq) qh)
+            (fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+              (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wk) kh)
+            (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn_a) wv_a)
+            cuQ cuK qh kh d vd causal windowLeft)) wo)) wn_m) wv_m))) wd)))))
+      = allGatherPrimDimN 0 2 0
+          [(elemwiseAdd (elemwiseAdd r0 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo))
+        (elemwiseAdd
+          (fw_all2all_moe_gmm_full
+            (fw_rms_norm (elemwiseAdd r0 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo)) wn_m)
+            ((fw_topk_routing
+                (fw_norm_linear (fw_rms_norm (elemwiseAdd r0 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo)) wn_m) wr)
+                topK (E_shard * 2)).fst)
+            ((fw_topk_routing
+                (fw_norm_linear (fw_rms_norm (elemwiseAdd r0 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo)) wn_m) wr)
+                topK (E_shard * 2)).snd.fst)
+            [w13a, w13b] [w2a, w2b] (E_shard * 2) topK swigluLimit)
+          (elemwiseMul
+            (fw_sigmoid (fw_view [2048, 1]
+              (fw_linear (fw_rms_norm (elemwiseAdd r0 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo)) wn_m) wg)))
+            (fw_view [2048, 1024]
+              (fw_linear (fw_swiglu
+                (fw_view [2048, dInner]
+                  (fw_linear (fw_rms_norm (elemwiseAdd r0 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo)) wn_m) wu))
+                (fw_view [2048, dInner]
+                  (fw_linear (fw_rms_norm (elemwiseAdd r0 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo)) wn_m) wv_m))) wd))))),
+           (elemwiseAdd (elemwiseAdd r1 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo))
+        (elemwiseAdd
+          (fw_all2all_moe_gmm_full
+            (fw_rms_norm (elemwiseAdd r1 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo)) wn_m)
+            ((fw_topk_routing
+                (fw_norm_linear (fw_rms_norm (elemwiseAdd r1 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo)) wn_m) wr)
+                topK (E_shard * 2)).fst)
+            ((fw_topk_routing
+                (fw_norm_linear (fw_rms_norm (elemwiseAdd r1 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo)) wn_m) wr)
+                topK (E_shard * 2)).snd.fst)
+            [w13a, w13b] [w2a, w2b] (E_shard * 2) topK swigluLimit)
+          (elemwiseMul
+            (fw_sigmoid (fw_view [2048, 1]
+              (fw_linear (fw_rms_norm (elemwiseAdd r1 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo)) wn_m) wg)))
+            (fw_view [2048, 1024]
+              (fw_linear (fw_swiglu
+                (fw_view [2048, dInner]
+                  (fw_linear (fw_rms_norm (elemwiseAdd r1 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo)) wn_m) wu))
+                (fw_view [2048, dInner]
+                  (fw_linear (fw_rms_norm (elemwiseAdd r1 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo)) wn_m) wv_m))) wd)))))] := by
+  have h_attn := layer_attn_block_commute r0 r1 wn_a wq wk wv_a cs pos0 pos1 wo cuQ cuK
+      qh kh d vd causal windowLeft hqh hkh hd hvd hr0 hr1 hwn_a hwq hwk hwv_a
+      hpos0 hpos1 hwo haf
+  rw [h_attn]
+  have hv0 : (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))).shape = [2048, qh * vd] :=
+    view_shape_p3 _ _
+  have hv1 : (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))).shape = [2048, qh * vd] :=
+    view_shape_p3 _ _
+  have hproj0 : (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo).shape = [2048, 1024] :=
+    linear_shape_p3 2048 (qh * vd) 1024 _ wo hv0 hwo
+  have hproj1 : (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo).shape = [2048, 1024] :=
+    linear_shape_p3 2048 (qh * vd) 1024 _ wo hv1 hwo
+  have hi0 : (elemwiseAdd r0 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo)).shape = [2048, 1024] :=
+    elemwiseAdd_shape_of_shapes _ _ _ hr0 hproj0
+  have hi1 : (elemwiseAdd r1 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo)).shape = [2048, 1024] :=
+    elemwiseAdd_shape_of_shapes _ _ _ hr1 hproj1
+  exact layer_moe_block_commute (elemwiseAdd r0 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo)) (elemwiseAdd r1 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1 (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn_a) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn_a) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn_a) wv_a,
+                    fw_per_head_linear (fw_rms_norm r1 wn_a) wv_a])
+                cuQ cuK qh kh d vd causal windowLeft))) wo))
+    wn_m wr wg wu wv_m wd w13a w13b w2a w2b
+    E_shard topK t_dim d_dim dInner swigluLimit
+    hE ht hd_dim hdI ht_even hi0 hi1 hwr hwg hwu hwv_m hwd hw13a hw13b hw2a hw2b
+
 end TrainVerify.Denote.GeneratedPatterns
