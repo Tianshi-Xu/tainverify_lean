@@ -934,4 +934,323 @@ theorem moe_combine_tail_commute
         (elemwiseAdd moe0 (elemwiseMul gate0 sw0)) (elemwiseAdd moe1 (elemwiseMul gate1 sw1))
         hc0 hc1 hadd0 hadd1]
 
+/-- Local shape helper: 2-D `fw_norm_linear` output shape `[b, n]` (`w : [n, k]`). -/
+private theorem norm_linear_shape_p3 (b k n : Nat) (x w : Tensor)
+    (hx : x.shape = [b, k]) (hw : w.shape = [n, k]) :
+    (fw_norm_linear x w).shape = [b, n] := by
+  unfold fw_norm_linear; rw [hx, hw]; simp [Tensor.mkShape]
+
+/-- Local shape helper: `fw_topk_routing` routing-probs (`.fst`) has shape
+    `[S, numExp]` when the logits have shape `[S, numExp]`. -/
+private theorem topk_fst_shape_p3 (x : Tensor) (S topK numExp : Nat)
+    (hx : x.shape = [S, numExp]) :
+    (fw_topk_routing x topK numExp).fst.shape = [S, numExp] := by
+  unfold fw_topk_routing; simp [Tensor.mkShape]; rw [hx]; rfl
+
+/-- Local shape helper: `fw_topk_routing` routing-map (`.snd.fst`) has shape
+    `[S, numExp]` when the logits have shape `[S, numExp]`. -/
+private theorem topk_snd_fst_shape_p3 (x : Tensor) (S topK numExp : Nat)
+    (hx : x.shape = [S, numExp]) :
+    (fw_topk_routing x topK numExp).snd.fst.shape = [S, numExp] := by
+  unfold fw_topk_routing; simp [Tensor.mkShape]; rw [hx]; rfl
+
+/-- **MoE-GMM path residual commute.**  The MoE sub-block's expert-FFN branch —
+    routing logits (`rms_norm → norm_linear`, `FW_float` being identity),
+    top-k routing (scores `.fst` and map `.snd.fst`), and the fused all-to-all
+    grouped-MM expert layer on the normed activation — commutes with the
+    residual-stream shard-gather: the full (SM, numRanks=1) MoE-GMM output over
+    the gathered residual equals the dim-0 gather of the two per-rank
+    (PM, numRanks=2) MoE-GMM outputs, with `w13 / w2` expert weights replicated
+    across ranks.  Chains Pattern_1's proven `fw_rms_norm`, `fw_norm_linear`,
+    `fw_topk_routing_fst` / `_snd_fst`, and `fw_all2all_moe_gmm_full_split`
+    sharding-commutes (`dModel` = model dim, `E_shard * 2` = total experts). -/
+theorem moe_gmm_output_commute
+    (r0 r1 wn wr w13a w13b w2a w2b : Tensor)
+    (L dModel E_shard topK t_dim d_dim : Nat) (swigluLimit : Scalar)
+    (hL : 0 < L) (hdM : 0 < dModel) (hE : 0 < E_shard) (ht : 0 < t_dim) (hd : 0 < d_dim)
+    (ht_even : t_dim = 2 * d_dim)
+    (hr0 : r0.shape = [L, dModel]) (hr1 : r1.shape = [L, dModel])
+    (hwr : wr.shape = [E_shard * 2, dModel])
+    (hw13a : w13a.shape = [E_shard, t_dim, dModel]) (hw13b : w13b.shape = [E_shard, t_dim, dModel])
+    (hw2a : w2a.shape = [E_shard, dModel, d_dim]) (hw2b : w2b.shape = [E_shard, dModel, d_dim]) :
+    fw_all2all_moe_gmm_full
+        (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn)
+        ((fw_topk_routing
+            (fw_norm_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn) wr)
+            topK (E_shard * 2)).fst)
+        ((fw_topk_routing
+            (fw_norm_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn) wr)
+            topK (E_shard * 2)).snd.fst)
+        [w13a, w13b] [w2a, w2b] (E_shard * 2) topK swigluLimit
+      = allGatherPrimDimN 0 2 0
+          [fw_all2all_moe_gmm_full (fw_rms_norm r0 wn)
+              ((fw_topk_routing (fw_norm_linear (fw_rms_norm r0 wn) wr) topK (E_shard * 2)).fst)
+              ((fw_topk_routing (fw_norm_linear (fw_rms_norm r0 wn) wr) topK (E_shard * 2)).snd.fst)
+              [w13a, w13b] [w2a, w2b] (E_shard * 2) topK swigluLimit,
+           fw_all2all_moe_gmm_full (fw_rms_norm r1 wn)
+              ((fw_topk_routing (fw_norm_linear (fw_rms_norm r1 wn) wr) topK (E_shard * 2)).fst)
+              ((fw_topk_routing (fw_norm_linear (fw_rms_norm r1 wn) wr) topK (E_shard * 2)).snd.fst)
+              [w13a, w13b] [w2a, w2b] (E_shard * 2) topK swigluLimit] := by
+  have hrms0 : (fw_rms_norm r0 wn).shape = [L, dModel] := (rms_norm_shape_p3 r0 wn).trans hr0
+  have hrms1 : (fw_rms_norm r1 wn).shape = [L, dModel] := (rms_norm_shape_p3 r1 wn).trans hr1
+  have hlog0 : (fw_norm_linear (fw_rms_norm r0 wn) wr).shape = [L, E_shard * 2] :=
+    norm_linear_shape_p3 L dModel (E_shard * 2) _ wr hrms0 hwr
+  have hlog1 : (fw_norm_linear (fw_rms_norm r1 wn) wr).shape = [L, E_shard * 2] :=
+    norm_linear_shape_p3 L dModel (E_shard * 2) _ wr hrms1 hwr
+  have hsc0 : (fw_topk_routing (fw_norm_linear (fw_rms_norm r0 wn) wr) topK (E_shard * 2)).fst.shape
+      = [L, E_shard * 2] := topk_fst_shape_p3 _ L topK (E_shard * 2) hlog0
+  have hsc1 : (fw_topk_routing (fw_norm_linear (fw_rms_norm r1 wn) wr) topK (E_shard * 2)).fst.shape
+      = [L, E_shard * 2] := topk_fst_shape_p3 _ L topK (E_shard * 2) hlog1
+  have hmap0 : (fw_topk_routing (fw_norm_linear (fw_rms_norm r0 wn) wr) topK (E_shard * 2)).snd.fst.shape
+      = [L, E_shard * 2] := topk_snd_fst_shape_p3 _ L topK (E_shard * 2) hlog0
+  have hmap1 : (fw_topk_routing (fw_norm_linear (fw_rms_norm r1 wn) wr) topK (E_shard * 2)).snd.fst.shape
+      = [L, E_shard * 2] := topk_snd_fst_shape_p3 _ L topK (E_shard * 2) hlog1
+  rw [fw_rms_norm_allGather0_commute_2 r0 r1 wn L dModel hL hdM hr0 hr1]
+  rw [fw_norm_linear_allGather0_commute_2 (fw_rms_norm r0 wn) (fw_rms_norm r1 wn) wr
+        L dModel (E_shard * 2) hL hdM (by omega) hrms0 hrms1 hwr]
+  rw [fw_topk_routing_fst_allGather0_commute_2_of
+        (fw_norm_linear (fw_rms_norm r0 wn) wr) (fw_norm_linear (fw_rms_norm r1 wn) wr)
+        L topK (E_shard * 2) hL (by omega) hlog0 hlog1]
+  rw [fw_topk_routing_snd_fst_allGather0_commute_2_of
+        (fw_norm_linear (fw_rms_norm r0 wn) wr) (fw_norm_linear (fw_rms_norm r1 wn) wr)
+        L topK (E_shard * 2) hL (by omega) hlog0 hlog1]
+  exact fw_all2all_moe_gmm_full_split_commute_2
+    (fw_rms_norm r0 wn) (fw_rms_norm r1 wn)
+    ((fw_topk_routing (fw_norm_linear (fw_rms_norm r0 wn) wr) topK (E_shard * 2)).fst)
+    ((fw_topk_routing (fw_norm_linear (fw_rms_norm r1 wn) wr) topK (E_shard * 2)).fst)
+    ((fw_topk_routing (fw_norm_linear (fw_rms_norm r0 wn) wr) topK (E_shard * 2)).snd.fst)
+    ((fw_topk_routing (fw_norm_linear (fw_rms_norm r1 wn) wr) topK (E_shard * 2)).snd.fst)
+    w13a w13b w2a w2b
+    L dModel E_shard topK t_dim d_dim swigluLimit
+    hL hdM hE ht hd ht_even hrms0 hrms1 hsc0 hsc1 hmap0 hmap1 hw13a hw13b hw2a hw2b
+
+/-- Local shape helper: `fw_swiglu g u` inherits the `up` argument's shape `[b, h]`. -/
+private theorem swiglu_shape_p3 (g u : Tensor) (b h : Nat) (hu : u.shape = [b, h]) :
+    (fw_swiglu g u).shape = [b, h] := by
+  unfold fw_swiglu Tensor.mkShape; simp; exact hu
+
+/-- **MoE gate path residual commute.**  The sigmoid gate branch
+    (`rms_norm → mix_precision_linear → view → sigmoid`, `FW_reshape` being
+    identity) commutes with the residual-stream shard-gather.  The gate weight
+    `wg : [1, dModel]` projects each token to a scalar gate.  Chains
+    `fw_rms_norm`, `fw_mix_precision_linear`, `fw_view`, `fw_sigmoid`
+    sharding-commutes. -/
+theorem moe_gate_path_commute
+    (r0 r1 wn wg : Tensor) (L dModel : Nat)
+    (hL : 0 < L) (hdM : 0 < dModel)
+    (hr0 : r0.shape = [L, dModel]) (hr1 : r1.shape = [L, dModel])
+    (hwg : wg.shape = [1, dModel]) :
+    fw_sigmoid (fw_view [L * 2, 1]
+        (fw_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn) wg))
+      = allGatherPrimDimN 0 2 0
+          [fw_sigmoid (fw_view [L, 1] (fw_linear (fw_rms_norm r0 wn) wg)),
+           fw_sigmoid (fw_view [L, 1] (fw_linear (fw_rms_norm r1 wn) wg))] := by
+  have hrms0 : (fw_rms_norm r0 wn).shape = [L, dModel] := (rms_norm_shape_p3 r0 wn).trans hr0
+  have hrms1 : (fw_rms_norm r1 wn).shape = [L, dModel] := (rms_norm_shape_p3 r1 wn).trans hr1
+  have hlin0 : (fw_linear (fw_rms_norm r0 wn) wg).shape = [L, 1] :=
+    linear_shape_p3 L dModel 1 _ wg hrms0 hwg
+  have hlin1 : (fw_linear (fw_rms_norm r1 wn) wg).shape = [L, 1] :=
+    linear_shape_p3 L dModel 1 _ wg hrms1 hwg
+  have hview0 : (fw_view [L, 1] (fw_linear (fw_rms_norm r0 wn) wg)).shape = [L, 1] :=
+    view_shape_p3 _ _
+  have hview1 : (fw_view [L, 1] (fw_linear (fw_rms_norm r1 wn) wg)).shape = [L, 1] :=
+    view_shape_p3 _ _
+  rw [fw_rms_norm_allGather0_commute_2 r0 r1 wn L dModel hL hdM hr0 hr1]
+  rw [fw_mix_precision_linear_allGather0_commute_2 (fw_rms_norm r0 wn) (fw_rms_norm r1 wn) wg
+        L dModel 1 hL hdM (by norm_num) hrms0 hrms1 hwg]
+  rw [fw_view_allGather0_commute_2_of
+        (fw_linear (fw_rms_norm r0 wn) wg) (fw_linear (fw_rms_norm r1 wn) wg) L 1 hL hlin0 hlin1]
+  rw [fw_sigmoid_allGather0_commute_2
+        (fw_view [L, 1] (fw_linear (fw_rms_norm r0 wn) wg))
+        (fw_view [L, 1] (fw_linear (fw_rms_norm r1 wn) wg)) L 1 hL (by norm_num) hview0 hview1]
+
+/-- **MoE SwiGLU-projection path residual commute.**  The SwiGLU FFN branch
+    feeding the gate multiply (`rms_norm → up/gate mix_precision_linear → view →
+    swiglu → down mix_precision_linear → view`, `FW_reshape` being identity)
+    commutes with the residual-stream shard-gather.  `wu, wv : [dInner, dModel]`
+    are the up/gate projections and `wd : [dModel, dInner]` the down projection.
+    Chains `fw_rms_norm`, `fw_mix_precision_linear`, `fw_view`, `fw_swiglu`
+    sharding-commutes. -/
+theorem moe_swiglu_path_commute
+    (r0 r1 wn wu wv wd : Tensor) (L dModel dInner : Nat)
+    (hL : 0 < L) (hdM : 0 < dModel) (hdI : 0 < dInner)
+    (hr0 : r0.shape = [L, dModel]) (hr1 : r1.shape = [L, dModel])
+    (hwu : wu.shape = [dInner, dModel]) (hwv : wv.shape = [dInner, dModel])
+    (hwd : wd.shape = [dModel, dInner]) :
+    fw_view [L * 2, dModel]
+        (fw_linear (fw_swiglu
+          (fw_view [L * 2, dInner]
+            (fw_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn) wu))
+          (fw_view [L * 2, dInner]
+            (fw_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn) wv))) wd)
+      = allGatherPrimDimN 0 2 0
+          [fw_view [L, dModel] (fw_linear (fw_swiglu
+              (fw_view [L, dInner] (fw_linear (fw_rms_norm r0 wn) wu))
+              (fw_view [L, dInner] (fw_linear (fw_rms_norm r0 wn) wv))) wd),
+           fw_view [L, dModel] (fw_linear (fw_swiglu
+              (fw_view [L, dInner] (fw_linear (fw_rms_norm r1 wn) wu))
+              (fw_view [L, dInner] (fw_linear (fw_rms_norm r1 wn) wv))) wd)] := by
+  have hrms0 : (fw_rms_norm r0 wn).shape = [L, dModel] := (rms_norm_shape_p3 r0 wn).trans hr0
+  have hrms1 : (fw_rms_norm r1 wn).shape = [L, dModel] := (rms_norm_shape_p3 r1 wn).trans hr1
+  have hlinu0 : (fw_linear (fw_rms_norm r0 wn) wu).shape = [L, dInner] :=
+    linear_shape_p3 L dModel dInner _ wu hrms0 hwu
+  have hlinu1 : (fw_linear (fw_rms_norm r1 wn) wu).shape = [L, dInner] :=
+    linear_shape_p3 L dModel dInner _ wu hrms1 hwu
+  have hlinv0 : (fw_linear (fw_rms_norm r0 wn) wv).shape = [L, dInner] :=
+    linear_shape_p3 L dModel dInner _ wv hrms0 hwv
+  have hlinv1 : (fw_linear (fw_rms_norm r1 wn) wv).shape = [L, dInner] :=
+    linear_shape_p3 L dModel dInner _ wv hrms1 hwv
+  have hvu0 : (fw_view [L, dInner] (fw_linear (fw_rms_norm r0 wn) wu)).shape = [L, dInner] :=
+    view_shape_p3 _ _
+  have hvu1 : (fw_view [L, dInner] (fw_linear (fw_rms_norm r1 wn) wu)).shape = [L, dInner] :=
+    view_shape_p3 _ _
+  have hvv0 : (fw_view [L, dInner] (fw_linear (fw_rms_norm r0 wn) wv)).shape = [L, dInner] :=
+    view_shape_p3 _ _
+  have hvv1 : (fw_view [L, dInner] (fw_linear (fw_rms_norm r1 wn) wv)).shape = [L, dInner] :=
+    view_shape_p3 _ _
+  have hsw0 : (fw_swiglu (fw_view [L, dInner] (fw_linear (fw_rms_norm r0 wn) wu))
+                (fw_view [L, dInner] (fw_linear (fw_rms_norm r0 wn) wv))).shape = [L, dInner] :=
+    swiglu_shape_p3 _ _ L dInner hvv0
+  have hsw1 : (fw_swiglu (fw_view [L, dInner] (fw_linear (fw_rms_norm r1 wn) wu))
+                (fw_view [L, dInner] (fw_linear (fw_rms_norm r1 wn) wv))).shape = [L, dInner] :=
+    swiglu_shape_p3 _ _ L dInner hvv1
+  have hproj0 : (fw_linear (fw_swiglu
+      (fw_view [L, dInner] (fw_linear (fw_rms_norm r0 wn) wu))
+      (fw_view [L, dInner] (fw_linear (fw_rms_norm r0 wn) wv))) wd).shape = [L, dModel] :=
+    linear_shape_p3 L dInner dModel _ wd hsw0 hwd
+  have hproj1 : (fw_linear (fw_swiglu
+      (fw_view [L, dInner] (fw_linear (fw_rms_norm r1 wn) wu))
+      (fw_view [L, dInner] (fw_linear (fw_rms_norm r1 wn) wv))) wd).shape = [L, dModel] :=
+    linear_shape_p3 L dInner dModel _ wd hsw1 hwd
+  rw [fw_rms_norm_allGather0_commute_2 r0 r1 wn L dModel hL hdM hr0 hr1]
+  rw [fw_mix_precision_linear_allGather0_commute_2 (fw_rms_norm r0 wn) (fw_rms_norm r1 wn) wu
+        L dModel dInner hL hdM hdI hrms0 hrms1 hwu]
+  rw [fw_mix_precision_linear_allGather0_commute_2 (fw_rms_norm r0 wn) (fw_rms_norm r1 wn) wv
+        L dModel dInner hL hdM hdI hrms0 hrms1 hwv]
+  rw [fw_view_allGather0_commute_2_of
+        (fw_linear (fw_rms_norm r0 wn) wu) (fw_linear (fw_rms_norm r1 wn) wu) L dInner hL hlinu0 hlinu1]
+  rw [fw_view_allGather0_commute_2_of
+        (fw_linear (fw_rms_norm r0 wn) wv) (fw_linear (fw_rms_norm r1 wn) wv) L dInner hL hlinv0 hlinv1]
+  rw [fw_swiglu_allGather0_commute_2
+        (fw_view [L, dInner] (fw_linear (fw_rms_norm r0 wn) wu))
+        (fw_view [L, dInner] (fw_linear (fw_rms_norm r1 wn) wu))
+        (fw_view [L, dInner] (fw_linear (fw_rms_norm r0 wn) wv))
+        (fw_view [L, dInner] (fw_linear (fw_rms_norm r1 wn) wv))
+        L dInner hL hdI hvu0 hvu1 hvv0 hvv1]
+  rw [fw_mix_precision_linear_allGather0_commute_2
+        (fw_swiglu (fw_view [L, dInner] (fw_linear (fw_rms_norm r0 wn) wu))
+          (fw_view [L, dInner] (fw_linear (fw_rms_norm r0 wn) wv)))
+        (fw_swiglu (fw_view [L, dInner] (fw_linear (fw_rms_norm r1 wn) wu))
+          (fw_view [L, dInner] (fw_linear (fw_rms_norm r1 wn) wv)))
+        wd L dInner dModel hL hdI hdM hsw0 hsw1 hwd]
+  rw [fw_view_allGather0_commute_2_of
+        (fw_linear (fw_swiglu (fw_view [L, dInner] (fw_linear (fw_rms_norm r0 wn) wu))
+          (fw_view [L, dInner] (fw_linear (fw_rms_norm r0 wn) wv))) wd)
+        (fw_linear (fw_swiglu (fw_view [L, dInner] (fw_linear (fw_rms_norm r1 wn) wu))
+          (fw_view [L, dInner] (fw_linear (fw_rms_norm r1 wn) wv))) wd)
+        L dModel hL hproj0 hproj1]
+
+/-- **Full MoE sub-block residual commute (Approach A, value level).**
+
+    Ties the three residual-commuting branches of a layer's MoE sub-block —
+    the expert-FFN (`moe_gmm_output_commute`), the sigmoid gate
+    (`moe_gate_path_commute`), and the SwiGLU projection
+    (`moe_swiglu_path_commute`) — to the combine tail (`moe_combine_tail_commute`,
+    from `405ddf6`).  The left-hand side is the SM (full, numRanks=1) MoE
+    sub-block computed over the gathered residual stream `r_L`; the right-hand
+    side is the dim-0 gather of the two PM (numRanks=2) per-rank sub-blocks
+    (`FW_float` / `FW_reshape` being identities in the model).  `dModel = 1024`
+    is the model dim, `E_shard * 2` the total experts, `dInner` the SwiGLU inner
+    width.  Together with `layer_attn_block_commute` this completes the algebraic
+    per-layer residual invariant. -/
+theorem layer_moe_block_commute
+    (r0 r1 wn wr wg wu wv wd w13a w13b w2a w2b : Tensor)
+    (E_shard topK t_dim d_dim dInner : Nat) (swigluLimit : Scalar)
+    (hE : 0 < E_shard) (ht : 0 < t_dim) (hd : 0 < d_dim) (hdI : 0 < dInner)
+    (ht_even : t_dim = 2 * d_dim)
+    (hr0 : r0.shape = [2048, 1024]) (hr1 : r1.shape = [2048, 1024])
+    (hwr : wr.shape = [E_shard * 2, 1024]) (hwg : wg.shape = [1, 1024])
+    (hwu : wu.shape = [dInner, 1024]) (hwv : wv.shape = [dInner, 1024])
+    (hwd : wd.shape = [1024, dInner])
+    (hw13a : w13a.shape = [E_shard, t_dim, 1024]) (hw13b : w13b.shape = [E_shard, t_dim, 1024])
+    (hw2a : w2a.shape = [E_shard, 1024, d_dim]) (hw2b : w2b.shape = [E_shard, 1024, d_dim]) :
+    elemwiseAdd (allGatherPrimDimN 0 2 0 [r0, r1])
+        (elemwiseAdd
+          (fw_all2all_moe_gmm_full
+            (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn)
+            ((fw_topk_routing
+                (fw_norm_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn) wr)
+                topK (E_shard * 2)).fst)
+            ((fw_topk_routing
+                (fw_norm_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn) wr)
+                topK (E_shard * 2)).snd.fst)
+            [w13a, w13b] [w2a, w2b] (E_shard * 2) topK swigluLimit)
+          (elemwiseMul
+            (fw_sigmoid (fw_view [2048 * 2, 1]
+              (fw_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn) wg)))
+            (fw_view [2048 * 2, 1024]
+              (fw_linear (fw_swiglu
+                (fw_view [2048 * 2, dInner]
+                  (fw_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn) wu))
+                (fw_view [2048 * 2, dInner]
+                  (fw_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn) wv))) wd))))
+      = allGatherPrimDimN 0 2 0
+          [elemwiseAdd r0
+            (elemwiseAdd
+              (fw_all2all_moe_gmm_full (fw_rms_norm r0 wn)
+                ((fw_topk_routing (fw_norm_linear (fw_rms_norm r0 wn) wr) topK (E_shard * 2)).fst)
+                ((fw_topk_routing (fw_norm_linear (fw_rms_norm r0 wn) wr) topK (E_shard * 2)).snd.fst)
+                [w13a, w13b] [w2a, w2b] (E_shard * 2) topK swigluLimit)
+              (elemwiseMul
+                (fw_sigmoid (fw_view [2048, 1] (fw_linear (fw_rms_norm r0 wn) wg)))
+                (fw_view [2048, 1024] (fw_linear (fw_swiglu
+                  (fw_view [2048, dInner] (fw_linear (fw_rms_norm r0 wn) wu))
+                  (fw_view [2048, dInner] (fw_linear (fw_rms_norm r0 wn) wv))) wd)))),
+           elemwiseAdd r1
+            (elemwiseAdd
+              (fw_all2all_moe_gmm_full (fw_rms_norm r1 wn)
+                ((fw_topk_routing (fw_norm_linear (fw_rms_norm r1 wn) wr) topK (E_shard * 2)).fst)
+                ((fw_topk_routing (fw_norm_linear (fw_rms_norm r1 wn) wr) topK (E_shard * 2)).snd.fst)
+                [w13a, w13b] [w2a, w2b] (E_shard * 2) topK swigluLimit)
+              (elemwiseMul
+                (fw_sigmoid (fw_view [2048, 1] (fw_linear (fw_rms_norm r1 wn) wg)))
+                (fw_view [2048, 1024] (fw_linear (fw_swiglu
+                  (fw_view [2048, dInner] (fw_linear (fw_rms_norm r1 wn) wu))
+                  (fw_view [2048, dInner] (fw_linear (fw_rms_norm r1 wn) wv))) wd))))] := by
+  rw [moe_gmm_output_commute r0 r1 wn wr w13a w13b w2a w2b
+        2048 1024 E_shard topK t_dim d_dim swigluLimit
+        (by norm_num) (by norm_num) hE ht hd ht_even hr0 hr1 hwr hw13a hw13b hw2a hw2b]
+  rw [moe_gate_path_commute r0 r1 wn wg 2048 1024 (by norm_num) (by norm_num) hr0 hr1 hwg]
+  rw [moe_swiglu_path_commute r0 r1 wn wu wv wd 2048 1024 dInner
+        (by norm_num) (by norm_num) hdI hr0 hr1 hwu hwv hwd]
+  -- Per-rank branch-output shapes for the combine tail.
+  have hrms0 : (fw_rms_norm r0 wn).shape = [2048, 1024] := (rms_norm_shape_p3 r0 wn).trans hr0
+  have hrms1 : (fw_rms_norm r1 wn).shape = [2048, 1024] := (rms_norm_shape_p3 r1 wn).trans hr1
+  have hmoe0 : (fw_all2all_moe_gmm_full (fw_rms_norm r0 wn)
+      ((fw_topk_routing (fw_norm_linear (fw_rms_norm r0 wn) wr) topK (E_shard * 2)).fst)
+      ((fw_topk_routing (fw_norm_linear (fw_rms_norm r0 wn) wr) topK (E_shard * 2)).snd.fst)
+      [w13a, w13b] [w2a, w2b] (E_shard * 2) topK swigluLimit).shape = [2048, 1024] :=
+    fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024
+      (by rw [hrms0]; rfl) (by rw [hrms0]; rfl)
+  have hmoe1 : (fw_all2all_moe_gmm_full (fw_rms_norm r1 wn)
+      ((fw_topk_routing (fw_norm_linear (fw_rms_norm r1 wn) wr) topK (E_shard * 2)).fst)
+      ((fw_topk_routing (fw_norm_linear (fw_rms_norm r1 wn) wr) topK (E_shard * 2)).snd.fst)
+      [w13a, w13b] [w2a, w2b] (E_shard * 2) topK swigluLimit).shape = [2048, 1024] :=
+    fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024
+      (by rw [hrms1]; rfl) (by rw [hrms1]; rfl)
+  have hgate0 : (fw_sigmoid (fw_view [2048, 1] (fw_linear (fw_rms_norm r0 wn) wg))).shape = [2048, 1] := by
+    unfold fw_sigmoid Tensor.mkShape; simp [view_shape_p3]
+  have hgate1 : (fw_sigmoid (fw_view [2048, 1] (fw_linear (fw_rms_norm r1 wn) wg))).shape = [2048, 1] := by
+    unfold fw_sigmoid Tensor.mkShape; simp [view_shape_p3]
+  have hswp0 : (fw_view [2048, 1024] (fw_linear (fw_swiglu
+      (fw_view [2048, dInner] (fw_linear (fw_rms_norm r0 wn) wu))
+      (fw_view [2048, dInner] (fw_linear (fw_rms_norm r0 wn) wv))) wd)).shape = [2048, 1024] :=
+    view_shape_p3 _ _
+  have hswp1 : (fw_view [2048, 1024] (fw_linear (fw_swiglu
+      (fw_view [2048, dInner] (fw_linear (fw_rms_norm r1 wn) wu))
+      (fw_view [2048, dInner] (fw_linear (fw_rms_norm r1 wn) wv))) wd)).shape = [2048, 1024] :=
+    view_shape_p3 _ _
+  exact moe_combine_tail_commute r0 r1 _ _ _ _ _ _
+    hr0 hr1 hmoe0 hmoe1 hgate0 hgate1 hswp0 hswp1
+
 end TrainVerify.Denote.GeneratedPatterns
