@@ -918,24 +918,30 @@ theorem bw_norm_linear_snd_shape
     `[l, e]`. Params encode `[top_k, numExperts]`. -/
 
 theorem evalOp_fw_topk_routing
-    (numParts rank top_k numExperts : Nat) (logits : Tensor) :
+    (numParts rank top_k numExperts : Nat) (logits : Tensor)
+    (hlast : logits.shape.reverse.head? = some numExperts) :
     evalOp numParts rank "OpName.FW_topk_routing" [top_k, numExperts] [logits] =
       [ (fw_topk_routing logits top_k numExperts).1,
         (fw_topk_routing logits top_k numExperts).2.1,
         (fw_topk_routing logits top_k numExperts).2.2 ] := by
+  have h : evalOp numParts rank "OpName.FW_topk_routing" [top_k, numExperts] [logits] =
+      [ (fw_topk_routing logits top_k ((logits.shape.reverse.head?).getD numExperts)).1,
+        (fw_topk_routing logits top_k ((logits.shape.reverse.head?).getD numExperts)).2.1,
+        (fw_topk_routing logits top_k ((logits.shape.reverse.head?).getD numExperts)).2.2 ] := rfl
+  rw [h, hlast]
   rfl
-
 /-- `applyNode` for `FW_topk_routing` 1st output (`routing_probs`). -/
 theorem applyNode_fw_topk_routing_fst_out
     (g : GraphDecl) (s : Store) (rank top_k numExperts : Nat)
-    (logitsTid t1 t2 t3 : Tid) :
+    (logitsTid t1 t2 t3 : Tid)
+    (hlast : (s logitsTid).shape.reverse.head? = some numExperts) :
     applyNode g s { rank := rank, op := "OpName.FW_topk_routing",
                     ins := [logitsTid], outs := [t1, t2, t3],
                     params := [top_k, numExperts] } t1 =
       (fw_topk_routing (s logitsTid) top_k numExperts).1 := by
   unfold applyNode
   rw [show ([logitsTid] : List Tid).map s = [s logitsTid] from rfl,
-      evalOp_fw_topk_routing]
+      evalOp_fw_topk_routing _ _ _ _ _ hlast]
   change storeSet s
     [(t1, (fw_topk_routing (s logitsTid) top_k numExperts).1),
      (t2, (fw_topk_routing (s logitsTid) top_k numExperts).2.1),
@@ -946,14 +952,15 @@ theorem applyNode_fw_topk_routing_fst_out
 /-- `applyNode` for `FW_topk_routing` 2nd output (`routing_map`). -/
 theorem applyNode_fw_topk_routing_snd_out
     (g : GraphDecl) (s : Store) (rank top_k numExperts : Nat)
-    (logitsTid t1 t2 t3 : Tid) (hne12 : t1 ≠ t2) :
+    (logitsTid t1 t2 t3 : Tid) (hne12 : t1 ≠ t2)
+    (hlast : (s logitsTid).shape.reverse.head? = some numExperts) :
     applyNode g s { rank := rank, op := "OpName.FW_topk_routing",
                     ins := [logitsTid], outs := [t1, t2, t3],
                     params := [top_k, numExperts] } t2 =
       (fw_topk_routing (s logitsTid) top_k numExperts).2.1 := by
   unfold applyNode
   rw [show ([logitsTid] : List Tid).map s = [s logitsTid] from rfl,
-      evalOp_fw_topk_routing]
+      evalOp_fw_topk_routing _ _ _ _ _ hlast]
   change storeSet s
     [(t1, (fw_topk_routing (s logitsTid) top_k numExperts).1),
      (t2, (fw_topk_routing (s logitsTid) top_k numExperts).2.1),
@@ -964,14 +971,15 @@ theorem applyNode_fw_topk_routing_snd_out
 /-- `applyNode` for `FW_topk_routing` 3rd output (`gate_scores`). -/
 theorem applyNode_fw_topk_routing_thd_out
     (g : GraphDecl) (s : Store) (rank top_k numExperts : Nat)
-    (logitsTid t1 t2 t3 : Tid) (hne13 : t1 ≠ t3) (hne23 : t2 ≠ t3) :
+    (logitsTid t1 t2 t3 : Tid) (hne13 : t1 ≠ t3) (hne23 : t2 ≠ t3)
+    (hlast : (s logitsTid).shape.reverse.head? = some numExperts) :
     applyNode g s { rank := rank, op := "OpName.FW_topk_routing",
                     ins := [logitsTid], outs := [t1, t2, t3],
                     params := [top_k, numExperts] } t3 =
       (fw_topk_routing (s logitsTid) top_k numExperts).2.2 := by
   unfold applyNode
   rw [show ([logitsTid] : List Tid).map s = [s logitsTid] from rfl,
-      evalOp_fw_topk_routing]
+      evalOp_fw_topk_routing _ _ _ _ _ hlast]
   change storeSet s
     [(t1, (fw_topk_routing (s logitsTid) top_k numExperts).1),
      (t2, (fw_topk_routing (s logitsTid) top_k numExperts).2.1),

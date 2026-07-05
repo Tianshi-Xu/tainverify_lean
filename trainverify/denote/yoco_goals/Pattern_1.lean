@@ -120,7 +120,8 @@ All FW_reshape / FW_float are identity (verified via intermediate shape checks).
 -/
 
 /-- Full unfolding of `denoteGraph sm_goal_1 initSM 4673` in terms of `initSM` values. -/
-theorem denote_sm_goal_1_4673 (initSM : Store) :
+theorem denote_sm_goal_1_4673 (initSM : Store)
+    (h5898 : (initSM 5898).shape.reverse.head? = some 64) :
     denoteGraph sm_goal_1 initSM 4673 =
       (fw_inner_chunk_ce
         (fw_rms_norm
@@ -310,21 +311,26 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
     rw [hS2_eq_8591]
     exact applyNode_fw_multiref5_at_pos1_out sm_goal_1 S1 0 5895 8587 8591 8595 8599 8603 (by decide)
   -- Sj=9 written by node_8 (FW_topk_routing), outs=[5899, 5900, 5901], tid=5899
+  have hS8_5898_sh : (S8 5898).shape.reverse.head? = some 64 := by
+    have hS8_5898_eq : S8 5898 = initSM 5898 :=
+      foldl_applyNode_at_not_written sm_goal_1 (sm_goal_1.nodes.take 8) initSM 5898
+        (by intro n hn; fin_cases hn <;> decide)
+    rw [hS8_5898_eq]; exact h5898
   have h_take9_5899 : sm_goal_1.nodes.take 9 = sm_goal_1.nodes.take 8 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [5898], outs := [5899, 5900, 5901], params := [8, 64] }] := by rfl
   have hS9_eq_5899 : S9 = applyNode sm_goal_1 S8 { rank := 0, op := "OpName.FW_topk_routing", ins := [5898], outs := [5899, 5900, 5901], params := [8, 64] } := by
     show (sm_goal_1.nodes.take 9).foldl (applyNode sm_goal_1) initSM = _
     rw [h_take9_5899, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hS9_5899 : S9 5899 = (fw_topk_routing (S8 5898) 8 64).fst := by
-    rw [hS9_eq_5899]
-    exact applyNode_fw_topk_routing_probs_out sm_goal_1 S8 0 5898 5899 5900 5901 [8, 64]
+    rw [hS9_eq_5899, applyNode_fw_topk_routing_probs_out sm_goal_1 S8 0 5898 5899 5900 5901 [8, 64], hS8_5898_sh]
+    rfl
   -- Sj=9 written by node_8 (FW_topk_routing), outs=[5899, 5900, 5901], tid=5900
   have h_take9_5900 : sm_goal_1.nodes.take 9 = sm_goal_1.nodes.take 8 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [5898], outs := [5899, 5900, 5901], params := [8, 64] }] := by rfl
   have hS9_eq_5900 : S9 = applyNode sm_goal_1 S8 { rank := 0, op := "OpName.FW_topk_routing", ins := [5898], outs := [5899, 5900, 5901], params := [8, 64] } := by
     show (sm_goal_1.nodes.take 9).foldl (applyNode sm_goal_1) initSM = _
     rw [h_take9_5900, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hS9_5900 : S9 5900 = (fw_topk_routing (S8 5898) 8 64).snd.fst := by
-    rw [hS9_eq_5900]
-    exact applyNode_fw_topk_routing_map_out sm_goal_1 S8 0 5898 5899 5900 5901 [8, 64] (by decide)
+    rw [hS9_eq_5900, applyNode_fw_topk_routing_map_out sm_goal_1 S8 0 5898 5899 5900 5901 [8, 64] (by decide), hS8_5898_sh]
+    rfl
   have hS13_5908 : S13 5908 = S10 5908 :=
     foldl_take_split_at_not_written sm_goal_1 sm_goal_1.nodes initSM 5908 10 13 (by omega)
       (by intro n hn; fin_cases hn <;> decide)
@@ -516,7 +522,9 @@ theorem denote_sm_goal_1_4673 (initSM : Store) :
 
 
 /-- Full unfolding of `denoteGraph pm_goal_1 initPM 4673`. -/
-theorem denote_pm_goal_1_4673 (initPM : Store) :
+theorem denote_pm_goal_1_4673 (initPM : Store)
+    (h11621 : (initPM 11621).shape.reverse.head? = some 64)
+    (h11622 : (initPM 11622).shape.reverse.head? = some 64) :
     denoteGraph pm_goal_1 initPM 4673 =
       allGatherPrimDimN 0 pm_goal_1.numRanks 0 [(fw_inner_chunk_ce (fw_rms_norm (fw_maybe_unshuffle (elemwiseAdd (initPM 11609) (elemwiseAdd (fw_all2all_moe_gmm_full (initPM 11613) ((fw_topk_routing (initPM 11621) 8 64).fst) ((fw_topk_routing (initPM 11621) 8 64).snd.fst) [initPM 11629, initPM 11630] [initPM 11631, initPM 11632] 64 8 ((((10 : Nat) : Scalar)))) (elemwiseMul (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11613) (initPM 5906)))) (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5911))) (fw_view [2048, 512] (fw_linear (initPM 11613) (initPM 5915)))) (initPM 5920)))))) (initPM 5927) 2 0) (initPM 5929)) (initPM 5931) (chunkPrimDimN 0 pm_goal_1.numRanks 0 (initPM 4678)) (((initPM 5931).shape.head?).getD 0) ((((0 : Nat) : Scalar)))).fst, (fw_inner_chunk_ce (fw_rms_norm (fw_maybe_unshuffle (elemwiseAdd (initPM 11610) (elemwiseAdd (fw_all2all_moe_gmm_full (initPM 11614) ((fw_topk_routing (initPM 11622) 8 64).fst) ((fw_topk_routing (initPM 11622) 8 64).snd.fst) [initPM 11629, initPM 11630] [initPM 11631, initPM 11632] 64 8 ((((10 : Nat) : Scalar)))) (elemwiseMul (fw_sigmoid (fw_view [2048, 1] (fw_linear (initPM 11614) (initPM 5906)))) (fw_view [2048, 1024] (fw_linear (fw_swiglu (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5911))) (fw_view [2048, 512] (fw_linear (initPM 11614) (initPM 5915)))) (initPM 5920)))))) (initPM 5927) 2 1) (initPM 5929)) (initPM 5931) (chunkPrimDimN 0 pm_goal_1.numRanks 1 (initPM 4678)) (((initPM 5931).shape.head?).getD 0) ((((0 : Nat) : Scalar)))).fst] := by
   have h_split : pm_goal_1.nodes = pm_goal_1.nodes.take 52 ++
@@ -891,21 +899,26 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [hP6_eq_16889]
     exact applyNode_fw_multiref5_at_pos1_out pm_goal_1 P5 1 11614 16885 16889 16893 16897 16901 (by decide)
   -- Pj=23 written by pm_node_22 (rank=1 FW_topk_routing), outs=[11624, 11626, 11628], tid=11624
+  have hP22_11622_sh : (P22 11622).shape.reverse.head? = some 64 := by
+    have hP22_11622_eq : P22 11622 = initPM 11622 :=
+      foldl_applyNode_at_not_written pm_goal_1 (pm_goal_1.nodes.take 22) initPM 11622
+        (by intro n hn; fin_cases hn <;> decide)
+    rw [hP22_11622_eq]; exact h11622
   have h_pmtake23_11624 : pm_goal_1.nodes.take 23 = pm_goal_1.nodes.take 22 ++ [{ rank := 1, op := "OpName.FW_topk_routing", ins := [11622], outs := [11624, 11626, 11628], params := [8, 64] }] := by rfl
   have hP23_eq_11624 : P23 = applyNode pm_goal_1 P22 { rank := 1, op := "OpName.FW_topk_routing", ins := [11622], outs := [11624, 11626, 11628], params := [8, 64] } := by
     show (pm_goal_1.nodes.take 23).foldl (applyNode pm_goal_1) initPM = _
     rw [h_pmtake23_11624, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP23_11624 : P23 11624 = (fw_topk_routing (P22 11622) 8 64).fst := by
-    rw [hP23_eq_11624]
-    exact applyNode_fw_topk_routing_probs_out pm_goal_1 P22 1 11622 11624 11626 11628 [8, 64]
+    rw [hP23_eq_11624, applyNode_fw_topk_routing_probs_out pm_goal_1 P22 1 11622 11624 11626 11628 [8, 64], hP22_11622_sh]
+    rfl
   -- Pj=23 written by pm_node_22 (rank=1 FW_topk_routing), outs=[11624, 11626, 11628], tid=11626
   have h_pmtake23_11626 : pm_goal_1.nodes.take 23 = pm_goal_1.nodes.take 22 ++ [{ rank := 1, op := "OpName.FW_topk_routing", ins := [11622], outs := [11624, 11626, 11628], params := [8, 64] }] := by rfl
   have hP23_eq_11626 : P23 = applyNode pm_goal_1 P22 { rank := 1, op := "OpName.FW_topk_routing", ins := [11622], outs := [11624, 11626, 11628], params := [8, 64] } := by
     show (pm_goal_1.nodes.take 23).foldl (applyNode pm_goal_1) initPM = _
     rw [h_pmtake23_11626, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP23_11626 : P23 11626 = (fw_topk_routing (P22 11622) 8 64).snd.fst := by
-    rw [hP23_eq_11626]
-    exact applyNode_fw_topk_routing_map_out pm_goal_1 P22 1 11622 11624 11626 11628 [8, 64] (by decide)
+    rw [hP23_eq_11626, applyNode_fw_topk_routing_map_out pm_goal_1 P22 1 11622 11624 11626 11628 [8, 64] (by decide), hP22_11622_sh]
+    rfl
   -- Pj=31 written by pm_node_30 (rank=1 FW_sigmoid), outs=[11648], tid=11648
   have h_pmtake31_11648 : pm_goal_1.nodes.take 31 = pm_goal_1.nodes.take 30 ++ [{ rank := 1, op := "OpName.FW_sigmoid", ins := [11646], outs := [11648] }] := by rfl
   have hP31_eq_11648 : P31 = applyNode pm_goal_1 P30 { rank := 1, op := "OpName.FW_sigmoid", ins := [11646], outs := [11648] } := by
@@ -931,21 +944,26 @@ theorem denote_pm_goal_1_4673 (initPM : Store) :
     rw [hP5_eq_16866]
     exact applyNode_fw_multiref5_at_pos1_out pm_goal_1 P4 0 11613 16862 16866 16870 16874 16878 (by decide)
   -- Pj=19 written by pm_node_18 (rank=0 FW_topk_routing), outs=[11623, 11625, 11627], tid=11623
+  have hP18_11621_sh : (P18 11621).shape.reverse.head? = some 64 := by
+    have hP18_11621_eq : P18 11621 = initPM 11621 :=
+      foldl_applyNode_at_not_written pm_goal_1 (pm_goal_1.nodes.take 18) initPM 11621
+        (by intro n hn; fin_cases hn <;> decide)
+    rw [hP18_11621_eq]; exact h11621
   have h_pmtake19_11623 : pm_goal_1.nodes.take 19 = pm_goal_1.nodes.take 18 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [11621], outs := [11623, 11625, 11627], params := [8, 64] }] := by rfl
   have hP19_eq_11623 : P19 = applyNode pm_goal_1 P18 { rank := 0, op := "OpName.FW_topk_routing", ins := [11621], outs := [11623, 11625, 11627], params := [8, 64] } := by
     show (pm_goal_1.nodes.take 19).foldl (applyNode pm_goal_1) initPM = _
     rw [h_pmtake19_11623, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP19_11623 : P19 11623 = (fw_topk_routing (P18 11621) 8 64).fst := by
-    rw [hP19_eq_11623]
-    exact applyNode_fw_topk_routing_probs_out pm_goal_1 P18 0 11621 11623 11625 11627 [8, 64]
+    rw [hP19_eq_11623, applyNode_fw_topk_routing_probs_out pm_goal_1 P18 0 11621 11623 11625 11627 [8, 64], hP18_11621_sh]
+    rfl
   -- Pj=19 written by pm_node_18 (rank=0 FW_topk_routing), outs=[11623, 11625, 11627], tid=11625
   have h_pmtake19_11625 : pm_goal_1.nodes.take 19 = pm_goal_1.nodes.take 18 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [11621], outs := [11623, 11625, 11627], params := [8, 64] }] := by rfl
   have hP19_eq_11625 : P19 = applyNode pm_goal_1 P18 { rank := 0, op := "OpName.FW_topk_routing", ins := [11621], outs := [11623, 11625, 11627], params := [8, 64] } := by
     show (pm_goal_1.nodes.take 19).foldl (applyNode pm_goal_1) initPM = _
     rw [h_pmtake19_11625, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have hP19_11625 : P19 11625 = (fw_topk_routing (P18 11621) 8 64).snd.fst := by
-    rw [hP19_eq_11625]
-    exact applyNode_fw_topk_routing_map_out pm_goal_1 P18 0 11621 11623 11625 11627 [8, 64] (by decide)
+    rw [hP19_eq_11625, applyNode_fw_topk_routing_map_out pm_goal_1 P18 0 11621 11623 11625 11627 [8, 64] (by decide), hP18_11621_sh]
+    rfl
   -- Pj=28 written by pm_node_27 (rank=0 FW_sigmoid), outs=[11647], tid=11647
   have h_pmtake28_11647 : pm_goal_1.nodes.take 28 = pm_goal_1.nodes.take 27 ++ [{ rank := 0, op := "OpName.FW_sigmoid", ins := [11645], outs := [11647] }] := by rfl
   have hP28_eq_11647 : P28 = applyNode pm_goal_1 P27 { rank := 0, op := "OpName.FW_sigmoid", ins := [11645], outs := [11647] } := by
@@ -3996,7 +4014,7 @@ theorem sm_chain_shape_4096 (initSM : Store) (hSM : StoreShapesHold initSM sm_go
         houter_add_shape]
   -- fw_inner_chunk_ce.fst.shape = [x.shape.head?.getD 0]
   have hL : _ = some 4096 := congrArg List.head? hx_shape
-  rw [denote_sm_goal_1_4673]
+  rw [denote_sm_goal_1_4673 initSM (by rw [hSM 5898 [4096, 64] (by native_decide)]; rfl)]
   exact TrainVerify.Denote.fw_inner_chunk_ce_fst_shape
     _ _ _ _ _ 4096 hL
 
@@ -4194,7 +4212,7 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
     TrainVerify.Denote.fw_inner_chunk_ce_fst_shape _ _ _ _ _ 2048 hL1
   -- allGatherPrimDimN 0 2 0 [T0, T1] where T0.shape = [2048], T1.shape = [2048]:
   -- output shape = [2048].set 0 (2048 * 2) = [4096]
-  rw [denote_pm_goal_1_4673]
+  rw [denote_pm_goal_1_4673 initPM (by rw [hPM 11621 [2048, 64] (by native_decide)]; rfl) (by rw [hPM 11622 [2048, 64] (by native_decide)]; rfl)]
   have hpn : pm_goal_1.numRanks = 2 := rfl
   rw [hpn]
   -- Apply allGatherPrimDimN_shape with shardShape = [2048].
@@ -4287,7 +4305,8 @@ theorem prove_goal_1 : goal_1_stmt_with_labels := by
     -- Reconstruct singleton [x] = x.
     simp only [List.map, reconstructWithDim]
     -- Reduce SM and PM via machinery.
-    rw [denote_sm_goal_1_4673 initSM, denote_pm_goal_1_4673 initPM]
+    rw [denote_sm_goal_1_4673 initSM (by rw [hSM 5898 [4096, 64] (by native_decide)]; rfl),
+        denote_pm_goal_1_4673 initPM (by rw [hPM 11621 [2048, 64] (by native_decide)]; rfl) (by rw [hPM 11622 [2048, 64] (by native_decide)]; rfl)]
     -- Rewrite all boundary tids in SM expression.
     rw [hb_4678, hb_5906, hb_5911, hb_5915, hb_5920, hb_5927, hb_5929, hb_5931,
         hb_5893, hb_5895, hb_5898, hb_5902, hb_5903]
