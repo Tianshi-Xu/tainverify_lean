@@ -754,4 +754,141 @@ theorem view_flatten_gather_2 (L A B : Nat) (hL : 0 < L) (hA : 0 < A) (hB : 0 < 
     · simp only [hr0', if_true]; rw [hview_val c0]
     · simp only [hr1', if_false, Nat.one_ne_zero]; rw [hview_val c1]
 
+/-- Local shape helper: 2-D `fw_linear` output shape `[b, o]`. -/
+private theorem linear_shape_p3 (b i o : Nat) (x w : Tensor)
+    (hx : x.shape = [b, i]) (hw : w.shape = [o, i]) :
+    (fw_linear x w).shape = [b, o] := by
+  unfold fw_linear; rw [hx, hw]; simp [Tensor.mkShape]
+
+/-- **Reshape/flatten bridge (chunk form).** Flattening `[2L, A, B] → [2L, A*B]` of
+    a tensor `T` equals the dim-0 gather of the per-rank flattened seq-chunks of
+    `T`.  Direct corollary of `view_flatten_gather_2` composed with the chunk
+    reconstruction (`allGather0_reconstruct_chunks_3d`). -/
+theorem view_flatten_chunks (L A B : Nat) (hL : 0 < L) (hA : 0 < A) (hB : 0 < B)
+    (T : Tensor) (hT : T.shape = [2 * L, A, B]) :
+    fw_view [2 * L, A * B] T
+      = allGatherPrimDimN 0 2 0
+          [fw_view [L, A * B] (chunkPrimDimN 0 2 0 T),
+           fw_view [L, A * B] (chunkPrimDimN 0 2 1 T)] := by
+  have hchunk : ∀ r, (chunkPrimDimN 0 2 r T).shape = [L, A, B] := by
+    intro r
+    rw [chunkPrimDimN_shape 0 2 r T [2 * L, A, B] hT (by omega)]
+    simp only [List.set, List.getD_cons_zero]; rw [show 2 * L / 2 = L from by omega]
+  rw [show fw_view [2 * L, A * B] T
+        = fw_view [2 * L, A * B]
+            (allGatherPrimDimN 0 2 0 [chunkPrimDimN 0 2 0 T, chunkPrimDimN 0 2 1 T])
+      from by rw [allGather0_reconstruct_chunks_3d L A B hL hA hB T hT]]
+  exact view_flatten_gather_2 L A B hL hA hB
+    (chunkPrimDimN 0 2 0 T) (chunkPrimDimN 0 2 1 T) (hchunk 0) (hchunk 1)
+
+/-- **Output bridge (attention).** The post-attention output projection and
+    residual add commute with the residual-stream shard-gather: given the full
+    attention output `af : [4096, qh, vd]` (whose per-rank ring shards are its two
+    seq-chunks), the full residual output equals the dim-0 gather of the two
+    per-rank residual outputs.  Chains `view_flatten_chunks`,
+    `fw_mix_precision_linear_allGather0_commute_2`, and the `[2048,1024]` residual
+    add commute. -/
+theorem attn_output_residual_commute
+    (r0 r1 wo af : Tensor) (qh vd : Nat)
+    (hqh : 0 < qh) (hvd : 0 < vd)
+    (hr0 : r0.shape = [2048, 1024]) (hr1 : r1.shape = [2048, 1024])
+    (hwo : wo.shape = [1024, qh * vd])
+    (haf : af.shape = [2 * 2048, qh, vd]) :
+    elemwiseAdd (allGatherPrimDimN 0 2 0 [r0, r1])
+        (fw_linear (fw_view [2 * 2048, qh * vd] af) wo)
+      = allGatherPrimDimN 0 2 0
+          [elemwiseAdd r0 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0 af)) wo),
+           elemwiseAdd r1 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1 af)) wo)] := by
+  have hqhvd : 0 < qh * vd := Nat.mul_pos hqh hvd
+  have hv0 : (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0 af)).shape = [2048, qh * vd] :=
+    view_shape_p3 _ _
+  have hv1 : (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1 af)).shape = [2048, qh * vd] :=
+    view_shape_p3 _ _
+  have hproj0 : (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0 af)) wo).shape
+      = [2048, 1024] := linear_shape_p3 2048 (qh * vd) 1024 _ wo hv0 hwo
+  have hproj1 : (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1 af)) wo).shape
+      = [2048, 1024] := linear_shape_p3 2048 (qh * vd) 1024 _ wo hv1 hwo
+  rw [view_flatten_chunks 2048 qh vd (by norm_num) hqh hvd af haf]
+  rw [fw_mix_precision_linear_allGather0_commute_2
+        (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0 af))
+        (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1 af)) wo
+        2048 (qh * vd) 1024 (by norm_num) hqhvd (by norm_num) hv0 hv1 hwo]
+  rw [fw_add_allGather0_commute_2_2048_1024 r0 r1
+        (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0 af)) wo)
+        (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1 af)) wo)
+        hr0 hr1 hproj0 hproj1]
+
+/-- **Layer attention sub-block residual commute (Approach A, value level).**
+
+    Ties the input bridges (`norm_perhead_rotary_gather_commute` for Q/K,
+    `norm_perhead_gather_commute` for V) to the output bridge
+    (`attn_output_residual_commute`).  The left-hand side is the SM (full,
+    numRanks=1) attention sub-block computed over the gathered residual stream;
+    the right-hand side is the dim-0 gather of the two PM (numRanks=2) per-rank
+    sub-blocks, whose ring-attention output shard is the corresponding seq-chunk
+    of the full attention.  Covers both sliding_window and zigzag layers (both
+    reduce to `fw_attn_varlen`).  `qh * vd = 1024` is the model dimension. -/
+theorem layer_attn_block_commute
+    (r0 r1 wn wq wk wv cs pos0 pos1 wo cuQ cuK : Tensor)
+    (qh kh d vd : Nat) (causal : Bool) (windowLeft : Nat)
+    (hqh : 0 < qh) (hkh : 0 < kh) (hd : 0 < d) (hvd : 0 < vd)
+    (hr0 : r0.shape = [2048, 1024]) (hr1 : r1.shape = [2048, 1024])
+    (hwn : wn.shape = [1024])
+    (hwq : wq.shape = [qh, d, 1024]) (hwk : wk.shape = [kh, d, 1024])
+    (hwv : wv.shape = [kh, vd, 1024])
+    (hpos0 : pos0.shape = [2048, 1]) (hpos1 : pos1.shape = [2048, 1])
+    (hwo : wo.shape = [1024, qh * vd])
+    (haf : (fw_attn_varlen
+              (allGatherPrimDimN 0 2 0
+                 [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn) wq) qh,
+                  fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn) wq) qh])
+              (allGatherPrimDimN 0 2 0
+                 [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn) wk) kh,
+                  fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn) wk) kh])
+              (allGatherPrimDimN 0 2 0
+                 [fw_per_head_linear (fw_rms_norm r0 wn) wv,
+                  fw_per_head_linear (fw_rms_norm r1 wn) wv])
+              cuQ cuK qh kh d vd causal windowLeft).shape = [2 * 2048, qh, vd]) :
+    elemwiseAdd (allGatherPrimDimN 0 2 0 [r0, r1])
+        (fw_linear (fw_view [2 * 2048, qh * vd]
+          (fw_attn_varlen
+            (fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+              (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn) wq) qh)
+            (fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+              (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn) wk) kh)
+            (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn) wv)
+            cuQ cuK qh kh d vd causal windowLeft)) wo)
+      = allGatherPrimDimN 0 2 0
+          [elemwiseAdd r0 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 0
+              (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn) wv,
+                    fw_per_head_linear (fw_rms_norm r1 wn) wv])
+                cuQ cuK qh kh d vd causal windowLeft))) wo),
+           elemwiseAdd r1 (fw_linear (fw_view [2048, qh * vd] (chunkPrimDimN 0 2 1
+              (fw_attn_varlen
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn) wq) qh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn) wq) qh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn) wk) kh,
+                    fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn) wk) kh])
+                (allGatherPrimDimN 0 2 0
+                   [fw_per_head_linear (fw_rms_norm r0 wn) wv,
+                    fw_per_head_linear (fw_rms_norm r1 wn) wv])
+                cuQ cuK qh kh d vd causal windowLeft))) wo)] := by
+  rw [norm_perhead_rotary_gather_commute r0 r1 wn wq cs pos0 pos1 2048 qh d
+        (by norm_num) hqh hd hr0 hr1 hwn hwq hpos0 hpos1]
+  rw [norm_perhead_rotary_gather_commute r0 r1 wn wk cs pos0 pos1 2048 kh d
+        (by norm_num) hkh hd hr0 hr1 hwn hwk hpos0 hpos1]
+  rw [norm_perhead_gather_commute r0 r1 wn wv 2048 kh vd
+        (by norm_num) hkh hvd hr0 hr1 hwn hwv]
+  exact attn_output_residual_commute r0 r1 wo _ qh vd hqh hvd hr0 hr1 hwo haf
+
 end TrainVerify.Denote.GeneratedPatterns
