@@ -3986,12 +3986,16 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       let (dx, dw) := bw_norm_linear g x w
       [dx, dw]
   -- === MoE: top-k routing + fused all-to-all + grouped MM ===
-  -- `topk_routing`: params encode `[top_k, numExperts]`. The trailing
-  -- dim of `logits` is used as `numExperts` (passed in params for
-  -- shape-independence inside the kernel).
+  -- `topk_routing`: params encode `[top_k, numExperts]`, but the authoritative
+  -- `numExperts` is the trailing dim of `logits` (the params entry is only a
+  -- shape-independent fallback).
   | "OpName.FW_topk_routing", [logits] =>
       let top_k      := params.getD 0 1
-      let numExperts := params.getD 1 1
+      -- numExperts is the trailing dim of `logits` (Python:
+      -- `topk_routing(logits, top_k)` returns `l e^ -> l e^, l e^, l e^`,
+      -- so e = logits.shape.last). Fall back to `params.getD 1 1` only when
+      -- the shape is unavailable, for backward-compat.
+      let numExperts := (logits.shape.reverse.head?).getD (params.getD 1 1)
       let (rp, rm, gs) := fw_topk_routing logits top_k numExperts
       [rp, rm, gs]
   -- `nnscaler_all2all_moe_gmm`: params encode
@@ -4191,12 +4195,12 @@ theorem applyNode_fw_topk_routing_scores_out
     applyNode g s
       { rank := rank, op := "OpName.FW_topk_routing", ins := [logitsTid],
         outs := [probsTid, mapTid, scoresTid], params := params } scoresTid =
-      (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).snd.snd := by
+      (fw_topk_routing (s logitsTid) (params.getD 0 1) (((s logitsTid).shape.reverse.head?).getD (params.getD 1 1))).snd.snd := by
   unfold applyNode
   change storeSet s
-    [(probsTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).fst),
-     (mapTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).snd.fst),
-     (scoresTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).snd.snd)] scoresTid = _
+    [(probsTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (((s logitsTid).shape.reverse.head?).getD (params.getD 1 1))).fst),
+     (mapTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (((s logitsTid).shape.reverse.head?).getD (params.getD 1 1))).snd.fst),
+     (scoresTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (((s logitsTid).shape.reverse.head?).getD (params.getD 1 1))).snd.snd)] scoresTid = _
   unfold storeSet
   simp [List.find?, h_pne_s, h_mne_s]
 
@@ -4208,12 +4212,12 @@ theorem applyNode_fw_topk_routing_map_out
     applyNode g s
       { rank := rank, op := "OpName.FW_topk_routing", ins := [logitsTid],
         outs := [probsTid, mapTid, scoresTid], params := params } mapTid =
-      (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).snd.fst := by
+      (fw_topk_routing (s logitsTid) (params.getD 0 1) (((s logitsTid).shape.reverse.head?).getD (params.getD 1 1))).snd.fst := by
   unfold applyNode
   change storeSet s
-    [(probsTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).fst),
-     (mapTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).snd.fst),
-     (scoresTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).snd.snd)] mapTid = _
+    [(probsTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (((s logitsTid).shape.reverse.head?).getD (params.getD 1 1))).fst),
+     (mapTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (((s logitsTid).shape.reverse.head?).getD (params.getD 1 1))).snd.fst),
+     (scoresTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (((s logitsTid).shape.reverse.head?).getD (params.getD 1 1))).snd.snd)] mapTid = _
   unfold storeSet
   simp [List.find?, h_pne_m]
 
@@ -4873,12 +4877,12 @@ theorem applyNode_fw_topk_routing_probs_out
     applyNode g s
       { rank := rank, op := "OpName.FW_topk_routing", ins := [logitsTid],
         outs := [probsTid, mapTid, scoresTid], params := params } probsTid =
-      (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).fst := by
+      (fw_topk_routing (s logitsTid) (params.getD 0 1) (((s logitsTid).shape.reverse.head?).getD (params.getD 1 1))).fst := by
   unfold applyNode
   change storeSet s
-    [(probsTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).fst),
-     (mapTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).snd.fst),
-     (scoresTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (params.getD 1 1)).snd.snd)] probsTid = _
+    [(probsTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (((s logitsTid).shape.reverse.head?).getD (params.getD 1 1))).fst),
+     (mapTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (((s logitsTid).shape.reverse.head?).getD (params.getD 1 1))).snd.fst),
+     (scoresTid, (fw_topk_routing (s logitsTid) (params.getD 0 1) (((s logitsTid).shape.reverse.head?).getD (params.getD 1 1))).snd.snd)] probsTid = _
   unfold storeSet
   simp [List.find?]
 
