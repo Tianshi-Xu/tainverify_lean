@@ -14453,6 +14453,697 @@ theorem denote_pm_goal_3_r_14_r0 (initPM : Store) :
   try rfl
 
 
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_r_15_r0 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 10249 =
+      ((fw_topk_routing (fw_norm_linear (fw_rms_norm (elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 10173) (fw_view [2048, 1024] (fw_linear (applyNodeRingAttn_zigzag pm_goal_3 (((pm_goal_3.nodes.take 1277).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_attn_zigzag", ins := [10179, 5490, 5491, 5492, 5493], outs := [10203], params := [16, 4, 64, 64, 1, 0] }) (initPM 5497)))) (initPM 5502)) (initPM 5505)) 8 1).snd.fst) := by
+  have hEntry : denoteGraph_ringAttn pm_goal_3 initPM 10249 =
+      (((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10249 := by
+    show pm_goal_3.nodes.foldl (applyNodeRingAttn pm_goal_3) initPM 10249 = _
+    exact foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10249 1314 (by decide) (by decide)
+  rw [hEntry]
+  rw [show pm_goal_3.nodes.take 1314 = pm_goal_3.nodes.take 1313 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [10245], outs := [10247, 10249, 10251], params := [8] }] from rfl,
+      List.foldl_append, List.foldl_cons, List.foldl_nil]
+  rw [applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1313).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_topk_routing", ins := [10245], outs := [10247, 10249, 10251], params := [8] } (by decide) (by decide)]
+  rw [applyNode_fw_topk_routing_map_out pm_goal_3 (((pm_goal_3.nodes.take 1313).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10245 10247 10249 10251 [8] (by decide)]
+  rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10245 1313 1314 (by omega) (by decide) (by decide)]
+  have hval_10245 : (((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10245 = (fw_norm_linear ((((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10239) (initPM 5505)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10245 1306 1314 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1306 = pm_goal_3.nodes.take 1305 ++ [{ rank := 0, op := "OpName.FW_norm_linear", ins := [10239, 5505], outs := [10245] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1305).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_norm_linear", ins := [10239, 5505], outs := [10245] } (by decide) (by decide),
+      applyNode_fw_norm_linear_out pm_goal_3 (((pm_goal_3.nodes.take 1305).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10239 5505 10245 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10239 1305 1314 (by omega) (by decide) (by decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1305) initPM 5505 (by decide) (by decide)]
+  have hval_10239 : (((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10239 = ((((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16238) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10239 1298 1314 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1298 = pm_goal_3.nodes.take 1297 ++ [{ rank := 0, op := "OpName.FW_float", ins := [16238], outs := [10239] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1297).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_float", ins := [16238], outs := [10239] } (by decide) (by decide),
+      applyNode_fw_float_out pm_goal_3 (((pm_goal_3.nodes.take 1297).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 16238 10239 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16238 1297 1314 (by omega) (by decide) (by decide)]
+  have hval_16238 : (((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16238 = ((((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10237) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16238 1296 1314 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1296 = pm_goal_3.nodes.take 1295 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [10237], outs := [16238, 16242, 16246, 16250, 16254], params := [5] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1295).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_multiref", ins := [10237], outs := [16238, 16242, 16246, 16250, 16254], params := [5] } (by decide) (by decide),
+      applyNode_fw_multiref5_first_out pm_goal_3 (((pm_goal_3.nodes.take 1295).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10237 16238 16242 16246 16250 16254]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10237 1295 1314 (by omega) (by decide) (by decide)]
+  have hval_10237 : (((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10237 = (fw_rms_norm ((((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16219) (initPM 5502)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10237 1294 1314 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1294 = pm_goal_3.nodes.take 1293 ++ [{ rank := 0, op := "OpName.FW_rms_norm", ins := [16219, 5502], outs := [10237] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1293).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_rms_norm", ins := [16219, 5502], outs := [10237] } (by decide) (by decide),
+      applyNode_fw_rms_norm_out_1p pm_goal_3 (((pm_goal_3.nodes.take 1293).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 16219 5502 10237]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16219 1293 1314 (by omega) (by decide) (by decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1293) initPM 5502 (by decide) (by decide)]
+  have hval_16219 : (((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16219 = ((((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10233) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16219 1292 1314 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1292 = pm_goal_3.nodes.take 1291 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [10233], outs := [16219, 16223], params := [2] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1291).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_multiref", ins := [10233], outs := [16219, 16223], params := [2] } (by decide) (by decide),
+      applyNode_fw_multiref2_first_out pm_goal_3 (((pm_goal_3.nodes.take 1291).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10233 16219 16223]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10233 1291 1314 (by omega) (by decide) (by decide)]
+  have hval_10233 : (((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10233 = (elemwiseAdd ((((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16207) ((((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10229)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10233 1290 1314 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1290 = pm_goal_3.nodes.take 1289 ++ [{ rank := 0, op := "OpName.FW_add", ins := [16207, 10229], outs := [10233] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1289).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_add", ins := [16207, 10229], outs := [10233] } (by decide) (by decide),
+      applyNode_fw_add2_out pm_goal_3 (((pm_goal_3.nodes.take 1289).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 16207 10229 10233]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16207 1289 1314 (by omega) (by decide) (by decide),
+      ← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10229 1289 1314 (by omega) (by decide) (by decide)]
+  have hval_10229 : (((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10229 = ((((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10225) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10229 1288 1314 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1288 = pm_goal_3.nodes.take 1287 ++ [{ rank := 0, op := "OpName.FW_float", ins := [10225], outs := [10229] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1287).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_float", ins := [10225], outs := [10229] } (by decide) (by decide),
+      applyNode_fw_float_out pm_goal_3 (((pm_goal_3.nodes.take 1287).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10225 10229 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10225 1287 1314 (by omega) (by decide) (by decide)]
+  have hval_10225 : (((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10225 = (fw_view [2048, 1024] ((((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10215)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10225 1286 1314 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1286 = pm_goal_3.nodes.take 1285 ++ [{ rank := 0, op := "OpName.FW_view", ins := [10215], outs := [10225], params := [2048, 1024] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1285).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_view", ins := [10215], outs := [10225], params := [2048, 1024] } (by decide) (by decide),
+      applyNode_fw_view_out pm_goal_3 (((pm_goal_3.nodes.take 1285).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 2048 [1024] 10215 10225]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10215 1285 1314 (by omega) (by decide) (by decide)]
+  have hval_10215 : (((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10215 = (fw_linear ((((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10211) (initPM 5497)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10215 1284 1314 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1284 = pm_goal_3.nodes.take 1283 ++ [{ rank := 0, op := "OpName.FW_mix_precision_linear", ins := [10211, 5497], outs := [10215] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1283).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_mix_precision_linear", ins := [10211, 5497], outs := [10215] } (by decide) (by decide),
+      applyNode_fw_mix_precision_linear_out_1p pm_goal_3 (((pm_goal_3.nodes.take 1283).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10211 5497 10215]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10211 1283 1314 (by omega) (by decide) (by decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1283) initPM 5497 (by decide) (by decide)]
+  have hval_10211 : (((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10211 = ((((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10205) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10211 1282 1314 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1282 = pm_goal_3.nodes.take 1281 ++ [{ rank := 0, op := "OpName.FW_reshape", ins := [10205], outs := [10211] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1281).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_reshape", ins := [10205], outs := [10211] } (by decide) (by decide),
+      applyNode_fw_reshape_out pm_goal_3 (((pm_goal_3.nodes.take 1281).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10205 10211 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10205 1281 1314 (by omega) (by decide) (by decide)]
+  have hval_10205 : (((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10205 = ((((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10203) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10205 1280 1314 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1280 = pm_goal_3.nodes.take 1279 ++ [{ rank := 0, op := "OpName.FW_reshape", ins := [10203], outs := [10205] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1279).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_reshape", ins := [10203], outs := [10205] } (by decide) (by decide),
+      applyNode_fw_reshape_out pm_goal_3 (((pm_goal_3.nodes.take 1279).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10203 10205 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10203 1279 1314 (by omega) (by decide) (by decide)]
+  have hval_10203 : (((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10203 = applyNodeRingAttn_zigzag pm_goal_3 (((pm_goal_3.nodes.take 1277).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_attn_zigzag", ins := [10179, 5490, 5491, 5492, 5493], outs := [10203], params := [16, 4, 64, 64, 1, 0] } := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10203 1278 1314 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1278 = pm_goal_3.nodes.take 1277 ++ [{ rank := 0, op := "OpName.FW_attn_zigzag", ins := [10179, 5490, 5491, 5492, 5493], outs := [10203], params := [16, 4, 64, 64, 1, 0] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_zigzag_out pm_goal_3 (((pm_goal_3.nodes.take 1277).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10179 5490 5491 5492 5493 10203 [16, 4, 64, 64, 1, 0]]
+  have hval_16207 : (((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16207 = ((((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10173) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16207 1272 1314 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1272 = pm_goal_3.nodes.take 1271 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [10173], outs := [16203, 16207], params := [2] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1271).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_multiref", ins := [10173], outs := [16203, 16207], params := [2] } (by decide) (by decide),
+      applyNode_fw_multiref2_second_out pm_goal_3 (((pm_goal_3.nodes.take 1271).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10173 16203 16207 (by decide)]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10173 1271 1314 (by omega) (by decide) (by decide)]
+  have hval_10173 : (((pm_goal_3.nodes.take 1314).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10173 = denoteGraph_ringAttn pm_goal_3 initPM 10173 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10173 1314 (by decide) (by decide)).symm
+  rw [hval_10245, hval_10239, hval_16238, hval_10237, hval_16219, hval_10233, hval_10229, hval_10225, hval_10215, hval_10211, hval_10205, hval_10203, hval_16207, hval_10173]
+  try rfl
+
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_r_16_r0 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 10421 =
+      ((fw_topk_routing (fw_norm_linear (fw_rms_norm (elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 10345) (fw_view [2048, 1024] (fw_linear (applyNodeRingAttn_zigzag pm_goal_3 (((pm_goal_3.nodes.take 1347).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_attn_zigzag", ins := [10351, 5539, 5540, 5541, 5542], outs := [10375], params := [16, 4, 64, 64, 1, 0] }) (initPM 5546)))) (initPM 5551)) (initPM 5554)) 8 1).snd.fst) := by
+  have hEntry : denoteGraph_ringAttn pm_goal_3 initPM 10421 =
+      (((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10421 := by
+    show pm_goal_3.nodes.foldl (applyNodeRingAttn pm_goal_3) initPM 10421 = _
+    exact foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10421 1384 (by decide) (by decide)
+  rw [hEntry]
+  rw [show pm_goal_3.nodes.take 1384 = pm_goal_3.nodes.take 1383 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [10417], outs := [10419, 10421, 10423], params := [8] }] from rfl,
+      List.foldl_append, List.foldl_cons, List.foldl_nil]
+  rw [applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1383).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_topk_routing", ins := [10417], outs := [10419, 10421, 10423], params := [8] } (by decide) (by decide)]
+  rw [applyNode_fw_topk_routing_map_out pm_goal_3 (((pm_goal_3.nodes.take 1383).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10417 10419 10421 10423 [8] (by decide)]
+  rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10417 1383 1384 (by omega) (by decide) (by decide)]
+  have hval_10417 : (((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10417 = (fw_norm_linear ((((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10411) (initPM 5554)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10417 1376 1384 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1376 = pm_goal_3.nodes.take 1375 ++ [{ rank := 0, op := "OpName.FW_norm_linear", ins := [10411, 5554], outs := [10417] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1375).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_norm_linear", ins := [10411, 5554], outs := [10417] } (by decide) (by decide),
+      applyNode_fw_norm_linear_out pm_goal_3 (((pm_goal_3.nodes.take 1375).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10411 5554 10417 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10411 1375 1384 (by omega) (by decide) (by decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1375) initPM 5554 (by decide) (by decide)]
+  have hval_10411 : (((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10411 = ((((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16316) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10411 1368 1384 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1368 = pm_goal_3.nodes.take 1367 ++ [{ rank := 0, op := "OpName.FW_float", ins := [16316], outs := [10411] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1367).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_float", ins := [16316], outs := [10411] } (by decide) (by decide),
+      applyNode_fw_float_out pm_goal_3 (((pm_goal_3.nodes.take 1367).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 16316 10411 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16316 1367 1384 (by omega) (by decide) (by decide)]
+  have hval_16316 : (((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16316 = ((((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10409) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16316 1366 1384 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1366 = pm_goal_3.nodes.take 1365 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [10409], outs := [16316, 16320, 16324, 16328, 16332], params := [5] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1365).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_multiref", ins := [10409], outs := [16316, 16320, 16324, 16328, 16332], params := [5] } (by decide) (by decide),
+      applyNode_fw_multiref5_first_out pm_goal_3 (((pm_goal_3.nodes.take 1365).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10409 16316 16320 16324 16328 16332]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10409 1365 1384 (by omega) (by decide) (by decide)]
+  have hval_10409 : (((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10409 = (fw_rms_norm ((((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16297) (initPM 5551)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10409 1364 1384 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1364 = pm_goal_3.nodes.take 1363 ++ [{ rank := 0, op := "OpName.FW_rms_norm", ins := [16297, 5551], outs := [10409] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1363).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_rms_norm", ins := [16297, 5551], outs := [10409] } (by decide) (by decide),
+      applyNode_fw_rms_norm_out_1p pm_goal_3 (((pm_goal_3.nodes.take 1363).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 16297 5551 10409]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16297 1363 1384 (by omega) (by decide) (by decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1363) initPM 5551 (by decide) (by decide)]
+  have hval_16297 : (((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16297 = ((((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10405) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16297 1362 1384 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1362 = pm_goal_3.nodes.take 1361 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [10405], outs := [16297, 16301], params := [2] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1361).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_multiref", ins := [10405], outs := [16297, 16301], params := [2] } (by decide) (by decide),
+      applyNode_fw_multiref2_first_out pm_goal_3 (((pm_goal_3.nodes.take 1361).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10405 16297 16301]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10405 1361 1384 (by omega) (by decide) (by decide)]
+  have hval_10405 : (((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10405 = (elemwiseAdd ((((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16285) ((((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10401)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10405 1360 1384 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1360 = pm_goal_3.nodes.take 1359 ++ [{ rank := 0, op := "OpName.FW_add", ins := [16285, 10401], outs := [10405] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1359).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_add", ins := [16285, 10401], outs := [10405] } (by decide) (by decide),
+      applyNode_fw_add2_out pm_goal_3 (((pm_goal_3.nodes.take 1359).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 16285 10401 10405]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16285 1359 1384 (by omega) (by decide) (by decide),
+      ← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10401 1359 1384 (by omega) (by decide) (by decide)]
+  have hval_10401 : (((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10401 = ((((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10397) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10401 1358 1384 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1358 = pm_goal_3.nodes.take 1357 ++ [{ rank := 0, op := "OpName.FW_float", ins := [10397], outs := [10401] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1357).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_float", ins := [10397], outs := [10401] } (by decide) (by decide),
+      applyNode_fw_float_out pm_goal_3 (((pm_goal_3.nodes.take 1357).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10397 10401 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10397 1357 1384 (by omega) (by decide) (by decide)]
+  have hval_10397 : (((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10397 = (fw_view [2048, 1024] ((((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10387)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10397 1356 1384 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1356 = pm_goal_3.nodes.take 1355 ++ [{ rank := 0, op := "OpName.FW_view", ins := [10387], outs := [10397], params := [2048, 1024] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1355).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_view", ins := [10387], outs := [10397], params := [2048, 1024] } (by decide) (by decide),
+      applyNode_fw_view_out pm_goal_3 (((pm_goal_3.nodes.take 1355).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 2048 [1024] 10387 10397]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10387 1355 1384 (by omega) (by decide) (by decide)]
+  have hval_10387 : (((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10387 = (fw_linear ((((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10383) (initPM 5546)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10387 1354 1384 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1354 = pm_goal_3.nodes.take 1353 ++ [{ rank := 0, op := "OpName.FW_mix_precision_linear", ins := [10383, 5546], outs := [10387] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1353).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_mix_precision_linear", ins := [10383, 5546], outs := [10387] } (by decide) (by decide),
+      applyNode_fw_mix_precision_linear_out_1p pm_goal_3 (((pm_goal_3.nodes.take 1353).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10383 5546 10387]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10383 1353 1384 (by omega) (by decide) (by decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1353) initPM 5546 (by decide) (by decide)]
+  have hval_10383 : (((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10383 = ((((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10377) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10383 1352 1384 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1352 = pm_goal_3.nodes.take 1351 ++ [{ rank := 0, op := "OpName.FW_reshape", ins := [10377], outs := [10383] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1351).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_reshape", ins := [10377], outs := [10383] } (by decide) (by decide),
+      applyNode_fw_reshape_out pm_goal_3 (((pm_goal_3.nodes.take 1351).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10377 10383 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10377 1351 1384 (by omega) (by decide) (by decide)]
+  have hval_10377 : (((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10377 = ((((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10375) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10377 1350 1384 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1350 = pm_goal_3.nodes.take 1349 ++ [{ rank := 0, op := "OpName.FW_reshape", ins := [10375], outs := [10377] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1349).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_reshape", ins := [10375], outs := [10377] } (by decide) (by decide),
+      applyNode_fw_reshape_out pm_goal_3 (((pm_goal_3.nodes.take 1349).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10375 10377 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10375 1349 1384 (by omega) (by decide) (by decide)]
+  have hval_10375 : (((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10375 = applyNodeRingAttn_zigzag pm_goal_3 (((pm_goal_3.nodes.take 1347).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_attn_zigzag", ins := [10351, 5539, 5540, 5541, 5542], outs := [10375], params := [16, 4, 64, 64, 1, 0] } := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10375 1348 1384 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1348 = pm_goal_3.nodes.take 1347 ++ [{ rank := 0, op := "OpName.FW_attn_zigzag", ins := [10351, 5539, 5540, 5541, 5542], outs := [10375], params := [16, 4, 64, 64, 1, 0] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_zigzag_out pm_goal_3 (((pm_goal_3.nodes.take 1347).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10351 5539 5540 5541 5542 10375 [16, 4, 64, 64, 1, 0]]
+  have hval_16285 : (((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16285 = ((((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10345) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16285 1342 1384 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1342 = pm_goal_3.nodes.take 1341 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [10345], outs := [16281, 16285], params := [2] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1341).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_multiref", ins := [10345], outs := [16281, 16285], params := [2] } (by decide) (by decide),
+      applyNode_fw_multiref2_second_out pm_goal_3 (((pm_goal_3.nodes.take 1341).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10345 16281 16285 (by decide)]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10345 1341 1384 (by omega) (by decide) (by decide)]
+  have hval_10345 : (((pm_goal_3.nodes.take 1384).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10345 = denoteGraph_ringAttn pm_goal_3 initPM 10345 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10345 1384 (by decide) (by decide)).symm
+  rw [hval_10417, hval_10411, hval_16316, hval_10409, hval_16297, hval_10405, hval_10401, hval_10397, hval_10387, hval_10383, hval_10377, hval_10375, hval_16285, hval_10345]
+  try rfl
+
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_r_17_r0 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 10593 =
+      ((fw_topk_routing (fw_norm_linear (fw_rms_norm (elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 10517) (fw_view [2048, 1024] (fw_linear (applyNodeRingAttn_zigzag pm_goal_3 (((pm_goal_3.nodes.take 1417).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_attn_zigzag", ins := [10523, 5588, 5589, 5590, 5591], outs := [10547], params := [16, 4, 64, 64, 1, 0] }) (initPM 5595)))) (initPM 5600)) (initPM 5603)) 8 1).snd.fst) := by
+  have hEntry : denoteGraph_ringAttn pm_goal_3 initPM 10593 =
+      (((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10593 := by
+    show pm_goal_3.nodes.foldl (applyNodeRingAttn pm_goal_3) initPM 10593 = _
+    exact foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10593 1454 (by decide) (by decide)
+  rw [hEntry]
+  rw [show pm_goal_3.nodes.take 1454 = pm_goal_3.nodes.take 1453 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [10589], outs := [10591, 10593, 10595], params := [8] }] from rfl,
+      List.foldl_append, List.foldl_cons, List.foldl_nil]
+  rw [applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1453).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_topk_routing", ins := [10589], outs := [10591, 10593, 10595], params := [8] } (by decide) (by decide)]
+  rw [applyNode_fw_topk_routing_map_out pm_goal_3 (((pm_goal_3.nodes.take 1453).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10589 10591 10593 10595 [8] (by decide)]
+  rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10589 1453 1454 (by omega) (by decide) (by decide)]
+  have hval_10589 : (((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10589 = (fw_norm_linear ((((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10583) (initPM 5603)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10589 1446 1454 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1446 = pm_goal_3.nodes.take 1445 ++ [{ rank := 0, op := "OpName.FW_norm_linear", ins := [10583, 5603], outs := [10589] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1445).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_norm_linear", ins := [10583, 5603], outs := [10589] } (by decide) (by decide),
+      applyNode_fw_norm_linear_out pm_goal_3 (((pm_goal_3.nodes.take 1445).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10583 5603 10589 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10583 1445 1454 (by omega) (by decide) (by decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1445) initPM 5603 (by decide) (by decide)]
+  have hval_10583 : (((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10583 = ((((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16394) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10583 1438 1454 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1438 = pm_goal_3.nodes.take 1437 ++ [{ rank := 0, op := "OpName.FW_float", ins := [16394], outs := [10583] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1437).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_float", ins := [16394], outs := [10583] } (by decide) (by decide),
+      applyNode_fw_float_out pm_goal_3 (((pm_goal_3.nodes.take 1437).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 16394 10583 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16394 1437 1454 (by omega) (by decide) (by decide)]
+  have hval_16394 : (((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16394 = ((((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10581) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16394 1436 1454 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1436 = pm_goal_3.nodes.take 1435 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [10581], outs := [16394, 16398, 16402, 16406, 16410], params := [5] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1435).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_multiref", ins := [10581], outs := [16394, 16398, 16402, 16406, 16410], params := [5] } (by decide) (by decide),
+      applyNode_fw_multiref5_first_out pm_goal_3 (((pm_goal_3.nodes.take 1435).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10581 16394 16398 16402 16406 16410]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10581 1435 1454 (by omega) (by decide) (by decide)]
+  have hval_10581 : (((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10581 = (fw_rms_norm ((((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16375) (initPM 5600)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10581 1434 1454 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1434 = pm_goal_3.nodes.take 1433 ++ [{ rank := 0, op := "OpName.FW_rms_norm", ins := [16375, 5600], outs := [10581] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1433).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_rms_norm", ins := [16375, 5600], outs := [10581] } (by decide) (by decide),
+      applyNode_fw_rms_norm_out_1p pm_goal_3 (((pm_goal_3.nodes.take 1433).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 16375 5600 10581]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16375 1433 1454 (by omega) (by decide) (by decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1433) initPM 5600 (by decide) (by decide)]
+  have hval_16375 : (((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16375 = ((((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10577) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16375 1432 1454 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1432 = pm_goal_3.nodes.take 1431 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [10577], outs := [16375, 16379], params := [2] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1431).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_multiref", ins := [10577], outs := [16375, 16379], params := [2] } (by decide) (by decide),
+      applyNode_fw_multiref2_first_out pm_goal_3 (((pm_goal_3.nodes.take 1431).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10577 16375 16379]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10577 1431 1454 (by omega) (by decide) (by decide)]
+  have hval_10577 : (((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10577 = (elemwiseAdd ((((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16363) ((((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10573)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10577 1430 1454 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1430 = pm_goal_3.nodes.take 1429 ++ [{ rank := 0, op := "OpName.FW_add", ins := [16363, 10573], outs := [10577] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1429).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_add", ins := [16363, 10573], outs := [10577] } (by decide) (by decide),
+      applyNode_fw_add2_out pm_goal_3 (((pm_goal_3.nodes.take 1429).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 16363 10573 10577]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16363 1429 1454 (by omega) (by decide) (by decide),
+      ← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10573 1429 1454 (by omega) (by decide) (by decide)]
+  have hval_10573 : (((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10573 = ((((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10569) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10573 1428 1454 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1428 = pm_goal_3.nodes.take 1427 ++ [{ rank := 0, op := "OpName.FW_float", ins := [10569], outs := [10573] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1427).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_float", ins := [10569], outs := [10573] } (by decide) (by decide),
+      applyNode_fw_float_out pm_goal_3 (((pm_goal_3.nodes.take 1427).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10569 10573 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10569 1427 1454 (by omega) (by decide) (by decide)]
+  have hval_10569 : (((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10569 = (fw_view [2048, 1024] ((((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10559)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10569 1426 1454 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1426 = pm_goal_3.nodes.take 1425 ++ [{ rank := 0, op := "OpName.FW_view", ins := [10559], outs := [10569], params := [2048, 1024] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1425).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_view", ins := [10559], outs := [10569], params := [2048, 1024] } (by decide) (by decide),
+      applyNode_fw_view_out pm_goal_3 (((pm_goal_3.nodes.take 1425).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 2048 [1024] 10559 10569]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10559 1425 1454 (by omega) (by decide) (by decide)]
+  have hval_10559 : (((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10559 = (fw_linear ((((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10555) (initPM 5595)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10559 1424 1454 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1424 = pm_goal_3.nodes.take 1423 ++ [{ rank := 0, op := "OpName.FW_mix_precision_linear", ins := [10555, 5595], outs := [10559] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1423).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_mix_precision_linear", ins := [10555, 5595], outs := [10559] } (by decide) (by decide),
+      applyNode_fw_mix_precision_linear_out_1p pm_goal_3 (((pm_goal_3.nodes.take 1423).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10555 5595 10559]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10555 1423 1454 (by omega) (by decide) (by decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1423) initPM 5595 (by decide) (by decide)]
+  have hval_10555 : (((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10555 = ((((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10549) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10555 1422 1454 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1422 = pm_goal_3.nodes.take 1421 ++ [{ rank := 0, op := "OpName.FW_reshape", ins := [10549], outs := [10555] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1421).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_reshape", ins := [10549], outs := [10555] } (by decide) (by decide),
+      applyNode_fw_reshape_out pm_goal_3 (((pm_goal_3.nodes.take 1421).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10549 10555 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10549 1421 1454 (by omega) (by decide) (by decide)]
+  have hval_10549 : (((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10549 = ((((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10547) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10549 1420 1454 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1420 = pm_goal_3.nodes.take 1419 ++ [{ rank := 0, op := "OpName.FW_reshape", ins := [10547], outs := [10549] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1419).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_reshape", ins := [10547], outs := [10549] } (by decide) (by decide),
+      applyNode_fw_reshape_out pm_goal_3 (((pm_goal_3.nodes.take 1419).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10547 10549 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10547 1419 1454 (by omega) (by decide) (by decide)]
+  have hval_10547 : (((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10547 = applyNodeRingAttn_zigzag pm_goal_3 (((pm_goal_3.nodes.take 1417).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_attn_zigzag", ins := [10523, 5588, 5589, 5590, 5591], outs := [10547], params := [16, 4, 64, 64, 1, 0] } := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10547 1418 1454 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1418 = pm_goal_3.nodes.take 1417 ++ [{ rank := 0, op := "OpName.FW_attn_zigzag", ins := [10523, 5588, 5589, 5590, 5591], outs := [10547], params := [16, 4, 64, 64, 1, 0] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_zigzag_out pm_goal_3 (((pm_goal_3.nodes.take 1417).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10523 5588 5589 5590 5591 10547 [16, 4, 64, 64, 1, 0]]
+  have hval_16363 : (((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16363 = ((((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10517) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16363 1412 1454 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1412 = pm_goal_3.nodes.take 1411 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [10517], outs := [16359, 16363], params := [2] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1411).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_multiref", ins := [10517], outs := [16359, 16363], params := [2] } (by decide) (by decide),
+      applyNode_fw_multiref2_second_out pm_goal_3 (((pm_goal_3.nodes.take 1411).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10517 16359 16363 (by decide)]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10517 1411 1454 (by omega) (by decide) (by decide)]
+  have hval_10517 : (((pm_goal_3.nodes.take 1454).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10517 = denoteGraph_ringAttn pm_goal_3 initPM 10517 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10517 1454 (by decide) (by decide)).symm
+  rw [hval_10589, hval_10583, hval_16394, hval_10581, hval_16375, hval_10577, hval_10573, hval_10569, hval_10559, hval_10555, hval_10549, hval_10547, hval_16363, hval_10517]
+  try rfl
+
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_r_18_r0 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 10765 =
+      ((fw_topk_routing (fw_norm_linear (fw_rms_norm (elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 10689) (fw_view [2048, 1024] (fw_linear (applyNodeRingAttn_zigzag pm_goal_3 (((pm_goal_3.nodes.take 1487).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_attn_zigzag", ins := [10695, 5637, 5638, 5639, 5640], outs := [10719], params := [16, 4, 64, 64, 1, 0] }) (initPM 5644)))) (initPM 5649)) (initPM 5652)) 8 1).snd.fst) := by
+  have hEntry : denoteGraph_ringAttn pm_goal_3 initPM 10765 =
+      (((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10765 := by
+    show pm_goal_3.nodes.foldl (applyNodeRingAttn pm_goal_3) initPM 10765 = _
+    exact foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10765 1524 (by decide) (by decide)
+  rw [hEntry]
+  rw [show pm_goal_3.nodes.take 1524 = pm_goal_3.nodes.take 1523 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [10761], outs := [10763, 10765, 10767], params := [8] }] from rfl,
+      List.foldl_append, List.foldl_cons, List.foldl_nil]
+  rw [applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1523).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_topk_routing", ins := [10761], outs := [10763, 10765, 10767], params := [8] } (by decide) (by decide)]
+  rw [applyNode_fw_topk_routing_map_out pm_goal_3 (((pm_goal_3.nodes.take 1523).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10761 10763 10765 10767 [8] (by decide)]
+  rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10761 1523 1524 (by omega) (by decide) (by decide)]
+  have hval_10761 : (((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10761 = (fw_norm_linear ((((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10755) (initPM 5652)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10761 1516 1524 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1516 = pm_goal_3.nodes.take 1515 ++ [{ rank := 0, op := "OpName.FW_norm_linear", ins := [10755, 5652], outs := [10761] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1515).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_norm_linear", ins := [10755, 5652], outs := [10761] } (by decide) (by decide),
+      applyNode_fw_norm_linear_out pm_goal_3 (((pm_goal_3.nodes.take 1515).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10755 5652 10761 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10755 1515 1524 (by omega) (by decide) (by decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1515) initPM 5652 (by decide) (by decide)]
+  have hval_10755 : (((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10755 = ((((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16472) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10755 1508 1524 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1508 = pm_goal_3.nodes.take 1507 ++ [{ rank := 0, op := "OpName.FW_float", ins := [16472], outs := [10755] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1507).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_float", ins := [16472], outs := [10755] } (by decide) (by decide),
+      applyNode_fw_float_out pm_goal_3 (((pm_goal_3.nodes.take 1507).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 16472 10755 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16472 1507 1524 (by omega) (by decide) (by decide)]
+  have hval_16472 : (((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16472 = ((((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10753) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16472 1506 1524 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1506 = pm_goal_3.nodes.take 1505 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [10753], outs := [16472, 16476, 16480, 16484, 16488], params := [5] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1505).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_multiref", ins := [10753], outs := [16472, 16476, 16480, 16484, 16488], params := [5] } (by decide) (by decide),
+      applyNode_fw_multiref5_first_out pm_goal_3 (((pm_goal_3.nodes.take 1505).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10753 16472 16476 16480 16484 16488]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10753 1505 1524 (by omega) (by decide) (by decide)]
+  have hval_10753 : (((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10753 = (fw_rms_norm ((((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16453) (initPM 5649)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10753 1504 1524 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1504 = pm_goal_3.nodes.take 1503 ++ [{ rank := 0, op := "OpName.FW_rms_norm", ins := [16453, 5649], outs := [10753] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1503).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_rms_norm", ins := [16453, 5649], outs := [10753] } (by decide) (by decide),
+      applyNode_fw_rms_norm_out_1p pm_goal_3 (((pm_goal_3.nodes.take 1503).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 16453 5649 10753]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16453 1503 1524 (by omega) (by decide) (by decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1503) initPM 5649 (by decide) (by decide)]
+  have hval_16453 : (((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16453 = ((((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10749) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16453 1502 1524 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1502 = pm_goal_3.nodes.take 1501 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [10749], outs := [16453, 16457], params := [2] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1501).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_multiref", ins := [10749], outs := [16453, 16457], params := [2] } (by decide) (by decide),
+      applyNode_fw_multiref2_first_out pm_goal_3 (((pm_goal_3.nodes.take 1501).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10749 16453 16457]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10749 1501 1524 (by omega) (by decide) (by decide)]
+  have hval_10749 : (((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10749 = (elemwiseAdd ((((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16441) ((((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10745)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10749 1500 1524 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1500 = pm_goal_3.nodes.take 1499 ++ [{ rank := 0, op := "OpName.FW_add", ins := [16441, 10745], outs := [10749] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1499).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_add", ins := [16441, 10745], outs := [10749] } (by decide) (by decide),
+      applyNode_fw_add2_out pm_goal_3 (((pm_goal_3.nodes.take 1499).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 16441 10745 10749]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16441 1499 1524 (by omega) (by decide) (by decide),
+      ← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10745 1499 1524 (by omega) (by decide) (by decide)]
+  have hval_10745 : (((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10745 = ((((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10741) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10745 1498 1524 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1498 = pm_goal_3.nodes.take 1497 ++ [{ rank := 0, op := "OpName.FW_float", ins := [10741], outs := [10745] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1497).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_float", ins := [10741], outs := [10745] } (by decide) (by decide),
+      applyNode_fw_float_out pm_goal_3 (((pm_goal_3.nodes.take 1497).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10741 10745 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10741 1497 1524 (by omega) (by decide) (by decide)]
+  have hval_10741 : (((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10741 = (fw_view [2048, 1024] ((((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10731)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10741 1496 1524 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1496 = pm_goal_3.nodes.take 1495 ++ [{ rank := 0, op := "OpName.FW_view", ins := [10731], outs := [10741], params := [2048, 1024] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1495).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_view", ins := [10731], outs := [10741], params := [2048, 1024] } (by decide) (by decide),
+      applyNode_fw_view_out pm_goal_3 (((pm_goal_3.nodes.take 1495).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 2048 [1024] 10731 10741]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10731 1495 1524 (by omega) (by decide) (by decide)]
+  have hval_10731 : (((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10731 = (fw_linear ((((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10727) (initPM 5644)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10731 1494 1524 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1494 = pm_goal_3.nodes.take 1493 ++ [{ rank := 0, op := "OpName.FW_mix_precision_linear", ins := [10727, 5644], outs := [10731] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1493).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_mix_precision_linear", ins := [10727, 5644], outs := [10731] } (by decide) (by decide),
+      applyNode_fw_mix_precision_linear_out_1p pm_goal_3 (((pm_goal_3.nodes.take 1493).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10727 5644 10731]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10727 1493 1524 (by omega) (by decide) (by decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1493) initPM 5644 (by decide) (by decide)]
+  have hval_10727 : (((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10727 = ((((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10721) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10727 1492 1524 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1492 = pm_goal_3.nodes.take 1491 ++ [{ rank := 0, op := "OpName.FW_reshape", ins := [10721], outs := [10727] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1491).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_reshape", ins := [10721], outs := [10727] } (by decide) (by decide),
+      applyNode_fw_reshape_out pm_goal_3 (((pm_goal_3.nodes.take 1491).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10721 10727 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10721 1491 1524 (by omega) (by decide) (by decide)]
+  have hval_10721 : (((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10721 = ((((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10719) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10721 1490 1524 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1490 = pm_goal_3.nodes.take 1489 ++ [{ rank := 0, op := "OpName.FW_reshape", ins := [10719], outs := [10721] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1489).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_reshape", ins := [10719], outs := [10721] } (by decide) (by decide),
+      applyNode_fw_reshape_out pm_goal_3 (((pm_goal_3.nodes.take 1489).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10719 10721 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10719 1489 1524 (by omega) (by decide) (by decide)]
+  have hval_10719 : (((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10719 = applyNodeRingAttn_zigzag pm_goal_3 (((pm_goal_3.nodes.take 1487).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_attn_zigzag", ins := [10695, 5637, 5638, 5639, 5640], outs := [10719], params := [16, 4, 64, 64, 1, 0] } := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10719 1488 1524 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1488 = pm_goal_3.nodes.take 1487 ++ [{ rank := 0, op := "OpName.FW_attn_zigzag", ins := [10695, 5637, 5638, 5639, 5640], outs := [10719], params := [16, 4, 64, 64, 1, 0] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_zigzag_out pm_goal_3 (((pm_goal_3.nodes.take 1487).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10695 5637 5638 5639 5640 10719 [16, 4, 64, 64, 1, 0]]
+  have hval_16441 : (((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16441 = ((((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10689) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16441 1482 1524 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1482 = pm_goal_3.nodes.take 1481 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [10689], outs := [16437, 16441], params := [2] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1481).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_multiref", ins := [10689], outs := [16437, 16441], params := [2] } (by decide) (by decide),
+      applyNode_fw_multiref2_second_out pm_goal_3 (((pm_goal_3.nodes.take 1481).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10689 16437 16441 (by decide)]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10689 1481 1524 (by omega) (by decide) (by decide)]
+  have hval_10689 : (((pm_goal_3.nodes.take 1524).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10689 = denoteGraph_ringAttn pm_goal_3 initPM 10689 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10689 1524 (by decide) (by decide)).symm
+  rw [hval_10761, hval_10755, hval_16472, hval_10753, hval_16453, hval_10749, hval_10745, hval_10741, hval_10731, hval_10727, hval_10721, hval_10719, hval_16441, hval_10689]
+  try rfl
+
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_r_19_r0 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 10937 =
+      ((fw_topk_routing (fw_norm_linear (fw_rms_norm (elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 10861) (fw_view [2048, 1024] (fw_linear (applyNodeRingAttn_zigzag pm_goal_3 (((pm_goal_3.nodes.take 1557).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_attn_zigzag", ins := [10867, 5686, 5687, 5688, 5689], outs := [10891], params := [16, 4, 64, 64, 1, 0] }) (initPM 5693)))) (initPM 5698)) (initPM 5701)) 8 1).snd.fst) := by
+  have hEntry : denoteGraph_ringAttn pm_goal_3 initPM 10937 =
+      (((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10937 := by
+    show pm_goal_3.nodes.foldl (applyNodeRingAttn pm_goal_3) initPM 10937 = _
+    exact foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10937 1594 (by decide) (by decide)
+  rw [hEntry]
+  rw [show pm_goal_3.nodes.take 1594 = pm_goal_3.nodes.take 1593 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [10933], outs := [10935, 10937, 10939], params := [8] }] from rfl,
+      List.foldl_append, List.foldl_cons, List.foldl_nil]
+  rw [applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1593).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_topk_routing", ins := [10933], outs := [10935, 10937, 10939], params := [8] } (by decide) (by decide)]
+  rw [applyNode_fw_topk_routing_map_out pm_goal_3 (((pm_goal_3.nodes.take 1593).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10933 10935 10937 10939 [8] (by decide)]
+  rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10933 1593 1594 (by omega) (by decide) (by decide)]
+  have hval_10933 : (((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10933 = (fw_norm_linear ((((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10927) (initPM 5701)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10933 1586 1594 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1586 = pm_goal_3.nodes.take 1585 ++ [{ rank := 0, op := "OpName.FW_norm_linear", ins := [10927, 5701], outs := [10933] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1585).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_norm_linear", ins := [10927, 5701], outs := [10933] } (by decide) (by decide),
+      applyNode_fw_norm_linear_out pm_goal_3 (((pm_goal_3.nodes.take 1585).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10927 5701 10933 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10927 1585 1594 (by omega) (by decide) (by decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1585) initPM 5701 (by decide) (by decide)]
+  have hval_10927 : (((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10927 = ((((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16550) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10927 1578 1594 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1578 = pm_goal_3.nodes.take 1577 ++ [{ rank := 0, op := "OpName.FW_float", ins := [16550], outs := [10927] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1577).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_float", ins := [16550], outs := [10927] } (by decide) (by decide),
+      applyNode_fw_float_out pm_goal_3 (((pm_goal_3.nodes.take 1577).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 16550 10927 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16550 1577 1594 (by omega) (by decide) (by decide)]
+  have hval_16550 : (((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16550 = ((((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10925) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16550 1576 1594 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1576 = pm_goal_3.nodes.take 1575 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [10925], outs := [16550, 16554, 16558, 16562, 16566], params := [5] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1575).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_multiref", ins := [10925], outs := [16550, 16554, 16558, 16562, 16566], params := [5] } (by decide) (by decide),
+      applyNode_fw_multiref5_first_out pm_goal_3 (((pm_goal_3.nodes.take 1575).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10925 16550 16554 16558 16562 16566]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10925 1575 1594 (by omega) (by decide) (by decide)]
+  have hval_10925 : (((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10925 = (fw_rms_norm ((((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16531) (initPM 5698)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10925 1574 1594 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1574 = pm_goal_3.nodes.take 1573 ++ [{ rank := 0, op := "OpName.FW_rms_norm", ins := [16531, 5698], outs := [10925] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1573).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_rms_norm", ins := [16531, 5698], outs := [10925] } (by decide) (by decide),
+      applyNode_fw_rms_norm_out_1p pm_goal_3 (((pm_goal_3.nodes.take 1573).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 16531 5698 10925]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16531 1573 1594 (by omega) (by decide) (by decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1573) initPM 5698 (by decide) (by decide)]
+  have hval_16531 : (((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16531 = ((((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10921) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16531 1572 1594 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1572 = pm_goal_3.nodes.take 1571 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [10921], outs := [16531, 16535], params := [2] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1571).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_multiref", ins := [10921], outs := [16531, 16535], params := [2] } (by decide) (by decide),
+      applyNode_fw_multiref2_first_out pm_goal_3 (((pm_goal_3.nodes.take 1571).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10921 16531 16535]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10921 1571 1594 (by omega) (by decide) (by decide)]
+  have hval_10921 : (((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10921 = (elemwiseAdd ((((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16519) ((((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10917)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10921 1570 1594 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1570 = pm_goal_3.nodes.take 1569 ++ [{ rank := 0, op := "OpName.FW_add", ins := [16519, 10917], outs := [10921] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1569).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_add", ins := [16519, 10917], outs := [10921] } (by decide) (by decide),
+      applyNode_fw_add2_out pm_goal_3 (((pm_goal_3.nodes.take 1569).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 16519 10917 10921]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16519 1569 1594 (by omega) (by decide) (by decide),
+      ← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10917 1569 1594 (by omega) (by decide) (by decide)]
+  have hval_10917 : (((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10917 = ((((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10913) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10917 1568 1594 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1568 = pm_goal_3.nodes.take 1567 ++ [{ rank := 0, op := "OpName.FW_float", ins := [10913], outs := [10917] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1567).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_float", ins := [10913], outs := [10917] } (by decide) (by decide),
+      applyNode_fw_float_out pm_goal_3 (((pm_goal_3.nodes.take 1567).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10913 10917 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10913 1567 1594 (by omega) (by decide) (by decide)]
+  have hval_10913 : (((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10913 = (fw_view [2048, 1024] ((((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10903)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10913 1566 1594 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1566 = pm_goal_3.nodes.take 1565 ++ [{ rank := 0, op := "OpName.FW_view", ins := [10903], outs := [10913], params := [2048, 1024] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1565).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_view", ins := [10903], outs := [10913], params := [2048, 1024] } (by decide) (by decide),
+      applyNode_fw_view_out pm_goal_3 (((pm_goal_3.nodes.take 1565).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 2048 [1024] 10903 10913]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10903 1565 1594 (by omega) (by decide) (by decide)]
+  have hval_10903 : (((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10903 = (fw_linear ((((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10899) (initPM 5693)) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10903 1564 1594 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1564 = pm_goal_3.nodes.take 1563 ++ [{ rank := 0, op := "OpName.FW_mix_precision_linear", ins := [10899, 5693], outs := [10903] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1563).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_mix_precision_linear", ins := [10899, 5693], outs := [10903] } (by decide) (by decide),
+      applyNode_fw_mix_precision_linear_out_1p pm_goal_3 (((pm_goal_3.nodes.take 1563).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10899 5693 10903]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10899 1563 1594 (by omega) (by decide) (by decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1563) initPM 5693 (by decide) (by decide)]
+  have hval_10899 : (((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10899 = ((((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10893) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10899 1562 1594 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1562 = pm_goal_3.nodes.take 1561 ++ [{ rank := 0, op := "OpName.FW_reshape", ins := [10893], outs := [10899] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1561).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_reshape", ins := [10893], outs := [10899] } (by decide) (by decide),
+      applyNode_fw_reshape_out pm_goal_3 (((pm_goal_3.nodes.take 1561).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10893 10899 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10893 1561 1594 (by omega) (by decide) (by decide)]
+  have hval_10893 : (((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10893 = ((((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10891) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10893 1560 1594 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1560 = pm_goal_3.nodes.take 1559 ++ [{ rank := 0, op := "OpName.FW_reshape", ins := [10891], outs := [10893] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1559).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_reshape", ins := [10891], outs := [10893] } (by decide) (by decide),
+      applyNode_fw_reshape_out pm_goal_3 (((pm_goal_3.nodes.take 1559).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10891 10893 []]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10891 1559 1594 (by omega) (by decide) (by decide)]
+  have hval_10891 : (((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10891 = applyNodeRingAttn_zigzag pm_goal_3 (((pm_goal_3.nodes.take 1557).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_attn_zigzag", ins := [10867, 5686, 5687, 5688, 5689], outs := [10891], params := [16, 4, 64, 64, 1, 0] } := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10891 1558 1594 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1558 = pm_goal_3.nodes.take 1557 ++ [{ rank := 0, op := "OpName.FW_attn_zigzag", ins := [10867, 5686, 5687, 5688, 5689], outs := [10891], params := [16, 4, 64, 64, 1, 0] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_zigzag_out pm_goal_3 (((pm_goal_3.nodes.take 1557).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10867 5686 5687 5688 5689 10891 [16, 4, 64, 64, 1, 0]]
+  have hval_16519 : (((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 16519 = ((((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10861) := by
+    rw [foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 16519 1552 1594 (by omega) (by decide) (by decide),
+      show pm_goal_3.nodes.take 1552 = pm_goal_3.nodes.take 1551 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [10861], outs := [16515, 16519], params := [2] }] from rfl,
+      List.foldl_append,
+      List.foldl_cons,
+      List.foldl_nil,
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3 (((pm_goal_3.nodes.take 1551).foldl (applyNodeRingAttn pm_goal_3) initPM)) { rank := 0, op := "OpName.FW_multiref", ins := [10861], outs := [16515, 16519], params := [2] } (by decide) (by decide),
+      applyNode_fw_multiref2_second_out pm_goal_3 (((pm_goal_3.nodes.take 1551).foldl (applyNodeRingAttn pm_goal_3) initPM)) 0 10861 16515 16519 (by decide)]
+    rw [← foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10861 1551 1594 (by omega) (by decide) (by decide)]
+  have hval_10861 : (((pm_goal_3.nodes.take 1594).foldl (applyNodeRingAttn pm_goal_3) initPM)) 10861 = denoteGraph_ringAttn pm_goal_3 initPM 10861 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10861 1594 (by decide) (by decide)).symm
+  rw [hval_10933, hval_10927, hval_16550, hval_10925, hval_16531, hval_10921, hval_10917, hval_10913, hval_10903, hval_10899, hval_10893, hval_10891, hval_16519, hval_10861]
+  try rfl
+
+
 /-! ### Phase C1: concrete `ringAttnBuddies` structure lemmas.
 
     The graphs `sm_goal_3` / `pm_goal_3` are concrete literal node lists, so the
