@@ -107,6 +107,46 @@ theorem foldl_prefix_eq_full_ringAttn
   conv_lhs => rw [← List.take_append_drop k nodes, List.foldl_append]
   exact foldl_applyNodeRingAttn_at_not_written g _ _ tid hnil h
 
+/-! ### Phase 3 (fold-bridge): per-tid ring-fold evaluation.
+
+    Following Pattern_1's `denote_sm_goal_1_XXX` template, adapted to the
+    ring-attention fold. Each theorem unfolds `denoteGraph_ringAttn sm_goal_3`
+    at a specific tid to a closed expression in `initSM` (and, where the
+    dependency cone crosses a ring-attention node, an opaque
+    `applyNodeRingAttn_{sliding_window,zigzag}` call on the prefix state — this
+    is exactly the intended `<op_semantic> (S <inputTid>)` form). -/
+
+/-- Milestone: the layer-0 attention output tid `4696` evaluates to the
+    ring sliding-window semantics on the take-8 prefix state. Validates the
+    entry bridge + `applyNodeRingAttn_sliding_window_out`. -/
+theorem denote_sm_goal_3_4696 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 4696 =
+      applyNodeRingAttn_sliding_window sm_goal_3
+        ((sm_goal_3.nodes.take 8).foldl (applyNodeRingAttn sm_goal_3) initSM)
+        { rank := 0, op := "OpName.FW_attn_sliding_window",
+          ins := [4692, 4693, 4689, 4694, 4695], outs := [4696],
+          params := [16, 4, 64, 64, 1, 512] } := by
+  have hEntry : denoteGraph_ringAttn sm_goal_3 initSM 4696 =
+      (sm_goal_3.nodes.take 9).foldl (applyNodeRingAttn sm_goal_3) initSM 4696 := by
+    show sm_goal_3.nodes.foldl (applyNodeRingAttn sm_goal_3) initSM 4696 = _
+    exact foldl_prefix_eq_full_ringAttn sm_goal_3 sm_goal_3.nodes initSM 4696 9
+      (by decide) (by decide)
+  rw [hEntry,
+      show (sm_goal_3.nodes.take 9).foldl (applyNodeRingAttn sm_goal_3) initSM =
+        applyNodeRingAttn sm_goal_3
+          ((sm_goal_3.nodes.take 8).foldl (applyNodeRingAttn sm_goal_3) initSM)
+          { rank := 0, op := "OpName.FW_attn_sliding_window",
+            ins := [4692, 4693, 4689, 4694, 4695], outs := [4696],
+            params := [16, 4, 64, 64, 1, 512] } from by
+        rw [show sm_goal_3.nodes.take 9 = sm_goal_3.nodes.take 8 ++
+            [{ rank := 0, op := "OpName.FW_attn_sliding_window",
+               ins := [4692, 4693, 4689, 4694, 4695], outs := [4696],
+               params := [16, 4, 64, 64, 1, 512] }] from rfl,
+            List.foldl_append, List.foldl_cons, List.foldl_nil]]
+  exact applyNodeRingAttn_sliding_window_out sm_goal_3
+    ((sm_goal_3.nodes.take 8).foldl (applyNodeRingAttn sm_goal_3) initSM)
+    0 4692 4693 4689 4694 4695 4696 [16, 4, 64, 64, 1, 512]
+
 /-! ### Phase C1: concrete `ringAttnBuddies` structure lemmas.
 
     The graphs `sm_goal_3` / `pm_goal_3` are concrete literal node lists, so the
