@@ -49422,4 +49422,1259 @@ theorem topk_snd_fst_chunk_commute (L : Tensor) (S n k : Nat)
   rw [fw_topk_routing_snd_fst_allGather0_commute_2_of
         (chunkPrimDimN 0 2 0 L) (chunkPrimDimN 0 2 1 L) S n k hS hk hc0 hc1]
 
+
+/-! ### Phase 5b.5.1: PM router shape claims (H clauses 1+2 of goal_3_stmt_cut_ringAttn_of_router_commutes).
+    Shape-only checkpoint: proves per-rank router logits are [2048, 64] via a carry-shape
+    induction. The commute clause (clause 3) is a separate value-induction, not proven here. -/
+
+theorem rms_sh (x w : Tensor) : (fw_rms_norm x w).shape = x.shape := by
+  unfold fw_rms_norm
+  cases hrev : x.shape.reverse with
+  | nil => simp
+  | cons d tl => simp [Tensor.mkShape]
+
+theorem sigmoid_sh (x : Tensor) : (fw_sigmoid x).shape = x.shape := by
+  unfold fw_sigmoid; simp [Tensor.mkShape]
+
+theorem view_sh (sh : Shape) (x : Tensor) : (fw_view sh x).shape = sh := by
+  unfold fw_view; simp [Tensor.mkShape]
+
+theorem ewadd_eq (x y : Tensor) (s : Shape) (hx : x.shape = s) (hy : y.shape = s) :
+    (elemwiseAdd x y).shape = s :=
+  elemwiseAdd_shape_of_shapes x y s hx hy
+
+theorem ewmul_bc (x y : Tensor) (a b : Nat) (hb : 1 ≤ b)
+    (hx : x.shape = [a, 1]) (hy : y.shape = [a, b]) :
+    (elemwiseMul x y).shape = [a, b] := by
+  unfold elemwiseMul
+  simp only [Tensor.mkShape, outShape2, hx, hy, List.length, Nat.reduceAdd,
+    Nat.reduceSub, List.replicate, List.append_nil, List.nil_append,
+    List.zipWith, Nat.max_self, Nat.max_eq_right hb]
+
+theorem moe_eq (input rp rm w13 w2 : Tensor) (ne ls le tk : Nat) (sl : Scalar)
+    (a b : Nat) (h : input.shape = [a, b]) :
+    (fw_all2all_moe_gmm input rp rm w13 w2 ne ls le tk sl).shape = [a, b] := by
+  unfold fw_all2all_moe_gmm
+  simp only [h, Tensor.mkShape, List.head?, List.reverse, List.reverseAux, Option.getD]
+
+theorem chunk0_2 (r : Nat) (x : Tensor) (a b : Nat) (h : x.shape = [a, b]) :
+    (chunkPrimDimN 0 2 r x).shape = [a / 2, b] := by
+  rw [chunkPrimDimN_shape 0 2 r x [a, b] h (by omega)]
+  simp [List.set]
+
+theorem nl_sh (b k n : Nat) (x w : Tensor)
+    (hx : x.shape = [b, k]) (hw : w.shape = [n, k]) :
+    (fw_norm_linear x w).shape = [b, n] := by
+  unfold fw_norm_linear; rw [hx, hw]; simp [Tensor.mkShape]
+
+theorem topk_sf_sh (x : Tensor) (S topK numExp : Nat) (hx : x.shape = [S, numExp]) :
+    (fw_topk_routing x topK numExp).snd.fst.shape = [S, numExp] := by
+  unfold fw_topk_routing; simp [Tensor.mkShape]; rw [hx]; rfl
+
+theorem shuffle_sh (x cu : Tensor) (n r : Nat) :
+    (fw_maybe_shuffle x cu n r).shape = x.shape := rfl
+
+-- Generic router-logit closer: topk.snd.fst of a [2048,64] logit is [2048,64].
+theorem router_from_logit (C : Tensor) (h : C.shape = [2048, 64]) :
+    (fw_topk_routing C 8 ((C.shape.reverse.head?).getD 1)).snd.fst.shape = [2048, 64] := by
+  have hnum : (C.shape.reverse.head?).getD 1 = 64 := by rw [h]; rfl
+  rw [hnum]; exact topk_sf_sh C 2048 8 64 h
+
+-- ===== Phase 5b.5.1 generated: PM router shape claims (H clauses 1+2) =====
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 4736).shape = [4096, 1024] := by
+  rw [denote_pm_goal_3_h_0_r0 initPM]
+  have hnr : pm_goal_3.numRanks = 2 := rfl
+  rw [hnr]
+  have h4680 : (initPM 4680).shape = [4096, 1024] := hPM 4680 [4096,1024] (by decide)
+  refine ewadd_eq _ _ [4096,1024] (ewadd_eq _ _ _ h4680 (view_sh _ _)) ?_
+  refine ewadd_eq _ _ [4096,1024] ?_ ?_
+  · rw [allGatherPrimDimN_shape 0 2 _ [2048,1024] ?_]
+    · simp [List.set]
+    · simp only [List.head?, Option.map, Option.getD]
+      refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact chunk0_2 0 _ 4096 1024 ((rms_sh _ _).trans (ewadd_eq _ _ [4096,1024] h4680 (view_sh _ _)))
+  · refine ewmul_bc _ _ 4096 1024 (by omega) ?_ (view_sh _ _)
+    rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_1_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 7765).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_1_r0 initPM]
+  have hnr : pm_goal_3.numRanks = 2 := rfl
+  rw [hnr]
+  have hprev := pm_carry_shape_0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact chunk0_2 0 _ 4096 1024 (ewadd_eq _ _ [4096,1024] hprev (view_sh _ _))
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact chunk0_2 0 _ 4096 1024 ((rms_sh _ _).trans (ewadd_eq _ _ [4096,1024] hprev (view_sh _ _)))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact chunk0_2 0 _ 4096 1 (view_sh _ _)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_2_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 7951).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_2_r0 initPM]
+  have hprev := pm_carry_shape_1_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_3_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8137).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_3_r0 initPM]
+  have hprev := pm_carry_shape_2_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_4_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8323).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_4_r0 initPM]
+  have hprev := pm_carry_shape_3_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_5_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8509).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_5_r0 initPM]
+  have hprev := pm_carry_shape_4_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_6_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8695).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_6_r0 initPM]
+  have hprev := pm_carry_shape_5_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_7_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8881).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_7_r0 initPM]
+  have hprev := pm_carry_shape_6_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_8_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9067).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_8_r0 initPM]
+  have hprev := pm_carry_shape_7_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_9_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9253).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_9_r0 initPM]
+  have hprev := pm_carry_shape_8_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_10_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9439).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_10_r0 initPM]
+  have hprev := pm_carry_shape_9_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_11_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9625).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_11_r0 initPM]
+  have hprev := pm_carry_shape_10_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_12_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9829).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_12_r0 initPM]
+  have hprev := pm_carry_shape_11_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] ((shuffle_sh _ _ _ _).trans hprev) (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] ((shuffle_sh _ _ _ _).trans hprev) (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_13_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10001).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_13_r0 initPM]
+  have hprev := pm_carry_shape_12_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_14_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10173).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_14_r0 initPM]
+  have hprev := pm_carry_shape_13_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_15_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10345).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_15_r0 initPM]
+  have hprev := pm_carry_shape_14_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_16_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10517).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_16_r0 initPM]
+  have hprev := pm_carry_shape_15_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_17_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10689).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_17_r0 initPM]
+  have hprev := pm_carry_shape_16_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_18_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10861).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_18_r0 initPM]
+  have hprev := pm_carry_shape_17_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_19_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 11033).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_19_r0 initPM]
+  have hprev := pm_carry_shape_18_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_20_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 11205).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_20_r0 initPM]
+  have hprev := pm_carry_shape_19_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_21_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 11377).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_21_r0 initPM]
+  have hprev := pm_carry_shape_20_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_22_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 11549).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_22_r0 initPM]
+  have hprev := pm_carry_shape_21_r0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_1_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 7766).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_1_r1 initPM]
+  have hnr : pm_goal_3.numRanks = 2 := rfl
+  rw [hnr]
+  have hprev := pm_carry_shape_0 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact chunk0_2 1 _ 4096 1024 (ewadd_eq _ _ [4096,1024] hprev (view_sh _ _))
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact chunk0_2 1 _ 4096 1024 ((rms_sh _ _).trans (ewadd_eq _ _ [4096,1024] hprev (view_sh _ _)))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact chunk0_2 1 _ 4096 1 (view_sh _ _)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_2_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 7952).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_2_r1 initPM]
+  have hprev := pm_carry_shape_1_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_3_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8138).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_3_r1 initPM]
+  have hprev := pm_carry_shape_2_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_4_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8324).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_4_r1 initPM]
+  have hprev := pm_carry_shape_3_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_5_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8510).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_5_r1 initPM]
+  have hprev := pm_carry_shape_4_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_6_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8696).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_6_r1 initPM]
+  have hprev := pm_carry_shape_5_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_7_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8882).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_7_r1 initPM]
+  have hprev := pm_carry_shape_6_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_8_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9068).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_8_r1 initPM]
+  have hprev := pm_carry_shape_7_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_9_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9254).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_9_r1 initPM]
+  have hprev := pm_carry_shape_8_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_10_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9440).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_10_r1 initPM]
+  have hprev := pm_carry_shape_9_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_11_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9626).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_11_r1 initPM]
+  have hprev := pm_carry_shape_10_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_12_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9830).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_12_r1 initPM]
+  have hprev := pm_carry_shape_11_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] ((shuffle_sh _ _ _ _).trans hprev) (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] ((shuffle_sh _ _ _ _).trans hprev) (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_13_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10002).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_13_r1 initPM]
+  have hprev := pm_carry_shape_12_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_14_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10174).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_14_r1 initPM]
+  have hprev := pm_carry_shape_13_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_15_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10346).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_15_r1 initPM]
+  have hprev := pm_carry_shape_14_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_16_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10518).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_16_r1 initPM]
+  have hprev := pm_carry_shape_15_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_17_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10690).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_17_r1 initPM]
+  have hprev := pm_carry_shape_16_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_18_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10862).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_18_r1 initPM]
+  have hprev := pm_carry_shape_17_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_19_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 11034).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_19_r1 initPM]
+  have hprev := pm_carry_shape_18_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_20_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 11206).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_20_r1 initPM]
+  have hprev := pm_carry_shape_19_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_21_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 11378).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_21_r1 initPM]
+  have hprev := pm_carry_shape_20_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_carry_shape_22_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 11550).shape = [2048, 1024] := by
+  rw [denote_pm_goal_3_h_22_r1 initPM]
+  have hprev := pm_carry_shape_21_r1 initPM hPM
+  refine ewadd_eq _ _ [2048,1024] ?_ ?_
+  · exact ewadd_eq _ _ [2048,1024] hprev (view_sh _ _)
+  · refine ewadd_eq _ _ [2048,1024] ?_ ?_
+    · refine moe_eq _ _ _ _ _ _ _ _ _ _ 2048 1024 ?_
+      exact (rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hprev (view_sh _ _))
+    · refine ewmul_bc _ _ 2048 1024 (by omega) ?_ (view_sh _ _)
+      rw [sigmoid_sh]; exact view_sh _ _
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_0_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 7483).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_0_r0 initPM]
+  have hnr : pm_goal_3.numRanks = 2 := rfl
+  rw [hnr]
+  have hres : (initPM 4680).shape = [4096, 1024] := hPM 4680 [4096,1024] (by decide)
+  have hw : (initPM 4707).shape = [64, 1024] := hPM 4707 [64,1024] (by decide)
+  exact router_from_logit _ (chunk0_2 0 _ 4096 64
+    (nl_sh 4096 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [4096,1024] hres (view_sh _ _))) hw))
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_1_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 7669).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_1_r0 initPM]
+  have hnr : pm_goal_3.numRanks = 2 := rfl
+  rw [hnr]
+  have hres := pm_carry_shape_0 initPM hPM
+  have hw : (initPM 4761).shape = [64, 1024] := hPM 4761 [64,1024] (by decide)
+  exact router_from_logit _ (chunk0_2 0 _ 4096 64
+    (nl_sh 4096 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [4096,1024] hres (view_sh _ _))) hw))
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_2_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 7855).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_2_r0 initPM]
+  have hres := pm_carry_shape_1_r0 initPM hPM
+  have hw : (initPM 4815).shape = [64, 1024] := hPM 4815 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_3_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8041).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_3_r0 initPM]
+  have hres := pm_carry_shape_2_r0 initPM hPM
+  have hw : (initPM 4869).shape = [64, 1024] := hPM 4869 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_4_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8227).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_4_r0 initPM]
+  have hres := pm_carry_shape_3_r0 initPM hPM
+  have hw : (initPM 4923).shape = [64, 1024] := hPM 4923 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_5_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8413).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_5_r0 initPM]
+  have hres := pm_carry_shape_4_r0 initPM hPM
+  have hw : (initPM 4977).shape = [64, 1024] := hPM 4977 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_6_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8599).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_6_r0 initPM]
+  have hres := pm_carry_shape_5_r0 initPM hPM
+  have hw : (initPM 5031).shape = [64, 1024] := hPM 5031 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_7_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8785).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_7_r0 initPM]
+  have hres := pm_carry_shape_6_r0 initPM hPM
+  have hw : (initPM 5085).shape = [64, 1024] := hPM 5085 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_8_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8971).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_8_r0 initPM]
+  have hres := pm_carry_shape_7_r0 initPM hPM
+  have hw : (initPM 5139).shape = [64, 1024] := hPM 5139 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_9_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9157).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_9_r0 initPM]
+  have hres := pm_carry_shape_8_r0 initPM hPM
+  have hw : (initPM 5193).shape = [64, 1024] := hPM 5193 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_10_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9343).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_10_r0 initPM]
+  have hres := pm_carry_shape_9_r0 initPM hPM
+  have hw : (initPM 5247).shape = [64, 1024] := hPM 5247 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_11_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9529).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_11_r0 initPM]
+  have hres := pm_carry_shape_10_r0 initPM hPM
+  have hw : (initPM 5301).shape = [64, 1024] := hPM 5301 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_12_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9733).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_12_r0 initPM]
+  have hres := pm_carry_shape_11_r0 initPM hPM
+  have hw : (initPM 5358).shape = [64, 1024] := hPM 5358 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] ((shuffle_sh _ _ _ _).trans hres) (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_13_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9905).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_13_r0 initPM]
+  have hres := pm_carry_shape_12_r0 initPM hPM
+  have hw : (initPM 5407).shape = [64, 1024] := hPM 5407 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_14_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10077).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_14_r0 initPM]
+  have hres := pm_carry_shape_13_r0 initPM hPM
+  have hw : (initPM 5456).shape = [64, 1024] := hPM 5456 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_15_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10249).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_15_r0 initPM]
+  have hres := pm_carry_shape_14_r0 initPM hPM
+  have hw : (initPM 5505).shape = [64, 1024] := hPM 5505 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_16_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10421).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_16_r0 initPM]
+  have hres := pm_carry_shape_15_r0 initPM hPM
+  have hw : (initPM 5554).shape = [64, 1024] := hPM 5554 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_17_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10593).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_17_r0 initPM]
+  have hres := pm_carry_shape_16_r0 initPM hPM
+  have hw : (initPM 5603).shape = [64, 1024] := hPM 5603 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_18_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10765).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_18_r0 initPM]
+  have hres := pm_carry_shape_17_r0 initPM hPM
+  have hw : (initPM 5652).shape = [64, 1024] := hPM 5652 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_19_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10937).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_19_r0 initPM]
+  have hres := pm_carry_shape_18_r0 initPM hPM
+  have hw : (initPM 5701).shape = [64, 1024] := hPM 5701 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_20_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 11109).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_20_r0 initPM]
+  have hres := pm_carry_shape_19_r0 initPM hPM
+  have hw : (initPM 5750).shape = [64, 1024] := hPM 5750 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_21_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 11281).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_21_r0 initPM]
+  have hres := pm_carry_shape_20_r0 initPM hPM
+  have hw : (initPM 5799).shape = [64, 1024] := hPM 5799 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_22_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 11453).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_22_r0 initPM]
+  have hres := pm_carry_shape_21_r0 initPM hPM
+  have hw : (initPM 5848).shape = [64, 1024] := hPM 5848 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_23_r0 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 11625).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_23_r0 initPM]
+  have hres := pm_carry_shape_22_r0 initPM hPM
+  have hw : (initPM 5897).shape = [64, 1024] := hPM 5897 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_0_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 7484).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_0_r1 initPM]
+  have hnr : pm_goal_3.numRanks = 2 := rfl
+  rw [hnr]
+  have hres : (initPM 4680).shape = [4096, 1024] := hPM 4680 [4096,1024] (by decide)
+  have hw : (initPM 4707).shape = [64, 1024] := hPM 4707 [64,1024] (by decide)
+  exact router_from_logit _ (chunk0_2 1 _ 4096 64
+    (nl_sh 4096 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [4096,1024] hres (view_sh _ _))) hw))
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_1_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 7670).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_1_r1 initPM]
+  have hnr : pm_goal_3.numRanks = 2 := rfl
+  rw [hnr]
+  have hres := pm_carry_shape_0 initPM hPM
+  have hw : (initPM 4761).shape = [64, 1024] := hPM 4761 [64,1024] (by decide)
+  exact router_from_logit _ (chunk0_2 1 _ 4096 64
+    (nl_sh 4096 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [4096,1024] hres (view_sh _ _))) hw))
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_2_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 7856).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_2_r1 initPM]
+  have hres := pm_carry_shape_1_r1 initPM hPM
+  have hw : (initPM 4815).shape = [64, 1024] := hPM 4815 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_3_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8042).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_3_r1 initPM]
+  have hres := pm_carry_shape_2_r1 initPM hPM
+  have hw : (initPM 4869).shape = [64, 1024] := hPM 4869 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_4_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8228).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_4_r1 initPM]
+  have hres := pm_carry_shape_3_r1 initPM hPM
+  have hw : (initPM 4923).shape = [64, 1024] := hPM 4923 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_5_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8414).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_5_r1 initPM]
+  have hres := pm_carry_shape_4_r1 initPM hPM
+  have hw : (initPM 4977).shape = [64, 1024] := hPM 4977 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_6_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8600).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_6_r1 initPM]
+  have hres := pm_carry_shape_5_r1 initPM hPM
+  have hw : (initPM 5031).shape = [64, 1024] := hPM 5031 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_7_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8786).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_7_r1 initPM]
+  have hres := pm_carry_shape_6_r1 initPM hPM
+  have hw : (initPM 5085).shape = [64, 1024] := hPM 5085 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_8_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 8972).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_8_r1 initPM]
+  have hres := pm_carry_shape_7_r1 initPM hPM
+  have hw : (initPM 5139).shape = [64, 1024] := hPM 5139 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_9_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9158).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_9_r1 initPM]
+  have hres := pm_carry_shape_8_r1 initPM hPM
+  have hw : (initPM 5193).shape = [64, 1024] := hPM 5193 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_10_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9344).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_10_r1 initPM]
+  have hres := pm_carry_shape_9_r1 initPM hPM
+  have hw : (initPM 5247).shape = [64, 1024] := hPM 5247 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_11_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9530).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_11_r1 initPM]
+  have hres := pm_carry_shape_10_r1 initPM hPM
+  have hw : (initPM 5301).shape = [64, 1024] := hPM 5301 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_12_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9734).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_12_r1 initPM]
+  have hres := pm_carry_shape_11_r1 initPM hPM
+  have hw : (initPM 5358).shape = [64, 1024] := hPM 5358 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] ((shuffle_sh _ _ _ _).trans hres) (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_13_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9906).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_13_r1 initPM]
+  have hres := pm_carry_shape_12_r1 initPM hPM
+  have hw : (initPM 5407).shape = [64, 1024] := hPM 5407 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_14_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10078).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_14_r1 initPM]
+  have hres := pm_carry_shape_13_r1 initPM hPM
+  have hw : (initPM 5456).shape = [64, 1024] := hPM 5456 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_15_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10250).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_15_r1 initPM]
+  have hres := pm_carry_shape_14_r1 initPM hPM
+  have hw : (initPM 5505).shape = [64, 1024] := hPM 5505 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_16_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10422).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_16_r1 initPM]
+  have hres := pm_carry_shape_15_r1 initPM hPM
+  have hw : (initPM 5554).shape = [64, 1024] := hPM 5554 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_17_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10594).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_17_r1 initPM]
+  have hres := pm_carry_shape_16_r1 initPM hPM
+  have hw : (initPM 5603).shape = [64, 1024] := hPM 5603 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_18_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10766).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_18_r1 initPM]
+  have hres := pm_carry_shape_17_r1 initPM hPM
+  have hw : (initPM 5652).shape = [64, 1024] := hPM 5652 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_19_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 10938).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_19_r1 initPM]
+  have hres := pm_carry_shape_18_r1 initPM hPM
+  have hw : (initPM 5701).shape = [64, 1024] := hPM 5701 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_20_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 11110).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_20_r1 initPM]
+  have hres := pm_carry_shape_19_r1 initPM hPM
+  have hw : (initPM 5750).shape = [64, 1024] := hPM 5750 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_21_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 11282).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_21_r1 initPM]
+  have hres := pm_carry_shape_20_r1 initPM hPM
+  have hw : (initPM 5799).shape = [64, 1024] := hPM 5799 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_22_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 11454).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_22_r1 initPM]
+  have hres := pm_carry_shape_21_r1 initPM hPM
+  have hw : (initPM 5848).shape = [64, 1024] := hPM 5848 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option maxHeartbeats 2000000 in
+theorem pm_router_shape_23_r1 (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 11626).shape = [2048, 64] := by
+  rw [denote_pm_goal_3_r_23_r1 initPM]
+  have hres := pm_carry_shape_22_r1 initPM hPM
+  have hw : (initPM 5897).shape = [64, 1024] := hPM 5897 [64,1024] (by decide)
+  exact router_from_logit _
+    (nl_sh 2048 1024 64 _ _ ((rms_sh _ _).trans (ewadd_eq _ _ [2048,1024] hres (view_sh _ _))) hw)
+
+set_option linter.style.multiGoal false in
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 4000000 in
+theorem pm_goal_3_routers_r0_shapes (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    ∀ i, i < 24 → ((pm_goal_3_routers_r0 initPM).getD i (zeroTensor [2048, 64])).shape = [2048, 64] := by
+  intro i hi
+  unfold pm_goal_3_routers_r0
+  interval_cases i <;> simp only [List.getD_cons_zero, List.getD_cons_succ]
+  exact pm_router_shape_0_r0 initPM hPM
+  exact pm_router_shape_1_r0 initPM hPM
+  exact pm_router_shape_2_r0 initPM hPM
+  exact pm_router_shape_3_r0 initPM hPM
+  exact pm_router_shape_4_r0 initPM hPM
+  exact pm_router_shape_5_r0 initPM hPM
+  exact pm_router_shape_6_r0 initPM hPM
+  exact pm_router_shape_7_r0 initPM hPM
+  exact pm_router_shape_8_r0 initPM hPM
+  exact pm_router_shape_9_r0 initPM hPM
+  exact pm_router_shape_10_r0 initPM hPM
+  exact pm_router_shape_11_r0 initPM hPM
+  exact pm_router_shape_12_r0 initPM hPM
+  exact pm_router_shape_13_r0 initPM hPM
+  exact pm_router_shape_14_r0 initPM hPM
+  exact pm_router_shape_15_r0 initPM hPM
+  exact pm_router_shape_16_r0 initPM hPM
+  exact pm_router_shape_17_r0 initPM hPM
+  exact pm_router_shape_18_r0 initPM hPM
+  exact pm_router_shape_19_r0 initPM hPM
+  exact pm_router_shape_20_r0 initPM hPM
+  exact pm_router_shape_21_r0 initPM hPM
+  exact pm_router_shape_22_r0 initPM hPM
+  exact pm_router_shape_23_r0 initPM hPM
+
+set_option linter.style.multiGoal false in
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 4000000 in
+theorem pm_goal_3_routers_r1_shapes (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    ∀ i, i < 24 → ((pm_goal_3_routers_r1 initPM).getD i (zeroTensor [2048, 64])).shape = [2048, 64] := by
+  intro i hi
+  unfold pm_goal_3_routers_r1
+  interval_cases i <;> simp only [List.getD_cons_zero, List.getD_cons_succ]
+  exact pm_router_shape_0_r1 initPM hPM
+  exact pm_router_shape_1_r1 initPM hPM
+  exact pm_router_shape_2_r1 initPM hPM
+  exact pm_router_shape_3_r1 initPM hPM
+  exact pm_router_shape_4_r1 initPM hPM
+  exact pm_router_shape_5_r1 initPM hPM
+  exact pm_router_shape_6_r1 initPM hPM
+  exact pm_router_shape_7_r1 initPM hPM
+  exact pm_router_shape_8_r1 initPM hPM
+  exact pm_router_shape_9_r1 initPM hPM
+  exact pm_router_shape_10_r1 initPM hPM
+  exact pm_router_shape_11_r1 initPM hPM
+  exact pm_router_shape_12_r1 initPM hPM
+  exact pm_router_shape_13_r1 initPM hPM
+  exact pm_router_shape_14_r1 initPM hPM
+  exact pm_router_shape_15_r1 initPM hPM
+  exact pm_router_shape_16_r1 initPM hPM
+  exact pm_router_shape_17_r1 initPM hPM
+  exact pm_router_shape_18_r1 initPM hPM
+  exact pm_router_shape_19_r1 initPM hPM
+  exact pm_router_shape_20_r1 initPM hPM
+  exact pm_router_shape_21_r1 initPM hPM
+  exact pm_router_shape_22_r1 initPM hPM
+  exact pm_router_shape_23_r1 initPM hPM
+
+
 end TrainVerify.Denote.GeneratedPatterns
