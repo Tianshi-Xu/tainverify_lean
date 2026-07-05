@@ -39673,6 +39673,57 @@ theorem denote_pm_goal_3_qproj_0_r1 (initPM : Store) :
   rw [hval_4692, hval_4687, hval_4685, hval_14632, hval_14636, hval_4683, hval_14611, hval_4681, hval_11853]
   try rfl
 
+-- Phase 5b.5.2 (multiref-init-fix follow-through): the L0 Q-projection
+-- reconstruction commutes — the SM full q-proj tensor equals the all-gather
+-- (over dim 0, the token dim) of the two PM rank shards.
+--
+-- This is the base case that the second upstream fidelity fix
+-- (`initGoal_4691.tps -> source leaf 4691`) unblocks: the rotary cos/sin
+-- table boundary equality `initSM 4691 = initPM 4691` is now extractable from
+-- `InitGoalsHold goal_3_cut_initGoals`, which was previously underivable when
+-- `initGoal_4691.tps` pointed at the multiref copy 11853.  All the weight
+-- boundary equalities (4680 via goal_5, 4682/4684/4686/4690/4691 via the
+-- identity init goals) come straight from `InitGoalsHold`; the reconstruction
+-- itself is `allGather0_reconstruct_chunks_3d`.  Kernel-only axioms.
+set_option maxHeartbeats 1600000 in
+theorem sm_pm_qproj_L0_commute
+    (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (hT : ((fw_rotary_embedding (initPM 4691) (initPM 4690)
+              (fw_per_head_linear (fw_rms_norm (initPM 4680) (initPM 4682)) (initPM 4684))
+              (fw_per_head_linear (fw_rms_norm (initPM 4680) (initPM 4682)) (initPM 4686)) 16 4).1).shape
+            = [2 * 2048, 4, 64]) :
+    denoteGraph_ringAttn sm_goal_3 initSM 4692
+      = allGatherPrimDimN 0 2 0
+          [ denoteGraph_ringAttn pm_goal_3 initPM 7433,
+            denoteGraph_ringAttn pm_goal_3 initPM 7434 ] := by
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM := by
+    intro g hg
+    exact hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have h4682 : initSM 4682 = initPM 4682 := hb initGoal_4682 (by decide) rfl
+  have h4684 : initSM 4684 = initPM 4684 := hb initGoal_4684 (by decide) rfl
+  have h4686 : initSM 4686 = initPM 4686 := hb initGoal_4686 (by decide) rfl
+  have h4690 : initSM 4690 = initPM 4690 := hb initGoal_4690 (by decide) rfl
+  have h4691 : initSM 4691 = initPM 4691 := hb initGoal_4691 (by decide) rfl
+  have h4680 : initSM 4680 = initPM 4680 := by
+    have hg := hInit goal_5
+      (by unfold goal_3_cut_initGoals goal_3_prereqs; exact List.mem_append_right _ (by simp))
+    unfold InitGoalHolds at hg
+    obtain ⟨_, _, hval⟩ := hg
+    simpa [goal_5, List.map, reconstructWithDim_singleton] using hval
+  rw [denote_sm_goal_3_qproj_0, denote_pm_goal_3_qproj_0_r0, denote_pm_goal_3_qproj_0_r1]
+  rw [h4680, h4682, h4684, h4686, h4690, h4691]
+  rw [show pm_goal_3.numRanks = 2 from rfl]
+  exact (allGather0_reconstruct_chunks_3d 2048 4 64 (by omega) (by omega) (by omega) _ hT).symm
+
 set_option maxHeartbeats 8000000 in
 theorem denote_pm_goal_3_kproj_0_r1 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 7436 =
