@@ -571,4 +571,187 @@ theorem applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair
   rw [← hcuQ_same, ← hcuK_same, ← hparams_same]
   rw [allGather0_reconstruct_chunks_3d Lshard qh vd hL hqh hvd _ hfull_shape]
 
+/-! ### Deliverable 3 (Approach A): value-level per-layer residual-stream commute.
+
+    These lemmas compose the per-op sharding-commute lemmas (from Pattern_1 and
+    Phase C2a) into a single **parametric layer-step commute** at the Tensor value
+    level.  They witness that one full Pattern_3 layer (structurally identical
+    across all 24 layers — only the attention *kind* differs, and both kinds
+    reduce to `fw_attn_varlen` at the value level via the ed31485 reconstruction
+    primitives) preserves the residual-stream sharding invariant:
+
+      residual_in_full = allGather0 [residual_in_r0, residual_in_r1]
+        ⟹ residual_out_full = allGather0 [residual_out_r0, residual_out_r1].
+
+    The layer is split into two residual sub-blocks (attention, MoE), each proven
+    separately and then chained.  Everything is at the value level (no graph
+    fold), so a single lemma covers both sliding_window and zigzag layers. -/
+
+/-- Local shape helper: `fw_rms_norm` preserves shape. -/
+private theorem rms_norm_shape_p3 (x w : Tensor) :
+    (fw_rms_norm x w).shape = x.shape := by
+  unfold fw_rms_norm
+  cases hrev : x.shape.reverse with
+  | nil => simp
+  | cons d tl => simp [Tensor.mkShape]
+
+/-- Local shape helper: `fw_per_head_linear` output shape `[b, hW, dW]`. -/
+private theorem per_head_linear_shape_p3 (b k hW dW : Nat) (x w : Tensor)
+    (hx : x.shape = [b, k]) (hw : w.shape = [hW, dW, k]) :
+    (fw_per_head_linear x w).shape = [b, hW, dW] := by
+  unfold fw_per_head_linear
+  rw [hx, hw]
+  simp [Tensor.mkShape]
+
+/-- **Input bridge (Q/K path).** The residual-stream shard-gather commutes through
+    the pre-attention `rms_norm → per_head_linear → rotary_apply` chain: the full
+    (SM) rotary-applied query (or key) equals the all-gather of the two per-rank
+    (PM) rotary-applied shards.  Parametric in the number of heads `nh` so it
+    serves both Q (`nh = qh`) and K (`nh = kvh`). -/
+theorem norm_perhead_rotary_gather_commute
+    (r0 r1 wn wp cs pos0 pos1 : Tensor) (Lshard nh dW : Nat)
+    (hL : 0 < Lshard) (hnh : 0 < nh) (hdW : 0 < dW)
+    (hr0 : r0.shape = [Lshard, 1024]) (hr1 : r1.shape = [Lshard, 1024])
+    (hwn : wn.shape = [1024])
+    (hwp : wp.shape = [nh, dW, 1024])
+    (hpos0 : pos0.shape = [Lshard, 1]) (hpos1 : pos1.shape = [Lshard, 1]) :
+    fw_rotary_apply cs (allGatherPrimDimN 0 2 0 [pos0, pos1])
+        (fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn) wp) nh
+      = allGatherPrimDimN 0 2 0
+          [fw_rotary_apply cs pos0 (fw_per_head_linear (fw_rms_norm r0 wn) wp) nh,
+           fw_rotary_apply cs pos1 (fw_per_head_linear (fw_rms_norm r1 wn) wp) nh] := by
+  have hrms0 : (fw_rms_norm r0 wn).shape = [Lshard, 1024] := (rms_norm_shape_p3 r0 wn).trans hr0
+  have hrms1 : (fw_rms_norm r1 wn).shape = [Lshard, 1024] := (rms_norm_shape_p3 r1 wn).trans hr1
+  have hph0 : (fw_per_head_linear (fw_rms_norm r0 wn) wp).shape = [Lshard, nh, dW] :=
+    per_head_linear_shape_p3 Lshard 1024 nh dW _ wp hrms0 hwp
+  have hph1 : (fw_per_head_linear (fw_rms_norm r1 wn) wp).shape = [Lshard, nh, dW] :=
+    per_head_linear_shape_p3 Lshard 1024 nh dW _ wp hrms1 hwp
+  rw [fw_rms_norm_allGather0_commute_2 r0 r1 wn Lshard 1024 hL (by norm_num) hr0 hr1]
+  rw [fw_per_head_mix_precision_linear_allGather0_commute_2
+        (fw_rms_norm r0 wn) (fw_rms_norm r1 wn) wp Lshard 1024 nh dW
+        hL (by norm_num) hnh hdW hrms0 hrms1 hwp]
+  rw [fw_rotary_apply_allGather0_commute_2
+        (fw_per_head_linear (fw_rms_norm r0 wn) wp) (fw_per_head_linear (fw_rms_norm r1 wn) wp)
+        pos0 pos1 cs Lshard nh dW hL hnh hdW hph0 hph1 hpos0 hpos1]
+
+/-- **Input bridge (V path).** The value projection `rms_norm → per_head_linear`
+    (no rotary) commutes with the residual-stream shard-gather. -/
+theorem norm_perhead_gather_commute
+    (r0 r1 wn wp : Tensor) (Lshard nh dW : Nat)
+    (hL : 0 < Lshard) (hnh : 0 < nh) (hdW : 0 < dW)
+    (hr0 : r0.shape = [Lshard, 1024]) (hr1 : r1.shape = [Lshard, 1024])
+    (hwn : wn.shape = [1024])
+    (hwp : wp.shape = [nh, dW, 1024]) :
+    fw_per_head_linear (fw_rms_norm (allGatherPrimDimN 0 2 0 [r0, r1]) wn) wp
+      = allGatherPrimDimN 0 2 0
+          [fw_per_head_linear (fw_rms_norm r0 wn) wp,
+           fw_per_head_linear (fw_rms_norm r1 wn) wp] := by
+  have hrms0 : (fw_rms_norm r0 wn).shape = [Lshard, 1024] := (rms_norm_shape_p3 r0 wn).trans hr0
+  have hrms1 : (fw_rms_norm r1 wn).shape = [Lshard, 1024] := (rms_norm_shape_p3 r1 wn).trans hr1
+  rw [fw_rms_norm_allGather0_commute_2 r0 r1 wn Lshard 1024 hL (by norm_num) hr0 hr1]
+  rw [fw_per_head_mix_precision_linear_allGather0_commute_2
+        (fw_rms_norm r0 wn) (fw_rms_norm r1 wn) wp Lshard 1024 nh dW
+        hL (by norm_num) hnh hdW hrms0 hrms1 hwp]
+
+/-- Local shape helper: `fw_view` yields exactly its target shape. -/
+private theorem view_shape_p3 (s : Shape) (x : Tensor) : (fw_view s x).shape = s := by
+  unfold fw_view; simp [Tensor.mkShape]
+
+/-- Local value helper: `fw_view` is buffer-preserving on in-bounds indices. -/
+private theorem valAt_fw_view (s : Shape) (x : Tensor) (idx : Nat) (h : idx < prodShape s) :
+    valAt (fw_view s x) idx = valAt x idx := by
+  have hb : idx < prodShape (fw_view s x).shape := by rw [view_shape_p3]; exact h
+  rw [valAt_of_lt _ _ hb]
+  unfold fw_view; simp [Tensor.mkShape]
+
+/-- **Reshape/flatten bridge.** Flattening the last two dims of a dim-0-gathered
+    `[2L, A, B]` tensor to `[2L, A*B]` commutes with the gather: it equals the
+    gather of the per-rank `[L, A*B]` flattenings.  This bridges the attention
+    output (3-D `[2L, qh, vd]`) into the 2-D input the output projection expects. -/
+theorem view_flatten_gather_2 (L A B : Nat) (hL : 0 < L) (hA : 0 < A) (hB : 0 < B)
+    (c0 c1 : Tensor) (hc0 : c0.shape = [L, A, B]) (hc1 : c1.shape = [L, A, B]) :
+    fw_view [2 * L, A * B] (allGatherPrimDimN 0 2 0 [c0, c1])
+      = allGatherPrimDimN 0 2 0 [fw_view [L, A * B] c0, fw_view [L, A * B] c1] := by
+  have hAB : 0 < A * B := Nat.mul_pos hA hB
+  have hhead3 : (([c0, c1].head?.map (fun t => t.shape)).getD []) = [L, A, B] := by simp [hc0]
+  have hG3 : (allGatherPrimDimN 0 2 0 [c0, c1]).shape = [2 * L, A, B] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [L, A, B] hhead3]
+    simp only [List.set, List.getD_cons_zero]; rw [Nat.mul_comm L 2]
+  have hv0 : (fw_view [L, A * B] c0).shape = [L, A * B] := view_shape_p3 _ _
+  have hv1 : (fw_view [L, A * B] c1).shape = [L, A * B] := view_shape_p3 _ _
+  have hheadv : (([fw_view [L, A * B] c0, fw_view [L, A * B] c1].head?.map
+      (fun t => t.shape)).getD []) = [L, A * B] := by simp [hv0]
+  have hGv : (allGatherPrimDimN 0 2 0 [fw_view [L, A * B] c0, fw_view [L, A * B] c1]).shape
+      = [2 * L, A * B] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [L, A * B] hheadv]
+    simp only [List.set, List.getD_cons_zero]; rw [Nat.mul_comm L 2]
+  apply Tensor.ext
+  · rw [hGv, view_shape_p3]
+  · intro idx hidx
+    rw [view_shape_p3] at hidx
+    have hprod : prodShape [2 * L, A * B] = 2 * L * (A * B) := by simp [prodShape, Nat.mul_assoc]
+    rw [hprod] at hidx
+    set inner := idx % B with hinner_def
+    set col := (idx / B) % A with hcol_def
+    set fullrow := idx / B / A with hfullrow_def
+    have hinner : inner < B := by rw [hinner_def]; exact Nat.mod_lt _ hB
+    have hcol : col < A := by rw [hcol_def]; exact Nat.mod_lt _ hA
+    have hfullrow_lt : fullrow < 2 * L := by
+      rw [hfullrow_def]
+      apply Nat.div_lt_of_lt_mul; apply Nat.div_lt_of_lt_mul
+      calc idx < 2 * L * (A * B) := hidx
+        _ = B * (A * (2 * L)) := by ring
+    set r := fullrow / L with hr_def
+    set i := fullrow % L with hi_def
+    have hi : i < L := by rw [hi_def]; exact Nat.mod_lt _ hL
+    have hr : r < 2 := by rw [hr_def]; apply Nat.div_lt_of_lt_mul; rw [Nat.mul_comm]; exact hfullrow_lt
+    have hfullrow_split : fullrow = r * L + i := by
+      rw [hr_def, hi_def, Nat.mul_comm]; exact (Nat.div_add_mod fullrow L).symm
+    set j := col * B + inner with hj_def
+    have hj_lt : j < A * B := by
+      rw [hj_def]
+      calc col * B + inner < col * B + B := by omega
+        _ = (col + 1) * B := by ring
+        _ ≤ A * B := Nat.mul_le_mul_right _ (by omega)
+    have hidx_3d : idx = ((r * L + i) * A + col) * B + inner := by
+      rw [← hfullrow_split, hinner_def, hcol_def, hfullrow_def]
+      have e1 : (idx / B / A) * A + (idx / B) % A = idx / B := by
+        rw [Nat.mul_comm]; exact Nat.div_add_mod (idx / B) A
+      rw [e1, Nat.mul_comm (idx / B) B]; exact (Nat.div_add_mod idx B).symm
+    have hidx_2d : idx = (r * L + i) * (A * B) + j := by
+      rw [hidx_3d, hj_def]; ring
+    have hLval : valAt (fw_view [2 * L, A * B] (allGatherPrimDimN 0 2 0 [c0, c1])) idx
+        = valAt ([c0, c1].getD r (zeroTensor [L, A, B])) ((i * A + col) * B + inner) := by
+      rw [valAt_fw_view _ _ _ (by rw [hprod]; exact hidx)]
+      rw [hidx_3d]
+      exact gather0_3d_valAt 2 L A B _ (by omega) hL hA hB hhead3 r hr i hi col hcol inner hinner
+    have hRval : valAt (allGatherPrimDimN 0 2 0 [fw_view [L, A * B] c0, fw_view [L, A * B] c1]) idx
+        = valAt ([fw_view [L, A * B] c0, fw_view [L, A * B] c1].getD r (zeroTensor [L, A * B]))
+            (i * (A * B) + j) := by
+      rw [hidx_2d]
+      exact allGatherPrimDimN0_valAt 2 L (A * B) _ (by omega) hL hAB hheadv
+          (by intro r' hr'; interval_cases r' <;> simp [List.getD, hv0, hv1]) r hr i hi j hj_lt
+    rw [hLval, hRval]
+    have hgetD3 : [c0, c1].getD r (zeroTensor [L, A, B]) = if r = 0 then c0 else c1 := by
+      interval_cases r <;> rfl
+    have hgetDv : [fw_view [L, A * B] c0, fw_view [L, A * B] c1].getD r (zeroTensor [L, A * B])
+        = if r = 0 then fw_view [L, A * B] c0 else fw_view [L, A * B] c1 := by
+      interval_cases r <;> rfl
+    rw [hgetD3, hgetDv]
+    have hlocal_eq : (i * A + col) * B + inner = i * (A * B) + j := by rw [hj_def]; ring
+    rw [hlocal_eq]
+    have hview_val : ∀ c : Tensor,
+        valAt (fw_view [L, A * B] c) (i * (A * B) + j) = valAt c (i * (A * B) + j) := by
+      intro c
+      apply valAt_fw_view
+      have hp : prodShape [L, A * B] = L * (A * B) := by simp [prodShape, Nat.mul_assoc]
+      rw [hp]
+      calc i * (A * B) + j < i * (A * B) + A * B := by omega
+        _ = (i + 1) * (A * B) := by ring
+        _ ≤ L * (A * B) := Nat.mul_le_mul_right _ (by omega)
+    clear_value r
+    rcases (by omega : r = 0 ∨ r = 1) with hr0' | hr1'
+    · simp only [hr0', if_true]; rw [hview_val c0]
+    · simp only [hr1', if_false, Nat.one_ne_zero]; rw [hview_val c1]
+
 end TrainVerify.Denote.GeneratedPatterns
