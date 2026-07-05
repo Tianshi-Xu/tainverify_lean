@@ -197,7 +197,7 @@ theorem denote_sm_goal_3_r0 (initSM : Store) :
       applyNodeRingAttn_eq_applyNode_of_not_ring sm_goal_3 (((sm_goal_3.nodes.take 22).foldl (applyNodeRingAttn sm_goal_3) initSM)) { rank := 0, op := "OpName.FW_norm_linear", ins := [4706, 4707], outs := [4708] } (by decide) (by decide),
       applyNode_fw_norm_linear_out sm_goal_3 (((sm_goal_3.nodes.take 22).foldl (applyNodeRingAttn sm_goal_3) initSM)) 0 4706 4707 4708 [],
       ← foldl_take_split_at_not_written_ringAttn sm_goal_3 sm_goal_3.nodes initSM 4706 22 27 (by omega) (by intro m hm; fin_cases hm <;> decide) (by intro m hm; fin_cases hm <;> decide)]
-    exact congrArg (fun z => fw_norm_linear ((((sm_goal_3.nodes.take 27).foldl (applyNodeRingAttn sm_goal_3) initSM)) 4706) z) (foldl_applyNodeRingAttn_at_not_written sm_goal_3 (sm_goal_3.nodes.take 22) initSM 4707 (by intro m hm; fin_cases hm <;> decide) (by intro m hm; fin_cases hm <;> decide))
+    simp only [foldl_applyNodeRingAttn_at_not_written sm_goal_3 (sm_goal_3.nodes.take 22) initSM 4707 (by intro m hm; fin_cases hm <;> decide) (by intro m hm; fin_cases hm <;> decide)]
   have hval_4706 : (((sm_goal_3.nodes.take 27).foldl (applyNodeRingAttn sm_goal_3) initSM)) 4706 = ((((sm_goal_3.nodes.take 27).foldl (applyNodeRingAttn sm_goal_3) initSM)) 7415) := by
     rw [foldl_take_split_at_not_written_ringAttn sm_goal_3 sm_goal_3.nodes initSM 4706 19 27 (by omega) (by intro n hn; fin_cases hn <;> decide) (by intro n hn; fin_cases hn <;> decide),
       show sm_goal_3.nodes.take 19 = sm_goal_3.nodes.take 18 ++ [{ rank := 0, op := "OpName.FW_float", ins := [7415], outs := [4706] }] from rfl,
@@ -224,8 +224,8 @@ theorem denote_sm_goal_3_r0 (initSM : Store) :
       List.foldl_nil,
       applyNodeRingAttn_eq_applyNode_of_not_ring sm_goal_3 (((sm_goal_3.nodes.take 16).foldl (applyNodeRingAttn sm_goal_3) initSM)) { rank := 0, op := "OpName.FW_rms_norm", ins := [7404, 4704], outs := [4705] } (by decide) (by decide),
       applyNode_fw_rms_norm_out_1p sm_goal_3 (((sm_goal_3.nodes.take 16).foldl (applyNodeRingAttn sm_goal_3) initSM)) 0 7404 4704 4705,
-      ← foldl_take_split_at_not_written_ringAttn sm_goal_3 sm_goal_3.nodes initSM 7404 16 27 (by omega) (by intro m hm; fin_cases hm <;> decide) (by intro m hm; fin_cases hm <;> decide),
-      foldl_applyNodeRingAttn_at_not_written sm_goal_3 (sm_goal_3.nodes.take 16) initSM 4704 (by intro m hm; fin_cases hm <;> decide) (by intro m hm; fin_cases hm <;> decide)]
+      ← foldl_take_split_at_not_written_ringAttn sm_goal_3 sm_goal_3.nodes initSM 7404 16 27 (by omega) (by intro m hm; fin_cases hm <;> decide) (by intro m hm; fin_cases hm <;> decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written sm_goal_3 (sm_goal_3.nodes.take 16) initSM 4704 (by intro m hm; fin_cases hm <;> decide) (by intro m hm; fin_cases hm <;> decide)]
   have hval_7404 : (((sm_goal_3.nodes.take 27).foldl (applyNodeRingAttn sm_goal_3) initSM)) 7404 = ((((sm_goal_3.nodes.take 27).foldl (applyNodeRingAttn sm_goal_3) initSM)) 4703) := by
     rw [foldl_take_split_at_not_written_ringAttn sm_goal_3 sm_goal_3.nodes initSM 7404 16 27 (by omega) (by intro n hn; fin_cases hn <;> decide) (by intro n hn; fin_cases hn <;> decide),
       show sm_goal_3.nodes.take 16 = sm_goal_3.nodes.take 15 ++ [{ rank := 0, op := "OpName.FW_multiref", ins := [4703], outs := [7404, 7408], params := [2] }] from rfl,
@@ -271,8 +271,8 @@ theorem denote_sm_goal_3_r0 (initSM : Store) :
       List.foldl_nil,
       applyNodeRingAttn_eq_applyNode_of_not_ring sm_goal_3 (((sm_goal_3.nodes.take 11).foldl (applyNodeRingAttn sm_goal_3) initSM)) { rank := 0, op := "OpName.FW_mix_precision_linear", ins := [4698, 4699], outs := [4700] } (by decide) (by decide),
       applyNode_fw_mix_precision_linear_out_1p sm_goal_3 (((sm_goal_3.nodes.take 11).foldl (applyNodeRingAttn sm_goal_3) initSM)) 0 4698 4699 4700,
-      ← foldl_take_split_at_not_written_ringAttn sm_goal_3 sm_goal_3.nodes initSM 4698 11 27 (by omega) (by intro m hm; fin_cases hm <;> decide) (by intro m hm; fin_cases hm <;> decide),
-      foldl_applyNodeRingAttn_at_not_written sm_goal_3 (sm_goal_3.nodes.take 11) initSM 4699 (by intro m hm; fin_cases hm <;> decide) (by intro m hm; fin_cases hm <;> decide)]
+      ← foldl_take_split_at_not_written_ringAttn sm_goal_3 sm_goal_3.nodes initSM 4698 11 27 (by omega) (by intro m hm; fin_cases hm <;> decide) (by intro m hm; fin_cases hm <;> decide)]
+    simp only [foldl_applyNodeRingAttn_at_not_written sm_goal_3 (sm_goal_3.nodes.take 11) initSM 4699 (by intro m hm; fin_cases hm <;> decide) (by intro m hm; fin_cases hm <;> decide)]
   have hval_4698 : (((sm_goal_3.nodes.take 27).foldl (applyNodeRingAttn sm_goal_3) initSM)) 4698 = ((((sm_goal_3.nodes.take 27).foldl (applyNodeRingAttn sm_goal_3) initSM)) 4697) := by
     rw [foldl_take_split_at_not_written_ringAttn sm_goal_3 sm_goal_3.nodes initSM 4698 11 27 (by omega) (by intro n hn; fin_cases hn <;> decide) (by intro n hn; fin_cases hn <;> decide),
       show sm_goal_3.nodes.take 11 = sm_goal_3.nodes.take 10 ++ [{ rank := 0, op := "OpName.FW_reshape", ins := [4697], outs := [4698] }] from rfl,
@@ -314,8 +314,8 @@ theorem denote_sm_goal_3_r0 (initSM : Store) :
       List.foldl_cons,
       List.foldl_nil,
       applyNodeRingAttn_eq_applyNode_of_not_ring sm_goal_3 (((sm_goal_3.nodes.take 0).foldl (applyNodeRingAttn sm_goal_3) initSM)) { rank := 0, op := "OpName.FW_float", ins := [4680], outs := [4681] } (by decide) (by decide),
-      applyNode_fw_float_out sm_goal_3 (((sm_goal_3.nodes.take 0).foldl (applyNodeRingAttn sm_goal_3) initSM)) 0 4680 4681 [],
-      foldl_applyNodeRingAttn_at_not_written sm_goal_3 (sm_goal_3.nodes.take 0) initSM 4680 (by intro m hm; fin_cases hm <;> decide) (by intro m hm; fin_cases hm <;> decide)]
+      applyNode_fw_float_out sm_goal_3 (((sm_goal_3.nodes.take 0).foldl (applyNodeRingAttn sm_goal_3) initSM)) 0 4680 4681 []]
+    simp only [foldl_applyNodeRingAttn_at_not_written sm_goal_3 (sm_goal_3.nodes.take 0) initSM 4680 (by intro m hm; fin_cases hm <;> decide) (by intro m hm; fin_cases hm <;> decide)]
   rw [hval_4708, hval_4706, hval_7415, hval_4705, hval_7404, hval_4703, hval_4702, hval_4701, hval_4700, hval_4698, hval_4697, hval_4696, hval_7387, hval_4681]
   rfl
 
