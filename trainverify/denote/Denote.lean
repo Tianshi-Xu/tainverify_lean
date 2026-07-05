@@ -3892,11 +3892,21 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       [dq, dk, dv]
   -- FW/BW_attn_sliding_window: alias to attn_varlen (windowLeft ≠ 0 encodes window).
   -- Python's `wrap_sliding_window_attn_func` computes flash-attn with window_size=(w, 0).
-  -- The math is identical to `fw_attn_varlen` with `windowLeft = params[5]`; window
-  -- semantics fully modeled via `attnMaskedAt` (line 1379). Value-faithful for
-  -- intra-rank computation. For sharded computation (Pattern_3), the sharding-commute
-  -- proof uses the fact that PM cu_seqlens equals SM cu_seqlens (both replicated)
-  -- and windowLeft respects cumulative sequence boundaries.
+  -- FW/BW_attn_sliding_window: cross-rank sliding-window attn with CP support.
+  -- Python's `wrap_sliding_window_attn_func` (see nnscaler/customized_ops/
+  -- ring_attention/sliding_window_attn.py line 60-91 and 93-138):
+  --   * when process_group is None or len == 1 or not enable_ring
+  --     → plain flash_attn_varlen_func (single-rank, value-faithful)
+  --   * when len(process_group) > 1 and enable_ring
+  --     → sliding_window_attn_func with single-hop A2A communication +
+  --       cached metadata + constraint window_size[0] <= length_per_rank
+  -- We faithfully model this dichotomy the same way as fw_attn_zigzag
+  -- (Phase A revised, commit 5d01c7d):
+  --   * numParts = 1 → dispatch to fw_attn_varlen (value-faithful)
+  --   * numParts > 1 → identity shape model (AGENTS.md #24: per-rank Denote
+  --     cannot express cross-rank A2A single-hop; shape-correct output only,
+  --     value-lossy — Python's actual A2A + metadata semantics live above
+  --     the Denote abstraction).
   | "OpName.FW_attn_sliding_window", [q, k, v, cuQ, cuK] =>
       let qh         := params.getD 0 1
       let kvh        := params.getD 1 1
@@ -3905,7 +3915,11 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       let causalNat  := params.getD 4 0
       let windowLeft := params.getD 5 0
       let causal     := decide (causalNat ≠ 0)
-      [fw_attn_varlen q k v cuQ cuK qh kvh d vd causal windowLeft]
+      let lQ         := (q.shape.head?).getD 0
+      if numParts = 1 then
+        [fw_attn_varlen q k v cuQ cuK qh kvh d vd causal windowLeft]
+      else
+        [Tensor.mkShape [lQ, qh, vd] (fun _ => 0)]
   | "OpName.BW_attn_sliding_window", [gO, q, k, v, cuQ, cuK] =>
       let qh         := params.getD 0 1
       let kvh        := params.getD 1 1
@@ -3914,8 +3928,13 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
       let causalNat  := params.getD 4 0
       let windowLeft := params.getD 5 0
       let causal     := decide (causalNat ≠ 0)
-      let (dq, dk, dv) := bw_attn_varlen gO q k v cuQ cuK qh kvh d vd causal windowLeft
-      [dq, dk, dv]
+      if numParts = 1 then
+        let (dq, dk, dv) := bw_attn_varlen gO q k v cuQ cuK qh kvh d vd causal windowLeft
+        [dq, dk, dv]
+      else
+        [Tensor.mkShape q.shape (fun _ => 0),
+         Tensor.mkShape k.shape (fun _ => 0),
+         Tensor.mkShape v.shape (fun _ => 0)]
   -- FW/BW_attn_zigzag: cross-rank ring-attention. Python's `wrap_zigzag_attn_func`
   -- (see nnscaler/customized_ops/ring_attention/zigzag_attn.py line 30-35):
   --   * when process_group is None or len == 1 → plain flash_attn (single-rank)
