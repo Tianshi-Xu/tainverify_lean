@@ -891,4 +891,47 @@ theorem layer_attn_block_commute
         (by norm_num) hkh hvd hr0 hr1 hwn hwv]
   exact attn_output_residual_commute r0 r1 wo _ qh vd hqh hvd hr0 hr1 hwo haf
 
+/-- Local shape helper: broadcast `[2048,1] * [2048,1024]` has shape `[2048,1024]`. -/
+private theorem mul_broadcast_shape_p3 (x y : Tensor)
+    (hx : x.shape = [2048, 1]) (hy : y.shape = [2048, 1024]) :
+    (elemwiseMul x y).shape = [2048, 1024] := by
+  unfold elemwiseMul Tensor.mkShape
+  change outShape2 x y = [2048, 1024]
+  simp [outShape2, hx, hy]
+
+/-- **MoE combine tail residual commute.** The MoE sub-block's combine tail
+    (`gate ⊙ swiglu_proj`, add MoE-GMM output, add residual carry) commutes with
+    the residual-stream shard-gather, given that the MoE-GMM output, swiglu
+    projection, gate, and residual carry already commute (each equals the dim-0
+    gather of its two per-rank shards).  Chains the broadcast-mul commute and two
+    `[2048,1024]` add commutes.  Together with the attention sub-block, this
+    completes the algebraic residual invariant modulo the per-rank MoE-GMM /
+    swiglu / router commutes (which reduce to Pattern_1's proven op lemmas). -/
+theorem moe_combine_tail_commute
+    (carry0 carry1 moe0 moe1 gate0 gate1 sw0 sw1 : Tensor)
+    (hc0 : carry0.shape = [2048, 1024]) (hc1 : carry1.shape = [2048, 1024])
+    (hmoe0 : moe0.shape = [2048, 1024]) (hmoe1 : moe1.shape = [2048, 1024])
+    (hg0 : gate0.shape = [2048, 1]) (hg1 : gate1.shape = [2048, 1])
+    (hsw0 : sw0.shape = [2048, 1024]) (hsw1 : sw1.shape = [2048, 1024]) :
+    elemwiseAdd (allGatherPrimDimN 0 2 0 [carry0, carry1])
+        (elemwiseAdd (allGatherPrimDimN 0 2 0 [moe0, moe1])
+          (elemwiseMul (allGatherPrimDimN 0 2 0 [gate0, gate1])
+                       (allGatherPrimDimN 0 2 0 [sw0, sw1])))
+      = allGatherPrimDimN 0 2 0
+          [elemwiseAdd carry0 (elemwiseAdd moe0 (elemwiseMul gate0 sw0)),
+           elemwiseAdd carry1 (elemwiseAdd moe1 (elemwiseMul gate1 sw1))] := by
+  have hmul0 : (elemwiseMul gate0 sw0).shape = [2048, 1024] := mul_broadcast_shape_p3 _ _ hg0 hsw0
+  have hmul1 : (elemwiseMul gate1 sw1).shape = [2048, 1024] := mul_broadcast_shape_p3 _ _ hg1 hsw1
+  have hadd0 : (elemwiseAdd moe0 (elemwiseMul gate0 sw0)).shape = [2048, 1024] :=
+    elemwiseAdd_shape_of_shapes _ _ _ hmoe0 hmul0
+  have hadd1 : (elemwiseAdd moe1 (elemwiseMul gate1 sw1)).shape = [2048, 1024] :=
+    elemwiseAdd_shape_of_shapes _ _ _ hmoe1 hmul1
+  rw [fw_mul_allGather0_commute_2_of_broadcast gate0 gate1 sw0 sw1 2048 1024
+        (by norm_num) (by norm_num) (by norm_num) (by norm_num) (by norm_num) hg0 hg1 hsw0 hsw1]
+  rw [fw_add_allGather0_commute_2_2048_1024 moe0 moe1
+        (elemwiseMul gate0 sw0) (elemwiseMul gate1 sw1) hmoe0 hmoe1 hmul0 hmul1]
+  rw [fw_add_allGather0_commute_2_2048_1024 carry0 carry1
+        (elemwiseAdd moe0 (elemwiseMul gate0 sw0)) (elemwiseAdd moe1 (elemwiseMul gate1 sw1))
+        hc0 hc1 hadd0 hadd1]
+
 end TrainVerify.Denote.GeneratedPatterns
