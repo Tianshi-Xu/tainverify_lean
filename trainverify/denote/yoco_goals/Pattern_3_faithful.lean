@@ -1307,7 +1307,63 @@ theorem denote_sm_goal_3_faithful_4689 (initSM : Store) :
       legacy `sm_pm_carry_L{k}_commute` but on the faithful 1866-node PM graph.
 
     The router-split algebra (step 1) is fully discharged and kernel-clean via
-    `router_commute_of_nl_eq`. -/
+    `router_commute_of_nl_eq`.
+
+    ## Worker F verified findings (2026-07-06) — concrete path for the carry crux
+
+    Graph facts read directly off `sm_goal_3_faithful` / `pm_goal_3_faithful`:
+
+    1.  **L0 carry equality is a FULL-tensor equality, not an allGather.** The PM
+        graph computes the layer-0 residual `4703` on both ranks by AllGather-ing
+        the two attention shards (`7445, 7446 → 4698 = AllGatherPrim`), then running
+        `FW_mix_precision_linear`/`FW_view`/`FW_add` on the *full* `[4096,1024]`
+        tensor (replicated per rank). Hence the crux for L0's router is simply
+        `denote sm_goal_3_faithful initSM 4703 = denote pm_goal_3_faithful initPM 4703`
+        (both `[4096,1024]`). SM router logits `4708 = norm_linear(float(rms_norm(
+        multiref 4703, 4704)), 4707)`; PM does the same full `norm_linear`, then a
+        `ChunkPrim` splits into `7479, 7480` feeding the per-rank topk `7483, 7484`.
+        Per-layer stride: SM carry `4703 + 54k` / logits `4708 + 54k` / router
+        `4710 + 54k` for the sliding-window band L0..L11; the stride shifts at the
+        L12 zigzag boundary (read tids off the router lists, do NOT assume 54).
+
+    2.  **Carry equality ⟸ attention commute + view/allGather.** Unfolding both
+        sides, `4703 = elemwiseAdd (st 4680) (fw_view [4096,1024] (mix_lin (…attn…)
+        (st 4699)))`. Under faithful reshape `FW_reshape params → fw_view params`
+        (`applyNode_fw_reshape_out`), the SM `reshape;reshape` and PM
+        `reshape;reshape;AllGather` differ only by whether the dim-0 flatten happens
+        before or after the AllGather. With weight equalities `st4680/st4699 =`
+        (single-tps init goals) it reduces to
+          `fw_view∘fw_view (SM_full_attn) = AllGather0 [fw_view∘fw_view attn_r0,
+                                                        fw_view∘fw_view attn_r1]`,
+        i.e. the **attention commute** `SM_full_attn = AllGather0[attn_r0, attn_r1]`
+        at `[4096,16,64]` composed with `fw_view_allGather0_commute` (dim-0 flatten
+        commutes with allGather0).
+
+    3.  **Attention commute is fully bounded — no legacy-graph re-derivation.** The
+        SM L0 attention subgraph (`nodes.take 9`, tids 4680–4696) is byte-identical
+        to legacy; the three SM Q/K/V denote-unfolds are already added kernel-clean
+        (`denote_sm_goal_3_faithful_4692/4693/4689`). The reconstruction primitives
+        `applyNodeRingAttn_sliding_window_singleton` / `_pair_eq_chunk` live in core
+        `Denote.lean` (accessible). Only the graph-independent wrappers
+        `attn_sw_store_congr`, `applyNodeRingAttn_sliding_window_reconstruction_2_of_
+        buddy_pair`, and the value-level shape helpers `ph_shape_p3 / qrot_shape_p3 /
+        krot_shape_p3 / fw_attn_varlen_shape_p3` need copying from legacy Pattern_3
+        (each ≤ 20 lines, no graph dependence). The PM L0 attention shards sit at
+        `pm_goal_3_faithful.nodes.take 44/45` (attn nodes 44/45; Q shards `7433,7434`
+        = `ChunkPrim 4692`, K `7435,7436` = `ChunkPrim 4693`, V `7421,7422` =
+        `ChunkPrim 4689`); their denote-unfolds mirror the SM ones through the
+        interleaved-rank prefix.  For the zigzag band L12..L23 swap
+        `applyNodeRingAttn_sliding_window` → `_zigzag` and the reconstruction wrapper
+        to `applyNodeRingAttn_zigzag_reconstruction_2_of_buddy_pair`.
+
+    4.  **MoE / swiglu / gate blocks** commute via the already-imported
+        `fw_all2all_moe_gmm_full_split_commute_2` + `fw_swiglu_allGather0_commute_2`
+        exactly as in legacy `sm_pm_carry_L0_commute` (the PM MoE weights are the
+        `ChunkPrim`-split `[32,…]` shards `7487/7488`, `7489/7490` at L0).
+
+    Fast-iteration tip: develop each layer's lemmas in a scratch module that
+    `import`s this file (the cached `.olean` gives ~4 s builds vs. ~13 min for the
+    full module), then paste the verified block back here. -/
 theorem sm_pm_router_commute_layer
     (initSM initPM : Store)
     (hSM : StoreShapesHold initSM sm_goal_3_faithfulInitEnv)
