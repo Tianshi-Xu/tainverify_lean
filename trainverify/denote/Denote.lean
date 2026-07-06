@@ -4065,10 +4065,15 @@ def evalOp (numParts rank : Nat) (op : String) (params : List Nat) (args : List 
   | "OpName.BW_rsqrt", [g, x] => [bw_rsqrt g x]
   | "OpName.BW_multiref", xs => [tensorSum xs]
   | "OpName.FW_stack", xs => [fw_stack xs]
-  -- `FW_reshape`: identity in Denote (semantic shape unchanged for these graphs; the
-  -- pipeline may perform an actual reshape, but for graphs where target shape == input shape
-  -- this is a no-op). All Pattern_1/2/4 reshapes in yoco_goals preserve shape.
-  | "OpName.FW_reshape", [x] => [x]
+  -- `FW_reshape`: faithful reshape when params carries the target shape
+  -- (added 2026-07-06 for Pattern_3 fidelity). Semantics matches PyTorch
+  -- `.reshape()`: same flat data, new shape reinterpretation (same as `fw_view`).
+  -- Falls back to identity for legacy graphs with empty params (backwards compat
+  -- with Pattern_1/2/4/5 whose reshapes are all no-op shape-preserving).
+  | "OpName.FW_reshape", [x] =>
+      match params with
+      | [] => [x]
+      | targetShape => [fw_view targetShape x]
   -- `FW_float`: dtype cast to float. Since Scalar = ℝ, this is identity.
   | "OpName.FW_float", [x] => [x]
   -- `FW_to`: dtype conversion. Also identity in Scalar = ℝ.
@@ -4742,9 +4747,18 @@ theorem applyNode_fw_multiref2_first_out
 
 /-! ### applyNode helpers for Pattern_1 (added 2026-07-02) -/
 
-/-- Unfolding lemma for `evalOp` on `FW_reshape`. -/
-theorem evalOp_fw_reshape (numParts rank : Nat) (params : List Nat) (x : Tensor) :
-    evalOp numParts rank "OpName.FW_reshape" params [x] = [x] := by
+/-- Unfolding lemma for `evalOp` on `FW_reshape` with empty params
+    (legacy no-op case — kept for backwards-compat with Pattern_1/2/4/5). -/
+theorem evalOp_fw_reshape (numParts rank : Nat) (x : Tensor) :
+    evalOp numParts rank "OpName.FW_reshape" [] [x] = [x] := by
+  rfl
+
+/-- Unfolding lemma for `evalOp` on `FW_reshape` with explicit target shape
+    (added 2026-07-06 for Pattern_3 fidelity). Uses `fw_view` semantics for
+    the actual reshape (same flat data, new shape). -/
+theorem evalOp_fw_reshape_explicit
+    (numParts rank : Nat) (hd : Nat) (tl : List Nat) (x : Tensor) :
+    evalOp numParts rank "OpName.FW_reshape" (hd :: tl) [x] = [fw_view (hd :: tl) x] := by
   rfl
 
 /-- Unfolding lemma for `evalOp` on `FW_float`. -/
@@ -4782,16 +4796,33 @@ theorem evalOp_fw_mix_precision_linear_iroha (numParts rank : Nat) (params : Lis
     evalOp numParts rank "OpName.FW_mix_precision_linear" params [x, w] = [fw_linear x w] := by
   rfl
 
-/-- applyNode for `FW_reshape` (identity semantics). -/
+/-- `applyNode` for `FW_reshape` — pattern-matches on `params` internally:
+    empty params → identity (legacy no-op, Pattern_1/2/4/5),
+    non-empty → `fw_view` at the target shape (added 2026-07-06 for Pattern_3
+    fidelity).
+
+    Signature kept 5-arg-compatible with earlier code (which passes `[]`
+    explicitly). Call sites now naturally get the right behavior based on
+    whichever params they emit. -/
 theorem applyNode_fw_reshape_out
     (g : GraphDecl) (s : Store) (rank : Nat) (xTid outTid : Tid) (params : List Nat) :
     applyNode g s { rank := rank, op := "OpName.FW_reshape", ins := [xTid], outs := [outTid], params := params } outTid =
-      s xTid := by
+      (match params with
+       | [] => s xTid
+       | targetShape => fw_view targetShape (s xTid)) := by
   unfold applyNode
-  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_reshape]
-  change storeSet s [(outTid, s xTid)] outTid = _
-  unfold storeSet
-  simp [List.find?]
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl]
+  cases params with
+  | nil =>
+      rw [evalOp_fw_reshape]
+      change storeSet s [(outTid, s xTid)] outTid = _
+      unfold storeSet
+      simp [List.find?]
+  | cons hd tl =>
+      rw [evalOp_fw_reshape_explicit]
+      change storeSet s [(outTid, fw_view (hd :: tl) (s xTid))] outTid = _
+      unfold storeSet
+      simp [List.find?]
 
 /-- applyNode for `FW_float` (identity in Scalar = ℝ). -/
 theorem applyNode_fw_float_out
@@ -21964,14 +21995,19 @@ theorem fw_float_allGather0_commute_2
   rw [evalOp_fw_float, evalOp_fw_float, evalOp_fw_float]
   rfl
 
-/-- `FW_reshape` (identity on the flat buffer under matching total size) commutes
-    with dim-0 sharding. -/
+/-- `FW_reshape` with empty params (legacy no-op identity model) commutes
+    with dim-0 sharding trivially. NOTE: with the 2026-07-06 params-aware
+    FW_reshape, this identity commutativity only holds for the empty-params
+    case; a shape-changing reshape (non-empty params) does NOT commute with
+    allGather in general (the flat-index truncation of `fw_view` breaks the
+    equality — this was the root cause of the Pattern_3 goal_3 impossibility).
+    Kept for legacy no-op Pattern_1/2/4/5 reshape sites. -/
 theorem fw_reshape_allGather0_commute_2
-    (numParts rank : Nat) (params : List Nat) (a b : Tensor) :
-    (evalOp numParts rank "OpName.FW_reshape" params [allGatherPrimDimN 0 2 0 [a, b]]).headD (zeroTensor [])
+    (numParts rank : Nat) (a b : Tensor) :
+    (evalOp numParts rank "OpName.FW_reshape" [] [allGatherPrimDimN 0 2 0 [a, b]]).headD (zeroTensor [])
       = allGatherPrimDimN 0 2 0
-          [(evalOp numParts rank "OpName.FW_reshape" params [a]).headD (zeroTensor []),
-           (evalOp numParts rank "OpName.FW_reshape" params [b]).headD (zeroTensor [])] := by
+          [(evalOp numParts rank "OpName.FW_reshape" [] [a]).headD (zeroTensor []),
+           (evalOp numParts rank "OpName.FW_reshape" [] [b]).headD (zeroTensor [])] := by
   rw [evalOp_fw_reshape, evalOp_fw_reshape, evalOp_fw_reshape]
   rfl
 

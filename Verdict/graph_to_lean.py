@@ -323,6 +323,15 @@ def _get_node_params(G: Any, n: Any, num_parts: int = 0) -> Optional[List[int]]:
 		outs = G.node_outputs(n)
 		if outs:
 			return list(int(d) for d in G.tensor_shape(outs[0]))
+	elif "FW_reshape" in op or "BW_reshape" in op:
+		# Emit target output shape as params, so Denote can build a faithful reshape.
+		# Historically FW_reshape params were empty and Denote modelled it as identity;
+		# that's only valid when target shape == input shape (Pattern_1/2/4). Pattern_3
+		# uses shape-changing reshape (e.g. attn output [seq, head, dim] -> [seq, head*dim])
+		# so we need target shape. Same treatment as FW_view above.
+		outs = G.node_outputs(n)
+		if outs:
+			return list(int(d) for d in G.tensor_shape(outs[0]))
 	elif "FW_transpose" in op or "BW_transpose" in op:
 		kwargs = G.node_kwargs(n)
 		if "dim0" in kwargs and "dim1" in kwargs:
