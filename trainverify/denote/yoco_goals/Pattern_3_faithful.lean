@@ -903,6 +903,82 @@ theorem router_commute_of_nl_eq (NL_SM NL_PM : Tensor)
         (chunkPrimDimN 0 2 0 NL_SM) (chunkPrimDimN 0 2 1 NL_SM)
         2048 8 64 (by omega) (by omega) (hc 0) (hc 1)]
 
+/-! ### L0 denote-unfold template (kernel-clean, validated reduction infra).
+
+    Concrete worked example of the per-layer "reduction infra": reduce a router
+    output tid in the ring-attn fold down to the closed `fw_topk_routing …` form.
+    Proved for layer 0 (SM tid 4710; PM r0 tid 7483; PM r1 tid 7484) via
+    `foldl_prefix_eq_full_ringAttn` (jump full graph → dependency-cone prefix),
+    `applyNodeRingAttn_eq_applyNode_of_not_ring` (topk is not a ring op), and
+    `applyNode_fw_topk_routing_map_out` (`.snd.fst` = second output). The identical
+    schema replicates at every layer by substituting the layer's router/logits
+    tids and node indices (read off `sm_goal_3_faithful` / `pm_goal_3_faithful`).
+
+    Together with `router_commute_of_nl_eq`, ChunkPrim unfolds (`7479 =
+    chunk0 4708`, `7480 = chunk1 4708`) and the logits shape, the *only* remaining
+    obligation for layer 0's router commute is `denote SM 4708 = denote PM 4708`
+    (the carry-derived norm-linear equality of step 2/3 in the roadmap below). -/
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_faithful_4710 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3_faithful initSM 4710 =
+      (fw_topk_routing (denoteGraph_ringAttn sm_goal_3_faithful initSM 4708) 8
+        (((denoteGraph_ringAttn sm_goal_3_faithful initSM 4708).shape.reverse.head?).getD 1)).snd.fst := by
+  have hEntry : denoteGraph_ringAttn sm_goal_3_faithful initSM 4710 =
+      (((sm_goal_3_faithful.nodes.take 27).foldl (applyNodeRingAttn sm_goal_3_faithful) initSM)) 4710 := by
+    show sm_goal_3_faithful.nodes.foldl (applyNodeRingAttn sm_goal_3_faithful) initSM 4710 = _
+    exact foldl_prefix_eq_full_ringAttn sm_goal_3_faithful sm_goal_3_faithful.nodes initSM 4710 27 (by decide) (by decide)
+  rw [hEntry]
+  rw [show sm_goal_3_faithful.nodes.take 27 = sm_goal_3_faithful.nodes.take 26 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [4708], outs := [4709, 4710, 4711], params := [8] }] from rfl,
+      List.foldl_append, List.foldl_cons, List.foldl_nil]
+  rw [applyNodeRingAttn_eq_applyNode_of_not_ring sm_goal_3_faithful (((sm_goal_3_faithful.nodes.take 26).foldl (applyNodeRingAttn sm_goal_3_faithful) initSM)) { rank := 0, op := "OpName.FW_topk_routing", ins := [4708], outs := [4709, 4710, 4711], params := [8] } (by decide) (by decide)]
+  rw [applyNode_fw_topk_routing_map_out sm_goal_3_faithful (((sm_goal_3_faithful.nodes.take 26).foldl (applyNodeRingAttn sm_goal_3_faithful) initSM)) 0 4708 4709 4710 4711 [8] (by decide)]
+  have hval_4708 : (((sm_goal_3_faithful.nodes.take 26).foldl (applyNodeRingAttn sm_goal_3_faithful) initSM)) 4708 = denoteGraph_ringAttn sm_goal_3_faithful initSM 4708 :=
+    (foldl_prefix_eq_full_ringAttn sm_goal_3_faithful sm_goal_3_faithful.nodes initSM 4708 26 (by decide) (by decide)).symm
+  rw [hval_4708]
+  rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_faithful_7483 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3_faithful initPM 7483 =
+      (fw_topk_routing (denoteGraph_ringAttn pm_goal_3_faithful initPM 7479) 8
+        (((denoteGraph_ringAttn pm_goal_3_faithful initPM 7479).shape.reverse.head?).getD 1)).snd.fst := by
+  have hEntry : denoteGraph_ringAttn pm_goal_3_faithful initPM 7483 =
+      (((pm_goal_3_faithful.nodes.take 92).foldl (applyNodeRingAttn pm_goal_3_faithful) initPM)) 7483 := by
+    show pm_goal_3_faithful.nodes.foldl (applyNodeRingAttn pm_goal_3_faithful) initPM 7483 = _
+    exact foldl_prefix_eq_full_ringAttn pm_goal_3_faithful pm_goal_3_faithful.nodes initPM 7483 92 (by decide) (by decide)
+  rw [hEntry]
+  rw [show pm_goal_3_faithful.nodes.take 92 = pm_goal_3_faithful.nodes.take 91 ++ [{ rank := 0, op := "OpName.FW_topk_routing", ins := [7479], outs := [7481, 7483, 7485], params := [8] }] from rfl,
+      List.foldl_append, List.foldl_cons, List.foldl_nil]
+  rw [applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3_faithful (((pm_goal_3_faithful.nodes.take 91).foldl (applyNodeRingAttn pm_goal_3_faithful) initPM)) { rank := 0, op := "OpName.FW_topk_routing", ins := [7479], outs := [7481, 7483, 7485], params := [8] } (by decide) (by decide)]
+  rw [applyNode_fw_topk_routing_map_out pm_goal_3_faithful (((pm_goal_3_faithful.nodes.take 91).foldl (applyNodeRingAttn pm_goal_3_faithful) initPM)) 0 7479 7481 7483 7485 [8] (by decide)]
+  have hval : (((pm_goal_3_faithful.nodes.take 91).foldl (applyNodeRingAttn pm_goal_3_faithful) initPM)) 7479 = denoteGraph_ringAttn pm_goal_3_faithful initPM 7479 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3_faithful pm_goal_3_faithful.nodes initPM 7479 91 (by decide) (by decide)).symm
+  rw [hval]
+  rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_faithful_7484 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3_faithful initPM 7484 =
+      (fw_topk_routing (denoteGraph_ringAttn pm_goal_3_faithful initPM 7480) 8
+        (((denoteGraph_ringAttn pm_goal_3_faithful initPM 7480).shape.reverse.head?).getD 1)).snd.fst := by
+  have hEntry : denoteGraph_ringAttn pm_goal_3_faithful initPM 7484 =
+      (((pm_goal_3_faithful.nodes.take 93).foldl (applyNodeRingAttn pm_goal_3_faithful) initPM)) 7484 := by
+    show pm_goal_3_faithful.nodes.foldl (applyNodeRingAttn pm_goal_3_faithful) initPM 7484 = _
+    exact foldl_prefix_eq_full_ringAttn pm_goal_3_faithful pm_goal_3_faithful.nodes initPM 7484 93 (by decide) (by decide)
+  rw [hEntry]
+  rw [show pm_goal_3_faithful.nodes.take 93 = pm_goal_3_faithful.nodes.take 92 ++ [{ rank := 1, op := "OpName.FW_topk_routing", ins := [7480], outs := [7482, 7484, 7486], params := [8] }] from rfl,
+      List.foldl_append, List.foldl_cons, List.foldl_nil]
+  rw [applyNodeRingAttn_eq_applyNode_of_not_ring pm_goal_3_faithful (((pm_goal_3_faithful.nodes.take 92).foldl (applyNodeRingAttn pm_goal_3_faithful) initPM)) { rank := 1, op := "OpName.FW_topk_routing", ins := [7480], outs := [7482, 7484, 7486], params := [8] } (by decide) (by decide)]
+  rw [applyNode_fw_topk_routing_map_out pm_goal_3_faithful (((pm_goal_3_faithful.nodes.take 92).foldl (applyNodeRingAttn pm_goal_3_faithful) initPM)) 1 7480 7482 7484 7486 [8] (by decide)]
+  have hval : (((pm_goal_3_faithful.nodes.take 92).foldl (applyNodeRingAttn pm_goal_3_faithful) initPM)) 7480 = denoteGraph_ringAttn pm_goal_3_faithful initPM 7480 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3_faithful pm_goal_3_faithful.nodes initPM 7480 92 (by decide) (by decide)).symm
+  rw [hval]
+  rfl
+
 /-- Per-layer commute (`sm.router_L{k} = allGather0 [pm_r0.router_L{k}, pm_r1.router_L{k}]`).
     L0..L11 use sliding_window attn (shard-local, causal window = 512 ≤ 2048).
     L12..L23 use zigzag ring attn (cross-rank q-gather + broadcast k/v).
