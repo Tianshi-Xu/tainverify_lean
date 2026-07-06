@@ -872,11 +872,79 @@ theorem sm_pm_router_shapes_r1
     ∀ i (_ : i < 24), ((pm_goal_3_faithful_routers_r1 initPM).getD i (zeroTensor [2048, 64])).shape = [2048, 64] := by
   sorry
 
+/-- L0 (first layer, sliding_window attn) router commute — split out as the
+    standalone pilot template for L1..L23.
+
+    ============================================================================
+    BLOCKED: unprovable against the CURRENT `pm_goal_3_faithful` graph, which is
+    in an inconsistent *half-cut* state (upstream graph-generation bug — NOT a
+    proof difficulty). See `sm_pm_router_commute_layer` note below and the
+    full root-cause in the block comment. Body is a documented `sorry` per the
+    honesty clause: no axioms, no fabricated proof.
+    ============================================================================
+
+    Root cause (verified against Goal_3_faithful.lean):
+    * SM (`sm_goal_3_faithful`) COMPUTES the L0 router rms_norm through attention:
+      `FW_rms_norm(7404,4704)->4705 -> FW_multiref->7415 -> FW_float->4706
+       -> FW_norm_linear->4708 -> FW_topk_routing_snd_fst->4710`.
+    * PM (`pm_goal_3_faithful`) is CUT: `FW_float(11875)->4706 -> ... -> 7483/7484`,
+      where **11875 is an unconstrained init leaf** — no PM node has
+      `outs := [11875]`; it appears only in `pm_goal_3_faithfulInitShapes`
+      (Goal_3_faithful.lean:3454, shape [4096,1024]).
+    * The PM nodes `FW_rms_norm(14644,4704)->4705` and
+      `FW_multiref(4705)->[11875..11879]` present in legacy
+      `Goal_3.lean:985-988` are **MISSING** from faithful PM. Hence the
+      attention residual `14644` (produced at Goal_3_faithful node 944) is
+      **dangling** (read by nobody) and `11875..11879` are free init leaves.
+    * `intermediateGoal_7415` (`initSM 7415 = reconstruct(initPM 11875 ...)`,
+      GeneratedYOCOMoE.lean:15229) would link the two sides, but it is **NOT**
+      in `goal_3_cut_initGoals` (= `initGoals ++ [goal_5]`; `goal_5` covers only
+      the embedding tid 4680). And even if added it would not suffice: SM uses
+      the *computed* 7415 (through attention), not its init value, so SM would
+      also have to be cut at 7415.
+    * Therefore `denote SM 4710` (a function of SM attention inits) and
+      `allGather0 [denote PM 7483, denote PM 7484]` (a function of free
+      `initPM 11875`) are functions of DISJOINT free store entries with no
+      linking init goal — they cannot be equal for arbitrary stores.
+
+    This half-cut pattern repeats for every layer (per-layer init-leaf blocks
+    `11875-11879`, `11903-11907`, ... one `[4096,1024]×5` block per layer), so the
+    fix is upstream and cross-cutting: either (A) restore the PM
+    `rms_norm+multiref` nodes for all layers (make PM compute through, matching
+    legacy — shifts PM node indices, breaks the proven stack helpers), or (B)
+    complete the intended cut (also cut SM at 7415 and add the
+    `intermediateGoal_7415`-family to `goal_3_cut_initGoals`). Both are
+    generator-level (`graph_to_lean.py`) changes affecting all 24 layers and the
+    shared file, so they must be coordinated — beyond the L0-pilot scope. -/
+theorem sm_pm_router_commute_L0
+    (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM sm_goal_3_faithfulInitEnv)
+    (hPM : StoreShapesHold initPM pm_goal_3_faithfulInitEnv)
+    (hInit : InitGoalsHold pm_goal_3_faithful.numRanks goal_3_cut_initGoals initSM initPM) :
+    (sm_goal_3_faithful_routers initSM).getD 0 (zeroTensor [2 * 2048, 64]) =
+      allGatherPrimDimN 0 2 0
+        [(pm_goal_3_faithful_routers_r0 initPM).getD 0 (zeroTensor [2048, 64]),
+         (pm_goal_3_faithful_routers_r1 initPM).getD 0 (zeroTensor [2048, 64])] := by
+  -- BLOCKER: SM side traces `denote 4710` through attention; PM side traces
+  -- `denote 7483/7484` back to the UNCONSTRAINED init leaf `initPM 11875`
+  -- (missing `FW_rms_norm(14644,4704)->4705` + `FW_multiref->[11875..11879]`
+  -- nodes in `pm_goal_3_faithful`). No init goal links them in the cut set, so
+  -- the two sides are functions of disjoint free store entries. Requires an
+  -- upstream graph fix (regeneration); see the doc comment above.
+  sorry
+
 /-- Per-layer commute (`sm.router_L{k} = allGather0 [pm_r0.router_L{k}, pm_r1.router_L{k}]`).
     L0..L11 use sliding_window attn (shard-local, causal window = 512 ≤ 2048).
     L12..L23 use zigzag ring attn (cross-rank q-gather + broadcast k/v).
     Under the faithful reshape semantics these are all TRUE and provable per
-    the schema in `PROMPT.md`. -/
+    the schema in `PROMPT.md`.
+
+    NOTE (pilot finding): currently BLOCKED by the same upstream graph bug
+    documented on `sm_pm_router_commute_L0` above — `pm_goal_3_faithful` omits
+    the per-layer router `rms_norm`+`multiref` nodes, leaving the PM router
+    inputs as unconstrained init leaves (`11875..`, `11903..`, ...) disconnected
+    from the attention residuals. Fix upstream (graph regeneration) before
+    proving L0..L23. -/
 theorem sm_pm_router_commute_layer
     (initSM initPM : Store)
     (hSM : StoreShapesHold initSM sm_goal_3_faithfulInitEnv)
