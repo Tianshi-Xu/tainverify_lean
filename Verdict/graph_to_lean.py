@@ -958,7 +958,8 @@ def _emit_cut_to_full(
 	# pm-side: for each tp in goal.tps, the node in sl.pm_nodes that outputs tp.tid.
 	pm_writer_nodes: List[Tuple[int, Any]] = []
 	for tp in sl.goal.tps:
-		tp_tid = int(tp.tid)
+		# tp is (rank, tid) tuple per LineageGoal.tps typing (line 603).
+		tp_tid = int(tp[1]) if isinstance(tp, tuple) else int(tp.tid)
 		for n in sl.pm_nodes:
 			outs = [int(t.tid) for t in pm_graph.node_outputs(n)]
 			if tp_tid in outs:
