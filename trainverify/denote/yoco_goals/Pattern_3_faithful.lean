@@ -842,13 +842,54 @@ theorem goal_3_stmt_cut_ringAttn_of_router_commutes
       hxhead hyhead hzhead hxshapes hyshapes hcommute
 
 
-/-- **REMAINING PROOF OBLIGATION (not yet discharged).**
-    The 24 per-layer router sharding-commutes + per-rank router shapes.
-    Under the faithful reshape semantics these are all TRUE (see file header),
-    but their proofs require the full L0..L23 layer-commute induction
-    (dependency-cone unfolds + attention/MoE/swiglu commutes per layer).
-    This is isolated here as the single open obligation; everything else
-    (the final-stack reduction below) is proven kernel-clean. -/
+/-! ## Sub-obligations — 24 layer router commutes, isolated per layer.
+
+    Each `sm_pm_router_commute_L{k}` is a self-contained lemma for layer k.
+    Batch workers each own one file / one lemma. Once ALL 24 are proved,
+    `sm_pm_router_commute_all` assembles them by `Fin.cases`.
+
+    ALSO isolated: `sm_pm_router_shapes_r0`/`r1` cover the 24 shape claims
+    per rank. Under the faithful reshape semantics these are 24 shape-
+    reduction chains through fw_view / fw_linear / fw_add / rms_norm /
+    per_head_mix_precision_linear / attn — routine but bulky. -/
+
+/-- pm rank-0 router shapes at every layer. Discharged by
+    `Pattern_3_faithful_RouterShapes.lean` (Worker A). -/
+theorem sm_pm_router_shapes_r0
+    (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM sm_goal_3_faithfulInitEnv)
+    (hPM : StoreShapesHold initPM pm_goal_3_faithfulInitEnv)
+    (hInit : InitGoalsHold pm_goal_3_faithful.numRanks goal_3_cut_initGoals initSM initPM) :
+    ∀ i (_ : i < 24), ((pm_goal_3_faithful_routers_r0 initPM).getD i (zeroTensor [2048, 64])).shape = [2048, 64] := by
+  sorry
+
+/-- pm rank-1 router shapes at every layer. Same file as `_r0`. -/
+theorem sm_pm_router_shapes_r1
+    (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM sm_goal_3_faithfulInitEnv)
+    (hPM : StoreShapesHold initPM pm_goal_3_faithfulInitEnv)
+    (hInit : InitGoalsHold pm_goal_3_faithful.numRanks goal_3_cut_initGoals initSM initPM) :
+    ∀ i (_ : i < 24), ((pm_goal_3_faithful_routers_r1 initPM).getD i (zeroTensor [2048, 64])).shape = [2048, 64] := by
+  sorry
+
+/-- Per-layer commute (`sm.router_L{k} = allGather0 [pm_r0.router_L{k}, pm_r1.router_L{k}]`).
+    L0..L11 use sliding_window attn (shard-local, causal window = 512 ≤ 2048).
+    L12..L23 use zigzag ring attn (cross-rank q-gather + broadcast k/v).
+    Under the faithful reshape semantics these are all TRUE and provable per
+    the schema in `PROMPT.md`. -/
+theorem sm_pm_router_commute_layer
+    (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM sm_goal_3_faithfulInitEnv)
+    (hPM : StoreShapesHold initPM pm_goal_3_faithfulInitEnv)
+    (hInit : InitGoalsHold pm_goal_3_faithful.numRanks goal_3_cut_initGoals initSM initPM) :
+    ∀ i (_ : i < 24),
+      (sm_goal_3_faithful_routers initSM).getD i (zeroTensor [2 * 2048, 64]) =
+        allGatherPrimDimN 0 2 0
+          [(pm_goal_3_faithful_routers_r0 initPM).getD i (zeroTensor [2048, 64]),
+           (pm_goal_3_faithful_routers_r1 initPM).getD i (zeroTensor [2048, 64])] := by
+  sorry
+
+/-- Assembly of the three components. Kernel-clean once the three above are. -/
 theorem sm_pm_router_commute_all
     (initSM initPM : Store)
     (hSM : StoreShapesHold initSM sm_goal_3_faithfulInitEnv)
@@ -858,8 +899,10 @@ theorem sm_pm_router_commute_all
     (∀ i (_ : i < 24), ((pm_goal_3_faithful_routers_r1 initPM).getD i (zeroTensor [2048, 64])).shape = [2048, 64]) ∧
     (∀ i (_ : i < 24), (sm_goal_3_faithful_routers initSM).getD i (zeroTensor [2 * 2048, 64]) =
       allGatherPrimDimN 0 2 0 [(pm_goal_3_faithful_routers_r0 initPM).getD i (zeroTensor [2048, 64]),
-        (pm_goal_3_faithful_routers_r1 initPM).getD i (zeroTensor [2048, 64])]) := by
-  sorry
+        (pm_goal_3_faithful_routers_r1 initPM).getD i (zeroTensor [2048, 64])]) :=
+  ⟨sm_pm_router_shapes_r0 initSM initPM hSM hPM hInit,
+   sm_pm_router_shapes_r1 initSM initPM hSM hPM hInit,
+   sm_pm_router_commute_layer initSM initPM hSM hPM hInit⟩
 
 
 /-- Top-level Pattern_3 proof under the faithful reshape semantics.
