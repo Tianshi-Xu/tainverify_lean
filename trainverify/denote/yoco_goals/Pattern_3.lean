@@ -51272,6 +51272,168 @@ theorem sm_pm_router_L0_commute
     rw [chunk0_2 1 _ 4096 64 hLshape]; rfl
   rw [hk, hkc0, hkc1]
   exact topk_snd_fst_chunk_commute _ 2048 8 64 (by omega) (by omega) hLshape
+
+set_option maxHeartbeats 8000000 in
+/-- **L0 carry commute (keystone for L>=1 router commutes).**
+    `denote SM 4736 = denote PM 4736`: the layer-0 residual carry (embedding +
+    attention + faithful MoE + gate*swiglu) reconstructs exactly across the
+    PM shard partition.  Now provable because pm_goal_3's MoE uses the
+    upstream-faithful `fw_all2all_moe_gmm_full` op (via
+    `fw_all2all_moe_gmm_full_split_commute_2`), with no disjointness/new axioms. -/
+theorem sm_pm_carry_L0_commute
+    (initSM initPM : Store)
+    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    denoteGraph_ringAttn sm_goal_3 initSM 4736 = denoteGraph_ringAttn pm_goal_3 initPM 4736 := by
+  rw [denote_sm_goal_3_h_0, denote_pm_goal_3_h_0_r0]
+  -- attention residual commute
+  have hattn := sm_pm_attention_L0_commute initSM initPM h_ss_sm h_ss_pm hInit
+  -- weight equalities (single-tps)
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM := by
+    intro g hg
+    exact hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have h4699 : initSM 4699 = initPM 4699 := hb initGoal_4699 (by decide) rfl
+  have h4704 : initSM 4704 = initPM 4704 := hb initGoal_4704 (by decide) rfl
+  have h4707 : initSM 4707 = initPM 4707 := hb initGoal_4707 (by decide) rfl
+  have h4716 : initSM 4716 = initPM 4716 := hb initGoal_4716 (by decide) rfl
+  have h4721 : initSM 4721 = initPM 4721 := hb initGoal_4721 (by decide) rfl
+  have h4725 : initSM 4725 = initPM 4725 := hb initGoal_4725 (by decide) rfl
+  have h4730 : initSM 4730 = initPM 4730 := hb initGoal_4730 (by decide) rfl
+  have h4680 : initSM 4680 = initPM 4680 := by
+    have hg := hInit goal_5
+      (by unfold goal_3_cut_initGoals goal_3_prereqs; exact List.mem_append_right _ (by simp))
+    unfold InitGoalHolds at hg
+    obtain ⟨_, _, hval⟩ := hg
+    simpa [goal_5, List.map, reconstructWithDim_singleton] using hval
+  -- 2-shard weight reconstructions
+  have h4712 : initSM 4712 = allGatherPrimDimN 0 2 0 [initPM 7487, initPM 7488] := by
+    have hg := hII initGoal_4712 (by decide)
+    unfold InitGoalHolds at hg
+    obtain ⟨_, _, hval⟩ := hg
+    simp only [initGoal_4712, List.map] at hval
+    rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 7487) (initPM 7488) []
+        (by rw [h_ss_pm 7487 [32,1024,1024] (by decide)]; decide)] at hval
+    rw [show pm_goal_3.numRanks = 2 from rfl] at hval
+    exact hval
+  have h4713 : initSM 4713 = allGatherPrimDimN 0 2 0 [initPM 7489, initPM 7490] := by
+    have hg := hII initGoal_4713 (by decide)
+    unfold InitGoalHolds at hg
+    obtain ⟨_, _, hval⟩ := hg
+    simp only [initGoal_4713, List.map] at hval
+    rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 7489) (initPM 7490) []
+        (by rw [h_ss_pm 7489 [32,1024,512] (by decide)]; decide)] at hval
+    rw [show pm_goal_3.numRanks = 2 from rfl] at hval
+    exact hval
+  -- unify SM weights/attention into PM terms
+  rw [hattn, h4680, h4699, h4704, h4707, h4716, h4721, h4725, h4730]
+  rw [show pm_goal_3.numRanks = 2 from rfl]
+  -- abbreviations
+  set A := fw_linear (allGatherPrimDimN 0 2 0
+      [applyNodeRingAttn_sliding_window pm_goal_3
+         ((pm_goal_3.nodes.take 44).foldl (applyNodeRingAttn pm_goal_3) initPM)
+         { rank := 0, op := "OpName.FW_attn_sliding_window", ins := [7433, 7435, 7421, 4694, 4695], outs := [7437], params := [16, 4, 64, 64, 1, 512] },
+       applyNodeRingAttn_sliding_window pm_goal_3
+         ((pm_goal_3.nodes.take 45).foldl (applyNodeRingAttn pm_goal_3) initPM)
+         { rank := 1, op := "OpName.FW_attn_sliding_window", ins := [7434, 7436, 7422, 4694, 4695], outs := [7438], params := [16, 4, 64, 64, 1, 512] }])
+      (initPM 4699) with hA
+  set RES := elemwiseAdd (initPM 4680) (fw_view [4096, 1024] A) with hRES
+  set RMS := fw_rms_norm RES (initPM 4704) with hRMS
+  set NL := fw_norm_linear RMS (initPM 4707) with hNL
+  set UV := fw_view [4096, 512] (fw_linear RMS (initPM 4721)) with hUV
+  set VV := fw_view [4096, 512] (fw_linear RMS (initPM 4725)) with hVV
+  -- shapes
+  have hRESsh : RES.shape = [4096, 1024] := by
+    rw [hRES]; exact ewadd_eq _ _ [4096,1024] (h_ss_pm 4680 [4096,1024] (by decide)) (view_sh _ _)
+  have hRMSsh : RMS.shape = [4096, 1024] := by rw [hRMS, rms_sh]; exact hRESsh
+  have hNLsh : NL.shape = [4096, 64] := by
+    rw [hNL]
+    exact fw_norm_linear_shape RMS (initPM 4707) 64 1024 [4096]
+      (by rw [hRMSsh]; rfl) (h_ss_pm 4707 [64,1024] (by decide))
+  have hUsh : UV.shape = [4096, 512] := by rw [hUV]; exact view_sh _ _
+  have hVsh : VV.shape = [4096, 512] := by rw [hVV]; exact view_sh _ _
+  -- num-experts normalization
+  have hkSM : (NL.shape.reverse.head?).getD 1 = 64 := by rw [hNLsh]; rfl
+  have hkc0 : ((chunkPrimDimN 0 2 0 NL).shape.reverse.head?).getD 1 = 64 := by
+    rw [chunk0_2 0 NL 4096 64 hNLsh]; rfl
+  have hkc1 : ((chunkPrimDimN 0 2 1 NL).shape.reverse.head?).getD 1 = 64 := by
+    rw [chunk0_2 1 NL 4096 64 hNLsh]; rfl
+  rw [hkSM, hkc0, hkc1]
+  rw [h4712, h4713]
+  -- chunk shapes
+  have hc0NL : (chunkPrimDimN 0 2 0 NL).shape = [2048, 64] := chunk0_2 0 NL 4096 64 hNLsh
+  have hc1NL : (chunkPrimDimN 0 2 1 NL).shape = [2048, 64] := chunk0_2 1 NL 4096 64 hNLsh
+  have hc0RMS : (chunkPrimDimN 0 2 0 RMS).shape = [2048, 1024] := chunk0_2 0 RMS 4096 1024 hRMSsh
+  have hc1RMS : (chunkPrimDimN 0 2 1 RMS).shape = [2048, 1024] := chunk0_2 1 RMS 4096 1024 hRMSsh
+  -- topk fst chunk commute (inline)
+  have hfstchunk : (fw_topk_routing NL 8 64).fst =
+      allGatherPrimDimN 0 2 0
+        [(fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).fst,
+         (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).fst] := by
+    have hchunk := allGather0_reconstruct_chunks_2d 2048 64 (by omega) (by omega) NL hNLsh
+    conv_lhs => rw [← hchunk]
+    rw [fw_topk_routing_fst_allGather0_commute_2_of (chunkPrimDimN 0 2 0 NL) (chunkPrimDimN 0 2 1 NL)
+          2048 8 64 (by omega) (by omega) hc0NL hc1NL]
+  have hsndchunk : (fw_topk_routing NL 8 64).snd.fst =
+      allGatherPrimDimN 0 2 0
+        [(fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).snd.fst,
+         (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).snd.fst] :=
+    topk_snd_fst_chunk_commute NL 2048 8 64 (by omega) (by omega) hNLsh
+  -- routing shapes
+  have hrp0 : (fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).fst.shape = [2048, 64] :=
+    fw_topk_routing_fst_shape (chunkPrimDimN 0 2 0 NL) 8 64 2048 (by rw [hc0NL]; rfl)
+  have hrp1 : (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).fst.shape = [2048, 64] :=
+    fw_topk_routing_fst_shape (chunkPrimDimN 0 2 1 NL) 8 64 2048 (by rw [hc1NL]; rfl)
+  have hrm0 : (fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).snd.fst.shape = [2048, 64] :=
+    topk_sf_sh (chunkPrimDimN 0 2 0 NL) 2048 8 64 hc0NL
+  have hrm1 : (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).snd.fst.shape = [2048, 64] :=
+    topk_sf_sh (chunkPrimDimN 0 2 1 NL) 2048 8 64 hc1NL
+  -- weight shapes
+  have hw87 : (initPM 7487).shape = [32,1024,1024] := h_ss_pm 7487 [32,1024,1024] (by decide)
+  have hw88 : (initPM 7488).shape = [32,1024,1024] := h_ss_pm 7488 [32,1024,1024] (by decide)
+  have hw89 : (initPM 7489).shape = [32,1024,512] := h_ss_pm 7489 [32,1024,512] (by decide)
+  have hw90 : (initPM 7490).shape = [32,1024,512] := h_ss_pm 7490 [32,1024,512] (by decide)
+  -- swiglu path commute
+  have hsw : fw_swiglu UV VV =
+      allGatherPrimDimN 0 2 0
+        [fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV),
+         fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV)] := by
+    have hcu0 : (chunkPrimDimN 0 2 0 UV).shape = [2048,512] := chunk0_2 0 UV 4096 512 hUsh
+    have hcu1 : (chunkPrimDimN 0 2 1 UV).shape = [2048,512] := chunk0_2 1 UV 4096 512 hUsh
+    have hcv0 : (chunkPrimDimN 0 2 0 VV).shape = [2048,512] := chunk0_2 0 VV 4096 512 hVsh
+    have hcv1 : (chunkPrimDimN 0 2 1 VV).shape = [2048,512] := chunk0_2 1 VV 4096 512 hVsh
+    have key := fw_swiglu_allGather0_commute_2 (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 1 UV)
+      (chunkPrimDimN 0 2 0 VV) (chunkPrimDimN 0 2 1 VV) 2048 512 (by omega) (by omega)
+      hcu0 hcu1 hcv0 hcv1
+    rw [allGather0_reconstruct_chunks_2d 2048 512 (by omega) (by omega) UV hUsh,
+        allGather0_reconstruct_chunks_2d 2048 512 (by omega) (by omega) VV hVsh] at key
+    exact key
+  -- combine
+  congr 1
+  congr 1
+  · -- MoE
+    have key := fw_all2all_moe_gmm_full_split_commute_2
+      (chunkPrimDimN 0 2 0 RMS) (chunkPrimDimN 0 2 1 RMS)
+      (fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).fst (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).fst
+      (fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).snd.fst (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).snd.fst
+      (initPM 7487) (initPM 7488) (initPM 7489) (initPM 7490)
+      2048 1024 32 8 1024 512 ((((10 : Nat) : Scalar)))
+      (by omega) (by omega) (by omega) (by omega) (by omega) rfl
+      hc0RMS hc1RMS hrp0 hrp1 hrm0 hrm1 hw87 hw88 hw89 hw90
+    rw [allGather0_reconstruct_chunks_2d 2048 1024 (by omega) (by omega) RMS hRMSsh,
+        ← hfstchunk, ← hsndchunk] at key
+    exact key
+  · -- gate * swiglu
+    rw [hsw]
+
 end RouterL0Commute
 
 
