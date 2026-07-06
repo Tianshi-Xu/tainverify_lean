@@ -872,11 +872,94 @@ theorem sm_pm_router_shapes_r1
     ∀ i (_ : i < 24), ((pm_goal_3_faithful_routers_r1 initPM).getD i (zeroTensor [2048, 64])).shape = [2048, 64] := by
   sorry
 
+/-- **Reusable router-split reduction (kernel-clean, all 24 layers).**
+
+    The heart of the per-layer router commute. Suppose the SM full norm-linear
+    logits tensor `NL_SM` equals the PM full norm-linear logits tensor `NL_PM`
+    (shape `[4096, 64] = [2*2048, 64]`). Then the SM router output (topk `.snd.fst`
+    over the full logits) equals `allGather0` of the two PM shard routers (topk
+    `.snd.fst` over each dim-0 chunk of `NL_PM`).
+
+    This is provable directly from `allGather0_reconstruct_chunks_2d` (chunk
+    reconstruction) composed with the imported topk 2-shard commute
+    `fw_topk_routing_snd_fst_allGather0_commute_2_of`. It is graph-independent,
+    hence reusable at every layer `k`; the only per-layer work left is the three
+    denote unfolds (SM router tid, PM r0/r1 router tids) plus the `NL_SM = NL_PM`
+    equality — see the roadmap on `sm_pm_router_commute_layer`. -/
+theorem router_commute_of_nl_eq (NL_SM NL_PM : Tensor)
+    (hNL : NL_PM.shape = [2 * 2048, 64]) (heq : NL_SM = NL_PM) :
+    (fw_topk_routing NL_SM 8 64).snd.fst =
+      allGatherPrimDimN 0 2 0
+        [(fw_topk_routing (chunkPrimDimN 0 2 0 NL_PM) 8 64).snd.fst,
+         (fw_topk_routing (chunkPrimDimN 0 2 1 NL_PM) 8 64).snd.fst] := by
+  subst heq
+  have hc : ∀ r, (chunkPrimDimN 0 2 r NL_SM).shape = [2048, 64] := by
+    intro r
+    rw [chunkPrimDimN_shape 0 2 r NL_SM [2 * 2048, 64] hNL (by omega)]
+    simp only [List.set, List.getD_cons_zero]
+  have hrecon := allGather0_reconstruct_chunks_2d 2048 64 (by omega) (by omega) NL_SM hNL
+  conv_lhs => rw [← hrecon]
+  rw [TrainVerify.Denote.GeneratedPatterns.fw_topk_routing_snd_fst_allGather0_commute_2_of
+        (chunkPrimDimN 0 2 0 NL_SM) (chunkPrimDimN 0 2 1 NL_SM)
+        2048 8 64 (by omega) (by omega) (hc 0) (hc 1)]
+
 /-- Per-layer commute (`sm.router_L{k} = allGather0 [pm_r0.router_L{k}, pm_r1.router_L{k}]`).
     L0..L11 use sliding_window attn (shard-local, causal window = 512 ≤ 2048).
     L12..L23 use zigzag ring attn (cross-rank q-gather + broadcast k/v).
-    Under the faithful reshape semantics these are all TRUE and provable per
-    the schema in `PROMPT.md`. -/
+
+    ## Verified reduction roadmap (2026-07-06, Worker E)
+
+    Under the faithful reshape semantics these are all TRUE. The proof of each
+    layer `k` reduces, in three graph-independent + one graph-specific step, to a
+    single *carry* (residual-stream) equality:
+
+    1.  **Router split (DONE, kernel-clean).** In BOTH graphs the layer-`k`
+        norm-linear logits `NL` are computed as a full `[4096, 64]` tensor
+        (SM router tids are `sm_goal_3_faithful_routers`, PM shard router tids are
+        `pm_goal_3_faithful_routers_r0/_r1`; the layer stride is 54 for the
+        sliding-window band L0..L11 and shifts at the L12 zigzag boundary — read
+        the tid off the router lists, do not assume a uniform stride.  In both
+        graphs the router feeds off `FW_norm_linear` on the *full*
+        `[4096, 1024]` rms-norm output — verified: PM does `norm_linear` on the
+        AllGather-reconstructed full carry, *then* a `ChunkPrim` splits it into
+        the two `[2048, 64]` shards feeding the two per-rank `FW_topk_routing`
+        nodes). Hence:
+          - SM router  = `(fw_topk_routing NL_SM 8 64).snd.fst`
+          - PM r0/r1   = `(fw_topk_routing (chunkPrimDimN 0 2 {0,1} NL_PM) 8 64).snd.fst`
+        and `router_commute_of_nl_eq` (above) closes the split GIVEN `NL_SM = NL_PM`.
+
+    2.  **NL equality ⟸ carry equality.** `NL = fw_norm_linear (fw_float
+        (fw_rms_norm carry w704)) w707`. The weights `w704 = 4704`, `w707 = 4707`
+        are single-`tps` init goals so `initSM = initPM` on them; hence
+        `NL_SM = NL_PM ⟺ carry_SM = carry_PM` (congruence).
+
+    3.  **Carry equality (the remaining crux).** `carry_SM`/`carry_PM` are the
+        full `[4096, 1024]` residual streams (SM/PM `FW_add` output feeding the
+        layer rms-norm; read tids off the graph per layer).
+        `carry_k = carry_{k-1} + attn_block_k + moe_block_k`. By induction on `k`
+        (base `carry_0` = embedding + attn₀ + moe₀), assuming `carry_{k-1}`
+        commutes, the residual block commutes because:
+          - `attn_block`: L0..L11 sliding-window (window 512 ≤ shard 2048, so the
+            SM full attention = AllGather0 of the two per-shard attentions — the PM
+            graph literally does per-shard `FW_attn_sliding_window` then
+            `AllGatherPrim`); L12..L23 zigzag ring attn
+            (`applyNodeRingAttn_zigzag`).  reshape/linear commute through dim-0
+            sharding under faithful reshape (flatten preserves dim-0).
+          - `moe_block`: `fw_all2all_moe_gmm_full_split_commute_2` (as in legacy
+            `sm_pm_carry_L0_commute`).
+          - `swiglu`/`mul`/`add`: row-wise, commute with dim-0 sharding.
+
+    ## Remaining mechanization (per layer, ~200 lines each)
+    - three denote-unfold lemmas (SM router tid, PM r0/r1 router tids) reducing
+      each `denoteGraph_ringAttn …` to the closed `fw_topk_routing …` form (this
+      is the "reduction infra" — bulky `foldl_prefix_eq_full_ringAttn` /
+      `foldl_take_split_at_not_written_ringAttn` chains, cf.
+      `denote_sm_goal_3_faithful_4675`);
+    - the carry-commute recursion (step 3), the mathematical heart, mirroring
+      legacy `sm_pm_carry_L{k}_commute` but on the faithful 1866-node PM graph.
+
+    The router-split algebra (step 1) is fully discharged and kernel-clean via
+    `router_commute_of_nl_eq`. -/
 theorem sm_pm_router_commute_layer
     (initSM initPM : Store)
     (hSM : StoreShapesHold initSM sm_goal_3_faithfulInitEnv)
