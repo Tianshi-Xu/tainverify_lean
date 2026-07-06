@@ -51852,6 +51852,247 @@ theorem sm_pm_router_L1_commute
 
 end RouterL1Commute
 
+section RouterLayerInduction
+
+set_option maxHeartbeats 8000000
+set_option maxRecDepth 20000
+
+theorem sm_pm_carry_L1_commute
+    (initSM initPM : Store)
+    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    denoteGraph_ringAttn sm_goal_3 initSM 4790
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3 initPM 7765,
+           denoteGraph_ringAttn pm_goal_3 initPM 7766] := by
+  rw [denote_sm_goal_3_h_1, denote_pm_goal_3_h_1_r0, denote_pm_goal_3_h_1_r1]
+  -- attention residual commute (L1)
+  have hattn := sm_pm_attention_L1_commute initSM initPM h_ss_sm h_ss_pm hInit
+  -- L0 carry (replicated) for the input residual 4736
+  have hcarry := sm_pm_carry_L0_commute initSM initPM h_ss_sm h_ss_pm hInit
+  -- weight equalities (single-tps)
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM := by
+    intro g hg
+    exact hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have h4753 : initSM 4753 = initPM 4753 := hb initGoal_4753 (by decide) rfl
+  have h4758 : initSM 4758 = initPM 4758 := hb initGoal_4758 (by decide) rfl
+  have h4761 : initSM 4761 = initPM 4761 := hb initGoal_4761 (by decide) rfl
+  have h4770 : initSM 4770 = initPM 4770 := hb initGoal_4770 (by decide) rfl
+  have h4775 : initSM 4775 = initPM 4775 := hb initGoal_4775 (by decide) rfl
+  have h4779 : initSM 4779 = initPM 4779 := hb initGoal_4779 (by decide) rfl
+  have h4784 : initSM 4784 = initPM 4784 := hb initGoal_4784 (by decide) rfl
+  -- 2-shard weight reconstructions (w13, w2)
+  have h4766 : initSM 4766 = allGatherPrimDimN 0 2 0 [initPM 7673, initPM 7674] := by
+    have hg := hII initGoal_4766 (by decide)
+    unfold InitGoalHolds at hg
+    obtain ⟨_, _, hval⟩ := hg
+    simp only [initGoal_4766, List.map] at hval
+    rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 7673) (initPM 7674) []
+        (by rw [h_ss_pm 7673 [32,1024,1024] (by decide)]; decide)] at hval
+    rw [show pm_goal_3.numRanks = 2 from rfl] at hval
+    exact hval
+  have h4767 : initSM 4767 = allGatherPrimDimN 0 2 0 [initPM 7675, initPM 7676] := by
+    have hg := hII initGoal_4767 (by decide)
+    unfold InitGoalHolds at hg
+    obtain ⟨_, _, hval⟩ := hg
+    simp only [initGoal_4767, List.map] at hval
+    rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 7675) (initPM 7676) []
+        (by rw [h_ss_pm 7675 [32,1024,512] (by decide)]; decide)] at hval
+    rw [show pm_goal_3.numRanks = 2 from rfl] at hval
+    exact hval
+  -- unify SM attention/weights into PM terms
+  rw [hattn, hcarry, h4753, h4758, h4761, h4770, h4775, h4779, h4784]
+  rw [show pm_goal_3.numRanks = 2 from rfl]
+  -- abbreviations (mirror L0 carry)
+  set A := fw_linear (allGatherPrimDimN 0 2 0
+      [applyNodeRingAttn_sliding_window pm_goal_3
+         ((pm_goal_3.nodes.take 139).foldl (applyNodeRingAttn pm_goal_3) initPM)
+         { rank := 0, op := "OpName.FW_attn_sliding_window", ins := [7619, 7621, 7607, 4748, 4749], outs := [7623], params := [16, 4, 64, 64, 1, 512] },
+       applyNodeRingAttn_sliding_window pm_goal_3
+         ((pm_goal_3.nodes.take 140).foldl (applyNodeRingAttn pm_goal_3) initPM)
+         { rank := 1, op := "OpName.FW_attn_sliding_window", ins := [7620, 7622, 7608, 4748, 4749], outs := [7624], params := [16, 4, 64, 64, 1, 512] }])
+      (initPM 4753) with hA
+  set RES := elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 4736) (fw_view [4096, 1024] A) with hRES
+  set RMS := fw_rms_norm RES (initPM 4758) with hRMS
+  set NL := fw_norm_linear RMS (initPM 4761) with hNL
+  set GATE := fw_view [4096, 1] (fw_linear RMS (initPM 4770)) with hGATE
+  set UV := fw_view [4096, 512] (fw_linear RMS (initPM 4775)) with hUV
+  set VV := fw_view [4096, 512] (fw_linear RMS (initPM 4779)) with hVV
+  rw [h4766, h4767]
+  -- shapes
+  have hRESsh : RES.shape = [4096, 1024] := by
+    rw [hRES]; exact ewadd_eq _ _ [4096,1024] (pm_carry_shape_0 initPM h_ss_pm) (view_sh _ _)
+  have hRMSsh : RMS.shape = [4096, 1024] := by rw [hRMS, rms_sh]; exact hRESsh
+  have hNLsh : NL.shape = [4096, 64] := by
+    rw [hNL]
+    exact fw_norm_linear_shape RMS (initPM 4761) 64 1024 [4096]
+      (by rw [hRMSsh]; rfl) (h_ss_pm 4761 [64,1024] (by decide))
+  have hGATEsh : GATE.shape = [4096, 1] := by rw [hGATE]; exact view_sh _ _
+  have hUsh : UV.shape = [4096, 512] := by rw [hUV]; exact view_sh _ _
+  have hVsh : VV.shape = [4096, 512] := by rw [hVV]; exact view_sh _ _
+  -- numExp normalization
+  have hkSM : (NL.shape.reverse.head?).getD 1 = 64 := by rw [hNLsh]; rfl
+  have hkc0 : ((chunkPrimDimN 0 2 0 NL).shape.reverse.head?).getD 1 = 64 := by
+    rw [chunk0_2 0 NL 4096 64 hNLsh]; rfl
+  have hkc1 : ((chunkPrimDimN 0 2 1 NL).shape.reverse.head?).getD 1 = 64 := by
+    rw [chunk0_2 1 NL 4096 64 hNLsh]; rfl
+  rw [hkSM, hkc0, hkc1]
+  -- chunk shapes
+  have hc0RES : (chunkPrimDimN 0 2 0 RES).shape = [2048, 1024] := chunk0_2 0 RES 4096 1024 hRESsh
+  have hc1RES : (chunkPrimDimN 0 2 1 RES).shape = [2048, 1024] := chunk0_2 1 RES 4096 1024 hRESsh
+  have hc0RMS : (chunkPrimDimN 0 2 0 RMS).shape = [2048, 1024] := chunk0_2 0 RMS 4096 1024 hRMSsh
+  have hc1RMS : (chunkPrimDimN 0 2 1 RMS).shape = [2048, 1024] := chunk0_2 1 RMS 4096 1024 hRMSsh
+  have hc0NL : (chunkPrimDimN 0 2 0 NL).shape = [2048, 64] := chunk0_2 0 NL 4096 64 hNLsh
+  have hc1NL : (chunkPrimDimN 0 2 1 NL).shape = [2048, 64] := chunk0_2 1 NL 4096 64 hNLsh
+  have hc0GATE : (chunkPrimDimN 0 2 0 GATE).shape = [2048, 1] := chunk0_2 0 GATE 4096 1 hGATEsh
+  have hc1GATE : (chunkPrimDimN 0 2 1 GATE).shape = [2048, 1] := chunk0_2 1 GATE 4096 1 hGATEsh
+  have hc0UV : (chunkPrimDimN 0 2 0 UV).shape = [2048, 512] := chunk0_2 0 UV 4096 512 hUsh
+  have hc1UV : (chunkPrimDimN 0 2 1 UV).shape = [2048, 512] := chunk0_2 1 UV 4096 512 hUsh
+  have hc0VV : (chunkPrimDimN 0 2 0 VV).shape = [2048, 512] := chunk0_2 0 VV 4096 512 hVsh
+  have hc1VV : (chunkPrimDimN 0 2 1 VV).shape = [2048, 512] := chunk0_2 1 VV 4096 512 hVsh
+  -- topk fst / snd_fst chunk commutes
+  have hfstchunk : (fw_topk_routing NL 8 64).fst =
+      allGatherPrimDimN 0 2 0
+        [(fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).fst,
+         (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).fst] := by
+    have hchunk := allGather0_reconstruct_chunks_2d 2048 64 (by omega) (by omega) NL hNLsh
+    conv_lhs => rw [← hchunk]
+    rw [fw_topk_routing_fst_allGather0_commute_2_of (chunkPrimDimN 0 2 0 NL) (chunkPrimDimN 0 2 1 NL)
+          2048 8 64 (by omega) (by omega) hc0NL hc1NL]
+  have hsndchunk : (fw_topk_routing NL 8 64).snd.fst =
+      allGatherPrimDimN 0 2 0
+        [(fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).snd.fst,
+         (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).snd.fst] :=
+    topk_snd_fst_chunk_commute NL 2048 8 64 (by omega) (by omega) hNLsh
+  -- routing shapes
+  have hrp0 : (fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).fst.shape = [2048, 64] :=
+    fw_topk_routing_fst_shape (chunkPrimDimN 0 2 0 NL) 8 64 2048 (by rw [hc0NL]; rfl)
+  have hrp1 : (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).fst.shape = [2048, 64] :=
+    fw_topk_routing_fst_shape (chunkPrimDimN 0 2 1 NL) 8 64 2048 (by rw [hc1NL]; rfl)
+  have hrm0 : (fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).snd.fst.shape = [2048, 64] :=
+    topk_sf_sh (chunkPrimDimN 0 2 0 NL) 2048 8 64 hc0NL
+  have hrm1 : (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).snd.fst.shape = [2048, 64] :=
+    topk_sf_sh (chunkPrimDimN 0 2 1 NL) 2048 8 64 hc1NL
+  -- weight shapes (sharded w13/w2)
+  have hw73 : (initPM 7673).shape = [32,1024,1024] := h_ss_pm 7673 [32,1024,1024] (by decide)
+  have hw74 : (initPM 7674).shape = [32,1024,1024] := h_ss_pm 7674 [32,1024,1024] (by decide)
+  have hw75 : (initPM 7675).shape = [32,1024,512] := h_ss_pm 7675 [32,1024,512] (by decide)
+  have hw76 : (initPM 7676).shape = [32,1024,512] := h_ss_pm 7676 [32,1024,512] (by decide)
+  -- MoE split commute: full moe on gathered = gather of per-rank full moe
+  have key := fw_all2all_moe_gmm_full_split_commute_2
+    (chunkPrimDimN 0 2 0 RMS) (chunkPrimDimN 0 2 1 RMS)
+    (fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).fst (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).fst
+    (fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).snd.fst (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).snd.fst
+    (initPM 7673) (initPM 7674) (initPM 7675) (initPM 7676)
+    2048 1024 32 8 1024 512 ((((10 : Nat) : Scalar)))
+    (by omega) (by omega) (by omega) (by omega) (by omega) rfl
+    hc0RMS hc1RMS hrp0 hrp1 hrm0 hrm1 hw73 hw74 hw75 hw76
+  rw [allGather0_reconstruct_chunks_2d 2048 1024 (by omega) (by omega) RMS hRMSsh,
+      ← hfstchunk, ← hsndchunk] at key
+  -- gate * swiglu path commute
+  have hsg : fw_sigmoid GATE =
+      allGatherPrimDimN 0 2 0 [fw_sigmoid (chunkPrimDimN 0 2 0 GATE), fw_sigmoid (chunkPrimDimN 0 2 1 GATE)] := by
+    have keyg := fw_sigmoid_allGather0_commute_2 (chunkPrimDimN 0 2 0 GATE) (chunkPrimDimN 0 2 1 GATE) 2048 1 (by omega) (by omega) hc0GATE hc1GATE
+    rw [allGather0_reconstruct_chunks_2d 2048 1 (by omega) (by omega) GATE hGATEsh] at keyg
+    exact keyg
+  have hsw : fw_swiglu UV VV =
+      allGatherPrimDimN 0 2 0
+        [fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV),
+         fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV)] := by
+    have key2 := fw_swiglu_allGather0_commute_2 (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 1 UV)
+      (chunkPrimDimN 0 2 0 VV) (chunkPrimDimN 0 2 1 VV) 2048 512 (by omega) (by omega) hc0UV hc1UV hc0VV hc1VV
+    rw [allGather0_reconstruct_chunks_2d 2048 512 (by omega) (by omega) UV hUsh,
+        allGather0_reconstruct_chunks_2d 2048 512 (by omega) (by omega) VV hVsh] at key2
+    exact key2
+  -- swiglu / linear / view shapes for the gate-mul path
+  have hsw0sh : (fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV)).shape = [2048, 512] :=
+    (fw_swiglu_shape _ _).trans hc0VV
+  have hsw1sh : (fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV)).shape = [2048, 512] :=
+    (fw_swiglu_shape _ _).trans hc1VV
+  have hwd : (initPM 4784).shape = [1024, 512] := h_ss_pm 4784 [1024,512] (by decide)
+  have hlin0 : (fw_linear (fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV)) (initPM 4784)).shape = [2048, 1024] := by
+    unfold fw_linear; rw [hsw0sh, hwd]; simp [Tensor.mkShape]
+  have hlin1 : (fw_linear (fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV)) (initPM 4784)).shape = [2048, 1024] := by
+    unfold fw_linear; rw [hsw1sh, hwd]; simp [Tensor.mkShape]
+  have hview0 : (fw_view [2048, 1024] (fw_linear (fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV)) (initPM 4784))).shape = [2048, 1024] := view_sh _ _
+  have hview1 : (fw_view [2048, 1024] (fw_linear (fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV)) (initPM 4784))).shape = [2048, 1024] := view_sh _ _
+  have hsig0 : (fw_sigmoid (chunkPrimDimN 0 2 0 GATE)).shape = [2048, 1] := (sigmoid_sh _).trans hc0GATE
+  have hsig1 : (fw_sigmoid (chunkPrimDimN 0 2 1 GATE)).shape = [2048, 1] := (sigmoid_sh _).trans hc1GATE
+  have hGMeq : elemwiseMul (fw_sigmoid GATE) (fw_view [4096, 1024] (fw_linear (fw_swiglu UV VV) (initPM 4784)))
+      = allGatherPrimDimN 0 2 0
+          [elemwiseMul (fw_sigmoid (chunkPrimDimN 0 2 0 GATE))
+            (fw_view [2048, 1024] (fw_linear (fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV)) (initPM 4784))),
+           elemwiseMul (fw_sigmoid (chunkPrimDimN 0 2 1 GATE))
+            (fw_view [2048, 1024] (fw_linear (fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV)) (initPM 4784)))] := by
+    rw [hsg, hsw]
+    rw [fw_linear_allGather0_commute_2_of
+          (fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV))
+          (fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV))
+          (initPM 4784) 2048 512 1024 (by omega) (by omega) (by omega) hsw0sh hsw1sh hwd]
+    rw [show ([4096, 1024] : Shape) = [2048 * 2, 1024] from rfl]
+    rw [fw_view_allGather0_commute_2_of
+          (fw_linear (fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV)) (initPM 4784))
+          (fw_linear (fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV)) (initPM 4784))
+          2048 1024 (by omega) hlin0 hlin1]
+    rw [fw_mul_allGather0_commute_2_of_broadcast
+          (fw_sigmoid (chunkPrimDimN 0 2 0 GATE)) (fw_sigmoid (chunkPrimDimN 0 2 1 GATE))
+          (fw_view [2048, 1024] (fw_linear (fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV)) (initPM 4784)))
+          (fw_view [2048, 1024] (fw_linear (fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV)) (initPM 4784)))
+          2048 1024 (by omega) (by omega) (by omega) (by omega) (by omega) hsig0 hsig1 hview0 hview1]
+  -- MOE / GM per-rank shapes for the outer add commute
+  have hMOE0 : (fw_all2all_moe_gmm_full (chunkPrimDimN 0 2 0 RMS)
+      (fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).fst (fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).snd.fst
+      [initPM 7673, initPM 7674] [initPM 7675, initPM 7676] 64 8 ((((10 : Nat) : Scalar)))).shape = [2048, 1024] :=
+    moe_full_eq _ _ _ _ _ _ _ _ 2048 1024 hc0RMS
+  have hMOE1 : (fw_all2all_moe_gmm_full (chunkPrimDimN 0 2 1 RMS)
+      (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).fst (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).snd.fst
+      [initPM 7673, initPM 7674] [initPM 7675, initPM 7676] 64 8 ((((10 : Nat) : Scalar)))).shape = [2048, 1024] :=
+    moe_full_eq _ _ _ _ _ _ _ _ 2048 1024 hc1RMS
+  have hGM0 : (elemwiseMul (fw_sigmoid (chunkPrimDimN 0 2 0 GATE))
+      (fw_view [2048, 1024] (fw_linear (fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV)) (initPM 4784)))).shape = [2048, 1024] :=
+    ewmul_bc _ _ 2048 1024 (by omega) hsig0 hview0
+  have hGM1 : (elemwiseMul (fw_sigmoid (chunkPrimDimN 0 2 1 GATE))
+      (fw_view [2048, 1024] (fw_linear (fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV)) (initPM 4784)))).shape = [2048, 1024] :=
+    ewmul_bc _ _ 2048 1024 (by omega) hsig1 hview1
+  have hT0 : (elemwiseAdd
+      (fw_all2all_moe_gmm_full (chunkPrimDimN 0 2 0 RMS)
+        (fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).fst (fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).snd.fst
+        [initPM 7673, initPM 7674] [initPM 7675, initPM 7676] 64 8 ((((10 : Nat) : Scalar))))
+      (elemwiseMul (fw_sigmoid (chunkPrimDimN 0 2 0 GATE))
+        (fw_view [2048, 1024] (fw_linear (fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV)) (initPM 4784))))).shape = [2048, 1024] :=
+    ewadd_eq _ _ [2048,1024] hMOE0 hGM0
+  have hT1 : (elemwiseAdd
+      (fw_all2all_moe_gmm_full (chunkPrimDimN 0 2 1 RMS)
+        (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).fst (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).snd.fst
+        [initPM 7673, initPM 7674] [initPM 7675, initPM 7676] 64 8 ((((10 : Nat) : Scalar))))
+      (elemwiseMul (fw_sigmoid (chunkPrimDimN 0 2 1 GATE))
+        (fw_view [2048, 1024] (fw_linear (fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV)) (initPM 4784))))).shape = [2048, 1024] :=
+    ewadd_eq _ _ [2048,1024] hMOE1 hGM1
+  -- fold the RHS gather back into the full residual step
+  rw [← fw_add_allGather0_commute_2_2048_1024 (chunkPrimDimN 0 2 0 RES) (chunkPrimDimN 0 2 1 RES) _ _ hc0RES hc1RES hT0 hT1]
+  rw [allGather0_reconstruct_chunks_2d 2048 1024 (by omega) (by omega) RES hRESsh]
+  rw [← fw_add_allGather0_commute_2_2048_1024 _ _ _ _ hMOE0 hMOE1 hGM0 hGM1]
+  -- bridge SM plain moe to the split (allGather) form via defeq (full unfolds to plain on gathered weights)
+  have keyb : fw_all2all_moe_gmm RMS (fw_topk_routing NL 8 64).1 (fw_topk_routing NL 8 64).2.1
+        (allGatherPrimDimN 0 2 0 [initPM 7673, initPM 7674]) (allGatherPrimDimN 0 2 0 [initPM 7675, initPM 7676]) 64 0 64 8 (((10 : Nat) : Scalar))
+      = allGatherPrimDimN 0 2 0
+          [fw_all2all_moe_gmm_full (chunkPrimDimN 0 2 0 RMS) (fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).1
+              (fw_topk_routing (chunkPrimDimN 0 2 0 NL) 8 64).2.1 [initPM 7673, initPM 7674] [initPM 7675, initPM 7676] 64 8 (((10 : Nat) : Scalar)),
+            fw_all2all_moe_gmm_full (chunkPrimDimN 0 2 1 RMS) (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).1
+              (fw_topk_routing (chunkPrimDimN 0 2 1 NL) 8 64).2.1 [initPM 7673, initPM 7674] [initPM 7675, initPM 7676] 64 8 (((10 : Nat) : Scalar))] := key
+  rw [keyb, hGMeq]
+
+end RouterLayerInduction
+
 
 
 end TrainVerify.Denote.GeneratedPatterns
