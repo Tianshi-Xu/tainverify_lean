@@ -1,4 +1,4 @@
-import denote.yoco_goals.Pattern_3_faithful
+import denote.yoco_goals.Pattern_3
 open TrainVerify.Denote.GeneratedPatterns
 #print axioms fw_all2all_moe_gmm_full_split_commute_2
 #print axioms fw_add_allGather0_commute_2_2048_1024

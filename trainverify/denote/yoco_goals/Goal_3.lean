@@ -1,21 +1,24 @@
 /-
-  Goal_3_faithful.lean — 2026-07-06 upstream-reshape-fidelity variant of Goal_3.
+  Goal_3.lean — YOCO MoE Pattern_3 graph declaration under
+  upstream-reshape-fidelity semantics.
 
-  This file CLONES the entire legacy Goal_3.lean node structure verbatim
-  (including the intermediateGoal_11875 half-cut chain: PM's
-  `rms_norm(14644,4704)->4705` + `multiref(4705)->[11875..11879]` per layer),
-  then patches ONLY the FW_reshape struct literals to carry
-  `params := [target_shape]` so Denote runs faithful `fw_view target x` semantics
-  rather than identity.
+  This file defines `sm_goal_3` / `pm_goal_3` with FW_reshape struct literals
+  that carry `params := [target_shape]`, so Denote runs faithful
+  `fw_view target x` semantics rather than treating reshape as identity.
 
-  Rationale: previous slicer (build_goal3_faithful.py backward-reachability
-  version) dropped the rms_norm+multiref chain because they connect to SM via
-  init goals (intermediateGoal_11875), not via graph edges. That produced a
-  half-cut inconsistency (SM computes through attention, PM reads unconstrained
-  init leaf 11875). Cloning legacy verbatim restores the correct cut structure.
+  History: an earlier "identity-reshape" variant of this file existed and made
+  `goal_3_stmt_cut_ringAttn` mathematically false at layers ≥ 2; it was
+  removed in 2026-07-08. `git log` retains the old content if needed.
 
-  Namespace: `TrainVerify.Denote.GeneratedGoalsFaithful` (disambiguated from
-  legacy `TrainVerify.Denote.GeneratedGoalsFaithful`).
+  Structure notes:
+  - Includes the `intermediateGoal_11875` half-cut chain: PM's
+    `rms_norm(14644,4704)->4705` + `multiref(4705)->[11875..11879]` per layer.
+    (Earlier backward-reachability slicers dropped this chain because they
+    connect to SM via init goals, not graph edges, producing a half-cut
+    inconsistency where SM computes through attention but PM reads unconstrained
+    init leaf 11875. Clone-legacy-verbatim restores the correct cut structure.)
+
+  Namespace: `TrainVerify.Denote.GeneratedGoals` (aligns with Goal_1/2/4/5).
 -/
 import denote.GeneratedYOCOMoE
 
@@ -24,9 +27,9 @@ set_option maxRecDepth 100000
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 
-namespace TrainVerify.Denote.GeneratedGoalsFaithful
+namespace TrainVerify.Denote.GeneratedGoals
 
-def sm_goal_3_faithful : GraphDecl := by
+def sm_goal_3 : GraphDecl := by
   refine { numRanks := 1, nodes := ?_ }
   exact [
     { rank := 0, op := "OpName.FW_float", ins := [4680], outs := [4681] },
@@ -934,7 +937,7 @@ def sm_goal_3_faithful : GraphDecl := by
     { rank := 0, op := "OpName.FW_stack", ins := [4710, 4764, 4818, 4872, 4926, 4980, 5034, 5088, 5142, 5196, 5250, 5304, 5361, 5410, 5459, 5508, 5557, 5606, 5655, 5704, 5753, 5802, 5851, 5900], outs := [4675] },
   ]
 
-def pm_goal_3_faithful : GraphDecl := by
+def pm_goal_3 : GraphDecl := by
   refine { numRanks := 2, nodes := ?_ }
   exact [
     { rank := 0, op := "OpName.FW_multiref", ins := [4691], outs := [11853, 11854, 11855, 11856, 11857, 11858, 11859, 11860, 11861, 11862, 11863, 11864], params := [12] },
@@ -2805,7 +2808,7 @@ def pm_goal_3_faithful : GraphDecl := by
     { rank := 0, op := "OpName.AllGatherPrim", ins := [11729, 11730], outs := [4675], params := [1] },
   ]
 
-def sm_goal_3_faithfulInitShapes : List (Tid × Shape) := [
+def sm_goal_3InitShapes : List (Tid × Shape) := [
   (4680, [4096, 1024]),
   (4682, [1024]),
   (4684, [16, 64, 1024]),
@@ -3156,9 +3159,9 @@ def sm_goal_3_faithfulInitShapes : List (Tid × Shape) := [
   (5897, [64, 1024]),
 ]
 
-def sm_goal_3_faithfulInitEnv : ShapeEnv := shapeEnvOfList sm_goal_3_faithfulInitShapes
+def sm_goal_3InitEnv : ShapeEnv := shapeEnvOfList sm_goal_3InitShapes
 
-def pm_goal_3_faithfulInitShapes : List (Tid × Shape) := [
+def pm_goal_3InitShapes : List (Tid × Shape) := [
   (4680, [4096, 1024]),
   (4682, [1024]),
   (4684, [16, 64, 1024]),
@@ -3555,22 +3558,22 @@ def pm_goal_3_faithfulInitShapes : List (Tid × Shape) := [
   (11460, [32, 1024, 512]),
 ]
 
-def pm_goal_3_faithfulInitEnv : ShapeEnv := shapeEnvOfList pm_goal_3_faithfulInitShapes
+def pm_goal_3InitEnv : ShapeEnv := shapeEnvOfList pm_goal_3InitShapes
 
 def goal_3_prereqs : List LineageGoal := [goal_5]
 def goal_3_cut_initGoals : List LineageGoal := initGoals ++ goal_3_prereqs
 
 def goal_3_stmt_cut : Prop :=
-  CoarseLineageHoldsWithInit sm_goal_3_faithful pm_goal_3_faithful goal_3 sm_goal_3_faithfulInitEnv pm_goal_3_faithfulInitEnv goal_3_cut_initGoals
+  CoarseLineageHoldsWithInit sm_goal_3 pm_goal_3 goal_3 sm_goal_3InitEnv pm_goal_3InitEnv goal_3_cut_initGoals
 
 
 /-- Ring-attention-aware goal statement — mirror of Pattern_3.lean's
     `goal_3_stmt_cut_ringAttn`, adapted to the faithful graph. Uses
     `CoarseLineageHoldsWithInit_ringAttn` for the zigzag ring-attn semantics. -/
 def goal_3_stmt_cut_ringAttn : Prop :=
-  CoarseLineageHoldsWithInit_ringAttn sm_goal_3_faithful pm_goal_3_faithful goal_3
-    sm_goal_3_faithfulInitEnv pm_goal_3_faithfulInitEnv goal_3_cut_initGoals
+  CoarseLineageHoldsWithInit_ringAttn sm_goal_3 pm_goal_3 goal_3
+    sm_goal_3InitEnv pm_goal_3InitEnv goal_3_cut_initGoals
 
 
-end TrainVerify.Denote.GeneratedGoalsFaithful
+end TrainVerify.Denote.GeneratedGoals
 
