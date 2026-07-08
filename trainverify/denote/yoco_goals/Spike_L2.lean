@@ -570,6 +570,137 @@ theorem denote_pm_goal_3_faithful_11904 (initPM : Store) :
 
 #print axioms denote_pm_goal_3_faithful_11904
 
+-- Sub-commute A: SM 4768 (MoE) = allGather [PM 7677, PM 7678]
+-- This is the E1 crux. Reduces via:
+--   1. Unfold both sides via my deep unfolds
+--   2. Bridge SM 7471/4763/4764 to their gathered-chunk PM analogues
+--   3. Apply fw_all2all_moe_gmm_full_split_commute_2
+set_option maxHeartbeats 32000000 in
+set_option maxRecDepth 20000 in
+theorem sm_pm_moe_gmm_L1_commute
+    (initSM initPM : Store)
+    (h_ss_sm : StoreShapesHold initSM sm_goal_3_faithfulInitEnv)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3_faithfulInitEnv)
+    (hInit : InitGoalsHold pm_goal_3_faithful.numRanks goal_3_cut_initGoals initSM initPM) :
+    denoteGraph_ringAttn sm_goal_3_faithful initSM 4768
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3_faithful initPM 7677,
+           denoteGraph_ringAttn pm_goal_3_faithful initPM 7678] := by
+  -- unfold both sides
+  rw [denote_sm_goal_3_faithful_4768, denote_pm_goal_3_faithful_7677, denote_pm_goal_3_faithful_7678]
+  -- Bridge SM sub-terms to their PM/shard counterparts
+  rw [denote_sm_goal_3_faithful_7471, denote_sm_goal_3_faithful_4763, denote_sm_goal_3_faithful_4764]
+  rw [denote_pm_goal_3_faithful_11977, denote_pm_goal_3_faithful_11978,
+      denote_pm_goal_3_faithful_11904,
+      denote_pm_goal_3_faithful_7667, denote_pm_goal_3_faithful_7669,
+      denote_pm_goal_3_faithful_7668, denote_pm_goal_3_faithful_7670,
+      denote_pm_goal_3_faithful_7665, denote_pm_goal_3_faithful_7666,
+      denote_sm_goal_3_faithful_4762, denote_pm_goal_3_faithful_4762]
+  -- SM 4757 = PM 4757 via carry
+  rw [sm_pm_carry_4757_commute initSM initPM h_ss_sm h_ss_pm hInit]
+  -- initSM 4758 = initPM 4758, initSM 4761 = initPM 4761
+  have hII : InitGoalsHold pm_goal_3_faithful.numRanks initGoals initSM initPM :=
+    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have h4758 : initSM 4758 = initPM 4758 := hb initGoal_4758 (by decide) rfl
+  have h4761 : initSM 4761 = initPM 4761 := hb initGoal_4761 (by decide) rfl
+  rw [h4758, h4761]
+  -- Weight reconstructions (2-shard MoE weights)
+  have h4766 : initSM 4766 = allGatherPrimDimN 0 2 0 [initPM 7673, initPM 7674] := by
+    have hg := hII initGoal_4766 (by decide)
+    unfold InitGoalHolds at hg
+    obtain ⟨_, _, hval⟩ := hg
+    simp only [initGoal_4766, List.map] at hval
+    rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3_faithful.numRanks 0 (initPM 7673) (initPM 7674) []
+        (by rw [h_ss_pm 7673 [32,1024,1024] (by decide)]; decide)] at hval
+    rw [show pm_goal_3_faithful.numRanks = 2 from rfl] at hval
+    exact hval
+  have h4767 : initSM 4767 = allGatherPrimDimN 0 2 0 [initPM 7675, initPM 7676] := by
+    have hg := hII initGoal_4767 (by decide)
+    unfold InitGoalHolds at hg
+    obtain ⟨_, _, hval⟩ := hg
+    simp only [initGoal_4767, List.map] at hval
+    rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3_faithful.numRanks 0 (initPM 7675) (initPM 7676) []
+        (by rw [h_ss_pm 7675 [32,1024,512] (by decide)]; decide)] at hval
+    rw [show pm_goal_3_faithful.numRanks = 2 from rfl] at hval
+    exact hval
+  rw [h4766, h4767]
+  rw [show pm_goal_3_faithful.numRanks = 2 from rfl]
+  -- Now goal is fw_all2all_moe_gmm on gathered = allGather of fw_all2all_moe_gmm_full per-shard
+  -- This matches fw_all2all_moe_gmm_full_split_commute_2 (with reconstruction from chunks)
+  set RMS_PM := fw_rms_norm (denoteGraph_ringAttn pm_goal_3_faithful initPM 4757) (initPM 4758) with hRMSpm
+  set NL_PM := fw_norm_linear RMS_PM (initPM 4761) with hNLpm
+  have hRMSpm_sh : RMS_PM.shape = [4096, 1024] := by
+    rw [hRMSpm, rms_sh]
+    exact RouterShapesHelpers.hs_4757 initPM h_ss_pm
+  have hNLpm_sh : NL_PM.shape = [4096, 64] := by
+    rw [hNLpm]
+    exact nl_sh 4096 1024 64 _ _ hRMSpm_sh (h_ss_pm 4761 [64,1024] (by decide))
+  -- chunk shapes
+  have hc0_RMS : (chunkPrimDimN 0 2 0 RMS_PM).shape = [2048, 1024] :=
+    chunk0_2 0 _ 4096 1024 hRMSpm_sh
+  have hc1_RMS : (chunkPrimDimN 0 2 1 RMS_PM).shape = [2048, 1024] :=
+    chunk0_2 1 _ 4096 1024 hRMSpm_sh
+  have hc0_NL : (chunkPrimDimN 0 2 0 NL_PM).shape = [2048, 64] :=
+    chunk0_2 0 _ 4096 64 hNLpm_sh
+  have hc1_NL : (chunkPrimDimN 0 2 1 NL_PM).shape = [2048, 64] :=
+    chunk0_2 1 _ 4096 64 hNLpm_sh
+  -- routing shapes
+  have hrp0 : (fw_topk_routing (chunkPrimDimN 0 2 0 NL_PM) 8 64).fst.shape = [2048, 64] :=
+    fw_topk_routing_fst_shape (chunkPrimDimN 0 2 0 NL_PM) 8 64 2048 (by rw [hc0_NL]; rfl)
+  have hrp1 : (fw_topk_routing (chunkPrimDimN 0 2 1 NL_PM) 8 64).fst.shape = [2048, 64] :=
+    fw_topk_routing_fst_shape (chunkPrimDimN 0 2 1 NL_PM) 8 64 2048 (by rw [hc1_NL]; rfl)
+  have hrm0 : (fw_topk_routing (chunkPrimDimN 0 2 0 NL_PM) 8 64).snd.fst.shape = [2048, 64] :=
+    topk_sf_sh (chunkPrimDimN 0 2 0 NL_PM) 2048 8 64 hc0_NL
+  have hrm1 : (fw_topk_routing (chunkPrimDimN 0 2 1 NL_PM) 8 64).snd.fst.shape = [2048, 64] :=
+    topk_sf_sh (chunkPrimDimN 0 2 1 NL_PM) 2048 8 64 hc1_NL
+  -- weight shapes
+  have hw73 : (initPM 7673).shape = [32,1024,1024] := h_ss_pm 7673 [32,1024,1024] (by decide)
+  have hw74 : (initPM 7674).shape = [32,1024,1024] := h_ss_pm 7674 [32,1024,1024] (by decide)
+  have hw75 : (initPM 7675).shape = [32,1024,512] := h_ss_pm 7675 [32,1024,512] (by decide)
+  have hw76 : (initPM 7676).shape = [32,1024,512] := h_ss_pm 7676 [32,1024,512] (by decide)
+  -- normalize k dim of NL
+  have hk_full : (NL_PM.shape.reverse.head?).getD 1 = 64 := by rw [hNLpm_sh]; rfl
+  have hk_c0 : ((chunkPrimDimN 0 2 0 NL_PM).shape.reverse.head?).getD 1 = 64 := by rw [hc0_NL]; rfl
+  have hk_c1 : ((chunkPrimDimN 0 2 1 NL_PM).shape.reverse.head?).getD 1 = 64 := by rw [hc1_NL]; rfl
+  rw [hk_full, hk_c0, hk_c1]
+  -- topk_fst / topk_snd_fst chunk commutes: fw_topk_routing NL fst = allGather [chunk fsts]
+  have hfstchunk : (fw_topk_routing NL_PM 8 64).fst =
+      allGatherPrimDimN 0 2 0
+        [(fw_topk_routing (chunkPrimDimN 0 2 0 NL_PM) 8 64).fst,
+         (fw_topk_routing (chunkPrimDimN 0 2 1 NL_PM) 8 64).fst] := by
+    have hchunk := allGather0_reconstruct_chunks_2d 2048 64 (by omega) (by omega) NL_PM hNLpm_sh
+    conv_lhs => rw [← hchunk]
+    rw [GeneratedPatterns.fw_topk_routing_fst_allGather0_commute_2_of
+          (chunkPrimDimN 0 2 0 NL_PM) (chunkPrimDimN 0 2 1 NL_PM)
+          2048 8 64 (by omega) (by omega) hc0_NL hc1_NL]
+  have hsndchunk : (fw_topk_routing NL_PM 8 64).snd.fst =
+      allGatherPrimDimN 0 2 0
+        [(fw_topk_routing (chunkPrimDimN 0 2 0 NL_PM) 8 64).snd.fst,
+         (fw_topk_routing (chunkPrimDimN 0 2 1 NL_PM) 8 64).snd.fst] :=
+    topk_snd_fst_chunk_commute NL_PM 2048 8 64 (by omega) (by omega) hNLpm_sh
+  -- Apply the split_commute lemma
+  have key := GeneratedPatterns.fw_all2all_moe_gmm_full_split_commute_2
+    (chunkPrimDimN 0 2 0 RMS_PM) (chunkPrimDimN 0 2 1 RMS_PM)
+    (fw_topk_routing (chunkPrimDimN 0 2 0 NL_PM) 8 64).fst (fw_topk_routing (chunkPrimDimN 0 2 1 NL_PM) 8 64).fst
+    (fw_topk_routing (chunkPrimDimN 0 2 0 NL_PM) 8 64).snd.fst (fw_topk_routing (chunkPrimDimN 0 2 1 NL_PM) 8 64).snd.fst
+    (initPM 7673) (initPM 7674) (initPM 7675) (initPM 7676)
+    2048 1024 32 8 1024 512 ((((10 : Nat) : Scalar)))
+    (by omega) (by omega) (by omega) (by omega) (by omega) rfl
+    hc0_RMS hc1_RMS hrp0 hrp1 hrm0 hrm1 hw73 hw74 hw75 hw76
+  rw [allGather0_reconstruct_chunks_2d 2048 1024 (by omega) (by omega) RMS_PM hRMSpm_sh,
+      ← hfstchunk, ← hsndchunk] at key
+  exact key
+
+#print axioms sm_pm_moe_gmm_L1_commute
+
 set_option maxHeartbeats 16000000 in
 set_option maxRecDepth 20000 in
 theorem sm_pm_carry_4790_commute
