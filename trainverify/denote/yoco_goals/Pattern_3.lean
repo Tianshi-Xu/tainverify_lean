@@ -20868,6 +20868,36 @@ theorem router_commute_of_nl_eq (NL_SM NL_PM : Tensor)
         (chunkPrimDimN 0 2 0 NL_SM) (chunkPrimDimN 0 2 1 NL_SM)
         2048 8 64 (by omega) (by omega) (hc 0) (hc 1)]
 
+/-- Extract `initSM tid = initPM tid` for a singleton-tps init goal.
+
+    This is the layer-agnostic version of the 10-line boilerplate
+      `have hII := fun g hg => hInit g (mem_append_left ...)`
+      `have hb := ... obtain ⟨_, _, hval⟩ ... simpa [reconstructWithDim_singleton] using hval`
+      `have hXXXX := hb initGoal_XXXX (by decide) rfl`
+    that occurs 17+ times across L0/L1 proofs. Every layer-k weight init goal
+    (rms/pos/cos/q/k/v projection weights, MoE experts, etc.) is a singleton
+    (`tps = [{ rank := 0, tid := ts }]`), so a single call suffices:
+
+      have h4682 : initSM 4682 = initPM 4682 :=
+        singleton_init_eq initSM initPM hInit initGoal_4682 (by decide) rfl
+
+    Requirements for the caller:
+    - `g ∈ initGoals` (proved by `by decide` for concrete named `initGoal_XXXX`)
+    - `g.tps = [{ rank := 0, tid := g.ts }]` (proved by `rfl` for singletons).
+-/
+theorem singleton_init_eq (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (g : LineageGoal) (hmem : g ∈ initGoals)
+    (hshape : g.tps = [{ rank := 0, tid := g.ts }]) :
+    initSM g.ts = initPM g.ts := by
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    fun g' hg' => hInit g' (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg')
+  have hgh := hII g hmem
+  unfold InitGoalHolds at hgh
+  obtain ⟨_, _, hval⟩ := hgh
+  rw [hshape] at hval
+  simpa [List.map, reconstructWithDim_singleton] using hval
+
 /-! ### L0 denote-unfold template (kernel-clean, validated reduction infra).
 
     Concrete worked example of the per-layer "reduction infra": reduce a router
