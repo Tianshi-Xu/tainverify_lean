@@ -19,7 +19,7 @@
   false at layers ≥ 2 under identity reshape). Removed 2026-07-08 in favor of
   this faithful version. See git log for the old content.
 
-  Namespace: `TrainVerify.Denote.GeneratedPatterns.Pattern3`.
+  Namespace: `TrainVerify.Denote.GeneratedPatterns` (aligns with Pattern_1/2/4/5).
 -/
 import denote.yoco_goals.Goal_3
 import denote.yoco_goals.Pattern_1  -- reuse fw_topk_routing_snd_fst_allGather0_commute_2_of
@@ -30,7 +30,7 @@ open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.GeneratedGoals
 
-namespace TrainVerify.Denote.GeneratedPatterns.Pattern3
+namespace TrainVerify.Denote.GeneratedPatterns
 
 /-! ## Layer-step commute skeleton
 
@@ -26337,12 +26337,24 @@ theorem prove_goal_3 : goal_3_stmt_cut_ringAttn :=
   goal_3_stmt_cut_ringAttn_of_router_commutes
     (fun initSM initPM hSM hPM hInit => sm_pm_router_commute_all initSM initPM hSM hPM hInit)
 
-/-- Pattern 3 discharge (in the faithful variant). Mirrors the old pattern_3_target
-    binding used in MainTheorem.lean; we bind to the goal_3_stmt_cut_ringAttn Prop
-    from Goal_3 namespace. -/
-def pattern_3_target : Prop := goal_3_stmt_cut_ringAttn
+def pattern_3_goalIds : List Nat := [3]
 
-theorem prove_pattern_3 : pattern_3_target := prove_goal_3
+/-- Pattern 3 discharge target. Aligns with Pattern_1/2/4/5's inductive scheme
+    so that `Instances.lean` can uniformly project `prove_pattern_N pattern_N_target.goal_N`.
+
+    We bind to `goal_3_stmt_cut_ringAttn` (the ring-attention-aware variant)
+    because Pattern_3's cross-rank `FW_attn_zigzag` op needs ring-attn semantics
+    that non-ring `denoteGraph` cannot model faithfully. -/
+inductive pattern_3_target : Prop → Prop
+  | goal_3 : pattern_3_target goal_3_stmt_cut_ringAttn
+
+def pattern_3_stmt : Prop :=
+  ∀ {target : Prop}, pattern_3_target target → target
+
+theorem prove_pattern_3 : pattern_3_stmt := by
+  intro _ hpat
+  cases hpat
+  exact prove_goal_3
 
 
 
@@ -27925,4 +27937,4 @@ theorem sm_pm_carry_4790_commute
           (denoteGraph_ringAttn pm_goal_3 initPM 7752)) hc0 hc1 hadd0 hadd1]
 
 
-end TrainVerify.Denote.GeneratedPatterns.Pattern3
+end TrainVerify.Denote.GeneratedPatterns
