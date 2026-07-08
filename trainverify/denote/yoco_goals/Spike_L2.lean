@@ -1403,6 +1403,8 @@ theorem denote_sm_goal_3_faithful_7483 (initSM : Store) :
 #print axioms denote_sm_goal_3_faithful_7483
 
 -- Restore sub-commute B theorem with sorry — now with SM 7475/7479/7483 helpers available for use
+set_option maxHeartbeats 64000000 in
+set_option maxRecDepth 20000 in
 theorem sm_pm_gate_mul_L1_commute
     (initSM initPM : Store)
     (h_ss_sm : StoreShapesHold initSM sm_goal_3_faithfulInitEnv)
@@ -1412,6 +1414,49 @@ theorem sm_pm_gate_mul_L1_commute
       = allGatherPrimDimN 0 2 0
           [denoteGraph_ringAttn pm_goal_3_faithful initPM 7751,
            denoteGraph_ringAttn pm_goal_3_faithful initPM 7752] := by
+  -- Unfold both sides
+  rw [denote_sm_goal_3_faithful_4787,
+      denote_pm_goal_3_faithful_7751, denote_pm_goal_3_faithful_7752]
+  -- Bridge SM 7475/7479/7483 → fw_rms_norm form
+  rw [denote_sm_goal_3_faithful_7475, denote_sm_goal_3_faithful_7479, denote_sm_goal_3_faithful_7483]
+  -- Bridge PM 4772/4777/4781 → fw_view/fw_linear/fw_view/fw_rms_norm form
+  rw [denote_pm_goal_3_faithful_4772, denote_pm_goal_3_faithful_4777, denote_pm_goal_3_faithful_4781]
+  -- SM 4757 = PM 4757
+  rw [sm_pm_carry_4757_commute initSM initPM h_ss_sm h_ss_pm hInit]
+  -- initSM ↔ initPM for 4758/4770/4775/4779/4784
+  have hII : InitGoalsHold pm_goal_3_faithful.numRanks initGoals initSM initPM :=
+    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have h4758 : initSM 4758 = initPM 4758 := hb initGoal_4758 (by decide) rfl
+  have h4770 : initSM 4770 = initPM 4770 := hb initGoal_4770 (by decide) rfl
+  have h4775 : initSM 4775 = initPM 4775 := hb initGoal_4775 (by decide) rfl
+  have h4779 : initSM 4779 = initPM 4779 := hb initGoal_4779 (by decide) rfl
+  have h4784 : initSM 4784 = initPM 4784 := hb initGoal_4784 (by decide) rfl
+  rw [h4758, h4770, h4775, h4779, h4784]
+  rw [show pm_goal_3_faithful.numRanks = 2 from rfl]
+  -- Now: LHS and RHS are structurally very similar.
+  -- LHS: elemwiseMul (fw_sigmoid (fw_view [4096, 1] (fw_linear (fw_view [4096, 1024] RMS_PM) (initPM 4770))))
+  --                 (fw_view [4096, 1024] (fw_linear (fw_view [4096, 512] (fw_swiglu
+  --                    (fw_view [4096, 512] (fw_linear (fw_view [4096, 1024] RMS_PM) (initPM 4775)))
+  --                    (fw_view [4096, 512] (fw_linear (fw_view [4096, 1024] RMS_PM) (initPM 4779)))))
+  --                   (initPM 4784)))
+  -- RHS: allGatherPrimDimN 0 2 0
+  --   [elemwiseMul (fw_sigmoid (chunkPrimDimN 0 2 0 GATE_PM))
+  --                (fw_view [2048, 1024] (fw_linear (fw_view [2048, 512] (fw_swiglu (chunkPrimDimN 0 2 0 UV_PM) (chunkPrimDimN 0 2 0 VV_PM))) (initPM 4784))),
+  --    elemwiseMul (fw_sigmoid (chunkPrimDimN 0 2 1 GATE_PM))
+  --                (fw_view [2048, 1024] (fw_linear (fw_view [2048, 512] (fw_swiglu (chunkPrimDimN 0 2 1 UV_PM) (chunkPrimDimN 0 2 1 VV_PM))) (initPM 4784)))]
+  -- where GATE_PM = fw_view [4096, 1] (fw_linear (fw_view [4096, 1024] RMS_PM) initPM 4770)
+  --       UV_PM = fw_view [4096, 512] (fw_linear (fw_view [4096, 1024] RMS_PM) initPM 4775)
+  --       VV_PM = fw_view [4096, 512] (fw_linear (fw_view [4096, 1024] RMS_PM) initPM 4779)
+  -- Sub-commute B assembly deferred: 5 nested allGather commutes needed.
+  -- Building blocks all in place; assembly is mechanical but long.
   sorry
 
 #print axioms sm_pm_gate_mul_L1_commute
