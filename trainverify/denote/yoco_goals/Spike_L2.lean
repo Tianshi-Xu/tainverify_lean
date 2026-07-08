@@ -1529,7 +1529,54 @@ theorem sm_pm_carry_4790_commute
       = allGatherPrimDimN 0 2 0
           [denoteGraph_ringAttn pm_goal_3_faithful initPM 7765,
            denoteGraph_ringAttn pm_goal_3_faithful initPM 7766] := by
-  sorry
+  -- Unfold LHS residual chain: SM 4790 = SM 4757 + (SM 4768 + SM 4787)
+  rw [denote_sm_goal_3_faithful_4790_shallow, denote_sm_goal_3_faithful_4788_shallow]
+  -- Unfold RHS shards: PM 776x = chunk (PM 4757) + (PM 76xx + PM 775x)
+  rw [denote_pm_goal_3_faithful_7765_shallow, denote_pm_goal_3_faithful_7766_shallow,
+      denote_pm_goal_3_faithful_7755_shallow, denote_pm_goal_3_faithful_7756_shallow]
+  -- Apply the three sub-commutes
+  rw [sm_pm_carry_4757_commute initSM initPM h_ss_sm h_ss_pm hInit,
+      sm_pm_moe_gmm_L1_commute initSM initPM h_ss_sm h_ss_pm hInit,
+      sm_pm_gate_mul_L1_commute initSM initPM h_ss_sm h_ss_pm hInit]
+  rw [show pm_goal_3_faithful.numRanks = 2 from rfl]
+  -- Shapes of the per-shard pieces
+  have h77 : (denoteGraph_ringAttn pm_goal_3_faithful initPM 7677).shape = [2048, 1024] :=
+    RouterShapesHelpers.hs_7677 initPM h_ss_pm
+  have h78 : (denoteGraph_ringAttn pm_goal_3_faithful initPM 7678).shape = [2048, 1024] :=
+    RouterShapesHelpers.hs_7678 initPM h_ss_pm
+  have h51 : (denoteGraph_ringAttn pm_goal_3_faithful initPM 7751).shape = [2048, 1024] :=
+    RouterShapesHelpers.hs_7751 initPM h_ss_pm
+  have h52 : (denoteGraph_ringAttn pm_goal_3_faithful initPM 7752).shape = [2048, 1024] :=
+    RouterShapesHelpers.hs_7752 initPM h_ss_pm
+  have h4757sh : (denoteGraph_ringAttn pm_goal_3_faithful initPM 4757).shape = [4096, 1024] :=
+    RouterShapesHelpers.hs_4757 initPM h_ss_pm
+  have hc0 : (chunkPrimDimN 0 2 0 (denoteGraph_ringAttn pm_goal_3_faithful initPM 4757)).shape = [2048, 1024] :=
+    chunk0_2 0 _ 4096 1024 h4757sh
+  have hc1 : (chunkPrimDimN 0 2 1 (denoteGraph_ringAttn pm_goal_3_faithful initPM 4757)).shape = [2048, 1024] :=
+    chunk0_2 1 _ 4096 1024 h4757sh
+  have hadd0 : (elemwiseAdd (denoteGraph_ringAttn pm_goal_3_faithful initPM 7677)
+      (denoteGraph_ringAttn pm_goal_3_faithful initPM 7751)).shape = [2048, 1024] :=
+    ewadd_eq _ _ [2048, 1024] h77 h51
+  have hadd1 : (elemwiseAdd (denoteGraph_ringAttn pm_goal_3_faithful initPM 7678)
+      (denoteGraph_ringAttn pm_goal_3_faithful initPM 7752)).shape = [2048, 1024] :=
+    ewadd_eq _ _ [2048, 1024] h78 h52
+  -- Inner add commute: (allGather MoE) + (allGather gate·mul) = allGather of per-shard adds
+  rw [GeneratedPatterns.fw_add_allGather0_commute_2_2048_1024
+        (denoteGraph_ringAttn pm_goal_3_faithful initPM 7677)
+        (denoteGraph_ringAttn pm_goal_3_faithful initPM 7678)
+        (denoteGraph_ringAttn pm_goal_3_faithful initPM 7751)
+        (denoteGraph_ringAttn pm_goal_3_faithful initPM 7752) h77 h78 h51 h52]
+  -- Reconstruct PM 4757 residual as allGather of its two chunks (LHS only)
+  conv_lhs => rw [← allGather0_reconstruct_chunks_2d 2048 1024 (by omega) (by omega)
+        (denoteGraph_ringAttn pm_goal_3_faithful initPM 4757) h4757sh]
+  -- Outer add commute
+  rw [GeneratedPatterns.fw_add_allGather0_commute_2_2048_1024
+        (chunkPrimDimN 0 2 0 (denoteGraph_ringAttn pm_goal_3_faithful initPM 4757))
+        (chunkPrimDimN 0 2 1 (denoteGraph_ringAttn pm_goal_3_faithful initPM 4757))
+        (elemwiseAdd (denoteGraph_ringAttn pm_goal_3_faithful initPM 7677)
+          (denoteGraph_ringAttn pm_goal_3_faithful initPM 7751))
+        (elemwiseAdd (denoteGraph_ringAttn pm_goal_3_faithful initPM 7678)
+          (denoteGraph_ringAttn pm_goal_3_faithful initPM 7752)) hc0 hc1 hadd0 hadd1]
 
 
 end TrainVerify.Denote.Pattern3Faithful
