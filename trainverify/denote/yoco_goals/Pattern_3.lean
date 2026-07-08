@@ -20898,6 +20898,88 @@ theorem singleton_init_eq (initSM initPM : Store)
   rw [hshape] at hval
   simpa [List.map, reconstructWithDim_singleton] using hval
 
+/-- Buddy lookup for a SM (single-rank) attention node.
+
+    Given a proof that the filter yielding matching-key attention nodes on
+    `sm_goal_3.nodes` returns exactly `[n]`, this closes
+    `ringAttnBuddies sm_goal_3 n = [n]` in one line. Layer-agnostic replacement
+    for the per-layer `buddy_sm`/`buddy_sm_1` boilerplate.
+
+    Usage:
+      theorem buddy_sm_Lk : ringAttnBuddies sm_goal_3 nSM_k = [nSM_k] :=
+        buddy_from_singleton_sm nSM_k (by rfl)
+-/
+theorem buddy_from_singleton_sm (n : NodeDecl)
+    (hunique : List.filter (fun m => decide (m.op = n.op) && decide (m.params = n.params) &&
+        decide (m.ins.getD 3 0 = n.ins.getD 3 0) && decide (m.ins.getD 4 0 = n.ins.getD 4 0))
+        sm_goal_3.nodes = [n]) :
+    ringAttnBuddies sm_goal_3 n = [n] := by
+  show (List.filter (fun m => decide (m.op = n.op) && decide (m.params = n.params) &&
+      decide (m.ins.getD 3 0 = n.ins.getD 3 0) && decide (m.ins.getD 4 0 = n.ins.getD 4 0))
+      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [n]
+  rw [hunique]
+  simp
+
+/-- Buddy lookup for a PM (2-rank) attention node.
+
+    Given `n : NodeDecl` and its rank-0/rank-1 companions `r0`/`r1`, together
+    with a filter-uniqueness proof `filter … = [r0, r1]` and a rank ordering
+    proof `r0.rank ≤ r1.rank`, this closes `ringAttnBuddies pm_goal_3 n = [r0, r1]`.
+    Works for both "n = r0" (looking up rank 0's buddies) and "n = r1"
+    (looking up rank 1's).
+
+    Usage:
+      theorem buddy_r0_Lk : ringAttnBuddies pm_goal_3 nR0_k = [nR0_k, nR1_k] :=
+        buddy_from_pair_pm nR0_k nR0_k nR1_k (by rfl) (by decide)
+      theorem buddy_r1_Lk : ringAttnBuddies pm_goal_3 nR1_k = [nR0_k, nR1_k] :=
+        buddy_from_pair_pm nR1_k nR0_k nR1_k (by rfl) (by decide)
+
+    (The `by decide` closes `nR0_k.rank ≤ nR1_k.rank` when the node decls have
+    concrete ranks 0 and 1.)
+-/
+theorem buddy_from_pair_pm (n r0 r1 : NodeDecl)
+    (hunique : List.filter (fun m => decide (m.op = n.op) && decide (m.params = n.params) &&
+        decide (m.ins.getD 3 0 = n.ins.getD 3 0) && decide (m.ins.getD 4 0 = n.ins.getD 4 0))
+        pm_goal_3.nodes = [r0, r1])
+    (hrank : r0.rank ≤ r1.rank) :
+    ringAttnBuddies pm_goal_3 n = [r0, r1] := by
+  show (List.filter (fun m => decide (m.op = n.op) && decide (m.params = n.params) &&
+      decide (m.ins.getD 3 0 = n.ins.getD 3 0) && decide (m.ins.getD 4 0 = n.ins.getD 4 0))
+      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [r0, r1]
+  rw [hunique]
+  apply List.mergeSort_of_pairwise
+  apply List.Pairwise.cons
+  · intro b hb
+    simp only [List.mem_singleton] at hb
+    subst hb
+    exact decide_eq_true hrank
+  · exact List.Pairwise.cons (by simp) List.Pairwise.nil
+
+/-- Extract `initSM 4680 = initPM 4680` for the Pattern_3 prereq (goal_5 =
+    embedding output). This is the standard 5-line 'have hg := hInit goal_5'
+    boilerplate that appears 6+ times across L0/L1 qproj/kproj/vproj commutes.
+
+    Usage:
+      have h4680 : initSM 4680 = initPM 4680 := prereq_goal_5_init_eq initSM initPM hInit
+-/
+theorem prereq_goal_5_init_eq (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    initSM 4680 = initPM 4680 := by
+  have hg := hInit goal_5
+    (by unfold goal_3_cut_initGoals goal_3_prereqs; exact List.mem_append_right _ (by simp))
+  unfold InitGoalHolds at hg
+  obtain ⟨_, _, hval⟩ := hg
+  simpa [goal_5, List.map, reconstructWithDim_singleton] using hval
+
+/-! ## Attention shape helpers — layer-generic
+
+    `ph_shape_g` / `qrot_shape_g` / `krot_shape_g` (defined further below, line
+    ~25445) already take tensors rather than fixed `initPM XXXX` references,
+    so they are the reusable choice for L3-L23. Their `_p3` counterparts
+    (`ph_shape_p3` etc., line ~21837) hardcode `st 4680 / st 4682` and were
+    written for L0's specific carry — prefer `_g` in new layer proofs.
+-/
+
 /-! ### L0 denote-unfold template (kernel-clean, validated reduction infra).
 
     Concrete worked example of the per-layer "reduction infra": reduce a router
