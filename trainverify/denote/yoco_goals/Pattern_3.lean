@@ -29857,4 +29857,129 @@ theorem sm_pm_attention_L2_commute
     exact applyNodeRingAttn_sliding_window_out pm_goal_3 _ 1 7806 7808 7794 4802 4803 7810 [16, 4, 64, 64, 1, 512]
   rw [hbridge_sm, hrec, bridge_r1, hbridge_r0, hbridge_r1_denote]
 
+
+/-!
+### L2 Phase 4 infrastructure: 3D→2D view/allGather commute
+
+The following two kernel-clean helper lemmas close the infrastructure GAP that
+was flagged for the L2 residual/norm-linear chain: reshaping a 3-D attention
+output tensor (`[S, nh, d]`) to 2-D (`[S, nh*d]`) commutes with a 2-shard,
+dim-0 `allGatherPrimDimN`.  Existing `fw_view_allGather0_commute_2_of`
+(Pattern_1.lean:2176) only handles 2D→2D input, so the innermost
+`fw_view [4096,1024] (allGather0 [attn_r0, attn_r1])` in `denote_sm_goal_3_4811`
+(residual add after L2 attention) could not be pushed through the gather.
+
+* `aG0_2_valAt_flat_gen` — the flat-index computation for `valAt` of a 2-shard
+  dim-0 gather at index `q*P+k` (works for both shard shapes `[S,nh,d]` and
+  `[S,nh*d]`, since both give the same post-stride).
+* `fw_view_aG0_2_3to2` — the general 3D→2D view/gather commute built on it.
+
+ROADMAP (remaining L2 work, for the next worker):
+  `sm_pm_carry_4811_commute` (SM 4811 = allGather0 [PM 7839, PM 7840]) needs, in
+  addition to these lemmas:
+    (a) a `pm_attn_shard_shapes_L2` helper giving
+        `denote 7809 .shape = denote 7810 .shape = [2048,16,64]` — port
+        `pm_attn_shard_shapes_L1` (line ~26015) by tid/take-index substitution,
+        reusing the Phase-2 `sm_pm_{q,k,v}proj_L2_commute` lemmas;
+    (b) shape-specialized wrappers of `fw_view_aG0_2_3to2`,
+        `fw_view_allGather0_commute_2_of`, `fw_linear_allGather0_commute_2_of`
+        with literal shapes `[4096,1024]`/`[2048,1024]` (the general lemmas emit
+        `[2048*2,1024]` which does not syntactically match the goal's `[4096,1024]`
+        for `rw`);
+    (c) the assembly, forward-rewriting the view/linear/`fw_add` gather commutes
+        exactly like `sm_pm_carry_4790_commute` (line 27993).
+  Then `sm_pm_nl_L2_commute` (SM 4816) chains `fw_rms_norm`/`fw_norm_linear`
+  allGather0 commutes off the carry, and `sm_pm_router_commute_L2` (SM 4818)
+  follows `sm_pm_router_commute_L1` (line 26273) via
+  `fw_topk_routing_snd_fst_allGather0_commute_2_of`.
+-/
+
+theorem aG0_2_valAt_flat_gen (Ws : List Tensor) (sh : Shape) (S P : Nat)
+    (hS : 0 < S) (hP : 0 < P)
+    (hSval : sh.getD 0 0 = S)
+    (hPval : (sh.drop 1).foldl (· * ·) 1 = P)
+    (hprodset : prodShape (sh.set 0 (S * 2)) = S * 2 * P)
+    (hhead : (Ws.head?.map (fun t => t.shape)).getD [] = sh)
+    (q k : Nat) (hq : q < S * 2) (hk : k < P) :
+    valAt (allGatherPrimDimN 0 2 0 Ws) (q * P + k)
+      = valAt (Ws.getD (q / S) (zeroTensor sh)) ((q % S) * P + k) := by
+  unfold allGatherPrimDimN
+  rw [hhead]
+  have hidx_lt : q * P + k < S * 2 * P := by
+    have h3 : (q + 1) * P ≤ S * 2 * P := Nat.mul_le_mul_right P (by omega)
+    have : q * P + k < (q + 1) * P := by ring_nf; omega
+    omega
+  have hbound : q * P + k < prodShape (sh.set 0 (sh.getD 0 0 * 2)) := by
+    rw [hSval, hprodset]; exact hidx_lt
+  rw [valAt_of_lt _ _ hbound]
+  simp only [Tensor.mkShape, hSval, hPval]
+  have hP_ne : P ≠ 0 := Nat.pos_iff_ne_zero.mp hP
+  have hS_ne : S ≠ 0 := Nat.pos_iff_ne_zero.mp hS
+  have hfd_ne : S * 2 * P ≠ 0 := by positivity
+  have e_pre : (q * P + k) / (S * 2 * P) = 0 := Nat.div_eq_of_lt hidx_lt
+  have e_rem : (q * P + k) % (S * 2 * P) = q * P + k := Nat.mod_eq_of_lt hidx_lt
+  have e_jFull : (q * P + k) / P = q := by
+    rw [Nat.mul_comm q P, Nat.mul_add_div hP]; simp [Nat.div_eq_of_lt hk]
+  have e_k : (q * P + k) % P = k := by
+    rw [Nat.mul_comm q P, Nat.mul_add_mod]; exact Nat.mod_eq_of_lt hk
+  simp only [if_neg hS_ne, if_neg hP_ne, if_neg hfd_ne, e_pre, e_rem, e_jFull, e_k,
+    Nat.zero_mul, Nat.zero_add]
+
+theorem fw_view_aG0_2_3to2 (a b : Tensor) (S nh d : Nat)
+    (hS : 0 < S) (hnh : 0 < nh) (hd : 0 < d)
+    (ha : a.shape = [S, nh, d]) (hb : b.shape = [S, nh, d]) :
+    fw_view [S * 2, nh * d] (allGatherPrimDimN 0 2 0 [a, b])
+      = allGatherPrimDimN 0 2 0 [fw_view [S, nh * d] a, fw_view [S, nh * d] b] := by
+  have hP : 0 < nh * d := Nat.mul_pos hnh hd
+  have hheadab : (([a, b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [S, nh, d] := by
+    simp [ha]
+  have hheadv : (([fw_view [S, nh * d] a, fw_view [S, nh * d] b] : List Tensor).head?.map
+      (fun t => t.shape)).getD [] = [S, nh * d] := by
+    simp [fw_view, Tensor.mkShape]
+  have fvva : ∀ (t : Tensor) (m : Nat), m < S * (nh * d) →
+      valAt (fw_view [S, nh * d] t) m = valAt t m := by
+    intro t m hm
+    unfold fw_view
+    rw [valAt_of_lt _ _ (by show m < prodShape [S, nh * d]; simpa [prodShape] using hm)]
+    simp [Tensor.mkShape]
+  apply Tensor.ext
+  · rw [allGatherPrimDimN_shape 0 2 _ [S, nh * d] hheadv]
+    simp [fw_view, Tensor.mkShape, List.set, List.getD]
+  · intro idx hidx
+    have hidx2 : idx < S * 2 * (nh * d) := by
+      simp only [fw_view, Tensor.mkShape, prodShape] at hidx
+      simpa [prodShape] using hidx
+    set P := nh * d with hPdef
+    set q := idx / P with hqdef
+    set k := idx % P with hkdef
+    have hk_lt : k < P := Nat.mod_lt _ hP
+    have hq_lt : q < S * 2 := by
+      rw [hqdef, Nat.div_lt_iff_lt_mul hP]; exact hidx2
+    have hidx_eq : idx = q * P + k := by
+      rw [hqdef, hkdef, Nat.mul_comm q P]; exact (Nat.div_add_mod idx P).symm
+    have hlhs : valAt (fw_view [S * 2, nh * d] (allGatherPrimDimN 0 2 0 [a, b])) idx
+        = valAt (allGatherPrimDimN 0 2 0 [a, b]) idx := by
+      unfold fw_view
+      rw [valAt_of_lt _ _ (by show idx < prodShape [S * 2, nh * d]; simpa [prodShape] using hidx2)]
+      simp [Tensor.mkShape]
+    rw [hlhs, hidx_eq]
+    have hprod1 : prodShape (List.set [S, nh, d] 0 (S * 2)) = S * 2 * P := by
+      simp [prodShape, List.set, hPdef]; ring
+    have hprod2 : prodShape (List.set [S, nh * d] 0 (S * 2)) = S * 2 * P := by
+      simp [prodShape, List.set, hPdef]
+    rw [aG0_2_valAt_flat_gen [a, b] [S, nh, d] S P hS hP (by simp) (by simp [hPdef])
+          hprod1 hheadab q k hq_lt hk_lt]
+    rw [aG0_2_valAt_flat_gen [fw_view [S, nh * d] a, fw_view [S, nh * d] b] [S, nh * d] S P hS hP
+          (by simp) (by simp [hPdef]) hprod2 hheadv q k hq_lt hk_lt]
+    have haddr_lt : (q % S) * P + k < S * P := by
+      have hmod : q % S < S := Nat.mod_lt _ hS
+      have hstep : (q % S + 1) * P ≤ S * P := Nat.mul_le_mul_right P hmod
+      have : (q % S) * P + k < (q % S + 1) * P := by ring_nf; omega
+      omega
+    have hr : q / S = 0 ∨ q / S = 1 := by
+      have hlt : q / S < 2 := by rw [Nat.div_lt_iff_lt_mul hS]; omega
+      interval_cases h : (q / S) <;> simp
+    rcases hr with hr | hr <;> rw [hr] <;> simp only [List.getD_cons_zero, List.getD_cons_succ] <;>
+      rw [fvva _ _ (by rw [Nat.mul_comm S P] at haddr_lt ⊢; exact haddr_lt)]
+
 end TrainVerify.Denote.GeneratedPatterns
