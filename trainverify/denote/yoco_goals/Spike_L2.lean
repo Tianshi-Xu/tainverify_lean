@@ -1270,6 +1270,29 @@ theorem denote_pm_goal_3_faithful_7752 (initPM : Store) :
 
 #print axioms denote_pm_goal_3_faithful_7752
 
+-- Sub-commute B: SM 4787 = allGather [PM 7751, PM 7752] (gate·mul path)
+-- TODO: assembly using fw_mul_allGather0_commute_2_of_broadcast + fw_sigmoid/swiglu/linear/view allGather commutes
+-- Sketch of proof (still needs debugging):
+--   1. Deep unfold both sides via denote_sm/pm_goal_3_faithful_4787/7751/7752 (done)
+--   2. Bridge PM 4772/4777/4781 → via existing deep unfolds (done)
+--   3. Bridge SM 7475/7479/7483 → fw_rms_norm form (missing helpers, need to prove or import)
+--   4. sm_pm_carry_4757_commute + hII/hb for initSM 4758/4770/4775/4779/4784 = initPM
+--   5. allGather0_reconstruct_chunks_2d for PM_4772/4777/4781
+--   6. fw_view_allGather0_commute_2_of + fw_linear_allGather0_commute_2_of
+--      + fw_swiglu_allGather0_commute_2 + fw_sigmoid_allGather0_commute_2
+--      + fw_mul_allGather0_commute_2_of_broadcast
+-- This is ~250 lines assembly. Deferred for main theorem attempt.
+theorem sm_pm_gate_mul_L1_commute
+    (initSM initPM : Store)
+    (h_ss_sm : StoreShapesHold initSM sm_goal_3_faithfulInitEnv)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3_faithfulInitEnv)
+    (hInit : InitGoalsHold pm_goal_3_faithful.numRanks goal_3_cut_initGoals initSM initPM) :
+    denoteGraph_ringAttn sm_goal_3_faithful initSM 4787
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3_faithful initPM 7751,
+           denoteGraph_ringAttn pm_goal_3_faithful initPM 7752] := by
+  sorry
+
 set_option maxHeartbeats 16000000 in
 set_option maxRecDepth 20000 in
 theorem sm_pm_carry_4790_commute
