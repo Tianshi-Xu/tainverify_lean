@@ -1441,23 +1441,80 @@ theorem sm_pm_gate_mul_L1_commute
   have h4784 : initSM 4784 = initPM 4784 := hb initGoal_4784 (by decide) rfl
   rw [h4758, h4770, h4775, h4779, h4784]
   rw [show pm_goal_3_faithful.numRanks = 2 from rfl]
-  -- Now: LHS and RHS are structurally very similar.
-  -- LHS: elemwiseMul (fw_sigmoid (fw_view [4096, 1] (fw_linear (fw_view [4096, 1024] RMS_PM) (initPM 4770))))
-  --                 (fw_view [4096, 1024] (fw_linear (fw_view [4096, 512] (fw_swiglu
-  --                    (fw_view [4096, 512] (fw_linear (fw_view [4096, 1024] RMS_PM) (initPM 4775)))
-  --                    (fw_view [4096, 512] (fw_linear (fw_view [4096, 1024] RMS_PM) (initPM 4779)))))
-  --                   (initPM 4784)))
-  -- RHS: allGatherPrimDimN 0 2 0
-  --   [elemwiseMul (fw_sigmoid (chunkPrimDimN 0 2 0 GATE_PM))
-  --                (fw_view [2048, 1024] (fw_linear (fw_view [2048, 512] (fw_swiglu (chunkPrimDimN 0 2 0 UV_PM) (chunkPrimDimN 0 2 0 VV_PM))) (initPM 4784))),
-  --    elemwiseMul (fw_sigmoid (chunkPrimDimN 0 2 1 GATE_PM))
-  --                (fw_view [2048, 1024] (fw_linear (fw_view [2048, 512] (fw_swiglu (chunkPrimDimN 0 2 1 UV_PM) (chunkPrimDimN 0 2 1 VV_PM))) (initPM 4784)))]
-  -- where GATE_PM = fw_view [4096, 1] (fw_linear (fw_view [4096, 1024] RMS_PM) initPM 4770)
-  --       UV_PM = fw_view [4096, 512] (fw_linear (fw_view [4096, 1024] RMS_PM) initPM 4775)
-  --       VV_PM = fw_view [4096, 512] (fw_linear (fw_view [4096, 1024] RMS_PM) initPM 4779)
-  -- Sub-commute B assembly deferred: 5 nested allGather commutes needed.
-  -- Building blocks all in place; assembly is mechanical but long.
-  sorry
+  -- Abstract RMS_PM and eliminate the identity view around it (faithful reshape)
+  set RMS := fw_rms_norm (denoteGraph_ringAttn pm_goal_3_faithful initPM 4757) (initPM 4758) with hRMS
+  have hRMSsh : RMS.shape = [4096, 1024] := by
+    rw [hRMS, rms_sh]; exact RouterShapesHelpers.hs_4757 initPM h_ss_pm
+  have hvR : fw_view [4096, 1024] RMS = RMS := fw_view_self_eq_l1 RMS [4096, 1024] hRMSsh
+  simp only [hvR]
+  -- Abstract GATE/UV/VV
+  set GATE := fw_view [4096, 1] (fw_linear RMS (initPM 4770)) with hGATE
+  set UV := fw_view [4096, 512] (fw_linear RMS (initPM 4775)) with hUV
+  set VV := fw_view [4096, 512] (fw_linear RMS (initPM 4779)) with hVV
+  have hGATEsh : GATE.shape = [4096, 1] := by rw [hGATE]; exact view_sh _ _
+  have hUsh : UV.shape = [4096, 512] := by rw [hUV]; exact view_sh _ _
+  have hVsh : VV.shape = [4096, 512] := by rw [hVV]; exact view_sh _ _
+  -- chunk shapes
+  have hc0GATE : (chunkPrimDimN 0 2 0 GATE).shape = [2048, 1] := chunk0_2 0 GATE 4096 1 hGATEsh
+  have hc1GATE : (chunkPrimDimN 0 2 1 GATE).shape = [2048, 1] := chunk0_2 1 GATE 4096 1 hGATEsh
+  have hc0UV : (chunkPrimDimN 0 2 0 UV).shape = [2048, 512] := chunk0_2 0 UV 4096 512 hUsh
+  have hc1UV : (chunkPrimDimN 0 2 1 UV).shape = [2048, 512] := chunk0_2 1 UV 4096 512 hUsh
+  have hc0VV : (chunkPrimDimN 0 2 0 VV).shape = [2048, 512] := chunk0_2 0 VV 4096 512 hVsh
+  have hc1VV : (chunkPrimDimN 0 2 1 VV).shape = [2048, 512] := chunk0_2 1 VV 4096 512 hVsh
+  -- swiglu shapes and eliminate identity views around swiglu (faithful reshape)
+  have hswSMsh : (fw_swiglu UV VV).shape = [4096, 512] := (fw_swiglu_shape UV VV).trans hVsh
+  have hswC0sh : (fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV)).shape = [2048, 512] :=
+    (fw_swiglu_shape _ _).trans hc0VV
+  have hswC1sh : (fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV)).shape = [2048, 512] :=
+    (fw_swiglu_shape _ _).trans hc1VV
+  have hvSW : fw_view [4096, 512] (fw_swiglu UV VV) = fw_swiglu UV VV :=
+    fw_view_self_eq_l1 _ [4096, 512] hswSMsh
+  have hvC0 : fw_view [2048, 512] (fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV))
+      = fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV) :=
+    fw_view_self_eq_l1 _ [2048, 512] hswC0sh
+  have hvC1 : fw_view [2048, 512] (fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV))
+      = fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV) :=
+    fw_view_self_eq_l1 _ [2048, 512] hswC1sh
+  simp only [hvSW, hvC0, hvC1]
+  -- gate·mul path allGather commute (mirrors L1 hGMeq)
+  have hsg : fw_sigmoid GATE =
+      allGatherPrimDimN 0 2 0 [fw_sigmoid (chunkPrimDimN 0 2 0 GATE), fw_sigmoid (chunkPrimDimN 0 2 1 GATE)] := by
+    have keyg := GeneratedPatterns.fw_sigmoid_allGather0_commute_2 (chunkPrimDimN 0 2 0 GATE) (chunkPrimDimN 0 2 1 GATE) 2048 1 (by omega) (by omega) hc0GATE hc1GATE
+    rw [allGather0_reconstruct_chunks_2d 2048 1 (by omega) (by omega) GATE hGATEsh] at keyg
+    exact keyg
+  have hsw : fw_swiglu UV VV =
+      allGatherPrimDimN 0 2 0
+        [fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV),
+         fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV)] := by
+    have key2 := GeneratedPatterns.fw_swiglu_allGather0_commute_2 (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 1 UV)
+      (chunkPrimDimN 0 2 0 VV) (chunkPrimDimN 0 2 1 VV) 2048 512 (by omega) (by omega) hc0UV hc1UV hc0VV hc1VV
+    rw [allGather0_reconstruct_chunks_2d 2048 512 (by omega) (by omega) UV hUsh,
+        allGather0_reconstruct_chunks_2d 2048 512 (by omega) (by omega) VV hVsh] at key2
+    exact key2
+  have hwd : (initPM 4784).shape = [1024, 512] := h_ss_pm 4784 [1024, 512] (by decide)
+  have hlin0 : (fw_linear (fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV)) (initPM 4784)).shape = [2048, 1024] := by
+    unfold fw_linear; rw [hswC0sh, hwd]; simp [Tensor.mkShape]
+  have hlin1 : (fw_linear (fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV)) (initPM 4784)).shape = [2048, 1024] := by
+    unfold fw_linear; rw [hswC1sh, hwd]; simp [Tensor.mkShape]
+  have hview0 : (fw_view [2048, 1024] (fw_linear (fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV)) (initPM 4784))).shape = [2048, 1024] := view_sh _ _
+  have hview1 : (fw_view [2048, 1024] (fw_linear (fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV)) (initPM 4784))).shape = [2048, 1024] := view_sh _ _
+  have hsig0 : (fw_sigmoid (chunkPrimDimN 0 2 0 GATE)).shape = [2048, 1] := (sigmoid_sh _).trans hc0GATE
+  have hsig1 : (fw_sigmoid (chunkPrimDimN 0 2 1 GATE)).shape = [2048, 1] := (sigmoid_sh _).trans hc1GATE
+  rw [hsg, hsw]
+  rw [GeneratedPatterns.fw_linear_allGather0_commute_2_of
+        (fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV))
+        (fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV))
+        (initPM 4784) 2048 512 1024 (by omega) (by omega) (by omega) hswC0sh hswC1sh hwd]
+  rw [show ([4096, 1024] : Shape) = [2048 * 2, 1024] from rfl]
+  rw [GeneratedPatterns.fw_view_allGather0_commute_2_of
+        (fw_linear (fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV)) (initPM 4784))
+        (fw_linear (fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV)) (initPM 4784))
+        2048 1024 (by omega) hlin0 hlin1]
+  rw [GeneratedPatterns.fw_mul_allGather0_commute_2_of_broadcast
+        (fw_sigmoid (chunkPrimDimN 0 2 0 GATE)) (fw_sigmoid (chunkPrimDimN 0 2 1 GATE))
+        (fw_view [2048, 1024] (fw_linear (fw_swiglu (chunkPrimDimN 0 2 0 UV) (chunkPrimDimN 0 2 0 VV)) (initPM 4784)))
+        (fw_view [2048, 1024] (fw_linear (fw_swiglu (chunkPrimDimN 0 2 1 UV) (chunkPrimDimN 0 2 1 VV)) (initPM 4784)))
+        2048 1024 (by omega) (by omega) (by omega) (by omega) (by omega) hsig0 hsig1 hview0 hview1]
 
 #print axioms sm_pm_gate_mul_L1_commute
 
