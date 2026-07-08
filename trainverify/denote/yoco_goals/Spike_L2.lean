@@ -1402,7 +1402,7 @@ theorem denote_sm_goal_3_faithful_7483 (initSM : Store) :
 
 #print axioms denote_sm_goal_3_faithful_7483
 
--- Restore sub-commute B theorem with sorry — now with SM 7475/7479/7483 helpers available for use
+-- Sub-commute B: SM 4787 = allGather [PM 7751, PM 7752] (gate·mul crux), closed kernel-clean
 set_option maxHeartbeats 64000000 in
 set_option maxRecDepth 20000 in
 theorem sm_pm_gate_mul_L1_commute
