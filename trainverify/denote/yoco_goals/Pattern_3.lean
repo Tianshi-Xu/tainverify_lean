@@ -33062,6 +33062,846 @@ theorem denote_pm_goal_3_7994 (initPM : Store) :
   rw [hval_7994, hval_11856, hval_7990, hval_7958, hval_7970]
 
 
+/- ==================================================================
+   Commit D: L3 steady-state chain → sm_pm_router_commute_L3
+   Ported from L2 lemmas by tid-substitution (SM node +39, PM +78;
+   tid map from l3maps.json). attention/shard/carry/nl/router.
+   ================================================================= -/
+
+theorem sm_pm_rms_L3_commute (initSM initPM : Store)
+    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    denoteGraph_ringAttn sm_goal_3 initSM 4846
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3 initPM 7955,
+           denoteGraph_ringAttn pm_goal_3 initPM 7956] := by
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have h4845 : initSM 4845 = initPM 4845 := hb initGoal_4845 (by decide) rfl
+  have hcarry := sm_pm_carry_4844_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have h65 : (denoteGraph_ringAttn pm_goal_3 initPM 7951).shape = [2048, 1024] :=
+    RouterShapesHelpers.hs_7951 initPM h_ss_pm
+  have h66 : (denoteGraph_ringAttn pm_goal_3 initPM 7952).shape = [2048, 1024] :=
+    RouterShapesHelpers.hs_7952 initPM h_ss_pm
+  rw [denote_sm_goal_3_4846, denote_pm_goal_3_7955, denote_pm_goal_3_7956, hcarry, h4845]
+  exact fw_rms_norm_allGather0_commute_2 _ _ (initPM 4845) 2048 1024 (by omega) (by omega) h65 h66
+
+theorem sm_pm_qlin_L3_commute (initSM initPM : Store)
+    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    denoteGraph_ringAttn sm_goal_3 initSM 4848
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3 initPM 7957,
+           denoteGraph_ringAttn pm_goal_3 initPM 7958] := by
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have h4847 : initSM 4847 = initPM 4847 := hb initGoal_4847 (by decide) rfl
+  have hrms := sm_pm_rms_L3_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have h69 : (denoteGraph_ringAttn pm_goal_3 initPM 7955).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_7955, rms_sh]; exact RouterShapesHelpers.hs_7951 initPM h_ss_pm
+  have h70 : (denoteGraph_ringAttn pm_goal_3 initPM 7956).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_7956, rms_sh]; exact RouterShapesHelpers.hs_7952 initPM h_ss_pm
+  have hw : (initPM 4847).shape = [16, 64, 1024] := h_ss_pm 4847 [16, 64, 1024] (by decide)
+  rw [denote_sm_goal_3_4848, denote_pm_goal_3_7957, denote_pm_goal_3_7958, hrms, h4847]
+  exact fw_per_head_mix_precision_linear_allGather0_commute_2 _ _ (initPM 4847)
+    2048 1024 16 64 (by omega) (by omega) (by omega) (by omega) h69 h70 hw
+
+theorem sm_pm_klin_L3_commute (initSM initPM : Store)
+    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    denoteGraph_ringAttn sm_goal_3 initSM 4850
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3 initPM 7969,
+           denoteGraph_ringAttn pm_goal_3 initPM 7970] := by
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have h4849 : initSM 4849 = initPM 4849 := hb initGoal_4849 (by decide) rfl
+  have hrms := sm_pm_rms_L3_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have h69 : (denoteGraph_ringAttn pm_goal_3 initPM 7955).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_7955, rms_sh]; exact RouterShapesHelpers.hs_7951 initPM h_ss_pm
+  have h70 : (denoteGraph_ringAttn pm_goal_3 initPM 7956).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_7956, rms_sh]; exact RouterShapesHelpers.hs_7952 initPM h_ss_pm
+  have hw : (initPM 4849).shape = [4, 64, 1024] := h_ss_pm 4849 [4, 64, 1024] (by decide)
+  rw [denote_sm_goal_3_4850, denote_pm_goal_3_7969, denote_pm_goal_3_7970, hrms, h4849]
+  exact fw_per_head_mix_precision_linear_allGather0_commute_2 _ _ (initPM 4849)
+    2048 1024 4 64 (by omega) (by omega) (by omega) (by omega) h69 h70 hw
+
+theorem sm_pm_vproj_L3_commute (initSM initPM : Store)
+    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    denoteGraph_ringAttn sm_goal_3 initSM 4852
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3 initPM 7979,
+           denoteGraph_ringAttn pm_goal_3 initPM 7980] := by
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have h4851 : initSM 4851 = initPM 4851 := hb initGoal_4851 (by decide) rfl
+  have hrms := sm_pm_rms_L3_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have h69 : (denoteGraph_ringAttn pm_goal_3 initPM 7955).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_7955, rms_sh]; exact RouterShapesHelpers.hs_7951 initPM h_ss_pm
+  have h70 : (denoteGraph_ringAttn pm_goal_3 initPM 7956).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_7956, rms_sh]; exact RouterShapesHelpers.hs_7952 initPM h_ss_pm
+  have hw : (initPM 4851).shape = [4, 64, 1024] := h_ss_pm 4851 [4, 64, 1024] (by decide)
+  rw [denote_sm_goal_3_4852, denote_pm_goal_3_7979, denote_pm_goal_3_7980, hrms, h4851]
+  exact fw_per_head_mix_precision_linear_allGather0_commute_2 _ _ (initPM 4851)
+    2048 1024 4 64 (by omega) (by omega) (by omega) (by omega) h69 h70 hw
+
+theorem sm_pm_qproj_L3_commute (initSM initPM : Store)
+    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    denoteGraph_ringAttn sm_goal_3 initSM 4854
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3 initPM 7991,
+           denoteGraph_ringAttn pm_goal_3 initPM 7992] := by
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have hcos : initSM 4691 = initPM 4691 := hb initGoal_4691 (by decide) rfl
+  have hpos : initSM 4853 = initPM 4853 := hb initGoal_4853 (by decide) rfl
+  have hqlin := sm_pm_qlin_L3_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have h69 : (denoteGraph_ringAttn pm_goal_3 initPM 7955).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_7955, rms_sh]; exact RouterShapesHelpers.hs_7951 initPM h_ss_pm
+  have h70 : (denoteGraph_ringAttn pm_goal_3 initPM 7956).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_7956, rms_sh]; exact RouterShapesHelpers.hs_7952 initPM h_ss_pm
+  have hwq : (initPM 4847).shape = [16, 64, 1024] := h_ss_pm 4847 [16, 64, 1024] (by decide)
+  have ha : (denoteGraph_ringAttn pm_goal_3 initPM 7957).shape = [2048, 16, 64] := by
+    rw [denote_pm_goal_3_7957]; exact ph_lin_shape_2048 _ _ 16 h69 hwq
+  have hbsh : (denoteGraph_ringAttn pm_goal_3 initPM 7958).shape = [2048, 16, 64] := by
+    rw [denote_pm_goal_3_7958]; exact ph_lin_shape_2048 _ _ 16 h70 hwq
+  have hP : (initPM 4853).shape = [2 * 2048] := by
+    rw [show ([2 * 2048] : Shape) = [4096] from rfl]; exact h_ss_pm 4853 [4096] (by decide)
+  rw [denote_sm_goal_3_4854, denote_pm_goal_3_7991, denote_pm_goal_3_7992]
+  simp only [fw_rotary_embedding, show pm_goal_3.numRanks = 2 from rfl]
+  rw [hcos, hpos, hqlin]
+  exact fw_rotary_apply_allGather0_commute_2_1d (initPM 4691) (initPM 4853)
+    (denoteGraph_ringAttn pm_goal_3 initPM 7957) (denoteGraph_ringAttn pm_goal_3 initPM 7958)
+    2048 16 64 (by omega) (by omega) (by omega) hP ha hbsh
+
+theorem sm_pm_kproj_L3_commute (initSM initPM : Store)
+    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    denoteGraph_ringAttn sm_goal_3 initSM 4855
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3 initPM 7993,
+           denoteGraph_ringAttn pm_goal_3 initPM 7994] := by
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have hcos : initSM 4691 = initPM 4691 := hb initGoal_4691 (by decide) rfl
+  have hpos : initSM 4853 = initPM 4853 := hb initGoal_4853 (by decide) rfl
+  have hklin := sm_pm_klin_L3_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have h69 : (denoteGraph_ringAttn pm_goal_3 initPM 7955).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_7955, rms_sh]; exact RouterShapesHelpers.hs_7951 initPM h_ss_pm
+  have h70 : (denoteGraph_ringAttn pm_goal_3 initPM 7956).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_7956, rms_sh]; exact RouterShapesHelpers.hs_7952 initPM h_ss_pm
+  have hwk : (initPM 4849).shape = [4, 64, 1024] := h_ss_pm 4849 [4, 64, 1024] (by decide)
+  have ha : (denoteGraph_ringAttn pm_goal_3 initPM 7969).shape = [2048, 4, 64] := by
+    rw [denote_pm_goal_3_7969]; exact ph_lin_shape_2048 _ _ 4 h69 hwk
+  have hbsh : (denoteGraph_ringAttn pm_goal_3 initPM 7970).shape = [2048, 4, 64] := by
+    rw [denote_pm_goal_3_7970]; exact ph_lin_shape_2048 _ _ 4 h70 hwk
+  have hP : (initPM 4853).shape = [2 * 2048] := by
+    rw [show ([2 * 2048] : Shape) = [4096] from rfl]; exact h_ss_pm 4853 [4096] (by decide)
+  rw [denote_sm_goal_3_4855, denote_pm_goal_3_7993, denote_pm_goal_3_7994]
+  simp only [fw_rotary_embedding, show pm_goal_3.numRanks = 2 from rfl]
+  rw [hcos, hpos, hklin]
+  exact fw_rotary_apply_allGather0_commute_2_1d (initPM 4691) (initPM 4853)
+    (denoteGraph_ringAttn pm_goal_3 initPM 7969) (denoteGraph_ringAttn pm_goal_3 initPM 7970)
+    2048 4 64 (by omega) (by omega) (by omega) hP ha hbsh
+
+
+-- ============ L2 Phase 3: attention commute (allGather form) ============
+-- Generic aG0 shape helper (abstract tensors: avoids whnf blowup on foldl terms)
+
+def nSM_3 : NodeDecl := { rank := 0, op := "OpName.FW_attn_sliding_window", ins := [4854, 4855, 4852, 4856, 4857], outs := [4858], params := [16, 4, 64, 64, 1, 512] }
+def nR0_3 : NodeDecl := { rank := 0, op := "OpName.FW_attn_sliding_window", ins := [7991, 7993, 7979, 4856, 4857], outs := [7995], params := [16, 4, 64, 64, 1, 512] }
+def nR1_3 : NodeDecl := { rank := 1, op := "OpName.FW_attn_sliding_window", ins := [7992, 7994, 7980, 4856, 4857], outs := [7996], params := [16, 4, 64, 64, 1, 512] }
+
+set_option maxRecDepth 1000000 in
+theorem buddy_sm_3 : ringAttnBuddies sm_goal_3 nSM_3 = [nSM_3] := by
+  show (List.filter (fun m => decide (m.op = nSM_3.op) && decide (m.params = nSM_3.params) &&
+      decide (m.ins.getD 3 0 = nSM_3.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_3.ins.getD 4 0))
+      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_3]
+  rw [show (List.filter (fun m => decide (m.op = nSM_3.op) && decide (m.params = nSM_3.params) &&
+      decide (m.ins.getD 3 0 = nSM_3.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_3.ins.getD 4 0))
+      sm_goal_3.nodes) = [nSM_3] from by rfl]
+  simp
+
+set_option maxRecDepth 1000000 in
+theorem buddy_r0_3 : ringAttnBuddies pm_goal_3 nR0_3 = [nR0_3, nR1_3] := by
+  show (List.filter (fun m => decide (m.op = nR0_3.op) && decide (m.params = nR0_3.params) &&
+      decide (m.ins.getD 3 0 = nR0_3.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_3.ins.getD 4 0))
+      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_3, nR1_3]
+  rw [show (List.filter (fun m => decide (m.op = nR0_3.op) && decide (m.params = nR0_3.params) &&
+      decide (m.ins.getD 3 0 = nR0_3.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_3.ins.getD 4 0))
+      pm_goal_3.nodes) = [nR0_3, nR1_3] from by rfl]
+  apply List.mergeSort_of_pairwise; decide
+
+set_option maxRecDepth 1000000 in
+theorem buddy_r1_3 : ringAttnBuddies pm_goal_3 nR1_3 = [nR0_3, nR1_3] := by
+  show (List.filter (fun m => decide (m.op = nR1_3.op) && decide (m.params = nR1_3.params) &&
+      decide (m.ins.getD 3 0 = nR1_3.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_3.ins.getD 4 0))
+      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_3, nR1_3]
+  rw [show (List.filter (fun m => decide (m.op = nR1_3.op) && decide (m.params = nR1_3.params) &&
+      decide (m.ins.getD 3 0 = nR1_3.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_3.ins.getD 4 0))
+      pm_goal_3.nodes) = [nR0_3, nR1_3] from by rfl]
+  apply List.mergeSort_of_pairwise; decide
+
+set_option maxRecDepth 1000000 in
+set_option maxHeartbeats 100000000 in
+theorem sm_pm_attention_L3_commute
+    (initSM initPM : Store)
+    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    denoteGraph_ringAttn sm_goal_3 initSM 4858
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3 initPM 7995,
+           denoteGraph_ringAttn pm_goal_3 initPM 7996] := by
+  -- weight equalities (cu_seqlens 4802/4803)
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have h4802 : initSM 4856 = initPM 4856 := hb initGoal_4856 (by decide) rfl
+  have h4803 : initSM 4857 = initPM 4857 := hb initGoal_4857 (by decide) rfl
+  -- proj commutes (already proven)
+  have qproj := sm_pm_qproj_L3_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have kproj := sm_pm_kproj_L3_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have vproj := sm_pm_vproj_L3_commute initSM initPM h_ss_sm h_ss_pm hInit
+  -- store <-> prefix-fold bridges for SM inputs (take 86)
+  have bSM4800 : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4854
+      = denoteGraph_ringAttn sm_goal_3 initSM 4854 :=
+    (foldl_prefix_eq_full_ringAttn sm_goal_3 sm_goal_3.nodes initSM 4854 125 (by decide) (by decide)).symm
+  have bSM4801 : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4855
+      = denoteGraph_ringAttn sm_goal_3 initSM 4855 :=
+    (foldl_prefix_eq_full_ringAttn sm_goal_3 sm_goal_3.nodes initSM 4855 125 (by decide) (by decide)).symm
+  have bSM4798 : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4852
+      = denoteGraph_ringAttn sm_goal_3 initSM 4852 :=
+    (foldl_prefix_eq_full_ringAttn sm_goal_3 sm_goal_3.nodes initSM 4852 125 (by decide) (by decide)).symm
+  -- PM bridges (take 230)
+  have bPM7805 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7991
+      = denoteGraph_ringAttn pm_goal_3 initPM 7991 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7991 308 (by decide) (by decide)).symm
+  have bPM7806 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7992
+      = denoteGraph_ringAttn pm_goal_3 initPM 7992 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7992 308 (by decide) (by decide)).symm
+  have bPM7807 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7993
+      = denoteGraph_ringAttn pm_goal_3 initPM 7993 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7993 308 (by decide) (by decide)).symm
+  have bPM7808 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7994
+      = denoteGraph_ringAttn pm_goal_3 initPM 7994 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7994 308 (by decide) (by decide)).symm
+  have bPM7793 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7979
+      = denoteGraph_ringAttn pm_goal_3 initPM 7979 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7979 308 (by decide) (by decide)).symm
+  have bPM7794 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7980
+      = denoteGraph_ringAttn pm_goal_3 initPM 7980 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7980 308 (by decide) (by decide)).symm
+  -- store-level q/k/v full hyps
+  have hq_full : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4854
+      = allGatherPrimDimN 0 2 0
+          [(pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7991,
+           (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7992] := by
+    rw [bSM4800, bPM7805, bPM7806]; exact qproj
+  have hk_full : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4855
+      = allGatherPrimDimN 0 2 0
+          [(pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7993,
+           (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7994] := by
+    rw [bSM4801, bPM7807, bPM7808]; exact kproj
+  have hv_full : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4852
+      = allGatherPrimDimN 0 2 0
+          [(pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7979,
+           (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7980] := by
+    rw [bSM4798, bPM7793, bPM7794]; exact vproj
+  -- SM input shapes (from SM denote chain)
+  have hcarry_ag := sm_pm_carry_4844_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have hSM4790sh : (denoteGraph_ringAttn sm_goal_3 initSM 4844).shape = [4096, 1024] := by
+    rw [hcarry_ag]
+    exact aG0_2_shape (denoteGraph_ringAttn pm_goal_3 initPM 7951)
+      (denoteGraph_ringAttn pm_goal_3 initPM 7952) 2048 1024
+      (RouterShapesHelpers.hs_7951 initPM h_ss_pm)
+  have hwq_sm : (initSM 4847).shape = [16, 64, 1024] := h_ss_sm 4847 [16, 64, 1024] (by decide)
+  have hwk_sm : (initSM 4849).shape = [4, 64, 1024] := h_ss_sm 4849 [4, 64, 1024] (by decide)
+  have hwv_sm : (initSM 4851).shape = [4, 64, 1024] := h_ss_sm 4851 [4, 64, 1024] (by decide)
+  have h4792sh : (denoteGraph_ringAttn sm_goal_3 initSM 4846).shape = [4096, 1024] := by
+    rw [denote_sm_goal_3_4846, rms_sh]; exact hSM4790sh
+  have h4794sh : (denoteGraph_ringAttn sm_goal_3 initSM 4848).shape = [4096, 16, 64] := by
+    rw [denote_sm_goal_3_4848]; exact ph_lin_shape_gen _ _ 4096 16 h4792sh hwq_sm
+  have h4796sh : (denoteGraph_ringAttn sm_goal_3 initSM 4850).shape = [4096, 4, 64] := by
+    rw [denote_sm_goal_3_4850]; exact ph_lin_shape_gen _ _ 4096 4 h4792sh hwk_sm
+  have hSMq_shape : ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4854).shape
+      = [4096, 16, 64] := by
+    rw [bSM4800, denote_sm_goal_3_4854]
+    simp only [fw_rotary_embedding]
+    exact fw_rotary_apply_shape_c2a (initSM 4691) (initSM 4853)
+      (denoteGraph_ringAttn sm_goal_3 initSM 4848) 4096 16 64 h4794sh
+  have hSMk_shape : ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4855).shape
+      = [4096, 4, 64] := by
+    rw [bSM4801, denote_sm_goal_3_4855]
+    simp only [fw_rotary_embedding]
+    exact fw_rotary_apply_shape_c2a (initSM 4691) (initSM 4853)
+      (denoteGraph_ringAttn sm_goal_3 initSM 4850) 4096 4 64 h4796sh
+  have hSMv_shape : ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4852).shape
+      = [4096, 4, 64] := by
+    rw [bSM4798, denote_sm_goal_3_4852]
+    exact ph_lin_shape_gen _ _ 4096 4 h4792sh hwv_sm
+  have hq_sm : 0 < ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_3.ins.getD 0 0)).shape.length := by
+    show 0 < ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4854).shape.length
+    rw [hSMq_shape]; decide
+  have hk_sm : 0 < ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_3.ins.getD 1 0)).shape.length := by
+    show 0 < ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4855).shape.length
+    rw [hSMk_shape]; decide
+  have hv_sm : 0 < ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_3.ins.getD 2 0)).shape.length := by
+    show 0 < ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4852).shape.length
+    rw [hSMv_shape]; decide
+  -- cu_seqlens equalities
+  have hSM4802 : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4856 = initSM 4856 :=
+    foldl_applyNodeRingAttn_at_not_written sm_goal_3 (sm_goal_3.nodes.take 125) initSM 4856 (by decide) (by decide)
+  have hSM4803 : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4857 = initSM 4857 :=
+    foldl_applyNodeRingAttn_at_not_written sm_goal_3 (sm_goal_3.nodes.take 125) initSM 4857 (by decide) (by decide)
+  have hPM4802 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 4856 = initPM 4856 :=
+    foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 308) initPM 4856 (by decide) (by decide)
+  have hPM4803 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 4857 = initPM 4857 :=
+    foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 308) initPM 4857 (by decide) (by decide)
+  have hcuQ_sm_pm : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_3.ins.getD 3 0)
+      = (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 3 0) := by
+    show (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4856
+        = (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 4856
+    rw [hSM4802, hPM4802, h4802]
+  have hcuK_sm_pm : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_3.ins.getD 4 0)
+      = (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 4 0) := by
+    show (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4857
+        = (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 4857
+    rw [hSM4803, hPM4803, h4803]
+  -- full attention output shape
+  have hfull_shape :
+      (fw_attn_varlen
+        (allGatherPrimDimN 0 2 0 [(pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 0 0),
+                                  (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR1_3.ins.getD 0 0)])
+        (allGatherPrimDimN 0 2 0 [(pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 1 0),
+                                  (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR1_3.ins.getD 1 0)])
+        (allGatherPrimDimN 0 2 0 [(pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 2 0),
+                                  (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR1_3.ins.getD 2 0)])
+        ((pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 3 0))
+        ((pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 4 0))
+        (nR0_3.params.getD 0 1) (nR0_3.params.getD 1 1) (nR0_3.params.getD 2 1) (nR0_3.params.getD 3 1)
+        (decide (nR0_3.params.getD 4 0 ≠ 0)) (nR0_3.params.getD 5 0)).shape
+      = [2 * 2048, 16, 64] := by
+    rw [fw_attn_varlen_shape_p3]
+    show [(allGatherPrimDimN 0 2 0 [(pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7991,
+                                    (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7992]).shape.head?.getD 0, 16, 64]
+        = [2 * 2048, 16, 64]
+    rw [← hq_full, hSMq_shape]; rfl
+  -- bridge r1: take 230 -> take 231
+  have e7805 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7991
+      = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 7991 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7991 308 309 (by omega) (by decide) (by decide)).symm
+  have e7806 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7992
+      = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 7992 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7992 308 309 (by omega) (by decide) (by decide)).symm
+  have e7807 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7993
+      = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 7993 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7993 308 309 (by omega) (by decide) (by decide)).symm
+  have e7808 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7994
+      = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 7994 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7994 308 309 (by omega) (by decide) (by decide)).symm
+  have e7793 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7979
+      = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 7979 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7979 308 309 (by omega) (by decide) (by decide)).symm
+  have e7794 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7980
+      = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 7980 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7980 308 309 (by omega) (by decide) (by decide)).symm
+  have e4802b : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 4856
+      = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 4856 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 4856 308 309 (by omega) (by decide) (by decide)).symm
+  have e4803b : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 4857
+      = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 4857 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 4857 308 309 (by omega) (by decide) (by decide)).symm
+  have bridge_r1 : applyNodeRingAttn_sliding_window pm_goal_3
+        ((pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM) nR1_3
+      = applyNodeRingAttn_sliding_window pm_goal_3
+        ((pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM) nR1_3 := by
+    apply attn_sw_store_congr
+    · rw [buddy_r1_3]; intro m hm; fin_cases hm
+      · exact e7805
+      · exact e7806
+    · rw [buddy_r1_3]; intro m hm; fin_cases hm
+      · exact e7807
+      · exact e7808
+    · rw [buddy_r1_3]; intro m hm; fin_cases hm
+      · exact e7793
+      · exact e7794
+    · exact e4802b
+    · exact e4803b
+  -- reconstruction
+  have hrec := applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair
+    sm_goal_3 pm_goal_3
+    ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM)
+    ((pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM)
+    nSM_3 nR0_3 nR1_3 2048 16 64 (by omega) (by omega) (by omega)
+    buddy_sm_3 buddy_r0_3 buddy_r1_3 (by decide) (by decide)
+    hq_sm hk_sm hv_sm hq_full hk_full hv_full
+    hcuQ_sm_pm hcuK_sm_pm rfl rfl rfl rfl hfull_shape
+  -- denote <-> applyNode bridges
+  have hbridge_sm : denoteGraph_ringAttn sm_goal_3 initSM 4858
+      = applyNodeRingAttn_sliding_window sm_goal_3
+          ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM) nSM_3 := by
+    rw [show denoteGraph_ringAttn sm_goal_3 initSM 4858
+        = (sm_goal_3.nodes.take 126).foldl (applyNodeRingAttn sm_goal_3) initSM 4858 from
+        foldl_prefix_eq_full_ringAttn sm_goal_3 sm_goal_3.nodes initSM 4858 126 (by decide) (by decide)]
+    rw [show sm_goal_3.nodes.take 126 = sm_goal_3.nodes.take 125 ++ [nSM_3] from rfl,
+        List.foldl_append, List.foldl_cons, List.foldl_nil]
+    exact applyNodeRingAttn_sliding_window_out sm_goal_3 _ 0 4854 4855 4852 4856 4857 4858 [16, 4, 64, 64, 1, 512]
+  have hbridge_r0 : denoteGraph_ringAttn pm_goal_3 initPM 7995
+      = applyNodeRingAttn_sliding_window pm_goal_3
+          ((pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM) nR0_3 := by
+    rw [show denoteGraph_ringAttn pm_goal_3 initPM 7995
+        = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 7995 from
+        foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7995 309 (by decide) (by decide)]
+    rw [show pm_goal_3.nodes.take 309 = pm_goal_3.nodes.take 308 ++ [nR0_3] from rfl,
+        List.foldl_append, List.foldl_cons, List.foldl_nil]
+    exact applyNodeRingAttn_sliding_window_out pm_goal_3 _ 0 7991 7993 7979 4856 4857 7995 [16, 4, 64, 64, 1, 512]
+  have hbridge_r1_denote : denoteGraph_ringAttn pm_goal_3 initPM 7996
+      = applyNodeRingAttn_sliding_window pm_goal_3
+          ((pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM) nR1_3 := by
+    rw [show denoteGraph_ringAttn pm_goal_3 initPM 7996
+        = (pm_goal_3.nodes.take 310).foldl (applyNodeRingAttn pm_goal_3) initPM 7996 from
+        foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7996 310 (by decide) (by decide)]
+    rw [show pm_goal_3.nodes.take 310 = pm_goal_3.nodes.take 309 ++ [nR1_3] from rfl,
+        List.foldl_append, List.foldl_cons, List.foldl_nil]
+    exact applyNodeRingAttn_sliding_window_out pm_goal_3 _ 1 7992 7994 7980 4856 4857 7996 [16, 4, 64, 64, 1, 512]
+  rw [hbridge_sm, hrec, bridge_r1, hbridge_r0, hbridge_r1_denote]
+
+set_option maxRecDepth 1000000 in
+set_option maxHeartbeats 100000000 in
+set_option maxRecDepth 1000000 in
+set_option maxHeartbeats 100000000 in
+theorem pm_attn_shard_shapes_L3
+    (initSM initPM : Store)
+    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 7995).shape = [2048, 16, 64]
+  ∧ (denoteGraph_ringAttn pm_goal_3 initPM 7996).shape = [2048, 16, 64] := by
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have h4802 : initSM 4856 = initPM 4856 := hb initGoal_4856 (by decide) rfl
+  have h4803 : initSM 4857 = initPM 4857 := hb initGoal_4857 (by decide) rfl
+  -- proj commutes (already proven)
+  have qproj := sm_pm_qproj_L3_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have kproj := sm_pm_kproj_L3_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have vproj := sm_pm_vproj_L3_commute initSM initPM h_ss_sm h_ss_pm hInit
+  -- store <-> prefix-fold bridges for SM inputs (take 86)
+  have bSM4800 : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4854
+      = denoteGraph_ringAttn sm_goal_3 initSM 4854 :=
+    (foldl_prefix_eq_full_ringAttn sm_goal_3 sm_goal_3.nodes initSM 4854 125 (by decide) (by decide)).symm
+  have bSM4801 : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4855
+      = denoteGraph_ringAttn sm_goal_3 initSM 4855 :=
+    (foldl_prefix_eq_full_ringAttn sm_goal_3 sm_goal_3.nodes initSM 4855 125 (by decide) (by decide)).symm
+  have bSM4798 : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4852
+      = denoteGraph_ringAttn sm_goal_3 initSM 4852 :=
+    (foldl_prefix_eq_full_ringAttn sm_goal_3 sm_goal_3.nodes initSM 4852 125 (by decide) (by decide)).symm
+  -- PM bridges (take 230)
+  have bPM7805 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7991
+      = denoteGraph_ringAttn pm_goal_3 initPM 7991 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7991 308 (by decide) (by decide)).symm
+  have bPM7806 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7992
+      = denoteGraph_ringAttn pm_goal_3 initPM 7992 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7992 308 (by decide) (by decide)).symm
+  have bPM7807 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7993
+      = denoteGraph_ringAttn pm_goal_3 initPM 7993 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7993 308 (by decide) (by decide)).symm
+  have bPM7808 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7994
+      = denoteGraph_ringAttn pm_goal_3 initPM 7994 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7994 308 (by decide) (by decide)).symm
+  have bPM7793 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7979
+      = denoteGraph_ringAttn pm_goal_3 initPM 7979 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7979 308 (by decide) (by decide)).symm
+  have bPM7794 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7980
+      = denoteGraph_ringAttn pm_goal_3 initPM 7980 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7980 308 (by decide) (by decide)).symm
+  -- store-level q/k/v full hyps
+  have hq_full : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4854
+      = allGatherPrimDimN 0 2 0
+          [(pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7991,
+           (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7992] := by
+    rw [bSM4800, bPM7805, bPM7806]; exact qproj
+  have hk_full : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4855
+      = allGatherPrimDimN 0 2 0
+          [(pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7993,
+           (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7994] := by
+    rw [bSM4801, bPM7807, bPM7808]; exact kproj
+  have hv_full : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4852
+      = allGatherPrimDimN 0 2 0
+          [(pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7979,
+           (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7980] := by
+    rw [bSM4798, bPM7793, bPM7794]; exact vproj
+  -- SM input shapes (from SM denote chain)
+  have hcarry_ag := sm_pm_carry_4844_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have hSM4790sh : (denoteGraph_ringAttn sm_goal_3 initSM 4844).shape = [4096, 1024] := by
+    rw [hcarry_ag]
+    exact aG0_2_shape (denoteGraph_ringAttn pm_goal_3 initPM 7951)
+      (denoteGraph_ringAttn pm_goal_3 initPM 7952) 2048 1024
+      (RouterShapesHelpers.hs_7951 initPM h_ss_pm)
+  have hwq_sm : (initSM 4847).shape = [16, 64, 1024] := h_ss_sm 4847 [16, 64, 1024] (by decide)
+  have hwk_sm : (initSM 4849).shape = [4, 64, 1024] := h_ss_sm 4849 [4, 64, 1024] (by decide)
+  have hwv_sm : (initSM 4851).shape = [4, 64, 1024] := h_ss_sm 4851 [4, 64, 1024] (by decide)
+  have h4792sh : (denoteGraph_ringAttn sm_goal_3 initSM 4846).shape = [4096, 1024] := by
+    rw [denote_sm_goal_3_4846, rms_sh]; exact hSM4790sh
+  have h4794sh : (denoteGraph_ringAttn sm_goal_3 initSM 4848).shape = [4096, 16, 64] := by
+    rw [denote_sm_goal_3_4848]; exact ph_lin_shape_gen _ _ 4096 16 h4792sh hwq_sm
+  have h4796sh : (denoteGraph_ringAttn sm_goal_3 initSM 4850).shape = [4096, 4, 64] := by
+    rw [denote_sm_goal_3_4850]; exact ph_lin_shape_gen _ _ 4096 4 h4792sh hwk_sm
+  have hSMq_shape : ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4854).shape
+      = [4096, 16, 64] := by
+    rw [bSM4800, denote_sm_goal_3_4854]
+    simp only [fw_rotary_embedding]
+    exact fw_rotary_apply_shape_c2a (initSM 4691) (initSM 4853)
+      (denoteGraph_ringAttn sm_goal_3 initSM 4848) 4096 16 64 h4794sh
+  have hSMk_shape : ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4855).shape
+      = [4096, 4, 64] := by
+    rw [bSM4801, denote_sm_goal_3_4855]
+    simp only [fw_rotary_embedding]
+    exact fw_rotary_apply_shape_c2a (initSM 4691) (initSM 4853)
+      (denoteGraph_ringAttn sm_goal_3 initSM 4850) 4096 4 64 h4796sh
+  have hSMv_shape : ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4852).shape
+      = [4096, 4, 64] := by
+    rw [bSM4798, denote_sm_goal_3_4852]
+    exact ph_lin_shape_gen _ _ 4096 4 h4792sh hwv_sm
+  have hq_sm : 0 < ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_3.ins.getD 0 0)).shape.length := by
+    show 0 < ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4854).shape.length
+    rw [hSMq_shape]; decide
+  have hk_sm : 0 < ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_3.ins.getD 1 0)).shape.length := by
+    show 0 < ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4855).shape.length
+    rw [hSMk_shape]; decide
+  have hv_sm : 0 < ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_3.ins.getD 2 0)).shape.length := by
+    show 0 < ((sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4852).shape.length
+    rw [hSMv_shape]; decide
+  -- cu_seqlens equalities
+  have hSM4802 : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4856 = initSM 4856 :=
+    foldl_applyNodeRingAttn_at_not_written sm_goal_3 (sm_goal_3.nodes.take 125) initSM 4856 (by decide) (by decide)
+  have hSM4803 : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4857 = initSM 4857 :=
+    foldl_applyNodeRingAttn_at_not_written sm_goal_3 (sm_goal_3.nodes.take 125) initSM 4857 (by decide) (by decide)
+  have hPM4802 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 4856 = initPM 4856 :=
+    foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 308) initPM 4856 (by decide) (by decide)
+  have hPM4803 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 4857 = initPM 4857 :=
+    foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 308) initPM 4857 (by decide) (by decide)
+  have hcuQ_sm_pm : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_3.ins.getD 3 0)
+      = (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 3 0) := by
+    show (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4856
+        = (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 4856
+    rw [hSM4802, hPM4802, h4802]
+  have hcuK_sm_pm : (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_3.ins.getD 4 0)
+      = (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 4 0) := by
+    show (sm_goal_3.nodes.take 125).foldl (applyNodeRingAttn sm_goal_3) initSM 4857
+        = (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 4857
+    rw [hSM4803, hPM4803, h4803]
+  -- full attention output shape
+  have hfull_shape :
+      (fw_attn_varlen
+        (allGatherPrimDimN 0 2 0 [(pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 0 0),
+                                  (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR1_3.ins.getD 0 0)])
+        (allGatherPrimDimN 0 2 0 [(pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 1 0),
+                                  (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR1_3.ins.getD 1 0)])
+        (allGatherPrimDimN 0 2 0 [(pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 2 0),
+                                  (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR1_3.ins.getD 2 0)])
+        ((pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 3 0))
+        ((pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 4 0))
+        (nR0_3.params.getD 0 1) (nR0_3.params.getD 1 1) (nR0_3.params.getD 2 1) (nR0_3.params.getD 3 1)
+        (decide (nR0_3.params.getD 4 0 ≠ 0)) (nR0_3.params.getD 5 0)).shape
+      = [2 * 2048, 16, 64] := by
+    rw [fw_attn_varlen_shape_p3]
+    show [(allGatherPrimDimN 0 2 0 [(pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7991,
+                                    (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7992]).shape.head?.getD 0, 16, 64]
+        = [2 * 2048, 16, 64]
+    rw [← hq_full, hSMq_shape]; rfl
+  -- bridge r1: take 230 -> take 231
+  have e7805 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7991
+      = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 7991 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7991 308 309 (by omega) (by decide) (by decide)).symm
+  have e7806 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7992
+      = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 7992 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7992 308 309 (by omega) (by decide) (by decide)).symm
+  have e7807 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7993
+      = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 7993 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7993 308 309 (by omega) (by decide) (by decide)).symm
+  have e7808 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7994
+      = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 7994 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7994 308 309 (by omega) (by decide) (by decide)).symm
+  have e7793 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7979
+      = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 7979 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7979 308 309 (by omega) (by decide) (by decide)).symm
+  have e7794 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 7980
+      = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 7980 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7980 308 309 (by omega) (by decide) (by decide)).symm
+  have e4802b : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 4856
+      = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 4856 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 4856 308 309 (by omega) (by decide) (by decide)).symm
+  have e4803b : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM 4857
+      = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 4857 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 4857 308 309 (by omega) (by decide) (by decide)).symm
+  have bridge_r1 : applyNodeRingAttn_sliding_window pm_goal_3
+        ((pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM) nR1_3
+      = applyNodeRingAttn_sliding_window pm_goal_3
+        ((pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM) nR1_3 := by
+    apply attn_sw_store_congr
+    · rw [buddy_r1_3]; intro m hm; fin_cases hm
+      · exact e7805
+      · exact e7806
+    · rw [buddy_r1_3]; intro m hm; fin_cases hm
+      · exact e7807
+      · exact e7808
+    · rw [buddy_r1_3]; intro m hm; fin_cases hm
+      · exact e7793
+      · exact e7794
+    · exact e4802b
+    · exact e4803b
+  have hbridge_r0 : denoteGraph_ringAttn pm_goal_3 initPM 7995
+      = applyNodeRingAttn_sliding_window pm_goal_3
+          ((pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM) nR0_3 := by
+    rw [show denoteGraph_ringAttn pm_goal_3 initPM 7995
+        = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM 7995 from
+        foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7995 309 (by decide) (by decide)]
+    rw [show pm_goal_3.nodes.take 309 = pm_goal_3.nodes.take 308 ++ [nR0_3] from rfl,
+        List.foldl_append, List.foldl_cons, List.foldl_nil]
+    exact applyNodeRingAttn_sliding_window_out pm_goal_3 _ 0 7991 7993 7979 4856 4857 7995 [16, 4, 64, 64, 1, 512]
+  have hbridge_r1_denote : denoteGraph_ringAttn pm_goal_3 initPM 7996
+      = applyNodeRingAttn_sliding_window pm_goal_3
+          ((pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM) nR1_3 := by
+    rw [show denoteGraph_ringAttn pm_goal_3 initPM 7996
+        = (pm_goal_3.nodes.take 310).foldl (applyNodeRingAttn pm_goal_3) initPM 7996 from
+        foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 7996 310 (by decide) (by decide)]
+    rw [show pm_goal_3.nodes.take 310 = pm_goal_3.nodes.take 309 ++ [nR1_3] from rfl,
+        List.foldl_append, List.foldl_cons, List.foldl_nil]
+    exact applyNodeRingAttn_sliding_window_out pm_goal_3 _ 1 7992 7994 7980 4856 4857 7996 [16, 4, 64, 64, 1, 512]
+  refine ⟨?_, ?_⟩
+  · rw [hbridge_r0]
+    unfold applyNodeRingAttn_sliding_window
+    rw [buddy_r0_3]
+    simp only [List.map, List.findIdx?, List.findIdx?.go, if_true, ite_true, eq_self_iff_true,
+      Option.getD_some, List.length_cons, List.length_nil, Nat.reduceAdd, Nat.zero_add]
+    rw [chunkPrimDimN_shape 0 2 _ _ [2 * 2048, 16, 64] hfull_shape (by omega)]
+    decide
+  · rw [hbridge_r1_denote]
+    unfold applyNodeRingAttn_sliding_window
+    rw [buddy_r1_3]
+    simp only [List.map, List.findIdx?, List.findIdx?.go, if_true, ite_true, if_false, ite_false,
+      eq_self_iff_true, Option.getD_some, List.length_cons, List.length_nil, Nat.reduceAdd, Nat.zero_add]
+    rw [show (nR1_3.ins.getD 3 0) = (nR0_3.ins.getD 3 0) from rfl,
+        show (nR1_3.ins.getD 4 0) = (nR0_3.ins.getD 4 0) from rfl,
+        show nR1_3.params = nR0_3.params from rfl]
+    have B0 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 0 0) = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 0 0) := e7805
+    have B1 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR1_3.ins.getD 0 0) = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM (nR1_3.ins.getD 0 0) := e7806
+    have B2 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 1 0) = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 1 0) := e7807
+    have B3 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR1_3.ins.getD 1 0) = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM (nR1_3.ins.getD 1 0) := e7808
+    have B4 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 2 0) = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 2 0) := e7793
+    have B5 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR1_3.ins.getD 2 0) = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM (nR1_3.ins.getD 2 0) := e7794
+    have B6 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 3 0) = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 3 0) := e4802b
+    have B7 : (pm_goal_3.nodes.take 308).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 4 0) = (pm_goal_3.nodes.take 309).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_3.ins.getD 4 0) := e4803b
+    rw [← B0, ← B1, ← B2, ← B3, ← B4, ← B5, ← B6, ← B7]
+    rw [chunkPrimDimN_shape 0 2 _ _ [2 * 2048, 16, 64] hfull_shape (by omega)]
+    decide
+
+-- Shape-specialized wrappers (literal numerals to match denote goal shapes)
+set_option maxHeartbeats 4000000 in
+set_option maxHeartbeats 4000000 in
+theorem sm_pm_carry_4865_commute (initSM initPM : Store)
+    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    denoteGraph_ringAttn sm_goal_3 initSM 4865
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3 initPM 8025,
+           denoteGraph_ringAttn pm_goal_3 initPM 8026] := by
+  rw [denote_sm_goal_3_4865, denote_pm_goal_3_8025, denote_pm_goal_3_8026]
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have hw4807 : initSM 4861 = initPM 4861 := hb initGoal_4861 (by decide) rfl
+  have hwsh : (initPM 4861).shape = [1024, 1024] := h_ss_pm 4861 [1024, 1024] (by decide)
+  have hcarry := sm_pm_carry_4844_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have hattn := sm_pm_attention_L3_commute initSM initPM h_ss_sm h_ss_pm hInit
+  obtain ⟨hs09, hs10⟩ := pm_attn_shard_shapes_L3 initSM initPM h_ss_sm h_ss_pm hInit
+  have h765 : (denoteGraph_ringAttn pm_goal_3 initPM 7951).shape = [2048, 1024] :=
+    RouterShapesHelpers.hs_7951 initPM h_ss_pm
+  have h766 : (denoteGraph_ringAttn pm_goal_3 initPM 7952).shape = [2048, 1024] :=
+    RouterShapesHelpers.hs_7952 initPM h_ss_pm
+  -- trivial fw_view shapes
+  have hview_sh : ∀ t : Tensor, (fw_view [2048, 1024] t).shape = [2048, 1024] := by
+    intro t; exact fw_view_shape_eq _ _
+  set v09 := fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 7995) with hv09def
+  set v10 := fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 7996) with hv10def
+  set w09 := fw_view [2048, 1024] v09 with hw09def
+  set w10 := fw_view [2048, 1024] v10 with hw10def
+  have hv09 : v09.shape = [2048, 1024] := hview_sh _
+  have hv10 : v10.shape = [2048, 1024] := hview_sh _
+  have hw09 : w09.shape = [2048, 1024] := hview_sh _
+  have hw10 : w10.shape = [2048, 1024] := hview_sh _
+  have hl09 : (fw_linear w09 (initPM 4861)).shape = [2048, 1024] := by
+    unfold fw_linear; rw [hw09, hwsh]; rfl
+  have hl10 : (fw_linear w10 (initPM 4861)).shape = [2048, 1024] := by
+    unfold fw_linear; rw [hw10, hwsh]; rfl
+  have hx0 : (fw_view [2048, 1024] (fw_linear w09 (initPM 4861))).shape = [2048, 1024] := hview_sh _
+  have hx1 : (fw_view [2048, 1024] (fw_linear w10 (initPM 4861))).shape = [2048, 1024] := hview_sh _
+  rw [hw4807, hcarry, hattn]
+  rw [fw_view_aG0_2_3to2_L2 _ _ hs09 hs10]
+  rw [← hv09def, ← hv10def]
+  rw [fw_view2d_L2 _ _ hv09 hv10]
+  rw [← hw09def, ← hw10def]
+  rw [fw_linear_L2 _ _ _ hw09 hw10 hwsh]
+  rw [fw_view2d_L2 _ _ hl09 hl10]
+  rw [fw_add_allGather0_commute_2_2048_1024 _ _ _ _ h765 h766 hx0 hx1]
+set_option maxHeartbeats 4000000 in
+theorem sm_pm_nl_L3_commute (initSM initPM : Store)
+    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    denoteGraph_ringAttn sm_goal_3 initSM 4870
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3 initPM 8037,
+           denoteGraph_ringAttn pm_goal_3 initPM 8038] := by
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have h4812 : initSM 4866 = initPM 4866 := hb initGoal_4866 (by decide) rfl
+  have h4815 : initSM 4869 = initPM 4869 := hb initGoal_4869 (by decide) rfl
+  have hcarry := sm_pm_carry_4865_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have hw4815 : (initPM 4869).shape = [64, 1024] := h_ss_pm 4869 [64, 1024] (by decide)
+  have hs839 : (denoteGraph_ringAttn pm_goal_3 initPM 8025).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_8025]
+    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
+      (RouterShapesHelpers.hs_7951 initPM h_ss_pm) (fw_view_shape_eq _ _)
+  have hs840 : (denoteGraph_ringAttn pm_goal_3 initPM 8026).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_8026]
+    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
+      (RouterShapesHelpers.hs_7952 initPM h_ss_pm) (fw_view_shape_eq _ _)
+  have hrms839 : (fw_rms_norm (denoteGraph_ringAttn pm_goal_3 initPM 8025) (initPM 4866)).shape = [2048, 1024] := by
+    rw [rms_sh]; exact hs839
+  have hrms840 : (fw_rms_norm (denoteGraph_ringAttn pm_goal_3 initPM 8026) (initPM 4866)).shape = [2048, 1024] := by
+    rw [rms_sh]; exact hs840
+  rw [denote_sm_goal_3_4870, denote_sm_goal_3_4868, denote_sm_goal_3_4867,
+      denote_pm_goal_3_8037, denote_pm_goal_3_8031, denote_pm_goal_3_8029,
+      denote_pm_goal_3_8038, denote_pm_goal_3_8032, denote_pm_goal_3_8030]
+  rw [h4812, h4815, hcarry]
+  rw [fw_rms_norm_allGather0_commute_2 _ _ (initPM 4866) 2048 1024 (by omega) (by omega) hs839 hs840]
+  rw [fw_norm_linear_allGather0_commute_2 _ _ (initPM 4869) 2048 1024 64 (by omega) (by omega) (by omega) hrms839 hrms840 hw4815]
+set_option maxHeartbeats 4000000 in
+theorem sm_pm_router_commute_L3
+    (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM sm_goal_3InitEnv)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    (sm_goal_3_routers initSM).getD 3 (zeroTensor [2 * 2048, 64]) =
+      allGatherPrimDimN 0 2 0
+        [(pm_goal_3_routers_r0 initPM).getD 3 (zeroTensor [2048, 64]),
+         (pm_goal_3_routers_r1 initPM).getD 3 (zeroTensor [2048, 64])] := by
+  simp only [sm_goal_3_routers, pm_goal_3_routers_r0, pm_goal_3_routers_r1,
+    List.getD_cons_succ, List.getD_cons_zero]
+  have hnl := sm_pm_nl_L3_commute initSM initPM hSM hPM hInit
+  have hs839 : (denoteGraph_ringAttn pm_goal_3 initPM 8025).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_8025]
+    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
+      (RouterShapesHelpers.hs_7951 initPM hPM) (fw_view_shape_eq _ _)
+  have hs840 : (denoteGraph_ringAttn pm_goal_3 initPM 8026).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_8026]
+    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
+      (RouterShapesHelpers.hs_7952 initPM hPM) (fw_view_shape_eq _ _)
+  have hs51 : (denoteGraph_ringAttn pm_goal_3 initPM 8037).shape = [2048, 64] := by
+    rw [denote_pm_goal_3_8037, denote_pm_goal_3_8031, denote_pm_goal_3_8029]
+    exact nl_sh 2048 1024 64 _ (initPM 4869) (by rw [rms_sh]; exact hs839) (hPM 4869 [64, 1024] (by decide))
+  have hs52 : (denoteGraph_ringAttn pm_goal_3 initPM 8038).shape = [2048, 64] := by
+    rw [denote_pm_goal_3_8038, denote_pm_goal_3_8032, denote_pm_goal_3_8030]
+    exact nl_sh 2048 1024 64 _ (initPM 4869) (by rw [rms_sh]; exact hs840) (hPM 4869 [64, 1024] (by decide))
+  have hSM16sh : (denoteGraph_ringAttn sm_goal_3 initSM 4870).shape = [4096, 64] := by
+    rw [hnl]; exact aG0_2_shape _ _ 2048 64 hs51
+  rw [denote_sm_goal_3_4872, denote_pm_goal_3_8041, denote_pm_goal_3_8042]
+  rw [show (denoteGraph_ringAttn sm_goal_3 initSM 4870).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hSM16sh]; rfl,
+      show (denoteGraph_ringAttn pm_goal_3 initPM 8037).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs51]; rfl,
+      show (denoteGraph_ringAttn pm_goal_3 initPM 8038).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs52]; rfl]
+  rw [hnl]
+  exact fw_topk_routing_snd_fst_allGather0_commute_2_of _ _ 2048 ([8].getD 0 1) 64 (by omega) (by omega) hs51 hs52
+
+
 /-
 ================================================================================
 ROADMAP — L3 steady-state chain: closing `sm_pm_router_commute_L3`
