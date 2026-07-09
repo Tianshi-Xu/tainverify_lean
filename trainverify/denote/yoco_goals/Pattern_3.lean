@@ -47100,4 +47100,125 @@ theorem denote_pm_goal_3_8738 (initPM : Store) :
   rw [hval_8738, hval_11860, hval_8734, hval_8702, hval_8714]
 
 
+
+set_option maxHeartbeats 4000000 in
+theorem sm_pm_moe_gmm_L6_commute (initSM initPM : Store)
+    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5038
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3 initPM 8607,
+           denoteGraph_ringAttn pm_goal_3 initPM 8608] := by
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+    intro g hg hshape
+    have hgh := hII g hg
+    unfold InitGoalHolds at hgh
+    obtain ⟨_, _, hval⟩ := hgh
+    rw [hshape] at hval
+    simpa [List.map, reconstructWithDim_singleton] using hval
+  have h5028 : initSM 5028 = initPM 5028 := hb initGoal_5028 (by decide) rfl
+  have h5036 : initSM 5036 = allGatherPrimDimN 0 2 0 [initPM 8603, initPM 8604] := by
+    have hg := hII initGoal_5036 (by decide)
+    unfold InitGoalHolds at hg
+    obtain ⟨_, _, hval⟩ := hg
+    simp only [initGoal_5036, List.map] at hval
+    rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 8603) (initPM 8604) []
+        (by rw [h_ss_pm 8603 [32,1024,1024] (by decide)]; decide)] at hval
+    rw [show pm_goal_3.numRanks = 2 from rfl] at hval
+    exact hval
+  have h5037 : initSM 5037 = allGatherPrimDimN 0 2 0 [initPM 8605, initPM 8606] := by
+    have hg := hII initGoal_5037 (by decide)
+    unfold InitGoalHolds at hg
+    obtain ⟨_, _, hval⟩ := hg
+    simp only [initGoal_5037, List.map] at hval
+    rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 8605) (initPM 8606) []
+        (by rw [h_ss_pm 8605 [32,1024,512] (by decide)]; decide)] at hval
+    rw [show pm_goal_3.numRanks = 2 from rfl] at hval
+    exact hval
+  have hcarry := sm_pm_carry_5027_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have hnl := sm_pm_nl_L6_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have hs839 : (denoteGraph_ringAttn pm_goal_3 initPM 8583).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_8583]
+    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
+      (RouterShapesHelpers.hs_8509 initPM h_ss_pm) (fw_view_shape_eq _ _)
+  have hs840 : (denoteGraph_ringAttn pm_goal_3 initPM 8584).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_8584]
+    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
+      (RouterShapesHelpers.hs_8510 initPM h_ss_pm) (fw_view_shape_eq _ _)
+  have hs51 : (denoteGraph_ringAttn pm_goal_3 initPM 8595).shape = [2048, 64] := by
+    rw [denote_pm_goal_3_8595, denote_pm_goal_3_8589, denote_pm_goal_3_8587]
+    exact nl_sh 2048 1024 64 _ (initPM 5031) (by rw [rms_sh]; exact hs839) (h_ss_pm 5031 [64, 1024] (by decide))
+  have hs52 : (denoteGraph_ringAttn pm_goal_3 initPM 8596).shape = [2048, 64] := by
+    rw [denote_pm_goal_3_8596, denote_pm_goal_3_8590, denote_pm_goal_3_8588]
+    exact nl_sh 2048 1024 64 _ (initPM 5031) (by rw [rms_sh]; exact hs840) (h_ss_pm 5031 [64, 1024] (by decide))
+  have hSM16sh : (denoteGraph_ringAttn sm_goal_3 initSM 5032).shape = [4096, 64] := by
+    rw [hnl]; exact aG0_2_shape _ _ 2048 64 hs51
+  have hrms839 : (fw_rms_norm (denoteGraph_ringAttn pm_goal_3 initPM 8583) (initPM 5028)).shape = [2048, 1024] := by
+    rw [rms_sh]; exact hs839
+  have hrms840 : (fw_rms_norm (denoteGraph_ringAttn pm_goal_3 initPM 8584) (initPM 5028)).shape = [2048, 1024] := by
+    rw [rms_sh]; exact hs840
+  have hw59 : (initPM 8603).shape = [32,1024,1024] := h_ss_pm 8603 [32,1024,1024] (by decide)
+  have hw60 : (initPM 8604).shape = [32,1024,1024] := h_ss_pm 8604 [32,1024,1024] (by decide)
+  have hw61 : (initPM 8605).shape = [32,1024,512] := h_ss_pm 8605 [32,1024,512] (by decide)
+  have hw62 : (initPM 8606).shape = [32,1024,512] := h_ss_pm 8606 [32,1024,512] (by decide)
+  -- shapes of rms outputs = inputs to moe (via denote 8587/8588)
+  have h843sh : (denoteGraph_ringAttn pm_goal_3 initPM 8587).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_8587]; exact hrms839
+  have h844sh : (denoteGraph_ringAttn pm_goal_3 initPM 8588).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_8588]; exact hrms840
+  -- canonical topk forms for the four routing outputs
+  have h853canon : denoteGraph_ringAttn pm_goal_3 initPM 8597
+      = (fw_topk_routing (denoteGraph_ringAttn pm_goal_3 initPM 8595) 8 64).fst := by
+    rw [denote_pm_goal_3_8597, show ((denoteGraph_ringAttn pm_goal_3 initPM 8595).shape.reverse.head?).getD 1 = 64 from by rw [hs51]; rfl]
+  have h854canon : denoteGraph_ringAttn pm_goal_3 initPM 8598
+      = (fw_topk_routing (denoteGraph_ringAttn pm_goal_3 initPM 8596) 8 64).fst := by
+    rw [denote_pm_goal_3_8598, show ((denoteGraph_ringAttn pm_goal_3 initPM 8596).shape.reverse.head?).getD 1 = 64 from by rw [hs52]; rfl]
+  have h855canon : denoteGraph_ringAttn pm_goal_3 initPM 8599
+      = (fw_topk_routing (denoteGraph_ringAttn pm_goal_3 initPM 8595) ([8].getD 0 1) 64).snd.fst := by
+    rw [denote_pm_goal_3_8599, show ((denoteGraph_ringAttn pm_goal_3 initPM 8595).shape.reverse.head?).getD ([8].getD 1 1) = 64 from by rw [hs51]; rfl]
+  have h856canon : denoteGraph_ringAttn pm_goal_3 initPM 8600
+      = (fw_topk_routing (denoteGraph_ringAttn pm_goal_3 initPM 8596) ([8].getD 0 1) 64).snd.fst := by
+    rw [denote_pm_goal_3_8600, show ((denoteGraph_ringAttn pm_goal_3 initPM 8596).shape.reverse.head?).getD ([8].getD 1 1) = 64 from by rw [hs52]; rfl]
+  have h853sh : (denoteGraph_ringAttn pm_goal_3 initPM 8597).shape = [2048, 64] := by
+    rw [h853canon]; exact fw_topk_routing_fst_shape _ 8 64 2048 (by rw [hs51]; rfl)
+  have h854sh : (denoteGraph_ringAttn pm_goal_3 initPM 8598).shape = [2048, 64] := by
+    rw [h854canon]; exact fw_topk_routing_fst_shape _ 8 64 2048 (by rw [hs52]; rfl)
+  have h855sh : (denoteGraph_ringAttn pm_goal_3 initPM 8599).shape = [2048, 64] := by
+    rw [h855canon]; exact topk_sf_sh _ 2048 ([8].getD 0 1) 64 hs51
+  have h856sh : (denoteGraph_ringAttn pm_goal_3 initPM 8600).shape = [2048, 64] := by
+    rw [h856canon]; exact topk_sf_sh _ 2048 ([8].getD 0 1) 64 hs52
+  -- split commute key
+  have key := fw_all2all_moe_gmm_full_split_commute_2
+    (denoteGraph_ringAttn pm_goal_3 initPM 8587) (denoteGraph_ringAttn pm_goal_3 initPM 8588)
+    (denoteGraph_ringAttn pm_goal_3 initPM 8597) (denoteGraph_ringAttn pm_goal_3 initPM 8598)
+    (denoteGraph_ringAttn pm_goal_3 initPM 8599) (denoteGraph_ringAttn pm_goal_3 initPM 8600)
+    (initPM 8603) (initPM 8604) (initPM 8605) (initPM 8606)
+    2048 1024 32 8 1024 512 ((((10 : Nat) : Scalar)))
+    (by omega) (by omega) (by omega) (by omega) (by omega) rfl
+    h843sh h844sh h853sh h854sh h855sh h856sh hw59 hw60 hw61 hw62
+  -- Rewrite RHS via denote unfolds and key
+  rw [denote_pm_goal_3_8607, denote_pm_goal_3_8608, denote_pm_goal_3_15182, denote_pm_goal_3_15205,
+      ← key]
+  -- Transform LHS
+  rw [denote_sm_goal_3_5038, denote_sm_goal_3_7731, denote_sm_goal_3_5033, denote_sm_goal_3_5034]
+  rw [h5036, h5037, h5028]
+  -- normalize SM topk k
+  rw [show ((denoteGraph_ringAttn sm_goal_3 initSM 5032).shape.reverse.head?).getD 1 = 64 from by rw [hSM16sh]; rfl,
+      show ((denoteGraph_ringAttn sm_goal_3 initSM 5032).shape.reverse.head?).getD ([8].getD 1 1) = 64 from by rw [hSM16sh]; rfl]
+  rw [hcarry, hnl]
+  -- rms commute
+  rw [fw_rms_norm_allGather0_commute_2 _ _ (initPM 5028) 2048 1024 (by omega) (by omega) hs839 hs840]
+  rw [← denote_pm_goal_3_8587, ← denote_pm_goal_3_8588]
+  -- topk fst/snd_fst commutes
+  rw [fw_topk_routing_fst_allGather0_commute_2_of _ _ 2048 8 64 (by omega) (by omega) hs51 hs52]
+  rw [fw_topk_routing_snd_fst_allGather0_commute_2_of _ _ 2048 ([8].getD 0 1) 64 (by omega) (by omega) hs51 hs52]
+  rw [← h853canon, ← h854canon, ← h855canon, ← h856canon]
+  unfold fw_all2all_moe_gmm_full
+  rfl
+
+
 end TrainVerify.Denote.GeneratedPatterns
