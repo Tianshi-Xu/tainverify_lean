@@ -43767,4 +43767,39 @@ theorem sm_pm_gate_mul_L5_commute
         (by rw [TrainVerify.Denote.fw_sigmoid_shape]; exact fw_view_shape_eq _ _) (by rw [TrainVerify.Denote.fw_sigmoid_shape]; exact fw_view_shape_eq _ _) (fw_view_shape_eq _ _) (fw_view_shape_eq _ _)]
 
 
+
+set_option maxHeartbeats 8000000 in
+set_option maxRecDepth 20000 in
+theorem sm_pm_carry_5006_commute
+    (initSM initPM : Store)
+    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5006
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3 initPM 8509,
+           denoteGraph_ringAttn pm_goal_3 initPM 8510] := by
+  have hcarry := sm_pm_carry_4973_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have hmoe := sm_pm_moe_gmm_L5_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have hgate := sm_pm_gate_mul_L5_commute initSM initPM h_ss_sm h_ss_pm hInit
+  have h839 := RouterShapesHelpers.hs_8397 initPM h_ss_pm
+  have h840 := RouterShapesHelpers.hs_8398 initPM h_ss_pm
+  have h863 := RouterShapesHelpers.hs_8421 initPM h_ss_pm
+  have h864 := RouterShapesHelpers.hs_8422 initPM h_ss_pm
+  have h937 := RouterShapesHelpers.hs_8495 initPM h_ss_pm
+  have h938 := RouterShapesHelpers.hs_8496 initPM h_ss_pm
+  have hin0 : (elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 8421)
+      (denoteGraph_ringAttn pm_goal_3 initPM 8495)).shape = [2048, 1024] :=
+    elemwiseAdd_shape_of_shapes _ _ _ h863 h937
+  have hin1 : (elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 8422)
+      (denoteGraph_ringAttn pm_goal_3 initPM 8496)).shape = [2048, 1024] :=
+    elemwiseAdd_shape_of_shapes _ _ _ h864 h938
+  rw [denote_sm_goal_3_5006, denote_sm_goal_3_7668, denote_sm_goal_3_5005, denote_sm_goal_3_5004,
+      denote_pm_goal_3_8509, denote_pm_goal_3_15059, denote_pm_goal_3_8505, denote_pm_goal_3_8499,
+      denote_pm_goal_3_8510, denote_pm_goal_3_15067, denote_pm_goal_3_8506, denote_pm_goal_3_8500]
+  rw [hcarry, hmoe, hgate]
+  rw [fw_add_allGather0_commute_2_2048_1024 _ _ _ _ h863 h864 h937 h938]
+  rw [fw_add_allGather0_commute_2_2048_1024 _ _ _ _ h839 h840 hin0 hin1]
+
+
 end TrainVerify.Denote.GeneratedPatterns
