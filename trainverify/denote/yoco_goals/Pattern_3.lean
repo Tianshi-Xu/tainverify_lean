@@ -31596,4 +31596,72 @@ theorem denote_pm_goal_3_7994 (initPM : Store) :
   rw [hval_7994, hval_11856, hval_7990, hval_7958, hval_7970]
 
 
+/-
+================================================================================
+ROADMAP — L3 steady-state chain: closing `sm_pm_router_commute_L3`
+================================================================================
+
+STATUS (this commit): Phase 1 landed — 33 L3 denote unfolds above
+(`denote_sm_goal_3_4846` .. `denote_pm_goal_3_8042`), kernel-clean
+[propext, Classical.choice, Quot.sound]. These validate the L2→L3
+tid-substitution codegen template (SM +54, PM +186, cos +1 per layer).
+
+REMAINING REDUCTION (all downstream lemmas gate on ONE novel proof):
+
+  sm_pm_router_commute_L3          (SM 4872)   -- mechanical Δ-shift of _L2
+    <- sm_pm_nl_L3_commute         (SM 4870)   -- mechanical Δ-shift of _L2
+      <- sm_pm_carry_4865_commute  (SM 4865)   -- L3 INTERNAL attn residual,
+                                                   Δ-shift of sm_pm_carry_4811
+      <- sm_pm_attention_L3_commute(SM 4858)   -- needs buddy defs nSM_3/nR0_3/
+                                                   nR1_3 + pm_attn_shard_shapes_L3
+        <- {qproj,kproj,vproj,q,k,rms}_L3       -- see L3_proj_scaffold.lean
+          <- sm_pm_carry_4844_commute (SM 4844) -- *** THE BLOCKER ***
+
+BLOCKER — `sm_pm_carry_4844_commute` (L2→L3 boundary residual carry):
+
+  SM 4844 = SM 4811 + (SM 4822 + SM 4841)   (L2 layer's attn-residual + MoE + gate)
+          = allGather0[PM 7951, PM 7952]
+
+  Requires THREE sub-commutes, analogous to `sm_pm_carry_4790_commute`
+  (the proven L1→L2 boundary):
+    (1) sm_pm_carry_4811_commute        -- EXISTS (L2 Phase 4, line 30246)
+    (2) sm_pm_moe_gmm_L2_commute        -- NOVEL: SM 4822 = allGather0[PM 7863,7864]
+    (3) sm_pm_gate_mul_L2_commute       -- NOVEL: SM 4841 = allGather0[PM 8017,8018]
+
+  (2) and (3) CANNOT be tid-shifted from their L1 counterparts
+  (`sm_pm_moe_gmm_L1_commute`, `sm_pm_gate_mul_L1_commute`). The L1 and L2
+  MoE regions are NOT structurally isomorphic — verified by node inspection
+  in Goal_3.lean:
+
+    L1 (special first layer — routing computed FULL then chunked):
+      moe_gmm ins[0] = 11977 = ChunkPrim(11904)
+      11904 = multiref(4759)               -- 4759 = FULL 4096-row NL (SM-shared)
+      => per-shard moe input is a CHUNK of the gathered full tensor.
+      Proof reconstructs full RMS/NL on PM, chunks, applies
+      `fw_all2all_moe_gmm_full_split_commute_2`.
+
+    L2 (steady-state — routing computed PER-SHARD on PM):
+      moe_gmm ins[0] = 14766 = multiref(7843)   -- 7843 = per-shard 2048-row float
+      7845 = FW_float(14762);  7851 = FW_norm_linear(7845, 4815);
+      7853/7855 = FW_topk_routing(7851)          -- routing done PER-SHARD, no chunk.
+      => per-shard moe input is NOT expressed as a chunk in the graph.
+
+  To bridge L2 to `fw_all2all_moe_gmm_full_split_commute_2` one must first
+  prove per-shard routing = chunk of full routing, i.e. row-wise commutes:
+      chunkPrimDimN ∘ FW_float        = FW_float ∘ chunkPrimDimN
+      chunkPrimDimN ∘ FW_norm_linear  = FW_norm_linear ∘ chunkPrimDimN  (row-wise)
+      chunkPrimDimN ∘ FW_topk_routing = FW_topk_routing ∘ chunkPrimDimN  (row-wise)
+  NONE of these chunk-commute lemmas currently exist in the codebase
+  (searched denote/*.lean, Pattern_1.lean). Building them + moe_gmm_L2 +
+  gate_mul_L2 is an estimated ~800+ line novel steady-state MoE proof,
+  requiring an additional family of L2-MoE-region denote unfolds not yet
+  generated. This exceeds the single-subgoal budget and is deferred.
+
+NEXT STEP to unblock: prove the three row-wise chunk-commute lemmas above
+(reusable for L4..L11), then assemble sm_pm_moe_gmm_L2_commute /
+sm_pm_gate_mul_L2_commute → sm_pm_carry_4844_commute. All lemmas below
+carry_4844 are then mechanical Δ-shifts of their L2 originals.
+================================================================================
+-/
+
 end TrainVerify.Denote.GeneratedPatterns
