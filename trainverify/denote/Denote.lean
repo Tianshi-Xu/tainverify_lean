@@ -5764,6 +5764,133 @@ theorem allGatherPrimDimN0_valAt_3D
   rw [show (0 : Nat) * (shard * (mid * last)) + i * (mid * last) + (j * last + k)
       = (i * mid + j) * last + k from by ring]
 
+-- `fw_attn_varlen` is invariant under appending an unused duplicate of K/V along
+-- dim 0 (row-doubling via `allGatherPrimDimN 0 2 0 [k,k]`). This is the algebraic
+-- core enabling the L12-L23 zigzag-attention sharding-commute: the PM-side buddies
+-- share K/V tids, so `fullK_pm = allGather0[K,K]` is row-doubled, but the extra
+-- rows (indices ≥ Lk) are never read because `fw_attn_varlen` only touches rows
+-- `j < k_end ≤ Lk` (via `h_bound` on the decoded `cuK`). Hypotheses `0 < qh`,
+-- `0 < kvh`, `0 < d`, `0 < vd`, and `kvh ∣ qh` are the GQA well-formedness
+-- conditions ensuring the decoded head index `h_kv < kvh`.
+set_option maxHeartbeats 4000000 in
+theorem fw_attn_varlen_kv_append_invariant
+    (q k v cuQ cuK : Tensor)
+    (qh kvh d vd : Nat) (causal : Bool) (windowLeft : Nat)
+    (Lk : Nat)
+    (hqh : 0 < qh) (hkvh : 0 < kvh) (hd : 0 < d) (hvd : 0 < vd)
+    (hdvd : kvh ∣ qh)
+    (hk_shape : k.shape = [Lk, kvh, d])
+    (hv_shape : v.shape = [Lk, kvh, vd])
+    (h_bound : ∀ s, (decodeCuSeqlens cuK).getD (s+1) 0 ≤ Lk) :
+    fw_attn_varlen q k v cuQ cuK qh kvh d vd causal windowLeft
+      = fw_attn_varlen q (allGatherPrimDimN 0 2 0 [k, k])
+                         (allGatherPrimDimN 0 2 0 [v, v])
+                         cuQ cuK qh kvh d vd causal windowLeft := by
+  unfold fw_attn_varlen
+  apply congrArg (Tensor.mkShape [(List.head? q.shape).getD 0, qh, vd])
+  funext outIdx
+  dsimp only
+  set lh := (↑outIdx : Nat) / vd with hlh
+  set i0 := lh / qh with hi0
+  set hq0 := lh % qh with hhq0
+  set c0 := (↑outIdx : Nat) % vd with hc0
+  set s0 := attnFindSeq (decodeCuSeqlens cuQ) i0 with hs0
+  set ks := (decodeCuSeqlens cuK).getD s0 0 with hks
+  set ke := (decodeCuSeqlens cuK).getD (s0 + 1) ks with hke
+  set gf := (if kvh = 0 then 1 else qh / kvh) with hgf
+  set hkv := (if gf = 0 then hq0 else hq0 / gf) with hhkv
+  set il := i0 - (decodeCuSeqlens cuQ).getD s0 0 with hil
+  set sc := attnScale d with hsc
+  -- h_kv bound (GQA divisibility)
+  have hkvh_ne : kvh ≠ 0 := Nat.pos_iff_ne_zero.mp hkvh
+  have hgf_eq : gf = qh / kvh := by rw [hgf, if_neg hkvh_ne]
+  have hgf_pos : 0 < gf := by
+    rw [hgf_eq]; exact Nat.div_pos (Nat.le_of_dvd hqh hdvd) hkvh
+  have hgf_ne : gf ≠ 0 := Nat.pos_iff_ne_zero.mp hgf_pos
+  have hhkv_eq : hkv = hq0 / gf := by rw [hhkv, if_neg hgf_ne]
+  have hkvmul : kvh * gf = qh := by rw [hgf_eq]; exact Nat.mul_div_cancel' hdvd
+  have hhq0_lt : hq0 < qh := by rw [hhq0]; exact Nat.mod_lt _ hqh
+  have hhkv_lt : hkv < kvh := by
+    rw [hhkv_eq, Nat.div_lt_iff_lt_mul hgf_pos, hkvmul]; exact hhq0_lt
+  -- j-index bound: reads stay within the first Lk rows
+  have hbound_j : ∀ x, x < ke - ks → ks + x < Lk := by
+    intro x hx
+    have hkelt : ke ≤ Lk := by
+      cases hcase : (decodeCuSeqlens cuK)[s0 + 1]? with
+      | none =>
+          exfalso
+          have hke_eq : ke = ks := by
+            rw [hke, List.getD_eq_getElem?_getD, hcase]; rfl
+          omega
+      | some e =>
+          have hke_eq : ke = e := by
+            rw [hke, List.getD_eq_getElem?_getD, hcase]; rfl
+          have hbnd := h_bound s0
+          rw [List.getD_eq_getElem?_getD, hcase] at hbnd
+          simp only [Option.getD_some] at hbnd
+          rw [hke_eq]; exact hbnd
+    omega
+  -- shape facts for the gathered K/V
+  have hhead2 : (([k, k]).head?.map (fun t => t.shape)).getD [] = [Lk, kvh, d] := by
+    simp only [List.head?_cons, Option.map_some, Option.getD_some, hk_shape]
+  have hWs2 : ∀ r (_ : r < 2),
+      (([k, k]).getD r (zeroTensor [Lk, kvh, d])).shape = [Lk, kvh, d] := by
+    intro r hr
+    interval_cases r <;> simp only [List.getD_cons_zero, List.getD_cons_succ, hk_shape]
+  have hheadV : (([v, v]).head?.map (fun t => t.shape)).getD [] = [Lk, kvh, vd] := by
+    simp only [List.head?_cons, Option.map_some, Option.getD_some, hv_shape]
+  have hWsV : ∀ r (_ : r < 2),
+      (([v, v]).getD r (zeroTensor [Lk, kvh, vd])).shape = [Lk, kvh, vd] := by
+    intro r hr
+    interval_cases r <;> simp only [List.getD_cons_zero, List.getD_cons_succ, hv_shape]
+  -- dot-product invariance for rows < Lk
+  have hdotK : ∀ jj, jj < Lk →
+      attnDotQK q k qh kvh d i0 hq0 jj hkv
+        = attnDotQK q (allGatherPrimDimN 0 2 0 [k, k]) qh kvh d i0 hq0 jj hkv := by
+    intro jj hjj
+    have hLk_pos : 0 < Lk := by omega
+    unfold attnDotQK
+    apply Finset.sum_congr rfl
+    intro c hc
+    have hcd : c < d := Finset.mem_range.mp hc
+    congr 1
+    have hA := allGatherPrimDimN0_valAt_3D 2 Lk kvh d [k, k]
+      (by norm_num) hLk_pos hkvh hd hhead2 hWs2 0 (by norm_num) jj hjj hkv hhkv_lt c hcd
+    simp only [Nat.zero_mul, Nat.zero_add, List.getD_cons_zero] at hA
+    exact hA.symm
+  -- value invariance for rows < Lk
+  have hvalV : ∀ jj, jj < Lk →
+      valAt v ((jj * kvh + hkv) * vd + c0)
+        = valAt (allGatherPrimDimN 0 2 0 [v, v]) ((jj * kvh + hkv) * vd + c0) := by
+    intro jj hjj
+    have hLk_pos : 0 < Lk := by omega
+    have hc0lt : c0 < vd := by rw [hc0]; exact Nat.mod_lt _ hvd
+    have hA := allGatherPrimDimN0_valAt_3D 2 Lk kvh vd [v, v]
+      (by norm_num) hLk_pos hkvh hvd hheadV hWsV 0 (by norm_num) jj hjj hkv hhkv_lt c0 hc0lt
+    simp only [Nat.zero_mul, Nat.zero_add, List.getD_cons_zero] at hA
+    exact hA.symm
+  -- expSum invariance
+  have hExp : (∑ jOff ∈ Finset.range (ke - ks),
+        if attnMaskedAt causal windowLeft il jOff = true then 0
+        else expFn (attnDotQK q k qh kvh d i0 hq0 (ks + jOff) hkv * sc))
+      = (∑ jOff ∈ Finset.range (ke - ks),
+        if attnMaskedAt causal windowLeft il jOff = true then 0
+        else expFn (attnDotQK q (allGatherPrimDimN 0 2 0 [k, k]) qh kvh d i0 hq0 (ks + jOff) hkv * sc)) := by
+    apply Finset.sum_congr rfl
+    intro x hx
+    have hxr := Finset.mem_range.mp hx
+    by_cases hm : attnMaskedAt causal windowLeft il x = true
+    · rw [if_pos hm, if_pos hm]
+    · rw [if_neg hm, if_neg hm, hdotK (ks + x) (hbound_j x hxr)]
+  -- main
+  rw [hExp]
+  apply Finset.sum_congr rfl
+  intro x hx
+  have hxr := Finset.mem_range.mp hx
+  by_cases hm : attnMaskedAt causal windowLeft il x = true
+  · rw [if_pos hm, if_pos hm, zero_mul, zero_mul]
+  · rw [if_neg hm, if_neg hm, hdotK (ks + x) (hbound_j x hxr), hvalV (ks + x) (hbound_j x hxr)]
+
 /-- Value of `fw_embedding ids fullW` at output index `outIdx` is the full lookup
     when row is in vocab range, else 0. -/
 theorem fw_embedding_valAt
