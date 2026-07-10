@@ -29454,14 +29454,41 @@ theorem $n0 (initSM initPM : Store)
 
 mk_rms 2
 
-theorem sm_pm_qlin_L2_commute (initSM initPM : Store)
+open Lean Elab Command Term in
+
+/-- Macro `mk_qlin k` (k ≥ 2): emit `sm_pm_qlin_L{k}_commute`.
+    Every per-layer tid is affine in `k` (SM stride 54, PM stride 186), so the
+    full ~28-line proof is spliced from one template. The produced theorem
+    elaborates to the same kernel term as the hand-written layer lemma it
+    replaces, with the identical name. -/
+elab "mk_qlin " kStx:num : command => do
+  let k := kStx.getNat
+  let q0  : Ident  := mkIdent (Name.mkSimple s!"sm_pm_qlin_L{k}_commute")
+  let nS  : NumLit := Syntax.mkNumLit (toString (4794 + 54*(k-2)))
+  let nPa : NumLit := Syntax.mkNumLit (toString (7771 + 186*(k-2)))
+  let nPb : NumLit := Syntax.mkNumLit (toString (7772 + 186*(k-2)))
+  let ns  : NumLit := Syntax.mkNumLit (toString (4793 + 54*(k-2)))
+  let hsN : Ident  := mkIdent (Name.mkSimple s!"h{(4793 + 54*(k-2))}")
+  let ig  : Ident  := mkIdent (Name.mkSimple s!"initGoal_{(4793 + 54*(k-2))}")
+  let rms : Ident  := mkIdent (Name.mkSimple s!"sm_pm_rms_L{k}_commute")
+  let nP69 : NumLit := Syntax.mkNumLit (toString (7769 + 186*(k-2)))
+  let nP70 : NumLit := Syntax.mkNumLit (toString (7770 + 186*(k-2)))
+  let dP69 : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{(7769 + 186*(k-2))}")
+  let dP70 : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{(7770 + 186*(k-2))}")
+  let hsa : Ident  := mkIdent (Name.str (Name.str .anonymous "RouterShapesHelpers") s!"hs_{(7765 + 186*(k-2))}")
+  let hsb : Ident  := mkIdent (Name.str (Name.str .anonymous "RouterShapesHelpers") s!"hs_{(7766 + 186*(k-2))}")
+  let dS  : Ident  := mkIdent (Name.mkSimple s!"denote_sm_goal_3_{(4794 + 54*(k-2))}")
+  let dPa : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{(7771 + 186*(k-2))}")
+  let dPb : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{(7772 + 186*(k-2))}")
+  let decl ← `(command|
+theorem $q0 (initSM initPM : Store)
     (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
     (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
     (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    denoteGraph_ringAttn sm_goal_3 initSM 4794
+    denoteGraph_ringAttn sm_goal_3 initSM $nS
       = allGatherPrimDimN 0 2 0
-          [denoteGraph_ringAttn pm_goal_3 initPM 7771,
-           denoteGraph_ringAttn pm_goal_3 initPM 7772] := by
+          [denoteGraph_ringAttn pm_goal_3 initPM $nPa,
+           denoteGraph_ringAttn pm_goal_3 initPM $nPb] := by
   have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
   have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
@@ -29472,16 +29499,21 @@ theorem sm_pm_qlin_L2_commute (initSM initPM : Store)
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
     simpa [List.map, reconstructWithDim_singleton] using hval
-  have h4793 : initSM 4793 = initPM 4793 := hb initGoal_4793 (by decide) rfl
-  have hrms := sm_pm_rms_L2_commute initSM initPM h_ss_sm h_ss_pm hInit
-  have h69 : (denoteGraph_ringAttn pm_goal_3 initPM 7769).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_7769, rms_sh]; exact RouterShapesHelpers.hs_7765 initPM h_ss_pm
-  have h70 : (denoteGraph_ringAttn pm_goal_3 initPM 7770).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_7770, rms_sh]; exact RouterShapesHelpers.hs_7766 initPM h_ss_pm
-  have hw : (initPM 4793).shape = [16, 64, 1024] := h_ss_pm 4793 [16, 64, 1024] (by decide)
-  rw [denote_sm_goal_3_4794, denote_pm_goal_3_7771, denote_pm_goal_3_7772, hrms, h4793]
-  exact fw_per_head_mix_precision_linear_allGather0_commute_2 _ _ (initPM 4793)
+  have $hsN : initSM $ns = initPM $ns := hb $ig (by decide) rfl
+  have hrms := $rms initSM initPM h_ss_sm h_ss_pm hInit
+  have h69 : (denoteGraph_ringAttn pm_goal_3 initPM $nP69).shape = [2048, 1024] := by
+    rw [$dP69:term, rms_sh]; exact $hsa initPM h_ss_pm
+  have h70 : (denoteGraph_ringAttn pm_goal_3 initPM $nP70).shape = [2048, 1024] := by
+    rw [$dP70:term, rms_sh]; exact $hsb initPM h_ss_pm
+  have hw : (initPM $ns).shape = [16, 64, 1024] := h_ss_pm $ns [16, 64, 1024] (by decide)
+  rw [$dS:term, $dPa:term, $dPb:term, hrms, $hsN:term]
+  exact fw_per_head_mix_precision_linear_allGather0_commute_2 _ _ (initPM $ns)
     2048 1024 16 64 (by omega) (by omega) (by omega) (by omega) h69 h70 hw
+  )
+  elabCommand decl
+
+set_option maxHeartbeats 4000000 in
+mk_qlin 2
 
 theorem sm_pm_klin_L2_commute (initSM initPM : Store)
     (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
@@ -33182,34 +33214,8 @@ theorem denote_pm_goal_3_7994 (initPM : Store) :
 
 mk_rms 3
 
-theorem sm_pm_qlin_L3_commute (initSM initPM : Store)
-    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
-    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    denoteGraph_ringAttn sm_goal_3 initSM 4848
-      = allGatherPrimDimN 0 2 0
-          [denoteGraph_ringAttn pm_goal_3 initPM 7957,
-           denoteGraph_ringAttn pm_goal_3 initPM 7958] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
-    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
-      initSM g.ts = initPM g.ts := by
-    intro g hg hshape
-    have hgh := hII g hg
-    unfold InitGoalHolds at hgh
-    obtain ⟨_, _, hval⟩ := hgh
-    rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
-  have h4847 : initSM 4847 = initPM 4847 := hb initGoal_4847 (by decide) rfl
-  have hrms := sm_pm_rms_L3_commute initSM initPM h_ss_sm h_ss_pm hInit
-  have h69 : (denoteGraph_ringAttn pm_goal_3 initPM 7955).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_7955, rms_sh]; exact RouterShapesHelpers.hs_7951 initPM h_ss_pm
-  have h70 : (denoteGraph_ringAttn pm_goal_3 initPM 7956).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_7956, rms_sh]; exact RouterShapesHelpers.hs_7952 initPM h_ss_pm
-  have hw : (initPM 4847).shape = [16, 64, 1024] := h_ss_pm 4847 [16, 64, 1024] (by decide)
-  rw [denote_sm_goal_3_4848, denote_pm_goal_3_7957, denote_pm_goal_3_7958, hrms, h4847]
-  exact fw_per_head_mix_precision_linear_allGather0_commute_2 _ _ (initPM 4847)
-    2048 1024 16 64 (by omega) (by omega) (by omega) (by omega) h69 h70 hw
+set_option maxHeartbeats 4000000 in
+mk_qlin 3
 
 theorem sm_pm_klin_L3_commute (initSM initPM : Store)
     (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
@@ -36612,34 +36618,8 @@ theorem sm_pm_carry_4898_commute
 
 mk_rms 4
 
-theorem sm_pm_qlin_L4_commute (initSM initPM : Store)
-    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
-    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    denoteGraph_ringAttn sm_goal_3 initSM 4902
-      = allGatherPrimDimN 0 2 0
-          [denoteGraph_ringAttn pm_goal_3 initPM 8143,
-           denoteGraph_ringAttn pm_goal_3 initPM 8144] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
-    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
-      initSM g.ts = initPM g.ts := by
-    intro g hg hshape
-    have hgh := hII g hg
-    unfold InitGoalHolds at hgh
-    obtain ⟨_, _, hval⟩ := hgh
-    rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
-  have h4901 : initSM 4901 = initPM 4901 := hb initGoal_4901 (by decide) rfl
-  have hrms := sm_pm_rms_L4_commute initSM initPM h_ss_sm h_ss_pm hInit
-  have h69 : (denoteGraph_ringAttn pm_goal_3 initPM 8141).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8141, rms_sh]; exact RouterShapesHelpers.hs_8137 initPM h_ss_pm
-  have h70 : (denoteGraph_ringAttn pm_goal_3 initPM 8142).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8142, rms_sh]; exact RouterShapesHelpers.hs_8138 initPM h_ss_pm
-  have hw : (initPM 4901).shape = [16, 64, 1024] := h_ss_pm 4901 [16, 64, 1024] (by decide)
-  rw [denote_sm_goal_3_4902, denote_pm_goal_3_8143, denote_pm_goal_3_8144, hrms, h4901]
-  exact fw_per_head_mix_precision_linear_allGather0_commute_2 _ _ (initPM 4901)
-    2048 1024 16 64 (by omega) (by omega) (by omega) (by omega) h69 h70 hw
+set_option maxHeartbeats 4000000 in
+mk_qlin 4
 
 theorem sm_pm_klin_L4_commute (initSM initPM : Store)
     (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
@@ -40048,34 +40028,8 @@ theorem sm_pm_carry_4952_commute
 mk_rms 5
 
 
-theorem sm_pm_qlin_L5_commute (initSM initPM : Store)
-    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
-    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    denoteGraph_ringAttn sm_goal_3 initSM 4956
-      = allGatherPrimDimN 0 2 0
-          [denoteGraph_ringAttn pm_goal_3 initPM 8329,
-           denoteGraph_ringAttn pm_goal_3 initPM 8330] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
-    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
-      initSM g.ts = initPM g.ts := by
-    intro g hg hshape
-    have hgh := hII g hg
-    unfold InitGoalHolds at hgh
-    obtain ⟨_, _, hval⟩ := hgh
-    rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
-  have h4955 : initSM 4955 = initPM 4955 := hb initGoal_4955 (by decide) rfl
-  have hrms := sm_pm_rms_L5_commute initSM initPM h_ss_sm h_ss_pm hInit
-  have h69 : (denoteGraph_ringAttn pm_goal_3 initPM 8327).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8327, rms_sh]; exact RouterShapesHelpers.hs_8323 initPM h_ss_pm
-  have h70 : (denoteGraph_ringAttn pm_goal_3 initPM 8328).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8328, rms_sh]; exact RouterShapesHelpers.hs_8324 initPM h_ss_pm
-  have hw : (initPM 4955).shape = [16, 64, 1024] := h_ss_pm 4955 [16, 64, 1024] (by decide)
-  rw [denote_sm_goal_3_4956, denote_pm_goal_3_8329, denote_pm_goal_3_8330, hrms, h4955]
-  exact fw_per_head_mix_precision_linear_allGather0_commute_2 _ _ (initPM 4955)
-    2048 1024 16 64 (by omega) (by omega) (by omega) (by omega) h69 h70 hw
+set_option maxHeartbeats 4000000 in
+mk_qlin 5
 
 
 theorem sm_pm_klin_L5_commute (initSM initPM : Store)
@@ -43495,34 +43449,8 @@ theorem sm_pm_carry_5006_commute
 mk_rms 6
 
 
-theorem sm_pm_qlin_L6_commute (initSM initPM : Store)
-    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
-    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    denoteGraph_ringAttn sm_goal_3 initSM 5010
-      = allGatherPrimDimN 0 2 0
-          [denoteGraph_ringAttn pm_goal_3 initPM 8515,
-           denoteGraph_ringAttn pm_goal_3 initPM 8516] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
-    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
-      initSM g.ts = initPM g.ts := by
-    intro g hg hshape
-    have hgh := hII g hg
-    unfold InitGoalHolds at hgh
-    obtain ⟨_, _, hval⟩ := hgh
-    rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
-  have h5009 : initSM 5009 = initPM 5009 := hb initGoal_5009 (by decide) rfl
-  have hrms := sm_pm_rms_L6_commute initSM initPM h_ss_sm h_ss_pm hInit
-  have h69 : (denoteGraph_ringAttn pm_goal_3 initPM 8513).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8513, rms_sh]; exact RouterShapesHelpers.hs_8509 initPM h_ss_pm
-  have h70 : (denoteGraph_ringAttn pm_goal_3 initPM 8514).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8514, rms_sh]; exact RouterShapesHelpers.hs_8510 initPM h_ss_pm
-  have hw : (initPM 5009).shape = [16, 64, 1024] := h_ss_pm 5009 [16, 64, 1024] (by decide)
-  rw [denote_sm_goal_3_5010, denote_pm_goal_3_8515, denote_pm_goal_3_8516, hrms, h5009]
-  exact fw_per_head_mix_precision_linear_allGather0_commute_2 _ _ (initPM 5009)
-    2048 1024 16 64 (by omega) (by omega) (by omega) (by omega) h69 h70 hw
+set_option maxHeartbeats 4000000 in
+mk_qlin 6
 
 
 theorem sm_pm_klin_L6_commute (initSM initPM : Store)
@@ -46942,34 +46870,8 @@ theorem sm_pm_carry_5060_commute
 mk_rms 7
 
 
-theorem sm_pm_qlin_L7_commute (initSM initPM : Store)
-    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
-    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    denoteGraph_ringAttn sm_goal_3 initSM 5064
-      = allGatherPrimDimN 0 2 0
-          [denoteGraph_ringAttn pm_goal_3 initPM 8701,
-           denoteGraph_ringAttn pm_goal_3 initPM 8702] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
-    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
-      initSM g.ts = initPM g.ts := by
-    intro g hg hshape
-    have hgh := hII g hg
-    unfold InitGoalHolds at hgh
-    obtain ⟨_, _, hval⟩ := hgh
-    rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
-  have h5063 : initSM 5063 = initPM 5063 := hb initGoal_5063 (by decide) rfl
-  have hrms := sm_pm_rms_L7_commute initSM initPM h_ss_sm h_ss_pm hInit
-  have h69 : (denoteGraph_ringAttn pm_goal_3 initPM 8699).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8699, rms_sh]; exact RouterShapesHelpers.hs_8695 initPM h_ss_pm
-  have h70 : (denoteGraph_ringAttn pm_goal_3 initPM 8700).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8700, rms_sh]; exact RouterShapesHelpers.hs_8696 initPM h_ss_pm
-  have hw : (initPM 5063).shape = [16, 64, 1024] := h_ss_pm 5063 [16, 64, 1024] (by decide)
-  rw [denote_sm_goal_3_5064, denote_pm_goal_3_8701, denote_pm_goal_3_8702, hrms, h5063]
-  exact fw_per_head_mix_precision_linear_allGather0_commute_2 _ _ (initPM 5063)
-    2048 1024 16 64 (by omega) (by omega) (by omega) (by omega) h69 h70 hw
+set_option maxHeartbeats 4000000 in
+mk_qlin 7
 
 
 theorem sm_pm_klin_L7_commute (initSM initPM : Store)
@@ -50389,34 +50291,8 @@ theorem sm_pm_carry_5114_commute
 mk_rms 8
 
 
-theorem sm_pm_qlin_L8_commute (initSM initPM : Store)
-    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
-    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    denoteGraph_ringAttn sm_goal_3 initSM 5118
-      = allGatherPrimDimN 0 2 0
-          [denoteGraph_ringAttn pm_goal_3 initPM 8887,
-           denoteGraph_ringAttn pm_goal_3 initPM 8888] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
-    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
-      initSM g.ts = initPM g.ts := by
-    intro g hg hshape
-    have hgh := hII g hg
-    unfold InitGoalHolds at hgh
-    obtain ⟨_, _, hval⟩ := hgh
-    rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
-  have h5117 : initSM 5117 = initPM 5117 := hb initGoal_5117 (by decide) rfl
-  have hrms := sm_pm_rms_L8_commute initSM initPM h_ss_sm h_ss_pm hInit
-  have h69 : (denoteGraph_ringAttn pm_goal_3 initPM 8885).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8885, rms_sh]; exact RouterShapesHelpers.hs_8881 initPM h_ss_pm
-  have h70 : (denoteGraph_ringAttn pm_goal_3 initPM 8886).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8886, rms_sh]; exact RouterShapesHelpers.hs_8882 initPM h_ss_pm
-  have hw : (initPM 5117).shape = [16, 64, 1024] := h_ss_pm 5117 [16, 64, 1024] (by decide)
-  rw [denote_sm_goal_3_5118, denote_pm_goal_3_8887, denote_pm_goal_3_8888, hrms, h5117]
-  exact fw_per_head_mix_precision_linear_allGather0_commute_2 _ _ (initPM 5117)
-    2048 1024 16 64 (by omega) (by omega) (by omega) (by omega) h69 h70 hw
+set_option maxHeartbeats 4000000 in
+mk_qlin 8
 
 
 theorem sm_pm_klin_L8_commute (initSM initPM : Store)
@@ -53836,34 +53712,8 @@ theorem sm_pm_carry_5168_commute
 mk_rms 9
 
 
-theorem sm_pm_qlin_L9_commute (initSM initPM : Store)
-    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
-    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    denoteGraph_ringAttn sm_goal_3 initSM 5172
-      = allGatherPrimDimN 0 2 0
-          [denoteGraph_ringAttn pm_goal_3 initPM 9073,
-           denoteGraph_ringAttn pm_goal_3 initPM 9074] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
-    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
-      initSM g.ts = initPM g.ts := by
-    intro g hg hshape
-    have hgh := hII g hg
-    unfold InitGoalHolds at hgh
-    obtain ⟨_, _, hval⟩ := hgh
-    rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
-  have h5171 : initSM 5171 = initPM 5171 := hb initGoal_5171 (by decide) rfl
-  have hrms := sm_pm_rms_L9_commute initSM initPM h_ss_sm h_ss_pm hInit
-  have h69 : (denoteGraph_ringAttn pm_goal_3 initPM 9071).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_9071, rms_sh]; exact RouterShapesHelpers.hs_9067 initPM h_ss_pm
-  have h70 : (denoteGraph_ringAttn pm_goal_3 initPM 9072).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_9072, rms_sh]; exact RouterShapesHelpers.hs_9068 initPM h_ss_pm
-  have hw : (initPM 5171).shape = [16, 64, 1024] := h_ss_pm 5171 [16, 64, 1024] (by decide)
-  rw [denote_sm_goal_3_5172, denote_pm_goal_3_9073, denote_pm_goal_3_9074, hrms, h5171]
-  exact fw_per_head_mix_precision_linear_allGather0_commute_2 _ _ (initPM 5171)
-    2048 1024 16 64 (by omega) (by omega) (by omega) (by omega) h69 h70 hw
+set_option maxHeartbeats 4000000 in
+mk_qlin 9
 
 
 theorem sm_pm_klin_L9_commute (initSM initPM : Store)
@@ -57283,34 +57133,8 @@ theorem sm_pm_carry_5222_commute
 mk_rms 10
 
 
-theorem sm_pm_qlin_L10_commute (initSM initPM : Store)
-    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
-    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    denoteGraph_ringAttn sm_goal_3 initSM 5226
-      = allGatherPrimDimN 0 2 0
-          [denoteGraph_ringAttn pm_goal_3 initPM 9259,
-           denoteGraph_ringAttn pm_goal_3 initPM 9260] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
-    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
-      initSM g.ts = initPM g.ts := by
-    intro g hg hshape
-    have hgh := hII g hg
-    unfold InitGoalHolds at hgh
-    obtain ⟨_, _, hval⟩ := hgh
-    rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
-  have h5225 : initSM 5225 = initPM 5225 := hb initGoal_5225 (by decide) rfl
-  have hrms := sm_pm_rms_L10_commute initSM initPM h_ss_sm h_ss_pm hInit
-  have h69 : (denoteGraph_ringAttn pm_goal_3 initPM 9257).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_9257, rms_sh]; exact RouterShapesHelpers.hs_9253 initPM h_ss_pm
-  have h70 : (denoteGraph_ringAttn pm_goal_3 initPM 9258).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_9258, rms_sh]; exact RouterShapesHelpers.hs_9254 initPM h_ss_pm
-  have hw : (initPM 5225).shape = [16, 64, 1024] := h_ss_pm 5225 [16, 64, 1024] (by decide)
-  rw [denote_sm_goal_3_5226, denote_pm_goal_3_9259, denote_pm_goal_3_9260, hrms, h5225]
-  exact fw_per_head_mix_precision_linear_allGather0_commute_2 _ _ (initPM 5225)
-    2048 1024 16 64 (by omega) (by omega) (by omega) (by omega) h69 h70 hw
+set_option maxHeartbeats 4000000 in
+mk_qlin 10
 
 
 theorem sm_pm_klin_L10_commute (initSM initPM : Store)
@@ -60730,34 +60554,8 @@ theorem sm_pm_carry_5276_commute
 mk_rms 11
 
 
-theorem sm_pm_qlin_L11_commute (initSM initPM : Store)
-    (h_ss_sm : StoreShapesHold initSM sm_goal_3InitEnv)
-    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    denoteGraph_ringAttn sm_goal_3 initSM 5280
-      = allGatherPrimDimN 0 2 0
-          [denoteGraph_ringAttn pm_goal_3 initPM 9445,
-           denoteGraph_ringAttn pm_goal_3 initPM 9446] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
-    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
-      initSM g.ts = initPM g.ts := by
-    intro g hg hshape
-    have hgh := hII g hg
-    unfold InitGoalHolds at hgh
-    obtain ⟨_, _, hval⟩ := hgh
-    rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
-  have h5279 : initSM 5279 = initPM 5279 := hb initGoal_5279 (by decide) rfl
-  have hrms := sm_pm_rms_L11_commute initSM initPM h_ss_sm h_ss_pm hInit
-  have h69 : (denoteGraph_ringAttn pm_goal_3 initPM 9443).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_9443, rms_sh]; exact RouterShapesHelpers.hs_9439 initPM h_ss_pm
-  have h70 : (denoteGraph_ringAttn pm_goal_3 initPM 9444).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_9444, rms_sh]; exact RouterShapesHelpers.hs_9440 initPM h_ss_pm
-  have hw : (initPM 5279).shape = [16, 64, 1024] := h_ss_pm 5279 [16, 64, 1024] (by decide)
-  rw [denote_sm_goal_3_5280, denote_pm_goal_3_9445, denote_pm_goal_3_9446, hrms, h5279]
-  exact fw_per_head_mix_precision_linear_allGather0_commute_2 _ _ (initPM 5279)
-    2048 1024 16 64 (by omega) (by omega) (by omega) (by omega) h69 h70 hw
+set_option maxHeartbeats 4000000 in
+mk_qlin 11
 
 
 theorem sm_pm_klin_L11_commute (initSM initPM : Store)
