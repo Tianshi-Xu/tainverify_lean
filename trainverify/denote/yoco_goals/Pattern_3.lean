@@ -30352,41 +30352,83 @@ theorem sm_pm_nl_L2_commute (initSM initPM : Store)
   rw [fw_rms_norm_allGather0_commute_2 _ _ (initPM 4812) 2048 1024 (by omega) (by omega) hs839 hs840]
   rw [fw_norm_linear_allGather0_commute_2 _ _ (initPM 4815) 2048 1024 64 (by omega) (by omega) (by omega) hrms839 hrms840 hw4815]
 
+open Lean Elab Command Term in
+/-- Macro `mk_router k` (2 ≤ k ≤ 11): emit `sm_pm_router_commute_L{k}`, the
+    per-layer sliding-window router-commute lemma. Every per-layer tid is affine
+    in `k` (SM output stride 54, PM router stride 186; carry/shape helpers are
+    fixed offsets of those), verified exactly against all 10 hand-written layers,
+    so `k` is the only argument. Expands to the same kernel term (identical name
+    and statement type) as the lemma it replaces. -/
+elab "mk_router " kStx:num : command => do
+  let k := kStx.getNat
+  let smout  := 4818 + 54*(k-2)
+  let hs839  := 7839 + 186*(k-2)
+  let hsr    := hs839 - 74
+  let hs51   := hs839 + 12
+  let initpm := smout - 3
+  let hsm16  := smout - 2
+  let n0    : Ident  := mkIdent (Name.mkSimple s!"sm_pm_router_commute_L{k}")
+  let sK    : NumLit := Syntax.mkNumLit (toString k)
+  let iNL   : Ident  := mkIdent (Name.mkSimple s!"sm_pm_nl_L{k}_commute")
+  let s839  : NumLit := Syntax.mkNumLit (toString hs839)
+  let d839  : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{hs839}")
+  let hsrI  : Ident  := mkIdent (Name.str (Name.str .anonymous "RouterShapesHelpers") s!"hs_{hsr}")
+  let s840  : NumLit := Syntax.mkNumLit (toString (hs839+1))
+  let d840  : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{hs839+1}")
+  let hsr1I : Ident  := mkIdent (Name.str (Name.str .anonymous "RouterShapesHelpers") s!"hs_{hsr+1}")
+  let s51   : NumLit := Syntax.mkNumLit (toString hs51)
+  let d51a  : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{hs51}")
+  let d51b  : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{hs51-6}")
+  let d51c  : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{hs51-8}")
+  let sInit : NumLit := Syntax.mkNumLit (toString initpm)
+  let s52   : NumLit := Syntax.mkNumLit (toString (hs51+1))
+  let d52a  : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{hs51+1}")
+  let d52b  : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{hs51-5}")
+  let d52c  : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{hs51-7}")
+  let sSm16 : NumLit := Syntax.mkNumLit (toString hsm16)
+  let dSmOut: Ident  := mkIdent (Name.mkSimple s!"denote_sm_goal_3_{smout}")
+  let d55   : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{hs51+4}")
+  let d56   : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{hs51+5}")
+  let decl ← `(command|
 set_option maxHeartbeats 4000000 in
-theorem sm_pm_router_commute_L2
+theorem $n0
     (initSM initPM : Store)
     (hSM : StoreShapesHold initSM sm_goal_3InitEnv)
     (hPM : StoreShapesHold initPM pm_goal_3InitEnv)
     (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    (sm_goal_3_routers initSM).getD 2 (zeroTensor [2 * 2048, 64]) =
+    (sm_goal_3_routers initSM).getD $sK (zeroTensor [2 * 2048, 64]) =
       allGatherPrimDimN 0 2 0
-        [(pm_goal_3_routers_r0 initPM).getD 2 (zeroTensor [2048, 64]),
-         (pm_goal_3_routers_r1 initPM).getD 2 (zeroTensor [2048, 64])] := by
+        [(pm_goal_3_routers_r0 initPM).getD $sK (zeroTensor [2048, 64]),
+         (pm_goal_3_routers_r1 initPM).getD $sK (zeroTensor [2048, 64])] := by
   simp only [sm_goal_3_routers, pm_goal_3_routers_r0, pm_goal_3_routers_r1,
     List.getD_cons_succ, List.getD_cons_zero]
-  have hnl := sm_pm_nl_L2_commute initSM initPM hSM hPM hInit
-  have hs839 : (denoteGraph_ringAttn pm_goal_3 initPM 7839).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_7839]
+  have hnl := $iNL initSM initPM hSM hPM hInit
+  have hs839 : (denoteGraph_ringAttn pm_goal_3 initPM $s839).shape = [2048, 1024] := by
+    rw [$d839:term]
     exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_7765 initPM hPM) (fw_view_shape_eq _ _)
-  have hs840 : (denoteGraph_ringAttn pm_goal_3 initPM 7840).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_7840]
+      ($hsrI initPM hPM) (fw_view_shape_eq _ _)
+  have hs840 : (denoteGraph_ringAttn pm_goal_3 initPM $s840).shape = [2048, 1024] := by
+    rw [$d840:term]
     exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_7766 initPM hPM) (fw_view_shape_eq _ _)
-  have hs51 : (denoteGraph_ringAttn pm_goal_3 initPM 7851).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_7851, denote_pm_goal_3_7845, denote_pm_goal_3_7843]
-    exact nl_sh 2048 1024 64 _ (initPM 4815) (by rw [rms_sh]; exact hs839) (hPM 4815 [64, 1024] (by decide))
-  have hs52 : (denoteGraph_ringAttn pm_goal_3 initPM 7852).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_7852, denote_pm_goal_3_7846, denote_pm_goal_3_7844]
-    exact nl_sh 2048 1024 64 _ (initPM 4815) (by rw [rms_sh]; exact hs840) (hPM 4815 [64, 1024] (by decide))
-  have hSM16sh : (denoteGraph_ringAttn sm_goal_3 initSM 4816).shape = [4096, 64] := by
+      ($hsr1I initPM hPM) (fw_view_shape_eq _ _)
+  have hs51 : (denoteGraph_ringAttn pm_goal_3 initPM $s51).shape = [2048, 64] := by
+    rw [$d51a:term, $d51b:term, $d51c:term]
+    exact nl_sh 2048 1024 64 _ (initPM $sInit) (by rw [rms_sh]; exact hs839) (hPM $sInit [64, 1024] (by decide))
+  have hs52 : (denoteGraph_ringAttn pm_goal_3 initPM $s52).shape = [2048, 64] := by
+    rw [$d52a:term, $d52b:term, $d52c:term]
+    exact nl_sh 2048 1024 64 _ (initPM $sInit) (by rw [rms_sh]; exact hs840) (hPM $sInit [64, 1024] (by decide))
+  have hSM16sh : (denoteGraph_ringAttn sm_goal_3 initSM $sSm16).shape = [4096, 64] := by
     rw [hnl]; exact aG0_2_shape _ _ 2048 64 hs51
-  rw [denote_sm_goal_3_4818, denote_pm_goal_3_7855, denote_pm_goal_3_7856]
-  rw [show (denoteGraph_ringAttn sm_goal_3 initSM 4816).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hSM16sh]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 7851).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs51]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 7852).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs52]; rfl]
+  rw [$dSmOut:term, $d55:term, $d56:term]
+  rw [show (denoteGraph_ringAttn sm_goal_3 initSM $sSm16).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hSM16sh]; rfl,
+      show (denoteGraph_ringAttn pm_goal_3 initPM $s51).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs51]; rfl,
+      show (denoteGraph_ringAttn pm_goal_3 initPM $s52).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs52]; rfl]
   rw [hnl]
   exact fw_topk_routing_snd_fst_allGather0_commute_2_of _ _ 2048 ([8].getD 0 1) 64 (by omega) (by omega) hs51 hs52
+  )
+  elabCommand decl
+
+mk_router 2
 
 set_option maxHeartbeats 8000000 in
 set_option maxRecDepth 20000 in
@@ -33944,41 +33986,7 @@ theorem sm_pm_nl_L3_commute (initSM initPM : Store)
   rw [h4812, h4815, hcarry]
   rw [fw_rms_norm_allGather0_commute_2 _ _ (initPM 4866) 2048 1024 (by omega) (by omega) hs839 hs840]
   rw [fw_norm_linear_allGather0_commute_2 _ _ (initPM 4869) 2048 1024 64 (by omega) (by omega) (by omega) hrms839 hrms840 hw4815]
-set_option maxHeartbeats 4000000 in
-theorem sm_pm_router_commute_L3
-    (initSM initPM : Store)
-    (hSM : StoreShapesHold initSM sm_goal_3InitEnv)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    (sm_goal_3_routers initSM).getD 3 (zeroTensor [2 * 2048, 64]) =
-      allGatherPrimDimN 0 2 0
-        [(pm_goal_3_routers_r0 initPM).getD 3 (zeroTensor [2048, 64]),
-         (pm_goal_3_routers_r1 initPM).getD 3 (zeroTensor [2048, 64])] := by
-  simp only [sm_goal_3_routers, pm_goal_3_routers_r0, pm_goal_3_routers_r1,
-    List.getD_cons_succ, List.getD_cons_zero]
-  have hnl := sm_pm_nl_L3_commute initSM initPM hSM hPM hInit
-  have hs839 : (denoteGraph_ringAttn pm_goal_3 initPM 8025).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8025]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_7951 initPM hPM) (fw_view_shape_eq _ _)
-  have hs840 : (denoteGraph_ringAttn pm_goal_3 initPM 8026).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8026]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_7952 initPM hPM) (fw_view_shape_eq _ _)
-  have hs51 : (denoteGraph_ringAttn pm_goal_3 initPM 8037).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_8037, denote_pm_goal_3_8031, denote_pm_goal_3_8029]
-    exact nl_sh 2048 1024 64 _ (initPM 4869) (by rw [rms_sh]; exact hs839) (hPM 4869 [64, 1024] (by decide))
-  have hs52 : (denoteGraph_ringAttn pm_goal_3 initPM 8038).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_8038, denote_pm_goal_3_8032, denote_pm_goal_3_8030]
-    exact nl_sh 2048 1024 64 _ (initPM 4869) (by rw [rms_sh]; exact hs840) (hPM 4869 [64, 1024] (by decide))
-  have hSM16sh : (denoteGraph_ringAttn sm_goal_3 initSM 4870).shape = [4096, 64] := by
-    rw [hnl]; exact aG0_2_shape _ _ 2048 64 hs51
-  rw [denote_sm_goal_3_4872, denote_pm_goal_3_8041, denote_pm_goal_3_8042]
-  rw [show (denoteGraph_ringAttn sm_goal_3 initSM 4870).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hSM16sh]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 8037).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs51]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 8038).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs52]; rfl]
-  rw [hnl]
-  exact fw_topk_routing_snd_fst_allGather0_commute_2_of _ _ 2048 ([8].getD 0 1) 64 (by omega) (by omega) hs51 hs52
+mk_router 3
 
 
 /-
@@ -37403,41 +37411,7 @@ theorem sm_pm_nl_L4_commute (initSM initPM : Store)
   rw [fw_rms_norm_allGather0_commute_2 _ _ (initPM 4920) 2048 1024 (by omega) (by omega) hs839 hs840]
   rw [fw_norm_linear_allGather0_commute_2 _ _ (initPM 4923) 2048 1024 64 (by omega) (by omega) (by omega) hrms839 hrms840 hw4815]
 
-set_option maxHeartbeats 4000000 in
-theorem sm_pm_router_commute_L4
-    (initSM initPM : Store)
-    (hSM : StoreShapesHold initSM sm_goal_3InitEnv)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    (sm_goal_3_routers initSM).getD 4 (zeroTensor [2 * 2048, 64]) =
-      allGatherPrimDimN 0 2 0
-        [(pm_goal_3_routers_r0 initPM).getD 4 (zeroTensor [2048, 64]),
-         (pm_goal_3_routers_r1 initPM).getD 4 (zeroTensor [2048, 64])] := by
-  simp only [sm_goal_3_routers, pm_goal_3_routers_r0, pm_goal_3_routers_r1,
-    List.getD_cons_succ, List.getD_cons_zero]
-  have hnl := sm_pm_nl_L4_commute initSM initPM hSM hPM hInit
-  have hs839 : (denoteGraph_ringAttn pm_goal_3 initPM 8211).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8211]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_8137 initPM hPM) (fw_view_shape_eq _ _)
-  have hs840 : (denoteGraph_ringAttn pm_goal_3 initPM 8212).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8212]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_8138 initPM hPM) (fw_view_shape_eq _ _)
-  have hs51 : (denoteGraph_ringAttn pm_goal_3 initPM 8223).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_8223, denote_pm_goal_3_8217, denote_pm_goal_3_8215]
-    exact nl_sh 2048 1024 64 _ (initPM 4923) (by rw [rms_sh]; exact hs839) (hPM 4923 [64, 1024] (by decide))
-  have hs52 : (denoteGraph_ringAttn pm_goal_3 initPM 8224).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_8224, denote_pm_goal_3_8218, denote_pm_goal_3_8216]
-    exact nl_sh 2048 1024 64 _ (initPM 4923) (by rw [rms_sh]; exact hs840) (hPM 4923 [64, 1024] (by decide))
-  have hSM16sh : (denoteGraph_ringAttn sm_goal_3 initSM 4924).shape = [4096, 64] := by
-    rw [hnl]; exact aG0_2_shape _ _ 2048 64 hs51
-  rw [denote_sm_goal_3_4926, denote_pm_goal_3_8227, denote_pm_goal_3_8228]
-  rw [show (denoteGraph_ringAttn sm_goal_3 initSM 4924).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hSM16sh]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 8223).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs51]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 8224).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs52]; rfl]
-  rw [hnl]
-  exact fw_topk_routing_snd_fst_allGather0_commute_2_of _ _ 2048 ([8].getD 0 1) 64 (by omega) (by omega) hs51 hs52
+mk_router 4
 
 
 
@@ -40874,41 +40848,7 @@ theorem sm_pm_nl_L5_commute (initSM initPM : Store)
   rw [fw_norm_linear_allGather0_commute_2 _ _ (initPM 4977) 2048 1024 64 (by omega) (by omega) (by omega) hrms839 hrms840 hw4815]
 
 
-set_option maxHeartbeats 4000000 in
-theorem sm_pm_router_commute_L5
-    (initSM initPM : Store)
-    (hSM : StoreShapesHold initSM sm_goal_3InitEnv)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    (sm_goal_3_routers initSM).getD 5 (zeroTensor [2 * 2048, 64]) =
-      allGatherPrimDimN 0 2 0
-        [(pm_goal_3_routers_r0 initPM).getD 5 (zeroTensor [2048, 64]),
-         (pm_goal_3_routers_r1 initPM).getD 5 (zeroTensor [2048, 64])] := by
-  simp only [sm_goal_3_routers, pm_goal_3_routers_r0, pm_goal_3_routers_r1,
-    List.getD_cons_succ, List.getD_cons_zero]
-  have hnl := sm_pm_nl_L5_commute initSM initPM hSM hPM hInit
-  have hs839 : (denoteGraph_ringAttn pm_goal_3 initPM 8397).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8397]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_8323 initPM hPM) (fw_view_shape_eq _ _)
-  have hs840 : (denoteGraph_ringAttn pm_goal_3 initPM 8398).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8398]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_8324 initPM hPM) (fw_view_shape_eq _ _)
-  have hs51 : (denoteGraph_ringAttn pm_goal_3 initPM 8409).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_8409, denote_pm_goal_3_8403, denote_pm_goal_3_8401]
-    exact nl_sh 2048 1024 64 _ (initPM 4977) (by rw [rms_sh]; exact hs839) (hPM 4977 [64, 1024] (by decide))
-  have hs52 : (denoteGraph_ringAttn pm_goal_3 initPM 8410).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_8410, denote_pm_goal_3_8404, denote_pm_goal_3_8402]
-    exact nl_sh 2048 1024 64 _ (initPM 4977) (by rw [rms_sh]; exact hs840) (hPM 4977 [64, 1024] (by decide))
-  have hSM16sh : (denoteGraph_ringAttn sm_goal_3 initSM 4978).shape = [4096, 64] := by
-    rw [hnl]; exact aG0_2_shape _ _ 2048 64 hs51
-  rw [denote_sm_goal_3_4980, denote_pm_goal_3_8413, denote_pm_goal_3_8414]
-  rw [show (denoteGraph_ringAttn sm_goal_3 initSM 4978).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hSM16sh]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 8409).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs51]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 8410).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs52]; rfl]
-  rw [hnl]
-  exact fw_topk_routing_snd_fst_allGather0_commute_2_of _ _ 2048 ([8].getD 0 1) 64 (by omega) (by omega) hs51 hs52
+mk_router 5
 
 
 
@@ -44346,41 +44286,7 @@ theorem sm_pm_nl_L6_commute (initSM initPM : Store)
   rw [fw_norm_linear_allGather0_commute_2 _ _ (initPM 5031) 2048 1024 64 (by omega) (by omega) (by omega) hrms839 hrms840 hw4815]
 
 
-set_option maxHeartbeats 4000000 in
-theorem sm_pm_router_commute_L6
-    (initSM initPM : Store)
-    (hSM : StoreShapesHold initSM sm_goal_3InitEnv)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    (sm_goal_3_routers initSM).getD 6 (zeroTensor [2 * 2048, 64]) =
-      allGatherPrimDimN 0 2 0
-        [(pm_goal_3_routers_r0 initPM).getD 6 (zeroTensor [2048, 64]),
-         (pm_goal_3_routers_r1 initPM).getD 6 (zeroTensor [2048, 64])] := by
-  simp only [sm_goal_3_routers, pm_goal_3_routers_r0, pm_goal_3_routers_r1,
-    List.getD_cons_succ, List.getD_cons_zero]
-  have hnl := sm_pm_nl_L6_commute initSM initPM hSM hPM hInit
-  have hs839 : (denoteGraph_ringAttn pm_goal_3 initPM 8583).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8583]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_8509 initPM hPM) (fw_view_shape_eq _ _)
-  have hs840 : (denoteGraph_ringAttn pm_goal_3 initPM 8584).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8584]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_8510 initPM hPM) (fw_view_shape_eq _ _)
-  have hs51 : (denoteGraph_ringAttn pm_goal_3 initPM 8595).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_8595, denote_pm_goal_3_8589, denote_pm_goal_3_8587]
-    exact nl_sh 2048 1024 64 _ (initPM 5031) (by rw [rms_sh]; exact hs839) (hPM 5031 [64, 1024] (by decide))
-  have hs52 : (denoteGraph_ringAttn pm_goal_3 initPM 8596).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_8596, denote_pm_goal_3_8590, denote_pm_goal_3_8588]
-    exact nl_sh 2048 1024 64 _ (initPM 5031) (by rw [rms_sh]; exact hs840) (hPM 5031 [64, 1024] (by decide))
-  have hSM16sh : (denoteGraph_ringAttn sm_goal_3 initSM 5032).shape = [4096, 64] := by
-    rw [hnl]; exact aG0_2_shape _ _ 2048 64 hs51
-  rw [denote_sm_goal_3_5034, denote_pm_goal_3_8599, denote_pm_goal_3_8600]
-  rw [show (denoteGraph_ringAttn sm_goal_3 initSM 5032).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hSM16sh]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 8595).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs51]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 8596).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs52]; rfl]
-  rw [hnl]
-  exact fw_topk_routing_snd_fst_allGather0_commute_2_of _ _ 2048 ([8].getD 0 1) 64 (by omega) (by omega) hs51 hs52
+mk_router 6
 
 
 
@@ -47818,41 +47724,7 @@ theorem sm_pm_nl_L7_commute (initSM initPM : Store)
   rw [fw_norm_linear_allGather0_commute_2 _ _ (initPM 5085) 2048 1024 64 (by omega) (by omega) (by omega) hrms839 hrms840 hw4815]
 
 
-set_option maxHeartbeats 4000000 in
-theorem sm_pm_router_commute_L7
-    (initSM initPM : Store)
-    (hSM : StoreShapesHold initSM sm_goal_3InitEnv)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    (sm_goal_3_routers initSM).getD 7 (zeroTensor [2 * 2048, 64]) =
-      allGatherPrimDimN 0 2 0
-        [(pm_goal_3_routers_r0 initPM).getD 7 (zeroTensor [2048, 64]),
-         (pm_goal_3_routers_r1 initPM).getD 7 (zeroTensor [2048, 64])] := by
-  simp only [sm_goal_3_routers, pm_goal_3_routers_r0, pm_goal_3_routers_r1,
-    List.getD_cons_succ, List.getD_cons_zero]
-  have hnl := sm_pm_nl_L7_commute initSM initPM hSM hPM hInit
-  have hs839 : (denoteGraph_ringAttn pm_goal_3 initPM 8769).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8769]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_8695 initPM hPM) (fw_view_shape_eq _ _)
-  have hs840 : (denoteGraph_ringAttn pm_goal_3 initPM 8770).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8770]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_8696 initPM hPM) (fw_view_shape_eq _ _)
-  have hs51 : (denoteGraph_ringAttn pm_goal_3 initPM 8781).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_8781, denote_pm_goal_3_8775, denote_pm_goal_3_8773]
-    exact nl_sh 2048 1024 64 _ (initPM 5085) (by rw [rms_sh]; exact hs839) (hPM 5085 [64, 1024] (by decide))
-  have hs52 : (denoteGraph_ringAttn pm_goal_3 initPM 8782).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_8782, denote_pm_goal_3_8776, denote_pm_goal_3_8774]
-    exact nl_sh 2048 1024 64 _ (initPM 5085) (by rw [rms_sh]; exact hs840) (hPM 5085 [64, 1024] (by decide))
-  have hSM16sh : (denoteGraph_ringAttn sm_goal_3 initSM 5086).shape = [4096, 64] := by
-    rw [hnl]; exact aG0_2_shape _ _ 2048 64 hs51
-  rw [denote_sm_goal_3_5088, denote_pm_goal_3_8785, denote_pm_goal_3_8786]
-  rw [show (denoteGraph_ringAttn sm_goal_3 initSM 5086).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hSM16sh]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 8781).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs51]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 8782).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs52]; rfl]
-  rw [hnl]
-  exact fw_topk_routing_snd_fst_allGather0_commute_2_of _ _ 2048 ([8].getD 0 1) 64 (by omega) (by omega) hs51 hs52
+mk_router 7
 
 
 
@@ -51290,41 +51162,7 @@ theorem sm_pm_nl_L8_commute (initSM initPM : Store)
   rw [fw_norm_linear_allGather0_commute_2 _ _ (initPM 5139) 2048 1024 64 (by omega) (by omega) (by omega) hrms839 hrms840 hw4815]
 
 
-set_option maxHeartbeats 4000000 in
-theorem sm_pm_router_commute_L8
-    (initSM initPM : Store)
-    (hSM : StoreShapesHold initSM sm_goal_3InitEnv)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    (sm_goal_3_routers initSM).getD 8 (zeroTensor [2 * 2048, 64]) =
-      allGatherPrimDimN 0 2 0
-        [(pm_goal_3_routers_r0 initPM).getD 8 (zeroTensor [2048, 64]),
-         (pm_goal_3_routers_r1 initPM).getD 8 (zeroTensor [2048, 64])] := by
-  simp only [sm_goal_3_routers, pm_goal_3_routers_r0, pm_goal_3_routers_r1,
-    List.getD_cons_succ, List.getD_cons_zero]
-  have hnl := sm_pm_nl_L8_commute initSM initPM hSM hPM hInit
-  have hs839 : (denoteGraph_ringAttn pm_goal_3 initPM 8955).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8955]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_8881 initPM hPM) (fw_view_shape_eq _ _)
-  have hs840 : (denoteGraph_ringAttn pm_goal_3 initPM 8956).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_8956]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_8882 initPM hPM) (fw_view_shape_eq _ _)
-  have hs51 : (denoteGraph_ringAttn pm_goal_3 initPM 8967).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_8967, denote_pm_goal_3_8961, denote_pm_goal_3_8959]
-    exact nl_sh 2048 1024 64 _ (initPM 5139) (by rw [rms_sh]; exact hs839) (hPM 5139 [64, 1024] (by decide))
-  have hs52 : (denoteGraph_ringAttn pm_goal_3 initPM 8968).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_8968, denote_pm_goal_3_8962, denote_pm_goal_3_8960]
-    exact nl_sh 2048 1024 64 _ (initPM 5139) (by rw [rms_sh]; exact hs840) (hPM 5139 [64, 1024] (by decide))
-  have hSM16sh : (denoteGraph_ringAttn sm_goal_3 initSM 5140).shape = [4096, 64] := by
-    rw [hnl]; exact aG0_2_shape _ _ 2048 64 hs51
-  rw [denote_sm_goal_3_5142, denote_pm_goal_3_8971, denote_pm_goal_3_8972]
-  rw [show (denoteGraph_ringAttn sm_goal_3 initSM 5140).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hSM16sh]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 8967).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs51]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 8968).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs52]; rfl]
-  rw [hnl]
-  exact fw_topk_routing_snd_fst_allGather0_commute_2_of _ _ 2048 ([8].getD 0 1) 64 (by omega) (by omega) hs51 hs52
+mk_router 8
 
 
 
@@ -54762,41 +54600,7 @@ theorem sm_pm_nl_L9_commute (initSM initPM : Store)
   rw [fw_norm_linear_allGather0_commute_2 _ _ (initPM 5193) 2048 1024 64 (by omega) (by omega) (by omega) hrms839 hrms840 hw4815]
 
 
-set_option maxHeartbeats 4000000 in
-theorem sm_pm_router_commute_L9
-    (initSM initPM : Store)
-    (hSM : StoreShapesHold initSM sm_goal_3InitEnv)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    (sm_goal_3_routers initSM).getD 9 (zeroTensor [2 * 2048, 64]) =
-      allGatherPrimDimN 0 2 0
-        [(pm_goal_3_routers_r0 initPM).getD 9 (zeroTensor [2048, 64]),
-         (pm_goal_3_routers_r1 initPM).getD 9 (zeroTensor [2048, 64])] := by
-  simp only [sm_goal_3_routers, pm_goal_3_routers_r0, pm_goal_3_routers_r1,
-    List.getD_cons_succ, List.getD_cons_zero]
-  have hnl := sm_pm_nl_L9_commute initSM initPM hSM hPM hInit
-  have hs839 : (denoteGraph_ringAttn pm_goal_3 initPM 9141).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_9141]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_9067 initPM hPM) (fw_view_shape_eq _ _)
-  have hs840 : (denoteGraph_ringAttn pm_goal_3 initPM 9142).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_9142]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_9068 initPM hPM) (fw_view_shape_eq _ _)
-  have hs51 : (denoteGraph_ringAttn pm_goal_3 initPM 9153).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_9153, denote_pm_goal_3_9147, denote_pm_goal_3_9145]
-    exact nl_sh 2048 1024 64 _ (initPM 5193) (by rw [rms_sh]; exact hs839) (hPM 5193 [64, 1024] (by decide))
-  have hs52 : (denoteGraph_ringAttn pm_goal_3 initPM 9154).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_9154, denote_pm_goal_3_9148, denote_pm_goal_3_9146]
-    exact nl_sh 2048 1024 64 _ (initPM 5193) (by rw [rms_sh]; exact hs840) (hPM 5193 [64, 1024] (by decide))
-  have hSM16sh : (denoteGraph_ringAttn sm_goal_3 initSM 5194).shape = [4096, 64] := by
-    rw [hnl]; exact aG0_2_shape _ _ 2048 64 hs51
-  rw [denote_sm_goal_3_5196, denote_pm_goal_3_9157, denote_pm_goal_3_9158]
-  rw [show (denoteGraph_ringAttn sm_goal_3 initSM 5194).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hSM16sh]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 9153).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs51]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 9154).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs52]; rfl]
-  rw [hnl]
-  exact fw_topk_routing_snd_fst_allGather0_commute_2_of _ _ 2048 ([8].getD 0 1) 64 (by omega) (by omega) hs51 hs52
+mk_router 9
 
 
 
@@ -58234,41 +58038,7 @@ theorem sm_pm_nl_L10_commute (initSM initPM : Store)
   rw [fw_norm_linear_allGather0_commute_2 _ _ (initPM 5247) 2048 1024 64 (by omega) (by omega) (by omega) hrms839 hrms840 hw4815]
 
 
-set_option maxHeartbeats 4000000 in
-theorem sm_pm_router_commute_L10
-    (initSM initPM : Store)
-    (hSM : StoreShapesHold initSM sm_goal_3InitEnv)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    (sm_goal_3_routers initSM).getD 10 (zeroTensor [2 * 2048, 64]) =
-      allGatherPrimDimN 0 2 0
-        [(pm_goal_3_routers_r0 initPM).getD 10 (zeroTensor [2048, 64]),
-         (pm_goal_3_routers_r1 initPM).getD 10 (zeroTensor [2048, 64])] := by
-  simp only [sm_goal_3_routers, pm_goal_3_routers_r0, pm_goal_3_routers_r1,
-    List.getD_cons_succ, List.getD_cons_zero]
-  have hnl := sm_pm_nl_L10_commute initSM initPM hSM hPM hInit
-  have hs839 : (denoteGraph_ringAttn pm_goal_3 initPM 9327).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_9327]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_9253 initPM hPM) (fw_view_shape_eq _ _)
-  have hs840 : (denoteGraph_ringAttn pm_goal_3 initPM 9328).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_9328]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_9254 initPM hPM) (fw_view_shape_eq _ _)
-  have hs51 : (denoteGraph_ringAttn pm_goal_3 initPM 9339).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_9339, denote_pm_goal_3_9333, denote_pm_goal_3_9331]
-    exact nl_sh 2048 1024 64 _ (initPM 5247) (by rw [rms_sh]; exact hs839) (hPM 5247 [64, 1024] (by decide))
-  have hs52 : (denoteGraph_ringAttn pm_goal_3 initPM 9340).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_9340, denote_pm_goal_3_9334, denote_pm_goal_3_9332]
-    exact nl_sh 2048 1024 64 _ (initPM 5247) (by rw [rms_sh]; exact hs840) (hPM 5247 [64, 1024] (by decide))
-  have hSM16sh : (denoteGraph_ringAttn sm_goal_3 initSM 5248).shape = [4096, 64] := by
-    rw [hnl]; exact aG0_2_shape _ _ 2048 64 hs51
-  rw [denote_sm_goal_3_5250, denote_pm_goal_3_9343, denote_pm_goal_3_9344]
-  rw [show (denoteGraph_ringAttn sm_goal_3 initSM 5248).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hSM16sh]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 9339).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs51]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 9340).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs52]; rfl]
-  rw [hnl]
-  exact fw_topk_routing_snd_fst_allGather0_commute_2_of _ _ 2048 ([8].getD 0 1) 64 (by omega) (by omega) hs51 hs52
+mk_router 10
 
 
 
@@ -61706,41 +61476,7 @@ theorem sm_pm_nl_L11_commute (initSM initPM : Store)
   rw [fw_norm_linear_allGather0_commute_2 _ _ (initPM 5301) 2048 1024 64 (by omega) (by omega) (by omega) hrms839 hrms840 hw4815]
 
 
-set_option maxHeartbeats 4000000 in
-theorem sm_pm_router_commute_L11
-    (initSM initPM : Store)
-    (hSM : StoreShapesHold initSM sm_goal_3InitEnv)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv)
-    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    (sm_goal_3_routers initSM).getD 11 (zeroTensor [2 * 2048, 64]) =
-      allGatherPrimDimN 0 2 0
-        [(pm_goal_3_routers_r0 initPM).getD 11 (zeroTensor [2048, 64]),
-         (pm_goal_3_routers_r1 initPM).getD 11 (zeroTensor [2048, 64])] := by
-  simp only [sm_goal_3_routers, pm_goal_3_routers_r0, pm_goal_3_routers_r1,
-    List.getD_cons_succ, List.getD_cons_zero]
-  have hnl := sm_pm_nl_L11_commute initSM initPM hSM hPM hInit
-  have hs839 : (denoteGraph_ringAttn pm_goal_3 initPM 9513).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_9513]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_9439 initPM hPM) (fw_view_shape_eq _ _)
-  have hs840 : (denoteGraph_ringAttn pm_goal_3 initPM 9514).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_9514]
-    exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024]
-      (RouterShapesHelpers.hs_9440 initPM hPM) (fw_view_shape_eq _ _)
-  have hs51 : (denoteGraph_ringAttn pm_goal_3 initPM 9525).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_9525, denote_pm_goal_3_9519, denote_pm_goal_3_9517]
-    exact nl_sh 2048 1024 64 _ (initPM 5301) (by rw [rms_sh]; exact hs839) (hPM 5301 [64, 1024] (by decide))
-  have hs52 : (denoteGraph_ringAttn pm_goal_3 initPM 9526).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_9526, denote_pm_goal_3_9520, denote_pm_goal_3_9518]
-    exact nl_sh 2048 1024 64 _ (initPM 5301) (by rw [rms_sh]; exact hs840) (hPM 5301 [64, 1024] (by decide))
-  have hSM16sh : (denoteGraph_ringAttn sm_goal_3 initSM 5302).shape = [4096, 64] := by
-    rw [hnl]; exact aG0_2_shape _ _ 2048 64 hs51
-  rw [denote_sm_goal_3_5304, denote_pm_goal_3_9529, denote_pm_goal_3_9530]
-  rw [show (denoteGraph_ringAttn sm_goal_3 initSM 5302).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hSM16sh]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 9525).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs51]; rfl,
-      show (denoteGraph_ringAttn pm_goal_3 initPM 9526).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs52]; rfl]
-  rw [hnl]
-  exact fw_topk_routing_snd_fst_allGather0_commute_2_of _ _ 2048 ([8].getD 0 1) 64 (by omega) (by omega) hs51 hs52
+mk_router 11
 
 
 end TrainVerify.Denote.GeneratedPatterns
