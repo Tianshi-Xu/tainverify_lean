@@ -1,0 +1,9 @@
+=== RELAY session start Fri Jul 10 14:54:09 UTC 2026 ===
+=== BASELINE build start Fri Jul 10 15:00:42 UTC 2026 ===
+EXIT 0
+
+=== REFACTOR LANDED ===
+Baseline Pattern_3 build: 1447s | Refactored: 1462s (+1.0%)
+File 54496 -> 47167 lines (-7329, -13.4%)
+1113/1116 helpers via HsHelpersGeneric (3 hand-written: hs_4714,hs_9655,hs_9656)
+Axioms all [propext, Classical.choice, Quot.sound]. EXIT 0.
