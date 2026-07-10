@@ -5672,6 +5672,98 @@ theorem allGatherPrimDimN0_valAt
   rw [hmod_fds, hdiv_fds, hdiv_hidden, hmod_hidden, hdiv_shard, hmod_shard]
   simp only [Nat.zero_mul, Nat.zero_add, valAt, hidx_lt_Wr, dif_pos]
 
+-- 3D generalization of `allGatherPrimDimN0_valAt`: value of the dim-0 all-gather
+-- of `[shard, mid, last]` shards at the flat index for `[r*shard+i, j, k]` equals
+-- the `r`-th shard read at `[i, j, k]`. Used by the zigzag-attention K/V
+-- append-invariance lemma (`fw_attn_varlen_kv_append_invariant`).
+set_option maxHeartbeats 1600000 in
+theorem allGatherPrimDimN0_valAt_3D
+    (numParts shard mid last : Nat) (Ws : List Tensor)
+    (hparts : 0 < numParts) (hshard : 0 < shard) (hmid : 0 < mid) (hlast : 0 < last)
+    (hhead : (Ws.head?.map (fun t => t.shape)).getD [] = [shard, mid, last])
+    (hWs_shape : ∀ r (_ : r < numParts),
+        (Ws.getD r (zeroTensor [shard, mid, last])).shape = [shard, mid, last])
+    (r : Nat) (hr : r < numParts) (i : Nat) (hi : i < shard)
+    (j : Nat) (hj : j < mid) (k : Nat) (hk : k < last) :
+    valAt (allGatherPrimDimN 0 numParts 0 Ws) (((r * shard + i) * mid + j) * last + k) =
+      valAt (Ws.getD r (zeroTensor [shard, mid, last])) ((i * mid + j) * last + k) := by
+  have hP_pos : 0 < mid * last := Nat.mul_pos hmid hlast
+  have hshard_ne : shard ≠ 0 := Nat.ne_of_gt hshard
+  have hP_ne : mid * last ≠ 0 := Nat.ne_of_gt hP_pos
+  have hinner_lt : j * last + k < mid * last := by
+    calc j * last + k < j * last + last := by omega
+      _ = (j + 1) * last := by ring
+      _ ≤ mid * last := Nat.mul_le_mul_right _ (by omega)
+  have hrow_lt : r * shard + i < shard * numParts := by
+    have hsi : r * shard + i < (r + 1) * shard := by
+      calc r * shard + i < r * shard + shard := by omega
+        _ = (r + 1) * shard := by ring
+    have hle : (r + 1) * shard ≤ numParts * shard := Nat.mul_le_mul_right _ hr
+    calc r * shard + i < (r + 1) * shard := hsi
+      _ ≤ numParts * shard := hle
+      _ = shard * numParts := by ring
+  have hfds_ne : shard * numParts * (mid * last) ≠ 0 := by positivity
+  have hidx_lt_fds : ((r * shard + i) * mid + j) * last + k < shard * numParts * (mid * last) := by
+    calc ((r * shard + i) * mid + j) * last + k
+        = (r * shard + i) * (mid * last) + (j * last + k) := by ring
+      _ < (r * shard + i) * (mid * last) + (mid * last) := by omega
+      _ = (r * shard + i + 1) * (mid * last) := by ring
+      _ ≤ (shard * numParts) * (mid * last) := Nat.mul_le_mul_right _ (by omega)
+      _ = shard * numParts * (mid * last) := by ring
+  have hdiv_fds : (((r * shard + i) * mid + j) * last + k) / (shard * numParts * (mid * last)) = 0 :=
+    Nat.div_eq_of_lt hidx_lt_fds
+  have hmod_fds : (((r * shard + i) * mid + j) * last + k) % (shard * numParts * (mid * last))
+      = ((r * shard + i) * mid + j) * last + k :=
+    Nat.mod_eq_of_lt hidx_lt_fds
+  have hdiv_P : (((r * shard + i) * mid + j) * last + k) / (mid * last) = r * shard + i := by
+    rw [show ((r*shard+i)*mid+j)*last+k = (j*last+k) + (mid*last) * (r*shard+i) from by ring,
+        Nat.add_mul_div_left _ _ hP_pos, Nat.div_eq_of_lt hinner_lt, Nat.zero_add]
+  have hmod_P : (((r * shard + i) * mid + j) * last + k) % (mid * last) = j * last + k := by
+    rw [show ((r*shard+i)*mid+j)*last+k = (j*last+k) + (mid*last) * (r*shard+i) from by ring,
+        Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hinner_lt]
+  have hdiv_shard : (r * shard + i) / shard = r := by
+    rw [show r*shard+i = i + shard*r from by ring,
+        Nat.add_mul_div_left _ _ hshard, Nat.div_eq_of_lt hi, Nat.zero_add]
+  have hmod_shard : (r * shard + i) % shard = i := by
+    rw [show r*shard+i = i + shard*r from by ring,
+        Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hi]
+  have hshape_out : (allGatherPrimDimN 0 numParts 0 Ws).shape = [shard * numParts, mid, last] := by
+    have := allGatherPrimDimN_shape 0 numParts Ws [shard, mid, last] hhead
+    simpa using this
+  have hidx_lt_prod : ((r * shard + i) * mid + j) * last + k <
+      prodShape (allGatherPrimDimN 0 numParts 0 Ws).shape := by
+    rw [hshape_out]
+    have hpr : prodShape [shard * numParts, mid, last] = shard * numParts * (mid * last) := by
+      simp [prodShape]; ring
+    rw [hpr]; exact hidx_lt_fds
+  have hgetD0 : (([shard, mid, last] : List Nat).getD 0 0) = shard := rfl
+  have hdrop1 : List.foldl (fun (a b : Nat) => a * b) 1
+      (List.drop (0 + 1) ([shard, mid, last] : List Nat)) = mid * last := by
+    simp [List.drop, List.foldl]
+  have hWr_shape : (Ws.getD r (zeroTensor [shard, mid, last])).shape = [shard, mid, last] :=
+    hWs_shape r hr
+  have hWr_prod : prodShape (Ws.getD r (zeroTensor [shard, mid, last])).shape
+      = shard * (mid * last) := by
+    rw [hWr_shape]; simp [prodShape]; ring
+  have hidx_lt_Wr : (i * mid + j) * last + k <
+      prodShape (Ws.getD r (zeroTensor [shard, mid, last])).shape := by
+    rw [hWr_prod]
+    calc (i * mid + j) * last + k
+        = i * (mid * last) + (j * last + k) := by ring
+      _ < i * (mid * last) + (mid * last) := by omega
+      _ = (i + 1) * (mid * last) := by ring
+      _ ≤ shard * (mid * last) := Nat.mul_le_mul_right _ (by omega)
+  have h0 : valAt (allGatherPrimDimN 0 numParts 0 Ws) (((r * shard + i) * mid + j) * last + k) =
+      (allGatherPrimDimN 0 numParts 0 Ws).val
+        ⟨((r * shard + i) * mid + j) * last + k, hidx_lt_prod⟩ := by
+    simp [valAt, hidx_lt_prod]
+  rw [h0]
+  simp only [allGatherPrimDimN, Tensor.mkShape, hhead, hgetD0, hdrop1,
+    if_neg hshard_ne, if_neg hP_ne, if_neg hfds_ne]
+  rw [hmod_fds, hdiv_fds, hdiv_P, hmod_P, hdiv_shard, hmod_shard]
+  rw [show (0 : Nat) * (shard * (mid * last)) + i * (mid * last) + (j * last + k)
+      = (i * mid + j) * last + k from by ring]
+
 /-- Value of `fw_embedding ids fullW` at output index `outIdx` is the full lookup
     when row is in vocab range, else 0. -/
 theorem fw_embedding_valAt
