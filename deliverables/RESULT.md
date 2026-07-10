@@ -155,4 +155,4 @@ exactly `[propext, Classical.choice, Quot.sound]`. See `axiom_audit_r2.log`.
 
 ## Commit
 
-`d253157849a9df03f5c068f113ff1b5cb68681d2` on branch `iroha-denote-refactor2`.
+`fe24f18` (the substantive refactor commit) on branch `iroha-denote-refactor2`.
