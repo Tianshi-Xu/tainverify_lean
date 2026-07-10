@@ -1,0 +1,24 @@
+hs_step% macro task — session relay log
+========================================
+
+1. Explored worktree (branch iroha-hs-macro @ 863cf1b). Pattern_3.lean = 40,820 lines.
+2. Studied HsHelpersGeneric backbone (866-999): 5 lemmas leaf/1in/id/2in/7in.
+   Studied namespace layout + existing mk_* command macros (splice fixed
+   templates via affine arithmetic on k — NOT graph reads at elab time).
+3. Catalogued 1116 hs_ helpers: 142 leaf, 286 1in, 366 id, 273 2in, 46 7in, 3 hand.
+   Found 15 distinct generic proof templates, fully regular after number-normalization.
+4. Determined statement carries fully-inferred output shape (absent from graph)
+   => pure graph-reading term macro cannot synthesise the statement.
+   Adopted sanctioned fall-back: explicit-arg command macros (mirrors mk_* precedent).
+5. Wrote Python extractor -> /tmp/hs_recs.json (structured records per helper).
+6. Implemented 16 command macros; validated in scratch file (15/16 pass;
+   16th = test-only namespace-resolution artifact, safe in production).
+7. Deployed via generator: replaced hs region with macro defs + 1113 one-line
+   invocations + 3 hand-written blocks verbatim. 40,820 -> 29,885 lines (-10,935).
+8. Full build: lake build denote.yoco_goals.Pattern_3 => EXIT 0, 26m10s (+3.8%).
+9. Kernel audit: 20 sampled hs_ names, all => [propext, Classical.choice, Quot.sound].
+   No sorryAx / native_decide / ofReduceBool.
+10. Verified: 1116 names preserved (diff IDENTICAL, no dups); backbone byte-identical;
+    DO-NOT-TOUCH regions intact (only 1 cosmetic trailing blank line).
+11. Removed scratch files (HsMacroScratch.lean, HsAxiomAudit.lean).
+12. Wrote deliverables; committed + pushed to origin iroha-hs-macro.

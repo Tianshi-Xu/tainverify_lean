@@ -1308,311 +1308,313 @@ theorem elemwiseMul_shape2 (x y : Tensor) (sx sy : Shape)
   show outShape2 x y = _
   unfold outShape2; rw [hx, hy]
 
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4680 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4680).shape = [4096, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 4680 [4096, 1024] (by decide) (by decide) (by decide)
 
+/-! ## hs-helper macro layer
+
+The 1113 generic `hs_<tid>` shape helpers below are emitted by the `hs*` command
+macros defined here. Each macro reads the writer-node structure (op / inputs /
+position / output-shape) passed as literal arguments and splices the exact
+`HsHelpersGeneric.denote_step_*` invocation the hand-written proof used, so every
+generated theorem is byte-for-byte the proof it replaces. The 3 non-generic
+helpers (`hs_4714` allGather, `hs_9655`/`hs_9656` maybe_shuffle) stay hand-written. -/
+
+open Lean Elab Command Term
+
+declare_syntax_cat hsh
+syntax "s[" num,* "]" : hsh
+
+/-- nat values of an `hsh` shape node -/
+def hshNats (s : TSyntax `hsh) : Array Nat :=
+  (s.raw[1].getSepArgs).map (fun n => n.isNatLit?.getD 0)
+
+/-- `hsh` → term `[n, ...]` -/
+def hshTerm (s : TSyntax `hsh) : CommandElabM (TSyntax `term) := do
+  let elems : Array (TSyntax `term) := (hshNats s).map (fun n => Lean.quote n)
+  `([$elems,*])
+
+/-- `hsh` → (head term, tail-list term) for view -/
+def hshHeadTail (s : TSyntax `hsh) : CommandElabM (TSyntax `term × TSyntax `term) := do
+  let ns := hshNats s
+  let head : TSyntax `term := Lean.quote (ns[0]!)
+  let tailElems : Array (TSyntax `term) := (ns.toList.drop 1).toArray.map (fun n => Lean.quote n)
+  let tail ← `([$tailElems,*])
+  return (head, tail)
+
+
+def hsId (n : Nat) : Ident := mkIdent (Name.mkSimple s!"hs_{n}")
+def thmHeader (tid : TSyntax `num) : Ident := mkIdent (Name.mkSimple s!"hs_{tid.getNat}")
+
+-- LEAF
+elab "hsleaf " t:num sh:hsh : command => do
+  let nm := thmHeader t; let shT ← hshTerm sh
+  elabCommand (← `(command|
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 4000000 in
-theorem hs_4681 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4681).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 4681 4680 23
-      { rank := 1, op := "OpName.FW_float", ins := [4680], outs := [4681], params := [] }
+theorem $nm (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM $t).shape = $shT := by
+  exact HsHelpersGeneric.denote_leaf_shape initPM hPM $t $shT (by decide) (by decide) (by decide)))
+
+-- FLOAT (id)
+elab "hsflt " t:num in1:num m:num rank:num sh:hsh : command => do
+  let nm := thmHeader t; let shT ← hshTerm sh; let hi := hsId in1.getNat
+  elabCommand (← `(command|
+set_option maxRecDepth 1000000 in
+set_option maxHeartbeats 4000000 in
+theorem $nm (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM $t).shape = $shT := by
+  rw [HsHelpersGeneric.denote_step_id initPM $t $in1 $m
+      { rank := $rank, op := "OpName.FW_float", ins := [$in1], outs := [$t], params := [] }
       (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 4680 4681 [])]
-  exact (hs_4680 initPM hPM)
+      (fun s => applyNode_fw_float_out pm_goal_3 s $rank $in1 $t [])]
+  exact ($hi initPM hPM)))
 
+-- MULTIREF2 second (outs=[o1,tid])
+elab "hsm2b " t:num in1:num o1:num m:num rank:num sh:hsh : command => do
+  let nm := thmHeader t; let shT ← hshTerm sh; let hi := hsId in1.getNat
+  elabCommand (← `(command|
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 4000000 in
-theorem hs_14615 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14615).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14615 4681 25
-      { rank := 1, op := "OpName.FW_multiref", ins := [4681], outs := [14611, 14615], params := [2] }
+theorem $nm (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM $t).shape = $shT := by
+  rw [HsHelpersGeneric.denote_step_id initPM $t $in1 $m
+      { rank := $rank, op := "OpName.FW_multiref", ins := [$in1], outs := [$o1, $t], params := [2] }
       (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 4681 14611 14615 (by decide))]
-  exact (hs_4681 initPM hPM)
+      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s $rank $in1 $o1 $t (by decide))]
+  exact ($hi initPM hPM)))
 
+-- MULTIREF2 first (outs=[tid,o2])
+elab "hsm2a " t:num in1:num o2:num m:num rank:num sh:hsh : command => do
+  let nm := thmHeader t; let shT ← hshTerm sh; let hi := hsId in1.getNat
+  elabCommand (← `(command|
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 4000000 in
-theorem hs_4701 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4701).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 4701 4700 54
-      { rank := 1, op := "OpName.FW_view", ins := [4700], outs := [4701], params := [4096, 1024] }
-      (fw_view [4096, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 4096 [1024] 4700 4701)]
+theorem $nm (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM $t).shape = $shT := by
+  rw [HsHelpersGeneric.denote_step_id initPM $t $in1 $m
+      { rank := $rank, op := "OpName.FW_multiref", ins := [$in1], outs := [$t, $o2], params := [2] }
+      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s $rank $in1 $t $o2)]
+  exact ($hi initPM hPM)))
+
+-- MULTIREF5 first (outs=[tid,o2,o3,o4,o5])
+elab "hsm5a " t:num in1:num o2:num o3:num o4:num o5:num m:num rank:num sh:hsh : command => do
+  let nm := thmHeader t; let shT ← hshTerm sh; let hi := hsId in1.getNat
+  elabCommand (← `(command|
+set_option maxRecDepth 1000000 in
+set_option maxHeartbeats 4000000 in
+theorem $nm (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM $t).shape = $shT := by
+  rw [HsHelpersGeneric.denote_step_id initPM $t $in1 $m
+      { rank := $rank, op := "OpName.FW_multiref", ins := [$in1], outs := [$t, $o2, $o3, $o4, $o5], params := [5] }
+      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s $rank $in1 $t $o2 $o3 $o4 $o5)]
+  exact ($hi initPM hPM)))
+
+-- MULTIREF5 pos1 (outs=[o1,tid,o3,o4,o5])
+elab "hsm5b " t:num in1:num o1:num o3:num o4:num o5:num m:num rank:num sh:hsh : command => do
+  let nm := thmHeader t; let shT ← hshTerm sh; let hi := hsId in1.getNat
+  elabCommand (← `(command|
+set_option maxRecDepth 1000000 in
+set_option maxHeartbeats 4000000 in
+theorem $nm (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM $t).shape = $shT := by
+  rw [HsHelpersGeneric.denote_step_id initPM $t $in1 $m
+      { rank := $rank, op := "OpName.FW_multiref", ins := [$in1], outs := [$o1, $t, $o3, $o4, $o5], params := [5] }
+      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s $rank $in1 $o1 $t $o3 $o4 $o5 (by decide))]
+  exact ($hi initPM hPM)))
+
+-- VIEW (1in)
+elab "hsview " t:num in1:num m:num rank:num sh:hsh : command => do
+  let nm := thmHeader t; let shT ← hshTerm sh; let hi := hsId in1.getNat
+  let (hd, tl) ← hshHeadTail sh
+  elabCommand (← `(command|
+set_option maxRecDepth 1000000 in
+set_option maxHeartbeats 4000000 in
+theorem $nm (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM $t).shape = $shT := by
+  rw [HsHelpersGeneric.denote_step_1in initPM $t $in1 $m
+      { rank := $rank, op := "OpName.FW_view", ins := [$in1], outs := [$t], params := $shT }
+      (fw_view $shT) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_view_out pm_goal_3 s $rank $hd $tl $in1 $t)]
   beta_reduce
-  rfl
+  rfl))
 
+-- ADD (2in)
+elab "hsadd " t:num in1:num in2:num m:num rank:num sh:hsh : command => do
+  let nm := thmHeader t; let shT ← hshTerm sh; let h1 := hsId in1.getNat; let h2 := hsId in2.getNat
+  elabCommand (← `(command|
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 4000000 in
-theorem hs_4702 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4702).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 4702 4701 56
-      { rank := 1, op := "OpName.FW_float", ins := [4701], outs := [4702], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 4701 4702 [])]
-  exact (hs_4701 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4703 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4703).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 4703 14615 4702 58
-      { rank := 1, op := "OpName.FW_add", ins := [14615, 4702], outs := [4703], params := [] }
+theorem $nm (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM $t).shape = $shT := by
+  rw [HsHelpersGeneric.denote_step_2in initPM $t $in1 $in2 $m
+      { rank := $rank, op := "OpName.FW_add", ins := [$in1, $in2], outs := [$t], params := [] }
       (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 14615 4702 4703)]
+      (fun s => applyNode_fw_add2_out pm_goal_3 s $rank $in1 $in2 $t)]
   beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [4096, 1024] (hs_14615 initPM hPM) (hs_4702 initPM hPM)
+  exact elemwiseAdd_shape_of_shapes _ _ $shT ($h1 initPM hPM) ($h2 initPM hPM)))
 
+-- RMS (2in)
+elab "hsrms " t:num in1:num in2:num m:num rank:num sh:hsh : command => do
+  let nm := thmHeader t; let shT ← hshTerm sh; let h1 := hsId in1.getNat
+  elabCommand (← `(command|
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 4000000 in
-theorem hs_14652 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14652).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14652 4703 60
-      { rank := 1, op := "OpName.FW_multiref", ins := [4703], outs := [14652, 14656], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 4703 14652 14656)]
-  exact (hs_4703 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4704 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4704).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 4704 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4705 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4705).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 4705 14652 4704 62
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [14652, 4704], outs := [4705], params := [] }
+theorem $nm (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM $t).shape = $shT := by
+  rw [HsHelpersGeneric.denote_step_2in initPM $t $in1 $in2 $m
+      { rank := $rank, op := "OpName.FW_rms_norm", ins := [$in1, $in2], outs := [$t], params := [] }
       (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 14652 4704 4705)]
+      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s $rank $in1 $in2 $t)]
   beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_14652 initPM hPM)
+  rw [fw_rms_norm_shape]; exact ($h1 initPM hPM)))
 
+-- NORM_LINEAR (2in), sh=[b,n], k=1024
+elab "hsnlin " t:num in1:num in2:num m:num rank:num sh:hsh : command => do
+  let nm := thmHeader t; let shT ← hshTerm sh; let h1 := hsId in1.getNat; let h2 := hsId in2.getNat
+  let ns := hshNats sh
+  let bT : TSyntax `term := Lean.quote (ns[0]!)
+  let nT : TSyntax `term := Lean.quote (ns[1]!)
+  elabCommand (← `(command|
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 4000000 in
-theorem hs_11875 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11875).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11875 4705 64
-      { rank := 1, op := "OpName.FW_multiref", ins := [4705], outs := [11875, 11876, 11877, 11878, 11879], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 4705 11875 11876 11877 11878 11879)]
-  exact (hs_4705 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4706 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4706).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 4706 11875 70
-      { rank := 1, op := "OpName.FW_float", ins := [11875], outs := [4706], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 11875 4706 [])]
-  exact (hs_11875 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4707 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4707).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 4707 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4708 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4708).shape = [4096, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 4708 4706 4707 76
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [4706, 4707], outs := [4708], params := [] }
+theorem $nm (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM $t).shape = $shT := by
+  rw [HsHelpersGeneric.denote_step_2in initPM $t $in1 $in2 $m
+      { rank := $rank, op := "OpName.FW_norm_linear", ins := [$in1, $in2], outs := [$t], params := [] }
       (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 4706 4707 4708)]
+      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s $rank $in1 $in2 $t)]
   beta_reduce
-  exact fw_norm_linear_shape2 _ _ 4096 1024 64 (hs_4706 initPM hPM) (hs_4707 initPM hPM)
+  exact fw_norm_linear_shape2 _ _ $bT 1024 $nT ($h1 initPM hPM) ($h2 initPM hPM)))
 
+-- SIGMOID (1in)
+elab "hssig " t:num in1:num m:num rank:num sh:hsh : command => do
+  let nm := thmHeader t; let shT ← hshTerm sh; let h1 := hsId in1.getNat
+  elabCommand (← `(command|
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 4000000 in
-theorem hs_7479 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7479).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7479 4708 83
-      { rank := 0, op := "OpName.ChunkPrim", ins := [4708], outs := [7479], params := [0] }
-      (fun x => chunkPrimDimN 0 pm_goal_3.numRanks 0 (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_chunkPrimDimN_out pm_goal_3 s 0 4708 7479 0)]
+theorem $nm (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM $t).shape = $shT := by
+  rw [HsHelpersGeneric.denote_step_1in initPM $t $in1 $m
+      { rank := $rank, op := "OpName.FW_sigmoid", ins := [$in1], outs := [$t], params := [] }
+      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s $rank $in1 $t)]
   beta_reduce
-  rw [chunkPrimDimN_shape 0 pm_goal_3.numRanks 0 _ [4096, 64] (hs_4708 initPM hPM) (by decide)]; rfl
+  rw [fw_sigmoid_shape]; exact ($h1 initPM hPM)))
 
+-- CHUNK (1in), sh out, ish in
+elab "hschunk " t:num in1:num m:num rank:num sh:hsh ish:hsh : command => do
+  let nm := thmHeader t; let shT ← hshTerm sh; let ishT ← hshTerm ish; let h1 := hsId in1.getNat
+  elabCommand (← `(command|
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 4000000 in
-theorem hs_7483 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7483).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7483 7479 91
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [7479], outs := [7481, 7483, 7485], params := [8] }
+theorem $nm (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM $t).shape = $shT := by
+  rw [HsHelpersGeneric.denote_step_1in initPM $t $in1 $m
+      { rank := $rank, op := "OpName.ChunkPrim", ins := [$in1], outs := [$t], params := [0] }
+      (fun x => chunkPrimDimN 0 pm_goal_3.numRanks $rank (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_chunkPrimDimN_out pm_goal_3 s $rank $in1 $t 0)]
+  beta_reduce
+  rw [chunkPrimDimN_shape 0 pm_goal_3.numRanks $rank _ $ishT ($h1 initPM hPM) (by decide)]; rfl))
+
+-- TOPK map (outs=[o1,tid,o3]), sh=[b,e]
+elab "hstkm " t:num in1:num o1:num o3:num m:num rank:num sh:hsh : command => do
+  let nm := thmHeader t; let shT ← hshTerm sh; let h1 := hsId in1.getNat
+  let ns := hshNats sh
+  let bT : TSyntax `term := Lean.quote (ns[0]!); let eT : TSyntax `term := Lean.quote (ns[1]!)
+  elabCommand (← `(command|
+set_option maxRecDepth 1000000 in
+set_option maxHeartbeats 4000000 in
+theorem $nm (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM $t).shape = $shT := by
+  rw [HsHelpersGeneric.denote_step_1in initPM $t $in1 $m
+      { rank := $rank, op := "OpName.FW_topk_routing", ins := [$in1], outs := [$o1, $t, $o3], params := [8] }
       (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 7479 7481 7483 7485 [8] (by decide))]
+      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s $rank $in1 $o1 $t $o3 [8] (by decide))]
   beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_7479 initPM hPM)
+  exact fw_topk_routing_map_shape2 _ $bT $eT ($h1 initPM hPM)))
 
+-- TOPK probs (outs=[tid,o2,o3]), sh=[b,e]
+elab "hstkp " t:num in1:num o2:num o3:num m:num rank:num sh:hsh : command => do
+  let nm := thmHeader t; let shT ← hshTerm sh; let h1 := hsId in1.getNat
+  let ns := hshNats sh
+  let bT : TSyntax `term := Lean.quote (ns[0]!); let eT : TSyntax `term := Lean.quote (ns[1]!)
+  elabCommand (← `(command|
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 4000000 in
-theorem hs_14656 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14656).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14656 4703 60
-      { rank := 1, op := "OpName.FW_multiref", ins := [4703], outs := [14652, 14656], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 4703 14652 14656 (by decide))]
-  exact (hs_4703 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11876 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11876).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11876 4705 64
-      { rank := 1, op := "OpName.FW_multiref", ins := [4705], outs := [11875, 11876, 11877, 11878, 11879], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 4705 11875 11876 11877 11878 11879 (by decide))]
-  exact (hs_4705 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11941 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11941).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11941 11876 66
-      { rank := 0, op := "OpName.ChunkPrim", ins := [11876], outs := [11941], params := [0] }
-      (fun x => chunkPrimDimN 0 pm_goal_3.numRanks 0 (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_chunkPrimDimN_out pm_goal_3 s 0 11876 11941 0)]
-  beta_reduce
-  rw [chunkPrimDimN_shape 0 pm_goal_3.numRanks 0 _ [4096, 1024] (hs_11876 initPM hPM) (by decide)]; rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7481 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7481).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7481 7479 91
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [7479], outs := [7481, 7483, 7485], params := [8] }
+theorem $nm (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM $t).shape = $shT := by
+  rw [HsHelpersGeneric.denote_step_1in initPM $t $in1 $m
+      { rank := $rank, op := "OpName.FW_topk_routing", ins := [$in1], outs := [$t, $o2, $o3], params := [8] }
       (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 7479 7481 7483 7485 [8])]
+      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s $rank $in1 $t $o2 $o3 [8])]
   beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_7479 initPM hPM)
+  exact fw_topk_routing_probs_shape2 _ $bT $eT ($h1 initPM hPM)))
 
+-- MUL (2in), sh out, s1/s2 input shapes
+elab "hsmul " t:num in1:num in2:num m:num rank:num sh:hsh s1:hsh s2:hsh : command => do
+  let nm := thmHeader t; let shT ← hshTerm sh; let s1T ← hshTerm s1; let s2T ← hshTerm s2
+  let h1 := hsId in1.getNat; let h2 := hsId in2.getNat
+  elabCommand (← `(command|
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 4000000 in
-theorem hs_7487 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7487).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 7487 [32, 1024, 1024] (by decide) (by decide) (by decide)
+theorem $nm (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM $t).shape = $shT := by
+  rw [HsHelpersGeneric.denote_step_2in initPM $t $in1 $in2 $m
+      { rank := $rank, op := "OpName.FW_mul", ins := [$in1, $in2], outs := [$t], params := [] }
+      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_mul_out pm_goal_3 s $rank $in1 $in2 $t)]
+  beta_reduce
+  rw [elemwiseMul_shape2 _ _ $s1T $s2T ($h1 initPM hPM) ($h2 initPM hPM)]
+  decide))
 
+-- MOE (7in), sh=[b,d], params=[64,8,10]
+elab "hsmoe " t:num i1:num i2:num i3:num i4:num i5:num i6:num i7:num m:num rank:num sh:hsh : command => do
+  let nm := thmHeader t; let shT ← hshTerm sh; let hi1 := hsId i1.getNat
+  let ns := hshNats sh
+  let bT : TSyntax `term := Lean.quote (ns[0]!); let dT : TSyntax `term := Lean.quote (ns[1]!)
+  elabCommand (← `(command|
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 4000000 in
-theorem hs_7488 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7488).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 7488 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7489 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7489).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 7489 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7490 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7490).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 7490 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7491 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7491).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 7491 11941 7481 7483 7487 7488 7489 7490 99
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [11941, 7481, 7483, 7487, 7488, 7489, 7490], outs := [7491], params := [64, 8, 10] }
+theorem $nm (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM $t).shape = $shT := by
+  rw [HsHelpersGeneric.denote_step_7in initPM $t $i1 $i2 $i3 $i4 $i5 $i6 $i7 $m
+      { rank := $rank, op := "OpName.FW_all2all_moe_gmm_full", ins := [$i1, $i2, $i3, $i4, $i5, $i6, $i7], outs := [$t], params := [64, 8, 10] }
       (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 11941 7481 7483 7487 7488 7489 7490 7491 [64, 8, 10])]
+      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s $rank $i1 $i2 $i3 $i4 $i5 $i6 $i7 $t [64, 8, 10])]
   beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_11941 initPM hPM)]; rfl) (by rw [(hs_11941 initPM hPM)]; rfl)]
+  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ $bT $dT (by rw [($hi1 initPM hPM)]; rfl) (by rw [($hi1 initPM hPM)]; rfl)]))
 
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11942 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11942).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11942 11876 71
-      { rank := 1, op := "OpName.ChunkPrim", ins := [11876], outs := [11942], params := [0] }
-      (fun x => chunkPrimDimN 0 pm_goal_3.numRanks 1 (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_chunkPrimDimN_out pm_goal_3 s 1 11876 11942 0)]
-  beta_reduce
-  rw [chunkPrimDimN_shape 0 pm_goal_3.numRanks 1 _ [4096, 1024] (hs_11876 initPM hPM) (by decide)]; rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7480 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7480).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7480 4708 84
-      { rank := 1, op := "OpName.ChunkPrim", ins := [4708], outs := [7480], params := [0] }
-      (fun x => chunkPrimDimN 0 pm_goal_3.numRanks 1 (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_chunkPrimDimN_out pm_goal_3 s 1 4708 7480 0)]
-  beta_reduce
-  rw [chunkPrimDimN_shape 0 pm_goal_3.numRanks 1 _ [4096, 64] (hs_4708 initPM hPM) (by decide)]; rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7482 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7482).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7482 7480 92
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [7480], outs := [7482, 7484, 7486], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 7480 7482 7484 7486 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_7480 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7484 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7484).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7484 7480 92
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [7480], outs := [7482, 7484, 7486], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 7480 7482 7484 7486 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_7480 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7492 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7492).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 7492 11942 7482 7484 7487 7488 7489 7490 100
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [11942, 7482, 7484, 7487, 7488, 7489, 7490], outs := [7492], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 11942 7482 7484 7487 7488 7489 7490 7492 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_11942 initPM hPM)]; rfl) (by rw [(hs_11942 initPM hPM)]; rfl)]
-
+hsleaf 4680 s[4096, 1024]
+hsflt 4681 4680 23 1 s[4096, 1024]
+hsm2b 14615 4681 14611 25 1 s[4096, 1024]
+hsview 4701 4700 54 1 s[4096, 1024]
+hsflt 4702 4701 56 1 s[4096, 1024]
+hsadd 4703 14615 4702 58 1 s[4096, 1024]
+hsm2a 14652 4703 14656 60 1 s[4096, 1024]
+hsleaf 4704 s[1024]
+hsrms 4705 14652 4704 62 1 s[4096, 1024]
+hsm5a 11875 4705 11876 11877 11878 11879 64 1 s[4096, 1024]
+hsflt 4706 11875 70 1 s[4096, 1024]
+hsleaf 4707 s[64, 1024]
+hsnlin 4708 4706 4707 76 1 s[4096, 64]
+hschunk 7479 4708 83 0 s[2048, 64] s[4096, 64]
+hstkm 7483 7479 7481 7485 91 0 s[2048, 64]
+hsm2b 14656 4703 14652 60 1 s[4096, 1024]
+hsm5b 11876 4705 11875 11877 11878 11879 64 1 s[4096, 1024]
+hschunk 11941 11876 66 0 s[2048, 1024] s[4096, 1024]
+hstkp 7481 7479 7483 7485 91 0 s[2048, 64]
+hsleaf 7487 s[32, 1024, 1024]
+hsleaf 7488 s[32, 1024, 1024]
+hsleaf 7489 s[32, 1024, 512]
+hsleaf 7490 s[32, 1024, 512]
+hsmoe 7491 11941 7481 7483 7487 7488 7489 7490 99 0 s[2048, 1024]
+hschunk 11942 11876 71 1 s[2048, 1024] s[4096, 1024]
+hschunk 7480 4708 84 1 s[2048, 64] s[4096, 64]
+hstkp 7482 7480 7484 7486 92 1 s[2048, 64]
+hstkm 7484 7480 7482 7486 92 1 s[2048, 64]
+hsmoe 7492 11942 7482 7484 7487 7488 7489 7490 100 1 s[2048, 1024]
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 4000000 in
 theorem hs_4714 (initPM : Store)
@@ -1633,3314 +1635,316 @@ theorem hs_4714 (initPM : Store)
     rfl
   rw [hval_4714]
   rw [allGatherPrimDimN_shape 0 pm_goal_3.numRanks [denoteGraph_ringAttn pm_goal_3 initPM 7491, denoteGraph_ringAttn pm_goal_3 initPM 7492] [2048, 1024] (by show (denoteGraph_ringAttn pm_goal_3 initPM 7491).shape = [2048, 1024]; exact (hs_7491 initPM hPM))]; rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4718 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4718).shape = [4096, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 4718 4717 86
-      { rank := 1, op := "OpName.FW_view", ins := [4717], outs := [4718], params := [4096, 1] }
-      (fw_view [4096, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 4096 [1] 4717 4718)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4719 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4719).shape = [4096, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 4719 4718 94
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [4718], outs := [4719], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 4718 4719)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_4718 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4732 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4732).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 4732 4731 110
-      { rank := 1, op := "OpName.FW_view", ins := [4731], outs := [4732], params := [4096, 1024] }
-      (fw_view [4096, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 4096 [1024] 4731 4732)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4733 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4733).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 4733 4719 4732 112
-      { rank := 1, op := "OpName.FW_mul", ins := [4719, 4732], outs := [4733], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 4719 4732 4733)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [4096, 1] [4096, 1024] (hs_4719 initPM hPM) (hs_4732 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4734 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4734).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 4734 4714 4733 114
-      { rank := 1, op := "OpName.FW_add", ins := [4714, 4733], outs := [4734], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 4714 4733 4734)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [4096, 1024] (hs_4714 initPM hPM) (hs_4733 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4735 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4735).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 4735 4734 116
-      { rank := 1, op := "OpName.FW_float", ins := [4734], outs := [4735], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 4734 4735 [])]
-  exact (hs_4734 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4736 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4736).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 4736 14656 4735 118
-      { rank := 1, op := "OpName.FW_add", ins := [14656, 4735], outs := [4736], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 14656 4735 4736)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [4096, 1024] (hs_14656 initPM hPM) (hs_4735 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14672 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14672).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14672 4736 120
-      { rank := 1, op := "OpName.FW_multiref", ins := [4736], outs := [14668, 14672], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 4736 14668 14672 (by decide))]
-  exact (hs_4736 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4755 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4755).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 4755 4754 149
-      { rank := 1, op := "OpName.FW_view", ins := [4754], outs := [4755], params := [4096, 1024] }
-      (fw_view [4096, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 4096 [1024] 4754 4755)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4756 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4756).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 4756 4755 151
-      { rank := 1, op := "OpName.FW_float", ins := [4755], outs := [4756], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 4755 4756 [])]
-  exact (hs_4755 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4757 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4757).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 4757 14672 4756 153
-      { rank := 1, op := "OpName.FW_add", ins := [14672, 4756], outs := [4757], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 14672 4756 4757)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [4096, 1024] (hs_14672 initPM hPM) (hs_4756 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11889 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11889).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11889 4757 155
-      { rank := 1, op := "OpName.FW_multiref", ins := [4757], outs := [11889, 11890], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 4757 11889 11890)]
-  exact (hs_4757 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4758 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4758).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 4758 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4759 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4759).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 4759 11889 4758 158
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [11889, 4758], outs := [4759], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 11889 4758 4759)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_11889 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11903 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11903).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11903 4759 161
-      { rank := 1, op := "OpName.FW_multiref", ins := [4759], outs := [11903, 11904, 11905, 11906, 11907], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 4759 11903 11904 11905 11906 11907)]
-  exact (hs_4759 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4760 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4760).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 4760 11903 167
-      { rank := 1, op := "OpName.FW_float", ins := [11903], outs := [4760], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 11903 4760 [])]
-  exact (hs_11903 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4761 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4761).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 4761 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4762 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4762).shape = [4096, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 4762 4760 4761 173
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [4760, 4761], outs := [4762], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 4760 4761 4762)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 4096 1024 64 (hs_4760 initPM hPM) (hs_4761 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7665 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7665).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7665 4762 180
-      { rank := 0, op := "OpName.ChunkPrim", ins := [4762], outs := [7665], params := [0] }
-      (fun x => chunkPrimDimN 0 pm_goal_3.numRanks 0 (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_chunkPrimDimN_out pm_goal_3 s 0 4762 7665 0)]
-  beta_reduce
-  rw [chunkPrimDimN_shape 0 pm_goal_3.numRanks 0 _ [4096, 64] (hs_4762 initPM hPM) (by decide)]; rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7669 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7669).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7669 7665 188
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [7665], outs := [7667, 7669, 7671], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 7665 7667 7669 7671 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_7665 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11890 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11890).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11890 4757 155
-      { rank := 1, op := "OpName.FW_multiref", ins := [4757], outs := [11889, 11890], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 4757 11889 11890 (by decide))]
-  exact (hs_4757 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_12011 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 12011).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 12011 11890 157
-      { rank := 0, op := "OpName.ChunkPrim", ins := [11890], outs := [12011], params := [0] }
-      (fun x => chunkPrimDimN 0 pm_goal_3.numRanks 0 (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_chunkPrimDimN_out pm_goal_3 s 0 11890 12011 0)]
-  beta_reduce
-  rw [chunkPrimDimN_shape 0 pm_goal_3.numRanks 0 _ [4096, 1024] (hs_11890 initPM hPM) (by decide)]; rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11904 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11904).shape = [4096, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11904 4759 161
-      { rank := 1, op := "OpName.FW_multiref", ins := [4759], outs := [11903, 11904, 11905, 11906, 11907], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 4759 11903 11904 11905 11906 11907 (by decide))]
-  exact (hs_4759 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11977 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11977).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11977 11904 163
-      { rank := 0, op := "OpName.ChunkPrim", ins := [11904], outs := [11977], params := [0] }
-      (fun x => chunkPrimDimN 0 pm_goal_3.numRanks 0 (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_chunkPrimDimN_out pm_goal_3 s 0 11904 11977 0)]
-  beta_reduce
-  rw [chunkPrimDimN_shape 0 pm_goal_3.numRanks 0 _ [4096, 1024] (hs_11904 initPM hPM) (by decide)]; rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7667 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7667).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7667 7665 188
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [7665], outs := [7667, 7669, 7671], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 7665 7667 7669 7671 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_7665 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7673 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7673).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 7673 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7674 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7674).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 7674 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7675 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7675).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 7675 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7676 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7676).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 7676 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7677 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7677).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 7677 11977 7667 7669 7673 7674 7675 7676 196
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [11977, 7667, 7669, 7673, 7674, 7675, 7676], outs := [7677], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 11977 7667 7669 7673 7674 7675 7676 7677 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_11977 initPM hPM)]; rfl) (by rw [(hs_11977 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4772 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4772).shape = [4096, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 4772 4771 183
-      { rank := 1, op := "OpName.FW_view", ins := [4771], outs := [4772], params := [4096, 1] }
-      (fw_view [4096, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 4096 [1] 4771 4772)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7689 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7689).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7689 4772 190
-      { rank := 0, op := "OpName.ChunkPrim", ins := [4772], outs := [7689], params := [0] }
-      (fun x => chunkPrimDimN 0 pm_goal_3.numRanks 0 (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_chunkPrimDimN_out pm_goal_3 s 0 4772 7689 0)]
-  beta_reduce
-  rw [chunkPrimDimN_shape 0 pm_goal_3.numRanks 0 _ [4096, 1] (hs_4772 initPM hPM) (by decide)]; rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7691 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7691).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7691 7689 198
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [7689], outs := [7691], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 7689 7691)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_7689 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7747 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7747).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7747 7737 206
-      { rank := 0, op := "OpName.FW_view", ins := [7737], outs := [7747], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 7737 7747)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7751 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7751).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7751 7691 7747 208
-      { rank := 0, op := "OpName.FW_mul", ins := [7691, 7747], outs := [7751], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 7691 7747 7751)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_7691 initPM hPM) (hs_7747 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7755 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7755).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7755 7677 7751 210
-      { rank := 0, op := "OpName.FW_add", ins := [7677, 7751], outs := [7755], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 7677 7751 7755)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_7677 initPM hPM) (hs_7751 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7761 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7761).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 7761 7755 212
-      { rank := 0, op := "OpName.FW_float", ins := [7755], outs := [7761], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 7755 7761 [])]
-  exact (hs_7755 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7765 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7765).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7765 12011 7761 214
-      { rank := 0, op := "OpName.FW_add", ins := [12011, 7761], outs := [7765], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 12011 7761 7765)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_12011 initPM hPM) (hs_7761 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14705 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14705).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14705 7765 216
-      { rank := 0, op := "OpName.FW_multiref", ins := [7765], outs := [14701, 14705], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 7765 14701 14705 (by decide))]
-  exact (hs_7765 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7831 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7831).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7831 7821 238
-      { rank := 0, op := "OpName.FW_view", ins := [7821], outs := [7831], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 7821 7831)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7835 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7835).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 7835 7831 240
-      { rank := 0, op := "OpName.FW_float", ins := [7831], outs := [7835], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 7831 7835 [])]
-  exact (hs_7831 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7839 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7839).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7839 14705 7835 242
-      { rank := 0, op := "OpName.FW_add", ins := [14705, 7835], outs := [7839], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 14705 7835 7839)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_14705 initPM hPM) (hs_7835 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14743 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14743).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14743 7839 244
-      { rank := 0, op := "OpName.FW_multiref", ins := [7839], outs := [14743, 14747], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 7839 14743 14747)]
-  exact (hs_7839 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4812 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4812).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 4812 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7843 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7843).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7843 14743 4812 246
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [14743, 4812], outs := [7843], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 14743 4812 7843)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_14743 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14762 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14762).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14762 7843 248
-      { rank := 0, op := "OpName.FW_multiref", ins := [7843], outs := [14762, 14766, 14770, 14774, 14778], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 7843 14762 14766 14770 14774 14778)]
-  exact (hs_7843 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7845 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7845).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 7845 14762 250
-      { rank := 0, op := "OpName.FW_float", ins := [14762], outs := [7845], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 14762 7845 [])]
-  exact (hs_14762 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4815 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4815).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 4815 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7851 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7851).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7851 7845 4815 258
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [7845, 4815], outs := [7851], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 7845 4815 7851)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_7845 initPM hPM) (hs_4815 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7855 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7855).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7855 7851 266
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [7851], outs := [7853, 7855, 7857], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 7851 7853 7855 7857 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_7851 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14747 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14747).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14747 7839 244
-      { rank := 0, op := "OpName.FW_multiref", ins := [7839], outs := [14743, 14747], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 7839 14743 14747 (by decide))]
-  exact (hs_7839 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14766 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14766).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14766 7843 248
-      { rank := 0, op := "OpName.FW_multiref", ins := [7843], outs := [14762, 14766, 14770, 14774, 14778], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 7843 14762 14766 14770 14774 14778 (by decide))]
-  exact (hs_7843 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7853 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7853).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7853 7851 266
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [7851], outs := [7853, 7855, 7857], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 7851 7853 7855 7857 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_7851 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7859 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7859).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 7859 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7860 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7860).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 7860 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7861 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7861).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 7861 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7862 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7862).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 7862 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7863 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7863).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 7863 14766 7853 7855 7859 7860 7861 7862 274
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [14766, 7853, 7855, 7859, 7860, 7861, 7862], outs := [7863], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 14766 7853 7855 7859 7860 7861 7862 7863 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_14766 initPM hPM)]; rfl) (by rw [(hs_14766 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7875 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7875).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7875 7869 267
-      { rank := 0, op := "OpName.FW_view", ins := [7869], outs := [7875], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 7869 7875)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7877 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7877).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7877 7875 275
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [7875], outs := [7877], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 7875 7877)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_7875 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7933 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7933).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7933 7923 284
-      { rank := 0, op := "OpName.FW_view", ins := [7923], outs := [7933], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 7923 7933)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7937 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7937).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7937 7877 7933 286
-      { rank := 0, op := "OpName.FW_mul", ins := [7877, 7933], outs := [7937], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 7877 7933 7937)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_7877 initPM hPM) (hs_7933 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7941 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7941).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7941 7863 7937 288
-      { rank := 0, op := "OpName.FW_add", ins := [7863, 7937], outs := [7941], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 7863 7937 7941)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_7863 initPM hPM) (hs_7937 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7947 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7947).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 7947 7941 290
-      { rank := 0, op := "OpName.FW_float", ins := [7941], outs := [7947], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 7941 7947 [])]
-  exact (hs_7941 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7951 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7951).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7951 14747 7947 292
-      { rank := 0, op := "OpName.FW_add", ins := [14747, 7947], outs := [7951], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 14747 7947 7951)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_14747 initPM hPM) (hs_7947 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14809 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14809).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14809 7951 294
-      { rank := 0, op := "OpName.FW_multiref", ins := [7951], outs := [14805, 14809], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 7951 14805 14809 (by decide))]
-  exact (hs_7951 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8017 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8017).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8017 8007 316
-      { rank := 0, op := "OpName.FW_view", ins := [8007], outs := [8017], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 8007 8017)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8021 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8021).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8021 8017 318
-      { rank := 0, op := "OpName.FW_float", ins := [8017], outs := [8021], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 8017 8021 [])]
-  exact (hs_8017 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8025 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8025).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8025 14809 8021 320
-      { rank := 0, op := "OpName.FW_add", ins := [14809, 8021], outs := [8025], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 14809 8021 8025)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_14809 initPM hPM) (hs_8021 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14847 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14847).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14847 8025 322
-      { rank := 0, op := "OpName.FW_multiref", ins := [8025], outs := [14847, 14851], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 8025 14847 14851)]
-  exact (hs_8025 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4866 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4866).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 4866 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8029 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8029).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8029 14847 4866 324
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [14847, 4866], outs := [8029], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 14847 4866 8029)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_14847 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14866 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14866).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14866 8029 326
-      { rank := 0, op := "OpName.FW_multiref", ins := [8029], outs := [14866, 14870, 14874, 14878, 14882], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 8029 14866 14870 14874 14878 14882)]
-  exact (hs_8029 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8031 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8031).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8031 14866 328
-      { rank := 0, op := "OpName.FW_float", ins := [14866], outs := [8031], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 14866 8031 [])]
-  exact (hs_14866 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4869 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4869).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 4869 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8037 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8037).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8037 8031 4869 336
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [8031, 4869], outs := [8037], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 8031 4869 8037)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_8031 initPM hPM) (hs_4869 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8041 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8041).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8041 8037 344
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [8037], outs := [8039, 8041, 8043], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 8037 8039 8041 8043 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_8037 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14851 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14851).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14851 8025 322
-      { rank := 0, op := "OpName.FW_multiref", ins := [8025], outs := [14847, 14851], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 8025 14847 14851 (by decide))]
-  exact (hs_8025 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14870 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14870).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14870 8029 326
-      { rank := 0, op := "OpName.FW_multiref", ins := [8029], outs := [14866, 14870, 14874, 14878, 14882], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 8029 14866 14870 14874 14878 14882 (by decide))]
-  exact (hs_8029 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8039 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8039).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8039 8037 344
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [8037], outs := [8039, 8041, 8043], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 8037 8039 8041 8043 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_8037 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8045 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8045).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8045 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8046 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8046).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8046 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8047 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8047).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8047 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8048 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8048).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8048 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8049 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8049).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 8049 14870 8039 8041 8045 8046 8047 8048 352
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [14870, 8039, 8041, 8045, 8046, 8047, 8048], outs := [8049], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 14870 8039 8041 8045 8046 8047 8048 8049 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_14870 initPM hPM)]; rfl) (by rw [(hs_14870 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8061 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8061).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8061 8055 345
-      { rank := 0, op := "OpName.FW_view", ins := [8055], outs := [8061], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 8055 8061)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8063 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8063).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8063 8061 353
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [8061], outs := [8063], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 8061 8063)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_8061 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8119 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8119).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8119 8109 362
-      { rank := 0, op := "OpName.FW_view", ins := [8109], outs := [8119], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 8109 8119)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8123 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8123).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8123 8063 8119 364
-      { rank := 0, op := "OpName.FW_mul", ins := [8063, 8119], outs := [8123], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 8063 8119 8123)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_8063 initPM hPM) (hs_8119 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8127 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8127).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8127 8049 8123 366
-      { rank := 0, op := "OpName.FW_add", ins := [8049, 8123], outs := [8127], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 8049 8123 8127)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_8049 initPM hPM) (hs_8123 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8133 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8133).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8133 8127 368
-      { rank := 0, op := "OpName.FW_float", ins := [8127], outs := [8133], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 8127 8133 [])]
-  exact (hs_8127 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8137 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8137).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8137 14851 8133 370
-      { rank := 0, op := "OpName.FW_add", ins := [14851, 8133], outs := [8137], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 14851 8133 8137)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_14851 initPM hPM) (hs_8133 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14913 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14913).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14913 8137 372
-      { rank := 0, op := "OpName.FW_multiref", ins := [8137], outs := [14909, 14913], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 8137 14909 14913 (by decide))]
-  exact (hs_8137 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8203 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8203).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8203 8193 394
-      { rank := 0, op := "OpName.FW_view", ins := [8193], outs := [8203], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 8193 8203)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8207 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8207).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8207 8203 396
-      { rank := 0, op := "OpName.FW_float", ins := [8203], outs := [8207], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 8203 8207 [])]
-  exact (hs_8203 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8211 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8211).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8211 14913 8207 398
-      { rank := 0, op := "OpName.FW_add", ins := [14913, 8207], outs := [8211], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 14913 8207 8211)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_14913 initPM hPM) (hs_8207 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14951 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14951).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14951 8211 400
-      { rank := 0, op := "OpName.FW_multiref", ins := [8211], outs := [14951, 14955], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 8211 14951 14955)]
-  exact (hs_8211 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4920 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4920).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 4920 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8215 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8215).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8215 14951 4920 402
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [14951, 4920], outs := [8215], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 14951 4920 8215)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_14951 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14970 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14970).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14970 8215 404
-      { rank := 0, op := "OpName.FW_multiref", ins := [8215], outs := [14970, 14974, 14978, 14982, 14986], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 8215 14970 14974 14978 14982 14986)]
-  exact (hs_8215 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8217 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8217).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8217 14970 406
-      { rank := 0, op := "OpName.FW_float", ins := [14970], outs := [8217], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 14970 8217 [])]
-  exact (hs_14970 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4923 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4923).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 4923 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8223 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8223).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8223 8217 4923 414
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [8217, 4923], outs := [8223], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 8217 4923 8223)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_8217 initPM hPM) (hs_4923 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8227 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8227).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8227 8223 422
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [8223], outs := [8225, 8227, 8229], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 8223 8225 8227 8229 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_8223 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14955 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14955).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14955 8211 400
-      { rank := 0, op := "OpName.FW_multiref", ins := [8211], outs := [14951, 14955], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 8211 14951 14955 (by decide))]
-  exact (hs_8211 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14974 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14974).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14974 8215 404
-      { rank := 0, op := "OpName.FW_multiref", ins := [8215], outs := [14970, 14974, 14978, 14982, 14986], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 8215 14970 14974 14978 14982 14986 (by decide))]
-  exact (hs_8215 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8225 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8225).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8225 8223 422
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [8223], outs := [8225, 8227, 8229], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 8223 8225 8227 8229 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_8223 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8231 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8231).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8231 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8232 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8232).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8232 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8233 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8233).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8233 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8234 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8234).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8234 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8235 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8235).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 8235 14974 8225 8227 8231 8232 8233 8234 430
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [14974, 8225, 8227, 8231, 8232, 8233, 8234], outs := [8235], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 14974 8225 8227 8231 8232 8233 8234 8235 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_14974 initPM hPM)]; rfl) (by rw [(hs_14974 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8247 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8247).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8247 8241 423
-      { rank := 0, op := "OpName.FW_view", ins := [8241], outs := [8247], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 8241 8247)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8249 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8249).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8249 8247 431
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [8247], outs := [8249], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 8247 8249)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_8247 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8305 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8305).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8305 8295 440
-      { rank := 0, op := "OpName.FW_view", ins := [8295], outs := [8305], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 8295 8305)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8309 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8309).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8309 8249 8305 442
-      { rank := 0, op := "OpName.FW_mul", ins := [8249, 8305], outs := [8309], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 8249 8305 8309)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_8249 initPM hPM) (hs_8305 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8313 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8313).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8313 8235 8309 444
-      { rank := 0, op := "OpName.FW_add", ins := [8235, 8309], outs := [8313], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 8235 8309 8313)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_8235 initPM hPM) (hs_8309 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8319 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8319).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8319 8313 446
-      { rank := 0, op := "OpName.FW_float", ins := [8313], outs := [8319], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 8313 8319 [])]
-  exact (hs_8313 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8323 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8323).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8323 14955 8319 448
-      { rank := 0, op := "OpName.FW_add", ins := [14955, 8319], outs := [8323], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 14955 8319 8323)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_14955 initPM hPM) (hs_8319 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15017 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15017).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15017 8323 450
-      { rank := 0, op := "OpName.FW_multiref", ins := [8323], outs := [15013, 15017], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 8323 15013 15017 (by decide))]
-  exact (hs_8323 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8389 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8389).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8389 8379 472
-      { rank := 0, op := "OpName.FW_view", ins := [8379], outs := [8389], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 8379 8389)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8393 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8393).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8393 8389 474
-      { rank := 0, op := "OpName.FW_float", ins := [8389], outs := [8393], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 8389 8393 [])]
-  exact (hs_8389 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8397 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8397).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8397 15017 8393 476
-      { rank := 0, op := "OpName.FW_add", ins := [15017, 8393], outs := [8397], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15017 8393 8397)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15017 initPM hPM) (hs_8393 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15055 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15055).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15055 8397 478
-      { rank := 0, op := "OpName.FW_multiref", ins := [8397], outs := [15055, 15059], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 8397 15055 15059)]
-  exact (hs_8397 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4974 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4974).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 4974 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8401 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8401).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8401 15055 4974 480
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [15055, 4974], outs := [8401], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 15055 4974 8401)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_15055 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15074 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15074).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15074 8401 482
-      { rank := 0, op := "OpName.FW_multiref", ins := [8401], outs := [15074, 15078, 15082, 15086, 15090], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 8401 15074 15078 15082 15086 15090)]
-  exact (hs_8401 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8403 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8403).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8403 15074 484
-      { rank := 0, op := "OpName.FW_float", ins := [15074], outs := [8403], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 15074 8403 [])]
-  exact (hs_15074 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_4977 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 4977).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 4977 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8409 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8409).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8409 8403 4977 492
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [8403, 4977], outs := [8409], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 8403 4977 8409)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_8403 initPM hPM) (hs_4977 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8413 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8413).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8413 8409 500
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [8409], outs := [8411, 8413, 8415], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 8409 8411 8413 8415 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_8409 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15059 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15059).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15059 8397 478
-      { rank := 0, op := "OpName.FW_multiref", ins := [8397], outs := [15055, 15059], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 8397 15055 15059 (by decide))]
-  exact (hs_8397 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15078 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15078).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15078 8401 482
-      { rank := 0, op := "OpName.FW_multiref", ins := [8401], outs := [15074, 15078, 15082, 15086, 15090], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 8401 15074 15078 15082 15086 15090 (by decide))]
-  exact (hs_8401 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8411 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8411).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8411 8409 500
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [8409], outs := [8411, 8413, 8415], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 8409 8411 8413 8415 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_8409 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8417 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8417).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8417 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8418 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8418).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8418 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8419 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8419).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8419 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8420 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8420).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8420 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8421 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8421).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 8421 15078 8411 8413 8417 8418 8419 8420 508
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [15078, 8411, 8413, 8417, 8418, 8419, 8420], outs := [8421], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 15078 8411 8413 8417 8418 8419 8420 8421 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_15078 initPM hPM)]; rfl) (by rw [(hs_15078 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8433 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8433).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8433 8427 501
-      { rank := 0, op := "OpName.FW_view", ins := [8427], outs := [8433], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 8427 8433)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8435 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8435).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8435 8433 509
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [8433], outs := [8435], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 8433 8435)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_8433 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8491 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8491).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8491 8481 518
-      { rank := 0, op := "OpName.FW_view", ins := [8481], outs := [8491], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 8481 8491)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8495 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8495).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8495 8435 8491 520
-      { rank := 0, op := "OpName.FW_mul", ins := [8435, 8491], outs := [8495], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 8435 8491 8495)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_8435 initPM hPM) (hs_8491 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8499 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8499).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8499 8421 8495 522
-      { rank := 0, op := "OpName.FW_add", ins := [8421, 8495], outs := [8499], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 8421 8495 8499)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_8421 initPM hPM) (hs_8495 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8505 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8505).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8505 8499 524
-      { rank := 0, op := "OpName.FW_float", ins := [8499], outs := [8505], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 8499 8505 [])]
-  exact (hs_8499 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8509 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8509).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8509 15059 8505 526
-      { rank := 0, op := "OpName.FW_add", ins := [15059, 8505], outs := [8509], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15059 8505 8509)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15059 initPM hPM) (hs_8505 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15121 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15121).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15121 8509 528
-      { rank := 0, op := "OpName.FW_multiref", ins := [8509], outs := [15117, 15121], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 8509 15117 15121 (by decide))]
-  exact (hs_8509 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8575 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8575).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8575 8565 550
-      { rank := 0, op := "OpName.FW_view", ins := [8565], outs := [8575], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 8565 8575)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8579 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8579).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8579 8575 552
-      { rank := 0, op := "OpName.FW_float", ins := [8575], outs := [8579], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 8575 8579 [])]
-  exact (hs_8575 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8583 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8583).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8583 15121 8579 554
-      { rank := 0, op := "OpName.FW_add", ins := [15121, 8579], outs := [8583], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15121 8579 8583)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15121 initPM hPM) (hs_8579 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15159 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15159).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15159 8583 556
-      { rank := 0, op := "OpName.FW_multiref", ins := [8583], outs := [15159, 15163], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 8583 15159 15163)]
-  exact (hs_8583 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5028 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5028).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5028 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8587 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8587).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8587 15159 5028 558
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [15159, 5028], outs := [8587], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 15159 5028 8587)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_15159 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15178 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15178).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15178 8587 560
-      { rank := 0, op := "OpName.FW_multiref", ins := [8587], outs := [15178, 15182, 15186, 15190, 15194], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 8587 15178 15182 15186 15190 15194)]
-  exact (hs_8587 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8589 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8589).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8589 15178 562
-      { rank := 0, op := "OpName.FW_float", ins := [15178], outs := [8589], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 15178 8589 [])]
-  exact (hs_15178 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5031 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5031).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5031 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8595 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8595).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8595 8589 5031 570
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [8589, 5031], outs := [8595], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 8589 5031 8595)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_8589 initPM hPM) (hs_5031 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8599 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8599).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8599 8595 578
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [8595], outs := [8597, 8599, 8601], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 8595 8597 8599 8601 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_8595 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15163 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15163).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15163 8583 556
-      { rank := 0, op := "OpName.FW_multiref", ins := [8583], outs := [15159, 15163], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 8583 15159 15163 (by decide))]
-  exact (hs_8583 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15182 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15182).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15182 8587 560
-      { rank := 0, op := "OpName.FW_multiref", ins := [8587], outs := [15178, 15182, 15186, 15190, 15194], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 8587 15178 15182 15186 15190 15194 (by decide))]
-  exact (hs_8587 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8597 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8597).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8597 8595 578
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [8595], outs := [8597, 8599, 8601], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 8595 8597 8599 8601 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_8595 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8603 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8603).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8603 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8604 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8604).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8604 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8605 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8605).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8605 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8606 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8606).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8606 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8607 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8607).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 8607 15182 8597 8599 8603 8604 8605 8606 586
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [15182, 8597, 8599, 8603, 8604, 8605, 8606], outs := [8607], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 15182 8597 8599 8603 8604 8605 8606 8607 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_15182 initPM hPM)]; rfl) (by rw [(hs_15182 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8619 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8619).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8619 8613 579
-      { rank := 0, op := "OpName.FW_view", ins := [8613], outs := [8619], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 8613 8619)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8621 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8621).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8621 8619 587
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [8619], outs := [8621], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 8619 8621)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_8619 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8677 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8677).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8677 8667 596
-      { rank := 0, op := "OpName.FW_view", ins := [8667], outs := [8677], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 8667 8677)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8681 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8681).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8681 8621 8677 598
-      { rank := 0, op := "OpName.FW_mul", ins := [8621, 8677], outs := [8681], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 8621 8677 8681)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_8621 initPM hPM) (hs_8677 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8685 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8685).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8685 8607 8681 600
-      { rank := 0, op := "OpName.FW_add", ins := [8607, 8681], outs := [8685], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 8607 8681 8685)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_8607 initPM hPM) (hs_8681 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8691 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8691).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8691 8685 602
-      { rank := 0, op := "OpName.FW_float", ins := [8685], outs := [8691], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 8685 8691 [])]
-  exact (hs_8685 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8695 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8695).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8695 15163 8691 604
-      { rank := 0, op := "OpName.FW_add", ins := [15163, 8691], outs := [8695], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15163 8691 8695)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15163 initPM hPM) (hs_8691 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15225 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15225).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15225 8695 606
-      { rank := 0, op := "OpName.FW_multiref", ins := [8695], outs := [15221, 15225], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 8695 15221 15225 (by decide))]
-  exact (hs_8695 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8761 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8761).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8761 8751 628
-      { rank := 0, op := "OpName.FW_view", ins := [8751], outs := [8761], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 8751 8761)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8765 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8765).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8765 8761 630
-      { rank := 0, op := "OpName.FW_float", ins := [8761], outs := [8765], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 8761 8765 [])]
-  exact (hs_8761 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8769 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8769).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8769 15225 8765 632
-      { rank := 0, op := "OpName.FW_add", ins := [15225, 8765], outs := [8769], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15225 8765 8769)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15225 initPM hPM) (hs_8765 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15263 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15263).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15263 8769 634
-      { rank := 0, op := "OpName.FW_multiref", ins := [8769], outs := [15263, 15267], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 8769 15263 15267)]
-  exact (hs_8769 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5082 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5082).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5082 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8773 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8773).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8773 15263 5082 636
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [15263, 5082], outs := [8773], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 15263 5082 8773)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_15263 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15282 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15282).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15282 8773 638
-      { rank := 0, op := "OpName.FW_multiref", ins := [8773], outs := [15282, 15286, 15290, 15294, 15298], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 8773 15282 15286 15290 15294 15298)]
-  exact (hs_8773 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8775 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8775).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8775 15282 640
-      { rank := 0, op := "OpName.FW_float", ins := [15282], outs := [8775], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 15282 8775 [])]
-  exact (hs_15282 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5085 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5085).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5085 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8781 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8781).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8781 8775 5085 648
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [8775, 5085], outs := [8781], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 8775 5085 8781)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_8775 initPM hPM) (hs_5085 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8785 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8785).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8785 8781 656
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [8781], outs := [8783, 8785, 8787], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 8781 8783 8785 8787 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_8781 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15267 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15267).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15267 8769 634
-      { rank := 0, op := "OpName.FW_multiref", ins := [8769], outs := [15263, 15267], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 8769 15263 15267 (by decide))]
-  exact (hs_8769 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15286 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15286).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15286 8773 638
-      { rank := 0, op := "OpName.FW_multiref", ins := [8773], outs := [15282, 15286, 15290, 15294, 15298], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 8773 15282 15286 15290 15294 15298 (by decide))]
-  exact (hs_8773 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8783 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8783).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8783 8781 656
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [8781], outs := [8783, 8785, 8787], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 8781 8783 8785 8787 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_8781 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8789 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8789).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8789 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8790 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8790).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8790 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8791 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8791).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8791 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8792 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8792).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8792 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8793 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8793).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 8793 15286 8783 8785 8789 8790 8791 8792 664
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [15286, 8783, 8785, 8789, 8790, 8791, 8792], outs := [8793], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 15286 8783 8785 8789 8790 8791 8792 8793 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_15286 initPM hPM)]; rfl) (by rw [(hs_15286 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8805 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8805).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8805 8799 657
-      { rank := 0, op := "OpName.FW_view", ins := [8799], outs := [8805], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 8799 8805)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8807 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8807).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8807 8805 665
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [8805], outs := [8807], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 8805 8807)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_8805 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8863 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8863).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8863 8853 674
-      { rank := 0, op := "OpName.FW_view", ins := [8853], outs := [8863], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 8853 8863)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8867 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8867).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8867 8807 8863 676
-      { rank := 0, op := "OpName.FW_mul", ins := [8807, 8863], outs := [8867], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 8807 8863 8867)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_8807 initPM hPM) (hs_8863 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8871 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8871).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8871 8793 8867 678
-      { rank := 0, op := "OpName.FW_add", ins := [8793, 8867], outs := [8871], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 8793 8867 8871)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_8793 initPM hPM) (hs_8867 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8877 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8877).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8877 8871 680
-      { rank := 0, op := "OpName.FW_float", ins := [8871], outs := [8877], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 8871 8877 [])]
-  exact (hs_8871 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8881 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8881).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8881 15267 8877 682
-      { rank := 0, op := "OpName.FW_add", ins := [15267, 8877], outs := [8881], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15267 8877 8881)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15267 initPM hPM) (hs_8877 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15329 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15329).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15329 8881 684
-      { rank := 0, op := "OpName.FW_multiref", ins := [8881], outs := [15325, 15329], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 8881 15325 15329 (by decide))]
-  exact (hs_8881 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8947 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8947).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8947 8937 706
-      { rank := 0, op := "OpName.FW_view", ins := [8937], outs := [8947], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 8937 8947)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8951 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8951).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8951 8947 708
-      { rank := 0, op := "OpName.FW_float", ins := [8947], outs := [8951], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 8947 8951 [])]
-  exact (hs_8947 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8955 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8955).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8955 15329 8951 710
-      { rank := 0, op := "OpName.FW_add", ins := [15329, 8951], outs := [8955], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15329 8951 8955)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15329 initPM hPM) (hs_8951 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15367 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15367).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15367 8955 712
-      { rank := 0, op := "OpName.FW_multiref", ins := [8955], outs := [15367, 15371], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 8955 15367 15371)]
-  exact (hs_8955 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5136 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5136).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5136 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8959 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8959).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8959 15367 5136 714
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [15367, 5136], outs := [8959], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 15367 5136 8959)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_15367 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15386 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15386).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15386 8959 716
-      { rank := 0, op := "OpName.FW_multiref", ins := [8959], outs := [15386, 15390, 15394, 15398, 15402], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 8959 15386 15390 15394 15398 15402)]
-  exact (hs_8959 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8961 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8961).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8961 15386 718
-      { rank := 0, op := "OpName.FW_float", ins := [15386], outs := [8961], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 15386 8961 [])]
-  exact (hs_15386 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5139 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5139).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5139 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8967 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8967).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8967 8961 5139 726
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [8961, 5139], outs := [8967], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 8961 5139 8967)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_8961 initPM hPM) (hs_5139 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8971 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8971).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8971 8967 734
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [8967], outs := [8969, 8971, 8973], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 8967 8969 8971 8973 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_8967 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15371 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15371).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15371 8955 712
-      { rank := 0, op := "OpName.FW_multiref", ins := [8955], outs := [15367, 15371], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 8955 15367 15371 (by decide))]
-  exact (hs_8955 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15390 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15390).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15390 8959 716
-      { rank := 0, op := "OpName.FW_multiref", ins := [8959], outs := [15386, 15390, 15394, 15398, 15402], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 8959 15386 15390 15394 15398 15402 (by decide))]
-  exact (hs_8959 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8969 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8969).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8969 8967 734
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [8967], outs := [8969, 8971, 8973], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 8967 8969 8971 8973 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_8967 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8975 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8975).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8975 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8976 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8976).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8976 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8977 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8977).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8977 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8978 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8978).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 8978 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8979 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8979).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 8979 15390 8969 8971 8975 8976 8977 8978 742
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [15390, 8969, 8971, 8975, 8976, 8977, 8978], outs := [8979], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 15390 8969 8971 8975 8976 8977 8978 8979 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_15390 initPM hPM)]; rfl) (by rw [(hs_15390 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8991 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8991).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8991 8985 735
-      { rank := 0, op := "OpName.FW_view", ins := [8985], outs := [8991], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 8985 8991)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8993 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8993).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8993 8991 743
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [8991], outs := [8993], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 8991 8993)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_8991 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9049 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9049).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9049 9039 752
-      { rank := 0, op := "OpName.FW_view", ins := [9039], outs := [9049], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 9039 9049)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9053 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9053).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9053 8993 9049 754
-      { rank := 0, op := "OpName.FW_mul", ins := [8993, 9049], outs := [9053], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 8993 9049 9053)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_8993 initPM hPM) (hs_9049 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9057 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9057).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9057 8979 9053 756
-      { rank := 0, op := "OpName.FW_add", ins := [8979, 9053], outs := [9057], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 8979 9053 9057)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_8979 initPM hPM) (hs_9053 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9063 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9063).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9063 9057 758
-      { rank := 0, op := "OpName.FW_float", ins := [9057], outs := [9063], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 9057 9063 [])]
-  exact (hs_9057 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9067 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9067).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9067 15371 9063 760
-      { rank := 0, op := "OpName.FW_add", ins := [15371, 9063], outs := [9067], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15371 9063 9067)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15371 initPM hPM) (hs_9063 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15433 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15433).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15433 9067 762
-      { rank := 0, op := "OpName.FW_multiref", ins := [9067], outs := [15429, 15433], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 9067 15429 15433 (by decide))]
-  exact (hs_9067 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9133 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9133).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9133 9123 784
-      { rank := 0, op := "OpName.FW_view", ins := [9123], outs := [9133], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 9123 9133)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9137 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9137).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9137 9133 786
-      { rank := 0, op := "OpName.FW_float", ins := [9133], outs := [9137], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 9133 9137 [])]
-  exact (hs_9133 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9141 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9141).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9141 15433 9137 788
-      { rank := 0, op := "OpName.FW_add", ins := [15433, 9137], outs := [9141], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15433 9137 9141)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15433 initPM hPM) (hs_9137 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15471 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15471).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15471 9141 790
-      { rank := 0, op := "OpName.FW_multiref", ins := [9141], outs := [15471, 15475], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 9141 15471 15475)]
-  exact (hs_9141 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5190 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5190).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5190 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9145 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9145).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9145 15471 5190 792
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [15471, 5190], outs := [9145], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 15471 5190 9145)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_15471 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15490 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15490).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15490 9145 794
-      { rank := 0, op := "OpName.FW_multiref", ins := [9145], outs := [15490, 15494, 15498, 15502, 15506], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 9145 15490 15494 15498 15502 15506)]
-  exact (hs_9145 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9147 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9147).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9147 15490 796
-      { rank := 0, op := "OpName.FW_float", ins := [15490], outs := [9147], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 15490 9147 [])]
-  exact (hs_15490 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5193 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5193).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5193 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9153 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9153).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9153 9147 5193 804
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [9147, 5193], outs := [9153], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 9147 5193 9153)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_9147 initPM hPM) (hs_5193 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9157 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9157).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9157 9153 812
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [9153], outs := [9155, 9157, 9159], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 9153 9155 9157 9159 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_9153 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15475 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15475).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15475 9141 790
-      { rank := 0, op := "OpName.FW_multiref", ins := [9141], outs := [15471, 15475], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 9141 15471 15475 (by decide))]
-  exact (hs_9141 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15494 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15494).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15494 9145 794
-      { rank := 0, op := "OpName.FW_multiref", ins := [9145], outs := [15490, 15494, 15498, 15502, 15506], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 9145 15490 15494 15498 15502 15506 (by decide))]
-  exact (hs_9145 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9155 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9155).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9155 9153 812
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [9153], outs := [9155, 9157, 9159], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 9153 9155 9157 9159 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_9153 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9161 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9161).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9161 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9162 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9162).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9162 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9163 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9163).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9163 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9164 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9164).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9164 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9165 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9165).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 9165 15494 9155 9157 9161 9162 9163 9164 820
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [15494, 9155, 9157, 9161, 9162, 9163, 9164], outs := [9165], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 15494 9155 9157 9161 9162 9163 9164 9165 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_15494 initPM hPM)]; rfl) (by rw [(hs_15494 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9177 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9177).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9177 9171 813
-      { rank := 0, op := "OpName.FW_view", ins := [9171], outs := [9177], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 9171 9177)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9179 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9179).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9179 9177 821
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [9177], outs := [9179], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 9177 9179)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_9177 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9235 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9235).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9235 9225 830
-      { rank := 0, op := "OpName.FW_view", ins := [9225], outs := [9235], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 9225 9235)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9239 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9239).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9239 9179 9235 832
-      { rank := 0, op := "OpName.FW_mul", ins := [9179, 9235], outs := [9239], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 9179 9235 9239)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_9179 initPM hPM) (hs_9235 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9243 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9243).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9243 9165 9239 834
-      { rank := 0, op := "OpName.FW_add", ins := [9165, 9239], outs := [9243], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 9165 9239 9243)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_9165 initPM hPM) (hs_9239 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9249 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9249).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9249 9243 836
-      { rank := 0, op := "OpName.FW_float", ins := [9243], outs := [9249], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 9243 9249 [])]
-  exact (hs_9243 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9253 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9253).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9253 15475 9249 838
-      { rank := 0, op := "OpName.FW_add", ins := [15475, 9249], outs := [9253], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15475 9249 9253)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15475 initPM hPM) (hs_9249 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15537 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15537).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15537 9253 840
-      { rank := 0, op := "OpName.FW_multiref", ins := [9253], outs := [15533, 15537], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 9253 15533 15537 (by decide))]
-  exact (hs_9253 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9319 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9319).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9319 9309 862
-      { rank := 0, op := "OpName.FW_view", ins := [9309], outs := [9319], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 9309 9319)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9323 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9323).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9323 9319 864
-      { rank := 0, op := "OpName.FW_float", ins := [9319], outs := [9323], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 9319 9323 [])]
-  exact (hs_9319 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9327 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9327).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9327 15537 9323 866
-      { rank := 0, op := "OpName.FW_add", ins := [15537, 9323], outs := [9327], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15537 9323 9327)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15537 initPM hPM) (hs_9323 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15575 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15575).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15575 9327 868
-      { rank := 0, op := "OpName.FW_multiref", ins := [9327], outs := [15575, 15579], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 9327 15575 15579)]
-  exact (hs_9327 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5244 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5244).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5244 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9331 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9331).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9331 15575 5244 870
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [15575, 5244], outs := [9331], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 15575 5244 9331)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_15575 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15594 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15594).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15594 9331 872
-      { rank := 0, op := "OpName.FW_multiref", ins := [9331], outs := [15594, 15598, 15602, 15606, 15610], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 9331 15594 15598 15602 15606 15610)]
-  exact (hs_9331 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9333 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9333).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9333 15594 874
-      { rank := 0, op := "OpName.FW_float", ins := [15594], outs := [9333], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 15594 9333 [])]
-  exact (hs_15594 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5247 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5247).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5247 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9339 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9339).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9339 9333 5247 882
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [9333, 5247], outs := [9339], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 9333 5247 9339)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_9333 initPM hPM) (hs_5247 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9343 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9343).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9343 9339 890
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [9339], outs := [9341, 9343, 9345], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 9339 9341 9343 9345 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_9339 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15579 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15579).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15579 9327 868
-      { rank := 0, op := "OpName.FW_multiref", ins := [9327], outs := [15575, 15579], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 9327 15575 15579 (by decide))]
-  exact (hs_9327 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15598 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15598).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15598 9331 872
-      { rank := 0, op := "OpName.FW_multiref", ins := [9331], outs := [15594, 15598, 15602, 15606, 15610], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 9331 15594 15598 15602 15606 15610 (by decide))]
-  exact (hs_9331 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9341 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9341).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9341 9339 890
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [9339], outs := [9341, 9343, 9345], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 9339 9341 9343 9345 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_9339 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9347 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9347).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9347 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9348 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9348).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9348 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9349 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9349).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9349 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9350 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9350).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9350 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9351 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9351).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 9351 15598 9341 9343 9347 9348 9349 9350 898
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [15598, 9341, 9343, 9347, 9348, 9349, 9350], outs := [9351], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 15598 9341 9343 9347 9348 9349 9350 9351 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_15598 initPM hPM)]; rfl) (by rw [(hs_15598 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9363 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9363).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9363 9357 891
-      { rank := 0, op := "OpName.FW_view", ins := [9357], outs := [9363], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 9357 9363)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9365 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9365).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9365 9363 899
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [9363], outs := [9365], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 9363 9365)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_9363 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9421 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9421).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9421 9411 908
-      { rank := 0, op := "OpName.FW_view", ins := [9411], outs := [9421], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 9411 9421)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9425 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9425).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9425 9365 9421 910
-      { rank := 0, op := "OpName.FW_mul", ins := [9365, 9421], outs := [9425], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 9365 9421 9425)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_9365 initPM hPM) (hs_9421 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9429 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9429).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9429 9351 9425 912
-      { rank := 0, op := "OpName.FW_add", ins := [9351, 9425], outs := [9429], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 9351 9425 9429)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_9351 initPM hPM) (hs_9425 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9435 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9435).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9435 9429 914
-      { rank := 0, op := "OpName.FW_float", ins := [9429], outs := [9435], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 9429 9435 [])]
-  exact (hs_9429 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9439 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9439).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9439 15579 9435 916
-      { rank := 0, op := "OpName.FW_add", ins := [15579, 9435], outs := [9439], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15579 9435 9439)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15579 initPM hPM) (hs_9435 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15641 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15641).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15641 9439 918
-      { rank := 0, op := "OpName.FW_multiref", ins := [9439], outs := [15637, 15641], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 9439 15637 15641 (by decide))]
-  exact (hs_9439 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9505 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9505).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9505 9495 940
-      { rank := 0, op := "OpName.FW_view", ins := [9495], outs := [9505], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 9495 9505)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9509 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9509).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9509 9505 942
-      { rank := 0, op := "OpName.FW_float", ins := [9505], outs := [9509], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 9505 9509 [])]
-  exact (hs_9505 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9513 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9513).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9513 15641 9509 944
-      { rank := 0, op := "OpName.FW_add", ins := [15641, 9509], outs := [9513], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15641 9509 9513)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15641 initPM hPM) (hs_9509 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15679 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15679).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15679 9513 946
-      { rank := 0, op := "OpName.FW_multiref", ins := [9513], outs := [15679, 15683], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 9513 15679 15683)]
-  exact (hs_9513 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5298 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5298).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5298 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9517 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9517).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9517 15679 5298 948
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [15679, 5298], outs := [9517], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 15679 5298 9517)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_15679 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15698 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15698).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15698 9517 950
-      { rank := 0, op := "OpName.FW_multiref", ins := [9517], outs := [15698, 15702, 15706, 15710, 15714], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 9517 15698 15702 15706 15710 15714)]
-  exact (hs_9517 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9519 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9519).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9519 15698 952
-      { rank := 0, op := "OpName.FW_float", ins := [15698], outs := [9519], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 15698 9519 [])]
-  exact (hs_15698 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5301 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5301).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5301 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9525 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9525).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9525 9519 5301 960
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [9519, 5301], outs := [9525], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 9519 5301 9525)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_9519 initPM hPM) (hs_5301 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9529 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9529).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9529 9525 968
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [9525], outs := [9527, 9529, 9531], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 9525 9527 9529 9531 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_9525 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15683 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15683).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15683 9513 946
-      { rank := 0, op := "OpName.FW_multiref", ins := [9513], outs := [15679, 15683], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 9513 15679 15683 (by decide))]
-  exact (hs_9513 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15702 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15702).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15702 9517 950
-      { rank := 0, op := "OpName.FW_multiref", ins := [9517], outs := [15698, 15702, 15706, 15710, 15714], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 9517 15698 15702 15706 15710 15714 (by decide))]
-  exact (hs_9517 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9527 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9527).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9527 9525 968
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [9525], outs := [9527, 9529, 9531], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 9525 9527 9529 9531 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_9525 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9533 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9533).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9533 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9534 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9534).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9534 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9535 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9535).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9535 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9536 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9536).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9536 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9537 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9537).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 9537 15702 9527 9529 9533 9534 9535 9536 976
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [15702, 9527, 9529, 9533, 9534, 9535, 9536], outs := [9537], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 15702 9527 9529 9533 9534 9535 9536 9537 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_15702 initPM hPM)]; rfl) (by rw [(hs_15702 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9549 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9549).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9549 9543 969
-      { rank := 0, op := "OpName.FW_view", ins := [9543], outs := [9549], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 9543 9549)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9551 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9551).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9551 9549 977
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [9549], outs := [9551], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 9549 9551)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_9549 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9607 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9607).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9607 9597 986
-      { rank := 0, op := "OpName.FW_view", ins := [9597], outs := [9607], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 9597 9607)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9611 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9611).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9611 9551 9607 988
-      { rank := 0, op := "OpName.FW_mul", ins := [9551, 9607], outs := [9611], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 9551 9607 9611)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_9551 initPM hPM) (hs_9607 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9615 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9615).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9615 9537 9611 990
-      { rank := 0, op := "OpName.FW_add", ins := [9537, 9611], outs := [9615], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 9537 9611 9615)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_9537 initPM hPM) (hs_9611 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9621 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9621).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9621 9615 992
-      { rank := 0, op := "OpName.FW_float", ins := [9615], outs := [9621], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 9615 9621 [])]
-  exact (hs_9615 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9625 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9625).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9625 15683 9621 994
-      { rank := 0, op := "OpName.FW_add", ins := [15683, 9621], outs := [9625], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15683 9621 9625)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15683 initPM hPM) (hs_9621 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_13257 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 13257).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 13257 9625 996
-      { rank := 0, op := "OpName.FW_multiref", ins := [9625], outs := [14597, 13257], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 9625 14597 13257 (by decide))]
-  exact (hs_9625 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5337 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5337).shape = [2] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5337 [2] (by decide) (by decide) (by decide)
-
+hsview 4718 4717 86 1 s[4096, 1]
+hssig 4719 4718 94 1 s[4096, 1]
+hsview 4732 4731 110 1 s[4096, 1024]
+hsmul 4733 4719 4732 112 1 s[4096, 1024] s[4096, 1] s[4096, 1024]
+hsadd 4734 4714 4733 114 1 s[4096, 1024]
+hsflt 4735 4734 116 1 s[4096, 1024]
+hsadd 4736 14656 4735 118 1 s[4096, 1024]
+hsm2b 14672 4736 14668 120 1 s[4096, 1024]
+hsview 4755 4754 149 1 s[4096, 1024]
+hsflt 4756 4755 151 1 s[4096, 1024]
+hsadd 4757 14672 4756 153 1 s[4096, 1024]
+hsm2a 11889 4757 11890 155 1 s[4096, 1024]
+hsleaf 4758 s[1024]
+hsrms 4759 11889 4758 158 1 s[4096, 1024]
+hsm5a 11903 4759 11904 11905 11906 11907 161 1 s[4096, 1024]
+hsflt 4760 11903 167 1 s[4096, 1024]
+hsleaf 4761 s[64, 1024]
+hsnlin 4762 4760 4761 173 1 s[4096, 64]
+hschunk 7665 4762 180 0 s[2048, 64] s[4096, 64]
+hstkm 7669 7665 7667 7671 188 0 s[2048, 64]
+hsm2b 11890 4757 11889 155 1 s[4096, 1024]
+hschunk 12011 11890 157 0 s[2048, 1024] s[4096, 1024]
+hsm5b 11904 4759 11903 11905 11906 11907 161 1 s[4096, 1024]
+hschunk 11977 11904 163 0 s[2048, 1024] s[4096, 1024]
+hstkp 7667 7665 7669 7671 188 0 s[2048, 64]
+hsleaf 7673 s[32, 1024, 1024]
+hsleaf 7674 s[32, 1024, 1024]
+hsleaf 7675 s[32, 1024, 512]
+hsleaf 7676 s[32, 1024, 512]
+hsmoe 7677 11977 7667 7669 7673 7674 7675 7676 196 0 s[2048, 1024]
+hsview 4772 4771 183 1 s[4096, 1]
+hschunk 7689 4772 190 0 s[2048, 1] s[4096, 1]
+hssig 7691 7689 198 0 s[2048, 1]
+hsview 7747 7737 206 0 s[2048, 1024]
+hsmul 7751 7691 7747 208 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 7755 7677 7751 210 0 s[2048, 1024]
+hsflt 7761 7755 212 0 s[2048, 1024]
+hsadd 7765 12011 7761 214 0 s[2048, 1024]
+hsm2b 14705 7765 14701 216 0 s[2048, 1024]
+hsview 7831 7821 238 0 s[2048, 1024]
+hsflt 7835 7831 240 0 s[2048, 1024]
+hsadd 7839 14705 7835 242 0 s[2048, 1024]
+hsm2a 14743 7839 14747 244 0 s[2048, 1024]
+hsleaf 4812 s[1024]
+hsrms 7843 14743 4812 246 0 s[2048, 1024]
+hsm5a 14762 7843 14766 14770 14774 14778 248 0 s[2048, 1024]
+hsflt 7845 14762 250 0 s[2048, 1024]
+hsleaf 4815 s[64, 1024]
+hsnlin 7851 7845 4815 258 0 s[2048, 64]
+hstkm 7855 7851 7853 7857 266 0 s[2048, 64]
+hsm2b 14747 7839 14743 244 0 s[2048, 1024]
+hsm5b 14766 7843 14762 14770 14774 14778 248 0 s[2048, 1024]
+hstkp 7853 7851 7855 7857 266 0 s[2048, 64]
+hsleaf 7859 s[32, 1024, 1024]
+hsleaf 7860 s[32, 1024, 1024]
+hsleaf 7861 s[32, 1024, 512]
+hsleaf 7862 s[32, 1024, 512]
+hsmoe 7863 14766 7853 7855 7859 7860 7861 7862 274 0 s[2048, 1024]
+hsview 7875 7869 267 0 s[2048, 1]
+hssig 7877 7875 275 0 s[2048, 1]
+hsview 7933 7923 284 0 s[2048, 1024]
+hsmul 7937 7877 7933 286 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 7941 7863 7937 288 0 s[2048, 1024]
+hsflt 7947 7941 290 0 s[2048, 1024]
+hsadd 7951 14747 7947 292 0 s[2048, 1024]
+hsm2b 14809 7951 14805 294 0 s[2048, 1024]
+hsview 8017 8007 316 0 s[2048, 1024]
+hsflt 8021 8017 318 0 s[2048, 1024]
+hsadd 8025 14809 8021 320 0 s[2048, 1024]
+hsm2a 14847 8025 14851 322 0 s[2048, 1024]
+hsleaf 4866 s[1024]
+hsrms 8029 14847 4866 324 0 s[2048, 1024]
+hsm5a 14866 8029 14870 14874 14878 14882 326 0 s[2048, 1024]
+hsflt 8031 14866 328 0 s[2048, 1024]
+hsleaf 4869 s[64, 1024]
+hsnlin 8037 8031 4869 336 0 s[2048, 64]
+hstkm 8041 8037 8039 8043 344 0 s[2048, 64]
+hsm2b 14851 8025 14847 322 0 s[2048, 1024]
+hsm5b 14870 8029 14866 14874 14878 14882 326 0 s[2048, 1024]
+hstkp 8039 8037 8041 8043 344 0 s[2048, 64]
+hsleaf 8045 s[32, 1024, 1024]
+hsleaf 8046 s[32, 1024, 1024]
+hsleaf 8047 s[32, 1024, 512]
+hsleaf 8048 s[32, 1024, 512]
+hsmoe 8049 14870 8039 8041 8045 8046 8047 8048 352 0 s[2048, 1024]
+hsview 8061 8055 345 0 s[2048, 1]
+hssig 8063 8061 353 0 s[2048, 1]
+hsview 8119 8109 362 0 s[2048, 1024]
+hsmul 8123 8063 8119 364 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 8127 8049 8123 366 0 s[2048, 1024]
+hsflt 8133 8127 368 0 s[2048, 1024]
+hsadd 8137 14851 8133 370 0 s[2048, 1024]
+hsm2b 14913 8137 14909 372 0 s[2048, 1024]
+hsview 8203 8193 394 0 s[2048, 1024]
+hsflt 8207 8203 396 0 s[2048, 1024]
+hsadd 8211 14913 8207 398 0 s[2048, 1024]
+hsm2a 14951 8211 14955 400 0 s[2048, 1024]
+hsleaf 4920 s[1024]
+hsrms 8215 14951 4920 402 0 s[2048, 1024]
+hsm5a 14970 8215 14974 14978 14982 14986 404 0 s[2048, 1024]
+hsflt 8217 14970 406 0 s[2048, 1024]
+hsleaf 4923 s[64, 1024]
+hsnlin 8223 8217 4923 414 0 s[2048, 64]
+hstkm 8227 8223 8225 8229 422 0 s[2048, 64]
+hsm2b 14955 8211 14951 400 0 s[2048, 1024]
+hsm5b 14974 8215 14970 14978 14982 14986 404 0 s[2048, 1024]
+hstkp 8225 8223 8227 8229 422 0 s[2048, 64]
+hsleaf 8231 s[32, 1024, 1024]
+hsleaf 8232 s[32, 1024, 1024]
+hsleaf 8233 s[32, 1024, 512]
+hsleaf 8234 s[32, 1024, 512]
+hsmoe 8235 14974 8225 8227 8231 8232 8233 8234 430 0 s[2048, 1024]
+hsview 8247 8241 423 0 s[2048, 1]
+hssig 8249 8247 431 0 s[2048, 1]
+hsview 8305 8295 440 0 s[2048, 1024]
+hsmul 8309 8249 8305 442 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 8313 8235 8309 444 0 s[2048, 1024]
+hsflt 8319 8313 446 0 s[2048, 1024]
+hsadd 8323 14955 8319 448 0 s[2048, 1024]
+hsm2b 15017 8323 15013 450 0 s[2048, 1024]
+hsview 8389 8379 472 0 s[2048, 1024]
+hsflt 8393 8389 474 0 s[2048, 1024]
+hsadd 8397 15017 8393 476 0 s[2048, 1024]
+hsm2a 15055 8397 15059 478 0 s[2048, 1024]
+hsleaf 4974 s[1024]
+hsrms 8401 15055 4974 480 0 s[2048, 1024]
+hsm5a 15074 8401 15078 15082 15086 15090 482 0 s[2048, 1024]
+hsflt 8403 15074 484 0 s[2048, 1024]
+hsleaf 4977 s[64, 1024]
+hsnlin 8409 8403 4977 492 0 s[2048, 64]
+hstkm 8413 8409 8411 8415 500 0 s[2048, 64]
+hsm2b 15059 8397 15055 478 0 s[2048, 1024]
+hsm5b 15078 8401 15074 15082 15086 15090 482 0 s[2048, 1024]
+hstkp 8411 8409 8413 8415 500 0 s[2048, 64]
+hsleaf 8417 s[32, 1024, 1024]
+hsleaf 8418 s[32, 1024, 1024]
+hsleaf 8419 s[32, 1024, 512]
+hsleaf 8420 s[32, 1024, 512]
+hsmoe 8421 15078 8411 8413 8417 8418 8419 8420 508 0 s[2048, 1024]
+hsview 8433 8427 501 0 s[2048, 1]
+hssig 8435 8433 509 0 s[2048, 1]
+hsview 8491 8481 518 0 s[2048, 1024]
+hsmul 8495 8435 8491 520 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 8499 8421 8495 522 0 s[2048, 1024]
+hsflt 8505 8499 524 0 s[2048, 1024]
+hsadd 8509 15059 8505 526 0 s[2048, 1024]
+hsm2b 15121 8509 15117 528 0 s[2048, 1024]
+hsview 8575 8565 550 0 s[2048, 1024]
+hsflt 8579 8575 552 0 s[2048, 1024]
+hsadd 8583 15121 8579 554 0 s[2048, 1024]
+hsm2a 15159 8583 15163 556 0 s[2048, 1024]
+hsleaf 5028 s[1024]
+hsrms 8587 15159 5028 558 0 s[2048, 1024]
+hsm5a 15178 8587 15182 15186 15190 15194 560 0 s[2048, 1024]
+hsflt 8589 15178 562 0 s[2048, 1024]
+hsleaf 5031 s[64, 1024]
+hsnlin 8595 8589 5031 570 0 s[2048, 64]
+hstkm 8599 8595 8597 8601 578 0 s[2048, 64]
+hsm2b 15163 8583 15159 556 0 s[2048, 1024]
+hsm5b 15182 8587 15178 15186 15190 15194 560 0 s[2048, 1024]
+hstkp 8597 8595 8599 8601 578 0 s[2048, 64]
+hsleaf 8603 s[32, 1024, 1024]
+hsleaf 8604 s[32, 1024, 1024]
+hsleaf 8605 s[32, 1024, 512]
+hsleaf 8606 s[32, 1024, 512]
+hsmoe 8607 15182 8597 8599 8603 8604 8605 8606 586 0 s[2048, 1024]
+hsview 8619 8613 579 0 s[2048, 1]
+hssig 8621 8619 587 0 s[2048, 1]
+hsview 8677 8667 596 0 s[2048, 1024]
+hsmul 8681 8621 8677 598 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 8685 8607 8681 600 0 s[2048, 1024]
+hsflt 8691 8685 602 0 s[2048, 1024]
+hsadd 8695 15163 8691 604 0 s[2048, 1024]
+hsm2b 15225 8695 15221 606 0 s[2048, 1024]
+hsview 8761 8751 628 0 s[2048, 1024]
+hsflt 8765 8761 630 0 s[2048, 1024]
+hsadd 8769 15225 8765 632 0 s[2048, 1024]
+hsm2a 15263 8769 15267 634 0 s[2048, 1024]
+hsleaf 5082 s[1024]
+hsrms 8773 15263 5082 636 0 s[2048, 1024]
+hsm5a 15282 8773 15286 15290 15294 15298 638 0 s[2048, 1024]
+hsflt 8775 15282 640 0 s[2048, 1024]
+hsleaf 5085 s[64, 1024]
+hsnlin 8781 8775 5085 648 0 s[2048, 64]
+hstkm 8785 8781 8783 8787 656 0 s[2048, 64]
+hsm2b 15267 8769 15263 634 0 s[2048, 1024]
+hsm5b 15286 8773 15282 15290 15294 15298 638 0 s[2048, 1024]
+hstkp 8783 8781 8785 8787 656 0 s[2048, 64]
+hsleaf 8789 s[32, 1024, 1024]
+hsleaf 8790 s[32, 1024, 1024]
+hsleaf 8791 s[32, 1024, 512]
+hsleaf 8792 s[32, 1024, 512]
+hsmoe 8793 15286 8783 8785 8789 8790 8791 8792 664 0 s[2048, 1024]
+hsview 8805 8799 657 0 s[2048, 1]
+hssig 8807 8805 665 0 s[2048, 1]
+hsview 8863 8853 674 0 s[2048, 1024]
+hsmul 8867 8807 8863 676 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 8871 8793 8867 678 0 s[2048, 1024]
+hsflt 8877 8871 680 0 s[2048, 1024]
+hsadd 8881 15267 8877 682 0 s[2048, 1024]
+hsm2b 15329 8881 15325 684 0 s[2048, 1024]
+hsview 8947 8937 706 0 s[2048, 1024]
+hsflt 8951 8947 708 0 s[2048, 1024]
+hsadd 8955 15329 8951 710 0 s[2048, 1024]
+hsm2a 15367 8955 15371 712 0 s[2048, 1024]
+hsleaf 5136 s[1024]
+hsrms 8959 15367 5136 714 0 s[2048, 1024]
+hsm5a 15386 8959 15390 15394 15398 15402 716 0 s[2048, 1024]
+hsflt 8961 15386 718 0 s[2048, 1024]
+hsleaf 5139 s[64, 1024]
+hsnlin 8967 8961 5139 726 0 s[2048, 64]
+hstkm 8971 8967 8969 8973 734 0 s[2048, 64]
+hsm2b 15371 8955 15367 712 0 s[2048, 1024]
+hsm5b 15390 8959 15386 15394 15398 15402 716 0 s[2048, 1024]
+hstkp 8969 8967 8971 8973 734 0 s[2048, 64]
+hsleaf 8975 s[32, 1024, 1024]
+hsleaf 8976 s[32, 1024, 1024]
+hsleaf 8977 s[32, 1024, 512]
+hsleaf 8978 s[32, 1024, 512]
+hsmoe 8979 15390 8969 8971 8975 8976 8977 8978 742 0 s[2048, 1024]
+hsview 8991 8985 735 0 s[2048, 1]
+hssig 8993 8991 743 0 s[2048, 1]
+hsview 9049 9039 752 0 s[2048, 1024]
+hsmul 9053 8993 9049 754 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 9057 8979 9053 756 0 s[2048, 1024]
+hsflt 9063 9057 758 0 s[2048, 1024]
+hsadd 9067 15371 9063 760 0 s[2048, 1024]
+hsm2b 15433 9067 15429 762 0 s[2048, 1024]
+hsview 9133 9123 784 0 s[2048, 1024]
+hsflt 9137 9133 786 0 s[2048, 1024]
+hsadd 9141 15433 9137 788 0 s[2048, 1024]
+hsm2a 15471 9141 15475 790 0 s[2048, 1024]
+hsleaf 5190 s[1024]
+hsrms 9145 15471 5190 792 0 s[2048, 1024]
+hsm5a 15490 9145 15494 15498 15502 15506 794 0 s[2048, 1024]
+hsflt 9147 15490 796 0 s[2048, 1024]
+hsleaf 5193 s[64, 1024]
+hsnlin 9153 9147 5193 804 0 s[2048, 64]
+hstkm 9157 9153 9155 9159 812 0 s[2048, 64]
+hsm2b 15475 9141 15471 790 0 s[2048, 1024]
+hsm5b 15494 9145 15490 15498 15502 15506 794 0 s[2048, 1024]
+hstkp 9155 9153 9157 9159 812 0 s[2048, 64]
+hsleaf 9161 s[32, 1024, 1024]
+hsleaf 9162 s[32, 1024, 1024]
+hsleaf 9163 s[32, 1024, 512]
+hsleaf 9164 s[32, 1024, 512]
+hsmoe 9165 15494 9155 9157 9161 9162 9163 9164 820 0 s[2048, 1024]
+hsview 9177 9171 813 0 s[2048, 1]
+hssig 9179 9177 821 0 s[2048, 1]
+hsview 9235 9225 830 0 s[2048, 1024]
+hsmul 9239 9179 9235 832 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 9243 9165 9239 834 0 s[2048, 1024]
+hsflt 9249 9243 836 0 s[2048, 1024]
+hsadd 9253 15475 9249 838 0 s[2048, 1024]
+hsm2b 15537 9253 15533 840 0 s[2048, 1024]
+hsview 9319 9309 862 0 s[2048, 1024]
+hsflt 9323 9319 864 0 s[2048, 1024]
+hsadd 9327 15537 9323 866 0 s[2048, 1024]
+hsm2a 15575 9327 15579 868 0 s[2048, 1024]
+hsleaf 5244 s[1024]
+hsrms 9331 15575 5244 870 0 s[2048, 1024]
+hsm5a 15594 9331 15598 15602 15606 15610 872 0 s[2048, 1024]
+hsflt 9333 15594 874 0 s[2048, 1024]
+hsleaf 5247 s[64, 1024]
+hsnlin 9339 9333 5247 882 0 s[2048, 64]
+hstkm 9343 9339 9341 9345 890 0 s[2048, 64]
+hsm2b 15579 9327 15575 868 0 s[2048, 1024]
+hsm5b 15598 9331 15594 15602 15606 15610 872 0 s[2048, 1024]
+hstkp 9341 9339 9343 9345 890 0 s[2048, 64]
+hsleaf 9347 s[32, 1024, 1024]
+hsleaf 9348 s[32, 1024, 1024]
+hsleaf 9349 s[32, 1024, 512]
+hsleaf 9350 s[32, 1024, 512]
+hsmoe 9351 15598 9341 9343 9347 9348 9349 9350 898 0 s[2048, 1024]
+hsview 9363 9357 891 0 s[2048, 1]
+hssig 9365 9363 899 0 s[2048, 1]
+hsview 9421 9411 908 0 s[2048, 1024]
+hsmul 9425 9365 9421 910 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 9429 9351 9425 912 0 s[2048, 1024]
+hsflt 9435 9429 914 0 s[2048, 1024]
+hsadd 9439 15579 9435 916 0 s[2048, 1024]
+hsm2b 15641 9439 15637 918 0 s[2048, 1024]
+hsview 9505 9495 940 0 s[2048, 1024]
+hsflt 9509 9505 942 0 s[2048, 1024]
+hsadd 9513 15641 9509 944 0 s[2048, 1024]
+hsm2a 15679 9513 15683 946 0 s[2048, 1024]
+hsleaf 5298 s[1024]
+hsrms 9517 15679 5298 948 0 s[2048, 1024]
+hsm5a 15698 9517 15702 15706 15710 15714 950 0 s[2048, 1024]
+hsflt 9519 15698 952 0 s[2048, 1024]
+hsleaf 5301 s[64, 1024]
+hsnlin 9525 9519 5301 960 0 s[2048, 64]
+hstkm 9529 9525 9527 9531 968 0 s[2048, 64]
+hsm2b 15683 9513 15679 946 0 s[2048, 1024]
+hsm5b 15702 9517 15698 15706 15710 15714 950 0 s[2048, 1024]
+hstkp 9527 9525 9529 9531 968 0 s[2048, 64]
+hsleaf 9533 s[32, 1024, 1024]
+hsleaf 9534 s[32, 1024, 1024]
+hsleaf 9535 s[32, 1024, 512]
+hsleaf 9536 s[32, 1024, 512]
+hsmoe 9537 15702 9527 9529 9533 9534 9535 9536 976 0 s[2048, 1024]
+hsview 9549 9543 969 0 s[2048, 1]
+hssig 9551 9549 977 0 s[2048, 1]
+hsview 9607 9597 986 0 s[2048, 1024]
+hsmul 9611 9551 9607 988 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 9615 9537 9611 990 0 s[2048, 1024]
+hsflt 9621 9615 992 0 s[2048, 1024]
+hsadd 9625 15683 9621 994 0 s[2048, 1024]
+hsm2b 13257 9625 14597 996 0 s[2048, 1024]
+hsleaf 5337 s[2]
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 4000000 in
 theorem hs_9655 (initPM : Store)
@@ -4960,5910 +1964,539 @@ theorem hs_9655 (initPM : Store)
     rfl
   rw [hval_9655]
   rw [fw_maybe_shuffle_shape]; exact (hs_13257 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15973 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15973).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15973 9655 1001
-      { rank := 0, op := "OpName.FW_multiref", ins := [9655], outs := [15969, 15973], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 9655 15969 15973 (by decide))]
-  exact (hs_9655 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9709 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9709).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9709 9699 1075
-      { rank := 0, op := "OpName.FW_view", ins := [9699], outs := [9709], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 9699 9709)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9713 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9713).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9713 9709 1077
-      { rank := 0, op := "OpName.FW_float", ins := [9709], outs := [9713], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 9709 9713 [])]
-  exact (hs_9709 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9717 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9717).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9717 15973 9713 1079
-      { rank := 0, op := "OpName.FW_add", ins := [15973, 9713], outs := [9717], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15973 9713 9717)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15973 initPM hPM) (hs_9713 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15985 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15985).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15985 9717 1081
-      { rank := 0, op := "OpName.FW_multiref", ins := [9717], outs := [15985, 15989], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 9717 15985 15989)]
-  exact (hs_9717 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5355 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5355).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5355 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9721 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9721).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9721 15985 5355 1083
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [15985, 5355], outs := [9721], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 15985 5355 9721)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_15985 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16004 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16004).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16004 9721 1085
-      { rank := 0, op := "OpName.FW_multiref", ins := [9721], outs := [16004, 16008, 16012, 16016, 16020], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 9721 16004 16008 16012 16016 16020)]
-  exact (hs_9721 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9723 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9723).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9723 16004 1087
-      { rank := 0, op := "OpName.FW_float", ins := [16004], outs := [9723], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 16004 9723 [])]
-  exact (hs_16004 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5358 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5358).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5358 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9729 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9729).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9729 9723 5358 1095
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [9723, 5358], outs := [9729], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 9723 5358 9729)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_9723 initPM hPM) (hs_5358 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9733 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9733).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9733 9729 1103
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [9729], outs := [9731, 9733, 9735], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 9729 9731 9733 9735 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_9729 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15989 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15989).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15989 9717 1081
-      { rank := 0, op := "OpName.FW_multiref", ins := [9717], outs := [15985, 15989], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 9717 15985 15989 (by decide))]
-  exact (hs_9717 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16008 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16008).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16008 9721 1085
-      { rank := 0, op := "OpName.FW_multiref", ins := [9721], outs := [16004, 16008, 16012, 16016, 16020], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 9721 16004 16008 16012 16016 16020 (by decide))]
-  exact (hs_9721 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9731 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9731).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9731 9729 1103
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [9729], outs := [9731, 9733, 9735], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 9729 9731 9733 9735 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_9729 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9737 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9737).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9737 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9738 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9738).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9738 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9739 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9739).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9739 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9740 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9740).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9740 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9741 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9741).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 9741 16008 9731 9733 9737 9738 9739 9740 1111
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [16008, 9731, 9733, 9737, 9738, 9739, 9740], outs := [9741], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 16008 9731 9733 9737 9738 9739 9740 9741 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16008 initPM hPM)]; rfl) (by rw [(hs_16008 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9753 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9753).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9753 9747 1104
-      { rank := 0, op := "OpName.FW_view", ins := [9747], outs := [9753], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 9747 9753)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9755 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9755).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9755 9753 1112
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [9753], outs := [9755], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 9753 9755)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_9753 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9811 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9811).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9811 9801 1121
-      { rank := 0, op := "OpName.FW_view", ins := [9801], outs := [9811], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 9801 9811)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9815 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9815).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9815 9755 9811 1123
-      { rank := 0, op := "OpName.FW_mul", ins := [9755, 9811], outs := [9815], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 9755 9811 9815)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_9755 initPM hPM) (hs_9811 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9819 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9819).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9819 9741 9815 1125
-      { rank := 0, op := "OpName.FW_add", ins := [9741, 9815], outs := [9819], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 9741 9815 9819)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_9741 initPM hPM) (hs_9815 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9825 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9825).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9825 9819 1127
-      { rank := 0, op := "OpName.FW_float", ins := [9819], outs := [9825], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 9819 9825 [])]
-  exact (hs_9819 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9829 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9829).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9829 15989 9825 1129
-      { rank := 0, op := "OpName.FW_add", ins := [15989, 9825], outs := [9829], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15989 9825 9829)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15989 initPM hPM) (hs_9825 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16051 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16051).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16051 9829 1131
-      { rank := 0, op := "OpName.FW_multiref", ins := [9829], outs := [16047, 16051], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 9829 16047 16051 (by decide))]
-  exact (hs_9829 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9881 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9881).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9881 9871 1145
-      { rank := 0, op := "OpName.FW_view", ins := [9871], outs := [9881], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 9871 9881)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9885 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9885).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9885 9881 1147
-      { rank := 0, op := "OpName.FW_float", ins := [9881], outs := [9885], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 9881 9885 [])]
-  exact (hs_9881 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9889 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9889).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9889 16051 9885 1149
-      { rank := 0, op := "OpName.FW_add", ins := [16051, 9885], outs := [9889], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16051 9885 9889)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16051 initPM hPM) (hs_9885 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16063 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16063).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16063 9889 1151
-      { rank := 0, op := "OpName.FW_multiref", ins := [9889], outs := [16063, 16067], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 9889 16063 16067)]
-  exact (hs_9889 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5404 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5404).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5404 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9893 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9893).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9893 16063 5404 1153
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [16063, 5404], outs := [9893], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 16063 5404 9893)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16063 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16082 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16082).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16082 9893 1155
-      { rank := 0, op := "OpName.FW_multiref", ins := [9893], outs := [16082, 16086, 16090, 16094, 16098], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 9893 16082 16086 16090 16094 16098)]
-  exact (hs_9893 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9895 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9895).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9895 16082 1157
-      { rank := 0, op := "OpName.FW_float", ins := [16082], outs := [9895], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 16082 9895 [])]
-  exact (hs_16082 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5407 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5407).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5407 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9901 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9901).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9901 9895 5407 1165
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [9895, 5407], outs := [9901], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 9895 5407 9901)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_9895 initPM hPM) (hs_5407 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9905 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9905).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9905 9901 1173
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [9901], outs := [9903, 9905, 9907], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 9901 9903 9905 9907 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_9901 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16067 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16067).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16067 9889 1151
-      { rank := 0, op := "OpName.FW_multiref", ins := [9889], outs := [16063, 16067], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 9889 16063 16067 (by decide))]
-  exact (hs_9889 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16086 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16086).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16086 9893 1155
-      { rank := 0, op := "OpName.FW_multiref", ins := [9893], outs := [16082, 16086, 16090, 16094, 16098], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 9893 16082 16086 16090 16094 16098 (by decide))]
-  exact (hs_9893 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9903 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9903).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9903 9901 1173
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [9901], outs := [9903, 9905, 9907], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 9901 9903 9905 9907 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_9901 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9909 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9909).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9909 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9910 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9910).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9910 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9911 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9911).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9911 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9912 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9912).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 9912 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9913 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9913).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 9913 16086 9903 9905 9909 9910 9911 9912 1181
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [16086, 9903, 9905, 9909, 9910, 9911, 9912], outs := [9913], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 16086 9903 9905 9909 9910 9911 9912 9913 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16086 initPM hPM)]; rfl) (by rw [(hs_16086 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9925 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9925).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9925 9919 1174
-      { rank := 0, op := "OpName.FW_view", ins := [9919], outs := [9925], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 9919 9925)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9927 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9927).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9927 9925 1182
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [9925], outs := [9927], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 9925 9927)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_9925 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9983 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9983).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9983 9973 1191
-      { rank := 0, op := "OpName.FW_view", ins := [9973], outs := [9983], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 9973 9983)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9987 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9987).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9987 9927 9983 1193
-      { rank := 0, op := "OpName.FW_mul", ins := [9927, 9983], outs := [9987], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 9927 9983 9987)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_9927 initPM hPM) (hs_9983 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9991 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9991).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9991 9913 9987 1195
-      { rank := 0, op := "OpName.FW_add", ins := [9913, 9987], outs := [9991], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 9913 9987 9991)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_9913 initPM hPM) (hs_9987 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9997 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9997).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9997 9991 1197
-      { rank := 0, op := "OpName.FW_float", ins := [9991], outs := [9997], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 9991 9997 [])]
-  exact (hs_9991 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10001 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10001).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10001 16067 9997 1199
-      { rank := 0, op := "OpName.FW_add", ins := [16067, 9997], outs := [10001], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16067 9997 10001)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16067 initPM hPM) (hs_9997 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16129 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16129).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16129 10001 1201
-      { rank := 0, op := "OpName.FW_multiref", ins := [10001], outs := [16125, 16129], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 10001 16125 16129 (by decide))]
-  exact (hs_10001 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10053 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10053).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10053 10043 1215
-      { rank := 0, op := "OpName.FW_view", ins := [10043], outs := [10053], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 10043 10053)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10057 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10057).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10057 10053 1217
-      { rank := 0, op := "OpName.FW_float", ins := [10053], outs := [10057], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 10053 10057 [])]
-  exact (hs_10053 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10061 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10061).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10061 16129 10057 1219
-      { rank := 0, op := "OpName.FW_add", ins := [16129, 10057], outs := [10061], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16129 10057 10061)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16129 initPM hPM) (hs_10057 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16141 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16141).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16141 10061 1221
-      { rank := 0, op := "OpName.FW_multiref", ins := [10061], outs := [16141, 16145], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 10061 16141 16145)]
-  exact (hs_10061 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5453 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5453).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5453 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10065 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10065).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10065 16141 5453 1223
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [16141, 5453], outs := [10065], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 16141 5453 10065)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16141 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16160 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16160).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16160 10065 1225
-      { rank := 0, op := "OpName.FW_multiref", ins := [10065], outs := [16160, 16164, 16168, 16172, 16176], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 10065 16160 16164 16168 16172 16176)]
-  exact (hs_10065 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10067 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10067).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10067 16160 1227
-      { rank := 0, op := "OpName.FW_float", ins := [16160], outs := [10067], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 16160 10067 [])]
-  exact (hs_16160 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5456 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5456).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5456 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10073 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10073).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10073 10067 5456 1235
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [10067, 5456], outs := [10073], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 10067 5456 10073)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_10067 initPM hPM) (hs_5456 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10077 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10077).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10077 10073 1243
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [10073], outs := [10075, 10077, 10079], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 10073 10075 10077 10079 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_10073 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16145 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16145).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16145 10061 1221
-      { rank := 0, op := "OpName.FW_multiref", ins := [10061], outs := [16141, 16145], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 10061 16141 16145 (by decide))]
-  exact (hs_10061 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16164 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16164).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16164 10065 1225
-      { rank := 0, op := "OpName.FW_multiref", ins := [10065], outs := [16160, 16164, 16168, 16172, 16176], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 10065 16160 16164 16168 16172 16176 (by decide))]
-  exact (hs_10065 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10075 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10075).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10075 10073 1243
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [10073], outs := [10075, 10077, 10079], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 10073 10075 10077 10079 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_10073 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10081 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10081).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10081 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10082 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10082).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10082 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10083 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10083).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10083 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10084 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10084).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10084 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10085 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10085).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 10085 16164 10075 10077 10081 10082 10083 10084 1251
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [16164, 10075, 10077, 10081, 10082, 10083, 10084], outs := [10085], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 16164 10075 10077 10081 10082 10083 10084 10085 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16164 initPM hPM)]; rfl) (by rw [(hs_16164 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10097 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10097).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10097 10091 1244
-      { rank := 0, op := "OpName.FW_view", ins := [10091], outs := [10097], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 10091 10097)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10099 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10099).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10099 10097 1252
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [10097], outs := [10099], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 10097 10099)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_10097 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10155 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10155).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10155 10145 1261
-      { rank := 0, op := "OpName.FW_view", ins := [10145], outs := [10155], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 10145 10155)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10159 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10159).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10159 10099 10155 1263
-      { rank := 0, op := "OpName.FW_mul", ins := [10099, 10155], outs := [10159], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 10099 10155 10159)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_10099 initPM hPM) (hs_10155 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10163 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10163).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10163 10085 10159 1265
-      { rank := 0, op := "OpName.FW_add", ins := [10085, 10159], outs := [10163], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 10085 10159 10163)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_10085 initPM hPM) (hs_10159 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10169 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10169).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10169 10163 1267
-      { rank := 0, op := "OpName.FW_float", ins := [10163], outs := [10169], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 10163 10169 [])]
-  exact (hs_10163 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10173 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10173).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10173 16145 10169 1269
-      { rank := 0, op := "OpName.FW_add", ins := [16145, 10169], outs := [10173], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16145 10169 10173)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16145 initPM hPM) (hs_10169 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16207 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16207).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16207 10173 1271
-      { rank := 0, op := "OpName.FW_multiref", ins := [10173], outs := [16203, 16207], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 10173 16203 16207 (by decide))]
-  exact (hs_10173 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10225 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10225).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10225 10215 1285
-      { rank := 0, op := "OpName.FW_view", ins := [10215], outs := [10225], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 10215 10225)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10229 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10229).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10229 10225 1287
-      { rank := 0, op := "OpName.FW_float", ins := [10225], outs := [10229], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 10225 10229 [])]
-  exact (hs_10225 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10233 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10233).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10233 16207 10229 1289
-      { rank := 0, op := "OpName.FW_add", ins := [16207, 10229], outs := [10233], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16207 10229 10233)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16207 initPM hPM) (hs_10229 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16219 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16219).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16219 10233 1291
-      { rank := 0, op := "OpName.FW_multiref", ins := [10233], outs := [16219, 16223], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 10233 16219 16223)]
-  exact (hs_10233 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5502 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5502).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5502 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10237 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10237).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10237 16219 5502 1293
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [16219, 5502], outs := [10237], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 16219 5502 10237)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16219 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16238 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16238).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16238 10237 1295
-      { rank := 0, op := "OpName.FW_multiref", ins := [10237], outs := [16238, 16242, 16246, 16250, 16254], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 10237 16238 16242 16246 16250 16254)]
-  exact (hs_10237 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10239 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10239).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10239 16238 1297
-      { rank := 0, op := "OpName.FW_float", ins := [16238], outs := [10239], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 16238 10239 [])]
-  exact (hs_16238 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5505 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5505).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5505 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10245 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10245).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10245 10239 5505 1305
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [10239, 5505], outs := [10245], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 10239 5505 10245)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_10239 initPM hPM) (hs_5505 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10249 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10249).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10249 10245 1313
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [10245], outs := [10247, 10249, 10251], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 10245 10247 10249 10251 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_10245 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16223 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16223).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16223 10233 1291
-      { rank := 0, op := "OpName.FW_multiref", ins := [10233], outs := [16219, 16223], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 10233 16219 16223 (by decide))]
-  exact (hs_10233 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16242 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16242).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16242 10237 1295
-      { rank := 0, op := "OpName.FW_multiref", ins := [10237], outs := [16238, 16242, 16246, 16250, 16254], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 10237 16238 16242 16246 16250 16254 (by decide))]
-  exact (hs_10237 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10247 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10247).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10247 10245 1313
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [10245], outs := [10247, 10249, 10251], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 10245 10247 10249 10251 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_10245 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10253 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10253).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10253 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10254 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10254).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10254 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10255 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10255).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10255 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10256 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10256).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10256 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10257 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10257).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 10257 16242 10247 10249 10253 10254 10255 10256 1321
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [16242, 10247, 10249, 10253, 10254, 10255, 10256], outs := [10257], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 16242 10247 10249 10253 10254 10255 10256 10257 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16242 initPM hPM)]; rfl) (by rw [(hs_16242 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10269 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10269).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10269 10263 1314
-      { rank := 0, op := "OpName.FW_view", ins := [10263], outs := [10269], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 10263 10269)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10271 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10271).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10271 10269 1322
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [10269], outs := [10271], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 10269 10271)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_10269 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10327 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10327).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10327 10317 1331
-      { rank := 0, op := "OpName.FW_view", ins := [10317], outs := [10327], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 10317 10327)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10331 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10331).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10331 10271 10327 1333
-      { rank := 0, op := "OpName.FW_mul", ins := [10271, 10327], outs := [10331], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 10271 10327 10331)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_10271 initPM hPM) (hs_10327 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10335 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10335).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10335 10257 10331 1335
-      { rank := 0, op := "OpName.FW_add", ins := [10257, 10331], outs := [10335], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 10257 10331 10335)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_10257 initPM hPM) (hs_10331 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10341 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10341).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10341 10335 1337
-      { rank := 0, op := "OpName.FW_float", ins := [10335], outs := [10341], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 10335 10341 [])]
-  exact (hs_10335 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10345 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10345).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10345 16223 10341 1339
-      { rank := 0, op := "OpName.FW_add", ins := [16223, 10341], outs := [10345], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16223 10341 10345)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16223 initPM hPM) (hs_10341 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16285 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16285).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16285 10345 1341
-      { rank := 0, op := "OpName.FW_multiref", ins := [10345], outs := [16281, 16285], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 10345 16281 16285 (by decide))]
-  exact (hs_10345 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10397 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10397).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10397 10387 1355
-      { rank := 0, op := "OpName.FW_view", ins := [10387], outs := [10397], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 10387 10397)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10401 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10401).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10401 10397 1357
-      { rank := 0, op := "OpName.FW_float", ins := [10397], outs := [10401], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 10397 10401 [])]
-  exact (hs_10397 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10405 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10405).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10405 16285 10401 1359
-      { rank := 0, op := "OpName.FW_add", ins := [16285, 10401], outs := [10405], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16285 10401 10405)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16285 initPM hPM) (hs_10401 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16297 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16297).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16297 10405 1361
-      { rank := 0, op := "OpName.FW_multiref", ins := [10405], outs := [16297, 16301], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 10405 16297 16301)]
-  exact (hs_10405 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5551 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5551).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5551 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10409 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10409).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10409 16297 5551 1363
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [16297, 5551], outs := [10409], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 16297 5551 10409)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16297 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16316 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16316).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16316 10409 1365
-      { rank := 0, op := "OpName.FW_multiref", ins := [10409], outs := [16316, 16320, 16324, 16328, 16332], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 10409 16316 16320 16324 16328 16332)]
-  exact (hs_10409 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10411 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10411).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10411 16316 1367
-      { rank := 0, op := "OpName.FW_float", ins := [16316], outs := [10411], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 16316 10411 [])]
-  exact (hs_16316 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5554 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5554).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5554 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10417 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10417).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10417 10411 5554 1375
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [10411, 5554], outs := [10417], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 10411 5554 10417)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_10411 initPM hPM) (hs_5554 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10421 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10421).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10421 10417 1383
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [10417], outs := [10419, 10421, 10423], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 10417 10419 10421 10423 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_10417 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16301 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16301).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16301 10405 1361
-      { rank := 0, op := "OpName.FW_multiref", ins := [10405], outs := [16297, 16301], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 10405 16297 16301 (by decide))]
-  exact (hs_10405 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16320 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16320).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16320 10409 1365
-      { rank := 0, op := "OpName.FW_multiref", ins := [10409], outs := [16316, 16320, 16324, 16328, 16332], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 10409 16316 16320 16324 16328 16332 (by decide))]
-  exact (hs_10409 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10419 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10419).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10419 10417 1383
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [10417], outs := [10419, 10421, 10423], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 10417 10419 10421 10423 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_10417 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10425 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10425).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10425 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10426 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10426).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10426 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10427 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10427).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10427 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10428 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10428).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10428 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10429 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10429).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 10429 16320 10419 10421 10425 10426 10427 10428 1391
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [16320, 10419, 10421, 10425, 10426, 10427, 10428], outs := [10429], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 16320 10419 10421 10425 10426 10427 10428 10429 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16320 initPM hPM)]; rfl) (by rw [(hs_16320 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10441 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10441).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10441 10435 1384
-      { rank := 0, op := "OpName.FW_view", ins := [10435], outs := [10441], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 10435 10441)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10443 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10443).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10443 10441 1392
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [10441], outs := [10443], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 10441 10443)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_10441 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10499 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10499).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10499 10489 1401
-      { rank := 0, op := "OpName.FW_view", ins := [10489], outs := [10499], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 10489 10499)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10503 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10503).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10503 10443 10499 1403
-      { rank := 0, op := "OpName.FW_mul", ins := [10443, 10499], outs := [10503], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 10443 10499 10503)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_10443 initPM hPM) (hs_10499 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10507 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10507).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10507 10429 10503 1405
-      { rank := 0, op := "OpName.FW_add", ins := [10429, 10503], outs := [10507], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 10429 10503 10507)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_10429 initPM hPM) (hs_10503 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10513 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10513).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10513 10507 1407
-      { rank := 0, op := "OpName.FW_float", ins := [10507], outs := [10513], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 10507 10513 [])]
-  exact (hs_10507 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10517 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10517).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10517 16301 10513 1409
-      { rank := 0, op := "OpName.FW_add", ins := [16301, 10513], outs := [10517], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16301 10513 10517)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16301 initPM hPM) (hs_10513 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16363 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16363).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16363 10517 1411
-      { rank := 0, op := "OpName.FW_multiref", ins := [10517], outs := [16359, 16363], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 10517 16359 16363 (by decide))]
-  exact (hs_10517 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10569 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10569).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10569 10559 1425
-      { rank := 0, op := "OpName.FW_view", ins := [10559], outs := [10569], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 10559 10569)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10573 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10573).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10573 10569 1427
-      { rank := 0, op := "OpName.FW_float", ins := [10569], outs := [10573], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 10569 10573 [])]
-  exact (hs_10569 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10577 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10577).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10577 16363 10573 1429
-      { rank := 0, op := "OpName.FW_add", ins := [16363, 10573], outs := [10577], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16363 10573 10577)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16363 initPM hPM) (hs_10573 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16375 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16375).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16375 10577 1431
-      { rank := 0, op := "OpName.FW_multiref", ins := [10577], outs := [16375, 16379], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 10577 16375 16379)]
-  exact (hs_10577 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5600 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5600).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5600 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10581 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10581).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10581 16375 5600 1433
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [16375, 5600], outs := [10581], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 16375 5600 10581)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16375 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16394 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16394).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16394 10581 1435
-      { rank := 0, op := "OpName.FW_multiref", ins := [10581], outs := [16394, 16398, 16402, 16406, 16410], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 10581 16394 16398 16402 16406 16410)]
-  exact (hs_10581 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10583 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10583).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10583 16394 1437
-      { rank := 0, op := "OpName.FW_float", ins := [16394], outs := [10583], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 16394 10583 [])]
-  exact (hs_16394 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5603 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5603).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5603 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10589 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10589).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10589 10583 5603 1445
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [10583, 5603], outs := [10589], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 10583 5603 10589)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_10583 initPM hPM) (hs_5603 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10593 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10593).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10593 10589 1453
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [10589], outs := [10591, 10593, 10595], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 10589 10591 10593 10595 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_10589 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16379 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16379).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16379 10577 1431
-      { rank := 0, op := "OpName.FW_multiref", ins := [10577], outs := [16375, 16379], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 10577 16375 16379 (by decide))]
-  exact (hs_10577 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16398 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16398).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16398 10581 1435
-      { rank := 0, op := "OpName.FW_multiref", ins := [10581], outs := [16394, 16398, 16402, 16406, 16410], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 10581 16394 16398 16402 16406 16410 (by decide))]
-  exact (hs_10581 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10591 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10591).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10591 10589 1453
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [10589], outs := [10591, 10593, 10595], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 10589 10591 10593 10595 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_10589 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10597 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10597).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10597 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10598 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10598).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10598 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10599 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10599).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10599 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10600 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10600).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10600 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10601 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10601).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 10601 16398 10591 10593 10597 10598 10599 10600 1461
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [16398, 10591, 10593, 10597, 10598, 10599, 10600], outs := [10601], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 16398 10591 10593 10597 10598 10599 10600 10601 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16398 initPM hPM)]; rfl) (by rw [(hs_16398 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10613 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10613).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10613 10607 1454
-      { rank := 0, op := "OpName.FW_view", ins := [10607], outs := [10613], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 10607 10613)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10615 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10615).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10615 10613 1462
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [10613], outs := [10615], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 10613 10615)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_10613 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10671 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10671).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10671 10661 1471
-      { rank := 0, op := "OpName.FW_view", ins := [10661], outs := [10671], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 10661 10671)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10675 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10675).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10675 10615 10671 1473
-      { rank := 0, op := "OpName.FW_mul", ins := [10615, 10671], outs := [10675], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 10615 10671 10675)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_10615 initPM hPM) (hs_10671 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10679 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10679).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10679 10601 10675 1475
-      { rank := 0, op := "OpName.FW_add", ins := [10601, 10675], outs := [10679], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 10601 10675 10679)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_10601 initPM hPM) (hs_10675 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10685 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10685).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10685 10679 1477
-      { rank := 0, op := "OpName.FW_float", ins := [10679], outs := [10685], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 10679 10685 [])]
-  exact (hs_10679 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10689 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10689).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10689 16379 10685 1479
-      { rank := 0, op := "OpName.FW_add", ins := [16379, 10685], outs := [10689], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16379 10685 10689)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16379 initPM hPM) (hs_10685 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16441 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16441).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16441 10689 1481
-      { rank := 0, op := "OpName.FW_multiref", ins := [10689], outs := [16437, 16441], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 10689 16437 16441 (by decide))]
-  exact (hs_10689 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10741 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10741).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10741 10731 1495
-      { rank := 0, op := "OpName.FW_view", ins := [10731], outs := [10741], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 10731 10741)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10745 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10745).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10745 10741 1497
-      { rank := 0, op := "OpName.FW_float", ins := [10741], outs := [10745], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 10741 10745 [])]
-  exact (hs_10741 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10749 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10749).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10749 16441 10745 1499
-      { rank := 0, op := "OpName.FW_add", ins := [16441, 10745], outs := [10749], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16441 10745 10749)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16441 initPM hPM) (hs_10745 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16453 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16453).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16453 10749 1501
-      { rank := 0, op := "OpName.FW_multiref", ins := [10749], outs := [16453, 16457], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 10749 16453 16457)]
-  exact (hs_10749 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5649 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5649).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5649 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10753 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10753).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10753 16453 5649 1503
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [16453, 5649], outs := [10753], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 16453 5649 10753)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16453 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16472 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16472).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16472 10753 1505
-      { rank := 0, op := "OpName.FW_multiref", ins := [10753], outs := [16472, 16476, 16480, 16484, 16488], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 10753 16472 16476 16480 16484 16488)]
-  exact (hs_10753 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10755 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10755).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10755 16472 1507
-      { rank := 0, op := "OpName.FW_float", ins := [16472], outs := [10755], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 16472 10755 [])]
-  exact (hs_16472 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5652 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5652).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5652 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10761 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10761).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10761 10755 5652 1515
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [10755, 5652], outs := [10761], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 10755 5652 10761)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_10755 initPM hPM) (hs_5652 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10765 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10765).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10765 10761 1523
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [10761], outs := [10763, 10765, 10767], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 10761 10763 10765 10767 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_10761 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16457 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16457).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16457 10749 1501
-      { rank := 0, op := "OpName.FW_multiref", ins := [10749], outs := [16453, 16457], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 10749 16453 16457 (by decide))]
-  exact (hs_10749 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16476 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16476).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16476 10753 1505
-      { rank := 0, op := "OpName.FW_multiref", ins := [10753], outs := [16472, 16476, 16480, 16484, 16488], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 10753 16472 16476 16480 16484 16488 (by decide))]
-  exact (hs_10753 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10763 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10763).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10763 10761 1523
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [10761], outs := [10763, 10765, 10767], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 10761 10763 10765 10767 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_10761 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10769 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10769).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10769 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10770 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10770).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10770 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10771 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10771).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10771 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10772 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10772).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10772 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10773 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10773).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 10773 16476 10763 10765 10769 10770 10771 10772 1531
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [16476, 10763, 10765, 10769, 10770, 10771, 10772], outs := [10773], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 16476 10763 10765 10769 10770 10771 10772 10773 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16476 initPM hPM)]; rfl) (by rw [(hs_16476 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10785 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10785).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10785 10779 1524
-      { rank := 0, op := "OpName.FW_view", ins := [10779], outs := [10785], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 10779 10785)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10787 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10787).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10787 10785 1532
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [10785], outs := [10787], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 10785 10787)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_10785 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10843 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10843).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10843 10833 1541
-      { rank := 0, op := "OpName.FW_view", ins := [10833], outs := [10843], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 10833 10843)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10847 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10847).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10847 10787 10843 1543
-      { rank := 0, op := "OpName.FW_mul", ins := [10787, 10843], outs := [10847], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 10787 10843 10847)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_10787 initPM hPM) (hs_10843 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10851 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10851).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10851 10773 10847 1545
-      { rank := 0, op := "OpName.FW_add", ins := [10773, 10847], outs := [10851], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 10773 10847 10851)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_10773 initPM hPM) (hs_10847 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10857 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10857).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10857 10851 1547
-      { rank := 0, op := "OpName.FW_float", ins := [10851], outs := [10857], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 10851 10857 [])]
-  exact (hs_10851 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10861 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10861).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10861 16457 10857 1549
-      { rank := 0, op := "OpName.FW_add", ins := [16457, 10857], outs := [10861], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16457 10857 10861)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16457 initPM hPM) (hs_10857 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16519 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16519).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16519 10861 1551
-      { rank := 0, op := "OpName.FW_multiref", ins := [10861], outs := [16515, 16519], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 10861 16515 16519 (by decide))]
-  exact (hs_10861 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10913 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10913).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10913 10903 1565
-      { rank := 0, op := "OpName.FW_view", ins := [10903], outs := [10913], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 10903 10913)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10917 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10917).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10917 10913 1567
-      { rank := 0, op := "OpName.FW_float", ins := [10913], outs := [10917], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 10913 10917 [])]
-  exact (hs_10913 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10921 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10921).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10921 16519 10917 1569
-      { rank := 0, op := "OpName.FW_add", ins := [16519, 10917], outs := [10921], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16519 10917 10921)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16519 initPM hPM) (hs_10917 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16531 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16531).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16531 10921 1571
-      { rank := 0, op := "OpName.FW_multiref", ins := [10921], outs := [16531, 16535], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 10921 16531 16535)]
-  exact (hs_10921 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5698 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5698).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5698 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10925 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10925).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10925 16531 5698 1573
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [16531, 5698], outs := [10925], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 16531 5698 10925)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16531 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16550 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16550).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16550 10925 1575
-      { rank := 0, op := "OpName.FW_multiref", ins := [10925], outs := [16550, 16554, 16558, 16562, 16566], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 10925 16550 16554 16558 16562 16566)]
-  exact (hs_10925 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10927 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10927).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10927 16550 1577
-      { rank := 0, op := "OpName.FW_float", ins := [16550], outs := [10927], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 16550 10927 [])]
-  exact (hs_16550 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5701 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5701).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5701 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10933 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10933).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10933 10927 5701 1585
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [10927, 5701], outs := [10933], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 10927 5701 10933)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_10927 initPM hPM) (hs_5701 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10937 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10937).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10937 10933 1593
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [10933], outs := [10935, 10937, 10939], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 10933 10935 10937 10939 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_10933 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16535 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16535).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16535 10921 1571
-      { rank := 0, op := "OpName.FW_multiref", ins := [10921], outs := [16531, 16535], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 10921 16531 16535 (by decide))]
-  exact (hs_10921 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16554 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16554).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16554 10925 1575
-      { rank := 0, op := "OpName.FW_multiref", ins := [10925], outs := [16550, 16554, 16558, 16562, 16566], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 10925 16550 16554 16558 16562 16566 (by decide))]
-  exact (hs_10925 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10935 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10935).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10935 10933 1593
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [10933], outs := [10935, 10937, 10939], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 10933 10935 10937 10939 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_10933 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10941 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10941).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10941 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10942 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10942).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10942 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10943 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10943).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10943 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10944 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10944).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 10944 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10945 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10945).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 10945 16554 10935 10937 10941 10942 10943 10944 1601
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [16554, 10935, 10937, 10941, 10942, 10943, 10944], outs := [10945], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 16554 10935 10937 10941 10942 10943 10944 10945 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16554 initPM hPM)]; rfl) (by rw [(hs_16554 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10957 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10957).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10957 10951 1594
-      { rank := 0, op := "OpName.FW_view", ins := [10951], outs := [10957], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 10951 10957)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10959 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10959).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10959 10957 1602
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [10957], outs := [10959], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 10957 10959)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_10957 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11015 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11015).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11015 11005 1611
-      { rank := 0, op := "OpName.FW_view", ins := [11005], outs := [11015], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 11005 11015)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11019 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11019).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11019 10959 11015 1613
-      { rank := 0, op := "OpName.FW_mul", ins := [10959, 11015], outs := [11019], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 10959 11015 11019)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_10959 initPM hPM) (hs_11015 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11023 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11023).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11023 10945 11019 1615
-      { rank := 0, op := "OpName.FW_add", ins := [10945, 11019], outs := [11023], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 10945 11019 11023)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_10945 initPM hPM) (hs_11019 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11029 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11029).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11029 11023 1617
-      { rank := 0, op := "OpName.FW_float", ins := [11023], outs := [11029], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 11023 11029 [])]
-  exact (hs_11023 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11033 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11033).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11033 16535 11029 1619
-      { rank := 0, op := "OpName.FW_add", ins := [16535, 11029], outs := [11033], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16535 11029 11033)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16535 initPM hPM) (hs_11029 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16597 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16597).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16597 11033 1621
-      { rank := 0, op := "OpName.FW_multiref", ins := [11033], outs := [16593, 16597], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 11033 16593 16597 (by decide))]
-  exact (hs_11033 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11085 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11085).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11085 11075 1635
-      { rank := 0, op := "OpName.FW_view", ins := [11075], outs := [11085], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 11075 11085)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11089 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11089).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11089 11085 1637
-      { rank := 0, op := "OpName.FW_float", ins := [11085], outs := [11089], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 11085 11089 [])]
-  exact (hs_11085 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11093 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11093).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11093 16597 11089 1639
-      { rank := 0, op := "OpName.FW_add", ins := [16597, 11089], outs := [11093], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16597 11089 11093)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16597 initPM hPM) (hs_11089 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16609 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16609).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16609 11093 1641
-      { rank := 0, op := "OpName.FW_multiref", ins := [11093], outs := [16609, 16613], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 11093 16609 16613)]
-  exact (hs_11093 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5747 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5747).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5747 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11097 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11097).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11097 16609 5747 1643
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [16609, 5747], outs := [11097], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 16609 5747 11097)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16609 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16628 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16628).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16628 11097 1645
-      { rank := 0, op := "OpName.FW_multiref", ins := [11097], outs := [16628, 16632, 16636, 16640, 16644], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 11097 16628 16632 16636 16640 16644)]
-  exact (hs_11097 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11099 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11099).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11099 16628 1647
-      { rank := 0, op := "OpName.FW_float", ins := [16628], outs := [11099], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 16628 11099 [])]
-  exact (hs_16628 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5750 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5750).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5750 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11105 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11105).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11105 11099 5750 1655
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [11099, 5750], outs := [11105], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 11099 5750 11105)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_11099 initPM hPM) (hs_5750 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11109 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11109).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11109 11105 1663
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [11105], outs := [11107, 11109, 11111], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 11105 11107 11109 11111 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_11105 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16613 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16613).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16613 11093 1641
-      { rank := 0, op := "OpName.FW_multiref", ins := [11093], outs := [16609, 16613], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 11093 16609 16613 (by decide))]
-  exact (hs_11093 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16632 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16632).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16632 11097 1645
-      { rank := 0, op := "OpName.FW_multiref", ins := [11097], outs := [16628, 16632, 16636, 16640, 16644], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 11097 16628 16632 16636 16640 16644 (by decide))]
-  exact (hs_11097 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11107 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11107).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11107 11105 1663
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [11105], outs := [11107, 11109, 11111], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 11105 11107 11109 11111 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_11105 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11113 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11113).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 11113 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11114 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11114).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 11114 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11115 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11115).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 11115 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11116 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11116).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 11116 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11117 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11117).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 11117 16632 11107 11109 11113 11114 11115 11116 1671
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [16632, 11107, 11109, 11113, 11114, 11115, 11116], outs := [11117], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 16632 11107 11109 11113 11114 11115 11116 11117 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16632 initPM hPM)]; rfl) (by rw [(hs_16632 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11129 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11129).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11129 11123 1664
-      { rank := 0, op := "OpName.FW_view", ins := [11123], outs := [11129], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 11123 11129)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11131 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11131).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11131 11129 1672
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [11129], outs := [11131], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 11129 11131)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_11129 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11187 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11187).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11187 11177 1681
-      { rank := 0, op := "OpName.FW_view", ins := [11177], outs := [11187], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 11177 11187)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11191 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11191).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11191 11131 11187 1683
-      { rank := 0, op := "OpName.FW_mul", ins := [11131, 11187], outs := [11191], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 11131 11187 11191)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_11131 initPM hPM) (hs_11187 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11195 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11195).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11195 11117 11191 1685
-      { rank := 0, op := "OpName.FW_add", ins := [11117, 11191], outs := [11195], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 11117 11191 11195)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_11117 initPM hPM) (hs_11191 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11201 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11201).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11201 11195 1687
-      { rank := 0, op := "OpName.FW_float", ins := [11195], outs := [11201], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 11195 11201 [])]
-  exact (hs_11195 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11205 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11205).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11205 16613 11201 1689
-      { rank := 0, op := "OpName.FW_add", ins := [16613, 11201], outs := [11205], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16613 11201 11205)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16613 initPM hPM) (hs_11201 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16675 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16675).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16675 11205 1691
-      { rank := 0, op := "OpName.FW_multiref", ins := [11205], outs := [16671, 16675], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 11205 16671 16675 (by decide))]
-  exact (hs_11205 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11257 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11257).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11257 11247 1705
-      { rank := 0, op := "OpName.FW_view", ins := [11247], outs := [11257], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 11247 11257)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11261 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11261).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11261 11257 1707
-      { rank := 0, op := "OpName.FW_float", ins := [11257], outs := [11261], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 11257 11261 [])]
-  exact (hs_11257 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11265 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11265).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11265 16675 11261 1709
-      { rank := 0, op := "OpName.FW_add", ins := [16675, 11261], outs := [11265], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16675 11261 11265)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16675 initPM hPM) (hs_11261 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16687 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16687).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16687 11265 1711
-      { rank := 0, op := "OpName.FW_multiref", ins := [11265], outs := [16687, 16691], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 11265 16687 16691)]
-  exact (hs_11265 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5796 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5796).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5796 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11269 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11269).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11269 16687 5796 1713
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [16687, 5796], outs := [11269], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 16687 5796 11269)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16687 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16706 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16706).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16706 11269 1715
-      { rank := 0, op := "OpName.FW_multiref", ins := [11269], outs := [16706, 16710, 16714, 16718, 16722], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 11269 16706 16710 16714 16718 16722)]
-  exact (hs_11269 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11271 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11271).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11271 16706 1717
-      { rank := 0, op := "OpName.FW_float", ins := [16706], outs := [11271], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 16706 11271 [])]
-  exact (hs_16706 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5799 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5799).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5799 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11277 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11277).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11277 11271 5799 1725
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [11271, 5799], outs := [11277], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 11271 5799 11277)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_11271 initPM hPM) (hs_5799 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11281 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11281).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11281 11277 1733
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [11277], outs := [11279, 11281, 11283], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 11277 11279 11281 11283 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_11277 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16691 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16691).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16691 11265 1711
-      { rank := 0, op := "OpName.FW_multiref", ins := [11265], outs := [16687, 16691], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 11265 16687 16691 (by decide))]
-  exact (hs_11265 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16710 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16710).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16710 11269 1715
-      { rank := 0, op := "OpName.FW_multiref", ins := [11269], outs := [16706, 16710, 16714, 16718, 16722], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 11269 16706 16710 16714 16718 16722 (by decide))]
-  exact (hs_11269 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11279 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11279).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11279 11277 1733
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [11277], outs := [11279, 11281, 11283], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 11277 11279 11281 11283 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_11277 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11285 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11285).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 11285 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11286 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11286).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 11286 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11287 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11287).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 11287 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11288 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11288).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 11288 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11289 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11289).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 11289 16710 11279 11281 11285 11286 11287 11288 1741
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [16710, 11279, 11281, 11285, 11286, 11287, 11288], outs := [11289], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 16710 11279 11281 11285 11286 11287 11288 11289 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16710 initPM hPM)]; rfl) (by rw [(hs_16710 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11301 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11301).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11301 11295 1734
-      { rank := 0, op := "OpName.FW_view", ins := [11295], outs := [11301], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 11295 11301)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11303 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11303).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11303 11301 1742
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [11301], outs := [11303], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 11301 11303)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_11301 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11359 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11359).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11359 11349 1751
-      { rank := 0, op := "OpName.FW_view", ins := [11349], outs := [11359], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 11349 11359)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11363 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11363).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11363 11303 11359 1753
-      { rank := 0, op := "OpName.FW_mul", ins := [11303, 11359], outs := [11363], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 11303 11359 11363)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_11303 initPM hPM) (hs_11359 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11367 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11367).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11367 11289 11363 1755
-      { rank := 0, op := "OpName.FW_add", ins := [11289, 11363], outs := [11367], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 11289 11363 11367)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_11289 initPM hPM) (hs_11363 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11373 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11373).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11373 11367 1757
-      { rank := 0, op := "OpName.FW_float", ins := [11367], outs := [11373], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 11367 11373 [])]
-  exact (hs_11367 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11377 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11377).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11377 16691 11373 1759
-      { rank := 0, op := "OpName.FW_add", ins := [16691, 11373], outs := [11377], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16691 11373 11377)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16691 initPM hPM) (hs_11373 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16753 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16753).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16753 11377 1761
-      { rank := 0, op := "OpName.FW_multiref", ins := [11377], outs := [16749, 16753], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 11377 16749 16753 (by decide))]
-  exact (hs_11377 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11429 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11429).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11429 11419 1775
-      { rank := 0, op := "OpName.FW_view", ins := [11419], outs := [11429], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 11419 11429)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11433 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11433).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11433 11429 1777
-      { rank := 0, op := "OpName.FW_float", ins := [11429], outs := [11433], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 11429 11433 [])]
-  exact (hs_11429 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11437 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11437).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11437 16753 11433 1779
-      { rank := 0, op := "OpName.FW_add", ins := [16753, 11433], outs := [11437], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16753 11433 11437)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16753 initPM hPM) (hs_11433 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16765 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16765).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16765 11437 1781
-      { rank := 0, op := "OpName.FW_multiref", ins := [11437], outs := [16765, 16769], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 11437 16765 16769)]
-  exact (hs_11437 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5845 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5845).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5845 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11441 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11441).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11441 16765 5845 1783
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [16765, 5845], outs := [11441], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 16765 5845 11441)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16765 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16784 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16784).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16784 11441 1785
-      { rank := 0, op := "OpName.FW_multiref", ins := [11441], outs := [16784, 16788, 16792, 16796, 16800], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 11441 16784 16788 16792 16796 16800)]
-  exact (hs_11441 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11443 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11443).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11443 16784 1787
-      { rank := 0, op := "OpName.FW_float", ins := [16784], outs := [11443], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 16784 11443 [])]
-  exact (hs_16784 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5848 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5848).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5848 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11449 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11449).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11449 11443 5848 1795
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [11443, 5848], outs := [11449], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 11443 5848 11449)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_11443 initPM hPM) (hs_5848 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11453 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11453).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11453 11449 1803
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [11449], outs := [11451, 11453, 11455], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 11449 11451 11453 11455 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_11449 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16769 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16769).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16769 11437 1781
-      { rank := 0, op := "OpName.FW_multiref", ins := [11437], outs := [16765, 16769], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 11437 16765 16769 (by decide))]
-  exact (hs_11437 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16788 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16788).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16788 11441 1785
-      { rank := 0, op := "OpName.FW_multiref", ins := [11441], outs := [16784, 16788, 16792, 16796, 16800], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 0 11441 16784 16788 16792 16796 16800 (by decide))]
-  exact (hs_11441 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11451 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11451).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11451 11449 1803
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [11449], outs := [11451, 11453, 11455], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 0 11449 11451 11453 11455 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_11449 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11457 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11457).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 11457 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11458 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11458).shape = [32, 1024, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 11458 [32, 1024, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11459 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11459).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 11459 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11460 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11460).shape = [32, 1024, 512] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 11460 [32, 1024, 512] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11461 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11461).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 11461 16788 11451 11453 11457 11458 11459 11460 1811
-      { rank := 0, op := "OpName.FW_all2all_moe_gmm_full", ins := [16788, 11451, 11453, 11457, 11458, 11459, 11460], outs := [11461], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 0 16788 11451 11453 11457 11458 11459 11460 11461 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16788 initPM hPM)]; rfl) (by rw [(hs_16788 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11473 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11473).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11473 11467 1804
-      { rank := 0, op := "OpName.FW_view", ins := [11467], outs := [11473], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1] 11467 11473)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11475 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11475).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11475 11473 1812
-      { rank := 0, op := "OpName.FW_sigmoid", ins := [11473], outs := [11475], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 0 11473 11475)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_11473 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11531 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11531).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11531 11521 1821
-      { rank := 0, op := "OpName.FW_view", ins := [11521], outs := [11531], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 11521 11531)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11535 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11535).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11535 11475 11531 1823
-      { rank := 0, op := "OpName.FW_mul", ins := [11475, 11531], outs := [11535], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 0 11475 11531 11535)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_11475 initPM hPM) (hs_11531 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11539 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11539).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11539 11461 11535 1825
-      { rank := 0, op := "OpName.FW_add", ins := [11461, 11535], outs := [11539], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 11461 11535 11539)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_11461 initPM hPM) (hs_11535 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11545 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11545).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11545 11539 1827
-      { rank := 0, op := "OpName.FW_float", ins := [11539], outs := [11545], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 11539 11545 [])]
-  exact (hs_11539 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11549 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11549).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11549 16769 11545 1829
-      { rank := 0, op := "OpName.FW_add", ins := [16769, 11545], outs := [11549], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16769 11545 11549)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16769 initPM hPM) (hs_11545 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16831 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16831).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16831 11549 1831
-      { rank := 0, op := "OpName.FW_multiref", ins := [11549], outs := [16827, 16831], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 0 11549 16827 16831 (by decide))]
-  exact (hs_11549 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11601 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11601).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11601 11591 1845
-      { rank := 0, op := "OpName.FW_view", ins := [11591], outs := [11601], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 11591 11601)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11605 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11605).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11605 11601 1847
-      { rank := 0, op := "OpName.FW_float", ins := [11601], outs := [11605], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 11601 11605 [])]
-  exact (hs_11601 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11609 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11609).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11609 16831 11605 1849
-      { rank := 0, op := "OpName.FW_add", ins := [16831, 11605], outs := [11609], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16831 11605 11609)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16831 initPM hPM) (hs_11605 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16843 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16843).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16843 11609 1851
-      { rank := 0, op := "OpName.FW_multiref", ins := [11609], outs := [16843, 16847], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 0 11609 16843 16847)]
-  exact (hs_11609 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5894 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5894).shape = [1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5894 [1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11613 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11613).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11613 16843 5894 1853
-      { rank := 0, op := "OpName.FW_rms_norm", ins := [16843, 5894], outs := [11613], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 16843 5894 11613)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16843 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16862 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16862).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16862 11613 1855
-      { rank := 0, op := "OpName.FW_multiref", ins := [11613], outs := [16862, 16866, 16870, 16874, 16878], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 0 11613 16862 16866 16870 16874 16878)]
-  exact (hs_11613 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11615 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11615).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11615 16862 1857
-      { rank := 0, op := "OpName.FW_float", ins := [16862], outs := [11615], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 0 16862 11615 [])]
-  exact (hs_16862 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_5897 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 5897).shape = [64, 1024] := by
-  exact HsHelpersGeneric.denote_leaf_shape initPM hPM 5897 [64, 1024] (by decide) (by decide) (by decide)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11621 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11621).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11621 11615 5897 1859
-      { rank := 0, op := "OpName.FW_norm_linear", ins := [11615, 5897], outs := [11621], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 11615 5897 11621)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_11615 initPM hPM) (hs_5897 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11625 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11625).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11625 11621 1861
-      { rank := 0, op := "OpName.FW_topk_routing", ins := [11621], outs := [11623, 11625, 11627], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 11621 11623 11625 11627 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_11621 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7666 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7666).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7666 4762 181
-      { rank := 1, op := "OpName.ChunkPrim", ins := [4762], outs := [7666], params := [0] }
-      (fun x => chunkPrimDimN 0 pm_goal_3.numRanks 1 (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_chunkPrimDimN_out pm_goal_3 s 1 4762 7666 0)]
-  beta_reduce
-  rw [chunkPrimDimN_shape 0 pm_goal_3.numRanks 1 _ [4096, 64] (hs_4762 initPM hPM) (by decide)]; rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7670 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7670).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7670 7666 189
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [7666], outs := [7668, 7670, 7672], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 7666 7668 7670 7672 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_7666 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_12012 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 12012).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 12012 11890 159
-      { rank := 1, op := "OpName.ChunkPrim", ins := [11890], outs := [12012], params := [0] }
-      (fun x => chunkPrimDimN 0 pm_goal_3.numRanks 1 (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_chunkPrimDimN_out pm_goal_3 s 1 11890 12012 0)]
-  beta_reduce
-  rw [chunkPrimDimN_shape 0 pm_goal_3.numRanks 1 _ [4096, 1024] (hs_11890 initPM hPM) (by decide)]; rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11978 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11978).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11978 11904 168
-      { rank := 1, op := "OpName.ChunkPrim", ins := [11904], outs := [11978], params := [0] }
-      (fun x => chunkPrimDimN 0 pm_goal_3.numRanks 1 (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_chunkPrimDimN_out pm_goal_3 s 1 11904 11978 0)]
-  beta_reduce
-  rw [chunkPrimDimN_shape 0 pm_goal_3.numRanks 1 _ [4096, 1024] (hs_11904 initPM hPM) (by decide)]; rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7668 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7668).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7668 7666 189
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [7666], outs := [7668, 7670, 7672], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 7666 7668 7670 7672 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_7666 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7678 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7678).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 7678 11978 7668 7670 7673 7674 7675 7676 197
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [11978, 7668, 7670, 7673, 7674, 7675, 7676], outs := [7678], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 11978 7668 7670 7673 7674 7675 7676 7678 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_11978 initPM hPM)]; rfl) (by rw [(hs_11978 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7690 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7690).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7690 4772 191
-      { rank := 1, op := "OpName.ChunkPrim", ins := [4772], outs := [7690], params := [0] }
-      (fun x => chunkPrimDimN 0 pm_goal_3.numRanks 1 (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_chunkPrimDimN_out pm_goal_3 s 1 4772 7690 0)]
-  beta_reduce
-  rw [chunkPrimDimN_shape 0 pm_goal_3.numRanks 1 _ [4096, 1] (hs_4772 initPM hPM) (by decide)]; rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7692 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7692).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7692 7690 199
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [7690], outs := [7692], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 7690 7692)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_7690 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7748 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7748).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7748 7738 207
-      { rank := 1, op := "OpName.FW_view", ins := [7738], outs := [7748], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 7738 7748)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7752 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7752).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7752 7692 7748 209
-      { rank := 1, op := "OpName.FW_mul", ins := [7692, 7748], outs := [7752], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 7692 7748 7752)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_7692 initPM hPM) (hs_7748 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7756 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7756).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7756 7678 7752 211
-      { rank := 1, op := "OpName.FW_add", ins := [7678, 7752], outs := [7756], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 7678 7752 7756)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_7678 initPM hPM) (hs_7752 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7762 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7762).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 7762 7756 213
-      { rank := 1, op := "OpName.FW_float", ins := [7756], outs := [7762], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 7756 7762 [])]
-  exact (hs_7756 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7766 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7766).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7766 12012 7762 215
-      { rank := 1, op := "OpName.FW_add", ins := [12012, 7762], outs := [7766], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 12012 7762 7766)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_12012 initPM hPM) (hs_7762 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14713 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14713).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14713 7766 217
-      { rank := 1, op := "OpName.FW_multiref", ins := [7766], outs := [14709, 14713], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 7766 14709 14713 (by decide))]
-  exact (hs_7766 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7832 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7832).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7832 7822 239
-      { rank := 1, op := "OpName.FW_view", ins := [7822], outs := [7832], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 7822 7832)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7836 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7836).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 7836 7832 241
-      { rank := 1, op := "OpName.FW_float", ins := [7832], outs := [7836], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 7832 7836 [])]
-  exact (hs_7832 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7840 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7840).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7840 14713 7836 243
-      { rank := 1, op := "OpName.FW_add", ins := [14713, 7836], outs := [7840], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 14713 7836 7840)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_14713 initPM hPM) (hs_7836 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14751 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14751).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14751 7840 245
-      { rank := 1, op := "OpName.FW_multiref", ins := [7840], outs := [14751, 14755], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 7840 14751 14755)]
-  exact (hs_7840 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7844 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7844).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7844 14751 4812 247
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [14751, 4812], outs := [7844], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 14751 4812 7844)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_14751 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14785 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14785).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14785 7844 249
-      { rank := 1, op := "OpName.FW_multiref", ins := [7844], outs := [14785, 14789, 14793, 14797, 14801], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 7844 14785 14789 14793 14797 14801)]
-  exact (hs_7844 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7846 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7846).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 7846 14785 254
-      { rank := 1, op := "OpName.FW_float", ins := [14785], outs := [7846], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 14785 7846 [])]
-  exact (hs_14785 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7852 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7852).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7852 7846 4815 262
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [7846, 4815], outs := [7852], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 7846 4815 7852)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_7846 initPM hPM) (hs_4815 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7856 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7856).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7856 7852 270
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [7852], outs := [7854, 7856, 7858], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 7852 7854 7856 7858 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_7852 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14755 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14755).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14755 7840 245
-      { rank := 1, op := "OpName.FW_multiref", ins := [7840], outs := [14751, 14755], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 7840 14751 14755 (by decide))]
-  exact (hs_7840 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14789 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14789).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14789 7844 249
-      { rank := 1, op := "OpName.FW_multiref", ins := [7844], outs := [14785, 14789, 14793, 14797, 14801], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 7844 14785 14789 14793 14797 14801 (by decide))]
-  exact (hs_7844 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7854 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7854).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7854 7852 270
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [7852], outs := [7854, 7856, 7858], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 7852 7854 7856 7858 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_7852 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7864 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7864).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 7864 14789 7854 7856 7859 7860 7861 7862 277
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [14789, 7854, 7856, 7859, 7860, 7861, 7862], outs := [7864], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 14789 7854 7856 7859 7860 7861 7862 7864 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_14789 initPM hPM)]; rfl) (by rw [(hs_14789 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7876 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7876).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7876 7870 271
-      { rank := 1, op := "OpName.FW_view", ins := [7870], outs := [7876], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 7870 7876)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7878 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7878).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7878 7876 278
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [7876], outs := [7878], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 7876 7878)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_7876 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7934 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7934).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 7934 7924 285
-      { rank := 1, op := "OpName.FW_view", ins := [7924], outs := [7934], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 7924 7934)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7938 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7938).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7938 7878 7934 287
-      { rank := 1, op := "OpName.FW_mul", ins := [7878, 7934], outs := [7938], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 7878 7934 7938)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_7878 initPM hPM) (hs_7934 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7942 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7942).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7942 7864 7938 289
-      { rank := 1, op := "OpName.FW_add", ins := [7864, 7938], outs := [7942], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 7864 7938 7942)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_7864 initPM hPM) (hs_7938 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7948 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7948).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 7948 7942 291
-      { rank := 1, op := "OpName.FW_float", ins := [7942], outs := [7948], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 7942 7948 [])]
-  exact (hs_7942 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_7952 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 7952).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 7952 14755 7948 293
-      { rank := 1, op := "OpName.FW_add", ins := [14755, 7948], outs := [7952], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 14755 7948 7952)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_14755 initPM hPM) (hs_7948 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14817 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14817).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14817 7952 295
-      { rank := 1, op := "OpName.FW_multiref", ins := [7952], outs := [14813, 14817], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 7952 14813 14817 (by decide))]
-  exact (hs_7952 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8018 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8018).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8018 8008 317
-      { rank := 1, op := "OpName.FW_view", ins := [8008], outs := [8018], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 8008 8018)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8022 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8022).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8022 8018 319
-      { rank := 1, op := "OpName.FW_float", ins := [8018], outs := [8022], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 8018 8022 [])]
-  exact (hs_8018 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8026 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8026).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8026 14817 8022 321
-      { rank := 1, op := "OpName.FW_add", ins := [14817, 8022], outs := [8026], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 14817 8022 8026)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_14817 initPM hPM) (hs_8022 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14855 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14855).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14855 8026 323
-      { rank := 1, op := "OpName.FW_multiref", ins := [8026], outs := [14855, 14859], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 8026 14855 14859)]
-  exact (hs_8026 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8030 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8030).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8030 14855 4866 325
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [14855, 4866], outs := [8030], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 14855 4866 8030)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_14855 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14889 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14889).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14889 8030 327
-      { rank := 1, op := "OpName.FW_multiref", ins := [8030], outs := [14889, 14893, 14897, 14901, 14905], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 8030 14889 14893 14897 14901 14905)]
-  exact (hs_8030 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8032 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8032).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8032 14889 332
-      { rank := 1, op := "OpName.FW_float", ins := [14889], outs := [8032], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 14889 8032 [])]
-  exact (hs_14889 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8038 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8038).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8038 8032 4869 340
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [8032, 4869], outs := [8038], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 8032 4869 8038)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_8032 initPM hPM) (hs_4869 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8042 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8042).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8042 8038 348
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [8038], outs := [8040, 8042, 8044], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 8038 8040 8042 8044 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_8038 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14859 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14859).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14859 8026 323
-      { rank := 1, op := "OpName.FW_multiref", ins := [8026], outs := [14855, 14859], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 8026 14855 14859 (by decide))]
-  exact (hs_8026 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14893 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14893).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14893 8030 327
-      { rank := 1, op := "OpName.FW_multiref", ins := [8030], outs := [14889, 14893, 14897, 14901, 14905], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 8030 14889 14893 14897 14901 14905 (by decide))]
-  exact (hs_8030 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8040 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8040).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8040 8038 348
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [8038], outs := [8040, 8042, 8044], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 8038 8040 8042 8044 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_8038 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8050 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8050).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 8050 14893 8040 8042 8045 8046 8047 8048 355
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [14893, 8040, 8042, 8045, 8046, 8047, 8048], outs := [8050], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 14893 8040 8042 8045 8046 8047 8048 8050 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_14893 initPM hPM)]; rfl) (by rw [(hs_14893 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8062 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8062).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8062 8056 349
-      { rank := 1, op := "OpName.FW_view", ins := [8056], outs := [8062], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 8056 8062)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8064 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8064).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8064 8062 356
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [8062], outs := [8064], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 8062 8064)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_8062 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8120 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8120).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8120 8110 363
-      { rank := 1, op := "OpName.FW_view", ins := [8110], outs := [8120], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 8110 8120)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8124 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8124).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8124 8064 8120 365
-      { rank := 1, op := "OpName.FW_mul", ins := [8064, 8120], outs := [8124], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 8064 8120 8124)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_8064 initPM hPM) (hs_8120 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8128 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8128).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8128 8050 8124 367
-      { rank := 1, op := "OpName.FW_add", ins := [8050, 8124], outs := [8128], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 8050 8124 8128)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_8050 initPM hPM) (hs_8124 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8134 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8134).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8134 8128 369
-      { rank := 1, op := "OpName.FW_float", ins := [8128], outs := [8134], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 8128 8134 [])]
-  exact (hs_8128 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8138 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8138).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8138 14859 8134 371
-      { rank := 1, op := "OpName.FW_add", ins := [14859, 8134], outs := [8138], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 14859 8134 8138)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_14859 initPM hPM) (hs_8134 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14921 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14921).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14921 8138 373
-      { rank := 1, op := "OpName.FW_multiref", ins := [8138], outs := [14917, 14921], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 8138 14917 14921 (by decide))]
-  exact (hs_8138 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8204 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8204).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8204 8194 395
-      { rank := 1, op := "OpName.FW_view", ins := [8194], outs := [8204], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 8194 8204)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8208 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8208).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8208 8204 397
-      { rank := 1, op := "OpName.FW_float", ins := [8204], outs := [8208], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 8204 8208 [])]
-  exact (hs_8204 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8212 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8212).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8212 14921 8208 399
-      { rank := 1, op := "OpName.FW_add", ins := [14921, 8208], outs := [8212], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 14921 8208 8212)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_14921 initPM hPM) (hs_8208 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14959 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14959).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14959 8212 401
-      { rank := 1, op := "OpName.FW_multiref", ins := [8212], outs := [14959, 14963], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 8212 14959 14963)]
-  exact (hs_8212 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8216 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8216).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8216 14959 4920 403
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [14959, 4920], outs := [8216], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 14959 4920 8216)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_14959 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14993 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14993).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14993 8216 405
-      { rank := 1, op := "OpName.FW_multiref", ins := [8216], outs := [14993, 14997, 15001, 15005, 15009], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 8216 14993 14997 15001 15005 15009)]
-  exact (hs_8216 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8218 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8218).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8218 14993 410
-      { rank := 1, op := "OpName.FW_float", ins := [14993], outs := [8218], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 14993 8218 [])]
-  exact (hs_14993 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8224 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8224).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8224 8218 4923 418
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [8218, 4923], outs := [8224], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 8218 4923 8224)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_8218 initPM hPM) (hs_4923 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8228 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8228).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8228 8224 426
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [8224], outs := [8226, 8228, 8230], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 8224 8226 8228 8230 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_8224 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14963 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14963).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14963 8212 401
-      { rank := 1, op := "OpName.FW_multiref", ins := [8212], outs := [14959, 14963], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 8212 14959 14963 (by decide))]
-  exact (hs_8212 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_14997 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 14997).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 14997 8216 405
-      { rank := 1, op := "OpName.FW_multiref", ins := [8216], outs := [14993, 14997, 15001, 15005, 15009], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 8216 14993 14997 15001 15005 15009 (by decide))]
-  exact (hs_8216 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8226 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8226).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8226 8224 426
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [8224], outs := [8226, 8228, 8230], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 8224 8226 8228 8230 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_8224 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8236 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8236).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 8236 14997 8226 8228 8231 8232 8233 8234 433
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [14997, 8226, 8228, 8231, 8232, 8233, 8234], outs := [8236], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 14997 8226 8228 8231 8232 8233 8234 8236 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_14997 initPM hPM)]; rfl) (by rw [(hs_14997 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8248 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8248).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8248 8242 427
-      { rank := 1, op := "OpName.FW_view", ins := [8242], outs := [8248], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 8242 8248)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8250 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8250).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8250 8248 434
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [8248], outs := [8250], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 8248 8250)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_8248 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8306 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8306).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8306 8296 441
-      { rank := 1, op := "OpName.FW_view", ins := [8296], outs := [8306], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 8296 8306)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8310 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8310).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8310 8250 8306 443
-      { rank := 1, op := "OpName.FW_mul", ins := [8250, 8306], outs := [8310], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 8250 8306 8310)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_8250 initPM hPM) (hs_8306 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8314 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8314).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8314 8236 8310 445
-      { rank := 1, op := "OpName.FW_add", ins := [8236, 8310], outs := [8314], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 8236 8310 8314)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_8236 initPM hPM) (hs_8310 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8320 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8320).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8320 8314 447
-      { rank := 1, op := "OpName.FW_float", ins := [8314], outs := [8320], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 8314 8320 [])]
-  exact (hs_8314 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8324 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8324).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8324 14963 8320 449
-      { rank := 1, op := "OpName.FW_add", ins := [14963, 8320], outs := [8324], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 14963 8320 8324)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_14963 initPM hPM) (hs_8320 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15025 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15025).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15025 8324 451
-      { rank := 1, op := "OpName.FW_multiref", ins := [8324], outs := [15021, 15025], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 8324 15021 15025 (by decide))]
-  exact (hs_8324 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8390 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8390).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8390 8380 473
-      { rank := 1, op := "OpName.FW_view", ins := [8380], outs := [8390], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 8380 8390)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8394 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8394).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8394 8390 475
-      { rank := 1, op := "OpName.FW_float", ins := [8390], outs := [8394], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 8390 8394 [])]
-  exact (hs_8390 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8398 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8398).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8398 15025 8394 477
-      { rank := 1, op := "OpName.FW_add", ins := [15025, 8394], outs := [8398], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15025 8394 8398)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15025 initPM hPM) (hs_8394 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15063 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15063).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15063 8398 479
-      { rank := 1, op := "OpName.FW_multiref", ins := [8398], outs := [15063, 15067], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 8398 15063 15067)]
-  exact (hs_8398 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8402 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8402).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8402 15063 4974 481
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [15063, 4974], outs := [8402], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 15063 4974 8402)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_15063 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15097 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15097).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15097 8402 483
-      { rank := 1, op := "OpName.FW_multiref", ins := [8402], outs := [15097, 15101, 15105, 15109, 15113], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 8402 15097 15101 15105 15109 15113)]
-  exact (hs_8402 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8404 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8404).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8404 15097 488
-      { rank := 1, op := "OpName.FW_float", ins := [15097], outs := [8404], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 15097 8404 [])]
-  exact (hs_15097 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8410 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8410).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8410 8404 4977 496
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [8404, 4977], outs := [8410], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 8404 4977 8410)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_8404 initPM hPM) (hs_4977 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8414 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8414).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8414 8410 504
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [8410], outs := [8412, 8414, 8416], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 8410 8412 8414 8416 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_8410 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15067 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15067).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15067 8398 479
-      { rank := 1, op := "OpName.FW_multiref", ins := [8398], outs := [15063, 15067], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 8398 15063 15067 (by decide))]
-  exact (hs_8398 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15101 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15101).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15101 8402 483
-      { rank := 1, op := "OpName.FW_multiref", ins := [8402], outs := [15097, 15101, 15105, 15109, 15113], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 8402 15097 15101 15105 15109 15113 (by decide))]
-  exact (hs_8402 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8412 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8412).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8412 8410 504
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [8410], outs := [8412, 8414, 8416], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 8410 8412 8414 8416 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_8410 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8422 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8422).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 8422 15101 8412 8414 8417 8418 8419 8420 511
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [15101, 8412, 8414, 8417, 8418, 8419, 8420], outs := [8422], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 15101 8412 8414 8417 8418 8419 8420 8422 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_15101 initPM hPM)]; rfl) (by rw [(hs_15101 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8434 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8434).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8434 8428 505
-      { rank := 1, op := "OpName.FW_view", ins := [8428], outs := [8434], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 8428 8434)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8436 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8436).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8436 8434 512
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [8434], outs := [8436], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 8434 8436)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_8434 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8492 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8492).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8492 8482 519
-      { rank := 1, op := "OpName.FW_view", ins := [8482], outs := [8492], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 8482 8492)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8496 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8496).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8496 8436 8492 521
-      { rank := 1, op := "OpName.FW_mul", ins := [8436, 8492], outs := [8496], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 8436 8492 8496)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_8436 initPM hPM) (hs_8492 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8500 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8500).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8500 8422 8496 523
-      { rank := 1, op := "OpName.FW_add", ins := [8422, 8496], outs := [8500], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 8422 8496 8500)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_8422 initPM hPM) (hs_8496 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8506 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8506).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8506 8500 525
-      { rank := 1, op := "OpName.FW_float", ins := [8500], outs := [8506], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 8500 8506 [])]
-  exact (hs_8500 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8510 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8510).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8510 15067 8506 527
-      { rank := 1, op := "OpName.FW_add", ins := [15067, 8506], outs := [8510], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15067 8506 8510)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15067 initPM hPM) (hs_8506 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15129 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15129).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15129 8510 529
-      { rank := 1, op := "OpName.FW_multiref", ins := [8510], outs := [15125, 15129], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 8510 15125 15129 (by decide))]
-  exact (hs_8510 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8576 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8576).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8576 8566 551
-      { rank := 1, op := "OpName.FW_view", ins := [8566], outs := [8576], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 8566 8576)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8580 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8580).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8580 8576 553
-      { rank := 1, op := "OpName.FW_float", ins := [8576], outs := [8580], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 8576 8580 [])]
-  exact (hs_8576 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8584 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8584).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8584 15129 8580 555
-      { rank := 1, op := "OpName.FW_add", ins := [15129, 8580], outs := [8584], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15129 8580 8584)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15129 initPM hPM) (hs_8580 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15167 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15167).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15167 8584 557
-      { rank := 1, op := "OpName.FW_multiref", ins := [8584], outs := [15167, 15171], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 8584 15167 15171)]
-  exact (hs_8584 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8588 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8588).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8588 15167 5028 559
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [15167, 5028], outs := [8588], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 15167 5028 8588)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_15167 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15201 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15201).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15201 8588 561
-      { rank := 1, op := "OpName.FW_multiref", ins := [8588], outs := [15201, 15205, 15209, 15213, 15217], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 8588 15201 15205 15209 15213 15217)]
-  exact (hs_8588 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8590 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8590).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8590 15201 566
-      { rank := 1, op := "OpName.FW_float", ins := [15201], outs := [8590], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 15201 8590 [])]
-  exact (hs_15201 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8596 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8596).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8596 8590 5031 574
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [8590, 5031], outs := [8596], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 8590 5031 8596)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_8590 initPM hPM) (hs_5031 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8600 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8600).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8600 8596 582
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [8596], outs := [8598, 8600, 8602], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 8596 8598 8600 8602 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_8596 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15171 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15171).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15171 8584 557
-      { rank := 1, op := "OpName.FW_multiref", ins := [8584], outs := [15167, 15171], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 8584 15167 15171 (by decide))]
-  exact (hs_8584 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15205 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15205).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15205 8588 561
-      { rank := 1, op := "OpName.FW_multiref", ins := [8588], outs := [15201, 15205, 15209, 15213, 15217], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 8588 15201 15205 15209 15213 15217 (by decide))]
-  exact (hs_8588 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8598 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8598).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8598 8596 582
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [8596], outs := [8598, 8600, 8602], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 8596 8598 8600 8602 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_8596 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8608 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8608).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 8608 15205 8598 8600 8603 8604 8605 8606 589
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [15205, 8598, 8600, 8603, 8604, 8605, 8606], outs := [8608], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 15205 8598 8600 8603 8604 8605 8606 8608 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_15205 initPM hPM)]; rfl) (by rw [(hs_15205 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8620 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8620).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8620 8614 583
-      { rank := 1, op := "OpName.FW_view", ins := [8614], outs := [8620], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 8614 8620)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8622 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8622).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8622 8620 590
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [8620], outs := [8622], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 8620 8622)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_8620 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8678 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8678).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8678 8668 597
-      { rank := 1, op := "OpName.FW_view", ins := [8668], outs := [8678], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 8668 8678)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8682 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8682).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8682 8622 8678 599
-      { rank := 1, op := "OpName.FW_mul", ins := [8622, 8678], outs := [8682], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 8622 8678 8682)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_8622 initPM hPM) (hs_8678 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8686 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8686).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8686 8608 8682 601
-      { rank := 1, op := "OpName.FW_add", ins := [8608, 8682], outs := [8686], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 8608 8682 8686)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_8608 initPM hPM) (hs_8682 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8692 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8692).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8692 8686 603
-      { rank := 1, op := "OpName.FW_float", ins := [8686], outs := [8692], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 8686 8692 [])]
-  exact (hs_8686 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8696 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8696).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8696 15171 8692 605
-      { rank := 1, op := "OpName.FW_add", ins := [15171, 8692], outs := [8696], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15171 8692 8696)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15171 initPM hPM) (hs_8692 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15233 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15233).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15233 8696 607
-      { rank := 1, op := "OpName.FW_multiref", ins := [8696], outs := [15229, 15233], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 8696 15229 15233 (by decide))]
-  exact (hs_8696 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8762 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8762).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8762 8752 629
-      { rank := 1, op := "OpName.FW_view", ins := [8752], outs := [8762], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 8752 8762)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8766 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8766).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8766 8762 631
-      { rank := 1, op := "OpName.FW_float", ins := [8762], outs := [8766], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 8762 8766 [])]
-  exact (hs_8762 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8770 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8770).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8770 15233 8766 633
-      { rank := 1, op := "OpName.FW_add", ins := [15233, 8766], outs := [8770], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15233 8766 8770)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15233 initPM hPM) (hs_8766 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15271 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15271).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15271 8770 635
-      { rank := 1, op := "OpName.FW_multiref", ins := [8770], outs := [15271, 15275], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 8770 15271 15275)]
-  exact (hs_8770 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8774 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8774).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8774 15271 5082 637
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [15271, 5082], outs := [8774], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 15271 5082 8774)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_15271 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15305 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15305).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15305 8774 639
-      { rank := 1, op := "OpName.FW_multiref", ins := [8774], outs := [15305, 15309, 15313, 15317, 15321], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 8774 15305 15309 15313 15317 15321)]
-  exact (hs_8774 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8776 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8776).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8776 15305 644
-      { rank := 1, op := "OpName.FW_float", ins := [15305], outs := [8776], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 15305 8776 [])]
-  exact (hs_15305 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8782 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8782).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8782 8776 5085 652
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [8776, 5085], outs := [8782], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 8776 5085 8782)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_8776 initPM hPM) (hs_5085 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8786 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8786).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8786 8782 660
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [8782], outs := [8784, 8786, 8788], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 8782 8784 8786 8788 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_8782 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15275 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15275).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15275 8770 635
-      { rank := 1, op := "OpName.FW_multiref", ins := [8770], outs := [15271, 15275], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 8770 15271 15275 (by decide))]
-  exact (hs_8770 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15309 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15309).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15309 8774 639
-      { rank := 1, op := "OpName.FW_multiref", ins := [8774], outs := [15305, 15309, 15313, 15317, 15321], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 8774 15305 15309 15313 15317 15321 (by decide))]
-  exact (hs_8774 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8784 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8784).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8784 8782 660
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [8782], outs := [8784, 8786, 8788], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 8782 8784 8786 8788 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_8782 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8794 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8794).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 8794 15309 8784 8786 8789 8790 8791 8792 667
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [15309, 8784, 8786, 8789, 8790, 8791, 8792], outs := [8794], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 15309 8784 8786 8789 8790 8791 8792 8794 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_15309 initPM hPM)]; rfl) (by rw [(hs_15309 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8806 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8806).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8806 8800 661
-      { rank := 1, op := "OpName.FW_view", ins := [8800], outs := [8806], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 8800 8806)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8808 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8808).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8808 8806 668
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [8806], outs := [8808], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 8806 8808)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_8806 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8864 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8864).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8864 8854 675
-      { rank := 1, op := "OpName.FW_view", ins := [8854], outs := [8864], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 8854 8864)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8868 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8868).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8868 8808 8864 677
-      { rank := 1, op := "OpName.FW_mul", ins := [8808, 8864], outs := [8868], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 8808 8864 8868)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_8808 initPM hPM) (hs_8864 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8872 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8872).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8872 8794 8868 679
-      { rank := 1, op := "OpName.FW_add", ins := [8794, 8868], outs := [8872], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 8794 8868 8872)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_8794 initPM hPM) (hs_8868 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8878 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8878).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8878 8872 681
-      { rank := 1, op := "OpName.FW_float", ins := [8872], outs := [8878], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 8872 8878 [])]
-  exact (hs_8872 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8882 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8882).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8882 15275 8878 683
-      { rank := 1, op := "OpName.FW_add", ins := [15275, 8878], outs := [8882], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15275 8878 8882)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15275 initPM hPM) (hs_8878 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15337 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15337).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15337 8882 685
-      { rank := 1, op := "OpName.FW_multiref", ins := [8882], outs := [15333, 15337], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 8882 15333 15337 (by decide))]
-  exact (hs_8882 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8948 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8948).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8948 8938 707
-      { rank := 1, op := "OpName.FW_view", ins := [8938], outs := [8948], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 8938 8948)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8952 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8952).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8952 8948 709
-      { rank := 1, op := "OpName.FW_float", ins := [8948], outs := [8952], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 8948 8952 [])]
-  exact (hs_8948 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8956 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8956).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8956 15337 8952 711
-      { rank := 1, op := "OpName.FW_add", ins := [15337, 8952], outs := [8956], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15337 8952 8956)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15337 initPM hPM) (hs_8952 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15375 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15375).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15375 8956 713
-      { rank := 1, op := "OpName.FW_multiref", ins := [8956], outs := [15375, 15379], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 8956 15375 15379)]
-  exact (hs_8956 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8960 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8960).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8960 15375 5136 715
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [15375, 5136], outs := [8960], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 15375 5136 8960)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_15375 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15409 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15409).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15409 8960 717
-      { rank := 1, op := "OpName.FW_multiref", ins := [8960], outs := [15409, 15413, 15417, 15421, 15425], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 8960 15409 15413 15417 15421 15425)]
-  exact (hs_8960 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8962 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8962).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 8962 15409 722
-      { rank := 1, op := "OpName.FW_float", ins := [15409], outs := [8962], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 15409 8962 [])]
-  exact (hs_15409 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8968 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8968).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 8968 8962 5139 730
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [8962, 5139], outs := [8968], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 8962 5139 8968)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_8962 initPM hPM) (hs_5139 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8972 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8972).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8972 8968 738
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [8968], outs := [8970, 8972, 8974], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 8968 8970 8972 8974 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_8968 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15379 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15379).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15379 8956 713
-      { rank := 1, op := "OpName.FW_multiref", ins := [8956], outs := [15375, 15379], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 8956 15375 15379 (by decide))]
-  exact (hs_8956 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15413 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15413).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15413 8960 717
-      { rank := 1, op := "OpName.FW_multiref", ins := [8960], outs := [15409, 15413, 15417, 15421, 15425], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 8960 15409 15413 15417 15421 15425 (by decide))]
-  exact (hs_8960 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8970 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8970).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8970 8968 738
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [8968], outs := [8970, 8972, 8974], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 8968 8970 8972 8974 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_8968 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8980 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8980).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 8980 15413 8970 8972 8975 8976 8977 8978 745
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [15413, 8970, 8972, 8975, 8976, 8977, 8978], outs := [8980], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 15413 8970 8972 8975 8976 8977 8978 8980 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_15413 initPM hPM)]; rfl) (by rw [(hs_15413 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8992 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8992).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8992 8986 739
-      { rank := 1, op := "OpName.FW_view", ins := [8986], outs := [8992], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 8986 8992)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_8994 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 8994).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 8994 8992 746
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [8992], outs := [8994], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 8992 8994)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_8992 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9050 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9050).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9050 9040 753
-      { rank := 1, op := "OpName.FW_view", ins := [9040], outs := [9050], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 9040 9050)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9054 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9054).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9054 8994 9050 755
-      { rank := 1, op := "OpName.FW_mul", ins := [8994, 9050], outs := [9054], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 8994 9050 9054)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_8994 initPM hPM) (hs_9050 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9058 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9058).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9058 8980 9054 757
-      { rank := 1, op := "OpName.FW_add", ins := [8980, 9054], outs := [9058], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 8980 9054 9058)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_8980 initPM hPM) (hs_9054 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9064 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9064).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9064 9058 759
-      { rank := 1, op := "OpName.FW_float", ins := [9058], outs := [9064], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 9058 9064 [])]
-  exact (hs_9058 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9068 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9068).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9068 15379 9064 761
-      { rank := 1, op := "OpName.FW_add", ins := [15379, 9064], outs := [9068], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15379 9064 9068)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15379 initPM hPM) (hs_9064 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15441 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15441).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15441 9068 763
-      { rank := 1, op := "OpName.FW_multiref", ins := [9068], outs := [15437, 15441], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 9068 15437 15441 (by decide))]
-  exact (hs_9068 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9134 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9134).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9134 9124 785
-      { rank := 1, op := "OpName.FW_view", ins := [9124], outs := [9134], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 9124 9134)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9138 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9138).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9138 9134 787
-      { rank := 1, op := "OpName.FW_float", ins := [9134], outs := [9138], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 9134 9138 [])]
-  exact (hs_9134 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9142 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9142).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9142 15441 9138 789
-      { rank := 1, op := "OpName.FW_add", ins := [15441, 9138], outs := [9142], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15441 9138 9142)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15441 initPM hPM) (hs_9138 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15479 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15479).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15479 9142 791
-      { rank := 1, op := "OpName.FW_multiref", ins := [9142], outs := [15479, 15483], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 9142 15479 15483)]
-  exact (hs_9142 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9146 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9146).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9146 15479 5190 793
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [15479, 5190], outs := [9146], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 15479 5190 9146)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_15479 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15513 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15513).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15513 9146 795
-      { rank := 1, op := "OpName.FW_multiref", ins := [9146], outs := [15513, 15517, 15521, 15525, 15529], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 9146 15513 15517 15521 15525 15529)]
-  exact (hs_9146 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9148 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9148).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9148 15513 800
-      { rank := 1, op := "OpName.FW_float", ins := [15513], outs := [9148], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 15513 9148 [])]
-  exact (hs_15513 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9154 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9154).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9154 9148 5193 808
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [9148, 5193], outs := [9154], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 9148 5193 9154)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_9148 initPM hPM) (hs_5193 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9158 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9158).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9158 9154 816
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [9154], outs := [9156, 9158, 9160], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 9154 9156 9158 9160 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_9154 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15483 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15483).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15483 9142 791
-      { rank := 1, op := "OpName.FW_multiref", ins := [9142], outs := [15479, 15483], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 9142 15479 15483 (by decide))]
-  exact (hs_9142 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15517 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15517).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15517 9146 795
-      { rank := 1, op := "OpName.FW_multiref", ins := [9146], outs := [15513, 15517, 15521, 15525, 15529], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 9146 15513 15517 15521 15525 15529 (by decide))]
-  exact (hs_9146 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9156 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9156).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9156 9154 816
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [9154], outs := [9156, 9158, 9160], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 9154 9156 9158 9160 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_9154 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9166 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9166).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 9166 15517 9156 9158 9161 9162 9163 9164 823
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [15517, 9156, 9158, 9161, 9162, 9163, 9164], outs := [9166], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 15517 9156 9158 9161 9162 9163 9164 9166 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_15517 initPM hPM)]; rfl) (by rw [(hs_15517 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9178 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9178).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9178 9172 817
-      { rank := 1, op := "OpName.FW_view", ins := [9172], outs := [9178], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 9172 9178)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9180 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9180).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9180 9178 824
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [9178], outs := [9180], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 9178 9180)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_9178 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9236 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9236).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9236 9226 831
-      { rank := 1, op := "OpName.FW_view", ins := [9226], outs := [9236], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 9226 9236)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9240 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9240).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9240 9180 9236 833
-      { rank := 1, op := "OpName.FW_mul", ins := [9180, 9236], outs := [9240], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 9180 9236 9240)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_9180 initPM hPM) (hs_9236 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9244 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9244).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9244 9166 9240 835
-      { rank := 1, op := "OpName.FW_add", ins := [9166, 9240], outs := [9244], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 9166 9240 9244)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_9166 initPM hPM) (hs_9240 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9250 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9250).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9250 9244 837
-      { rank := 1, op := "OpName.FW_float", ins := [9244], outs := [9250], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 9244 9250 [])]
-  exact (hs_9244 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9254 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9254).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9254 15483 9250 839
-      { rank := 1, op := "OpName.FW_add", ins := [15483, 9250], outs := [9254], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15483 9250 9254)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15483 initPM hPM) (hs_9250 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15545 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15545).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15545 9254 841
-      { rank := 1, op := "OpName.FW_multiref", ins := [9254], outs := [15541, 15545], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 9254 15541 15545 (by decide))]
-  exact (hs_9254 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9320 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9320).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9320 9310 863
-      { rank := 1, op := "OpName.FW_view", ins := [9310], outs := [9320], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 9310 9320)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9324 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9324).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9324 9320 865
-      { rank := 1, op := "OpName.FW_float", ins := [9320], outs := [9324], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 9320 9324 [])]
-  exact (hs_9320 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9328 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9328).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9328 15545 9324 867
-      { rank := 1, op := "OpName.FW_add", ins := [15545, 9324], outs := [9328], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15545 9324 9328)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15545 initPM hPM) (hs_9324 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15583 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15583).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15583 9328 869
-      { rank := 1, op := "OpName.FW_multiref", ins := [9328], outs := [15583, 15587], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 9328 15583 15587)]
-  exact (hs_9328 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9332 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9332).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9332 15583 5244 871
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [15583, 5244], outs := [9332], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 15583 5244 9332)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_15583 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15617 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15617).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15617 9332 873
-      { rank := 1, op := "OpName.FW_multiref", ins := [9332], outs := [15617, 15621, 15625, 15629, 15633], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 9332 15617 15621 15625 15629 15633)]
-  exact (hs_9332 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9334 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9334).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9334 15617 878
-      { rank := 1, op := "OpName.FW_float", ins := [15617], outs := [9334], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 15617 9334 [])]
-  exact (hs_15617 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9340 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9340).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9340 9334 5247 886
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [9334, 5247], outs := [9340], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 9334 5247 9340)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_9334 initPM hPM) (hs_5247 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9344 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9344).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9344 9340 894
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [9340], outs := [9342, 9344, 9346], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 9340 9342 9344 9346 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_9340 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15587 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15587).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15587 9328 869
-      { rank := 1, op := "OpName.FW_multiref", ins := [9328], outs := [15583, 15587], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 9328 15583 15587 (by decide))]
-  exact (hs_9328 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15621 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15621).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15621 9332 873
-      { rank := 1, op := "OpName.FW_multiref", ins := [9332], outs := [15617, 15621, 15625, 15629, 15633], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 9332 15617 15621 15625 15629 15633 (by decide))]
-  exact (hs_9332 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9342 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9342).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9342 9340 894
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [9340], outs := [9342, 9344, 9346], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 9340 9342 9344 9346 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_9340 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9352 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9352).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 9352 15621 9342 9344 9347 9348 9349 9350 901
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [15621, 9342, 9344, 9347, 9348, 9349, 9350], outs := [9352], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 15621 9342 9344 9347 9348 9349 9350 9352 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_15621 initPM hPM)]; rfl) (by rw [(hs_15621 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9364 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9364).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9364 9358 895
-      { rank := 1, op := "OpName.FW_view", ins := [9358], outs := [9364], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 9358 9364)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9366 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9366).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9366 9364 902
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [9364], outs := [9366], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 9364 9366)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_9364 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9422 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9422).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9422 9412 909
-      { rank := 1, op := "OpName.FW_view", ins := [9412], outs := [9422], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 9412 9422)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9426 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9426).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9426 9366 9422 911
-      { rank := 1, op := "OpName.FW_mul", ins := [9366, 9422], outs := [9426], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 9366 9422 9426)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_9366 initPM hPM) (hs_9422 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9430 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9430).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9430 9352 9426 913
-      { rank := 1, op := "OpName.FW_add", ins := [9352, 9426], outs := [9430], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 9352 9426 9430)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_9352 initPM hPM) (hs_9426 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9436 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9436).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9436 9430 915
-      { rank := 1, op := "OpName.FW_float", ins := [9430], outs := [9436], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 9430 9436 [])]
-  exact (hs_9430 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9440 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9440).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9440 15587 9436 917
-      { rank := 1, op := "OpName.FW_add", ins := [15587, 9436], outs := [9440], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15587 9436 9440)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15587 initPM hPM) (hs_9436 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15649 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15649).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15649 9440 919
-      { rank := 1, op := "OpName.FW_multiref", ins := [9440], outs := [15645, 15649], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 9440 15645 15649 (by decide))]
-  exact (hs_9440 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9506 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9506).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9506 9496 941
-      { rank := 1, op := "OpName.FW_view", ins := [9496], outs := [9506], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 9496 9506)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9510 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9510).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9510 9506 943
-      { rank := 1, op := "OpName.FW_float", ins := [9506], outs := [9510], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 9506 9510 [])]
-  exact (hs_9506 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9514 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9514).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9514 15649 9510 945
-      { rank := 1, op := "OpName.FW_add", ins := [15649, 9510], outs := [9514], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15649 9510 9514)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15649 initPM hPM) (hs_9510 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15687 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15687).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15687 9514 947
-      { rank := 1, op := "OpName.FW_multiref", ins := [9514], outs := [15687, 15691], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 9514 15687 15691)]
-  exact (hs_9514 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9518 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9518).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9518 15687 5298 949
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [15687, 5298], outs := [9518], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 15687 5298 9518)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_15687 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15721 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15721).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15721 9518 951
-      { rank := 1, op := "OpName.FW_multiref", ins := [9518], outs := [15721, 15725, 15729, 15733, 15737], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 9518 15721 15725 15729 15733 15737)]
-  exact (hs_9518 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9520 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9520).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9520 15721 956
-      { rank := 1, op := "OpName.FW_float", ins := [15721], outs := [9520], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 15721 9520 [])]
-  exact (hs_15721 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9526 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9526).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9526 9520 5301 964
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [9520, 5301], outs := [9526], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 9520 5301 9526)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_9520 initPM hPM) (hs_5301 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9530 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9530).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9530 9526 972
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [9526], outs := [9528, 9530, 9532], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 9526 9528 9530 9532 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_9526 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15691 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15691).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15691 9514 947
-      { rank := 1, op := "OpName.FW_multiref", ins := [9514], outs := [15687, 15691], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 9514 15687 15691 (by decide))]
-  exact (hs_9514 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15725 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15725).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15725 9518 951
-      { rank := 1, op := "OpName.FW_multiref", ins := [9518], outs := [15721, 15725, 15729, 15733, 15737], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 9518 15721 15725 15729 15733 15737 (by decide))]
-  exact (hs_9518 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9528 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9528).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9528 9526 972
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [9526], outs := [9528, 9530, 9532], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 9526 9528 9530 9532 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_9526 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9538 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9538).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 9538 15725 9528 9530 9533 9534 9535 9536 979
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [15725, 9528, 9530, 9533, 9534, 9535, 9536], outs := [9538], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 15725 9528 9530 9533 9534 9535 9536 9538 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_15725 initPM hPM)]; rfl) (by rw [(hs_15725 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9550 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9550).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9550 9544 973
-      { rank := 1, op := "OpName.FW_view", ins := [9544], outs := [9550], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 9544 9550)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9552 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9552).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9552 9550 980
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [9550], outs := [9552], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 9550 9552)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_9550 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9608 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9608).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9608 9598 987
-      { rank := 1, op := "OpName.FW_view", ins := [9598], outs := [9608], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 9598 9608)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9612 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9612).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9612 9552 9608 989
-      { rank := 1, op := "OpName.FW_mul", ins := [9552, 9608], outs := [9612], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 9552 9608 9612)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_9552 initPM hPM) (hs_9608 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9616 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9616).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9616 9538 9612 991
-      { rank := 1, op := "OpName.FW_add", ins := [9538, 9612], outs := [9616], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 9538 9612 9616)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_9538 initPM hPM) (hs_9612 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9622 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9622).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9622 9616 993
-      { rank := 1, op := "OpName.FW_float", ins := [9616], outs := [9622], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 9616 9622 [])]
-  exact (hs_9616 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9626 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9626).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9626 15691 9622 995
-      { rank := 1, op := "OpName.FW_add", ins := [15691, 9622], outs := [9626], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15691 9622 9626)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15691 initPM hPM) (hs_9622 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_13258 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 13258).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 13258 9626 997
-      { rank := 1, op := "OpName.FW_multiref", ins := [9626], outs := [14599, 13258], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 9626 14599 13258 (by decide))]
-  exact (hs_9626 initPM hPM)
-
+hsm2b 15973 9655 15969 1001 0 s[2048, 1024]
+hsview 9709 9699 1075 0 s[2048, 1024]
+hsflt 9713 9709 1077 0 s[2048, 1024]
+hsadd 9717 15973 9713 1079 0 s[2048, 1024]
+hsm2a 15985 9717 15989 1081 0 s[2048, 1024]
+hsleaf 5355 s[1024]
+hsrms 9721 15985 5355 1083 0 s[2048, 1024]
+hsm5a 16004 9721 16008 16012 16016 16020 1085 0 s[2048, 1024]
+hsflt 9723 16004 1087 0 s[2048, 1024]
+hsleaf 5358 s[64, 1024]
+hsnlin 9729 9723 5358 1095 0 s[2048, 64]
+hstkm 9733 9729 9731 9735 1103 0 s[2048, 64]
+hsm2b 15989 9717 15985 1081 0 s[2048, 1024]
+hsm5b 16008 9721 16004 16012 16016 16020 1085 0 s[2048, 1024]
+hstkp 9731 9729 9733 9735 1103 0 s[2048, 64]
+hsleaf 9737 s[32, 1024, 1024]
+hsleaf 9738 s[32, 1024, 1024]
+hsleaf 9739 s[32, 1024, 512]
+hsleaf 9740 s[32, 1024, 512]
+hsmoe 9741 16008 9731 9733 9737 9738 9739 9740 1111 0 s[2048, 1024]
+hsview 9753 9747 1104 0 s[2048, 1]
+hssig 9755 9753 1112 0 s[2048, 1]
+hsview 9811 9801 1121 0 s[2048, 1024]
+hsmul 9815 9755 9811 1123 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 9819 9741 9815 1125 0 s[2048, 1024]
+hsflt 9825 9819 1127 0 s[2048, 1024]
+hsadd 9829 15989 9825 1129 0 s[2048, 1024]
+hsm2b 16051 9829 16047 1131 0 s[2048, 1024]
+hsview 9881 9871 1145 0 s[2048, 1024]
+hsflt 9885 9881 1147 0 s[2048, 1024]
+hsadd 9889 16051 9885 1149 0 s[2048, 1024]
+hsm2a 16063 9889 16067 1151 0 s[2048, 1024]
+hsleaf 5404 s[1024]
+hsrms 9893 16063 5404 1153 0 s[2048, 1024]
+hsm5a 16082 9893 16086 16090 16094 16098 1155 0 s[2048, 1024]
+hsflt 9895 16082 1157 0 s[2048, 1024]
+hsleaf 5407 s[64, 1024]
+hsnlin 9901 9895 5407 1165 0 s[2048, 64]
+hstkm 9905 9901 9903 9907 1173 0 s[2048, 64]
+hsm2b 16067 9889 16063 1151 0 s[2048, 1024]
+hsm5b 16086 9893 16082 16090 16094 16098 1155 0 s[2048, 1024]
+hstkp 9903 9901 9905 9907 1173 0 s[2048, 64]
+hsleaf 9909 s[32, 1024, 1024]
+hsleaf 9910 s[32, 1024, 1024]
+hsleaf 9911 s[32, 1024, 512]
+hsleaf 9912 s[32, 1024, 512]
+hsmoe 9913 16086 9903 9905 9909 9910 9911 9912 1181 0 s[2048, 1024]
+hsview 9925 9919 1174 0 s[2048, 1]
+hssig 9927 9925 1182 0 s[2048, 1]
+hsview 9983 9973 1191 0 s[2048, 1024]
+hsmul 9987 9927 9983 1193 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 9991 9913 9987 1195 0 s[2048, 1024]
+hsflt 9997 9991 1197 0 s[2048, 1024]
+hsadd 10001 16067 9997 1199 0 s[2048, 1024]
+hsm2b 16129 10001 16125 1201 0 s[2048, 1024]
+hsview 10053 10043 1215 0 s[2048, 1024]
+hsflt 10057 10053 1217 0 s[2048, 1024]
+hsadd 10061 16129 10057 1219 0 s[2048, 1024]
+hsm2a 16141 10061 16145 1221 0 s[2048, 1024]
+hsleaf 5453 s[1024]
+hsrms 10065 16141 5453 1223 0 s[2048, 1024]
+hsm5a 16160 10065 16164 16168 16172 16176 1225 0 s[2048, 1024]
+hsflt 10067 16160 1227 0 s[2048, 1024]
+hsleaf 5456 s[64, 1024]
+hsnlin 10073 10067 5456 1235 0 s[2048, 64]
+hstkm 10077 10073 10075 10079 1243 0 s[2048, 64]
+hsm2b 16145 10061 16141 1221 0 s[2048, 1024]
+hsm5b 16164 10065 16160 16168 16172 16176 1225 0 s[2048, 1024]
+hstkp 10075 10073 10077 10079 1243 0 s[2048, 64]
+hsleaf 10081 s[32, 1024, 1024]
+hsleaf 10082 s[32, 1024, 1024]
+hsleaf 10083 s[32, 1024, 512]
+hsleaf 10084 s[32, 1024, 512]
+hsmoe 10085 16164 10075 10077 10081 10082 10083 10084 1251 0 s[2048, 1024]
+hsview 10097 10091 1244 0 s[2048, 1]
+hssig 10099 10097 1252 0 s[2048, 1]
+hsview 10155 10145 1261 0 s[2048, 1024]
+hsmul 10159 10099 10155 1263 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 10163 10085 10159 1265 0 s[2048, 1024]
+hsflt 10169 10163 1267 0 s[2048, 1024]
+hsadd 10173 16145 10169 1269 0 s[2048, 1024]
+hsm2b 16207 10173 16203 1271 0 s[2048, 1024]
+hsview 10225 10215 1285 0 s[2048, 1024]
+hsflt 10229 10225 1287 0 s[2048, 1024]
+hsadd 10233 16207 10229 1289 0 s[2048, 1024]
+hsm2a 16219 10233 16223 1291 0 s[2048, 1024]
+hsleaf 5502 s[1024]
+hsrms 10237 16219 5502 1293 0 s[2048, 1024]
+hsm5a 16238 10237 16242 16246 16250 16254 1295 0 s[2048, 1024]
+hsflt 10239 16238 1297 0 s[2048, 1024]
+hsleaf 5505 s[64, 1024]
+hsnlin 10245 10239 5505 1305 0 s[2048, 64]
+hstkm 10249 10245 10247 10251 1313 0 s[2048, 64]
+hsm2b 16223 10233 16219 1291 0 s[2048, 1024]
+hsm5b 16242 10237 16238 16246 16250 16254 1295 0 s[2048, 1024]
+hstkp 10247 10245 10249 10251 1313 0 s[2048, 64]
+hsleaf 10253 s[32, 1024, 1024]
+hsleaf 10254 s[32, 1024, 1024]
+hsleaf 10255 s[32, 1024, 512]
+hsleaf 10256 s[32, 1024, 512]
+hsmoe 10257 16242 10247 10249 10253 10254 10255 10256 1321 0 s[2048, 1024]
+hsview 10269 10263 1314 0 s[2048, 1]
+hssig 10271 10269 1322 0 s[2048, 1]
+hsview 10327 10317 1331 0 s[2048, 1024]
+hsmul 10331 10271 10327 1333 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 10335 10257 10331 1335 0 s[2048, 1024]
+hsflt 10341 10335 1337 0 s[2048, 1024]
+hsadd 10345 16223 10341 1339 0 s[2048, 1024]
+hsm2b 16285 10345 16281 1341 0 s[2048, 1024]
+hsview 10397 10387 1355 0 s[2048, 1024]
+hsflt 10401 10397 1357 0 s[2048, 1024]
+hsadd 10405 16285 10401 1359 0 s[2048, 1024]
+hsm2a 16297 10405 16301 1361 0 s[2048, 1024]
+hsleaf 5551 s[1024]
+hsrms 10409 16297 5551 1363 0 s[2048, 1024]
+hsm5a 16316 10409 16320 16324 16328 16332 1365 0 s[2048, 1024]
+hsflt 10411 16316 1367 0 s[2048, 1024]
+hsleaf 5554 s[64, 1024]
+hsnlin 10417 10411 5554 1375 0 s[2048, 64]
+hstkm 10421 10417 10419 10423 1383 0 s[2048, 64]
+hsm2b 16301 10405 16297 1361 0 s[2048, 1024]
+hsm5b 16320 10409 16316 16324 16328 16332 1365 0 s[2048, 1024]
+hstkp 10419 10417 10421 10423 1383 0 s[2048, 64]
+hsleaf 10425 s[32, 1024, 1024]
+hsleaf 10426 s[32, 1024, 1024]
+hsleaf 10427 s[32, 1024, 512]
+hsleaf 10428 s[32, 1024, 512]
+hsmoe 10429 16320 10419 10421 10425 10426 10427 10428 1391 0 s[2048, 1024]
+hsview 10441 10435 1384 0 s[2048, 1]
+hssig 10443 10441 1392 0 s[2048, 1]
+hsview 10499 10489 1401 0 s[2048, 1024]
+hsmul 10503 10443 10499 1403 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 10507 10429 10503 1405 0 s[2048, 1024]
+hsflt 10513 10507 1407 0 s[2048, 1024]
+hsadd 10517 16301 10513 1409 0 s[2048, 1024]
+hsm2b 16363 10517 16359 1411 0 s[2048, 1024]
+hsview 10569 10559 1425 0 s[2048, 1024]
+hsflt 10573 10569 1427 0 s[2048, 1024]
+hsadd 10577 16363 10573 1429 0 s[2048, 1024]
+hsm2a 16375 10577 16379 1431 0 s[2048, 1024]
+hsleaf 5600 s[1024]
+hsrms 10581 16375 5600 1433 0 s[2048, 1024]
+hsm5a 16394 10581 16398 16402 16406 16410 1435 0 s[2048, 1024]
+hsflt 10583 16394 1437 0 s[2048, 1024]
+hsleaf 5603 s[64, 1024]
+hsnlin 10589 10583 5603 1445 0 s[2048, 64]
+hstkm 10593 10589 10591 10595 1453 0 s[2048, 64]
+hsm2b 16379 10577 16375 1431 0 s[2048, 1024]
+hsm5b 16398 10581 16394 16402 16406 16410 1435 0 s[2048, 1024]
+hstkp 10591 10589 10593 10595 1453 0 s[2048, 64]
+hsleaf 10597 s[32, 1024, 1024]
+hsleaf 10598 s[32, 1024, 1024]
+hsleaf 10599 s[32, 1024, 512]
+hsleaf 10600 s[32, 1024, 512]
+hsmoe 10601 16398 10591 10593 10597 10598 10599 10600 1461 0 s[2048, 1024]
+hsview 10613 10607 1454 0 s[2048, 1]
+hssig 10615 10613 1462 0 s[2048, 1]
+hsview 10671 10661 1471 0 s[2048, 1024]
+hsmul 10675 10615 10671 1473 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 10679 10601 10675 1475 0 s[2048, 1024]
+hsflt 10685 10679 1477 0 s[2048, 1024]
+hsadd 10689 16379 10685 1479 0 s[2048, 1024]
+hsm2b 16441 10689 16437 1481 0 s[2048, 1024]
+hsview 10741 10731 1495 0 s[2048, 1024]
+hsflt 10745 10741 1497 0 s[2048, 1024]
+hsadd 10749 16441 10745 1499 0 s[2048, 1024]
+hsm2a 16453 10749 16457 1501 0 s[2048, 1024]
+hsleaf 5649 s[1024]
+hsrms 10753 16453 5649 1503 0 s[2048, 1024]
+hsm5a 16472 10753 16476 16480 16484 16488 1505 0 s[2048, 1024]
+hsflt 10755 16472 1507 0 s[2048, 1024]
+hsleaf 5652 s[64, 1024]
+hsnlin 10761 10755 5652 1515 0 s[2048, 64]
+hstkm 10765 10761 10763 10767 1523 0 s[2048, 64]
+hsm2b 16457 10749 16453 1501 0 s[2048, 1024]
+hsm5b 16476 10753 16472 16480 16484 16488 1505 0 s[2048, 1024]
+hstkp 10763 10761 10765 10767 1523 0 s[2048, 64]
+hsleaf 10769 s[32, 1024, 1024]
+hsleaf 10770 s[32, 1024, 1024]
+hsleaf 10771 s[32, 1024, 512]
+hsleaf 10772 s[32, 1024, 512]
+hsmoe 10773 16476 10763 10765 10769 10770 10771 10772 1531 0 s[2048, 1024]
+hsview 10785 10779 1524 0 s[2048, 1]
+hssig 10787 10785 1532 0 s[2048, 1]
+hsview 10843 10833 1541 0 s[2048, 1024]
+hsmul 10847 10787 10843 1543 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 10851 10773 10847 1545 0 s[2048, 1024]
+hsflt 10857 10851 1547 0 s[2048, 1024]
+hsadd 10861 16457 10857 1549 0 s[2048, 1024]
+hsm2b 16519 10861 16515 1551 0 s[2048, 1024]
+hsview 10913 10903 1565 0 s[2048, 1024]
+hsflt 10917 10913 1567 0 s[2048, 1024]
+hsadd 10921 16519 10917 1569 0 s[2048, 1024]
+hsm2a 16531 10921 16535 1571 0 s[2048, 1024]
+hsleaf 5698 s[1024]
+hsrms 10925 16531 5698 1573 0 s[2048, 1024]
+hsm5a 16550 10925 16554 16558 16562 16566 1575 0 s[2048, 1024]
+hsflt 10927 16550 1577 0 s[2048, 1024]
+hsleaf 5701 s[64, 1024]
+hsnlin 10933 10927 5701 1585 0 s[2048, 64]
+hstkm 10937 10933 10935 10939 1593 0 s[2048, 64]
+hsm2b 16535 10921 16531 1571 0 s[2048, 1024]
+hsm5b 16554 10925 16550 16558 16562 16566 1575 0 s[2048, 1024]
+hstkp 10935 10933 10937 10939 1593 0 s[2048, 64]
+hsleaf 10941 s[32, 1024, 1024]
+hsleaf 10942 s[32, 1024, 1024]
+hsleaf 10943 s[32, 1024, 512]
+hsleaf 10944 s[32, 1024, 512]
+hsmoe 10945 16554 10935 10937 10941 10942 10943 10944 1601 0 s[2048, 1024]
+hsview 10957 10951 1594 0 s[2048, 1]
+hssig 10959 10957 1602 0 s[2048, 1]
+hsview 11015 11005 1611 0 s[2048, 1024]
+hsmul 11019 10959 11015 1613 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 11023 10945 11019 1615 0 s[2048, 1024]
+hsflt 11029 11023 1617 0 s[2048, 1024]
+hsadd 11033 16535 11029 1619 0 s[2048, 1024]
+hsm2b 16597 11033 16593 1621 0 s[2048, 1024]
+hsview 11085 11075 1635 0 s[2048, 1024]
+hsflt 11089 11085 1637 0 s[2048, 1024]
+hsadd 11093 16597 11089 1639 0 s[2048, 1024]
+hsm2a 16609 11093 16613 1641 0 s[2048, 1024]
+hsleaf 5747 s[1024]
+hsrms 11097 16609 5747 1643 0 s[2048, 1024]
+hsm5a 16628 11097 16632 16636 16640 16644 1645 0 s[2048, 1024]
+hsflt 11099 16628 1647 0 s[2048, 1024]
+hsleaf 5750 s[64, 1024]
+hsnlin 11105 11099 5750 1655 0 s[2048, 64]
+hstkm 11109 11105 11107 11111 1663 0 s[2048, 64]
+hsm2b 16613 11093 16609 1641 0 s[2048, 1024]
+hsm5b 16632 11097 16628 16636 16640 16644 1645 0 s[2048, 1024]
+hstkp 11107 11105 11109 11111 1663 0 s[2048, 64]
+hsleaf 11113 s[32, 1024, 1024]
+hsleaf 11114 s[32, 1024, 1024]
+hsleaf 11115 s[32, 1024, 512]
+hsleaf 11116 s[32, 1024, 512]
+hsmoe 11117 16632 11107 11109 11113 11114 11115 11116 1671 0 s[2048, 1024]
+hsview 11129 11123 1664 0 s[2048, 1]
+hssig 11131 11129 1672 0 s[2048, 1]
+hsview 11187 11177 1681 0 s[2048, 1024]
+hsmul 11191 11131 11187 1683 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 11195 11117 11191 1685 0 s[2048, 1024]
+hsflt 11201 11195 1687 0 s[2048, 1024]
+hsadd 11205 16613 11201 1689 0 s[2048, 1024]
+hsm2b 16675 11205 16671 1691 0 s[2048, 1024]
+hsview 11257 11247 1705 0 s[2048, 1024]
+hsflt 11261 11257 1707 0 s[2048, 1024]
+hsadd 11265 16675 11261 1709 0 s[2048, 1024]
+hsm2a 16687 11265 16691 1711 0 s[2048, 1024]
+hsleaf 5796 s[1024]
+hsrms 11269 16687 5796 1713 0 s[2048, 1024]
+hsm5a 16706 11269 16710 16714 16718 16722 1715 0 s[2048, 1024]
+hsflt 11271 16706 1717 0 s[2048, 1024]
+hsleaf 5799 s[64, 1024]
+hsnlin 11277 11271 5799 1725 0 s[2048, 64]
+hstkm 11281 11277 11279 11283 1733 0 s[2048, 64]
+hsm2b 16691 11265 16687 1711 0 s[2048, 1024]
+hsm5b 16710 11269 16706 16714 16718 16722 1715 0 s[2048, 1024]
+hstkp 11279 11277 11281 11283 1733 0 s[2048, 64]
+hsleaf 11285 s[32, 1024, 1024]
+hsleaf 11286 s[32, 1024, 1024]
+hsleaf 11287 s[32, 1024, 512]
+hsleaf 11288 s[32, 1024, 512]
+hsmoe 11289 16710 11279 11281 11285 11286 11287 11288 1741 0 s[2048, 1024]
+hsview 11301 11295 1734 0 s[2048, 1]
+hssig 11303 11301 1742 0 s[2048, 1]
+hsview 11359 11349 1751 0 s[2048, 1024]
+hsmul 11363 11303 11359 1753 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 11367 11289 11363 1755 0 s[2048, 1024]
+hsflt 11373 11367 1757 0 s[2048, 1024]
+hsadd 11377 16691 11373 1759 0 s[2048, 1024]
+hsm2b 16753 11377 16749 1761 0 s[2048, 1024]
+hsview 11429 11419 1775 0 s[2048, 1024]
+hsflt 11433 11429 1777 0 s[2048, 1024]
+hsadd 11437 16753 11433 1779 0 s[2048, 1024]
+hsm2a 16765 11437 16769 1781 0 s[2048, 1024]
+hsleaf 5845 s[1024]
+hsrms 11441 16765 5845 1783 0 s[2048, 1024]
+hsm5a 16784 11441 16788 16792 16796 16800 1785 0 s[2048, 1024]
+hsflt 11443 16784 1787 0 s[2048, 1024]
+hsleaf 5848 s[64, 1024]
+hsnlin 11449 11443 5848 1795 0 s[2048, 64]
+hstkm 11453 11449 11451 11455 1803 0 s[2048, 64]
+hsm2b 16769 11437 16765 1781 0 s[2048, 1024]
+hsm5b 16788 11441 16784 16792 16796 16800 1785 0 s[2048, 1024]
+hstkp 11451 11449 11453 11455 1803 0 s[2048, 64]
+hsleaf 11457 s[32, 1024, 1024]
+hsleaf 11458 s[32, 1024, 1024]
+hsleaf 11459 s[32, 1024, 512]
+hsleaf 11460 s[32, 1024, 512]
+hsmoe 11461 16788 11451 11453 11457 11458 11459 11460 1811 0 s[2048, 1024]
+hsview 11473 11467 1804 0 s[2048, 1]
+hssig 11475 11473 1812 0 s[2048, 1]
+hsview 11531 11521 1821 0 s[2048, 1024]
+hsmul 11535 11475 11531 1823 0 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 11539 11461 11535 1825 0 s[2048, 1024]
+hsflt 11545 11539 1827 0 s[2048, 1024]
+hsadd 11549 16769 11545 1829 0 s[2048, 1024]
+hsm2b 16831 11549 16827 1831 0 s[2048, 1024]
+hsview 11601 11591 1845 0 s[2048, 1024]
+hsflt 11605 11601 1847 0 s[2048, 1024]
+hsadd 11609 16831 11605 1849 0 s[2048, 1024]
+hsm2a 16843 11609 16847 1851 0 s[2048, 1024]
+hsleaf 5894 s[1024]
+hsrms 11613 16843 5894 1853 0 s[2048, 1024]
+hsm5a 16862 11613 16866 16870 16874 16878 1855 0 s[2048, 1024]
+hsflt 11615 16862 1857 0 s[2048, 1024]
+hsleaf 5897 s[64, 1024]
+hsnlin 11621 11615 5897 1859 0 s[2048, 64]
+hstkm 11625 11621 11623 11627 1861 0 s[2048, 64]
+hschunk 7666 4762 181 1 s[2048, 64] s[4096, 64]
+hstkm 7670 7666 7668 7672 189 1 s[2048, 64]
+hschunk 12012 11890 159 1 s[2048, 1024] s[4096, 1024]
+hschunk 11978 11904 168 1 s[2048, 1024] s[4096, 1024]
+hstkp 7668 7666 7670 7672 189 1 s[2048, 64]
+hsmoe 7678 11978 7668 7670 7673 7674 7675 7676 197 1 s[2048, 1024]
+hschunk 7690 4772 191 1 s[2048, 1] s[4096, 1]
+hssig 7692 7690 199 1 s[2048, 1]
+hsview 7748 7738 207 1 s[2048, 1024]
+hsmul 7752 7692 7748 209 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 7756 7678 7752 211 1 s[2048, 1024]
+hsflt 7762 7756 213 1 s[2048, 1024]
+hsadd 7766 12012 7762 215 1 s[2048, 1024]
+hsm2b 14713 7766 14709 217 1 s[2048, 1024]
+hsview 7832 7822 239 1 s[2048, 1024]
+hsflt 7836 7832 241 1 s[2048, 1024]
+hsadd 7840 14713 7836 243 1 s[2048, 1024]
+hsm2a 14751 7840 14755 245 1 s[2048, 1024]
+hsrms 7844 14751 4812 247 1 s[2048, 1024]
+hsm5a 14785 7844 14789 14793 14797 14801 249 1 s[2048, 1024]
+hsflt 7846 14785 254 1 s[2048, 1024]
+hsnlin 7852 7846 4815 262 1 s[2048, 64]
+hstkm 7856 7852 7854 7858 270 1 s[2048, 64]
+hsm2b 14755 7840 14751 245 1 s[2048, 1024]
+hsm5b 14789 7844 14785 14793 14797 14801 249 1 s[2048, 1024]
+hstkp 7854 7852 7856 7858 270 1 s[2048, 64]
+hsmoe 7864 14789 7854 7856 7859 7860 7861 7862 277 1 s[2048, 1024]
+hsview 7876 7870 271 1 s[2048, 1]
+hssig 7878 7876 278 1 s[2048, 1]
+hsview 7934 7924 285 1 s[2048, 1024]
+hsmul 7938 7878 7934 287 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 7942 7864 7938 289 1 s[2048, 1024]
+hsflt 7948 7942 291 1 s[2048, 1024]
+hsadd 7952 14755 7948 293 1 s[2048, 1024]
+hsm2b 14817 7952 14813 295 1 s[2048, 1024]
+hsview 8018 8008 317 1 s[2048, 1024]
+hsflt 8022 8018 319 1 s[2048, 1024]
+hsadd 8026 14817 8022 321 1 s[2048, 1024]
+hsm2a 14855 8026 14859 323 1 s[2048, 1024]
+hsrms 8030 14855 4866 325 1 s[2048, 1024]
+hsm5a 14889 8030 14893 14897 14901 14905 327 1 s[2048, 1024]
+hsflt 8032 14889 332 1 s[2048, 1024]
+hsnlin 8038 8032 4869 340 1 s[2048, 64]
+hstkm 8042 8038 8040 8044 348 1 s[2048, 64]
+hsm2b 14859 8026 14855 323 1 s[2048, 1024]
+hsm5b 14893 8030 14889 14897 14901 14905 327 1 s[2048, 1024]
+hstkp 8040 8038 8042 8044 348 1 s[2048, 64]
+hsmoe 8050 14893 8040 8042 8045 8046 8047 8048 355 1 s[2048, 1024]
+hsview 8062 8056 349 1 s[2048, 1]
+hssig 8064 8062 356 1 s[2048, 1]
+hsview 8120 8110 363 1 s[2048, 1024]
+hsmul 8124 8064 8120 365 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 8128 8050 8124 367 1 s[2048, 1024]
+hsflt 8134 8128 369 1 s[2048, 1024]
+hsadd 8138 14859 8134 371 1 s[2048, 1024]
+hsm2b 14921 8138 14917 373 1 s[2048, 1024]
+hsview 8204 8194 395 1 s[2048, 1024]
+hsflt 8208 8204 397 1 s[2048, 1024]
+hsadd 8212 14921 8208 399 1 s[2048, 1024]
+hsm2a 14959 8212 14963 401 1 s[2048, 1024]
+hsrms 8216 14959 4920 403 1 s[2048, 1024]
+hsm5a 14993 8216 14997 15001 15005 15009 405 1 s[2048, 1024]
+hsflt 8218 14993 410 1 s[2048, 1024]
+hsnlin 8224 8218 4923 418 1 s[2048, 64]
+hstkm 8228 8224 8226 8230 426 1 s[2048, 64]
+hsm2b 14963 8212 14959 401 1 s[2048, 1024]
+hsm5b 14997 8216 14993 15001 15005 15009 405 1 s[2048, 1024]
+hstkp 8226 8224 8228 8230 426 1 s[2048, 64]
+hsmoe 8236 14997 8226 8228 8231 8232 8233 8234 433 1 s[2048, 1024]
+hsview 8248 8242 427 1 s[2048, 1]
+hssig 8250 8248 434 1 s[2048, 1]
+hsview 8306 8296 441 1 s[2048, 1024]
+hsmul 8310 8250 8306 443 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 8314 8236 8310 445 1 s[2048, 1024]
+hsflt 8320 8314 447 1 s[2048, 1024]
+hsadd 8324 14963 8320 449 1 s[2048, 1024]
+hsm2b 15025 8324 15021 451 1 s[2048, 1024]
+hsview 8390 8380 473 1 s[2048, 1024]
+hsflt 8394 8390 475 1 s[2048, 1024]
+hsadd 8398 15025 8394 477 1 s[2048, 1024]
+hsm2a 15063 8398 15067 479 1 s[2048, 1024]
+hsrms 8402 15063 4974 481 1 s[2048, 1024]
+hsm5a 15097 8402 15101 15105 15109 15113 483 1 s[2048, 1024]
+hsflt 8404 15097 488 1 s[2048, 1024]
+hsnlin 8410 8404 4977 496 1 s[2048, 64]
+hstkm 8414 8410 8412 8416 504 1 s[2048, 64]
+hsm2b 15067 8398 15063 479 1 s[2048, 1024]
+hsm5b 15101 8402 15097 15105 15109 15113 483 1 s[2048, 1024]
+hstkp 8412 8410 8414 8416 504 1 s[2048, 64]
+hsmoe 8422 15101 8412 8414 8417 8418 8419 8420 511 1 s[2048, 1024]
+hsview 8434 8428 505 1 s[2048, 1]
+hssig 8436 8434 512 1 s[2048, 1]
+hsview 8492 8482 519 1 s[2048, 1024]
+hsmul 8496 8436 8492 521 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 8500 8422 8496 523 1 s[2048, 1024]
+hsflt 8506 8500 525 1 s[2048, 1024]
+hsadd 8510 15067 8506 527 1 s[2048, 1024]
+hsm2b 15129 8510 15125 529 1 s[2048, 1024]
+hsview 8576 8566 551 1 s[2048, 1024]
+hsflt 8580 8576 553 1 s[2048, 1024]
+hsadd 8584 15129 8580 555 1 s[2048, 1024]
+hsm2a 15167 8584 15171 557 1 s[2048, 1024]
+hsrms 8588 15167 5028 559 1 s[2048, 1024]
+hsm5a 15201 8588 15205 15209 15213 15217 561 1 s[2048, 1024]
+hsflt 8590 15201 566 1 s[2048, 1024]
+hsnlin 8596 8590 5031 574 1 s[2048, 64]
+hstkm 8600 8596 8598 8602 582 1 s[2048, 64]
+hsm2b 15171 8584 15167 557 1 s[2048, 1024]
+hsm5b 15205 8588 15201 15209 15213 15217 561 1 s[2048, 1024]
+hstkp 8598 8596 8600 8602 582 1 s[2048, 64]
+hsmoe 8608 15205 8598 8600 8603 8604 8605 8606 589 1 s[2048, 1024]
+hsview 8620 8614 583 1 s[2048, 1]
+hssig 8622 8620 590 1 s[2048, 1]
+hsview 8678 8668 597 1 s[2048, 1024]
+hsmul 8682 8622 8678 599 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 8686 8608 8682 601 1 s[2048, 1024]
+hsflt 8692 8686 603 1 s[2048, 1024]
+hsadd 8696 15171 8692 605 1 s[2048, 1024]
+hsm2b 15233 8696 15229 607 1 s[2048, 1024]
+hsview 8762 8752 629 1 s[2048, 1024]
+hsflt 8766 8762 631 1 s[2048, 1024]
+hsadd 8770 15233 8766 633 1 s[2048, 1024]
+hsm2a 15271 8770 15275 635 1 s[2048, 1024]
+hsrms 8774 15271 5082 637 1 s[2048, 1024]
+hsm5a 15305 8774 15309 15313 15317 15321 639 1 s[2048, 1024]
+hsflt 8776 15305 644 1 s[2048, 1024]
+hsnlin 8782 8776 5085 652 1 s[2048, 64]
+hstkm 8786 8782 8784 8788 660 1 s[2048, 64]
+hsm2b 15275 8770 15271 635 1 s[2048, 1024]
+hsm5b 15309 8774 15305 15313 15317 15321 639 1 s[2048, 1024]
+hstkp 8784 8782 8786 8788 660 1 s[2048, 64]
+hsmoe 8794 15309 8784 8786 8789 8790 8791 8792 667 1 s[2048, 1024]
+hsview 8806 8800 661 1 s[2048, 1]
+hssig 8808 8806 668 1 s[2048, 1]
+hsview 8864 8854 675 1 s[2048, 1024]
+hsmul 8868 8808 8864 677 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 8872 8794 8868 679 1 s[2048, 1024]
+hsflt 8878 8872 681 1 s[2048, 1024]
+hsadd 8882 15275 8878 683 1 s[2048, 1024]
+hsm2b 15337 8882 15333 685 1 s[2048, 1024]
+hsview 8948 8938 707 1 s[2048, 1024]
+hsflt 8952 8948 709 1 s[2048, 1024]
+hsadd 8956 15337 8952 711 1 s[2048, 1024]
+hsm2a 15375 8956 15379 713 1 s[2048, 1024]
+hsrms 8960 15375 5136 715 1 s[2048, 1024]
+hsm5a 15409 8960 15413 15417 15421 15425 717 1 s[2048, 1024]
+hsflt 8962 15409 722 1 s[2048, 1024]
+hsnlin 8968 8962 5139 730 1 s[2048, 64]
+hstkm 8972 8968 8970 8974 738 1 s[2048, 64]
+hsm2b 15379 8956 15375 713 1 s[2048, 1024]
+hsm5b 15413 8960 15409 15417 15421 15425 717 1 s[2048, 1024]
+hstkp 8970 8968 8972 8974 738 1 s[2048, 64]
+hsmoe 8980 15413 8970 8972 8975 8976 8977 8978 745 1 s[2048, 1024]
+hsview 8992 8986 739 1 s[2048, 1]
+hssig 8994 8992 746 1 s[2048, 1]
+hsview 9050 9040 753 1 s[2048, 1024]
+hsmul 9054 8994 9050 755 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 9058 8980 9054 757 1 s[2048, 1024]
+hsflt 9064 9058 759 1 s[2048, 1024]
+hsadd 9068 15379 9064 761 1 s[2048, 1024]
+hsm2b 15441 9068 15437 763 1 s[2048, 1024]
+hsview 9134 9124 785 1 s[2048, 1024]
+hsflt 9138 9134 787 1 s[2048, 1024]
+hsadd 9142 15441 9138 789 1 s[2048, 1024]
+hsm2a 15479 9142 15483 791 1 s[2048, 1024]
+hsrms 9146 15479 5190 793 1 s[2048, 1024]
+hsm5a 15513 9146 15517 15521 15525 15529 795 1 s[2048, 1024]
+hsflt 9148 15513 800 1 s[2048, 1024]
+hsnlin 9154 9148 5193 808 1 s[2048, 64]
+hstkm 9158 9154 9156 9160 816 1 s[2048, 64]
+hsm2b 15483 9142 15479 791 1 s[2048, 1024]
+hsm5b 15517 9146 15513 15521 15525 15529 795 1 s[2048, 1024]
+hstkp 9156 9154 9158 9160 816 1 s[2048, 64]
+hsmoe 9166 15517 9156 9158 9161 9162 9163 9164 823 1 s[2048, 1024]
+hsview 9178 9172 817 1 s[2048, 1]
+hssig 9180 9178 824 1 s[2048, 1]
+hsview 9236 9226 831 1 s[2048, 1024]
+hsmul 9240 9180 9236 833 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 9244 9166 9240 835 1 s[2048, 1024]
+hsflt 9250 9244 837 1 s[2048, 1024]
+hsadd 9254 15483 9250 839 1 s[2048, 1024]
+hsm2b 15545 9254 15541 841 1 s[2048, 1024]
+hsview 9320 9310 863 1 s[2048, 1024]
+hsflt 9324 9320 865 1 s[2048, 1024]
+hsadd 9328 15545 9324 867 1 s[2048, 1024]
+hsm2a 15583 9328 15587 869 1 s[2048, 1024]
+hsrms 9332 15583 5244 871 1 s[2048, 1024]
+hsm5a 15617 9332 15621 15625 15629 15633 873 1 s[2048, 1024]
+hsflt 9334 15617 878 1 s[2048, 1024]
+hsnlin 9340 9334 5247 886 1 s[2048, 64]
+hstkm 9344 9340 9342 9346 894 1 s[2048, 64]
+hsm2b 15587 9328 15583 869 1 s[2048, 1024]
+hsm5b 15621 9332 15617 15625 15629 15633 873 1 s[2048, 1024]
+hstkp 9342 9340 9344 9346 894 1 s[2048, 64]
+hsmoe 9352 15621 9342 9344 9347 9348 9349 9350 901 1 s[2048, 1024]
+hsview 9364 9358 895 1 s[2048, 1]
+hssig 9366 9364 902 1 s[2048, 1]
+hsview 9422 9412 909 1 s[2048, 1024]
+hsmul 9426 9366 9422 911 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 9430 9352 9426 913 1 s[2048, 1024]
+hsflt 9436 9430 915 1 s[2048, 1024]
+hsadd 9440 15587 9436 917 1 s[2048, 1024]
+hsm2b 15649 9440 15645 919 1 s[2048, 1024]
+hsview 9506 9496 941 1 s[2048, 1024]
+hsflt 9510 9506 943 1 s[2048, 1024]
+hsadd 9514 15649 9510 945 1 s[2048, 1024]
+hsm2a 15687 9514 15691 947 1 s[2048, 1024]
+hsrms 9518 15687 5298 949 1 s[2048, 1024]
+hsm5a 15721 9518 15725 15729 15733 15737 951 1 s[2048, 1024]
+hsflt 9520 15721 956 1 s[2048, 1024]
+hsnlin 9526 9520 5301 964 1 s[2048, 64]
+hstkm 9530 9526 9528 9532 972 1 s[2048, 64]
+hsm2b 15691 9514 15687 947 1 s[2048, 1024]
+hsm5b 15725 9518 15721 15729 15733 15737 951 1 s[2048, 1024]
+hstkp 9528 9526 9530 9532 972 1 s[2048, 64]
+hsmoe 9538 15725 9528 9530 9533 9534 9535 9536 979 1 s[2048, 1024]
+hsview 9550 9544 973 1 s[2048, 1]
+hssig 9552 9550 980 1 s[2048, 1]
+hsview 9608 9598 987 1 s[2048, 1024]
+hsmul 9612 9552 9608 989 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 9616 9538 9612 991 1 s[2048, 1024]
+hsflt 9622 9616 993 1 s[2048, 1024]
+hsadd 9626 15691 9622 995 1 s[2048, 1024]
+hsm2b 13258 9626 14599 997 1 s[2048, 1024]
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 4000000 in
 theorem hs_9656 (initPM : Store)
@@ -10883,2816 +2516,247 @@ theorem hs_9656 (initPM : Store)
     rfl
   rw [hval_9656]
   rw [fw_maybe_shuffle_shape]; exact (hs_13258 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15981 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15981).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15981 9656 1004
-      { rank := 1, op := "OpName.FW_multiref", ins := [9656], outs := [15977, 15981], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 9656 15977 15981 (by decide))]
-  exact (hs_9656 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9710 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9710).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9710 9700 1076
-      { rank := 1, op := "OpName.FW_view", ins := [9700], outs := [9710], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 9700 9710)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9714 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9714).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9714 9710 1078
-      { rank := 1, op := "OpName.FW_float", ins := [9710], outs := [9714], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 9710 9714 [])]
-  exact (hs_9710 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9718 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9718).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9718 15981 9714 1080
-      { rank := 1, op := "OpName.FW_add", ins := [15981, 9714], outs := [9718], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15981 9714 9718)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15981 initPM hPM) (hs_9714 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15993 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15993).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15993 9718 1082
-      { rank := 1, op := "OpName.FW_multiref", ins := [9718], outs := [15993, 15997], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 9718 15993 15997)]
-  exact (hs_9718 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9722 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9722).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9722 15993 5355 1084
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [15993, 5355], outs := [9722], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 15993 5355 9722)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_15993 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16027 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16027).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16027 9722 1086
-      { rank := 1, op := "OpName.FW_multiref", ins := [9722], outs := [16027, 16031, 16035, 16039, 16043], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 9722 16027 16031 16035 16039 16043)]
-  exact (hs_9722 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9724 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9724).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9724 16027 1091
-      { rank := 1, op := "OpName.FW_float", ins := [16027], outs := [9724], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 16027 9724 [])]
-  exact (hs_16027 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9730 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9730).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9730 9724 5358 1099
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [9724, 5358], outs := [9730], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 9724 5358 9730)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_9724 initPM hPM) (hs_5358 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9734 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9734).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9734 9730 1107
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [9730], outs := [9732, 9734, 9736], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 9730 9732 9734 9736 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_9730 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_15997 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 15997).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 15997 9718 1082
-      { rank := 1, op := "OpName.FW_multiref", ins := [9718], outs := [15993, 15997], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 9718 15993 15997 (by decide))]
-  exact (hs_9718 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16031 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16031).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16031 9722 1086
-      { rank := 1, op := "OpName.FW_multiref", ins := [9722], outs := [16027, 16031, 16035, 16039, 16043], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 9722 16027 16031 16035 16039 16043 (by decide))]
-  exact (hs_9722 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9732 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9732).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9732 9730 1107
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [9730], outs := [9732, 9734, 9736], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 9730 9732 9734 9736 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_9730 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9742 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9742).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 9742 16031 9732 9734 9737 9738 9739 9740 1114
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [16031, 9732, 9734, 9737, 9738, 9739, 9740], outs := [9742], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 16031 9732 9734 9737 9738 9739 9740 9742 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16031 initPM hPM)]; rfl) (by rw [(hs_16031 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9754 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9754).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9754 9748 1108
-      { rank := 1, op := "OpName.FW_view", ins := [9748], outs := [9754], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 9748 9754)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9756 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9756).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9756 9754 1115
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [9754], outs := [9756], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 9754 9756)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_9754 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9812 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9812).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9812 9802 1122
-      { rank := 1, op := "OpName.FW_view", ins := [9802], outs := [9812], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 9802 9812)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9816 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9816).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9816 9756 9812 1124
-      { rank := 1, op := "OpName.FW_mul", ins := [9756, 9812], outs := [9816], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 9756 9812 9816)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_9756 initPM hPM) (hs_9812 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9820 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9820).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9820 9742 9816 1126
-      { rank := 1, op := "OpName.FW_add", ins := [9742, 9816], outs := [9820], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 9742 9816 9820)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_9742 initPM hPM) (hs_9816 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9826 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9826).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9826 9820 1128
-      { rank := 1, op := "OpName.FW_float", ins := [9820], outs := [9826], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 9820 9826 [])]
-  exact (hs_9820 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9830 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9830).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9830 15997 9826 1130
-      { rank := 1, op := "OpName.FW_add", ins := [15997, 9826], outs := [9830], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15997 9826 9830)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_15997 initPM hPM) (hs_9826 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16059 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16059).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16059 9830 1132
-      { rank := 1, op := "OpName.FW_multiref", ins := [9830], outs := [16055, 16059], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 9830 16055 16059 (by decide))]
-  exact (hs_9830 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9882 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9882).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9882 9872 1146
-      { rank := 1, op := "OpName.FW_view", ins := [9872], outs := [9882], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 9872 9882)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9886 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9886).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9886 9882 1148
-      { rank := 1, op := "OpName.FW_float", ins := [9882], outs := [9886], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 9882 9886 [])]
-  exact (hs_9882 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9890 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9890).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9890 16059 9886 1150
-      { rank := 1, op := "OpName.FW_add", ins := [16059, 9886], outs := [9890], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16059 9886 9890)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16059 initPM hPM) (hs_9886 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16071 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16071).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16071 9890 1152
-      { rank := 1, op := "OpName.FW_multiref", ins := [9890], outs := [16071, 16075], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 9890 16071 16075)]
-  exact (hs_9890 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9894 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9894).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9894 16071 5404 1154
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [16071, 5404], outs := [9894], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 16071 5404 9894)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16071 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16105 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16105).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16105 9894 1156
-      { rank := 1, op := "OpName.FW_multiref", ins := [9894], outs := [16105, 16109, 16113, 16117, 16121], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 9894 16105 16109 16113 16117 16121)]
-  exact (hs_9894 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9896 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9896).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9896 16105 1161
-      { rank := 1, op := "OpName.FW_float", ins := [16105], outs := [9896], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 16105 9896 [])]
-  exact (hs_16105 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9902 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9902).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9902 9896 5407 1169
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [9896, 5407], outs := [9902], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 9896 5407 9902)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_9896 initPM hPM) (hs_5407 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9906 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9906).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9906 9902 1177
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [9902], outs := [9904, 9906, 9908], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 9902 9904 9906 9908 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_9902 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16075 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16075).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16075 9890 1152
-      { rank := 1, op := "OpName.FW_multiref", ins := [9890], outs := [16071, 16075], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 9890 16071 16075 (by decide))]
-  exact (hs_9890 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16109 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16109).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16109 9894 1156
-      { rank := 1, op := "OpName.FW_multiref", ins := [9894], outs := [16105, 16109, 16113, 16117, 16121], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 9894 16105 16109 16113 16117 16121 (by decide))]
-  exact (hs_9894 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9904 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9904).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9904 9902 1177
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [9902], outs := [9904, 9906, 9908], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 9902 9904 9906 9908 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_9902 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9914 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9914).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 9914 16109 9904 9906 9909 9910 9911 9912 1184
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [16109, 9904, 9906, 9909, 9910, 9911, 9912], outs := [9914], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 16109 9904 9906 9909 9910 9911 9912 9914 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16109 initPM hPM)]; rfl) (by rw [(hs_16109 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9926 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9926).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9926 9920 1178
-      { rank := 1, op := "OpName.FW_view", ins := [9920], outs := [9926], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 9920 9926)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9928 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9928).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9928 9926 1185
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [9926], outs := [9928], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 9926 9928)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_9926 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9984 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9984).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 9984 9974 1192
-      { rank := 1, op := "OpName.FW_view", ins := [9974], outs := [9984], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 9974 9984)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9988 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9988).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9988 9928 9984 1194
-      { rank := 1, op := "OpName.FW_mul", ins := [9928, 9984], outs := [9988], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 9928 9984 9988)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_9928 initPM hPM) (hs_9984 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9992 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9992).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 9992 9914 9988 1196
-      { rank := 1, op := "OpName.FW_add", ins := [9914, 9988], outs := [9992], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 9914 9988 9992)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_9914 initPM hPM) (hs_9988 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_9998 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 9998).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 9998 9992 1198
-      { rank := 1, op := "OpName.FW_float", ins := [9992], outs := [9998], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 9992 9998 [])]
-  exact (hs_9992 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10002 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10002).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10002 16075 9998 1200
-      { rank := 1, op := "OpName.FW_add", ins := [16075, 9998], outs := [10002], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16075 9998 10002)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16075 initPM hPM) (hs_9998 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16137 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16137).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16137 10002 1202
-      { rank := 1, op := "OpName.FW_multiref", ins := [10002], outs := [16133, 16137], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 10002 16133 16137 (by decide))]
-  exact (hs_10002 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10054 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10054).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10054 10044 1216
-      { rank := 1, op := "OpName.FW_view", ins := [10044], outs := [10054], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 10044 10054)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10058 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10058).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10058 10054 1218
-      { rank := 1, op := "OpName.FW_float", ins := [10054], outs := [10058], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 10054 10058 [])]
-  exact (hs_10054 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10062 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10062).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10062 16137 10058 1220
-      { rank := 1, op := "OpName.FW_add", ins := [16137, 10058], outs := [10062], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16137 10058 10062)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16137 initPM hPM) (hs_10058 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16149 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16149).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16149 10062 1222
-      { rank := 1, op := "OpName.FW_multiref", ins := [10062], outs := [16149, 16153], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 10062 16149 16153)]
-  exact (hs_10062 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10066 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10066).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10066 16149 5453 1224
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [16149, 5453], outs := [10066], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 16149 5453 10066)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16149 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16183 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16183).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16183 10066 1226
-      { rank := 1, op := "OpName.FW_multiref", ins := [10066], outs := [16183, 16187, 16191, 16195, 16199], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 10066 16183 16187 16191 16195 16199)]
-  exact (hs_10066 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10068 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10068).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10068 16183 1231
-      { rank := 1, op := "OpName.FW_float", ins := [16183], outs := [10068], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 16183 10068 [])]
-  exact (hs_16183 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10074 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10074).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10074 10068 5456 1239
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [10068, 5456], outs := [10074], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 10068 5456 10074)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_10068 initPM hPM) (hs_5456 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10078 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10078).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10078 10074 1247
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [10074], outs := [10076, 10078, 10080], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 10074 10076 10078 10080 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_10074 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16153 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16153).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16153 10062 1222
-      { rank := 1, op := "OpName.FW_multiref", ins := [10062], outs := [16149, 16153], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 10062 16149 16153 (by decide))]
-  exact (hs_10062 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16187 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16187).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16187 10066 1226
-      { rank := 1, op := "OpName.FW_multiref", ins := [10066], outs := [16183, 16187, 16191, 16195, 16199], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 10066 16183 16187 16191 16195 16199 (by decide))]
-  exact (hs_10066 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10076 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10076).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10076 10074 1247
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [10074], outs := [10076, 10078, 10080], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 10074 10076 10078 10080 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_10074 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10086 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10086).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 10086 16187 10076 10078 10081 10082 10083 10084 1254
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [16187, 10076, 10078, 10081, 10082, 10083, 10084], outs := [10086], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 16187 10076 10078 10081 10082 10083 10084 10086 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16187 initPM hPM)]; rfl) (by rw [(hs_16187 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10098 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10098).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10098 10092 1248
-      { rank := 1, op := "OpName.FW_view", ins := [10092], outs := [10098], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 10092 10098)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10100 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10100).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10100 10098 1255
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [10098], outs := [10100], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 10098 10100)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_10098 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10156 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10156).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10156 10146 1262
-      { rank := 1, op := "OpName.FW_view", ins := [10146], outs := [10156], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 10146 10156)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10160 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10160).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10160 10100 10156 1264
-      { rank := 1, op := "OpName.FW_mul", ins := [10100, 10156], outs := [10160], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 10100 10156 10160)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_10100 initPM hPM) (hs_10156 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10164 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10164).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10164 10086 10160 1266
-      { rank := 1, op := "OpName.FW_add", ins := [10086, 10160], outs := [10164], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 10086 10160 10164)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_10086 initPM hPM) (hs_10160 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10170 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10170).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10170 10164 1268
-      { rank := 1, op := "OpName.FW_float", ins := [10164], outs := [10170], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 10164 10170 [])]
-  exact (hs_10164 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10174 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10174).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10174 16153 10170 1270
-      { rank := 1, op := "OpName.FW_add", ins := [16153, 10170], outs := [10174], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16153 10170 10174)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16153 initPM hPM) (hs_10170 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16215 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16215).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16215 10174 1272
-      { rank := 1, op := "OpName.FW_multiref", ins := [10174], outs := [16211, 16215], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 10174 16211 16215 (by decide))]
-  exact (hs_10174 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10226 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10226).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10226 10216 1286
-      { rank := 1, op := "OpName.FW_view", ins := [10216], outs := [10226], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 10216 10226)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10230 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10230).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10230 10226 1288
-      { rank := 1, op := "OpName.FW_float", ins := [10226], outs := [10230], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 10226 10230 [])]
-  exact (hs_10226 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10234 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10234).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10234 16215 10230 1290
-      { rank := 1, op := "OpName.FW_add", ins := [16215, 10230], outs := [10234], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16215 10230 10234)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16215 initPM hPM) (hs_10230 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16227 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16227).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16227 10234 1292
-      { rank := 1, op := "OpName.FW_multiref", ins := [10234], outs := [16227, 16231], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 10234 16227 16231)]
-  exact (hs_10234 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10238 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10238).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10238 16227 5502 1294
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [16227, 5502], outs := [10238], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 16227 5502 10238)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16227 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16261 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16261).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16261 10238 1296
-      { rank := 1, op := "OpName.FW_multiref", ins := [10238], outs := [16261, 16265, 16269, 16273, 16277], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 10238 16261 16265 16269 16273 16277)]
-  exact (hs_10238 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10240 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10240).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10240 16261 1301
-      { rank := 1, op := "OpName.FW_float", ins := [16261], outs := [10240], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 16261 10240 [])]
-  exact (hs_16261 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10246 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10246).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10246 10240 5505 1309
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [10240, 5505], outs := [10246], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 10240 5505 10246)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_10240 initPM hPM) (hs_5505 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10250 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10250).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10250 10246 1317
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [10246], outs := [10248, 10250, 10252], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 10246 10248 10250 10252 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_10246 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16231 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16231).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16231 10234 1292
-      { rank := 1, op := "OpName.FW_multiref", ins := [10234], outs := [16227, 16231], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 10234 16227 16231 (by decide))]
-  exact (hs_10234 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16265 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16265).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16265 10238 1296
-      { rank := 1, op := "OpName.FW_multiref", ins := [10238], outs := [16261, 16265, 16269, 16273, 16277], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 10238 16261 16265 16269 16273 16277 (by decide))]
-  exact (hs_10238 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10248 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10248).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10248 10246 1317
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [10246], outs := [10248, 10250, 10252], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 10246 10248 10250 10252 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_10246 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10258 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10258).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 10258 16265 10248 10250 10253 10254 10255 10256 1324
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [16265, 10248, 10250, 10253, 10254, 10255, 10256], outs := [10258], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 16265 10248 10250 10253 10254 10255 10256 10258 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16265 initPM hPM)]; rfl) (by rw [(hs_16265 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10270 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10270).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10270 10264 1318
-      { rank := 1, op := "OpName.FW_view", ins := [10264], outs := [10270], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 10264 10270)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10272 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10272).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10272 10270 1325
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [10270], outs := [10272], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 10270 10272)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_10270 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10328 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10328).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10328 10318 1332
-      { rank := 1, op := "OpName.FW_view", ins := [10318], outs := [10328], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 10318 10328)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10332 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10332).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10332 10272 10328 1334
-      { rank := 1, op := "OpName.FW_mul", ins := [10272, 10328], outs := [10332], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 10272 10328 10332)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_10272 initPM hPM) (hs_10328 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10336 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10336).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10336 10258 10332 1336
-      { rank := 1, op := "OpName.FW_add", ins := [10258, 10332], outs := [10336], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 10258 10332 10336)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_10258 initPM hPM) (hs_10332 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10342 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10342).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10342 10336 1338
-      { rank := 1, op := "OpName.FW_float", ins := [10336], outs := [10342], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 10336 10342 [])]
-  exact (hs_10336 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10346 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10346).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10346 16231 10342 1340
-      { rank := 1, op := "OpName.FW_add", ins := [16231, 10342], outs := [10346], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16231 10342 10346)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16231 initPM hPM) (hs_10342 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16293 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16293).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16293 10346 1342
-      { rank := 1, op := "OpName.FW_multiref", ins := [10346], outs := [16289, 16293], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 10346 16289 16293 (by decide))]
-  exact (hs_10346 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10398 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10398).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10398 10388 1356
-      { rank := 1, op := "OpName.FW_view", ins := [10388], outs := [10398], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 10388 10398)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10402 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10402).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10402 10398 1358
-      { rank := 1, op := "OpName.FW_float", ins := [10398], outs := [10402], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 10398 10402 [])]
-  exact (hs_10398 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10406 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10406).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10406 16293 10402 1360
-      { rank := 1, op := "OpName.FW_add", ins := [16293, 10402], outs := [10406], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16293 10402 10406)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16293 initPM hPM) (hs_10402 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16305 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16305).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16305 10406 1362
-      { rank := 1, op := "OpName.FW_multiref", ins := [10406], outs := [16305, 16309], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 10406 16305 16309)]
-  exact (hs_10406 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10410 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10410).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10410 16305 5551 1364
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [16305, 5551], outs := [10410], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 16305 5551 10410)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16305 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16339 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16339).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16339 10410 1366
-      { rank := 1, op := "OpName.FW_multiref", ins := [10410], outs := [16339, 16343, 16347, 16351, 16355], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 10410 16339 16343 16347 16351 16355)]
-  exact (hs_10410 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10412 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10412).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10412 16339 1371
-      { rank := 1, op := "OpName.FW_float", ins := [16339], outs := [10412], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 16339 10412 [])]
-  exact (hs_16339 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10418 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10418).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10418 10412 5554 1379
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [10412, 5554], outs := [10418], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 10412 5554 10418)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_10412 initPM hPM) (hs_5554 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10422 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10422).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10422 10418 1387
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [10418], outs := [10420, 10422, 10424], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 10418 10420 10422 10424 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_10418 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16309 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16309).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16309 10406 1362
-      { rank := 1, op := "OpName.FW_multiref", ins := [10406], outs := [16305, 16309], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 10406 16305 16309 (by decide))]
-  exact (hs_10406 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16343 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16343).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16343 10410 1366
-      { rank := 1, op := "OpName.FW_multiref", ins := [10410], outs := [16339, 16343, 16347, 16351, 16355], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 10410 16339 16343 16347 16351 16355 (by decide))]
-  exact (hs_10410 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10420 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10420).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10420 10418 1387
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [10418], outs := [10420, 10422, 10424], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 10418 10420 10422 10424 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_10418 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10430 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10430).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 10430 16343 10420 10422 10425 10426 10427 10428 1394
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [16343, 10420, 10422, 10425, 10426, 10427, 10428], outs := [10430], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 16343 10420 10422 10425 10426 10427 10428 10430 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16343 initPM hPM)]; rfl) (by rw [(hs_16343 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10442 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10442).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10442 10436 1388
-      { rank := 1, op := "OpName.FW_view", ins := [10436], outs := [10442], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 10436 10442)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10444 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10444).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10444 10442 1395
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [10442], outs := [10444], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 10442 10444)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_10442 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10500 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10500).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10500 10490 1402
-      { rank := 1, op := "OpName.FW_view", ins := [10490], outs := [10500], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 10490 10500)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10504 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10504).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10504 10444 10500 1404
-      { rank := 1, op := "OpName.FW_mul", ins := [10444, 10500], outs := [10504], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 10444 10500 10504)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_10444 initPM hPM) (hs_10500 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10508 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10508).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10508 10430 10504 1406
-      { rank := 1, op := "OpName.FW_add", ins := [10430, 10504], outs := [10508], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 10430 10504 10508)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_10430 initPM hPM) (hs_10504 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10514 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10514).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10514 10508 1408
-      { rank := 1, op := "OpName.FW_float", ins := [10508], outs := [10514], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 10508 10514 [])]
-  exact (hs_10508 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10518 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10518).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10518 16309 10514 1410
-      { rank := 1, op := "OpName.FW_add", ins := [16309, 10514], outs := [10518], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16309 10514 10518)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16309 initPM hPM) (hs_10514 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16371 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16371).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16371 10518 1412
-      { rank := 1, op := "OpName.FW_multiref", ins := [10518], outs := [16367, 16371], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 10518 16367 16371 (by decide))]
-  exact (hs_10518 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10570 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10570).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10570 10560 1426
-      { rank := 1, op := "OpName.FW_view", ins := [10560], outs := [10570], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 10560 10570)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10574 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10574).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10574 10570 1428
-      { rank := 1, op := "OpName.FW_float", ins := [10570], outs := [10574], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 10570 10574 [])]
-  exact (hs_10570 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10578 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10578).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10578 16371 10574 1430
-      { rank := 1, op := "OpName.FW_add", ins := [16371, 10574], outs := [10578], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16371 10574 10578)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16371 initPM hPM) (hs_10574 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16383 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16383).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16383 10578 1432
-      { rank := 1, op := "OpName.FW_multiref", ins := [10578], outs := [16383, 16387], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 10578 16383 16387)]
-  exact (hs_10578 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10582 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10582).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10582 16383 5600 1434
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [16383, 5600], outs := [10582], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 16383 5600 10582)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16383 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16417 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16417).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16417 10582 1436
-      { rank := 1, op := "OpName.FW_multiref", ins := [10582], outs := [16417, 16421, 16425, 16429, 16433], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 10582 16417 16421 16425 16429 16433)]
-  exact (hs_10582 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10584 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10584).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10584 16417 1441
-      { rank := 1, op := "OpName.FW_float", ins := [16417], outs := [10584], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 16417 10584 [])]
-  exact (hs_16417 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10590 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10590).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10590 10584 5603 1449
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [10584, 5603], outs := [10590], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 10584 5603 10590)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_10584 initPM hPM) (hs_5603 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10594 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10594).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10594 10590 1457
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [10590], outs := [10592, 10594, 10596], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 10590 10592 10594 10596 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_10590 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16387 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16387).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16387 10578 1432
-      { rank := 1, op := "OpName.FW_multiref", ins := [10578], outs := [16383, 16387], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 10578 16383 16387 (by decide))]
-  exact (hs_10578 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16421 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16421).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16421 10582 1436
-      { rank := 1, op := "OpName.FW_multiref", ins := [10582], outs := [16417, 16421, 16425, 16429, 16433], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 10582 16417 16421 16425 16429 16433 (by decide))]
-  exact (hs_10582 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10592 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10592).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10592 10590 1457
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [10590], outs := [10592, 10594, 10596], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 10590 10592 10594 10596 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_10590 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10602 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10602).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 10602 16421 10592 10594 10597 10598 10599 10600 1464
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [16421, 10592, 10594, 10597, 10598, 10599, 10600], outs := [10602], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 16421 10592 10594 10597 10598 10599 10600 10602 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16421 initPM hPM)]; rfl) (by rw [(hs_16421 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10614 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10614).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10614 10608 1458
-      { rank := 1, op := "OpName.FW_view", ins := [10608], outs := [10614], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 10608 10614)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10616 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10616).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10616 10614 1465
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [10614], outs := [10616], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 10614 10616)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_10614 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10672 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10672).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10672 10662 1472
-      { rank := 1, op := "OpName.FW_view", ins := [10662], outs := [10672], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 10662 10672)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10676 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10676).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10676 10616 10672 1474
-      { rank := 1, op := "OpName.FW_mul", ins := [10616, 10672], outs := [10676], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 10616 10672 10676)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_10616 initPM hPM) (hs_10672 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10680 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10680).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10680 10602 10676 1476
-      { rank := 1, op := "OpName.FW_add", ins := [10602, 10676], outs := [10680], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 10602 10676 10680)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_10602 initPM hPM) (hs_10676 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10686 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10686).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10686 10680 1478
-      { rank := 1, op := "OpName.FW_float", ins := [10680], outs := [10686], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 10680 10686 [])]
-  exact (hs_10680 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10690 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10690).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10690 16387 10686 1480
-      { rank := 1, op := "OpName.FW_add", ins := [16387, 10686], outs := [10690], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16387 10686 10690)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16387 initPM hPM) (hs_10686 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16449 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16449).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16449 10690 1482
-      { rank := 1, op := "OpName.FW_multiref", ins := [10690], outs := [16445, 16449], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 10690 16445 16449 (by decide))]
-  exact (hs_10690 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10742 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10742).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10742 10732 1496
-      { rank := 1, op := "OpName.FW_view", ins := [10732], outs := [10742], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 10732 10742)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10746 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10746).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10746 10742 1498
-      { rank := 1, op := "OpName.FW_float", ins := [10742], outs := [10746], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 10742 10746 [])]
-  exact (hs_10742 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10750 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10750).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10750 16449 10746 1500
-      { rank := 1, op := "OpName.FW_add", ins := [16449, 10746], outs := [10750], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16449 10746 10750)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16449 initPM hPM) (hs_10746 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16461 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16461).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16461 10750 1502
-      { rank := 1, op := "OpName.FW_multiref", ins := [10750], outs := [16461, 16465], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 10750 16461 16465)]
-  exact (hs_10750 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10754 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10754).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10754 16461 5649 1504
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [16461, 5649], outs := [10754], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 16461 5649 10754)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16461 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16495 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16495).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16495 10754 1506
-      { rank := 1, op := "OpName.FW_multiref", ins := [10754], outs := [16495, 16499, 16503, 16507, 16511], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 10754 16495 16499 16503 16507 16511)]
-  exact (hs_10754 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10756 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10756).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10756 16495 1511
-      { rank := 1, op := "OpName.FW_float", ins := [16495], outs := [10756], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 16495 10756 [])]
-  exact (hs_16495 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10762 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10762).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10762 10756 5652 1519
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [10756, 5652], outs := [10762], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 10756 5652 10762)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_10756 initPM hPM) (hs_5652 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10766 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10766).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10766 10762 1527
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [10762], outs := [10764, 10766, 10768], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 10762 10764 10766 10768 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_10762 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16465 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16465).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16465 10750 1502
-      { rank := 1, op := "OpName.FW_multiref", ins := [10750], outs := [16461, 16465], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 10750 16461 16465 (by decide))]
-  exact (hs_10750 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16499 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16499).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16499 10754 1506
-      { rank := 1, op := "OpName.FW_multiref", ins := [10754], outs := [16495, 16499, 16503, 16507, 16511], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 10754 16495 16499 16503 16507 16511 (by decide))]
-  exact (hs_10754 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10764 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10764).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10764 10762 1527
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [10762], outs := [10764, 10766, 10768], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 10762 10764 10766 10768 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_10762 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10774 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10774).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 10774 16499 10764 10766 10769 10770 10771 10772 1534
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [16499, 10764, 10766, 10769, 10770, 10771, 10772], outs := [10774], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 16499 10764 10766 10769 10770 10771 10772 10774 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16499 initPM hPM)]; rfl) (by rw [(hs_16499 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10786 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10786).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10786 10780 1528
-      { rank := 1, op := "OpName.FW_view", ins := [10780], outs := [10786], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 10780 10786)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10788 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10788).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10788 10786 1535
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [10786], outs := [10788], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 10786 10788)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_10786 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10844 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10844).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10844 10834 1542
-      { rank := 1, op := "OpName.FW_view", ins := [10834], outs := [10844], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 10834 10844)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10848 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10848).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10848 10788 10844 1544
-      { rank := 1, op := "OpName.FW_mul", ins := [10788, 10844], outs := [10848], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 10788 10844 10848)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_10788 initPM hPM) (hs_10844 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10852 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10852).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10852 10774 10848 1546
-      { rank := 1, op := "OpName.FW_add", ins := [10774, 10848], outs := [10852], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 10774 10848 10852)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_10774 initPM hPM) (hs_10848 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10858 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10858).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10858 10852 1548
-      { rank := 1, op := "OpName.FW_float", ins := [10852], outs := [10858], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 10852 10858 [])]
-  exact (hs_10852 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10862 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10862).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10862 16465 10858 1550
-      { rank := 1, op := "OpName.FW_add", ins := [16465, 10858], outs := [10862], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16465 10858 10862)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16465 initPM hPM) (hs_10858 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16527 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16527).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16527 10862 1552
-      { rank := 1, op := "OpName.FW_multiref", ins := [10862], outs := [16523, 16527], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 10862 16523 16527 (by decide))]
-  exact (hs_10862 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10914 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10914).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10914 10904 1566
-      { rank := 1, op := "OpName.FW_view", ins := [10904], outs := [10914], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 10904 10914)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10918 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10918).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10918 10914 1568
-      { rank := 1, op := "OpName.FW_float", ins := [10914], outs := [10918], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 10914 10918 [])]
-  exact (hs_10914 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10922 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10922).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10922 16527 10918 1570
-      { rank := 1, op := "OpName.FW_add", ins := [16527, 10918], outs := [10922], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16527 10918 10922)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16527 initPM hPM) (hs_10918 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16539 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16539).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16539 10922 1572
-      { rank := 1, op := "OpName.FW_multiref", ins := [10922], outs := [16539, 16543], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 10922 16539 16543)]
-  exact (hs_10922 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10926 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10926).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10926 16539 5698 1574
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [16539, 5698], outs := [10926], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 16539 5698 10926)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16539 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16573 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16573).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16573 10926 1576
-      { rank := 1, op := "OpName.FW_multiref", ins := [10926], outs := [16573, 16577, 16581, 16585, 16589], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 10926 16573 16577 16581 16585 16589)]
-  exact (hs_10926 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10928 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10928).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 10928 16573 1581
-      { rank := 1, op := "OpName.FW_float", ins := [16573], outs := [10928], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 16573 10928 [])]
-  exact (hs_16573 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10934 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10934).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 10934 10928 5701 1589
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [10928, 5701], outs := [10934], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 10928 5701 10934)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_10928 initPM hPM) (hs_5701 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10938 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10938).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10938 10934 1597
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [10934], outs := [10936, 10938, 10940], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 10934 10936 10938 10940 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_10934 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16543 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16543).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16543 10922 1572
-      { rank := 1, op := "OpName.FW_multiref", ins := [10922], outs := [16539, 16543], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 10922 16539 16543 (by decide))]
-  exact (hs_10922 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16577 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16577).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16577 10926 1576
-      { rank := 1, op := "OpName.FW_multiref", ins := [10926], outs := [16573, 16577, 16581, 16585, 16589], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 10926 16573 16577 16581 16585 16589 (by decide))]
-  exact (hs_10926 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10936 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10936).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10936 10934 1597
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [10934], outs := [10936, 10938, 10940], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 10934 10936 10938 10940 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_10934 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10946 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10946).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 10946 16577 10936 10938 10941 10942 10943 10944 1604
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [16577, 10936, 10938, 10941, 10942, 10943, 10944], outs := [10946], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 16577 10936 10938 10941 10942 10943 10944 10946 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16577 initPM hPM)]; rfl) (by rw [(hs_16577 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10958 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10958).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10958 10952 1598
-      { rank := 1, op := "OpName.FW_view", ins := [10952], outs := [10958], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 10952 10958)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_10960 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 10960).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 10960 10958 1605
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [10958], outs := [10960], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 10958 10960)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_10958 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11016 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11016).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11016 11006 1612
-      { rank := 1, op := "OpName.FW_view", ins := [11006], outs := [11016], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 11006 11016)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11020 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11020).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11020 10960 11016 1614
-      { rank := 1, op := "OpName.FW_mul", ins := [10960, 11016], outs := [11020], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 10960 11016 11020)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_10960 initPM hPM) (hs_11016 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11024 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11024).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11024 10946 11020 1616
-      { rank := 1, op := "OpName.FW_add", ins := [10946, 11020], outs := [11024], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 10946 11020 11024)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_10946 initPM hPM) (hs_11020 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11030 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11030).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11030 11024 1618
-      { rank := 1, op := "OpName.FW_float", ins := [11024], outs := [11030], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 11024 11030 [])]
-  exact (hs_11024 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11034 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11034).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11034 16543 11030 1620
-      { rank := 1, op := "OpName.FW_add", ins := [16543, 11030], outs := [11034], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16543 11030 11034)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16543 initPM hPM) (hs_11030 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16605 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16605).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16605 11034 1622
-      { rank := 1, op := "OpName.FW_multiref", ins := [11034], outs := [16601, 16605], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 11034 16601 16605 (by decide))]
-  exact (hs_11034 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11086 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11086).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11086 11076 1636
-      { rank := 1, op := "OpName.FW_view", ins := [11076], outs := [11086], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 11076 11086)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11090 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11090).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11090 11086 1638
-      { rank := 1, op := "OpName.FW_float", ins := [11086], outs := [11090], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 11086 11090 [])]
-  exact (hs_11086 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11094 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11094).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11094 16605 11090 1640
-      { rank := 1, op := "OpName.FW_add", ins := [16605, 11090], outs := [11094], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16605 11090 11094)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16605 initPM hPM) (hs_11090 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16617 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16617).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16617 11094 1642
-      { rank := 1, op := "OpName.FW_multiref", ins := [11094], outs := [16617, 16621], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 11094 16617 16621)]
-  exact (hs_11094 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11098 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11098).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11098 16617 5747 1644
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [16617, 5747], outs := [11098], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 16617 5747 11098)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16617 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16651 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16651).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16651 11098 1646
-      { rank := 1, op := "OpName.FW_multiref", ins := [11098], outs := [16651, 16655, 16659, 16663, 16667], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 11098 16651 16655 16659 16663 16667)]
-  exact (hs_11098 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11100 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11100).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11100 16651 1651
-      { rank := 1, op := "OpName.FW_float", ins := [16651], outs := [11100], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 16651 11100 [])]
-  exact (hs_16651 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11106 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11106).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11106 11100 5750 1659
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [11100, 5750], outs := [11106], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 11100 5750 11106)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_11100 initPM hPM) (hs_5750 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11110 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11110).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11110 11106 1667
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [11106], outs := [11108, 11110, 11112], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 11106 11108 11110 11112 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_11106 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16621 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16621).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16621 11094 1642
-      { rank := 1, op := "OpName.FW_multiref", ins := [11094], outs := [16617, 16621], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 11094 16617 16621 (by decide))]
-  exact (hs_11094 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16655 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16655).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16655 11098 1646
-      { rank := 1, op := "OpName.FW_multiref", ins := [11098], outs := [16651, 16655, 16659, 16663, 16667], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 11098 16651 16655 16659 16663 16667 (by decide))]
-  exact (hs_11098 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11108 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11108).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11108 11106 1667
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [11106], outs := [11108, 11110, 11112], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 11106 11108 11110 11112 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_11106 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11118 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11118).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 11118 16655 11108 11110 11113 11114 11115 11116 1674
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [16655, 11108, 11110, 11113, 11114, 11115, 11116], outs := [11118], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 16655 11108 11110 11113 11114 11115 11116 11118 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16655 initPM hPM)]; rfl) (by rw [(hs_16655 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11130 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11130).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11130 11124 1668
-      { rank := 1, op := "OpName.FW_view", ins := [11124], outs := [11130], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 11124 11130)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11132 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11132).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11132 11130 1675
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [11130], outs := [11132], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 11130 11132)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_11130 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11188 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11188).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11188 11178 1682
-      { rank := 1, op := "OpName.FW_view", ins := [11178], outs := [11188], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 11178 11188)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11192 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11192).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11192 11132 11188 1684
-      { rank := 1, op := "OpName.FW_mul", ins := [11132, 11188], outs := [11192], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 11132 11188 11192)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_11132 initPM hPM) (hs_11188 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11196 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11196).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11196 11118 11192 1686
-      { rank := 1, op := "OpName.FW_add", ins := [11118, 11192], outs := [11196], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 11118 11192 11196)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_11118 initPM hPM) (hs_11192 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11202 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11202).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11202 11196 1688
-      { rank := 1, op := "OpName.FW_float", ins := [11196], outs := [11202], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 11196 11202 [])]
-  exact (hs_11196 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11206 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11206).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11206 16621 11202 1690
-      { rank := 1, op := "OpName.FW_add", ins := [16621, 11202], outs := [11206], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16621 11202 11206)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16621 initPM hPM) (hs_11202 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16683 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16683).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16683 11206 1692
-      { rank := 1, op := "OpName.FW_multiref", ins := [11206], outs := [16679, 16683], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 11206 16679 16683 (by decide))]
-  exact (hs_11206 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11258 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11258).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11258 11248 1706
-      { rank := 1, op := "OpName.FW_view", ins := [11248], outs := [11258], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 11248 11258)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11262 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11262).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11262 11258 1708
-      { rank := 1, op := "OpName.FW_float", ins := [11258], outs := [11262], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 11258 11262 [])]
-  exact (hs_11258 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11266 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11266).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11266 16683 11262 1710
-      { rank := 1, op := "OpName.FW_add", ins := [16683, 11262], outs := [11266], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16683 11262 11266)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16683 initPM hPM) (hs_11262 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16695 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16695).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16695 11266 1712
-      { rank := 1, op := "OpName.FW_multiref", ins := [11266], outs := [16695, 16699], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 11266 16695 16699)]
-  exact (hs_11266 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11270 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11270).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11270 16695 5796 1714
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [16695, 5796], outs := [11270], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 16695 5796 11270)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16695 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16729 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16729).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16729 11270 1716
-      { rank := 1, op := "OpName.FW_multiref", ins := [11270], outs := [16729, 16733, 16737, 16741, 16745], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 11270 16729 16733 16737 16741 16745)]
-  exact (hs_11270 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11272 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11272).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11272 16729 1721
-      { rank := 1, op := "OpName.FW_float", ins := [16729], outs := [11272], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 16729 11272 [])]
-  exact (hs_16729 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11278 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11278).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11278 11272 5799 1729
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [11272, 5799], outs := [11278], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 11272 5799 11278)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_11272 initPM hPM) (hs_5799 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11282 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11282).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11282 11278 1737
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [11278], outs := [11280, 11282, 11284], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 11278 11280 11282 11284 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_11278 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16699 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16699).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16699 11266 1712
-      { rank := 1, op := "OpName.FW_multiref", ins := [11266], outs := [16695, 16699], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 11266 16695 16699 (by decide))]
-  exact (hs_11266 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16733 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16733).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16733 11270 1716
-      { rank := 1, op := "OpName.FW_multiref", ins := [11270], outs := [16729, 16733, 16737, 16741, 16745], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 11270 16729 16733 16737 16741 16745 (by decide))]
-  exact (hs_11270 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11280 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11280).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11280 11278 1737
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [11278], outs := [11280, 11282, 11284], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 11278 11280 11282 11284 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_11278 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11290 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11290).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 11290 16733 11280 11282 11285 11286 11287 11288 1744
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [16733, 11280, 11282, 11285, 11286, 11287, 11288], outs := [11290], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 16733 11280 11282 11285 11286 11287 11288 11290 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16733 initPM hPM)]; rfl) (by rw [(hs_16733 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11302 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11302).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11302 11296 1738
-      { rank := 1, op := "OpName.FW_view", ins := [11296], outs := [11302], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 11296 11302)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11304 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11304).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11304 11302 1745
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [11302], outs := [11304], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 11302 11304)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_11302 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11360 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11360).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11360 11350 1752
-      { rank := 1, op := "OpName.FW_view", ins := [11350], outs := [11360], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 11350 11360)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11364 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11364).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11364 11304 11360 1754
-      { rank := 1, op := "OpName.FW_mul", ins := [11304, 11360], outs := [11364], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 11304 11360 11364)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_11304 initPM hPM) (hs_11360 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11368 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11368).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11368 11290 11364 1756
-      { rank := 1, op := "OpName.FW_add", ins := [11290, 11364], outs := [11368], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 11290 11364 11368)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_11290 initPM hPM) (hs_11364 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11374 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11374).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11374 11368 1758
-      { rank := 1, op := "OpName.FW_float", ins := [11368], outs := [11374], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 11368 11374 [])]
-  exact (hs_11368 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11378 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11378).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11378 16699 11374 1760
-      { rank := 1, op := "OpName.FW_add", ins := [16699, 11374], outs := [11378], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16699 11374 11378)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16699 initPM hPM) (hs_11374 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16761 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16761).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16761 11378 1762
-      { rank := 1, op := "OpName.FW_multiref", ins := [11378], outs := [16757, 16761], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 11378 16757 16761 (by decide))]
-  exact (hs_11378 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11430 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11430).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11430 11420 1776
-      { rank := 1, op := "OpName.FW_view", ins := [11420], outs := [11430], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 11420 11430)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11434 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11434).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11434 11430 1778
-      { rank := 1, op := "OpName.FW_float", ins := [11430], outs := [11434], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 11430 11434 [])]
-  exact (hs_11430 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11438 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11438).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11438 16761 11434 1780
-      { rank := 1, op := "OpName.FW_add", ins := [16761, 11434], outs := [11438], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16761 11434 11438)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16761 initPM hPM) (hs_11434 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16773 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16773).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16773 11438 1782
-      { rank := 1, op := "OpName.FW_multiref", ins := [11438], outs := [16773, 16777], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 11438 16773 16777)]
-  exact (hs_11438 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11442 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11442).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11442 16773 5845 1784
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [16773, 5845], outs := [11442], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 16773 5845 11442)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16773 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16807 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16807).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16807 11442 1786
-      { rank := 1, op := "OpName.FW_multiref", ins := [11442], outs := [16807, 16811, 16815, 16819, 16823], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 11442 16807 16811 16815 16819 16823)]
-  exact (hs_11442 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11444 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11444).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11444 16807 1791
-      { rank := 1, op := "OpName.FW_float", ins := [16807], outs := [11444], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 16807 11444 [])]
-  exact (hs_16807 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11450 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11450).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11450 11444 5848 1799
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [11444, 5848], outs := [11450], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 11444 5848 11450)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_11444 initPM hPM) (hs_5848 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11454 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11454).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11454 11450 1807
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [11450], outs := [11452, 11454, 11456], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 11450 11452 11454 11456 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_11450 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16777 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16777).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16777 11438 1782
-      { rank := 1, op := "OpName.FW_multiref", ins := [11438], outs := [16773, 16777], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 11438 16773 16777 (by decide))]
-  exact (hs_11438 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16811 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16811).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16811 11442 1786
-      { rank := 1, op := "OpName.FW_multiref", ins := [11442], outs := [16807, 16811, 16815, 16819, 16823], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_at_pos1_out pm_goal_3 s 1 11442 16807 16811 16815 16819 16823 (by decide))]
-  exact (hs_11442 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11452 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11452).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11452 11450 1807
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [11450], outs := [11452, 11454, 11456], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_probs_out pm_goal_3 s 1 11450 11452 11454 11456 [8])]
-  beta_reduce
-  exact fw_topk_routing_probs_shape2 _ 2048 64 (hs_11450 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11462 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11462).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_7in initPM 11462 16811 11452 11454 11457 11458 11459 11460 1814
-      { rank := 1, op := "OpName.FW_all2all_moe_gmm_full", ins := [16811, 11452, 11454, 11457, 11458, 11459, 11460], outs := [11462], params := [64, 8, 10] }
-      (fun x1 x2 x3 x4 x5 x6 x7 => fw_all2all_moe_gmm_full (x1) (x2) (x3) [x4, x5] [x6, x7] ([64, 8, 10].getD 0 1) ([64, 8, 10].getD 1 1) (((([64, 8, 10].getD 2 10) : Nat) : Scalar))) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_all2all_moe_gmm_full_out_1p_r2 pm_goal_3 s 1 16811 11452 11454 11457 11458 11459 11460 11462 [64, 8, 10])]
-  beta_reduce
-  rw [fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024 (by rw [(hs_16811 initPM hPM)]; rfl) (by rw [(hs_16811 initPM hPM)]; rfl)]
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11474 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11474).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11474 11468 1808
-      { rank := 1, op := "OpName.FW_view", ins := [11468], outs := [11474], params := [2048, 1] }
-      (fw_view [2048, 1]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1] 11468 11474)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11476 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11476).shape = [2048, 1] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11476 11474 1815
-      { rank := 1, op := "OpName.FW_sigmoid", ins := [11474], outs := [11476], params := [] }
-      (fun x => fw_sigmoid (x)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_sigmoid_out_1p pm_goal_3 s 1 11474 11476)]
-  beta_reduce
-  rw [fw_sigmoid_shape]; exact (hs_11474 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11532 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11532).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11532 11522 1822
-      { rank := 1, op := "OpName.FW_view", ins := [11522], outs := [11532], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 11522 11532)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11536 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11536).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11536 11476 11532 1824
-      { rank := 1, op := "OpName.FW_mul", ins := [11476, 11532], outs := [11536], params := [] }
-      (fun a b => elemwiseMul (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_mul_out pm_goal_3 s 1 11476 11532 11536)]
-  beta_reduce
-  rw [elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] (hs_11476 initPM hPM) (hs_11532 initPM hPM)]
-  decide
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11540 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11540).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11540 11462 11536 1826
-      { rank := 1, op := "OpName.FW_add", ins := [11462, 11536], outs := [11540], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 11462 11536 11540)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_11462 initPM hPM) (hs_11536 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11546 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11546).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11546 11540 1828
-      { rank := 1, op := "OpName.FW_float", ins := [11540], outs := [11546], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 11540 11546 [])]
-  exact (hs_11540 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11550 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11550).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11550 16777 11546 1830
-      { rank := 1, op := "OpName.FW_add", ins := [16777, 11546], outs := [11550], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16777 11546 11550)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16777 initPM hPM) (hs_11546 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16839 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16839).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16839 11550 1832
-      { rank := 1, op := "OpName.FW_multiref", ins := [11550], outs := [16835, 16839], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_second_out pm_goal_3 s 1 11550 16835 16839 (by decide))]
-  exact (hs_11550 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11602 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11602).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11602 11592 1846
-      { rank := 1, op := "OpName.FW_view", ins := [11592], outs := [11602], params := [2048, 1024] }
-      (fw_view [2048, 1024]) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 11592 11602)]
-  beta_reduce
-  rfl
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11606 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11606).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11606 11602 1848
-      { rank := 1, op := "OpName.FW_float", ins := [11602], outs := [11606], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 11602 11606 [])]
-  exact (hs_11602 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11610 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11610).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11610 16839 11606 1850
-      { rank := 1, op := "OpName.FW_add", ins := [16839, 11606], outs := [11610], params := [] }
-      (fun a b => elemwiseAdd (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16839 11606 11610)]
-  beta_reduce
-  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] (hs_16839 initPM hPM) (hs_11606 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16851 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16851).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16851 11610 1852
-      { rank := 1, op := "OpName.FW_multiref", ins := [11610], outs := [16851, 16855], params := [2] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref2_first_out pm_goal_3 s 1 11610 16851 16855)]
-  exact (hs_11610 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11614 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11614).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11614 16851 5894 1854
-      { rank := 1, op := "OpName.FW_rms_norm", ins := [16851, 5894], outs := [11614], params := [] }
-      (fun a b => fw_rms_norm (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 16851 5894 11614)]
-  beta_reduce
-  rw [fw_rms_norm_shape]; exact (hs_16851 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_16885 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 16885).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 16885 11614 1856
-      { rank := 1, op := "OpName.FW_multiref", ins := [11614], outs := [16885, 16889, 16893, 16897, 16901], params := [5] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_multiref5_first_out pm_goal_3 s 1 11614 16885 16889 16893 16897 16901)]
-  exact (hs_11614 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11616 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11616).shape = [2048, 1024] := by
-  rw [HsHelpersGeneric.denote_step_id initPM 11616 16885 1858
-      { rank := 1, op := "OpName.FW_float", ins := [16885], outs := [11616], params := [] }
-      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_float_out pm_goal_3 s 1 16885 11616 [])]
-  exact (hs_16885 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11622 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11622).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_2in initPM 11622 11616 5897 1860
-      { rank := 1, op := "OpName.FW_norm_linear", ins := [11616, 5897], outs := [11622], params := [] }
-      (fun a b => fw_norm_linear (a) (b)) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 11616 5897 11622)]
-  beta_reduce
-  exact fw_norm_linear_shape2 _ _ 2048 1024 64 (hs_11616 initPM hPM) (hs_5897 initPM hPM)
-
-set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
-theorem hs_11626 (initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
-    (denoteGraph_ringAttn pm_goal_3 initPM 11626).shape = [2048, 64] := by
-  rw [HsHelpersGeneric.denote_step_1in initPM 11626 11622 1862
-      { rank := 1, op := "OpName.FW_topk_routing", ins := [11622], outs := [11624, 11626, 11628], params := [8] }
-      (fun x => (fw_topk_routing (x) ([8].getD 0 1) (((x).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst) (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-      (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 11622 11624 11626 11628 [8] (by decide))]
-  beta_reduce
-  exact fw_topk_routing_map_shape2 _ 2048 64 (hs_11622 initPM hPM)
+hsm2b 15981 9656 15977 1004 1 s[2048, 1024]
+hsview 9710 9700 1076 1 s[2048, 1024]
+hsflt 9714 9710 1078 1 s[2048, 1024]
+hsadd 9718 15981 9714 1080 1 s[2048, 1024]
+hsm2a 15993 9718 15997 1082 1 s[2048, 1024]
+hsrms 9722 15993 5355 1084 1 s[2048, 1024]
+hsm5a 16027 9722 16031 16035 16039 16043 1086 1 s[2048, 1024]
+hsflt 9724 16027 1091 1 s[2048, 1024]
+hsnlin 9730 9724 5358 1099 1 s[2048, 64]
+hstkm 9734 9730 9732 9736 1107 1 s[2048, 64]
+hsm2b 15997 9718 15993 1082 1 s[2048, 1024]
+hsm5b 16031 9722 16027 16035 16039 16043 1086 1 s[2048, 1024]
+hstkp 9732 9730 9734 9736 1107 1 s[2048, 64]
+hsmoe 9742 16031 9732 9734 9737 9738 9739 9740 1114 1 s[2048, 1024]
+hsview 9754 9748 1108 1 s[2048, 1]
+hssig 9756 9754 1115 1 s[2048, 1]
+hsview 9812 9802 1122 1 s[2048, 1024]
+hsmul 9816 9756 9812 1124 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 9820 9742 9816 1126 1 s[2048, 1024]
+hsflt 9826 9820 1128 1 s[2048, 1024]
+hsadd 9830 15997 9826 1130 1 s[2048, 1024]
+hsm2b 16059 9830 16055 1132 1 s[2048, 1024]
+hsview 9882 9872 1146 1 s[2048, 1024]
+hsflt 9886 9882 1148 1 s[2048, 1024]
+hsadd 9890 16059 9886 1150 1 s[2048, 1024]
+hsm2a 16071 9890 16075 1152 1 s[2048, 1024]
+hsrms 9894 16071 5404 1154 1 s[2048, 1024]
+hsm5a 16105 9894 16109 16113 16117 16121 1156 1 s[2048, 1024]
+hsflt 9896 16105 1161 1 s[2048, 1024]
+hsnlin 9902 9896 5407 1169 1 s[2048, 64]
+hstkm 9906 9902 9904 9908 1177 1 s[2048, 64]
+hsm2b 16075 9890 16071 1152 1 s[2048, 1024]
+hsm5b 16109 9894 16105 16113 16117 16121 1156 1 s[2048, 1024]
+hstkp 9904 9902 9906 9908 1177 1 s[2048, 64]
+hsmoe 9914 16109 9904 9906 9909 9910 9911 9912 1184 1 s[2048, 1024]
+hsview 9926 9920 1178 1 s[2048, 1]
+hssig 9928 9926 1185 1 s[2048, 1]
+hsview 9984 9974 1192 1 s[2048, 1024]
+hsmul 9988 9928 9984 1194 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 9992 9914 9988 1196 1 s[2048, 1024]
+hsflt 9998 9992 1198 1 s[2048, 1024]
+hsadd 10002 16075 9998 1200 1 s[2048, 1024]
+hsm2b 16137 10002 16133 1202 1 s[2048, 1024]
+hsview 10054 10044 1216 1 s[2048, 1024]
+hsflt 10058 10054 1218 1 s[2048, 1024]
+hsadd 10062 16137 10058 1220 1 s[2048, 1024]
+hsm2a 16149 10062 16153 1222 1 s[2048, 1024]
+hsrms 10066 16149 5453 1224 1 s[2048, 1024]
+hsm5a 16183 10066 16187 16191 16195 16199 1226 1 s[2048, 1024]
+hsflt 10068 16183 1231 1 s[2048, 1024]
+hsnlin 10074 10068 5456 1239 1 s[2048, 64]
+hstkm 10078 10074 10076 10080 1247 1 s[2048, 64]
+hsm2b 16153 10062 16149 1222 1 s[2048, 1024]
+hsm5b 16187 10066 16183 16191 16195 16199 1226 1 s[2048, 1024]
+hstkp 10076 10074 10078 10080 1247 1 s[2048, 64]
+hsmoe 10086 16187 10076 10078 10081 10082 10083 10084 1254 1 s[2048, 1024]
+hsview 10098 10092 1248 1 s[2048, 1]
+hssig 10100 10098 1255 1 s[2048, 1]
+hsview 10156 10146 1262 1 s[2048, 1024]
+hsmul 10160 10100 10156 1264 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 10164 10086 10160 1266 1 s[2048, 1024]
+hsflt 10170 10164 1268 1 s[2048, 1024]
+hsadd 10174 16153 10170 1270 1 s[2048, 1024]
+hsm2b 16215 10174 16211 1272 1 s[2048, 1024]
+hsview 10226 10216 1286 1 s[2048, 1024]
+hsflt 10230 10226 1288 1 s[2048, 1024]
+hsadd 10234 16215 10230 1290 1 s[2048, 1024]
+hsm2a 16227 10234 16231 1292 1 s[2048, 1024]
+hsrms 10238 16227 5502 1294 1 s[2048, 1024]
+hsm5a 16261 10238 16265 16269 16273 16277 1296 1 s[2048, 1024]
+hsflt 10240 16261 1301 1 s[2048, 1024]
+hsnlin 10246 10240 5505 1309 1 s[2048, 64]
+hstkm 10250 10246 10248 10252 1317 1 s[2048, 64]
+hsm2b 16231 10234 16227 1292 1 s[2048, 1024]
+hsm5b 16265 10238 16261 16269 16273 16277 1296 1 s[2048, 1024]
+hstkp 10248 10246 10250 10252 1317 1 s[2048, 64]
+hsmoe 10258 16265 10248 10250 10253 10254 10255 10256 1324 1 s[2048, 1024]
+hsview 10270 10264 1318 1 s[2048, 1]
+hssig 10272 10270 1325 1 s[2048, 1]
+hsview 10328 10318 1332 1 s[2048, 1024]
+hsmul 10332 10272 10328 1334 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 10336 10258 10332 1336 1 s[2048, 1024]
+hsflt 10342 10336 1338 1 s[2048, 1024]
+hsadd 10346 16231 10342 1340 1 s[2048, 1024]
+hsm2b 16293 10346 16289 1342 1 s[2048, 1024]
+hsview 10398 10388 1356 1 s[2048, 1024]
+hsflt 10402 10398 1358 1 s[2048, 1024]
+hsadd 10406 16293 10402 1360 1 s[2048, 1024]
+hsm2a 16305 10406 16309 1362 1 s[2048, 1024]
+hsrms 10410 16305 5551 1364 1 s[2048, 1024]
+hsm5a 16339 10410 16343 16347 16351 16355 1366 1 s[2048, 1024]
+hsflt 10412 16339 1371 1 s[2048, 1024]
+hsnlin 10418 10412 5554 1379 1 s[2048, 64]
+hstkm 10422 10418 10420 10424 1387 1 s[2048, 64]
+hsm2b 16309 10406 16305 1362 1 s[2048, 1024]
+hsm5b 16343 10410 16339 16347 16351 16355 1366 1 s[2048, 1024]
+hstkp 10420 10418 10422 10424 1387 1 s[2048, 64]
+hsmoe 10430 16343 10420 10422 10425 10426 10427 10428 1394 1 s[2048, 1024]
+hsview 10442 10436 1388 1 s[2048, 1]
+hssig 10444 10442 1395 1 s[2048, 1]
+hsview 10500 10490 1402 1 s[2048, 1024]
+hsmul 10504 10444 10500 1404 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 10508 10430 10504 1406 1 s[2048, 1024]
+hsflt 10514 10508 1408 1 s[2048, 1024]
+hsadd 10518 16309 10514 1410 1 s[2048, 1024]
+hsm2b 16371 10518 16367 1412 1 s[2048, 1024]
+hsview 10570 10560 1426 1 s[2048, 1024]
+hsflt 10574 10570 1428 1 s[2048, 1024]
+hsadd 10578 16371 10574 1430 1 s[2048, 1024]
+hsm2a 16383 10578 16387 1432 1 s[2048, 1024]
+hsrms 10582 16383 5600 1434 1 s[2048, 1024]
+hsm5a 16417 10582 16421 16425 16429 16433 1436 1 s[2048, 1024]
+hsflt 10584 16417 1441 1 s[2048, 1024]
+hsnlin 10590 10584 5603 1449 1 s[2048, 64]
+hstkm 10594 10590 10592 10596 1457 1 s[2048, 64]
+hsm2b 16387 10578 16383 1432 1 s[2048, 1024]
+hsm5b 16421 10582 16417 16425 16429 16433 1436 1 s[2048, 1024]
+hstkp 10592 10590 10594 10596 1457 1 s[2048, 64]
+hsmoe 10602 16421 10592 10594 10597 10598 10599 10600 1464 1 s[2048, 1024]
+hsview 10614 10608 1458 1 s[2048, 1]
+hssig 10616 10614 1465 1 s[2048, 1]
+hsview 10672 10662 1472 1 s[2048, 1024]
+hsmul 10676 10616 10672 1474 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 10680 10602 10676 1476 1 s[2048, 1024]
+hsflt 10686 10680 1478 1 s[2048, 1024]
+hsadd 10690 16387 10686 1480 1 s[2048, 1024]
+hsm2b 16449 10690 16445 1482 1 s[2048, 1024]
+hsview 10742 10732 1496 1 s[2048, 1024]
+hsflt 10746 10742 1498 1 s[2048, 1024]
+hsadd 10750 16449 10746 1500 1 s[2048, 1024]
+hsm2a 16461 10750 16465 1502 1 s[2048, 1024]
+hsrms 10754 16461 5649 1504 1 s[2048, 1024]
+hsm5a 16495 10754 16499 16503 16507 16511 1506 1 s[2048, 1024]
+hsflt 10756 16495 1511 1 s[2048, 1024]
+hsnlin 10762 10756 5652 1519 1 s[2048, 64]
+hstkm 10766 10762 10764 10768 1527 1 s[2048, 64]
+hsm2b 16465 10750 16461 1502 1 s[2048, 1024]
+hsm5b 16499 10754 16495 16503 16507 16511 1506 1 s[2048, 1024]
+hstkp 10764 10762 10766 10768 1527 1 s[2048, 64]
+hsmoe 10774 16499 10764 10766 10769 10770 10771 10772 1534 1 s[2048, 1024]
+hsview 10786 10780 1528 1 s[2048, 1]
+hssig 10788 10786 1535 1 s[2048, 1]
+hsview 10844 10834 1542 1 s[2048, 1024]
+hsmul 10848 10788 10844 1544 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 10852 10774 10848 1546 1 s[2048, 1024]
+hsflt 10858 10852 1548 1 s[2048, 1024]
+hsadd 10862 16465 10858 1550 1 s[2048, 1024]
+hsm2b 16527 10862 16523 1552 1 s[2048, 1024]
+hsview 10914 10904 1566 1 s[2048, 1024]
+hsflt 10918 10914 1568 1 s[2048, 1024]
+hsadd 10922 16527 10918 1570 1 s[2048, 1024]
+hsm2a 16539 10922 16543 1572 1 s[2048, 1024]
+hsrms 10926 16539 5698 1574 1 s[2048, 1024]
+hsm5a 16573 10926 16577 16581 16585 16589 1576 1 s[2048, 1024]
+hsflt 10928 16573 1581 1 s[2048, 1024]
+hsnlin 10934 10928 5701 1589 1 s[2048, 64]
+hstkm 10938 10934 10936 10940 1597 1 s[2048, 64]
+hsm2b 16543 10922 16539 1572 1 s[2048, 1024]
+hsm5b 16577 10926 16573 16581 16585 16589 1576 1 s[2048, 1024]
+hstkp 10936 10934 10938 10940 1597 1 s[2048, 64]
+hsmoe 10946 16577 10936 10938 10941 10942 10943 10944 1604 1 s[2048, 1024]
+hsview 10958 10952 1598 1 s[2048, 1]
+hssig 10960 10958 1605 1 s[2048, 1]
+hsview 11016 11006 1612 1 s[2048, 1024]
+hsmul 11020 10960 11016 1614 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 11024 10946 11020 1616 1 s[2048, 1024]
+hsflt 11030 11024 1618 1 s[2048, 1024]
+hsadd 11034 16543 11030 1620 1 s[2048, 1024]
+hsm2b 16605 11034 16601 1622 1 s[2048, 1024]
+hsview 11086 11076 1636 1 s[2048, 1024]
+hsflt 11090 11086 1638 1 s[2048, 1024]
+hsadd 11094 16605 11090 1640 1 s[2048, 1024]
+hsm2a 16617 11094 16621 1642 1 s[2048, 1024]
+hsrms 11098 16617 5747 1644 1 s[2048, 1024]
+hsm5a 16651 11098 16655 16659 16663 16667 1646 1 s[2048, 1024]
+hsflt 11100 16651 1651 1 s[2048, 1024]
+hsnlin 11106 11100 5750 1659 1 s[2048, 64]
+hstkm 11110 11106 11108 11112 1667 1 s[2048, 64]
+hsm2b 16621 11094 16617 1642 1 s[2048, 1024]
+hsm5b 16655 11098 16651 16659 16663 16667 1646 1 s[2048, 1024]
+hstkp 11108 11106 11110 11112 1667 1 s[2048, 64]
+hsmoe 11118 16655 11108 11110 11113 11114 11115 11116 1674 1 s[2048, 1024]
+hsview 11130 11124 1668 1 s[2048, 1]
+hssig 11132 11130 1675 1 s[2048, 1]
+hsview 11188 11178 1682 1 s[2048, 1024]
+hsmul 11192 11132 11188 1684 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 11196 11118 11192 1686 1 s[2048, 1024]
+hsflt 11202 11196 1688 1 s[2048, 1024]
+hsadd 11206 16621 11202 1690 1 s[2048, 1024]
+hsm2b 16683 11206 16679 1692 1 s[2048, 1024]
+hsview 11258 11248 1706 1 s[2048, 1024]
+hsflt 11262 11258 1708 1 s[2048, 1024]
+hsadd 11266 16683 11262 1710 1 s[2048, 1024]
+hsm2a 16695 11266 16699 1712 1 s[2048, 1024]
+hsrms 11270 16695 5796 1714 1 s[2048, 1024]
+hsm5a 16729 11270 16733 16737 16741 16745 1716 1 s[2048, 1024]
+hsflt 11272 16729 1721 1 s[2048, 1024]
+hsnlin 11278 11272 5799 1729 1 s[2048, 64]
+hstkm 11282 11278 11280 11284 1737 1 s[2048, 64]
+hsm2b 16699 11266 16695 1712 1 s[2048, 1024]
+hsm5b 16733 11270 16729 16737 16741 16745 1716 1 s[2048, 1024]
+hstkp 11280 11278 11282 11284 1737 1 s[2048, 64]
+hsmoe 11290 16733 11280 11282 11285 11286 11287 11288 1744 1 s[2048, 1024]
+hsview 11302 11296 1738 1 s[2048, 1]
+hssig 11304 11302 1745 1 s[2048, 1]
+hsview 11360 11350 1752 1 s[2048, 1024]
+hsmul 11364 11304 11360 1754 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 11368 11290 11364 1756 1 s[2048, 1024]
+hsflt 11374 11368 1758 1 s[2048, 1024]
+hsadd 11378 16699 11374 1760 1 s[2048, 1024]
+hsm2b 16761 11378 16757 1762 1 s[2048, 1024]
+hsview 11430 11420 1776 1 s[2048, 1024]
+hsflt 11434 11430 1778 1 s[2048, 1024]
+hsadd 11438 16761 11434 1780 1 s[2048, 1024]
+hsm2a 16773 11438 16777 1782 1 s[2048, 1024]
+hsrms 11442 16773 5845 1784 1 s[2048, 1024]
+hsm5a 16807 11442 16811 16815 16819 16823 1786 1 s[2048, 1024]
+hsflt 11444 16807 1791 1 s[2048, 1024]
+hsnlin 11450 11444 5848 1799 1 s[2048, 64]
+hstkm 11454 11450 11452 11456 1807 1 s[2048, 64]
+hsm2b 16777 11438 16773 1782 1 s[2048, 1024]
+hsm5b 16811 11442 16807 16815 16819 16823 1786 1 s[2048, 1024]
+hstkp 11452 11450 11454 11456 1807 1 s[2048, 64]
+hsmoe 11462 16811 11452 11454 11457 11458 11459 11460 1814 1 s[2048, 1024]
+hsview 11474 11468 1808 1 s[2048, 1]
+hssig 11476 11474 1815 1 s[2048, 1]
+hsview 11532 11522 1822 1 s[2048, 1024]
+hsmul 11536 11476 11532 1824 1 s[2048, 1024] s[2048, 1] s[2048, 1024]
+hsadd 11540 11462 11536 1826 1 s[2048, 1024]
+hsflt 11546 11540 1828 1 s[2048, 1024]
+hsadd 11550 16777 11546 1830 1 s[2048, 1024]
+hsm2b 16839 11550 16835 1832 1 s[2048, 1024]
+hsview 11602 11592 1846 1 s[2048, 1024]
+hsflt 11606 11602 1848 1 s[2048, 1024]
+hsadd 11610 16839 11606 1850 1 s[2048, 1024]
+hsm2a 16851 11610 16855 1852 1 s[2048, 1024]
+hsrms 11614 16851 5894 1854 1 s[2048, 1024]
+hsm5a 16885 11614 16889 16893 16897 16901 1856 1 s[2048, 1024]
+hsflt 11616 16885 1858 1 s[2048, 1024]
+hsnlin 11622 11616 5897 1860 1 s[2048, 64]
+hstkm 11626 11622 11624 11628 1862 1 s[2048, 64]
 
 end RouterShapesHelpers
 
@@ -40818,3 +29882,4 @@ mk_router 11
 
 
 end TrainVerify.Denote.GeneratedPatterns
+
