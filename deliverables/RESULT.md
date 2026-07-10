@@ -1,59 +1,77 @@
-# RESULT — Pattern_3 hs_ helper generic-lemma refactor
+# RESULT — denote-unfold generic-lemma refactor
 
-## Verdict: ✅ LANDED (full success, zero sorry, zero new axioms)
+## Summary
 
-## What was done
-Added a new `HsHelpersGeneric` namespace (5 backbone lemmas) to `Pattern_3.lean`
-immediately before `namespace RouterShapesHelpers`, then rewrote **1113 of 1116**
-`hs_<tid>` helpers to short invocations of those generics. All 1116
-`RouterShapesHelpers.hs_<tid>` NAMES preserved exactly — downstream call sites
-(`sm_pm_router_commute_L0..L9`, `mk_router`) build unchanged.
+Introduced namespace `DenoteUnfoldGeneric` (7 zero-sorry backbone lemmas) in
+`Pattern_3.lean` and rewrote **510 of 686** `denote_{sm,pm}_goal_3_<tid>`
+value-unfold theorems into compact term-mode invocations of those lemmas,
+mirroring the prior `HsHelpersGeneric` approach.
 
-### The 5 generic lemmas (spike pattern, proven zero-sorry)
-1. `denote_leaf_shape` — leaf init tids (no writer node) → `StoreShapesHold`.
-2. `denote_step_1in` — 1-input value propagation (`f : Tensor → Tensor`): view, float,
-   sigmoid, topk_routing, chunk, norm_linear, etc.
-3. `denote_step_id` — 1-input identity passthrough (float/multiref/to).
-4. `denote_step_2in` — 2-input propagation (add, mul, rms_norm, ...).
-5. `denote_step_7in` — n-ary (all2all_moe_gmm_full, 7 inputs). Subsumes 1in/2in;
-   1in/2in kept as cheaper-to-call specializations.
+## Backbone lemmas (namespace `DenoteUnfoldGeneric`, ZERO sorry)
 
-### 3 helpers intentionally left hand-written (per ground rule 8)
-- `hs_4714` (allGather — single occurrence, no generic class)
-- `hs_9655`, `hs_9656` (maybe_shuffle — 2 occurrences, no generic class)
-These retain original hand-written proofs; not worth a dedicated generic.
+| Lemma | Role |
+|---|---|
+| `denote_leaf_val` | leaf input value = `initStore tid` (drop-0 dependency-cone `by decide`) |
+| `dstep1` | 1-input node: `denote tid_out = f (denote i1)` |
+| `dstep2` | 2-input node |
+| `dstep3` | 3-input node (linear-family) |
+| `dstep4` | 4-input node (rotary) |
+| `dstep5` | 5-input node |
+| `dstep7` | 7-input node (moe_gmm n-ary) |
+
+Machinery per lemma: `foldl_prefix_eq_full_ringAttn` (Boundary) → `take (M+1)` split
+(Written) → `applyNodeRingAttn_eq_applyNode_of_not_ring` + per-op `applyNode_<op>_out`
++ leaf/recursive value hypotheses. Every hypothesis discharged by `by decide` /
+`rfl` / nested `dstep1` at each call-site.
 
 ## Metrics
 
-| Metric | Baseline | Refactored | Delta |
-|---|---|---|---|
-| Total file lines | 54,496 | 47,167 | **−7,329 (−13.4%)** |
-| Helper-block body lines saved | — | — | ~7,508 |
-| `hs_<tid>` theorems | 1116 | 1116 | 0 (names preserved) |
-| Helpers via generics | 0 | 1113 | +1113 |
-| `Pattern_3` module build | 1447s | 1462s | +15s (+1.0%, noise) |
+| Metric | Baseline | After | Delta |
+|---|---:|---:|---:|
+| `Pattern_3.lean` lines | 47,168 | **40,820** | **−6,348 (−13.5%)** |
+| `denote_*` theorems genericized | 0 | **510** (330 n1 + 180 n2) | — |
+| `denote_*` theorems hand-written | 686 | 176 | — |
+| Theorem names preserved | 686 | 686 | **0 lost** |
+| Full build time | 31m17s | **25m13s** | **−19.4% (faster)** |
+| Build exit code | 0 | **0** | ✅ |
 
-Build: `lake build denote.yoco_goals.Pattern_3` → **EXIT 0** (24:24 wall).
-No build regression (well within the ±5% budget).
+Build-time regression budget was ≤5%; result is a **19% improvement** (well within budget).
 
 ## Kernel audit (`#print axioms`)
-All sampled = `[propext, Classical.choice, Quot.sound]` (standard, kernel-clean):
-- Generics: `denote_leaf_shape`, `denote_step_1in`, `denote_step_id`,
-  `denote_step_2in`, `denote_step_7in` ✓
-- Helpers: hs_4680 (leaf), hs_4681 (float/id), hs_4701 (view), hs_4703 (add/2in),
-  hs_4719 (sigmoid), hs_4733 (mul/2in), hs_7479 (chunk), hs_7483 (topk/1in),
-  hs_7491 (moe/7in) ✓
 
-## Downstream
-`sm_pm_router_commute_L0 .. L9` and all `mk_router` invocations reference
-`RouterShapesHelpers.hs_<tid>` by preserved name and build clean in the same
-module (covered by the EXIT-0 full build).
+All sampled names report exactly `[propext, Classical.choice, Quot.sound]`:
 
-## Honest notes
-- Net line saving 7,329 (target was <11,000 saved, no regression >5%): ✅.
-- Compile time essentially unchanged (+1%) as predicted — dominant cost is the
-  per-helper `by decide` over the ~903-node graph, unchanged by the refactor.
-- Sub-2000-line aspiration (metaprogramming macro) remains out of scope.
+- Backbone: `denote_leaf_val`, `dstep1`, `dstep2`, `dstep3`, `dstep4`, `dstep5`, `dstep7`
+- n1 samples: `denote_sm_goal_3_4867`, `denote_pm_goal_3_7666`, `denote_sm_goal_3_4814`
+- n2 samples: `denote_pm_goal_3_7771`, `denote_sm_goal_3_4868`, `denote_pm_goal_3_8031`,
+  `denote_sm_goal_3_4922`, `denote_pm_goal_3_7845`
+- Downstream sanity: `sm_pm_router_commute_L5` → clean (resolves correctly)
+
+ZERO new axioms. No `sorryAx`, `ofReduceBool`, or `Lean.ofReduceBool` in any
+refactored theorem.
+
+## Honest partial-failure notes (ground rule 8)
+
+- **n_out ≥ 3 multi-node class (177 theorems) ABANDONED**: these unfold 3+ writer
+  nodes with heterogeneous op/see-through topologies; a clean single backbone would
+  require per-topology specialization with diminishing returns. Left hand-written.
+- **`FW_stack` (3 theorems, 24 inputs)**: no `dstepK` for arity 24; hand-written.
+- **`_shallow` sliding-window unfolds & 1 `ChunkPrim` n2 exception**: structurally
+  irregular; hand-written.
+- These 176 hand-written theorems account for the bulk of the residual unfold lines,
+  so the realized −13.5% is below the ~50% aspiration but is fully correct, faster,
+  and axiom-clean.
+
+## Pre-existing `sorry` disclosure
+
+`sm_pm_router_commute_layer` (Pattern_3.lean) carries a `sorry` in the baseline
+(inside the DO-NOT-TOUCH `sm_pm_*` set). Not introduced or affected by this refactor.
+
+## Verdict
+
+**SHIP.** 510/686 denote-unfold theorems genericized onto a 7-lemma zero-sorry
+backbone; all names preserved; build EXIT 0 and 19% faster; kernel-clean.
 
 ## Commit
-SHA: 4751490484b42473bab19a9bb248ce5b61bb5fcd (branch `iroha-hs-refactor`, pushed to `origin`)
+
+`f770f8e36f50d97264cf3dce95c90169a957f049` on branch `iroha-denote-refactor`.
