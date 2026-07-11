@@ -1841,6 +1841,67 @@ theorem sm_pm_attention_L12_commute (initSM initPM : Store)
   rw [denote_sm_attn_L12_bridge, hrec, bridge_r1,
       ← denote_pm_attn_L12_r0_bridge, ← denote_pm_attn_L12_r1_bridge]
 
+/-! ## L12 post-attention residual carry: maybe_shuffle branch commute
+
+The router-L12 residual `SM 5354 = add(8143, 5353)` has an "8143" branch that
+threads the L11 carry (`SM 5330`, proven `sm_pm_carry_5330_commute`) through a
+`multiref → fw_maybe_shuffle → multiref` chain.  `fw_maybe_shuffle` is the
+identity on its data argument (AGENTS.md #24), and `multiref` is the gathered
+input, so the whole branch is the identity on the carry and the commute reduces
+to `hcarry5330`. -/
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_8143 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 8143 =
+      denoteGraph_ringAttn sm_goal_3 initSM 5338 :=
+  DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 8143 5338 473
+    ({ rank := 0, op := "OpName.FW_multiref", ins := [5338], outs := [8139, 8143], params := [2] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_multiref_out sm_goal_3 s 0 5338 8143 [8139, 8143] 2 (by decide) (by decide))
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_15973 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 15973 =
+      denoteGraph_ringAttn pm_goal_3 initPM 9655 :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 15973 9655 1001
+    ({ rank := 0, op := "OpName.FW_multiref", ins := [9655], outs := [15969, 15973], params := [2] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_multiref_out pm_goal_3 s 0 9655 15973 [15969, 15973] 2 (by decide) (by decide))
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_15981 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 15981 =
+      denoteGraph_ringAttn pm_goal_3 initPM 9656 :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 15981 9656 1004
+    ({ rank := 1, op := "OpName.FW_multiref", ins := [9656], outs := [15977, 15981], params := [2] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_multiref_out pm_goal_3 s 1 9656 15981 [15977, 15981] 2 (by decide) (by decide))
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem sm_pm_shuffle_carry_commute (initSM initPM : Store)
+    (hcarry5330 : denoteGraph_ringAttn sm_goal_3 initSM 5330 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9625,
+         denoteGraph_ringAttn pm_goal_3 initPM 9626]) :
+    denoteGraph_ringAttn sm_goal_3 initSM 8143 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 15973,
+         denoteGraph_ringAttn pm_goal_3 initPM 15981] := by
+  rw [denote_sm_goal_3_8143, denote_sm_goal_3_5338,
+      denote_pm_goal_3_15973, denote_pm_goal_3_9655, denote_pm_goal_3_13257,
+      denote_pm_goal_3_15981, denote_pm_goal_3_9656, denote_pm_goal_3_13258]
+  unfold fw_maybe_shuffle
+  exact hcarry5330
+
 end TrainVerify.Denote.GeneratedPatterns
 
 -- Axiom audit for the newly ported zigzag primitives (should be kernel-only).
@@ -1862,3 +1923,4 @@ end TrainVerify.Denote.GeneratedPatterns
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_qfull_L12_commute
 
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_carry_5330_commute
+#print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_shuffle_carry_commute
