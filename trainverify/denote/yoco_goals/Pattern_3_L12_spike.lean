@@ -226,4 +226,62 @@ theorem denote_sm_goal_3_5342 (initSM : Store) :
     rfl
     (DenoteUnfoldGeneric.denote_leaf_val sm_goal_3 initSM 5341 (by decide) (by decide))
 
+-- L12 K-path per_head (SM node index 474): ins [8015,5333]→[5334]; 8015=multiref(5332)
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5334 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5334 =
+      fw_per_head_linear (denoteGraph_ringAttn sm_goal_3 initSM 5332) (initSM 5333) :=
+  DenoteUnfoldGeneric.dstep2 sm_goal_3 initSM 5334 8015 5333 474
+    ({ rank := 0, op := "OpName.FW_per_head_mix_precision_linear", ins := [8015, 5333], outs := [5334] })
+    (fun a1 a2 => fw_per_head_linear (a1) (a2))
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_per_head_mix_precision_linear_out sm_goal_3 s 0 8015 5333 5334 [])
+    (DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 8015 5332 472
+      ({ rank := 0, op := "OpName.FW_multiref", ins := [5332], outs := [8015, 8019], params := [2] })
+      (fun a1 => a1)
+      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref_out sm_goal_3 s 0 5332 8015 [8015, 8019] 2 (by decide) (by decide))
+      rfl)
+    (DenoteUnfoldGeneric.denote_leaf_val sm_goal_3 initSM 5333 (by decide) (by decide))
+
+-- L12 V-path per_head (SM node index 475): ins [8019,5335]→[5336]; 8019=multiref(5332)
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5336 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5336 =
+      fw_per_head_linear (denoteGraph_ringAttn sm_goal_3 initSM 5332) (initSM 5335) :=
+  DenoteUnfoldGeneric.dstep2 sm_goal_3 initSM 5336 8019 5335 475
+    ({ rank := 0, op := "OpName.FW_per_head_mix_precision_linear", ins := [8019, 5335], outs := [5336] })
+    (fun a1 a2 => fw_per_head_linear (a1) (a2))
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_per_head_mix_precision_linear_out sm_goal_3 s 0 8019 5335 5336 [])
+    (DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 8019 5332 472
+      ({ rank := 0, op := "OpName.FW_multiref", ins := [5332], outs := [8015, 8019], params := [2] })
+      (fun a1 => a1)
+      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref_out sm_goal_3 s 0 5332 8019 [8015, 8019] 2 (by decide) (by decide))
+      rfl)
+    (DenoteUnfoldGeneric.denote_leaf_val sm_goal_3 initSM 5335 (by decide) (by decide))
+
+-- L12 Q-path rms (SM node index 476): ins [8139,5339]→[5340]; 8139=multiref(5338)
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5340 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5340 =
+      fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5338) (initSM 5339) := by
+  refine DenoteUnfoldGeneric.dstep2 sm_goal_3 initSM 5340 8139 5339 476
+    ({ rank := 0, op := "OpName.FW_rms_norm", ins := [8139, 5339], outs := [5340] })
+    (fun a1 a2 => fw_rms_norm (a1) (a2))
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_rms_norm_out_1p sm_goal_3 s 0 8139 5339 5340)
+    ?_ ?_
+  · refine DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 8139 5338 473
+      ({ rank := 0, op := "OpName.FW_multiref", ins := [5338], outs := [8139, 8143], params := [2] })
+      (fun a1 => a1)
+      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => by rw [applyNode_fw_multiref_out sm_goal_3 s 0 5338 8139 [8139, 8143] 2 (by decide) (by decide)])
+      rfl
+  · exact DenoteUnfoldGeneric.denote_leaf_val sm_goal_3 initSM 5339 (by decide) (by decide)
+
 end TrainVerify.Denote.GeneratedPatterns
