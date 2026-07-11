@@ -320,4 +320,86 @@ theorem denote_sm_goal_3_5344 (initSM : Store) :
       (fun s => applyNode_fw_multiref_out sm_goal_3 s 0 5336 8091 [8091, 8095, 8099, 8103, 8107, 8111, 8115, 8119, 8123, 8127, 8131, 8135] 12 (by decide) (by decide))
       rfl)
 
+/-! ## L12 Zigzag ring-attention reconstruction lemmas
+
+`applyNodeRingAttn_zigzag` is *definitionally identical* to
+`applyNodeRingAttn_sliding_window` (see `denote/Denote.lean`: both allGather the
+q/k/v shards, apply `fw_attn_varlen`, and `chunkPrimDimN` back to the local
+shard; only the dispatch op-string differs). Hence the two missing buddy-pair
+reconstruction lemmas port over verbatim from the sliding-window versions
+(`Pattern_3.lean:3724` / `:3742`), swapping `sliding_window` → `zigzag`. These
+are the core denote-layer primitives that `sm_pm_attention_L12_commute` needs. -/
+
+theorem applyNodeRingAttn_zigzag_pair_eq_chunk
+    (g : GraphDecl) (s : Store) (n n0 n1 : NodeDecl)
+    (idx : Nat)
+    (hbuddy : ringAttnBuddies g n = [n0, n1])
+    (hmyIdx : (([n0, n1].findIdx? (fun m => m.rank = n.rank)).getD 0) = idx) :
+    applyNodeRingAttn_zigzag g s n =
+      chunkPrimDimN 0 2 idx
+        (fw_attn_varlen
+          (allGatherPrimDimN 0 2 0 [s (n0.ins.getD 0 0), s (n1.ins.getD 0 0)])
+          (allGatherPrimDimN 0 2 0 [s (n0.ins.getD 1 0), s (n1.ins.getD 1 0)])
+          (allGatherPrimDimN 0 2 0 [s (n0.ins.getD 2 0), s (n1.ins.getD 2 0)])
+          (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
+          (n.params.getD 0 1) (n.params.getD 1 1) (n.params.getD 2 1) (n.params.getD 3 1)
+          (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0)) := by
+  unfold applyNodeRingAttn_zigzag
+  rw [hbuddy]
+  simp only [List.map, List.length_cons, List.length_nil, hmyIdx]
+
+theorem applyNodeRingAttn_zigzag_reconstruction_2_of_buddy_pair
+    (g_sm g_pm : GraphDecl) (s_sm s_pm : Store)
+    (n_sm n_pm_r0 n_pm_r1 : NodeDecl)
+    (Lshard qh vd : Nat)
+    (hL : 0 < Lshard) (hqh : 0 < qh) (hvd : 0 < vd)
+    (hbuddy_sm : ringAttnBuddies g_sm n_sm = [n_sm])
+    (hbuddy_pm : ringAttnBuddies g_pm n_pm_r0 = [n_pm_r0, n_pm_r1])
+    (hbuddy_pm' : ringAttnBuddies g_pm n_pm_r1 = [n_pm_r0, n_pm_r1])
+    (hmyIdx0 : (([n_pm_r0, n_pm_r1].findIdx? (fun m => m.rank = n_pm_r0.rank)).getD 0) = 0)
+    (hmyIdx1 : (([n_pm_r0, n_pm_r1].findIdx? (fun m => m.rank = n_pm_r1.rank)).getD 0) = 1)
+    (hq_sm : 0 < (s_sm (n_sm.ins.getD 0 0)).shape.length)
+    (hk_sm : 0 < (s_sm (n_sm.ins.getD 1 0)).shape.length)
+    (hv_sm : 0 < (s_sm (n_sm.ins.getD 2 0)).shape.length)
+    (hq_full : s_sm (n_sm.ins.getD 0 0) =
+        allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 0 0), s_pm (n_pm_r1.ins.getD 0 0)])
+    (hk_full : s_sm (n_sm.ins.getD 1 0) =
+        allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 1 0), s_pm (n_pm_r1.ins.getD 1 0)])
+    (hv_full : s_sm (n_sm.ins.getD 2 0) =
+        allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 2 0), s_pm (n_pm_r1.ins.getD 2 0)])
+    (hcuQ_sm_pm : s_sm (n_sm.ins.getD 3 0) = s_pm (n_pm_r0.ins.getD 3 0))
+    (hcuK_sm_pm : s_sm (n_sm.ins.getD 4 0) = s_pm (n_pm_r0.ins.getD 4 0))
+    (hcuQ_same : s_pm (n_pm_r0.ins.getD 3 0) = s_pm (n_pm_r1.ins.getD 3 0))
+    (hcuK_same : s_pm (n_pm_r0.ins.getD 4 0) = s_pm (n_pm_r1.ins.getD 4 0))
+    (hparams_sm : n_sm.params = n_pm_r0.params)
+    (hparams_same : n_pm_r0.params = n_pm_r1.params)
+    (hfull_shape :
+        (fw_attn_varlen
+          (allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 0 0), s_pm (n_pm_r1.ins.getD 0 0)])
+          (allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 1 0), s_pm (n_pm_r1.ins.getD 1 0)])
+          (allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 2 0), s_pm (n_pm_r1.ins.getD 2 0)])
+          (s_pm (n_pm_r0.ins.getD 3 0)) (s_pm (n_pm_r0.ins.getD 4 0))
+          (n_pm_r0.params.getD 0 1) (n_pm_r0.params.getD 1 1) (n_pm_r0.params.getD 2 1)
+          (n_pm_r0.params.getD 3 1)
+          (decide (n_pm_r0.params.getD 4 0 ≠ 0)) (n_pm_r0.params.getD 5 0)).shape
+        = [2 * Lshard, qh, vd]) :
+    applyNodeRingAttn_zigzag g_sm s_sm n_sm =
+      allGatherPrimDimN 0 2 0
+        [applyNodeRingAttn_zigzag g_pm s_pm n_pm_r0,
+         applyNodeRingAttn_zigzag g_pm s_pm n_pm_r1] := by
+  have hout_sm : 0 < (fw_attn_varlen (s_sm (n_sm.ins.getD 0 0)) (s_sm (n_sm.ins.getD 1 0))
+      (s_sm (n_sm.ins.getD 2 0)) (s_sm (n_sm.ins.getD 3 0)) (s_sm (n_sm.ins.getD 4 0))
+      (n_sm.params.getD 0 1) (n_sm.params.getD 1 1) (n_sm.params.getD 2 1) (n_sm.params.getD 3 1)
+      (decide (n_sm.params.getD 4 0 ≠ 0)) (n_sm.params.getD 5 0)).shape.length := by
+    rw [hq_full, hk_full, hv_full, hcuQ_sm_pm, hcuK_sm_pm, hparams_sm, hfull_shape]
+    simp
+  rw [applyNodeRingAttn_zigzag_singleton g_sm s_sm n_sm hbuddy_sm hq_sm hk_sm hv_sm hout_sm,
+      hq_full, hk_full, hv_full, hcuQ_sm_pm, hcuK_sm_pm, hparams_sm]
+  rw [applyNodeRingAttn_zigzag_pair_eq_chunk g_pm s_pm n_pm_r0 n_pm_r0 n_pm_r1 0
+        hbuddy_pm hmyIdx0,
+      applyNodeRingAttn_zigzag_pair_eq_chunk g_pm s_pm n_pm_r1 n_pm_r0 n_pm_r1 1
+        hbuddy_pm' hmyIdx1]
+  rw [← hcuQ_same, ← hcuK_same, ← hparams_same]
+  rw [allGather0_reconstruct_chunks_3d Lshard qh vd hL hqh hvd _ hfull_shape]
+
 end TrainVerify.Denote.GeneratedPatterns
