@@ -2480,6 +2480,47 @@ theorem sm_pm_router_commute_L12 (initSM initPM : Store)
   rw [hnl]
   exact fw_topk_routing_snd_fst_allGather0_commute_2_of _ _ 2048 ([8].getD 0 1) 64 (by omega) (by omega) hs9729 hs9730
 
+-- Capstone: router-L12 fully reduced to the attention commute + L11 carry + base shapes.
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 40000000 in
+theorem sm_pm_router_commute_L12_from_attention (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (hcarry5330 : denoteGraph_ringAttn sm_goal_3 initSM 5330 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9625,
+         denoteGraph_ringAttn pm_goal_3 initPM 9626])
+    (hattn : denoteGraph_ringAttn sm_goal_3 initSM 5347 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9687,
+         denoteGraph_ringAttn pm_goal_3 initPM 9688])
+    (h9687 : (denoteGraph_ringAttn pm_goal_3 initPM 9687).shape = [2048, 16, 64])
+    (h9688 : (denoteGraph_ringAttn pm_goal_3 initPM 9688).shape = [2048, 16, 64])
+    (h9625 : (denoteGraph_ringAttn pm_goal_3 initPM 9625).shape = [2048, 1024])
+    (h9626 : (denoteGraph_ringAttn pm_goal_3 initPM 9626).shape = [2048, 1024])
+    (hw5350 : (initPM 5350).shape = [1024, 1024]) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5361 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9733,
+         denoteGraph_ringAttn pm_goal_3 initPM 9734] := by
+  have hshuffle := sm_pm_shuffle_carry_commute initSM initPM hcarry5330
+  have hreshape := sm_pm_reshape_float_5353_commute initSM initPM hInit hattn h9687 h9688 hw5350
+  have h15973 : (denoteGraph_ringAttn pm_goal_3 initPM 15973).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_15973, denote_pm_goal_3_9655, fw_maybe_shuffle_shape, denote_pm_goal_3_13257]
+    exact h9625
+  have h15981 : (denoteGraph_ringAttn pm_goal_3 initPM 15981).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_15981, denote_pm_goal_3_9656, fw_maybe_shuffle_shape, denote_pm_goal_3_13258]
+    exact h9626
+  have h9713 : (denoteGraph_ringAttn pm_goal_3 initPM 9713).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9713, denote_pm_goal_3_9709]; rfl
+  have h9714 : (denoteGraph_ringAttn pm_goal_3 initPM 9714).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9714, denote_pm_goal_3_9710]; rfl
+  have hcarry5354 := sm_pm_carry_5354_commute initSM initPM hshuffle hreshape h15973 h15981 h9713 h9714
+  have h9717 : (denoteGraph_ringAttn pm_goal_3 initPM 9717).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9717]; exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h15973 h9713
+  have h9718 : (denoteGraph_ringAttn pm_goal_3 initPM 9718).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9718]; exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h15981 h9714
+  exact sm_pm_router_commute_L12 initSM initPM hInit hcarry5354 h9717 h9718
+
 end TrainVerify.Denote.GeneratedPatterns
 
 -- Axiom audit for the newly ported zigzag primitives (should be kernel-only).
@@ -2506,3 +2547,4 @@ end TrainVerify.Denote.GeneratedPatterns
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_nl_L12_commute
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_carry_5354_commute
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_router_commute_L12
+#print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_router_commute_L12_from_attention
