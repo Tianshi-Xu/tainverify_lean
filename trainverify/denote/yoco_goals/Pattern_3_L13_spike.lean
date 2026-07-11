@@ -806,4 +806,267 @@ theorem denote_pm_goal_3_9886 (initPM : Store) :
     (fun s => applyNode_fw_float_out pm_goal_3 s 1 9882 9886 [])
     rfl
 
+/-! ## L13 residual carry + rms/float/norm_linear/topk denote chain -/
+
+-- Multiref passthroughs feeding the residual add (left = carry, no shuffle).
+set_option maxRecDepth 20000 in
+theorem denote_sm_goal_3_8182 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 8182 =
+      denoteGraph_ringAttn sm_goal_3 initSM 5387 :=
+  DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 8182 5387 536
+    ({ rank := 0, op := "OpName.FW_multiref", ins := [5387], outs := [8178, 8182], params := [2] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_multiref_out sm_goal_3 s 0 5387 8182 [8178, 8182] 2 (by decide) (by decide))
+    rfl
+
+set_option maxRecDepth 20000 in
+theorem denote_pm_goal_3_16051 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 16051 =
+      denoteGraph_ringAttn pm_goal_3 initPM 9829 :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 16051 9829 1131
+    ({ rank := 0, op := "OpName.FW_multiref", ins := [9829], outs := [16047, 16051], params := [2] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_multiref_out pm_goal_3 s 0 9829 16051 [16047, 16051] 2 (by decide) (by decide))
+    rfl
+
+set_option maxRecDepth 20000 in
+theorem denote_pm_goal_3_16059 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 16059 =
+      denoteGraph_ringAttn pm_goal_3 initPM 9830 :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 16059 9830 1132
+    ({ rank := 1, op := "OpName.FW_multiref", ins := [9830], outs := [16055, 16059], params := [2] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_multiref_out pm_goal_3 s 1 9830 16059 [16055, 16059] 2 (by decide) (by decide))
+    rfl
+
+-- Residual adds: 5403 = add(8182, 5402); PM 9889 = add(16051, 9885), 9890 = add(16059, 9886).
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5403 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5403 =
+      elemwiseAdd (denoteGraph_ringAttn sm_goal_3 initSM 8182)
+        (denoteGraph_ringAttn sm_goal_3 initSM 5402) :=
+  DenoteUnfoldGeneric.dstep2 sm_goal_3 initSM 5403 8182 5402 545
+    ({ rank := 0, op := "OpName.FW_add", ins := [8182, 5402], outs := [5403] })
+    (fun a1 a2 => elemwiseAdd a1 a2)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_add2_out sm_goal_3 s 0 8182 5402 5403)
+    rfl rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9889 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9889 =
+      elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 16051)
+        (denoteGraph_ringAttn pm_goal_3 initPM 9885) :=
+  DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 9889 16051 9885 1149
+    ({ rank := 0, op := "OpName.FW_add", ins := [16051, 9885], outs := [9889] })
+    (fun a1 a2 => elemwiseAdd a1 a2)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_add2_out pm_goal_3 s 0 16051 9885 9889)
+    rfl rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9890 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9890 =
+      elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 16059)
+        (denoteGraph_ringAttn pm_goal_3 initPM 9886) :=
+  DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 9890 16059 9886 1150
+    ({ rank := 1, op := "OpName.FW_add", ins := [16059, 9886], outs := [9890] })
+    (fun a1 a2 => elemwiseAdd a1 a2)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_add2_out pm_goal_3 s 1 16059 9886 9890)
+    rfl rfl
+
+-- RMS: 5405 = rms(mr 5403, 5404); PM 9893/9894.
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5405 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5405 =
+      fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5403) (initSM 5404) :=
+  DenoteUnfoldGeneric.dstep2 sm_goal_3 initSM 5405 8186 5404 547
+    ({ rank := 0, op := "OpName.FW_rms_norm", ins := [8186, 5404], outs := [5405] })
+    (fun a1 a2 => fw_rms_norm a1 a2)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_rms_norm_out_1p sm_goal_3 s 0 8186 5404 5405)
+    (DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 8186 5403 546
+      ({ rank := 0, op := "OpName.FW_multiref", ins := [5403], outs := [8186, 8190], params := [2] })
+      (fun a1 => a1)
+      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref_out sm_goal_3 s 0 5403 8186 [8186, 8190] 2 (by decide) (by decide))
+      rfl)
+    (DenoteUnfoldGeneric.denote_leaf_val sm_goal_3 initSM 5404 (by decide) (by decide))
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9893 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9893 =
+      fw_rms_norm (denoteGraph_ringAttn pm_goal_3 initPM 9889) (initPM 5404) :=
+  DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 9893 16063 5404 1153
+    ({ rank := 0, op := "OpName.FW_rms_norm", ins := [16063, 5404], outs := [9893] })
+    (fun a1 a2 => fw_rms_norm a1 a2)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 0 16063 5404 9893)
+    (DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 16063 9889 1151
+      ({ rank := 0, op := "OpName.FW_multiref", ins := [9889], outs := [16063, 16067], params := [2] })
+      (fun a1 => a1)
+      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref_out pm_goal_3 s 0 9889 16063 [16063, 16067] 2 (by decide) (by decide))
+      rfl)
+    (DenoteUnfoldGeneric.denote_leaf_val pm_goal_3 initPM 5404 (by decide) (by decide))
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9894 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9894 =
+      fw_rms_norm (denoteGraph_ringAttn pm_goal_3 initPM 9890) (initPM 5404) :=
+  DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 9894 16071 5404 1154
+    ({ rank := 1, op := "OpName.FW_rms_norm", ins := [16071, 5404], outs := [9894] })
+    (fun a1 a2 => fw_rms_norm a1 a2)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_rms_norm_out_1p pm_goal_3 s 1 16071 5404 9894)
+    (DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 16071 9890 1152
+      ({ rank := 1, op := "OpName.FW_multiref", ins := [9890], outs := [16071, 16075], params := [2] })
+      (fun a1 => a1)
+      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref_out pm_goal_3 s 1 9890 16071 [16071, 16075] 2 (by decide) (by decide))
+      rfl)
+    (DenoteUnfoldGeneric.denote_leaf_val pm_goal_3 initPM 5404 (by decide) (by decide))
+
+-- Float (through the 5-way multiref): 5406 = float(mr 5405); PM 9895/9896.
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5406 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5406 =
+      denoteGraph_ringAttn sm_goal_3 initSM 5405 :=
+  DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 5406 8197 549
+    ({ rank := 0, op := "OpName.FW_float", ins := [8197], outs := [5406] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_float_out sm_goal_3 s 0 8197 5406 [])
+    (DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 8197 5405 548
+      ({ rank := 0, op := "OpName.FW_multiref", ins := [5405], outs := [8197, 8201, 8205, 8209, 8213], params := [5] })
+      (fun a1 => a1)
+      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref_out sm_goal_3 s 0 5405 8197 [8197, 8201, 8205, 8209, 8213] 5 (by decide) (by decide))
+      rfl)
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9895 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9895 =
+      denoteGraph_ringAttn pm_goal_3 initPM 9893 :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 9895 16082 1157
+    ({ rank := 0, op := "OpName.FW_float", ins := [16082], outs := [9895] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_float_out pm_goal_3 s 0 16082 9895 [])
+    (DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 16082 9893 1155
+      ({ rank := 0, op := "OpName.FW_multiref", ins := [9893], outs := [16082, 16086, 16090, 16094, 16098], params := [5] })
+      (fun a1 => a1)
+      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref_out pm_goal_3 s 0 9893 16082 [16082, 16086, 16090, 16094, 16098] 5 (by decide) (by decide))
+      rfl)
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9896 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9896 =
+      denoteGraph_ringAttn pm_goal_3 initPM 9894 :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 9896 16105 1161
+    ({ rank := 1, op := "OpName.FW_float", ins := [16105], outs := [9896] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_float_out pm_goal_3 s 1 16105 9896 [])
+    (DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 16105 9894 1156
+      ({ rank := 1, op := "OpName.FW_multiref", ins := [9894], outs := [16105, 16109, 16113, 16117, 16121], params := [5] })
+      (fun a1 => a1)
+      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref_out pm_goal_3 s 1 9894 16105 [16105, 16109, 16113, 16117, 16121] 5 (by decide) (by decide))
+      rfl)
+
+-- Norm-linear: 5408 = nl(5406, 5407); PM 9901/9902.
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5408 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5408 =
+      fw_norm_linear (denoteGraph_ringAttn sm_goal_3 initSM 5406) (initSM 5407) :=
+  DenoteUnfoldGeneric.dstep2 sm_goal_3 initSM 5408 5406 5407 553
+    ({ rank := 0, op := "OpName.FW_norm_linear", ins := [5406, 5407], outs := [5408] })
+    (fun a1 a2 => fw_norm_linear a1 a2)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_norm_linear_out sm_goal_3 s 0 5406 5407 5408 [])
+    rfl
+    (DenoteUnfoldGeneric.denote_leaf_val sm_goal_3 initSM 5407 (by decide) (by decide))
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9901 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9901 =
+      fw_norm_linear (denoteGraph_ringAttn pm_goal_3 initPM 9895) (initPM 5407) :=
+  DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 9901 9895 5407 1165
+    ({ rank := 0, op := "OpName.FW_norm_linear", ins := [9895, 5407], outs := [9901] })
+    (fun a1 a2 => fw_norm_linear a1 a2)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 0 9895 5407 9901 [])
+    rfl
+    (DenoteUnfoldGeneric.denote_leaf_val pm_goal_3 initPM 5407 (by decide) (by decide))
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9902 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9902 =
+      fw_norm_linear (denoteGraph_ringAttn pm_goal_3 initPM 9896) (initPM 5407) :=
+  DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 9902 9896 5407 1169
+    ({ rank := 1, op := "OpName.FW_norm_linear", ins := [9896, 5407], outs := [9902] })
+    (fun a1 a2 => fw_norm_linear a1 a2)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_norm_linear_out pm_goal_3 s 1 9896 5407 9902 [])
+    rfl
+    (DenoteUnfoldGeneric.denote_leaf_val pm_goal_3 initPM 5407 (by decide) (by decide))
+
+-- Topk (2nd output = router logits map): 5410; PM 9905/9906.
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5410 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5410 =
+      (fw_topk_routing (denoteGraph_ringAttn sm_goal_3 initSM 5408) ([8].getD 0 1)
+        (((denoteGraph_ringAttn sm_goal_3 initSM 5408).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst :=
+  DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 5410 5408 557
+    ({ rank := 0, op := "OpName.FW_topk_routing", ins := [5408], outs := [5409, 5410, 5411], params := [8] })
+    (fun a1 => (fw_topk_routing a1 ([8].getD 0 1) ((a1.shape.reverse.head?).getD ([8].getD 1 1))).snd.fst)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_topk_routing_map_out sm_goal_3 s 0 5408 5409 5410 5411 [8] (by decide))
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9905 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9905 =
+      (fw_topk_routing (denoteGraph_ringAttn pm_goal_3 initPM 9901) ([8].getD 0 1)
+        (((denoteGraph_ringAttn pm_goal_3 initPM 9901).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 9905 9901 1173
+    ({ rank := 0, op := "OpName.FW_topk_routing", ins := [9901], outs := [9903, 9905, 9907], params := [8] })
+    (fun a1 => (fw_topk_routing a1 ([8].getD 0 1) ((a1.shape.reverse.head?).getD ([8].getD 1 1))).snd.fst)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 0 9901 9903 9905 9907 [8] (by decide))
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9906 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9906 =
+      (fw_topk_routing (denoteGraph_ringAttn pm_goal_3 initPM 9902) ([8].getD 0 1)
+        (((denoteGraph_ringAttn pm_goal_3 initPM 9902).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 9906 9902 1177
+    ({ rank := 1, op := "OpName.FW_topk_routing", ins := [9902], outs := [9904, 9906, 9908], params := [8] })
+    (fun a1 => (fw_topk_routing a1 ([8].getD 0 1) ((a1.shape.reverse.head?).getD ([8].getD 1 1))).snd.fst)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 9902 9904 9906 9908 [8] (by decide))
+    rfl
+
 end TrainVerify.Denote.GeneratedPatterns
