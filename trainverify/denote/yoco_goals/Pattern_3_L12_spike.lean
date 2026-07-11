@@ -284,4 +284,40 @@ theorem denote_sm_goal_3_5340 (initSM : Store) :
       rfl
   · exact DenoteUnfoldGeneric.denote_leaf_val sm_goal_3 initSM 5339 (by decide) (by decide)
 
+-- L12 K attention-input FW_to (SM node index 480): ins [8033]→[5343]; 8033=multiref(5334)
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5343 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5343 =
+      denoteGraph_ringAttn sm_goal_3 initSM 5334 :=
+  DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 5343 8033 480
+    ({ rank := 0, op := "OpName.FW_to", ins := [8033], outs := [5343] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_to_out sm_goal_3 s 0 8033 5343 [])
+    (DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 8033 5334 477
+      ({ rank := 0, op := "OpName.FW_multiref", ins := [5334], outs := [8033, 8037, 8041, 8045, 8049, 8053, 8057, 8061, 8065, 8069, 8073, 8077], params := [12] })
+      (fun a1 => a1)
+      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref_out sm_goal_3 s 0 5334 8033 [8033, 8037, 8041, 8045, 8049, 8053, 8057, 8061, 8065, 8069, 8073, 8077] 12 (by decide) (by decide))
+      rfl)
+
+-- L12 V attention-input FW_to (SM node index 492): ins [8091]→[5344]; 8091=multiref(5336)
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5344 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5344 =
+      denoteGraph_ringAttn sm_goal_3 initSM 5336 :=
+  DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 5344 8091 492
+    ({ rank := 0, op := "OpName.FW_to", ins := [8091], outs := [5344] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_to_out sm_goal_3 s 0 8091 5344 [])
+    (DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 8091 5336 478
+      ({ rank := 0, op := "OpName.FW_multiref", ins := [5336], outs := [8091, 8095, 8099, 8103, 8107, 8111, 8115, 8119, 8123, 8127, 8131, 8135], params := [12] })
+      (fun a1 => a1)
+      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref_out sm_goal_3 s 0 5336 8091 [8091, 8095, 8099, 8103, 8107, 8111, 8115, 8119, 8123, 8127, 8131, 8135] 12 (by decide) (by decide))
+      rfl)
+
 end TrainVerify.Denote.GeneratedPatterns
