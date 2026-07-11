@@ -2147,6 +2147,72 @@ theorem sm_pm_reshape_float_5353_commute (initSM initPM : Store)
     rw [allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hla])]; simp [List.set]
   rw [fw_view_id _ [4096, 1024] hAG, fw_view_id _ [2048, 1024] hla, fw_view_id _ [2048, 1024] hlb]
 
+/-! ## L12 post-attention residual carry `sm_pm_carry_5354_commute`
+
+`SM 5354 = add(8143, 5353)` combines the two proven branches (shuffle-carry and
+reshape-float) via `fw_add_allGather0_commute_2_2048_1024`. -/
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5354 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5354 =
+      elemwiseAdd (denoteGraph_ringAttn sm_goal_3 initSM 8143)
+        (denoteGraph_ringAttn sm_goal_3 initSM 5353) :=
+  DenoteUnfoldGeneric.dstep2 sm_goal_3 initSM 5354 8143 5353 510
+    ({ rank := 0, op := "OpName.FW_add", ins := [8143, 5353], outs := [5354] })
+    (fun a1 a2 => elemwiseAdd a1 a2)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_add2_out sm_goal_3 s 0 8143 5353 5354)
+    rfl rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9717 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9717 =
+      elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 15973)
+        (denoteGraph_ringAttn pm_goal_3 initPM 9713) :=
+  DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 9717 15973 9713 1079
+    ({ rank := 0, op := "OpName.FW_add", ins := [15973, 9713], outs := [9717] })
+    (fun a1 a2 => elemwiseAdd a1 a2)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_add2_out pm_goal_3 s 0 15973 9713 9717)
+    rfl rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9718 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9718 =
+      elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 15981)
+        (denoteGraph_ringAttn pm_goal_3 initPM 9714) :=
+  DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 9718 15981 9714 1080
+    ({ rank := 1, op := "OpName.FW_add", ins := [15981, 9714], outs := [9718] })
+    (fun a1 a2 => elemwiseAdd a1 a2)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_add2_out pm_goal_3 s 1 15981 9714 9718)
+    rfl rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 20000000 in
+theorem sm_pm_carry_5354_commute (initSM initPM : Store)
+    (hshuffle : denoteGraph_ringAttn sm_goal_3 initSM 8143 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 15973,
+         denoteGraph_ringAttn pm_goal_3 initPM 15981])
+    (hreshape : denoteGraph_ringAttn sm_goal_3 initSM 5353 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9713,
+         denoteGraph_ringAttn pm_goal_3 initPM 9714])
+    (h15973 : (denoteGraph_ringAttn pm_goal_3 initPM 15973).shape = [2048, 1024])
+    (h15981 : (denoteGraph_ringAttn pm_goal_3 initPM 15981).shape = [2048, 1024])
+    (h9713 : (denoteGraph_ringAttn pm_goal_3 initPM 9713).shape = [2048, 1024])
+    (h9714 : (denoteGraph_ringAttn pm_goal_3 initPM 9714).shape = [2048, 1024]) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5354 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9717,
+         denoteGraph_ringAttn pm_goal_3 initPM 9718] := by
+  rw [denote_sm_goal_3_5354, denote_pm_goal_3_9717, denote_pm_goal_3_9718]
+  rw [hshuffle, hreshape]
+  rw [fw_add_allGather0_commute_2_2048_1024 _ _ _ _ h15973 h15981 h9713 h9714]
+
 end TrainVerify.Denote.GeneratedPatterns
 
 -- Axiom audit for the newly ported zigzag primitives (should be kernel-only).
