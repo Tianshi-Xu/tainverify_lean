@@ -572,3 +572,34 @@ zigzag tid strides — routers jump +57 at L11→L12, then +49 steady):
 optimistic — it requires finishing the whole zigzag layer forward pass through
 the router (attention-hyp discharge + ~30 new denote helpers + 6-step commute
 assembly). Blocker A (the specifically-assigned item) is fully resolved.
+
+---
+
+## Continuation Worker (Opus, post-attention chain) — router_L12 PROVEN (modulo attention hyps)
+
+**Base:** `8ccff3c`. All work in `Pattern_3_L12_spike.lean`, kernel-clean
+`[propext, Classical.choice, Quot.sound]`, full spike builds (`2631 jobs`).
+
+### Done this session (all kernel-clean, zero sorry/axiom)
+Full L12 post-attention forward chain proven:
+- `sm_pm_shuffle_carry_commute` — SM 8143 = allGather0[PM 15973, 15981]
+  (maybe_shuffle residual branch; identity => reduces to `sm_pm_carry_5330_commute`).
+- `sm_pm_reshape_float_5353_commute` — SM 5353 = allGather0[PM 9713, 9714]
+  (reshape->linear->view->float branch; via existing `carry_view_commute` +
+  `fw_mix_precision_linear_allGather0_commute_2` + new `fw_view_id`).
+- `sm_pm_carry_5354_commute` — SM 5354 = allGather0[PM 9717, 9718]
+  (residual add of the two branches via `fw_add_allGather0_commute_2_2048_1024`).
+- `sm_pm_nl_L12_commute` — SM 5359 = allGather0[PM 9729, 9730]
+  (rms->norm_linear head via generic `fw_rms_norm_/fw_norm_linear_allGather0_commute_2`).
+- **`sm_pm_router_commute_L12`** — SM 5361 = allGather0[PM 9733, 9734]
+  (topk map via `fw_topk_routing_snd_fst_allGather0_commute_2_of`), fed by carry_5354.
+- **`sm_pm_router_commute_L12_from_attention`** (capstone) — reduces router-L12 to
+  ONLY: `hattn` (attention SM 5347 = allGather0[9687,9688]), `hcarry5330`
+  (L11 carry, already proven), and base tensor shapes.
+
+Plus ~30 supporting denote helpers over real graph node indices, all kernel-clean.
+
+### Remaining to fully close (single obligation)
+`hattn` = `sm_pm_attention_L12_commute` still has its 10 shape/Q-sharding hypotheses
+open (the documented crux). `hcarry5330` is proven. The entire post-attention half
+is now DONE.
