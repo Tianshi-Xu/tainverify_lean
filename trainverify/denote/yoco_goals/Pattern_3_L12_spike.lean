@@ -402,4 +402,19 @@ theorem applyNodeRingAttn_zigzag_reconstruction_2_of_buddy_pair
   rw [← hcuQ_same, ← hcuK_same, ← hparams_same]
   rw [allGather0_reconstruct_chunks_3d Lshard qh vd hL hqh hvd _ hfull_shape]
 
+theorem attn_zigzag_store_congr (g : GraphDecl) (s s' : Store) (n : NodeDecl)
+    (h0 : ∀ m ∈ ringAttnBuddies g n, s (m.ins.getD 0 0) = s' (m.ins.getD 0 0))
+    (h1 : ∀ m ∈ ringAttnBuddies g n, s (m.ins.getD 1 0) = s' (m.ins.getD 1 0))
+    (h2 : ∀ m ∈ ringAttnBuddies g n, s (m.ins.getD 2 0) = s' (m.ins.getD 2 0))
+    (hcuQ : s (n.ins.getD 3 0) = s' (n.ins.getD 3 0))
+    (hcuK : s (n.ins.getD 4 0) = s' (n.ins.getD 4 0)) :
+    applyNodeRingAttn_zigzag g s n = applyNodeRingAttn_zigzag g s' n := by
+  unfold applyNodeRingAttn_zigzag
+  simp only []
+  rw [List.map_congr_left h0, List.map_congr_left h1, List.map_congr_left h2, hcuQ, hcuK]
+
 end TrainVerify.Denote.GeneratedPatterns
+
+-- Axiom audit for the newly ported zigzag primitives (should be kernel-only).
+#print axioms TrainVerify.Denote.GeneratedPatterns.applyNodeRingAttn_zigzag_reconstruction_2_of_buddy_pair
+#print axioms TrainVerify.Denote.GeneratedPatterns.denote_sm_goal_3_5342
