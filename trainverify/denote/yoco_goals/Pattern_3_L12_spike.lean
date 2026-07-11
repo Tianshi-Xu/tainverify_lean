@@ -894,6 +894,74 @@ theorem sm_pm_vrepl_L12_commute (initSM initPM : Store)
   rw [denote_sm_goal_3_5344, denote_sm_goal_3_5336, hrms, hw5335,
       denote_pm_goal_3_5344, denote_pm_goal_3_5336]
 
+-- SM 5338: rank-0 zigzag maybe_shuffle of the residual carry (via multiref 8011 of 5330).
+-- fw_maybe_shuffle is the identity on its data argument (AGENTS.md #24), so this
+-- denote-unfold exposes the carry directly. Node index 471; multiref 5330→8007,8011 = 469.
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5338 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5338 =
+      fw_maybe_shuffle (denoteGraph_ringAttn sm_goal_3 initSM 5330) (initSM 5337) 1 0 :=
+  DenoteUnfoldGeneric.dstep2 sm_goal_3 initSM 5338 8011 5337 471
+    ({ rank := 0, op := "OpName.FW_maybe_shuffle", ins := [8011, 5337], outs := [5338], params := [1, 0] })
+    (fun a1 a2 => fw_maybe_shuffle a1 a2 1 0)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_maybe_shuffle_out sm_goal_3 s 0 1 0 8011 5337 5338)
+    (DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 8011 5330 469
+      ({ rank := 0, op := "OpName.FW_multiref", ins := [5330], outs := [8007, 8011], params := [2] })
+      (fun a1 => a1)
+      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref_out sm_goal_3 s 0 5330 8011 [8007, 8011] 2 (by decide) (by decide))
+      rfl)
+    (DenoteUnfoldGeneric.denote_leaf_val sm_goal_3 initSM 5337 (by decide) (by decide))
+
+-- `fw_rms_norm` preserves its input shape (value-independent — avoids whnf on denote).
+theorem fw_rms_norm_shape_eq (x w : Tensor) : (fw_rms_norm x w).shape = x.shape := by
+  unfold fw_rms_norm
+  cases h : x.shape.reverse with
+  | nil => simp
+  | cons d ds => simp [Tensor.mkShape]
+
+/-! ## Q full-sharding commute (Blocker B)
+
+The Q path threads a zigzag `fw_maybe_shuffle` (SM: cpSize=1; PM r0: [2,0]; PM r1:
+[2,1]), which is the identity on its data argument (AGENTS.md #24).  Below the
+shuffle the path is `per_head_linear ∘ rms_norm`, both per-row along dim 0, so they
+commute with the dim-0 all-gather of the CP-sharded residual.  Reuses the general
+`fw_rms_norm_allGather0_commute_2` (Pattern_1) and
+`fw_per_head_mix_precision_linear_allGather0_commute_2` (Denote).  The two PM-side
+residual shapes and the Q-weight shape are taken as hypotheses. -/
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 40000000 in
+theorem sm_pm_qfull_L12_commute (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (hcarry5330 : denoteGraph_ringAttn sm_goal_3 initSM 5330 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9625,
+         denoteGraph_ringAttn pm_goal_3 initPM 9626])
+    (h9625 : (denoteGraph_ringAttn pm_goal_3 initPM 9625).shape = [2048, 1024])
+    (h9626 : (denoteGraph_ringAttn pm_goal_3 initPM 9626).shape = [2048, 1024])
+    (hw5341 : (initPM 5341).shape = [16, 64, 1024]) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5342 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9659,
+         denoteGraph_ringAttn pm_goal_3 initPM 9660] := by
+  have hb := L12_weight_eq initSM initPM hInit
+  have hw5339 : initSM 5339 = initPM 5339 := hb initGoal_5339 (by decide) rfl
+  have hw5341e : initSM 5341 = initPM 5341 := hb initGoal_5341 (by decide) rfl
+  rw [denote_sm_goal_3_5342, denote_sm_goal_3_5340, denote_sm_goal_3_5338,
+      denote_pm_goal_3_9659, denote_pm_goal_3_9657, denote_pm_goal_3_9655, denote_pm_goal_3_13257,
+      denote_pm_goal_3_9660, denote_pm_goal_3_9658, denote_pm_goal_3_9656, denote_pm_goal_3_13258]
+  unfold fw_maybe_shuffle
+  rw [hcarry5330, hw5339, hw5341e]
+  have hrms9625 : (fw_rms_norm (denoteGraph_ringAttn pm_goal_3 initPM 9625) (initPM 5339)).shape = [2048, 1024] := by
+    rw [fw_rms_norm_shape_eq, h9625]
+  have hrms9626 : (fw_rms_norm (denoteGraph_ringAttn pm_goal_3 initPM 9626) (initPM 5339)).shape = [2048, 1024] := by
+    rw [fw_rms_norm_shape_eq, h9626]
+  rw [fw_rms_norm_allGather0_commute_2 _ _ (initPM 5339) 2048 1024 (by omega) (by omega) h9625 h9626,
+      fw_per_head_mix_precision_linear_allGather0_commute_2 _ _ (initPM 5341) 2048 1024 16 64
+        (by omega) (by omega) (by omega) (by omega) hrms9625 hrms9626 hw5341]
+
 /-! ## L12 attention commute assembly
 
 Compose the CP reconstruction lemma (`applyNodeRingAttn_zigzag_reconstruction_2_cp`)
@@ -913,11 +981,9 @@ theorem sm_pm_attention_L12_commute (initSM initPM : Store)
     (hq_sm : 0 < (denoteGraph_ringAttn sm_goal_3 initSM 5342).shape.length)
     (hk_sm : 0 < (denoteGraph_ringAttn sm_goal_3 initSM 5343).shape.length)
     (hv_sm : 0 < (denoteGraph_ringAttn sm_goal_3 initSM 5344).shape.length)
-    (hq_full :
-      (sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5342 =
-        allGatherPrimDimN 0 2 0
-          [(pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9659,
-           (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9660])
+    (h9625 : (denoteGraph_ringAttn pm_goal_3 initPM 9625).shape = [2048, 1024])
+    (h9626 : (denoteGraph_ringAttn pm_goal_3 initPM 9626).shape = [2048, 1024])
+    (hw5341 : (initPM 5341).shape = [16, 64, 1024])
     (hk_shape :
       ((pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5343).shape
         = [4096, 4, 64])
@@ -947,6 +1013,23 @@ theorem sm_pm_attention_L12_commute (initSM initPM : Store)
   -- folded-store bridges for the K/V replication commutes (denote ↔ prefix fold)
   have hkrepl := sm_pm_krepl_L12_commute initSM initPM hInit hcarry5330
   have hvrepl := sm_pm_vrepl_L12_commute initSM initPM hInit hcarry5330
+  -- Q full-sharding commute (Blocker B) lifted into folded-prefix form
+  have hq_full :
+      (sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5342 =
+        allGatherPrimDimN 0 2 0
+          [(pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9659,
+           (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9660] := by
+    have bq5342 : (sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5342
+        = denoteGraph_ringAttn sm_goal_3 initSM 5342 :=
+      (foldl_prefix_eq_full_ringAttn sm_goal_3 sm_goal_3.nodes initSM 5342 504 (by decide) (by decide)).symm
+    have bq9659 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9659
+        = denoteGraph_ringAttn pm_goal_3 initPM 9659 :=
+      (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 9659 1067 (by decide) (by decide)).symm
+    have bq9660 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9660
+        = denoteGraph_ringAttn pm_goal_3 initPM 9660 :=
+      (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 9660 1067 (by decide) (by decide)).symm
+    rw [bq5342, bq9659, bq9660]
+    exact sm_pm_qfull_L12_commute initSM initPM hInit hcarry5330 h9625 h9626 hw5341
   -- SM-side folded ↔ denote at K/V tids
   have bSM5343 : (sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5343
       = denoteGraph_ringAttn sm_goal_3 initSM 5343 :=
@@ -1062,3 +1145,5 @@ end TrainVerify.Denote.GeneratedPatterns
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_krepl_L12_commute
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_vrepl_L12_commute
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_attention_L12_commute
+
+#print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_qfull_L12_commute
