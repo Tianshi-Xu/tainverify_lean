@@ -186,18 +186,31 @@ Start with denote unfold theorems which are mechanical.
 -/
 
 -- L12 RMS norm output (main path)
--- This should unfold from the graph at node ~XXX
+-- From Goal_3.lean line 505 (node index 470): FW_rms_norm, ins := [8007, 5331], outs := [5332]
+-- This is analogous to L3's denote_sm_goal_3_4846 but for L12
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
 theorem denote_sm_goal_3_5332 (initSM : Store) :
     denoteGraph_ringAttn sm_goal_3 initSM 5332 =
-      fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5330) (initSM 5331) := by
-  sorry  -- TODO: Fill in DenoteUnfoldGeneric.dstep* pattern after verifying node structure
+      fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 8007) (initSM 5331) := by
+  refine DenoteUnfoldGeneric.dstep2 sm_goal_3 initSM 5332 8007 5331 470
+    ({ rank := 0, op := "OpName.FW_rms_norm", ins := [8007, 5331], outs := [5332] })
+    (fun a1 a2 => fw_rms_norm (a1) (a2))
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_rms_norm_out_1p sm_goal_3 s 0 8007 5331 5332)
+    ?_ ?_
+  · -- 8007 from multiref (node index 469)
+    refine DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 8007 5330 469
+      ({ rank := 0, op := "OpName.FW_multiref", ins := [5330], outs := [8007, 8011], params := [2] })
+      (fun a1 => a1)
+      (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (fun s => by rw [applyNode_fw_multiref_out sm_goal_3 s 0 5330 8007 [8007, 8011] 2 (by decide) (by decide)])
+      ?_
+    -- 5330 is the carry output (node index 468) - for now just use rfl
+    rfl
+  · -- 5331 is a leaf (weight tensor)
+    exact DenoteUnfoldGeneric.denote_leaf_val sm_goal_3 initSM 5331 (by decide) (by decide)
 
--- Actually, before writing more theorems, let me verify the node structure is correct.
--- Let me check if sm_goal_3.nodes actually has the expected L12 attention node.
-
--- I can use #eval to inspect, but that's slow. Instead, let me just try building
--- one complete simple helper and see if the tids are right.
+-- Excellent! Now let me try building again to see if this works.
 
 end TrainVerify.Denote.GeneratedPatterns
