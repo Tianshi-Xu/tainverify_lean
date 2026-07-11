@@ -402,6 +402,96 @@ theorem applyNodeRingAttn_zigzag_reconstruction_2_of_buddy_pair
   rw [← hcuQ_same, ← hcuK_same, ← hparams_same]
   rw [allGather0_reconstruct_chunks_3d Lshard qh vd hL hqh hvd _ hfull_shape]
 
+/-! ## L12 zigzag context-parallel reconstruction (replicated K/V)
+
+Unlike the tensor-parallel sliding-window layout (K/V sharded), the L12 zigzag
+CP layout REPLICATES K/V: both PM buddies share the same K/V tid, so the ring
+gather forms `allGatherPrimDimN 0 2 0 [K, K]` (row-doubled). The extra rows are
+never read (`fw_attn_varlen` only touches `j < k_end ≤ Lk`), which is exactly
+`fw_attn_varlen_kv_append_invariant`. This lemma bridges the SM single-K
+attention to the PM doubled-K gather and reconstructs the two chunks. -/
+set_option maxHeartbeats 1600000 in
+theorem applyNodeRingAttn_zigzag_reconstruction_2_cp
+    (g_sm g_pm : GraphDecl) (s_sm s_pm : Store)
+    (n_sm n_pm_r0 n_pm_r1 : NodeDecl)
+    (Lshard Lk : Nat)
+    (hL : 0 < Lshard)
+    (hqh : 0 < n_pm_r0.params.getD 0 1) (hkvh : 0 < n_pm_r0.params.getD 1 1)
+    (hd : 0 < n_pm_r0.params.getD 2 1) (hvd : 0 < n_pm_r0.params.getD 3 1)
+    (hdvd : n_pm_r0.params.getD 1 1 ∣ n_pm_r0.params.getD 0 1)
+    (hbuddy_sm : ringAttnBuddies g_sm n_sm = [n_sm])
+    (hbuddy_pm : ringAttnBuddies g_pm n_pm_r0 = [n_pm_r0, n_pm_r1])
+    (hbuddy_pm' : ringAttnBuddies g_pm n_pm_r1 = [n_pm_r0, n_pm_r1])
+    (hmyIdx0 : (([n_pm_r0, n_pm_r1].findIdx? (fun m => m.rank = n_pm_r0.rank)).getD 0) = 0)
+    (hmyIdx1 : (([n_pm_r0, n_pm_r1].findIdx? (fun m => m.rank = n_pm_r1.rank)).getD 0) = 1)
+    (hq_sm : 0 < (s_sm (n_sm.ins.getD 0 0)).shape.length)
+    (hk_sm : 0 < (s_sm (n_sm.ins.getD 1 0)).shape.length)
+    (hv_sm : 0 < (s_sm (n_sm.ins.getD 2 0)).shape.length)
+    (hkins : n_pm_r1.ins.getD 1 0 = n_pm_r0.ins.getD 1 0)
+    (hvins : n_pm_r1.ins.getD 2 0 = n_pm_r0.ins.getD 2 0)
+    (hq_full : s_sm (n_sm.ins.getD 0 0) =
+        allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 0 0), s_pm (n_pm_r1.ins.getD 0 0)])
+    (hk_repl : s_sm (n_sm.ins.getD 1 0) = s_pm (n_pm_r0.ins.getD 1 0))
+    (hv_repl : s_sm (n_sm.ins.getD 2 0) = s_pm (n_pm_r0.ins.getD 2 0))
+    (hk_shape : (s_pm (n_pm_r0.ins.getD 1 0)).shape =
+        [Lk, n_pm_r0.params.getD 1 1, n_pm_r0.params.getD 2 1])
+    (hv_shape : (s_pm (n_pm_r0.ins.getD 2 0)).shape =
+        [Lk, n_pm_r0.params.getD 1 1, n_pm_r0.params.getD 3 1])
+    (h_bound : ∀ t, (decodeCuSeqlens (s_pm (n_pm_r0.ins.getD 4 0))).getD (t+1) 0 ≤ Lk)
+    (hcuQ_sm_pm : s_sm (n_sm.ins.getD 3 0) = s_pm (n_pm_r0.ins.getD 3 0))
+    (hcuK_sm_pm : s_sm (n_sm.ins.getD 4 0) = s_pm (n_pm_r0.ins.getD 4 0))
+    (hcuQ_same : s_pm (n_pm_r0.ins.getD 3 0) = s_pm (n_pm_r1.ins.getD 3 0))
+    (hcuK_same : s_pm (n_pm_r0.ins.getD 4 0) = s_pm (n_pm_r1.ins.getD 4 0))
+    (hparams_sm : n_sm.params = n_pm_r0.params)
+    (hparams_same : n_pm_r0.params = n_pm_r1.params)
+    (hfull_shape :
+        (fw_attn_varlen
+          (allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 0 0), s_pm (n_pm_r1.ins.getD 0 0)])
+          (allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 1 0), s_pm (n_pm_r1.ins.getD 1 0)])
+          (allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 2 0), s_pm (n_pm_r1.ins.getD 2 0)])
+          (s_pm (n_pm_r0.ins.getD 3 0)) (s_pm (n_pm_r0.ins.getD 4 0))
+          (n_pm_r0.params.getD 0 1) (n_pm_r0.params.getD 1 1) (n_pm_r0.params.getD 2 1)
+          (n_pm_r0.params.getD 3 1)
+          (decide (n_pm_r0.params.getD 4 0 ≠ 0)) (n_pm_r0.params.getD 5 0)).shape
+        = [2 * Lshard, n_pm_r0.params.getD 0 1, n_pm_r0.params.getD 3 1]) :
+    applyNodeRingAttn_zigzag g_sm s_sm n_sm =
+      allGatherPrimDimN 0 2 0
+        [applyNodeRingAttn_zigzag g_pm s_pm n_pm_r0,
+         applyNodeRingAttn_zigzag g_pm s_pm n_pm_r1] := by
+  -- SM: the two K/V shards are equal (shared tid), so the ring gather doubles them.
+  have hkk : s_pm (n_pm_r1.ins.getD 1 0) = s_pm (n_pm_r0.ins.getD 1 0) := by rw [hkins]
+  have hvv : s_pm (n_pm_r1.ins.getD 2 0) = s_pm (n_pm_r0.ins.getD 2 0) := by rw [hvins]
+  have hout_sm : 0 < (fw_attn_varlen (s_sm (n_sm.ins.getD 0 0)) (s_sm (n_sm.ins.getD 1 0))
+      (s_sm (n_sm.ins.getD 2 0)) (s_sm (n_sm.ins.getD 3 0)) (s_sm (n_sm.ins.getD 4 0))
+      (n_sm.params.getD 0 1) (n_sm.params.getD 1 1) (n_sm.params.getD 2 1) (n_sm.params.getD 3 1)
+      (decide (n_sm.params.getD 4 0 ≠ 0)) (n_sm.params.getD 5 0)).shape.length := by
+    have hlen3 : (fw_attn_varlen (s_sm (n_sm.ins.getD 0 0)) (s_sm (n_sm.ins.getD 1 0))
+        (s_sm (n_sm.ins.getD 2 0)) (s_sm (n_sm.ins.getD 3 0)) (s_sm (n_sm.ins.getD 4 0))
+        (n_sm.params.getD 0 1) (n_sm.params.getD 1 1) (n_sm.params.getD 2 1) (n_sm.params.getD 3 1)
+        (decide (n_sm.params.getD 4 0 ≠ 0)) (n_sm.params.getD 5 0)).shape.length = 3 := rfl
+    omega
+  rw [applyNodeRingAttn_zigzag_singleton g_sm s_sm n_sm hbuddy_sm hq_sm hk_sm hv_sm hout_sm,
+      hq_full, hk_repl, hv_repl, hcuQ_sm_pm, hcuK_sm_pm, hparams_sm]
+  -- Bridge single-K SM attention to doubled-K PM gather via the append-invariant.
+  rw [fw_attn_varlen_kv_append_invariant
+        (allGatherPrimDimN 0 2 0 [s_pm (n_pm_r0.ins.getD 0 0), s_pm (n_pm_r1.ins.getD 0 0)])
+        (s_pm (n_pm_r0.ins.getD 1 0)) (s_pm (n_pm_r0.ins.getD 2 0))
+        (s_pm (n_pm_r0.ins.getD 3 0)) (s_pm (n_pm_r0.ins.getD 4 0))
+        (n_pm_r0.params.getD 0 1) (n_pm_r0.params.getD 1 1) (n_pm_r0.params.getD 2 1)
+        (n_pm_r0.params.getD 3 1)
+        (decide (n_pm_r0.params.getD 4 0 ≠ 0)) (n_pm_r0.params.getD 5 0)
+        Lk hqh hkvh hd hvd hdvd hk_shape hv_shape h_bound]
+  -- Now normalize the doubled K/V to the buddy-indexed form.
+  -- PM sides collapse to chunks of the same full output.
+  rw [applyNodeRingAttn_zigzag_pair_eq_chunk g_pm s_pm n_pm_r0 n_pm_r0 n_pm_r1 0
+        hbuddy_pm hmyIdx0,
+      applyNodeRingAttn_zigzag_pair_eq_chunk g_pm s_pm n_pm_r1 n_pm_r0 n_pm_r1 1
+        hbuddy_pm' hmyIdx1]
+  rw [← hcuQ_same, ← hcuK_same, ← hparams_same]
+  rw [allGather0_reconstruct_chunks_3d Lshard (n_pm_r0.params.getD 0 1) (n_pm_r0.params.getD 3 1)
+        hL hqh hvd _ hfull_shape]
+  rw [hkk, hvv]
+
 theorem attn_zigzag_store_congr (g : GraphDecl) (s s' : Store) (n : NodeDecl)
     (h0 : ∀ m ∈ ringAttnBuddies g n, s (m.ins.getD 0 0) = s' (m.ins.getD 0 0))
     (h1 : ∀ m ∈ ringAttnBuddies g n, s (m.ins.getD 1 0) = s' (m.ins.getD 1 0))
@@ -655,3 +745,4 @@ end TrainVerify.Denote.GeneratedPatterns
 #print axioms TrainVerify.Denote.GeneratedPatterns.denote_pm_goal_3_5343
 #print axioms TrainVerify.Denote.GeneratedPatterns.denote_pm_goal_3_5344
 #print axioms TrainVerify.Denote.GeneratedPatterns.denote_pm_goal_3_11917
+#print axioms TrainVerify.Denote.GeneratedPatterns.applyNodeRingAttn_zigzag_reconstruction_2_cp
