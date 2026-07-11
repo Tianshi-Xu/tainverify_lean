@@ -514,3 +514,61 @@ hand-write (confirmed, as the recon note predicted).
 **Next worker:** tackle BLOCKER B (zigzag `fw_maybe_shuffle` allGather commute) —
 it is self-contained and unblocks `hq_full`. BLOCKER A (L11 MoE + carry) is the
 larger lift toward the top-level `sm_pm_router_commute_L12`.
+
+---
+
+## Continuation Worker (Opus) — Blocker A RESOLVED (kernel-clean)
+
+**Commit base:** `dcabccb` (worker #8). This session's work is in
+`trainverify/denote/yoco_goals/Pattern_3_L12_spike.lean`.
+
+### Done this session
+- **`sm_pm_carry_5330_commute` PROVEN, kernel-clean.**
+  `#print axioms` = `[propext, Classical.choice, Quot.sound]`. This is
+  exactly the `hcarry5330` hypothesis of `sm_pm_attention_L12_commute`
+  (`SM 5330 = allGather0 [PM 9625, PM 9626]`).
+- Identified `sm_pm_carry_5330_commute` == `mk_carry_b 11`
+  (`4736 + 54*11 = 5330`). The existing `mk_moe_gmm`, `mk_gate_mul`,
+  `mk_carry_b` macros work **as-is for k=11** — no forking needed.
+- The macros required **33 previously-missing L11 MoE-branch denote-unfold
+  helpers** (22 PM: 9527/9528/9537/9538/15702/15725/9611/9612/15706/15710/
+  15714/15729/15733/15737/9615/9616/9621/9622/9625/9626/15683/15691;
+  11 SM: 5303/5308/7991/5327/7995/7999/8003/5328/5329/5330/7980).
+  These were auto-generated from their L10 structural analogs by a
+  parallel-DFS number-remap over the actual `sm_goal_3`/`pm_goal_3` node
+  cones (per-region tid strides: PM 186 / 104, SM 54 / 52; node-index and
+  layer-scalar deltas read from the real graph, not assumed). All 33
+  typecheck kernel-clean.
+- Full spike build: `Build completed successfully (2631 jobs)`, only the
+  pre-existing `Pattern_3.lean:8034` `sorry` (the L0..L23 aggregation
+  `sm_pm_router_commute_layer`, unrelated) remains.
+
+### Remaining for `sm_pm_router_commute_L12` (`SM 5361 = allGather0[PM 9733, 9734]`)
+Router L12 = `routers.getD 12`. Backward trace of SM 5361 shows it needs the
+**entire post-L12-attention forward chain**, NOT just composition:
+```
+5361 topk ← 5359 norm_linear ← 5356 rms ← 5354 add(8143, 5353)
+  8143 ← multiref ← 5338 maybe_shuffle(8011←5330, 5337)   [zigzag reorder]
+  5353 float ← 5352 view ← 5351 mix_linear ← 5349/5348 reshape ← 5347 attn_zigzag
+```
+Concretely still required (each ~a sliding-layer's worth of work, on the new
+zigzag tid strides — routers jump +57 at L11→L12, then +49 steady):
+1. **Discharge all 10 hypotheses of `sm_pm_attention_L12_commute`** (hq_sm,
+   h9625/h9626, hw5341, hk_shape/hv_shape, h_bound, hfull_shape, …) — these
+   are the shape facts that the sliding-window `mk_attention` macro discharges
+   internally but the hand-forked zigzag version left open. This is the crux.
+2. denote helpers for the SM 5347..5361 and PM 9687..9734 chain (structurally
+   = reshape/reshape/mix_linear/view/float/add/rms/multiref/norm_linear/topk,
+   same ops as sliding layers → generatable by the same analog-remap script).
+3. commute steps: reshape/linear/view/float through allGather0 (dim-0 shard,
+   existing lemmas); `fw_maybe_shuffle` commute is **trivial** (Denote models
+   it as identity on data, `fw_maybe_shuffle_shape` exists); add/rms/
+   norm_linear/topk commutes (existing lemmas from sliding band).
+4. Fork `mk_nl` → `mk_nl_zigzag` and `mk_router` → `mk_router_zigzag` with the
+   L12 strides (or hand-write the single L12 case), feeding the carry-5354
+   commute from (1)+(2)+(3).
+
+**Assessment:** Worker #9's "composition work" estimate for router_L12 was
+optimistic — it requires finishing the whole zigzag layer forward pass through
+the router (attention-hyp discharge + ~30 new denote helpers + 6-step commute
+assembly). Blocker A (the specifically-assigned item) is fully resolved.
