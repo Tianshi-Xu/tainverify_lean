@@ -211,6 +211,19 @@ theorem denote_sm_goal_3_5332 (initSM : Store) :
   · -- 5331 is a leaf (weight tensor)
     exact DenoteUnfoldGeneric.denote_leaf_val sm_goal_3 initSM 5331 (by decide) (by decide)
 
--- Excellent! Now let me try building again to see if this works.
+-- L12 Q-path per_head_mix_precision_linear (SM node index 479, graph line 514)
+-- ins := [5340, 5341], outs := [5342]; input 5340 is the q-path rms output.
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5342 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5342 =
+      fw_per_head_linear (denoteGraph_ringAttn sm_goal_3 initSM 5340) (initSM 5341) :=
+  DenoteUnfoldGeneric.dstep2 sm_goal_3 initSM 5342 5340 5341 479
+    ({ rank := 0, op := "OpName.FW_per_head_mix_precision_linear", ins := [5340, 5341], outs := [5342] })
+    (fun a1 a2 => fw_per_head_linear (a1) (a2))
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_per_head_mix_precision_linear_out sm_goal_3 s 0 5340 5341 5342 [])
+    rfl
+    (DenoteUnfoldGeneric.denote_leaf_val sm_goal_3 initSM 5341 (by decide) (by decide))
 
 end TrainVerify.Denote.GeneratedPatterns
