@@ -469,3 +469,48 @@ Once L12 is done:
 **Status:** Ready for macro implementation (buddy proofs pending build verification)  
 **ETA to completion:** 4-6 hours focused work  
 **Blocker:** None (time only)
+
+---
+
+## Worker #8 session update (HEAD `07d77b5`)
+
+**Proven kernel-clean `[propext, Classical.choice, Quot.sound]` this session
+(in `Pattern_3_L12_spike.lean`):**
+
+- `denote_sm_goal_3_8007`, `denote_pm_goal_3_14597`, `denote_pm_goal_3_14599`
+  — multiref passthrough micro-unfolds feeding the RMS inputs.
+- `L12_weight_eq` — replicated-leaf SM=PM weight helper from `goal_3_cut_initGoals`.
+- `sm_pm_rms_L12_commute` — SM 5332 = PM 5332 (replicated full RMS), modulo the
+  incoming residual commute `hcarry5330`.
+- `sm_pm_krepl_L12_commute` — SM 5343 = PM 5343 (K replication), modulo `hcarry5330`.
+- `sm_pm_vrepl_L12_commute` — SM 5344 = PM 5344 (V replication), modulo `hcarry5330`.
+- **`sm_pm_attention_L12_commute`** — the full CP attention commute
+  `denote SM 5347 = allGather[denote PM 9687, denote PM 9688]`, composing
+  `applyNodeRingAttn_zigzag_reconstruction_2_cp` + the 3 denote↔applyNode bridges
+  + `attn_zigzag_store_congr` (take-1068 → take-1067 rank-1 alignment) + the K/V
+  replication commutes. Buddy lemmas converted off `native_decide`
+  (`List.mergeSort_of_pairwise; decide`) so **zero native axioms**.
+
+**Remaining hypotheses of `sm_pm_attention_L12_commute` (explicit args):**
+1. `hcarry5330 : denote SM 5330 = allGather[denote PM 9625, denote PM 9626]`
+   — the L11→L12 residual boundary. Requires the full L11 MoE branch
+   (`sm_pm_moe_gmm_L11`, `sm_pm_gate_mul_L11` — NOT yet built) + carry recursion.
+   This is a whole additional layer of work. **BLOCKER A.**
+2. `hq_full` — Q-sharding commute. SM Q path = full carry → `fw_maybe_shuffle`
+   (params `[1,0]`) → rms → qlin; PM path = per-rank `fw_maybe_shuffle`
+   (params `[2,r]`) → rms → qlin, gathered. Needs a NEW dedicated
+   `fw_maybe_shuffle` ⋈ allGather zigzag-permutation commute lemma. **BLOCKER B.**
+3. `hq_sm/hk_sm/hv_sm/hk_shape/hv_shape/h_bound/hfull_shape` — mechanical shape
+   facts derivable from the denote chains + existing shape lemmas
+   (`ph_lin_shape_gen`, `rms_sh`, `aG0_2_shape`, fw_attn_varlen shape). Left as
+   explicit hyps for now; straightforward to discharge.
+
+**mk_* macro reuse verdict:** NONE of `mk_rms/qlin/klin/vproj/qproj/kproj/
+attention/pm_attn_shard_shapes/carry/nl/router` apply to L12. Reason: they encode
+the *sharded* sliding-window RMS/K/V (`fw_rms_norm_allGather0_commute_2`), whereas
+L12 CP layout *replicates* RMS/K/V and *shuffles* Q. Structurally different — must
+hand-write (confirmed, as the recon note predicted).
+
+**Next worker:** tackle BLOCKER B (zigzag `fw_maybe_shuffle` allGather commute) —
+it is self-contained and unblocks `hq_full`. BLOCKER A (L11 MoE + carry) is the
+larger lift toward the top-level `sm_pm_router_commute_L12`.
