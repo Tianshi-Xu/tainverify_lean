@@ -17,14 +17,16 @@ Task at **implementation-ready** state: all prerequisites validated, exact tids 
 - K/V source: 5343/5344 (from FW_to ops on 8033/8091)
 - Op: "OpName.FW_attn_zigzag"
 - Params: [16, 4, 64, 64, 1, 0]
-- **Graph lines 500-570 fully mapped**
+- **Graph line 539, node index 504**
+- **Take count: 504 (up to attn), 505 (including attn)**
 
 **L12 PM (rank 0/1) - COMPLETE MAPPING:**
 - Attention outputs: 9687 (r0), 9688 (r1)
 - Local Q inputs: 9659 (r0), 9660 (r1)
 - Shared K/V: 5343, 5344
 - Shared cu_seqlens: 5345, 5346
-- **Graph lines 2010-2011 fully mapped**
+- **Graph lines 2010-2011, node indices 1970-1971**
+- **Take count: 1970 (up to r0), 1971 (incl r0), 1972 (incl both)**
 
 **Verified via extraction script:** `/tmp/tv-l12-pilot/extract_l12_tids.py`
 
