@@ -734,6 +734,48 @@ theorem denote_pm_goal_3_5344 (initPM : Store) :
       (fun s => applyNode_fw_multiref_out pm_goal_3 s 1 5336 15921 [15921, 15925, 15929, 15933, 15937, 15941, 15945, 15949, 15953, 15957, 15961, 15965] 12 (by decide) (by decide))
       rfl)
 
+/-! ## L12 attention denote ↔ applyNodeRingAttn_zigzag bridges
+
+Connect `denoteGraph_ringAttn` at the attention output tids (5347/9687/9688) to
+`applyNodeRingAttn_zigzag` on the folded prefix store, so the CP reconstruction
+lemma can be plugged in. SM attn node index = 504, PM r0 = 1067, PM r1 = 1068. -/
+
+set_option maxRecDepth 20000 in
+theorem denote_sm_attn_L12_bridge (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5347
+      = applyNodeRingAttn_zigzag sm_goal_3
+          ((sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM) nSM_12 := by
+  rw [show denoteGraph_ringAttn sm_goal_3 initSM 5347
+      = (sm_goal_3.nodes.take 505).foldl (applyNodeRingAttn sm_goal_3) initSM 5347 from
+      foldl_prefix_eq_full_ringAttn sm_goal_3 sm_goal_3.nodes initSM 5347 505 (by decide) (by decide)]
+  rw [show sm_goal_3.nodes.take 505 = sm_goal_3.nodes.take 504 ++ [nSM_12] from rfl,
+      List.foldl_append, List.foldl_cons, List.foldl_nil]
+  exact applyNodeRingAttn_zigzag_out sm_goal_3 _ 0 5342 5343 5344 5345 5346 5347 [16, 4, 64, 64, 1, 0]
+
+set_option maxRecDepth 20000 in
+theorem denote_pm_attn_L12_r0_bridge (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9687
+      = applyNodeRingAttn_zigzag pm_goal_3
+          ((pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM) nR0_12 := by
+  rw [show denoteGraph_ringAttn pm_goal_3 initPM 9687
+      = (pm_goal_3.nodes.take 1068).foldl (applyNodeRingAttn pm_goal_3) initPM 9687 from
+      foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 9687 1068 (by decide) (by decide)]
+  rw [show pm_goal_3.nodes.take 1068 = pm_goal_3.nodes.take 1067 ++ [nR0_12] from rfl,
+      List.foldl_append, List.foldl_cons, List.foldl_nil]
+  exact applyNodeRingAttn_zigzag_out pm_goal_3 _ 0 9659 5343 5344 5345 5346 9687 [16, 4, 64, 64, 1, 0]
+
+set_option maxRecDepth 20000 in
+theorem denote_pm_attn_L12_r1_bridge (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9688
+      = applyNodeRingAttn_zigzag pm_goal_3
+          ((pm_goal_3.nodes.take 1068).foldl (applyNodeRingAttn pm_goal_3) initPM) nR1_12 := by
+  rw [show denoteGraph_ringAttn pm_goal_3 initPM 9688
+      = (pm_goal_3.nodes.take 1069).foldl (applyNodeRingAttn pm_goal_3) initPM 9688 from
+      foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 9688 1069 (by decide) (by decide)]
+  rw [show pm_goal_3.nodes.take 1069 = pm_goal_3.nodes.take 1068 ++ [nR1_12] from rfl,
+      List.foldl_append, List.foldl_cons, List.foldl_nil]
+  exact applyNodeRingAttn_zigzag_out pm_goal_3 _ 1 9660 5343 5344 5345 5346 9688 [16, 4, 64, 64, 1, 0]
+
 end TrainVerify.Denote.GeneratedPatterns
 
 -- Axiom audit for the newly ported zigzag primitives (should be kernel-only).
