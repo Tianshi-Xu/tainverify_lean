@@ -776,6 +776,115 @@ theorem denote_pm_attn_L12_r1_bridge (initPM : Store) :
       List.foldl_append, List.foldl_cons, List.foldl_nil]
   exact applyNodeRingAttn_zigzag_out pm_goal_3 _ 1 9660 5343 5344 5345 5346 9688 [16, 4, 64, 64, 1, 0]
 
+/-! ## L12 attention input-side commutes (K/V replication + RMS)
+
+The CP zigzag layout REPLICATES the K/V path: both PM ranks recompute the full
+RMS (`5332`) from the ring-gathered residual `11917 = allGather[9625, 9626]`,
+then apply the *same* per-head linear weights. Hence SM's full-sequence K/V
+equal each PM rank's K/V, provided the incoming residual commutes
+(`hcarry5330 : SM 5330 = allGather[PM 9625, PM 9626]`). The Q path additionally
+threads a zigzag `fw_maybe_shuffle`, so its sharding commute (`hq_full`) is left
+to a dedicated shuffle lemma; the K/V replication below is complete. -/
+
+-- Micro-unfolds: multiref passthroughs feeding the RMS inputs.
+set_option maxRecDepth 20000 in
+theorem denote_sm_goal_3_8007 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 8007 =
+      denoteGraph_ringAttn sm_goal_3 initSM 5330 :=
+  DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 8007 5330 469
+    ({ rank := 0, op := "OpName.FW_multiref", ins := [5330], outs := [8007, 8011], params := [2] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_multiref_out sm_goal_3 s 0 5330 8007 [8007, 8011] 2 (by decide) (by decide))
+    rfl
+
+set_option maxRecDepth 20000 in
+theorem denote_pm_goal_3_14597 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 14597 =
+      denoteGraph_ringAttn pm_goal_3 initPM 9625 :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 14597 9625 996
+    ({ rank := 0, op := "OpName.FW_multiref", ins := [9625], outs := [14597, 13257], params := [2] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_multiref_out pm_goal_3 s 0 9625 14597 [14597, 13257] 2 (by decide) (by decide))
+    rfl
+
+set_option maxRecDepth 20000 in
+theorem denote_pm_goal_3_14599 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 14599 =
+      denoteGraph_ringAttn pm_goal_3 initPM 9626 :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 14599 9626 997
+    ({ rank := 1, op := "OpName.FW_multiref", ins := [9626], outs := [14599, 13258], params := [2] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_multiref_out pm_goal_3 s 1 9626 14599 [14599, 13258] 2 (by decide) (by decide))
+    rfl
+
+-- Weight-equality helper (SM = PM at replicated leaf weights) from the cut init goals.
+theorem L12_weight_eq (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
+    ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+      initSM g.ts = initPM g.ts := by
+  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
+  intro g hg hshape
+  have hgh := hII g hg
+  unfold InitGoalHolds at hgh
+  obtain ⟨_, _, hval⟩ := hgh
+  rw [hshape] at hval
+  simpa [List.map, reconstructWithDim_singleton] using hval
+
+-- RMS replication: SM 5332 = PM 5332 given the incoming residual commutes.
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem sm_pm_rms_L12_commute (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (hcarry5330 : denoteGraph_ringAttn sm_goal_3 initSM 5330 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9625,
+         denoteGraph_ringAttn pm_goal_3 initPM 9626]) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5332 =
+      denoteGraph_ringAttn pm_goal_3 initPM 5332 := by
+  have hb := L12_weight_eq initSM initPM hInit
+  have hw5331 : initSM 5331 = initPM 5331 := hb initGoal_5331 (by decide) rfl
+  rw [denote_sm_goal_3_5332, denote_sm_goal_3_8007, hcarry5330, hw5331,
+      denote_pm_goal_3_5332, denote_pm_goal_3_11917,
+      denote_pm_goal_3_14597, denote_pm_goal_3_14599]
+
+-- K replication: SM 5343 = PM 5343.
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem sm_pm_krepl_L12_commute (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (hcarry5330 : denoteGraph_ringAttn sm_goal_3 initSM 5330 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9625,
+         denoteGraph_ringAttn pm_goal_3 initPM 9626]) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5343 =
+      denoteGraph_ringAttn pm_goal_3 initPM 5343 := by
+  have hb := L12_weight_eq initSM initPM hInit
+  have hw5333 : initSM 5333 = initPM 5333 := hb initGoal_5333 (by decide) rfl
+  have hrms := sm_pm_rms_L12_commute initSM initPM hInit hcarry5330
+  rw [denote_sm_goal_3_5343, denote_sm_goal_3_5334, hrms, hw5333,
+      denote_pm_goal_3_5343, denote_pm_goal_3_5334]
+
+-- V replication: SM 5344 = PM 5344.
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem sm_pm_vrepl_L12_commute (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (hcarry5330 : denoteGraph_ringAttn sm_goal_3 initSM 5330 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9625,
+         denoteGraph_ringAttn pm_goal_3 initPM 9626]) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5344 =
+      denoteGraph_ringAttn pm_goal_3 initPM 5344 := by
+  have hb := L12_weight_eq initSM initPM hInit
+  have hw5335 : initSM 5335 = initPM 5335 := hb initGoal_5335 (by decide) rfl
+  have hrms := sm_pm_rms_L12_commute initSM initPM hInit hcarry5330
+  rw [denote_sm_goal_3_5344, denote_sm_goal_3_5336, hrms, hw5335,
+      denote_pm_goal_3_5344, denote_pm_goal_3_5336]
+
 end TrainVerify.Denote.GeneratedPatterns
 
 -- Axiom audit for the newly ported zigzag primitives (should be kernel-only).
@@ -788,3 +897,7 @@ end TrainVerify.Denote.GeneratedPatterns
 #print axioms TrainVerify.Denote.GeneratedPatterns.denote_pm_goal_3_5344
 #print axioms TrainVerify.Denote.GeneratedPatterns.denote_pm_goal_3_11917
 #print axioms TrainVerify.Denote.GeneratedPatterns.applyNodeRingAttn_zigzag_reconstruction_2_cp
+
+#print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_rms_L12_commute
+#print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_krepl_L12_commute
+#print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_vrepl_L12_commute
