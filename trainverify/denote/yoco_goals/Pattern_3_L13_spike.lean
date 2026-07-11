@@ -1069,4 +1069,69 @@ theorem denote_pm_goal_3_9906 (initPM : Store) :
     (fun s => applyNode_fw_topk_routing_map_out pm_goal_3 s 1 9902 9904 9906 9908 [8] (by decide))
     rfl
 
+/-! ## L13 post-attention reshape-float + residual carry commutes -/
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 40000000 in
+theorem sm_pm_reshape_float_5402_commute (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (hattn : denoteGraph_ringAttn sm_goal_3 initSM 5396 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9859,
+         denoteGraph_ringAttn pm_goal_3 initPM 9860])
+    (h9859 : (denoteGraph_ringAttn pm_goal_3 initPM 9859).shape = [2048, 16, 64])
+    (h9860 : (denoteGraph_ringAttn pm_goal_3 initPM 9860).shape = [2048, 16, 64])
+    (hw5399 : (initPM 5399).shape = [1024, 1024]) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5402 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9885,
+         denoteGraph_ringAttn pm_goal_3 initPM 9886] := by
+  have hb := L12_weight_eq initSM initPM hInit
+  have hw : initSM 5399 = initPM 5399 := hb initGoal_5399 (by decide) rfl
+  rw [denote_sm_goal_3_5402, denote_sm_goal_3_5401, denote_sm_goal_3_5400,
+      denote_sm_goal_3_5398, denote_sm_goal_3_5397,
+      denote_pm_goal_3_9885, denote_pm_goal_3_9881, denote_pm_goal_3_9871,
+      denote_pm_goal_3_9867, denote_pm_goal_3_9861,
+      denote_pm_goal_3_9886, denote_pm_goal_3_9882, denote_pm_goal_3_9872,
+      denote_pm_goal_3_9868, denote_pm_goal_3_9862]
+  rw [hattn, hw]
+  rw [carry_view_commute _ _ h9859 h9860]
+  have hva : (fw_view [2048, 1024] (fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9859))).shape = [2048, 1024] := rfl
+  have hvb : (fw_view [2048, 1024] (fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9860))).shape = [2048, 1024] := rfl
+  rw [fw_mix_precision_linear_allGather0_commute_2 _ _ (initPM 5399) 2048 1024 1024
+      (by omega) (by omega) (by omega) hva hvb hw5399]
+  have hla : (fw_linear (fw_view [2048, 1024] (fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9859))) (initPM 5399)).shape = [2048, 1024] := by
+    rw [fw_linear_is_matmul 2048 1024 1024 _ _ hva hw5399]; rfl
+  have hlb : (fw_linear (fw_view [2048, 1024] (fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9860))) (initPM 5399)).shape = [2048, 1024] := by
+    rw [fw_linear_is_matmul 2048 1024 1024 _ _ hvb hw5399]; rfl
+  have hAG : (allGatherPrimDimN 0 2 0
+      [fw_linear (fw_view [2048, 1024] (fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9859))) (initPM 5399),
+       fw_linear (fw_view [2048, 1024] (fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9860))) (initPM 5399)]).shape = [4096, 1024] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hla])]; simp [List.set]
+  rw [fw_view_id _ [4096, 1024] hAG, fw_view_id _ [2048, 1024] hla, fw_view_id _ [2048, 1024] hlb]
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 20000000 in
+theorem sm_pm_carry_5403_commute (initSM initPM : Store)
+    (hcarry5387 : denoteGraph_ringAttn sm_goal_3 initSM 5387 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9829,
+         denoteGraph_ringAttn pm_goal_3 initPM 9830])
+    (hreshape : denoteGraph_ringAttn sm_goal_3 initSM 5402 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9885,
+         denoteGraph_ringAttn pm_goal_3 initPM 9886])
+    (h9829 : (denoteGraph_ringAttn pm_goal_3 initPM 9829).shape = [2048, 1024])
+    (h9830 : (denoteGraph_ringAttn pm_goal_3 initPM 9830).shape = [2048, 1024])
+    (h9885 : (denoteGraph_ringAttn pm_goal_3 initPM 9885).shape = [2048, 1024])
+    (h9886 : (denoteGraph_ringAttn pm_goal_3 initPM 9886).shape = [2048, 1024]) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5403 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9889,
+         denoteGraph_ringAttn pm_goal_3 initPM 9890] := by
+  rw [denote_sm_goal_3_5403, denote_pm_goal_3_9889, denote_pm_goal_3_9890,
+      denote_sm_goal_3_8182, denote_pm_goal_3_16051, denote_pm_goal_3_16059]
+  rw [hcarry5387, hreshape]
+  rw [fw_add_allGather0_commute_2_2048_1024 _ _ _ _ h9829 h9830 h9885 h9886]
+
 end TrainVerify.Denote.GeneratedPatterns
