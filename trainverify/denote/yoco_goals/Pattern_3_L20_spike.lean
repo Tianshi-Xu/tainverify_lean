@@ -111,7 +111,7 @@ theorem denote_pm_attn_L20_r1_bridge (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_sm_goal_3_5585 (initSM : Store) :
+theorem denote_sm_goal_3_5585_L20 (initSM : Store) :
     denoteGraph_ringAttn sm_goal_3 initSM 5732 =
       fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5730) (initSM 5731) :=
   DenoteUnfoldGeneric.dstep2 sm_goal_3 initSM 5732 8451 5731 782
@@ -129,7 +129,7 @@ theorem denote_sm_goal_3_5585 (initSM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_sm_goal_3_5587 (initSM : Store) :
+theorem denote_sm_goal_3_5587_L20 (initSM : Store) :
     denoteGraph_ringAttn sm_goal_3 initSM 5734 =
       fw_per_head_linear (denoteGraph_ringAttn sm_goal_3 initSM 5732) (initSM 5733) :=
   DenoteUnfoldGeneric.dstep2 sm_goal_3 initSM 5734 5732 5733 783
@@ -142,7 +142,7 @@ theorem denote_sm_goal_3_5587 (initSM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_sm_goal_3_5593 (initSM : Store) :
+theorem denote_sm_goal_3_5593_L20 (initSM : Store) :
     denoteGraph_ringAttn sm_goal_3 initSM 5740 =
       fw_view [4096, 1024] (denoteGraph_ringAttn sm_goal_3 initSM 5739) :=
   DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 5740 5739 785
@@ -154,7 +154,7 @@ theorem denote_sm_goal_3_5593 (initSM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_sm_goal_3_5594 (initSM : Store) :
+theorem denote_sm_goal_3_5594_L20 (initSM : Store) :
     denoteGraph_ringAttn sm_goal_3 initSM 5741 =
       fw_view [4096, 1024] (denoteGraph_ringAttn sm_goal_3 initSM 5740) :=
   DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 5741 5740 786
@@ -166,7 +166,7 @@ theorem denote_sm_goal_3_5594 (initSM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_sm_goal_3_5596 (initSM : Store) :
+theorem denote_sm_goal_3_5596_L20 (initSM : Store) :
     denoteGraph_ringAttn sm_goal_3 initSM 5743 =
       fw_linear (denoteGraph_ringAttn sm_goal_3 initSM 5741) (initSM 5742) :=
   DenoteUnfoldGeneric.dstep2 sm_goal_3 initSM 5743 5741 5742 787
@@ -179,7 +179,7 @@ theorem denote_sm_goal_3_5596 (initSM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_sm_goal_3_5597 (initSM : Store) :
+theorem denote_sm_goal_3_5597_L20 (initSM : Store) :
     denoteGraph_ringAttn sm_goal_3 initSM 5744 =
       fw_view [4096, 1024] (denoteGraph_ringAttn sm_goal_3 initSM 5743) :=
   DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 5744 5743 788
@@ -191,7 +191,7 @@ theorem denote_sm_goal_3_5597 (initSM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_sm_goal_3_5598 (initSM : Store) :
+theorem denote_sm_goal_3_5598_L20 (initSM : Store) :
     denoteGraph_ringAttn sm_goal_3 initSM 5745 =
       denoteGraph_ringAttn sm_goal_3 initSM 5744 :=
   DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 5745 5744 789
@@ -203,7 +203,7 @@ theorem denote_sm_goal_3_5598 (initSM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_sm_goal_3_5599 (initSM : Store) :
+theorem denote_sm_goal_3_5599_L20 (initSM : Store) :
     denoteGraph_ringAttn sm_goal_3 initSM 5746 =
       elemwiseAdd (denoteGraph_ringAttn sm_goal_3 initSM 5730)
         (denoteGraph_ringAttn sm_goal_3 initSM 5745) := by
@@ -224,7 +224,7 @@ theorem denote_sm_goal_3_5599 (initSM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_sm_goal_3_5601 (initSM : Store) :
+theorem denote_sm_goal_3_5601_L20 (initSM : Store) :
     denoteGraph_ringAttn sm_goal_3 initSM 5748 =
       fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5746) (initSM 5747) :=
   DenoteUnfoldGeneric.dstep2 sm_goal_3 initSM 5748 8459 5747 792
@@ -242,7 +242,7 @@ theorem denote_sm_goal_3_5601 (initSM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_sm_goal_3_5602 (initSM : Store) :
+theorem denote_sm_goal_3_5602_L20 (initSM : Store) :
     denoteGraph_ringAttn sm_goal_3 initSM 5749 =
       denoteGraph_ringAttn sm_goal_3 initSM 5748 :=
   DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 5749 8470 794
@@ -259,7 +259,7 @@ theorem denote_sm_goal_3_5602 (initSM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_sm_goal_3_5604 (initSM : Store) :
+theorem denote_sm_goal_3_5604_L20 (initSM : Store) :
     denoteGraph_ringAttn sm_goal_3 initSM 5751 =
       fw_norm_linear (denoteGraph_ringAttn sm_goal_3 initSM 5749) (initSM 5750) :=
   DenoteUnfoldGeneric.dstep2 sm_goal_3 initSM 5751 5749 5750 798
@@ -272,7 +272,7 @@ theorem denote_sm_goal_3_5604 (initSM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_sm_goal_3_5606 (initSM : Store) :
+theorem denote_sm_goal_3_5606_L20 (initSM : Store) :
     denoteGraph_ringAttn sm_goal_3 initSM 5753 =
       (fw_topk_routing (denoteGraph_ringAttn sm_goal_3 initSM 5751) ([8].getD 0 1)
         (((denoteGraph_ringAttn sm_goal_3 initSM 5751).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst :=
@@ -285,7 +285,7 @@ theorem denote_sm_goal_3_5606 (initSM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_sm_goal_3_5588 (initSM : Store) :
+theorem denote_sm_goal_3_5588_L20 (initSM : Store) :
     denoteGraph_ringAttn sm_goal_3 initSM 5735 =
       denoteGraph_ringAttn sm_goal_3 initSM 5334 :=
   DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 5735 8065 488
@@ -302,7 +302,7 @@ theorem denote_sm_goal_3_5588 (initSM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_sm_goal_3_5589 (initSM : Store) :
+theorem denote_sm_goal_3_5589_L20 (initSM : Store) :
     denoteGraph_ringAttn sm_goal_3 initSM 5736 =
       denoteGraph_ringAttn sm_goal_3 initSM 5336 :=
   DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 5736 8123 500
@@ -321,7 +321,7 @@ theorem denote_sm_goal_3_5589 (initSM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10521 (initPM : Store) :
+theorem denote_pm_goal_3_10521_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11037 =
       fw_rms_norm (denoteGraph_ringAttn pm_goal_3 initPM 11033) (initPM 5731) :=
   DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 11037 16593 5731 1623
@@ -339,7 +339,7 @@ theorem denote_pm_goal_3_10521 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10523 (initPM : Store) :
+theorem denote_pm_goal_3_10523_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11039 =
       fw_per_head_linear (denoteGraph_ringAttn pm_goal_3 initPM 11037) (initPM 5733) :=
   DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 11039 11037 5733 1625
@@ -352,7 +352,7 @@ theorem denote_pm_goal_3_10523 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10549 (initPM : Store) :
+theorem denote_pm_goal_3_10549_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11065 =
       fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 11063) :=
   DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 11065 11063 1629
@@ -364,7 +364,7 @@ theorem denote_pm_goal_3_10549 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10555 (initPM : Store) :
+theorem denote_pm_goal_3_10555_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11071 =
       fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 11065) :=
   DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 11071 11065 1631
@@ -376,7 +376,7 @@ theorem denote_pm_goal_3_10555 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10559 (initPM : Store) :
+theorem denote_pm_goal_3_10559_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11075 =
       fw_linear (denoteGraph_ringAttn pm_goal_3 initPM 11071) (initPM 5742) :=
   DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 11075 11071 5742 1633
@@ -389,7 +389,7 @@ theorem denote_pm_goal_3_10559 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10569 (initPM : Store) :
+theorem denote_pm_goal_3_10569_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11085 =
       fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 11075) :=
   DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 11085 11075 1635
@@ -401,7 +401,7 @@ theorem denote_pm_goal_3_10569 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10573 (initPM : Store) :
+theorem denote_pm_goal_3_10573_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11089 =
       denoteGraph_ringAttn pm_goal_3 initPM 11085 :=
   DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 11089 11085 1637
@@ -413,7 +413,7 @@ theorem denote_pm_goal_3_10573 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10577 (initPM : Store) :
+theorem denote_pm_goal_3_10577_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11093 =
       elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 11033)
         (denoteGraph_ringAttn pm_goal_3 initPM 11089) := by
@@ -434,7 +434,7 @@ theorem denote_pm_goal_3_10577 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10581 (initPM : Store) :
+theorem denote_pm_goal_3_10581_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11097 =
       fw_rms_norm (denoteGraph_ringAttn pm_goal_3 initPM 11093) (initPM 5747) :=
   DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 11097 16609 5747 1643
@@ -452,7 +452,7 @@ theorem denote_pm_goal_3_10581 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10583 (initPM : Store) :
+theorem denote_pm_goal_3_10583_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11099 =
       denoteGraph_ringAttn pm_goal_3 initPM 11097 :=
   DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 11099 16628 1647
@@ -469,7 +469,7 @@ theorem denote_pm_goal_3_10583 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10589 (initPM : Store) :
+theorem denote_pm_goal_3_10589_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11105 =
       fw_norm_linear (denoteGraph_ringAttn pm_goal_3 initPM 11099) (initPM 5750) :=
   DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 11105 11099 5750 1655
@@ -482,7 +482,7 @@ theorem denote_pm_goal_3_10589 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10593 (initPM : Store) :
+theorem denote_pm_goal_3_10593_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11109 =
       (fw_topk_routing (denoteGraph_ringAttn pm_goal_3 initPM 11105) ([8].getD 0 1)
         (((denoteGraph_ringAttn pm_goal_3 initPM 11105).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst :=
@@ -495,7 +495,7 @@ theorem denote_pm_goal_3_10593 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10522 (initPM : Store) :
+theorem denote_pm_goal_3_10522_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11038 =
       fw_rms_norm (denoteGraph_ringAttn pm_goal_3 initPM 11034) (initPM 5731) :=
   DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 11038 16601 5731 1624
@@ -513,7 +513,7 @@ theorem denote_pm_goal_3_10522 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10524 (initPM : Store) :
+theorem denote_pm_goal_3_10524_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11040 =
       fw_per_head_linear (denoteGraph_ringAttn pm_goal_3 initPM 11038) (initPM 5733) :=
   DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 11040 11038 5733 1626
@@ -526,7 +526,7 @@ theorem denote_pm_goal_3_10524 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10550 (initPM : Store) :
+theorem denote_pm_goal_3_10550_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11066 =
       fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 11064) :=
   DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 11066 11064 1630
@@ -538,7 +538,7 @@ theorem denote_pm_goal_3_10550 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10556 (initPM : Store) :
+theorem denote_pm_goal_3_10556_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11072 =
       fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 11066) :=
   DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 11072 11066 1632
@@ -550,7 +550,7 @@ theorem denote_pm_goal_3_10556 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10560 (initPM : Store) :
+theorem denote_pm_goal_3_10560_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11076 =
       fw_linear (denoteGraph_ringAttn pm_goal_3 initPM 11072) (initPM 5742) :=
   DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 11076 11072 5742 1634
@@ -563,7 +563,7 @@ theorem denote_pm_goal_3_10560 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10570 (initPM : Store) :
+theorem denote_pm_goal_3_10570_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11086 =
       fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 11076) :=
   DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 11086 11076 1636
@@ -575,7 +575,7 @@ theorem denote_pm_goal_3_10570 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10574 (initPM : Store) :
+theorem denote_pm_goal_3_10574_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11090 =
       denoteGraph_ringAttn pm_goal_3 initPM 11086 :=
   DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 11090 11086 1638
@@ -587,7 +587,7 @@ theorem denote_pm_goal_3_10574 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10578 (initPM : Store) :
+theorem denote_pm_goal_3_10578_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11094 =
       elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 11034)
         (denoteGraph_ringAttn pm_goal_3 initPM 11090) := by
@@ -608,7 +608,7 @@ theorem denote_pm_goal_3_10578 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10582 (initPM : Store) :
+theorem denote_pm_goal_3_10582_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11098 =
       fw_rms_norm (denoteGraph_ringAttn pm_goal_3 initPM 11094) (initPM 5747) :=
   DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 11098 16617 5747 1644
@@ -626,7 +626,7 @@ theorem denote_pm_goal_3_10582 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10584 (initPM : Store) :
+theorem denote_pm_goal_3_10584_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11100 =
       denoteGraph_ringAttn pm_goal_3 initPM 11098 :=
   DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 11100 16651 1651
@@ -643,7 +643,7 @@ theorem denote_pm_goal_3_10584 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10590 (initPM : Store) :
+theorem denote_pm_goal_3_10590_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11106 =
       fw_norm_linear (denoteGraph_ringAttn pm_goal_3 initPM 11100) (initPM 5750) :=
   DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 11106 11100 5750 1659
@@ -656,7 +656,7 @@ theorem denote_pm_goal_3_10590 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_10594 (initPM : Store) :
+theorem denote_pm_goal_3_10594_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 11110 =
       (fw_topk_routing (denoteGraph_ringAttn pm_goal_3 initPM 11106) ([8].getD 0 1)
         (((denoteGraph_ringAttn pm_goal_3 initPM 11106).shape.reverse.head?).getD ([8].getD 1 1))).snd.fst :=
@@ -669,7 +669,7 @@ theorem denote_pm_goal_3_10594 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_5588 (initPM : Store) :
+theorem denote_pm_goal_3_5588_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 5735 =
       denoteGraph_ringAttn pm_goal_3 initPM 5334 :=
   DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 5735 15847 1039
@@ -686,7 +686,7 @@ theorem denote_pm_goal_3_5588 (initPM : Store) :
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 8000000 in
-theorem denote_pm_goal_3_5589 (initPM : Store) :
+theorem denote_pm_goal_3_5589_L20 (initPM : Store) :
     denoteGraph_ringAttn pm_goal_3 initPM 5736 =
       denoteGraph_ringAttn pm_goal_3 initPM 5336 :=
   DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 5736 15953 1063
@@ -723,9 +723,9 @@ theorem sm_pm_qfull_L20_commute (initSM initPM : Store)
   have hb := L12_weight_eq initSM initPM hInit
   have hw5584 : initSM 5731 = initPM 5731 := hb initGoal_5731 (by decide) rfl
   have hw5586e : initSM 5733 = initPM 5733 := hb initGoal_5733 (by decide) rfl
-  rw [denote_sm_goal_3_5587, denote_sm_goal_3_5585,
-      denote_pm_goal_3_10523, denote_pm_goal_3_10521,
-      denote_pm_goal_3_10524, denote_pm_goal_3_10522]
+  rw [denote_sm_goal_3_5587_L20, denote_sm_goal_3_5585_L20,
+      denote_pm_goal_3_10523_L20, denote_pm_goal_3_10521_L20,
+      denote_pm_goal_3_10524_L20, denote_pm_goal_3_10522_L20]
   rw [hcarry5583, hw5584, hw5586e]
   have hrms1 : (fw_rms_norm (denoteGraph_ringAttn pm_goal_3 initPM 11033) (initPM 5731)).shape = [2048, 1024] := by
     rw [rms_sh]; exact h10517
@@ -738,7 +738,7 @@ theorem sm_pm_qfull_L20_commute (initSM initPM : Store)
 -- PM K/V full-tensor shapes [4096,4,64] from the L12 K/V projection (via hPM).
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 40000000 in
-theorem pm_5588_shape (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+theorem pm_5588_shape_L20 (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
     (denoteGraph_ringAttn pm_goal_3 initPM 5735).shape = [4096, 4, 64] := by
   have h9625 : (denoteGraph_ringAttn pm_goal_3 initPM 9625).shape = [2048, 1024] :=
     RouterShapesHelpers.hs_9625 initPM hPM
@@ -748,12 +748,12 @@ theorem pm_5588_shape (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3In
     rw [denote_pm_goal_3_11917]; exact aG0_2_shape _ _ 2048 1024 h14597
   have h5332 : (denoteGraph_ringAttn pm_goal_3 initPM 5332).shape = [4096, 1024] := by
     rw [denote_pm_goal_3_5332, rms_sh]; exact h11917
-  rw [denote_pm_goal_3_5588, denote_pm_goal_3_5334]
+  rw [denote_pm_goal_3_5588_L20, denote_pm_goal_3_5334]
   exact ph_lin_shape_gen _ _ 4096 4 h5332 (hPM 5333 [4, 64, 1024] (by decide))
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 40000000 in
-theorem pm_5589_shape (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+theorem pm_5589_shape_L20 (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
     (denoteGraph_ringAttn pm_goal_3 initPM 5736).shape = [4096, 4, 64] := by
   have h9625 : (denoteGraph_ringAttn pm_goal_3 initPM 9625).shape = [2048, 1024] :=
     RouterShapesHelpers.hs_9625 initPM hPM
@@ -763,7 +763,7 @@ theorem pm_5589_shape (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3In
     rw [denote_pm_goal_3_11917]; exact aG0_2_shape _ _ 2048 1024 h14597
   have h5332 : (denoteGraph_ringAttn pm_goal_3 initPM 5332).shape = [4096, 1024] := by
     rw [denote_pm_goal_3_5332, rms_sh]; exact h11917
-  rw [denote_pm_goal_3_5589, denote_pm_goal_3_5336]
+  rw [denote_pm_goal_3_5589_L20, denote_pm_goal_3_5336]
   exact ph_lin_shape_gen _ _ 4096 4 h5332 (hPM 5335 [4, 64, 1024] (by decide))
 
 -- K/V replication (cross-graph, full tensor): SM 5735 = PM 5735, SM 5736 = PM 5736.
@@ -778,7 +778,7 @@ theorem sm_pm_krepl_L20_commute (initSM initPM : Store)
     denoteGraph_ringAttn sm_goal_3 initSM 5735 =
       denoteGraph_ringAttn pm_goal_3 initPM 5735 := by
   have hkrepl := sm_pm_krepl_L12_commute initSM initPM hInit hcarry5330
-  rw [denote_sm_goal_3_5588, denote_pm_goal_3_5588, ← denote_sm_goal_3_5343,
+  rw [denote_sm_goal_3_5588_L20, denote_pm_goal_3_5588_L20, ← denote_sm_goal_3_5343,
       ← denote_pm_goal_3_5343, hkrepl]
 
 set_option maxRecDepth 20000 in
@@ -792,7 +792,7 @@ theorem sm_pm_vrepl_L20_commute (initSM initPM : Store)
     denoteGraph_ringAttn sm_goal_3 initSM 5736 =
       denoteGraph_ringAttn pm_goal_3 initPM 5736 := by
   have hvrepl := sm_pm_vrepl_L12_commute initSM initPM hInit hcarry5330
-  rw [denote_sm_goal_3_5589, denote_pm_goal_3_5589, ← denote_sm_goal_3_5344,
+  rw [denote_sm_goal_3_5589_L20, denote_pm_goal_3_5589_L20, ← denote_sm_goal_3_5344,
       ← denote_pm_goal_3_5344, hvrepl]
 
 
@@ -822,17 +822,17 @@ theorem sm_pm_attention_L20_commute (initSM initPM : Store)
   have hqf := sm_pm_qfull_L20_commute initSM initPM hInit hcarry5583 h10517 h10518 hw5586
   have hK := sm_pm_krepl_L20_commute initSM initPM hInit hcarry5330
   have hV := sm_pm_vrepl_L20_commute initSM initPM hInit hcarry5330
-  have hKsh := pm_5588_shape initPM hPM
-  have hVsh := pm_5589_shape initPM hPM
+  have hKsh := pm_5588_shape_L20 initPM hPM
+  have hVsh := pm_5589_shape_L20 initPM hPM
   -- PM Q shard shapes [2048,16,64]
   have h10521 : (denoteGraph_ringAttn pm_goal_3 initPM 11037).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_10521, rms_sh]; exact h10517
+    rw [denote_pm_goal_3_10521_L20, rms_sh]; exact h10517
   have h10522 : (denoteGraph_ringAttn pm_goal_3 initPM 11038).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_10522, rms_sh]; exact h10518
+    rw [denote_pm_goal_3_10522_L20, rms_sh]; exact h10518
   have h10523 : (denoteGraph_ringAttn pm_goal_3 initPM 11039).shape = [2048, 16, 64] := by
-    rw [denote_pm_goal_3_10523]; exact ph_lin_shape_gen _ _ 2048 16 h10521 hw5586
+    rw [denote_pm_goal_3_10523_L20]; exact ph_lin_shape_gen _ _ 2048 16 h10521 hw5586
   have h10524 : (denoteGraph_ringAttn pm_goal_3 initPM 11040).shape = [2048, 16, 64] := by
-    rw [denote_pm_goal_3_10524]; exact ph_lin_shape_gen _ _ 2048 16 h10522 hw5586
+    rw [denote_pm_goal_3_10524_L20]; exact ph_lin_shape_gen _ _ 2048 16 h10522 hw5586
   -- SM Q shape [4096,16,64]
   have hSMq : (denoteGraph_ringAttn sm_goal_3 initSM 5734).shape = [4096, 16, 64] := by
     rw [hqf]; exact allGatherPrimDimN_shape 0 2 _ [2048, 16, 64] (by exact h10523)
@@ -1004,12 +1004,12 @@ theorem sm_pm_reshape_float_L20_commute (initSM initPM : Store)
          denoteGraph_ringAttn pm_goal_3 initPM 11090] := by
   have hb := L12_weight_eq initSM initPM hInit
   have hw : initSM 5742 = initPM 5742 := hb initGoal_5742 (by decide) rfl
-  rw [denote_sm_goal_3_5598, denote_sm_goal_3_5597, denote_sm_goal_3_5596,
-      denote_sm_goal_3_5594, denote_sm_goal_3_5593,
-      denote_pm_goal_3_10573, denote_pm_goal_3_10569, denote_pm_goal_3_10559,
-      denote_pm_goal_3_10555, denote_pm_goal_3_10549,
-      denote_pm_goal_3_10574, denote_pm_goal_3_10570, denote_pm_goal_3_10560,
-      denote_pm_goal_3_10556, denote_pm_goal_3_10550]
+  rw [denote_sm_goal_3_5598_L20, denote_sm_goal_3_5597_L20, denote_sm_goal_3_5596_L20,
+      denote_sm_goal_3_5594_L20, denote_sm_goal_3_5593_L20,
+      denote_pm_goal_3_10573_L20, denote_pm_goal_3_10569_L20, denote_pm_goal_3_10559_L20,
+      denote_pm_goal_3_10555_L20, denote_pm_goal_3_10549_L20,
+      denote_pm_goal_3_10574_L20, denote_pm_goal_3_10570_L20, denote_pm_goal_3_10560_L20,
+      denote_pm_goal_3_10556_L20, denote_pm_goal_3_10550_L20]
   rw [hattn, hw]
   rw [carry_view_commute _ _ h10547 h10548]
   have hva : (fw_view [2048, 1024] (fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 11063))).shape = [2048, 1024] := rfl
@@ -1028,7 +1028,7 @@ theorem sm_pm_reshape_float_L20_commute (initSM initPM : Store)
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 20000000 in
-theorem sm_pm_carry_5599_commute (initSM initPM : Store)
+theorem sm_pm_carry_5599_commute_L20 (initSM initPM : Store)
     (hcarry5583 : denoteGraph_ringAttn sm_goal_3 initSM 5730 =
       allGatherPrimDimN 0 2 0
         [denoteGraph_ringAttn pm_goal_3 initPM 11033,
@@ -1045,7 +1045,7 @@ theorem sm_pm_carry_5599_commute (initSM initPM : Store)
       allGatherPrimDimN 0 2 0
         [denoteGraph_ringAttn pm_goal_3 initPM 11093,
          denoteGraph_ringAttn pm_goal_3 initPM 11094] := by
-  rw [denote_sm_goal_3_5599, denote_pm_goal_3_10577, denote_pm_goal_3_10578]
+  rw [denote_sm_goal_3_5599_L20, denote_pm_goal_3_10577_L20, denote_pm_goal_3_10578_L20]
   rw [hcarry5583, hreshape]
   rw [fw_add_allGather0_commute_2_2048_1024 _ _ _ _ h10517 h10518 h10573 h10574]
 
@@ -1073,9 +1073,9 @@ theorem sm_pm_nl_L20_commute (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
     simpa [initGoal_5750] using hsh
-  rw [denote_sm_goal_3_5604, denote_sm_goal_3_5602, denote_sm_goal_3_5601,
-      denote_pm_goal_3_10589, denote_pm_goal_3_10583, denote_pm_goal_3_10581,
-      denote_pm_goal_3_10590, denote_pm_goal_3_10584, denote_pm_goal_3_10582]
+  rw [denote_sm_goal_3_5604_L20, denote_sm_goal_3_5602_L20, denote_sm_goal_3_5601_L20,
+      denote_pm_goal_3_10589_L20, denote_pm_goal_3_10583_L20, denote_pm_goal_3_10581_L20,
+      denote_pm_goal_3_10590_L20, denote_pm_goal_3_10584_L20, denote_pm_goal_3_10582_L20]
   rw [hw5600, hw5603, hcarry5599]
   rw [fw_rms_norm_allGather0_commute_2 _ _ (initPM 5747) 2048 1024 (by omega) (by omega) h10577 h10578]
   have hrms1 : (fw_rms_norm (denoteGraph_ringAttn pm_goal_3 initPM 11093) (initPM 5747)).shape = [2048, 1024] := by
@@ -1108,14 +1108,14 @@ theorem sm_pm_router_commute_L20 (initSM initPM : Store)
     simpa [initGoal_5750] using hsh
   have hnl := sm_pm_nl_L20_commute initSM initPM hInit hcarry5599 h10577 h10578
   have hs10589 : (denoteGraph_ringAttn pm_goal_3 initPM 11105).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_10589, denote_pm_goal_3_10583, denote_pm_goal_3_10581]
+    rw [denote_pm_goal_3_10589_L20, denote_pm_goal_3_10583_L20, denote_pm_goal_3_10581_L20]
     exact nl_sh 2048 1024 64 _ (initPM 5750) (by rw [rms_sh]; exact h10577) hw5603sh
   have hs10590 : (denoteGraph_ringAttn pm_goal_3 initPM 11106).shape = [2048, 64] := by
-    rw [denote_pm_goal_3_10590, denote_pm_goal_3_10584, denote_pm_goal_3_10582]
+    rw [denote_pm_goal_3_10590_L20, denote_pm_goal_3_10584_L20, denote_pm_goal_3_10582_L20]
     exact nl_sh 2048 1024 64 _ (initPM 5750) (by rw [rms_sh]; exact h10578) hw5603sh
   have hSM5604sh : (denoteGraph_ringAttn sm_goal_3 initSM 5751).shape = [4096, 64] := by
     rw [hnl]; exact aG0_2_shape _ _ 2048 64 hs10589
-  rw [denote_sm_goal_3_5606, denote_pm_goal_3_10593, denote_pm_goal_3_10594]
+  rw [denote_sm_goal_3_5606_L20, denote_pm_goal_3_10593_L20, denote_pm_goal_3_10594_L20]
   rw [show (denoteGraph_ringAttn sm_goal_3 initSM 5751).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hSM5604sh]; rfl,
       show (denoteGraph_ringAttn pm_goal_3 initPM 11105).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs10589]; rfl,
       show (denoteGraph_ringAttn pm_goal_3 initPM 11106).shape.reverse.head?.getD ([8].getD 1 1) = 64 from by rw [hs10590]; rfl]
@@ -1148,14 +1148,14 @@ theorem sm_pm_router_commute_L20_from_attention (initSM initPM : Store)
          denoteGraph_ringAttn pm_goal_3 initPM 11110] := by
   have hreshape := sm_pm_reshape_float_L20_commute initSM initPM hInit hattn h10547 h10548 hw5595
   have h10573 : (denoteGraph_ringAttn pm_goal_3 initPM 11089).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_10573, denote_pm_goal_3_10569]; rfl
+    rw [denote_pm_goal_3_10573_L20, denote_pm_goal_3_10569_L20]; rfl
   have h10574 : (denoteGraph_ringAttn pm_goal_3 initPM 11090).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_10574, denote_pm_goal_3_10570]; rfl
-  have hcarry5599 := sm_pm_carry_5599_commute initSM initPM hcarry5583 hreshape h10517 h10518 h10573 h10574
+    rw [denote_pm_goal_3_10574_L20, denote_pm_goal_3_10570_L20]; rfl
+  have hcarry5599 := sm_pm_carry_5599_commute_L20 initSM initPM hcarry5583 hreshape h10517 h10518 h10573 h10574
   have h10577 : (denoteGraph_ringAttn pm_goal_3 initPM 11093).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_10577]; exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h10517 h10573
+    rw [denote_pm_goal_3_10577_L20]; exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h10517 h10573
   have h10578 : (denoteGraph_ringAttn pm_goal_3 initPM 11094).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_10578]; exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h10518 h10574
+    rw [denote_pm_goal_3_10578_L20]; exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h10518 h10574
   exact sm_pm_router_commute_L20 initSM initPM hInit hcarry5599 h10577 h10578
 
 /-! ## L20 router — fully assembled
@@ -1191,13 +1191,13 @@ theorem sm_pm_router_commute_L20_full (initSM initPM : Store)
   have hw5595 : (initPM 5742).shape = [1024, 1024] := hPM 5742 [1024, 1024] (by decide)
   -- PM Q shard shapes (for the attention chunk shape)
   have h10521 : (denoteGraph_ringAttn pm_goal_3 initPM 11037).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_10521, rms_sh]; exact h10517
+    rw [denote_pm_goal_3_10521_L20, rms_sh]; exact h10517
   have h10522 : (denoteGraph_ringAttn pm_goal_3 initPM 11038).shape = [2048, 1024] := by
-    rw [denote_pm_goal_3_10522, rms_sh]; exact h10518
+    rw [denote_pm_goal_3_10522_L20, rms_sh]; exact h10518
   have h10523d : (denoteGraph_ringAttn pm_goal_3 initPM 11039).shape = [2048, 16, 64] := by
-    rw [denote_pm_goal_3_10523]; exact ph_lin_shape_gen _ _ 2048 16 h10521 hw5586
+    rw [denote_pm_goal_3_10523_L20]; exact ph_lin_shape_gen _ _ 2048 16 h10521 hw5586
   have h10524d : (denoteGraph_ringAttn pm_goal_3 initPM 11040).shape = [2048, 16, 64] := by
-    rw [denote_pm_goal_3_10524]; exact ph_lin_shape_gen _ _ 2048 16 h10522 hw5586
+    rw [denote_pm_goal_3_10524_L20]; exact ph_lin_shape_gen _ _ 2048 16 h10522 hw5586
   -- folded-store bridges at the two attention Q tids
   have b1417_10523 : (pm_goal_3.nodes.take 1627).foldl (applyNodeRingAttn pm_goal_3) initPM 11039
       = denoteGraph_ringAttn pm_goal_3 initPM 11039 :=
@@ -1254,7 +1254,7 @@ end TrainVerify.Denote.GeneratedPatterns
 
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_attention_L20_commute
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_reshape_float_L20_commute
-#print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_carry_5599_commute
+#print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_carry_5599_commute_L20
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_nl_L20_commute
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_router_commute_L20
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_router_commute_L20_from_attention
