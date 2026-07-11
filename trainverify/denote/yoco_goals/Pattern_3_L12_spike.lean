@@ -1841,6 +1841,126 @@ theorem sm_pm_attention_L12_commute (initSM initPM : Store)
   rw [denote_sm_attn_L12_bridge, hrec, bridge_r1,
       ← denote_pm_attn_L12_r0_bridge, ← denote_pm_attn_L12_r1_bridge]
 
+/-! ## L12 attention commute — internally discharged shape/sharding hypotheses
+
+Wrapper over `sm_pm_attention_L12_commute` that derives, from the two
+`StoreShapesHold` well-formedness facts and the cut init goals, the nine shape /
+Q-sharding hypotheses.  The single remaining hypothesis `h_bound` is a genuine
+well-formed-input contract on the K cu_seqlens metadata tensor (`initPM 5346`):
+its decoded prefix sums must not exceed the total sequence length `4096`.  Per
+AGENTS.md #29 this is kept as a statement-level hypothesis (with a vacuity
+witness below), not an axiom. -/
+set_option maxRecDepth 1000000 in
+set_option maxHeartbeats 40000000 in
+theorem sm_pm_attention_L12_commute' (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM sm_goal_3InitEnv)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (h_bound : ∀ t, (decodeCuSeqlens (initPM 5346)).getD (t+1) 0 ≤ 4096) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5347
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3 initPM 9687,
+           denoteGraph_ringAttn pm_goal_3 initPM 9688] := by
+  -- carry (L11 residual) commute
+  have hcarry5330 := sm_pm_carry_5330_commute initSM initPM hSM hPM hInit
+  -- base PM residual shard shapes
+  have h9625 : (denoteGraph_ringAttn pm_goal_3 initPM 9625).shape = [2048, 1024] :=
+    RouterShapesHelpers.hs_9625 initPM hPM
+  have h9626 : (denoteGraph_ringAttn pm_goal_3 initPM 9626).shape = [2048, 1024] :=
+    RouterShapesHelpers.hs_9626 initPM hPM
+  have hw5341 : (initPM 5341).shape = [16, 64, 1024] := hPM 5341 [16, 64, 1024] (by decide)
+  -- PM Q-path shard shapes [2048,16,64]
+  have h13257 : (denoteGraph_ringAttn pm_goal_3 initPM 13257).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_13257]; exact h9625
+  have h9655 : (denoteGraph_ringAttn pm_goal_3 initPM 9655).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9655, fw_maybe_shuffle_shape]; exact h13257
+  have h9657 : (denoteGraph_ringAttn pm_goal_3 initPM 9657).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9657, rms_sh]; exact h9655
+  have h9659 : (denoteGraph_ringAttn pm_goal_3 initPM 9659).shape = [2048, 16, 64] := by
+    rw [denote_pm_goal_3_9659]; exact ph_lin_shape_gen _ _ 2048 16 h9657 hw5341
+  have h13258 : (denoteGraph_ringAttn pm_goal_3 initPM 13258).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_13258]; exact h9626
+  have h9656 : (denoteGraph_ringAttn pm_goal_3 initPM 9656).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9656, fw_maybe_shuffle_shape]; exact h13258
+  have h9658 : (denoteGraph_ringAttn pm_goal_3 initPM 9658).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9658, rms_sh]; exact h9656
+  have h9660 : (denoteGraph_ringAttn pm_goal_3 initPM 9660).shape = [2048, 16, 64] := by
+    rw [denote_pm_goal_3_9660]; exact ph_lin_shape_gen _ _ 2048 16 h9658 hw5341
+  -- PM K/V full (replicated) shapes [4096,4,64]
+  have h14597 : (denoteGraph_ringAttn pm_goal_3 initPM 14597).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_14597]; exact h9625
+  have h11917 : (denoteGraph_ringAttn pm_goal_3 initPM 11917).shape = [4096, 1024] := by
+    rw [denote_pm_goal_3_11917]; exact aG0_2_shape _ _ 2048 1024 h14597
+  have h5332 : (denoteGraph_ringAttn pm_goal_3 initPM 5332).shape = [4096, 1024] := by
+    rw [denote_pm_goal_3_5332, rms_sh]; exact h11917
+  have hPM5343 : (denoteGraph_ringAttn pm_goal_3 initPM 5343).shape = [4096, 4, 64] := by
+    rw [denote_pm_goal_3_5343, denote_pm_goal_3_5334]
+    exact ph_lin_shape_gen _ _ 4096 4 h5332 (hPM 5333 [4, 64, 1024] (by decide))
+  have hPM5344 : (denoteGraph_ringAttn pm_goal_3 initPM 5344).shape = [4096, 4, 64] := by
+    rw [denote_pm_goal_3_5344, denote_pm_goal_3_5336]
+    exact ph_lin_shape_gen _ _ 4096 4 h5332 (hPM 5335 [4, 64, 1024] (by decide))
+  -- SM Q/K/V shape-length facts (denote form)
+  have hqfull := sm_pm_qfull_L12_commute initSM initPM hInit hcarry5330 h9625 h9626 hw5341
+  have hkrepl := sm_pm_krepl_L12_commute initSM initPM hInit hcarry5330
+  have hvrepl := sm_pm_vrepl_L12_commute initSM initPM hInit hcarry5330
+  have hSMq : (denoteGraph_ringAttn sm_goal_3 initSM 5342).shape = [4096, 16, 64] := by
+    rw [hqfull]
+    exact allGatherPrimDimN_shape 0 2 _ [2048, 16, 64] (by exact h9659)
+  have hq_sm : 0 < (denoteGraph_ringAttn sm_goal_3 initSM 5342).shape.length := by
+    rw [hSMq]; decide
+  have hk_sm : 0 < (denoteGraph_ringAttn sm_goal_3 initSM 5343).shape.length := by
+    rw [hkrepl, hPM5343]; decide
+  have hv_sm : 0 < (denoteGraph_ringAttn sm_goal_3 initSM 5344).shape.length := by
+    rw [hvrepl, hPM5344]; decide
+  -- folded-store bridges for K/V and cu_seqlens hyps
+  have bPM5343 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5343
+      = denoteGraph_ringAttn pm_goal_3 initPM 5343 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 5343 1067 (by decide) (by decide)).symm
+  have bPM5344 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5344
+      = denoteGraph_ringAttn pm_goal_3 initPM 5344 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 5344 1067 (by decide) (by decide)).symm
+  have bPM9659 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9659
+      = denoteGraph_ringAttn pm_goal_3 initPM 9659 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 9659 1067 (by decide) (by decide)).symm
+  have bPM9660 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9660
+      = denoteGraph_ringAttn pm_goal_3 initPM 9660 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 9660 1067 (by decide) (by decide)).symm
+  have hk_shape : ((pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5343).shape
+      = [4096, 4, 64] := by rw [bPM5343]; exact hPM5343
+  have hv_shape : ((pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5344).shape
+      = [4096, 4, 64] := by rw [bPM5344]; exact hPM5344
+  -- cu_seqlens bound: folded 5346 = initPM 5346 (not written in prefix)
+  have hP5346 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5346 = initPM 5346 :=
+    foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1067) initPM 5346 (by decide) (by decide)
+  have h_bound' : ∀ t, (decodeCuSeqlens
+      ((pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5346)).getD (t+1) 0 ≤ 4096 := by
+    intro t; rw [hP5346]; exact h_bound t
+  -- full-attention output shape [2*2048,16,64]
+  have hfull_shape :
+      (fw_attn_varlen
+        (allGatherPrimDimN 0 2 0
+          [(pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9659,
+           (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9660])
+        (allGatherPrimDimN 0 2 0
+          [(pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5343,
+           (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5343])
+        (allGatherPrimDimN 0 2 0
+          [(pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5344,
+           (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5344])
+        ((pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5345)
+        ((pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5346)
+        16 4 64 64 (decide ((1:Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64] := by
+    rw [fw_attn_varlen_shape_p3]
+    have hq : (allGatherPrimDimN 0 2 0
+        [(pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9659,
+         (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9660]).shape
+        = [4096, 16, 64] := by
+      rw [bPM9659, bPM9660]
+      exact allGatherPrimDimN_shape 0 2 _ [2048, 16, 64] (by exact h9659)
+    rw [hq]; rfl
+  exact sm_pm_attention_L12_commute initSM initPM hInit hcarry5330
+    hq_sm hk_sm hv_sm h9625 h9626 hw5341 hk_shape hv_shape h_bound' hfull_shape
+
 /-! ## L12 post-attention residual carry: maybe_shuffle branch commute
 
 The router-L12 residual `SM 5354 = add(8143, 5353)` has an "8143" branch that
@@ -2521,6 +2641,104 @@ theorem sm_pm_router_commute_L12_from_attention (initSM initPM : Store)
     rw [denote_pm_goal_3_9718]; exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h15981 h9714
   exact sm_pm_router_commute_L12 initSM initPM hInit hcarry5354 h9717 h9718
 
+/-! ## L12 router — fully assembled from `StoreShapesHold` + cut init goals
+
+Top-level per-layer commute for the L12 zigzag band.  Every attention shape /
+sharding hypothesis is discharged internally from the two `StoreShapesHold`
+well-formedness facts and the cut init goals.  The only remaining hypothesis is
+the K cu_seqlens well-formed-input contract `h_bound` (kept as a statement-level
+hypothesis per AGENTS.md #29; see `sm_pm_router_L12_hbound_witness` for its
+vacuity witness). -/
+set_option maxRecDepth 1000000 in
+set_option maxHeartbeats 40000000 in
+theorem sm_pm_router_commute_L12_full (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM sm_goal_3InitEnv)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (h_bound : ∀ t, (decodeCuSeqlens (initPM 5346)).getD (t+1) 0 ≤ 4096) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5361 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9733,
+         denoteGraph_ringAttn pm_goal_3 initPM 9734] := by
+  have hcarry5330 := sm_pm_carry_5330_commute initSM initPM hSM hPM hInit
+  have hattn := sm_pm_attention_L12_commute' initSM initPM hSM hPM hInit h_bound
+  have h9625 : (denoteGraph_ringAttn pm_goal_3 initPM 9625).shape = [2048, 1024] :=
+    RouterShapesHelpers.hs_9625 initPM hPM
+  have h9626 : (denoteGraph_ringAttn pm_goal_3 initPM 9626).shape = [2048, 1024] :=
+    RouterShapesHelpers.hs_9626 initPM hPM
+  have hw5341 : (initPM 5341).shape = [16, 64, 1024] := hPM 5341 [16, 64, 1024] (by decide)
+  have hw5350 : (initPM 5350).shape = [1024, 1024] := hPM 5350 [1024, 1024] (by decide)
+  -- PM Q-path shard shapes [2048,16,64] (r0 + r1)
+  have h13257 : (denoteGraph_ringAttn pm_goal_3 initPM 13257).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_13257]; exact h9625
+  have h9655 : (denoteGraph_ringAttn pm_goal_3 initPM 9655).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9655, fw_maybe_shuffle_shape]; exact h13257
+  have h9657 : (denoteGraph_ringAttn pm_goal_3 initPM 9657).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9657, rms_sh]; exact h9655
+  have h9659d : (denoteGraph_ringAttn pm_goal_3 initPM 9659).shape = [2048, 16, 64] := by
+    rw [denote_pm_goal_3_9659]; exact ph_lin_shape_gen _ _ 2048 16 h9657 hw5341
+  have h13258 : (denoteGraph_ringAttn pm_goal_3 initPM 13258).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_13258]; exact h9626
+  have h9656 : (denoteGraph_ringAttn pm_goal_3 initPM 9656).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9656, fw_maybe_shuffle_shape]; exact h13258
+  have h9658 : (denoteGraph_ringAttn pm_goal_3 initPM 9658).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9658, rms_sh]; exact h9656
+  have h9660d : (denoteGraph_ringAttn pm_goal_3 initPM 9660).shape = [2048, 16, 64] := by
+    rw [denote_pm_goal_3_9660]; exact ph_lin_shape_gen _ _ 2048 16 h9658 hw5341
+  -- folded-store ↔ denote bridges at the two attention Q tids
+  have b1067_9659 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9659
+      = denoteGraph_ringAttn pm_goal_3 initPM 9659 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 9659 1067 (by decide) (by decide)).symm
+  have b1067_9660 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9660
+      = denoteGraph_ringAttn pm_goal_3 initPM 9660 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 9660 1067 (by decide) (by decide)).symm
+  have b1068_9659 : (pm_goal_3.nodes.take 1068).foldl (applyNodeRingAttn pm_goal_3) initPM 9659
+      = denoteGraph_ringAttn pm_goal_3 initPM 9659 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 9659 1068 (by decide) (by decide)).symm
+  have b1068_9660 : (pm_goal_3.nodes.take 1068).foldl (applyNodeRingAttn pm_goal_3) initPM 9660
+      = denoteGraph_ringAttn pm_goal_3 initPM 9660 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 9660 1068 (by decide) (by decide)).symm
+  -- PM attention output shapes [2048,16,64] (chunk of the full [4096,16,64])
+  have h9687 : (denoteGraph_ringAttn pm_goal_3 initPM 9687).shape = [2048, 16, 64] := by
+    rw [denote_pm_attn_L12_r0_bridge,
+        applyNodeRingAttn_zigzag_pair_eq_chunk pm_goal_3 _ nR0_12 nR0_12 nR1_12 0 buddy_r0_12 (by decide)]
+    have e0 : nR0_12.ins.getD 0 0 = 9659 := by decide
+    have e1 : nR1_12.ins.getD 0 0 = 9660 := by decide
+    have hq : (allGatherPrimDimN 0 2 0
+        [(pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_12.ins.getD 0 0),
+         (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM (nR1_12.ins.getD 0 0)]).shape
+        = [4096, 16, 64] := by
+      rw [e0, e1, b1067_9659, b1067_9660]
+      exact allGatherPrimDimN_shape 0 2 _ [2048, 16, 64] (by exact h9659d)
+    rw [chunkPrimDimN_shape 0 2 0 _ [2 * 2048, 16, 64] (by rw [fw_attn_varlen_shape_p3, hq]; rfl) (by omega)]
+    rfl
+  have h9688 : (denoteGraph_ringAttn pm_goal_3 initPM 9688).shape = [2048, 16, 64] := by
+    rw [denote_pm_attn_L12_r1_bridge,
+        applyNodeRingAttn_zigzag_pair_eq_chunk pm_goal_3 _ nR1_12 nR0_12 nR1_12 1 buddy_r1_12 (by decide)]
+    have e0 : nR0_12.ins.getD 0 0 = 9659 := by decide
+    have e1 : nR1_12.ins.getD 0 0 = 9660 := by decide
+    have hq : (allGatherPrimDimN 0 2 0
+        [(pm_goal_3.nodes.take 1068).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_12.ins.getD 0 0),
+         (pm_goal_3.nodes.take 1068).foldl (applyNodeRingAttn pm_goal_3) initPM (nR1_12.ins.getD 0 0)]).shape
+        = [4096, 16, 64] := by
+      rw [e0, e1, b1068_9659, b1068_9660]
+      exact allGatherPrimDimN_shape 0 2 _ [2048, 16, 64] (by exact h9659d)
+    rw [chunkPrimDimN_shape 0 2 1 _ [2 * 2048, 16, 64] (by rw [fw_attn_varlen_shape_p3, hq]; rfl) (by omega)]
+    rfl
+  exact sm_pm_router_commute_L12_from_attention initSM initPM hInit hcarry5330
+    hattn h9687 h9688 h9625 h9626 hw5350
+
+-- Vacuity witness for the `h_bound` well-formed-input hypothesis (AGENTS.md #29):
+-- the all-zero cu_seqlens store satisfies the bound, so the hypothesis is not vacuous.
+theorem sm_pm_router_L12_hbound_witness :
+    ∃ initPM : Store, ∀ t, (decodeCuSeqlens (initPM 5346)).getD (t+1) 0 ≤ 4096 := by
+  refine ⟨fun _ => zeroTensor [0], ?_⟩
+  intro t
+  have hnil : decodeCuSeqlens (zeroTensor [0]) = [] := by
+    simp [decodeCuSeqlens, zeroTensor, Tensor.mkShape, prodShape]
+  rw [hnil]
+  exact Nat.zero_le _
+
 end TrainVerify.Denote.GeneratedPatterns
 
 -- Axiom audit for the newly ported zigzag primitives (should be kernel-only).
@@ -2548,3 +2766,7 @@ end TrainVerify.Denote.GeneratedPatterns
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_carry_5354_commute
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_router_commute_L12
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_router_commute_L12_from_attention
+
+#print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_attention_L12_commute'
+#print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_router_commute_L12_full
+#print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_router_L12_hbound_witness
