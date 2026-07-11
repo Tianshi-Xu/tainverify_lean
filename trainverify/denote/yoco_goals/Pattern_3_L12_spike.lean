@@ -68,21 +68,30 @@ theorem buddy_sm_12 : ringAttnBuddies sm_goal_3 nSM_12 = [nSM_12] := by
   show (List.filter (fun m => decide (m.op = nSM_12.op) && decide (m.params = nSM_12.params) &&
       decide (m.ins.getD 3 0 = nSM_12.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_12.ins.getD 4 0))
       sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_12]
-  native_decide
+  rw [show (List.filter (fun m => decide (m.op = nSM_12.op) && decide (m.params = nSM_12.params) &&
+      decide (m.ins.getD 3 0 = nSM_12.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_12.ins.getD 4 0))
+      sm_goal_3.nodes) = [nSM_12] from by rfl]
+  simp
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_12 : ringAttnBuddies pm_goal_3 nR0_12 = [nR0_12, nR1_12] := by
   show (List.filter (fun m => decide (m.op = nR0_12.op) && decide (m.params = nR0_12.params) &&
       decide (m.ins.getD 3 0 = nR0_12.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_12.ins.getD 4 0))
       pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_12, nR1_12]
-  native_decide
+  rw [show (List.filter (fun m => decide (m.op = nR0_12.op) && decide (m.params = nR0_12.params) &&
+      decide (m.ins.getD 3 0 = nR0_12.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_12.ins.getD 4 0))
+      pm_goal_3.nodes) = [nR0_12, nR1_12] from by rfl]
+  apply List.mergeSort_of_pairwise; decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_12 : ringAttnBuddies pm_goal_3 nR1_12 = [nR0_12, nR1_12] := by
   show (List.filter (fun m => decide (m.op = nR1_12.op) && decide (m.params = nR1_12.params) &&
       decide (m.ins.getD 3 0 = nR1_12.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_12.ins.getD 4 0))
       pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_12, nR1_12]
-  native_decide
+  rw [show (List.filter (fun m => decide (m.op = nR1_12.op) && decide (m.params = nR1_12.params) &&
+      decide (m.ins.getD 3 0 = nR1_12.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_12.ins.getD 4 0))
+      pm_goal_3.nodes) = [nR0_12, nR1_12] from by rfl]
+  apply List.mergeSort_of_pairwise; decide
 
 /-! ## L12 TID Lookup Table
 
@@ -885,6 +894,157 @@ theorem sm_pm_vrepl_L12_commute (initSM initPM : Store)
   rw [denote_sm_goal_3_5344, denote_sm_goal_3_5336, hrms, hw5335,
       denote_pm_goal_3_5344, denote_pm_goal_3_5336]
 
+/-! ## L12 attention commute assembly
+
+Compose the CP reconstruction lemma (`applyNodeRingAttn_zigzag_reconstruction_2_cp`)
+with the three denote↔applyNode bridges and the `attn_zigzag_store_congr` used to
+align the rank-1 buddy's folded prefix store (take 1068) to the shared reconstruction
+store (take 1067). K/V replication is discharged by the commutes proven above; the
+Q sharding (`hq_full`) and the incoming residual (`hcarry5330`) plus the four PM-side
+attention shape facts are taken as hypotheses (each isolated to a dedicated lemma). -/
+set_option maxRecDepth 1000000 in
+set_option maxHeartbeats 40000000 in
+theorem sm_pm_attention_L12_commute (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (hcarry5330 : denoteGraph_ringAttn sm_goal_3 initSM 5330 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9625,
+         denoteGraph_ringAttn pm_goal_3 initPM 9626])
+    (hq_sm : 0 < (denoteGraph_ringAttn sm_goal_3 initSM 5342).shape.length)
+    (hk_sm : 0 < (denoteGraph_ringAttn sm_goal_3 initSM 5343).shape.length)
+    (hv_sm : 0 < (denoteGraph_ringAttn sm_goal_3 initSM 5344).shape.length)
+    (hq_full :
+      (sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5342 =
+        allGatherPrimDimN 0 2 0
+          [(pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9659,
+           (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9660])
+    (hk_shape :
+      ((pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5343).shape
+        = [4096, 4, 64])
+    (hv_shape :
+      ((pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5344).shape
+        = [4096, 4, 64])
+    (h_bound : ∀ t, (decodeCuSeqlens
+        ((pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5346)).getD (t+1) 0 ≤ 4096)
+    (hfull_shape :
+      (fw_attn_varlen
+        (allGatherPrimDimN 0 2 0
+          [(pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9659,
+           (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9660])
+        (allGatherPrimDimN 0 2 0
+          [(pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5343,
+           (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5343])
+        (allGatherPrimDimN 0 2 0
+          [(pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5344,
+           (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5344])
+        ((pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5345)
+        ((pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5346)
+        16 4 64 64 (decide ((1:Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5347
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3 initPM 9687,
+           denoteGraph_ringAttn pm_goal_3 initPM 9688] := by
+  -- folded-store bridges for the K/V replication commutes (denote ↔ prefix fold)
+  have hkrepl := sm_pm_krepl_L12_commute initSM initPM hInit hcarry5330
+  have hvrepl := sm_pm_vrepl_L12_commute initSM initPM hInit hcarry5330
+  -- SM-side folded ↔ denote at K/V tids
+  have bSM5343 : (sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5343
+      = denoteGraph_ringAttn sm_goal_3 initSM 5343 :=
+    (foldl_prefix_eq_full_ringAttn sm_goal_3 sm_goal_3.nodes initSM 5343 504 (by decide) (by decide)).symm
+  have bSM5344 : (sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5344
+      = denoteGraph_ringAttn sm_goal_3 initSM 5344 :=
+    (foldl_prefix_eq_full_ringAttn sm_goal_3 sm_goal_3.nodes initSM 5344 504 (by decide) (by decide)).symm
+  have bPM5343 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5343
+      = denoteGraph_ringAttn pm_goal_3 initPM 5343 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 5343 1067 (by decide) (by decide)).symm
+  have bPM5344 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5344
+      = denoteGraph_ringAttn pm_goal_3 initPM 5344 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 5344 1067 (by decide) (by decide)).symm
+  -- cu_seqlens folded = init (not written in prefix) then SM = PM via cut goals
+  have hb := L12_weight_eq initSM initPM hInit
+  have hS5345 : (sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5345 = initSM 5345 :=
+    foldl_applyNodeRingAttn_at_not_written sm_goal_3 (sm_goal_3.nodes.take 504) initSM 5345 (by decide) (by decide)
+  have hS5346 : (sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5346 = initSM 5346 :=
+    foldl_applyNodeRingAttn_at_not_written sm_goal_3 (sm_goal_3.nodes.take 504) initSM 5346 (by decide) (by decide)
+  have hP5345 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5345 = initPM 5345 :=
+    foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1067) initPM 5345 (by decide) (by decide)
+  have hP5346 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5346 = initPM 5346 :=
+    foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1067) initPM 5346 (by decide) (by decide)
+  have hw5345 : initSM 5345 = initPM 5345 := hb initGoal_5345 (by decide) rfl
+  have hw5346 : initSM 5346 = initPM 5346 := hb initGoal_5346 (by decide) rfl
+  -- reconstruction inputs
+  have hkfull : (sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5343
+      = (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5343 := by
+    rw [bSM5343, bPM5343, hkrepl]
+  have hvfull : (sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5344
+      = (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5344 := by
+    rw [bSM5344, bPM5344, hvrepl]
+  have hcuQ : (sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5345
+      = (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5345 := by
+    rw [hS5345, hP5345, hw5345]
+  have hcuK : (sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5346
+      = (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5346 := by
+    rw [hS5346, hP5346, hw5346]
+  -- align rank-1 buddy folded store (take 1068) to reconstruction store (take 1067)
+  have e9659 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9659
+      = (pm_goal_3.nodes.take 1068).foldl (applyNodeRingAttn pm_goal_3) initPM 9659 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 9659 1067 1068 (by omega) (by decide) (by decide)).symm
+  have e9660 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 9660
+      = (pm_goal_3.nodes.take 1068).foldl (applyNodeRingAttn pm_goal_3) initPM 9660 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 9660 1067 1068 (by omega) (by decide) (by decide)).symm
+  have e5343 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5343
+      = (pm_goal_3.nodes.take 1068).foldl (applyNodeRingAttn pm_goal_3) initPM 5343 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 5343 1067 1068 (by omega) (by decide) (by decide)).symm
+  have e5344 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5344
+      = (pm_goal_3.nodes.take 1068).foldl (applyNodeRingAttn pm_goal_3) initPM 5344 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 5344 1067 1068 (by omega) (by decide) (by decide)).symm
+  have e5345 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5345
+      = (pm_goal_3.nodes.take 1068).foldl (applyNodeRingAttn pm_goal_3) initPM 5345 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 5345 1067 1068 (by omega) (by decide) (by decide)).symm
+  have e5346 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5346
+      = (pm_goal_3.nodes.take 1068).foldl (applyNodeRingAttn pm_goal_3) initPM 5346 :=
+    (foldl_take_split_at_not_written_ringAttn pm_goal_3 pm_goal_3.nodes initPM 5346 1067 1068 (by omega) (by decide) (by decide)).symm
+  have bridge_r1 : applyNodeRingAttn_zigzag pm_goal_3
+        ((pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM) nR1_12
+      = applyNodeRingAttn_zigzag pm_goal_3
+        ((pm_goal_3.nodes.take 1068).foldl (applyNodeRingAttn pm_goal_3) initPM) nR1_12 := by
+    apply attn_zigzag_store_congr
+    · rw [buddy_r1_12]; intro m hm; fin_cases hm
+      · exact e9659
+      · exact e9660
+    · rw [buddy_r1_12]; intro m hm; fin_cases hm
+      · exact e5343
+      · exact e5343
+    · rw [buddy_r1_12]; intro m hm; fin_cases hm
+      · exact e5344
+      · exact e5344
+    · exact e5345
+    · exact e5346
+  -- shape-length hyps in folded-store form
+  have bSM5342 : (sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5342
+      = denoteGraph_ringAttn sm_goal_3 initSM 5342 :=
+    (foldl_prefix_eq_full_ringAttn sm_goal_3 sm_goal_3.nodes initSM 5342 504 (by decide) (by decide)).symm
+  have hq_sm' : 0 < ((sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_12.ins.getD 0 0)).shape.length := by
+    show 0 < ((sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5342).shape.length
+    rw [bSM5342]; exact hq_sm
+  have hk_sm' : 0 < ((sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_12.ins.getD 1 0)).shape.length := by
+    show 0 < ((sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5343).shape.length
+    rw [bSM5343]; exact hk_sm
+  have hv_sm' : 0 < ((sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_12.ins.getD 2 0)).shape.length := by
+    show 0 < ((sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5344).shape.length
+    rw [bSM5344]; exact hv_sm
+  have hrec := applyNodeRingAttn_zigzag_reconstruction_2_cp
+    sm_goal_3 pm_goal_3
+    ((sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM)
+    ((pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM)
+    nSM_12 nR0_12 nR1_12 2048 4096 (by omega) (by decide) (by decide) (by decide) (by decide)
+    (by decide) buddy_sm_12 buddy_r0_12 buddy_r1_12 (by decide) (by decide)
+    hq_sm' hk_sm' hv_sm' (by rfl) (by rfl)
+    hq_full hkfull hvfull hk_shape hv_shape h_bound
+    hcuQ hcuK (by rfl) (by rfl) (by rfl) (by rfl) hfull_shape
+  rw [denote_sm_attn_L12_bridge, hrec, bridge_r1,
+      ← denote_pm_attn_L12_r0_bridge, ← denote_pm_attn_L12_r1_bridge]
+
 end TrainVerify.Denote.GeneratedPatterns
 
 -- Axiom audit for the newly ported zigzag primitives (should be kernel-only).
@@ -901,3 +1061,4 @@ end TrainVerify.Denote.GeneratedPatterns
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_rms_L12_commute
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_krepl_L12_commute
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_vrepl_L12_commute
+#print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_attention_L12_commute
