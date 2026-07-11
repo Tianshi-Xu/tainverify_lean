@@ -603,3 +603,41 @@ Plus ~30 supporting denote helpers over real graph node indices, all kernel-clea
 `hattn` = `sm_pm_attention_L12_commute` still has its 10 shape/Q-sharding hypotheses
 open (the documented crux). `hcarry5330` is proven. The entire post-attention half
 is now DONE.
+
+---
+
+## FINAL UPDATE (attention hyps discharged) — commit fc55afd
+
+The 10 attention hypotheses of `sm_pm_attention_L12_commute` are now discharged
+internally. New theorems in `denote/yoco_goals/Pattern_3_L12_spike.lean`:
+
+- `sm_pm_attention_L12_commute'` — wrapper deriving 9 of the 10 hyps from
+  `StoreShapesHold initSM/initPM` + cut init goals. Shape derivations use
+  `RouterShapesHelpers.hs_9625/hs_9626`, `ph_lin_shape_gen`, `rms_sh`,
+  `fw_maybe_shuffle_shape`, `aG0_2_shape`, `allGatherPrimDimN_shape`,
+  `fw_attn_varlen_shape_p3`. SM q/k/v length hyps via `sm_pm_qfull_L12_commute`
+  / `sm_pm_krepl/vrepl_L12_commute`.
+- Remaining hyp `h_bound` (K cu_seqlens ≤ 4096) is a genuine well-formed-input
+  contract, kept as a statement-level hypothesis per AGENTS.md #29, with
+  vacuity witness `sm_pm_router_L12_hbound_witness` (`zeroTensor [0]`).
+- `sm_pm_router_commute_L12_full` — top-level L12 commute from
+  `StoreShapesHold` + cut init goals + `h_bound` only. Derives PM attention
+  output shapes 9687/9688 via `chunkPrimDimN_shape` over the full
+  `[4096,16,64]` attention output, then chains through
+  `sm_pm_router_commute_L12_from_attention`.
+
+### `#print axioms sm_pm_router_commute_L12_full`
+`[propext, Classical.choice, Quot.sound]` — kernel-clean, no `native_decide`,
+no new axioms. Same for `sm_pm_attention_L12_commute'` and the witness.
+
+### Macros: worked as-is vs forked
+All existing `mk_*` macros were already consumed by earlier workers (kept
+verbatim in the spike). This pass added only hand-written wrappers; no macro
+fork was needed. `mk_attention` fork → `applyNodeRingAttn_zigzag_*` was done in
+prior commits.
+
+### Build
+`lake build denote.yoco_goals.Pattern_3_L12_spike` succeeds (~incremental,
+<10s warm). Full-file paste back to `Pattern_3.lean` intentionally deferred:
+all L12 material lives in the spike module (imports Pattern_3 for cached
+oleans), matching the prior 116-theorem layout.
