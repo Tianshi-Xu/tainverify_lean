@@ -1902,6 +1902,251 @@ theorem sm_pm_shuffle_carry_commute (initSM initPM : Store)
   unfold fw_maybe_shuffle
   exact hcarry5330
 
+/-! ## L12 post-attention reshape→linear→view→float branch commute
+
+The router-L12 residual `SM 5354 = add(8143, 5353)` has a "5353" branch that is
+`float ∘ view ∘ mix_linear ∘ reshape ∘ reshape` on the attention output.  The two
+reshapes merge `[·,16,64] → [·,1024]` (dim-0 preserved) and commute through the
+dim-0 all-gather via the existing `carry_view_commute`; the linear commutes via
+`fw_mix_precision_linear_allGather0_commute_2`; the closing view/float are
+identity-shaped.  Reduces `SM 5353 = allGather0[PM 9713, 9714]` to the attention
+commute plus the two attention-output shapes and the router weight shape. -/
+
+-- fw_view at the tensor's own shape is the identity.
+theorem fw_view_id (t : Tensor) (sh : Shape) (h : t.shape = sh) :
+    fw_view sh t = t := by
+  apply Tensor.ext
+  · show sh = t.shape; exact h.symm
+  · intro idx hidx
+    rw [valAt_fw_view sh t idx (by rw [h])]
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5348 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5348 =
+      fw_view [4096, 1024] (denoteGraph_ringAttn sm_goal_3 initSM 5347) :=
+  DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 5348 5347 505
+    ({ rank := 0, op := "OpName.FW_reshape", ins := [5347], outs := [5348], params := [4096, 1024] })
+    (fun a1 => fw_view [4096, 1024] a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_reshape_out sm_goal_3 s 0 5347 5348 [4096, 1024])
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5349 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5349 =
+      fw_view [4096, 1024] (denoteGraph_ringAttn sm_goal_3 initSM 5348) :=
+  DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 5349 5348 506
+    ({ rank := 0, op := "OpName.FW_reshape", ins := [5348], outs := [5349], params := [4096, 1024] })
+    (fun a1 => fw_view [4096, 1024] a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_reshape_out sm_goal_3 s 0 5348 5349 [4096, 1024])
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5351 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5351 =
+      fw_linear (denoteGraph_ringAttn sm_goal_3 initSM 5349) (initSM 5350) :=
+  DenoteUnfoldGeneric.dstep2 sm_goal_3 initSM 5351 5349 5350 507
+    ({ rank := 0, op := "OpName.FW_mix_precision_linear", ins := [5349, 5350], outs := [5351] })
+    (fun a1 a2 => fw_linear a1 a2)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_mix_precision_linear_out_1p sm_goal_3 s 0 5349 5350 5351)
+    rfl
+    (DenoteUnfoldGeneric.denote_leaf_val sm_goal_3 initSM 5350 (by decide) (by decide))
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5352 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5352 =
+      fw_view [4096, 1024] (denoteGraph_ringAttn sm_goal_3 initSM 5351) :=
+  DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 5352 5351 508
+    ({ rank := 0, op := "OpName.FW_view", ins := [5351], outs := [5352], params := [4096, 1024] })
+    (fun a1 => fw_view [4096, 1024] a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_view_out sm_goal_3 s 0 4096 [1024] 5351 5352)
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_sm_goal_3_5353 (initSM : Store) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5353 =
+      denoteGraph_ringAttn sm_goal_3 initSM 5352 :=
+  DenoteUnfoldGeneric.dstep1 sm_goal_3 initSM 5353 5352 509
+    ({ rank := 0, op := "OpName.FW_float", ins := [5352], outs := [5353] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_float_out sm_goal_3 s 0 5352 5353 [])
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9689 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9689 =
+      fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9687) :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 9689 9687 1069
+    ({ rank := 0, op := "OpName.FW_reshape", ins := [9687], outs := [9689], params := [2048, 1024] })
+    (fun a1 => fw_view [2048, 1024] a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_reshape_out pm_goal_3 s 0 9687 9689 [2048, 1024])
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9695 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9695 =
+      fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9689) :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 9695 9689 1071
+    ({ rank := 0, op := "OpName.FW_reshape", ins := [9689], outs := [9695], params := [2048, 1024] })
+    (fun a1 => fw_view [2048, 1024] a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_reshape_out pm_goal_3 s 0 9689 9695 [2048, 1024])
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9699 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9699 =
+      fw_linear (denoteGraph_ringAttn pm_goal_3 initPM 9695) (initPM 5350) :=
+  DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 9699 9695 5350 1073
+    ({ rank := 0, op := "OpName.FW_mix_precision_linear", ins := [9695, 5350], outs := [9699] })
+    (fun a1 a2 => fw_linear a1 a2)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_mix_precision_linear_out_1p pm_goal_3 s 0 9695 5350 9699)
+    rfl
+    (DenoteUnfoldGeneric.denote_leaf_val pm_goal_3 initPM 5350 (by decide) (by decide))
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9709 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9709 =
+      fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9699) :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 9709 9699 1075
+    ({ rank := 0, op := "OpName.FW_view", ins := [9699], outs := [9709], params := [2048, 1024] })
+    (fun a1 => fw_view [2048, 1024] a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_view_out pm_goal_3 s 0 2048 [1024] 9699 9709)
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9713 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9713 =
+      denoteGraph_ringAttn pm_goal_3 initPM 9709 :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 9713 9709 1077
+    ({ rank := 0, op := "OpName.FW_float", ins := [9709], outs := [9713] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_float_out pm_goal_3 s 0 9709 9713 [])
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9690 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9690 =
+      fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9688) :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 9690 9688 1070
+    ({ rank := 1, op := "OpName.FW_reshape", ins := [9688], outs := [9690], params := [2048, 1024] })
+    (fun a1 => fw_view [2048, 1024] a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_reshape_out pm_goal_3 s 1 9688 9690 [2048, 1024])
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9696 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9696 =
+      fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9690) :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 9696 9690 1072
+    ({ rank := 1, op := "OpName.FW_reshape", ins := [9690], outs := [9696], params := [2048, 1024] })
+    (fun a1 => fw_view [2048, 1024] a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_reshape_out pm_goal_3 s 1 9690 9696 [2048, 1024])
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9700 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9700 =
+      fw_linear (denoteGraph_ringAttn pm_goal_3 initPM 9696) (initPM 5350) :=
+  DenoteUnfoldGeneric.dstep2 pm_goal_3 initPM 9700 9696 5350 1074
+    ({ rank := 1, op := "OpName.FW_mix_precision_linear", ins := [9696, 5350], outs := [9700] })
+    (fun a1 a2 => fw_linear a1 a2)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_mix_precision_linear_out_1p pm_goal_3 s 1 9696 5350 9700)
+    rfl
+    (DenoteUnfoldGeneric.denote_leaf_val pm_goal_3 initPM 5350 (by decide) (by decide))
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9710 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9710 =
+      fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9700) :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 9710 9700 1076
+    ({ rank := 1, op := "OpName.FW_view", ins := [9700], outs := [9710], params := [2048, 1024] })
+    (fun a1 => fw_view [2048, 1024] a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_view_out pm_goal_3 s 1 2048 [1024] 9700 9710)
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem denote_pm_goal_3_9714 (initPM : Store) :
+    denoteGraph_ringAttn pm_goal_3 initPM 9714 =
+      denoteGraph_ringAttn pm_goal_3 initPM 9710 :=
+  DenoteUnfoldGeneric.dstep1 pm_goal_3 initPM 9714 9710 1078
+    ({ rank := 1, op := "OpName.FW_float", ins := [9710], outs := [9714] })
+    (fun a1 => a1)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (fun s => applyNode_fw_float_out pm_goal_3 s 1 9710 9714 [])
+    rfl
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 40000000 in
+theorem sm_pm_reshape_float_5353_commute (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (hattn : denoteGraph_ringAttn sm_goal_3 initSM 5347 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9687,
+         denoteGraph_ringAttn pm_goal_3 initPM 9688])
+    (h9687 : (denoteGraph_ringAttn pm_goal_3 initPM 9687).shape = [2048, 16, 64])
+    (h9688 : (denoteGraph_ringAttn pm_goal_3 initPM 9688).shape = [2048, 16, 64])
+    (hw5350 : (initPM 5350).shape = [1024, 1024]) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5353 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9713,
+         denoteGraph_ringAttn pm_goal_3 initPM 9714] := by
+  have hb := L12_weight_eq initSM initPM hInit
+  have hw : initSM 5350 = initPM 5350 := hb initGoal_5350 (by decide) rfl
+  rw [denote_sm_goal_3_5353, denote_sm_goal_3_5352, denote_sm_goal_3_5351,
+      denote_sm_goal_3_5349, denote_sm_goal_3_5348,
+      denote_pm_goal_3_9713, denote_pm_goal_3_9709, denote_pm_goal_3_9699,
+      denote_pm_goal_3_9695, denote_pm_goal_3_9689,
+      denote_pm_goal_3_9714, denote_pm_goal_3_9710, denote_pm_goal_3_9700,
+      denote_pm_goal_3_9696, denote_pm_goal_3_9690]
+  rw [hattn, hw]
+  -- merge the two reshapes through the all-gather
+  rw [carry_view_commute _ _ h9687 h9688]
+  -- shapes of the view² shards
+  have hva : (fw_view [2048, 1024] (fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9687))).shape = [2048, 1024] := rfl
+  have hvb : (fw_view [2048, 1024] (fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9688))).shape = [2048, 1024] := rfl
+  -- push the linear through the all-gather
+  rw [fw_mix_precision_linear_allGather0_commute_2 _ _ (initPM 5350) 2048 1024 1024
+      (by omega) (by omega) (by omega) hva hvb hw5350]
+  -- linear-output shapes
+  have hla : (fw_linear (fw_view [2048, 1024] (fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9687))) (initPM 5350)).shape = [2048, 1024] := by
+    rw [fw_linear_is_matmul 2048 1024 1024 _ _ hva hw5350]; rfl
+  have hlb : (fw_linear (fw_view [2048, 1024] (fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9688))) (initPM 5350)).shape = [2048, 1024] := by
+    rw [fw_linear_is_matmul 2048 1024 1024 _ _ hvb hw5350]; rfl
+  -- closing view is identity-shaped on both sides
+  have hAG : (allGatherPrimDimN 0 2 0
+      [fw_linear (fw_view [2048, 1024] (fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9687))) (initPM 5350),
+       fw_linear (fw_view [2048, 1024] (fw_view [2048, 1024] (denoteGraph_ringAttn pm_goal_3 initPM 9688))) (initPM 5350)]).shape = [4096, 1024] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hla])]; simp [List.set]
+  rw [fw_view_id _ [4096, 1024] hAG, fw_view_id _ [2048, 1024] hla, fw_view_id _ [2048, 1024] hlb]
+
 end TrainVerify.Denote.GeneratedPatterns
 
 -- Axiom audit for the newly ported zigzag primitives (should be kernel-only).
@@ -1924,3 +2169,4 @@ end TrainVerify.Denote.GeneratedPatterns
 
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_carry_5330_commute
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_shuffle_carry_commute
+#print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_reshape_float_5353_commute
