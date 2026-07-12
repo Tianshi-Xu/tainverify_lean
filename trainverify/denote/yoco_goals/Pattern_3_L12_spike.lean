@@ -3866,6 +3866,132 @@ theorem sm_pm_moe_gmm_L12_commute (initSM initPM : Store)
   unfold fw_all2all_moe_gmm_full
   rfl
 
+-- L12 MoE gate·expert product commute: SM 5384 = allGather0[PM 9815, 9816].
+-- Adapted from the `mk_gate_mul` macro template (Pattern_3.lean:12523) with the L12
+-- tid map and modular single-step SM/PM denote bridges (which are expanded explicitly
+-- since they are not monolithic like the L2..L10 layers').
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 40000000 in
+theorem sm_pm_gate_mul_L12_commute (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (h_ss_pm : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hcarry5354 : denoteGraph_ringAttn sm_goal_3 initSM 5354 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 9717,
+         denoteGraph_ringAttn pm_goal_3 initPM 9718])
+    (h9717 : (denoteGraph_ringAttn pm_goal_3 initPM 9717).shape = [2048, 1024])
+    (h9718 : (denoteGraph_ringAttn pm_goal_3 initPM 9718).shape = [2048, 1024]) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5384
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3 initPM 9815,
+           denoteGraph_ringAttn pm_goal_3 initPM 9816] := by
+  have hb := L12_weight_eq initSM initPM hInit
+  have hw5355 : initSM 5355 = initPM 5355 := hb initGoal_5355 (by decide) rfl
+  have hw5367 : initSM 5367 = initPM 5367 := hb initGoal_5367 (by decide) rfl
+  have hw5372 : initSM 5372 = initPM 5372 := hb initGoal_5372 (by decide) rfl
+  have hw5376 : initSM 5376 = initPM 5376 := hb initGoal_5376 (by decide) rfl
+  have hw5381 : initSM 5381 = initPM 5381 := hb initGoal_5381 (by decide) rfl
+  -- rms of the layer input commutes to the two PM rms-shard denote forms
+  have hRMS : fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5354) (initSM 5355)
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm_goal_3 initPM 9721,
+           denoteGraph_ringAttn pm_goal_3 initPM 9722] := by
+    rw [hcarry5354, hw5355,
+        fw_rms_norm_allGather0_commute_2 _ _ (initPM 5355) 2048 1024 (by omega) (by omega) h9717 h9718,
+        ← denote_pm_goal_3_9721, ← denote_pm_goal_3_9722]
+  -- Expand RHS PM gate tree (modular bridges) down to the two rms leaves 9721 / 9722
+  rw [denote_pm_goal_3_9815, denote_pm_goal_3_9816,
+      denote_pm_goal_3_9755, denote_pm_goal_3_9753, denote_pm_goal_3_9747, denote_pm_goal_3_9743, denote_pm_goal_3_16012,
+      denote_pm_goal_3_9811, denote_pm_goal_3_9801, denote_pm_goal_3_9795, denote_pm_goal_3_9793,
+      denote_pm_goal_3_9771, denote_pm_goal_3_9761, denote_pm_goal_3_9757, denote_pm_goal_3_16016,
+      denote_pm_goal_3_9789, denote_pm_goal_3_9779, denote_pm_goal_3_9775, denote_pm_goal_3_16020,
+      denote_pm_goal_3_9756, denote_pm_goal_3_9754, denote_pm_goal_3_9748, denote_pm_goal_3_9744, denote_pm_goal_3_16035,
+      denote_pm_goal_3_9812, denote_pm_goal_3_9802, denote_pm_goal_3_9796, denote_pm_goal_3_9794,
+      denote_pm_goal_3_9772, denote_pm_goal_3_9762, denote_pm_goal_3_9758, denote_pm_goal_3_16039,
+      denote_pm_goal_3_9790, denote_pm_goal_3_9780, denote_pm_goal_3_9776, denote_pm_goal_3_16043]
+  -- Expand LHS SM gate tree (modular bridges) down to the rms leaf 5356
+  rw [denote_sm_goal_3_5384, denote_sm_goal_3_5370, denote_sm_goal_3_5369, denote_sm_goal_3_5368,
+      denote_sm_goal_3_5366, denote_sm_goal_3_8166,
+      denote_sm_goal_3_5383, denote_sm_goal_3_5382, denote_sm_goal_3_5380, denote_sm_goal_3_5379,
+      denote_sm_goal_3_5374, denote_sm_goal_3_5373, denote_sm_goal_3_5371, denote_sm_goal_3_8170,
+      denote_sm_goal_3_5378, denote_sm_goal_3_5377, denote_sm_goal_3_5375, denote_sm_goal_3_8174,
+      denote_sm_goal_3_5356]
+  rw [hRMS, hw5367, hw5372, hw5376, hw5381]
+  -- Push allGather outward through the gate op chain (pure: uses proven _of variants)
+  set A := denoteGraph_ringAttn pm_goal_3 initPM 9721 with hA
+  set B := denoteGraph_ringAttn pm_goal_3 initPM 9722 with hB
+  have hAsh : A.shape = [2048, 1024] := by
+    rw [hA, denote_pm_goal_3_9721, rms_sh]; exact h9717
+  have hBsh : B.shape = [2048, 1024] := by
+    rw [hB, denote_pm_goal_3_9722, rms_sh]; exact h9718
+  have linsh : ∀ (bb ii oo : Nat) (x w : Tensor), x.shape = [bb, ii] → w.shape = [oo, ii] → (fw_linear x w).shape = [bb, oo] := by
+    intro bb ii oo x w hx hw
+    rw [TrainVerify.Denote.fw_linear_is_matmul bb ii oo x w hx hw]; rfl
+  have hw24 : (initPM 5367).shape = [1, 1024] := h_ss_pm 5367 [1, 1024] (by decide)
+  have hw29 : (initPM 5372).shape = [512, 1024] := h_ss_pm 5372 [512, 1024] (by decide)
+  have hw33 : (initPM 5376).shape = [512, 1024] := h_ss_pm 5376 [512, 1024] (by decide)
+  have hw38 : (initPM 5381).shape = [1024, 512] := h_ss_pm 5381 [1024, 512] (by decide)
+  -- view commute helpers (literal 4096 via defeq to 2048*2)
+  have vcA1024 : fw_view [4096, 1024] (allGatherPrimDimN 0 2 0 [A, B])
+      = allGatherPrimDimN 0 2 0 [fw_view [2048, 1024] A, fw_view [2048, 1024] B] :=
+    fw_view_allGather0_commute_2_of A B 2048 1024 (by omega) hAsh hBsh
+  rw [vcA1024]
+  have hVA : (fw_view [2048, 1024] A).shape = [2048, 1024] := fw_view_shape_eq _ _
+  have hVB : (fw_view [2048, 1024] B).shape = [2048, 1024] := fw_view_shape_eq _ _
+  rw [fw_linear_allGather0_commute_2_of (fw_view [2048, 1024] A) (fw_view [2048, 1024] B) (initPM 5367) 2048 1024 1 (by omega) (by omega) (by omega) hVA hVB hw24,
+      fw_linear_allGather0_commute_2_of (fw_view [2048, 1024] A) (fw_view [2048, 1024] B) (initPM 5372) 2048 1024 512 (by omega) (by omega) (by omega) hVA hVB hw29,
+      fw_linear_allGather0_commute_2_of (fw_view [2048, 1024] A) (fw_view [2048, 1024] B) (initPM 5376) 2048 1024 512 (by omega) (by omega) (by omega) hVA hVB hw33]
+  have hL24A : (fw_linear (fw_view [2048, 1024] A) (initPM 5367)).shape = [2048, 1] := linsh 2048 1024 1 _ _ hVA hw24
+  have hL24B : (fw_linear (fw_view [2048, 1024] B) (initPM 5367)).shape = [2048, 1] := linsh 2048 1024 1 _ _ hVB hw24
+  have hL29A : (fw_linear (fw_view [2048, 1024] A) (initPM 5372)).shape = [2048, 512] := linsh 2048 1024 512 _ _ hVA hw29
+  have hL29B : (fw_linear (fw_view [2048, 1024] B) (initPM 5372)).shape = [2048, 512] := linsh 2048 1024 512 _ _ hVB hw29
+  have hL33A : (fw_linear (fw_view [2048, 1024] A) (initPM 5376)).shape = [2048, 512] := linsh 2048 1024 512 _ _ hVA hw33
+  have hL33B : (fw_linear (fw_view [2048, 1024] B) (initPM 5376)).shape = [2048, 512] := linsh 2048 1024 512 _ _ hVB hw33
+  have vc24 : fw_view [4096, 1] (allGatherPrimDimN 0 2 0 [fw_linear (fw_view [2048, 1024] A) (initPM 5367), fw_linear (fw_view [2048, 1024] B) (initPM 5367)])
+      = allGatherPrimDimN 0 2 0 [fw_view [2048, 1] (fw_linear (fw_view [2048, 1024] A) (initPM 5367)), fw_view [2048, 1] (fw_linear (fw_view [2048, 1024] B) (initPM 5367))] :=
+    fw_view_allGather0_commute_2_of _ _ 2048 1 (by omega) hL24A hL24B
+  have vc29 : fw_view [4096, 512] (allGatherPrimDimN 0 2 0 [fw_linear (fw_view [2048, 1024] A) (initPM 5372), fw_linear (fw_view [2048, 1024] B) (initPM 5372)])
+      = allGatherPrimDimN 0 2 0 [fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5372)), fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5372))] :=
+    fw_view_allGather0_commute_2_of _ _ 2048 512 (by omega) hL29A hL29B
+  have vc33 : fw_view [4096, 512] (allGatherPrimDimN 0 2 0 [fw_linear (fw_view [2048, 1024] A) (initPM 5376), fw_linear (fw_view [2048, 1024] B) (initPM 5376)])
+      = allGatherPrimDimN 0 2 0 [fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5376)), fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5376))] :=
+    fw_view_allGather0_commute_2_of _ _ 2048 512 (by omega) hL33A hL33B
+  rw [vc24, vc29, vc33]
+  rw [fw_sigmoid_allGather0_commute_2
+        (fw_view [2048, 1] (fw_linear (fw_view [2048, 1024] A) (initPM 5367)))
+        (fw_view [2048, 1] (fw_linear (fw_view [2048, 1024] B) (initPM 5367)))
+        2048 1 (by omega) (by omega) (fw_view_shape_eq _ _) (fw_view_shape_eq _ _)]
+  rw [fw_swiglu_allGather0_commute_2
+        (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5372)))
+        (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5372)))
+        (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5376)))
+        (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5376)))
+        2048 512 (by omega) (by omega) (fw_view_shape_eq _ _) (fw_view_shape_eq _ _) (fw_view_shape_eq _ _) (fw_view_shape_eq _ _)]
+  have hSWA : (fw_swiglu (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5372))) (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5376)))).shape = [2048, 512] := by
+    rw [TrainVerify.Denote.fw_swiglu_shape]; exact fw_view_shape_eq _ _
+  have hSWB : (fw_swiglu (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5372))) (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5376)))).shape = [2048, 512] := by
+    rw [TrainVerify.Denote.fw_swiglu_shape]; exact fw_view_shape_eq _ _
+  have vcSW : fw_view [4096, 512] (allGatherPrimDimN 0 2 0 [fw_swiglu (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5372))) (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5376))), fw_swiglu (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5372))) (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5376)))])
+      = allGatherPrimDimN 0 2 0 [fw_view [2048, 512] (fw_swiglu (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5372))) (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5376)))), fw_view [2048, 512] (fw_swiglu (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5372))) (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5376))))] :=
+    fw_view_allGather0_commute_2_of _ _ 2048 512 (by omega) hSWA hSWB
+  rw [vcSW]
+  have hSVA : (fw_view [2048, 512] (fw_swiglu (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5372))) (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5376))))).shape = [2048, 512] := fw_view_shape_eq _ _
+  have hSVB : (fw_view [2048, 512] (fw_swiglu (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5372))) (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5376))))).shape = [2048, 512] := fw_view_shape_eq _ _
+  rw [fw_linear_allGather0_commute_2_of _ _ (initPM 5381) 2048 512 1024 (by omega) (by omega) (by omega) hSVA hSVB hw38]
+  have hD38A : (fw_linear (fw_view [2048, 512] (fw_swiglu (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5372))) (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5376))))) (initPM 5381)).shape = [2048, 1024] := linsh 2048 512 1024 _ _ hSVA hw38
+  have hD38B : (fw_linear (fw_view [2048, 512] (fw_swiglu (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5372))) (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5376))))) (initPM 5381)).shape = [2048, 1024] := linsh 2048 512 1024 _ _ hSVB hw38
+  have vcD : fw_view [4096, 1024] (allGatherPrimDimN 0 2 0 [fw_linear (fw_view [2048, 512] (fw_swiglu (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5372))) (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5376))))) (initPM 5381), fw_linear (fw_view [2048, 512] (fw_swiglu (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5372))) (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5376))))) (initPM 5381)])
+      = allGatherPrimDimN 0 2 0 [fw_view [2048, 1024] (fw_linear (fw_view [2048, 512] (fw_swiglu (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5372))) (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5376))))) (initPM 5381)), fw_view [2048, 1024] (fw_linear (fw_view [2048, 512] (fw_swiglu (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5372))) (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5376))))) (initPM 5381))] :=
+    fw_view_allGather0_commute_2_of _ _ 2048 1024 (by omega) hD38A hD38B
+  rw [vcD]
+  rw [fw_mul_allGather0_commute_2_of_broadcast
+        (fw_sigmoid (fw_view [2048, 1] (fw_linear (fw_view [2048, 1024] A) (initPM 5367))))
+        (fw_sigmoid (fw_view [2048, 1] (fw_linear (fw_view [2048, 1024] B) (initPM 5367))))
+        (fw_view [2048, 1024] (fw_linear (fw_view [2048, 512] (fw_swiglu (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5372))) (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] A) (initPM 5376))))) (initPM 5381)))
+        (fw_view [2048, 1024] (fw_linear (fw_view [2048, 512] (fw_swiglu (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5372))) (fw_view [2048, 512] (fw_linear (fw_view [2048, 1024] B) (initPM 5376))))) (initPM 5381)))
+        2048 1024 (by omega) (by omega) (by decide) (by decide) (by decide)
+        (by rw [TrainVerify.Denote.fw_sigmoid_shape]; exact fw_view_shape_eq _ _) (by rw [TrainVerify.Denote.fw_sigmoid_shape]; exact fw_view_shape_eq _ _) (fw_view_shape_eq _ _) (fw_view_shape_eq _ _)]
+
 -- Vacuity witness for the `h_bound` well-formed-input hypothesis (AGENTS.md #29):
 -- the all-zero cu_seqlens store satisfies the bound, so the hypothesis is not vacuous.
 theorem sm_pm_router_L12_hbound_witness :
