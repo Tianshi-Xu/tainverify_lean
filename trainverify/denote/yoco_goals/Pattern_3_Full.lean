@@ -98,6 +98,17 @@ theorem sm_pm_router_commute_layer_full
     have h10002 : (denoteGraph_ringAttn pm_goal_3 initPM 10002).shape = [2048, 1024] :=
       pm_goal_3_10002_shape initPM hPM
     exact sm_pm_router_commute_L14_full initSM initPM hSM hPM hInit hcarry5436 h10001 h10002 hbnd
+  · -- L15: hcarry5485 + h10173/h10174 shape + h_bound(5493)
+    simp only [sm_goal_3_routers, pm_goal_3_routers_r0, pm_goal_3_routers_r1,
+      List.getD_cons_succ, List.getD_cons_zero]
+    have hbnd : ∀ t, (decodeCuSeqlens (initPM 5493)).getD (t+1) 0 ≤ 4096 :=
+      cu_bound_of_value_pin _ hp5493
+    have hcarry5485 := sm_pm_carry_5485_commute initSM initPM hSM hPM hInit hp5346 hp5395 hp5444
+    have h10173 : (denoteGraph_ringAttn pm_goal_3 initPM 10173).shape = [2048, 1024] :=
+      pm_goal_3_10173_shape initPM hPM
+    have h10174 : (denoteGraph_ringAttn pm_goal_3 initPM 10174).shape = [2048, 1024] :=
+      pm_goal_3_10174_shape initPM hPM
+    exact sm_pm_router_commute_L15_full initSM initPM hSM hPM hInit hcarry5485 h10173 h10174 hbnd
   all_goals sorry
 
 end TrainVerify.Denote.GeneratedPatterns
