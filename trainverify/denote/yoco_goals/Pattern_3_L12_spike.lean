@@ -4143,6 +4143,82 @@ theorem sm_pm_carry_5387_commute (initSM initPM : Store)
         (elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 9742) (denoteGraph_ringAttn pm_goal_3 initPM 9816))
         h9717 h9718 hinnerA hinnerB]
 
+-- Shape of the L13-entry residual pm 9829 = elemwiseAdd (pm 15989) (pm 9825).
+-- pm 15989 = pm 9717 ([2048,1024]); pm 9825 = pm 9819 = elemwiseAdd (pm 9741) (pm 9815).
+-- Lifted from the shape haves in `sm_pm_carry_5387_commute` above.
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem pm_goal_3_9829_shape
+    (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9829).shape = [2048, 1024] := by
+  have h9625 : (denoteGraph_ringAttn pm_goal_3 initPM 9625).shape = [2048, 1024] :=
+    RouterShapesHelpers.hs_9625 initPM hPM
+  have h15973 : (denoteGraph_ringAttn pm_goal_3 initPM 15973).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_15973, denote_pm_goal_3_9655, fw_maybe_shuffle_shape, denote_pm_goal_3_13257]
+    exact h9625
+  have h9713 : (denoteGraph_ringAttn pm_goal_3 initPM 9713).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9713, denote_pm_goal_3_9709]; rfl
+  have h9717 : (denoteGraph_ringAttn pm_goal_3 initPM 9717).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9717]; exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h15973 h9713
+  have h9721sh : (denoteGraph_ringAttn pm_goal_3 initPM 9721).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9721, rms_sh]; exact h9717
+  have h9741sh : (denoteGraph_ringAttn pm_goal_3 initPM 9741).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9741, denote_pm_goal_3_16008]
+    exact TrainVerify.Denote.fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024
+      (by rw [h9721sh]; rfl) (by rw [h9721sh]; rfl)
+  have h9755sh : (denoteGraph_ringAttn pm_goal_3 initPM 9755).shape = [2048, 1] := by
+    rw [denote_pm_goal_3_9755, TrainVerify.Denote.fw_sigmoid_shape, denote_pm_goal_3_9753]
+    exact fw_view_shape_eq _ _
+  have h9811sh : (denoteGraph_ringAttn pm_goal_3 initPM 9811).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9811]; exact fw_view_shape_eq _ _
+  have h9815sh : (denoteGraph_ringAttn pm_goal_3 initPM 9815).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9815, RouterShapesHelpers.elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] h9755sh h9811sh]; rfl
+  have hinnerA : (elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 9741) (denoteGraph_ringAttn pm_goal_3 initPM 9815)).shape = [2048, 1024] :=
+    elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h9741sh h9815sh
+  have h15989sh : (denoteGraph_ringAttn pm_goal_3 initPM 15989).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_15989]; exact h9717
+  have h9825sh : (denoteGraph_ringAttn pm_goal_3 initPM 9825).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9825, denote_pm_goal_3_9819]; exact hinnerA
+  rw [denote_pm_goal_3_9829]
+  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h15989sh h9825sh
+
+-- Shape of the L13-entry residual pm 9830 = elemwiseAdd (pm 15997) (pm 9826) (rank-1 mirror).
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 8000000 in
+theorem pm_goal_3_9830_shape
+    (initPM : Store) (hPM : StoreShapesHold initPM pm_goal_3InitEnv) :
+    (denoteGraph_ringAttn pm_goal_3 initPM 9830).shape = [2048, 1024] := by
+  have h9626 : (denoteGraph_ringAttn pm_goal_3 initPM 9626).shape = [2048, 1024] :=
+    RouterShapesHelpers.hs_9626 initPM hPM
+  have h15981 : (denoteGraph_ringAttn pm_goal_3 initPM 15981).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_15981, denote_pm_goal_3_9656, fw_maybe_shuffle_shape, denote_pm_goal_3_13258]
+    exact h9626
+  have h9714 : (denoteGraph_ringAttn pm_goal_3 initPM 9714).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9714, denote_pm_goal_3_9710]; rfl
+  have h9718 : (denoteGraph_ringAttn pm_goal_3 initPM 9718).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9718]; exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h15981 h9714
+  have h9722sh : (denoteGraph_ringAttn pm_goal_3 initPM 9722).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9722, rms_sh]; exact h9718
+  have h9742sh : (denoteGraph_ringAttn pm_goal_3 initPM 9742).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9742, denote_pm_goal_3_16031]
+    exact TrainVerify.Denote.fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024
+      (by rw [h9722sh]; rfl) (by rw [h9722sh]; rfl)
+  have h9756sh : (denoteGraph_ringAttn pm_goal_3 initPM 9756).shape = [2048, 1] := by
+    rw [denote_pm_goal_3_9756, TrainVerify.Denote.fw_sigmoid_shape, denote_pm_goal_3_9754]
+    exact fw_view_shape_eq _ _
+  have h9812sh : (denoteGraph_ringAttn pm_goal_3 initPM 9812).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9812]; exact fw_view_shape_eq _ _
+  have h9816sh : (denoteGraph_ringAttn pm_goal_3 initPM 9816).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9816, RouterShapesHelpers.elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] h9756sh h9812sh]; rfl
+  have hinnerB : (elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 9742) (denoteGraph_ringAttn pm_goal_3 initPM 9816)).shape = [2048, 1024] :=
+    elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h9742sh h9816sh
+  have h15997sh : (denoteGraph_ringAttn pm_goal_3 initPM 15997).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_15997]; exact h9718
+  have h9826sh : (denoteGraph_ringAttn pm_goal_3 initPM 9826).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_9826, denote_pm_goal_3_9820]; exact hinnerB
+  rw [denote_pm_goal_3_9830]
+  exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h15997sh h9826sh
+
 -- Vacuity witness for the `h_bound` well-formed-input hypothesis (AGENTS.md #29):
 -- the all-zero cu_seqlens store satisfies the bound, so the hypothesis is not vacuous.
 theorem sm_pm_router_L12_hbound_witness :
@@ -4188,3 +4264,5 @@ end TrainVerify.Denote.GeneratedPatterns
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_moe_gmm_L12_commute
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_gate_mul_L12_commute
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_carry_5387_commute
+#print axioms TrainVerify.Denote.GeneratedPatterns.pm_goal_3_9829_shape
+#print axioms TrainVerify.Denote.GeneratedPatterns.pm_goal_3_9830_shape
