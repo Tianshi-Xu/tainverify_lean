@@ -70,6 +70,12 @@ theorem sm_pm_router_commute_layer_full
   · exact sm_pm_router_commute_L9 initSM initPM hSM hPM hInit
   · exact sm_pm_router_commute_L10 initSM initPM hSM hPM hInit
   · exact sm_pm_router_commute_L11 initSM initPM hSM hPM hInit
+  · -- L12: h_bound only, no hcarry
+    simp only [sm_goal_3_routers, pm_goal_3_routers_r0, pm_goal_3_routers_r1,
+      List.getD_cons_succ, List.getD_cons_zero]
+    have hbnd : ∀ t, (decodeCuSeqlens (initPM 5346)).getD (t+1) 0 ≤ 4096 :=
+      cu_bound_of_value_pin _ hp5346
+    exact sm_pm_router_commute_L12_full initSM initPM hSM hPM hInit hbnd
   all_goals sorry
 
 end TrainVerify.Denote.GeneratedPatterns
