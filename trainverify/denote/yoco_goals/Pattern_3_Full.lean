@@ -422,4 +422,48 @@ theorem sm_pm_router_commute_layer_full
       pm_goal_3_11550_shape initPM hPM h11378
     exact sm_pm_router_commute_L23_full initSM initPM hSM hPM hInit hbnd hcarry5877 h11549 h11550
 
+/-- Kernel-clean assembly: replaces `sm_pm_router_commute_all` (which depends on
+    the `sorry`-stubbed `sm_pm_router_commute_layer` in Pattern_3.lean) with the
+    fully-proved `sm_pm_router_commute_layer_full` above. -/
+theorem sm_pm_router_commute_all_full
+    (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM sm_goal_3InitEnv)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (hp5346 : initPM 5346 = cu_pin_value)
+    (hp5395 : initPM 5395 = cu_pin_value)
+    (hp5444 : initPM 5444 = cu_pin_value)
+    (hp5493 : initPM 5493 = cu_pin_value)
+    (hp5542 : initPM 5542 = cu_pin_value)
+    (hp5591 : initPM 5591 = cu_pin_value)
+    (hp5640 : initPM 5640 = cu_pin_value)
+    (hp5689 : initPM 5689 = cu_pin_value)
+    (hp5738 : initPM 5738 = cu_pin_value)
+    (hp5787 : initPM 5787 = cu_pin_value)
+    (hp5836 : initPM 5836 = cu_pin_value)
+    (hp5885 : initPM 5885 = cu_pin_value) :
+    (∀ i (_ : i < 24), ((pm_goal_3_routers_r0 initPM).getD i (zeroTensor [2048, 64])).shape = [2048, 64]) ∧
+    (∀ i (_ : i < 24), ((pm_goal_3_routers_r1 initPM).getD i (zeroTensor [2048, 64])).shape = [2048, 64]) ∧
+    (∀ i (_ : i < 24), (sm_goal_3_routers initSM).getD i (zeroTensor [2 * 2048, 64]) =
+      allGatherPrimDimN 0 2 0 [(pm_goal_3_routers_r0 initPM).getD i (zeroTensor [2048, 64]),
+        (pm_goal_3_routers_r1 initPM).getD i (zeroTensor [2048, 64])]) :=
+  ⟨sm_pm_router_shapes_r0 initSM initPM hSM hPM hInit,
+   sm_pm_router_shapes_r1 initSM initPM hSM hPM hInit,
+   sm_pm_router_commute_layer_full initSM initPM hSM hPM hInit
+     hp5346 hp5395 hp5444 hp5493 hp5542 hp5591 hp5640 hp5689 hp5738 hp5787 hp5836 hp5885⟩
+
+/-- Kernel-clean `prove_goal_3` — same statement, replaces the version in
+    Pattern_3.lean that transitively depended on the `sorry`. -/
+theorem prove_goal_3_full : goal_3_stmt_with_pins :=
+  goal_3_stmt_with_pins_of_router_commutes
+    (fun initSM initPM hSM hPM hInit hp5346 hp5395 hp5444 hp5493 hp5542 hp5591 hp5640 hp5689 hp5738 hp5787 hp5836 hp5885 =>
+      sm_pm_router_commute_all_full initSM initPM hSM hPM hInit
+        hp5346 hp5395 hp5444 hp5493 hp5542 hp5591 hp5640 hp5689 hp5738 hp5787 hp5836 hp5885)
+
+/-- Kernel-clean Pattern_3 top-level. -/
+theorem prove_pattern_3_full : pattern_3_stmt := by
+  intro _ h
+  cases h
+  exact prove_goal_3_full
+
 end TrainVerify.Denote.GeneratedPatterns

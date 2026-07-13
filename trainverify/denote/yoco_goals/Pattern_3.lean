@@ -8146,6 +8146,9 @@ theorem sm_pm_router_commute_layer
         allGatherPrimDimN 0 2 0
           [(pm_goal_3_routers_r0 initPM).getD i (zeroTensor [2048, 64]),
            (pm_goal_3_routers_r1 initPM).getD i (zeroTensor [2048, 64])] := by
+  -- Kernel-clean proof lives in Pattern_3_Full.lean as `sm_pm_router_commute_layer_full`
+  -- (cannot import here due to module cycle; downstream users should reference
+  -- `prove_pattern_3_full` from Pattern_3_Full.lean instead of `prove_pattern_3`).
   sorry
 
 /-- Assembly of the three components. Kernel-clean once the three above are. -/
