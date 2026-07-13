@@ -2612,6 +2612,134 @@ theorem pm_goal_3_10690_shape
   rw [br_pm_10690]
   exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h16387sh h10686sh
 
+-- ===== carry_5632 =====
+set_option maxRecDepth 1000000 in
+set_option maxHeartbeats 40000000 in
+theorem sm_pm_carry_5632_commute (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM sm_goal_3InitEnv)
+    (hPM : StoreShapesHold initPM pm_goal_3InitEnv)
+    (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
+    (h_bound : ∀ t, (decodeCuSeqlens (initPM 5591)).getD (t+1) 0 ≤ 4096)
+    (hcarry5583 : denoteGraph_ringAttn sm_goal_3 initSM 5583 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 10517,
+         denoteGraph_ringAttn pm_goal_3 initPM 10518])
+    (h10517 : (denoteGraph_ringAttn pm_goal_3 initPM 10517).shape = [2048, 1024])
+    (h10518 : (denoteGraph_ringAttn pm_goal_3 initPM 10518).shape = [2048, 1024]) :
+    denoteGraph_ringAttn sm_goal_3 initSM 5632 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraph_ringAttn pm_goal_3 initPM 10689,
+         denoteGraph_ringAttn pm_goal_3 initPM 10690] := by
+  have hattn := sm_pm_attention_L17_commute initSM initPM hSM hPM hInit hcarry5583 h10517 h10518 h_bound
+  have hw5635 : (initPM 5586).shape = [16, 64, 1024] := hPM 5586 [16, 64, 1024] (by decide)
+  have hw5644 : (initPM 5595).shape = [1024, 1024] := hPM 5595 [1024, 1024] (by decide)
+  have h10693 : (denoteGraph_ringAttn pm_goal_3 initPM 10521).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_10521_L17, rms_sh]; exact h10517
+  have h10694 : (denoteGraph_ringAttn pm_goal_3 initPM 10522).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_10522_L17, rms_sh]; exact h10518
+  have h10695d : (denoteGraph_ringAttn pm_goal_3 initPM 10523).shape = [2048, 16, 64] := by
+    rw [denote_pm_goal_3_10523_L17]; exact ph_lin_shape_gen _ _ 2048 16 h10693 hw5635
+  have h10696d : (denoteGraph_ringAttn pm_goal_3 initPM 10524).shape = [2048, 16, 64] := by
+    rw [denote_pm_goal_3_10524_L17]; exact ph_lin_shape_gen _ _ 2048 16 h10694 hw5635
+  -- folded-store bridges at the two attention Q tids
+  have b1487_10695 : (pm_goal_3.nodes.take 1417).foldl (applyNodeRingAttn pm_goal_3) initPM 10523
+      = denoteGraph_ringAttn pm_goal_3 initPM 10523 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10523 1417 (by decide) (by decide)).symm
+  have b1487_10696 : (pm_goal_3.nodes.take 1417).foldl (applyNodeRingAttn pm_goal_3) initPM 10524
+      = denoteGraph_ringAttn pm_goal_3 initPM 10524 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10524 1417 (by decide) (by decide)).symm
+  have b1488_10695 : (pm_goal_3.nodes.take 1418).foldl (applyNodeRingAttn pm_goal_3) initPM 10523
+      = denoteGraph_ringAttn pm_goal_3 initPM 10523 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10523 1418 (by decide) (by decide)).symm
+  have b1488_10696 : (pm_goal_3.nodes.take 1418).foldl (applyNodeRingAttn pm_goal_3) initPM 10524
+      = denoteGraph_ringAttn pm_goal_3 initPM 10524 :=
+    (foldl_prefix_eq_full_ringAttn pm_goal_3 pm_goal_3.nodes initPM 10524 1418 (by decide) (by decide)).symm
+  have h10719 : (denoteGraph_ringAttn pm_goal_3 initPM 10547).shape = [2048, 16, 64] := by
+    rw [denote_pm_attn_L17_r0_bridge,
+        applyNodeRingAttn_zigzag_pair_eq_chunk pm_goal_3 _ nR0_17 nR0_17 nR1_17 0 buddy_r0_17 (by decide)]
+    have e0 : nR0_17.ins.getD 0 0 = 10523 := by decide
+    have e1 : nR1_17.ins.getD 0 0 = 10524 := by decide
+    have hq : (allGatherPrimDimN 0 2 0
+        [(pm_goal_3.nodes.take 1417).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_17.ins.getD 0 0),
+         (pm_goal_3.nodes.take 1417).foldl (applyNodeRingAttn pm_goal_3) initPM (nR1_17.ins.getD 0 0)]).shape
+        = [4096, 16, 64] := by
+      rw [e0, e1, b1487_10695, b1487_10696]
+      exact allGatherPrimDimN_shape 0 2 _ [2048, 16, 64] (by exact h10695d)
+    rw [chunkPrimDimN_shape 0 2 0 _ [2 * 2048, 16, 64] (by rw [fw_attn_varlen_shape_p3, hq]; rfl) (by omega)]
+    rfl
+  have h10720 : (denoteGraph_ringAttn pm_goal_3 initPM 10548).shape = [2048, 16, 64] := by
+    rw [denote_pm_attn_L17_r1_bridge,
+        applyNodeRingAttn_zigzag_pair_eq_chunk pm_goal_3 _ nR1_17 nR0_17 nR1_17 1 buddy_r1_17 (by decide)]
+    have e0 : nR0_17.ins.getD 0 0 = 10523 := by decide
+    have e1 : nR1_17.ins.getD 0 0 = 10524 := by decide
+    have hq : (allGatherPrimDimN 0 2 0
+        [(pm_goal_3.nodes.take 1418).foldl (applyNodeRingAttn pm_goal_3) initPM (nR0_17.ins.getD 0 0),
+         (pm_goal_3.nodes.take 1418).foldl (applyNodeRingAttn pm_goal_3) initPM (nR1_17.ins.getD 0 0)]).shape
+        = [4096, 16, 64] := by
+      rw [e0, e1, b1488_10695, b1488_10696]
+      exact allGatherPrimDimN_shape 0 2 _ [2048, 16, 64] (by exact h10695d)
+    rw [chunkPrimDimN_shape 0 2 1 _ [2 * 2048, 16, 64] (by rw [fw_attn_varlen_shape_p3, hq]; rfl) (by omega)]
+    rfl
+
+  have hreshape := sm_pm_reshape_float_L17_commute initSM initPM hInit hattn h10719 h10720 hw5644
+  have h10745 : (denoteGraph_ringAttn pm_goal_3 initPM 10573).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_10573_L17, denote_pm_goal_3_10569_L17]; rfl
+  have h10746 : (denoteGraph_ringAttn pm_goal_3 initPM 10574).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_10574_L17, denote_pm_goal_3_10570_L17]; rfl
+  have hcarry5599 := sm_pm_carry_5599_commute_L17 initSM initPM hcarry5583 hreshape h10517 h10518 h10745 h10746
+  have h10577 : (denoteGraph_ringAttn pm_goal_3 initPM 10577).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_10577_L17]; exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h10517 h10745
+  have h10578 : (denoteGraph_ringAttn pm_goal_3 initPM 10578).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_10578_L17]; exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h10518 h10746
+  have hgmm := sm_pm_moe_gmm_L17_commute initSM initPM hInit hPM hcarry5599 h10577 h10578
+  have hgate := sm_pm_gate_mul_L17_commute initSM initPM hInit hPM hcarry5599 h10577 h10578
+  -- === shard shapes of the gmm / gate outputs (both [2048, 1024]) ===
+  have h10581sh : (denoteGraph_ringAttn pm_goal_3 initPM 10581).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_10581_L17, rms_sh]; exact h10577
+  have h10582sh : (denoteGraph_ringAttn pm_goal_3 initPM 10582).shape = [2048, 1024] := by
+    rw [denote_pm_goal_3_10582_L17, rms_sh]; exact h10578
+  have h10601sh : (denoteGraph_ringAttn pm_goal_3 initPM 10601).shape = [2048, 1024] := by
+    rw [br_pm_10601, br_pm_16398]
+    exact TrainVerify.Denote.fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024
+      (by rw [h10581sh]; rfl) (by rw [h10581sh]; rfl)
+  have h10602sh : (denoteGraph_ringAttn pm_goal_3 initPM 10602).shape = [2048, 1024] := by
+    rw [br_pm_10602, br_pm_16421]
+    exact TrainVerify.Denote.fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ 2048 1024
+      (by rw [h10582sh]; rfl) (by rw [h10582sh]; rfl)
+  have h10615sh : (denoteGraph_ringAttn pm_goal_3 initPM 10615).shape = [2048, 1] := by
+    rw [br_pm_10615, TrainVerify.Denote.fw_sigmoid_shape, br_pm_10613]
+    exact fw_view_shape_eq _ _
+  have h10671sh : (denoteGraph_ringAttn pm_goal_3 initPM 10671).shape = [2048, 1024] := by
+    rw [br_pm_10671]; exact fw_view_shape_eq _ _
+  have h10675sh : (denoteGraph_ringAttn pm_goal_3 initPM 10675).shape = [2048, 1024] := by
+    rw [br_pm_10675, RouterShapesHelpers.elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] h10615sh h10671sh]; rfl
+  have h10616sh : (denoteGraph_ringAttn pm_goal_3 initPM 10616).shape = [2048, 1] := by
+    rw [br_pm_10616, TrainVerify.Denote.fw_sigmoid_shape, br_pm_10614]
+    exact fw_view_shape_eq _ _
+  have h10672sh : (denoteGraph_ringAttn pm_goal_3 initPM 10672).shape = [2048, 1024] := by
+    rw [br_pm_10672]; exact fw_view_shape_eq _ _
+  have h10676sh : (denoteGraph_ringAttn pm_goal_3 initPM 10676).shape = [2048, 1024] := by
+    rw [br_pm_10676, RouterShapesHelpers.elemwiseMul_shape2 _ _ [2048, 1] [2048, 1024] h10616sh h10672sh]; rfl
+  -- inner-add shard shapes
+  have hinnerA : (elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 10601) (denoteGraph_ringAttn pm_goal_3 initPM 10675)).shape = [2048, 1024] :=
+    elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h10601sh h10675sh
+  have hinnerB : (elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 10602) (denoteGraph_ringAttn pm_goal_3 initPM 10676)).shape = [2048, 1024] :=
+    elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h10602sh h10676sh
+  -- === assemble ===
+  rw [br_pm_10689, br_pm_16379, br_pm_10685, br_pm_10679,
+      br_pm_10690, br_pm_16387, br_pm_10686, br_pm_10680]
+  rw [br_sm_5632, br_sm_8346, br_sm_5631, br_sm_5630]
+  rw [hcarry5599, hgmm, hgate]
+  rw [fw_add_allGather0_commute_2_2048_1024
+        (denoteGraph_ringAttn pm_goal_3 initPM 10601) (denoteGraph_ringAttn pm_goal_3 initPM 10602)
+        (denoteGraph_ringAttn pm_goal_3 initPM 10675) (denoteGraph_ringAttn pm_goal_3 initPM 10676)
+        h10601sh h10602sh h10675sh h10676sh]
+  rw [fw_add_allGather0_commute_2_2048_1024
+        (denoteGraph_ringAttn pm_goal_3 initPM 10577) (denoteGraph_ringAttn pm_goal_3 initPM 10578)
+        (elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 10601) (denoteGraph_ringAttn pm_goal_3 initPM 10675))
+        (elemwiseAdd (denoteGraph_ringAttn pm_goal_3 initPM 10602) (denoteGraph_ringAttn pm_goal_3 initPM 10676))
+        h10577 h10578 hinnerA hinnerB]
+
 end TrainVerify.Denote.GeneratedPatterns
 
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_attention_L17_commute
@@ -2627,3 +2755,4 @@ end TrainVerify.Denote.GeneratedPatterns
 #print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_gate_mul_L17_commute
 #print axioms TrainVerify.Denote.GeneratedPatterns.pm_goal_3_10689_shape
 #print axioms TrainVerify.Denote.GeneratedPatterns.pm_goal_3_10690_shape
+#print axioms TrainVerify.Denote.GeneratedPatterns.sm_pm_carry_5632_commute
