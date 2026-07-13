@@ -2614,7 +2614,7 @@ theorem sm_pm_carry_5730_commute (initSM initPM : Store)
     (hSM : StoreShapesHold initSM sm_goal_3InitEnv)
     (hPM : StoreShapesHold initPM pm_goal_3InitEnv)
     (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
-    (h_bound : ∀ t, (decodeCuSeqlens (initPM 5689)).getD (t+1) 0 ≤ 4096)
+    (h_bound : ∀ t, (decodeCuSeqlens (initPM 5689)).getD (t + 1) 0 ≤ 4096)
     (hcarry5681 : denoteGraph_ringAttn sm_goal_3 initSM 5681 =
       allGatherPrimDimN 0 2 0
         [denoteGraph_ringAttn pm_goal_3 initPM 10861,
