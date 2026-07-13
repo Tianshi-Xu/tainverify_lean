@@ -166,6 +166,41 @@ theorem sm_pm_router_commute_layer_full
     have h10690 : (denoteGraph_ringAttn pm_goal_3 initPM 10690).shape = [2048, 1024] :=
       pm_goal_3_10690_shape initPM hPM h10518
     exact sm_pm_router_commute_L18_full initSM initPM hSM hPM hInit hbnd hcarry5632 h10689 h10690
+  · -- L19: h_bound(5689) + hcarry5681 (chain built from hcarry5534) + h10861/h10862 shape
+    simp only [sm_goal_3_routers, pm_goal_3_routers_r0, pm_goal_3_routers_r1,
+      List.getD_cons_succ, List.getD_cons_zero]
+    have hbnd : ∀ t, (decodeCuSeqlens (initPM 5689)).getD (t+1) 0 ≤ 4096 :=
+      cu_bound_of_value_pin _ hp5689
+    have hbnd_5542 : ∀ t, (decodeCuSeqlens (initPM 5542)).getD (t+1) 0 ≤ 4096 :=
+      cu_bound_of_value_pin _ hp5542
+    have hbnd_5591 : ∀ t, (decodeCuSeqlens (initPM 5591)).getD (t+1) 0 ≤ 4096 :=
+      cu_bound_of_value_pin _ hp5591
+    have hbnd_5640 : ∀ t, (decodeCuSeqlens (initPM 5640)).getD (t+1) 0 ≤ 4096 :=
+      cu_bound_of_value_pin _ hp5640
+    have hcarry5534 := sm_pm_carry_5534_commute initSM initPM hSM hPM hInit hp5346 hp5395 hp5444 hp5493
+    have h10345 : (denoteGraph_ringAttn pm_goal_3 initPM 10345).shape = [2048, 1024] :=
+      pm_goal_3_10345_shape initPM hPM
+    have h10346 : (denoteGraph_ringAttn pm_goal_3 initPM 10346).shape = [2048, 1024] :=
+      pm_goal_3_10346_shape initPM hPM
+    have hcarry5583 := sm_pm_carry_5583_commute initSM initPM hSM hPM hInit
+      hbnd_5542 hcarry5534 h10345 h10346
+    have h10517 : (denoteGraph_ringAttn pm_goal_3 initPM 10517).shape = [2048, 1024] :=
+      pm_goal_3_10517_shape initPM hPM h10345
+    have h10518 : (denoteGraph_ringAttn pm_goal_3 initPM 10518).shape = [2048, 1024] :=
+      pm_goal_3_10518_shape initPM hPM h10346
+    have hcarry5632 := sm_pm_carry_5632_commute initSM initPM hSM hPM hInit
+      hbnd_5591 hcarry5583 h10517 h10518
+    have h10689 : (denoteGraph_ringAttn pm_goal_3 initPM 10689).shape = [2048, 1024] :=
+      pm_goal_3_10689_shape initPM hPM h10517
+    have h10690 : (denoteGraph_ringAttn pm_goal_3 initPM 10690).shape = [2048, 1024] :=
+      pm_goal_3_10690_shape initPM hPM h10518
+    have hcarry5681 := sm_pm_carry_5681_commute initSM initPM hSM hPM hInit
+      hbnd_5640 hcarry5632 h10689 h10690
+    have h10861 : (denoteGraph_ringAttn pm_goal_3 initPM 10861).shape = [2048, 1024] :=
+      pm_goal_3_10861_shape initPM hPM h10689
+    have h10862 : (denoteGraph_ringAttn pm_goal_3 initPM 10862).shape = [2048, 1024] :=
+      pm_goal_3_10862_shape initPM hPM h10690
+    exact sm_pm_router_commute_L19_full initSM initPM hSM hPM hInit hbnd hcarry5681 h10861 h10862
   all_goals sorry
 
 end TrainVerify.Denote.GeneratedPatterns
