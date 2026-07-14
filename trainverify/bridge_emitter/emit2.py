@@ -88,9 +88,16 @@ def run_probe_all(imports, sm_tids, pm_tids, timeout=900, multi_out=False):
               "set_option maxHeartbeats 4000000\n"
               "namespace TrainVerify.Denote.GeneratedGoals\n"
               "open TrainVerify.Denote TrainVerify.Denote.Generated\n")
-    # For multi-output nodes (e.g. FW_multiref outs=[t1,t2]) an exact `o = [t]`
-    # match fails; use membership `t ∈ o` so a node is found by ANY of its outputs.
-    pat = (lambda t: f"{t} ∈ o") if multi_out else (lambda t: f"o = [{t}]")
+    # For multi-output nodes (e.g. FW_multiref outs=[t1,t2], FW_inner_chunk_ce
+    # outs=[fst, snd], FW_topk_routing outs=[scores, map, probs]) an exact
+    # `o = [t]` match fails; use membership `t ∈ o` unconditionally so a node is
+    # found by ANY of its outputs. The old exact-match path had no known
+    # correctness advantage — kept only via `BRIDGE_PROBE_EXACT_MATCH=1` opt-out.
+    _exact = os.environ.get("BRIDGE_PROBE_EXACT_MATCH", "0") == "1"
+    if _exact and not multi_out:
+        pat = lambda t: f"o = [{t}]"
+    else:
+        pat = lambda t: f"{t} ∈ o"
     lines = [header]
     for t in sm_tids:
         lines.append(_eval_line("sm", pat(t), f'"SM:{t}"'))

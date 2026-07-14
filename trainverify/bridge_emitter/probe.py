@@ -36,10 +36,15 @@ def _eval_line(graph: str, outs_pat: str, tag: str) -> str:
 def build_probe(import_mod: str, sm_tids: list, pm_tids: list) -> str:
     lines = [PROBE_HEADER.format(import_mod=import_mod)]
     # one eval per tid keeps parsing unambiguous
+    # Use `t ∈ o` membership check so multi-output nodes (FW_inner_chunk_ce with
+    # outs=[a,b], FW_multiref, FW_topk_routing etc.) also match. This is safe
+    # because the *emitted* bridge only asserts `outs := [tid]` for single-output
+    # nodes; for multi-output nodes the emitter uses the full outs list literal
+    # (which the applyNode_XXX_out lemmas accept).
     for t in sm_tids:
-        lines.append(_eval_line("sm", f"o = [{t}]", f'"SM:{t}"'))
+        lines.append(_eval_line("sm", f"{t} ∈ o", f'"SM:{t}"'))
     for t in pm_tids:
-        lines.append(_eval_line("pm", f"o = [{t}]", f'"PM:{t}"'))
+        lines.append(_eval_line("pm", f"{t} ∈ o", f'"PM:{t}"'))
     lines.append("end TrainVerify.Denote.GeneratedGoals")
     return "\n".join(lines)
 
