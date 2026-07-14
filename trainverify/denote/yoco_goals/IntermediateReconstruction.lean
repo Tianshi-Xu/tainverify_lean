@@ -399,6 +399,108 @@ theorem recon_intermediateGoal_4689 (initSM initPM : Store)
     rfl
   exact wrap_1tp initSM initPM intermediateGoal_4689 4689 [4096, 4, 64] rfl rfl rfl rfl rfl rfl hval hshape
 
+/-! ### Standalone value/shape equalities for the per-head Q/K outputs (reused by
+    the 1-tp rotary embedding reconstruction below). -/
+
+/-- `sm 4685 = pm 4685` (per-head Q projection). -/
+theorem veq_4685 (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    denoteGraph sm initSM 4685 = denoteGraph pm initPM 4685 := by
+  have hsmMref : denoteGraph sm initSM 7392 = denoteGraph sm initSM 4683 := by
+    rw [sm_val initSM 4 7392 (by native_decide) (by native_decide)]
+    rw [show sm.nodes[4]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_multiref", ins := [4683], outs := [7392, 7396, 7400], params := [3] }
+        from by native_decide]
+    rw [applyNode_fw_multiref3_first_out', sm_prefix_eq initSM 4 4683 (by native_decide)]
+  have hpmMref : denoteGraph pm initPM 14632 = denoteGraph pm initPM 4683 := by
+    rw [pm_val initPM 34 14632 (by native_decide) (by native_decide)]
+    rw [show pm.nodes[34]'(by native_decide)
+        = { rank := 1, op := "OpName.FW_multiref", ins := [4683], outs := [14632, 14636, 14640], params := [3] }
+        from by native_decide]
+    rw [applyNode_fw_multiref3_first_out', pm_prefix_eq initPM 34 4683 (by native_decide)]
+  exact veq_perhead initSM initPM hSM hPM hInit 4685 4684 7392 14632 5 38
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    hsmMref hpmMref initGoal_4684 (by native_decide) rfl rfl rfl rfl
+
+/-- `(sm 4685).shape = [4096, 16, 64]`. -/
+theorem shape_4685 (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    (denoteGraph sm initSM 4685).shape = [4096, 16, 64] := by
+  have hsmMref : denoteGraph sm initSM 7392 = denoteGraph sm initSM 4683 := by
+    rw [sm_val initSM 4 7392 (by native_decide) (by native_decide)]
+    rw [show sm.nodes[4]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_multiref", ins := [4683], outs := [7392, 7396, 7400], params := [3] }
+        from by native_decide]
+    rw [applyNode_fw_multiref3_first_out', sm_prefix_eq initSM 4 4683 (by native_decide)]
+  have hsm : denoteGraph sm initSM 4685
+      = fw_per_head_linear (denoteGraph sm initSM 4683) (denoteGraph sm initSM 4684) := by
+    rw [sm_val initSM 5 4685 (by native_decide) (by native_decide)]
+    rw [show sm.nodes[5]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_per_head_mix_precision_linear", ins := [7392, 4684], outs := [4685] }
+        from by native_decide]
+    rw [applyNode_fw_per_head_mix_precision_linear_out,
+        sm_prefix_eq initSM 5 7392 (by native_decide),
+        sm_prefix_eq initSM 5 4684 (by native_decide), hsmMref]
+  rw [hsm, fw_per_head_linear_shape _ _ 16 64 1024 [4096]
+        (by rw [shape_4683 initSM initPM hSM hPM hInit]; rfl)
+        (shape_weight initSM initPM hInit initGoal_4684 (by native_decide) 4684 [16,64,1024] rfl rfl)]
+  rfl
+
+/-- `sm 4687 = pm 4687` (per-head K projection). -/
+theorem veq_4687 (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    denoteGraph sm initSM 4687 = denoteGraph pm initPM 4687 := by
+  have hsmMref : denoteGraph sm initSM 7396 = denoteGraph sm initSM 4683 := by
+    rw [sm_val initSM 4 7396 (by native_decide) (by native_decide)]
+    rw [show sm.nodes[4]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_multiref", ins := [4683], outs := [7392, 7396, 7400], params := [3] }
+        from by native_decide]
+    rw [applyNode_fw_multiref3_second_out' _ _ _ _ 7392 7396 7400 (by decide),
+        sm_prefix_eq initSM 4 4683 (by native_decide)]
+  have hpmMref : denoteGraph pm initPM 14636 = denoteGraph pm initPM 4683 := by
+    rw [pm_val initPM 34 14636 (by native_decide) (by native_decide)]
+    rw [show pm.nodes[34]'(by native_decide)
+        = { rank := 1, op := "OpName.FW_multiref", ins := [4683], outs := [14632, 14636, 14640], params := [3] }
+        from by native_decide]
+    rw [applyNode_fw_multiref3_second_out' _ _ _ _ 14632 14636 14640 (by decide),
+        pm_prefix_eq initPM 34 4683 (by native_decide)]
+  exact veq_perhead initSM initPM hSM hPM hInit 4687 4686 7396 14636 6 39
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    hsmMref hpmMref initGoal_4686 (by native_decide) rfl rfl rfl rfl
+
+/-- `(sm 4687).shape = [4096, 4, 64]`. -/
+theorem shape_4687 (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    (denoteGraph sm initSM 4687).shape = [4096, 4, 64] := by
+  have hsmMref : denoteGraph sm initSM 7396 = denoteGraph sm initSM 4683 := by
+    rw [sm_val initSM 4 7396 (by native_decide) (by native_decide)]
+    rw [show sm.nodes[4]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_multiref", ins := [4683], outs := [7392, 7396, 7400], params := [3] }
+        from by native_decide]
+    rw [applyNode_fw_multiref3_second_out' _ _ _ _ 7392 7396 7400 (by decide),
+        sm_prefix_eq initSM 4 4683 (by native_decide)]
+  have hsm : denoteGraph sm initSM 4687
+      = fw_per_head_linear (denoteGraph sm initSM 4683) (denoteGraph sm initSM 4686) := by
+    rw [sm_val initSM 6 4687 (by native_decide) (by native_decide)]
+    rw [show sm.nodes[6]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_per_head_mix_precision_linear", ins := [7396, 4686], outs := [4687] }
+        from by native_decide]
+    rw [applyNode_fw_per_head_mix_precision_linear_out,
+        sm_prefix_eq initSM 6 7396 (by native_decide),
+        sm_prefix_eq initSM 6 4686 (by native_decide), hsmMref]
+  rw [hsm, fw_per_head_linear_shape _ _ 4 64 1024 [4096]
+        (by rw [shape_4683 initSM initPM hSM hPM hInit]; rfl)
+        (shape_weight initSM initPM hInit initGoal_4686 (by native_decide) 4686 [4,64,1024] rfl rfl)]
+  rfl
+
 
 /-! ### Replicated multiref-copy goals (FW_multiref with `replicated := true`)
 
@@ -613,6 +715,207 @@ theorem recon_intermediateGoal_7400 (initSM initPM : Store)
   · rw [hpm0, ← hv]; exact hs
   · rw [hpm1, ← hv]; exact hs
 
+/-! ### Rotary embedding cs-cache bridge (Worker #3, 2026-07-14)
+
+    Refutes the "no bridge between SM tid 4691 and PM tid 11853" claim: BOTH
+    graphs share init tid 4691 (`initGoal_4691 ∈ initGoals`), and PM broadcasts
+    that init leaf to tids 11853..11864 via two `FW_multiref` nodes (rank 0 @
+    pm idx 1, rank 1 @ pm idx 14). Hence `pm (11853+k) = pm 4691 = sm 4691`,
+    a value equality provable from the PM graph structure + `hInit`. -/
+
+/-- Any key present in `L` resolves, through a `zip` with a constant
+    `List.replicate` column, to that constant value. -/
+theorem storeSet_zip_replicate_mem (s : Store) (v : Tensor) :
+    ∀ (L : List Tid) (tid : Tid), tid ∈ L →
+      storeSet s (L.zip (List.replicate L.length v)) tid = v := by
+  intro L
+  induction L with
+  | nil => intro tid h; simp at h
+  | cons a rest ih =>
+    intro tid hmem
+    rw [List.length_cons, List.replicate_succ, List.zip_cons_cons]
+    by_cases h : a = tid
+    · subst h
+      show storeSet s ((a, v) :: (rest.zip (List.replicate rest.length v))) a = v
+      unfold storeSet
+      rw [List.find?_cons_of_pos (by simp)]
+    · show storeSet s ((a, v) :: (rest.zip (List.replicate rest.length v))) tid = v
+      have hmem' : tid ∈ rest := by
+        rcases List.mem_cons.mp hmem with h' | h'
+        · exact absurd h'.symm h
+        · exact h'
+      unfold storeSet
+      rw [List.find?_cons_of_neg (by simp [h])]
+      have := ih tid hmem'
+      unfold storeSet at this
+      exact this
+
+/-- `applyNode` for `FW_multiref` (`params = [outs.length]`) at ANY output index
+    present in `outs` returns the (single) input. Generalizes the head-only
+    reductions to the 12-way rotary cs-cache broadcast. -/
+theorem applyNode_fw_multiref_mem_out (g : GraphDecl) (s : Store) (rank : Nat)
+    (xTid : Tid) (outs : List Tid) (tid : Tid) (hmem : tid ∈ outs) :
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid],
+                    outs := outs, params := [outs.length] } tid = s xTid := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_multiref]
+  change storeSet s (outs.zip (List.replicate outs.length (s xTid))) tid = _
+  exact storeSet_zip_replicate_mem s (s xTid) outs tid hmem
+
+/-- PM broadcasts init tid 4691 (rotary cs-cache) to tids 11853..11864 via
+    two `FW_multiref` nodes; the LAST writer is rank-1 pm node idx 14. For every
+    copy index `k < 12`, `pm (11853+k) = pm 4691`. -/
+theorem pm_multiref_11853_broadcast (initPM : Store) (k : Nat) (hk : k < 12) :
+    denoteGraph pm initPM (11853 + k) = denoteGraph pm initPM 4691 := by
+  have hmem : (11853 + k) ∈ ((List.range 12).map (fun r => 11853 + r)) := by
+    rw [List.mem_map]; exact ⟨k, List.mem_range.mpr hk, rfl⟩
+  have hlen : ((List.range 12).map (fun r => 11853 + r)).length = 12 := by
+    rw [List.length_map, List.length_range]
+  have hnowrite : ∀ n ∈ pm.nodes.drop 15, (11853 + k) ∉ n.outs := by
+    intro n hn
+    exact (by native_decide :
+      ∀ n ∈ pm.nodes.drop 15, ∀ t ∈ ((List.range 12).map (fun r => 11853 + r)), t ∉ n.outs)
+      n hn (11853 + k) hmem
+  rw [pm_val initPM 14 (11853 + k) (by native_decide) hnowrite]
+  rw [show pm.nodes[14]'(by native_decide)
+      = { rank := 1, op := "OpName.FW_multiref", ins := [4691],
+          outs := ((List.range 12).map (fun r => 11853 + r)), params := [12] }
+      from by native_decide]
+  rw [show ([12] : List Nat) = [((List.range 12).map (fun r => 11853 + r)).length] from by rw [hlen]]
+  rw [applyNode_fw_multiref_mem_out _ _ _ _ _ _ hmem,
+      pm_prefix_eq initPM 14 4691 (by native_decide)]
+
+/-- Rotary cs-cache agreement: `sm 4691 = pm cs` where `cs = 11853 + k` is the
+    `k`-th PM broadcast copy. The `sm 4691 = pm 4691` step comes from `hInit`
+    (`initGoal_4691 ∈ initGoals`), the broadcast step from the PM graph. -/
+theorem sm_pm_rotary_cache_agree (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (cs k : Nat) (hk : k < 12) (hcs : cs = 11853 + k) :
+    denoteGraph sm initSM 4691 = denoteGraph pm initPM cs := by
+  subst hcs
+  rw [pm_multiref_11853_broadcast initPM k hk]
+  exact recon_weight initSM initPM hInit initGoal_4691 (by native_decide) 4691 rfl rfl rfl rfl
+
+/-- `sm 4692 = pm 4692` (first rotary output, `.1` = Q'). Both sides apply
+    `fw_rotary_embedding` to identical inputs except the cs-cache (SM 4691 vs
+    PM 11853), which agree via `sm_pm_rotary_cache_agree`. -/
+theorem veq_4692 (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    denoteGraph sm initSM 4692 = denoteGraph pm initPM 4692 := by
+  have hsm : denoteGraph sm initSM 4692
+      = (fw_rotary_embedding (denoteGraph sm initSM 4691) (denoteGraph sm initSM 4690)
+          (denoteGraph sm initSM 4685) (denoteGraph sm initSM 4687) 16 4).1 := by
+    rw [sm_val initSM 8 4692 (by native_decide) (by native_decide)]
+    rw [show sm.nodes[8]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_rotary_embedding", ins := [4691, 4690, 4685, 4687], outs := [4692, 4693], params := [16, 4] }
+        from by native_decide]
+    rw [applyNode_fw_rotary_embedding_fst_out,
+        sm_prefix_eq initSM 8 4691 (by native_decide),
+        sm_prefix_eq initSM 8 4690 (by native_decide),
+        sm_prefix_eq initSM 8 4685 (by native_decide),
+        sm_prefix_eq initSM 8 4687 (by native_decide)]
+  have hpm : denoteGraph pm initPM 4692
+      = (fw_rotary_embedding (denoteGraph pm initPM 11853) (denoteGraph pm initPM 4690)
+          (denoteGraph pm initPM 4685) (denoteGraph pm initPM 4687) 16 4).1 := by
+    rw [pm_val initPM 42 4692 (by native_decide) (by native_decide)]
+    rw [show pm.nodes[42]'(by native_decide)
+        = { rank := 1, op := "OpName.FW_rotary_embedding", ins := [11853, 4690, 4685, 4687], outs := [4692, 4693], params := [16, 4] }
+        from by native_decide]
+    rw [applyNode_fw_rotary_embedding_fst_out,
+        pm_prefix_eq initPM 42 11853 (by native_decide),
+        pm_prefix_eq initPM 42 4690 (by native_decide),
+        pm_prefix_eq initPM 42 4685 (by native_decide),
+        pm_prefix_eq initPM 42 4687 (by native_decide)]
+  rw [hsm, hpm,
+      sm_pm_rotary_cache_agree initSM initPM hInit 11853 0 (by norm_num) rfl,
+      recon_weight initSM initPM hInit initGoal_4690 (by native_decide) 4690 rfl rfl rfl rfl,
+      veq_4685 initSM initPM hSM hPM hInit,
+      veq_4687 initSM initPM hSM hPM hInit]
+
+/-- `sm 4693 = pm 4693` (second rotary output, `.2` = K'). -/
+theorem veq_4693 (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    denoteGraph sm initSM 4693 = denoteGraph pm initPM 4693 := by
+  have hsm : denoteGraph sm initSM 4693
+      = (fw_rotary_embedding (denoteGraph sm initSM 4691) (denoteGraph sm initSM 4690)
+          (denoteGraph sm initSM 4685) (denoteGraph sm initSM 4687) 16 4).2 := by
+    rw [sm_val initSM 8 4693 (by native_decide) (by native_decide)]
+    rw [show sm.nodes[8]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_rotary_embedding", ins := [4691, 4690, 4685, 4687], outs := [4692, 4693], params := [16, 4] }
+        from by native_decide]
+    rw [applyNode_fw_rotary_embedding_snd_out _ _ _ _ _ 4691 4690 4685 4687 4692 4693 (by decide),
+        sm_prefix_eq initSM 8 4691 (by native_decide),
+        sm_prefix_eq initSM 8 4690 (by native_decide),
+        sm_prefix_eq initSM 8 4685 (by native_decide),
+        sm_prefix_eq initSM 8 4687 (by native_decide)]
+  have hpm : denoteGraph pm initPM 4693
+      = (fw_rotary_embedding (denoteGraph pm initPM 11853) (denoteGraph pm initPM 4690)
+          (denoteGraph pm initPM 4685) (denoteGraph pm initPM 4687) 16 4).2 := by
+    rw [pm_val initPM 42 4693 (by native_decide) (by native_decide)]
+    rw [show pm.nodes[42]'(by native_decide)
+        = { rank := 1, op := "OpName.FW_rotary_embedding", ins := [11853, 4690, 4685, 4687], outs := [4692, 4693], params := [16, 4] }
+        from by native_decide]
+    rw [applyNode_fw_rotary_embedding_snd_out _ _ _ _ _ 11853 4690 4685 4687 4692 4693 (by decide),
+        pm_prefix_eq initPM 42 11853 (by native_decide),
+        pm_prefix_eq initPM 42 4690 (by native_decide),
+        pm_prefix_eq initPM 42 4685 (by native_decide),
+        pm_prefix_eq initPM 42 4687 (by native_decide)]
+  rw [hsm, hpm,
+      sm_pm_rotary_cache_agree initSM initPM hInit 11853 0 (by norm_num) rfl,
+      recon_weight initSM initPM hInit initGoal_4690 (by native_decide) 4690 rfl rfl rfl rfl,
+      veq_4685 initSM initPM hSM hPM hInit,
+      veq_4687 initSM initPM hSM hPM hInit]
+
+/-- `intermediateGoal_4692` (FW_rotary_embedding, 1-tp Q' — cs-cache bridge). -/
+theorem recon_intermediateGoal_4692 (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4692
+      (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hshape : (denoteGraph sm initSM 4692).shape = [4096, 16, 64] := by
+    have hsm : denoteGraph sm initSM 4692
+        = (fw_rotary_embedding (denoteGraph sm initSM 4691) (denoteGraph sm initSM 4690)
+            (denoteGraph sm initSM 4685) (denoteGraph sm initSM 4687) 16 4).1 := by
+      rw [sm_val initSM 8 4692 (by native_decide) (by native_decide)]
+      rw [show sm.nodes[8]'(by native_decide)
+          = { rank := 0, op := "OpName.FW_rotary_embedding", ins := [4691, 4690, 4685, 4687], outs := [4692, 4693], params := [16, 4] }
+          from by native_decide]
+      rw [applyNode_fw_rotary_embedding_fst_out,
+          sm_prefix_eq initSM 8 4691 (by native_decide),
+          sm_prefix_eq initSM 8 4690 (by native_decide),
+          sm_prefix_eq initSM 8 4685 (by native_decide),
+          sm_prefix_eq initSM 8 4687 (by native_decide)]
+    rw [hsm, fw_rotary_embedding_fst_shape]
+    exact shape_4685 initSM initPM hSM hPM hInit
+  exact wrap_1tp initSM initPM intermediateGoal_4692 4692 [4096, 16, 64] rfl rfl rfl rfl rfl rfl
+    (veq_4692 initSM initPM hSM hPM hInit) hshape
+
+/-- `intermediateGoal_4693` (FW_rotary_embedding, 1-tp K' — cs-cache bridge). -/
+theorem recon_intermediateGoal_4693 (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4693
+      (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hshape : (denoteGraph sm initSM 4693).shape = [4096, 4, 64] := by
+    have hsm : denoteGraph sm initSM 4693
+        = (fw_rotary_embedding (denoteGraph sm initSM 4691) (denoteGraph sm initSM 4690)
+            (denoteGraph sm initSM 4685) (denoteGraph sm initSM 4687) 16 4).2 := by
+      rw [sm_val initSM 8 4693 (by native_decide) (by native_decide)]
+      rw [show sm.nodes[8]'(by native_decide)
+          = { rank := 0, op := "OpName.FW_rotary_embedding", ins := [4691, 4690, 4685, 4687], outs := [4692, 4693], params := [16, 4] }
+          from by native_decide]
+      rw [applyNode_fw_rotary_embedding_snd_out _ _ _ _ _ 4691 4690 4685 4687 4692 4693 (by decide),
+          sm_prefix_eq initSM 8 4691 (by native_decide),
+          sm_prefix_eq initSM 8 4690 (by native_decide),
+          sm_prefix_eq initSM 8 4685 (by native_decide),
+          sm_prefix_eq initSM 8 4687 (by native_decide)]
+    rw [hsm, fw_rotary_embedding_snd_shape]
+    exact shape_4687 initSM initPM hSM hPM hInit
+  exact wrap_1tp initSM initPM intermediateGoal_4693 4693 [4096, 4, 64] rfl rfl rfl rfl rfl rfl
+    (veq_4693 initSM initPM hSM hPM hInit) hshape
+
 /-- Full list of all 1151 intermediate reconstruction goals (infrastructure). -/
 def all_intermediateGoals_list : List LineageGoal :=
   [
@@ -767,7 +1070,8 @@ def all_intermediateGoals_proven_list : List LineageGoal :=
   [ intermediateGoal_4681, intermediateGoal_4683, intermediateGoal_4685,
     intermediateGoal_4687, intermediateGoal_4689,
     intermediateGoal_7383, intermediateGoal_7387, intermediateGoal_7392,
-    intermediateGoal_7396, intermediateGoal_7400 ]
+    intermediateGoal_7396, intermediateGoal_7400,
+    intermediateGoal_4692, intermediateGoal_4693 ]
 
 /-- Partial assembly: `InitGoalsHold` for the proven sub-list, joined from the
     per-goal reconstruction lemmas. Kept SEPARATE from the (unproven) ideal
@@ -781,7 +1085,7 @@ theorem all_intermediateGoals_proven_hold
       (denoteGraph sm initSM) (denoteGraph pm initPM) := by
   intro g hg
   simp only [all_intermediateGoals_proven_list, List.mem_cons, List.mem_singleton] at hg
-  rcases hg with h | h | h | h | h | h | h | h | h | h
+  rcases hg with h | h | h | h | h | h | h | h | h | h | h | h
   · rw [h]; exact recon_intermediateGoal_4681 initSM initPM hSM hPM hInit
   · rw [h]; exact recon_intermediateGoal_4683 initSM initPM hSM hPM hInit
   · rw [h]; exact recon_intermediateGoal_4685 initSM initPM hSM hPM hInit
@@ -791,8 +1095,10 @@ theorem all_intermediateGoals_proven_hold
   · rw [h]; exact recon_intermediateGoal_7387 initSM initPM hSM hPM hInit
   · rw [h]; exact recon_intermediateGoal_7392 initSM initPM hSM hPM hInit
   · rw [h]; exact recon_intermediateGoal_7396 initSM initPM hSM hPM hInit
+  · rw [h]; exact recon_intermediateGoal_7400 initSM initPM hSM hPM hInit
+  · rw [h]; exact recon_intermediateGoal_4692 initSM initPM hSM hPM hInit
   · rcases h with h | h
-    · rw [h]; exact recon_intermediateGoal_7400 initSM initPM hSM hPM hInit
+    · rw [h]; exact recon_intermediateGoal_4693 initSM initPM hSM hPM hInit
     · exact absurd h (by simp)
 
 end TrainVerify.Denote.GeneratedPatterns
