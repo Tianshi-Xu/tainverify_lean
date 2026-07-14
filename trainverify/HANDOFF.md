@@ -1,0 +1,97 @@
+# HANDOFF — Scaling YOCO Intermediate Reconstruction to all 1151 goals
+
+This documents the **validated proof recipe** so a follow-up worker can
+mechanically scale from the 5 proven goals to the remaining 1146.
+
+## Where things are
+
+- Deliverable: `denote/yoco_goals/IntermediateReconstruction.lean`
+  (namespace `TrainVerify.Denote.GeneratedPatterns`).
+- Categorizer: `python3 scripts/emit_intermediate_reconstruction.py`
+  (add `--json` for per-goal ts/tps/tpShapes/op data).
+- Axiom audit: `denote/yoco_goals/AuditIR.lean` (edit the `#print axioms`
+  target then `lake build denote.yoco_goals.AuditIR`).
+- Build (ALWAYS `ulimit -n 65535` first):
+  `lake build denote.yoco_goals.IntermediateReconstruction 2>&1 | tail`
+  Cold build ~9 min; incremental this-file-only ~3–12 s.
+
+## The proof recipe (per goal)
+
+Each `intermediateGoal_XXXX` obligation is
+`InitGoalHolds pm.numRanks intermediateGoal_XXXX (denoteGraph sm initSM)
+(denoteGraph pm initPM)`. Discharge it INDEPENDENTLY (no chaining through
+other intermediate lemmas) by re-deriving tid `XXXX` from init leaves on
+both graphs:
+
+1. **Reduce SM side.** `sm_val initSM k T (by native_decide) (by native_decide)`
+   rewrites `denoteGraph sm initSM T` to `applyNode (sm.nodes[k]) (prefix)`,
+   where `k` = index of the SM node writing `T`. Then
+   `rw [show sm.nodes[k]'(_) = {explicit node literal} from by native_decide]`
+   and `rw [applyNode_<op>_out]` to expose the op applied to input tids.
+2. **Resolve inputs.** For each input tid `i`, `rw [sm_prefix_eq initSM k i
+   (by native_decide)]` rewrites `(take k prefix) i` back to
+   `denoteGraph sm initSM i`. **CRITICAL: use the SAME index `k` as `sm_val`**
+   (sm_val yields prefix `take k`; sm_prefix_eq must match `k`, NOT `k+1`).
+3. **Same for PM** with `pm_val` / `pm_prefix_eq`. **PM last-writer rule:**
+   when a tid is written by multiple PM nodes (both ranks), `pm_val` must use
+   the LAST writer's index; its `hdrop` (over `drop (k+1)`) native_decide
+   confirms no later write.
+4. **Recurse to already-proven inputs.** Once both sides reduce to the op
+   applied to input tids, substitute the input goals' `veq_*` lemmas.
+5. **Wrap.** For 1-tp replicated-prefix goals use `wrap_1tp` (handles
+   `reconstructForGoal_of_not_replicated` + `reconstructWithDim_singleton`).
+   For 2-tp sharded goals use the extract_singleton/extract_dual +
+   `_allGather0_commute_2` pattern from `Pattern_1.lean:4275-4797`.
+
+## Node-index discovery (Python)
+
+Node indices come from parsing `denote/GeneratedYOCOMoE.lean` (sm def @14,
+pm def @946). sm has 927 nodes, pm has 1920. For a target tid, find the node
+whose `outs` contains it. Example known indices (layer-0 prefix):
+- sm: 4681@1, 4683@3, 7383(mref)@2, 4685@5, 4687@6, 4689@7, mref3@4.
+- pm: 4680@26(AllReduce), 4681@27,28, 4683@31,32, per_head 4685@35,38 etc.
+
+Extend the categorizer script to emit `(tid, sm_node_idx, pm_last_node_idx,
+op, ins)` so the per-goal boilerplate can be code-generated.
+
+## Category difficulty tiers (attack order)
+
+- **Easiest (value-identity):** FW_float, FW_to — `applyNode_fw_float_out`
+  gives `= s xTid`. Reduce directly to input recon. (73 + 24 goals.)
+- **1-tp replicated ops (done pattern):** FW_rms_norm, FW_per_head_linear,
+  FW_sigmoid, FW_swiglu, FW_mul — reuse `wrap_1tp`; need each op's
+  `applyNode_*_out` + a shape lemma. Follow `recon_intermediateGoal_4683`.
+- **2-tp sharded ops (harder):** FW_view, FW_reshape, FW_add,
+  FW_mix_precision_linear, FW_multiref, FW_topk_routing, FW_all2all_moe_gmm.
+  These need the `_allGather0_commute_2` commute lemmas already in
+  `Pattern_1.lean` (grep `^theorem.*_allGather.*_commute` in yoco_goals/).
+  Copy the extract_dual usage from `prove_goal_1` (`Pattern_1.lean:4165+`).
+- **Bespoke (hardest):** FW_attn_sliding_window (12), FW_attn_zigzag (12,
+  NEW), FW_rotary_embedding (24, needs sm4691↔pm11853 boundary),
+  FW_maybe_shuffle (1), FW_maybe_unshuffle (1 — **audit cp2 fidelity first,
+  AGENTS.md rule 20**).
+
+## Assembly (final step)
+
+Once per-op sub-lemmas `intermediateGoals_FW_XXX_hold : InitGoalsHold ...`
+exist (one per category over its sub-list), join them with
+`InitGoalsHold_append` (`denote/GraphSlicing.lean:76`) into
+`all_intermediateGoals_hold` over `all_intermediateGoals_list`. The list def
+is already present. Then:
+1. Write `Goal_2_CutToFull.lean` (copy `gpt_ly4_regen/Goal5Bridge.lean:108-187`)
+   using `all_intermediateGoals_hold` to close prereqs.
+2. Replace the `prove_goal_2_from_pattern_2` sorry in `Instances.lean`.
+3. Repeat Goal_1, Goal_4. Goal_3 uses only `[goal_5]` — trivial via
+   `goal_5_intermediate`.
+4. Rebuild `Instances.lean` (4 sorries → 0), then `MainTheorem.lean`.
+
+## Gotchas (v4.31)
+
+- `set_option linter.style.{setOption,nativeDecide,longLine} false` needed.
+- Structure-literal node in a theorem BINDER type must be single-line with
+  `(sm.nodes[sk]'hsk)` parenthesized. Inline `(by tac : T)` ascription as an
+  rw arg fails to parse — use an in-scope `have`.
+- After `rw [fw_*_shape ...]`, a trailing `rfl` is needed to reduce
+  `List.reverse`/`++` on concrete shapes (rw's auto-rfl doesn't fire).
+- `simp only [List.mem_cons]` leaves a trailing `∨ g ∈ []`; handle with an
+  extra `rcases h with h | h` + `exact absurd h (by simp)`.
