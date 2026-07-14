@@ -11,10 +11,11 @@ from parser import load_goal_ir, analyze, GoalIR
 from probe import build_probe, DENOTE_DIR
 from emit import trace_input_sources, compute_imports
 import renderer_uni as RU
+from target_config import DENOTE_DIR as _RELDIR, MOD_PREFIX
 
 REPO = os.path.expanduser("~/.openclaw/workspace/tainverify_lean")
 TV   = os.path.join(REPO, "trainverify")
-DENOTE = "denote/gpt_ly4_regen"
+DENOTE = _RELDIR
 
 # parse #eval probe output, capturing ALL writer indices per tid (take max = last writer)
 LINE_RE = re.compile(r'(SM|PM):(\d+)\s+\[(.*?)\]\s*$', re.M)
@@ -122,7 +123,7 @@ def main():
         log(f"  WARNING unresolved inputs: {missing}")
 
     imports = compute_imports(ir.prereqs)
-    imports.append(f"denote.gpt_ly4_regen.Goal_{n}")
+    imports.append(f"{MOD_PREFIX}.Goal_{n}")
     # NOTE (prereq-trim 2026-06-21): we used to ALSO union-in the ORIGINAL bridge's
     # imports for regression robustness. That is now HARMFUL: the renderer body only
     # references `goal_M_intermediate` for M in ir.prereqs (the *trimmed* prereq set),
@@ -138,7 +139,7 @@ def main():
         seen = set(imports)
         for m in orig_imports:
             # skip GoalNBridge imports: those must come from compute_imports(ir.prereqs)
-            if re.match(r"denote\.gpt_ly4_regen\.Goal\d+Bridge$", m):
+            if re.match(rf"{re.escape(MOD_PREFIX)}\.Goal\d+Bridge$", m):
                 continue
             if m not in seen:
                 imports.append(m); seen.add(m)
@@ -147,7 +148,10 @@ def main():
     # which live in BridgeKit; storeShapes_weaken lives in SpikeBridge. Guarantee
     # both are imported no matter which import-building path ran above (handwritten
     # originals predate BridgeKit and don't import it).
-    for kit in ("denote.gpt_ly4_regen.BridgeKit", "denote.gpt_ly4_regen.SpikeBridge"):
+    kits = [f"{MOD_PREFIX}.BridgeKit"]
+    if os.path.exists(os.path.join(TV, DENOTE, "SpikeBridge.lean")):
+        kits.append(f"{MOD_PREFIX}.SpikeBridge")
+    for kit in kits:
         if kit not in imports:
             imports.insert(0, kit)
 
@@ -223,6 +227,11 @@ def main():
         sys.exit(3)
 
     text = RU.render_universal(n, ir, topo, probe, input_sources, ir.prereqs, imports)
+    # Apply BRIDGE_NAMESPACE / EXTRA_OPENS substitutions (from target_config env vars).
+    _ns = os.environ.get("BRIDGE_NAMESPACE", "GeneratedGoals")
+    _extra = os.environ.get("BRIDGE_EXTRA_OPENS", "")
+    _extra_str = (" " + _extra) if _extra else ""
+    text = text.replace("@@BRIDGE_NAMESPACE@@", _ns).replace("@@EXTRA_OPENS@@", _extra_str)
     out_path = args.out or os.path.join(TV, DENOTE, f"Goal{n}Bridge.lean")
     if args.dry_run:
         log(text)

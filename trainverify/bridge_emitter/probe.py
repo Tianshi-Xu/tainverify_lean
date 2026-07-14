@@ -10,8 +10,8 @@ Probes for each tid we need to locate in the full sm/pm graph, returns:
   { "sm": {tid: (node_idx, op, params)}, "pm": {tid: (node_idx, op, params)} }
 """
 import re, os, subprocess, tempfile, json, sys
-
-DENOTE_DIR = "denote/gpt_ly4_regen"   # relative to trainverify/
+sys.path.insert(0, os.path.dirname(__file__))
+from target_config import DENOTE_DIR
 
 PROBE_HEADER = """import {import_mod}
 set_option maxRecDepth 100000

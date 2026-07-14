@@ -41,8 +41,8 @@ set_option linter.style.setOption false
 set_option linter.unnecessarySeqFocus false
 set_option linter.flexible false
 
-namespace TrainVerify.Denote.GeneratedGoals
-open TrainVerify.Denote TrainVerify.Denote.Generated
+namespace TrainVerify.Denote.@@BRIDGE_NAMESPACE@@
+open TrainVerify.Denote TrainVerify.Denote.Generated@@EXTRA_OPENS@@
 
 """
 

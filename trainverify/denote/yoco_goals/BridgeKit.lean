@@ -68,16 +68,41 @@ theorem pm_prefix_eq (initPM : Store) (k : Nat) (tid : Tid)
 -- initGoals 保持：initGoals 条件是输入 tid 上的，SM/PM 都不重写输入，
 -- 所以 init store 上成立 => computed store 上也成立。图通用。
 -- ------------------------------------------------------------------------
--- Note (2026-07-01): YOCO's initGoal_4691.tps includes tid 11853 which IS written
--- by FW_multiref in pm — likely a generator bug where multiref outputs collide
--- with expected init tp. `all_initGoal_tps_not_written` fails as a result.
--- Pattern proofs that don't need this lemma can proceed; if patterns require
--- initGoals_preserved, we need to either fix the generator or provide a
--- narrower lemma that filters out the bad initGoal.
+-- Note (2026-07-14): earlier comment about `initGoal_4691.tps` including tid
+-- 11853 was stale — the emitter has since been fixed. Both
+-- `all_initGoal_ts_not_written` and `all_initGoal_tps_not_written` now pass
+-- via native_decide on the current YOCO generator output.
 
 /-- SM side: no initGoal.ts is written by any sm node. Passes on YOCO. -/
 theorem all_initGoal_ts_not_written :
     ∀ g ∈ initGoals, ∀ n ∈ sm.nodes, g.ts ∉ n.outs := by native_decide
+
+/-- PM side: no initGoal.tp.tid is written by any pm node. -/
+theorem all_initGoal_tps_not_written :
+    ∀ g ∈ initGoals, ∀ tp ∈ g.tps, ∀ n ∈ pm.nodes, tp.tid ∉ n.outs := by native_decide
+
+/-- Key lemma for non-base bridges: initGoals hold on `initStores` ⇒ they hold
+    on the computed stores `denoteGraph sm initSM / denoteGraph pm initPM`,
+    because neither graph rewrites any tid appearing in an initGoal. -/
+theorem initGoals_preserved (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalsHold pm.numRanks initGoals (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  intro g hg
+  have hg0 := hInit g hg
+  have hts : denoteGraph sm initSM g.ts = initSM g.ts := by
+    have hnw : ∀ n ∈ sm.nodes, g.ts ∉ n.outs := all_initGoal_ts_not_written g hg
+    have heq := denoteGraph_tid_eq_of_forall_not_mem_outs sm sm.nodes initSM g.ts hnw
+    simpa using heq
+  have htps : ∀ tp ∈ g.tps, denoteGraph pm initPM tp.tid = initPM tp.tid := by
+    intro tp htp
+    have hnw : ∀ n ∈ pm.nodes, tp.tid ∉ n.outs := all_initGoal_tps_not_written g hg tp htp
+    have heq := denoteGraph_tid_eq_of_forall_not_mem_outs pm pm.nodes initPM tp.tid hnw
+    simpa using heq
+  unfold InitGoalHolds at hg0 ⊢
+  simp only [hts]
+  rw [List.map_congr_left (g := fun p => initPM p.tid)]
+  · exact hg0
+  · intro tp htp; exact htps tp htp
 
 -- ------------------------------------------------------------------------
 -- Prefix-of-prefix reduction: computing on `take K` graph but only needing tid
@@ -106,5 +131,37 @@ theorem pm_val_prefix (initPM : Store) (K k : Nat)
   rw [e1]
   simp only [denoteGraph, hfn, hfn']
   exact congrFun (foldl_take_succ (applyNode pm) g'.nodes initPM k hg'_len) out
+
+-- ------------------------------------------------------------------------
+-- Universal helper lemmas (used by auto-generated bridges).
+-- These match gpt_ly4_regen's SpikeBridge counterparts; kept here so yoco
+-- bridges can rely on BridgeKit alone.
+-- ------------------------------------------------------------------------
+
+/-- `shapeEnvOfList` lookup success ⇒ membership. -/
+theorem mem_of_shapeEnvOfList_eq_some {xs : List (Tid × Shape)} {tid sh}
+    (h : shapeEnvOfList xs tid = some sh) : (tid, sh) ∈ xs := by
+  unfold shapeEnvOfList at h
+  cases hf : xs.find? (fun p => p.1 = tid) with
+  | none => rw [hf] at h; simp at h
+  | some pair =>
+    rw [hf] at h
+    obtain ⟨t, s⟩ := pair
+    simp only [Option.some.injEq] at h
+    subst h
+    have hmem := List.mem_of_find?_eq_some hf
+    have hpred := List.find?_some hf
+    simp only [decide_eq_true_eq] at hpred
+    subst hpred
+    exact hmem
+
+/-- Sub-env weakening for `StoreShapesHold`. -/
+theorem storeShapes_weaken {init : Store} {small big : List (Tid × Shape)}
+    (hsub : ∀ p ∈ small, shapeEnvOfList big p.1 = some p.2)
+    (hbig : StoreShapesHold init (shapeEnvOfList big)) :
+    StoreShapesHold init (shapeEnvOfList small) := by
+  intro tid sh hsh
+  have hmem : (tid, sh) ∈ small := mem_of_shapeEnvOfList_eq_some hsh
+  exact hbig tid sh (hsub (tid, sh) hmem)
 
 end TrainVerify.Denote.GeneratedPatterns

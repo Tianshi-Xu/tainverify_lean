@@ -12,8 +12,16 @@ prints a JSON-ish dump of the parsed IR + topology for goal N.
 import re, sys, json, os
 from dataclasses import dataclass, field, asdict
 from typing import Optional
+sys.path.insert(0, os.path.dirname(__file__))
+from target_config import DENOTE_DIR as _RELDIR, GEN_FILE
 
-DENOTE_DIR = "trainverify/denote/gpt_ly4_regen"
+DENOTE_DIR = "trainverify/" + _RELDIR  # keep backward-compat absolute form
+
+# Allow the generated-data file to live outside DENOTE_DIR (yoco keeps it in denote/,
+# while gpt_ly4 keeps it in denote/gpt_ly4_regen/). BRIDGE_GEN_DIR (optional env var)
+# overrides the directory; default is DENOTE_DIR.
+import os as _os
+GEN_DIR = _os.environ.get("BRIDGE_GEN_DIR", "trainverify/" + _RELDIR)
 
 # ---------- data classes ----------
 @dataclass
@@ -107,7 +115,7 @@ def parse_prereqs(goal_text: str, n: int):
 # ---------- top-level ----------
 def load_goal_ir(n: int, root: str) -> GoalIR:
     goal_path = os.path.join(root, DENOTE_DIR, f"Goal_{n}.lean")
-    gen_path  = os.path.join(root, DENOTE_DIR, "GeneratedData.lean")
+    gen_path  = os.path.join(root, GEN_DIR, GEN_FILE)
     goal_text = open(goal_path).read()
     gen_text  = open(gen_path).read()
 

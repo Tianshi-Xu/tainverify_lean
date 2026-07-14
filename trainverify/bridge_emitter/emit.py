@@ -18,10 +18,11 @@ sys.path.insert(0, os.path.dirname(__file__))
 from parser import load_goal_ir, analyze, GoalIR
 from probe import run_probe
 from renderer import render_family_a, InputSource
+from target_config import DENOTE_DIR as _RELDIR, GEN_FILE, MOD_PREFIX
 
 REPO = os.path.expanduser("~/.openclaw/workspace/tainverify_lean")
 TV   = os.path.join(REPO, "trainverify")
-DENOTE = "denote/gpt_ly4_regen"
+DENOTE = _RELDIR
 
 def trace_input_sources(ir: GoalIR) -> list:
     """For each pm-input tid (in pm_goal_NInitShapes), find its origin.
@@ -33,8 +34,10 @@ def trace_input_sources(ir: GoalIR) -> list:
     Returns list[InputSource] for sm and pm inputs (both).
     """
     sources = []
-    # load all prereq goals' lineage from GeneratedData
-    gen_text = open(os.path.join(TV, DENOTE, "GeneratedData.lean")).read()
+    # load all prereq goals' lineage from generated-data file
+    from parser import GEN_DIR
+    _gd_path = os.path.join(REPO, GEN_DIR, GEN_FILE)
+    gen_text = open(_gd_path).read()
 
     def goal_def(gid):
         m = re.search(rf'def\s+goal_{gid}\b.*?(?=\ndef\s)', gen_text, re.S)
@@ -201,15 +204,18 @@ def compute_imports(prereqs: list) -> list:
     SpikeBridge (storeShapes_weaken / mem_of_shapeEnvOfList weakening gears),
     which every bridge's assembly block needs regardless of prereqs."""
     import os as _os
-    base = ["denote.gpt_ly4_regen.BridgeKit", "denote.gpt_ly4_regen.SpikeBridge"]
+    base = [f"{MOD_PREFIX}.BridgeKit"]
+    # SpikeBridge is a gpt_ly4-only helper file; include only if it exists.
+    if _os.path.exists(_os.path.join(TV, DENOTE, "SpikeBridge.lean")):
+        base.append(f"{MOD_PREFIX}.SpikeBridge")
     if not prereqs:
         return list(base)
-    _denote = _os.path.join(_os.path.dirname(__file__), "..", "denote", "gpt_ly4_regen")
+    _denote = _os.path.join(_os.path.dirname(__file__), "..", DENOTE)
     imports = list(base)
     for p in sorted(set(prereqs)):
         bf = _os.path.join(_denote, f"Goal{p}Bridge.lean")
         if _os.path.exists(bf):
-            imports.append(f"denote.gpt_ly4_regen.Goal{p}Bridge")
+            imports.append(f"{MOD_PREFIX}.Goal{p}Bridge")
     return imports
 
 def main():
@@ -253,14 +259,14 @@ def main():
               f" shape={s.shape}")
 
     imports = compute_imports(ir.prereqs)
-    imports.append(f"denote.gpt_ly4_regen.Goal_{n}")
+    imports.append(f"{MOD_PREFIX}.Goal_{n}")
     print(f"[5/7] Imports: {imports}")
 
     print(f"[6/7] Probing node indices...")
     sm_tids = [nd.outs[0] for nd in ir.sm_nodes]
     pm_tids = [nd.outs[0] for nd in ir.pm_nodes]
     # use highest existing bridge as probe import (so pm/sm are defined)
-    probe_import = imports[0] if imports[0].endswith("Bridge") else f"denote.gpt_ly4_regen.GeneratedData"
+    probe_import = imports[0] if imports[0].endswith("Bridge") else f"{MOD_PREFIX}.{os.path.splitext(GEN_FILE)[0]}"
     probe_res = run_probe(REPO, probe_import, sm_tids, pm_tids, timeout=600)
     if probe_res.get("_returncode", 1) != 0 or not probe_res["sm"] or not probe_res["pm"]:
         print(f"  PROBE FAILED rc={probe_res.get('_returncode')}")
