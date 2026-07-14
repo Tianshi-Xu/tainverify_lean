@@ -261,3 +261,27 @@ SM and PM compute the identical op at rank 0).
 
 See `HANDOFF.md` for the validated proof recipe to scale the remaining
 1146 goals.
+
+## WORKER #5 (2026-07-14) — Rotary 2-tp adversarial hypothesis inventory
+
+Closed the LOWEST-tid rotary 2-tp goal `recon_intermediateGoal_4800` (+ `_4801`)
+as canonically-named, fully-threaded, zero-sorry theorems (kernel triple +
+project-baseline native_decide axioms; audited in `AuditIR.lean`). These wrap
+worker #4's `recon_rotary_2tp_fst/snd` gears with the EXACT minimal hypothesis set.
+
+**Adversarial finding — the threaded hypotheses split into two kinds:**
+- `hq` (4794) / `hk` (4796): direct op `FW_per_head_mix_precision_linear`, each
+  HAS an `intermediateGoal_*`, but transitively gated on `FW_all2all_moe_gmm` +
+  `FW_attn_sliding_window` (MoE/attention region, no template). **Irreducible /
+  attention-shaped.**
+- `hpos` (4799): SM position tensor is an INIT LEAF (`initGoal_4799 ∈ initGoals`),
+  PM-sharded by 2× `ChunkPrim`. NO `intermediateGoal_4799`. **Structural, not
+  attention-gated** (reducible-in-principle from `hInit`; left threaded due to the
+  `[4096]→[2048,1]` ChunkPrim-reshape roundtrip lacking a ready lemma).
+
+Per-goal threaded count = **9** (3 value-eqs + 6 shard shapes). The irreducible
+attention core is **2 value-eqs per layer** → 20 distinct facts across all 20
+rotary 2-tp goals. Full breakdown + stmt-level-lift assessment:
+`~/HYPOTHESIS_INVENTORY.md`. **Recommendation:** lift/prove at the
+per-head-linear + attention/MoE boundary (unblocks rotary AND all downstream
+2-tp ops), NOT at the rotary boundary.
