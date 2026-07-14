@@ -6,3 +6,5 @@ open TrainVerify.Denote.GeneratedPatterns
 #print axioms wrap_2tp_allGather
 #print axioms rotary_fst_gather_commute
 #print axioms rotary_snd_gather_commute
+#print axioms recon_rotary_2tp_fst
+#print axioms recon_rotary_2tp_snd

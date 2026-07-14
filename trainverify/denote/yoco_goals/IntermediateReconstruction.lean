@@ -1005,6 +1005,111 @@ theorem rotary_snd_gather_commute
         L nh kh d hL hnh hkh hd hq0 hq1 hk0 hk1 hp0 hp1]
   rfl
 
+/-! ### Fully parametrized 2-tp rotary reconstruction gears
+
+    These abstract over the concrete tids/node-indices: to reconstruct any one of
+    the 20 rotary 2-tp goals (`4800`/`4801` … `5286`/`5287`) it suffices to supply
+    (a) the SM/PM node reductions (mechanical `native_decide` lemmas per layer,
+    cf. `sm_rotary_4800_node` etc.), (b) the cs-cache agreement (from
+    `sm_pm_rotary_cache_agree`), (c) the three sharded-input reconstructions
+    (positions / query / key — the attention/MoE-region 2-tp goals), and (d) the
+    six PM shard shapes. This IS the recipe for the ~910 remaining 2-tp goals in
+    general (swap the rotary commute for the op-specific `_allGather0_commute_2`). -/
+
+/-- Parametrized 2-tp rotary Q' reconstruction gear. -/
+theorem recon_rotary_2tp_fst (initSM initPM : Store) (g : LineageGoal)
+    (T p0 p1 csS posS qS kS csP pos0 q0 k0 pos1 q1 k1 : Tid) (L nh kh d : Nat)
+    (hL : 0 < L) (hnh : 0 < nh) (hkh : 0 < kh) (hd : 0 < d)
+    (htp : g.tps = [{rank := 0, tid := p0}, {rank := 1, tid := p1}])
+    (hgd : g.gatherDim = 0) (hrep : g.replicated = false) (hts : g.ts = T)
+    (htsShape : g.tsShape = [L * 2, nh, d]) (htpShapes : g.tpShapes = [[L, nh, d], [L, nh, d]])
+    (hne : ([L, nh, d] : Shape) ≠ [1])
+    (hsmNode : denoteGraph sm initSM T
+        = (fw_rotary_embedding (denoteGraph sm initSM csS) (denoteGraph sm initSM posS)
+            (denoteGraph sm initSM qS) (denoteGraph sm initSM kS) nh kh).1)
+    (hpm0 : denoteGraph pm initPM p0
+        = (fw_rotary_embedding (denoteGraph pm initPM csP) (denoteGraph pm initPM pos0)
+            (denoteGraph pm initPM q0) (denoteGraph pm initPM k0) nh kh).1)
+    (hpm1 : denoteGraph pm initPM p1
+        = (fw_rotary_embedding (denoteGraph pm initPM csP) (denoteGraph pm initPM pos1)
+            (denoteGraph pm initPM q1) (denoteGraph pm initPM k1) nh kh).1)
+    (hcs : denoteGraph sm initSM csS = denoteGraph pm initPM csP)
+    (hpos : denoteGraph sm initSM posS
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM pos0, denoteGraph pm initPM pos1])
+    (hq : denoteGraph sm initSM qS
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM q0, denoteGraph pm initPM q1])
+    (hk : denoteGraph sm initSM kS
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM k0, denoteGraph pm initPM k1])
+    (hq0 : (denoteGraph pm initPM q0).shape = [L, nh, d])
+    (hq1 : (denoteGraph pm initPM q1).shape = [L, nh, d])
+    (hk0 : (denoteGraph pm initPM k0).shape = [L, kh, d])
+    (hk1 : (denoteGraph pm initPM k1).shape = [L, kh, d])
+    (hp0 : (denoteGraph pm initPM pos0).shape = [L, 1])
+    (hp1 : (denoteGraph pm initPM pos1).shape = [L, 1]) :
+    InitGoalHolds pm.numRanks g (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hval : denoteGraph sm initSM T
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph pm initPM p0, denoteGraph pm initPM p1] := by
+    rw [hsmNode, hpm0, hpm1]
+    exact rotary_fst_gather_commute _ _ _ _ _ _ _ _ _ _ _ L nh kh d
+      hL hnh hkh hd hq0 hq1 hk0 hk1 hp0 hp1 hcs hpos hq hk
+  have hshape : (denoteGraph sm initSM T).shape = [L * 2, nh, d] := by
+    rw [hsmNode, fw_rotary_embedding_fst_shape, hq,
+        allGatherPrimDimN_shape 0 2 _ [L, nh, d]
+          (by simp only [List.head?_cons, Option.map_some, Option.getD_some]; exact hq0)]
+    rfl
+  refine wrap_2tp_allGather initSM initPM g T p0 p1 [L * 2, nh, d] [L, nh, d]
+    htp hgd hrep hts htsShape htpShapes hne hval hshape ?_ ?_
+  · rw [hpm0, fw_rotary_embedding_fst_shape]; exact hq0
+  · rw [hpm1, fw_rotary_embedding_fst_shape]; exact hq1
+
+/-- Parametrized 2-tp rotary K' reconstruction gear (the `.2` companion). -/
+theorem recon_rotary_2tp_snd (initSM initPM : Store) (g : LineageGoal)
+    (T p0 p1 csS posS qS kS csP pos0 q0 k0 pos1 q1 k1 : Tid) (L nh kh d : Nat)
+    (hL : 0 < L) (hnh : 0 < nh) (hkh : 0 < kh) (hd : 0 < d)
+    (htp : g.tps = [{rank := 0, tid := p0}, {rank := 1, tid := p1}])
+    (hgd : g.gatherDim = 0) (hrep : g.replicated = false) (hts : g.ts = T)
+    (htsShape : g.tsShape = [L * 2, kh, d]) (htpShapes : g.tpShapes = [[L, kh, d], [L, kh, d]])
+    (hne : ([L, kh, d] : Shape) ≠ [1])
+    (hsmNode : denoteGraph sm initSM T
+        = (fw_rotary_embedding (denoteGraph sm initSM csS) (denoteGraph sm initSM posS)
+            (denoteGraph sm initSM qS) (denoteGraph sm initSM kS) nh kh).2)
+    (hpm0 : denoteGraph pm initPM p0
+        = (fw_rotary_embedding (denoteGraph pm initPM csP) (denoteGraph pm initPM pos0)
+            (denoteGraph pm initPM q0) (denoteGraph pm initPM k0) nh kh).2)
+    (hpm1 : denoteGraph pm initPM p1
+        = (fw_rotary_embedding (denoteGraph pm initPM csP) (denoteGraph pm initPM pos1)
+            (denoteGraph pm initPM q1) (denoteGraph pm initPM k1) nh kh).2)
+    (hcs : denoteGraph sm initSM csS = denoteGraph pm initPM csP)
+    (hpos : denoteGraph sm initSM posS
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM pos0, denoteGraph pm initPM pos1])
+    (hq : denoteGraph sm initSM qS
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM q0, denoteGraph pm initPM q1])
+    (hk : denoteGraph sm initSM kS
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM k0, denoteGraph pm initPM k1])
+    (hq0 : (denoteGraph pm initPM q0).shape = [L, nh, d])
+    (hq1 : (denoteGraph pm initPM q1).shape = [L, nh, d])
+    (hk0 : (denoteGraph pm initPM k0).shape = [L, kh, d])
+    (hk1 : (denoteGraph pm initPM k1).shape = [L, kh, d])
+    (hp0 : (denoteGraph pm initPM pos0).shape = [L, 1])
+    (hp1 : (denoteGraph pm initPM pos1).shape = [L, 1]) :
+    InitGoalHolds pm.numRanks g (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hval : denoteGraph sm initSM T
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph pm initPM p0, denoteGraph pm initPM p1] := by
+    rw [hsmNode, hpm0, hpm1]
+    exact rotary_snd_gather_commute _ _ _ _ _ _ _ _ _ _ _ L nh kh d
+      hL hnh hkh hd hq0 hq1 hk0 hk1 hp0 hp1 hcs hpos hq hk
+  have hshape : (denoteGraph sm initSM T).shape = [L * 2, kh, d] := by
+    rw [hsmNode, fw_rotary_embedding_snd_shape, hk,
+        allGatherPrimDimN_shape 0 2 _ [L, kh, d]
+          (by simp only [List.head?_cons, Option.map_some, Option.getD_some]; exact hk0)]
+    rfl
+  refine wrap_2tp_allGather initSM initPM g T p0 p1 [L * 2, kh, d] [L, kh, d]
+    htp hgd hrep hts htsShape htpShapes hne hval hshape ?_ ?_
+  · rw [hpm0, fw_rotary_embedding_snd_shape]; exact hk0
+  · rw [hpm1, fw_rotary_embedding_snd_shape]; exact hk1
+
 /-- SM node reduction for the layer-2 rotary Q' output (tid 4800, sm node 86). -/
 theorem sm_rotary_4800_node (initSM : Store) :
     denoteGraph sm initSM 4800
@@ -1118,22 +1223,12 @@ theorem recon_intermediateGoal_4800_of_inputs (initSM initPM : Store)
       (denoteGraph sm initSM) (denoteGraph pm initPM) := by
   have hcs : denoteGraph sm initSM 4691 = denoteGraph pm initPM 11855 :=
     sm_pm_rotary_cache_agree initSM initPM hInit 11855 2 (by norm_num) (by norm_num)
-  have hval : denoteGraph sm initSM 4800
-      = allGatherPrimDimN 0 pm.numRanks 0
-          [denoteGraph pm initPM 7805, denoteGraph pm initPM 7806] := by
-    rw [sm_rotary_4800_node, pm_rotary_7805_node, pm_rotary_7806_node]
-    exact rotary_fst_gather_commute _ _ _ _ _ _ _ _ _ _ _ 2048 16 4 64
-      (by norm_num) (by norm_num) (by norm_num) (by norm_num)
-      hq0 hq1 hk0 hk1 hp0 hp1 hcs hpos hq hk
-  have hshape : (denoteGraph sm initSM 4800).shape = [4096, 16, 64] := by
-    rw [sm_rotary_4800_node, fw_rotary_embedding_fst_shape, hq,
-        allGatherPrimDimN_shape 0 2 _ [2048, 16, 64]
-          (by simp only [List.head?_cons, Option.map_some, Option.getD_some]; exact hq0)]
-    rfl
-  refine wrap_2tp_allGather initSM initPM intermediateGoal_4800 4800 7805 7806
-    [4096, 16, 64] [2048, 16, 64] rfl rfl rfl rfl rfl rfl (by decide) hval hshape ?_ ?_
-  · rw [pm_rotary_7805_node, fw_rotary_embedding_fst_shape]; exact hq0
-  · rw [pm_rotary_7806_node, fw_rotary_embedding_fst_shape]; exact hq1
+  exact recon_rotary_2tp_fst initSM initPM intermediateGoal_4800 4800 7805 7806
+    4691 4799 4794 4796 11855 7803 7771 7783 7804 7772 7784 2048 16 4 64
+    (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+    rfl rfl rfl rfl rfl rfl (by decide)
+    (sm_rotary_4800_node initSM) (pm_rotary_7805_node initPM) (pm_rotary_7806_node initPM)
+    hcs hpos hq hk hq0 hq1 hk0 hk1 hp0 hp1
 
 /-- **2-tp rotary bridgehead — K' (tid 4801).** The `.2` companion of
     `recon_intermediateGoal_4800_of_inputs`. -/
@@ -1155,22 +1250,12 @@ theorem recon_intermediateGoal_4801_of_inputs (initSM initPM : Store)
       (denoteGraph sm initSM) (denoteGraph pm initPM) := by
   have hcs : denoteGraph sm initSM 4691 = denoteGraph pm initPM 11855 :=
     sm_pm_rotary_cache_agree initSM initPM hInit 11855 2 (by norm_num) (by norm_num)
-  have hval : denoteGraph sm initSM 4801
-      = allGatherPrimDimN 0 pm.numRanks 0
-          [denoteGraph pm initPM 7807, denoteGraph pm initPM 7808] := by
-    rw [sm_rotary_4801_node, pm_rotary_7807_node, pm_rotary_7808_node]
-    exact rotary_snd_gather_commute _ _ _ _ _ _ _ _ _ _ _ 2048 16 4 64
-      (by norm_num) (by norm_num) (by norm_num) (by norm_num)
-      hq0 hq1 hk0 hk1 hp0 hp1 hcs hpos hq hk
-  have hshape : (denoteGraph sm initSM 4801).shape = [4096, 4, 64] := by
-    rw [sm_rotary_4801_node, fw_rotary_embedding_snd_shape, hk,
-        allGatherPrimDimN_shape 0 2 _ [2048, 4, 64]
-          (by simp only [List.head?_cons, Option.map_some, Option.getD_some]; exact hk0)]
-    rfl
-  refine wrap_2tp_allGather initSM initPM intermediateGoal_4801 4801 7807 7808
-    [4096, 4, 64] [2048, 4, 64] rfl rfl rfl rfl rfl rfl (by decide) hval hshape ?_ ?_
-  · rw [pm_rotary_7807_node, fw_rotary_embedding_snd_shape]; exact hk0
-  · rw [pm_rotary_7808_node, fw_rotary_embedding_snd_shape]; exact hk1
+  exact recon_rotary_2tp_snd initSM initPM intermediateGoal_4801 4801 7807 7808
+    4691 4799 4794 4796 11855 7803 7771 7783 7804 7772 7784 2048 16 4 64
+    (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+    rfl rfl rfl rfl rfl rfl (by decide)
+    (sm_rotary_4801_node initSM) (pm_rotary_7807_node initPM) (pm_rotary_7808_node initPM)
+    hcs hpos hq hk hq0 hq1 hk0 hk1 hp0 hp1
 
 /-- Full list of all 1151 intermediate reconstruction goals (infrastructure). -/
 def all_intermediateGoals_list : List LineageGoal :=
