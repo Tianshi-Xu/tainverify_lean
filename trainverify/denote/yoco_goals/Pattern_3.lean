@@ -2975,13 +2975,16 @@ theorem router_commute_of_nl_eq (NL_SM NL_PM : Tensor)
 theorem singleton_init_eq (initSM initPM : Store)
     (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
     (g : LineageGoal) (hmem : g ∈ initGoals)
-    (hshape : g.tps = [{ rank := 0, tid := g.ts }]) :
+    (hshape : g.tps = [{ rank := 0, tid := g.ts }])
+    (hrep : g.replicated = false := by rfl) :
     initSM g.ts = initPM g.ts := by
   have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
     fun g' hg' => hInit g' (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg')
   have hgh := hII g hmem
   unfold InitGoalHolds at hgh
   obtain ⟨_, _, hval⟩ := hgh
+  rw [reconstructForGoal_of_not_replicated g pm_goal_3.numRanks
+        (g.tps.map (fun p => initPM p.tid)) hrep] at hval
   rw [hshape] at hval
   simpa [List.map, reconstructWithDim_singleton] using hval
 
@@ -4387,7 +4390,12 @@ theorem sm_pm_qproj_L0_commute
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4682 : initSM 4682 = initPM 4682 := hb initGoal_4682 (by decide) rfl
   have h4684 : initSM 4684 = initPM 4684 := hb initGoal_4684 (by decide) rfl
   have h4686 : initSM 4686 = initPM 4686 := hb initGoal_4686 (by decide) rfl
@@ -4597,7 +4605,12 @@ theorem sm_pm_kproj_L0_commute
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4682 : initSM 4682 = initPM 4682 := hb initGoal_4682 (by decide) rfl
   have h4684 : initSM 4684 = initPM 4684 := hb initGoal_4684 (by decide) rfl
   have h4686 : initSM 4686 = initPM 4686 := hb initGoal_4686 (by decide) rfl
@@ -4637,7 +4650,12 @@ theorem sm_pm_vproj_L0_commute
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4682 : initSM 4682 = initPM 4682 := hb initGoal_4682 (by decide) rfl
   have h4688 : initSM 4688 = initPM 4688 := hb initGoal_4688 (by decide) rfl
   have h4680 : initSM 4680 = initPM 4680 := by
@@ -4720,7 +4738,12 @@ theorem sm_pm_attention_L0_commute
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4682 : initSM 4682 = initPM 4682 := hb initGoal_4682 (by decide) rfl
   have h4684 : initSM 4684 = initPM 4684 := hb initGoal_4684 (by decide) rfl
   have h4686 : initSM 4686 = initPM 4686 := hb initGoal_4686 (by decide) rfl
@@ -5280,7 +5303,12 @@ theorem pm_attn_shard_shapes
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4682 : initSM 4682 = initPM 4682 := hb initGoal_4682 (by decide) rfl
   have h4684 : initSM 4684 = initPM 4684 := hb initGoal_4684 (by decide) rfl
   have h4686 : initSM 4686 = initPM 4686 := hb initGoal_4686 (by decide) rfl
@@ -5491,7 +5519,12 @@ theorem sm_pm_carry_4703_commute (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4699 : initSM 4699 = initPM 4699 := hb initGoal_4699 (by decide) rfl
   have h4680 : initSM 4680 = initPM 4680 := by
     have hg := hInit goal_5
@@ -5524,7 +5557,12 @@ theorem sm_pm_nl_4708_commute (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4704 : initSM 4704 = initPM 4704 := hb initGoal_4704 (by decide) rfl
   have h4707 : initSM 4707 = initPM 4707 := hb initGoal_4707 (by decide) rfl
   rw [h4704, h4707]
@@ -7263,7 +7301,12 @@ theorem sm_pm_carry_4736_commute
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4704 : initSM 4704 = initPM 4704 := hb initGoal_4704 (by decide) rfl
   have h4707 : initSM 4707 = initPM 4707 := hb initGoal_4707 (by decide) rfl
   have h4716 : initSM 4716 = initPM 4716 := hb initGoal_4716 (by decide) rfl
@@ -7275,7 +7318,7 @@ theorem sm_pm_carry_4736_commute
     have hg := hII initGoal_4712 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_4712, List.map] at hval
+    simp only [initGoal_4712, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 7487) (initPM 7488) []
         (by rw [h_ss_pm 7487 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -7284,7 +7327,7 @@ theorem sm_pm_carry_4736_commute
     have hg := hII initGoal_4713 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_4713, List.map] at hval
+    simp only [initGoal_4713, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 7489) (initPM 7490) []
         (by rw [h_ss_pm 7489 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -7432,7 +7475,12 @@ theorem sm_pm_qproj_L1_commute (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4737 : initSM 4737 = initPM 4737 := hb initGoal_4737 (by decide) rfl
   have h4739 : initSM 4739 = initPM 4739 := hb initGoal_4739 (by decide) rfl
   have h4741 : initSM 4741 = initPM 4741 := hb initGoal_4741 (by decide) rfl
@@ -7464,7 +7512,12 @@ theorem sm_pm_kproj_L1_commute (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4737 : initSM 4737 = initPM 4737 := hb initGoal_4737 (by decide) rfl
   have h4739 : initSM 4739 = initPM 4739 := hb initGoal_4739 (by decide) rfl
   have h4741 : initSM 4741 = initPM 4741 := hb initGoal_4741 (by decide) rfl
@@ -7494,7 +7547,12 @@ theorem sm_pm_vproj_L1_commute (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4737 : initSM 4737 = initPM 4737 := hb initGoal_4737 (by decide) rfl
   have h4743 : initSM 4743 = initPM 4743 := hb initGoal_4743 (by decide) rfl
   rw [denote_sm_goal_3_4744, denote_pm_goal_3_7607, denote_pm_goal_3_7608]
@@ -7536,7 +7594,12 @@ theorem sm_pm_attention_L1_commute
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4682 : initSM 4737 = initPM 4737 := hb initGoal_4737 (by decide) rfl
   have h4684 : initSM 4739 = initPM 4739 := hb initGoal_4739 (by decide) rfl
   have h4686 : initSM 4741 = initPM 4741 := hb initGoal_4741 (by decide) rfl
@@ -7743,7 +7806,12 @@ theorem pm_attn_shard_shapes_L1
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4682 : initSM 4737 = initPM 4737 := hb initGoal_4737 (by decide) rfl
   have h4684 : initSM 4739 = initPM 4739 := hb initGoal_4739 (by decide) rfl
   have h4686 : initSM 4741 = initPM 4741 := hb initGoal_4741 (by decide) rfl
@@ -7946,7 +8014,12 @@ theorem sm_pm_carry_4757_commute (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4753 : initSM 4753 = initPM 4753 := hb initGoal_4753 (by decide) rfl
   obtain ⟨hsh0, hsh1⟩ := pm_attn_shard_shapes_L1 initSM initPM hSM hPM hInit
   simp only [nR0_1, nR1_1] at hsh0 hsh1
@@ -7973,7 +8046,12 @@ theorem sm_pm_nl_4762_commute (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4758 : initSM 4758 = initPM 4758 := hb initGoal_4758 (by decide) rfl
   have h4761 : initSM 4761 = initPM 4761 := hb initGoal_4761 (by decide) rfl
   rw [h4758, h4761]
@@ -8541,7 +8619,12 @@ theorem sm_pm_moe_gmm_L1_commute
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4758 : initSM 4758 = initPM 4758 := hb initGoal_4758 (by decide) rfl
   have h4761 : initSM 4761 = initPM 4761 := hb initGoal_4761 (by decide) rfl
   rw [h4758, h4761]
@@ -8550,7 +8633,7 @@ theorem sm_pm_moe_gmm_L1_commute
     have hg := hII initGoal_4766 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_4766, List.map] at hval
+    simp only [initGoal_4766, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 7673) (initPM 7674) []
         (by rw [h_ss_pm 7673 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -8559,7 +8642,7 @@ theorem sm_pm_moe_gmm_L1_commute
     have hg := hII initGoal_4767 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_4767, List.map] at hval
+    simp only [initGoal_4767, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 7675) (initPM 7676) []
         (by rw [h_ss_pm 7675 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -9200,7 +9283,12 @@ theorem sm_pm_gate_mul_L1_commute
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4758 : initSM 4758 = initPM 4758 := hb initGoal_4758 (by decide) rfl
   have h4770 : initSM 4770 = initPM 4770 := hb initGoal_4770 (by decide) rfl
   have h4775 : initSM 4775 = initPM 4775 := hb initGoal_4775 (by decide) rfl
@@ -10143,7 +10231,12 @@ theorem $n0 (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have $hCB : initSM $sCB = initPM $sCB := hb $iIG (by decide) rfl
   have hcarry := $iCarry initSM initPM h_ss_sm h_ss_pm hInit
   have h65 : (denoteGraph_ringAttn pm_goal_3 initPM $sR).shape = [2048, 1024] :=
@@ -10201,7 +10294,12 @@ theorem $q0 (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have $hsN : initSM $ns = initPM $ns := hb $ig (by decide) rfl
   have hrms := $rms initSM initPM h_ss_sm h_ss_pm hInit
   have h69 : (denoteGraph_ringAttn pm_goal_3 initPM $nP69).shape = [2048, 1024] := by
@@ -10268,7 +10366,12 @@ theorem $n0 (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have $hCarry : initSM $sCarry = initPM $sCarry := hb $iIG (by decide) rfl
   have hrms := $iRms initSM initPM h_ss_sm h_ss_pm hInit
   have h69 : (denoteGraph_ringAttn pm_goal_3 initPM $sRms0).shape = [2048, 1024] := by
@@ -10334,7 +10437,12 @@ theorem $n0 (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have $hW : initSM $sW = initPM $sW := hb $iIG (by decide) rfl
   have hrms := $iRms initSM initPM h_ss_sm h_ss_pm hInit
   have h69 : (denoteGraph_ringAttn pm_goal_3 initPM $sRA).shape = [2048, 1024] := by
@@ -10399,7 +10507,12 @@ theorem $nm (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have hcos : initSM 4691 = initPM 4691 := hb initGoal_4691 (by decide) rfl
   have hpos : initSM $nPos = initPM $nPos := hb $idPos (by decide) rfl
   have hqlin := $qlin initSM initPM h_ss_sm h_ss_pm hInit
@@ -10483,7 +10596,12 @@ theorem $n0 (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have hcos : initSM 4691 = initPM 4691 := hb initGoal_4691 (by decide) rfl
   have hpos : initSM $sHpos = initPM $sHpos := hb $iHpos (by decide) rfl
   have hklin := $iKlin initSM initPM h_ss_sm h_ss_pm hInit
@@ -10579,7 +10697,12 @@ theorem sm_pm_attention_L2_commute
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4802 : initSM 4802 = initPM 4802 := hb initGoal_4802 (by decide) rfl
   have h4803 : initSM 4803 = initPM 4803 := hb initGoal_4803 (by decide) rfl
   -- proj commutes (already proven)
@@ -11014,7 +11137,12 @@ theorem $thm
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have $i_hh_4802 : initSM $n4802 = initPM $n4802 := hb $i_ig_4802 (by decide) rfl
   have $i_hh_4803 : initSM $n4803 = initPM $n4803 := hb $i_ig_4803 (by decide) rfl
   -- proj commutes (already proven)
@@ -11300,7 +11428,12 @@ theorem $thm (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have hw4807 : initSM $n4807 = initPM $n4807 := hb $i_ig_4807 (by decide) rfl
   have hwsh : (initPM $n4807).shape = [1024, 1024] := h_ss_pm $n4807 [1024, 1024] (by decide)
   have hcarry := $i_cy_4790 initSM initPM h_ss_sm h_ss_pm hInit
@@ -11463,7 +11596,12 @@ theorem $i1 (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have h4812 : initSM $n6 = initPM $n6 := hb $i5 (by decide) rfl
   have h4815 : initSM $n8 = initPM $n8 := hb $i7 (by decide) rfl
   have hcarry := $i9 initSM initPM h_ss_sm h_ss_pm hInit
@@ -11804,13 +11942,18 @@ theorem $a0 (initSM initPM : Store)
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have $a4 : initSM $a5 = initPM $a5 := hb $a6 (by decide) rfl
   have $a7 : initSM $a8 = allGatherPrimDimN 0 2 0 [initPM $a9, initPM $a10] := by
     have hg := hII $a11 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [$a11:term, List.map] at hval
+    simp only [$a11:term, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM $a9) (initPM $a10) []
         (by rw [h_ss_pm $a9 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -11819,7 +11962,7 @@ theorem $a0 (initSM initPM : Store)
     have hg := hII $a16 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [$a16:term, List.map] at hval
+    simp only [$a16:term, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM $a14) (initPM $a15) []
         (by rw [h_ss_pm $a14 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -12407,7 +12550,12 @@ theorem $thm
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have $hh4812 : initSM $n4812 = initPM $n4812 := hb $ig4812 (by decide) rfl
   have $hh4824 : initSM $n4824 = initPM $n4824 := hb $ig4824 (by decide) rfl
   have $hh4829 : initSM $n4829 = initPM $n4829 := hb $ig4829 (by decide) rfl
@@ -13519,7 +13667,12 @@ theorem $thm
     unfold InitGoalHolds at hgh
     obtain ⟨_, _, hval⟩ := hgh
     rw [hshape] at hval
-    simpa [List.map, reconstructWithDim_singleton] using hval
+    cases hrep' : g.replicated
+    · simp only [reconstructForGoal, hrep', Bool.false_eq_true, if_false] at hval
+      simpa [List.map, reconstructWithDim_singleton] using hval
+    · -- replicated case: reconstructForGoal picks head; [x].headD default = x
+      simp only [reconstructForGoal, hrep', if_true] at hval
+      simpa [List.map, List.headD] using hval
   have $i_hh_4802 : initSM $n4856 = initPM $n4856 := hb $i_ig_4856 (by decide) rfl
   have $i_hh_4803 : initSM $n4857 = initPM $n4857 := hb $i_ig_4857 (by decide) rfl
   -- proj commutes (already proven)
@@ -27559,7 +27712,7 @@ theorem L12_weight_eq (initSM initPM : Store)
   unfold InitGoalHolds at hgh
   obtain ⟨_, _, hval⟩ := hgh
   rw [hshape] at hval
-  simpa [List.map, reconstructWithDim_singleton] using hval
+  simpa [List.map, reconstructForGoal, reconstructWithDim_singleton] using hval
 
 -- RMS replication: SM 5332 = PM 5332 given the incoming residual commutes.
 set_option maxRecDepth 20000 in
@@ -29783,7 +29936,7 @@ theorem sm_pm_moe_gmm_L12_commute (initSM initPM : Store)
     have hg := hII initGoal_5363 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5363, List.map] at hval
+    simp only [initGoal_5363, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 9737) (initPM 9738) []
         (by rw [h_ss_pm 9737 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -29792,7 +29945,7 @@ theorem sm_pm_moe_gmm_L12_commute (initSM initPM : Store)
     have hg := hII initGoal_5364 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5364, List.map] at hval
+    simp only [initGoal_5364, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 9739) (initPM 9740) []
         (by rw [h_ss_pm 9739 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -32622,7 +32775,7 @@ theorem sm_pm_moe_gmm_L13_commute (initSM initPM : Store)
     have hg := hII initGoal_5412 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5412, List.map] at hval
+    simp only [initGoal_5412, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 9909) (initPM 9910) []
         (by rw [h_ss_pm 9909 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -32631,7 +32784,7 @@ theorem sm_pm_moe_gmm_L13_commute (initSM initPM : Store)
     have hg := hII initGoal_5413 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5413, List.map] at hval
+    simp only [initGoal_5413, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 9911) (initPM 9912) []
         (by rw [h_ss_pm 9911 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -35481,7 +35634,7 @@ theorem sm_pm_moe_gmm_L14_commute (initSM initPM : Store)
     have hg := hII initGoal_5461 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5461, List.map] at hval
+    simp only [initGoal_5461, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10081) (initPM 10082) []
         (by rw [h_ss_pm 10081 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -35490,7 +35643,7 @@ theorem sm_pm_moe_gmm_L14_commute (initSM initPM : Store)
     have hg := hII initGoal_5462 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5462, List.map] at hval
+    simp only [initGoal_5462, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10083) (initPM 10084) []
         (by rw [h_ss_pm 10083 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -38346,7 +38499,7 @@ theorem sm_pm_moe_gmm_L15_commute (initSM initPM : Store)
     have hg := hII initGoal_5510 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5510, List.map] at hval
+    simp only [initGoal_5510, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10253) (initPM 10254) []
         (by rw [h_ss_pm 10253 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -38355,7 +38508,7 @@ theorem sm_pm_moe_gmm_L15_commute (initSM initPM : Store)
     have hg := hII initGoal_5511 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5511, List.map] at hval
+    simp only [initGoal_5511, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10255) (initPM 10256) []
         (by rw [h_ss_pm 10255 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -41076,7 +41229,7 @@ theorem sm_pm_moe_gmm_L16_commute (initSM initPM : Store)
     have hg := hII initGoal_5559 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5559, List.map] at hval
+    simp only [initGoal_5559, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10425) (initPM 10426) []
         (by rw [h_ss_pm 10425 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -41085,7 +41238,7 @@ theorem sm_pm_moe_gmm_L16_commute (initSM initPM : Store)
     have hg := hII initGoal_5560 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5560, List.map] at hval
+    simp only [initGoal_5560, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10427) (initPM 10428) []
         (by rw [h_ss_pm 10427 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -43802,7 +43955,7 @@ theorem sm_pm_moe_gmm_L17_commute (initSM initPM : Store)
     have hg := hII initGoal_5608 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5608, List.map] at hval
+    simp only [initGoal_5608, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10597) (initPM 10598) []
         (by rw [h_ss_pm 10597 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -43811,7 +43964,7 @@ theorem sm_pm_moe_gmm_L17_commute (initSM initPM : Store)
     have hg := hII initGoal_5609 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5609, List.map] at hval
+    simp only [initGoal_5609, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10599) (initPM 10600) []
         (by rw [h_ss_pm 10599 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -46521,7 +46674,7 @@ theorem sm_pm_moe_gmm_L18_commute (initSM initPM : Store)
     have hg := hII initGoal_5657 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5657, List.map] at hval
+    simp only [initGoal_5657, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10769) (initPM 10770) []
         (by rw [h_ss_pm 10769 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -46530,7 +46683,7 @@ theorem sm_pm_moe_gmm_L18_commute (initSM initPM : Store)
     have hg := hII initGoal_5658 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5658, List.map] at hval
+    simp only [initGoal_5658, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10771) (initPM 10772) []
         (by rw [h_ss_pm 10771 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -49242,7 +49395,7 @@ theorem sm_pm_moe_gmm_L19_commute (initSM initPM : Store)
     have hg := hII initGoal_5706 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5706, List.map] at hval
+    simp only [initGoal_5706, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10941) (initPM 10942) []
         (by rw [h_ss_pm 10941 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -49251,7 +49404,7 @@ theorem sm_pm_moe_gmm_L19_commute (initSM initPM : Store)
     have hg := hII initGoal_5707 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5707, List.map] at hval
+    simp only [initGoal_5707, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10943) (initPM 10944) []
         (by rw [h_ss_pm 10943 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -51962,7 +52115,7 @@ theorem sm_pm_moe_gmm_L20_commute (initSM initPM : Store)
     have hg := hII initGoal_5755 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5755, List.map] at hval
+    simp only [initGoal_5755, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 11113) (initPM 11114) []
         (by rw [h_ss_pm 11113 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -51971,7 +52124,7 @@ theorem sm_pm_moe_gmm_L20_commute (initSM initPM : Store)
     have hg := hII initGoal_5756 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5756, List.map] at hval
+    simp only [initGoal_5756, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 11115) (initPM 11116) []
         (by rw [h_ss_pm 11115 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -54682,7 +54835,7 @@ theorem sm_pm_moe_gmm_L21_commute (initSM initPM : Store)
     have hg := hII initGoal_5804 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5804, List.map] at hval
+    simp only [initGoal_5804, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 11285) (initPM 11286) []
         (by rw [h_ss_pm 11285 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -54691,7 +54844,7 @@ theorem sm_pm_moe_gmm_L21_commute (initSM initPM : Store)
     have hg := hII initGoal_5805 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5805, List.map] at hval
+    simp only [initGoal_5805, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 11287) (initPM 11288) []
         (by rw [h_ss_pm 11287 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -57402,7 +57555,7 @@ theorem sm_pm_moe_gmm_L22_commute (initSM initPM : Store)
     have hg := hII initGoal_5853 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5853, List.map] at hval
+    simp only [initGoal_5853, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 11457) (initPM 11458) []
         (by rw [h_ss_pm 11457 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -57411,7 +57564,7 @@ theorem sm_pm_moe_gmm_L22_commute (initSM initPM : Store)
     have hg := hII initGoal_5854 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5854, List.map] at hval
+    simp only [initGoal_5854, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 11459) (initPM 11460) []
         (by rw [h_ss_pm 11459 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval

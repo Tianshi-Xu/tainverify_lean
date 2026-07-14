@@ -311,7 +311,8 @@ theorem prove_goal_2 : goal_2_stmt_cut := by
     native_decide
   unfold InitGoalHolds at hg5930
   obtain ⟨_, _, hval5930⟩ := hg5930
-  simp only [intermediateGoal_5930, List.map] at hval5930
+  simp only [intermediateGoal_5930, List.map, reconstructForGoal, Bool.false_eq_true,
+             if_false] at hval5930
   -- pm_goal_2.numRanks = 2.
   have hpmR : pm_goal_2.numRanks = 2 := rfl
   -- reconstructWithDim on [x, y] with non-scalar shape = allGatherPrimDimN.
@@ -369,7 +370,8 @@ theorem prove_goal_2 : goal_2_stmt_cut := by
     rfl
   case value =>
     -- Goal: denoteGraph sm_goal_2 initSM 4674 = reconstructWithDim 0 numRanks 0 [denoteGraph pm_goal_2 initPM 4674]
-    simp only [List.map, reconstructWithDim_singleton]
+    simp only [List.map, reconstructForGoal, Bool.false_eq_true, if_false,
+               reconstructWithDim_singleton]
     rw [denote_sm_goal_2_4674, denote_pm_goal_2_4674]
     -- Use intermediateGoal_5930 hypothesis: initSM 5930 = allGather [initPM 11833, initPM 11834].
     rw [hval5930]
@@ -381,7 +383,8 @@ theorem prove_goal_2 : goal_2_stmt_cut := by
       native_decide
     unfold InitGoalHolds at hg4678
     obtain ⟨_, _, hval4678⟩ := hg4678
-    simp only [initGoal_4678, List.map, reconstructWithDim_singleton] at hval4678
+    simp only [initGoal_4678, List.map, reconstructForGoal, Bool.false_eq_true, if_false,
+               reconstructWithDim_singleton] at hval4678
     rw [hval4678]
     -- 5931 unsharded similarly.
     have hg5931 : InitGoalHolds pm_goal_2.numRanks initGoal_5931 initSM initPM := by
@@ -391,7 +394,8 @@ theorem prove_goal_2 : goal_2_stmt_cut := by
       native_decide
     unfold InitGoalHolds at hg5931
     obtain ⟨_, _, hval5931⟩ := hg5931
-    simp only [initGoal_5931, List.map, reconstructWithDim_singleton] at hval5931
+    simp only [initGoal_5931, List.map, reconstructForGoal, Bool.false_eq_true, if_false,
+               reconstructWithDim_singleton] at hval5931
     rw [hval5931]
     -- Now apply the top-level lemma from InnerChunkCEShard.
     -- Goal shape:

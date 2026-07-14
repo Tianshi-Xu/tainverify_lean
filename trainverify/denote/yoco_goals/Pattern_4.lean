@@ -1519,12 +1519,15 @@ theorem prove_goal_4 : goal_4_stmt_cut := by
     have extract_singleton : ∀ (g : LineageGoal) (_ : g ∈ goal_4_cut_initGoals)
         (tps_val : List Tensor) (h_ne : tps_val ≠ [])
         (_ : g.tps.map (fun p => initPM p.tid) = tps_val)
+        (_ : g.replicated = false)
         (_ : tps_val.length = 1),
         initSM g.ts = tps_val.head h_ne := by
-      intro g hg tps_val h_ne htps_eq hlen
+      intro g hg tps_val h_ne htps_eq hrep hlen
       have hgoal := hInit' g hg
       unfold InitGoalHolds at hgoal
       obtain ⟨_, _, hval⟩ := hgoal
+      rw [reconstructForGoal_of_not_replicated g pm_goal_4.numRanks
+            (g.tps.map (fun p => initPM p.tid)) hrep] at hval
       rw [htps_eq] at hval
       match tps_val, h_ne, hlen with
       | [x], _, _ =>
@@ -1533,24 +1536,27 @@ theorem prove_goal_4 : goal_4_stmt_cut := by
     -- Layer 0 boundary: initSM 4708 = initPM 4708.
     have hb_4708 : initSM 4708 = initPM 4708 := by
       have := extract_singleton intermediateGoal_4708 (by native_decide) [initPM 4708]
-        (by simp) (by simp [intermediateGoal_4708]) (by rfl)
+        (by simp) (by simp [intermediateGoal_4708]) (by rfl) (by rfl)
       simpa [intermediateGoal_4708, List.head] using this
     have hb_4762 : initSM 4762 = initPM 4762 := by
       have := extract_singleton intermediateGoal_4762 (by native_decide) [initPM 4762]
-        (by simp) (by simp [intermediateGoal_4762]) (by rfl)
+        (by simp) (by simp [intermediateGoal_4762]) (by rfl) (by rfl)
       simpa [intermediateGoal_4762, List.head] using this
     -- Helper for dual-piece (layers 2..23): initSM tid = allGather_0 [initPM p0, initPM p1].
     have extract_dual : ∀ (g : LineageGoal) (_ : g ∈ goal_4_cut_initGoals)
         (p0 p1 : Nat)
         (_ : g.tps.map (fun p => initPM p.tid) = [initPM p0, initPM p1])
         (_ : g.gatherDim = 0)
+        (_ : g.replicated = false)
         (_ : g.tpShapes = [[2048, 64], [2048, 64]])
         (_ : (initPM p0).shape = [2048, 64]),
         initSM g.ts = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM p0, initPM p1] := by
-      intro g hg p0 p1 htps hdim hshapes hp0_shape
+      intro g hg p0 p1 htps hdim hrep hshapes hp0_shape
       have hgoal := hInit' g hg
       unfold InitGoalHolds at hgoal
       obtain ⟨_, _, hval⟩ := hgoal
+      rw [reconstructForGoal_of_not_replicated g pm_goal_4.numRanks
+            (g.tps.map (fun p => initPM p.tid)) hrep] at hval
       rw [htps, hdim] at hval
       -- reconstructWithDim on 2 elements with head shape ≠ [1] gives allGather.
       have hrec : reconstructWithDim 0 pm_goal_4.numRanks 0 [initPM p0, initPM p1]
@@ -1565,91 +1571,91 @@ theorem prove_goal_4 : goal_4_stmt_cut := by
     have h7851_pm : (initPM 7851).shape = [2048, 64] := hPM 7851 [2048, 64] (by native_decide)
     have hb_4816 : initSM 4816 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 7851, initPM 7852] :=
       extract_dual intermediateGoal_4816 (by native_decide) 7851 7852
-        (by simp [intermediateGoal_4816]) (by rfl) (by rfl) h7851_pm
+        (by simp [intermediateGoal_4816]) (by rfl) (by rfl) (by rfl) h7851_pm
     have h8037_pm : (initPM 8037).shape = [2048, 64] := hPM 8037 [2048, 64] (by native_decide)
     have hb_4870 : initSM 4870 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 8037, initPM 8038] :=
       extract_dual intermediateGoal_4870 (by native_decide) 8037 8038
-        (by simp [intermediateGoal_4870]) (by rfl) (by rfl) h8037_pm
+        (by simp [intermediateGoal_4870]) (by rfl) (by rfl) (by rfl) h8037_pm
     have h8223_pm : (initPM 8223).shape = [2048, 64] := hPM 8223 [2048, 64] (by native_decide)
     have hb_4924 : initSM 4924 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 8223, initPM 8224] :=
       extract_dual intermediateGoal_4924 (by native_decide) 8223 8224
-        (by simp [intermediateGoal_4924]) (by rfl) (by rfl) h8223_pm
+        (by simp [intermediateGoal_4924]) (by rfl) (by rfl) (by rfl) h8223_pm
     have h8409_pm : (initPM 8409).shape = [2048, 64] := hPM 8409 [2048, 64] (by native_decide)
     have hb_4978 : initSM 4978 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 8409, initPM 8410] :=
       extract_dual intermediateGoal_4978 (by native_decide) 8409 8410
-        (by simp [intermediateGoal_4978]) (by rfl) (by rfl) h8409_pm
+        (by simp [intermediateGoal_4978]) (by rfl) (by rfl) (by rfl) h8409_pm
     have h8595_pm : (initPM 8595).shape = [2048, 64] := hPM 8595 [2048, 64] (by native_decide)
     have hb_5032 : initSM 5032 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 8595, initPM 8596] :=
       extract_dual intermediateGoal_5032 (by native_decide) 8595 8596
-        (by simp [intermediateGoal_5032]) (by rfl) (by rfl) h8595_pm
+        (by simp [intermediateGoal_5032]) (by rfl) (by rfl) (by rfl) h8595_pm
     have h8781_pm : (initPM 8781).shape = [2048, 64] := hPM 8781 [2048, 64] (by native_decide)
     have hb_5086 : initSM 5086 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 8781, initPM 8782] :=
       extract_dual intermediateGoal_5086 (by native_decide) 8781 8782
-        (by simp [intermediateGoal_5086]) (by rfl) (by rfl) h8781_pm
+        (by simp [intermediateGoal_5086]) (by rfl) (by rfl) (by rfl) h8781_pm
     have h8967_pm : (initPM 8967).shape = [2048, 64] := hPM 8967 [2048, 64] (by native_decide)
     have hb_5140 : initSM 5140 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 8967, initPM 8968] :=
       extract_dual intermediateGoal_5140 (by native_decide) 8967 8968
-        (by simp [intermediateGoal_5140]) (by rfl) (by rfl) h8967_pm
+        (by simp [intermediateGoal_5140]) (by rfl) (by rfl) (by rfl) h8967_pm
     have h9153_pm : (initPM 9153).shape = [2048, 64] := hPM 9153 [2048, 64] (by native_decide)
     have hb_5194 : initSM 5194 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 9153, initPM 9154] :=
       extract_dual intermediateGoal_5194 (by native_decide) 9153 9154
-        (by simp [intermediateGoal_5194]) (by rfl) (by rfl) h9153_pm
+        (by simp [intermediateGoal_5194]) (by rfl) (by rfl) (by rfl) h9153_pm
     have h9339_pm : (initPM 9339).shape = [2048, 64] := hPM 9339 [2048, 64] (by native_decide)
     have hb_5248 : initSM 5248 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 9339, initPM 9340] :=
       extract_dual intermediateGoal_5248 (by native_decide) 9339 9340
-        (by simp [intermediateGoal_5248]) (by rfl) (by rfl) h9339_pm
+        (by simp [intermediateGoal_5248]) (by rfl) (by rfl) (by rfl) h9339_pm
     have h9525_pm : (initPM 9525).shape = [2048, 64] := hPM 9525 [2048, 64] (by native_decide)
     have hb_5302 : initSM 5302 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 9525, initPM 9526] :=
       extract_dual intermediateGoal_5302 (by native_decide) 9525 9526
-        (by simp [intermediateGoal_5302]) (by rfl) (by rfl) h9525_pm
+        (by simp [intermediateGoal_5302]) (by rfl) (by rfl) (by rfl) h9525_pm
     have h9729_pm : (initPM 9729).shape = [2048, 64] := hPM 9729 [2048, 64] (by native_decide)
     have hb_5359 : initSM 5359 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 9729, initPM 9730] :=
       extract_dual intermediateGoal_5359 (by native_decide) 9729 9730
-        (by simp [intermediateGoal_5359]) (by rfl) (by rfl) h9729_pm
+        (by simp [intermediateGoal_5359]) (by rfl) (by rfl) (by rfl) h9729_pm
     have h9901_pm : (initPM 9901).shape = [2048, 64] := hPM 9901 [2048, 64] (by native_decide)
     have hb_5408 : initSM 5408 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 9901, initPM 9902] :=
       extract_dual intermediateGoal_5408 (by native_decide) 9901 9902
-        (by simp [intermediateGoal_5408]) (by rfl) (by rfl) h9901_pm
+        (by simp [intermediateGoal_5408]) (by rfl) (by rfl) (by rfl) h9901_pm
     have h10073_pm : (initPM 10073).shape = [2048, 64] := hPM 10073 [2048, 64] (by native_decide)
     have hb_5457 : initSM 5457 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10073, initPM 10074] :=
       extract_dual intermediateGoal_5457 (by native_decide) 10073 10074
-        (by simp [intermediateGoal_5457]) (by rfl) (by rfl) h10073_pm
+        (by simp [intermediateGoal_5457]) (by rfl) (by rfl) (by rfl) h10073_pm
     have h10245_pm : (initPM 10245).shape = [2048, 64] := hPM 10245 [2048, 64] (by native_decide)
     have hb_5506 : initSM 5506 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10245, initPM 10246] :=
       extract_dual intermediateGoal_5506 (by native_decide) 10245 10246
-        (by simp [intermediateGoal_5506]) (by rfl) (by rfl) h10245_pm
+        (by simp [intermediateGoal_5506]) (by rfl) (by rfl) (by rfl) h10245_pm
     have h10417_pm : (initPM 10417).shape = [2048, 64] := hPM 10417 [2048, 64] (by native_decide)
     have hb_5555 : initSM 5555 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10417, initPM 10418] :=
       extract_dual intermediateGoal_5555 (by native_decide) 10417 10418
-        (by simp [intermediateGoal_5555]) (by rfl) (by rfl) h10417_pm
+        (by simp [intermediateGoal_5555]) (by rfl) (by rfl) (by rfl) h10417_pm
     have h10589_pm : (initPM 10589).shape = [2048, 64] := hPM 10589 [2048, 64] (by native_decide)
     have hb_5604 : initSM 5604 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10589, initPM 10590] :=
       extract_dual intermediateGoal_5604 (by native_decide) 10589 10590
-        (by simp [intermediateGoal_5604]) (by rfl) (by rfl) h10589_pm
+        (by simp [intermediateGoal_5604]) (by rfl) (by rfl) (by rfl) h10589_pm
     have h10761_pm : (initPM 10761).shape = [2048, 64] := hPM 10761 [2048, 64] (by native_decide)
     have hb_5653 : initSM 5653 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10761, initPM 10762] :=
       extract_dual intermediateGoal_5653 (by native_decide) 10761 10762
-        (by simp [intermediateGoal_5653]) (by rfl) (by rfl) h10761_pm
+        (by simp [intermediateGoal_5653]) (by rfl) (by rfl) (by rfl) h10761_pm
     have h10933_pm : (initPM 10933).shape = [2048, 64] := hPM 10933 [2048, 64] (by native_decide)
     have hb_5702 : initSM 5702 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10933, initPM 10934] :=
       extract_dual intermediateGoal_5702 (by native_decide) 10933 10934
-        (by simp [intermediateGoal_5702]) (by rfl) (by rfl) h10933_pm
+        (by simp [intermediateGoal_5702]) (by rfl) (by rfl) (by rfl) h10933_pm
     have h11105_pm : (initPM 11105).shape = [2048, 64] := hPM 11105 [2048, 64] (by native_decide)
     have hb_5751 : initSM 5751 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 11105, initPM 11106] :=
       extract_dual intermediateGoal_5751 (by native_decide) 11105 11106
-        (by simp [intermediateGoal_5751]) (by rfl) (by rfl) h11105_pm
+        (by simp [intermediateGoal_5751]) (by rfl) (by rfl) (by rfl) h11105_pm
     have h11277_pm : (initPM 11277).shape = [2048, 64] := hPM 11277 [2048, 64] (by native_decide)
     have hb_5800 : initSM 5800 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 11277, initPM 11278] :=
       extract_dual intermediateGoal_5800 (by native_decide) 11277 11278
-        (by simp [intermediateGoal_5800]) (by rfl) (by rfl) h11277_pm
+        (by simp [intermediateGoal_5800]) (by rfl) (by rfl) (by rfl) h11277_pm
     have h11449_pm : (initPM 11449).shape = [2048, 64] := hPM 11449 [2048, 64] (by native_decide)
     have hb_5849 : initSM 5849 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 11449, initPM 11450] :=
       extract_dual intermediateGoal_5849 (by native_decide) 11449 11450
-        (by simp [intermediateGoal_5849]) (by rfl) (by rfl) h11449_pm
+        (by simp [intermediateGoal_5849]) (by rfl) (by rfl) (by rfl) h11449_pm
     have h11621_pm : (initPM 11621).shape = [2048, 64] := hPM 11621 [2048, 64] (by native_decide)
     have hb_5898 : initSM 5898 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 11621, initPM 11622] :=
       extract_dual intermediateGoal_5898 (by native_decide) 11621 11622
-        (by simp [intermediateGoal_5898]) (by rfl) (by rfl) h11621_pm
+        (by simp [intermediateGoal_5898]) (by rfl) (by rfl) (by rfl) h11621_pm
     -- Layer 0/1 special: rewrite initSM 4708/4762 = initPM 4708/4762, then softmax → allGather form.
     rw [hb_4708, hb_4762]
     -- Layer 2..23: rewrite initSM = allGather.

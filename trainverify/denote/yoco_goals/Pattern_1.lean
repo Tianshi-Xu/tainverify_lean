@@ -1538,19 +1538,7 @@ theorem fw_add_allGather0_commute_2_2048_1024 (a b c d : Tensor)
       omega
     exact (elemwiseAdd_valAt_2048_1024 ea ec _ hea_shape hec_shape hloc_lt).symm
 
-/-- fw_add commutes with dim-0 sharding (2 shards).
-    NOTE: Left as an axiom because usage sites include mismatched-shape cases
-    (elemwiseAdd of full-shape all2all output with broadcast-shape elemwiseMul output).
-    A full proof would require handling broadcasting via `outShape2`. TODO: prove after
-    understanding elemwiseAdd/Mul broadcast semantics in the presence of dim-0 sharding. -/
-axiom fw_add_allGather0_commute_2 (a b c d : Tensor) :
-    elemwiseAdd (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])
-      = allGatherPrimDimN 0 2 0 [elemwiseAdd a c, elemwiseAdd b d]
 
-/-- fw_mul commutes with dim-0 sharding (2 shards). -/
-axiom fw_mul_allGather0_commute_2 (a b c d : Tensor) :
-    elemwiseMul (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])
-      = allGatherPrimDimN 0 2 0 [elemwiseMul a c, elemwiseMul b d]
 
 /-- Helper: valAt of elemwiseMul with same-shape `[S, H]` operands. -/
 private theorem elemwiseMul_valAt_S_H (a c : Tensor) (S H : Nat) (idx : Nat)
@@ -2010,16 +1998,7 @@ theorem fw_rms_norm_allGather0_commute_2 (a b w : Tensor) (shard hidden : Nat)
       rw [hc_shape]; simp [prodShape]; exact hloc_bound
     simp [hloc_lt_prod, h_ihidden_div, h_ihidden_mod]
 
-/-- Axiom form of fw_rms_norm sharding commute (for 1-dim shard shapes). Used by Pattern_1
-    when the input has Denote's cu-first shape semantics (i.e. output shape = [k] not [S, H]). -/
-axiom fw_rms_norm_allGather0_commute_2_axiom (a b w : Tensor) :
-    fw_rms_norm (allGatherPrimDimN 0 2 0 [a, b]) w
-      = allGatherPrimDimN 0 2 0 [fw_rms_norm a w, fw_rms_norm b w]
 
-/-- fw_linear commutes with dim-0 sharding. -/
-axiom fw_linear_allGather0_commute_2 (a b w : Tensor) :
-    fw_linear (allGatherPrimDimN 0 2 0 [a, b]) w
-      = allGatherPrimDimN 0 2 0 [fw_linear a w, fw_linear b w]
 
 /-- 2-D fw_linear shape: `[b, i] × [o, i] → [b, o]`. Moved up so subsequent theorems can use it. -/
 private theorem fw_linear_2d_shape (b i o : Nat) (x w : Tensor)
@@ -2153,11 +2132,6 @@ theorem fw_linear_allGather0_commute_2_of (a b w : Tensor) (bshard i o : Nat)
     rw [allGatherPrimDimN0_valAt 2 bshard i [a, b]
           (by omega) hbshard hi hhead_ab hshapes_ab r hr_lt il hil_lt j hj_lt]
 
-/-- fw_view commutes with dim-0 sharding when shapes are compatible.
-    The target [`full`] shape must have first dim = 2×(shard first dim). -/
-axiom fw_view_allGather0_commute_2 (a b : Tensor) (sh_full sh_shard : Shape) :
-    fw_view sh_full (allGatherPrimDimN 0 2 0 [a, b])
-      = allGatherPrimDimN 0 2 0 [fw_view sh_shard a, fw_view sh_shard b]
 
 -- (fw_linear_2d_shape moved earlier so fw_linear_allGather0_commute_2_of can use it.)
 
@@ -2692,17 +2666,7 @@ private theorem allGatherPrimDimN0_valAt_3d (E h d : Nat) (hE : 0 < E) (hh : 0 <
   --        =? valAt (Ws.getD r _) ((eLocal * h + hi) * d + di)
   ring_nf
 
-/-- fw_topk_routing fst commutes with dim-0 sharding.
-    LEGACY axiom form; prefer `fw_topk_routing_fst_allGather0_commute_2_of` for actual proofs. -/
-axiom fw_topk_routing_fst_allGather0_commute_2 (a b : Tensor) (n k : Nat) :
-    (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) n k).fst
-      = allGatherPrimDimN 0 2 0 [(fw_topk_routing a n k).fst, (fw_topk_routing b n k).fst]
 
-/-- fw_topk_routing snd_fst commutes with dim-0 sharding.
-    LEGACY axiom form; prefer `fw_topk_routing_snd_fst_allGather0_commute_2_of` for actual proofs. -/
-axiom fw_topk_routing_snd_fst_allGather0_commute_2 (a b : Tensor) (n k : Nat) :
-    (fw_topk_routing (allGatherPrimDimN 0 2 0 [a, b]) n k).snd.fst
-      = allGatherPrimDimN 0 2 0 [(fw_topk_routing a n k).snd.fst, (fw_topk_routing b n k).snd.fst]
 
 /-- The MoE `fw_all2all_moe_gmm` sum body at fixed (l, h_col, eLocal), abstracted for reuse.
     Note: routing indices use `e = start + eLocal` while weight indices use `eLocal` directly. -/
@@ -3580,23 +3544,6 @@ theorem fw_all2all_moe_gmm_split_commute_2_of
           rw [hinput_eq k hk_lt, hw13_up_eq k hk_lt]
         rw [hgate_eq, hup_eq, hw2_eq]
 
-/-- fw_all2all_moe_gmm splits expert range across 2 ranks (with sharded w13/w2 weights).
-    LEGACY axiom form; prefer `fw_all2all_moe_gmm_split_commute_2_of` for actual proofs. -/
-axiom fw_all2all_moe_gmm_split_commute_2
-    (input_a input_b routing_probs_a routing_probs_b routing_map_a routing_map_b
-     w13_a w13_b w2_a w2_b : Tensor)
-    (numExperts topK : Nat) (swigluLimit : Scalar) :
-    fw_all2all_moe_gmm (allGatherPrimDimN 0 2 0 [input_a, input_b])
-        (allGatherPrimDimN 0 2 0 [routing_probs_a, routing_probs_b])
-        (allGatherPrimDimN 0 2 0 [routing_map_a, routing_map_b])
-        (allGatherPrimDimN 0 2 0 [w13_a, w13_b])
-        (allGatherPrimDimN 0 2 0 [w2_a, w2_b])
-        numExperts 0 numExperts topK swigluLimit
-      = allGatherPrimDimN 0 2 0
-        [fw_all2all_moe_gmm input_a routing_probs_a routing_map_a w13_a w2_a
-          numExperts 0 (numExperts / 2) topK swigluLimit,
-         fw_all2all_moe_gmm input_b routing_probs_b routing_map_b w13_b w2_b
-          numExperts (numExperts / 2) numExperts topK swigluLimit]
 
 /-- `fw_maybe_unshuffle` at `cpSize=1` distributes over `allGather` of `cpSize=2` shards.
 
@@ -3885,14 +3832,6 @@ theorem fw_inner_chunk_ce_fst_allGather0_commute_2_of (x_a x_b w y : Tensor)
         _ = Lshard * 2 := by ring
     rw [hlin_row_eq lbl hlbl_lt]
 
-/-- fw_inner_chunk_ce fst commutes with dim-0 sharding.
-    LEGACY axiom form; prefer `fw_inner_chunk_ce_fst_allGather0_commute_2_of`. -/
-axiom fw_inner_chunk_ce_fst_allGather0_commute_2
-    (x_a x_b w y : Tensor) (vocab : Nat) (zLossScale : Scalar) :
-    (fw_inner_chunk_ce (allGatherPrimDimN 0 2 0 [x_a, x_b]) w y vocab zLossScale).fst
-      = allGatherPrimDimN 0 2 0
-        [(fw_inner_chunk_ce x_a w (chunkPrimDimN 0 2 0 y) vocab zLossScale).fst,
-         (fw_inner_chunk_ce x_b w (chunkPrimDimN 0 2 1 y) vocab zLossScale).fst]
 
 -- allGatherPrimDimN_0_shape_2 axiom removed as unused
 
@@ -4240,12 +4179,15 @@ theorem prove_goal_1 : goal_1_stmt_with_labels := by
     -- Extract shared-weight boundary linkages (initSM tid = initPM tid).
     have extract_singleton : ∀ (g : LineageGoal) (_ : g ∈ goal_1_cut_initGoals)
         (tid : Nat) (_ : g.tps = [{rank := 0, tid := tid}]) (_ : g.gatherDim = 0)
+        (_ : g.replicated = false)
         (_ : g.ts = tid),
         initSM tid = initPM tid := by
-      intro g hg tid htp hgd hts
+      intro g hg tid htp hgd hrep hts
       have h := hInit' g hg
       unfold InitGoalHolds at h
       have hval := h.2.2
+      rw [reconstructForGoal_of_not_replicated g pm_goal_1.numRanks
+            (g.tps.map (fun p => initPM p.tid)) hrep] at hval
       rw [htp, hts, hgd] at hval
       simp only [List.map, reconstructWithDim] at hval
       exact hval
@@ -4253,34 +4195,36 @@ theorem prove_goal_1 : goal_1_stmt_with_labels := by
     have extract_dual : ∀ (g : LineageGoal) (_ : g ∈ goal_1_cut_initGoals)
         (ts p0 p1 : Nat) (sh : Shape)
         (_ : g.tps = [{rank := 0, tid := p0}, {rank := 1, tid := p1}])
-        (_ : g.gatherDim = 0) (_ : g.ts = ts)
+        (_ : g.gatherDim = 0) (_ : g.replicated = false) (_ : g.ts = ts)
         (_ : (initPM p0).shape = sh) (_ : sh ≠ [1]),
         initSM ts = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM p0, initPM p1] := by
-      intro g hg ts p0 p1 sh htp hgd hts hshape hne
+      intro g hg ts p0 p1 sh htp hgd hrep hts hshape hne
       have h := hInit' g hg
       unfold InitGoalHolds at h
       have hval := h.2.2
+      rw [reconstructForGoal_of_not_replicated g pm_goal_1.numRanks
+            (g.tps.map (fun p => initPM p.tid)) hrep] at hval
       rw [htp, hts, hgd] at hval
       simp only [List.map, reconstructWithDim, List.head?, Option.map, Option.getD,
                  hshape, if_neg hne] at hval
       exact hval
     -- Boundary hypotheses (SM shared boundaries → PM identity).
     have hb_4678 : initSM 4678 = initPM 4678 :=
-      extract_singleton initGoal_4678 (by native_decide) 4678 (by rfl) (by rfl) (by rfl)
+      extract_singleton initGoal_4678 (by native_decide) 4678 (by rfl) (by rfl) (by rfl) (by rfl)
     have hb_5906 : initSM 5906 = initPM 5906 :=
-      extract_singleton initGoal_5906 (by native_decide) 5906 (by rfl) (by rfl) (by rfl)
+      extract_singleton initGoal_5906 (by native_decide) 5906 (by rfl) (by rfl) (by rfl) (by rfl)
     have hb_5911 : initSM 5911 = initPM 5911 :=
-      extract_singleton initGoal_5911 (by native_decide) 5911 (by rfl) (by rfl) (by rfl)
+      extract_singleton initGoal_5911 (by native_decide) 5911 (by rfl) (by rfl) (by rfl) (by rfl)
     have hb_5915 : initSM 5915 = initPM 5915 :=
-      extract_singleton initGoal_5915 (by native_decide) 5915 (by rfl) (by rfl) (by rfl)
+      extract_singleton initGoal_5915 (by native_decide) 5915 (by rfl) (by rfl) (by rfl) (by rfl)
     have hb_5920 : initSM 5920 = initPM 5920 :=
-      extract_singleton initGoal_5920 (by native_decide) 5920 (by rfl) (by rfl) (by rfl)
+      extract_singleton initGoal_5920 (by native_decide) 5920 (by rfl) (by rfl) (by rfl) (by rfl)
     have hb_5927 : initSM 5927 = initPM 5927 :=
-      extract_singleton initGoal_5927 (by native_decide) 5927 (by rfl) (by rfl) (by rfl)
+      extract_singleton initGoal_5927 (by native_decide) 5927 (by rfl) (by rfl) (by rfl) (by rfl)
     have hb_5929 : initSM 5929 = initPM 5929 :=
-      extract_singleton initGoal_5929 (by native_decide) 5929 (by rfl) (by rfl) (by rfl)
+      extract_singleton initGoal_5929 (by native_decide) 5929 (by rfl) (by rfl) (by rfl) (by rfl)
     have hb_5931 : initSM 5931 = initPM 5931 :=
-      extract_singleton initGoal_5931 (by native_decide) 5931 (by rfl) (by rfl) (by rfl)
+      extract_singleton initGoal_5931 (by native_decide) 5931 (by rfl) (by rfl) (by rfl) (by rfl)
     -- SM sharded boundaries → PM allGather form.
     have h11609_shape : (initPM 11609).shape = [2048, 1024] := hPM 11609 [2048, 1024] (by native_decide)
     have h11613_shape : (initPM 11613).shape = [2048, 1024] := hPM 11613 [2048, 1024] (by native_decide)
@@ -4289,19 +4233,19 @@ theorem prove_goal_1 : goal_1_stmt_with_labels := by
     have h11631_shape : (initPM 11631).shape = [32, 1024, 512] := hPM 11631 [32, 1024, 512] (by native_decide)
     have hb_5893 : initSM 5893 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11609, initPM 11610] :=
       extract_dual intermediateGoal_5893 (by native_decide) 5893 11609 11610 [2048, 1024]
-        (by rfl) (by rfl) (by rfl) h11609_shape (by decide)
+        (by rfl) (by rfl) (by rfl) (by rfl) h11609_shape (by decide)
     have hb_5895 : initSM 5895 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11613, initPM 11614] :=
       extract_dual intermediateGoal_5895 (by native_decide) 5895 11613 11614 [2048, 1024]
-        (by rfl) (by rfl) (by rfl) h11613_shape (by decide)
+        (by rfl) (by rfl) (by rfl) (by rfl) h11613_shape (by decide)
     have hb_5898 : initSM 5898 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11621, initPM 11622] :=
       extract_dual intermediateGoal_5898 (by native_decide) 5898 11621 11622 [2048, 64]
-        (by rfl) (by rfl) (by rfl) h11621_shape (by decide)
+        (by rfl) (by rfl) (by rfl) (by rfl) h11621_shape (by decide)
     have hb_5902 : initSM 5902 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11629, initPM 11630] :=
       extract_dual initGoal_5902 (by native_decide) 5902 11629 11630 [32, 1024, 1024]
-        (by rfl) (by rfl) (by rfl) h11629_shape (by decide)
+        (by rfl) (by rfl) (by rfl) (by rfl) h11629_shape (by decide)
     have hb_5903 : initSM 5903 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11631, initPM 11632] :=
       extract_dual initGoal_5903 (by native_decide) 5903 11631 11632 [32, 1024, 512]
-        (by rfl) (by rfl) (by rfl) h11631_shape (by decide)
+        (by rfl) (by rfl) (by rfl) (by rfl) h11631_shape (by decide)
     -- Reconstruct singleton [x] = x.
     simp only [List.map, reconstructWithDim]
     -- Reduce SM and PM via machinery.

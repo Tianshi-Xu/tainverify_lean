@@ -82,6 +82,11 @@ structure LineageGoal where
   tps : List Piece
   tpShapes : List Shape
   gatherDim : Nat := 0
+  /-- If true, `tps` are replicated copies of the SM tensor (each rank holds the
+      full `tsShape`), not sharded. Reconstruction picks the head rather than
+      allGather. Emitter detects this when `∀ tp ∈ tpShapes, tp = tsShape` (e.g.
+      after FW_multiref of a replicated tensor). Default false = shard/gather. -/
+  replicated : Bool := false
   deriving Repr, DecidableEq
 
 /-!
@@ -8112,12 +8117,21 @@ These are generated automatically as `initGoals` by the Python generator.
 Important: this is value-level, not just shapes.
 -/
 
+/-- Reconstruction target used by a `LineageGoal` — dispatches on `replicated`.
+    - `replicated = true`: pick the head shard (all shards are identical full copies)
+    - `replicated = false`: use `reconstructWithDim gatherDim numParts 0 tps` (sharded) -/
+def reconstructForGoal (goal : LineageGoal) (numParts : Nat) (tps : List Tensor) : Tensor :=
+  if goal.replicated then
+    tps.headD (zeroTensor goal.tsShape)
+  else
+    reconstructWithDim goal.gatherDim numParts 0 tps
+
 def InitGoalHolds (numParts : Nat) (goal : LineageGoal) (initSM initPM : Store) : Prop :=
   let ts := initSM goal.ts
   let tps := goal.tps.map (fun p => initPM p.tid)
   ts.shape = goal.tsShape ∧
     (tps.map (fun t => t.shape)) = goal.tpShapes ∧
-    ts = reconstructWithDim goal.gatherDim numParts 0 tps
+    ts = reconstructForGoal goal numParts tps
 
 def InitGoalsHold (numParts : Nat) (goals : List LineageGoal) (initSM initPM : Store) : Prop :=
   ∀ g ∈ goals, InitGoalHolds numParts g initSM initPM
@@ -8139,7 +8153,7 @@ def CoarseLineageHolds (sm pm : GraphDecl) (goal : LineageGoal) : Prop :=
     let tps := goal.tps.map (fun p => pmStore p.tid)
     ts.shape = goal.tsShape ∧
       (tps.map (fun t => t.shape)) = goal.tpShapes ∧
-      ts = reconstructWithDim goal.gatherDim pm.numRanks 0 tps
+      ts = reconstructForGoal goal pm.numRanks tps
 
 /-!
 `CoarseLineageHolds` as written above is intentionally “shape-free” on inputs, hence too strong
@@ -8160,7 +8174,7 @@ def CoarseLineageHoldsWith (sm pm : GraphDecl) (goal : LineageGoal)
     let tps := goal.tps.map (fun p => pmStore p.tid)
     ts.shape = goal.tsShape ∧
       (tps.map (fun t => t.shape)) = goal.tpShapes ∧
-      ts = reconstructWithDim goal.gatherDim pm.numRanks 0 tps
+      ts = reconstructForGoal goal pm.numRanks tps
 
 def CoarseLineageHoldsWithInit (sm pm : GraphDecl) (goal : LineageGoal)
     (smInit pmInit : ShapeEnv) (initGoals : List LineageGoal) : Prop :=
@@ -8174,7 +8188,15 @@ def CoarseLineageHoldsWithInit (sm pm : GraphDecl) (goal : LineageGoal)
     let tps := goal.tps.map (fun p => pmStore p.tid)
     ts.shape = goal.tsShape ∧
       (tps.map (fun t => t.shape)) = goal.tpShapes ∧
-      ts = reconstructWithDim goal.gatherDim pm.numRanks 0 tps
+      ts = reconstructForGoal goal pm.numRanks tps
+
+/-- Backward-compat: when `goal.replicated = false`, `reconstructForGoal` reduces to
+    `reconstructWithDim`. Existing proofs written before the `replicated` field can
+    rewrite via this lemma. -/
+@[simp] theorem reconstructForGoal_of_not_replicated (goal : LineageGoal) (numParts : Nat)
+    (tps : List Tensor) (h : goal.replicated = false) :
+    reconstructForGoal goal numParts tps = reconstructWithDim goal.gatherDim numParts 0 tps := by
+  unfold reconstructForGoal; rw [h]; rfl
 
 /-!
 ## Incremental lineage goals with intermediate prerequisites
@@ -21743,7 +21765,7 @@ def CoarseLineageHoldsWithInit_ringAttn (sm pm : GraphDecl) (goal : LineageGoal)
     let tps := goal.tps.map (fun p => pmStore p.tid)
     ts.shape = goal.tsShape ∧
       (tps.map (fun t => t.shape)) = goal.tpShapes ∧
-      ts = reconstructWithDim goal.gatherDim pm.numRanks 0 tps
+      ts = reconstructForGoal goal pm.numRanks tps
 
 /-! ### Stack-Gather Commutation (Pattern_3)
 

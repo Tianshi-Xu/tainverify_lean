@@ -124,7 +124,8 @@ theorem prove_goal_5 : goal_5_stmt_cut := by
     rfl
   case value =>
     -- Value: sm_goal_5 4680 = reconstruct 0 numRanks 0 [pm_goal_5 4680]
-    simp only [List.map, reconstructWithDim_singleton]
+    simp only [List.map, reconstructForGoal, Bool.false_eq_true, if_false,
+               reconstructWithDim_singleton]
     rw [denote_sm_goal_5_4680, denote_pm_goal_5_4680]
     -- Use goal_5_cut_initGoals = initGoals, so hInit gives initGoal_4679 etc.
     have hInit' : InitGoalsHold pm_goal_5.numRanks initGoals initSM initPM := by
@@ -133,7 +134,8 @@ theorem prove_goal_5 : goal_5_stmt_cut := by
     have hg4679 := hInit' initGoal_4679 (by native_decide)
     unfold InitGoalHolds at hg4679
     obtain ⟨_, _, hval⟩ := hg4679
-    simp only [initGoal_4679, hpmR, List.map] at hval
+    simp only [initGoal_4679, hpmR, List.map, reconstructForGoal, Bool.false_eq_true,
+               if_false] at hval
     have hreconstr :
         reconstructWithDim 0 2 0 [initPM 7389, initPM 7390] =
         allGatherPrimDimN 0 2 0 [initPM 7389, initPM 7390] := by
@@ -146,7 +148,8 @@ theorem prove_goal_5 : goal_5_stmt_cut := by
     have hg4677 := hInit' initGoal_4677 (by native_decide)
     unfold InitGoalHolds at hg4677
     obtain ⟨_, _, hval2⟩ := hg4677
-    simp only [initGoal_4677, hpmR, List.map, reconstructWithDim_singleton] at hval2
+    simp only [initGoal_4677, hpmR, List.map, reconstructForGoal, Bool.false_eq_true,
+               if_false, reconstructWithDim_singleton] at hval2
     rw [hval2]
     -- Apply the top-level vocab-parallel embedding lemma.
     have hWs_head :
