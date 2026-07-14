@@ -195,6 +195,21 @@ BW_MULTI = {
         ("applyNode_bw_layernorm_dw_out", ".2.1", 1),
         ("applyNode_bw_layernorm_db_out", ".2.2", 2),
     ]),
+    # FW multi-output ops that need to be treated as BW_MULTI for the framing machinery.
+    # The `fn` is still the FW function; per-out lemma pairs both outputs to their
+    # semantic projection (.1 = losses, .2 = zLosses for FW_inner_chunk_ce).
+    # `render_expr` = callable(node, args, proj) -> str, overrides the generic
+    # `_bw_expr` template so we can splice in the extra vocab/scalar args that
+    # fw_inner_chunk_ce needs but that live outside node.ins (vocab from
+    # (s wTid).shape.head?.getD 0; zLossScale from params.getD 1 0).
+    "FW_inner_chunk_ce": dict(fn="fw_inner_chunk_ce", nargs=3, outs=[
+        ("applyNode_fw_inner_chunk_ce_fst_out_1p", ".fst", 0),
+        ("applyNode_fw_inner_chunk_ce_snd_out_1p", ".snd", 1),
+    ], render_expr=lambda node, args, proj: (
+        f"(fw_inner_chunk_ce {' '.join('(' + a + ')' for a in args[:3])} "
+        f"((({args[1]}).shape.head?.getD 0)) "
+        f"((({(node.params or [0, 0])[1] if len(node.params or []) > 1 else 0} : Nat) : Scalar))){proj}"
+    )),
 }
 
 
@@ -255,9 +270,16 @@ def _bw_apply(node, bw_idx):
 
 
 def _bw_expr(node, args, bw_idx):
-    """Projected RHS expression `(bw_fn arg0 arg1 ...).<proj>` for a BW multi node."""
-    fn = BW_MULTI[node.op]["fn"]
+    """Projected RHS expression `(bw_fn arg0 arg1 ...).<proj>` for a BW multi node.
+    If the op's BW_MULTI entry provides a `render_expr` callable, delegate to it
+    so ops with extra derived args (e.g. FW_inner_chunk_ce needs vocab from
+    (s wTid).shape and zLossScale from params) can splice them in."""
+    meta = BW_MULTI[node.op]
     _lemma, proj, _nsc = _bw_meta(node.op, bw_idx)
+    render_expr = meta.get("render_expr")
+    if render_expr is not None:
+        return render_expr(node, args, proj)
+    fn = meta["fn"]
     inner = fn + " " + " ".join(_paren(a) for a in args)
     return f"({inner}){proj}"
 

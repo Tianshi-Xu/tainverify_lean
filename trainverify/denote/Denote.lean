@@ -5087,6 +5087,30 @@ theorem applyNode_fw_inner_chunk_ce_fst_out_1p
   unfold storeSet
   simp [List.find?]
 
+/-- applyNode for `FW_inner_chunk_ce` — retrieve second output (zLosses).
+    `params` is left implicit so the emitter's `_bw_apply` calling convention
+    (rank + all in/out tids + side-condition `(by decide)` for `hne`) works
+    without threading an explicit params arg. -/
+theorem applyNode_fw_inner_chunk_ce_snd_out_1p
+    (g : GraphDecl) (s : Store) (rank : Nat) (xTid wTid yTid lossesTid zLossesTid : Tid)
+    (hne : lossesTid ≠ zLossesTid) {params : List Nat} :
+    applyNode g s { rank := rank, op := "OpName.FW_inner_chunk_ce", ins := [xTid, wTid, yTid], outs := [lossesTid, zLossesTid], params := params } zLossesTid =
+      (fw_inner_chunk_ce (s xTid) (s wTid) (s yTid)
+        (((s wTid).shape.head?).getD 0)
+        ((((params.getD 1 0) : Nat) : Scalar))).snd := by
+  unfold applyNode
+  rw [show ([xTid, wTid, yTid] : List Tid).map s = [s xTid, s wTid, s yTid] from rfl,
+      evalOp_fw_inner_chunk_ce_iroha]
+  change storeSet s [(lossesTid, (fw_inner_chunk_ce (s xTid) (s wTid) (s yTid)
+        (((s wTid).shape.head?).getD 0)
+        ((((params.getD 1 0) : Nat) : Scalar))).fst),
+      (zLossesTid, (fw_inner_chunk_ce (s xTid) (s wTid) (s yTid)
+        (((s wTid).shape.head?).getD 0)
+        ((((params.getD 1 0) : Nat) : Scalar))).snd)] zLossesTid = _
+  unfold storeSet
+  have hne' : (lossesTid = zLossesTid) = False := eq_false (fun h => hne h)
+  simp [List.find?, hne', decide_eq_true_iff]
+
 /-! ## Layernorm split helper for `[1, 8, 32]` shape, dim=1 sharding into 4 parts.
 
     Layernorm normalizes across the *last* dim (here size 32). Sharding along dim=1

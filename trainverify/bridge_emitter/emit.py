@@ -40,9 +40,18 @@ def trace_input_sources(ir: GoalIR) -> list:
     gen_text = open(_gd_path).read()
 
     def goal_def(gid):
-        m = re.search(rf'def\s+goal_{gid}\b.*?(?=\ndef\s)', gen_text, re.S)
-        if not m: return ""
-        return m.group(0)
+        # yoco uses `intermediateGoal_<id>` for prereq lineage goals; gpt_ly4 uses
+        # `goal_<id>` for both regular and prereq goals. Try both.
+        for pfx in ("goal_", "intermediateGoal_"):
+            m = re.search(rf'def\s+{pfx}{gid}\b.*?(?=\ndef\s)', gen_text, re.S)
+            if m: return m.group(0)
+        return ""
+
+    # For yoco, ir.prereqs is populated from `goal_N_prereqs := [goal_5, intermediateGoal_XXX, ...]`.
+    # The parser's `parse_prereqs` regex extracts numeric IDs via `goal_(\d+)` which matches
+    # BOTH `goal_5` and `intermediateGoal_5930` (the `_` is a boundary). If yoco's
+    # generator emits `intermediateGoal_5930` we get gid=5930 here, and the loop below
+    # finds the def via the fallback prefix.
 
     # build reverse maps from prereqs
     tid_to_origin = {}   # tid -> InputSource

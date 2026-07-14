@@ -110,7 +110,10 @@ def parse_prereqs(goal_text: str, n: int):
     m = re.search(rf'def\s+goal_{n}_prereqs\s*:\s*List LineageGoal\s*:=\s*\[(.*?)\]', goal_text, re.S)
     if not m:
         return []
-    return [int(x) for x in re.findall(r'goal_(\d+)', m.group(1))]
+    # Match both `goal_5` (gpt_ly4 convention) and `intermediateGoal_5930` (yoco
+    # convention) as prereq references. Skip `initGoal_XXX` (those are always in
+    # `initGoals` at the graph level, never in the per-goal prereq list).
+    return [int(x) for x in re.findall(r'(?:^|[\s,\[])(?:intermediate)?[Gg]oal_(\d+)', m.group(1))]
 
 # ---------- top-level ----------
 def load_goal_ir(n: int, root: str) -> GoalIR:
