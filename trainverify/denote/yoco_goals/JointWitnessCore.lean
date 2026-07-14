@@ -383,4 +383,121 @@ theorem zeroStore_shapes_hold_of_list {shapeOf : Tid → Shape} {xs : List (Tid 
     have hval := of_decide_eq_true ((List.all_eq_true.mp h) pair hmem)
     rw [← hkey, hval, this]
 
+/-! ## Pinned-store version: allows value overrides at specific pin tids -/
+
+/-- A `pinnedStore` returns `pinValue` at pin tids, `zeroTensor (shapeOf tid)`
+    elsewhere. Used for hypothesis witnesses that need specific tensor values
+    at some tids (e.g. cu_seqlens pins in Pattern_3). -/
+def pinnedStore (isPin : Tid → Bool) (pinValue : Tensor) (shapeOf : Tid → Shape) :
+    Store := fun tid =>
+  if isPin tid then pinValue else zeroTensor (shapeOf tid)
+
+theorem pinnedStore_at_pin {isPin : Tid → Bool} {pinValue : Tensor}
+    {shapeOf : Tid → Shape} (tid : Tid) (h : isPin tid = true) :
+    pinnedStore isPin pinValue shapeOf tid = pinValue := by
+  unfold pinnedStore; rw [if_pos h]
+
+theorem pinnedStore_at_nonpin {isPin : Tid → Bool} {pinValue : Tensor}
+    {shapeOf : Tid → Shape} (tid : Tid) (h : isPin tid = false) :
+    pinnedStore isPin pinValue shapeOf tid = zeroTensor (shapeOf tid) := by
+  unfold pinnedStore
+  simp [h]
+
+/-- Per-goal check for pinnedStore InitGoalHolds. A goal `g` passes if:
+    - g is a "pin singleton": g.tps = [{r0, g.ts}], g.ts is a pin, g.tsShape = pinValue.shape,
+      g.tpShapes = [pinValue.shape], g.replicated = false; OR
+    - g is a "non-pin zero goal": g.ts is not a pin, no p ∈ g.tps has pin tid,
+      and goalShapeOK2_check shapeOfSM shapeOfPM numParts g holds. -/
+def pinnedGoalCheck (isPin : Tid → Bool) (pinValue : Tensor)
+    (shapeOfSM shapeOfPM : Tid → Shape) (numParts : Nat) (g : LineageGoal) : Bool :=
+  let noTpsIsPin := g.tps.all (fun p => !(isPin p.tid))
+  if isPin g.ts then
+    -- pin singleton: check structure
+    decide (g.tps = [{ rank := 0, tid := g.ts }]) &&
+    decide (g.tsShape = pinValue.shape) &&
+    decide (g.tpShapes = [pinValue.shape]) &&
+    decide (g.replicated = false)
+  else
+    noTpsIsPin && goalShapeOK2_check shapeOfSM shapeOfPM numParts g
+
+theorem pinnedStore2_initGoalHolds
+    (isPin : Tid → Bool) (pinValue : Tensor)
+    (shapeOfSM shapeOfPM : Tid → Shape) (numParts : Nat)
+    (g : LineageGoal)
+    (h : pinnedGoalCheck isPin pinValue shapeOfSM shapeOfPM numParts g = true) :
+    InitGoalHolds numParts g
+      (pinnedStore isPin pinValue shapeOfSM)
+      (pinnedStore isPin pinValue shapeOfPM) := by
+  unfold pinnedGoalCheck at h
+  by_cases hpin : isPin g.ts = true
+  · -- pin singleton branch
+    simp only [hpin, if_true, Bool.and_eq_true, decide_eq_true_eq] at h
+    obtain ⟨⟨⟨htps, htsShape⟩, htpShapes⟩, hrepl⟩ := h
+    refine ⟨?_, ?_, ?_⟩
+    · -- SM shape: pinnedStore SM g.ts = cu_pin_value (by pin), shape = pinValue.shape = g.tsShape
+      rw [pinnedStore_at_pin g.ts hpin, htsShape]
+    · -- PM tpShapes
+      rw [htps]
+      simp only [List.map_cons, List.map_nil]
+      -- pinnedStore PM g.ts = pinValue (by pin, since {r0, g.ts})
+      rw [pinnedStore_at_pin g.ts hpin, htpShapes]
+    · -- Reconstruction: pinnedSM g.ts = reconstructForGoal g numParts (map pinnedPM g.tps)
+      rw [htps]
+      simp only [List.map_cons, List.map_nil, reconstructForGoal, hrepl,
+                 Bool.false_eq_true, if_false, reconstructWithDim_singleton]
+      rw [pinnedStore_at_pin g.ts hpin, pinnedStore_at_pin g.ts hpin]
+  · -- non-pin branch, reduces to zeroStore case
+    have hpinF : isPin g.ts = false := by
+      rcases hc : isPin g.ts with _ | _
+      · rfl
+      · exact absurd hc hpin
+    simp only [hpinF, Bool.false_eq_true, if_false, Bool.and_eq_true] at h
+    obtain ⟨hnoTps, hgshape⟩ := h
+    have hshapeOK := goalShapeOK2_of_check hgshape
+    -- pinnedStore agrees with zeroStore at g.ts (non-pin) and at all tps (non-pin).
+    have hSM_eq : pinnedStore isPin pinValue shapeOfSM g.ts = zeroStore shapeOfSM g.ts :=
+      pinnedStore_at_nonpin g.ts hpinF
+    have hPM_eq : ∀ p ∈ g.tps,
+        pinnedStore isPin pinValue shapeOfPM p.tid = zeroStore shapeOfPM p.tid := by
+      intro p hp
+      have hntp : (!(isPin p.tid)) = true := (List.all_eq_true.mp hnoTps) p hp
+      have hpF : isPin p.tid = false := by
+        rcases hc : isPin p.tid with _ | _
+        · rfl
+        · rw [hc] at hntp; simp at hntp
+      exact pinnedStore_at_nonpin p.tid hpF
+    -- Now apply zeroStore2_initGoalHolds via congruence.
+    have hzero := zeroStore2_initGoalHolds shapeOfSM shapeOfPM numParts g hshapeOK
+    -- Convert zero-store statement to pinned-store via pointwise agreement
+    refine ⟨?_, ?_, ?_⟩
+    · rw [hSM_eq]; exact hzero.1
+    · -- PM tpShapes: (tps.map fun p => (pinnedStore ... p.tid)).map (fun t => t.shape) = ...
+      simp only [List.map_map]
+      have hmap_eq : g.tps.map (fun p => (pinnedStore isPin pinValue shapeOfPM p.tid).shape) =
+                     g.tps.map (fun p => (zeroStore shapeOfPM p.tid).shape) := by
+        apply List.map_congr_left; intro p hp; rw [hPM_eq p hp]
+      show (g.tps.map ((fun t : Tensor => t.shape) ∘ fun p => pinnedStore isPin pinValue shapeOfPM p.tid)) = g.tpShapes
+      simp only [Function.comp_def]
+      rw [hmap_eq]
+      have hz2 := hzero.2.1
+      simp only [List.map_map, Function.comp_def] at hz2
+      exact hz2
+    · rw [hSM_eq]
+      have hmap_eq : g.tps.map (fun p => pinnedStore isPin pinValue shapeOfPM p.tid) =
+                     g.tps.map (fun p => zeroStore shapeOfPM p.tid) := by
+        apply List.map_congr_left; intro p hp; rw [hPM_eq p hp]
+      rw [hmap_eq]; exact hzero.2.2
+
+theorem pinnedStore2_initGoalsHold
+    (isPin : Tid → Bool) (pinValue : Tensor)
+    (shapeOfSM shapeOfPM : Tid → Shape) (numParts : Nat)
+    (goals : List LineageGoal)
+    (h : goals.all (pinnedGoalCheck isPin pinValue shapeOfSM shapeOfPM numParts) = true) :
+    InitGoalsHold numParts goals
+      (pinnedStore isPin pinValue shapeOfSM)
+      (pinnedStore isPin pinValue shapeOfPM) := by
+  intro g hg
+  apply pinnedStore2_initGoalHolds
+  exact (List.all_eq_true.mp h) g hg
+
 end TrainVerify.Denote.JointWitness
