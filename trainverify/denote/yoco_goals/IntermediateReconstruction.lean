@@ -400,6 +400,219 @@ theorem recon_intermediateGoal_4689 (initSM initPM : Store)
   exact wrap_1tp initSM initPM intermediateGoal_4689 4689 [4096, 4, 64] rfl rfl rfl rfl rfl rfl hval hshape
 
 
+/-! ### Replicated multiref-copy goals (FW_multiref with `replicated := true`)
+
+    A `FW_multiref` output that is *replicated* across ranks records a
+    `replicated := true` goal whose `tps` list the per-rank full copies. Its
+    reconstruction picks the rank-0 head, so the obligation reduces to
+    `sm ts = pm p0` where both sides are multiref copies of the same already-
+    reconstructed source (`veq_4681` / `veq_4683`). -/
+
+/-- Generic `FW_multiref` (params `[2]`) second-output reduction. -/
+theorem applyNode_fw_multiref2_second_out' (g : GraphDecl) (s : Store) (rank : Nat)
+    (xTid t1 t2 : Tid) (h12 : t1 ≠ t2) :
+    applyNode g s { rank := rank, op := "OpName.FW_multiref", ins := [xTid],
+                    outs := [t1, t2], params := [2] } t2 = s xTid := by
+  unfold applyNode
+  rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_multiref]
+  change storeSet s ([t1, t2].zip (List.replicate 2 (s xTid))) t2 = _
+  unfold storeSet
+  simp [List.zip, List.zipWith, List.replicate, List.find?, show ¬ (t1 = t2) from h12]
+
+/-- Wrap a replicated dual-tp goal (`replicated := true`, two full copies) into
+    the `InitGoalHolds` obligation: reconstruction picks the rank-0 head. -/
+theorem wrap_replicated_dual (initSM initPM : Store) (g : LineageGoal)
+    (T p0 p1 : Tid) (sh : Shape)
+    (htp : g.tps = [{ rank := 0, tid := p0 }, { rank := 1, tid := p1 }])
+    (hrep : g.replicated = true) (hts : g.ts = T) (htsShape : g.tsShape = sh)
+    (htpShapes : g.tpShapes = [sh, sh])
+    (hval : denoteGraph sm initSM T = denoteGraph pm initPM p0)
+    (hshape0 : (denoteGraph sm initSM T).shape = sh)
+    (hshapeP0 : (denoteGraph pm initPM p0).shape = sh)
+    (hshapeP1 : (denoteGraph pm initPM p1).shape = sh) :
+    InitGoalHolds pm.numRanks g (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hts, htsShape]; exact hshape0
+  · rw [htp, htpShapes]; simp only [List.map]; rw [hshapeP0, hshapeP1]
+  · unfold reconstructForGoal
+    rw [hrep]
+    simp only [if_true, htp, hts, List.map, List.headD]
+    exact hval
+
+/-- `intermediateGoal_7383` (FW_multiref, replicated copy of 4681). -/
+theorem recon_intermediateGoal_7383 (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_7383
+      (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hsm : denoteGraph sm initSM 7383 = denoteGraph sm initSM 4681 := by
+    rw [sm_val initSM 2 7383 (by native_decide) (by native_decide)]
+    rw [show sm.nodes[2]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_multiref", ins := [4681], outs := [7383, 7387], params := [2] }
+        from by native_decide]
+    rw [applyNode_fw_multiref2_first_out, sm_prefix_eq initSM 2 4681 (by native_decide)]
+  have hpm0 : denoteGraph pm initPM 14603 = denoteGraph pm initPM 4681 := by
+    rw [pm_val initPM 29 14603 (by native_decide) (by native_decide)]
+    rw [show pm.nodes[29]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_multiref", ins := [4681], outs := [14603, 14607], params := [2] }
+        from by native_decide]
+    rw [applyNode_fw_multiref2_first_out, pm_prefix_eq initPM 29 4681 (by native_decide)]
+  have hpm1 : denoteGraph pm initPM 14611 = denoteGraph pm initPM 4681 := by
+    rw [pm_val initPM 30 14611 (by native_decide) (by native_decide)]
+    rw [show pm.nodes[30]'(by native_decide)
+        = { rank := 1, op := "OpName.FW_multiref", ins := [4681], outs := [14611, 14615], params := [2] }
+        from by native_decide]
+    rw [applyNode_fw_multiref2_first_out, pm_prefix_eq initPM 30 4681 (by native_decide)]
+  have hv := veq_4681 initSM initPM hSM hPM hInit
+  have hs := shape_4681 initSM initPM hSM hPM hInit
+  refine wrap_replicated_dual initSM initPM intermediateGoal_7383 7383 14603 14611 [4096, 1024]
+    rfl rfl rfl rfl rfl ?_ ?_ ?_ ?_
+  · rw [hsm, hpm0]; exact hv
+  · rw [hsm]; exact hs
+  · rw [hpm0, ← hv]; exact hs
+  · rw [hpm1, ← hv]; exact hs
+
+/-- `intermediateGoal_7387` (FW_multiref, replicated copy of 4681, 2nd out). -/
+theorem recon_intermediateGoal_7387 (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_7387
+      (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hsm : denoteGraph sm initSM 7387 = denoteGraph sm initSM 4681 := by
+    rw [sm_val initSM 2 7387 (by native_decide) (by native_decide)]
+    rw [show sm.nodes[2]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_multiref", ins := [4681], outs := [7383, 7387], params := [2] }
+        from by native_decide]
+    rw [applyNode_fw_multiref2_second_out' _ _ _ _ 7383 7387 (by decide),
+        sm_prefix_eq initSM 2 4681 (by native_decide)]
+  have hpm0 : denoteGraph pm initPM 14607 = denoteGraph pm initPM 4681 := by
+    rw [pm_val initPM 29 14607 (by native_decide) (by native_decide)]
+    rw [show pm.nodes[29]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_multiref", ins := [4681], outs := [14603, 14607], params := [2] }
+        from by native_decide]
+    rw [applyNode_fw_multiref2_second_out' _ _ _ _ 14603 14607 (by decide),
+        pm_prefix_eq initPM 29 4681 (by native_decide)]
+  have hpm1 : denoteGraph pm initPM 14615 = denoteGraph pm initPM 4681 := by
+    rw [pm_val initPM 30 14615 (by native_decide) (by native_decide)]
+    rw [show pm.nodes[30]'(by native_decide)
+        = { rank := 1, op := "OpName.FW_multiref", ins := [4681], outs := [14611, 14615], params := [2] }
+        from by native_decide]
+    rw [applyNode_fw_multiref2_second_out' _ _ _ _ 14611 14615 (by decide),
+        pm_prefix_eq initPM 30 4681 (by native_decide)]
+  have hv := veq_4681 initSM initPM hSM hPM hInit
+  have hs := shape_4681 initSM initPM hSM hPM hInit
+  refine wrap_replicated_dual initSM initPM intermediateGoal_7387 7387 14607 14615 [4096, 1024]
+    rfl rfl rfl rfl rfl ?_ ?_ ?_ ?_
+  · rw [hsm, hpm0]; exact hv
+  · rw [hsm]; exact hs
+  · rw [hpm0, ← hv]; exact hs
+  · rw [hpm1, ← hv]; exact hs
+
+/-- `intermediateGoal_7392` (FW_multiref, replicated copy of 4683, 1st out). -/
+theorem recon_intermediateGoal_7392 (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_7392
+      (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hsm : denoteGraph sm initSM 7392 = denoteGraph sm initSM 4683 := by
+    rw [sm_val initSM 4 7392 (by native_decide) (by native_decide)]
+    rw [show sm.nodes[4]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_multiref", ins := [4683], outs := [7392, 7396, 7400], params := [3] }
+        from by native_decide]
+    rw [applyNode_fw_multiref3_first_out', sm_prefix_eq initSM 4 4683 (by native_decide)]
+  have hpm0 : denoteGraph pm initPM 14620 = denoteGraph pm initPM 4683 := by
+    rw [pm_val initPM 33 14620 (by native_decide) (by native_decide)]
+    rw [show pm.nodes[33]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_multiref", ins := [4683], outs := [14620, 14624, 14628], params := [3] }
+        from by native_decide]
+    rw [applyNode_fw_multiref3_first_out', pm_prefix_eq initPM 33 4683 (by native_decide)]
+  have hpm1 : denoteGraph pm initPM 14632 = denoteGraph pm initPM 4683 := by
+    rw [pm_val initPM 34 14632 (by native_decide) (by native_decide)]
+    rw [show pm.nodes[34]'(by native_decide)
+        = { rank := 1, op := "OpName.FW_multiref", ins := [4683], outs := [14632, 14636, 14640], params := [3] }
+        from by native_decide]
+    rw [applyNode_fw_multiref3_first_out', pm_prefix_eq initPM 34 4683 (by native_decide)]
+  have hv := veq_4683 initSM initPM hSM hPM hInit
+  have hs := shape_4683 initSM initPM hSM hPM hInit
+  refine wrap_replicated_dual initSM initPM intermediateGoal_7392 7392 14620 14632 [4096, 1024]
+    rfl rfl rfl rfl rfl ?_ ?_ ?_ ?_
+  · rw [hsm, hpm0]; exact hv
+  · rw [hsm]; exact hs
+  · rw [hpm0, ← hv]; exact hs
+  · rw [hpm1, ← hv]; exact hs
+
+/-- `intermediateGoal_7396` (FW_multiref, replicated copy of 4683, 2nd out). -/
+theorem recon_intermediateGoal_7396 (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_7396
+      (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hsm : denoteGraph sm initSM 7396 = denoteGraph sm initSM 4683 := by
+    rw [sm_val initSM 4 7396 (by native_decide) (by native_decide)]
+    rw [show sm.nodes[4]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_multiref", ins := [4683], outs := [7392, 7396, 7400], params := [3] }
+        from by native_decide]
+    rw [applyNode_fw_multiref3_second_out' _ _ _ _ 7392 7396 7400 (by decide),
+        sm_prefix_eq initSM 4 4683 (by native_decide)]
+  have hpm0 : denoteGraph pm initPM 14624 = denoteGraph pm initPM 4683 := by
+    rw [pm_val initPM 33 14624 (by native_decide) (by native_decide)]
+    rw [show pm.nodes[33]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_multiref", ins := [4683], outs := [14620, 14624, 14628], params := [3] }
+        from by native_decide]
+    rw [applyNode_fw_multiref3_second_out' _ _ _ _ 14620 14624 14628 (by decide),
+        pm_prefix_eq initPM 33 4683 (by native_decide)]
+  have hpm1 : denoteGraph pm initPM 14636 = denoteGraph pm initPM 4683 := by
+    rw [pm_val initPM 34 14636 (by native_decide) (by native_decide)]
+    rw [show pm.nodes[34]'(by native_decide)
+        = { rank := 1, op := "OpName.FW_multiref", ins := [4683], outs := [14632, 14636, 14640], params := [3] }
+        from by native_decide]
+    rw [applyNode_fw_multiref3_second_out' _ _ _ _ 14632 14636 14640 (by decide),
+        pm_prefix_eq initPM 34 4683 (by native_decide)]
+  have hv := veq_4683 initSM initPM hSM hPM hInit
+  have hs := shape_4683 initSM initPM hSM hPM hInit
+  refine wrap_replicated_dual initSM initPM intermediateGoal_7396 7396 14624 14636 [4096, 1024]
+    rfl rfl rfl rfl rfl ?_ ?_ ?_ ?_
+  · rw [hsm, hpm0]; exact hv
+  · rw [hsm]; exact hs
+  · rw [hpm0, ← hv]; exact hs
+  · rw [hpm1, ← hv]; exact hs
+
+/-- `intermediateGoal_7400` (FW_multiref, replicated copy of 4683, 3rd out). -/
+theorem recon_intermediateGoal_7400 (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_7400
+      (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hsm : denoteGraph sm initSM 7400 = denoteGraph sm initSM 4683 := by
+    rw [sm_val initSM 4 7400 (by native_decide) (by native_decide)]
+    rw [show sm.nodes[4]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_multiref", ins := [4683], outs := [7392, 7396, 7400], params := [3] }
+        from by native_decide]
+    rw [applyNode_fw_multiref3_third_out' _ _ _ _ 7392 7396 7400 (by decide) (by decide),
+        sm_prefix_eq initSM 4 4683 (by native_decide)]
+  have hpm0 : denoteGraph pm initPM 14628 = denoteGraph pm initPM 4683 := by
+    rw [pm_val initPM 33 14628 (by native_decide) (by native_decide)]
+    rw [show pm.nodes[33]'(by native_decide)
+        = { rank := 0, op := "OpName.FW_multiref", ins := [4683], outs := [14620, 14624, 14628], params := [3] }
+        from by native_decide]
+    rw [applyNode_fw_multiref3_third_out' _ _ _ _ 14620 14624 14628 (by decide) (by decide),
+        pm_prefix_eq initPM 33 4683 (by native_decide)]
+  have hpm1 : denoteGraph pm initPM 14640 = denoteGraph pm initPM 4683 := by
+    rw [pm_val initPM 34 14640 (by native_decide) (by native_decide)]
+    rw [show pm.nodes[34]'(by native_decide)
+        = { rank := 1, op := "OpName.FW_multiref", ins := [4683], outs := [14632, 14636, 14640], params := [3] }
+        from by native_decide]
+    rw [applyNode_fw_multiref3_third_out' _ _ _ _ 14632 14636 14640 (by decide) (by decide),
+        pm_prefix_eq initPM 34 4683 (by native_decide)]
+  have hv := veq_4683 initSM initPM hSM hPM hInit
+  have hs := shape_4683 initSM initPM hSM hPM hInit
+  refine wrap_replicated_dual initSM initPM intermediateGoal_7400 7400 14628 14640 [4096, 1024]
+    rfl rfl rfl rfl rfl ?_ ?_ ?_ ?_
+  · rw [hsm, hpm0]; exact hv
+  · rw [hsm]; exact hs
+  · rw [hpm0, ← hv]; exact hs
+  · rw [hpm1, ← hv]; exact hs
+
 /-- Full list of all 1151 intermediate reconstruction goals (infrastructure). -/
 def all_intermediateGoals_list : List LineageGoal :=
   [
@@ -552,7 +765,9 @@ def all_intermediateGoals_list : List LineageGoal :=
     FW_float, FW_rms_norm, FW_per_head_mix_precision_linear categories). -/
 def all_intermediateGoals_proven_list : List LineageGoal :=
   [ intermediateGoal_4681, intermediateGoal_4683, intermediateGoal_4685,
-    intermediateGoal_4687, intermediateGoal_4689 ]
+    intermediateGoal_4687, intermediateGoal_4689,
+    intermediateGoal_7383, intermediateGoal_7387, intermediateGoal_7392,
+    intermediateGoal_7396, intermediateGoal_7400 ]
 
 /-- Partial assembly: `InitGoalsHold` for the proven sub-list, joined from the
     per-goal reconstruction lemmas. Kept SEPARATE from the (unproven) ideal
@@ -566,13 +781,18 @@ theorem all_intermediateGoals_proven_hold
       (denoteGraph sm initSM) (denoteGraph pm initPM) := by
   intro g hg
   simp only [all_intermediateGoals_proven_list, List.mem_cons, List.mem_singleton] at hg
-  rcases hg with h | h | h | h | h
+  rcases hg with h | h | h | h | h | h | h | h | h | h
   · rw [h]; exact recon_intermediateGoal_4681 initSM initPM hSM hPM hInit
   · rw [h]; exact recon_intermediateGoal_4683 initSM initPM hSM hPM hInit
   · rw [h]; exact recon_intermediateGoal_4685 initSM initPM hSM hPM hInit
   · rw [h]; exact recon_intermediateGoal_4687 initSM initPM hSM hPM hInit
+  · rw [h]; exact recon_intermediateGoal_4689 initSM initPM hSM hPM hInit
+  · rw [h]; exact recon_intermediateGoal_7383 initSM initPM hSM hPM hInit
+  · rw [h]; exact recon_intermediateGoal_7387 initSM initPM hSM hPM hInit
+  · rw [h]; exact recon_intermediateGoal_7392 initSM initPM hSM hPM hInit
+  · rw [h]; exact recon_intermediateGoal_7396 initSM initPM hSM hPM hInit
   · rcases h with h | h
-    · rw [h]; exact recon_intermediateGoal_4689 initSM initPM hSM hPM hInit
+    · rw [h]; exact recon_intermediateGoal_7400 initSM initPM hSM hPM hInit
     · exact absurd h (by simp)
 
 end TrainVerify.Denote.GeneratedPatterns
