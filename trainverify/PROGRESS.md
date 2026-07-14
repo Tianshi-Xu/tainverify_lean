@@ -76,6 +76,61 @@ per-head projections; value eq is pure input-congruence on `fw_rotary_embedding`
   `fw_rotary_apply_allGather0_commute_2_1d`, applied @10533); porting to full
   sm/pm needs only the per-head 2-tp input reconstruction as a side hypothesis.
 
+## WORKER #4 (2026-07-14) — 2-tp `extract_dual` ROTARY BRIDGEHEAD established
+
+Goal: pioneer the 2-tp `extract_dual` reconstruction pattern via the 20
+`FW_rotary_embedding` 2-tp goals. **Outcome: the 2-tp reconstruction pattern
+for the rotary op ITSELF is fully built and zero-sorry, but every rotary 2-tp
+goal is gated on attention/MoE-region input reconstruction (no template) — so
+the gears are stated CONDITIONALLY on those inputs.** This matches worker #3's
+honest assessment; the spec's "pieces in place" optimism conflated cut-graph
+(`Pattern_1.prove_goal_1`, where intermediates are boundary init-leaves resolved
+by `extract_dual`/`hInit`) with full-graph reconstruction (must re-derive each
+tid from init weights by chaining prior nodes).
+
+### The 20 rotary 2-tp goals (enumerated, Task 1)
+
+Q'/K' pairs across 10 layers: 4800/4801, 4854/4855, 4908/4909, 4962/4963,
+5016/5017, 5070/5071, 5124/5125, 5178/5179, 5232/5233, 5286/5287. Each Q' goal
+`tps=[p0(r0),p1(r1)]`, gatherDim=0, replicated=false, shards `[2048,16,64]` →
+`[4096,16,64]`; each K' shards `[2048,4,64]` → `[4096,4,64]`. cs-cache closed via
+`sm_pm_rotary_cache_agree k=2..11`.
+
+### Root cause of the gating (dependency trace)
+
+Goal 4800's q-input SM tid 4794 chains through 2× `FW_attn_sliding_window` +
+2× `FW_all2all_moe_gmm` (141 SM tids) — the bespoke attention/MoE region with
+**no reconstruction template**. Only layer-0 rotary (4692/4693) is shallow
+enough to close unconditionally. This is a structural blocker, not a rotary one.
+
+### Reusable gears added (zero-sorry, kernel axioms only — R1)
+
+- `wrap_2tp_allGather` — generic 2-tp (gatherDim=0, non-replicated) `InitGoalHolds`
+  wrapper. Analog of `wrap_1tp`; reduces a 2-tp goal to a value-eq + 3 shapes.
+- `rotary_fst_gather_commute` / `rotary_snd_gather_commute` — pure tensor-algebra
+  Q'/K' commute lemmas (`fw_rotary_embedding(allGather q,…).1 = allGather(rotary q).1`),
+  built on the existing `fw_rotary_embedding_allGather0_commute_2` (Denote.lean:22937).
+- `recon_rotary_2tp_fst` / `recon_rotary_2tp_snd` — **the parametrized 2-tp gear.**
+  Abstract over tids/node-indices: given SM/PM node reductions + cs agreement +
+  the 3 sharded-input recons + 6 PM shard shapes, produce `InitGoalHolds`. THIS is
+  the recipe for the ~910 remaining 2-tp goals (swap the rotary commute for the
+  op-specific `_allGather0_commute_2`).
+- `sm_rotary_4800/4801_node`, `pm_rotary_7805/7806/7807/7808_node` — per-goal
+  `native_decide` node reductions (mechanical template for the other 18 goals).
+- `recon_intermediateGoal_4800_of_inputs` / `_4801_of_inputs` — the concrete
+  layer-2 Q'/K' goals, each now a single application of the parametrized gear,
+  conditional on the 3 attention-gated sharded inputs (pos 4799, q 4794, k 4796).
+
+Not added to `all_intermediateGoals_proven_hold` (they are conditional, not
+unconditionally proven — correct behavior).
+
+### Recommended next attack
+
+Build the `FW_attn_sliding_window` (+ `FW_all2all_moe_gmm`) 2-tp reconstruction
+template. That single template unblocks the 3 sharded inputs feeding every rotary
+2-tp goal, at which point all 20 close mechanically via `recon_rotary_2tp_fst/snd`,
+and the same pattern generalizes to FW_view/reshape/add 2-tp goals.
+
 ## Category coverage table
 
 | Category                              | Count | Status                          |
@@ -89,7 +144,7 @@ per-head projections; value eq is pure input-congruence on `fw_rotary_embedding`
 | FW_view                               | 120   | un-attempted                    |
 | FW_add                                | 72    | un-attempted                    |
 | FW_topk_routing                       | 48    | un-attempted                    |
-| FW_rotary_embedding                   | 24    | 2 proven (1-tp 4692/4693); 4746/4747 gated on layer-0 MoE; 20 2-tp gated on per-head extract_dual |
+| FW_rotary_embedding                   | 24    | 2 proven (1-tp 4692/4693); 20 2-tp gears BUILT (`recon_rotary_2tp_fst/snd`), conditional on attention inputs; 4746/4747 gated on layer-0 MoE |
 | FW_norm_linear                        | 24    | un-attempted                    |
 | FW_all2all_moe_gmm                    | 24    | un-attempted                    |
 | FW_sigmoid                            | 24    | un-attempted                    |

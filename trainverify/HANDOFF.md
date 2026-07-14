@@ -117,3 +117,51 @@ is already present. Then:
   a naive regex misses these), build first/last-writer maps, resolve inputs
   through FW_multiref chains, then fixpoint the provable set. Reproduced in the
   session's /tmp/{parse,closure,frontier}.py scripts.
+
+## UPDATE (2026-07-14, worker #4): 2-tp `extract_dual` ROTARY bridgehead — the recipe for ~910 2-tp goals
+
+**The 2-tp reconstruction pattern is now BUILT and zero-sorry** (for the rotary op).
+Use these three gears, in `IntermediateReconstruction.lean` (before
+`all_intermediateGoals_list`):
+
+1. `wrap_2tp_allGather initSM initPM g T p0 p1 tsShape shardShape (htp hgd hrep hts
+   htsShape htpShapes hne : goal-structure) (hval : sm T = allGatherPrimDimN 0
+   numRanks 0 [pm p0, pm p1]) (hshape : (sm T).shape = tsShape) (hp0shape hp1shape)`
+   — the generic 2-tp (gatherDim=0, non-replicated) wrapper. This is the 2-tp
+   analog of `wrap_1tp`: it discharges `InitGoalHolds` via
+   `reconstructForGoal_of_not_replicated` + `reconstructWithDim_cons_cons_nonscalar`
+   (the `if sh=[1] then allReduce else allGather` dispatch — supply `hne : shardShape ≠ [1]`,
+   AGENTS.md rule 18). **This is op-agnostic — reuse it for EVERY 2-tp goal.**
+
+2. Per-op algebraic commute lemma, e.g. `rotary_fst_gather_commute` /
+   `rotary_snd_gather_commute`, built on the op's `_allGather0_commute_2`
+   (here `fw_rotary_embedding_allGather0_commute_2`, Denote.lean:22937). For a new
+   op grep `_allGather0_commute_2` in `denote/` — most sharded ops already have one
+   (proven on the goal_3 cut graphs). Shape: `op(allGather[x0,x1],…) = allGather[op x0,…]`.
+
+3. `recon_rotary_2tp_fst` / `recon_rotary_2tp_snd` — the **parametrized per-goal
+   gear**. Abstracts over all tids/node-indices. Given: goal structure, the SM/PM
+   node reductions (`hsmNode`/`hpm0`/`hpm1` — mechanical `native_decide` lemmas,
+   template `sm_rotary_4800_node` / `pm_rotary_7805_node`), cs/pos/q/k input recons,
+   and the 6 PM shard shapes → produces `InitGoalHolds`. The concrete goals
+   `recon_intermediateGoal_4800_of_inputs` / `_4801_of_inputs` are each a SINGLE
+   application. **To make an op-generic version, copy `recon_rotary_2tp_fst` and
+   swap the `rotary_fst_gather_commute` call + the two `fw_rotary_embedding_fst_shape`
+   uses for the target op's commute + shape lemmas.**
+
+### CRITICAL: full-graph vs cut-graph reconstruction (spec correction)
+
+`Pattern_1.prove_goal_1`'s `extract_dual` works on CUT graphs where intermediate
+values are boundary init-leaves resolved by `hInit`. Full-graph intermediateGoal
+reconstruction must RE-DERIVE each tid from init weights by chaining prior nodes.
+So the 2-tp gears above take the sharded INPUT reconstructions as HYPOTHESES
+(`hq`/`hk`/`hpos`) — they cannot be conjured from `hInit`. Every rotary 2-tp goal's
+q/k inputs are post-attention residual-stream values requiring 2×
+`FW_attn_sliding_window` + 2× `FW_all2all_moe_gmm` reconstruction (no template).
+
+### Recommended next attack (to actually CLOSE the 20 rotary 2-tp goals)
+
+Build the `FW_attn_sliding_window` + `FW_all2all_moe_gmm` 2-tp reconstruction
+template (produces `hq`/`hk` for the rotary gears). That single template unblocks
+all 20 rotary goals mechanically, and the `wrap_2tp_allGather` + parametrized-gear
+pattern then generalizes to FW_view/reshape/add/mul/… 2-tp goals directly.
