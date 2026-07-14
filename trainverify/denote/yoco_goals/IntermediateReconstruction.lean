@@ -1257,6 +1257,68 @@ theorem recon_intermediateGoal_4801_of_inputs (initSM initPM : Store)
     (sm_rotary_4801_node initSM) (pm_rotary_7807_node initPM) (pm_rotary_7808_node initPM)
     hcs hpos hq hk hq0 hq1 hk0 hk1 hp0 hp1
 
+/-! ### Worker #5 (2026-07-14) — adversarial hypothesis inventory for goal 4800
+
+    `recon_intermediateGoal_4800` / `_4801` are the canonically-named deliverable
+    theorems for the LOWEST-tid rotary 2-tp goal (4800/4801). They thread the
+    EXACT minimal hypothesis set discovered by the adversarial audit: the three
+    sharded rotary inputs (positions 4799, query 4794, key 4796) as 2-tp
+    allGather reconstructions, plus their six PM shard shapes. The rotary
+    cos/sin cache input (4691) is NOT threaded — it is closed internally via
+    `sm_pm_rotary_cache_agree` from `hInit` (init tid 4691 is broadcast in PM to
+    11855 through two `FW_multiref` nodes; worker #3's bridge).
+
+    Classification of the three threaded value-eq inputs (see
+    `~/HYPOTHESIS_INVENTORY.md`):
+    - `hq` (4794) / `hk` (4796): DIRECT producing op `FW_per_head_mix_precision_linear`,
+      each HAS an `intermediateGoal_*` (4794/4796) — but that goal's reconstruction is
+      transitively gated on `FW_all2all_moe_gmm` + `FW_attn_sliding_window` (the MoE /
+      attention region has no reconstruction template). These are the genuinely
+      attention-shaped, irreducible hypotheses.
+    - `hpos` (4799): the SM position tensor is an INIT LEAF (`initGoal_4799 ∈ initGoals`),
+      sharded in PM by two `ChunkPrim` nodes (7803/7804). NO `intermediateGoal_4799`.
+      This hypothesis is INDEPENDENT of attention — it is a ChunkPrim-of-init roundtrip
+      (with a `[4096] → [2048,1]` reshape), reducible in principle from `hInit` alone,
+      but distinct in kind from the attention-gated `hq`/`hk`. -/
+theorem recon_intermediateGoal_4800 (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hpos : denoteGraph sm initSM 4799
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7803, denoteGraph pm initPM 7804])
+    (hq : denoteGraph sm initSM 4794
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7771, denoteGraph pm initPM 7772])
+    (hk : denoteGraph sm initSM 4796
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7783, denoteGraph pm initPM 7784])
+    (hq0 : (denoteGraph pm initPM 7771).shape = [2048, 16, 64])
+    (hq1 : (denoteGraph pm initPM 7772).shape = [2048, 16, 64])
+    (hk0 : (denoteGraph pm initPM 7783).shape = [2048, 4, 64])
+    (hk1 : (denoteGraph pm initPM 7784).shape = [2048, 4, 64])
+    (hp0 : (denoteGraph pm initPM 7803).shape = [2048, 1])
+    (hp1 : (denoteGraph pm initPM 7804).shape = [2048, 1]) :
+    InitGoalHolds pm.numRanks intermediateGoal_4800
+      (denoteGraph sm initSM) (denoteGraph pm initPM) :=
+  recon_intermediateGoal_4800_of_inputs initSM initPM hInit
+    hpos hq hk hq0 hq1 hk0 hk1 hp0 hp1
+
+/-- K' companion of `recon_intermediateGoal_4800`. Same threaded hypothesis set. -/
+theorem recon_intermediateGoal_4801 (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hpos : denoteGraph sm initSM 4799
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7803, denoteGraph pm initPM 7804])
+    (hq : denoteGraph sm initSM 4794
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7771, denoteGraph pm initPM 7772])
+    (hk : denoteGraph sm initSM 4796
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7783, denoteGraph pm initPM 7784])
+    (hq0 : (denoteGraph pm initPM 7771).shape = [2048, 16, 64])
+    (hq1 : (denoteGraph pm initPM 7772).shape = [2048, 16, 64])
+    (hk0 : (denoteGraph pm initPM 7783).shape = [2048, 4, 64])
+    (hk1 : (denoteGraph pm initPM 7784).shape = [2048, 4, 64])
+    (hp0 : (denoteGraph pm initPM 7803).shape = [2048, 1])
+    (hp1 : (denoteGraph pm initPM 7804).shape = [2048, 1]) :
+    InitGoalHolds pm.numRanks intermediateGoal_4801
+      (denoteGraph sm initSM) (denoteGraph pm initPM) :=
+  recon_intermediateGoal_4801_of_inputs initSM initPM hInit
+    hpos hq hk hq0 hq1 hk0 hk1 hp0 hp1
+
 /-- Full list of all 1151 intermediate reconstruction goals (infrastructure). -/
 def all_intermediateGoals_list : List LineageGoal :=
   [
