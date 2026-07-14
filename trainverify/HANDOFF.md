@@ -95,3 +95,25 @@ is already present. Then:
   `List.reverse`/`++` on concrete shapes (rw's auto-rfl doesn't fire).
 - `simp only [List.mem_cons]` leaves a trailing `∨ g ∈ []`; handle with an
   extra `rcases h with h | h` + `exact absurd h (by simp)`.
+
+## UPDATE (2026-07-14, second worker): replicated-multiref pattern + frontier reality
+
+- **New reusable gear:** `wrap_replicated_dual` handles `replicated := true`
+  dual-tp goals (reconstruction = rank-0 head, `reconstructForGoal` true-branch =
+  `tps.headD`). Pair with `applyNode_fw_multiref{2,3}_{first,second,third}_out'`
+  to close replicated multiref copies. See `recon_intermediateGoal_7383` for the
+  template (SM copy → source, PM rank-0 copy → source, then `veq_source`).
+
+- **The "easy tier" is exhausted at 10 goals.** The pure-1-tp topological
+  closure is exactly {4681,4683,4685,4687,4689} + the 5 replicated multiref
+  copies {7383,7387,7392,7396,7400}. Do NOT chase more FW_float/FW_to/etc as
+  "easy value-identity" — their inputs cross the 2-tp sharded barrier. See the
+  CRITICAL FINDING section in PROGRESS.md for the dependency analysis and the
+  two genuine blockers (rotary cs-cache 4691↔11853 has no bridging goal;
+  attention is bespoke Tier D). Next real work = 2-tp `extract_dual` machinery.
+
+- **Frontier discovery tooling:** parse both graphs (handle
+  `ins := ((List.range N).map (fun r => BASE+r))` for the 12 attn_zigzag nodes —
+  a naive regex misses these), build first/last-writer maps, resolve inputs
+  through FW_multiref chains, then fixpoint the provable set. Reproduced in the
+  session's /tmp/{parse,closure,frontier}.py scripts.
