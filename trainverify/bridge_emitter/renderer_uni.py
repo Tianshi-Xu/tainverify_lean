@@ -12,6 +12,7 @@ Design (style-1, validated against Goal30/Goal44/Goal6/Goal9/Goal28/Goal3):
   * Assembly (cut_to_full / hInitCut / shapes) reused from renderer.py.
 """
 import os, sys
+import os
 from dataclasses import dataclass
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -21,6 +22,8 @@ from renderer import InputSource
 # ---------------- operator metadata ----------------
 # pointwise op -> (denote_fn, applyNode_lemma, arity, has_params, params_before_ins)
 # arg rendering: params (if params_before_ins) then ins, each input as `(acc tid)`.
+MINI_K = int(os.environ.get("BRIDGE_MINI_K", os.environ.get("BRIDGE_PM_NUMRANKS", "4")))
+
 POINTWISE = {
     "FW_layernorm": ("fw_layernorm", "applyNode_fw_layernorm_out", None, False, False),
     "FW_gelu":      ("fw_gelu",      "applyNode_fw_gelu_out",      None, False, False),
@@ -462,6 +465,11 @@ def _pointwise_expr(op, params, args):
         # literal so the RHS matches the post-`norm_num`-reduced applyNode lemma output.
         c = (params[0] if params else 1)
         return f"{fn} (({c} : Nat) : Scalar) {_paren(args[0])}"
+    if op == "FW_embedding":
+        # fw_embedding (ids) (w) OR fw_embedding_offset off (ids) (w)
+        if params:
+            return f"fw_embedding_offset {params[0]} " + " ".join(_paren(a) for a in args[:2])
+        return "fw_embedding " + " ".join(_paren(a) for a in args[:2])
     if has_params and pbefore:
         if op == "FW_view":
             pstr = "[" + ", ".join(str(p) for p in params) + "]"
@@ -525,7 +533,7 @@ def denote_sm_block(n, sm_node, bw_idx=None):
     smn = PMNode(sm_node.rank, sm_node.op, sm_node.ins, sm_node.outs, sm_node.params)
     is_bw = bw_idx is not None and sm_node.op in BW_MULTI
     out = _bw_lout(smn, bw_idx) if is_bw else sm_node.outs[0]
-    rhs = node_expr(smn, "s", {}, 4, bw_idx)
+    rhs = node_expr(smn, "s", {}, MINI_K, bw_idx)
     if is_bw:
         apply = _bw_apply(smn, bw_idx)
         post = ""
@@ -637,7 +645,7 @@ def denote_pm_block(n, node, inline_map, bw_idx=None):
     """denote_pm_goal_N_<final> : mini graph computes final = fully-nested expr (literal K=4, s)."""
     is_bw = bw_idx is not None and node.op in BW_MULTI
     out = _bw_lout(node, bw_idx) if is_bw else node.outs[0]
-    rhs = node_expr(node, "s", inline_map, 4, bw_idx)
+    rhs = node_expr(node, "s", inline_map, MINI_K, bw_idx)
     has_mid = any(t in inline_map for t in node.ins)
     if is_collective(node.op):
         meta = COLLECTIVE[node.op]
@@ -696,7 +704,7 @@ def pm_frame_block(node, inline_map, mid_rw_order, any_collective, bw_idx=None, 
     ip = inplace_info[0] if (inplace_info is not None and is_collective(node.op)
                              and out == node.outs[0]) else None
     acc = "denoteGraph pm initPM"
-    rhs = node_expr(node, acc, inline_map, 4, bw_idx)
+    rhs = node_expr(node, acc, inline_map, MINI_K, bw_idx)
     idx = node.node_idx
     explicit = bw_idx is not None
     lit = _node_literal(node, out, explicit_ins=explicit)
@@ -749,7 +757,7 @@ def pm_frame_block(node, inline_map, mid_rw_order, any_collective, bw_idx=None, 
     needs_numranks = _bears_numranks(node.op) or any(
         m in inline_map and _bears_numranks(inline_map[m].op) for m in mid_rw_order)
     if needs_numranks:
-        lines.append("  rw [show pm.numRanks = 4 from by native_decide]")
+        lines.append("  rw [show pm.numRanks = @@PM_NUMRANKS@@ from by native_decide]")
     # Pointwise-op post-normalize (e.g. fw_div scalar param) goes LAST, after the mid
     # rewrites have exposed the final `fw_div ((params.head?.getD 1)) ...` shape.
     if post:
@@ -779,21 +787,28 @@ def _find_inplace_collective(ir, bw_idx):
 
 
 def _pointwise_lemma_name(node):
-    """Just the applyNode lemma NAME for a POINTWISE node (offset-aware for BW_embedding).
+    """Just the applyNode lemma NAME for a POINTWISE node (offset-aware for BW_embedding/FW_embedding).
     Used at `rw [<name>]` sites in denote_pm_block where the lemma is applied by
     unification (no explicit tids)."""
     _, lemma, *_ = POINTWISE[node.op]
     if node.op == "BW_embedding" and node.params:
         return "applyNode_bw_embedding_offset_out"
+    if node.op == "FW_embedding" and node.params:
+        return "applyNode_fw_embedding_offset_out"
     return lemma
 
 
 def _pointwise_apply(node):
     """The `applyNode_..._out _ _ rank <ins> <out>` rewrite term for a single-output
-    POINTWISE node. Picks the offset variant lemma for BW_embedding when params present."""
+    POINTWISE node. Picks the offset variant lemma for BW_embedding / FW_embedding
+    when params present."""
     _, lemma, *_ = POINTWISE[node.op]
     if node.op == "BW_embedding" and node.params:
         lemma = "applyNode_bw_embedding_offset_out"
+        tids = " ".join(str(t) for t in (list(node.ins) + list(node.outs)))
+        return f"{lemma} _ _ {node.rank} {node.params[0]} {tids}"
+    if node.op == "FW_embedding" and node.params:
+        lemma = "applyNode_fw_embedding_offset_out"
         tids = " ".join(str(t) for t in (list(node.ins) + list(node.outs)))
         return f"{lemma} _ _ {node.rank} {node.params[0]} {tids}"
     tids = " ".join(str(t) for t in (list(node.ins) + list(node.outs)))
@@ -1547,7 +1562,7 @@ f"""theorem pm_frame_{tp}_self (initPM : Store) :
   rw [show pm.nodes[{pidx}]'(by native_decide)
       = {lit}
       from by native_decide]
-  rw [{meta['full']}, show pm.numRanks = 4 from by native_decide]
+  rw [{meta['full']}, show pm.numRanks = @@PM_NUMRANKS@@ from by native_decide]
 {range_simp}  rw [{prefix},
       {mid_rws}]
 

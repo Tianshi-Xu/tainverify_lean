@@ -428,13 +428,13 @@ theorem goal_{n}_intermediate (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
     InitGoalHolds pm.numRanks goal_{n} (denoteGraph sm initSM) (denoteGraph pm initPM) := by
-  have hfull : goal_{n}_stmt := goal_{n}_cut_to_full prove_goal_{n}_cut
+  have hfull : goal_{n}_stmt := goal_{n}_cut_to_full @@PROVE_GOAL_{n}@@
   have := hfull initSM initPM hSM hPM hInit
   unfold InitGoalHolds
   simp only [goal_{n}]
   exact this
 {goal_2_shim}
-end TrainVerify.Denote.GeneratedGoals
+end TrainVerify.Denote.@@BRIDGE_NAMESPACE@@
 """)
 
 def render_family_a(n: int, ir, topo, probe_map, input_sources, prereqs_in_order: list,

@@ -10,12 +10,24 @@ sys.path.insert(0, os.path.dirname(__file__))
 from parser import load_goal_ir, analyze, GoalIR
 from probe import build_probe, DENOTE_DIR
 from emit import trace_input_sources, compute_imports
-import renderer_uni as RU
-from target_config import DENOTE_DIR as _RELDIR, MOD_PREFIX
+from target_config import DENOTE_DIR as _RELDIR, MOD_PREFIX, GEN_FILE
 
 REPO = os.path.expanduser("~/.openclaw/workspace/tainverify_lean")
 TV   = os.path.join(REPO, "trainverify")
 DENOTE = _RELDIR
+
+# Auto-detect pm.numRanks from generated-data file and expose via BRIDGE_PM_NUMRANKS
+# env var BEFORE importing renderer_uni (which reads it at module load).
+from parser import GEN_DIR as _GD_INIT
+_gd_path_init = os.path.join(REPO, _GD_INIT, GEN_FILE)
+try:
+    _gd_text_init = open(_gd_path_init).read()
+    _pm_m_init = re.search(r'def\s+pm\s*:\s*GraphDecl.*?numRanks\s*:=\s*(\d+)', _gd_text_init, re.S)
+    if _pm_m_init and "BRIDGE_PM_NUMRANKS" not in os.environ:
+        os.environ["BRIDGE_PM_NUMRANKS"] = _pm_m_init.group(1)
+except Exception:
+    pass
+import renderer_uni as RU
 
 # parse #eval probe output, capturing ALL writer indices per tid (take max = last writer)
 LINE_RE = re.compile(r'(SM|PM):(\d+)\s+\[(.*?)\]\s*$', re.M)
@@ -151,6 +163,15 @@ def main():
     kits = [f"{MOD_PREFIX}.BridgeKit"]
     if os.path.exists(os.path.join(TV, DENOTE, "SpikeBridge.lean")):
         kits.append(f"{MOD_PREFIX}.SpikeBridge")
+    # BRIDGE_EXTRA_IMPORTS: comma-separated module names always prepended to
+    # imports. Use this to pull in a target-specific `Pattern_N.lean` (e.g. yoco
+    # keeps `prove_goal_N` in `denote.yoco_goals.Pattern_N` instead of the
+    # gpt_ly4 convention where `prove_goal_N_cut` lives in the Goal file).
+    _extra_imports = os.environ.get("BRIDGE_EXTRA_IMPORTS", "").strip()
+    if _extra_imports:
+        for m in [x.strip() for x in _extra_imports.split(",") if x.strip()]:
+            if m not in kits:
+                kits.append(m)
     for kit in kits:
         if kit not in imports:
             imports.insert(0, kit)
@@ -227,11 +248,23 @@ def main():
         sys.exit(3)
 
     text = RU.render_universal(n, ir, topo, probe, input_sources, ir.prereqs, imports)
-    # Apply BRIDGE_NAMESPACE / EXTRA_OPENS substitutions (from target_config env vars).
+    # Apply BRIDGE_NAMESPACE / EXTRA_OPENS / PROVE_GOAL / PM_NUMRANKS substitutions.
     _ns = os.environ.get("BRIDGE_NAMESPACE", "GeneratedGoals")
     _extra = os.environ.get("BRIDGE_EXTRA_OPENS", "")
     _extra_str = (" " + _extra) if _extra else ""
-    text = text.replace("@@BRIDGE_NAMESPACE@@", _ns).replace("@@EXTRA_OPENS@@", _extra_str)
+    _prove_fmt = os.environ.get("BRIDGE_PROVE_GOAL_FMT", "prove_goal_{n}_cut")
+    _prove_ref = _prove_fmt.format(n=n)
+    # Auto-detect pm.numRanks from the generated-data file (parses `def pm : GraphDecl := by refine { numRanks := N, ... }`).
+    from parser import GEN_DIR
+    from target_config import GEN_FILE
+    _gd_text = open(os.path.join(REPO, GEN_DIR, GEN_FILE)).read()
+    _pm_nr_m = re.search(r'def\s+pm\s*:\s*GraphDecl.*?numRanks\s*:=\s*(\d+)', _gd_text, re.S)
+    _pm_nr = _pm_nr_m.group(1) if _pm_nr_m else os.environ.get("BRIDGE_PM_NUMRANKS", "4")
+    text = (text
+            .replace("@@BRIDGE_NAMESPACE@@", _ns)
+            .replace("@@EXTRA_OPENS@@", _extra_str)
+            .replace(f"@@PROVE_GOAL_{n}@@", _prove_ref)
+            .replace("@@PM_NUMRANKS@@", _pm_nr))
     out_path = args.out or os.path.join(TV, DENOTE, f"Goal{n}Bridge.lean")
     if args.dry_run:
         log(text)
