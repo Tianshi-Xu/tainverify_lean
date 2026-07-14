@@ -172,19 +172,70 @@ theorem reconstructWithDim_of_zeroTensors (gatherDim numParts : Nat)
     We define a computable helper that checks the shape reconstruction; then
     prove `InitGoalHolds` follows when this returns `true`. -/
 def goalShapeOK (shapeOf : Tid → Shape) (numParts : Nat) (g : LineageGoal) : Prop :=
-  -- The reconstructed shape must equal g.tsShape, using the definitional cases
-  -- of reconstructWithDim on zero tensors.
   shapeOf g.ts = g.tsShape ∧
   (g.tps.map (fun p => shapeOf p.tid)) = g.tpShapes ∧
-  ( -- singleton reconstruction: reconstructWithDim on [x] = x, so tp shape = ts shape
-    (g.tps.length = 1 ∧ ∃ tp, g.tps = [tp] ∧ shapeOf tp.tid = g.tsShape) ∨
-    -- allReduce [1] case: nonempty tps required
+  ( (g.tps.length = 1 ∧ ∃ tp, g.tps = [tp] ∧ shapeOf tp.tid = g.tsShape) ∨
     (g.tps ≠ [] ∧ (∀ tp ∈ g.tps, shapeOf tp.tid = [1]) ∧ g.tsShape = [1]) ∨
-    -- allGather: tp shapes all equal shard sh, tsShape = sh with gatherDim scaled
     (∃ sh, (∀ tp ∈ g.tps, shapeOf tp.tid = sh) ∧
       sh ≠ [1] ∧
       g.tps.length ≥ 2 ∧
       g.tsShape = sh.set g.gatherDim (sh.getD g.gatherDim 0 * numParts)) )
+
+/-- Computable form of `goalShapeOK`: directly inspects the tps list. -/
+def goalShapeOK_check (shapeOf : Tid → Shape) (numParts : Nat) (g : LineageGoal) : Bool :=
+  decide (shapeOf g.ts = g.tsShape) &&
+  decide ((g.tps.map (fun p => shapeOf p.tid)) = g.tpShapes) &&
+  ( match g.tps with
+    | [] => false  -- empty tps not supported
+    | [tp] => decide (shapeOf tp.tid = g.tsShape)
+    | tp0 :: tps' =>
+      let sh0 := shapeOf tp0.tid
+      let allSame := (tp0 :: tps').all (fun p => decide (shapeOf p.tid = sh0))
+      allSame &&
+      ( (decide (sh0 = [1]) && decide (g.tsShape = [1])) ||
+        (!decide (sh0 = [1]) &&
+          decide (g.tsShape = sh0.set g.gatherDim (sh0.getD g.gatherDim 0 * numParts))) ) )
+
+theorem goalShapeOK_of_check {shapeOf : Tid → Shape} {numParts : Nat} {g : LineageGoal}
+    (h : goalShapeOK_check shapeOf numParts g = true) : goalShapeOK shapeOf numParts g := by
+  unfold goalShapeOK_check at h
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  obtain ⟨⟨hts, htps⟩, hmatch⟩ := h
+  refine ⟨hts, htps, ?_⟩
+  -- Case split on g.tps directly
+  match hg : g.tps, hmatch with
+  | [], hm => simp at hm
+  | [tp], hm =>
+    left
+    simp only at hm
+    exact ⟨by simp, tp, rfl, of_decide_eq_true hm⟩
+  | tp0 :: tp1 :: rest, hm =>
+    right
+    simp only [List.all_cons, Bool.and_eq_true, decide_eq_true_eq,
+               Bool.or_eq_true, Bool.not_eq_true'] at hm
+    -- hm : ((shapeOf tp0.tid = shapeOf tp0.tid ∧ ...) ∧ ...) ∧ (...)
+    obtain ⟨hallB, hbranch⟩ := hm
+    -- Extract "all elements have shape = shapeOf tp0.tid"
+    have hallSame : ∀ p ∈ (tp0 :: tp1 :: rest), shapeOf p.tid = shapeOf tp0.tid := by
+      intro p hp
+      rcases List.mem_cons.mp hp with rfl | hp'
+      · rfl
+      · rcases List.mem_cons.mp hp' with rfl | hp''
+        · exact hallB.2.1
+        · -- p ∈ rest
+          have hrest : (rest.all (fun q => decide (shapeOf q.tid = shapeOf tp0.tid))) = true := hallB.2.2
+          have := (List.all_eq_true.mp hrest) p hp''
+          exact of_decide_eq_true this
+    rcases hbranch with ⟨hsh1, hts1⟩ | ⟨hsh_ne, hts_gather⟩
+    · left
+      refine ⟨by simp, ?_, hts1⟩
+      intro tp htp
+      rw [hallSame tp htp, hsh1]
+    · right
+      refine ⟨shapeOf tp0.tid, ?_, of_decide_eq_false hsh_ne, ?_, hts_gather⟩
+      · intro tp htp
+        exact hallSame tp htp
+      · simp
 
 /-- For a zeroStore, if goalShapeOK holds then InitGoalHolds holds. -/
 theorem zeroStore_initGoalHolds (shapeOf : Tid → Shape) (numParts : Nat)
@@ -266,5 +317,187 @@ theorem zeroStore_initGoalHolds (shapeOf : Tid → Shape) (numParts : Nat)
             rw [hhead_sh]; exact hne1
           simp only [hne, if_false]
           exact (allGatherPrimDimN_of_zeroTensors g.gatherDim numParts _ _ hallL hhead_sh).symm
+
+/-- List-level: all goals pass the check. -/
+def goalsShapeOK_check_all (shapeOf : Tid → Shape) (numParts : Nat)
+    (goals : List LineageGoal) : Bool :=
+  goals.all (goalShapeOK_check shapeOf numParts)
+
+theorem zeroStore_initGoalsHold (shapeOf : Tid → Shape) (numParts : Nat)
+    (goals : List LineageGoal)
+    (h : goalsShapeOK_check_all shapeOf numParts goals = true) :
+    InitGoalsHold numParts goals (zeroStore shapeOf) (zeroStore shapeOf) := by
+  intro g hg
+  apply zeroStore_initGoalHolds
+  apply goalShapeOK_of_check
+  exact (List.all_eq_true.mp h) g hg
+
+/-- Predicate: shape maps for SM (ts side) and PM (tps side) are consistent. -/
+def goalShapeOK2 (shapeOfSM shapeOfPM : Tid → Shape) (numParts : Nat) (g : LineageGoal) : Prop :=
+  shapeOfSM g.ts = g.tsShape ∧
+  (g.tps.map (fun p => shapeOfPM p.tid)) = g.tpShapes ∧
+  ( (g.tps.length = 1 ∧ ∃ tp, g.tps = [tp] ∧ shapeOfPM tp.tid = g.tsShape) ∨
+    (g.tps ≠ [] ∧ (∀ tp ∈ g.tps, shapeOfPM tp.tid = [1]) ∧ g.tsShape = [1]) ∨
+    (∃ sh, (∀ tp ∈ g.tps, shapeOfPM tp.tid = sh) ∧
+      sh ≠ [1] ∧
+      g.tps.length ≥ 2 ∧
+      g.tsShape = sh.set g.gatherDim (sh.getD g.gatherDim 0 * numParts)) )
+
+/-- Computable form for two-store version. -/
+def goalShapeOK2_check (shapeOfSM shapeOfPM : Tid → Shape) (numParts : Nat)
+    (g : LineageGoal) : Bool :=
+  decide (shapeOfSM g.ts = g.tsShape) &&
+  decide ((g.tps.map (fun p => shapeOfPM p.tid)) = g.tpShapes) &&
+  ( match g.tps with
+    | [] => false
+    | [tp] => decide (shapeOfPM tp.tid = g.tsShape)
+    | tp0 :: tps' =>
+      let sh0 := shapeOfPM tp0.tid
+      let allSame := (tp0 :: tps').all (fun p => decide (shapeOfPM p.tid = sh0))
+      allSame &&
+      ( (decide (sh0 = [1]) && decide (g.tsShape = [1])) ||
+        (!decide (sh0 = [1]) &&
+          decide (g.tsShape = sh0.set g.gatherDim (sh0.getD g.gatherDim 0 * numParts))) ) )
+
+theorem goalShapeOK2_of_check {shapeOfSM shapeOfPM : Tid → Shape} {numParts : Nat}
+    {g : LineageGoal}
+    (h : goalShapeOK2_check shapeOfSM shapeOfPM numParts g = true) :
+    goalShapeOK2 shapeOfSM shapeOfPM numParts g := by
+  unfold goalShapeOK2_check at h
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  obtain ⟨⟨hts, htps⟩, hmatch⟩ := h
+  refine ⟨hts, htps, ?_⟩
+  match hg : g.tps, hmatch with
+  | [], hm => simp at hm
+  | [tp], hm =>
+    left
+    simp only at hm
+    exact ⟨by simp, tp, rfl, of_decide_eq_true hm⟩
+  | tp0 :: tp1 :: rest, hm =>
+    right
+    simp only [List.all_cons, Bool.and_eq_true, decide_eq_true_eq,
+               Bool.or_eq_true, Bool.not_eq_true'] at hm
+    obtain ⟨hallB, hbranch⟩ := hm
+    have hallSame : ∀ p ∈ (tp0 :: tp1 :: rest), shapeOfPM p.tid = shapeOfPM tp0.tid := by
+      intro p hp
+      rcases List.mem_cons.mp hp with rfl | hp'
+      · rfl
+      · rcases List.mem_cons.mp hp' with rfl | hp''
+        · exact hallB.2.1
+        · have hrest : (rest.all (fun q => decide (shapeOfPM q.tid = shapeOfPM tp0.tid))) = true := hallB.2.2
+          exact of_decide_eq_true ((List.all_eq_true.mp hrest) p hp'')
+    rcases hbranch with ⟨hsh1, hts1⟩ | ⟨hsh_ne, hts_gather⟩
+    · left
+      refine ⟨by simp, ?_, hts1⟩
+      intro tp htp; rw [hallSame tp htp, hsh1]
+    · right
+      refine ⟨shapeOfPM tp0.tid, ?_, of_decide_eq_false hsh_ne, ?_, hts_gather⟩
+      · intro tp htp; exact hallSame tp htp
+      · simp
+
+/-- Two-store zero InitGoalHolds. -/
+theorem zeroStore2_initGoalHolds (shapeOfSM shapeOfPM : Tid → Shape) (numParts : Nat)
+    (g : LineageGoal) (hOK : goalShapeOK2 shapeOfSM shapeOfPM numParts g) :
+    InitGoalHolds numParts g (zeroStore shapeOfSM) (zeroStore shapeOfPM) := by
+  obtain ⟨hts, htps, hrec⟩ := hOK
+  refine ⟨?_, ?_, ?_⟩
+  · show (zeroStore shapeOfSM g.ts).shape = g.tsShape
+    rw [zeroStore_shape, hts]
+  · show (g.tps.map (fun p => (zeroStore shapeOfPM p.tid))).map (fun t => t.shape) = g.tpShapes
+    rw [List.map_map]
+    have hfun : ((fun t : Tensor => t.shape) ∘ (fun p : Piece => zeroStore shapeOfPM p.tid)) =
+        (fun p : Piece => shapeOfPM p.tid) := by
+      funext p; exact zeroStore_shape shapeOfPM p.tid
+    rw [hfun]; exact htps
+  · show (zeroStore shapeOfSM g.ts) =
+      reconstructWithDim g.gatherDim numParts 0 (g.tps.map (fun p => zeroStore shapeOfPM p.tid))
+    unfold zeroStore
+    rw [hts]
+    rcases hrec with ⟨hlen1, tp, htpseq, htp_ts⟩ | ⟨hnonempty, hall1, hts1⟩ | ⟨sh, hall, hne1, hlen2, htsShape⟩
+    · rw [htpseq]
+      simp only [List.map_cons, List.map_nil]
+      rw [reconstructWithDim_singleton, htp_ts]
+    · have hmap : g.tps.map (fun p => zeroTensor (shapeOfPM p.tid)) =
+          g.tps.map (fun _ => zeroTensor ([1] : Shape)) := by
+        apply List.map_congr_left; intro p hp; rw [hall1 p hp]
+      rw [hmap, hts1]
+      generalize hL : g.tps.map (fun _ => zeroTensor ([1] : Shape)) = L
+      have hallL : ∀ t ∈ L, t = zeroTensor [1] := by
+        intro t ht; rw [← hL] at ht
+        rcases List.mem_map.mp ht with ⟨p, _, hpeq⟩; exact hpeq.symm
+      unfold reconstructWithDim
+      cases L with
+      | nil =>
+        exfalso; apply hnonempty
+        cases htps' : g.tps with
+        | nil => rfl
+        | cons a t => rw [htps'] at hL; simp at hL
+      | cons a rest =>
+        cases rest with
+        | nil => rw [show a = zeroTensor [1] from hallL a (by simp)]
+        | cons b rest' =>
+          have hhead1 : (Option.map (fun t : Tensor => t.shape) (a :: b :: rest').head?).getD [] = [1] := by
+            simp; rw [hallL a (by simp)]; rfl
+          simp only [hhead1, if_true]
+          exact (allReducePrim_of_zeroTensors numParts _ _ hhead1 hallL).symm
+    · have hmap : g.tps.map (fun p => zeroTensor (shapeOfPM p.tid)) =
+          g.tps.map (fun _ => zeroTensor sh) := by
+        apply List.map_congr_left; intro p hp; rw [hall p hp]
+      rw [hmap, htsShape]
+      generalize hL : g.tps.map (fun _ => zeroTensor sh) = L
+      have hallL : ∀ t ∈ L, t = zeroTensor sh := by
+        intro t ht; rw [← hL] at ht
+        rcases List.mem_map.mp ht with ⟨_, _, hpeq⟩; exact hpeq.symm
+      have hlenL : L.length ≥ 2 := by rw [← hL, List.length_map]; exact hlen2
+      unfold reconstructWithDim
+      cases L with
+      | nil => simp at hlenL
+      | cons a rest =>
+        cases rest with
+        | nil => simp at hlenL
+        | cons b rest' =>
+          have hhead_sh : (Option.map (fun t : Tensor => t.shape) (a :: b :: rest').head?).getD [] = sh := by
+            simp; rw [hallL a (by simp)]; rfl
+          have hne : (Option.map (fun t : Tensor => t.shape) (a :: b :: rest').head?).getD [] ≠ [1] := by
+            rw [hhead_sh]; exact hne1
+          simp only [hne, if_false]
+          exact (allGatherPrimDimN_of_zeroTensors g.gatherDim numParts _ _ hallL hhead_sh).symm
+
+/-- Two-store list-level version. -/
+def goalsShapeOK2_check_all (shapeOfSM shapeOfPM : Tid → Shape) (numParts : Nat)
+    (goals : List LineageGoal) : Bool :=
+  goals.all (goalShapeOK2_check shapeOfSM shapeOfPM numParts)
+
+theorem zeroStore2_initGoalsHold (shapeOfSM shapeOfPM : Tid → Shape) (numParts : Nat)
+    (goals : List LineageGoal)
+    (h : goalsShapeOK2_check_all shapeOfSM shapeOfPM numParts goals = true) :
+    InitGoalsHold numParts goals (zeroStore shapeOfSM) (zeroStore shapeOfPM) := by
+  intro g hg
+  apply zeroStore2_initGoalHolds
+  apply goalShapeOK2_of_check
+  exact (List.all_eq_true.mp h) g hg
+
+/-- If a Tid → Shape function agrees with a shape env's list on every pair
+    in the list, then StoreShapesHold holds for the corresponding zero store. -/
+theorem zeroStore_shapes_hold_of_list {shapeOf : Tid → Shape} {xs : List (Tid × Shape)}
+    (h : xs.all (fun p => decide (shapeOf p.1 = p.2)) = true) :
+    StoreShapesHold (zeroStore shapeOf) (shapeEnvOfList xs) := by
+  intro tid sh hsh
+  rw [zeroStore_shape]
+  -- shapeEnvOfList xs tid = some sh means find? returned (tid, sh)
+  unfold shapeEnvOfList at hsh
+  cases hf : xs.find? (fun p => p.1 = tid) with
+  | none => rw [hf] at hsh; simp at hsh
+  | some pair =>
+    rw [hf] at hsh
+    -- hsh : some pair.2 = some sh
+    have : pair.2 = sh := by simp at hsh; exact hsh
+    -- pair ∈ xs and pair.1 = tid
+    have hmem : pair ∈ xs := List.mem_of_find?_eq_some hf
+    have hkey : pair.1 = tid := by
+      have := List.find?_some hf
+      exact of_decide_eq_true this
+    have hval := of_decide_eq_true ((List.all_eq_true.mp h) pair hmem)
+    rw [← hkey, hval, this]
 
 end TrainVerify.Denote.JointWitness
