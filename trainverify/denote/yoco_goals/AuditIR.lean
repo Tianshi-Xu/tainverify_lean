@@ -1,7 +1,3 @@
 import denote.yoco_goals.IntermediateReconstruction
 open TrainVerify.Denote.GeneratedPatterns
-#print axioms recon_intermediateGoal_4681
-#print axioms recon_intermediateGoal_4683
-#print axioms recon_intermediateGoal_4685
-#print axioms recon_intermediateGoal_4687
-#print axioms recon_intermediateGoal_4689
+#print axioms all_intermediateGoals_proven_hold
