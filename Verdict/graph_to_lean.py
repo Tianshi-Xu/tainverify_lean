@@ -1479,7 +1479,15 @@ def emit_lean_spec(
 		# Infer gather dimension and validate shapes
 		num_pieces = len(g.tps)
 		gather_dim = 0
-		if num_pieces > 1 and ts_shape and ts_shape != [1] and tp_shapes and tp_shapes[0]:
+		# Detect replicated tensor: all shards have shape == ts_shape (per-rank full copy).
+		# This arises from FW_multiref of replicated tensors — nnscaler semantics is "pick one",
+		# not allGather. Emit `replicated := true` so Denote's reconstructForGoal takes the head.
+		replicated = (
+			num_pieces > 1
+			and ts_shape
+			and all(tp_shape == ts_shape for tp_shape in tp_shapes if tp_shape)
+		)
+		if num_pieces > 1 and ts_shape and ts_shape != [1] and tp_shapes and tp_shapes[0] and not replicated:
 			actual_tp_shape = tp_shapes[0]
 			gather_dim = _infer_gather_dim(ts_shape, actual_tp_shape, num_pieces)
 			# Validate: check that the inferred dimension is consistent
@@ -1504,6 +1512,8 @@ def emit_lean_spec(
 
 		# Only emit gatherDim when it's non-default (non-zero) to keep output clean
 		gather_dim_expr = f", gatherDim := {gather_dim}" if gather_dim != 0 else ""
+		# Emit replicated only when true (default is false, keeps default cases clean)
+		replicated_expr = ", replicated := true" if replicated else ""
 
 		lines.append(f"def {def_name} : LineageGoal :=")
 		lines.append(
@@ -1516,6 +1526,7 @@ def emit_lean_spec(
 			+ ", tpShapes := "
 			+ tp_shapes_expr
 			+ gather_dim_expr
+			+ replicated_expr
 			+ " }"
 		)
 		lines.append("")
