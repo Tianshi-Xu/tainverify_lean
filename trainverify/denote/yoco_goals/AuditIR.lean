@@ -1,3 +1,8 @@
 import denote.yoco_goals.IntermediateReconstruction
 open TrainVerify.Denote.GeneratedPatterns
 #print axioms all_intermediateGoals_proven_hold
+#print axioms recon_intermediateGoal_4800_of_inputs
+#print axioms recon_intermediateGoal_4801_of_inputs
+#print axioms wrap_2tp_allGather
+#print axioms rotary_fst_gather_commute
+#print axioms rotary_snd_gather_commute

@@ -916,6 +916,262 @@ theorem recon_intermediateGoal_4693 (initSM initPM : Store)
   exact wrap_1tp initSM initPM intermediateGoal_4693 4693 [4096, 4, 64] rfl rfl rfl rfl rfl rfl
     (veq_4693 initSM initPM hSM hPM hInit) hshape
 
+/-! ### 2-tp `extract_dual` bridgehead — FW_rotary_embedding sharded reconstruction
+
+    The 20 token-sharded (2-tp) rotary goals (`4800`/`4801` … `5286`/`5287`)
+    reconstruct the SM full rotary output as the `allGatherPrimDimN 0 2 0` of the
+    two PM per-rank rotary shards. The reconstruction transfers the token-dim
+    sharding across the rotary op via `fw_rotary_embedding_allGather0_commute_2`,
+    PROVIDED the three sharded INPUTS (positions / query / key) are themselves
+    reconstructed as dim-0 gathers of the corresponding PM shards, and the
+    cs-cache agrees (`sm_pm_rotary_cache_agree`).
+
+    Those three input reconstructions are the attention/MoE-region 2-tp goals. For
+    the lowest-tid 2-tp rotary goal `4800`, the SM q-input tid `4794` chains back
+    through `2× FW_attn_sliding_window + 2× FW_all2all_moe_gmm + FW_topk_routing`
+    (empirically: 141 SM tids, min init leaf 4677) — the bespoke attention/MoE
+    region that has no reconstruction template yet (PROGRESS.md "Still gated").
+
+    Hence the gears below are stated CONDITIONALLY on the input reconstructions
+    (zero sorry). They are the reusable machinery that fires the moment the
+    attention region is reconstructed: `recon_intermediateGoal_4800_of_inputs`
+    consumes exactly the three input intermediateGoal conclusions (`4794`/`4796`/
+    `4799`) plus their PM shard shapes, and produces the rotary reconstruction. -/
+
+/-- Generic wrapper for a 2-tp (`gatherDim = 0`, non-replicated) goal whose SM
+    value equals the dim-0 `allGatherPrimDimN` of its two PM shards. Analog of
+    `wrap_1tp` / `wrap_replicated_dual` for the sharded (extract_dual) case. -/
+theorem wrap_2tp_allGather (initSM initPM : Store) (g : LineageGoal)
+    (T p0 p1 : Tid) (sh sh0 : Shape)
+    (htp : g.tps = [{rank := 0, tid := p0}, {rank := 1, tid := p1}])
+    (hgd : g.gatherDim = 0) (hrep : g.replicated = false)
+    (hts : g.ts = T) (htsShape : g.tsShape = sh) (htpShapes : g.tpShapes = [sh0, sh0])
+    (hne : sh0 ≠ [1])
+    (hval : denoteGraph sm initSM T
+        = allGatherPrimDimN 0 pm.numRanks 0
+            [denoteGraph pm initPM p0, denoteGraph pm initPM p1])
+    (hshape : (denoteGraph sm initSM T).shape = sh)
+    (hshapeP0 : (denoteGraph pm initPM p0).shape = sh0)
+    (hshapeP1 : (denoteGraph pm initPM p1).shape = sh0) :
+    InitGoalHolds pm.numRanks g (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hts, htsShape]; exact hshape
+  · rw [htp, htpShapes]; simp only [List.map]; rw [hshapeP0, hshapeP1]
+  · rw [hts, reconstructForGoal_of_not_replicated g pm.numRanks _ hrep, hgd, htp]
+    simp only [List.map]
+    rw [reconstructWithDim_cons_cons_nonscalar 0 pm.numRanks 0 _ _ []
+          (by rw [hshapeP0]; exact hne)]
+    exact hval
+
+/-- Sharded rotary Q'-output commute (pure tensor algebra): if the full
+    position / query / key equal the dim-0 gather of their two shards and the
+    cs-cache agrees, the full rotary Q' output equals the gather of the two
+    per-rank rotary Q' outputs. -/
+theorem rotary_fst_gather_commute
+    (csS csP posS qS kS pos0 q0 k0 pos1 q1 k1 : Tensor) (L nh kh d : Nat)
+    (hL : 0 < L) (hnh : 0 < nh) (hkh : 0 < kh) (hd : 0 < d)
+    (hq0 : q0.shape = [L, nh, d]) (hq1 : q1.shape = [L, nh, d])
+    (hk0 : k0.shape = [L, kh, d]) (hk1 : k1.shape = [L, kh, d])
+    (hp0 : pos0.shape = [L, 1]) (hp1 : pos1.shape = [L, 1])
+    (hcs : csS = csP)
+    (hpos : posS = allGatherPrimDimN 0 2 0 [pos0, pos1])
+    (hq : qS = allGatherPrimDimN 0 2 0 [q0, q1])
+    (hk : kS = allGatherPrimDimN 0 2 0 [k0, k1]) :
+    (fw_rotary_embedding csS posS qS kS nh kh).1
+      = allGatherPrimDimN 0 2 0
+          [(fw_rotary_embedding csP pos0 q0 k0 nh kh).1,
+           (fw_rotary_embedding csP pos1 q1 k1 nh kh).1] := by
+  rw [hcs, hpos, hq, hk, fw_rotary_embedding_allGather0_commute_2 q0 q1 k0 k1 pos0 pos1 csP
+        L nh kh d hL hnh hkh hd hq0 hq1 hk0 hk1 hp0 hp1]
+  rfl
+
+/-- Sharded rotary K'-output commute (pure tensor algebra), the `.2` companion of
+    `rotary_fst_gather_commute`. -/
+theorem rotary_snd_gather_commute
+    (csS csP posS qS kS pos0 q0 k0 pos1 q1 k1 : Tensor) (L nh kh d : Nat)
+    (hL : 0 < L) (hnh : 0 < nh) (hkh : 0 < kh) (hd : 0 < d)
+    (hq0 : q0.shape = [L, nh, d]) (hq1 : q1.shape = [L, nh, d])
+    (hk0 : k0.shape = [L, kh, d]) (hk1 : k1.shape = [L, kh, d])
+    (hp0 : pos0.shape = [L, 1]) (hp1 : pos1.shape = [L, 1])
+    (hcs : csS = csP)
+    (hpos : posS = allGatherPrimDimN 0 2 0 [pos0, pos1])
+    (hq : qS = allGatherPrimDimN 0 2 0 [q0, q1])
+    (hk : kS = allGatherPrimDimN 0 2 0 [k0, k1]) :
+    (fw_rotary_embedding csS posS qS kS nh kh).2
+      = allGatherPrimDimN 0 2 0
+          [(fw_rotary_embedding csP pos0 q0 k0 nh kh).2,
+           (fw_rotary_embedding csP pos1 q1 k1 nh kh).2] := by
+  rw [hcs, hpos, hq, hk, fw_rotary_embedding_allGather0_commute_2 q0 q1 k0 k1 pos0 pos1 csP
+        L nh kh d hL hnh hkh hd hq0 hq1 hk0 hk1 hp0 hp1]
+  rfl
+
+/-- SM node reduction for the layer-2 rotary Q' output (tid 4800, sm node 86). -/
+theorem sm_rotary_4800_node (initSM : Store) :
+    denoteGraph sm initSM 4800
+      = (fw_rotary_embedding (denoteGraph sm initSM 4691) (denoteGraph sm initSM 4799)
+          (denoteGraph sm initSM 4794) (denoteGraph sm initSM 4796) 16 4).1 := by
+  rw [sm_val initSM 86 4800 (by native_decide) (by native_decide)]
+  rw [show sm.nodes[86]'(by native_decide)
+      = { rank := 0, op := "OpName.FW_rotary_embedding", ins := [4691, 4799, 4794, 4796], outs := [4800, 4801], params := [16, 4] }
+      from by native_decide]
+  rw [applyNode_fw_rotary_embedding_fst_out,
+      sm_prefix_eq initSM 86 4691 (by native_decide),
+      sm_prefix_eq initSM 86 4799 (by native_decide),
+      sm_prefix_eq initSM 86 4794 (by native_decide),
+      sm_prefix_eq initSM 86 4796 (by native_decide)]
+
+/-- SM node reduction for the layer-2 rotary K' output (tid 4801, sm node 86). -/
+theorem sm_rotary_4801_node (initSM : Store) :
+    denoteGraph sm initSM 4801
+      = (fw_rotary_embedding (denoteGraph sm initSM 4691) (denoteGraph sm initSM 4799)
+          (denoteGraph sm initSM 4794) (denoteGraph sm initSM 4796) 16 4).2 := by
+  rw [sm_val initSM 86 4801 (by native_decide) (by native_decide)]
+  rw [show sm.nodes[86]'(by native_decide)
+      = { rank := 0, op := "OpName.FW_rotary_embedding", ins := [4691, 4799, 4794, 4796], outs := [4800, 4801], params := [16, 4] }
+      from by native_decide]
+  rw [applyNode_fw_rotary_embedding_snd_out _ _ _ _ _ 4691 4799 4794 4796 4800 4801 (by decide),
+      sm_prefix_eq initSM 86 4691 (by native_decide),
+      sm_prefix_eq initSM 86 4799 (by native_decide),
+      sm_prefix_eq initSM 86 4794 (by native_decide),
+      sm_prefix_eq initSM 86 4796 (by native_decide)]
+
+/-- PM rank-0 node reduction for the layer-2 rotary Q' shard (tid 7805, pm node 227). -/
+theorem pm_rotary_7805_node (initPM : Store) :
+    denoteGraph pm initPM 7805
+      = (fw_rotary_embedding (denoteGraph pm initPM 11855) (denoteGraph pm initPM 7803)
+          (denoteGraph pm initPM 7771) (denoteGraph pm initPM 7783) 16 4).1 := by
+  rw [pm_val initPM 233 7805 (by native_decide) (by native_decide)]
+  rw [show pm.nodes[233]'(by native_decide)
+      = { rank := 0, op := "OpName.FW_rotary_embedding", ins := [11855, 7803, 7771, 7783], outs := [7805, 7807], params := [16, 4] }
+      from by native_decide]
+  rw [applyNode_fw_rotary_embedding_fst_out,
+      pm_prefix_eq initPM 233 11855 (by native_decide),
+      pm_prefix_eq initPM 233 7803 (by native_decide),
+      pm_prefix_eq initPM 233 7771 (by native_decide),
+      pm_prefix_eq initPM 233 7783 (by native_decide)]
+
+/-- PM rank-1 node reduction for the layer-2 rotary Q' shard (tid 7806, pm node 228). -/
+theorem pm_rotary_7806_node (initPM : Store) :
+    denoteGraph pm initPM 7806
+      = (fw_rotary_embedding (denoteGraph pm initPM 11855) (denoteGraph pm initPM 7804)
+          (denoteGraph pm initPM 7772) (denoteGraph pm initPM 7784) 16 4).1 := by
+  rw [pm_val initPM 234 7806 (by native_decide) (by native_decide)]
+  rw [show pm.nodes[234]'(by native_decide)
+      = { rank := 1, op := "OpName.FW_rotary_embedding", ins := [11855, 7804, 7772, 7784], outs := [7806, 7808], params := [16, 4] }
+      from by native_decide]
+  rw [applyNode_fw_rotary_embedding_fst_out,
+      pm_prefix_eq initPM 234 11855 (by native_decide),
+      pm_prefix_eq initPM 234 7804 (by native_decide),
+      pm_prefix_eq initPM 234 7772 (by native_decide),
+      pm_prefix_eq initPM 234 7784 (by native_decide)]
+
+/-- PM rank-0 node reduction for the layer-2 rotary K' shard (tid 7807, pm node 227). -/
+theorem pm_rotary_7807_node (initPM : Store) :
+    denoteGraph pm initPM 7807
+      = (fw_rotary_embedding (denoteGraph pm initPM 11855) (denoteGraph pm initPM 7803)
+          (denoteGraph pm initPM 7771) (denoteGraph pm initPM 7783) 16 4).2 := by
+  rw [pm_val initPM 233 7807 (by native_decide) (by native_decide)]
+  rw [show pm.nodes[233]'(by native_decide)
+      = { rank := 0, op := "OpName.FW_rotary_embedding", ins := [11855, 7803, 7771, 7783], outs := [7805, 7807], params := [16, 4] }
+      from by native_decide]
+  rw [applyNode_fw_rotary_embedding_snd_out _ _ _ _ _ 11855 7803 7771 7783 7805 7807 (by decide),
+      pm_prefix_eq initPM 233 11855 (by native_decide),
+      pm_prefix_eq initPM 233 7803 (by native_decide),
+      pm_prefix_eq initPM 233 7771 (by native_decide),
+      pm_prefix_eq initPM 233 7783 (by native_decide)]
+
+/-- PM rank-1 node reduction for the layer-2 rotary K' shard (tid 7808, pm node 228). -/
+theorem pm_rotary_7808_node (initPM : Store) :
+    denoteGraph pm initPM 7808
+      = (fw_rotary_embedding (denoteGraph pm initPM 11855) (denoteGraph pm initPM 7804)
+          (denoteGraph pm initPM 7772) (denoteGraph pm initPM 7784) 16 4).2 := by
+  rw [pm_val initPM 234 7808 (by native_decide) (by native_decide)]
+  rw [show pm.nodes[234]'(by native_decide)
+      = { rank := 1, op := "OpName.FW_rotary_embedding", ins := [11855, 7804, 7772, 7784], outs := [7806, 7808], params := [16, 4] }
+      from by native_decide]
+  rw [applyNode_fw_rotary_embedding_snd_out _ _ _ _ _ 11855 7804 7772 7784 7806 7808 (by decide),
+      pm_prefix_eq initPM 234 11855 (by native_decide),
+      pm_prefix_eq initPM 234 7804 (by native_decide),
+      pm_prefix_eq initPM 234 7772 (by native_decide),
+      pm_prefix_eq initPM 234 7784 (by native_decide)]
+
+/-- **2-tp rotary bridgehead — Q' (tid 4800).** `intermediateGoal_4800` holds given
+    the reconstructions of the three sharded rotary inputs (positions 4799, query
+    4794, key 4796) plus their PM shard shapes. The cs-cache is closed internally
+    via `sm_pm_rotary_cache_agree`. Instantiating this closes goal 4800 the moment
+    the attention/MoE region feeding 4794/4796/4799 is reconstructed. -/
+theorem recon_intermediateGoal_4800_of_inputs (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hpos : denoteGraph sm initSM 4799
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7803, denoteGraph pm initPM 7804])
+    (hq : denoteGraph sm initSM 4794
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7771, denoteGraph pm initPM 7772])
+    (hk : denoteGraph sm initSM 4796
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7783, denoteGraph pm initPM 7784])
+    (hq0 : (denoteGraph pm initPM 7771).shape = [2048, 16, 64])
+    (hq1 : (denoteGraph pm initPM 7772).shape = [2048, 16, 64])
+    (hk0 : (denoteGraph pm initPM 7783).shape = [2048, 4, 64])
+    (hk1 : (denoteGraph pm initPM 7784).shape = [2048, 4, 64])
+    (hp0 : (denoteGraph pm initPM 7803).shape = [2048, 1])
+    (hp1 : (denoteGraph pm initPM 7804).shape = [2048, 1]) :
+    InitGoalHolds pm.numRanks intermediateGoal_4800
+      (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hcs : denoteGraph sm initSM 4691 = denoteGraph pm initPM 11855 :=
+    sm_pm_rotary_cache_agree initSM initPM hInit 11855 2 (by norm_num) (by norm_num)
+  have hval : denoteGraph sm initSM 4800
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph pm initPM 7805, denoteGraph pm initPM 7806] := by
+    rw [sm_rotary_4800_node, pm_rotary_7805_node, pm_rotary_7806_node]
+    exact rotary_fst_gather_commute _ _ _ _ _ _ _ _ _ _ _ 2048 16 4 64
+      (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+      hq0 hq1 hk0 hk1 hp0 hp1 hcs hpos hq hk
+  have hshape : (denoteGraph sm initSM 4800).shape = [4096, 16, 64] := by
+    rw [sm_rotary_4800_node, fw_rotary_embedding_fst_shape, hq,
+        allGatherPrimDimN_shape 0 2 _ [2048, 16, 64]
+          (by simp only [List.head?_cons, Option.map_some, Option.getD_some]; exact hq0)]
+    rfl
+  refine wrap_2tp_allGather initSM initPM intermediateGoal_4800 4800 7805 7806
+    [4096, 16, 64] [2048, 16, 64] rfl rfl rfl rfl rfl rfl (by decide) hval hshape ?_ ?_
+  · rw [pm_rotary_7805_node, fw_rotary_embedding_fst_shape]; exact hq0
+  · rw [pm_rotary_7806_node, fw_rotary_embedding_fst_shape]; exact hq1
+
+/-- **2-tp rotary bridgehead — K' (tid 4801).** The `.2` companion of
+    `recon_intermediateGoal_4800_of_inputs`. -/
+theorem recon_intermediateGoal_4801_of_inputs (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hpos : denoteGraph sm initSM 4799
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7803, denoteGraph pm initPM 7804])
+    (hq : denoteGraph sm initSM 4794
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7771, denoteGraph pm initPM 7772])
+    (hk : denoteGraph sm initSM 4796
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7783, denoteGraph pm initPM 7784])
+    (hq0 : (denoteGraph pm initPM 7771).shape = [2048, 16, 64])
+    (hq1 : (denoteGraph pm initPM 7772).shape = [2048, 16, 64])
+    (hk0 : (denoteGraph pm initPM 7783).shape = [2048, 4, 64])
+    (hk1 : (denoteGraph pm initPM 7784).shape = [2048, 4, 64])
+    (hp0 : (denoteGraph pm initPM 7803).shape = [2048, 1])
+    (hp1 : (denoteGraph pm initPM 7804).shape = [2048, 1]) :
+    InitGoalHolds pm.numRanks intermediateGoal_4801
+      (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hcs : denoteGraph sm initSM 4691 = denoteGraph pm initPM 11855 :=
+    sm_pm_rotary_cache_agree initSM initPM hInit 11855 2 (by norm_num) (by norm_num)
+  have hval : denoteGraph sm initSM 4801
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph pm initPM 7807, denoteGraph pm initPM 7808] := by
+    rw [sm_rotary_4801_node, pm_rotary_7807_node, pm_rotary_7808_node]
+    exact rotary_snd_gather_commute _ _ _ _ _ _ _ _ _ _ _ 2048 16 4 64
+      (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+      hq0 hq1 hk0 hk1 hp0 hp1 hcs hpos hq hk
+  have hshape : (denoteGraph sm initSM 4801).shape = [4096, 4, 64] := by
+    rw [sm_rotary_4801_node, fw_rotary_embedding_snd_shape, hk,
+        allGatherPrimDimN_shape 0 2 _ [2048, 4, 64]
+          (by simp only [List.head?_cons, Option.map_some, Option.getD_some]; exact hk0)]
+    rfl
+  refine wrap_2tp_allGather initSM initPM intermediateGoal_4801 4801 7807 7808
+    [4096, 4, 64] [2048, 4, 64] rfl rfl rfl rfl rfl rfl (by decide) hval hshape ?_ ?_
+  · rw [pm_rotary_7807_node, fw_rotary_embedding_snd_shape]; exact hk0
+  · rw [pm_rotary_7808_node, fw_rotary_embedding_snd_shape]; exact hk1
+
 /-- Full list of all 1151 intermediate reconstruction goals (infrastructure). -/
 def all_intermediateGoals_list : List LineageGoal :=
   [
