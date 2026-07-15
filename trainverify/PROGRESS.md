@@ -724,27 +724,27 @@ All four proofs reuse Pattern_1's proven pure-tensor commute lemmas
 + Pattern_3's `allGather0_reconstruct_chunks_2d` + the shared `RingAttnGears`
 node-reduction machinery, mirrored over `denoteGraph_ringAttn`.
 
-### 4714 — blocked-by-graph-nonfaithfulness (NOT a proof-technique limitation)
-The ring-attn PM graph node 32 (`FW_all2all_moe_gmm`, out `4714`) is *byte-identical*
-to SM node 32, with `ins = [7419, 4709, 4710, 4712, 4713]`. In the PM graph:
-- `4712`/`4713` (expert weights) **are** bridged by `initGoal_4712`/`initGoal_4713`
-  (expert-parallel shards `[7487,7488]` / `[7489,7490]`, gatherDim 0).
-- `7419` (attention output), `4709` (routing_probs), `4710` (routing_map) are **NOT
-  written by any PM node** and appear in **no `initGoal`** (neither as `ts` nor in any
-  `tps`). They are unconstrained PM init leaves.
+### 4714 — CORRECTION (W17): graph IS faithful; blocker is the disjoint-commute lemma
+W14's "missing initGoal bridges" framing is **stale/incorrect** against the current
+W11-regenerated `GeneratedYOCOMoE.lean`. Re-verified by W17:
+- `7419`, `4709`, `4710` are **NOT** unconstrained PM init leaves — they are **not** in
+  `pmInitShapes` at all. The PM graph writes `4714` faithfully via
+  `AllGatherPrim(7491,7492)→4714` where `7491`/`7492 = FW_all2all_moe_gmm(11941/11942,
+  7481/7483, 7483/…, 7487/7489, …)` over expert-parallel shards.
+- The SM-side inputs are already bridged: `intermediateGoal_7419`
+  (`tps=[(0,11941),(1,11942)]`, gatherDim 0), and `recon_intermediateGoal_4709/4710`
+  are **proven**. So the emitter needs **no fix** — bridges already present.
 
-Therefore `denoteGraph_ringAttn pm initPM 4714 = fw_all2all_moe_gmm (initPM 7419)
-(initPM 4709) (initPM 4710) …` depends on arbitrary leaf values, while
-`denoteGraph_ringAttn sm initSM 4714` depends on SM's *computed* `7419`/`4709`/`4710`.
-The reconstruction `SM 4714 = PM 4714` is thus **false for general `initPM`** — a
-half-cut inconsistency (missing initGoal bridges for `7419`/`4709`/`4710`).
+W17 **proved `recon_intermediateGoal_7419_ringAttn`** (last missing input bridge),
+mirroring the proven `4705`/`4709` gears: multiref pos-1 reduction of `4705` → PM
+`ChunkPrim → 11941/11942` → `allGather0_reconstruct_chunks_2d 2048 1024`. Axiom audit:
+only `propext`/`Classical.choice`/`Quot.sound` + `native_decide` baseline.
 
-This is a **generator/upstream defect**, not W14's proof scope: fixing it requires
-either (a) emitting `initGoal`s bridging `7419`/`4709`/`4710` to their SM
-reconstructions, or (b) having PM node 32 read the gathered/reconstructed tids
-(e.g. gather `7481`/`7482 → 4709`) as `Goal_1`'s `_full` graph does. Per
-upstream-faithfulness (don't prove vacuous over garbage), 4714 is left blocked
-rather than fabricated via an unsound bridging axiom.
+Remaining 4714 blocker is **not** the graph: it is the expert-parallel all2all commute
+lemma `fw_all2all_moe_gmm_split_commute_2_of` (Pattern_1.lean:3081), which needs a
+routing-map **disjointness hypothesis** across expert ranges — a well-formed-input
+property not derivable from an abstract Store (would need a statement-level hypothesis
+per lesson #29, or deep topk/mask reasoning). Left for a future worker (>30 min).
 
 ### Axiom audit
 `#print axioms` on 4709/4710/4728/4729: only `propext`, `Classical.choice`,

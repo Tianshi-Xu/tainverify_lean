@@ -476,4 +476,78 @@ theorem recon_intermediateGoal_4710_ringAttn (initSM initPM : Store)
     intermediateGoal_4710 4710 7483 7484 [4096, 64] [2048, 64]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
+/-! ### 7419 — FW_multiref copy of the pre-MoE RMSNorm output (token-sharded, 2-tp)
+
+    SM `7419 = multiref₁(4705)` is a value-identity copy of the replicated
+    RMSNorm output `4705` (already reconstructed 1-tp by
+    `recon_intermediateGoal_4705_ringAttn`). On PM, `4705` is replicated per
+    rank, copied via `multiref₁ → 11876`, then dim-0 chunked into the per-rank
+    shards `11941`/`11942` (`ChunkPrim`). Hence `SM 7419 = SM 4705 = PM 4705 =
+    PM 11876 = allGather0[chunk₀ 11876, chunk₁ 11876] = allGather0[11941,11942]`,
+    giving the 2-tp (token-dim) reconstruction. This is the last missing input
+    bridge for the layer-0 `FW_all2all_moe_gmm` output `4714` (the expert-weight
+    inputs `4712`/`4713` are `initGoal`s, and `4709`/`4710` are the proven
+    routing reconstructions above). -/
+set_option maxHeartbeats 4000000 in
+theorem recon_intermediateGoal_7419_ringAttn (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_7419
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  have h4705 := recon_intermediateGoal_4705_ringAttn initSM initPM hSM hPM hInit
+  have hv4705 : denoteGraph_ringAttn sm initSM 4705 = denoteGraph_ringAttn pm initPM 4705 :=
+    oneTp_valeq intermediateGoal_4705 _ _ 4705 rfl rfl rfl rfl h4705
+  have hs4705sm : (denoteGraph_ringAttn sm initSM 4705).shape = [4096, 1024] := by
+    have := h4705.1; simpa [intermediateGoal_4705] using this
+  have hnr : pm.numRanks = 2 := rfl
+  -- SM 7419 = multiref₁(4705) [SM node 18, position 1]
+  have s7419 : denoteGraph_ringAttn sm initSM 7419 = id (denoteGraph_ringAttn sm initSM 4705) :=
+    ringAttn_reduce1 sm initSM 18
+      { rank := 0, op := "OpName.FW_multiref", ins := [4705],
+        outs := [7415, 7419, 7423, 7427, 7431], params := [5] }
+      4705 7419 id (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref5_at_pos1_out sm s 0 4705 7415 7419 7423 7427 7431 (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  -- PM 11876 = multiref₁(4705) [PM node 69 rank1, position 1 — last writer]
+  have p11876 : denoteGraph_ringAttn pm initPM 11876 = id (denoteGraph_ringAttn pm initPM 4705) :=
+    ringAttn_reduce1 pm initPM 69
+      { rank := 1, op := "OpName.FW_multiref", ins := [4705],
+        outs := [11875, 11876, 11877, 11878, 11879], params := [5] }
+      4705 11876 id (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref5_at_pos1_out pm s 1 4705 11875 11876 11877 11878 11879 (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at s7419 p11876
+  -- PM 11941 = chunk₀(11876) [PM node 71 rank0]
+  have c11941 : denoteGraph_ringAttn pm initPM 11941
+      = chunkPrimDimN 0 pm.numRanks 0 (denoteGraph_ringAttn pm initPM 11876) :=
+    ringAttn_reduce1 pm initPM 71
+      { rank := 0, op := "OpName.ChunkPrim", ins := [11876], outs := [11941], params := [0] }
+      11876 11941 (fun t => chunkPrimDimN 0 pm.numRanks 0 t) (by native_decide) (by native_decide)
+      (by decide) (by decide) (fun s => applyNode_chunkPrimDimN_out pm s 0 11876 11941 0)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  -- PM 11942 = chunk₁(11876) [PM node 76 rank1]
+  have c11942 : denoteGraph_ringAttn pm initPM 11942
+      = chunkPrimDimN 0 pm.numRanks 1 (denoteGraph_ringAttn pm initPM 11876) :=
+    ringAttn_reduce1 pm initPM 76
+      { rank := 1, op := "OpName.ChunkPrim", ins := [11876], outs := [11942], params := [0] }
+      11876 11942 (fun t => chunkPrimDimN 0 pm.numRanks 1 t) (by native_decide) (by native_decide)
+      (by decide) (by decide) (fun s => applyNode_chunkPrimDimN_out pm s 1 11876 11942 0)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hp11876 : (denoteGraph_ringAttn pm initPM 11876).shape = [4096, 1024] := by
+    rw [p11876, ← hv4705]; exact hs4705sm
+  have hsp0 : (denoteGraph_ringAttn pm initPM 11941).shape = [2048, 1024] := by
+    rw [c11941, chunkPrimDimN_shape 0 pm.numRanks 0 _ [4096, 1024] hp11876 (by native_decide)]; rfl
+  have hsp1 : (denoteGraph_ringAttn pm initPM 11942).shape = [2048, 1024] := by
+    rw [c11942, chunkPrimDimN_shape 0 pm.numRanks 1 _ [4096, 1024] hp11876 (by native_decide)]; rfl
+  have hval : denoteGraph_ringAttn sm initSM 7419
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph_ringAttn pm initPM 11941, denoteGraph_ringAttn pm initPM 11942] := by
+    rw [s7419, hv4705, ← p11876, c11941, c11942, hnr]
+    exact (allGather0_reconstruct_chunks_2d 2048 1024 (by omega) (by omega) _ hp11876).symm
+  have hshape : (denoteGraph_ringAttn sm initSM 7419).shape = [4096, 1024] := by
+    rw [s7419, hv4705, ← p11876]; exact hp11876
+  exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
+    intermediateGoal_7419 7419 11941 11942 [4096, 1024] [2048, 1024]
+    rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
+
 end TrainVerify.Denote.GeneratedPatterns
