@@ -381,3 +381,51 @@ The attention-output (`FW_attn_sliding_window`) and MoE-output (`FW_all2all_moe_
 2-tp reconstruction templates. Once built, the ENTIRE post-attention residual chain
 (add → multiref → rms → per-head Q/K → rotary) closes mechanically via the worker
 #4–#7 gears with zero remaining threaded hypotheses.
+
+---
+
+## Worker #8 (2026-07-15) — FW_attn_sliding_window 2-tp: NEGATIVE result (plain path FALSE; ring-attn gear already exists)
+
+**Priority 1 (semantics) COMPLETE.** `FW_attn_sliding_window` `evalOp`
+(Denote.lean:3915-3927) is `numParts`-conditional (`numParts = g.numRanks`):
+`numParts=1` → `fw_attn_varlen` (value-faithful, SM); `numParts>1` → all-zero
+`Tensor.mkShape [lQ,qh,vd] (fun _=>0)` (AGENTS.md #24 identity/zero model, PM).
+The value-faithful cross-rank model lives in the RING layer
+(`applyNodeRingAttn_sliding_window`, Denote.lean:21536: allGather buddy q/k/v →
+`fw_attn_varlen` on full seq → chunk back). `FW_attn_zigzag` (12 goals, new
+category) is identical. cu-metadata 4694/4695 are init leaves shape [2].
+
+**Priority 2 VERDICT: gear NOT buildable as specified (plain `denoteGraph`,
+mirror of `recon_rotary_2tp_fst`).** `intermediateGoal_4696` under plain
+`denoteGraph` is a FALSE ∀-statement: SM 4696 = real `fw_attn_varlen` (numParts=1),
+PM shards 7437/7438 = zero tensors (numParts=2, pm.numRanks=2), so
+`sm 4696 = allGather0[pm 7437, pm 7438]` forces `real_attn = 0`. No
+`_allGather0_commute_2` exists/holds for the plain path. AGENTS.md #24 (identity
+model) is the ROOT CAUSE; #29 (方案 E stmt-lift) does NOT apply (can't lift a
+false conclusion — no input contract makes 0 = real attention). R2/#25 forbid the
+Denote edit that would make plain faithful.
+
+**The value-faithful gear ALREADY EXISTS, zero-sorry:**
+`applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair`
+(Pattern_3.lean:3838), consumed by Goal_3 at node 4696 (Pattern_3.lean:4930)
+under `denoteGraph_ringAttn`. Inputs are shallow (Iroha correct): PM attn inputs
+7433/7435/7421 = ChunkPrim0 shards of the PROVEN-replicated layer-0 Q'/K'/V
+(4692/4693/4689); the ring gear's input hyps are allGather∘chunk roundtrips on
+those.
+
+**Root architectural finding:** the deliverable states attention (and its whole
+2-tp downstream residual chain) over plain `denoteGraph`, where those goals are
+unprovable-because-FALSE. The fix is the DENOTATION, not a new gear:
+(1) exclude the 24 attention goals from `all_intermediateGoals_list` (let Goal_3's
+ring bridge own them), or (2) restate `all_intermediateGoals_hold` over
+`denoteGraph_ringAttn` (non-attn ops transfer via
+`denoteGraph_ringAttn_eq_denoteGraph_of_no_ring_attn` /
+`applyNodeRingAttn_eq_applyNode_of_not_ring`; attn closes via the Pattern_3 gear).
+Option 2 unblocks the entire 2-tp cascade workers #4–#7 left conditional.
+
+**Delivered:** `denote/yoco_goals/AttnPlainZeroWitness.lean` (green; axioms =
+{propext, Classical.choice, Quot.sound}; zero sorry / zero user axiom) — 3
+checkable lemmas proving the plain PM attention output is the value-INDEPENDENT
+zero tensor while SM is value-faithful `fw_attn_varlen`, i.e. the plain 2-tp
+attention goal is false. Full analysis + effort estimate in `~/ATTENTION_ANALYSIS.md`.
+No Denote.lean edits (R2). No new gear sorried/axiomed (R5 honest fallback).
