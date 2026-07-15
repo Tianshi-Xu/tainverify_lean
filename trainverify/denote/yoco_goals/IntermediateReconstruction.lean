@@ -16,6 +16,7 @@
 import denote.yoco_goals.BridgeKit
 import denote.yoco_goals.Goal_5_Intermediate
 import denote.DenoteMoE
+import denote.yoco_goals.Pattern_1  -- fw_rms_norm_allGather0_commute_2 (worker #7)
 
 set_option linter.style.longLine false
 set_option linter.style.setOption false
@@ -1339,6 +1340,158 @@ theorem recon_intermediateGoal_4796 (initSM initPM : Store)
     InitGoalHolds pm.numRanks intermediateGoal_4796
       (denoteGraph sm initSM) (denoteGraph pm initPM) :=
   recon_intermediateGoal_4796_of_inputs initSM initPM hInit hx hx0 hx1
+
+/-! ### Fully parametrized 2-tp rms-norm reconstruction gear (worker #7)
+
+    Analog of `recon_per_head_linear_2tp` / `recon_rotary_2tp_fst/snd` for
+    `FW_rms_norm`. Row-wise (per-token) reduction is orthogonal to dim-0 (token)
+    sharding — each output row's normalization depends only on the matching input
+    row and the replicated weight — so rms-norm commutes cleanly with dim-0
+    sharding. Backed by `fw_rms_norm_allGather0_commute_2` (Pattern_1.lean, proven
+    zero-sorry with a full `Tensor.ext`).
+
+    To reconstruct any `FW_rms_norm` 2-tp goal it suffices to supply (a) the SM/PM
+    node reductions (mechanical `native_decide` per tid), (b) the sharded input
+    reconstruction (`hx`), (c) the replicated weight agreement (`hw`), and (d) the
+    two input shard shapes. Note: unlike the per-head gear, NO weight-shape
+    hypothesis is needed — the commute lemma leaves the weight unconstrained. -/
+
+/-- Raw value+shape bundle for a 2-tp rms-norm reconstruction: the SM value equals
+    the dim-0 gather of the two PM shards, and each shard has shape `[shard, hidden]`
+    (rms-norm is shape-preserving). Shared by `recon_rms_norm_2tp` (goal wrapper)
+    and by any composition that threads at the rms boundary. -/
+theorem rms_2tp_val_shapes (initSM initPM : Store)
+    (T p0 p1 xS wS x0 x1 wP : Tid) (shard hidden : Nat)
+    (hshard : 0 < shard) (hhid : 0 < hidden)
+    (hsmNode : denoteGraph sm initSM T
+        = fw_rms_norm (denoteGraph sm initSM xS) (denoteGraph sm initSM wS))
+    (hpm0 : denoteGraph pm initPM p0
+        = fw_rms_norm (denoteGraph pm initPM x0) (denoteGraph pm initPM wP))
+    (hpm1 : denoteGraph pm initPM p1
+        = fw_rms_norm (denoteGraph pm initPM x1) (denoteGraph pm initPM wP))
+    (hw : denoteGraph sm initSM wS = denoteGraph pm initPM wP)
+    (hx : denoteGraph sm initSM xS
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM x0, denoteGraph pm initPM x1])
+    (hx0 : (denoteGraph pm initPM x0).shape = [shard, hidden])
+    (hx1 : (denoteGraph pm initPM x1).shape = [shard, hidden]) :
+    denoteGraph sm initSM T
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM p0, denoteGraph pm initPM p1]
+      ∧ (denoteGraph pm initPM p0).shape = [shard, hidden]
+      ∧ (denoteGraph pm initPM p1).shape = [shard, hidden] := by
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsmNode, hw, hx,
+        fw_rms_norm_allGather0_commute_2
+          (denoteGraph pm initPM x0) (denoteGraph pm initPM x1) (denoteGraph pm initPM wP)
+          shard hidden hshard hhid hx0 hx1,
+        ← hpm0, ← hpm1]
+  · rw [hpm0, TrainVerify.Denote.fw_rms_norm_shape]; exact hx0
+  · rw [hpm1, TrainVerify.Denote.fw_rms_norm_shape]; exact hx1
+
+/-- Parametrized 2-tp rms-norm reconstruction gear. Closes any `FW_rms_norm` 2-tp
+    (`gatherDim = 0`, non-replicated) goal whose sharded input reconstructs as the
+    dim-0 gather of its two PM shards and whose (replicated) weight agrees SM↔PM. -/
+theorem recon_rms_norm_2tp (initSM initPM : Store) (g : LineageGoal)
+    (T p0 p1 xS wS x0 x1 wP : Tid) (shard hidden : Nat)
+    (hshard : 0 < shard) (hhid : 0 < hidden)
+    (htp : g.tps = [{ rank := 0, tid := p0 }, { rank := 1, tid := p1 }])
+    (hgd : g.gatherDim = 0) (hrep : g.replicated = false) (hts : g.ts = T)
+    (htsShape : g.tsShape = [shard * 2, hidden])
+    (htpShapes : g.tpShapes = [[shard, hidden], [shard, hidden]])
+    (hne : ([shard, hidden] : Shape) ≠ [1])
+    (hsmNode : denoteGraph sm initSM T
+        = fw_rms_norm (denoteGraph sm initSM xS) (denoteGraph sm initSM wS))
+    (hpm0 : denoteGraph pm initPM p0
+        = fw_rms_norm (denoteGraph pm initPM x0) (denoteGraph pm initPM wP))
+    (hpm1 : denoteGraph pm initPM p1
+        = fw_rms_norm (denoteGraph pm initPM x1) (denoteGraph pm initPM wP))
+    (hw : denoteGraph sm initSM wS = denoteGraph pm initPM wP)
+    (hx : denoteGraph sm initSM xS
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM x0, denoteGraph pm initPM x1])
+    (hx0 : (denoteGraph pm initPM x0).shape = [shard, hidden])
+    (hx1 : (denoteGraph pm initPM x1).shape = [shard, hidden]) :
+    InitGoalHolds pm.numRanks g (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  obtain ⟨hval2, hp0shape, hp1shape⟩ :=
+    rms_2tp_val_shapes initSM initPM T p0 p1 xS wS x0 x1 wP shard hidden
+      hshard hhid hsmNode hpm0 hpm1 hw hx hx0 hx1
+  have hval : denoteGraph sm initSM T
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph pm initPM p0, denoteGraph pm initPM p1] := hval2
+  have hshape : (denoteGraph sm initSM T).shape = [shard * 2, hidden] := by
+    rw [hval2, allGatherPrimDimN_shape 0 2 _ [shard, hidden]
+          (by simp only [List.head?_cons, Option.map_some, Option.getD_some]; exact hp0shape)]
+    rfl
+  exact wrap_2tp_allGather initSM initPM g T p0 p1 [shard * 2, hidden] [shard, hidden]
+    htp hgd hrep hts htsShape htpShapes hne hval hshape hp0shape hp1shape
+
+/-- SM node reduction for the layer-2 input-layernorm rms output (tid 4792, sm node 81). -/
+theorem sm_rms_4792_node (initSM : Store) :
+    denoteGraph sm initSM 4792
+      = fw_rms_norm (denoteGraph sm initSM 7487) (denoteGraph sm initSM 4791) := by
+  rw [sm_val initSM 81 4792 (by native_decide) (by native_decide)]
+  rw [show sm.nodes[81]'(by native_decide)
+      = { rank := 0, op := "OpName.FW_rms_norm", ins := [7487, 4791], outs := [4792] }
+      from by native_decide]
+  rw [applyNode_fw_rms_norm_out_1p,
+      sm_prefix_eq initSM 81 7487 (by native_decide),
+      sm_prefix_eq initSM 81 4791 (by native_decide)]
+
+/-- PM rank-0 node reduction for the rms shard (tid 7769, pm node 223). -/
+theorem pm_rms_7769_node (initPM : Store) :
+    denoteGraph pm initPM 7769
+      = fw_rms_norm (denoteGraph pm initPM 14701) (denoteGraph pm initPM 4791) := by
+  rw [pm_val initPM 223 7769 (by native_decide) (by native_decide)]
+  rw [show pm.nodes[223]'(by native_decide)
+      = { rank := 0, op := "OpName.FW_rms_norm", ins := [14701, 4791], outs := [7769] }
+      from by native_decide]
+  rw [applyNode_fw_rms_norm_out_1p,
+      pm_prefix_eq initPM 223 14701 (by native_decide),
+      pm_prefix_eq initPM 223 4791 (by native_decide)]
+
+/-- PM rank-1 node reduction for the rms shard (tid 7770, pm node 224). -/
+theorem pm_rms_7770_node (initPM : Store) :
+    denoteGraph pm initPM 7770
+      = fw_rms_norm (denoteGraph pm initPM 14709) (denoteGraph pm initPM 4791) := by
+  rw [pm_val initPM 224 7770 (by native_decide) (by native_decide)]
+  rw [show pm.nodes[224]'(by native_decide)
+      = { rank := 1, op := "OpName.FW_rms_norm", ins := [14709, 4791], outs := [7770] }
+      from by native_decide]
+  rw [applyNode_fw_rms_norm_out_1p,
+      pm_prefix_eq initPM 224 14709 (by native_decide),
+      pm_prefix_eq initPM 224 4791 (by native_decide)]
+
+/-- **2-tp rms-norm bridgehead (tid 4792).** `intermediateGoal_4792` holds given
+    the reconstruction of the sharded residual input (7487, gathered from PM shards
+    14701/14709) plus the two shard shapes. The replicated weight (init tid 4791)
+    is closed internally via `recon_weight`. The input `hx` is transitively
+    attention/MoE-gated (7487 ← 4790 = residual add ← attention + MoE), so this is
+    CONDITIONAL on `hx`, threaded as an honest theorem parameter. -/
+theorem recon_intermediateGoal_4792_of_inputs (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hx : denoteGraph sm initSM 7487
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 14701, denoteGraph pm initPM 14709])
+    (hx0 : (denoteGraph pm initPM 14701).shape = [2048, 1024])
+    (hx1 : (denoteGraph pm initPM 14709).shape = [2048, 1024]) :
+    InitGoalHolds pm.numRanks intermediateGoal_4792
+      (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hw : denoteGraph sm initSM 4791 = denoteGraph pm initPM 4791 :=
+    recon_weight initSM initPM hInit initGoal_4791 (by native_decide) 4791 rfl rfl rfl rfl
+  exact recon_rms_norm_2tp initSM initPM intermediateGoal_4792
+    4792 7769 7770 7487 4791 14701 14709 4791 2048 1024
+    (by norm_num) (by norm_num)
+    rfl rfl rfl rfl rfl rfl (by decide)
+    (sm_rms_4792_node initSM) (pm_rms_7769_node initPM) (pm_rms_7770_node initPM)
+    hw hx hx0 hx1
+
+/-- Canonically-named deliverable — 2-tp input-layernorm rms output (tid 4792). -/
+theorem recon_intermediateGoal_4792 (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hx : denoteGraph sm initSM 7487
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 14701, denoteGraph pm initPM 14709])
+    (hx0 : (denoteGraph pm initPM 14701).shape = [2048, 1024])
+    (hx1 : (denoteGraph pm initPM 14709).shape = [2048, 1024]) :
+    InitGoalHolds pm.numRanks intermediateGoal_4792
+      (denoteGraph sm initSM) (denoteGraph pm initPM) :=
+  recon_intermediateGoal_4792_of_inputs initSM initPM hInit hx hx0 hx1
 
 /-- SM node reduction for the layer-2 rotary Q' output (tid 4800, sm node 86). -/
 theorem sm_rotary_4800_node (initSM : Store) :
