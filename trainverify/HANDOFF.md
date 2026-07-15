@@ -184,11 +184,30 @@ pattern then generalizes to FW_view/reshape/add/mul/… 2-tp goals directly.
   `applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair`; wrap with
   `wrap_2tp_allGather_gen`. Global attn node literals == Pattern_3 cut-graph
   `nSM/nR0/nR1` byte-for-byte (`native_decide` buddy facts).
-- **CASCADE BLOCKER (next worker must fix upstream first):** downstream reshape
-  goals (4697/4698/…) are unprovable over the GLOBAL graph because its `FW_reshape`
-  nodes have `params=[]` (no-op identity) → output keeps shape `[4096,16,64]` while
-  the goals demand `[4096,1024]`. Pattern_3's CUT graphs already use params-aware
-  reshape; the GLOBAL `GeneratedYOCOMoE` graph does not. **Action:** regenerate the
-  global graph with params-aware `FW_reshape` (target shapes on `params`), OR restate
-  the reshape goals' `tsShape` to match the no-op identity model. Until then the
-  layer-0 residual/MoE/layer-1 cascade cannot proceed. Not a proof-side fix.
+- **CASCADE BLOCKER — RESOLVED by Worker #11 (2026-07-15):** the GLOBAL
+  `GeneratedYOCOMoE` graph was regenerated from the yoco_moe_a04b pkls with the
+  params-aware Verdict emitter. All 432 `FW_reshape` nodes now carry their target
+  output shape on `params` (e.g. `sm[10]` 4696→4697 `params := [4096, 1024]`), so
+  `Denote.evalOp` builds a faithful `fw_view` instead of identity. The reshape
+  goals' shape obligations are now SATISFIABLE (`SM 4697` has shape `[4096,1024]`,
+  matching `intermediateGoal_4697.tsShape`; previously `[4096,16,64]` → structurally
+  false). Full repo builds green (8560 jobs, 0 errors, 0 sorry); Pattern_1/2/4/5 are
+  unaffected (their cut graphs use shape-preserving reshapes and the empty-params
+  identity fallback is preserved). The manual `initGoal_4691` fix (b6e3506f, source
+  leaf 4691 not multiref-copy 11853) and the topk_routing `[8]→[8,1]` explicit
+  num_experts param (semantically identical: `params.getD 1 1 = 1` either way) were
+  reconciled during regen.
+- **NEW FRONTIER (next worker):** the reshape *shape obligation* is unblocked, but
+  proving the 2-tp reshape goals (`4697`, `4715`, `4720`, …) still needs a NEW
+  **row-preserving reshape / dim-0 allGather commute** lemma:
+  `fw_view [4096,1024] (allGather0 [a,b]) = allGather0 [fw_view [2048,1024] a,
+  fw_view [2048,1024] b]` for `a,b : [2048,16,64]`. This DOES hold here (dim0 stays
+  `2048*2`, only the per-row `16*64→1024` collapse changes; flat data = concat(a,b)
+  on both sides, and the allGather index arithmetic is identical because postStride
+  `1024` and dimSize `2048` match). It is NOT the general reshape/allGather commute
+  (which fails when the reshape crosses the shard boundary — see
+  `Denote.lean:22263` `fw_reshape_allGather0_commute_2`). Once this lemma lands, the
+  reshape nodes reconstruct, then the layer-0 residual-add → MoE → layer-1 cascade
+  can proceed. The attention gear `recon_attn_sliding_window_2tp_layer` alone does
+  NOT cascade past the reshape; each layer needs reshape-recon + residual/MoE recon
+  in addition to the attention gear.

@@ -528,3 +528,42 @@ fires the moment that fix lands (regenerate `GeneratedYOCOMoE` with params-aware
 #9); +1 reusable parametrized gear (`recon_attn_sliding_window_2tp_layer`); the
 attention-scaling path is proven to bottleneck on the SAME reshape blocker Worker
 #9 identified — no proof-side scaling is possible without the upstream fix.
+
+---
+
+## Worker #11 (2026-07-15) — Regenerated GeneratedYOCOMoE with params-aware FW_reshape
+
+**Upstream reshape blocker RESOLVED.** Regenerated the GLOBAL
+`denote/GeneratedYOCOMoE.lean` from the yoco_moe_a04b SM/PM pkls using the
+current Verdict `graph_to_lean.py` (params-aware `_get_node_params` FW_reshape
+branch, Verdict fix 8d55292f). Flags matched the original emission
+(`--max-goals 5 --split-goals`, goals redirected to scratch so the hand-edited
+`yoco_goals/` files were untouched).
+
+**Diff analysis (bak vs regen), exhaustively categorized:**
+- Node counts identical: SM 927, PM 1920. All tids byte-for-byte preserved on
+  non-reshape nodes. 19541 lines both.
+- 432/432 `FW_reshape` nodes gained `params := [target_shape]` (was `[]`). Under
+  `Denote.evalOp` these now build `fw_view targetShape` instead of identity.
+  Layer-0: `sm[10]` 4696→4697 `params := [4096,1024]`, `sm[11]` 4697→4698, etc.
+- 2 non-reshape deltas, both benign:
+  1. `FW_topk_routing` params `[8] → [8,1]` (explicit num_experts). Semantically
+     identical under Denote (`params.getD 1 1 = 1` either way).
+  2. `initGoal_4691` regenerated to `tid := 11853` (multiref copy); reapplied the
+     manual b6e3506f fix (`tid := 4691`, source leaf).
+
+**Build outcome: GREEN.** `lake build` full repo: 8560 jobs, 0 errors, 0 sorry.
+Standalone `denote.GeneratedYOCOMoE` builds in 41s. Pattern_1/2/4/5 + Pattern_3
++ IntermediateReconstruction + MainTheorem + AuditIR all rebuild clean — the
+params-aware reshape does NOT break the legacy identity-reshape proofs (they use
+their own cut graphs / shape-preserving reshapes; empty-params fallback kept).
+
+**Cascade impact:** the reshape *shape obligation* is now satisfiable —
+`intermediateGoal_4697` (and every downstream reshape goal) is no longer
+structurally false. The concrete NEW frontier (see HANDOFF) is a row-preserving
+reshape / dim-0 allGather commute lemma; the attention gear alone does not
+cascade past the reshape node.
+
+**Category delta:** +0 newly *proven* unconditional goals (proving them needs the
+new commute lemma), but the upstream faithfulness gap that made ALL L≥1 goals
+vacuous/false is now closed — the graph is faithful to the Python authority.
