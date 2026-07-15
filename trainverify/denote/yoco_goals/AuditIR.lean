@@ -22,3 +22,5 @@ open TrainVerify.Denote.GeneratedPatterns
 #print axioms rms_2tp_val_shapes
 #print axioms recon_intermediateGoal_4792
 #print axioms recon_intermediateGoal_4792_of_inputs
+#print axioms recon_intermediateGoal_4800_of_residual_inputs
+#print axioms recon_intermediateGoal_4801_of_residual_inputs

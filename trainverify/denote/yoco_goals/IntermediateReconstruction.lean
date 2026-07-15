@@ -1817,6 +1817,63 @@ theorem recon_intermediateGoal_4801_of_rms_inputs (initSM initPM : Store)
   exact recon_intermediateGoal_4801_of_inputs initSM initPM hInit
     hpos hq hk hq0 hq1 hk0 hk1 hp0 hp1
 
+/-! ### Worker #7 — rotary chain pushed ONE MORE HOP up (residual input)
+
+    `recon_intermediateGoal_4800/4801_of_residual_inputs` thread the rms-norm
+    RESIDUAL input (sm 7487 = allGather[pm 14701, pm 14709]) + its two input shard
+    shapes + positions, and derive the rms-output reconstruction (`hrms`, sm 4792 →
+    pm 7769/7770) + its two shard shapes INTERNALLY via `rms_2tp_val_shapes` (the
+    new rms gear). Still **6 hypotheses** — this is a boundary RELOCATION (not a
+    count reduction): it moves the threaded fact from the rms output (4792) one hop
+    closer to the true attention/MoE blocker (7487 ← 4790 = residual add ←
+    FW_attn_sliding_window + FW_all2all_moe_gmm). The rms shard shapes are no longer
+    threaded — they are derived (rms-norm is shape-preserving). -/
+theorem recon_intermediateGoal_4800_of_residual_inputs (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hpos : denoteGraph sm initSM 4799
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7803, denoteGraph pm initPM 7804])
+    (hres : denoteGraph sm initSM 7487
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 14701, denoteGraph pm initPM 14709])
+    (hr0 : (denoteGraph pm initPM 14701).shape = [2048, 1024])
+    (hr1 : (denoteGraph pm initPM 14709).shape = [2048, 1024])
+    (hp0 : (denoteGraph pm initPM 7803).shape = [2048, 1])
+    (hp1 : (denoteGraph pm initPM 7804).shape = [2048, 1]) :
+    InitGoalHolds pm.numRanks intermediateGoal_4800
+      (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hw : denoteGraph sm initSM 4791 = denoteGraph pm initPM 4791 :=
+    recon_weight initSM initPM hInit initGoal_4791 (by native_decide) 4791 rfl rfl rfl rfl
+  obtain ⟨hrms, hs0, hs1⟩ := rms_2tp_val_shapes initSM initPM
+    4792 7769 7770 7487 4791 14701 14709 4791 2048 1024
+    (by norm_num) (by norm_num)
+    (sm_rms_4792_node initSM) (pm_rms_7769_node initPM) (pm_rms_7770_node initPM)
+    hw hres hr0 hr1
+  exact recon_intermediateGoal_4800_of_rms_inputs initSM initPM hInit
+    hpos hrms hs0 hs1 hp0 hp1
+
+/-- K companion of `recon_intermediateGoal_4800_of_residual_inputs`; same 6
+    hypotheses, rms output derived internally. -/
+theorem recon_intermediateGoal_4801_of_residual_inputs (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hpos : denoteGraph sm initSM 4799
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7803, denoteGraph pm initPM 7804])
+    (hres : denoteGraph sm initSM 7487
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 14701, denoteGraph pm initPM 14709])
+    (hr0 : (denoteGraph pm initPM 14701).shape = [2048, 1024])
+    (hr1 : (denoteGraph pm initPM 14709).shape = [2048, 1024])
+    (hp0 : (denoteGraph pm initPM 7803).shape = [2048, 1])
+    (hp1 : (denoteGraph pm initPM 7804).shape = [2048, 1]) :
+    InitGoalHolds pm.numRanks intermediateGoal_4801
+      (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hw : denoteGraph sm initSM 4791 = denoteGraph pm initPM 4791 :=
+    recon_weight initSM initPM hInit initGoal_4791 (by native_decide) 4791 rfl rfl rfl rfl
+  obtain ⟨hrms, hs0, hs1⟩ := rms_2tp_val_shapes initSM initPM
+    4792 7769 7770 7487 4791 14701 14709 4791 2048 1024
+    (by norm_num) (by norm_num)
+    (sm_rms_4792_node initSM) (pm_rms_7769_node initPM) (pm_rms_7770_node initPM)
+    hw hres hr0 hr1
+  exact recon_intermediateGoal_4801_of_rms_inputs initSM initPM hInit
+    hpos hrms hs0 hs1 hp0 hp1
+
 /-! ### Worker #5 (2026-07-14) — adversarial hypothesis inventory for goal 4800
 
     `recon_intermediateGoal_4800` / `_4801` are the canonically-named deliverable
