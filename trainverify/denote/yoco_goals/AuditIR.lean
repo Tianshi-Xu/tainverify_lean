@@ -18,3 +18,9 @@ open TrainVerify.Denote.GeneratedPatterns
 #print axioms perhead_2tp_val_shapes
 #print axioms recon_intermediateGoal_4800_of_rms_inputs
 #print axioms recon_intermediateGoal_4801_of_rms_inputs
+#print axioms recon_rms_norm_2tp
+#print axioms rms_2tp_val_shapes
+#print axioms recon_intermediateGoal_4792
+#print axioms recon_intermediateGoal_4792_of_inputs
+#print axioms recon_intermediateGoal_4800_of_residual_inputs
+#print axioms recon_intermediateGoal_4801_of_residual_inputs
