@@ -587,3 +587,100 @@ plus 2 reusable machinery lemmas (reshape commute + ring reshape reducer). The
 upstream faithfulness gap that made ALL L≥1 goals vacuous/false is closed — the
 graph is faithful to the Python authority.
 
+
+---
+
+## Worker #12 — Residual / MoE / L1-pre-attention cascade (ring-attn)
+
+Chains forward from `recon_intermediateGoal_4697_ringAttn` through the
+down-projection, first residual add, RMSNorm, and the replicated MoE-gate /
+expert-projection sub-tree, proving each `intermediateGoal_<tid>` UNCONDITIONALLY
+over `denoteGraph_ringAttn`. Zero sorry, zero user axiom (kernel triple +
+native_decide baseline only, verified via `#print axioms`).
+
+### Files
+- **`denote/yoco_goals/RingAttnGears.lean`** (NEW, shared with W13): generic
+  ring node reducers `ringAttn_reduce1` / `ringAttn_reduce2` (unary / binary op
+  node → opfun over ring-denotations of the inputs), `ringAttn_reshape_reduce_g12`
+  (FW_reshape → fw_view), `fw_view_id_shape` (identity reshape/view collapse),
+  `valAt_fw_view_lt`, `foldl_prefix_ring_g12`. Unique `_g12` names to avoid
+  collision with Pattern_3. Builds green standalone.
+- **`denote/yoco_goals/ResidualMoEReconstruction.lean`** (NEW, W12 deliverable):
+  all 18 new theorems + helpers.
+- **`denote/yoco_goals/IntermediateReconstruction.lean`** (FIXED): origin
+  `cfb8ca04` did NOT compile from clean (duplicate `valAt_fw_view` colliding with
+  Pattern_3, and a docstring-then-`set_option in` parse error). Reconciled in
+  commit `6c68642c` (import RingAttnGears, delete the 3 broken local helpers,
+  reorder set_option before docstring, redirect 4697 proof to `_g12` gears).
+
+### Proven intermediateGoals (18 new, all UNCONDITIONAL over ring-attn)
+| tid  | op                         | shape        | status |
+|------|----------------------------|--------------|--------|
+| 4698 | reshape→allGather bridge   | [4096,1024]  | proved |
+| 4700 | mix_precision_linear (down)| [4096,1024]  | proved |
+| 4701 | view                       | [4096,1024]  | proved |
+| 4702 | float                      | [4096,1024]  | proved |
+| 4703 | residual add (+shortcut)   | [4096,1024]  | proved |
+| 4705 | rms_norm                   | [4096,1024]  | proved |
+| 4706 | float (router head)        | [4096,1024]  | proved |
+| 4708 | norm_linear (router gate)  | [4096,64]    | proved |
+| 4715 | reshape (identity)         | [4096,1024]  | proved |
+| 4720 | reshape (identity)         | [4096,1024]  | proved |
+| 4724 | reshape (identity)         | [4096,1024]  | proved |
+| 4717 | mix_precision_linear       | [4096,1]     | proved |
+| 4722 | mix_precision_linear       | [4096,512]   | proved |
+| 4726 | mix_precision_linear       | [4096,512]   | proved |
+| 4718 | view                       | [4096,1]     | proved |
+| 4723 | view                       | [4096,512]   | proved |
+| 4727 | view                       | [4096,512]   | proved |
+| 4719 | sigmoid (glu gate)         | [4096,1]     | proved |
+
+### Gated frontier in [4703,4750) (need genuine MoE sharding gears)
+These are the *hard* MoE core; each PM node computes over a **chunked/sharded**
+tensor and re-gathers, so the SM-vs-PM bridge needs a sharding-COMMUTE gear
+(not just a per-op node reduction). Deferred:
+- **4709 / 4710** — `FW_topk_routing` outputs (2-tp SHARDED, PM runs topk on
+  `ChunkPrim[4708]` shards 7479/7480). Needs a topk sharding-commute + buddy gear.
+- **4714** — `FW_all2all_moe_gmm` (PM `AllGatherPrim[7491,7492]` of per-rank
+  grouped-GEMM). Needs the `fw_all2all_moe_gmm_full_split_commute` family wired
+  into the ring reconstruction.
+- **4728** — `FW_swiglu` (2-tp SHARDED, PM on chunks 7521/7539 → 7543/7544).
+- **4729** — reshape+`AllGatherPrim[7545,7546]` of the swiglu shards. Needs a
+  swiglu-allGather commute.
+- **4731 / 4732 / 4733 / 4734 / 4735 / 4736 / 4738 / 4740 / 4742 / 4744 / 4746 /
+  4747** — transitively gated: `4731=mix_linear(4729,…)`, `4733=mul(4719,4732)`,
+  `4734=add(4714,4733)`, `4736=add(7408,4735)`, `4738=rms_norm(4736)`,
+  `4740/4742/4744=per_head_mix_precision_linear(4738)`,
+  `4746/4747=rotary_embedding`. All become mechanical (same replicated pattern as
+  above) ONCE 4714 / 4728 / 4729 are discharged.
+
+### New gears created (signatures)
+- `ringAttn_reduce1 (g init k node inTid outTid opfun) (hk hnode hnr1 hnr2 happly
+  hdrop_nil hdrop hpre_nil hpre) : denoteGraph_ringAttn g init outTid =
+  opfun (denoteGraph_ringAttn g init inTid)` — unary post-ring node reducer.
+- `ringAttn_reduce2 (… inTid1 inTid2 outTid opfun …) : … = opfun (ring in1)
+  (ring in2)` — binary analog.
+- `ringAttn_reshape_reduce_g12` — FW_reshape node → `fw_view tshape (ring inTid)`.
+- `applyNode_fw_multiref_first_out'` — generic first-output of an `n+1`-ary
+  FW_multiref (`= s xTid`), for the `(List.range 5).map` PM broadcast form.
+- `applyNode_fw_norm_linear_out` — FW_norm_linear singleton-output reducer.
+- Local shape helpers: `fw_linear_2d_shape`, `fw_norm_linear_2d_shape`,
+  `fw_rms_norm_shape2`, `fw_sigmoid_shape`; ring transfer helpers
+  `veq_ring_of_plain`, `shape_ring_of_plain`, `veq_weight_ring`,
+  `shape_weight_ring`, `wrap_1tp_gen`.
+
+### Axiom audit
+`#print axioms` on 4703/4708/4715/4719 (transitively covering all 18): only
+`propext`, `Classical.choice`, `Quot.sound` + `_native.native_decide.ax_*`
+baseline. **Zero `sorryAx`, zero user `axiom`.**
+
+### Ring-attn unconditional total
+Was 14 (through 4697). **+18 = 32** unconditional ring-attn intermediateGoals.
+
+### Commits (this worker)
+- `c21a99e6` add shared RingAttnGears.lean
+- `6c68642c` fix IntermediateReconstruction build (dedup valAt_fw_view, set_option order)
+- `dd3f8978` prove 4698/4700/4701/4702
+- `316ac833` prove 4703/4705/4706
+- `dc8523c6` prove 4715/4720/4724/4708
+- `ef3e8639` prove 4717/4722/4726/4718/4723/4727/4719
