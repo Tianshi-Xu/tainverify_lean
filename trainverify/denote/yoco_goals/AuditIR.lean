@@ -10,3 +10,11 @@ open TrainVerify.Denote.GeneratedPatterns
 #print axioms rotary_snd_gather_commute
 #print axioms recon_rotary_2tp_fst
 #print axioms recon_rotary_2tp_snd
+#print axioms recon_per_head_linear_2tp
+#print axioms recon_intermediateGoal_4794
+#print axioms recon_intermediateGoal_4796
+#print axioms recon_intermediateGoal_4794_of_inputs
+#print axioms recon_intermediateGoal_4796_of_inputs
+#print axioms perhead_2tp_val_shapes
+#print axioms recon_intermediateGoal_4800_of_rms_inputs
+#print axioms recon_intermediateGoal_4801_of_rms_inputs

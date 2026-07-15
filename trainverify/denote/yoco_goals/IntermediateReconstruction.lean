@@ -1110,6 +1110,236 @@ theorem recon_rotary_2tp_snd (initSM initPM : Store) (g : LineageGoal)
   · rw [hpm0, fw_rotary_embedding_snd_shape]; exact hk0
   · rw [hpm1, fw_rotary_embedding_snd_shape]; exact hk1
 
+/-! ### Fully parametrized 2-tp per-head linear reconstruction gear (worker #6)
+
+    Analog of `recon_rotary_2tp_fst/snd` for `FW_per_head_mix_precision_linear`.
+    Structurally per-head linear = a linear followed by a per-head reshape of the
+    output columns; it commutes with dim-0 (token) sharding exactly like plain
+    linear because each output token row depends only on the matching input row
+    (the weight is replicated). Backed by
+    `fw_per_head_mix_precision_linear_allGather0_commute_2` (Denote.lean) — the
+    per-head companion of `fw_linear_allGather0_commute_2_of` (Pattern_1.lean).
+
+    To reconstruct any `FW_per_head_mix_precision_linear` 2-tp goal it suffices to
+    supply (a) the SM/PM node reductions (mechanical `native_decide` per tid),
+    (b) the sharded input-activation reconstruction (`hx`), (c) the replicated
+    weight agreement (`hw`), and (d) the input/weight shapes. -/
+
+/-- Raw value+shape bundle for a 2-tp per-head linear reconstruction: the SM value
+    equals the dim-0 gather of the two PM per-head shards, and each shard has the
+    per-head shape `[L, hW, dW]`. Shared by `recon_per_head_linear_2tp` (the goal
+    wrapper) and by the rotary composition that threads at the rms boundary. -/
+theorem perhead_2tp_val_shapes (initSM initPM : Store)
+    (T p0 p1 xS wS x0 x1 wP : Tid) (L k hW dW : Nat)
+    (hL : 0 < L) (hk : 0 < k) (hW0 : 0 < hW) (hdW0 : 0 < dW)
+    (hsmNode : denoteGraph sm initSM T
+        = fw_per_head_linear (denoteGraph sm initSM xS) (denoteGraph sm initSM wS))
+    (hpm0 : denoteGraph pm initPM p0
+        = fw_per_head_linear (denoteGraph pm initPM x0) (denoteGraph pm initPM wP))
+    (hpm1 : denoteGraph pm initPM p1
+        = fw_per_head_linear (denoteGraph pm initPM x1) (denoteGraph pm initPM wP))
+    (hw : denoteGraph sm initSM wS = denoteGraph pm initPM wP)
+    (hx : denoteGraph sm initSM xS
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM x0, denoteGraph pm initPM x1])
+    (hx0 : (denoteGraph pm initPM x0).shape = [L, k])
+    (hx1 : (denoteGraph pm initPM x1).shape = [L, k])
+    (hwshape : (denoteGraph pm initPM wP).shape = [hW, dW, k]) :
+    denoteGraph sm initSM T
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM p0, denoteGraph pm initPM p1]
+      ∧ (denoteGraph pm initPM p0).shape = [L, hW, dW]
+      ∧ (denoteGraph pm initPM p1).shape = [L, hW, dW] := by
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hsmNode, hw, hx,
+        fw_per_head_mix_precision_linear_allGather0_commute_2
+          (denoteGraph pm initPM x0) (denoteGraph pm initPM x1) (denoteGraph pm initPM wP)
+          L k hW dW hL hk hW0 hdW0 hx0 hx1 hwshape,
+        ← hpm0, ← hpm1]
+  · rw [hpm0]
+    exact fw_per_head_linear_shape _ _ hW dW k [L] (by rw [hx0]; rfl) hwshape
+  · rw [hpm1]
+    exact fw_per_head_linear_shape _ _ hW dW k [L] (by rw [hx1]; rfl) hwshape
+
+/-- Parametrized 2-tp per-head linear reconstruction gear. Closes any
+    `FW_per_head_mix_precision_linear` 2-tp (`gatherDim = 0`, non-replicated)
+    goal whose sharded input activation reconstructs as the dim-0 gather of its
+    two PM shards and whose (replicated) weight agrees SM↔PM. -/
+theorem recon_per_head_linear_2tp (initSM initPM : Store) (g : LineageGoal)
+    (T p0 p1 xS wS x0 x1 wP : Tid) (L k hW dW : Nat)
+    (hL : 0 < L) (hk : 0 < k) (hW0 : 0 < hW) (hdW0 : 0 < dW)
+    (htp : g.tps = [{rank := 0, tid := p0}, {rank := 1, tid := p1}])
+    (hgd : g.gatherDim = 0) (hrep : g.replicated = false) (hts : g.ts = T)
+    (htsShape : g.tsShape = [L * 2, hW, dW])
+    (htpShapes : g.tpShapes = [[L, hW, dW], [L, hW, dW]])
+    (hne : ([L, hW, dW] : Shape) ≠ [1])
+    (hsmNode : denoteGraph sm initSM T
+        = fw_per_head_linear (denoteGraph sm initSM xS) (denoteGraph sm initSM wS))
+    (hpm0 : denoteGraph pm initPM p0
+        = fw_per_head_linear (denoteGraph pm initPM x0) (denoteGraph pm initPM wP))
+    (hpm1 : denoteGraph pm initPM p1
+        = fw_per_head_linear (denoteGraph pm initPM x1) (denoteGraph pm initPM wP))
+    (hw : denoteGraph sm initSM wS = denoteGraph pm initPM wP)
+    (hx : denoteGraph sm initSM xS
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM x0, denoteGraph pm initPM x1])
+    (hx0 : (denoteGraph pm initPM x0).shape = [L, k])
+    (hx1 : (denoteGraph pm initPM x1).shape = [L, k])
+    (hwshape : (denoteGraph pm initPM wP).shape = [hW, dW, k]) :
+    InitGoalHolds pm.numRanks g (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  obtain ⟨hval2, hp0shape, hp1shape⟩ :=
+    perhead_2tp_val_shapes initSM initPM T p0 p1 xS wS x0 x1 wP L k hW dW
+      hL hk hW0 hdW0 hsmNode hpm0 hpm1 hw hx hx0 hx1 hwshape
+  have hval : denoteGraph sm initSM T
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph pm initPM p0, denoteGraph pm initPM p1] := hval2
+  have hshape : (denoteGraph sm initSM T).shape = [L * 2, hW, dW] := by
+    rw [hval2, allGatherPrimDimN_shape 0 2 _ [L, hW, dW]
+          (by simp only [List.head?_cons, Option.map_some, Option.getD_some]; exact hp0shape)]
+    rfl
+  exact wrap_2tp_allGather initSM initPM g T p0 p1 [L * 2, hW, dW] [L, hW, dW]
+    htp hgd hrep hts htsShape htpShapes hne hval hshape hp0shape hp1shape
+
+/-- SM node reduction for the layer-2 per-head Q projection (tid 4794, sm node 83). -/
+theorem sm_perhead_4794_node (initSM : Store) :
+    denoteGraph sm initSM 4794
+      = fw_per_head_linear (denoteGraph sm initSM 7496) (denoteGraph sm initSM 4793) := by
+  rw [sm_val initSM 83 4794 (by native_decide) (by native_decide)]
+  rw [show sm.nodes[83]'(by native_decide)
+      = { rank := 0, op := "OpName.FW_per_head_mix_precision_linear", ins := [7496, 4793], outs := [4794] }
+      from by native_decide]
+  rw [applyNode_fw_per_head_mix_precision_linear_out,
+      sm_prefix_eq initSM 83 7496 (by native_decide),
+      sm_prefix_eq initSM 83 4793 (by native_decide)]
+
+/-- SM node reduction for the layer-2 per-head K projection (tid 4796, sm node 84). -/
+theorem sm_perhead_4796_node (initSM : Store) :
+    denoteGraph sm initSM 4796
+      = fw_per_head_linear (denoteGraph sm initSM 7500) (denoteGraph sm initSM 4795) := by
+  rw [sm_val initSM 84 4796 (by native_decide) (by native_decide)]
+  rw [show sm.nodes[84]'(by native_decide)
+      = { rank := 0, op := "OpName.FW_per_head_mix_precision_linear", ins := [7500, 4795], outs := [4796] }
+      from by native_decide]
+  rw [applyNode_fw_per_head_mix_precision_linear_out,
+      sm_prefix_eq initSM 84 7500 (by native_decide),
+      sm_prefix_eq initSM 84 4795 (by native_decide)]
+
+/-- PM rank-0 node reduction for the per-head Q shard (tid 7771, pm node 227). -/
+theorem pm_perhead_7771_node (initPM : Store) :
+    denoteGraph pm initPM 7771
+      = fw_per_head_linear (denoteGraph pm initPM 14718) (denoteGraph pm initPM 4793) := by
+  rw [pm_val initPM 227 7771 (by native_decide) (by native_decide)]
+  rw [show pm.nodes[227]'(by native_decide)
+      = { rank := 0, op := "OpName.FW_per_head_mix_precision_linear", ins := [14718, 4793], outs := [7771] }
+      from by native_decide]
+  rw [applyNode_fw_per_head_mix_precision_linear_out,
+      pm_prefix_eq initPM 227 14718 (by native_decide),
+      pm_prefix_eq initPM 227 4793 (by native_decide)]
+
+/-- PM rank-1 node reduction for the per-head Q shard (tid 7772, pm node 230). -/
+theorem pm_perhead_7772_node (initPM : Store) :
+    denoteGraph pm initPM 7772
+      = fw_per_head_linear (denoteGraph pm initPM 14731) (denoteGraph pm initPM 4793) := by
+  rw [pm_val initPM 230 7772 (by native_decide) (by native_decide)]
+  rw [show pm.nodes[230]'(by native_decide)
+      = { rank := 1, op := "OpName.FW_per_head_mix_precision_linear", ins := [14731, 4793], outs := [7772] }
+      from by native_decide]
+  rw [applyNode_fw_per_head_mix_precision_linear_out,
+      pm_prefix_eq initPM 230 14731 (by native_decide),
+      pm_prefix_eq initPM 230 4793 (by native_decide)]
+
+/-- PM rank-0 node reduction for the per-head K shard (tid 7783, pm node 228). -/
+theorem pm_perhead_7783_node (initPM : Store) :
+    denoteGraph pm initPM 7783
+      = fw_per_head_linear (denoteGraph pm initPM 14722) (denoteGraph pm initPM 4795) := by
+  rw [pm_val initPM 228 7783 (by native_decide) (by native_decide)]
+  rw [show pm.nodes[228]'(by native_decide)
+      = { rank := 0, op := "OpName.FW_per_head_mix_precision_linear", ins := [14722, 4795], outs := [7783] }
+      from by native_decide]
+  rw [applyNode_fw_per_head_mix_precision_linear_out,
+      pm_prefix_eq initPM 228 14722 (by native_decide),
+      pm_prefix_eq initPM 228 4795 (by native_decide)]
+
+/-- PM rank-1 node reduction for the per-head K shard (tid 7784, pm node 231). -/
+theorem pm_perhead_7784_node (initPM : Store) :
+    denoteGraph pm initPM 7784
+      = fw_per_head_linear (denoteGraph pm initPM 14735) (denoteGraph pm initPM 4795) := by
+  rw [pm_val initPM 231 7784 (by native_decide) (by native_decide)]
+  rw [show pm.nodes[231]'(by native_decide)
+      = { rank := 1, op := "OpName.FW_per_head_mix_precision_linear", ins := [14735, 4795], outs := [7784] }
+      from by native_decide]
+  rw [applyNode_fw_per_head_mix_precision_linear_out,
+      pm_prefix_eq initPM 231 14735 (by native_decide),
+      pm_prefix_eq initPM 231 4795 (by native_decide)]
+
+/-- **2-tp per-head Q bridgehead (tid 4794).** `intermediateGoal_4794` holds given
+    the reconstruction of the sharded input activation (7496, gathered from PM
+    shards 14718/14731) plus the two shard shapes. The replicated weight (init tid
+    4793) is closed internally via `recon_weight`. The input `hx` is transitively
+    attention/MoE-gated (7496 = rms_norm → residual → attention/MoE), so this is
+    CONDITIONAL on `hx`, threaded as an honest theorem parameter. -/
+theorem recon_intermediateGoal_4794_of_inputs (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hx : denoteGraph sm initSM 7496
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 14718, denoteGraph pm initPM 14731])
+    (hx0 : (denoteGraph pm initPM 14718).shape = [2048, 1024])
+    (hx1 : (denoteGraph pm initPM 14731).shape = [2048, 1024]) :
+    InitGoalHolds pm.numRanks intermediateGoal_4794
+      (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hw : denoteGraph sm initSM 4793 = denoteGraph pm initPM 4793 :=
+    recon_weight initSM initPM hInit initGoal_4793 (by native_decide) 4793 rfl rfl rfl rfl
+  have hwshape : (denoteGraph pm initPM 4793).shape = [16, 64, 1024] := by
+    rw [← hw]
+    exact shape_weight initSM initPM hInit initGoal_4793 (by native_decide) 4793 [16, 64, 1024] rfl rfl
+  exact recon_per_head_linear_2tp initSM initPM intermediateGoal_4794
+    4794 7771 7772 7496 4793 14718 14731 4793 2048 1024 16 64
+    (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+    rfl rfl rfl rfl rfl rfl (by decide)
+    (sm_perhead_4794_node initSM) (pm_perhead_7771_node initPM) (pm_perhead_7772_node initPM)
+    hw hx hx0 hx1 hwshape
+
+/-- **2-tp per-head K bridgehead (tid 4796).** K companion of
+    `recon_intermediateGoal_4794_of_inputs`; input 7500 (PM shards 14722/14735),
+    replicated weight init tid 4795. CONDITIONAL on `hx`. -/
+theorem recon_intermediateGoal_4796_of_inputs (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hx : denoteGraph sm initSM 7500
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 14722, denoteGraph pm initPM 14735])
+    (hx0 : (denoteGraph pm initPM 14722).shape = [2048, 1024])
+    (hx1 : (denoteGraph pm initPM 14735).shape = [2048, 1024]) :
+    InitGoalHolds pm.numRanks intermediateGoal_4796
+      (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hw : denoteGraph sm initSM 4795 = denoteGraph pm initPM 4795 :=
+    recon_weight initSM initPM hInit initGoal_4795 (by native_decide) 4795 rfl rfl rfl rfl
+  have hwshape : (denoteGraph pm initPM 4795).shape = [4, 64, 1024] := by
+    rw [← hw]
+    exact shape_weight initSM initPM hInit initGoal_4795 (by native_decide) 4795 [4, 64, 1024] rfl rfl
+  exact recon_per_head_linear_2tp initSM initPM intermediateGoal_4796
+    4796 7783 7784 7500 4795 14722 14735 4795 2048 1024 4 64
+    (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+    rfl rfl rfl rfl rfl rfl (by decide)
+    (sm_perhead_4796_node initSM) (pm_perhead_7783_node initPM) (pm_perhead_7784_node initPM)
+    hw hx hx0 hx1 hwshape
+
+/-- Canonically-named deliverable — 2-tp per-head Q projection (tid 4794). -/
+theorem recon_intermediateGoal_4794 (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hx : denoteGraph sm initSM 7496
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 14718, denoteGraph pm initPM 14731])
+    (hx0 : (denoteGraph pm initPM 14718).shape = [2048, 1024])
+    (hx1 : (denoteGraph pm initPM 14731).shape = [2048, 1024]) :
+    InitGoalHolds pm.numRanks intermediateGoal_4794
+      (denoteGraph sm initSM) (denoteGraph pm initPM) :=
+  recon_intermediateGoal_4794_of_inputs initSM initPM hInit hx hx0 hx1
+
+/-- Canonically-named deliverable — 2-tp per-head K projection (tid 4796). -/
+theorem recon_intermediateGoal_4796 (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hx : denoteGraph sm initSM 7500
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 14722, denoteGraph pm initPM 14735])
+    (hx0 : (denoteGraph pm initPM 14722).shape = [2048, 1024])
+    (hx1 : (denoteGraph pm initPM 14735).shape = [2048, 1024]) :
+    InitGoalHolds pm.numRanks intermediateGoal_4796
+      (denoteGraph sm initSM) (denoteGraph pm initPM) :=
+  recon_intermediateGoal_4796_of_inputs initSM initPM hInit hx hx0 hx1
+
 /-- SM node reduction for the layer-2 rotary Q' output (tid 4800, sm node 86). -/
 theorem sm_rotary_4800_node (initSM : Store) :
     denoteGraph sm initSM 4800
@@ -1256,6 +1486,183 @@ theorem recon_intermediateGoal_4801_of_inputs (initSM initPM : Store)
     rfl rfl rfl rfl rfl rfl (by decide)
     (sm_rotary_4801_node initSM) (pm_rotary_7807_node initPM) (pm_rotary_7808_node initPM)
     hcs hpos hq hk hq0 hq1 hk0 hk1 hp0 hp1
+
+/-! ### Worker #6 (2026-07-15) — rotary hypothesis reduction via shared rms input
+
+    The per-head Q (4794) and K (4796) projections both consume the SAME rms-norm
+    output (SM tid 4792) via a single `FW_multiref [4792] → [7496, 7500, 7504]`
+    (sm node 82). On PM the two ranks' rms shards are `7769` (rank 0) and `7770`
+    (rank 1), each multiref'd into the per-head input copies (pm nodes 225/226).
+
+    So instead of threading the two per-head outputs (4794/4796) as separate 2-tp
+    reconstructions plus their four shard shapes (6 hypotheses), we thread ONE
+    shared rms reconstruction (`hrms`) plus its two shard shapes, and derive
+    everything else via the multiref bridges + `perhead_2tp_val_shapes` + the
+    per-head node reductions. This cuts the rotary conditional hypothesis count
+    from 9 to 6 (see `recon_intermediateGoal_4800_of_rms_inputs`). -/
+
+/-- `sm 7496 = sm 4792` (per-head Q input is a multiref copy of the rms output). -/
+theorem sm_mref_7496_eq_4792 (initSM : Store) :
+    denoteGraph sm initSM 7496 = denoteGraph sm initSM 4792 := by
+  rw [sm_val initSM 82 7496 (by native_decide) (by native_decide)]
+  rw [show sm.nodes[82]'(by native_decide)
+      = { rank := 0, op := "OpName.FW_multiref", ins := [4792], outs := [7496, 7500, 7504], params := [3] }
+      from by native_decide]
+  rw [applyNode_fw_multiref3_first_out', sm_prefix_eq initSM 82 4792 (by native_decide)]
+
+/-- `sm 7500 = sm 4792` (per-head K input is a multiref copy of the rms output). -/
+theorem sm_mref_7500_eq_4792 (initSM : Store) :
+    denoteGraph sm initSM 7500 = denoteGraph sm initSM 4792 := by
+  rw [sm_val initSM 82 7500 (by native_decide) (by native_decide)]
+  rw [show sm.nodes[82]'(by native_decide)
+      = { rank := 0, op := "OpName.FW_multiref", ins := [4792], outs := [7496, 7500, 7504], params := [3] }
+      from by native_decide]
+  rw [applyNode_fw_multiref3_second_out' _ _ _ _ 7496 7500 7504 (by decide),
+      sm_prefix_eq initSM 82 4792 (by native_decide)]
+
+/-- `pm 14718 = pm 7769` (PM rank-0 per-head Q input is a multiref copy of the rms shard). -/
+theorem pm_mref_14718_eq_7769 (initPM : Store) :
+    denoteGraph pm initPM 14718 = denoteGraph pm initPM 7769 := by
+  rw [pm_val initPM 225 14718 (by native_decide) (by native_decide)]
+  rw [show pm.nodes[225]'(by native_decide)
+      = { rank := 0, op := "OpName.FW_multiref", ins := [7769], outs := [14718, 14722, 14726], params := [3] }
+      from by native_decide]
+  rw [applyNode_fw_multiref3_first_out', pm_prefix_eq initPM 225 7769 (by native_decide)]
+
+/-- `pm 14722 = pm 7769` (PM rank-0 per-head K input is a multiref copy of the rms shard). -/
+theorem pm_mref_14722_eq_7769 (initPM : Store) :
+    denoteGraph pm initPM 14722 = denoteGraph pm initPM 7769 := by
+  rw [pm_val initPM 225 14722 (by native_decide) (by native_decide)]
+  rw [show pm.nodes[225]'(by native_decide)
+      = { rank := 0, op := "OpName.FW_multiref", ins := [7769], outs := [14718, 14722, 14726], params := [3] }
+      from by native_decide]
+  rw [applyNode_fw_multiref3_second_out' _ _ _ _ 14718 14722 14726 (by decide),
+      pm_prefix_eq initPM 225 7769 (by native_decide)]
+
+/-- `pm 14731 = pm 7770` (PM rank-1 per-head Q input is a multiref copy of the rms shard). -/
+theorem pm_mref_14731_eq_7770 (initPM : Store) :
+    denoteGraph pm initPM 14731 = denoteGraph pm initPM 7770 := by
+  rw [pm_val initPM 226 14731 (by native_decide) (by native_decide)]
+  rw [show pm.nodes[226]'(by native_decide)
+      = { rank := 1, op := "OpName.FW_multiref", ins := [7770], outs := [14731, 14735, 14739], params := [3] }
+      from by native_decide]
+  rw [applyNode_fw_multiref3_first_out', pm_prefix_eq initPM 226 7770 (by native_decide)]
+
+/-- `pm 14735 = pm 7770` (PM rank-1 per-head K input is a multiref copy of the rms shard). -/
+theorem pm_mref_14735_eq_7770 (initPM : Store) :
+    denoteGraph pm initPM 14735 = denoteGraph pm initPM 7770 := by
+  rw [pm_val initPM 226 14735 (by native_decide) (by native_decide)]
+  rw [show pm.nodes[226]'(by native_decide)
+      = { rank := 1, op := "OpName.FW_multiref", ins := [7770], outs := [14731, 14735, 14739], params := [3] }
+      from by native_decide]
+  rw [applyNode_fw_multiref3_second_out' _ _ _ _ 14731 14735 14739 (by decide),
+      pm_prefix_eq initPM 226 7770 (by native_decide)]
+
+/-- **Reduced 2-tp rotary Q' bridgehead (tid 4800).** Threads only the SHARED rms
+    reconstruction (`hrms`, sm tid 4792 → pm shards 7769/7770) + its two shard
+    shapes + positions — **6 hypotheses** versus the 9 of
+    `recon_intermediateGoal_4800`. The per-head Q/K reconstructions (4794/4796) and
+    their four shard shapes are derived internally via the multiref bridges and
+    `perhead_2tp_val_shapes`. -/
+theorem recon_intermediateGoal_4800_of_rms_inputs (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hpos : denoteGraph sm initSM 4799
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7803, denoteGraph pm initPM 7804])
+    (hrms : denoteGraph sm initSM 4792
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7769, denoteGraph pm initPM 7770])
+    (hs0 : (denoteGraph pm initPM 7769).shape = [2048, 1024])
+    (hs1 : (denoteGraph pm initPM 7770).shape = [2048, 1024])
+    (hp0 : (denoteGraph pm initPM 7803).shape = [2048, 1])
+    (hp1 : (denoteGraph pm initPM 7804).shape = [2048, 1]) :
+    InitGoalHolds pm.numRanks intermediateGoal_4800
+      (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hx0_14718 : (denoteGraph pm initPM 14718).shape = [2048, 1024] := by
+    rw [pm_mref_14718_eq_7769]; exact hs0
+  have hx1_14731 : (denoteGraph pm initPM 14731).shape = [2048, 1024] := by
+    rw [pm_mref_14731_eq_7770]; exact hs1
+  have hx0_14722 : (denoteGraph pm initPM 14722).shape = [2048, 1024] := by
+    rw [pm_mref_14722_eq_7769]; exact hs0
+  have hx1_14735 : (denoteGraph pm initPM 14735).shape = [2048, 1024] := by
+    rw [pm_mref_14735_eq_7770]; exact hs1
+  have hx7496 : denoteGraph sm initSM 7496
+      = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 14718, denoteGraph pm initPM 14731] := by
+    rw [sm_mref_7496_eq_4792, hrms, pm_mref_14718_eq_7769, pm_mref_14731_eq_7770]
+  have hx7500 : denoteGraph sm initSM 7500
+      = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 14722, denoteGraph pm initPM 14735] := by
+    rw [sm_mref_7500_eq_4792, hrms, pm_mref_14722_eq_7769, pm_mref_14735_eq_7770]
+  have hw4793 : denoteGraph sm initSM 4793 = denoteGraph pm initPM 4793 :=
+    recon_weight initSM initPM hInit initGoal_4793 (by native_decide) 4793 rfl rfl rfl rfl
+  have hwshape4793 : (denoteGraph pm initPM 4793).shape = [16, 64, 1024] := by
+    rw [← hw4793]
+    exact shape_weight initSM initPM hInit initGoal_4793 (by native_decide) 4793 [16, 64, 1024] rfl rfl
+  have hw4795 : denoteGraph sm initSM 4795 = denoteGraph pm initPM 4795 :=
+    recon_weight initSM initPM hInit initGoal_4795 (by native_decide) 4795 rfl rfl rfl rfl
+  have hwshape4795 : (denoteGraph pm initPM 4795).shape = [4, 64, 1024] := by
+    rw [← hw4795]
+    exact shape_weight initSM initPM hInit initGoal_4795 (by native_decide) 4795 [4, 64, 1024] rfl rfl
+  obtain ⟨hq, hq0, hq1⟩ := perhead_2tp_val_shapes initSM initPM
+    4794 7771 7772 7496 4793 14718 14731 4793 2048 1024 16 64
+    (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+    (sm_perhead_4794_node initSM) (pm_perhead_7771_node initPM) (pm_perhead_7772_node initPM)
+    hw4793 hx7496 hx0_14718 hx1_14731 hwshape4793
+  obtain ⟨hk, hk0, hk1⟩ := perhead_2tp_val_shapes initSM initPM
+    4796 7783 7784 7500 4795 14722 14735 4795 2048 1024 4 64
+    (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+    (sm_perhead_4796_node initSM) (pm_perhead_7783_node initPM) (pm_perhead_7784_node initPM)
+    hw4795 hx7500 hx0_14722 hx1_14735 hwshape4795
+  exact recon_intermediateGoal_4800_of_inputs initSM initPM hInit
+    hpos hq hk hq0 hq1 hk0 hk1 hp0 hp1
+
+/-- **Reduced 2-tp rotary K' bridgehead (tid 4801).** K companion of
+    `recon_intermediateGoal_4800_of_rms_inputs`; same 6 hypotheses. -/
+theorem recon_intermediateGoal_4801_of_rms_inputs (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hpos : denoteGraph sm initSM 4799
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7803, denoteGraph pm initPM 7804])
+    (hrms : denoteGraph sm initSM 4792
+        = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 7769, denoteGraph pm initPM 7770])
+    (hs0 : (denoteGraph pm initPM 7769).shape = [2048, 1024])
+    (hs1 : (denoteGraph pm initPM 7770).shape = [2048, 1024])
+    (hp0 : (denoteGraph pm initPM 7803).shape = [2048, 1])
+    (hp1 : (denoteGraph pm initPM 7804).shape = [2048, 1]) :
+    InitGoalHolds pm.numRanks intermediateGoal_4801
+      (denoteGraph sm initSM) (denoteGraph pm initPM) := by
+  have hx0_14718 : (denoteGraph pm initPM 14718).shape = [2048, 1024] := by
+    rw [pm_mref_14718_eq_7769]; exact hs0
+  have hx1_14731 : (denoteGraph pm initPM 14731).shape = [2048, 1024] := by
+    rw [pm_mref_14731_eq_7770]; exact hs1
+  have hx0_14722 : (denoteGraph pm initPM 14722).shape = [2048, 1024] := by
+    rw [pm_mref_14722_eq_7769]; exact hs0
+  have hx1_14735 : (denoteGraph pm initPM 14735).shape = [2048, 1024] := by
+    rw [pm_mref_14735_eq_7770]; exact hs1
+  have hx7496 : denoteGraph sm initSM 7496
+      = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 14718, denoteGraph pm initPM 14731] := by
+    rw [sm_mref_7496_eq_4792, hrms, pm_mref_14718_eq_7769, pm_mref_14731_eq_7770]
+  have hx7500 : denoteGraph sm initSM 7500
+      = allGatherPrimDimN 0 2 0 [denoteGraph pm initPM 14722, denoteGraph pm initPM 14735] := by
+    rw [sm_mref_7500_eq_4792, hrms, pm_mref_14722_eq_7769, pm_mref_14735_eq_7770]
+  have hw4793 : denoteGraph sm initSM 4793 = denoteGraph pm initPM 4793 :=
+    recon_weight initSM initPM hInit initGoal_4793 (by native_decide) 4793 rfl rfl rfl rfl
+  have hwshape4793 : (denoteGraph pm initPM 4793).shape = [16, 64, 1024] := by
+    rw [← hw4793]
+    exact shape_weight initSM initPM hInit initGoal_4793 (by native_decide) 4793 [16, 64, 1024] rfl rfl
+  have hw4795 : denoteGraph sm initSM 4795 = denoteGraph pm initPM 4795 :=
+    recon_weight initSM initPM hInit initGoal_4795 (by native_decide) 4795 rfl rfl rfl rfl
+  have hwshape4795 : (denoteGraph pm initPM 4795).shape = [4, 64, 1024] := by
+    rw [← hw4795]
+    exact shape_weight initSM initPM hInit initGoal_4795 (by native_decide) 4795 [4, 64, 1024] rfl rfl
+  obtain ⟨hq, hq0, hq1⟩ := perhead_2tp_val_shapes initSM initPM
+    4794 7771 7772 7496 4793 14718 14731 4793 2048 1024 16 64
+    (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+    (sm_perhead_4794_node initSM) (pm_perhead_7771_node initPM) (pm_perhead_7772_node initPM)
+    hw4793 hx7496 hx0_14718 hx1_14731 hwshape4793
+  obtain ⟨hk, hk0, hk1⟩ := perhead_2tp_val_shapes initSM initPM
+    4796 7783 7784 7500 4795 14722 14735 4795 2048 1024 4 64
+    (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+    (sm_perhead_4796_node initSM) (pm_perhead_7783_node initPM) (pm_perhead_7784_node initPM)
+    hw4795 hx7500 hx0_14722 hx1_14735 hwshape4795
+  exact recon_intermediateGoal_4801_of_inputs initSM initPM hInit
+    hpos hq hk hq0 hq1 hk0 hk1 hp0 hp1
 
 /-! ### Worker #5 (2026-07-14) — adversarial hypothesis inventory for goal 4800
 

@@ -285,3 +285,52 @@ rotary 2-tp goals. Full breakdown + stmt-level-lift assessment:
 `~/HYPOTHESIS_INVENTORY.md`. **Recommendation:** lift/prove at the
 per-head-linear + attention/MoE boundary (unblocks rotary AND all downstream
 2-tp ops), NOT at the rotary boundary.
+
+---
+
+## Worker #6 (2026-07-15) — `FW_per_head_mix_precision_linear` 2-tp gear
+
+**Delivered (all zero-sorry, kernel triple + native_decide baseline; audited in `AuditIR.lean`):**
+
+### Priority 1 — the gear (`recon_per_head_linear_2tp`)
+Op-agnostic parametrized 2-tp reconstruction for `FW_per_head_mix_precision_linear`,
+the exact analog of worker #4's `recon_rotary_2tp_fst/snd`. Backed by the existing
+`fw_per_head_mix_precision_linear_allGather0_commute_2` (Denote.lean:22591 — the
+per-head companion of `fw_linear_allGather0_commute_2_of`, Pattern_1.lean:2012).
+Structurally per-head linear = linear + per-head output-column reshape; it commutes
+with dim-0 (token) sharding exactly like plain linear because each output row
+depends only on the matching input row (weight replicated). Signature threads:
+node reductions (`hsmNode`/`hpm0`/`hpm1`), input recon (`hx`), weight agreement
+(`hw`), input/weight shapes. A raw value+shape bundle `perhead_2tp_val_shapes` was
+factored out (reused by the rotary reduction below).
+
+### Priority 2 — applied to 4794 (Q) and 4796 (K)
+`recon_intermediateGoal_4794` / `_4796` (+ `_of_inputs`). CONDITIONAL on their
+sharded input activation (sm 7496 / 7500, transitively attention/MoE-gated),
+threaded honestly; the replicated weight (init 4793 / 4795) is closed internally
+via `recon_weight`. Node reductions: sm nodes 83/84, pm nodes 227/228/230/231.
+
+### Priority 3 — rotary hypothesis reduction 9 → 6
+Key structural finding: per-head Q (4794) and K (4796) consume the **same** rms-norm
+output (sm tid 4792) via a single `FW_multiref [4792] → [7496,7500,7504]` (sm node
+82); the PM rank shards are 7769 (rank0) / 7770 (rank1), each multiref'd into the
+per-head input copies (pm nodes 225/226). New
+`recon_intermediateGoal_4800/4801_of_rms_inputs` thread ONE shared rms
+reconstruction (`hrms`) + its 2 shard shapes + positions = **6 hypotheses** vs the
+9 of `recon_intermediateGoal_4800/4801`. The per-head Q/K bundles + their 4 shard
+shapes are derived internally via 6 multiref bridge lemmas
+(`sm_mref_7496/7500_eq_4792`, `pm_mref_14718/14722_eq_7769`,
+`pm_mref_14731/14735_eq_7770`) + `perhead_2tp_val_shapes`.
+Note: naive per-head→rotary substitution alone does NOT reduce the count (it just
+relocates the boundary upstream); the genuine 9→6 reduction comes specifically from
+folding the shared rms input (Q and K collapse from 6 hyps to 3).
+
+### Priority 4 — no fully-unconditional 2-tp per-head goal exists
+Verified: the per-head projections come in Q/K/V triples per layer. Layer-0
+(4685/4687/4689) and layer-1 (4740/4742/4744) per-head goals are all **1-tp
+replicated** (already proven unconditionally, `wrap_1tp`) because their rms input is
+still replicated. The FIRST 2-tp per-head goal is 4794 (layer-2), whose sharded
+input 7496 chains through `FW_all2all_moe_gmm` + `FW_attn_sliding_window`. Sequence
+sharding of the residual only begins after the first attention/MoE block, so **every**
+2-tp per-head goal (4794/4796 and the ~40 in layers 2–10) is attention-gated. No
+unconditional per-head 2-tp goal to harvest.
