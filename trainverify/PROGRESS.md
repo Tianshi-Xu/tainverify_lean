@@ -334,3 +334,50 @@ input 7496 chains through `FW_all2all_moe_gmm` + `FW_attn_sliding_window`. Seque
 sharding of the residual only begins after the first attention/MoE block, so **every**
 2-tp per-head goal (4794/4796 and the ~40 in layers 2–10) is attention-gated. No
 unconditional per-head 2-tp goal to harvest.
+
+---
+
+## Worker #7 (2026-07-15) — `FW_rms_norm` 2-tp gear + residual chain hits attention/MoE floor
+
+**Delivered (all zero-sorry, kernel triple + native_decide baseline; audited in `AuditIR.lean`):**
+
+### Priority 1 — the gear (`recon_rms_norm_2tp` + `rms_2tp_val_shapes`)
+Op-agnostic parametrized 2-tp reconstruction for `FW_rms_norm`, exact analog of
+worker #6's `recon_per_head_linear_2tp`. Backed by `fw_rms_norm_allGather0_commute_2`
+(Pattern_1.lean:1887, proven zero-sorry with full `Tensor.ext`; row-wise reduction is
+orthogonal to dim-0 token sharding). Signature threads node reductions
+(`hsmNode`/`hpm0`/`hpm1`), input recon (`hx`), replicated weight agreement (`hw`),
+and 2 input shard shapes. **No weight-shape hypothesis** (unlike per-head — the rms
+commute leaves the weight unconstrained). Required importing `Pattern_1` (the commute
+lemma lives there, same `GeneratedPatterns` namespace, non-circular).
+
+### Priority 2 — applied to 4792 (layer-2 input layernorm)
+`recon_intermediateGoal_4792` (+ `_of_inputs`). CONDITIONAL on its sharded residual
+input (sm 7487 = allGather[pm 14701,14709], transitively attention/MoE-gated),
+threaded honestly. Replicated weight (init 4791) closed internally via `recon_weight`.
+Node reductions: sm node 81, pm nodes 223/224.
+
+### Priority 3 — residual chain trace: NO daylight, floor is attention/MoE
+Traced one hop up from 4790 (residual add). It fans into BOTH `FW_attn_sliding_window`
+(via 7460→4757→4756→…→4750) AND `FW_all2all_moe_gmm` (via 4789→4788→4768). Every op on
+the path is a pure relay/combinator (multiref/add/float/reshape/view/mul/linear); NONE
+is init-derived. **There is no unconditionally-provable 2-tp intermediateGoal on the
+residual chain** — the residual stream is replicated (1-tp) through layers 0–1 and
+becomes 2-tp sharded only after the first attention/MoE block, permanently carrying
+attention+MoE contributions thereafter. Each upward hop is now mechanized, so the
+chain collapses to exactly two irreducible per-block obligations: attention-output and
+MoE-output 2-tp reconstruction. **That bespoke attention/MoE boundary is the genuine
+"no template exists here" floor — reached and confirmed not pushable further.** Full
+trace in `~/HYPOTHESIS_INVENTORY.md`.
+
+### Priority 4 — rotary chain pushed one hop up
+`recon_intermediateGoal_4800/4801_of_residual_inputs` thread the rms residual input
+(7487) instead of the rms output (4792), deriving `hrms` internally via the rms gear.
+Boundary relocation (still 6 hyps), moving the threaded fact one hop closer to the
+attention/MoE floor and demonstrating the rms gear composes with the rotary gears.
+
+### Next irreducible boundary
+The attention-output (`FW_attn_sliding_window`) and MoE-output (`FW_all2all_moe_gmm`)
+2-tp reconstruction templates. Once built, the ENTIRE post-attention residual chain
+(add → multiref → rms → per-head Q/K → rotary) closes mechanically via the worker
+#4–#7 gears with zero remaining threaded hypotheses.
