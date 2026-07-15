@@ -17,6 +17,7 @@ import denote.yoco_goals.BridgeKit
 import denote.yoco_goals.Goal_5_Intermediate
 import denote.DenoteMoE
 import denote.yoco_goals.Pattern_1  -- fw_rms_norm_allGather0_commute_2 (worker #7)
+import denote.GraphSlicing          -- foldl_applyNodeRingAttn_at_not_written (worker #9, ring-attn transfer)
 
 set_option linter.style.longLine false
 set_option linter.style.setOption false
@@ -29,6 +30,108 @@ namespace TrainVerify.Denote.GeneratedPatterns
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.GeneratedGoals
+
+/-! ### Ring-attention transfer gears (worker #9)
+
+Per `ATTENTION_ANALYSIS.md`, the deliverable is restated over
+`denoteGraph_ringAttn` — the value-faithful denotation for the cross-rank
+`FW_attn_sliding_window` / `FW_attn_zigzag` ops. The key observation: for any
+tid whose node *prefix* contains no ring-attention op, the ring denotation
+agrees with the plain one (`denoteGraph_ringAttn_eq_at`), so every worker
+#1–#7 gear transfers via `InitGoalHolds_transfer` with a thin per-tid rewrite.
+The first ring-attn node is `sm.nodes[9]` / `pm.nodes[49]` (verified below by
+`native_decide`), so every layer-0 replicated-prefix tid (all written by
+`sm.nodes[≤8]` / `pm.nodes[≤42]`) is ring/plain-agnostic. -/
+
+/-- List-level: folding `applyNodeRingAttn` over a ring-op-free node list
+    coincides with folding plain `applyNode`. Standalone extraction of the
+    `suffices` core of `denoteGraph_ringAttn_eq_denoteGraph_of_no_ring_attn`. -/
+theorem foldl_ringAttn_eq_foldl_of_no_ring (g : GraphDecl)
+    (nodes : List NodeDecl) (s : Store)
+    (hno : ∀ n ∈ nodes,
+      n.op ≠ "OpName.FW_attn_zigzag" ∧ n.op ≠ "OpName.FW_attn_sliding_window") :
+    nodes.foldl (applyNodeRingAttn g) s = nodes.foldl (applyNode g) s := by
+  induction nodes generalizing s with
+  | nil => rfl
+  | cons hd tl ih =>
+    have hhd := hno hd (by simp)
+    have htl : ∀ n ∈ tl,
+        n.op ≠ "OpName.FW_attn_zigzag" ∧ n.op ≠ "OpName.FW_attn_sliding_window" :=
+      fun n hn => hno n (List.mem_cons_of_mem _ hn)
+    simp only [List.foldl_cons]
+    rw [applyNodeRingAttn_eq_applyNode_of_not_ring g s hd hhd.1 hhd.2]
+    exact ih (applyNode g s hd) htl
+
+/-- Ring-fold prefix reduction (graph-generic; local re-derivation of Pattern_3's
+    `foldl_prefix_eq_full_ringAttn`): the ring value at `tid` equals its value
+    after the prefix `take k`, when the suffix `drop k` never writes `tid`. -/
+theorem foldl_prefix_eq_full_ringAttn' (g : GraphDecl) (nodes : List NodeDecl)
+    (s : Store) (tid : Tid) (k : Nat)
+    (hnil : ∀ n ∈ nodes.drop k, n.outs ≠ [])
+    (h : ∀ n ∈ nodes.drop k, tid ∉ n.outs) :
+    nodes.foldl (applyNodeRingAttn g) s tid =
+      (nodes.take k).foldl (applyNodeRingAttn g) s tid := by
+  conv_lhs => rw [← List.take_append_drop k nodes, List.foldl_append]
+  exact foldl_applyNodeRingAttn_at_not_written g _ _ tid hnil h
+
+/-- **Per-tid transfer**: if the node prefix `take k` contains no ring-attn op
+    and the suffix `drop k` never writes `tid`, the ring denotation agrees with
+    the plain denotation at `tid`. -/
+theorem denoteGraph_ringAttn_eq_at (g : GraphDecl) (init : Store) (tid : Tid) (k : Nat)
+    (hnil : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hsuf : ∀ n ∈ g.nodes.drop k, tid ∉ n.outs)
+    (hnoring : ∀ n ∈ g.nodes.take k,
+      n.op ≠ "OpName.FW_attn_zigzag" ∧ n.op ≠ "OpName.FW_attn_sliding_window") :
+    denoteGraph_ringAttn g init tid = denoteGraph g init tid := by
+  rw [denoteGraph_ringAttn,
+      foldl_prefix_eq_full_ringAttn' g g.nodes init tid k hnil hsuf,
+      foldl_ringAttn_eq_foldl_of_no_ring g (g.nodes.take k) init hnoring,
+      denoteGraph_tid_eq_of_suffix_no_writes g init tid (g.nodes.take k)
+        (g.nodes.drop k) (List.take_append_drop k g.nodes).symm hsuf]
+  simp only [denoteGraph]
+  rw [applyNode_congr_numRanks { g with nodes := g.nodes.take k } g rfl]
+
+/-- Transfer an `InitGoalHolds` obligation between two denotations that agree at
+    the goal's `ts` and every `tp.tid`. -/
+theorem InitGoalHolds_transfer (numParts : Nat) (gl : LineageGoal)
+    (smS smS' pmS pmS' : Store)
+    (hts : smS' gl.ts = smS gl.ts)
+    (htps : ∀ p ∈ gl.tps, pmS' p.tid = pmS p.tid)
+    (h : InitGoalHolds numParts gl smS pmS) :
+    InitGoalHolds numParts gl smS' pmS' := by
+  dsimp only [InitGoalHolds] at h ⊢
+  rw [hts, List.map_congr_left (fun p hp => htps p hp)]
+  exact h
+
+/-- Specialization to the global SM graph: the first ring-attn node is
+    `sm.nodes[9]`, so any tid unwritten by `sm.nodes.drop 9` is ring/plain-agnostic. -/
+theorem sm_ring_eq (initSM : Store) (T : Tid)
+    (hsuf : ∀ n ∈ sm.nodes.drop 9, T ∉ n.outs) :
+    denoteGraph_ringAttn sm initSM T = denoteGraph sm initSM T :=
+  denoteGraph_ringAttn_eq_at sm initSM T 9 (by native_decide) hsuf (by native_decide)
+
+/-- Specialization to the global PM graph: the first ring-attn node is
+    `pm.nodes[49]`, so any tid unwritten by `pm.nodes.drop 49` is ring/plain-agnostic. -/
+theorem pm_ring_eq (initPM : Store) (T : Tid)
+    (hsuf : ∀ n ∈ pm.nodes.drop 49, T ∉ n.outs) :
+    denoteGraph_ringAttn pm initPM T = denoteGraph pm initPM T :=
+  denoteGraph_ringAttn_eq_at pm initPM T 49 (by native_decide) hsuf (by native_decide)
+
+/-- **The transfer gear**: lift any plain-`denoteGraph` `InitGoalHolds` for a
+    layer-0 (pre-attention) goal to the ring-attn denotation. The two
+    `native_decide` side-goals confirm the goal's `ts`/`tps` are written strictly
+    before the first ring-attn node in each graph. -/
+theorem recon_ringAttn_of_plain (gl : LineageGoal)
+    (initSM initPM : Store)
+    (hsm : ∀ n ∈ sm.nodes.drop 9, gl.ts ∉ n.outs)
+    (hpm : ∀ p ∈ gl.tps, ∀ n ∈ pm.nodes.drop 49, p.tid ∉ n.outs)
+    (hplain : InitGoalHolds pm.numRanks gl (denoteGraph sm initSM) (denoteGraph pm initPM)) :
+    InitGoalHolds pm.numRanks gl (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) :=
+  InitGoalHolds_transfer pm.numRanks gl (denoteGraph sm initSM) (denoteGraph_ringAttn sm initSM)
+    (denoteGraph pm initPM) (denoteGraph_ringAttn pm initPM)
+    (sm_ring_eq initSM gl.ts hsm)
+    (fun p hp => pm_ring_eq initPM p.tid (hpm p hp))
+    hplain
 
 /-! ### Reusable gears -/
 
@@ -2119,6 +2222,49 @@ theorem all_intermediateGoals_proven_hold
   · rw [h]; exact recon_intermediateGoal_4692 initSM initPM hSM hPM hInit
   · rcases h with h | h
     · rw [h]; exact recon_intermediateGoal_4693 initSM initPM hSM hPM hInit
+    · exact absurd h (by simp)
+
+/-- **Ring-attention restatement of the proven assembly (worker #9).**
+    Every proven layer-0 goal is written strictly before the first ring-attn
+    node in both graphs, so the plain reconstruction transfers verbatim to the
+    value-faithful `denoteGraph_ringAttn` denotation via `recon_ringAttn_of_plain`.
+    This is the ring-attn analog of `all_intermediateGoals_proven_hold`; the
+    plain version is kept intact for existing consumers. -/
+theorem all_intermediateGoals_proven_hold_ringAttn
+    (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv)
+    (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalsHold pm.numRanks all_intermediateGoals_proven_list
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  intro g hg
+  simp only [all_intermediateGoals_proven_list, List.mem_cons, List.mem_singleton] at hg
+  rcases hg with h | h | h | h | h | h | h | h | h | h | h | h
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_4681 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_4683 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_4685 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_4687 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_4689 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_7383 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_7387 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_7392 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_7396 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_7400 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_4692 initSM initPM hSM hPM hInit)
+  · rcases h with h | h
+    · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+        (recon_intermediateGoal_4693 initSM initPM hSM hPM hInit)
     · exact absurd h (by simp)
 
 end TrainVerify.Denote.GeneratedPatterns

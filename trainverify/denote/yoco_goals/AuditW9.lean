@@ -1,0 +1,3 @@
+import denote.yoco_goals.IntermediateReconstruction
+open TrainVerify.Denote.GeneratedPatterns
+#print axioms all_intermediateGoals_proven_hold_ringAttn
