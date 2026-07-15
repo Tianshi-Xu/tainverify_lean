@@ -560,10 +560,30 @@ their own cut graphs / shape-preserving reshapes; empty-params fallback kept).
 
 **Cascade impact:** the reshape *shape obligation* is now satisfiable —
 `intermediateGoal_4697` (and every downstream reshape goal) is no longer
-structurally false. The concrete NEW frontier (see HANDOFF) is a row-preserving
-reshape / dim-0 allGather commute lemma; the attention gear alone does not
-cascade past the reshape node.
+structurally false.
 
-**Category delta:** +0 newly *proven* unconditional goals (proving them needs the
-new commute lemma), but the upstream faithfulness gap that made ALL L≥1 goals
-vacuous/false is now closed — the graph is faithful to the Python authority.
+**Cascade unlock (Worker #11 bonus, same session):** proved the
+**row-preserving reshape / dim-0 allGather commute** lemma and used it to land the
+first cascade goal:
+- `fw_view_allGather0_reshape_16_64_2` — `fw_view [4096,1024] (allGather0 [a,b]) =
+  allGather0 [fw_view [2048,1024] a, fw_view [2048,1024] b]` for `a,b:[2048,16,64]`.
+  Pure tensor algebra (flat-index decomposition `idx=((r*2048+i)*16+j)*64+k`,
+  `allGatherPrimDimN0_valAt_3D`/`_valAt`, `valAt_fw_view`). Axiom-clean
+  (propext/Classical.choice/Quot.sound).
+- `ringAttn_reshape_reduce` — ring-denotation node reducer for a non-empty-params
+  `FW_reshape` node sitting *after* the first ring-attn node (so `sm_ring_eq`/
+  `pm_ring_eq` don't apply): `denoteGraph_ringAttn g init outTid =
+  fw_view tshape (denoteGraph_ringAttn g init inTid)`. Kernel-clean, no in-body
+  native_decide (uses `foldl_take_succ` + `foldl_prefix_eq_full_ringAttn'` +
+  `applyNode_fw_reshape_out`).
+- **`recon_intermediateGoal_4697_ringAttn`** — UNCONDITIONAL over
+  `denoteGraph_ringAttn`: SM 4697 = allGather0[PM 7439, PM 7440], chaining through
+  Worker #9/#10's `recon_intermediateGoal_4696_ringAttn`. Node indices: SM reshape
+  = `sm.nodes[10]`, PM reshapes = `pm.nodes[51]/[52]`. All in
+  `denote/yoco_goals/IntermediateReconstruction.lean`. Full repo still green.
+
+**Category delta:** +1 newly *proven* unconditional intermediateGoal (**4697**),
+plus 2 reusable machinery lemmas (reshape commute + ring reshape reducer). The
+upstream faithfulness gap that made ALL L≥1 goals vacuous/false is closed — the
+graph is faithful to the Python authority.
+

@@ -197,17 +197,27 @@ pattern then generalizes to FW_view/reshape/add/mul/… 2-tp goals directly.
   leaf 4691 not multiref-copy 11853) and the topk_routing `[8]→[8,1]` explicit
   num_experts param (semantically identical: `params.getD 1 1 = 1` either way) were
   reconciled during regen.
-- **NEW FRONTIER (next worker):** the reshape *shape obligation* is unblocked, but
-  proving the 2-tp reshape goals (`4697`, `4715`, `4720`, …) still needs a NEW
-  **row-preserving reshape / dim-0 allGather commute** lemma:
-  `fw_view [4096,1024] (allGather0 [a,b]) = allGather0 [fw_view [2048,1024] a,
-  fw_view [2048,1024] b]` for `a,b : [2048,16,64]`. This DOES hold here (dim0 stays
-  `2048*2`, only the per-row `16*64→1024` collapse changes; flat data = concat(a,b)
-  on both sides, and the allGather index arithmetic is identical because postStride
-  `1024` and dimSize `2048` match). It is NOT the general reshape/allGather commute
-  (which fails when the reshape crosses the shard boundary — see
-  `Denote.lean:22263` `fw_reshape_allGather0_commute_2`). Once this lemma lands, the
-  reshape nodes reconstruct, then the layer-0 residual-add → MoE → layer-1 cascade
-  can proceed. The attention gear `recon_attn_sliding_window_2tp_layer` alone does
-  NOT cascade past the reshape; each layer needs reshape-recon + residual/MoE recon
-  in addition to the attention gear.
+- **NEW FRONTIER (next worker) — reshape commute PROVEN, cascade continues:**
+  Worker #11 landed the **row-preserving reshape / dim-0 allGather commute** lemma
+  `fw_view_allGather0_reshape_16_64_2` (axiom-clean: propext/Classical.choice/
+  Quot.sound) plus the ring-denotation reshape reducer `ringAttn_reshape_reduce`
+  (kernel-clean, no native_decide in-body) in
+  `denote/yoco_goals/IntermediateReconstruction.lean`. Using them,
+  **`recon_intermediateGoal_4697_ringAttn` is now proven UNCONDITIONAL over
+  `denoteGraph_ringAttn`** (SM 4697 = allGather0[PM 7439, PM 7440]), chaining
+  through Worker #9/#10's `recon_intermediateGoal_4696_ringAttn`. This is the first
+  cascade goal unblocked by the params-aware regen. Baseline axioms = the 4696
+  footprint (kernel triple + native_decide `Lean.ofReduceBool`), no new user axioms.
+  The general reshape/allGather commute (`Denote.lean:22263`
+  `fw_reshape_allGather0_commute_2`) still does NOT apply (it fails when the reshape
+  crosses the shard boundary); the new lemma is the row-preserving special case.
+  - **Remaining frontier:** the commute lemma is specialized to the
+    `[2048,16,64]→[2048,1024]` shape. The next reshape goals in the residual stream
+    (`4698` onward: residual-add → MoE → layer-1) need (a) the residual-add / MoE
+    reconstruction gears, and (b) possibly further shape specializations of the
+    reshape commute lemma for other tensor geometries. `recon_intermediateGoal_4697`
+    is the template: `ringAttn_reshape_reduce` + a shape-matched commute lemma +
+    `wrap_2tp_allGather_gen`. The attention gear `recon_attn_sliding_window_2tp_layer`
+    plus this reshape template together unlock the layer-N attention→reshape prefix;
+    the residual/MoE recon is the next missing piece for full per-layer cascade.
+
