@@ -19,6 +19,7 @@ import denote.DenoteMoE
 import denote.yoco_goals.Pattern_1  -- fw_rms_norm_allGather0_commute_2 (worker #7)
 import denote.GraphSlicing          -- foldl_applyNodeRingAttn_at_not_written (worker #9, ring-attn transfer)
 import denote.yoco_goals.Pattern_3  -- applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair (worker #9, Priority 3)
+import denote.yoco_goals.RingAttnGears -- shared ring-attn reshape/node reduction gears (worker #12)
 
 set_option linter.style.longLine false
 set_option linter.style.setOption false
@@ -1504,118 +1505,14 @@ theorem recon_intermediateGoal_4696_ringAttn (initSM initPM : Store)
     2-shard dim-0 `allGatherPrimDimN`. This is the special case the general
     `fw_reshape_allGather0_commute_2` (empty-params identity only) cannot cover. -/
 
-/-- `valAt` is invariant under `fw_view` (pure shape relabel over flat data). -/
-theorem valAt_fw_view (sh : Shape) (x : Tensor) (k : Nat) (h : k < prodShape sh) :
-    valAt (fw_view sh x) k = valAt x k := by
-  have hs : (fw_view sh x).shape = sh := rfl
-  rw [valAt_of_lt (fw_view sh x) k (by rw [hs]; exact h)]
-  rfl
 
--- Row-preserving reshape `[2048,16,64] → [2048,1024]` per dim-0 shard commutes
--- with a 2-shard dim-0 allGather. maxHeartbeats: index decomposition + valAt unfolds.
-set_option maxHeartbeats 1600000 in
-theorem fw_view_allGather0_reshape_16_64_2
-    (a b : Tensor) (ha : a.shape = [2048, 16, 64]) (hb : b.shape = [2048, 16, 64]) :
-    fw_view [4096, 1024] (allGatherPrimDimN 0 2 0 [a, b])
-      = allGatherPrimDimN 0 2 0 [fw_view [2048, 1024] a, fw_view [2048, 1024] b] := by
-  have hheadL : (([a, b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [2048, 16, 64] := by
-    simp [ha]
-  have hheadR : (([fw_view [2048, 1024] a, fw_view [2048, 1024] b] : List Tensor).head?.map
-      (fun t => t.shape)).getD [] = [2048, 1024] := rfl
-  have hRshape : (allGatherPrimDimN 0 2 0 [fw_view [2048, 1024] a, fw_view [2048, 1024] b]).shape
-      = [4096, 1024] := by
-    rw [allGatherPrimDimN_shape 0 2 _ [2048, 1024] hheadR]; rfl
-  apply Tensor.ext
-  · rw [hRshape]; rfl
-  · intro idx hidx
-    have hidx' : idx < prodShape ([4096, 1024] : Shape) := hidx
-    have hprod : prodShape ([4096, 1024] : Shape) = 4096 * 1024 := by simp [prodShape]
-    have hidxlt : idx < 4096 * 1024 := by rw [hprod] at hidx'; exact hidx'
-    rw [valAt_fw_view [4096, 1024] _ idx hidx']
-    set R := idx / 1024 with hR
-    set c := idx % 1024 with hc
-    have hc_lt : c < 1024 := Nat.mod_lt _ (by norm_num)
-    have hR_lt : R < 4096 := by
-      rw [hR]; exact Nat.div_lt_of_lt_mul (by rw [Nat.mul_comm]; exact hidxlt)
-    have hidx_eq : idx = R * 1024 + c := by rw [hR, hc]; omega
-    set r := R / 2048 with hr
-    set i := R % 2048 with hi
-    have hi_lt : i < 2048 := Nat.mod_lt _ (by norm_num)
-    have hr_lt : r < 2 := by rw [hr]; exact Nat.div_lt_of_lt_mul (by omega)
-    have hR_eq : R = r * 2048 + i := by rw [hr, hi]; omega
-    set j := c / 64 with hj
-    set k := c % 64 with hk
-    have hk_lt : k < 64 := Nat.mod_lt _ (by norm_num)
-    have hj_lt : j < 16 := by rw [hj]; exact Nat.div_lt_of_lt_mul (by omega)
-    have hc_eq : c = j * 64 + k := by rw [hj, hk]; omega
-    have hidx_3d : idx = ((r * 2048 + i) * 16 + j) * 64 + k := by
-      rw [hidx_eq, hR_eq, hc_eq]; ring
-    have hidx_2d : idx = (r * 2048 + i) * 1024 + c := by rw [hidx_eq, hR_eq]
-    have hLHS : valAt (allGatherPrimDimN 0 2 0 [a, b]) idx
-        = valAt (([a, b] : List Tensor).getD r (zeroTensor [2048, 16, 64])) ((i * 16 + j) * 64 + k) := by
-      rw [hidx_3d]
-      exact allGatherPrimDimN0_valAt_3D 2 2048 16 64 [a, b] (by norm_num) (by norm_num)
-        (by norm_num) (by norm_num) hheadL
-        (by intro rr hrr; interval_cases rr <;> simp [List.getD, ha, hb]) r hr_lt i hi_lt j hj_lt k hk_lt
-    have hRHS : valAt (allGatherPrimDimN 0 2 0 [fw_view [2048, 1024] a, fw_view [2048, 1024] b]) idx
-        = valAt (([fw_view [2048, 1024] a, fw_view [2048, 1024] b] : List Tensor).getD r
-            (zeroTensor [2048, 1024])) (i * 1024 + c) := by
-      rw [hidx_2d]
-      exact allGatherPrimDimN0_valAt 2 2048 1024 [fw_view [2048, 1024] a, fw_view [2048, 1024] b]
-        (by norm_num) (by norm_num) (by norm_num) hheadR
-        (by intro rr hrr; interval_cases rr <;> rfl) r hr_lt i hi_lt c hc_lt
-    rw [hLHS, hRHS]
-    have hbound : i * 1024 + c < prodShape ([2048, 1024] : Shape) := by
-      have hp : prodShape ([2048, 1024] : Shape) = 2097152 := by decide
-      rw [hp]; omega
-    have hpiece_a : valAt (fw_view [2048, 1024] a) (i * 1024 + c) = valAt a (i * 1024 + c) :=
-      valAt_fw_view [2048, 1024] a (i * 1024 + c) hbound
-    have hpiece_b : valAt (fw_view [2048, 1024] b) (i * 1024 + c) = valAt b (i * 1024 + c) :=
-      valAt_fw_view [2048, 1024] b (i * 1024 + c) hbound
-    have hoff : (i * 16 + j) * 64 + k = i * 1024 + c := by rw [hc_eq]; ring
-    interval_cases r <;>
-      simp only [List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some] <;>
-      rw [hoff] <;>
-      first
-        | rw [hpiece_a]
-        | rw [hpiece_b]
-
-/-- **Ring-denotation node reduction for a non-empty-params `FW_reshape` node.**
-    For a reshape node at position `k` (which may sit *after* the first ring-attn
-    node, so `sm_ring_eq`/`pm_ring_eq` do not apply), the ring value at its output
-    is `fw_view targetShape` of the ring value at its input. Mirrors `pm_val` but
-    over `applyNodeRingAttn` and specialized to reshape. -/
-theorem ringAttn_reshape_reduce (g : GraphDecl) (init : Store) (k : Nat)
-    (rank inTid outTid : Tid) (tshape : List Nat)
-    (hk : k < g.nodes.length)
-    (hnode : g.nodes[k]'hk =
-      { rank := rank, op := "OpName.FW_reshape", ins := [inTid], outs := [outTid], params := tshape })
-    (htne : tshape ≠ [])
-    (hdrop_nil : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ [])
-    (hdrop : ∀ n ∈ g.nodes.drop (k + 1), outTid ∉ n.outs)
-    (hpre_nil : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
-    (hpre : ∀ n ∈ g.nodes.drop k, inTid ∉ n.outs) :
-    denoteGraph_ringAttn g init outTid = fw_view tshape (denoteGraph_ringAttn g init inTid) := by
-  have hstep := congrFun (foldl_take_succ (applyNodeRingAttn g) g.nodes init k hk) outTid
-  rw [denoteGraph_ringAttn,
-      foldl_prefix_eq_full_ringAttn' g g.nodes init outTid (k + 1) hdrop_nil hdrop, hstep, hnode,
-      applyNodeRingAttn_eq_applyNode_of_not_ring g _ _ (by decide) (by decide),
-      applyNode_fw_reshape_out]
-  cases tshape with
-  | nil => exact absurd rfl htne
-  | cons hd tl =>
-    show fw_view (hd :: tl) ((g.nodes.take k).foldl (applyNodeRingAttn g) init inTid) = _
-    congr 1
-    rw [denoteGraph_ringAttn]
-    exact (foldl_prefix_eq_full_ringAttn' g g.nodes init inTid k hpre_nil hpre).symm
-
+set_option maxHeartbeats 4000000 in
 /-- **`intermediateGoal_4697` UNCONDITIONAL over ring-attn.** The layer-0
     attention output reshape `[4096,16,64] → [4096,1024]` (SM node 10) reconstructs
     as the dim-0 gather of the two PM per-rank reshapes (nodes 51/52), by chaining
     Worker #9/#10's `recon_intermediateGoal_4696_ringAttn` through the
     row-preserving-reshape commute lemma. First cascade goal unblocked by the
     params-aware regen. -/
-set_option maxHeartbeats 4000000 in
 theorem recon_intermediateGoal_4697_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
@@ -1639,17 +1536,17 @@ theorem recon_intermediateGoal_4697_ringAttn (initSM initPM : Store)
   -- reshape node reductions over the ring denotation
   have rSM : denoteGraph_ringAttn sm initSM 4697
       = fw_view [4096, 1024] (denoteGraph_ringAttn sm initSM 4696) :=
-    ringAttn_reshape_reduce sm initSM 10 0 4696 4697 [4096, 1024] (by native_decide)
+    ringAttn_reshape_reduce_g12 sm initSM 10 0 4696 4697 [4096, 1024] (by native_decide)
       (by native_decide) (by decide) (by native_decide) (by native_decide)
       (by native_decide) (by native_decide)
   have rP0 : denoteGraph_ringAttn pm initPM 7439
       = fw_view [2048, 1024] (denoteGraph_ringAttn pm initPM 7437) :=
-    ringAttn_reshape_reduce pm initPM 51 0 7437 7439 [2048, 1024] (by native_decide)
+    ringAttn_reshape_reduce_g12 pm initPM 51 0 7437 7439 [2048, 1024] (by native_decide)
       (by native_decide) (by decide) (by native_decide) (by native_decide)
       (by native_decide) (by native_decide)
   have rP1 : denoteGraph_ringAttn pm initPM 7440
       = fw_view [2048, 1024] (denoteGraph_ringAttn pm initPM 7438) :=
-    ringAttn_reshape_reduce pm initPM 52 1 7438 7440 [2048, 1024] (by native_decide)
+    ringAttn_reshape_reduce_g12 pm initPM 52 1 7438 7440 [2048, 1024] (by native_decide)
       (by native_decide) (by decide) (by native_decide) (by native_decide)
       (by native_decide) (by native_decide)
   -- the 4697 value reconstruction, via the commute lemma
@@ -1657,7 +1554,7 @@ theorem recon_intermediateGoal_4697_ringAttn (initSM initPM : Store)
       = allGatherPrimDimN 0 2 0
           [denoteGraph_ringAttn pm initPM 7439, denoteGraph_ringAttn pm initPM 7440] := by
     rw [rSM, hval96, rP0, rP1]
-    exact fw_view_allGather0_reshape_16_64_2 _ _ hs7437 hs7438
+    exact fw_view_allGather0_reshape_16_64_2_g12 _ _ hs7437 hs7438
   -- shapes
   have hs7439 : (denoteGraph_ringAttn pm initPM 7439).shape = [2048, 1024] := by rw [rP0]; rfl
   have hs7440 : (denoteGraph_ringAttn pm initPM 7440).shape = [2048, 1024] := by rw [rP1]; rfl
