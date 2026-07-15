@@ -476,3 +476,55 @@ requires regenerating `GeneratedYOCOMoE` with params-aware reshape (outside R2's
 cascade cannot proceed past the reshape boundary. Verified by shape witness (no
 sorry, no axiom). See also the pre-existing note at `denote/Denote.lean:22263`
 (`fw_reshape_allGather0_commute_2`) documenting the same params-aware breakage.
+
+---
+
+## Worker #10 (2026-07-15) — Priority 2 gear `recon_attn_sliding_window_2tp_layer` + reachability map
+
+**Priority 1 (enumeration) COMPLETE.** All 12 `FW_attn_sliding_window` SM nodes
+(outs 4696/4750/4804/4858/4912/4966/5020/5074/5128/5182/5236/5290) + their PM
+r0/r1 buddy pairs (7437/7438 … 9483/9484) and all 12 `FW_attn_zigzag` SM nodes
+(outs 5347/5396/…/5886) enumerated and recorded as a comment block in
+`IntermediateReconstruction.lean` (above `recon_attn_sliding_window_2tp_layer`).
+
+**Priority 2 (gear) COMPLETE — zero sorry, zero user axiom.** Extracted Worker
+#9's ~270-line `recon_intermediateGoal_4696_ringAttn` assembly tail into a
+parametrized theorem `recon_attn_sliding_window_2tp_layer`. It abstracts over the
+SM/PM attn node literals (`nSM`/`nR0`/`nR1`), the three take-prefix folds
+(`foldSM`/`foldPM`/`foldPM'` as opaque `Store`s), output tids, shard length `L`,
+head counts `nh`/`kh`, and the layer `LineageGoal`. Given the node reductions +
+r1 store bridge + Pattern_3 gear hyps (buddy detection, Q'/K'/V full
+reconstructions, cu/param agreement, full-output shapes on both folds) + goal
+metadata, it produces `InitGoalHolds pm.numRanks g (denoteGraph_ringAttn sm …)
+(denoteGraph_ringAttn pm …)`. `recon_intermediateGoal_4696_ringAttn` (layer 0)
+is REFACTORED to fire through the gear on the layer-0 witnesses — faithful
+re-derivation, statement unchanged, still builds green. Axioms:
+`recon_attn_sliding_window_2tp_layer` = {propext, Classical.choice, Quot.sound}
+(no user axioms); `recon_intermediateGoal_4696_ringAttn` = kernel triple +
+permitted native_decide baseline (unchanged from Worker #9).
+
+**Priority 3/4 (apply to layers 1–11 + zigzag) — GATED, documented per R5 (NOT
+sorried).** Reality check via graph producer-trace (`GeneratedYOCOMoE.lean`):
+- Every layer L≥1 sliding Q'-input (4746/4800/…/5286) reaches layer-0 attention
+  output 4696 through the residual stream (verified: all 11 reach 4696=True).
+- All 12 zigzag inputs (base 5342/…) also reach 4696 through the residual stream
+  (YOCO cross-decoder reads the self-decoder output; deeper trace confirms).
+- Every `FW_reshape` node in the GLOBAL `sm` graph has EMPTY params (verified:
+  all 168 reshape nodes params=None), including 4696→4697→4698 on the layer-0→1
+  path. Under the legacy no-op reshape model the downstream intermediateGoal
+  shapes are structurally FALSE (Worker #9's reshape blocker).
+Therefore **only LAYER 0 sliding attention is unconditionally reachable** (already
+proven by Worker #9, now via the gear). Layers 1–11 sliding + all 12 zigzag are
+GATED on the upstream reshape-params fix. The gear is the ready machinery that
+fires the moment that fix lands (regenerate `GeneratedYOCOMoE` with params-aware
+`FW_reshape`, unblocking the residual cascade layer-by-layer).
+
+**Reachability map (12 sliding + 12 zigzag = 24 attention layers):**
+- Sliding L0 (4696): UNCONDITIONAL ✓ (proven, via gear).
+- Sliding L1–L11 (4750…5290): GATED on reshape-params fix.
+- Zigzag L0–L11 (5347…5886): GATED on reshape-params fix.
+
+**Category delta:** +0 new unconditional goals (layer 0 already counted by Worker
+#9); +1 reusable parametrized gear (`recon_attn_sliding_window_2tp_layer`); the
+attention-scaling path is proven to bottleneck on the SAME reshape blocker Worker
+#9 identified — no proof-side scaling is possible without the upstream fix.

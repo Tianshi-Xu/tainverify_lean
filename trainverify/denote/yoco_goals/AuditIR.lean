@@ -24,3 +24,5 @@ open TrainVerify.Denote.GeneratedPatterns
 #print axioms recon_intermediateGoal_4792_of_inputs
 #print axioms recon_intermediateGoal_4800_of_residual_inputs
 #print axioms recon_intermediateGoal_4801_of_residual_inputs
+#print axioms recon_attn_sliding_window_2tp_layer
+#print axioms recon_intermediateGoal_4696_ringAttn

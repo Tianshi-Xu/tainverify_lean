@@ -1086,6 +1086,161 @@ theorem pm_chunk_reduce (initPM : Store) (k : Nat) (rank inTid outTid : Tid)
 -- =========================================================================
 -- Priority 3: intermediateGoal_4696 UNCONDITIONAL over ring-attn
 -- =========================================================================
+/-! ### Priority 2 (Worker #10): parametrized sliding-window attention 2-tp gear
+
+    `recon_attn_sliding_window_2tp_layer` abstracts the ASSEMBLY TAIL of
+    `recon_intermediateGoal_4696_ringAttn` (node reductions → Pattern_3
+    reconstruction gear → `wrap_2tp_allGather_gen`) over arbitrary:
+      - SM/PM attention node literals (`nSM`/`nR0`/`nR1`),
+      - the three take-prefix folds (`foldSM`/`foldPM`/`foldPM'`, opaque `Store`s),
+      - output tids (`oSM`/`oR0`/`oR1`), shard length `L`, head counts `nh`/`kh`,
+      - the layer `LineageGoal` `g`.
+    It consumes exactly the per-layer facts a caller must discharge:
+      - node reductions relating `denoteGraph_ringAttn …` to the ring-attn
+        `applyNodeRingAttn_sliding_window` on the prefix fold (`hSM_red`/`hR0_red`/
+        `hR1_red`), plus the r1 store bridge (`hbridge`, the take-k→take-(k+1) shift),
+      - the Pattern_3 gear hypotheses (buddy detection, Q'/K'/V full
+        reconstructions over the folds, cu-seqlens agreement, param agreement,
+        full-output shape on BOTH folds),
+      - the goal metadata (`g.tps`/`gatherDim`/`replicated`/`ts`/`tsShape`/`tpShapes`).
+    Produces `InitGoalHolds pm.numRanks g (denoteGraph_ringAttn sm …)
+    (denoteGraph_ringAttn pm …)`. `recon_intermediateGoal_4696_ringAttn` (layer 0,
+    just below) is refactored to fire THROUGH this gear on the layer-0 witnesses —
+    a faithful re-derivation demonstrating the gear is neither vacuous nor wrong.
+
+    ======================================================================
+    Priority 1 (Worker #10) — full `FW_attn_sliding_window` / `FW_attn_zigzag`
+    intermediateGoal enumeration (parsed from `denote/GeneratedYOCOMoE.lean`):
+
+    SM sliding-window nodes (sm.numRanks = 1) — 12 layers, output tid = goal tid:
+      L0  outs=[4696] ins=[4692,4693,4689,4694,4695]   (Q'=4692 K'=4693 V=4689)
+      L1  outs=[4750] ins=[4746,4747,4744,4748,4749]
+      L2  outs=[4804] ins=[4800,4801,4798,4802,4803]
+      L3  outs=[4858] ins=[4854,4855,4852,4856,4857]
+      L4  outs=[4912] ins=[4908,4909,4906,4910,4911]
+      L5  outs=[4966] ins=[4962,4963,4960,4964,4965]
+      L6  outs=[5020] ins=[5016,5017,5014,5018,5019]
+      L7  outs=[5074] ins=[5070,5071,5068,5072,5073]
+      L8  outs=[5128] ins=[5124,5125,5122,5126,5127]
+      L9  outs=[5182] ins=[5178,5179,5176,5180,5181]
+      L10 outs=[5236] ins=[5232,5233,5230,5234,5235]
+      L11 outs=[5290] ins=[5286,5287,5284,5288,5289]
+    PM sliding-window nodes (pm.numRanks = 2, r0/r1 per layer):
+      L0  [7437,7438]  L1  [7623,7624]  L2  [7809,7810]  L3  [7995,7996]
+      L4  [8181,8182]  L5  [8367,8368]  L6  [8553,8554]  L7  [8739,8740]
+      L8  [8925,8926]  L9  [9111,9112]  L10 [9297,9298]  L11 [9483,9484]
+    SM zigzag nodes (`FW_attn_zigzag`, params=[16,4,64,64,1,0]) — 12 layers:
+      outs = 5347, 5396, 5445, 5494, 5543, 5592, 5641, 5690, 5739, 5788, 5837, 5886
+      (ins = (List.range 5).map (fun r => base+r), base = 5342, 5391, …)
+
+    REACHABILITY (Worker #10 finding, verified from the graph): this gear fires
+    UNCONDITIONALLY only for LAYER 0. All 11 further `FW_attn_sliding_window`
+    layers (outs `4750`/`4804`/…/`5290`) and all 12 `FW_attn_zigzag` layers (outs
+    `5347`/`5396`/…/`5886`) have Q'/K'/V inputs that descend from layer-0
+    attention output `4696` through the residual stream, which passes through the
+    GLOBAL graph's empty-`params` `FW_reshape` no-op nodes (Worker #9's reshape
+    blocker: goal shapes structurally FALSE there). So layers 1–11 + all zigzag
+    are GATED on the upstream reshape-params fix; the gear is the ready machinery
+    that fires the moment that fix lands. -/
+set_option maxHeartbeats 4000000 in
+theorem recon_attn_sliding_window_2tp_layer
+    (initSM initPM : Store) (g : LineageGoal)
+    (nSM nR0 nR1 : NodeDecl)
+    (foldSM foldPM foldPM' : Store)
+    (oSM oR0 oR1 : Tid) (L nh kh : Nat)
+    (hL : 0 < L) (hnh : 0 < nh) (hkh : 0 < kh)
+    -- node reductions: ring-attn value at output tid = applyNodeRingAttn_sliding_window on prefix fold
+    (hSM_red : denoteGraph_ringAttn sm initSM oSM
+        = applyNodeRingAttn_sliding_window sm foldSM nSM)
+    (hR0_red : denoteGraph_ringAttn pm initPM oR0
+        = applyNodeRingAttn_sliding_window pm foldPM nR0)
+    (hR1_red : denoteGraph_ringAttn pm initPM oR1
+        = applyNodeRingAttn_sliding_window pm foldPM' nR1)
+    (hbridge : applyNodeRingAttn_sliding_window pm foldPM nR1
+        = applyNodeRingAttn_sliding_window pm foldPM' nR1)
+    -- Pattern_3 reconstruction gear hypotheses
+    (hbuddy_sm : ringAttnBuddies sm nSM = [nSM])
+    (hbuddy_r0 : ringAttnBuddies pm nR0 = [nR0, nR1])
+    (hbuddy_r1 : ringAttnBuddies pm nR1 = [nR0, nR1])
+    (hmyIdx0 : (([nR0, nR1].findIdx? (fun m => m.rank = nR0.rank)).getD 0) = 0)
+    (hmyIdx1 : (([nR0, nR1].findIdx? (fun m => m.rank = nR1.rank)).getD 0) = 1)
+    (hq_sm : 0 < (foldSM (nSM.ins.getD 0 0)).shape.length)
+    (hk_sm : 0 < (foldSM (nSM.ins.getD 1 0)).shape.length)
+    (hv_sm : 0 < (foldSM (nSM.ins.getD 2 0)).shape.length)
+    (hq_full : foldSM (nSM.ins.getD 0 0)
+        = allGatherPrimDimN 0 2 0 [foldPM (nR0.ins.getD 0 0), foldPM (nR1.ins.getD 0 0)])
+    (hk_full : foldSM (nSM.ins.getD 1 0)
+        = allGatherPrimDimN 0 2 0 [foldPM (nR0.ins.getD 1 0), foldPM (nR1.ins.getD 1 0)])
+    (hv_full : foldSM (nSM.ins.getD 2 0)
+        = allGatherPrimDimN 0 2 0 [foldPM (nR0.ins.getD 2 0), foldPM (nR1.ins.getD 2 0)])
+    (hcuQ_sm_pm : foldSM (nSM.ins.getD 3 0) = foldPM (nR0.ins.getD 3 0))
+    (hcuK_sm_pm : foldSM (nSM.ins.getD 4 0) = foldPM (nR0.ins.getD 4 0))
+    (hcuQ_same : foldPM (nR0.ins.getD 3 0) = foldPM (nR1.ins.getD 3 0))
+    (hcuK_same : foldPM (nR0.ins.getD 4 0) = foldPM (nR1.ins.getD 4 0))
+    (hparams_sm : nSM.params = nR0.params)
+    (hparams_same : nR0.params = nR1.params)
+    (hfull_shape :
+        (fw_attn_varlen
+          (allGatherPrimDimN 0 2 0 [foldPM (nR0.ins.getD 0 0), foldPM (nR1.ins.getD 0 0)])
+          (allGatherPrimDimN 0 2 0 [foldPM (nR0.ins.getD 1 0), foldPM (nR1.ins.getD 1 0)])
+          (allGatherPrimDimN 0 2 0 [foldPM (nR0.ins.getD 2 0), foldPM (nR1.ins.getD 2 0)])
+          (foldPM (nR0.ins.getD 3 0)) (foldPM (nR0.ins.getD 4 0))
+          (nR0.params.getD 0 1) (nR0.params.getD 1 1) (nR0.params.getD 2 1)
+          (nR0.params.getD 3 1)
+          (decide (nR0.params.getD 4 0 ≠ 0)) (nR0.params.getD 5 0)).shape
+        = [2 * L, nh, kh])
+    -- r1-shard full-output shape over the shifted fold (analog of `hfull_shape50`)
+    (hfull_shape' :
+        (fw_attn_varlen
+          (allGatherPrimDimN 0 2 0 [foldPM' (nR0.ins.getD 0 0), foldPM' (nR1.ins.getD 0 0)])
+          (allGatherPrimDimN 0 2 0 [foldPM' (nR0.ins.getD 1 0), foldPM' (nR1.ins.getD 1 0)])
+          (allGatherPrimDimN 0 2 0 [foldPM' (nR0.ins.getD 2 0), foldPM' (nR1.ins.getD 2 0)])
+          (foldPM' (nR1.ins.getD 3 0)) (foldPM' (nR1.ins.getD 4 0))
+          (nR1.params.getD 0 1) (nR1.params.getD 1 1) (nR1.params.getD 2 1)
+          (nR1.params.getD 3 1)
+          (decide (nR1.params.getD 4 0 ≠ 0)) (nR1.params.getD 5 0)).shape
+        = [2 * L, nh, kh])
+    -- goal metadata
+    (htp : g.tps = [{rank := 0, tid := oR0}, {rank := 1, tid := oR1}])
+    (hgd : g.gatherDim = 0) (hrep : g.replicated = false)
+    (hts : g.ts = oSM) (htsShape : g.tsShape = [2 * L, nh, kh])
+    (htpShapes : g.tpShapes = [[L, nh, kh], [L, nh, kh]]) :
+    InitGoalHolds pm.numRanks g
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  have hrec := applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair
+    sm pm foldSM foldPM nSM nR0 nR1 L nh kh hL hnh hkh
+    hbuddy_sm hbuddy_r0 hbuddy_r1 hmyIdx0 hmyIdx1
+    hq_sm hk_sm hv_sm hq_full hk_full hv_full
+    hcuQ_sm_pm hcuK_sm_pm hcuQ_same hcuK_same hparams_sm hparams_same hfull_shape
+  have hval : denoteGraph_ringAttn sm initSM oSM
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph_ringAttn pm initPM oR0, denoteGraph_ringAttn pm initPM oR1] := by
+    rw [hSM_red, hrec, hbridge, ← hR0_red, ← hR1_red, show pm.numRanks = 2 from rfl]
+  have hshapeP0 : (denoteGraph_ringAttn pm initPM oR0).shape = [L, nh, kh] := by
+    rw [hR0_red, applyNodeRingAttn_sliding_window_pair_eq_chunk pm foldPM nR0 nR0 nR1 0
+          hbuddy_r0 hmyIdx0,
+        chunkPrimDimN_shape 0 2 0 _ [2 * L, nh, kh] hfull_shape (by omega)]
+    simp only [List.set, List.getD_cons_zero]
+    rw [show 2 * L / 2 = L from by omega]
+  have hshapeP1 : (denoteGraph_ringAttn pm initPM oR1).shape = [L, nh, kh] := by
+    rw [hR1_red, applyNodeRingAttn_sliding_window_pair_eq_chunk pm foldPM' nR1 nR0 nR1 1
+          hbuddy_r1 hmyIdx1,
+        chunkPrimDimN_shape 0 2 1 _ [2 * L, nh, kh] hfull_shape' (by omega)]
+    simp only [List.set, List.getD_cons_zero]
+    rw [show 2 * L / 2 = L from by omega]
+  have hshape : (denoteGraph_ringAttn sm initSM oSM).shape = [2 * L, nh, kh] := by
+    rw [hval, show pm.numRanks = 2 from rfl,
+        allGatherPrimDimN_shape 0 2
+          [denoteGraph_ringAttn pm initPM oR0, denoteGraph_ringAttn pm initPM oR1]
+          [L, nh, kh] (by simpa using hshapeP0)]
+    simp only [List.set, List.getD_cons_zero]
+    rw [show L * 2 = 2 * L from by omega]
+  exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
+    g oSM oR0 oR1 [2 * L, nh, kh] [L, nh, kh]
+    htp hgd hrep hts htsShape htpShapes
+    (by intro h; simpa using congrArg List.length h)
+    hval hshape hshapeP0 hshapeP1
+
 set_option maxHeartbeats 12000000 in
 theorem recon_intermediateGoal_4696_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
@@ -1300,25 +1455,7 @@ theorem recon_intermediateGoal_4696_ringAttn (initSM initPM : Store)
         show pm.nodes.take 51 = pm.nodes.take 50 ++ [nR1g] from by native_decide,
         List.foldl_append, List.foldl_cons, List.foldl_nil]
     exact applyNodeRingAttn_sliding_window_out pm _ 1 7434 7436 7422 4694 4695 7438 [16, 4, 64, 64, 1, 512]
-  -- apply the reconstruction gear
-  have hrec := applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair
-    sm pm
-    ((sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM)
-    ((pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM)
-    nSMg nR0g nR1g 2048 16 64 (by omega) (by omega) (by omega)
-    buddy_sm_g buddy_r0_g buddy_r1_g (by decide) (by decide)
-    hq_sm hk_sm hv_sm hq_full hk_full hv_full
-    hcuQ_sm_pm hcuK_sm_pm rfl rfl rfl rfl hfull_shape
-  have hval : denoteGraph_ringAttn sm initSM 4696
-      = allGatherPrimDimN 0 pm.numRanks 0
-          [denoteGraph_ringAttn pm initPM 7437, denoteGraph_ringAttn pm initPM 7438] := by
-    rw [hSM4696, hrec, bridge_r1, ← hPM7437, ← hPM7438, show pm.numRanks = 2 from rfl]
-  -- shapes for the wrap
-  have hshapeP0 : (denoteGraph_ringAttn pm initPM 7437).shape = [2048, 16, 64] := by
-    rw [hPM7437, applyNodeRingAttn_sliding_window_pair_eq_chunk pm
-          ((pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM) nR0g nR0g nR1g 0 buddy_r0_g (by decide),
-        chunkPrimDimN_shape 0 2 0 _ [2 * 2048, 16, 64] hfull_shape (by omega)]
-    decide
+  -- r1-shard full-output shape over the take-50 fold (gear hyp `hfull_shape'`)
   have hfull_shape50 :
       (fw_attn_varlen
         (allGatherPrimDimN 0 2 0 [(pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM (nR0g.ins.getD 0 0),
@@ -1338,19 +1475,19 @@ theorem recon_intermediateGoal_4696_ringAttn (initSM initPM : Store)
         = [2 * 2048, 16, 64]
     rw [← e7433, ← e7434, ← hq_full, bSsm4692, hveq4692, hpm4692_shape]
     rfl
-  have hshapeP1 : (denoteGraph_ringAttn pm initPM 7438).shape = [2048, 16, 64] := by
-    rw [hPM7438, applyNodeRingAttn_sliding_window_pair_eq_chunk pm
-          ((pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM) nR1g nR0g nR1g 1 buddy_r1_g (by decide),
-        chunkPrimDimN_shape 0 2 1 _ [2 * 2048, 16, 64] hfull_shape50 (by omega)]
-    decide
-  have hshape : (denoteGraph_ringAttn sm initSM 4696).shape = [4096, 16, 64] := by
-    rw [hval, show pm.numRanks = 2 from rfl,
-        allGatherPrimDimN_shape 0 2 [denoteGraph_ringAttn pm initPM 7437, denoteGraph_ringAttn pm initPM 7438]
-          [2048, 16, 64] (by simpa using hshapeP0)]
-    decide
-  exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_4696 4696 7437 7438 [4096, 16, 64] [2048, 16, 64]
-    rfl rfl rfl rfl rfl rfl (by decide) hval hshape hshapeP0 hshapeP1
+  -- Fire the Worker #10 parametrized gear on the layer-0 witnesses (faithful
+  -- re-derivation of the Worker #9 assembly tail).
+  exact recon_attn_sliding_window_2tp_layer initSM initPM intermediateGoal_4696
+    nSMg nR0g nR1g
+    ((sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM)
+    ((pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM)
+    ((pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM)
+    4696 7437 7438 2048 16 64 (by omega) (by omega) (by omega)
+    hSM4696 hPM7437 hPM7438 bridge_r1
+    buddy_sm_g buddy_r0_g buddy_r1_g (by native_decide) (by native_decide)
+    hq_sm hk_sm hv_sm hq_full hk_full hv_full
+    hcuQ_sm_pm hcuK_sm_pm rfl rfl rfl rfl hfull_shape hfull_shape50
+    rfl rfl rfl rfl rfl rfl
 
 /-! ### 2-tp `extract_dual` bridgehead — FW_rotary_embedding sharded reconstruction
 
