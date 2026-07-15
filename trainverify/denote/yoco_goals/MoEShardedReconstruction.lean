@@ -117,11 +117,18 @@ theorem applyNode_topk81_snd (g : GraphDecl) (s : Store) (rank : Nat)
     `chunk_r(4723)`/`chunk_r(4727)`. Row-wise op ⇒ commutes with the token gather
     via `fw_swiglu_allGather0_commute_2`. -/
 set_option maxHeartbeats 4000000 in
-theorem recon_intermediateGoal_4728_ringAttn (initSM initPM : Store)
+/-- Shared core: SM `4728` (full swiglu) reconstructs as the dim-0 gather of the
+    two PM per-rank swiglu shards `7543`/`7544`, plus the shard/full shape facts.
+    Reused by both the `4728` (2-tp swiglu) and `4729` (reshape∘gather) goals. -/
+theorem moe_swiglu_gather_4728 (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_4728
-      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+    denoteGraph_ringAttn sm initSM 4728
+        = allGatherPrimDimN 0 pm.numRanks 0
+            [denoteGraph_ringAttn pm initPM 7543, denoteGraph_ringAttn pm initPM 7544]
+      ∧ (denoteGraph_ringAttn pm initPM 7543).shape = [2048, 512]
+      ∧ (denoteGraph_ringAttn pm initPM 7544).shape = [2048, 512]
+      ∧ (denoteGraph_ringAttn sm initSM 4728).shape = [4096, 512] := by
   -- replicated swiglu inputs (1-tp, proven)
   have h4723 := recon_intermediateGoal_4723_ringAttn initSM initPM hSM hPM hInit
   have h4727 := recon_intermediateGoal_4727_ringAttn initSM initPM hSM hPM hInit
@@ -222,8 +229,75 @@ theorem recon_intermediateGoal_4728_ringAttn (initSM initPM : Store)
     rw [rP0]; unfold fw_swiglu Tensor.mkShape; simp only []; exact hs7539
   have hsp1 : (denoteGraph_ringAttn pm initPM 7544).shape = [2048, 512] := by
     rw [rP1]; unfold fw_swiglu Tensor.mkShape; simp only []; exact hs7540
+  refine ⟨hval, hsp0, hsp1, hshape⟩
+
+/-! ### 4728 — FW_swiglu (token-sharded, 2-tp) -/
+set_option maxHeartbeats 4000000 in
+theorem recon_intermediateGoal_4728_ringAttn (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4728
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  obtain ⟨hval, hsp0, hsp1, hshape⟩ := moe_swiglu_gather_4728 initSM initPM hSM hPM hInit
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
     intermediateGoal_4728 4728 7543 7544 [4096, 512] [2048, 512]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
+
+/-! ### 4729 — FW_reshape ∘ AllGather (gathered, 1-tp)
+
+    SM `4729 = view[4096,512](4728)` is an identity reshape of the full swiglu
+    output, hence `= 4728 = allGather0[7543,7544]`. PM `4729 =
+    allGather0[view[2048,512](7543), view[2048,512](7544)] = allGather0[7543,7544]`
+    (each per-rank reshape is identity on its `[2048,512]` shard). Both sides
+    therefore equal the same dim-0 gather, giving the 1-tp reconstruction. -/
+set_option maxHeartbeats 4000000 in
+theorem recon_intermediateGoal_4729_ringAttn (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4729
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  obtain ⟨hval28, hsp0, hsp1, hshape28⟩ := moe_swiglu_gather_4728 initSM initPM hSM hPM hInit
+  -- SM reshape reduction (index 34): 4729 = view[4096,512](4728)
+  have rSMv : denoteGraph_ringAttn sm initSM 4729
+      = fw_view [4096, 512] (denoteGraph_ringAttn sm initSM 4728) :=
+    ringAttn_reshape_reduce_g12 sm initSM 34 0 4728 4729 [4096, 512]
+      (by native_decide) (by native_decide) (by decide)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  -- PM per-rank reshape reductions (indices 109/110)
+  have rP0v : denoteGraph_ringAttn pm initPM 7545
+      = fw_view [2048, 512] (denoteGraph_ringAttn pm initPM 7543) :=
+    ringAttn_reshape_reduce_g12 pm initPM 109 0 7543 7545 [2048, 512]
+      (by native_decide) (by native_decide) (by decide)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rP1v : denoteGraph_ringAttn pm initPM 7546
+      = fw_view [2048, 512] (denoteGraph_ringAttn pm initPM 7544) :=
+    ringAttn_reshape_reduce_g12 pm initPM 110 1 7544 7546 [2048, 512]
+      (by native_decide) (by native_decide) (by decide)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  -- PM allGather reduction (index 111): 4729 = allGather0[7545,7546]
+  have rPMg : denoteGraph_ringAttn pm initPM 4729
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph_ringAttn pm initPM 7545, denoteGraph_ringAttn pm initPM 7546] :=
+    ringAttn_reduce2 pm initPM 111
+      { rank := 0, op := "OpName.AllGatherPrim", ins := [7545, 7546], outs := [4729], params := [0] }
+      7545 7546 4729 (fun a b => allGatherPrimDimN 0 pm.numRanks 0 [a, b])
+      (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_allGatherPrimDimN_out_thm pm s 0 [7545, 7546] 4729 0)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  -- identity-reshape collapses
+  have hidSM : fw_view [4096, 512] (denoteGraph_ringAttn sm initSM 4728)
+      = denoteGraph_ringAttn sm initSM 4728 := fw_view_id_shape [4096, 512] _ hshape28
+  have hidP0 : fw_view [2048, 512] (denoteGraph_ringAttn pm initPM 7543)
+      = denoteGraph_ringAttn pm initPM 7543 := fw_view_id_shape [2048, 512] _ hsp0
+  have hidP1 : fw_view [2048, 512] (denoteGraph_ringAttn pm initPM 7544)
+      = denoteGraph_ringAttn pm initPM 7544 := fw_view_id_shape [2048, 512] _ hsp1
+  -- both sides reduce to allGather0[7543,7544]
+  have hval : denoteGraph_ringAttn sm initSM 4729 = denoteGraph_ringAttn pm initPM 4729 := by
+    rw [rSMv, hidSM, hval28, rPMg, rP0v, rP1v, hidP0, hidP1]
+  have hshape : (denoteGraph_ringAttn sm initSM 4729).shape = [4096, 512] := by
+    rw [rSMv, hidSM]; exact hshape28
+  exact wrap_1tp_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
+    intermediateGoal_4729 4729 [4096, 512]
+    rfl rfl rfl rfl rfl rfl hval hshape
 
 end TrainVerify.Denote.GeneratedPatterns
