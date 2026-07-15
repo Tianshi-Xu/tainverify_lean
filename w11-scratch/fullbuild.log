@@ -1,0 +1,21 @@
+⚠ [8558/8560] Replayed Trainverify.Basic
+warning: Trainverify/Basic.lean:1:1: * '-/':
+Copyright too short!
+
+
+Note: This linter can be disabled with `set_option linter.style.header false`
+warning: Trainverify/Basic.lean:2:0: The module doc-string for a file should be the first command after the imports.
+Please, add a module doc-string before `def hello :=
+  "world"`.
+
+Note: This linter can be disabled with `set_option linter.style.header false`
+warning: Trainverify/Basic.lean:1:1: * '-/':
+Copyright too short!
+
+
+Note: This linter can be disabled with `set_option linter.style.header false`
+warning: Trainverify/Basic.lean:2:0: The module doc-string for a file should be the first command after the imports.
+Please, add a module doc-string before ``.
+
+Note: This linter can be disabled with `set_option linter.style.header false`
+Build completed successfully (8560 jobs).
