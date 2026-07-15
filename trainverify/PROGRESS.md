@@ -429,3 +429,50 @@ checkable lemmas proving the plain PM attention output is the value-INDEPENDENT
 zero tensor while SM is value-faithful `fw_attn_varlen`, i.e. the plain 2-tp
 attention goal is false. Full analysis + effort estimate in `~/ATTENTION_ANALYSIS.md`.
 No Denote.lean edits (R2). No new gear sorried/axiomed (R5 honest fallback).
+
+---
+
+## Worker #9 — Ring-attn restatement + first UNCONDITIONAL attention goal (2026-07)
+
+**Priorities 1+2 (commit c4938a26):** Restated the proven assembly over
+`denoteGraph_ringAttn`. All 12 upstream (pre-attention) proven goals transfer
+verbatim from plain `denoteGraph` via the new `recon_ringAttn_of_plain` gear
+(they are all written strictly before the first ring-attn node: sm[9], pm[49]).
+New machinery: `foldl_prefix_eq_full_ringAttn'`, `denoteGraph_ringAttn_eq_at`,
+`InitGoalHolds_transfer`, `sm_ring_eq`(k=9)/`pm_ring_eq`(k=49),
+`all_intermediateGoals_proven_hold_ringAttn`.
+
+**Priority 3 (commit 63e27b99) — MILESTONE:** `intermediateGoal_4696`
+(layer-0 attention, 2-tp, `tps=[{0,7437},{1,7438}]`) proven **UNCONDITIONALLY**
+over `denoteGraph_ringAttn` on the GLOBAL sm/pm graphs. First genuinely
+unconditional 2-tp sharded intermediateGoal (previously the floor was the
+attention op itself, which is FALSE over plain `denoteGraph`). Reuses Pattern_3's
+ring gear `applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair`.
+Proof = ~270 lines: store↔plain bridges (ring≡plain on all non-attn inputs),
+Q/K/V full reconstructions via chunk `allGather0_reconstruct_chunks_3d`
+roundtrips (7433/7434 chunks of Q'4692, 7435/7436 of K'4693, 7421/7422 of V4689),
+cu_seqlens equalities (`recon_weight` on initGoal_4694/4695), gear application,
+and the take49→take50 nR1 store bridge (`attn_sw_store_congr`). Axiom-clean
+(propext / Classical.choice / Quot.sound + upstream native_decide only). New
+helpers: `nSMg/nR0g/nR1g` (global attn node literals, identical to Pattern_3
+cut-graph), `buddy_sm_g/r0_g/r1_g`, `oneTp_valeq`, `wrap_2tp_allGather_gen`,
+`pm_chunk_reduce`. Assembly `all_intermediateGoals_proven_hold_ringAttn_with_attn`
+covers 4696 + the 12 upstream goals (13 total).
+
+**Priority 4 (cascade) — BLOCKED, documented per R5 (NOT sorried):** The
+downstream reshape goals (`4697` = reshape(4696), `4698`, and the whole layer-0
+residual/MoE chain) are **structurally FALSE over the GLOBAL graph** because the
+global graph's `FW_reshape` nodes carry **empty params** (`sm[10]/sm[11]`,
+`pm[51]/pm[52]` all `params=[]`), i.e. the LEGACY no-op identity model. Under it:
+`SM 4697 = SM 4696` with shape `[4096,16,64]`, but `intermediateGoal_4697.tsShape
+= [4096,1024]` — the `InitGoalHolds` shape obligation `[4096,16,64] = [4096,1024]`
+is false. Reshape is NOT a ring op, so this holds identically over plain and ring
+denotations. This is an **upstream graph-generation faithfulness gap**: the
+Pattern_3 CUT graphs (`sm_goal_3`/`pm_goal_3`) were rebuilt on 2026-07-06 with
+params-aware `FW_reshape` (`params=[4096,1024]`, `[2048,1024]`), but the GLOBAL
+`sm`/`pm` in `GeneratedYOCOMoE` still emit empty-params no-op reshapes. Fixing it
+requires regenerating `GeneratedYOCOMoE` with params-aware reshape (outside R2's
+"no Denote.lean semantic edits" and not a proof-side change). Until then the
+cascade cannot proceed past the reshape boundary. Verified by shape witness (no
+sorry, no axiom). See also the pre-existing note at `denote/Denote.lean:22263`
+(`fw_reshape_allGather0_commute_2`) documenting the same params-aware breakage.
