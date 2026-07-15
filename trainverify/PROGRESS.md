@@ -684,3 +684,73 @@ Was 14 (through 4697). **+18 = 32** unconditional ring-attn intermediateGoals.
 - `316ac833` prove 4703/4705/4706
 - `dc8523c6` prove 4715/4720/4724/4708
 - `ef3e8639` prove 4717/4722/4726/4718/4723/4727/4719
+
+---
+
+## Worker #14 — MoE sharding-commute gears (topk / all2all_moe_gmm / swiglu)
+
+New file `denote/yoco_goals/MoEShardedReconstruction.lean` (imports
+`ResidualMoEReconstruction`). Zero sorry, native_decide baseline only.
+
+### Per-tid status
+| tid  | op                       | goal form | status |
+|------|--------------------------|-----------|--------|
+| 4709 | FW_topk_routing (.fst)   | 2-tp gather | **unconditional** |
+| 4710 | FW_topk_routing (.snd.fst)| 2-tp gather | **unconditional** |
+| 4728 | FW_swiglu                | 2-tp gather | **unconditional** |
+| 4729 | FW_reshape ∘ AllGather   | 1-tp        | **unconditional** |
+| 4714 | FW_all2all_moe_gmm       | 1-tp        | **blocked-by-graph-nonfaithfulness** |
+
+**+4 unconditional ring-attn intermediateGoals: 4709, 4710, 4728, 4729.**
+
+### New gears (in MoEShardedReconstruction.lean)
+- `ringAttn_reduce1_at` — store-specific single-input ring node reduction. Unlike
+  `ringAttn_reduce1` (which needs the `applyNode` reduction `∀ s`), this takes the
+  reduction only at the specific prefix store `(g.nodes.take k).foldl (applyNodeRingAttn g) init`.
+  Needed for ops (topk) whose `applyNode` lemma requires a shape hypothesis on the
+  folded input.
+- `evalOp_topk_81` / `applyNode_topk81_fst` / `applyNode_topk81_snd` — `applyNode`
+  reductions for the generated `FW_topk_routing` node whose params are `[8,1]`.
+  `numExperts=64` is read off the logits' trailing dim (params entry `1` is the
+  overridden fallback), so these require `(s logits).shape.reverse.head? = some 64`.
+- `moe_swiglu_gather_4728` — shared core: SM `4728` (full swiglu) = dim-0 gather of
+  PM per-rank swiglu shards `7543`/`7544`, + shard/full shapes. Reused by 4728 & 4729.
+- `moe_topk_common` — shared core: replicated logits `4708` reconstruct as dim-0
+  gather of per-rank chunks `7479`/`7480`, + chunk/logits shapes + prefix-store
+  trailing-dim (`= some 64`) hyps. Reused by 4709 & 4710.
+
+All four proofs reuse Pattern_1's proven pure-tensor commute lemmas
+(`fw_swiglu_allGather0_commute_2`, `fw_topk_routing_{fst,snd_fst}_allGather0_commute_2_of`)
++ Pattern_3's `allGather0_reconstruct_chunks_2d` + the shared `RingAttnGears`
+node-reduction machinery, mirrored over `denoteGraph_ringAttn`.
+
+### 4714 — blocked-by-graph-nonfaithfulness (NOT a proof-technique limitation)
+The ring-attn PM graph node 32 (`FW_all2all_moe_gmm`, out `4714`) is *byte-identical*
+to SM node 32, with `ins = [7419, 4709, 4710, 4712, 4713]`. In the PM graph:
+- `4712`/`4713` (expert weights) **are** bridged by `initGoal_4712`/`initGoal_4713`
+  (expert-parallel shards `[7487,7488]` / `[7489,7490]`, gatherDim 0).
+- `7419` (attention output), `4709` (routing_probs), `4710` (routing_map) are **NOT
+  written by any PM node** and appear in **no `initGoal`** (neither as `ts` nor in any
+  `tps`). They are unconstrained PM init leaves.
+
+Therefore `denoteGraph_ringAttn pm initPM 4714 = fw_all2all_moe_gmm (initPM 7419)
+(initPM 4709) (initPM 4710) …` depends on arbitrary leaf values, while
+`denoteGraph_ringAttn sm initSM 4714` depends on SM's *computed* `7419`/`4709`/`4710`.
+The reconstruction `SM 4714 = PM 4714` is thus **false for general `initPM`** — a
+half-cut inconsistency (missing initGoal bridges for `7419`/`4709`/`4710`).
+
+This is a **generator/upstream defect**, not W14's proof scope: fixing it requires
+either (a) emitting `initGoal`s bridging `7419`/`4709`/`4710` to their SM
+reconstructions, or (b) having PM node 32 read the gathered/reconstructed tids
+(e.g. gather `7481`/`7482 → 4709`) as `Goal_1`'s `_full` graph does. Per
+upstream-faithfulness (don't prove vacuous over garbage), 4714 is left blocked
+rather than fabricated via an unsound bridging axiom.
+
+### Axiom audit
+`#print axioms` on 4709/4710/4728/4729: only `propext`, `Classical.choice`,
+`Quot.sound` + `_native.native_decide.ax_*` baseline. **Zero `sorryAx`, zero user `axiom`.**
+
+### Commits (this worker)
+- `8f6f33e5` prove 4728 (FW_swiglu 2-tp)
+- `ae9383a7` prove 4729 (FW_reshape∘AllGather 1-tp)
+- `02386b2c` prove 4709/4710 (FW_topk_routing 2-tp)
