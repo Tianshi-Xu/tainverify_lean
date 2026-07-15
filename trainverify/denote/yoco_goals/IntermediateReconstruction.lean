@@ -17,6 +17,8 @@ import denote.yoco_goals.BridgeKit
 import denote.yoco_goals.Goal_5_Intermediate
 import denote.DenoteMoE
 import denote.yoco_goals.Pattern_1  -- fw_rms_norm_allGather0_commute_2 (worker #7)
+import denote.GraphSlicing          -- foldl_applyNodeRingAttn_at_not_written (worker #9, ring-attn transfer)
+import denote.yoco_goals.Pattern_3  -- applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair (worker #9, Priority 3)
 
 set_option linter.style.longLine false
 set_option linter.style.setOption false
@@ -29,6 +31,108 @@ namespace TrainVerify.Denote.GeneratedPatterns
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.GeneratedGoals
+
+/-! ### Ring-attention transfer gears (worker #9)
+
+Per `ATTENTION_ANALYSIS.md`, the deliverable is restated over
+`denoteGraph_ringAttn` — the value-faithful denotation for the cross-rank
+`FW_attn_sliding_window` / `FW_attn_zigzag` ops. The key observation: for any
+tid whose node *prefix* contains no ring-attention op, the ring denotation
+agrees with the plain one (`denoteGraph_ringAttn_eq_at`), so every worker
+#1–#7 gear transfers via `InitGoalHolds_transfer` with a thin per-tid rewrite.
+The first ring-attn node is `sm.nodes[9]` / `pm.nodes[49]` (verified below by
+`native_decide`), so every layer-0 replicated-prefix tid (all written by
+`sm.nodes[≤8]` / `pm.nodes[≤42]`) is ring/plain-agnostic. -/
+
+/-- List-level: folding `applyNodeRingAttn` over a ring-op-free node list
+    coincides with folding plain `applyNode`. Standalone extraction of the
+    `suffices` core of `denoteGraph_ringAttn_eq_denoteGraph_of_no_ring_attn`. -/
+theorem foldl_ringAttn_eq_foldl_of_no_ring (g : GraphDecl)
+    (nodes : List NodeDecl) (s : Store)
+    (hno : ∀ n ∈ nodes,
+      n.op ≠ "OpName.FW_attn_zigzag" ∧ n.op ≠ "OpName.FW_attn_sliding_window") :
+    nodes.foldl (applyNodeRingAttn g) s = nodes.foldl (applyNode g) s := by
+  induction nodes generalizing s with
+  | nil => rfl
+  | cons hd tl ih =>
+    have hhd := hno hd (by simp)
+    have htl : ∀ n ∈ tl,
+        n.op ≠ "OpName.FW_attn_zigzag" ∧ n.op ≠ "OpName.FW_attn_sliding_window" :=
+      fun n hn => hno n (List.mem_cons_of_mem _ hn)
+    simp only [List.foldl_cons]
+    rw [applyNodeRingAttn_eq_applyNode_of_not_ring g s hd hhd.1 hhd.2]
+    exact ih (applyNode g s hd) htl
+
+/-- Ring-fold prefix reduction (graph-generic; local re-derivation of Pattern_3's
+    `foldl_prefix_eq_full_ringAttn`): the ring value at `tid` equals its value
+    after the prefix `take k`, when the suffix `drop k` never writes `tid`. -/
+theorem foldl_prefix_eq_full_ringAttn' (g : GraphDecl) (nodes : List NodeDecl)
+    (s : Store) (tid : Tid) (k : Nat)
+    (hnil : ∀ n ∈ nodes.drop k, n.outs ≠ [])
+    (h : ∀ n ∈ nodes.drop k, tid ∉ n.outs) :
+    nodes.foldl (applyNodeRingAttn g) s tid =
+      (nodes.take k).foldl (applyNodeRingAttn g) s tid := by
+  conv_lhs => rw [← List.take_append_drop k nodes, List.foldl_append]
+  exact foldl_applyNodeRingAttn_at_not_written g _ _ tid hnil h
+
+/-- **Per-tid transfer**: if the node prefix `take k` contains no ring-attn op
+    and the suffix `drop k` never writes `tid`, the ring denotation agrees with
+    the plain denotation at `tid`. -/
+theorem denoteGraph_ringAttn_eq_at (g : GraphDecl) (init : Store) (tid : Tid) (k : Nat)
+    (hnil : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hsuf : ∀ n ∈ g.nodes.drop k, tid ∉ n.outs)
+    (hnoring : ∀ n ∈ g.nodes.take k,
+      n.op ≠ "OpName.FW_attn_zigzag" ∧ n.op ≠ "OpName.FW_attn_sliding_window") :
+    denoteGraph_ringAttn g init tid = denoteGraph g init tid := by
+  rw [denoteGraph_ringAttn,
+      foldl_prefix_eq_full_ringAttn' g g.nodes init tid k hnil hsuf,
+      foldl_ringAttn_eq_foldl_of_no_ring g (g.nodes.take k) init hnoring,
+      denoteGraph_tid_eq_of_suffix_no_writes g init tid (g.nodes.take k)
+        (g.nodes.drop k) (List.take_append_drop k g.nodes).symm hsuf]
+  simp only [denoteGraph]
+  rw [applyNode_congr_numRanks { g with nodes := g.nodes.take k } g rfl]
+
+/-- Transfer an `InitGoalHolds` obligation between two denotations that agree at
+    the goal's `ts` and every `tp.tid`. -/
+theorem InitGoalHolds_transfer (numParts : Nat) (gl : LineageGoal)
+    (smS smS' pmS pmS' : Store)
+    (hts : smS' gl.ts = smS gl.ts)
+    (htps : ∀ p ∈ gl.tps, pmS' p.tid = pmS p.tid)
+    (h : InitGoalHolds numParts gl smS pmS) :
+    InitGoalHolds numParts gl smS' pmS' := by
+  dsimp only [InitGoalHolds] at h ⊢
+  rw [hts, List.map_congr_left (fun p hp => htps p hp)]
+  exact h
+
+/-- Specialization to the global SM graph: the first ring-attn node is
+    `sm.nodes[9]`, so any tid unwritten by `sm.nodes.drop 9` is ring/plain-agnostic. -/
+theorem sm_ring_eq (initSM : Store) (T : Tid)
+    (hsuf : ∀ n ∈ sm.nodes.drop 9, T ∉ n.outs) :
+    denoteGraph_ringAttn sm initSM T = denoteGraph sm initSM T :=
+  denoteGraph_ringAttn_eq_at sm initSM T 9 (by native_decide) hsuf (by native_decide)
+
+/-- Specialization to the global PM graph: the first ring-attn node is
+    `pm.nodes[49]`, so any tid unwritten by `pm.nodes.drop 49` is ring/plain-agnostic. -/
+theorem pm_ring_eq (initPM : Store) (T : Tid)
+    (hsuf : ∀ n ∈ pm.nodes.drop 49, T ∉ n.outs) :
+    denoteGraph_ringAttn pm initPM T = denoteGraph pm initPM T :=
+  denoteGraph_ringAttn_eq_at pm initPM T 49 (by native_decide) hsuf (by native_decide)
+
+/-- **The transfer gear**: lift any plain-`denoteGraph` `InitGoalHolds` for a
+    layer-0 (pre-attention) goal to the ring-attn denotation. The two
+    `native_decide` side-goals confirm the goal's `ts`/`tps` are written strictly
+    before the first ring-attn node in each graph. -/
+theorem recon_ringAttn_of_plain (gl : LineageGoal)
+    (initSM initPM : Store)
+    (hsm : ∀ n ∈ sm.nodes.drop 9, gl.ts ∉ n.outs)
+    (hpm : ∀ p ∈ gl.tps, ∀ n ∈ pm.nodes.drop 49, p.tid ∉ n.outs)
+    (hplain : InitGoalHolds pm.numRanks gl (denoteGraph sm initSM) (denoteGraph pm initPM)) :
+    InitGoalHolds pm.numRanks gl (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) :=
+  InitGoalHolds_transfer pm.numRanks gl (denoteGraph sm initSM) (denoteGraph_ringAttn sm initSM)
+    (denoteGraph pm initPM) (denoteGraph_ringAttn pm initPM)
+    (sm_ring_eq initSM gl.ts hsm)
+    (fun p hp => pm_ring_eq initPM p.tid (hpm p hp))
+    hplain
 
 /-! ### Reusable gears -/
 
@@ -726,7 +830,7 @@ theorem recon_intermediateGoal_7400 (initSM initPM : Store)
 
 /-- Any key present in `L` resolves, through a `zip` with a constant
     `List.replicate` column, to that constant value. -/
-theorem storeSet_zip_replicate_mem (s : Store) (v : Tensor) :
+theorem storeSet_zip_replicate_mem_ir (s : Store) (v : Tensor) :
     ∀ (L : List Tid) (tid : Tid), tid ∈ L →
       storeSet s (L.zip (List.replicate L.length v)) tid = v := by
   intro L
@@ -761,7 +865,7 @@ theorem applyNode_fw_multiref_mem_out (g : GraphDecl) (s : Store) (rank : Nat)
   unfold applyNode
   rw [show ([xTid] : List Tid).map s = [s xTid] from rfl, evalOp_fw_multiref]
   change storeSet s (outs.zip (List.replicate outs.length (s xTid))) tid = _
-  exact storeSet_zip_replicate_mem s (s xTid) outs tid hmem
+  exact storeSet_zip_replicate_mem_ir s (s xTid) outs tid hmem
 
 /-- PM broadcasts init tid 4691 (rotary cs-cache) to tids 11853..11864 via
     two `FW_multiref` nodes; the LAST writer is rank-1 pm node idx 14. For every
@@ -916,6 +1020,337 @@ theorem recon_intermediateGoal_4693 (initSM initPM : Store)
     exact shape_4687 initSM initPM hSM hPM hInit
   exact wrap_1tp initSM initPM intermediateGoal_4693 4693 [4096, 4, 64] rfl rfl rfl rfl rfl rfl
     (veq_4693 initSM initPM hSM hPM hInit) hshape
+
+/-! ### Priority 3 (Worker #9): `intermediateGoal_4696` UNCONDITIONAL over `denoteGraph_ringAttn`
+
+    The layer-0 attention reconstruction, restated over the value-faithful ring
+    denotation. This is the first genuinely unconditional 2-tp sharded
+    `intermediateGoal` (previously the floor was the attention op itself, false
+    over plain `denoteGraph`). Reuses Pattern_3's ring-attn reconstruction gear
+    over the GLOBAL sm/pm graphs. -/
+
+-- global attention node literals (identical to Pattern_3 cut-graph nSM/nR0/nR1)
+def nSMg : NodeDecl := { rank := 0, op := "OpName.FW_attn_sliding_window", ins := [4692, 4693, 4689, 4694, 4695], outs := [4696], params := [16, 4, 64, 64, 1, 512] }
+def nR0g : NodeDecl := { rank := 0, op := "OpName.FW_attn_sliding_window", ins := [7433, 7435, 7421, 4694, 4695], outs := [7437], params := [16, 4, 64, 64, 1, 512] }
+def nR1g : NodeDecl := { rank := 1, op := "OpName.FW_attn_sliding_window", ins := [7434, 7436, 7422, 4694, 4695], outs := [7438], params := [16, 4, 64, 64, 1, 512] }
+
+theorem buddy_sm_g : ringAttnBuddies sm nSMg = [nSMg] := by native_decide
+theorem buddy_r0_g : ringAttnBuddies pm nR0g = [nR0g, nR1g] := by native_decide
+theorem buddy_r1_g : ringAttnBuddies pm nR1g = [nR0g, nR1g] := by native_decide
+
+/-- Extract a 1-tp (`ts = tp`, non-replicated, gatherDim 0) value equality from an
+    `InitGoalHolds`, over abstract stores. -/
+theorem oneTp_valeq (g : LineageGoal) (smS pmS : Store) (T : Tid)
+    (htp : g.tps = [{rank := 0, tid := T}]) (hgd : g.gatherDim = 0)
+    (hrep : g.replicated = false) (hts : g.ts = T)
+    (h : InitGoalHolds pm.numRanks g smS pmS) :
+    smS T = pmS T := by
+  have hval := h.2.2
+  rw [reconstructForGoal_of_not_replicated g pm.numRanks _ hrep, htp, hts, hgd] at hval
+  simp only [List.map, reconstructWithDim] at hval
+  exact hval
+
+/-- Generic-store analog of `wrap_2tp_allGather`. -/
+theorem wrap_2tp_allGather_gen (smS pmS : Store) (g : LineageGoal)
+    (T p0 p1 : Tid) (sh sh0 : Shape)
+    (htp : g.tps = [{rank := 0, tid := p0}, {rank := 1, tid := p1}])
+    (hgd : g.gatherDim = 0) (hrep : g.replicated = false)
+    (hts : g.ts = T) (htsShape : g.tsShape = sh) (htpShapes : g.tpShapes = [sh0, sh0])
+    (hne : sh0 ≠ [1])
+    (hval : smS T = allGatherPrimDimN 0 pm.numRanks 0 [pmS p0, pmS p1])
+    (hshape : (smS T).shape = sh)
+    (hshapeP0 : (pmS p0).shape = sh0)
+    (hshapeP1 : (pmS p1).shape = sh0) :
+    InitGoalHolds pm.numRanks g smS pmS := by
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hts, htsShape]; exact hshape
+  · rw [htp, htpShapes]; simp only [List.map]; rw [hshapeP0, hshapeP1]
+  · rw [hts, reconstructForGoal_of_not_replicated g pm.numRanks _ hrep, hgd, htp]
+    simp only [List.map]
+    rw [reconstructWithDim_cons_cons_nonscalar 0 pm.numRanks 0 _ _ []
+          (by rw [hshapeP0]; exact hne)]
+    exact hval
+
+/-- Chunk-node value reduction on the global PM graph. -/
+theorem pm_chunk_reduce (initPM : Store) (k : Nat) (rank inTid outTid : Tid)
+    (hk : k < pm.nodes.length)
+    (hnode : pm.nodes[k]'hk =
+      {rank := rank, op := "OpName.ChunkPrim", ins := [inTid], outs := [outTid], params := [0]})
+    (hdrop : ∀ n ∈ pm.nodes.drop (k+1), outTid ∉ n.outs)
+    (hpre : ∀ n ∈ pm.nodes.drop k, inTid ∉ n.outs) :
+    denoteGraph pm initPM outTid = chunkPrimDimN 0 pm.numRanks rank (denoteGraph pm initPM inTid) := by
+  rw [pm_val initPM k outTid hk hdrop, hnode, applyNode_chunkPrimDimN_out,
+      pm_prefix_eq initPM k inTid hpre]
+
+
+-- =========================================================================
+-- Priority 3: intermediateGoal_4696 UNCONDITIONAL over ring-attn
+-- =========================================================================
+set_option maxHeartbeats 12000000 in
+theorem recon_intermediateGoal_4696_ringAttn (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4696
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  -- input value equalities (plain)
+  have hveq4692 := veq_4692 initSM initPM hSM hPM hInit
+  have hveq4693 := veq_4693 initSM initPM hSM hPM hInit
+  have hveq4689 : denoteGraph sm initSM 4689 = denoteGraph pm initPM 4689 :=
+    oneTp_valeq intermediateGoal_4689 _ _ 4689 rfl rfl rfl rfl
+      (recon_intermediateGoal_4689 initSM initPM hSM hPM hInit)
+  have hcu4694 : denoteGraph sm initSM 4694 = denoteGraph pm initPM 4694 :=
+    recon_weight initSM initPM hInit initGoal_4694 (by native_decide) 4694 rfl rfl rfl rfl
+  have hcu4695 : denoteGraph sm initSM 4695 = denoteGraph pm initPM 4695 :=
+    recon_weight initSM initPM hInit initGoal_4695 (by native_decide) 4695 rfl rfl rfl rfl
+  -- input pm-side shapes
+  have hpm4692_shape : (denoteGraph pm initPM 4692).shape = [2 * 2048, 16, 64] := by
+    rw [← hveq4692]; exact (recon_intermediateGoal_4692 initSM initPM hSM hPM hInit).1
+  have hpm4693_shape : (denoteGraph pm initPM 4693).shape = [2 * 2048, 4, 64] := by
+    rw [← hveq4693]; exact (recon_intermediateGoal_4693 initSM initPM hSM hPM hInit).1
+  have hpm4689_shape : (denoteGraph pm initPM 4689).shape = [2 * 2048, 4, 64] := by
+    rw [← hveq4689]; exact (recon_intermediateGoal_4689 initSM initPM hSM hPM hInit).1
+  -- chunk-node value reductions (plain pm)
+  have hc7433 : denoteGraph pm initPM 7433 = chunkPrimDimN 0 pm.numRanks 0 (denoteGraph pm initPM 4692) :=
+    pm_chunk_reduce initPM 45 0 4692 7433 (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hc7434 : denoteGraph pm initPM 7434 = chunkPrimDimN 0 pm.numRanks 1 (denoteGraph pm initPM 4692) :=
+    pm_chunk_reduce initPM 47 1 4692 7434 (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hc7435 : denoteGraph pm initPM 7435 = chunkPrimDimN 0 pm.numRanks 0 (denoteGraph pm initPM 4693) :=
+    pm_chunk_reduce initPM 46 0 4693 7435 (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hc7436 : denoteGraph pm initPM 7436 = chunkPrimDimN 0 pm.numRanks 1 (denoteGraph pm initPM 4693) :=
+    pm_chunk_reduce initPM 48 1 4693 7436 (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hc7421 : denoteGraph pm initPM 7421 = chunkPrimDimN 0 pm.numRanks 0 (denoteGraph pm initPM 4689) :=
+    pm_chunk_reduce initPM 43 0 4689 7421 (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hc7422 : denoteGraph pm initPM 7422 = chunkPrimDimN 0 pm.numRanks 1 (denoteGraph pm initPM 4689) :=
+    pm_chunk_reduce initPM 44 1 4689 7422 (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  -- store<->plain bridges
+  have bSsm4692 : (sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM 4692 = denoteGraph sm initSM 4692 := by
+    rw [← foldl_prefix_eq_full_ringAttn' sm sm.nodes initSM 4692 9 (by native_decide) (by native_decide)]
+    exact sm_ring_eq initSM 4692 (by native_decide)
+  have bSsm4693 : (sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM 4693 = denoteGraph sm initSM 4693 := by
+    rw [← foldl_prefix_eq_full_ringAttn' sm sm.nodes initSM 4693 9 (by native_decide) (by native_decide)]
+    exact sm_ring_eq initSM 4693 (by native_decide)
+  have bSsm4689 : (sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM 4689 = denoteGraph sm initSM 4689 := by
+    rw [← foldl_prefix_eq_full_ringAttn' sm sm.nodes initSM 4689 9 (by native_decide) (by native_decide)]
+    exact sm_ring_eq initSM 4689 (by native_decide)
+  have bSpm7433 : (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7433
+      = chunkPrimDimN 0 pm.numRanks 0 (denoteGraph pm initPM 4692) := by
+    rw [← foldl_prefix_eq_full_ringAttn' pm pm.nodes initPM 7433 49 (by native_decide) (by native_decide)]
+    show denoteGraph_ringAttn pm initPM 7433 = _
+    rw [pm_ring_eq initPM 7433 (by native_decide), hc7433]
+  have bSpm7434 : (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7434
+      = chunkPrimDimN 0 pm.numRanks 1 (denoteGraph pm initPM 4692) := by
+    rw [← foldl_prefix_eq_full_ringAttn' pm pm.nodes initPM 7434 49 (by native_decide) (by native_decide)]
+    show denoteGraph_ringAttn pm initPM 7434 = _
+    rw [pm_ring_eq initPM 7434 (by native_decide), hc7434]
+  have bSpm7435 : (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7435
+      = chunkPrimDimN 0 pm.numRanks 0 (denoteGraph pm initPM 4693) := by
+    rw [← foldl_prefix_eq_full_ringAttn' pm pm.nodes initPM 7435 49 (by native_decide) (by native_decide)]
+    show denoteGraph_ringAttn pm initPM 7435 = _
+    rw [pm_ring_eq initPM 7435 (by native_decide), hc7435]
+  have bSpm7436 : (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7436
+      = chunkPrimDimN 0 pm.numRanks 1 (denoteGraph pm initPM 4693) := by
+    rw [← foldl_prefix_eq_full_ringAttn' pm pm.nodes initPM 7436 49 (by native_decide) (by native_decide)]
+    show denoteGraph_ringAttn pm initPM 7436 = _
+    rw [pm_ring_eq initPM 7436 (by native_decide), hc7436]
+  have bSpm7421 : (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7421
+      = chunkPrimDimN 0 pm.numRanks 0 (denoteGraph pm initPM 4689) := by
+    rw [← foldl_prefix_eq_full_ringAttn' pm pm.nodes initPM 7421 49 (by native_decide) (by native_decide)]
+    show denoteGraph_ringAttn pm initPM 7421 = _
+    rw [pm_ring_eq initPM 7421 (by native_decide), hc7421]
+  have bSpm7422 : (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7422
+      = chunkPrimDimN 0 pm.numRanks 1 (denoteGraph pm initPM 4689) := by
+    rw [← foldl_prefix_eq_full_ringAttn' pm pm.nodes initPM 7422 49 (by native_decide) (by native_decide)]
+    show denoteGraph_ringAttn pm initPM 7422 = _
+    rw [pm_ring_eq initPM 7422 (by native_decide), hc7422]
+  -- full q/k/v reconstructions (store-level, gear form)
+  have hq_full : (sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM 4692
+      = allGatherPrimDimN 0 2 0
+          [(pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7433,
+           (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7434] := by
+    rw [bSsm4692, bSpm7433, bSpm7434, hveq4692, show pm.numRanks = 2 from rfl]
+    exact (allGather0_reconstruct_chunks_3d 2048 16 64 (by omega) (by omega) (by omega)
+            (denoteGraph pm initPM 4692) hpm4692_shape).symm
+  have hk_full : (sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM 4693
+      = allGatherPrimDimN 0 2 0
+          [(pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7435,
+           (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7436] := by
+    rw [bSsm4693, bSpm7435, bSpm7436, hveq4693, show pm.numRanks = 2 from rfl]
+    exact (allGather0_reconstruct_chunks_3d 2048 4 64 (by omega) (by omega) (by omega)
+            (denoteGraph pm initPM 4693) hpm4693_shape).symm
+  have hv_full : (sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM 4689
+      = allGatherPrimDimN 0 2 0
+          [(pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7421,
+           (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7422] := by
+    rw [bSsm4689, bSpm7421, bSpm7422, hveq4689, show pm.numRanks = 2 from rfl]
+    exact (allGather0_reconstruct_chunks_3d 2048 4 64 (by omega) (by omega) (by omega)
+            (denoteGraph pm initPM 4689) hpm4689_shape).symm
+  -- SM input nonempty-shape facts
+  have hq_sm : 0 < ((sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM (nSMg.ins.getD 0 0)).shape.length := by
+    show 0 < ((sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM 4692).shape.length
+    rw [bSsm4692, hveq4692, hpm4692_shape]; decide
+  have hk_sm : 0 < ((sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM (nSMg.ins.getD 1 0)).shape.length := by
+    show 0 < ((sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM 4693).shape.length
+    rw [bSsm4693, hveq4693, hpm4693_shape]; decide
+  have hv_sm : 0 < ((sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM (nSMg.ins.getD 2 0)).shape.length := by
+    show 0 < ((sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM 4689).shape.length
+    rw [bSsm4689, hveq4689, hpm4689_shape]; decide
+  -- cu_seqlens equalities
+  have hSM4694 : (sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM 4694 = denoteGraph sm initSM 4694 := by
+    rw [← foldl_prefix_eq_full_ringAttn' sm sm.nodes initSM 4694 9 (by native_decide) (by native_decide)]
+    exact sm_ring_eq initSM 4694 (by native_decide)
+  have hSM4695 : (sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM 4695 = denoteGraph sm initSM 4695 := by
+    rw [← foldl_prefix_eq_full_ringAttn' sm sm.nodes initSM 4695 9 (by native_decide) (by native_decide)]
+    exact sm_ring_eq initSM 4695 (by native_decide)
+  have hPM4694 : (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 4694 = denoteGraph pm initPM 4694 := by
+    rw [← foldl_prefix_eq_full_ringAttn' pm pm.nodes initPM 4694 49 (by native_decide) (by native_decide)]
+    exact pm_ring_eq initPM 4694 (by native_decide)
+  have hPM4695 : (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 4695 = denoteGraph pm initPM 4695 := by
+    rw [← foldl_prefix_eq_full_ringAttn' pm pm.nodes initPM 4695 49 (by native_decide) (by native_decide)]
+    exact pm_ring_eq initPM 4695 (by native_decide)
+  have hcuQ_sm_pm : (sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM (nSMg.ins.getD 3 0)
+      = (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM (nR0g.ins.getD 3 0) := by
+    show (sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM 4694
+        = (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 4694
+    rw [hSM4694, hPM4694, hcu4694]
+  have hcuK_sm_pm : (sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM (nSMg.ins.getD 4 0)
+      = (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM (nR0g.ins.getD 4 0) := by
+    show (sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM 4695
+        = (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 4695
+    rw [hSM4695, hPM4695, hcu4695]
+  -- full attention output shape
+  have hfull_shape :
+      (fw_attn_varlen
+        (allGatherPrimDimN 0 2 0 [(pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM (nR0g.ins.getD 0 0),
+                                  (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM (nR1g.ins.getD 0 0)])
+        (allGatherPrimDimN 0 2 0 [(pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM (nR0g.ins.getD 1 0),
+                                  (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM (nR1g.ins.getD 1 0)])
+        (allGatherPrimDimN 0 2 0 [(pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM (nR0g.ins.getD 2 0),
+                                  (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM (nR1g.ins.getD 2 0)])
+        ((pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM (nR0g.ins.getD 3 0))
+        ((pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM (nR0g.ins.getD 4 0))
+        (nR0g.params.getD 0 1) (nR0g.params.getD 1 1) (nR0g.params.getD 2 1) (nR0g.params.getD 3 1)
+        (decide (nR0g.params.getD 4 0 ≠ 0)) (nR0g.params.getD 5 0)).shape
+      = [2 * 2048, 16, 64] := by
+    rw [fw_attn_varlen_shape_p3]
+    show [(allGatherPrimDimN 0 2 0 [(pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7433,
+                                    (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7434]).shape.head?.getD 0, 16, 64]
+        = [2 * 2048, 16, 64]
+    rw [← hq_full, bSsm4692, hveq4692, hpm4692_shape]
+    rfl
+  -- store bridge take49 -> take50 for r1 inputs
+  have e7433 : (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7433
+      = (pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM 7433 :=
+    (foldl_take_split_at_not_written_ringAttn pm pm.nodes initPM 7433 49 50 (by omega) (by native_decide) (by native_decide)).symm
+  have e7434 : (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7434
+      = (pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM 7434 :=
+    (foldl_take_split_at_not_written_ringAttn pm pm.nodes initPM 7434 49 50 (by omega) (by native_decide) (by native_decide)).symm
+  have e7435 : (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7435
+      = (pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM 7435 :=
+    (foldl_take_split_at_not_written_ringAttn pm pm.nodes initPM 7435 49 50 (by omega) (by native_decide) (by native_decide)).symm
+  have e7436 : (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7436
+      = (pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM 7436 :=
+    (foldl_take_split_at_not_written_ringAttn pm pm.nodes initPM 7436 49 50 (by omega) (by native_decide) (by native_decide)).symm
+  have e7421 : (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7421
+      = (pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM 7421 :=
+    (foldl_take_split_at_not_written_ringAttn pm pm.nodes initPM 7421 49 50 (by omega) (by native_decide) (by native_decide)).symm
+  have e7422 : (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 7422
+      = (pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM 7422 :=
+    (foldl_take_split_at_not_written_ringAttn pm pm.nodes initPM 7422 49 50 (by omega) (by native_decide) (by native_decide)).symm
+  have e4694 : (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 4694
+      = (pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM 4694 :=
+    (foldl_take_split_at_not_written_ringAttn pm pm.nodes initPM 4694 49 50 (by omega) (by native_decide) (by native_decide)).symm
+  have e4695 : (pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM 4695
+      = (pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM 4695 :=
+    (foldl_take_split_at_not_written_ringAttn pm pm.nodes initPM 4695 49 50 (by omega) (by native_decide) (by native_decide)).symm
+  have bridge_r1 : applyNodeRingAttn_sliding_window pm
+        ((pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM) nR1g
+      = applyNodeRingAttn_sliding_window pm
+        ((pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM) nR1g := by
+    apply attn_sw_store_congr
+    · rw [buddy_r1_g]; intro m hm; fin_cases hm
+      · exact e7433
+      · exact e7434
+    · rw [buddy_r1_g]; intro m hm; fin_cases hm
+      · exact e7435
+      · exact e7436
+    · rw [buddy_r1_g]; intro m hm; fin_cases hm
+      · exact e7421
+      · exact e7422
+    · exact e4694
+    · exact e4695
+  -- node reductions
+  have hSM4696 : denoteGraph_ringAttn sm initSM 4696
+      = applyNodeRingAttn_sliding_window sm ((sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM) nSMg := by
+    show sm.nodes.foldl (applyNodeRingAttn sm) initSM 4696 = _
+    rw [foldl_prefix_eq_full_ringAttn' sm sm.nodes initSM 4696 10 (by native_decide) (by native_decide),
+        show sm.nodes.take 10 = sm.nodes.take 9 ++ [nSMg] from by native_decide,
+        List.foldl_append, List.foldl_cons, List.foldl_nil]
+    exact applyNodeRingAttn_sliding_window_out sm _ 0 4692 4693 4689 4694 4695 4696 [16, 4, 64, 64, 1, 512]
+  have hPM7437 : denoteGraph_ringAttn pm initPM 7437
+      = applyNodeRingAttn_sliding_window pm ((pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM) nR0g := by
+    show pm.nodes.foldl (applyNodeRingAttn pm) initPM 7437 = _
+    rw [foldl_prefix_eq_full_ringAttn' pm pm.nodes initPM 7437 50 (by native_decide) (by native_decide),
+        show pm.nodes.take 50 = pm.nodes.take 49 ++ [nR0g] from by native_decide,
+        List.foldl_append, List.foldl_cons, List.foldl_nil]
+    exact applyNodeRingAttn_sliding_window_out pm _ 0 7433 7435 7421 4694 4695 7437 [16, 4, 64, 64, 1, 512]
+  have hPM7438 : denoteGraph_ringAttn pm initPM 7438
+      = applyNodeRingAttn_sliding_window pm ((pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM) nR1g := by
+    show pm.nodes.foldl (applyNodeRingAttn pm) initPM 7438 = _
+    rw [foldl_prefix_eq_full_ringAttn' pm pm.nodes initPM 7438 51 (by native_decide) (by native_decide),
+        show pm.nodes.take 51 = pm.nodes.take 50 ++ [nR1g] from by native_decide,
+        List.foldl_append, List.foldl_cons, List.foldl_nil]
+    exact applyNodeRingAttn_sliding_window_out pm _ 1 7434 7436 7422 4694 4695 7438 [16, 4, 64, 64, 1, 512]
+  -- apply the reconstruction gear
+  have hrec := applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair
+    sm pm
+    ((sm.nodes.take 9).foldl (applyNodeRingAttn sm) initSM)
+    ((pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM)
+    nSMg nR0g nR1g 2048 16 64 (by omega) (by omega) (by omega)
+    buddy_sm_g buddy_r0_g buddy_r1_g (by decide) (by decide)
+    hq_sm hk_sm hv_sm hq_full hk_full hv_full
+    hcuQ_sm_pm hcuK_sm_pm rfl rfl rfl rfl hfull_shape
+  have hval : denoteGraph_ringAttn sm initSM 4696
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph_ringAttn pm initPM 7437, denoteGraph_ringAttn pm initPM 7438] := by
+    rw [hSM4696, hrec, bridge_r1, ← hPM7437, ← hPM7438, show pm.numRanks = 2 from rfl]
+  -- shapes for the wrap
+  have hshapeP0 : (denoteGraph_ringAttn pm initPM 7437).shape = [2048, 16, 64] := by
+    rw [hPM7437, applyNodeRingAttn_sliding_window_pair_eq_chunk pm
+          ((pm.nodes.take 49).foldl (applyNodeRingAttn pm) initPM) nR0g nR0g nR1g 0 buddy_r0_g (by decide),
+        chunkPrimDimN_shape 0 2 0 _ [2 * 2048, 16, 64] hfull_shape (by omega)]
+    decide
+  have hfull_shape50 :
+      (fw_attn_varlen
+        (allGatherPrimDimN 0 2 0 [(pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM (nR0g.ins.getD 0 0),
+                                  (pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM (nR1g.ins.getD 0 0)])
+        (allGatherPrimDimN 0 2 0 [(pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM (nR0g.ins.getD 1 0),
+                                  (pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM (nR1g.ins.getD 1 0)])
+        (allGatherPrimDimN 0 2 0 [(pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM (nR0g.ins.getD 2 0),
+                                  (pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM (nR1g.ins.getD 2 0)])
+        ((pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM (nR1g.ins.getD 3 0))
+        ((pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM (nR1g.ins.getD 4 0))
+        (nR1g.params.getD 0 1) (nR1g.params.getD 1 1) (nR1g.params.getD 2 1) (nR1g.params.getD 3 1)
+        (decide (nR1g.params.getD 4 0 ≠ 0)) (nR1g.params.getD 5 0)).shape
+      = [2 * 2048, 16, 64] := by
+    rw [fw_attn_varlen_shape_p3]
+    show [(allGatherPrimDimN 0 2 0 [(pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM 7433,
+                                    (pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM 7434]).shape.head?.getD 0, 16, 64]
+        = [2 * 2048, 16, 64]
+    rw [← e7433, ← e7434, ← hq_full, bSsm4692, hveq4692, hpm4692_shape]
+    rfl
+  have hshapeP1 : (denoteGraph_ringAttn pm initPM 7438).shape = [2048, 16, 64] := by
+    rw [hPM7438, applyNodeRingAttn_sliding_window_pair_eq_chunk pm
+          ((pm.nodes.take 50).foldl (applyNodeRingAttn pm) initPM) nR1g nR0g nR1g 1 buddy_r1_g (by decide),
+        chunkPrimDimN_shape 0 2 1 _ [2 * 2048, 16, 64] hfull_shape50 (by omega)]
+    decide
+  have hshape : (denoteGraph_ringAttn sm initSM 4696).shape = [4096, 16, 64] := by
+    rw [hval, show pm.numRanks = 2 from rfl,
+        allGatherPrimDimN_shape 0 2 [denoteGraph_ringAttn pm initPM 7437, denoteGraph_ringAttn pm initPM 7438]
+          [2048, 16, 64] (by simpa using hshapeP0)]
+    decide
+  exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
+    intermediateGoal_4696 4696 7437 7438 [4096, 16, 64] [2048, 16, 64]
+    rfl rfl rfl rfl rfl rfl (by decide) hval hshape hshapeP0 hshapeP1
 
 /-! ### 2-tp `extract_dual` bridgehead — FW_rotary_embedding sharded reconstruction
 
@@ -2120,5 +2555,70 @@ theorem all_intermediateGoals_proven_hold
   · rcases h with h | h
     · rw [h]; exact recon_intermediateGoal_4693 initSM initPM hSM hPM hInit
     · exact absurd h (by simp)
+
+/-- **Ring-attention restatement of the proven assembly (worker #9).**
+    Every proven layer-0 goal is written strictly before the first ring-attn
+    node in both graphs, so the plain reconstruction transfers verbatim to the
+    value-faithful `denoteGraph_ringAttn` denotation via `recon_ringAttn_of_plain`.
+    This is the ring-attn analog of `all_intermediateGoals_proven_hold`; the
+    plain version is kept intact for existing consumers. -/
+theorem all_intermediateGoals_proven_hold_ringAttn
+    (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv)
+    (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalsHold pm.numRanks all_intermediateGoals_proven_list
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  intro g hg
+  simp only [all_intermediateGoals_proven_list, List.mem_cons, List.mem_singleton] at hg
+  rcases hg with h | h | h | h | h | h | h | h | h | h | h | h
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_4681 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_4683 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_4685 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_4687 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_4689 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_7383 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_7387 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_7392 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_7396 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_7400 initSM initPM hSM hPM hInit)
+  · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+      (recon_intermediateGoal_4692 initSM initPM hSM hPM hInit)
+  · rcases h with h | h
+    · rw [h]; exact recon_ringAttn_of_plain _ initSM initPM (by native_decide) (by native_decide)
+        (recon_intermediateGoal_4693 initSM initPM hSM hPM hInit)
+    · exact absurd h (by simp)
+
+/-- The ring-attn proven list: the 12 upstream (pre-attention) goals PLUS the
+    layer-0 attention goal `4696`, which is genuinely unconditional only over the
+    value-faithful `denoteGraph_ringAttn`. -/
+def all_intermediateGoals_proven_list_ringAttn : List LineageGoal :=
+  intermediateGoal_4696 :: all_intermediateGoals_proven_list
+
+/-- **Full ring-attn proven assembly (worker #9).** `InitGoalsHold` over the
+    ring denotation for all 12 upstream goals AND the layer-0 attention goal
+    `4696` — the first genuinely unconditional 2-tp sharded attention goal. -/
+theorem all_intermediateGoals_proven_hold_ringAttn_with_attn
+    (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv)
+    (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalsHold pm.numRanks all_intermediateGoals_proven_list_ringAttn
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  intro g hg
+  rw [all_intermediateGoals_proven_list_ringAttn, List.mem_cons] at hg
+  rcases hg with h | h
+  · rw [h]; exact recon_intermediateGoal_4696_ringAttn initSM initPM hSM hPM hInit
+  · exact all_intermediateGoals_proven_hold_ringAttn initSM initPM hSM hPM hInit g h
 
 end TrainVerify.Denote.GeneratedPatterns

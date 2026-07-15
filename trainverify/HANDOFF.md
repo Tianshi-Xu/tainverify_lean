@@ -165,3 +165,30 @@ Build the `FW_attn_sliding_window` + `FW_all2all_moe_gmm` 2-tp reconstruction
 template (produces `hq`/`hk` for the rotary gears). That single template unblocks
 all 20 rotary goals mechanically, and the `wrap_2tp_allGather` + parametrized-gear
 pattern then generalizes to FW_view/reshape/add/mul/… 2-tp goals directly.
+
+## Worker #9 addendum — ring-attn restatement + reshape blocker
+
+- **Use the ring-attn assembly for anything at/after attention.** The plain
+  `denoteGraph` attention goals (4696+) are FALSE (worker #8). The value-faithful
+  path is `denoteGraph_ringAttn`. `all_intermediateGoals_proven_hold_ringAttn_with_attn`
+  is the current top assembly (13 goals: 12 upstream + `intermediateGoal_4696`).
+- **Transfer gear** for any goal whose SM/PM producers are all written BEFORE the
+  first ring-attn node (sm[9]/pm[49]): `recon_ringAttn_of_plain` — turns a plain
+  proof into its ring-attn counterpart with a one-line rewrite. Backed by
+  `sm_ring_eq`(k=9)/`pm_ring_eq`(k=49) (`denoteGraph_ringAttn = denoteGraph` on
+  those prefixes) + `InitGoalHolds_transfer`.
+- **Attention recipe** (see `recon_intermediateGoal_4696_ringAttn`): reduce SM/PM
+  attn nodes via `foldl_prefix_eq_full_ringAttn'` + `applyNodeRingAttn_sliding_window_out`;
+  reconstruct Q/K/V fulls from their two chunks with `allGather0_reconstruct_chunks_3d`;
+  discharge cu_seqlens with `recon_weight`; apply gear
+  `applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair`; wrap with
+  `wrap_2tp_allGather_gen`. Global attn node literals == Pattern_3 cut-graph
+  `nSM/nR0/nR1` byte-for-byte (`native_decide` buddy facts).
+- **CASCADE BLOCKER (next worker must fix upstream first):** downstream reshape
+  goals (4697/4698/…) are unprovable over the GLOBAL graph because its `FW_reshape`
+  nodes have `params=[]` (no-op identity) → output keeps shape `[4096,16,64]` while
+  the goals demand `[4096,1024]`. Pattern_3's CUT graphs already use params-aware
+  reshape; the GLOBAL `GeneratedYOCOMoE` graph does not. **Action:** regenerate the
+  global graph with params-aware `FW_reshape` (target shapes on `params`), OR restate
+  the reshape goals' `tsShape` to match the no-op identity model. Until then the
+  layer-0 residual/MoE/layer-1 cascade cannot proceed. Not a proof-side fix.
