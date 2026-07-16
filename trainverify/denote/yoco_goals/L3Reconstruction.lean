@@ -516,4 +516,63 @@ theorem recon_intermediateGoal_4814_ringAttn (initSM initPM : Store)
     intermediateGoal_4814 4814 7845 7846 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
+/-- 4816 — 2-tp router logits `fw_norm_linear(4814, 4815)` with weight
+    `4815 : [64, 1024]` → `[4096, 64]` (SM node 101, PM nodes 263/267). -/
+theorem recon_intermediateGoal_4816_ringAttn (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4816
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  have hnr : pm.numRanks = 2 := rfl
+  obtain ⟨hval14, hs7845, hs7846⟩ := twoTp_gather _ _ intermediateGoal_4814 4814 7845 7846
+    [2048, 1024] rfl rfl rfl rfl rfl (by decide)
+    (recon_intermediateGoal_4814_ringAttn initSM initPM hSM hPM hInit hWF)
+  have hw4815 : denoteGraph_ringAttn sm initSM 4815 = denoteGraph_ringAttn pm initPM 4815 :=
+    veq_weight_ring initSM initPM hInit initGoal_4815 (by native_decide) 4815
+      rfl rfl rfl rfl (by native_decide) (by native_decide)
+  have hsw4815 : (denoteGraph_ringAttn sm initSM 4815).shape = [64, 1024] :=
+    shape_weight_ring initSM initPM hInit initGoal_4815 (by native_decide) 4815 [64, 1024]
+      rfl rfl (by native_decide)
+  have hpw4815 : (denoteGraph_ringAttn pm initPM 4815).shape = [64, 1024] := by
+    rw [← hw4815]; exact hsw4815
+  have rSM : denoteGraph_ringAttn sm initSM 4816
+      = fw_norm_linear (denoteGraph_ringAttn sm initSM 4814) (denoteGraph_ringAttn sm initSM 4815) :=
+    ringAttn_reduce2_pm_opaque sm initSM 101
+      { rank := 0, op := "OpName.FW_norm_linear", ins := [4814, 4815], outs := [4816] }
+      4814 4815 4816 fw_norm_linear (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_norm_linear_out sm s 0 4814 4815 4816)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rP0 : denoteGraph_ringAttn pm initPM 7851
+      = fw_norm_linear (denoteGraph_ringAttn pm initPM 7845) (denoteGraph_ringAttn pm initPM 4815) :=
+    ringAttn_reduce2_pm_opaque pm initPM 263
+      { rank := 0, op := "OpName.FW_norm_linear", ins := [7845, 4815], outs := [7851] }
+      7845 4815 7851 fw_norm_linear (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_norm_linear_out pm s 0 7845 4815 7851)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rP1 : denoteGraph_ringAttn pm initPM 7852
+      = fw_norm_linear (denoteGraph_ringAttn pm initPM 7846) (denoteGraph_ringAttn pm initPM 4815) :=
+    ringAttn_reduce2_pm_opaque pm initPM 267
+      { rank := 1, op := "OpName.FW_norm_linear", ins := [7846, 4815], outs := [7852] }
+      7846 4815 7852 fw_norm_linear (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_norm_linear_out pm s 1 7846 4815 7852)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hval : denoteGraph_ringAttn sm initSM 4816
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph_ringAttn pm initPM 7851, denoteGraph_ringAttn pm initPM 7852] := by
+    rw [rSM, hval14, hw4815, hnr,
+        fw_norm_linear_allGather0_commute_2 _ _ _ 2048 1024 64
+          (by omega) (by omega) (by omega) hs7845 hs7846 hpw4815,
+        ← rP0, ← rP1]
+  have hsp0 : (denoteGraph_ringAttn pm initPM 7851).shape = [2048, 64] := by
+    rw [rP0]; exact fw_norm_linear_2d_shape 2048 1024 64 _ _ (by decide) hs7845 hpw4815
+  have hsp1 : (denoteGraph_ringAttn pm initPM 7852).shape = [2048, 64] := by
+    rw [rP1]; exact fw_norm_linear_2d_shape 2048 1024 64 _ _ (by decide) hs7846 hpw4815
+  have hshape : (denoteGraph_ringAttn sm initSM 4816).shape = [4096, 64] := by
+    rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 64] (by simp [hsp0])]
+    simp [List.set, List.getD]
+  exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
+    intermediateGoal_4816 4816 7851 7852 [4096, 64] [2048, 64]
+    rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
+
 end TrainVerify.Denote.GeneratedPatterns
