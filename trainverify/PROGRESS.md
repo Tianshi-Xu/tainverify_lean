@@ -940,3 +940,103 @@ Landed what is unblocked (Parts A+B) and documented the frontier here per the
 ### Commits (this worker)
 - `4c4f3913` W22 Part A: whnf-safe PM ring-attn reduction gears
 - `cb82255f` W22 Part B: land 5 L1 per-head/rotary reconstruction theorems
+
+---
+
+## Worker 23 (2026-07-16) — Complete L2 block reconstruction (2-tp sharded cascade)
+
+### Objective met: the entire L2 block is closed
+
+Unlike L1's 1-tp replica, L2 is a genuine 2-way tensor-parallel sharded cascade
+(gatherDim 0, ranks 0/1). Every semantically required L2 intermediate from the
+first reconstructed attention boundary `recon_intermediateGoal_4750_ringAttn`
+through the final rotary output `4801` is now reconstructed unconditional-given-
+`WellFormed_YOCOMoE_A04B`, in generated topological order.
+
+### New tids landed (38, all in `denote/yoco_goals/L2Reconstruction.lean`)
+
+Phase 1 (reshape + gather→1tp): `4751 4752`
+Phase 2 (1-tp mixlin/view/float/add/rms/normlin + router): `4754 4755 4756 4757
+  4759 4760 4762 4769 4771 4772 4774 4776 4777 4778 4780 4781`
+Phase 3a (2-tp MoE topk/sigmoid/swiglu/mixlin/mul): `4763 4764 4773 4782 4783
+  4785 4786 4787`
+Phase 3b/3c (all2all + residual bridge): `4768 7471 7460`
+Phase 3d (2-tp residual add/float/add/rms): `4788 4789 4790 4792`
+Phase 3d-2 (2-tp per-head Q/K/V): `4794 4796 4798`
+Phase 3d-3 (2-tp rotary Q'/K'): `4800 4801`
+
+### L2 dependency table (SM node / PM nodes / op / gear)
+
+| tid | SM node | PM nodes | op | key gear |
+|-----|---------|----------|----|----------|
+| 4751 | 48 reshape | 146/147 | FW_reshape | 2-tp reshape (4697/4698 template) |
+| 4752 | 49 reshape | 150 AllGather | FW_reshape | gather→1tp |
+| 4754 | 51 mixlin | 151/152 | FW_mix_precision_linear | 1-tp |
+| 4757 | 54 add | 157/158 | FW_add | 1-tp residual |
+| 4759 | 56 rms | 161/163 | FW_rms_norm | 1-tp |
+| 4762 | 62 normlin | 177/178 | FW_norm_linear | router gate |
+| 4763/4764 | 66 topk | 193/194 | FW_topk_routing | 2-tp topk |
+| 4768 | 70 all2all | 201/202 | FW_all2all_moe_gmm | `recon_moe_all2all_1tp_of_disjoint` + `wf4768_hdisjA/B` |
+| 4773 | 71 sigmoid | 203/204 | FW_sigmoid | 2-tp |
+| 4782 | 72 swiglu | 205/206 | FW_swiglu | 2-tp |
+| 4787 | 76 mul | 213/214 | FW_mul | 2-tp |
+| 4788 | 77 add | 215/216 | FW_add | `twoTp_gather` + add-commute |
+| 4789 | 78 float | 217/218 | FW_to (id) | 2-tp float |
+| 4790 | 79 add | 219/220 | FW_add | 2-tp (7460 residual bridge) |
+| 4792 | 81 rms | 223/224 | FW_rms_norm | `fw_rms_norm_allGather0_commute_2` |
+| 4794/4796/4798 | 83/84/85 perhead | 227-232 | FW_per_head_mix_precision_linear | `fw_per_head_mix_precision_linear_allGather0_commute_2` |
+| 4800/4801 | 86 rotary | 233/234 | FW_rotary_embedding | `fw_rotary_apply_allGather0_commute_2_1d` (1-D positions) |
+
+### New generalized gear
+
+`twoTp_gather` — generic 2-tp `allGatherPrimDimN 0 numRanks 0` extractor:
+from a `LineageGoal` whose `tps = [{0,A},{1,B}]`, `replicated=false`,
+`gatherDim=0`, `tpShapes=[shard,shard]`, `shard ≠ [1]`, and its `InitGoalHolds`
+proof, yields `smD ts = allGather 0 numRanks 0 [pmD A, pmD B] ∧ (pmD A).shape =
+shard ∧ (pmD B).shape = shard`. Semantically valid: it is exactly the
+reconstruction contract for a non-replicated dim-0-gathered 2-shard goal, proved
+via `reconstructForGoal_of_not_replicated` +
+`reconstructWithDim_cons_cons_nonscalar`. Generalized over `shard : Shape` so it
+serves 2-D `[2048,1024]` residual shards and 3-D `[2048,16,64]`/`[2048,4,64]`
+per-head/rotary shards uniformly.
+
+### WellFormed contract extension
+
+Added `wf4768_hdisjA` / `wf4768_hdisjB` positive structural routing-locality
+fields (rank-0/rank-1 expert-index disjointness for the L2 all2all), mirroring
+L1's `wf4714`. Consistency witness `WellFormed_routing_witness` extended and
+re-proved on the zero/native_decide baseline. These are pure structural
+partition facts about the routing map; they do **not** encode any InitGoalHolds
+conclusion.
+
+### Rotary 1-D-positions note
+
+L2 positions `4799 : [4096]` are a 1-D replicated init chunked per rank (PM 7803
+r0 / 7804 r1), unlike L1's `[L,1]`. Required
+`fw_rotary_apply_allGather0_commute_2_1d`; the SM/PM cache mismatch (SM `4691` vs
+PM `11855 = 11853+2`) is bridged by `hcache_4691_11855`
+(`sm_pm_rotary_cache_agree`). Both rotary theorems carry
+`set_option maxHeartbeats 8000000`.
+
+### Effective new count
+
+Was 73. **+38 L2 tids = 111 / 1151** unconditional-given-WellFormed ring-attn
+goals. All 38 correspond to genuine `intermediateGoal_<tid>` defs (verified: no
+duplicate definitions in any other module).
+
+### Axiom audit
+`#print axioms` on representative L2 theorems (`recon_intermediateGoal_4768/4792/
+4800/4801_ringAttn`): only `propext`, `Classical.choice`, `Quot.sound` +
+`_native.native_decide.ax_*` baseline. **Zero `sorryAx`, zero user `axiom`.**
+
+### Commits (this worker)
+- `9408e967` L2 phase-3c all2all 4768 + 7471 + WF routing-locality fields
+- `0b692360` L2 phase-3d residual/float/rms 7460,4788,4789,4790,4792 (2-tp)
+- `8103d21c` L2 phase-3d-2 per-head 4794,4796,4798 (2-tp)
+- `541a35e6` L2 phase-3d-3 rotary Q/K outputs 4800,4801 (2-tp)
+
+### Remaining frontier
+L2 is fully closed. Next: L3 all2all `4822` + tail (multiref/RMSNorm frontier
+`4846`), replicating the L2 pattern via `twoTp_gather` + a per-layer
+`routing_map_local` WF field analogous to `wf4768`. L3+ upstream attention
+chains must be enumerated from source before proving.
