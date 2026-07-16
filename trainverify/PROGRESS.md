@@ -847,3 +847,96 @@ discharged companion (`recon_intermediateGoal_4714_ringAttn`), and the new tail
 - `14fce8fd` WellFormed_YOCOMoE_A04B contract + discharge 24 conditional ring-attn theorems
 - `0309ae5f` L1 MoE residual tail tids 4734/4735 (given WellFormed contract)
 - `c5659329` Part C: land 4736 (residual add) + 4738 (RMSNorm) L1 tail
+
+---
+
+## Worker 22 (2026-07-16) — whnf-safe PM ring-attn gears + L1 per-head/rotary
+
+### Part A — the whnf blow-up fix (`RingAttnGearsPM.lean`)
+
+W21's frontier note (above) was correct: the PM-side 3-way multiref
+`ringAttn_reduce1` at pm node ≈129 blew up the elaborator. **Root cause
+pinned:** the original `ringAttn_reduce1`/`reduce2` gears close with
+`congr 1; exact (foldl_prefix_ring_g12 …).symm`. `congr 1` forces `isDefEq`
+to whnf the k-deep `applyNodeRingAttn` fold (including its ring branches);
+cost scales with the pm node index, so SM node 43 and pm nodes ≤127 elaborate
+but pm node 129 explodes.
+
+**Fix:** whnf-safe variants that never put the deep fold into a defeq problem.
+They unfold the RHS ring denotation and rewrite the *full* node-fold into the
+*prefix* fold via `foldl_prefix_ring_g12` **forward**, so both sides become the
+identical prefix-fold term closed by `rfl`:
+
+- `ringAttn_reduce1_pm_opaque`, `ringAttn_reduce2_pm_opaque` — same signatures
+  as the originals (drop-in for high-index pm nodes).
+- `ringAttn_node_core_pm_opaque` — exposes
+  `denoteGraph_ringAttn g init out = applyNode g ((g.nodes.take k).foldl …) node out`
+  for multi-in/multi-out nodes (used for the 2-output rotary node); manipulates
+  the LHS only.
+- `ringAttn_prefix_read_pm`, `fw_per_head_linear_shape_3d` — supporting lemmas.
+
+Originals in `RingAttnGears.lean` are untouched (kept green). Verified: with the
+opaque gears, concrete pm node 129 (`4740`) elaborates in seconds instead of
+hanging/OOM.
+
+**Baseline vs post-fix on `4740`:** baseline = non-terminating (killed; the
+prior two sessions both hung here). Post-fix: the whole `L1PerHeadTail.lean`
+file (all 5 theorems incl. the node-129 reduction) compiles as part of a
+successful `lake build` with no per-file timeout.
+
+### Part B — 5 L1 per-head/rotary tail theorems (`L1PerHeadTail.lean`)
+
+All 5 previously-blocked tids landed (target met):
+
+- `recon_intermediateGoal_4740_ringAttn` — per-head mix-precision linear (Q)
+- `recon_intermediateGoal_4742_ringAttn` — per-head mix-precision linear (K)
+- `recon_intermediateGoal_4744_ringAttn` — per-head mix-precision linear (V)
+- `recon_intermediateGoal_4746_ringAttn` — rotary embedding Q'
+- `recon_intermediateGoal_4747_ringAttn` — rotary embedding K'
+
+PM reductions route through the Part-A opaque gears. The SM/PM rotary cache
+mismatch (SM cs `4691` vs PM cs `11854`, a rank-1 broadcast of `4691` via pm
+multiref node 1) is bridged by `hcache_4691_11854` using
+`sm_ring_eq`/`pm_ring_eq`/`sm_pm_rotary_cache_agree`.
+
+### Effective new count
+
+Was 68. **+5 (4740/4742/4744/4746/4747) = 73 / 1151** unconditional-given-
+WellFormed ring-attn goals. No new WF-contract field required (per-head/rotary
+are pure functions; equality of `4738` + replicated weights forces the outputs
+structurally).
+
+### Part C — attempted, blocked on upstream per-layer chains
+
+Part C (per-layer L1–L11 all2all `4768…5308` + per-layer per-head/rotary tails)
+is **not mechanically reducible to Part A**. Each higher layer's tail depends on
+that layer's own upstream reconstruction, which is not yet built:
+
+- Only L1's post-attn multiref value `4738` is reconstructed. The analogous
+  per-layer values `4792, 4846, 4900, 4954, 5008, 5062, 5116, 5170, 5224, 5278`
+  (stride 54) are all **MISSING**.
+- `4792` = `FW_rms_norm(7487, 4791)` where `7487` is a multiref of
+  `4790 = FW_add(7460, 4789)` and `4789` is the **L2 attention output** — an
+  entire per-layer attention chain that has not been reconstructed (in the
+  `4748–4792` window only `4750` has a recon).
+- Each all2all `4768` = `FW_all2all_moe_gmm(7471, 4763, 4764, 4766, 4767)`
+  depends on that layer's `FW_topk_routing`/`FW_norm_linear` routing chain,
+  which likewise is unbuilt, and would need per-layer `routing_map_local` WF
+  fields analogous to `wf4714_hdisjA/hdisjB`.
+
+So Part C requires reconstructing 10 further per-layer attention+MoE chains
+(prior-worker-scale effort each), not a mechanical replay of the Part-A gears.
+The Part-A machinery is ready and will apply verbatim to each layer's per-head/
+rotary tail *once that layer's `478X`/`479X` multiref value is reconstructed*.
+Landed what is unblocked (Parts A+B) and documented the frontier here per the
+"don't get stuck; land what you have" ground rule.
+
+### Axiom audit
+`#print axioms` on `ringAttn_reduce1_pm_opaque` and all 5 new
+`recon_intermediateGoal_474{0,2,4,6,7}_ringAttn`: only `propext`,
+`Classical.choice`, `Quot.sound` + `_native.native_decide.ax_*` baseline.
+**Zero `sorryAx`, zero user `axiom`.**
+
+### Commits (this worker)
+- `4c4f3913` W22 Part A: whnf-safe PM ring-attn reduction gears
+- `cb82255f` W22 Part B: land 5 L1 per-head/rotary reconstruction theorems
