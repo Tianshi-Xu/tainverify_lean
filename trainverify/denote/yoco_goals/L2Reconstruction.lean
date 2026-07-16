@@ -1482,4 +1482,277 @@ theorem recon_intermediateGoal_4787_ringAttn (initSM initPM : Store)
     intermediateGoal_4787 4787 7751 7752 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
+/-- **Whnf-safe five-input single-output ring reduction.** Drop-in for
+    `RingAttnGears.ringAttn_reduce5` that dodges the high-index `congr 1` whnf
+    blowup (needed for the layer-2 expert-parallel all2all at PM nodes 201/202)
+    by routing through `ringAttn_node_core_pm_opaque` + explicit prefix reads. -/
+theorem ringAttn_reduce5_pm_opaque (g : GraphDecl) (init : Store) (k : Nat)
+    (node : NodeDecl) (in1 in2 in3 in4 in5 outTid : Tid)
+    (opfun : Tensor → Tensor → Tensor → Tensor → Tensor → Tensor)
+    (hk : k < g.nodes.length)
+    (hnode : g.nodes[k]'hk = node)
+    (hnr1 : node.op ≠ "OpName.FW_attn_zigzag")
+    (hnr2 : node.op ≠ "OpName.FW_attn_sliding_window")
+    (happly : ∀ (s : Store), applyNode g s node outTid
+      = opfun (s in1) (s in2) (s in3) (s in4) (s in5))
+    (hdrop_nil : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ [])
+    (hdrop : ∀ n ∈ g.nodes.drop (k + 1), outTid ∉ n.outs)
+    (hpre_nil : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hpre1 : ∀ n ∈ g.nodes.drop k, in1 ∉ n.outs)
+    (hpre2 : ∀ n ∈ g.nodes.drop k, in2 ∉ n.outs)
+    (hpre3 : ∀ n ∈ g.nodes.drop k, in3 ∉ n.outs)
+    (hpre4 : ∀ n ∈ g.nodes.drop k, in4 ∉ n.outs)
+    (hpre5 : ∀ n ∈ g.nodes.drop k, in5 ∉ n.outs) :
+    denoteGraph_ringAttn g init outTid
+      = opfun (denoteGraph_ringAttn g init in1) (denoteGraph_ringAttn g init in2)
+          (denoteGraph_ringAttn g init in3) (denoteGraph_ringAttn g init in4)
+          (denoteGraph_ringAttn g init in5) := by
+  rw [ringAttn_node_core_pm_opaque g init k node outTid hk hnode hnr1 hnr2 hdrop_nil hdrop,
+      happly, ringAttn_prefix_read_pm g init k in1 hpre_nil hpre1,
+      ringAttn_prefix_read_pm g init k in2 hpre_nil hpre2,
+      ringAttn_prefix_read_pm g init k in3 hpre_nil hpre3,
+      ringAttn_prefix_read_pm g init k in4 hpre_nil hpre4,
+      ringAttn_prefix_read_pm g init k in5 hpre_nil hpre5]
+
+/-! ### 7471 — token bridge (FW_multiref copy of the L2 pre-MoE RMSNorm output)
+
+    SM `7471 = multiref₁(4759)` copies the replicated RMSNorm output `4759`
+    (1-tp, `recon_intermediateGoal_4759_ringAttn`). On PM, `4759` is copied via
+    `multiref₁ → 11904` then dim-0 chunked into per-rank token shards
+    `11977`/`11978`. Hence `SM 7471 = allGather0[11977, 11978]`, the last input
+    bridge for the layer-2 `FW_all2all_moe_gmm` output `4768`. -/
+theorem recon_intermediateGoal_7471_ringAttn (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_7471
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  have h4759 := recon_intermediateGoal_4759_ringAttn initSM initPM hSM hPM hInit hWF
+  have hv4759 : denoteGraph_ringAttn sm initSM 4759 = denoteGraph_ringAttn pm initPM 4759 :=
+    oneTp_valeq intermediateGoal_4759 _ _ 4759 rfl rfl rfl rfl h4759
+  have hs4759sm : (denoteGraph_ringAttn sm initSM 4759).shape = [4096, 1024] := by
+    have := h4759.1; simpa [intermediateGoal_4759] using this
+  have hnr : pm.numRanks = 2 := rfl
+  -- SM 7471 = multiref₁(4759) [SM node 57, position 1]
+  have s7471 : denoteGraph_ringAttn sm initSM 7471 = id (denoteGraph_ringAttn sm initSM 4759) :=
+    ringAttn_reduce1 sm initSM 57
+      { rank := 0, op := "OpName.FW_multiref", ins := [4759],
+        outs := [7467, 7471, 7475, 7479, 7483], params := [5] }
+      4759 7471 id (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref5_at_pos1_out sm s 0 4759 7467 7471 7475 7479 7483 (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  -- PM 11904 = multiref₁(4759) [PM node 166 rank1, position 1 — last writer]
+  have p11904 : denoteGraph_ringAttn pm initPM 11904 = id (denoteGraph_ringAttn pm initPM 4759) :=
+    ringAttn_reduce1_pm_opaque pm initPM 166
+      { rank := 1, op := "OpName.FW_multiref", ins := [4759],
+        outs := [11903, 11904, 11905, 11906, 11907], params := [5] }
+      4759 11904 id (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref5_at_pos1_out pm s 1 4759 11903 11904 11905 11906 11907 (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at s7471 p11904
+  -- PM 11977 = chunk₀(11904) [PM node 168 rank0]
+  have c11977 : denoteGraph_ringAttn pm initPM 11977
+      = chunkPrimDimN 0 pm.numRanks 0 (denoteGraph_ringAttn pm initPM 11904) :=
+    ringAttn_reduce1_pm_opaque pm initPM 168
+      { rank := 0, op := "OpName.ChunkPrim", ins := [11904], outs := [11977], params := [0] }
+      11904 11977 (fun t => chunkPrimDimN 0 pm.numRanks 0 t) (by native_decide) (by native_decide)
+      (by decide) (by decide) (fun s => applyNode_chunkPrimDimN_out pm s 0 11904 11977 0)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  -- PM 11978 = chunk₁(11904) [PM node 173 rank1]
+  have c11978 : denoteGraph_ringAttn pm initPM 11978
+      = chunkPrimDimN 0 pm.numRanks 1 (denoteGraph_ringAttn pm initPM 11904) :=
+    ringAttn_reduce1_pm_opaque pm initPM 173
+      { rank := 1, op := "OpName.ChunkPrim", ins := [11904], outs := [11978], params := [0] }
+      11904 11978 (fun t => chunkPrimDimN 0 pm.numRanks 1 t) (by native_decide) (by native_decide)
+      (by decide) (by decide) (fun s => applyNode_chunkPrimDimN_out pm s 1 11904 11978 0)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hp11904 : (denoteGraph_ringAttn pm initPM 11904).shape = [4096, 1024] := by
+    rw [p11904, ← hv4759]; exact hs4759sm
+  have hsp0 : (denoteGraph_ringAttn pm initPM 11977).shape = [2048, 1024] := by
+    rw [c11977, chunkPrimDimN_shape 0 pm.numRanks 0 _ [4096, 1024] hp11904 (by native_decide)]; rfl
+  have hsp1 : (denoteGraph_ringAttn pm initPM 11978).shape = [2048, 1024] := by
+    rw [c11978, chunkPrimDimN_shape 0 pm.numRanks 1 _ [4096, 1024] hp11904 (by native_decide)]; rfl
+  have hval : denoteGraph_ringAttn sm initSM 7471
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph_ringAttn pm initPM 11977, denoteGraph_ringAttn pm initPM 11978] := by
+    rw [s7471, hv4759, ← p11904, c11977, c11978, hnr]
+    exact (allGather0_reconstruct_chunks_2d 2048 1024 (by omega) (by omega) _ hp11904).symm
+  have hshape : (denoteGraph_ringAttn sm initSM 7471).shape = [4096, 1024] := by
+    rw [s7471, hv4759, ← p11904]; exact hp11904
+  exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
+    intermediateGoal_7471 7471 11977 11978 [4096, 1024] [2048, 1024]
+    rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
+
+set_option maxHeartbeats 8000000 in
+/-! ### 4768 — layer-2 expert-parallel MoE all2all (2-tp, expert-sharded)
+
+    `SM 4768 = fw_all2all_moe_gmm` over the full expert range `[0, 64)` (params
+    `[64, 0, 64, 8]`). PM shards experts across 2 ranks: rank 0 → `[0, 32)`
+    (`7677`), rank 1 → `[32, 64)` (`7678`). The full result reconstructs as
+    `allGather0[7677, 7678]` via `fw_all2all_moe_gmm_split_commute_2_of`, given
+    the per-rank routing maps `7669`/`7670` are expert-local (the
+    `wf4768_hdisjA/B` well-formedness fields). Unlike the layer-0 all2all `4714`
+    (a 1-tp singleton), `4768` is a genuine 2-tp expert-sharded goal. -/
+theorem recon_intermediateGoal_4768_ringAttn (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4768
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  have hnr : pm.numRanks = 2 := rfl
+  -- Input reconstruction bridges (token, routing_probs, routing_map).
+  have h7471 := recon_intermediateGoal_7471_ringAttn initSM initPM hSM hPM hInit hWF
+  have h4763 := recon_intermediateGoal_4763_ringAttn initSM initPM hSM hPM hInit hWF
+  have h4764 := recon_intermediateGoal_4764_ringAttn initSM initPM hSM hPM hInit hWF
+  -- Token bridge + shard shapes.
+  have hsInA : (denoteGraph_ringAttn pm initPM 11977).shape = [2048, 1024] := by
+    have hs := h7471.2.1
+    simp only [intermediateGoal_7471, List.map, List.cons.injEq, and_true] at hs; exact hs.1
+  have hsInB : (denoteGraph_ringAttn pm initPM 11978).shape = [2048, 1024] := by
+    have hs := h7471.2.1
+    simp only [intermediateGoal_7471, List.map, List.cons.injEq, and_true] at hs; exact hs.2
+  have hbrIn : denoteGraph_ringAttn sm initSM 7471
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm initPM 11977, denoteGraph_ringAttn pm initPM 11978] := by
+    have hv := h7471.2.2
+    rw [reconstructForGoal_of_not_replicated intermediateGoal_7471 pm.numRanks _ rfl] at hv
+    simp only [intermediateGoal_7471, List.map] at hv
+    rw [reconstructWithDim_cons_cons_nonscalar 0 pm.numRanks 0 _ _ []
+          (by rw [hsInA]; decide)] at hv
+    exact hv
+  -- Routing-probs bridge + shard shapes.
+  have hsRpA : (denoteGraph_ringAttn pm initPM 7667).shape = [2048, 64] := by
+    have hs := h4763.2.1
+    simp only [intermediateGoal_4763, List.map, List.cons.injEq, and_true] at hs; exact hs.1
+  have hsRpB : (denoteGraph_ringAttn pm initPM 7668).shape = [2048, 64] := by
+    have hs := h4763.2.1
+    simp only [intermediateGoal_4763, List.map, List.cons.injEq, and_true] at hs; exact hs.2
+  have hbrRp : denoteGraph_ringAttn sm initSM 4763
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm initPM 7667, denoteGraph_ringAttn pm initPM 7668] := by
+    have hv := h4763.2.2
+    rw [reconstructForGoal_of_not_replicated intermediateGoal_4763 pm.numRanks _ rfl] at hv
+    simp only [intermediateGoal_4763, List.map] at hv
+    rw [reconstructWithDim_cons_cons_nonscalar 0 pm.numRanks 0 _ _ []
+          (by rw [hsRpA]; decide)] at hv
+    exact hv
+  -- Routing-map bridge + shard shapes.
+  have hsRmA : (denoteGraph_ringAttn pm initPM 7669).shape = [2048, 64] := by
+    have hs := h4764.2.1
+    simp only [intermediateGoal_4764, List.map, List.cons.injEq, and_true] at hs; exact hs.1
+  have hsRmB : (denoteGraph_ringAttn pm initPM 7670).shape = [2048, 64] := by
+    have hs := h4764.2.1
+    simp only [intermediateGoal_4764, List.map, List.cons.injEq, and_true] at hs; exact hs.2
+  have hbrRm : denoteGraph_ringAttn sm initSM 4764
+      = allGatherPrimDimN 0 2 0
+          [denoteGraph_ringAttn pm initPM 7669, denoteGraph_ringAttn pm initPM 7670] := by
+    have hv := h4764.2.2
+    rw [reconstructForGoal_of_not_replicated intermediateGoal_4764 pm.numRanks _ rfl] at hv
+    simp only [intermediateGoal_4764, List.map] at hv
+    rw [reconstructWithDim_cons_cons_nonscalar 0 pm.numRanks 0 _ _ []
+          (by rw [hsRmA]; decide)] at hv
+    exact hv
+  -- Weight bridges (dual-tp init goals, expert-axis gatherDim 0).
+  have hbrW13 := veq_weight_dual_ring initSM initPM hInit initGoal_4766
+    (by native_decide) 4766 7673 7674 [32, 1024, 1024] rfl rfl rfl rfl rfl (by decide)
+    (by native_decide) (by native_decide) (by native_decide)
+  have hbrW2 := veq_weight_dual_ring initSM initPM hInit initGoal_4767
+    (by native_decide) 4767 7675 7676 [32, 1024, 512] rfl rfl rfl rfl rfl (by decide)
+    (by native_decide) (by native_decide) (by native_decide)
+  -- Weight shard shapes from the init goals.
+  have hpres := initGoals_preserved initSM initPM hInit
+  have hsW13A : (denoteGraph_ringAttn pm initPM 7673).shape = [32, 1024, 1024] := by
+    have h := hpres initGoal_4766 (by native_decide); unfold InitGoalHolds at h
+    have hs := h.2.1; simp only [initGoal_4766, List.map, List.cons.injEq, and_true] at hs
+    rw [pm_ring_eq initPM 7673 (by native_decide)]; exact hs.1
+  have hsW13B : (denoteGraph_ringAttn pm initPM 7674).shape = [32, 1024, 1024] := by
+    have h := hpres initGoal_4766 (by native_decide); unfold InitGoalHolds at h
+    have hs := h.2.1; simp only [initGoal_4766, List.map, List.cons.injEq, and_true] at hs
+    rw [pm_ring_eq initPM 7674 (by native_decide)]; exact hs.2
+  have hsW2A : (denoteGraph_ringAttn pm initPM 7675).shape = [32, 1024, 512] := by
+    have h := hpres initGoal_4767 (by native_decide); unfold InitGoalHolds at h
+    have hs := h.2.1; simp only [initGoal_4767, List.map, List.cons.injEq, and_true] at hs
+    rw [pm_ring_eq initPM 7675 (by native_decide)]; exact hs.1
+  have hsW2B : (denoteGraph_ringAttn pm initPM 7676).shape = [32, 1024, 512] := by
+    have h := hpres initGoal_4767 (by native_decide); unfold InitGoalHolds at h
+    have hs := h.2.1; simp only [initGoal_4767, List.map, List.cons.injEq, and_true] at hs
+    rw [pm_ring_eq initPM 7676 (by native_decide)]; exact hs.2
+  -- SM 4768 = full-range all2all (SM node 70).
+  have hSMout : denoteGraph_ringAttn sm initSM 4768
+      = fw_all2all_moe_gmm (denoteGraph_ringAttn sm initSM 7471)
+          (denoteGraph_ringAttn sm initSM 4763) (denoteGraph_ringAttn sm initSM 4764)
+          (denoteGraph_ringAttn sm initSM 4766) (denoteGraph_ringAttn sm initSM 4767)
+          64 0 64 8 (((10 : Nat) : Scalar)) :=
+    ringAttn_reduce5_pm_opaque sm initSM 70
+      { rank := 0, op := "OpName.FW_all2all_moe_gmm", ins := [7471, 4763, 4764, 4766, 4767],
+        outs := [4768], params := [64, 0, 64, 8] }
+      7471 4763 4764 4766 4767 4768
+      (fun a b c d e => fw_all2all_moe_gmm a b c d e 64 0 64 8 (((10 : Nat) : Scalar)))
+      (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_all2all_moe_gmm_out_1p sm s 0 7471 4763 4764 4766 4767 4768 [64, 0, 64, 8])
+      (by native_decide) (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  -- PM 7677 = rank-0 sharded-range all2all (PM node 201).
+  have hP0 : denoteGraph_ringAttn pm initPM 7677
+      = fw_all2all_moe_gmm (denoteGraph_ringAttn pm initPM 11977)
+          (denoteGraph_ringAttn pm initPM 7667) (denoteGraph_ringAttn pm initPM 7669)
+          (denoteGraph_ringAttn pm initPM 7673) (denoteGraph_ringAttn pm initPM 7675)
+          64 0 32 8 (((10 : Nat) : Scalar)) :=
+    ringAttn_reduce5_pm_opaque pm initPM 201
+      { rank := 0, op := "OpName.FW_all2all_moe_gmm", ins := [11977, 7667, 7669, 7673, 7675],
+        outs := [7677], params := [64, 0, 32, 8] }
+      11977 7667 7669 7673 7675 7677
+      (fun a b c d e => fw_all2all_moe_gmm a b c d e 64 0 32 8 (((10 : Nat) : Scalar)))
+      (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_all2all_moe_gmm_out_1p pm s 0 11977 7667 7669 7673 7675 7677 [64, 0, 32, 8])
+      (by native_decide) (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  -- PM 7678 = rank-1 sharded-range all2all (PM node 202).
+  have hP1 : denoteGraph_ringAttn pm initPM 7678
+      = fw_all2all_moe_gmm (denoteGraph_ringAttn pm initPM 11978)
+          (denoteGraph_ringAttn pm initPM 7668) (denoteGraph_ringAttn pm initPM 7670)
+          (denoteGraph_ringAttn pm initPM 7674) (denoteGraph_ringAttn pm initPM 7676)
+          64 32 64 8 (((10 : Nat) : Scalar)) :=
+    ringAttn_reduce5_pm_opaque pm initPM 202
+      { rank := 1, op := "OpName.FW_all2all_moe_gmm", ins := [11978, 7668, 7670, 7674, 7676],
+        outs := [7678], params := [64, 32, 64, 8] }
+      11978 7668 7670 7674 7676 7678
+      (fun a b c d e => fw_all2all_moe_gmm a b c d e 64 32 64 8 (((10 : Nat) : Scalar)))
+      (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_all2all_moe_gmm_out_1p pm s 1 11978 7668 7670 7674 7676 7678 [64, 32, 64, 8])
+      (by native_decide) (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  -- Expert-range split commute → 2-tp allGather bridge.
+  have hc := fw_all2all_moe_gmm_split_commute_2_of
+      (denoteGraph_ringAttn pm initPM 11977) (denoteGraph_ringAttn pm initPM 11978)
+      (denoteGraph_ringAttn pm initPM 7667) (denoteGraph_ringAttn pm initPM 7668)
+      (denoteGraph_ringAttn pm initPM 7669) (denoteGraph_ringAttn pm initPM 7670)
+      (denoteGraph_ringAttn pm initPM 7673) (denoteGraph_ringAttn pm initPM 7674)
+      (denoteGraph_ringAttn pm initPM 7675) (denoteGraph_ringAttn pm initPM 7676)
+      2048 1024 1024 512 32 8
+      (by omega) (by omega) (by omega) (by omega) (by omega) (by norm_num)
+      hsInA hsInB hsRpA hsRpB hsRmA hsRmB hsW13A hsW13B hsW2A hsW2B
+      (fun l hl e he hge => hWF.wf4768_hdisjA l hl e he (Or.inr hge))
+      (fun l hl e he hlt => hWF.wf4768_hdisjB l hl e he (Or.inl hlt))
+      (((10 : Nat) : Scalar))
+  have hval : denoteGraph_ringAttn sm initSM 4768
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph_ringAttn pm initPM 7677, denoteGraph_ringAttn pm initPM 7678] := by
+    rw [hSMout, hbrIn, hbrRp, hbrRm, hbrW13, hbrW2, hc, ← hP0, ← hP1, hnr]
+  -- Shapes.
+  have hsp0 : (denoteGraph_ringAttn pm initPM 7677).shape = [2048, 1024] := by
+    rw [hP0]
+    exact fw_all2all_moe_gmm_shape _ _ _ _ _ _ _ _ _ _ 2048 1024
+      (by rw [hsInA]; rfl) (by rw [hsInA]; rfl)
+  have hsp1 : (denoteGraph_ringAttn pm initPM 7678).shape = [2048, 1024] := by
+    rw [hP1]
+    exact fw_all2all_moe_gmm_shape _ _ _ _ _ _ _ _ _ _ 2048 1024
+      (by rw [hsInB]; rfl) (by rw [hsInB]; rfl)
+  have hshape : (denoteGraph_ringAttn sm initSM 4768).shape = [4096, 1024] := by
+    rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsp0])]
+    simp [List.set, List.getD]
+  exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
+    intermediateGoal_4768 4768 7677 7678 [4096, 1024] [2048, 1024]
+    rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
+
 end TrainVerify.Denote.GeneratedPatterns

@@ -46,6 +46,8 @@ theorem routing_map_local_zeroTensor (L numExp lo hi : Nat) :
 structure WellFormed_YOCOMoE_A04B (initSM initPM : Store) : Prop where
   wf4714_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 7483) 2048 64 0 32
   wf4714_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 7484) 2048 64 32 64
+  wf4768_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 7669) 2048 64 0 32
+  wf4768_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 7670) 2048 64 32 64
   wf4750_hveq4746 : denoteGraph_ringAttn sm initSM 4746 = denoteGraph_ringAttn pm initPM 4746
   wf4750_hveq4747 : denoteGraph_ringAttn sm initSM 4747 = denoteGraph_ringAttn pm initPM 4747
   wf4750_hveq4744 : denoteGraph_ringAttn sm initSM 4744 = denoteGraph_ringAttn pm initPM 4744
@@ -246,7 +248,11 @@ structure WellFormed_YOCOMoE_A04B (initSM initPM : Store) : Prop where
   wf5886_hfull_shape' : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 11555,              (pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 11556])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 5882,              (pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 5882])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 5883,              (pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 5883])           ((pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 5884)           ((pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 5885)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
 
 /-- Consistency witness for the routing-locality family: the all-zero routing
-    map satisfies both per-rank expert-locality constraints simultaneously. -/
+    map satisfies both per-rank expert-locality constraints simultaneously.
+    This witnesses satisfiability of *every* per-layer routing-locality field
+    (`wf4714_hdisjA/B`, `wf4768_hdisjA/B`, …): each is an instance of
+    `routing_map_local _ 2048 64 0 32` or `routing_map_local _ 2048 64 32 64`,
+    both discharged here by the zero-tensor baseline. -/
 theorem WellFormed_routing_witness :
     ∃ rm : Tensor, routing_map_local rm 2048 64 0 32 ∧ routing_map_local rm 2048 64 32 64 :=
   ⟨zeroTensor [2048 * 64], routing_map_local_zeroTensor _ _ _ _,
