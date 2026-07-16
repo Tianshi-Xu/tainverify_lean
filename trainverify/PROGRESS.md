@@ -1040,3 +1040,58 @@ L2 is fully closed. Next: L3 all2all `4822` + tail (multiref/RMSNorm frontier
 `4846`), replicating the L2 pattern via `twoTp_gather` + a per-layer
 `routing_map_local` WF field analogous to `wf4768`. L3+ upstream attention
 chains must be enumerated from source before proving.
+
+## Worker 23 (cont.) — Complete L3 block reconstruction
+
+### Objective met: the entire L3 block is closed
+L3 mirrors L2's 2-tp sharded cascade. All L3 intermediates from the MoE upstream
+chain through the final rotary Q'/K' outputs `4854/4855` are reconstructed
+unconditional-given-`WellFormed_YOCOMoE_A04B`, in generated topological order.
+Every PM node index was enumerated from `GeneratedYOCOMoE.lean` with a parser
+matching both plain-list and broadcast-multiref (`(List.range N).map`) node forms,
+anchored on the all2all node (`7863` = PM real idx 279).
+
+### New tids landed (`denote/yoco_goals/L3Reconstruction.lean`)
+MoE upstream chain (27 goals) + `moe_topk_common_L3` helper — commit `606656a2`.
+MoE all2all `4822` + `wf4822_hdisjA/B` fields — commit `2ab8ddca`.
+Residual tail (10 goals): `7512 4842 4843 4844 4846 4848 4850 4852 4854 4855`
+(+ `hcache_4691_11856` helper) — commit `c2e36ce7`.
+
+### L3 tail dependency table (SM node / PM nodes / op)
+| tid | SM node | PM nodes | op | key gear |
+|-----|---------|----------|----|----------|
+| 4822 | 109 all2all | 201.. (7863/7864) | FW_all2all_moe_gmm | `fw_all2all_moe_gmm_split_commute_2_of` + `wf4822_hdisjA/B` |
+| 4842 | 116 add | 293/294 | FW_add | `fw_add_allGather0_commute_2` |
+| 4843 | 117 float | 295/296 | FW_to (id) | 2-tp float |
+| 4844 | 118 add | 297/298 | FW_add | 2-tp residual bridge |
+| 4846 | 120 rms | 301/302 | FW_rms_norm | `fw_rms_norm_allGather0_commute_2` |
+| 4848/4850/4852 | 122/123/124 perhead | 305/308,306/309,307/310 | FW_per_head_mix_precision_linear | `fw_per_head_mix_precision_linear_allGather0_commute_2` |
+| 4854/4855 | 125 rotary | 311/312 | FW_rotary_embedding | `fw_rotary_apply_allGather0_commute_2_1d` |
+
+mref3 of 4846 at PM 303 (r0) / 304 (r1) feeds the per-head Q/K/V slices. Cache
+bridge `hcache_4691_11856` (`sm_pm_rotary_cache_agree`, `11856 = 11853+3`).
+
+### WellFormed contract extension
+Added `wf4822_hdisjA` / `wf4822_hdisjB` positive structural routing-locality
+fields for the L3 all2all (rank-0/rank-1 expert-index disjointness, shards
+`7855/7856`), mirroring `wf4768`. Witnessed by the zero-tensor
+`routing_map_local` baseline; no InitGoalHolds conclusion encoded.
+
+### Effective new count
+Was 111 (L2). **+28 L3 MoE/all2all + 10 L3 tail = 149 / 1151**
+unconditional-given-WellFormed ring-attn goals.
+
+### Axiom audit
+`#print axioms` on representative L3 theorems (`recon_intermediateGoal_4822/4846/
+4852/4855_ringAttn`): only `propext`, `Classical.choice`, `Quot.sound` +
+`_native.native_decide.ax_*` baseline. **Zero `sorryAx`, zero user `axiom`.**
+
+### Commits (L3)
+- `606656a2` L3 MoE upstream chain (27 goals) + `moe_topk_common_L3`
+- `2ab8ddca` L3 MoE all2all `4822` + `wf4822` fields
+- `c2e36ce7` L3 residual tail `7512/4842/4843/4844/4846/4848/4850/4852/4854/4855`
+
+### Remaining frontier
+L3 fully closed. L3 tail `4854/4855` rotary Q'/K' feed L4's attention. Next:
+L4 all2all `4876`, multiref/RMSNorm frontier `4900` — enumerate each L4 node
+from source (corrected parser) before proving; do not assume an exact L3 mirror.
