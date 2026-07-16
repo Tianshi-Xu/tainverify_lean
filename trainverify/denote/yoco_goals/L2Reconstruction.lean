@@ -874,4 +874,201 @@ theorem recon_intermediateGoal_4781_ringAttn (initSM initPM : Store)
   exact wrap_1tp_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
     intermediateGoal_4781 4781 [4096, 512] rfl rfl rfl rfl rfl rfl hval hshape
 
+/-! ## Phase 3a — MoE core (2-tp expert/token-sharded)
+
+    The router logits `4762` (1-tp replicated) are chunked per rank
+    (`7665`/`7666`) and each rank runs `topk`; the full `topk(4762)` reconstructs
+    as the dim-0 gather of the per-rank outputs.  Row-wise ops (topk fst/snd,
+    sigmoid, swiglu, reshape, mixlin, view, broadcast-mul) commute with the token
+    gather via the Pattern_1 `_allGather0_commute_2` lemmas. -/
+
+/-- Whnf-safe shape-dependent single-input reduction: the `happly` is
+    instantiated only at the specific prefix store (so a shape-conditioned
+    `applyNode` lemma such as the topk gear applies), routing through
+    `ringAttn_node_core_pm_opaque` to dodge the high-index `congr 1` blowup. -/
+theorem ringAttn_reduce1_at_pm (g : GraphDecl) (init : Store) (k : Nat)
+    (node : NodeDecl) (inTid outTid : Tid) (opfun : Tensor → Tensor)
+    (hk : k < g.nodes.length)
+    (hnode : g.nodes[k]'hk = node)
+    (hnr1 : node.op ≠ "OpName.FW_attn_zigzag")
+    (hnr2 : node.op ≠ "OpName.FW_attn_sliding_window")
+    (happly : applyNode g ((g.nodes.take k).foldl (applyNodeRingAttn g) init) node outTid
+      = opfun ((g.nodes.take k).foldl (applyNodeRingAttn g) init inTid))
+    (hdrop_nil : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ [])
+    (hdrop : ∀ n ∈ g.nodes.drop (k + 1), outTid ∉ n.outs)
+    (hpre_nil : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hpre : ∀ n ∈ g.nodes.drop k, inTid ∉ n.outs) :
+    denoteGraph_ringAttn g init outTid = opfun (denoteGraph_ringAttn g init inTid) := by
+  rw [ringAttn_node_core_pm_opaque g init k node outTid hk hnode hnr1 hnr2 hdrop_nil hdrop,
+      happly, ringAttn_prefix_read_pm g init k inTid hpre_nil hpre]
+
+/-- Shared core: SM `4762` (full router logits) reconstructs as the dim-0 gather
+    of the two PM per-rank chunks `7665`/`7666`, plus the shard/full shape facts
+    and the per-store trailing-dim facts needed by the topk gears. -/
+theorem moe_topk_common_L2 (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
+    denoteGraph_ringAttn sm initSM 4762
+        = allGatherPrimDimN 0 pm.numRanks 0
+            [denoteGraph_ringAttn pm initPM 7665, denoteGraph_ringAttn pm initPM 7666]
+      ∧ (denoteGraph_ringAttn sm initSM 4762).shape = [4096, 64]
+      ∧ (denoteGraph_ringAttn pm initPM 7665).shape = [2048, 64]
+      ∧ (denoteGraph_ringAttn pm initPM 7666).shape = [2048, 64]
+      ∧ ((sm.nodes.take 66).foldl (applyNodeRingAttn sm) initSM 4762).shape.reverse.head? = some 64
+      ∧ ((pm.nodes.take 193).foldl (applyNodeRingAttn pm) initPM 7665).shape.reverse.head? = some 64
+      ∧ ((pm.nodes.take 194).foldl (applyNodeRingAttn pm) initPM 7666).shape.reverse.head? = some 64 := by
+  have h4762 := recon_intermediateGoal_4762_ringAttn initSM initPM hSM hPM hInit hWF
+  have hv4762 : denoteGraph_ringAttn sm initSM 4762 = denoteGraph_ringAttn pm initPM 4762 :=
+    oneTp_valeq intermediateGoal_4762 _ _ 4762 rfl rfl rfl rfl h4762
+  have hs4762sm : (denoteGraph_ringAttn sm initSM 4762).shape = [4096, 64] := by
+    have := h4762.1; simpa [intermediateGoal_4762] using this
+  have hp4762 : (denoteGraph_ringAttn pm initPM 4762).shape = [4096, 64] := by
+    rw [← hv4762]; exact hs4762sm
+  have hnr : pm.numRanks = 2 := rfl
+  have hc7665 : denoteGraph_ringAttn pm initPM 7665
+      = chunkPrimDimN 0 pm.numRanks 0 (denoteGraph_ringAttn pm initPM 4762) :=
+    ringAttn_reduce1_pm_opaque pm initPM 185
+      { rank := 0, op := "OpName.ChunkPrim", ins := [4762], outs := [7665], params := [0] }
+      4762 7665 (fun t => chunkPrimDimN 0 pm.numRanks 0 t) (by native_decide) (by native_decide)
+      (by decide) (by decide) (fun s => applyNode_chunkPrimDimN_out pm s 0 4762 7665 0)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hc7666 : denoteGraph_ringAttn pm initPM 7666
+      = chunkPrimDimN 0 pm.numRanks 1 (denoteGraph_ringAttn pm initPM 4762) :=
+    ringAttn_reduce1_pm_opaque pm initPM 186
+      { rank := 1, op := "OpName.ChunkPrim", ins := [4762], outs := [7666], params := [0] }
+      4762 7666 (fun t => chunkPrimDimN 0 pm.numRanks 1 t) (by native_decide) (by native_decide)
+      (by decide) (by decide) (fun s => applyNode_chunkPrimDimN_out pm s 1 4762 7666 0)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hs7665 : (denoteGraph_ringAttn pm initPM 7665).shape = [2048, 64] := by
+    rw [hc7665, chunkPrimDimN_shape 0 pm.numRanks 0 _ [4096, 64] hp4762 (by native_decide)]; rfl
+  have hs7666 : (denoteGraph_ringAttn pm initPM 7666).shape = [2048, 64] := by
+    rw [hc7666, chunkPrimDimN_shape 0 pm.numRanks 1 _ [4096, 64] hp4762 (by native_decide)]; rfl
+  have hrec4762 : denoteGraph_ringAttn pm initPM 4762
+      = allGatherPrimDimN 0 2 0 [denoteGraph_ringAttn pm initPM 7665, denoteGraph_ringAttn pm initPM 7666] := by
+    rw [hc7665, hc7666, hnr]
+    exact (allGather0_reconstruct_chunks_2d 2048 64 (by omega) (by omega) _ hp4762).symm
+  have hSMeq : denoteGraph_ringAttn sm initSM 4762
+      = allGatherPrimDimN 0 pm.numRanks 0 [denoteGraph_ringAttn pm initPM 7665, denoteGraph_ringAttn pm initPM 7666] := by
+    rw [hv4762, hrec4762, hnr]
+  have hpre4762sm : denoteGraph_ringAttn sm initSM 4762
+      = (sm.nodes.take 66).foldl (applyNodeRingAttn sm) initSM 4762 := by
+    rw [denoteGraph_ringAttn]
+    exact foldl_prefix_ring_g12 sm sm.nodes initSM 4762 66 (by native_decide) (by native_decide)
+  have hlastSM : ((sm.nodes.take 66).foldl (applyNodeRingAttn sm) initSM 4762).shape.reverse.head? = some 64 := by
+    rw [← hpre4762sm, hs4762sm]; rfl
+  have hpre7665 : denoteGraph_ringAttn pm initPM 7665
+      = (pm.nodes.take 193).foldl (applyNodeRingAttn pm) initPM 7665 := by
+    rw [denoteGraph_ringAttn]
+    exact foldl_prefix_ring_g12 pm pm.nodes initPM 7665 193 (by native_decide) (by native_decide)
+  have hlast193 : ((pm.nodes.take 193).foldl (applyNodeRingAttn pm) initPM 7665).shape.reverse.head? = some 64 := by
+    rw [← hpre7665, hs7665]; rfl
+  have hpre7666 : denoteGraph_ringAttn pm initPM 7666
+      = (pm.nodes.take 194).foldl (applyNodeRingAttn pm) initPM 7666 := by
+    rw [denoteGraph_ringAttn]
+    exact foldl_prefix_ring_g12 pm pm.nodes initPM 7666 194 (by native_decide) (by native_decide)
+  have hlast194 : ((pm.nodes.take 194).foldl (applyNodeRingAttn pm) initPM 7666).shape.reverse.head? = some 64 := by
+    rw [← hpre7666, hs7666]; rfl
+  exact ⟨hSMeq, hs4762sm, hs7665, hs7666, hlastSM, hlast193, hlast194⟩
+
+/-- 4763 — `FW_topk_routing` routing_probs (`.fst`), token-sharded 2-tp. -/
+theorem recon_intermediateGoal_4763_ringAttn (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4763
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  obtain ⟨hSMeq, hs4762sm, hs7665, hs7666, hlastSM, hlast193, hlast194⟩ :=
+    moe_topk_common_L2 initSM initPM hSM hPM hInit hWF
+  have hnr : pm.numRanks = 2 := rfl
+  have rSM : denoteGraph_ringAttn sm initSM 4763
+      = (fw_topk_routing (denoteGraph_ringAttn sm initSM 4762) 8 64).1 :=
+    ringAttn_reduce1_at_pm sm initSM 66
+      { rank := 0, op := "OpName.FW_topk_routing", ins := [4762], outs := [4763, 4764, 4765], params := [8, 1] }
+      4762 4763 (fun t => (fw_topk_routing t 8 64).1) (by native_decide) (by native_decide)
+      (by decide) (by decide)
+      (applyNode_topk81_fst sm ((sm.nodes.take 66).foldl (applyNodeRingAttn sm) initSM) 0 4762 4763 4764 4765 hlastSM)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rP0 : denoteGraph_ringAttn pm initPM 7667
+      = (fw_topk_routing (denoteGraph_ringAttn pm initPM 7665) 8 64).1 :=
+    ringAttn_reduce1_at_pm pm initPM 193
+      { rank := 0, op := "OpName.FW_topk_routing", ins := [7665], outs := [7667, 7669, 7671], params := [8, 1] }
+      7665 7667 (fun t => (fw_topk_routing t 8 64).1) (by native_decide) (by native_decide)
+      (by decide) (by decide)
+      (applyNode_topk81_fst pm ((pm.nodes.take 193).foldl (applyNodeRingAttn pm) initPM) 0 7665 7667 7669 7671 hlast193)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rP1 : denoteGraph_ringAttn pm initPM 7668
+      = (fw_topk_routing (denoteGraph_ringAttn pm initPM 7666) 8 64).1 :=
+    ringAttn_reduce1_at_pm pm initPM 194
+      { rank := 1, op := "OpName.FW_topk_routing", ins := [7666], outs := [7668, 7670, 7672], params := [8, 1] }
+      7666 7668 (fun t => (fw_topk_routing t 8 64).1) (by native_decide) (by native_decide)
+      (by decide) (by decide)
+      (applyNode_topk81_fst pm ((pm.nodes.take 194).foldl (applyNodeRingAttn pm) initPM) 1 7666 7668 7670 7672 hlast194)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hval : denoteGraph_ringAttn sm initSM 4763
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph_ringAttn pm initPM 7667, denoteGraph_ringAttn pm initPM 7668] := by
+    rw [rSM, hSMeq, hnr,
+        fw_topk_routing_fst_allGather0_commute_2_of _ _ 2048 8 64 (by omega) (by omega) hs7665 hs7666,
+        rP0, rP1]
+  have hshape : (denoteGraph_ringAttn sm initSM 4763).shape = [4096, 64] := by
+    rw [rSM]; exact fw_topk_routing_fst_shape _ 8 64 4096 (by rw [hs4762sm]; rfl)
+  have hsp0 : (denoteGraph_ringAttn pm initPM 7667).shape = [2048, 64] := by
+    rw [rP0]; exact fw_topk_routing_fst_shape _ 8 64 2048 (by rw [hs7665]; rfl)
+  have hsp1 : (denoteGraph_ringAttn pm initPM 7668).shape = [2048, 64] := by
+    rw [rP1]; exact fw_topk_routing_fst_shape _ 8 64 2048 (by rw [hs7666]; rfl)
+  exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
+    intermediateGoal_4763 4763 7667 7668 [4096, 64] [2048, 64]
+    rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
+
+/-- 4764 — `FW_topk_routing` routing_map (`.snd.fst`), token-sharded 2-tp. -/
+theorem recon_intermediateGoal_4764_ringAttn (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4764
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  obtain ⟨hSMeq, hs4762sm, hs7665, hs7666, hlastSM, hlast193, hlast194⟩ :=
+    moe_topk_common_L2 initSM initPM hSM hPM hInit hWF
+  have hnr : pm.numRanks = 2 := rfl
+  have rSM : denoteGraph_ringAttn sm initSM 4764
+      = (fw_topk_routing (denoteGraph_ringAttn sm initSM 4762) 8 64).2.1 :=
+    ringAttn_reduce1_at_pm sm initSM 66
+      { rank := 0, op := "OpName.FW_topk_routing", ins := [4762], outs := [4763, 4764, 4765], params := [8, 1] }
+      4762 4764 (fun t => (fw_topk_routing t 8 64).2.1) (by native_decide) (by native_decide)
+      (by decide) (by decide)
+      (applyNode_topk81_snd sm ((sm.nodes.take 66).foldl (applyNodeRingAttn sm) initSM) 0 4762 4763 4764 4765 (by decide) hlastSM)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rP0 : denoteGraph_ringAttn pm initPM 7669
+      = (fw_topk_routing (denoteGraph_ringAttn pm initPM 7665) 8 64).2.1 :=
+    ringAttn_reduce1_at_pm pm initPM 193
+      { rank := 0, op := "OpName.FW_topk_routing", ins := [7665], outs := [7667, 7669, 7671], params := [8, 1] }
+      7665 7669 (fun t => (fw_topk_routing t 8 64).2.1) (by native_decide) (by native_decide)
+      (by decide) (by decide)
+      (applyNode_topk81_snd pm ((pm.nodes.take 193).foldl (applyNodeRingAttn pm) initPM) 0 7665 7667 7669 7671 (by decide) hlast193)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rP1 : denoteGraph_ringAttn pm initPM 7670
+      = (fw_topk_routing (denoteGraph_ringAttn pm initPM 7666) 8 64).2.1 :=
+    ringAttn_reduce1_at_pm pm initPM 194
+      { rank := 1, op := "OpName.FW_topk_routing", ins := [7666], outs := [7668, 7670, 7672], params := [8, 1] }
+      7666 7670 (fun t => (fw_topk_routing t 8 64).2.1) (by native_decide) (by native_decide)
+      (by decide) (by decide)
+      (applyNode_topk81_snd pm ((pm.nodes.take 194).foldl (applyNodeRingAttn pm) initPM) 1 7666 7668 7670 7672 (by decide) hlast194)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hval : denoteGraph_ringAttn sm initSM 4764
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph_ringAttn pm initPM 7669, denoteGraph_ringAttn pm initPM 7670] := by
+    rw [rSM, hSMeq, hnr,
+        fw_topk_routing_snd_fst_allGather0_commute_2_of _ _ 2048 8 64 (by omega) (by omega) hs7665 hs7666,
+        rP0, rP1]
+  have hshape : (denoteGraph_ringAttn sm initSM 4764).shape = [4096, 64] := by
+    rw [rSM]; exact fw_topk_routing_snd_shape _ 8 64 4096 (by rw [hs4762sm]; rfl)
+  have hsp0 : (denoteGraph_ringAttn pm initPM 7669).shape = [2048, 64] := by
+    rw [rP0]; exact fw_topk_routing_snd_shape _ 8 64 2048 (by rw [hs7665]; rfl)
+  have hsp1 : (denoteGraph_ringAttn pm initPM 7670).shape = [2048, 64] := by
+    rw [rP1]; exact fw_topk_routing_snd_shape _ 8 64 2048 (by rw [hs7666]; rfl)
+  exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
+    intermediateGoal_4764 4764 7669 7670 [4096, 64] [2048, 64]
+    rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
+
 end TrainVerify.Denote.GeneratedPatterns
