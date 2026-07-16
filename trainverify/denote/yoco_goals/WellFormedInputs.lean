@@ -52,6 +52,22 @@ structure WellFormed_YOCOMoE_A04B (initSM initPM : Store) : Prop where
   wf4822_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 7856) 2048 64 32 64
   wf4876_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 8041) 2048 64 0 32
   wf4876_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 8042) 2048 64 32 64
+  wf4930_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 8227) 2048 64 0 32
+  wf4930_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 8228) 2048 64 32 64
+  wf4984_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 8413) 2048 64 0 32
+  wf4984_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 8414) 2048 64 32 64
+  wf5038_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 8599) 2048 64 0 32
+  wf5038_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 8600) 2048 64 32 64
+  wf5092_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 8785) 2048 64 0 32
+  wf5092_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 8786) 2048 64 32 64
+  wf5146_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 8971) 2048 64 0 32
+  wf5146_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 8972) 2048 64 32 64
+  wf5200_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 9157) 2048 64 0 32
+  wf5200_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 9158) 2048 64 32 64
+  wf5254_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 9343) 2048 64 0 32
+  wf5254_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 9344) 2048 64 32 64
+  wf5308_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 9529) 2048 64 0 32
+  wf5308_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 9530) 2048 64 32 64
   wf4750_hveq4746 : denoteGraph_ringAttn sm initSM 4746 = denoteGraph_ringAttn pm initPM 4746
   wf4750_hveq4747 : denoteGraph_ringAttn sm initSM 4747 = denoteGraph_ringAttn pm initPM 4747
   wf4750_hveq4744 : denoteGraph_ringAttn sm initSM 4744 = denoteGraph_ringAttn pm initPM 4744
@@ -254,7 +270,7 @@ structure WellFormed_YOCOMoE_A04B (initSM initPM : Store) : Prop where
 /-- Consistency witness for the routing-locality family: the all-zero routing
     map satisfies both per-rank expert-locality constraints simultaneously.
     This witnesses satisfiability of *every* per-layer routing-locality field
-    (`wf4714_hdisjA/B`, `wf4768_hdisjA/B`, `wf4822_hdisjA/B`, `wf4876_hdisjA/B`, …): each is an instance of
+    (`wf4714_hdisjA/B`, `wf4768_hdisjA/B`, `wf4822_hdisjA/B`, `wf4876_hdisjA/B`, `wf4930_hdisjA/B`, …): each is an instance of
     `routing_map_local _ 2048 64 0 32` or `routing_map_local _ 2048 64 32 64`,
     both discharged here by the zero-tensor baseline. -/
 theorem WellFormed_routing_witness :
