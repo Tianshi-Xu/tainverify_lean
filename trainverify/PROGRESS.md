@@ -1188,12 +1188,28 @@ reconstruct is therefore driven through the rank-1 node and its rank-1 intermedi
 multiref tids.  Values remain rank-independent (rank-1 RMSNorm reads the same global
 gather; per-head/cast chains use replicated weights).  Closed by `wrap_1tp_gen`.
 
-Still open on this boundary: `5338 / 5340 / 5342` route through `FW_maybe_shuffle`
-(new op) and stay genuinely 2-tp sharded (PM tids `9655/9656`, `9657/9658`,
-`9659/9660`); they need a fidelity-checked maybe_shuffle gear (deferred).
+### L12 boundary maybe-shuffle branch (`denote/yoco_goals/L12MaybeShuffle.lean`)
+Closed the remaining 3 genuinely 2-tp sharded boundary goals `5338 / 5340 / 5342`
+(PM tids `9655/9656`, `9657/9658`, `9659/9660`), so the **L12 boundary tail is now
+fully closed**:
+- `5338 = FW_maybe_shuffle(mref₁(5330), 5337)`.  `fw_maybe_shuffle` is Denote-faithful
+  identity on the data tensor (`Denote.lean:1235`, audited against Python
+  `wrap_maybe_shuffle`; the varlen zigzag permutation is cross-rank-invisible), and
+  commutes with dim-0 sharding via the existing `fw_maybe_shuffle_allGather0_commute_2`.
+  So `5338` is `5330` re-sharded.  The CP metadata differs SM `[1,0]` vs PM
+  `[2,0]/[2,1]`, which is irrelevant precisely because the op ignores it.
+- `5340 = FW_rms_norm(mref₀(5338), 5339)` — identical template to periodic `5299`,
+  backed by `fw_rms_norm_allGather0_commute_2`.
+- `5342 = FW_per_head(5340, 5341)` (16-head Q path) — backed by
+  `fw_per_head_mix_precision_linear_allGather0_commute_2`.
+All via `wrap_2tp_allGather_gen`.  No new gears or Denote changes were required —
+the maybe_shuffle op and all three commute lemmas already existed and are reused
+verbatim; the only novelty is applying `fw_maybe_shuffle`'s existing identity
+semantics at this boundary.
 
 ### Effective count
-453 + 32 (periodic bulk) + 5 (replicated boundary) = **490 / 1151**.
+453 + 32 (periodic bulk) + 5 (replicated boundary) + 3 (maybe-shuffle branch)
+= **493 / 1151**.  **L12 (the last MoE layer) is fully closed.**
 
 ### Axiom audit
 `#print axioms` on `recon_intermediateGoal_5308_ringAttn` (all2all),
@@ -1201,8 +1217,14 @@ Still open on this boundary: `5338 / 5340 / 5342` route through `FW_maybe_shuffl
 Quot.sound` and `_native.native_decide.ax_*`.  Zero sorry / sorryAx / admit / user axioms.
 
 ### Remaining frontier (ranked)
-1. `FW_maybe_shuffle` boundary branch `5338/5340/5342` — needs a maybe_shuffle
-   allGather-commute gear + Denote-fidelity audit of `FW_maybe_shuffle` (params
-   SM `[1,0]` vs PM `[2,0]/[2,1]`).
-2. Post-transformer / global-output obligations after `5344` (cross-decoder cast
-   fan-out, final norm, LM head/logits, loss/backward/global outputs).
+1. **YOCO cross-decoder — 12 periodic layers (stride +49), the large prize.**
+   Starting at `5347` the graph has 12 repeating cross-decoder layers
+   (`5347→5396→5445`, +49 tid) that consume the global KV cache `5343/5344`.
+   Each layer is a full MoE block (norm/topk-routing/all2all-gmm/swiglu/residual
+   + per-head Q + cast).  The `FW_attn_zigzag` heads are already proven via
+   `ZigzagReconstruction`; the ~40 remaining ops/layer × 12 ≈ 480 goals would be
+   the highest-impact block.  Requires hand-reconstructing ONE cross-decoder layer
+   (new ops in the reconstruction position: `FW_all2all_moe_gmm`, `FW_swiglu`,
+   `FW_norm_linear`, `FW_topk_routing`, `FW_sigmoid`) then extrapolating ×12.
+2. Post-transformer / global output after the cross-decoder (final norm, LM
+   head/logits, loss/backward/global outputs).
