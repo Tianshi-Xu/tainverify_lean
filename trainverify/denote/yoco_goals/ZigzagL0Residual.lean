@@ -335,4 +335,184 @@ theorem recon_intermediateGoal_5359_ringAttn (initSM initPM : Store)
     intermediateGoal_5359 5359 9729 9730 [4096, 64] [2048, 64]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
+/-- 5366 — `FW_reshape(mref₂(5356))` `[4096,1024]→[4096,1024]` (SM node 516).
+    Identity reshape of the expert-input branch read from position 2 of the 5-way
+    residual multiref; reconstructs via the row-preserving view commute. -/
+theorem recon_intermediateGoal_5366_ringAttn (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_5366
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  have hnr : pm.numRanks = 2 := rfl
+  obtain ⟨hg56, hs9721, hs9722⟩ := twoTp_gather _ _ intermediateGoal_5356 5356 9721 9722
+    [2048, 1024] rfl rfl rfl rfl rfl (by decide)
+    (recon_intermediateGoal_5356_ringAttn initSM initPM hSM hPM hInit hWF)
+  have s8166 : denoteGraph_ringAttn sm initSM 8166 = id (denoteGraph_ringAttn sm initSM 5356) :=
+    ringAttn_reduce1_pm_opaque sm initSM 514
+      { rank := 0, op := "OpName.FW_multiref", ins := [5356], outs := [8158, 8162, 8166, 8170, 8174], params := [5] }
+      5356 8166 id (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref5_at_pos2_out sm s 0 5356 8158 8162 8166 8170 8174 (by decide) (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p16012 : denoteGraph_ringAttn pm initPM 16012 = id (denoteGraph_ringAttn pm initPM 9721) :=
+    ringAttn_reduce1_pm_opaque pm initPM 1090
+      { rank := 0, op := "OpName.FW_multiref", ins := [9721], outs := [16004, 16008, 16012, 16016, 16020], params := [5] }
+      9721 16012 id (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref5_at_pos2_out pm s 0 9721 16004 16008 16012 16016 16020 (by decide) (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p16035 : denoteGraph_ringAttn pm initPM 16035 = id (denoteGraph_ringAttn pm initPM 9722) :=
+    ringAttn_reduce1_pm_opaque pm initPM 1091
+      { rank := 1, op := "OpName.FW_multiref", ins := [9722], outs := [16027, 16031, 16035, 16039, 16043], params := [5] }
+      9722 16035 id (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref5_at_pos2_out pm s 1 9722 16027 16031 16035 16039 16043 (by decide) (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at s8166 p16012 p16035
+  have rSM : denoteGraph_ringAttn sm initSM 5366
+      = fw_view [4096, 1024] (denoteGraph_ringAttn sm initSM 8166) :=
+    ringAttn_reshape_reduce_g12 sm initSM 516 0 8166 5366 [4096, 1024] (by native_decide)
+      (by native_decide) (by decide) (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide)
+  have rP0 : denoteGraph_ringAttn pm initPM 9743
+      = fw_view [2048, 1024] (denoteGraph_ringAttn pm initPM 16012) :=
+    ringAttn_reshape_reduce_g12 pm initPM 1093 0 16012 9743 [2048, 1024] (by native_decide)
+      (by native_decide) (by decide) (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide)
+  have rP1 : denoteGraph_ringAttn pm initPM 9744
+      = fw_view [2048, 1024] (denoteGraph_ringAttn pm initPM 16035) :=
+    ringAttn_reshape_reduce_g12 pm initPM 1097 1 16035 9744 [2048, 1024] (by native_decide)
+      (by native_decide) (by decide) (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide)
+  have hval : denoteGraph_ringAttn sm initSM 5366
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph_ringAttn pm initPM 9743, denoteGraph_ringAttn pm initPM 9744] := by
+    rw [rSM, s8166, hg56, hnr,
+        fw_view_allGather0_commute_2_of _ _ 2048 1024 (by decide) hs9721 hs9722,
+        ← p16012, ← p16035, ← rP0, ← rP1]
+  have hsp0 : (denoteGraph_ringAttn pm initPM 9743).shape = [2048, 1024] := by rw [rP0]; rfl
+  have hsp1 : (denoteGraph_ringAttn pm initPM 9744).shape = [2048, 1024] := by rw [rP1]; rfl
+  have hshape : (denoteGraph_ringAttn sm initSM 5366).shape = [4096, 1024] := by rw [rSM]; rfl
+  exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
+    intermediateGoal_5366 5366 9743 9744 [4096, 1024] [2048, 1024]
+    rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
+
+/-- 5371 — `FW_reshape(mref₃(5356))` `[4096,1024]→[4096,1024]` (SM node 517).
+    Identity reshape of the second expert-input branch (position 3 of the 5-way
+    residual multiref). -/
+theorem recon_intermediateGoal_5371_ringAttn (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_5371
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  have hnr : pm.numRanks = 2 := rfl
+  obtain ⟨hg56, hs9721, hs9722⟩ := twoTp_gather _ _ intermediateGoal_5356 5356 9721 9722
+    [2048, 1024] rfl rfl rfl rfl rfl (by decide)
+    (recon_intermediateGoal_5356_ringAttn initSM initPM hSM hPM hInit hWF)
+  have s8170 : denoteGraph_ringAttn sm initSM 8170 = id (denoteGraph_ringAttn sm initSM 5356) :=
+    ringAttn_reduce1_pm_opaque sm initSM 514
+      { rank := 0, op := "OpName.FW_multiref", ins := [5356], outs := [8158, 8162, 8166, 8170, 8174], params := [5] }
+      5356 8170 id (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref5_at_pos3_out sm s 0 5356 8158 8162 8166 8170 8174 (by decide) (by decide) (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p16016 : denoteGraph_ringAttn pm initPM 16016 = id (denoteGraph_ringAttn pm initPM 9721) :=
+    ringAttn_reduce1_pm_opaque pm initPM 1090
+      { rank := 0, op := "OpName.FW_multiref", ins := [9721], outs := [16004, 16008, 16012, 16016, 16020], params := [5] }
+      9721 16016 id (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref5_at_pos3_out pm s 0 9721 16004 16008 16012 16016 16020 (by decide) (by decide) (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p16039 : denoteGraph_ringAttn pm initPM 16039 = id (denoteGraph_ringAttn pm initPM 9722) :=
+    ringAttn_reduce1_pm_opaque pm initPM 1091
+      { rank := 1, op := "OpName.FW_multiref", ins := [9722], outs := [16027, 16031, 16035, 16039, 16043], params := [5] }
+      9722 16039 id (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref5_at_pos3_out pm s 1 9722 16027 16031 16035 16039 16043 (by decide) (by decide) (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at s8170 p16016 p16039
+  have rSM : denoteGraph_ringAttn sm initSM 5371
+      = fw_view [4096, 1024] (denoteGraph_ringAttn sm initSM 8170) :=
+    ringAttn_reshape_reduce_g12 sm initSM 517 0 8170 5371 [4096, 1024] (by native_decide)
+      (by native_decide) (by decide) (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide)
+  have rP0 : denoteGraph_ringAttn pm initPM 9757
+      = fw_view [2048, 1024] (denoteGraph_ringAttn pm initPM 16016) :=
+    ringAttn_reshape_reduce_g12 pm initPM 1094 0 16016 9757 [2048, 1024] (by native_decide)
+      (by native_decide) (by decide) (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide)
+  have rP1 : denoteGraph_ringAttn pm initPM 9758
+      = fw_view [2048, 1024] (denoteGraph_ringAttn pm initPM 16039) :=
+    ringAttn_reshape_reduce_g12 pm initPM 1098 1 16039 9758 [2048, 1024] (by native_decide)
+      (by native_decide) (by decide) (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide)
+  have hval : denoteGraph_ringAttn sm initSM 5371
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph_ringAttn pm initPM 9757, denoteGraph_ringAttn pm initPM 9758] := by
+    rw [rSM, s8170, hg56, hnr,
+        fw_view_allGather0_commute_2_of _ _ 2048 1024 (by decide) hs9721 hs9722,
+        ← p16016, ← p16039, ← rP0, ← rP1]
+  have hsp0 : (denoteGraph_ringAttn pm initPM 9757).shape = [2048, 1024] := by rw [rP0]; rfl
+  have hsp1 : (denoteGraph_ringAttn pm initPM 9758).shape = [2048, 1024] := by rw [rP1]; rfl
+  have hshape : (denoteGraph_ringAttn sm initSM 5371).shape = [4096, 1024] := by rw [rSM]; rfl
+  exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
+    intermediateGoal_5371 5371 9757 9758 [4096, 1024] [2048, 1024]
+    rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
+
+/-- 5375 — `FW_reshape(mref₄(5356))` `[4096,1024]→[4096,1024]` (SM node 518).
+    Identity reshape of the third expert-input branch (position 4 of the 5-way
+    residual multiref). -/
+theorem recon_intermediateGoal_5375_ringAttn (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_5375
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  have hnr : pm.numRanks = 2 := rfl
+  obtain ⟨hg56, hs9721, hs9722⟩ := twoTp_gather _ _ intermediateGoal_5356 5356 9721 9722
+    [2048, 1024] rfl rfl rfl rfl rfl (by decide)
+    (recon_intermediateGoal_5356_ringAttn initSM initPM hSM hPM hInit hWF)
+  have s8174 : denoteGraph_ringAttn sm initSM 8174 = id (denoteGraph_ringAttn sm initSM 5356) :=
+    ringAttn_reduce1_pm_opaque sm initSM 514
+      { rank := 0, op := "OpName.FW_multiref", ins := [5356], outs := [8158, 8162, 8166, 8170, 8174], params := [5] }
+      5356 8174 id (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref5_at_pos4_out sm s 0 5356 8158 8162 8166 8170 8174 (by decide) (by decide) (by decide) (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p16020 : denoteGraph_ringAttn pm initPM 16020 = id (denoteGraph_ringAttn pm initPM 9721) :=
+    ringAttn_reduce1_pm_opaque pm initPM 1090
+      { rank := 0, op := "OpName.FW_multiref", ins := [9721], outs := [16004, 16008, 16012, 16016, 16020], params := [5] }
+      9721 16020 id (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref5_at_pos4_out pm s 0 9721 16004 16008 16012 16016 16020 (by decide) (by decide) (by decide) (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p16043 : denoteGraph_ringAttn pm initPM 16043 = id (denoteGraph_ringAttn pm initPM 9722) :=
+    ringAttn_reduce1_pm_opaque pm initPM 1091
+      { rank := 1, op := "OpName.FW_multiref", ins := [9722], outs := [16027, 16031, 16035, 16039, 16043], params := [5] }
+      9722 16043 id (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_multiref5_at_pos4_out pm s 1 9722 16027 16031 16035 16039 16043 (by decide) (by decide) (by decide) (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at s8174 p16020 p16043
+  have rSM : denoteGraph_ringAttn sm initSM 5375
+      = fw_view [4096, 1024] (denoteGraph_ringAttn sm initSM 8174) :=
+    ringAttn_reshape_reduce_g12 sm initSM 518 0 8174 5375 [4096, 1024] (by native_decide)
+      (by native_decide) (by decide) (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide)
+  have rP0 : denoteGraph_ringAttn pm initPM 9775
+      = fw_view [2048, 1024] (denoteGraph_ringAttn pm initPM 16020) :=
+    ringAttn_reshape_reduce_g12 pm initPM 1095 0 16020 9775 [2048, 1024] (by native_decide)
+      (by native_decide) (by decide) (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide)
+  have rP1 : denoteGraph_ringAttn pm initPM 9776
+      = fw_view [2048, 1024] (denoteGraph_ringAttn pm initPM 16043) :=
+    ringAttn_reshape_reduce_g12 pm initPM 1099 1 16043 9776 [2048, 1024] (by native_decide)
+      (by native_decide) (by decide) (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide)
+  have hval : denoteGraph_ringAttn sm initSM 5375
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph_ringAttn pm initPM 9775, denoteGraph_ringAttn pm initPM 9776] := by
+    rw [rSM, s8174, hg56, hnr,
+        fw_view_allGather0_commute_2_of _ _ 2048 1024 (by decide) hs9721 hs9722,
+        ← p16020, ← p16043, ← rP0, ← rP1]
+  have hsp0 : (denoteGraph_ringAttn pm initPM 9775).shape = [2048, 1024] := by rw [rP0]; rfl
+  have hsp1 : (denoteGraph_ringAttn pm initPM 9776).shape = [2048, 1024] := by rw [rP1]; rfl
+  have hshape : (denoteGraph_ringAttn sm initSM 5375).shape = [4096, 1024] := by rw [rSM]; rfl
+  exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
+    intermediateGoal_5375 5375 9775 9776 [4096, 1024] [2048, 1024]
+    rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
+
 end TrainVerify.Denote.GeneratedPatterns
