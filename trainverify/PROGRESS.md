@@ -1216,15 +1216,64 @@ semantics at this boundary.
 `_5332_` (boundary rms), `_5344_` (boundary cast): only `propext, Classical.choice,
 Quot.sound` and `_native.native_decide.ax_*`.  Zero sorry / sorryAx / admit / user axioms.
 
-### Remaining frontier (ranked)
-1. **YOCO cross-decoder — 12 periodic layers (stride +49), the large prize.**
-   Starting at `5347` the graph has 12 repeating cross-decoder layers
-   (`5347→5396→5445`, +49 tid) that consume the global KV cache `5343/5344`.
-   Each layer is a full MoE block (norm/topk-routing/all2all-gmm/swiglu/residual
-   + per-head Q + cast).  The `FW_attn_zigzag` heads are already proven via
-   `ZigzagReconstruction`; the ~40 remaining ops/layer × 12 ≈ 480 goals would be
-   the highest-impact block.  Requires hand-reconstructing ONE cross-decoder layer
-   (new ops in the reconstruction position: `FW_all2all_moe_gmm`, `FW_swiglu`,
-   `FW_norm_linear`, `FW_topk_routing`, `FW_sigmoid`) then extrapolating ×12.
-2. Post-transformer / global output after the cross-decoder (final norm, LM
-   head/logits, loss/backward/global outputs).
+### Remaining frontier (ranked) — full analysis (W24)
+
+The corrected coverage metric is **493 / 1151** unique `intermediateGoal` tids proven
+(regex must match `recon_intermediateGoal_<tid>` with OR without a `_suffix`; the L1
+entry goals `4681/4683/4685/4687/4689/4692/4693` use the bare form and are already
+proven via `recon_ringAttn_of_plain`).  All 658 remaining goals are the **YOCO
+cross-decoder + its tail** — one contiguous frontier, `5348 … 8603`.  There is no
+small isolated gap left to pick off; the whole remainder is the cross-decoder.
+
+**1. YOCO cross-decoder — 12 periodic layers (stride +49 tid, +35 SM node), ~480 goals.**
+   Layer-0 goal ids `5348..5391` (~40 goals); layer L = layer0 + 49·L for L=0..11
+   (`5347→5396→5445→…`).  Each layer is a zigzag-attention MoE block.  Per-layer op
+   sequence (SM nodes 505..539 for L0), in topological order:
+   `FW_attn_zigzag(5347)` → `reshape(5348,5349)` → `mix_precision_linear(5351)` →
+   `view(5352)` → `float(5353)` → `add(5354)` [residual] → `rms_norm(5356)` →
+   `float(5357)` → `reshape(5366,5371,5375)` → `norm_linear(5359)` →
+   `mix_precision_linear(5368,5373,5377)` → `topk_routing(5360,5361)` →
+   `view(5369,5374,5378)` → `all2all_moe_gmm(5365)` → `sigmoid(5370)` →
+   `swiglu(5379)` → `reshape(5380)` → `mix_precision_linear(5382)` → `view(5383)` →
+   `mul(5384)` → `add(5385)` → `float(5386)` → `add(5387)` [residual] →
+   `rms_norm(5389)` → `per_head(5391)` → next zigzag `attn_zigzag(5396)`.
+   ALL these ops already have gears (`applyNode_fw_{norm_linear,topk_routing_*,
+   all2all_moe_gmm_*,sigmoid,swiglu,mul,reshape,view,float,add,rms_norm,
+   per_head_mix_precision_linear}_out`) reused verbatim from the L2–L12 main-decoder
+   reconstruction; no NEW op infrastructure is needed for the MoE body.
+
+   **KEY UNLOCK (found by W24):** the zigzag entry `5347` is currently proven only
+   *conditionally* — `ZigzagReconstruction.recon_intermediateGoal_5347_ringAttn_of_qkv`
+   takes hypotheses `hq_full : (take 505 sm) 5342 = allGather0[pm 9659, pm 9660]`,
+   `hk_repl : sm 5343 = pm 5343`, `hv_repl : sm 5344 = pm 5344`, plus shard shapes.
+   **These are EXACTLY the L12-boundary goals W24 just proved:** `L12MaybeShuffle`'s
+   `5342` `hval` is verbatim `hq_full` (gather over pm `9659/9660`, shard shapes
+   `[2048,16,64]`), and `L12BoundaryTail`'s `5343/5344` give `hk_repl/hv_repl` +
+   shapes `[4096,4,64]`.  So an **unconditional** `recon_intermediateGoal_5347_ringAttn`
+   is now assemblable from W24's results (bridge full-fold `denoteGraph_ringAttn`
+   ↔ prefix-fold `(take 505/1072)` via `foldl_prefix_eq_full_ringAttn'`; both writers
+   are < node 505 / 1072).  Once 5347 is unconditional, `5348` (reshape) and the rest
+   of layer-0 follow the `recon_intermediateGoal_4697_ringAttn` post-attention
+   template (`ringAttn_reshape_reduce_g12` + `wrap_2tp_allGather_gen`), and layer L
+   extrapolates by the constant +49/+35 delta (native_decide-validated per node).
+
+   **REMAINING BLOCKER for the unconditional 5347:** the CP zigzag gear
+   `recon_attn_zigzag_2tp_layer_cp` *also* requires
+   `h_bound : ∀ t, (decodeCuSeqlens (pm 5346)).getD (t+1) 0 ≤ 4096` and two
+   `fw_attn_varlen … .shape = [2*2048,16,64]` facts.  `hfull_shape` is dischargeable
+   via `fw_attn_varlen_shape_p3` (as the sliding-window layers do), but `h_bound`
+   depends on the *value* of the cuseqlens init leaf `pm 5346` and is NOT
+   native_decide-able over a symbolic store.  The main-decoder sliding-window path
+   never needed it (fixed window, gear takes no bound).  Discharging it faithfully
+   needs a NEW positive `WellFormed_YOCOMoE_A04B` field asserting the harness
+   cuseqlens are bounded by the max sequence length (4096) — a legitimate structural
+   harness fact, NOT goal-shaped — plus a matching extension of the zero-tensor
+   consistency witness (`decodeCuSeqlens 0 = [0]`, `getD (t+1) 0 = 0 ≤ 4096`
+   trivially).  This is the exact next task and unlocks all ~480 cross-decoder goals.
+
+**2. Cross-decoder multiref/expert tail** `7404..7976`, `7987..8603` — the `7xxx/8xxx`
+   multiref fan-outs and expert-branch intermediates of the same 12 layers; they
+   reconstruct alongside their layer once the body above is done.
+
+**3. Post-transformer / global output** after the cross-decoder (final norm, LM
+   head/logits, loss/backward/global outputs) — the graph tail beyond `~5930`.
