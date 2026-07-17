@@ -1367,3 +1367,78 @@ counted but is now faithful rather than smuggled).
    Pattern_3 already carries per-layer commute lemmas (`sm_pm_reshape_float_5402`
    etc.), so the assembly is mechanical once layer 0 is complete.
 4. **7xxx/8xxx multiref/expert fan-outs** of each layer.
+
+---
+
+## Worker #26 — layer-0 body, all2all, K/V casts, and faithful `5396`
+
+Continuous campaign from W25 baseline HEAD `796c9afc` (498/1151).
+
+### Commits pushed to `origin/intermediate-goals-recon`
+- `ad5ec652` — **8143** reconstruction (root-cause: SM multiref alias of the
+  proven L12 boundary `5338`; the sibling index-0 output `8139` was already
+  consumed by W24's `5340`). NOT the deep `FW_per_head_mix_precision_linear(14926,4901)`
+  branch that W25 hypothesised — a structural multiref alias sufficed.
+- `6043ab06`,`535386f5` — spine `5354`/`5356`/`5357`/`5359`.
+- `568bb203` — expert reshapes `5366`/`5371`/`5375`.
+- `f745182d` — expert branch `5368`,`5369`,`5370`,`5373`,`5374`,`5377`,`5378`,
+  `5379`,`5380`,`5382`,`5383`,`5384`.
+- `b68de26f` — topk `5360`/`5361` (routing probs/map).
+- `d191ec4c` — all2all MoE gmm `5365` (template = L12 `5308`; added genuine
+  harness fields `wf5365_hdisjA/B`, routing-locality class of `wf5308_hdisjA/B`,
+  covered by `WellFormed_routing_witness`).
+- `ec658120` — residual tail `8151`/`5385`/`5386`/`5387`.
+- `c68d36fb` — RMSNorm `5389` + per-head Q `5391`.
+- `fcb9cfcd` — next-block K/V casts `5392`/`5393` (`FW_to(mref-pos1₁₂(5334/5336))`;
+  new generic gear `applyNode_fw_multiref_second_out'`).
+- `1a63236f` — **de-smuggle `5396`** (fidelity fix, no count change).
+
+### 8143 dependency audit (root-cause classification)
+`8143 = mref₁(5338)` (SM node 474) — case (1): a fan-out/multiref alias of an
+already-reconstructed L12 boundary value (`5338`). No new topological proofs
+below it were required; the "deep `14926` lineage" hypothesis was rejected by the
+source-derived DAG.
+
+### Layer-0 completion (5354..5396)
+Every `intermediateGoal` def in `5354..5396` now has a reconstruction theorem
+(spine, topk, all2all, expert body, residual tail, RMSNorm, per-head Q, K/V
+casts, and the zigzag entry `5396`). `5397/5398` begin layer 1 (out of scope).
+
+### Goal-shaped WF fields removed/replaced (fidelity)
+- `recon_intermediateGoal_5396_ringAttn` was **smuggled** through 10 goal-shaped
+  fields (`wf5396_hq_full/hk_repl/hv_repl/hq_sm/hk_sm/hv_sm/hk_shape/hv_shape/
+  hfull_shape/hfull_shape'`). All 10 removed; the theorem is re-proved faithfully
+  in `ZigzagL0Residual` from the reconstructed goals `5391` (2-tp Q gather over
+  PM `9835`/`9836`), `5392`/`5393` (replicated K/V), bridged full↔prefix via
+  `foldl_prefix_eq_full_ringAttn'`, shapes via `fw_attn_varlen_shape_p3`.
+- Only genuine harness invariant kept: `wf5396_hcuseq_bound` (cu-seqlens upper
+  bound on pure-init leaf `5395`), positive/reusable, satisfiable via
+  `WellFormed_cuseqlens_witness` (same class as W25's `wf5347_hcuseq_bound`).
+
+### New gears / WF changes
+- `applyNode_fw_multiref_second_out'` (ZigzagL0Residual): generic positional
+  extractor for the *second* output of an `FW_multiref` of any fan-out ≥2,
+  needed for the 12-way global-KV multirefs (pos1). Faithful: proved directly
+  from `evalOp_fw_multiref`/`storeSet`.
+- `wf5365_hdisjA/B` added (routing-locality, genuine harness invariant).
+- Denote changes: NONE.
+
+### Effective count
+**529 / 1151** (baseline 498; +31 new tids this campaign). Additionally, `5396`
+was **made faithful** (previously counted while smuggled) — reported separately,
+no double count.
+
+### Axiom audit
+`#print axioms` on `recon_intermediateGoal_5396/5392/5393_ringAttn`: only
+`propext, Classical.choice, Quot.sound` + `_native.native_decide.ax_*`. Zero
+`sorry`/`sorryAx`/`admit`/user axioms.
+
+### Ranked remaining frontier
+1. **Layer 1 entry `5397`/`5398`** and its zigzag body (`5445` is next smuggled
+   entry — de-smuggle once its Q/K/V land), stride +49 tid / +35 SM node.
+2. **Later cross-decoder layers 2..11** — mechanical per-layer template; validate
+   the +49/+35 map against `GeneratedYOCOMoE.lean`, hand-reconstruct at any
+   structural divergence.
+3. **Remaining smuggled zigzag entries** `5445`,`5494`,`5543`,`5592`,… — same
+   de-smuggling pattern as `5396`/`5347` once each layer's Q/K/V are proven.
+4. **7xxx/8xxx multiref/expert fan-outs** of each later layer.
