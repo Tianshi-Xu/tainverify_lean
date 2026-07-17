@@ -68,6 +68,8 @@ structure WellFormed_YOCOMoE_A04B (initSM initPM : Store) : Prop where
   wf5254_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 9344) 2048 64 32 64
   wf5308_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 9529) 2048 64 0 32
   wf5308_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 9530) 2048 64 32 64
+  wf5365_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 9733) 2048 64 0 32
+  wf5365_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 9734) 2048 64 32 64
   wf4750_hveq4746 : denoteGraph_ringAttn sm initSM 4746 = denoteGraph_ringAttn pm initPM 4746
   wf4750_hveq4747 : denoteGraph_ringAttn sm initSM 4747 = denoteGraph_ringAttn pm initPM 4747
   wf4750_hveq4744 : denoteGraph_ringAttn sm initSM 4744 = denoteGraph_ringAttn pm initPM 4744
@@ -269,7 +271,7 @@ structure WellFormed_YOCOMoE_A04B (initSM initPM : Store) : Prop where
 /-- Consistency witness for the routing-locality family: the all-zero routing
     map satisfies both per-rank expert-locality constraints simultaneously.
     This witnesses satisfiability of *every* per-layer routing-locality field
-    (`wf4714_hdisjA/B`, `wf4768_hdisjA/B`, `wf4822_hdisjA/B`, `wf4876_hdisjA/B`, `wf4930_hdisjA/B`, …): each is an instance of
+    (`wf4714_hdisjA/B`, `wf4768_hdisjA/B`, `wf4822_hdisjA/B`, `wf4876_hdisjA/B`, `wf4930_hdisjA/B`, …, `wf5308_hdisjA/B`, `wf5365_hdisjA/B`): each is an instance of
     `routing_map_local _ 2048 64 0 32` or `routing_map_local _ 2048 64 32 64`,
     both discharged here by the zero-tensor baseline. -/
 theorem WellFormed_routing_witness :
