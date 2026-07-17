@@ -1277,3 +1277,93 @@ small isolated gap left to pick off; the whole remainder is the cross-decoder.
 
 **3. Post-transformer / global output** after the cross-decoder (final norm, LM
    head/logits, loss/backward/global outputs) — the graph tail beyond `~5930`.
+
+---
+
+## Worker #25 — Faithful unconditional 5347 + layer-0 cross-decoder spine
+
+Branch head: `845209f7` (parent `d7066794`, baseline `cb65ba6f`).
+
+### Milestone commits (pushed)
+- `d7066794` — **Faithfully close unconditional 5347 zigzag L0 entry.** Removed
+  the 11 smuggled Q/K/V/shape WF fields (`wf5347_hq_full..hfull_shape'`) that W24
+  had planted in `WellFormed_YOCOMoE_A04B`; replaced them with a SINGLE genuine
+  harness field `wf5347_hcuseq_bound : ∀ t, (decodeCuSeqlens (initPM 5346)).getD
+  (t+1) 0 ≤ 4096` (a positive structural fact about the varlen attention mask, not
+  a goal restatement). Added consistency witnesses in `WellFormedInputs.lean`
+  (`scalarToNat_zero`, `decodeCuSeqlens_zeroTensor_le`, `WellFormed_cuseqlens_witness`):
+  the all-zero cu-seqlens tensor decodes to all-zero seqlens, proving the bound
+  from actual `decodeCuSeqlens` semantics. New module `ZigzagL0Entry.lean` proves
+  `recon_intermediateGoal_5347_ringAttn` unconditional-given-WF by DISCHARGING the
+  Q/K/V lineage from W24's proven `5342`/`5343`/`5344`, bridging full folds to the
+  gear's prefix folds (`foldl_prefix_eq_full_ringAttn'`) and the pure-init leaf
+  `5346` (`foldl_applyNodeRingAttn_at_not_written`), then feeding
+  `recon_intermediateGoal_5347_ringAttn_of_qkv`.
+- `845209f7` — **Layer-0 cross-decoder spine 5348–5353.** Post-attention segment,
+  all 2-tp sharded (dim-0 allGather), chained from proven 5347; no new gears.
+
+### WF cuseqlens field + witness (fidelity justification)
+Field: `wf5347_hcuseq_bound : ∀ t, (decodeCuSeqlens (initPM 5346)).getD (t+1) 0 ≤ 4096`.
+This is the ONLY genuine external requirement the zigzag gear needs beyond the
+Q/K/V lineage: the varlen `fw_attn_zigzag` decodes `cu_seqlens_padded` (`5346`) and
+requires per-sequence lengths not to exceed the padded window (4096). It is a
+harness/mask agreement about an INPUT leaf, never mentions `5347` or any goal
+conclusion, and is inhabited (`WellFormed_cuseqlens_witness`, zero-tensor). The
+zero-tensor bound proof is derived from `decodeCuSeqlens` semantics
+(`valAt_zeroTensor` ⇒ `scalarToNat 0 = 0 ≤ 4096`), not assumed.
+
+### Unconditional 5347: CLOSED
+`#print axioms recon_intermediateGoal_5347_ringAttn` (in `ZigzagL0Entry`): only
+`propext, Classical.choice, Quot.sound, _native.native_decide.ax_*`. Zero
+sorry/admit/user axioms. The proof consumes ONLY `hSM/hPM/hInit/hWF` and the
+proven `5342/5343/5344`; the single WF input touched is `wf5347_hcuseq_bound`.
+
+### Layer-0 dependency table (SM idx = line−17, PM idx = line−949)
+| tid  | op (SM)                              | ins        | SM idx | PM shards (idx)         | status |
+|------|--------------------------------------|------------|--------|-------------------------|--------|
+| 5347 | FW_attn_zigzag                       | 5342..5346 | 505    | 9687(1072)/9688(1073)   | ✅ faithful |
+| 5348 | FW_reshape [4096,16,64→4096,1024]    | 5347       | 506    | 9689(1074)/9690(1075)   | ✅ |
+| 5349 | FW_reshape [4096,1024] (id)          | 5348       | 507    | 9695(1076)/9696(1077)   | ✅ |
+| 5351 | FW_mix_precision_linear(·,5350)      | 5349,5350  | 508    | 9699(1078)/9700(1079)   | ✅ |
+| 5352 | FW_view [4096,1024] (id)             | 5351       | 509    | 9709(1080)/9710(1081)   | ✅ |
+| 5353 | FW_float (id cast)                   | 5352       | 510    | 9713(1082)/9714(1083)   | ✅ |
+| 5354 | FW_add (residual)                    | **8143**,5353 | 511 | 9717(1084)/9718(1085)   | ⛔ blocked on 8143 |
+| 5356 | FW_rms_norm                          | 5354,5355  | …      | …                       | ⛔ (needs 5354) |
+| 5359..5387 | MoE routing/experts            | 5357…      | …      | …                       | ⛔ (needs 5356) |
+| 5389 | FW_rms_norm                          | …          | …      | …                       | ⛔ |
+| 5391 | FW_per_head                          | …          | …      | …                       | ⛔ |
+| 5396 | next FW_attn_zigzag (layer 1 entry)  | …          | …      | …                       | ⛔ |
+
+**Blocker root cause:** `5354` residual add needs `8143` = the main-decoder final
+output `FW_per_head_mix_precision_linear(14926, 4901)` (SM node ~1315), whose
+lineage `14926` runs back through the entire main decoder tail. `8143` has no
+reconstruction yet; it is an independent (large) DAG branch, not part of the
+layer-0 spine. Per the campaign rule, green predecessors (5348–5353) are
+committed/pushed and the spine is parked here pending an `8143` reconstruction.
+
+### Effective count
+`grep -rhoE "theorem recon_intermediateGoal_[0-9]+(_[A-Za-z0-9]+)*"` unique tids:
+**498 / 1151** (was 493; +5 new: 5348/5349/5351/5352/5353; 5347 was already
+counted but is now faithful rather than smuggled).
+
+### New modules / gears
+- `ZigzagL0Entry.lean` (new, downstream of `L12MaybeShuffle`+`L12BoundaryTail`):
+  isolates all new `native_decide`-over-`sm`/`pm` assembly so `WellFormedInputs`
+  stays fast. No new gears — every step reuses proven L2–L12 machinery
+  (`ringAttn_reshape_reduce_g12`, `ringAttn_reduce1_pm_opaque`, `ringAttn_reduce2`,
+  `fw_view_allGather0_reshape_16_64_2_g12`, `fw_view_allGather0_commute_2_of`,
+  `fw_mix_precision_linear_allGather0_commute_2`, `veq_weight_ring`,
+  `wrap_2tp_allGather_gen`, `twoTp_gather`, `oneTp_valeq`,
+  `foldl_prefix_eq_full_ringAttn'`).
+- Denote changes: NONE (no fidelity fix required; the model was accurate).
+
+### Ranked remaining frontier
+1. **Reconstruct `8143`** (main-decoder final per-head output) — unblocks the
+   entire rest of layer-0 (5354→5356→MoE 5359..5387→5389→5391→5396). Highest
+   leverage; large (deep `14926` lineage).
+2. **Layer-0 MoE body** (5359..5387) once 5356 lands — routing/experts, reuses
+   L2–L12 MoE gears (`MoEShardedReconstruction`).
+3. **Later cross-decoder layers 1..11** (stride +49 tid) — same spine template;
+   Pattern_3 already carries per-layer commute lemmas (`sm_pm_reshape_float_5402`
+   etc.), so the assembly is mechanical once layer 0 is complete.
+4. **7xxx/8xxx multiref/expert fan-outs** of each layer.
