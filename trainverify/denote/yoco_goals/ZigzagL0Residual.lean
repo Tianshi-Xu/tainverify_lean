@@ -1872,4 +1872,136 @@ theorem recon_intermediateGoal_5393_ringAttn (initSM initPM : Store)
   exact wrap_1tp_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
     intermediateGoal_5393 5393 [4096, 4, 64] rfl rfl rfl rfl rfl rfl hval hshape
 
+/-- **Faithful, de-smuggled layer-0 next-zigzag entry `intermediateGoal_5396`**
+    (Worker #26).  The `_of_qkv` predecessor's Q/K/V lineage hypotheses are now
+    DISCHARGED from the reconstructed goals `5391` (2-tp Q gather over PM
+    `9835`/`9836`, shard `[2048,16,64]`), `5392`/`5393` (replicated K/V casts,
+    `[4096,4,64]`), bridged from full folds to the gear's prefix folds
+    (SM node 540 / PM nodes 1142,1143) via `foldl_prefix_eq_full_ringAttn'`, with
+    output shapes discharged by `fw_attn_varlen_shape_p3`.  The ONLY well-formedness
+    input consumed is the genuine cu-seqlens harness bound `wf5396_hcuseq_bound`
+    on the pure-init leaf `5395`.  Mirrors W25's faithful `5347`. -/
+theorem recon_intermediateGoal_5396_ringAttn (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_5396
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  -- Q lineage from proven 5391 (2-tp gather over pm 9835/9836).
+  obtain ⟨hQval, hQs0, hQs1⟩ := twoTp_gather (denoteGraph_ringAttn sm initSM)
+    (denoteGraph_ringAttn pm initPM) intermediateGoal_5391 5391 9835 9836 [2048, 16, 64]
+    rfl rfl rfl rfl rfl (by decide)
+    (recon_intermediateGoal_5391_ringAttn initSM initPM hSM hPM hInit hWF)
+  have hQshapeSM : (denoteGraph_ringAttn sm initSM 5391).shape = [4096, 16, 64] := by
+    have h := (recon_intermediateGoal_5391_ringAttn initSM initPM hSM hPM hInit hWF).1
+    simpa [intermediateGoal_5391] using h
+  -- K lineage from proven 5392 (replicated).
+  have h5392 := recon_intermediateGoal_5392_ringAttn initSM initPM hSM hPM hInit hWF
+  have hKval : denoteGraph_ringAttn sm initSM 5392 = denoteGraph_ringAttn pm initPM 5392 :=
+    oneTp_valeq intermediateGoal_5392 _ _ 5392 rfl rfl rfl rfl h5392
+  have hKshapeSM : (denoteGraph_ringAttn sm initSM 5392).shape = [4096, 4, 64] := by
+    have h := h5392.1; simpa [intermediateGoal_5392] using h
+  have hKshapePM : (denoteGraph_ringAttn pm initPM 5392).shape = [4096, 4, 64] := by
+    rw [← hKval]; exact hKshapeSM
+  -- V lineage from proven 5393 (replicated).
+  have h5393 := recon_intermediateGoal_5393_ringAttn initSM initPM hSM hPM hInit hWF
+  have hVval : denoteGraph_ringAttn sm initSM 5393 = denoteGraph_ringAttn pm initPM 5393 :=
+    oneTp_valeq intermediateGoal_5393 _ _ 5393 rfl rfl rfl rfl h5393
+  have hVshapeSM : (denoteGraph_ringAttn sm initSM 5393).shape = [4096, 4, 64] := by
+    have h := h5393.1; simpa [intermediateGoal_5393] using h
+  have hVshapePM : (denoteGraph_ringAttn pm initPM 5393).shape = [4096, 4, 64] := by
+    rw [← hVval]; exact hVshapeSM
+  -- Prefix ↔ full bridges (all tids written before SM node 540 / PM nodes 1142,1143).
+  have bSM5391 : (sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM 5391
+      = denoteGraph_ringAttn sm initSM 5391 :=
+    (foldl_prefix_eq_full_ringAttn' sm sm.nodes initSM 5391 540 (by native_decide) (by native_decide)).symm
+  have bSM5392 : (sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM 5392
+      = denoteGraph_ringAttn sm initSM 5392 :=
+    (foldl_prefix_eq_full_ringAttn' sm sm.nodes initSM 5392 540 (by native_decide) (by native_decide)).symm
+  have bSM5393 : (sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM 5393
+      = denoteGraph_ringAttn sm initSM 5393 :=
+    (foldl_prefix_eq_full_ringAttn' sm sm.nodes initSM 5393 540 (by native_decide) (by native_decide)).symm
+  have bPM9835_42 : (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 9835
+      = denoteGraph_ringAttn pm initPM 9835 :=
+    (foldl_prefix_eq_full_ringAttn' pm pm.nodes initPM 9835 1142 (by native_decide) (by native_decide)).symm
+  have bPM9836_42 : (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 9836
+      = denoteGraph_ringAttn pm initPM 9836 :=
+    (foldl_prefix_eq_full_ringAttn' pm pm.nodes initPM 9836 1142 (by native_decide) (by native_decide)).symm
+  have bPM5392_42 : (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5392
+      = denoteGraph_ringAttn pm initPM 5392 :=
+    (foldl_prefix_eq_full_ringAttn' pm pm.nodes initPM 5392 1142 (by native_decide) (by native_decide)).symm
+  have bPM5393_42 : (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5393
+      = denoteGraph_ringAttn pm initPM 5393 :=
+    (foldl_prefix_eq_full_ringAttn' pm pm.nodes initPM 5393 1142 (by native_decide) (by native_decide)).symm
+  have bPM9835_43 : (pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 9835
+      = denoteGraph_ringAttn pm initPM 9835 :=
+    (foldl_prefix_eq_full_ringAttn' pm pm.nodes initPM 9835 1143 (by native_decide) (by native_decide)).symm
+  -- cu-seqlens leaf bridge (5395 is a pure init leaf, never written).
+  have b5395_42 : (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5395 = initPM 5395 :=
+    foldl_applyNodeRingAttn_at_not_written pm (pm.nodes.take 1142) initPM 5395
+      (by native_decide) (by native_decide)
+  -- Assemble the `_of_qkv` hypotheses.
+  have hq_full : (sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM 5391
+      = allGatherPrimDimN 0 2 0
+          [(pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 9835,
+           (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 9836] := by
+    rw [bSM5391, bPM9835_42, bPM9836_42]; exact hQval
+  have hk_repl : (sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM 5392
+      = (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5392 := by
+    rw [bSM5392, bPM5392_42]; exact hKval
+  have hv_repl : (sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM 5393
+      = (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5393 := by
+    rw [bSM5393, bPM5393_42]; exact hVval
+  have hq_sm : 0 < ((sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM 5391).shape.length := by
+    rw [bSM5391, hQshapeSM]; decide
+  have hk_sm : 0 < ((sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM 5392).shape.length := by
+    rw [bSM5392, hKshapeSM]; decide
+  have hv_sm : 0 < ((sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM 5393).shape.length := by
+    rw [bSM5393, hVshapeSM]; decide
+  have hk_shape : ((pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5392).shape
+      = [4096, 4, 64] := by rw [bPM5392_42]; exact hKshapePM
+  have hv_shape : ((pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5393).shape
+      = [4096, 4, 64] := by rw [bPM5393_42]; exact hVshapePM
+  have h_bound : ∀ t, (decodeCuSeqlens
+      ((pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5395)).getD (t + 1) 0 ≤ 4096 := by
+    rw [b5395_42]; exact hWF.wf5396_hcuseq_bound
+  have hsh9835_42 : ((pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 9835).shape
+      = [2048, 16, 64] := by rw [bPM9835_42]; exact hQs0
+  have hsh9835_43 : ((pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 9835).shape
+      = [2048, 16, 64] := by rw [bPM9835_43]; exact hQs0
+  have hfull_shape :
+      (fw_attn_varlen
+        (allGatherPrimDimN 0 2 0
+          [(pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 9835,
+           (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 9836])
+        (allGatherPrimDimN 0 2 0
+          [(pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5392,
+           (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5392])
+        (allGatherPrimDimN 0 2 0
+          [(pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5393,
+           (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5393])
+        ((pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5394)
+        ((pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5395)
+        16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64] := by
+    rw [fw_attn_varlen_shape_p3, allGatherPrimDimN_shape 0 2 _ [2048, 16, 64] (by simp [hsh9835_42])]
+    decide
+  have hfull_shape' :
+      (fw_attn_varlen
+        (allGatherPrimDimN 0 2 0
+          [(pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 9835,
+           (pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 9836])
+        (allGatherPrimDimN 0 2 0
+          [(pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 5392,
+           (pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 5392])
+        (allGatherPrimDimN 0 2 0
+          [(pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 5393,
+           (pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 5393])
+        ((pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 5394)
+        ((pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 5395)
+        16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64] := by
+    rw [fw_attn_varlen_shape_p3, allGatherPrimDimN_shape 0 2 _ [2048, 16, 64] (by simp [hsh9835_43])]
+    decide
+  exact recon_intermediateGoal_5396_ringAttn_of_qkv initSM initPM hInit
+    hq_full hk_repl hv_repl hq_sm hk_sm hv_sm hk_shape hv_shape h_bound hfull_shape hfull_shape'
+
 end TrainVerify.Denote.GeneratedPatterns

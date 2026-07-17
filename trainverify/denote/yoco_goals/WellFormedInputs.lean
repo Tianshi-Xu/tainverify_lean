@@ -146,17 +146,12 @@ structure WellFormed_YOCOMoE_A04B (initSM initPM : Store) : Prop where
   -- restatement of `intermediateGoal_5347`.  Satisfiability is witnessed by
   -- `decodeCuSeqlens_zeroTensor_le` below.
   wf5347_hcuseq_bound : ∀ t, (decodeCuSeqlens (initPM 5346)).getD (t + 1) 0 ≤ 4096
-  wf5396_hq_full : (sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM 5391         = allGatherPrimDimN 0 2 0             [(pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 9835,              (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 9836]
-  wf5396_hk_repl : (sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM 5392         = (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5392
-  wf5396_hv_repl : (sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM 5393         = (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5393
-  wf5396_hq_sm : 0 < ((sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM 5391).shape.length
-  wf5396_hk_sm : 0 < ((sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM 5392).shape.length
-  wf5396_hv_sm : 0 < ((sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM 5393).shape.length
-  wf5396_hk_shape : ((pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5392).shape         = [4096, 4, 64]
-  wf5396_hv_shape : ((pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5393).shape         = [4096, 4, 64]
-  wf5396_h_bound : ∀ t, (decodeCuSeqlens         ((pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5395)).getD (t+1) 0 ≤ 4096
-  wf5396_hfull_shape : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 9835,              (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 9836])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5392,              (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5392])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5393,              (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5393])           ((pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5394)           ((pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5395)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5396_hfull_shape' : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 9835,              (pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 9836])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 5392,              (pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 5392])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 5393,              (pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 5393])           ((pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 5394)           ((pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 5395)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
+  -- Faithful layer-0 next-zigzag entry (`5396`): the ONLY genuine harness
+  -- invariant is the cu-seqlens upper bound on the pure-init leaf `5395`
+  -- (`cu_seqlens_padded`), mirroring `wf5347_hcuseq_bound`.  All former
+  -- goal-shaped Q/K/V/shape fields were removed once `5391`/`5392`/`5393`
+  -- became proven (Worker #26).
+  wf5396_hcuseq_bound : ∀ t, (decodeCuSeqlens (initPM 5395)).getD (t + 1) 0 ≤ 4096
   wf5445_hq_full : (sm.nodes.take 575).foldl (applyNodeRingAttn sm) initSM 5440         = allGatherPrimDimN 0 2 0             [(pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 10007,              (pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 10008]
   wf5445_hk_repl : (sm.nodes.take 575).foldl (applyNodeRingAttn sm) initSM 5441         = (pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 5441
   wf5445_hv_repl : (sm.nodes.take 575).foldl (applyNodeRingAttn sm) initSM 5442         = (pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 5442
@@ -423,14 +418,9 @@ theorem recon_intermediateGoal_5290_ringAttn (initSM initPM : Store)
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) :=
   recon_intermediateGoal_5290_of_inputs initSM initPM hSM hPM hInit hWF.wf5290_hq_recon hWF.wf5290_hk_recon hWF.wf5290_hv_recon hWF.wf5290_hq_sm_shape hWF.wf5290_hk_sm_shape hWF.wf5290_hv_sm_shape
 
-set_option maxHeartbeats 4000000 in
-/-- Unconditional-given-well-formed-inputs companion of `recon_intermediateGoal_5396_ringAttn_of_qkv`. -/
-theorem recon_intermediateGoal_5396_ringAttn (initSM initPM : Store)
-    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5396
-      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) :=
-  recon_intermediateGoal_5396_ringAttn_of_qkv initSM initPM hInit hWF.wf5396_hq_full hWF.wf5396_hk_repl hWF.wf5396_hv_repl hWF.wf5396_hq_sm hWF.wf5396_hk_sm hWF.wf5396_hv_sm hWF.wf5396_hk_shape hWF.wf5396_hv_shape hWF.wf5396_h_bound hWF.wf5396_hfull_shape hWF.wf5396_hfull_shape'
+-- `recon_intermediateGoal_5396_ringAttn` moved to `ZigzagL0Residual` (Worker #26):
+-- it is now proven faithfully from the reconstructed Q/K/V goals `5391`/`5392`/
+-- `5393`, consuming only the genuine `wf5396_hcuseq_bound` harness invariant.
 
 set_option maxHeartbeats 4000000 in
 /-- Unconditional-given-well-formed-inputs companion of `recon_intermediateGoal_5445_ringAttn_of_qkv`. -/
