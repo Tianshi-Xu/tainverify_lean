@@ -1095,3 +1095,58 @@ unconditional-given-WellFormed ring-attn goals.
 L3 fully closed. L3 tail `4854/4855` rotary Q'/K' feed L4's attention. Next:
 L4 all2all `4876`, multiref/RMSNorm frontier `4900` — enumerate each L4 node
 from source (corrected parser) before proving; do not assume an exact L3 mirror.
+
+## Worker 23 (cont.) — L4–L11 block reconstruction (mechanical periodic cascade)
+
+### Objective met: MoE layers L4 through L11 are fully closed
+The YOCO-MoE forward graph is a clean periodic mirror across MoE layers: SM node
+index stride +39, PM node index stride +78, reconstruction tids +54, 7xxx
+multiref tokens +52, routing shards +186, position chunks +1, rotary cache id +1.
+Each layer's 38 reconstruction goals were produced by a context-aware integer
+remap of the previous layer (`/tmp/gen_layer.py`, throwaway) and then **validated
+node-by-node by `native_decide`** — every SM/PM node record, theorem tid, and
+hypothesis must agree with `GeneratedYOCOMoE.lean` or the build fails loudly.
+
+Conflict handling (why the remap is faithful, not a rename):
+- **Node index vs shape/rank collisions** (e.g. PM node index `512` coincides with
+  the hidden-dim shape `512`, and the rank field follows a node index): node
+  indices are remapped only in their syntactic positions (after `initSM`/`initPM`,
+  `.take`, or as the 2nd number of a `foldl` when the 1st is a token), never inside
+  shape brackets or the rank slot.
+- **SM/PM token-id collisions**: the SM and PM graphs share the numeric id space but
+  denote different tensors. ~29 conflict tokens are resolved per-graph, using each
+  token's defining `denoteGraph_ringAttn sm/pm init.. V` context (consistent for
+  hypothesis names) with a stateful current-graph fallback; `intermediateGoal_<tid>`
+  ids are always SM.
+
+### WellFormed_YOCOMoE_A04B extensions
+Added positive structural routing-locality fields `wf4876, wf4930, wf4984, wf5038,
+wf5092, wf5146, wf5200, wf5254` (rank-0/rank-1 expert-index disjointness shards for
+each layer's all2all), all covered by the existing zero-tensor `WellFormed_routing_witness`
+(no goal-shaped/backdoor fields; consistency witness unchanged in structure).
+
+### Effective count
+Was 149 (L3). **+38 per layer × 8 layers (L4..L11) = 453 / 1151** unconditional-
+given-WellFormed ring-attn reconstruction goals. Layer totals: L4=187, L5=225,
+L6=263, L7=301, L8=339, L9=377, L10=415, L11=453.
+
+### Axiom audit
+`#print axioms` on representative all2all goals per layer (e.g. `recon_intermediateGoal_
+4876/5092/5254_ringAttn`): only `propext, Classical.choice, Quot.sound` and
+`_native.native_decide.ax_*`. Zero sorry / sorryAx / user axioms.
+
+### Commits (L4–L11)
+- `c4b1b17c` L4 block (tids 4858–4909) + `wf4876`
+- `75c95aec` L5 block (tids 4912–4963) + `wf4930..wf5308`
+- `0d5be0c6` L6–L11 blocks (all2all 4984/5038/5092/5146/5200/5254 + tails)
+
+### Remaining frontier
+- **L12 (last MoE layer) not yet reconstructed.** It is a boundary layer: its
+  late-layer ids (rotary/residual/cache `5279..5287`, `9443..9482`, `15654..15675`,
+  `11864`) have no periodic +stride successor (there is no L13 attention), so the
+  mechanical remap that generates L(n+1) from L(n) cannot generate L12 by chaining;
+  L12 must be reconstructed directly against `GeneratedYOCOMoE.lean` (expected
+  all2all tid `5308`, multiref/RMSNorm frontier `5278`). This is the exact first
+  missing theorem: `recon_intermediateGoal_5308_ringAttn` and the L12 tail.
+- After L12, the remaining 1151-goal frontier is the non-MoE / global-output
+  obligations outside the per-layer attention+MoE cascade.
