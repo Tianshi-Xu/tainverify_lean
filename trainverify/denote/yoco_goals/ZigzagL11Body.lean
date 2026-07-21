@@ -1799,4 +1799,118 @@ theorem recon_intermediateGoal_5926_ringAttn (initSM initPM : Store)
     intermediateGoal_5926 5926 11721 11722 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
+/-- 5928 — final-layer divergent tail op #1: 2-tp `FW_maybe_unshuffle(5926, 5927)`.
+    `fw_maybe_unshuffle` is the identity on the data tensor in this varlen CP model
+    (Denote.lean:1310, audited against Python `wrap_maybe_unshuffle`), and so
+    commutes trivially with dim-0 sharding.  The CP metadata differs between SM
+    (`[1,0]`) and PM (`[2,0]/[2,1]`), which is irrelevant precisely because the op
+    ignores it.  So `5928` is `5926` re-sharded.  The unshuffle input is the goal
+    tid `5926` directly (no intervening multiref). -/
+theorem recon_intermediateGoal_5928_ringAttn (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_5928
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  have hnr : pm.numRanks = 2 := rfl
+  obtain ⟨hg26, hs11721, hs11722⟩ := twoTp_gather _ _ intermediateGoal_5926 5926 11721 11722
+    [2048, 1024] rfl rfl rfl rfl rfl (by decide)
+    (recon_intermediateGoal_5926_ringAttn initSM initPM hSM hPM hInit hWF)
+  have rSM : denoteGraph_ringAttn sm initSM 5928
+      = fw_maybe_unshuffle (denoteGraph_ringAttn sm initSM 5926) (denoteGraph_ringAttn sm initSM 5927) 1 0 :=
+    ringAttn_reduce2_pm_opaque sm initSM 924
+      { rank := 0, op := "OpName.FW_maybe_unshuffle", ins := [5926, 5927], outs := [5928], params := [1, 0] }
+      5926 5927 5928 (fun a b => fw_maybe_unshuffle a b 1 0)
+      (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_maybe_unshuffle_out sm s 0 1 0 5926 5927 5928)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rP0 : denoteGraph_ringAttn pm initPM 11727
+      = fw_maybe_unshuffle (denoteGraph_ringAttn pm initPM 11721) (denoteGraph_ringAttn pm initPM 5927) 2 0 :=
+    ringAttn_reduce2_pm_opaque pm initPM 1912
+      { rank := 0, op := "OpName.FW_maybe_unshuffle", ins := [11721, 5927], outs := [11727], params := [2, 0] }
+      11721 5927 11727 (fun a b => fw_maybe_unshuffle a b 2 0)
+      (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_maybe_unshuffle_out pm s 0 2 0 11721 5927 11727)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rP1 : denoteGraph_ringAttn pm initPM 11728
+      = fw_maybe_unshuffle (denoteGraph_ringAttn pm initPM 11722) (denoteGraph_ringAttn pm initPM 5927) 2 1 :=
+    ringAttn_reduce2_pm_opaque pm initPM 1913
+      { rank := 1, op := "OpName.FW_maybe_unshuffle", ins := [11722, 5927], outs := [11728], params := [2, 1] }
+      11722 5927 11728 (fun a b => fw_maybe_unshuffle a b 2 1)
+      (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_maybe_unshuffle_out pm s 1 2 1 11722 5927 11728)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hval : denoteGraph_ringAttn sm initSM 5928
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph_ringAttn pm initPM 11727, denoteGraph_ringAttn pm initPM 11728] := by
+    rw [rSM, rP0, rP1, hg26, hnr]
+    simp only [fw_maybe_unshuffle]
+  have hsp0 : (denoteGraph_ringAttn pm initPM 11727).shape = [2048, 1024] := by
+    rw [rP0]; simp only [fw_maybe_unshuffle]; exact hs11721
+  have hsp1 : (denoteGraph_ringAttn pm initPM 11728).shape = [2048, 1024] := by
+    rw [rP1]; simp only [fw_maybe_unshuffle]; exact hs11722
+  have hshape : (denoteGraph_ringAttn sm initSM 5928).shape = [4096, 1024] := by
+    rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsp0])]
+    simp [List.set, List.getD]
+  exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
+    intermediateGoal_5928 5928 11727 11728 [4096, 1024] [2048, 1024]
+    rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
+
+/-- 5930 — final-layer divergent tail op #2: 2-tp `FW_rms_norm(5928, 5929)` (final
+    norm before the LM head / loss).  Dim-0 (sequence) sharding commutes with
+    RMSNorm since each row is normalised independently over the feature dim.  Same
+    template as the periodic `5299`/`5340`, backed by
+    `fw_rms_norm_allGather0_commute_2`.  The norm input is the goal tid `5928`
+    directly. -/
+theorem recon_intermediateGoal_5930_ringAttn (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_5930
+      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
+  have hnr : pm.numRanks = 2 := rfl
+  obtain ⟨hg28, hs11727, hs11728⟩ := twoTp_gather _ _ intermediateGoal_5928 5928 11727 11728
+    [2048, 1024] rfl rfl rfl rfl rfl (by decide)
+    (recon_intermediateGoal_5928_ringAttn initSM initPM hSM hPM hInit hWF)
+  have hw5929 : denoteGraph_ringAttn sm initSM 5929 = denoteGraph_ringAttn pm initPM 5929 :=
+    veq_weight_ring initSM initPM hInit initGoal_5929 (by native_decide) 5929
+      rfl rfl rfl rfl (by native_decide) (by native_decide)
+  have rSM : denoteGraph_ringAttn sm initSM 5930
+      = fw_rms_norm (denoteGraph_ringAttn sm initSM 5928) (denoteGraph_ringAttn sm initSM 5929) :=
+    ringAttn_reduce2_pm_opaque sm initSM 925
+      { rank := 0, op := "OpName.FW_rms_norm", ins := [5928, 5929], outs := [5930] }
+      5928 5929 5930 fw_rms_norm (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_rms_norm_out_1p sm s 0 5928 5929 5930)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rP0 : denoteGraph_ringAttn pm initPM 11833
+      = fw_rms_norm (denoteGraph_ringAttn pm initPM 11727) (denoteGraph_ringAttn pm initPM 5929) :=
+    ringAttn_reduce2_pm_opaque pm initPM 1914
+      { rank := 0, op := "OpName.FW_rms_norm", ins := [11727, 5929], outs := [11833] }
+      11727 5929 11833 fw_rms_norm (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_rms_norm_out_1p pm s 0 11727 5929 11833)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rP1 : denoteGraph_ringAttn pm initPM 11834
+      = fw_rms_norm (denoteGraph_ringAttn pm initPM 11728) (denoteGraph_ringAttn pm initPM 5929) :=
+    ringAttn_reduce2_pm_opaque pm initPM 1915
+      { rank := 1, op := "OpName.FW_rms_norm", ins := [11728, 5929], outs := [11834] }
+      11728 5929 11834 fw_rms_norm (by native_decide) (by native_decide) (by decide) (by decide)
+      (fun s => applyNode_fw_rms_norm_out_1p pm s 1 11728 5929 11834)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hval : denoteGraph_ringAttn sm initSM 5930
+      = allGatherPrimDimN 0 pm.numRanks 0
+          [denoteGraph_ringAttn pm initPM 11833, denoteGraph_ringAttn pm initPM 11834] := by
+    rw [rSM, hg28, hw5929, hnr,
+        fw_rms_norm_allGather0_commute_2 _ _ _ 2048 1024 (by omega) (by omega) hs11727 hs11728,
+        ← rP0, ← rP1]
+  have hsp0 : (denoteGraph_ringAttn pm initPM 11833).shape = [2048, 1024] := by
+    rw [rP0]; exact fw_rms_norm_shape2 _ _ 2048 1024 hs11727
+  have hsp1 : (denoteGraph_ringAttn pm initPM 11834).shape = [2048, 1024] := by
+    rw [rP1]; exact fw_rms_norm_shape2 _ _ 2048 1024 hs11728
+  have hshape : (denoteGraph_ringAttn sm initSM 5930).shape = [4096, 1024] := by
+    rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsp0])]
+    simp [List.set, List.getD]
+  exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
+    intermediateGoal_5930 5930 11833 11834 [4096, 1024] [2048, 1024]
+    rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
+
 end TrainVerify.Denote.GeneratedPatterns
