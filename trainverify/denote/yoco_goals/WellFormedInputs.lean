@@ -97,6 +97,8 @@ structure WellFormed_YOCOMoE_A04B (initSM initPM : Store) : Prop where
   wf5806_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 11282) 2048 64 32 64
   wf5855_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 11453) 2048 64 0 32
   wf5855_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 11454) 2048 64 32 64
+  wf5904_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 11625) 2048 64 0 32
+  wf5904_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 11626) 2048 64 32 64
   wf4750_hveq4746 : denoteGraph_ringAttn sm initSM 4746 = denoteGraph_ringAttn pm initPM 4746
   wf4750_hveq4747 : denoteGraph_ringAttn sm initSM 4747 = denoteGraph_ringAttn pm initPM 4747
   wf4750_hveq4744 : denoteGraph_ringAttn sm initSM 4744 = denoteGraph_ringAttn pm initPM 4744
