@@ -1442,3 +1442,91 @@ no double count.
 3. **Remaining smuggled zigzag entries** `5445`,`5494`,`5543`,`5592`,… — same
    de-smuggling pattern as `5396`/`5347` once each layer's Q/K/V are proven.
 4. **7xxx/8xxx multiref/expert fan-outs** of each later layer.
+
+## Worker #27 — cross-decoder layers 1–11 via a checked periodic remapper
+
+Continuous campaign from W26 baseline HEAD `64634950` (**529/1151**).
+
+### Commits pushed to `origin/intermediate-goals-recon`
+- `8e089eaa` — **layer 1** body `5397..5442` + faithful K/V casts `5441`/`5442`
+  + de-smuggled zigzag entry `5445` (`ZigzagL1Body.lean`).
+- `7c2aa8f4` — **layers 2–10** bodies `5446..5885` + K/V casts + de-smuggled
+  entries `5494/5543/5592/5641/5690/5739/5788/5837/5886` (`ZigzagL{2..10}Body`).
+- `6e6692cf` — **layer 11** periodic body `5887..5926` (final layer; partial —
+  see divergence note) (`ZigzagL11Body.lean`).
+
+### Checked periodic remapper (Phase C)
+The cross-decoder layers are structurally periodic. Rather than trust a blind
+`+49` offset, every layer body is produced by an **alignment-checked** remapper
+whose output is re-validated node-by-node against `GeneratedYOCOMoE.lean`:
+
+- **Strides (L0 → LN):** SM goal-tid **+49·N**; PM tid **+172·N**; SM writer-node
+  index **+35·N**; PM attention-node index **+70·N**; SM attn boundary node
+  `540+35·N`; PM attn nodes `1142+70·N` / `+1`; Q PM tids `9835+172·N` / `+1`;
+  routing PM tids `9733+172·N`(rank0)/`+1`(rank1); zigzag entry boundary
+  `E = 5396+49·N`; cu-seqlens leaf `E-1`.
+- **K/V casts:** the next-block K/V are *replicated* (written on both ranks) and
+  read as **leg N+1** of the two 12-way global-KV `FW_multiref`s (SM 478/479,
+  PM 1021/1023), routed through the **rank-1 last-writer** `FW_to` node
+  (SM `482+N`/`494+N`, PM `1037+N`/`1061+N`). Discharged by the generic public
+  gear `applyNode_fw_multiref_out` (all multiref legs share the input value, so
+  no positional distinctness is needed).
+- **Tooling (session artifacts, not committed):** `align_n.py N` seeds the L0→LN
+  tid correspondences from the goal defs and propagates through the writer DAG
+  with **op-preserving conflict detection** (`maps_N.json`); `gen_full.py N`
+  applies the map to the L0 body theorems, emits the hand-written casts + entry,
+  and reports `UNMAPPED=0`. The *build itself is the validator*: each node
+  reduction carries a `native_decide` against the real graph, so any wrong remap
+  constant fails to compile. Regex-only substitution was **not** trusted.
+
+### De-smuggling (fidelity, count-neutral)
+Every zigzag entry `5445, 5494, 5543, 5592, 5641, 5690, 5739, 5788, 5837, 5886`
+(10 total) was **re-proved faithfully** from reconstructed Q/K/V (2-tp Q gather,
+replicated K/V casts, full↔prefix bridge via `foldl_prefix_eq_full_ringAttn'`),
+exactly like W26's `5396`. All goal-shaped `wf5445_*..wf5886_*`
+Q/K/V/shape fields **and their smuggled companion theorems** were deleted from
+`WellFormedInputs.lean`. The only WF fields kept are positive, reusable harness
+invariants, each covered by an existing zero-tensor witness:
+- `wf<E>_hcuseq_bound` — cu-seqlens upper bound on the pure-init leaf `E-1`
+  (`WellFormed_cuseqlens_witness`), for each entry E.
+- `wf<5365+49N>_hdisjA/B` — routing-locality of the per-layer all2all
+  (`WellFormed_routing_witness`), for N=1..11.
+No theorem conclusions or equalities remain in the WF class.
+
+### Layer 11 divergence (final decoder layer)
+Layer 11 does **not** follow the template tail: there is no attention boundary
+`5935` (no next-zigzag entry), the global-KV multiref has only legs 0–11 so
+there is **no** KV-cache extension (`FW_to` writing `K=5931`/`V=5932` — leg 12 —
+does not exist), and the last two body ops diverge (`5928` `FW_maybe_unshuffle`
+vs L0 `FW_rms_norm`; `5930` `FW_rms_norm` vs L0 linear). We therefore close only
+its **periodic body** `5887..5926` (32 goals incl. all2all `5904` and residual
+helpers `8572`/`8580`) and deliberately do **not** force the divergent tail,
+cast, or entry. Those remain open and are flagged as a distinct structure.
+
+### Gears / Denote / WF changes
+- Reused public gear `applyNode_fw_multiref_out` (Pattern_3) for all K/V casts —
+  no new per-position `_nth_out'` gears needed.
+- Local copies (L0 originals are `private`): `applyNode_fw_multiref_third_out'`
+  and `elemwiseMul_shape_broadcast_S1` in each generated body.
+- WF: added `wf5414/5463/../5904_hdisjA/B` (routing) and
+  `wf5445/5494/../5886_hcuseq_bound` (cu-seqlens). Removed all smuggled
+  `wf5445_*..wf5886_*` Q/K/V/shape fields + companions. **Denote: NONE.**
+
+### Effective count
+**921 / 1151** — baseline 529, **+392 new goal tids** this campaign:
+L1–L10 = 36 each (34 body + 2 K/V casts) = 360; L11 = 32 (body only). The 10
+de-smuggled zigzag entries were already counted while smuggled and are reported
+separately (count-neutral, now faithful).
+
+### Axiom audit
+`#print axioms` on representative `recon_intermediateGoal_*_ringAttn` across
+L1–L11 (e.g. `5887/5904/5926`, `5441/5442`, entries): only
+`propext, Classical.choice, Quot.sound` + `_native.native_decide.ax_*`. Zero
+`sorry`/`sorryAx`/`admit`/user axioms. Banned-token scan clean.
+
+### Ranked remaining frontier
+1. **Layer 11 tail** — divergent final-layer ops `5928`/`5930` and whatever
+   follows (final norm / LM head); hand-reconstruct, no periodic template.
+2. **7xxx/8xxx global-KV / expert fan-outs** beyond the two residual helpers
+   already landed per layer (`8143/8151` analogues).
+3. Any post-decoder head/loss goals above the last decoder boundary.
