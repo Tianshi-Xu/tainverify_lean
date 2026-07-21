@@ -1530,3 +1530,59 @@ L1–L11 (e.g. `5887/5904/5926`, `5441/5442`, entries): only
 2. **7xxx/8xxx global-KV / expert fan-outs** beyond the two residual helpers
    already landed per layer (`8143/8151` analogues).
 3. Any post-decoder head/loss goals above the last decoder boundary.
+
+---
+
+## Worker #28 — Final-layer tail, head/loss fan-outs → **1151/1151 COMPLETE**
+
+Baseline `92dfdb88`, count 921/1151 (909 `_ringAttn` + 12 pre-existing non-ring
+`recon_intermediateGoal_N` in `IntermediateReconstruction`). **W28 closed all 230
+remaining goals → 1151/1151.** New HEAD `b90fe73b`.
+
+### A. Exact remaining-goal census (source-derived, 230 tids)
+Parsed the generated graph (`GeneratedYOCOMoE.lean`) and every theorem name.
+230 goals lacked a `_ringAttn` reconstruction. Categories:
+- **final-tail (2):** `5928` (`FW_maybe_unshuffle`, identity model), `5930`
+  (`FW_rms_norm`) — dim-0 2-tp sharded `[2048,1024]→[4096,1024]`.
+- **B_sharded (185):** 2-tp sharded `FW_multiref` copies. Goal G = multiref-pos(B);
+  PM PG0/PG1 = per-rank multiref of B's two pre-existing shards PA/PB.
+  allGather[PG0,PG1] = allGather[PA,PB] = SM B = SM G. Arities 2/3/5.
+- **Group S (10):** 1-tp `FW_multiref` copies of a *replicated* base
+  (`4705/4757/4759`): single PM shard = full copy; SM G = SM B = PM B = PM Tpm.
+  Special member `8007`: 1-tp copy of 2-tp base `5330` whose PM shard
+  `11917 = AllGatherPrim(mref₀(9625), mref₀(9626))`.
+- **Group R (33):** replicated dual-tp `FW_multiref` copies of 1-tp replicated
+  bases (`4703/4736/4738/5332/5334/5336`), arities 2/3 and two arity-12 groups
+  (`8033-8077`, `8091-8135`). Both ranks hold full copies; pick rank-0 head.
+
+### B. Final-layer divergent tail
+`5928`/`5930` hand-reconstructed against nnScaler authority (unshuffle = identity
+on data, cp-metadata ignored, matches Python early-return; final rms_norm).
+Committed `5fb24241`. No absent KV-cache/leg-12 goals manufactured.
+
+### C/D. Fan-outs (228)
+Faithful, checked generators; every node index/position re-validated by per-node
+`native_decide` over the real 2300-node graph. New reusable gears (all in the
+generated fan-out files, no shared-file edits):
+- `applyNode_mref_gen` — general arity-N multiref-position identity built on
+  `storeSet_replicate_mem_g307` (handles arity 2/3/5/12 uniformly).
+- `wrap_repl_dual_gen` — ring/store-generic replicated-dual wrapper (rank-0 head).
+- `wrap_1tp_distinct` — 1-tp wrapper allowing `ts ≠ tid` (multiref alias goals).
+
+Files: `FanOutB1..B5.lean` (185), `FanOutS.lean` (9), `FanOutR1..R3.lean` (33),
+`FanOut8007.lean` (1). Commits `90340544`, `feff7de8`, `ff242b7f`, `b90fe73b`.
+
+### Results
+- **Count: 921 → 1151/1151 (+230).** 1139 `_ringAttn` + 12 baseline non-ring.
+- Axioms (representative `#print axioms`): baseline `propext`/`Classical.choice`/
+  `Quot.sound` + `native_decide` only. Zero sorry/admit/user-axioms.
+- All 10 new modules + base build green together (2682 jobs).
+- No Denote/spec changes required (all upstream ops already faithful; unshuffle
+  and multiref identity models match Python authority).
+
+### Residual frontier
+**None** — all 1151 intermediate goals reconstructed. The 12 pre-existing
+non-ring `recon_intermediateGoal_N` goals (`4681-4693`, `7383-7400`) remain as
+the baseline left them (out of W28 scope; already counted).
+
+Resume id: `b90fe73b`.
