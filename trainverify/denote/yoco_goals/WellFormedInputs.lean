@@ -76,6 +76,27 @@ structure WellFormed_YOCOMoE_A04B (initSM initPM : Store) : Prop where
   -- witness `WellFormed_routing_witness`.
   wf5414_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 9905) 2048 64 0 32
   wf5414_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 9906) 2048 64 32 64
+  -- Layer-2..10 cross-decoder all2all routing-locality (goals 5463,5512,..,5855);
+  -- PM routing-map shards = layer-0 9733/9734 + 172*N.  Same routing-locality
+  -- class, covered by the zero-tensor witness `WellFormed_routing_witness`.
+  wf5463_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 10077) 2048 64 0 32
+  wf5463_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 10078) 2048 64 32 64
+  wf5512_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 10249) 2048 64 0 32
+  wf5512_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 10250) 2048 64 32 64
+  wf5561_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 10421) 2048 64 0 32
+  wf5561_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 10422) 2048 64 32 64
+  wf5610_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 10593) 2048 64 0 32
+  wf5610_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 10594) 2048 64 32 64
+  wf5659_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 10765) 2048 64 0 32
+  wf5659_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 10766) 2048 64 32 64
+  wf5708_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 10937) 2048 64 0 32
+  wf5708_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 10938) 2048 64 32 64
+  wf5757_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 11109) 2048 64 0 32
+  wf5757_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 11110) 2048 64 32 64
+  wf5806_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 11281) 2048 64 0 32
+  wf5806_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 11282) 2048 64 32 64
+  wf5855_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 11453) 2048 64 0 32
+  wf5855_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 11454) 2048 64 32 64
   wf4750_hveq4746 : denoteGraph_ringAttn sm initSM 4746 = denoteGraph_ringAttn pm initPM 4746
   wf4750_hveq4747 : denoteGraph_ringAttn sm initSM 4747 = denoteGraph_ringAttn pm initPM 4747
   wf4750_hveq4744 : denoteGraph_ringAttn sm initSM 4744 = denoteGraph_ringAttn pm initPM 4744
@@ -163,105 +184,17 @@ structure WellFormed_YOCOMoE_A04B (initSM initPM : Store) : Prop where
   -- (`cu_seqlens_padded`).  All former goal-shaped Q/K/V/shape fields were removed
   -- once `5440`/`5441`/`5442` became proven (Worker #27).
   wf5445_hcuseq_bound : ∀ t, (decodeCuSeqlens (initPM 5444)).getD (t + 1) 0 ≤ 4096
-  wf5494_hq_full : (sm.nodes.take 610).foldl (applyNodeRingAttn sm) initSM 5489         = allGatherPrimDimN 0 2 0             [(pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 10179,              (pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 10180]
-  wf5494_hk_repl : (sm.nodes.take 610).foldl (applyNodeRingAttn sm) initSM 5490         = (pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 5490
-  wf5494_hv_repl : (sm.nodes.take 610).foldl (applyNodeRingAttn sm) initSM 5491         = (pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 5491
-  wf5494_hq_sm : 0 < ((sm.nodes.take 610).foldl (applyNodeRingAttn sm) initSM 5489).shape.length
-  wf5494_hk_sm : 0 < ((sm.nodes.take 610).foldl (applyNodeRingAttn sm) initSM 5490).shape.length
-  wf5494_hv_sm : 0 < ((sm.nodes.take 610).foldl (applyNodeRingAttn sm) initSM 5491).shape.length
-  wf5494_hk_shape : ((pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 5490).shape         = [4096, 4, 64]
-  wf5494_hv_shape : ((pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 5491).shape         = [4096, 4, 64]
-  wf5494_h_bound : ∀ t, (decodeCuSeqlens         ((pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 5493)).getD (t+1) 0 ≤ 4096
-  wf5494_hfull_shape : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 10179,              (pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 10180])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 5490,              (pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 5490])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 5491,              (pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 5491])           ((pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 5492)           ((pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 5493)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5494_hfull_shape' : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1283).foldl (applyNodeRingAttn pm) initPM 10179,              (pm.nodes.take 1283).foldl (applyNodeRingAttn pm) initPM 10180])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1283).foldl (applyNodeRingAttn pm) initPM 5490,              (pm.nodes.take 1283).foldl (applyNodeRingAttn pm) initPM 5490])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1283).foldl (applyNodeRingAttn pm) initPM 5491,              (pm.nodes.take 1283).foldl (applyNodeRingAttn pm) initPM 5491])           ((pm.nodes.take 1283).foldl (applyNodeRingAttn pm) initPM 5492)           ((pm.nodes.take 1283).foldl (applyNodeRingAttn pm) initPM 5493)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5543_hq_full : (sm.nodes.take 645).foldl (applyNodeRingAttn sm) initSM 5538         = allGatherPrimDimN 0 2 0             [(pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM 10351,              (pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM 10352]
-  wf5543_hk_repl : (sm.nodes.take 645).foldl (applyNodeRingAttn sm) initSM 5539         = (pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM 5539
-  wf5543_hv_repl : (sm.nodes.take 645).foldl (applyNodeRingAttn sm) initSM 5540         = (pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM 5540
-  wf5543_hq_sm : 0 < ((sm.nodes.take 645).foldl (applyNodeRingAttn sm) initSM 5538).shape.length
-  wf5543_hk_sm : 0 < ((sm.nodes.take 645).foldl (applyNodeRingAttn sm) initSM 5539).shape.length
-  wf5543_hv_sm : 0 < ((sm.nodes.take 645).foldl (applyNodeRingAttn sm) initSM 5540).shape.length
-  wf5543_hk_shape : ((pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM 5539).shape         = [4096, 4, 64]
-  wf5543_hv_shape : ((pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM 5540).shape         = [4096, 4, 64]
-  wf5543_h_bound : ∀ t, (decodeCuSeqlens         ((pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM 5542)).getD (t+1) 0 ≤ 4096
-  wf5543_hfull_shape : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM 10351,              (pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM 10352])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM 5539,              (pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM 5539])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM 5540,              (pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM 5540])           ((pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM 5541)           ((pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM 5542)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5543_hfull_shape' : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1353).foldl (applyNodeRingAttn pm) initPM 10351,              (pm.nodes.take 1353).foldl (applyNodeRingAttn pm) initPM 10352])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1353).foldl (applyNodeRingAttn pm) initPM 5539,              (pm.nodes.take 1353).foldl (applyNodeRingAttn pm) initPM 5539])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1353).foldl (applyNodeRingAttn pm) initPM 5540,              (pm.nodes.take 1353).foldl (applyNodeRingAttn pm) initPM 5540])           ((pm.nodes.take 1353).foldl (applyNodeRingAttn pm) initPM 5541)           ((pm.nodes.take 1353).foldl (applyNodeRingAttn pm) initPM 5542)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5592_hq_full : (sm.nodes.take 680).foldl (applyNodeRingAttn sm) initSM 5587         = allGatherPrimDimN 0 2 0             [(pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM 10523,              (pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM 10524]
-  wf5592_hk_repl : (sm.nodes.take 680).foldl (applyNodeRingAttn sm) initSM 5588         = (pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM 5588
-  wf5592_hv_repl : (sm.nodes.take 680).foldl (applyNodeRingAttn sm) initSM 5589         = (pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM 5589
-  wf5592_hq_sm : 0 < ((sm.nodes.take 680).foldl (applyNodeRingAttn sm) initSM 5587).shape.length
-  wf5592_hk_sm : 0 < ((sm.nodes.take 680).foldl (applyNodeRingAttn sm) initSM 5588).shape.length
-  wf5592_hv_sm : 0 < ((sm.nodes.take 680).foldl (applyNodeRingAttn sm) initSM 5589).shape.length
-  wf5592_hk_shape : ((pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM 5588).shape         = [4096, 4, 64]
-  wf5592_hv_shape : ((pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM 5589).shape         = [4096, 4, 64]
-  wf5592_h_bound : ∀ t, (decodeCuSeqlens         ((pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM 5591)).getD (t+1) 0 ≤ 4096
-  wf5592_hfull_shape : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM 10523,              (pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM 10524])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM 5588,              (pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM 5588])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM 5589,              (pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM 5589])           ((pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM 5590)           ((pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM 5591)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5592_hfull_shape' : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1423).foldl (applyNodeRingAttn pm) initPM 10523,              (pm.nodes.take 1423).foldl (applyNodeRingAttn pm) initPM 10524])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1423).foldl (applyNodeRingAttn pm) initPM 5588,              (pm.nodes.take 1423).foldl (applyNodeRingAttn pm) initPM 5588])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1423).foldl (applyNodeRingAttn pm) initPM 5589,              (pm.nodes.take 1423).foldl (applyNodeRingAttn pm) initPM 5589])           ((pm.nodes.take 1423).foldl (applyNodeRingAttn pm) initPM 5590)           ((pm.nodes.take 1423).foldl (applyNodeRingAttn pm) initPM 5591)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5641_hq_full : (sm.nodes.take 715).foldl (applyNodeRingAttn sm) initSM 5636         = allGatherPrimDimN 0 2 0             [(pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM 10695,              (pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM 10696]
-  wf5641_hk_repl : (sm.nodes.take 715).foldl (applyNodeRingAttn sm) initSM 5637         = (pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM 5637
-  wf5641_hv_repl : (sm.nodes.take 715).foldl (applyNodeRingAttn sm) initSM 5638         = (pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM 5638
-  wf5641_hq_sm : 0 < ((sm.nodes.take 715).foldl (applyNodeRingAttn sm) initSM 5636).shape.length
-  wf5641_hk_sm : 0 < ((sm.nodes.take 715).foldl (applyNodeRingAttn sm) initSM 5637).shape.length
-  wf5641_hv_sm : 0 < ((sm.nodes.take 715).foldl (applyNodeRingAttn sm) initSM 5638).shape.length
-  wf5641_hk_shape : ((pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM 5637).shape         = [4096, 4, 64]
-  wf5641_hv_shape : ((pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM 5638).shape         = [4096, 4, 64]
-  wf5641_h_bound : ∀ t, (decodeCuSeqlens         ((pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM 5640)).getD (t+1) 0 ≤ 4096
-  wf5641_hfull_shape : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM 10695,              (pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM 10696])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM 5637,              (pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM 5637])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM 5638,              (pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM 5638])           ((pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM 5639)           ((pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM 5640)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5641_hfull_shape' : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1493).foldl (applyNodeRingAttn pm) initPM 10695,              (pm.nodes.take 1493).foldl (applyNodeRingAttn pm) initPM 10696])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1493).foldl (applyNodeRingAttn pm) initPM 5637,              (pm.nodes.take 1493).foldl (applyNodeRingAttn pm) initPM 5637])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1493).foldl (applyNodeRingAttn pm) initPM 5638,              (pm.nodes.take 1493).foldl (applyNodeRingAttn pm) initPM 5638])           ((pm.nodes.take 1493).foldl (applyNodeRingAttn pm) initPM 5639)           ((pm.nodes.take 1493).foldl (applyNodeRingAttn pm) initPM 5640)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5690_hq_full : (sm.nodes.take 750).foldl (applyNodeRingAttn sm) initSM 5685         = allGatherPrimDimN 0 2 0             [(pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM 10867,              (pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM 10868]
-  wf5690_hk_repl : (sm.nodes.take 750).foldl (applyNodeRingAttn sm) initSM 5686         = (pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM 5686
-  wf5690_hv_repl : (sm.nodes.take 750).foldl (applyNodeRingAttn sm) initSM 5687         = (pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM 5687
-  wf5690_hq_sm : 0 < ((sm.nodes.take 750).foldl (applyNodeRingAttn sm) initSM 5685).shape.length
-  wf5690_hk_sm : 0 < ((sm.nodes.take 750).foldl (applyNodeRingAttn sm) initSM 5686).shape.length
-  wf5690_hv_sm : 0 < ((sm.nodes.take 750).foldl (applyNodeRingAttn sm) initSM 5687).shape.length
-  wf5690_hk_shape : ((pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM 5686).shape         = [4096, 4, 64]
-  wf5690_hv_shape : ((pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM 5687).shape         = [4096, 4, 64]
-  wf5690_h_bound : ∀ t, (decodeCuSeqlens         ((pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM 5689)).getD (t+1) 0 ≤ 4096
-  wf5690_hfull_shape : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM 10867,              (pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM 10868])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM 5686,              (pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM 5686])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM 5687,              (pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM 5687])           ((pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM 5688)           ((pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM 5689)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5690_hfull_shape' : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1563).foldl (applyNodeRingAttn pm) initPM 10867,              (pm.nodes.take 1563).foldl (applyNodeRingAttn pm) initPM 10868])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1563).foldl (applyNodeRingAttn pm) initPM 5686,              (pm.nodes.take 1563).foldl (applyNodeRingAttn pm) initPM 5686])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1563).foldl (applyNodeRingAttn pm) initPM 5687,              (pm.nodes.take 1563).foldl (applyNodeRingAttn pm) initPM 5687])           ((pm.nodes.take 1563).foldl (applyNodeRingAttn pm) initPM 5688)           ((pm.nodes.take 1563).foldl (applyNodeRingAttn pm) initPM 5689)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5739_hq_full : (sm.nodes.take 785).foldl (applyNodeRingAttn sm) initSM 5734         = allGatherPrimDimN 0 2 0             [(pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM 11039,              (pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM 11040]
-  wf5739_hk_repl : (sm.nodes.take 785).foldl (applyNodeRingAttn sm) initSM 5735         = (pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM 5735
-  wf5739_hv_repl : (sm.nodes.take 785).foldl (applyNodeRingAttn sm) initSM 5736         = (pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM 5736
-  wf5739_hq_sm : 0 < ((sm.nodes.take 785).foldl (applyNodeRingAttn sm) initSM 5734).shape.length
-  wf5739_hk_sm : 0 < ((sm.nodes.take 785).foldl (applyNodeRingAttn sm) initSM 5735).shape.length
-  wf5739_hv_sm : 0 < ((sm.nodes.take 785).foldl (applyNodeRingAttn sm) initSM 5736).shape.length
-  wf5739_hk_shape : ((pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM 5735).shape         = [4096, 4, 64]
-  wf5739_hv_shape : ((pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM 5736).shape         = [4096, 4, 64]
-  wf5739_h_bound : ∀ t, (decodeCuSeqlens         ((pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM 5738)).getD (t+1) 0 ≤ 4096
-  wf5739_hfull_shape : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM 11039,              (pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM 11040])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM 5735,              (pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM 5735])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM 5736,              (pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM 5736])           ((pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM 5737)           ((pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM 5738)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5739_hfull_shape' : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1633).foldl (applyNodeRingAttn pm) initPM 11039,              (pm.nodes.take 1633).foldl (applyNodeRingAttn pm) initPM 11040])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1633).foldl (applyNodeRingAttn pm) initPM 5735,              (pm.nodes.take 1633).foldl (applyNodeRingAttn pm) initPM 5735])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1633).foldl (applyNodeRingAttn pm) initPM 5736,              (pm.nodes.take 1633).foldl (applyNodeRingAttn pm) initPM 5736])           ((pm.nodes.take 1633).foldl (applyNodeRingAttn pm) initPM 5737)           ((pm.nodes.take 1633).foldl (applyNodeRingAttn pm) initPM 5738)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5788_hq_full : (sm.nodes.take 820).foldl (applyNodeRingAttn sm) initSM 5783         = allGatherPrimDimN 0 2 0             [(pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM 11211,              (pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM 11212]
-  wf5788_hk_repl : (sm.nodes.take 820).foldl (applyNodeRingAttn sm) initSM 5784         = (pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM 5784
-  wf5788_hv_repl : (sm.nodes.take 820).foldl (applyNodeRingAttn sm) initSM 5785         = (pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM 5785
-  wf5788_hq_sm : 0 < ((sm.nodes.take 820).foldl (applyNodeRingAttn sm) initSM 5783).shape.length
-  wf5788_hk_sm : 0 < ((sm.nodes.take 820).foldl (applyNodeRingAttn sm) initSM 5784).shape.length
-  wf5788_hv_sm : 0 < ((sm.nodes.take 820).foldl (applyNodeRingAttn sm) initSM 5785).shape.length
-  wf5788_hk_shape : ((pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM 5784).shape         = [4096, 4, 64]
-  wf5788_hv_shape : ((pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM 5785).shape         = [4096, 4, 64]
-  wf5788_h_bound : ∀ t, (decodeCuSeqlens         ((pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM 5787)).getD (t+1) 0 ≤ 4096
-  wf5788_hfull_shape : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM 11211,              (pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM 11212])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM 5784,              (pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM 5784])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM 5785,              (pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM 5785])           ((pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM 5786)           ((pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM 5787)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5788_hfull_shape' : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1703).foldl (applyNodeRingAttn pm) initPM 11211,              (pm.nodes.take 1703).foldl (applyNodeRingAttn pm) initPM 11212])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1703).foldl (applyNodeRingAttn pm) initPM 5784,              (pm.nodes.take 1703).foldl (applyNodeRingAttn pm) initPM 5784])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1703).foldl (applyNodeRingAttn pm) initPM 5785,              (pm.nodes.take 1703).foldl (applyNodeRingAttn pm) initPM 5785])           ((pm.nodes.take 1703).foldl (applyNodeRingAttn pm) initPM 5786)           ((pm.nodes.take 1703).foldl (applyNodeRingAttn pm) initPM 5787)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5837_hq_full : (sm.nodes.take 855).foldl (applyNodeRingAttn sm) initSM 5832         = allGatherPrimDimN 0 2 0             [(pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM 11383,              (pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM 11384]
-  wf5837_hk_repl : (sm.nodes.take 855).foldl (applyNodeRingAttn sm) initSM 5833         = (pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM 5833
-  wf5837_hv_repl : (sm.nodes.take 855).foldl (applyNodeRingAttn sm) initSM 5834         = (pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM 5834
-  wf5837_hq_sm : 0 < ((sm.nodes.take 855).foldl (applyNodeRingAttn sm) initSM 5832).shape.length
-  wf5837_hk_sm : 0 < ((sm.nodes.take 855).foldl (applyNodeRingAttn sm) initSM 5833).shape.length
-  wf5837_hv_sm : 0 < ((sm.nodes.take 855).foldl (applyNodeRingAttn sm) initSM 5834).shape.length
-  wf5837_hk_shape : ((pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM 5833).shape         = [4096, 4, 64]
-  wf5837_hv_shape : ((pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM 5834).shape         = [4096, 4, 64]
-  wf5837_h_bound : ∀ t, (decodeCuSeqlens         ((pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM 5836)).getD (t+1) 0 ≤ 4096
-  wf5837_hfull_shape : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM 11383,              (pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM 11384])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM 5833,              (pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM 5833])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM 5834,              (pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM 5834])           ((pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM 5835)           ((pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM 5836)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5837_hfull_shape' : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1773).foldl (applyNodeRingAttn pm) initPM 11383,              (pm.nodes.take 1773).foldl (applyNodeRingAttn pm) initPM 11384])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1773).foldl (applyNodeRingAttn pm) initPM 5833,              (pm.nodes.take 1773).foldl (applyNodeRingAttn pm) initPM 5833])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1773).foldl (applyNodeRingAttn pm) initPM 5834,              (pm.nodes.take 1773).foldl (applyNodeRingAttn pm) initPM 5834])           ((pm.nodes.take 1773).foldl (applyNodeRingAttn pm) initPM 5835)           ((pm.nodes.take 1773).foldl (applyNodeRingAttn pm) initPM 5836)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5886_hq_full : (sm.nodes.take 890).foldl (applyNodeRingAttn sm) initSM 5881         = allGatherPrimDimN 0 2 0             [(pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM 11555,              (pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM 11556]
-  wf5886_hk_repl : (sm.nodes.take 890).foldl (applyNodeRingAttn sm) initSM 5882         = (pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM 5882
-  wf5886_hv_repl : (sm.nodes.take 890).foldl (applyNodeRingAttn sm) initSM 5883         = (pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM 5883
-  wf5886_hq_sm : 0 < ((sm.nodes.take 890).foldl (applyNodeRingAttn sm) initSM 5881).shape.length
-  wf5886_hk_sm : 0 < ((sm.nodes.take 890).foldl (applyNodeRingAttn sm) initSM 5882).shape.length
-  wf5886_hv_sm : 0 < ((sm.nodes.take 890).foldl (applyNodeRingAttn sm) initSM 5883).shape.length
-  wf5886_hk_shape : ((pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM 5882).shape         = [4096, 4, 64]
-  wf5886_hv_shape : ((pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM 5883).shape         = [4096, 4, 64]
-  wf5886_h_bound : ∀ t, (decodeCuSeqlens         ((pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM 5885)).getD (t+1) 0 ≤ 4096
-  wf5886_hfull_shape : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM 11555,              (pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM 11556])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM 5882,              (pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM 5882])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM 5883,              (pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM 5883])           ((pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM 5884)           ((pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM 5885)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5886_hfull_shape' : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 11555,              (pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 11556])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 5882,              (pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 5882])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 5883,              (pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 5883])           ((pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 5884)           ((pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 5885)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
+  -- Faithful layer-2..10 next-zigzag entries (5494..5886): only genuine harness
+  -- invariant is the cu-seqlens bound on the pure-init leaf E-1 (Worker #27).
+  wf5494_hcuseq_bound : ∀ t, (decodeCuSeqlens (initPM 5493)).getD (t + 1) 0 ≤ 4096
+  wf5543_hcuseq_bound : ∀ t, (decodeCuSeqlens (initPM 5542)).getD (t + 1) 0 ≤ 4096
+  wf5592_hcuseq_bound : ∀ t, (decodeCuSeqlens (initPM 5591)).getD (t + 1) 0 ≤ 4096
+  wf5641_hcuseq_bound : ∀ t, (decodeCuSeqlens (initPM 5640)).getD (t + 1) 0 ≤ 4096
+  wf5690_hcuseq_bound : ∀ t, (decodeCuSeqlens (initPM 5689)).getD (t + 1) 0 ≤ 4096
+  wf5739_hcuseq_bound : ∀ t, (decodeCuSeqlens (initPM 5738)).getD (t + 1) 0 ≤ 4096
+  wf5788_hcuseq_bound : ∀ t, (decodeCuSeqlens (initPM 5787)).getD (t + 1) 0 ≤ 4096
+  wf5837_hcuseq_bound : ∀ t, (decodeCuSeqlens (initPM 5836)).getD (t + 1) 0 ≤ 4096
+  wf5886_hcuseq_bound : ∀ t, (decodeCuSeqlens (initPM 5885)).getD (t + 1) 0 ≤ 4096
 
 /-- Consistency witness for the routing-locality family: the all-zero routing
     map satisfies both per-rank expert-locality constraints simultaneously.
@@ -427,85 +360,10 @@ theorem recon_intermediateGoal_5290_ringAttn (initSM initPM : Store)
 -- `5442`, consuming only the genuine `wf5445_hcuseq_bound` harness invariant
 -- (mirrors the faithful `5396`).
 
-set_option maxHeartbeats 4000000 in
-/-- Unconditional-given-well-formed-inputs companion of `recon_intermediateGoal_5494_ringAttn_of_qkv`. -/
-theorem recon_intermediateGoal_5494_ringAttn (initSM initPM : Store)
-    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5494
-      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) :=
-  recon_intermediateGoal_5494_ringAttn_of_qkv initSM initPM hInit hWF.wf5494_hq_full hWF.wf5494_hk_repl hWF.wf5494_hv_repl hWF.wf5494_hq_sm hWF.wf5494_hk_sm hWF.wf5494_hv_sm hWF.wf5494_hk_shape hWF.wf5494_hv_shape hWF.wf5494_h_bound hWF.wf5494_hfull_shape hWF.wf5494_hfull_shape'
-
-set_option maxHeartbeats 4000000 in
-/-- Unconditional-given-well-formed-inputs companion of `recon_intermediateGoal_5543_ringAttn_of_qkv`. -/
-theorem recon_intermediateGoal_5543_ringAttn (initSM initPM : Store)
-    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5543
-      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) :=
-  recon_intermediateGoal_5543_ringAttn_of_qkv initSM initPM hInit hWF.wf5543_hq_full hWF.wf5543_hk_repl hWF.wf5543_hv_repl hWF.wf5543_hq_sm hWF.wf5543_hk_sm hWF.wf5543_hv_sm hWF.wf5543_hk_shape hWF.wf5543_hv_shape hWF.wf5543_h_bound hWF.wf5543_hfull_shape hWF.wf5543_hfull_shape'
-
-set_option maxHeartbeats 4000000 in
-/-- Unconditional-given-well-formed-inputs companion of `recon_intermediateGoal_5592_ringAttn_of_qkv`. -/
-theorem recon_intermediateGoal_5592_ringAttn (initSM initPM : Store)
-    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5592
-      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) :=
-  recon_intermediateGoal_5592_ringAttn_of_qkv initSM initPM hInit hWF.wf5592_hq_full hWF.wf5592_hk_repl hWF.wf5592_hv_repl hWF.wf5592_hq_sm hWF.wf5592_hk_sm hWF.wf5592_hv_sm hWF.wf5592_hk_shape hWF.wf5592_hv_shape hWF.wf5592_h_bound hWF.wf5592_hfull_shape hWF.wf5592_hfull_shape'
-
-set_option maxHeartbeats 4000000 in
-/-- Unconditional-given-well-formed-inputs companion of `recon_intermediateGoal_5641_ringAttn_of_qkv`. -/
-theorem recon_intermediateGoal_5641_ringAttn (initSM initPM : Store)
-    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5641
-      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) :=
-  recon_intermediateGoal_5641_ringAttn_of_qkv initSM initPM hInit hWF.wf5641_hq_full hWF.wf5641_hk_repl hWF.wf5641_hv_repl hWF.wf5641_hq_sm hWF.wf5641_hk_sm hWF.wf5641_hv_sm hWF.wf5641_hk_shape hWF.wf5641_hv_shape hWF.wf5641_h_bound hWF.wf5641_hfull_shape hWF.wf5641_hfull_shape'
-
-set_option maxHeartbeats 4000000 in
-/-- Unconditional-given-well-formed-inputs companion of `recon_intermediateGoal_5690_ringAttn_of_qkv`. -/
-theorem recon_intermediateGoal_5690_ringAttn (initSM initPM : Store)
-    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5690
-      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) :=
-  recon_intermediateGoal_5690_ringAttn_of_qkv initSM initPM hInit hWF.wf5690_hq_full hWF.wf5690_hk_repl hWF.wf5690_hv_repl hWF.wf5690_hq_sm hWF.wf5690_hk_sm hWF.wf5690_hv_sm hWF.wf5690_hk_shape hWF.wf5690_hv_shape hWF.wf5690_h_bound hWF.wf5690_hfull_shape hWF.wf5690_hfull_shape'
-
-set_option maxHeartbeats 4000000 in
-/-- Unconditional-given-well-formed-inputs companion of `recon_intermediateGoal_5739_ringAttn_of_qkv`. -/
-theorem recon_intermediateGoal_5739_ringAttn (initSM initPM : Store)
-    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5739
-      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) :=
-  recon_intermediateGoal_5739_ringAttn_of_qkv initSM initPM hInit hWF.wf5739_hq_full hWF.wf5739_hk_repl hWF.wf5739_hv_repl hWF.wf5739_hq_sm hWF.wf5739_hk_sm hWF.wf5739_hv_sm hWF.wf5739_hk_shape hWF.wf5739_hv_shape hWF.wf5739_h_bound hWF.wf5739_hfull_shape hWF.wf5739_hfull_shape'
-
-set_option maxHeartbeats 4000000 in
-/-- Unconditional-given-well-formed-inputs companion of `recon_intermediateGoal_5788_ringAttn_of_qkv`. -/
-theorem recon_intermediateGoal_5788_ringAttn (initSM initPM : Store)
-    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5788
-      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) :=
-  recon_intermediateGoal_5788_ringAttn_of_qkv initSM initPM hInit hWF.wf5788_hq_full hWF.wf5788_hk_repl hWF.wf5788_hv_repl hWF.wf5788_hq_sm hWF.wf5788_hk_sm hWF.wf5788_hv_sm hWF.wf5788_hk_shape hWF.wf5788_hv_shape hWF.wf5788_h_bound hWF.wf5788_hfull_shape hWF.wf5788_hfull_shape'
-
-set_option maxHeartbeats 4000000 in
-/-- Unconditional-given-well-formed-inputs companion of `recon_intermediateGoal_5837_ringAttn_of_qkv`. -/
-theorem recon_intermediateGoal_5837_ringAttn (initSM initPM : Store)
-    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5837
-      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) :=
-  recon_intermediateGoal_5837_ringAttn_of_qkv initSM initPM hInit hWF.wf5837_hq_full hWF.wf5837_hk_repl hWF.wf5837_hv_repl hWF.wf5837_hq_sm hWF.wf5837_hk_sm hWF.wf5837_hv_sm hWF.wf5837_hk_shape hWF.wf5837_hv_shape hWF.wf5837_h_bound hWF.wf5837_hfull_shape hWF.wf5837_hfull_shape'
-
-set_option maxHeartbeats 4000000 in
-/-- Unconditional-given-well-formed-inputs companion of `recon_intermediateGoal_5886_ringAttn_of_qkv`. -/
-theorem recon_intermediateGoal_5886_ringAttn (initSM initPM : Store)
-    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5886
-      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) :=
-  recon_intermediateGoal_5886_ringAttn_of_qkv initSM initPM hInit hWF.wf5886_hq_full hWF.wf5886_hk_repl hWF.wf5886_hv_repl hWF.wf5886_hq_sm hWF.wf5886_hk_sm hWF.wf5886_hv_sm hWF.wf5886_hk_shape hWF.wf5886_hv_shape hWF.wf5886_h_bound hWF.wf5886_hfull_shape hWF.wf5886_hfull_shape'
+-- `recon_intermediateGoal_{5494,5543,5592,5641,5690,5739,5788,5837,5886}_ringAttn`
+-- (layer-2..10 next-zigzag entries) moved to `ZigzagL{2..10}Body` (Worker #27):
+-- each is now proven faithfully from its reconstructed Q/K/V goals, consuming only
+-- the genuine `wf<E>_hcuseq_bound` harness invariant.  The former goal-shaped
+-- Q/K/V/shape fields `wf<E>_h{q_full,k_repl,...}` were removed.
 
 end TrainVerify.Denote.GeneratedPatterns
