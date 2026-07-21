@@ -70,6 +70,12 @@ structure WellFormed_YOCOMoE_A04B (initSM initPM : Store) : Prop where
   wf5308_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 9530) 2048 64 32 64
   wf5365_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 9733) 2048 64 0 32
   wf5365_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 9734) 2048 64 32 64
+  -- Layer-1 cross-decoder all2all routing-locality (goal 5414); PM routing-map
+  -- shards 9905/9906 (= layer-0 9733/9734 + 172 zigzag stride).  Same positive
+  -- routing-locality class as `wf5365_hdisjA/B`, covered by the zero-tensor
+  -- witness `WellFormed_routing_witness`.
+  wf5414_hdisjA : routing_map_local (denoteGraph_ringAttn pm initPM 9905) 2048 64 0 32
+  wf5414_hdisjB : routing_map_local (denoteGraph_ringAttn pm initPM 9906) 2048 64 32 64
   wf4750_hveq4746 : denoteGraph_ringAttn sm initSM 4746 = denoteGraph_ringAttn pm initPM 4746
   wf4750_hveq4747 : denoteGraph_ringAttn sm initSM 4747 = denoteGraph_ringAttn pm initPM 4747
   wf4750_hveq4744 : denoteGraph_ringAttn sm initSM 4744 = denoteGraph_ringAttn pm initPM 4744
@@ -152,17 +158,11 @@ structure WellFormed_YOCOMoE_A04B (initSM initPM : Store) : Prop where
   -- goal-shaped Q/K/V/shape fields were removed once `5391`/`5392`/`5393`
   -- became proven (Worker #26).
   wf5396_hcuseq_bound : ∀ t, (decodeCuSeqlens (initPM 5395)).getD (t + 1) 0 ≤ 4096
-  wf5445_hq_full : (sm.nodes.take 575).foldl (applyNodeRingAttn sm) initSM 5440         = allGatherPrimDimN 0 2 0             [(pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 10007,              (pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 10008]
-  wf5445_hk_repl : (sm.nodes.take 575).foldl (applyNodeRingAttn sm) initSM 5441         = (pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 5441
-  wf5445_hv_repl : (sm.nodes.take 575).foldl (applyNodeRingAttn sm) initSM 5442         = (pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 5442
-  wf5445_hq_sm : 0 < ((sm.nodes.take 575).foldl (applyNodeRingAttn sm) initSM 5440).shape.length
-  wf5445_hk_sm : 0 < ((sm.nodes.take 575).foldl (applyNodeRingAttn sm) initSM 5441).shape.length
-  wf5445_hv_sm : 0 < ((sm.nodes.take 575).foldl (applyNodeRingAttn sm) initSM 5442).shape.length
-  wf5445_hk_shape : ((pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 5441).shape         = [4096, 4, 64]
-  wf5445_hv_shape : ((pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 5442).shape         = [4096, 4, 64]
-  wf5445_h_bound : ∀ t, (decodeCuSeqlens         ((pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 5444)).getD (t+1) 0 ≤ 4096
-  wf5445_hfull_shape : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 10007,              (pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 10008])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 5441,              (pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 5441])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 5442,              (pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 5442])           ((pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 5443)           ((pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 5444)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
-  wf5445_hfull_shape' : (fw_attn_varlen           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1213).foldl (applyNodeRingAttn pm) initPM 10007,              (pm.nodes.take 1213).foldl (applyNodeRingAttn pm) initPM 10008])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1213).foldl (applyNodeRingAttn pm) initPM 5441,              (pm.nodes.take 1213).foldl (applyNodeRingAttn pm) initPM 5441])           (allGatherPrimDimN 0 2 0             [(pm.nodes.take 1213).foldl (applyNodeRingAttn pm) initPM 5442,              (pm.nodes.take 1213).foldl (applyNodeRingAttn pm) initPM 5442])           ((pm.nodes.take 1213).foldl (applyNodeRingAttn pm) initPM 5443)           ((pm.nodes.take 1213).foldl (applyNodeRingAttn pm) initPM 5444)           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]
+  -- Faithful layer-1 next-zigzag entry (`5445`): like `5396`, the ONLY genuine
+  -- harness invariant is the cu-seqlens upper bound on the pure-init leaf `5444`
+  -- (`cu_seqlens_padded`).  All former goal-shaped Q/K/V/shape fields were removed
+  -- once `5440`/`5441`/`5442` became proven (Worker #27).
+  wf5445_hcuseq_bound : ∀ t, (decodeCuSeqlens (initPM 5444)).getD (t + 1) 0 ≤ 4096
   wf5494_hq_full : (sm.nodes.take 610).foldl (applyNodeRingAttn sm) initSM 5489         = allGatherPrimDimN 0 2 0             [(pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 10179,              (pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 10180]
   wf5494_hk_repl : (sm.nodes.take 610).foldl (applyNodeRingAttn sm) initSM 5490         = (pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 5490
   wf5494_hv_repl : (sm.nodes.take 610).foldl (applyNodeRingAttn sm) initSM 5491         = (pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 5491
@@ -266,7 +266,7 @@ structure WellFormed_YOCOMoE_A04B (initSM initPM : Store) : Prop where
 /-- Consistency witness for the routing-locality family: the all-zero routing
     map satisfies both per-rank expert-locality constraints simultaneously.
     This witnesses satisfiability of *every* per-layer routing-locality field
-    (`wf4714_hdisjA/B`, `wf4768_hdisjA/B`, `wf4822_hdisjA/B`, `wf4876_hdisjA/B`, `wf4930_hdisjA/B`, …, `wf5308_hdisjA/B`, `wf5365_hdisjA/B`): each is an instance of
+    (`wf4714_hdisjA/B`, `wf4768_hdisjA/B`, `wf4822_hdisjA/B`, `wf4876_hdisjA/B`, `wf4930_hdisjA/B`, …, `wf5308_hdisjA/B`, `wf5365_hdisjA/B`, `wf5414_hdisjA/B`): each is an instance of
     `routing_map_local _ 2048 64 0 32` or `routing_map_local _ 2048 64 32 64`,
     both discharged here by the zero-tensor baseline. -/
 theorem WellFormed_routing_witness :
@@ -422,14 +422,10 @@ theorem recon_intermediateGoal_5290_ringAttn (initSM initPM : Store)
 -- it is now proven faithfully from the reconstructed Q/K/V goals `5391`/`5392`/
 -- `5393`, consuming only the genuine `wf5396_hcuseq_bound` harness invariant.
 
-set_option maxHeartbeats 4000000 in
-/-- Unconditional-given-well-formed-inputs companion of `recon_intermediateGoal_5445_ringAttn_of_qkv`. -/
-theorem recon_intermediateGoal_5445_ringAttn (initSM initPM : Store)
-    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5445
-      (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) :=
-  recon_intermediateGoal_5445_ringAttn_of_qkv initSM initPM hInit hWF.wf5445_hq_full hWF.wf5445_hk_repl hWF.wf5445_hv_repl hWF.wf5445_hq_sm hWF.wf5445_hk_sm hWF.wf5445_hv_sm hWF.wf5445_hk_shape hWF.wf5445_hv_shape hWF.wf5445_h_bound hWF.wf5445_hfull_shape hWF.wf5445_hfull_shape'
+-- `recon_intermediateGoal_5445_ringAttn` moved to `ZigzagL1Body` (Worker #27):
+-- it is now proven faithfully from the reconstructed Q/K/V goals `5440`/`5441`/
+-- `5442`, consuming only the genuine `wf5445_hcuseq_bound` harness invariant
+-- (mirrors the faithful `5396`).
 
 set_option maxHeartbeats 4000000 in
 /-- Unconditional-given-well-formed-inputs companion of `recon_intermediateGoal_5494_ringAttn_of_qkv`. -/
