@@ -1,6 +1,6 @@
 """Authoritative small vectors for YOCO cross-rank semantics.
 
-These tests intentionally use only the Python standard library.  They pin the
+These tests intentionally use only the Python standard library. They pin the
 position/rank contracts independently of Torch, NCCL, and the current Lean
 Denote implementation.
 """
@@ -9,7 +9,9 @@ from trainverify.reference.yoco_semantics import (
     causal_sliding_attention_scalar,
     contiguous_rank_chunks,
     distributed_moe,
+    graph_aware_moe,
     local_only_moe,
+    replica_buddies,
     select_zigzag_outputs,
     zigzag_cp2_shuffle,
 )
@@ -58,3 +60,24 @@ def test_remote_expert_moe_counterexample() -> None:
     assert distributed_moe(token, route, expert_shards) != local_only_moe(
         token, route, expert_shards[0]
     )
+
+
+def test_graph_aware_remote_expert_uses_exact_declared_buddies() -> None:
+    """Graph lookup repairs the production-bug counterexample from 0 to 15."""
+    shards = {"rank0": {0: lambda x: 2 * x}, "rank1": {1: lambda x: 3 * x}}
+    groups = [["rank0", "rank1"]]
+    assert replica_buddies("rank0", groups) == ["rank0", "rank1"]
+    assert graph_aware_moe(5, 1, "rank0", groups, shards) == 15
+    assert local_only_moe(5, 1, shards["rank0"]) == 0
+
+
+def test_graph_aware_moe_missing_metadata_fails_closed() -> None:
+    """Same-op peers are not guessed when the exact replica group is absent."""
+    shards = {"rank0": {0: lambda x: 2 * x}, "rank1": {1: lambda x: 3 * x}}
+    assert replica_buddies("rank0", []) == ["rank0"]
+    try:
+        graph_aware_moe(5, 1, "rank0", [], shards)
+    except ValueError as error:
+        assert "exactly one expert owner" in str(error)
+    else:
+        raise AssertionError("missing replica metadata must not expose rank1")

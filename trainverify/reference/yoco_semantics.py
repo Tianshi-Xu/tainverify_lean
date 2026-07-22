@@ -8,10 +8,11 @@ have identical shapes but different rank-local values.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Sequence
-from typing import TypeVar
+from collections.abc import Callable, Mapping, Sequence
+from typing import Hashable, TypeVar
 
 T = TypeVar("T")
+N = TypeVar("N", bound=Hashable)
 Number = int | float
 Expert = Callable[[Number], Number]
 
@@ -97,3 +98,35 @@ def local_only_moe(token: Number, route: int, local_experts: dict[int, Expert]) 
     """Model one shard's masked contribution; a remote route contributes zero."""
     expert = local_experts.get(route)
     return 0 if expert is None else expert(token)
+
+
+def replica_buddies(
+    node: N, replica_groups: Sequence[Sequence[N]]
+) -> list[N]:
+    """Resolve one exact ordered replica group, failing closed to ``[node]``.
+
+    This is the dependency-free analogue of Lean's ``GraphDecl.replicaBuddies``.
+    Group order is semantic expert-shard order; missing, ambiguous, duplicate,
+    or stale membership is never guessed.
+    """
+    matches = [list(group) for group in replica_groups if node in group]
+    if len(matches) != 1:
+        return [node]
+    buddies = matches[0]
+    if len(set(buddies)) != len(buddies) or node not in buddies:
+        return [node]
+    return buddies
+
+
+def graph_aware_moe(
+    token: Number,
+    route: int,
+    node: N,
+    replica_groups: Sequence[Sequence[N]],
+    expert_shards: Mapping[N, dict[int, Expert]],
+) -> Number:
+    """Evaluate full-expert MoE from exactly the node's declared buddy shards."""
+    buddies = replica_buddies(node, replica_groups)
+    if any(buddy not in expert_shards for buddy in buddies):
+        buddies = [node]
+    return distributed_moe(token, route, [expert_shards[buddy] for buddy in buddies])

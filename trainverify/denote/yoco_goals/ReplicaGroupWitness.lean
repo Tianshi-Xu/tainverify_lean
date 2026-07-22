@@ -58,4 +58,17 @@ example : pm.replicaGroups.head? = some {
     ]
   } := by native_decide
 
+/-- The first generated MoE call resolves the exact two expert-weight shards in
+    declared `[rank0, rank1]` order (actual five-input ordering locked here). -/
+example : pm.replicaBuddies
+    { rank := 0, op := "OpName.FW_all2all_moe_gmm",
+      ins := [11941, 7481, 7483, 7487, 7489], outs := [7491],
+      params := [64, 0, 32, 8] } =
+    [{ rank := 0, op := "OpName.FW_all2all_moe_gmm",
+       ins := [11941, 7481, 7483, 7487, 7489], outs := [7491],
+       params := [64, 0, 32, 8] },
+     { rank := 1, op := "OpName.FW_all2all_moe_gmm",
+       ins := [11942, 7482, 7484, 7488, 7490], outs := [7492],
+       params := [64, 32, 64, 8] }] := by native_decide
+
 end TrainVerify.Denote.ReplicaGroupWitness

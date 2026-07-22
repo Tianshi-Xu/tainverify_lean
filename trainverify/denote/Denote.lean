@@ -21643,6 +21643,83 @@ noncomputable def applyNodeRingAttn (g : GraphDecl) (s : Store) (n : NodeDecl) :
   else
     applyNode g s n
 
+/-!
+## Canonical distributed node semantics
+
+`evalOp` and `applyNode` retain their historical per-rank MoE interpretation
+because existing local-range lemmas use it.  It is not the production
+interpretation of `nnscaler_all2all_moe_gmm`: every output token can depend on
+every expert shard after dispatch and combine.
+
+This evaluator obtains exact replicas from `GraphDecl.replicaBuddies`.  It
+neither rank-sorts nor infers replicas from op names.  Declared buddy order is
+the expert-shard concatenation order.  Missing or malformed metadata inherits
+`replicaBuddies`' fail-closed singleton result.
+
+Only `FW_all2all_moe_gmm` is added here.  Attention dispatch is delegated
+unchanged to `applyNodeRingAttn`; shuffle remains ordinary `applyNode` behavior.
+-/
+
+/-- Faithful full-expert value for one generated five-input MoE node.  Input
+    order is `[input, routing_probs, routing_map, w13, w2]`; each buddy's fourth
+    and fifth inputs are its corresponding expert-weight shards. -/
+noncomputable def applyNodeFullExpertMoE_value
+    (g : GraphDecl) (s : Store) (n : NodeDecl) : Tensor :=
+  let buddies := g.replicaBuddies n
+  let w13s := buddies.map (fun m => s (m.ins.getD 3 0))
+  let w2s := buddies.map (fun m => s (m.ins.getD 4 0))
+  fw_all2all_moe_gmm_full
+    (s (n.ins.getD 0 0)) (s (n.ins.getD 1 0)) (s (n.ins.getD 2 0))
+    w13s w2s
+    (n.params.getD 0 1) (n.params.getD 3 1)
+    (((n.params.getD 4 10 : Nat) : Scalar))
+
+/-- Canonical distributed apply step. Full-expert MoE is intercepted first;
+    every other operator retains the existing graph-aware attention semantics. -/
+noncomputable def applyNodeDistributed
+    (g : GraphDecl) (s : Store) (n : NodeDecl) : Store :=
+  if n.op = "OpName.FW_all2all_moe_gmm" then
+    storeSet s [(n.outs.getD 0 0, applyNodeFullExpertMoE_value g s n)]
+  else
+    applyNodeRingAttn g s n
+
+/-- Canonical production-facing distributed graph denotation. -/
+noncomputable def denoteGraphDistributed (g : GraphDecl) (init : Store) : Store :=
+  g.nodes.foldl (applyNodeDistributed g) init
+
+/-- The MoE interceptor writes faithful full-expert semantics at its output. -/
+theorem applyNodeDistributed_moe_out
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (inputTid rpTid rmTid w13Tid w2Tid outTid : Tid) (params : List Nat) :
+    applyNodeDistributed g s
+      { rank := rank, op := "OpName.FW_all2all_moe_gmm",
+        ins := [inputTid, rpTid, rmTid, w13Tid, w2Tid],
+        outs := [outTid], params := params } outTid =
+      applyNodeFullExpertMoE_value g s
+        { rank := rank, op := "OpName.FW_all2all_moe_gmm",
+          ins := [inputTid, rpTid, rmTid, w13Tid, w2Tid],
+          outs := [outTid], params := params } := by
+  unfold applyNodeDistributed
+  rw [if_pos (rfl : ("OpName.FW_all2all_moe_gmm" : String) = _)]
+  change storeSet s [(outTid, _)] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
+/-- Fail-closed singleton behavior: gather exactly this node's local weight
+    shards and nothing inferred from other graph nodes. -/
+theorem applyNodeFullExpertMoE_value_singleton
+    (g : GraphDecl) (s : Store) (n : NodeDecl)
+    (hbuddy : g.replicaBuddies n = [n]) :
+    applyNodeFullExpertMoE_value g s n =
+      fw_all2all_moe_gmm_full
+        (s (n.ins.getD 0 0)) (s (n.ins.getD 1 0)) (s (n.ins.getD 2 0))
+        [s (n.ins.getD 3 0)] [s (n.ins.getD 4 0)]
+        (n.params.getD 0 1) (n.params.getD 3 1)
+        (((n.params.getD 4 10 : Nat) : Scalar)) := by
+  unfold applyNodeFullExpertMoE_value
+  rw [hbuddy]
+  rfl
+
 /-- When `applyNodeRingAttn` intercepts a zigzag node with singleton buddy,
     it stores `fw_attn_varlen`-of-inputs at the output tid, matching what
     the plain (numParts-conditional) evalOp does for numRanks=1. -/
