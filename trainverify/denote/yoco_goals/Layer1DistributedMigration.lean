@@ -259,6 +259,210 @@ theorem recon_intermediateGoal_4734_distributed (initSM initPM : Store)
 
 #print axioms recon_intermediateGoal_4734_distributed
 
+/-! ## 4735–4738 — mechanical post-MoE chain
+
+All nodes in this chain are reduced directly in the distributed denotation.  The
+only ring bridge below is for 4703, whose defining prefix is strictly before the
+first MoE node. -/
+
+set_option maxRecDepth 10000000 in
+set_option maxHeartbeats 4000000 in
+theorem recon_intermediateGoal_4735_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4735
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) := by
+  have h4734 := recon_intermediateGoal_4734_distributed initSM initPM hSM hPM hInit
+  have hv4734 : denoteGraphDistributed sm initSM 4734 =
+      denoteGraphDistributed pm initPM 4734 :=
+    oneTp_valeq intermediateGoal_4734 _ _ 4734 rfl rfl rfl rfl h4734
+  have hs4734 : (denoteGraphDistributed sm initSM 4734).shape = [4096, 1024] := by
+    have hs := h4734.1
+    simpa [intermediateGoal_4734] using hs
+  have rSM : denoteGraphDistributed sm initSM 4735 =
+      id (denoteGraphDistributed sm initSM 4734) :=
+    distributed_reduce1 sm initSM 39
+      { rank := 0, op := "OpName.FW_float", ins := [4734], outs := [4735] }
+      4734 4735 id (by native_decide) (by native_decide) (by decide)
+      (fun s => applyNode_fw_float_out sm s 0 4734 4735 [])
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rPM : denoteGraphDistributed pm initPM 4735 =
+      id (denoteGraphDistributed pm initPM 4734) :=
+    distributed_reduce1 pm initPM 121
+      { rank := 1, op := "OpName.FW_float", ins := [4734], outs := [4735] }
+      4734 4735 id (by native_decide) (by native_decide) (by decide)
+      (fun s => applyNode_fw_float_out pm s 1 4734 4735 [])
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at rSM rPM
+  have hval : denoteGraphDistributed sm initSM 4735 =
+      denoteGraphDistributed pm initPM 4735 := by
+    rw [rSM, rPM, hv4734]
+  have hshape : (denoteGraphDistributed sm initSM 4735).shape = [4096, 1024] := by
+    rw [rSM]
+    exact hs4734
+  exact wrap_1tp_gen (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM)
+    intermediateGoal_4735 4735 [4096, 1024] rfl rfl rfl rfl rfl rfl hval hshape
+
+set_option maxRecDepth 10000000 in
+set_option maxHeartbeats 4000000 in
+theorem recon_intermediateGoal_4736_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4736
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) := by
+  -- 4703 is before the first MoE (SM node 31 / PM node 104), so this is the
+  -- unique permitted distributed-to-ring transport in the post-MoE chain.
+  have hs4703bridge : denoteGraphDistributed sm initSM 4703 =
+      denoteGraph_ringAttn sm initSM 4703 :=
+    denoteGraphDistributed_eq_ring_before_moe sm initSM 4703 31
+      (by native_decide) (by native_decide) (by native_decide)
+  have hp4703bridge : denoteGraphDistributed pm initPM 4703 =
+      denoteGraph_ringAttn pm initPM 4703 :=
+    denoteGraphDistributed_eq_ring_before_moe pm initPM 4703 104
+      (by native_decide) (by native_decide) (by native_decide)
+  have h4703ring := recon_intermediateGoal_4703_ringAttn initSM initPM hSM hPM hInit
+  have hv4703ring : denoteGraph_ringAttn sm initSM 4703 =
+      denoteGraph_ringAttn pm initPM 4703 :=
+    oneTp_valeq intermediateGoal_4703 _ _ 4703 rfl rfl rfl rfl h4703ring
+  have hs4703ring : (denoteGraph_ringAttn sm initSM 4703).shape = [4096, 1024] := by
+    have hs := h4703ring.1
+    simpa [intermediateGoal_4703] using hs
+  have hv4703 : denoteGraphDistributed sm initSM 4703 =
+      denoteGraphDistributed pm initPM 4703 := by
+    rw [hs4703bridge, hp4703bridge, hv4703ring]
+  have hs4703 : (denoteGraphDistributed sm initSM 4703).shape = [4096, 1024] := by
+    rw [hs4703bridge]
+    exact hs4703ring
+  have s7408 : denoteGraphDistributed sm initSM 7408 =
+      id (denoteGraphDistributed sm initSM 4703) :=
+    distributed_reduce1 sm initSM 16
+      { rank := 0, op := "OpName.FW_multiref", ins := [4703], outs := [7404, 7408], params := [2] }
+      4703 7408 id (by native_decide) (by native_decide) (by decide)
+      (fun s => applyNode_fw_multiref2_second_out' sm s 0 4703 7404 7408 (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p14656 : denoteGraphDistributed pm initPM 14656 =
+      id (denoteGraphDistributed pm initPM 4703) :=
+    distributed_reduce1 pm initPM 65
+      { rank := 1, op := "OpName.FW_multiref", ins := [4703], outs := [14652, 14656], params := [2] }
+      4703 14656 id (by native_decide) (by native_decide) (by decide)
+      (fun s => applyNode_fw_multiref2_second_out' pm s 1 4703 14652 14656 (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at s7408 p14656
+  have hv7408 : denoteGraphDistributed sm initSM 7408 =
+      denoteGraphDistributed pm initPM 14656 := by
+    rw [s7408, p14656, hv4703]
+  have hs7408 : (denoteGraphDistributed sm initSM 7408).shape = [4096, 1024] := by
+    rw [s7408]
+    exact hs4703
+  have h4735 := recon_intermediateGoal_4735_distributed initSM initPM hSM hPM hInit
+  have hv4735 : denoteGraphDistributed sm initSM 4735 =
+      denoteGraphDistributed pm initPM 4735 :=
+    oneTp_valeq intermediateGoal_4735 _ _ 4735 rfl rfl rfl rfl h4735
+  have hs4735 : (denoteGraphDistributed sm initSM 4735).shape = [4096, 1024] := by
+    have hs := h4735.1
+    simpa [intermediateGoal_4735] using hs
+  have rSM : denoteGraphDistributed sm initSM 4736 =
+      elemwiseAdd (denoteGraphDistributed sm initSM 7408)
+        (denoteGraphDistributed sm initSM 4735) :=
+    distributed_reduce2 sm initSM 40
+      { rank := 0, op := "OpName.FW_add", ins := [7408, 4735], outs := [4736] }
+      7408 4735 4736 elemwiseAdd (by native_decide) (by native_decide) (by decide)
+      (fun s => applyNode_fw_add2_out sm s 0 7408 4735 4736)
+      (by native_decide) (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide)
+  have rPM : denoteGraphDistributed pm initPM 4736 =
+      elemwiseAdd (denoteGraphDistributed pm initPM 14656)
+        (denoteGraphDistributed pm initPM 4735) :=
+    distributed_reduce2 pm initPM 123
+      { rank := 1, op := "OpName.FW_add", ins := [14656, 4735], outs := [4736] }
+      14656 4735 4736 elemwiseAdd (by native_decide) (by native_decide) (by decide)
+      (fun s => applyNode_fw_add2_out pm s 1 14656 4735 4736)
+      (by native_decide) (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide)
+  have hval : denoteGraphDistributed sm initSM 4736 =
+      denoteGraphDistributed pm initPM 4736 := by
+    rw [rSM, rPM, hv7408, hv4735]
+  have hshape : (denoteGraphDistributed sm initSM 4736).shape = [4096, 1024] := by
+    rw [rSM]
+    exact elemwiseAdd_shape_of_shapes _ _ [4096, 1024] hs7408 hs4735
+  exact wrap_1tp_gen (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM)
+    intermediateGoal_4736 4736 [4096, 1024] rfl rfl rfl rfl rfl rfl hval hshape
+
+set_option maxRecDepth 10000000 in
+set_option maxHeartbeats 4000000 in
+theorem recon_intermediateGoal_4738_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4738
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) := by
+  have h4736 := recon_intermediateGoal_4736_distributed initSM initPM hSM hPM hInit
+  have hv4736 : denoteGraphDistributed sm initSM 4736 =
+      denoteGraphDistributed pm initPM 4736 :=
+    oneTp_valeq intermediateGoal_4736 _ _ 4736 rfl rfl rfl rfl h4736
+  have hs4736 : (denoteGraphDistributed sm initSM 4736).shape = [4096, 1024] := by
+    have hs := h4736.1
+    simpa [intermediateGoal_4736] using hs
+  have s7435 : denoteGraphDistributed sm initSM 7435 =
+      id (denoteGraphDistributed sm initSM 4736) :=
+    distributed_reduce1 sm initSM 41
+      { rank := 0, op := "OpName.FW_multiref", ins := [4736], outs := [7435, 7439], params := [2] }
+      4736 7435 id (by native_decide) (by native_decide) (by decide)
+      (fun s => applyNode_fw_multiref2_first_out sm s 0 4736 7435 7439)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p14668 : denoteGraphDistributed pm initPM 14668 =
+      id (denoteGraphDistributed pm initPM 4736) :=
+    distributed_reduce1 pm initPM 125
+      { rank := 1, op := "OpName.FW_multiref", ins := [4736], outs := [14668, 14672], params := [2] }
+      4736 14668 id (by native_decide) (by native_decide) (by decide)
+      (fun s => applyNode_fw_multiref2_first_out pm s 1 4736 14668 14672)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at s7435 p14668
+  have hweightInit : initSM 4737 = initPM 4737 := by
+    have hg := hInit initGoal_4737 (by native_decide)
+    unfold InitGoalHolds at hg
+    obtain ⟨_, _, hval⟩ := hg
+    simp only [initGoal_4737, List.map, reconstructForGoal, List.headD] at hval
+    exact hval
+  have hsweight : denoteGraphDistributed sm initSM 4737 = initSM 4737 := by
+    rw [denoteGraphDistributed]
+    exact foldl_applyNodeDistributed_at_not_written sm sm.nodes initSM 4737
+      (by native_decide) (by native_decide)
+  have hpweight : denoteGraphDistributed pm initPM 4737 = initPM 4737 := by
+    rw [denoteGraphDistributed]
+    exact foldl_applyNodeDistributed_at_not_written pm pm.nodes initPM 4737
+      (by native_decide) (by native_decide)
+  have hw4737 : denoteGraphDistributed sm initSM 4737 =
+      denoteGraphDistributed pm initPM 4737 := by
+    rw [hsweight, hpweight, hweightInit]
+  have rSM : denoteGraphDistributed sm initSM 4738 =
+      fw_rms_norm (denoteGraphDistributed sm initSM 7435)
+        (denoteGraphDistributed sm initSM 4737) :=
+    distributed_reduce2 sm initSM 42
+      { rank := 0, op := "OpName.FW_rms_norm", ins := [7435, 4737], outs := [4738] }
+      7435 4737 4738 fw_rms_norm (by native_decide) (by native_decide) (by decide)
+      (fun s => applyNode_fw_rms_norm_out_1p sm s 0 7435 4737 4738)
+      (by native_decide) (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide)
+  have rPM : denoteGraphDistributed pm initPM 4738 =
+      fw_rms_norm (denoteGraphDistributed pm initPM 14668)
+        (denoteGraphDistributed pm initPM 4737) :=
+    distributed_reduce2 pm initPM 127
+      { rank := 1, op := "OpName.FW_rms_norm", ins := [14668, 4737], outs := [4738] }
+      14668 4737 4738 fw_rms_norm (by native_decide) (by native_decide) (by decide)
+      (fun s => applyNode_fw_rms_norm_out_1p pm s 1 14668 4737 4738)
+      (by native_decide) (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide)
+  have hval : denoteGraphDistributed sm initSM 4738 =
+      denoteGraphDistributed pm initPM 4738 := by
+    rw [rSM, rPM, s7435, p14668, hv4736, hw4737]
+  have hshape : (denoteGraphDistributed sm initSM 4738).shape = [4096, 1024] := by
+    rw [rSM]
+    exact fw_rms_norm_shape2 _ _ 4096 1024 (by rw [s7435]; exact hs4736)
+  exact wrap_1tp_gen (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM)
+    intermediateGoal_4738 4738 [4096, 1024] rfl rfl rfl rfl rfl rfl hval hshape
+
+#print axioms recon_intermediateGoal_4738_distributed
+
 private def layer1SmMoe : NodeDecl :=
   { rank := 0, op := "OpName.FW_all2all_moe_gmm",
     ins := [7471, 4763, 4764, 4766, 4767], outs := [4768],
