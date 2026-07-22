@@ -2988,63 +2988,6 @@ theorem singleton_init_eq (initSM initPM : Store)
   rw [hshape] at hval
   simpa [List.map, reconstructWithDim_singleton] using hval
 
-/-- Buddy lookup for a SM (single-rank) attention node.
-
-    Given a proof that the filter yielding matching-key attention nodes on
-    `sm_goal_3.nodes` returns exactly `[n]`, this closes
-    `ringAttnBuddies sm_goal_3 n = [n]` in one line. Layer-agnostic replacement
-    for the per-layer `buddy_sm`/`buddy_sm_1` boilerplate.
-
-    Usage:
-      theorem buddy_sm_Lk : ringAttnBuddies sm_goal_3 nSM_k = [nSM_k] :=
-        buddy_from_singleton_sm nSM_k (by rfl)
--/
-theorem buddy_from_singleton_sm (n : NodeDecl)
-    (hunique : List.filter (fun m => decide (m.op = n.op) && decide (m.params = n.params) &&
-        decide (m.ins.getD 3 0 = n.ins.getD 3 0) && decide (m.ins.getD 4 0 = n.ins.getD 4 0))
-        sm_goal_3.nodes = [n]) :
-    ringAttnBuddies sm_goal_3 n = [n] := by
-  show (List.filter (fun m => decide (m.op = n.op) && decide (m.params = n.params) &&
-      decide (m.ins.getD 3 0 = n.ins.getD 3 0) && decide (m.ins.getD 4 0 = n.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [n]
-  rw [hunique]
-  simp
-
-/-- Buddy lookup for a PM (2-rank) attention node.
-
-    Given `n : NodeDecl` and its rank-0/rank-1 companions `r0`/`r1`, together
-    with a filter-uniqueness proof `filter … = [r0, r1]` and a rank ordering
-    proof `r0.rank ≤ r1.rank`, this closes `ringAttnBuddies pm_goal_3 n = [r0, r1]`.
-    Works for both "n = r0" (looking up rank 0's buddies) and "n = r1"
-    (looking up rank 1's).
-
-    Usage:
-      theorem buddy_r0_Lk : ringAttnBuddies pm_goal_3 nR0_k = [nR0_k, nR1_k] :=
-        buddy_from_pair_pm nR0_k nR0_k nR1_k (by rfl) (by decide)
-      theorem buddy_r1_Lk : ringAttnBuddies pm_goal_3 nR1_k = [nR0_k, nR1_k] :=
-        buddy_from_pair_pm nR1_k nR0_k nR1_k (by rfl) (by decide)
-
-    (The `by decide` closes `nR0_k.rank ≤ nR1_k.rank` when the node decls have
-    concrete ranks 0 and 1.)
--/
-theorem buddy_from_pair_pm (n r0 r1 : NodeDecl)
-    (hunique : List.filter (fun m => decide (m.op = n.op) && decide (m.params = n.params) &&
-        decide (m.ins.getD 3 0 = n.ins.getD 3 0) && decide (m.ins.getD 4 0 = n.ins.getD 4 0))
-        pm_goal_3.nodes = [r0, r1])
-    (hrank : r0.rank ≤ r1.rank) :
-    ringAttnBuddies pm_goal_3 n = [r0, r1] := by
-  show (List.filter (fun m => decide (m.op = n.op) && decide (m.params = n.params) &&
-      decide (m.ins.getD 3 0 = n.ins.getD 3 0) && decide (m.ins.getD 4 0 = n.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [r0, r1]
-  rw [hunique]
-  apply List.mergeSort_of_pairwise
-  apply List.Pairwise.cons
-  · intro b hb
-    simp only [List.mem_singleton] at hb
-    subst hb
-    exact decide_eq_true hrank
-  · exact List.Pairwise.cons (by simp) List.Pairwise.nil
-
 /-- Extract `initSM 4680 = initPM 4680` for the Pattern_3 prereq (goal_5 =
     embedding output). This is the standard 5-line 'have hg := hInit goal_5'
     boilerplate that appears 6+ times across L0/L1 qproj/kproj/vproj commutes.
@@ -4678,31 +4621,13 @@ def nR1 : NodeDecl := { rank := 1, op := "OpName.FW_attn_sliding_window", ins :=
 
 -- buddy facts (kernel-clean)
 theorem buddy_sm : ringAttnBuddies sm_goal_3 nSM = [nSM] := by
-  show (List.filter (fun m => decide (m.op = nSM.op) && decide (m.params = nSM.params) &&
-      decide (m.ins.getD 3 0 = nSM.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM]
-  rw [show (List.filter (fun m => decide (m.op = nSM.op) && decide (m.params = nSM.params) &&
-      decide (m.ins.getD 3 0 = nSM.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM] from by rfl]
-  simp
+  native_decide
 
 theorem buddy_r0 : ringAttnBuddies pm_goal_3 nR0 = [nR0, nR1] := by
-  show (List.filter (fun m => decide (m.op = nR0.op) && decide (m.params = nR0.params) &&
-      decide (m.ins.getD 3 0 = nR0.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0, nR1]
-  rw [show (List.filter (fun m => decide (m.op = nR0.op) && decide (m.params = nR0.params) &&
-      decide (m.ins.getD 3 0 = nR0.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0, nR1] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 theorem buddy_r1 : ringAttnBuddies pm_goal_3 nR1 = [nR0, nR1] := by
-  show (List.filter (fun m => decide (m.op = nR1.op) && decide (m.params = nR1.params) &&
-      decide (m.ins.getD 3 0 = nR1.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0, nR1]
-  rw [show (List.filter (fun m => decide (m.op = nR1.op) && decide (m.params = nR1.params) &&
-      decide (m.ins.getD 3 0 = nR1.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0, nR1] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxHeartbeats 12000000 in
 theorem sm_pm_attention_L0_commute
@@ -7255,31 +7180,13 @@ def nR0_1 : NodeDecl := { rank := 0, op := "OpName.FW_attn_sliding_window", ins 
 def nR1_1 : NodeDecl := { rank := 1, op := "OpName.FW_attn_sliding_window", ins := [7620, 7622, 7608, 4748, 4749], outs := [7624], params := [16, 4, 64, 64, 1, 512] }
 
 theorem buddy_sm_1 : ringAttnBuddies sm_goal_3 nSM_1 = [nSM_1] := by
-  show (List.filter (fun m => decide (m.op = nSM_1.op) && decide (m.params = nSM_1.params) &&
-      decide (m.ins.getD 3 0 = nSM_1.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_1.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_1]
-  rw [show (List.filter (fun m => decide (m.op = nSM_1.op) && decide (m.params = nSM_1.params) &&
-      decide (m.ins.getD 3 0 = nSM_1.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_1.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_1] from by rfl]
-  simp
+  native_decide
 
 theorem buddy_r0_1 : ringAttnBuddies pm_goal_3 nR0_1 = [nR0_1, nR1_1] := by
-  show (List.filter (fun m => decide (m.op = nR0_1.op) && decide (m.params = nR0_1.params) &&
-      decide (m.ins.getD 3 0 = nR0_1.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_1.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_1, nR1_1]
-  rw [show (List.filter (fun m => decide (m.op = nR0_1.op) && decide (m.params = nR0_1.params) &&
-      decide (m.ins.getD 3 0 = nR0_1.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_1.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_1, nR1_1] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 theorem buddy_r1_1 : ringAttnBuddies pm_goal_3 nR1_1 = [nR0_1, nR1_1] := by
-  show (List.filter (fun m => decide (m.op = nR1_1.op) && decide (m.params = nR1_1.params) &&
-      decide (m.ins.getD 3 0 = nR1_1.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_1.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_1, nR1_1]
-  rw [show (List.filter (fun m => decide (m.op = nR1_1.op) && decide (m.params = nR1_1.params) &&
-      decide (m.ins.getD 3 0 = nR1_1.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_1.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_1, nR1_1] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxHeartbeats 12000000 in
 theorem sm_pm_carry_4736_commute
@@ -10648,33 +10555,15 @@ def nR1_2 : NodeDecl := { rank := 1, op := "OpName.FW_attn_sliding_window", ins 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_2 : ringAttnBuddies sm_goal_3 nSM_2 = [nSM_2] := by
-  show (List.filter (fun m => decide (m.op = nSM_2.op) && decide (m.params = nSM_2.params) &&
-      decide (m.ins.getD 3 0 = nSM_2.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_2.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_2]
-  rw [show (List.filter (fun m => decide (m.op = nSM_2.op) && decide (m.params = nSM_2.params) &&
-      decide (m.ins.getD 3 0 = nSM_2.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_2.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_2] from by rfl]
-  simp
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_2 : ringAttnBuddies pm_goal_3 nR0_2 = [nR0_2, nR1_2] := by
-  show (List.filter (fun m => decide (m.op = nR0_2.op) && decide (m.params = nR0_2.params) &&
-      decide (m.ins.getD 3 0 = nR0_2.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_2.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_2, nR1_2]
-  rw [show (List.filter (fun m => decide (m.op = nR0_2.op) && decide (m.params = nR0_2.params) &&
-      decide (m.ins.getD 3 0 = nR0_2.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_2.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_2, nR1_2] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_2 : ringAttnBuddies pm_goal_3 nR1_2 = [nR0_2, nR1_2] := by
-  show (List.filter (fun m => decide (m.op = nR1_2.op) && decide (m.params = nR1_2.params) &&
-      decide (m.ins.getD 3 0 = nR1_2.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_2.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_2, nR1_2]
-  rw [show (List.filter (fun m => decide (m.op = nR1_2.op) && decide (m.params = nR1_2.params) &&
-      decide (m.ins.getD 3 0 = nR1_2.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_2.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_2, nR1_2] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 100000000 in
@@ -13536,33 +13425,15 @@ def nR1_3 : NodeDecl := { rank := 1, op := "OpName.FW_attn_sliding_window", ins 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_3 : ringAttnBuddies sm_goal_3 nSM_3 = [nSM_3] := by
-  show (List.filter (fun m => decide (m.op = nSM_3.op) && decide (m.params = nSM_3.params) &&
-      decide (m.ins.getD 3 0 = nSM_3.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_3.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_3]
-  rw [show (List.filter (fun m => decide (m.op = nSM_3.op) && decide (m.params = nSM_3.params) &&
-      decide (m.ins.getD 3 0 = nSM_3.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_3.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_3] from by rfl]
-  simp
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_3 : ringAttnBuddies pm_goal_3 nR0_3 = [nR0_3, nR1_3] := by
-  show (List.filter (fun m => decide (m.op = nR0_3.op) && decide (m.params = nR0_3.params) &&
-      decide (m.ins.getD 3 0 = nR0_3.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_3.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_3, nR1_3]
-  rw [show (List.filter (fun m => decide (m.op = nR0_3.op) && decide (m.params = nR0_3.params) &&
-      decide (m.ins.getD 3 0 = nR0_3.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_3.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_3, nR1_3] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_3 : ringAttnBuddies pm_goal_3 nR1_3 = [nR0_3, nR1_3] := by
-  show (List.filter (fun m => decide (m.op = nR1_3.op) && decide (m.params = nR1_3.params) &&
-      decide (m.ins.getD 3 0 = nR1_3.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_3.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_3, nR1_3]
-  rw [show (List.filter (fun m => decide (m.op = nR1_3.op) && decide (m.params = nR1_3.params) &&
-      decide (m.ins.getD 3 0 = nR1_3.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_3.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_3, nR1_3] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxRecDepth 1000000 in
 open Lean Elab Command Term in
@@ -15401,33 +15272,15 @@ def nR1_4 : NodeDecl := { rank := 1, op := "OpName.FW_attn_sliding_window", ins 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_4 : ringAttnBuddies sm_goal_3 nSM_4 = [nSM_4] := by
-  show (List.filter (fun m => decide (m.op = nSM_4.op) && decide (m.params = nSM_4.params) &&
-      decide (m.ins.getD 3 0 = nSM_4.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_4.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_4]
-  rw [show (List.filter (fun m => decide (m.op = nSM_4.op) && decide (m.params = nSM_4.params) &&
-      decide (m.ins.getD 3 0 = nSM_4.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_4.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_4] from by rfl]
-  simp
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_4 : ringAttnBuddies pm_goal_3 nR0_4 = [nR0_4, nR1_4] := by
-  show (List.filter (fun m => decide (m.op = nR0_4.op) && decide (m.params = nR0_4.params) &&
-      decide (m.ins.getD 3 0 = nR0_4.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_4.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_4, nR1_4]
-  rw [show (List.filter (fun m => decide (m.op = nR0_4.op) && decide (m.params = nR0_4.params) &&
-      decide (m.ins.getD 3 0 = nR0_4.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_4.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_4, nR1_4] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_4 : ringAttnBuddies pm_goal_3 nR1_4 = [nR0_4, nR1_4] := by
-  show (List.filter (fun m => decide (m.op = nR1_4.op) && decide (m.params = nR1_4.params) &&
-      decide (m.ins.getD 3 0 = nR1_4.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_4.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_4, nR1_4]
-  rw [show (List.filter (fun m => decide (m.op = nR1_4.op) && decide (m.params = nR1_4.params) &&
-      decide (m.ins.getD 3 0 = nR1_4.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_4.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_4, nR1_4] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 100000000 in
@@ -16925,35 +16778,17 @@ def nR1_5 : NodeDecl := { rank := 1, op := "OpName.FW_attn_sliding_window", ins 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_5 : ringAttnBuddies sm_goal_3 nSM_5 = [nSM_5] := by
-  show (List.filter (fun m => decide (m.op = nSM_5.op) && decide (m.params = nSM_5.params) &&
-      decide (m.ins.getD 3 0 = nSM_5.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_5.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_5]
-  rw [show (List.filter (fun m => decide (m.op = nSM_5.op) && decide (m.params = nSM_5.params) &&
-      decide (m.ins.getD 3 0 = nSM_5.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_5.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_5] from by rfl]
-  simp
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_5 : ringAttnBuddies pm_goal_3 nR0_5 = [nR0_5, nR1_5] := by
-  show (List.filter (fun m => decide (m.op = nR0_5.op) && decide (m.params = nR0_5.params) &&
-      decide (m.ins.getD 3 0 = nR0_5.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_5.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_5, nR1_5]
-  rw [show (List.filter (fun m => decide (m.op = nR0_5.op) && decide (m.params = nR0_5.params) &&
-      decide (m.ins.getD 3 0 = nR0_5.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_5.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_5, nR1_5] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_5 : ringAttnBuddies pm_goal_3 nR1_5 = [nR0_5, nR1_5] := by
-  show (List.filter (fun m => decide (m.op = nR1_5.op) && decide (m.params = nR1_5.params) &&
-      decide (m.ins.getD 3 0 = nR1_5.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_5.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_5, nR1_5]
-  rw [show (List.filter (fun m => decide (m.op = nR1_5.op) && decide (m.params = nR1_5.params) &&
-      decide (m.ins.getD 3 0 = nR1_5.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_5.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_5, nR1_5] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
@@ -18455,35 +18290,17 @@ def nR1_6 : NodeDecl := { rank := 1, op := "OpName.FW_attn_sliding_window", ins 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_6 : ringAttnBuddies sm_goal_3 nSM_6 = [nSM_6] := by
-  show (List.filter (fun m => decide (m.op = nSM_6.op) && decide (m.params = nSM_6.params) &&
-      decide (m.ins.getD 3 0 = nSM_6.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_6.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_6]
-  rw [show (List.filter (fun m => decide (m.op = nSM_6.op) && decide (m.params = nSM_6.params) &&
-      decide (m.ins.getD 3 0 = nSM_6.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_6.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_6] from by rfl]
-  simp
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_6 : ringAttnBuddies pm_goal_3 nR0_6 = [nR0_6, nR1_6] := by
-  show (List.filter (fun m => decide (m.op = nR0_6.op) && decide (m.params = nR0_6.params) &&
-      decide (m.ins.getD 3 0 = nR0_6.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_6.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_6, nR1_6]
-  rw [show (List.filter (fun m => decide (m.op = nR0_6.op) && decide (m.params = nR0_6.params) &&
-      decide (m.ins.getD 3 0 = nR0_6.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_6.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_6, nR1_6] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_6 : ringAttnBuddies pm_goal_3 nR1_6 = [nR0_6, nR1_6] := by
-  show (List.filter (fun m => decide (m.op = nR1_6.op) && decide (m.params = nR1_6.params) &&
-      decide (m.ins.getD 3 0 = nR1_6.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_6.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_6, nR1_6]
-  rw [show (List.filter (fun m => decide (m.op = nR1_6.op) && decide (m.params = nR1_6.params) &&
-      decide (m.ins.getD 3 0 = nR1_6.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_6.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_6, nR1_6] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
@@ -19985,35 +19802,17 @@ def nR1_7 : NodeDecl := { rank := 1, op := "OpName.FW_attn_sliding_window", ins 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_7 : ringAttnBuddies sm_goal_3 nSM_7 = [nSM_7] := by
-  show (List.filter (fun m => decide (m.op = nSM_7.op) && decide (m.params = nSM_7.params) &&
-      decide (m.ins.getD 3 0 = nSM_7.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_7.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_7]
-  rw [show (List.filter (fun m => decide (m.op = nSM_7.op) && decide (m.params = nSM_7.params) &&
-      decide (m.ins.getD 3 0 = nSM_7.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_7.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_7] from by rfl]
-  simp
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_7 : ringAttnBuddies pm_goal_3 nR0_7 = [nR0_7, nR1_7] := by
-  show (List.filter (fun m => decide (m.op = nR0_7.op) && decide (m.params = nR0_7.params) &&
-      decide (m.ins.getD 3 0 = nR0_7.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_7.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_7, nR1_7]
-  rw [show (List.filter (fun m => decide (m.op = nR0_7.op) && decide (m.params = nR0_7.params) &&
-      decide (m.ins.getD 3 0 = nR0_7.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_7.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_7, nR1_7] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_7 : ringAttnBuddies pm_goal_3 nR1_7 = [nR0_7, nR1_7] := by
-  show (List.filter (fun m => decide (m.op = nR1_7.op) && decide (m.params = nR1_7.params) &&
-      decide (m.ins.getD 3 0 = nR1_7.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_7.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_7, nR1_7]
-  rw [show (List.filter (fun m => decide (m.op = nR1_7.op) && decide (m.params = nR1_7.params) &&
-      decide (m.ins.getD 3 0 = nR1_7.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_7.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_7, nR1_7] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
@@ -21515,35 +21314,17 @@ def nR1_8 : NodeDecl := { rank := 1, op := "OpName.FW_attn_sliding_window", ins 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_8 : ringAttnBuddies sm_goal_3 nSM_8 = [nSM_8] := by
-  show (List.filter (fun m => decide (m.op = nSM_8.op) && decide (m.params = nSM_8.params) &&
-      decide (m.ins.getD 3 0 = nSM_8.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_8.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_8]
-  rw [show (List.filter (fun m => decide (m.op = nSM_8.op) && decide (m.params = nSM_8.params) &&
-      decide (m.ins.getD 3 0 = nSM_8.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_8.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_8] from by rfl]
-  simp
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_8 : ringAttnBuddies pm_goal_3 nR0_8 = [nR0_8, nR1_8] := by
-  show (List.filter (fun m => decide (m.op = nR0_8.op) && decide (m.params = nR0_8.params) &&
-      decide (m.ins.getD 3 0 = nR0_8.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_8.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_8, nR1_8]
-  rw [show (List.filter (fun m => decide (m.op = nR0_8.op) && decide (m.params = nR0_8.params) &&
-      decide (m.ins.getD 3 0 = nR0_8.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_8.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_8, nR1_8] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_8 : ringAttnBuddies pm_goal_3 nR1_8 = [nR0_8, nR1_8] := by
-  show (List.filter (fun m => decide (m.op = nR1_8.op) && decide (m.params = nR1_8.params) &&
-      decide (m.ins.getD 3 0 = nR1_8.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_8.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_8, nR1_8]
-  rw [show (List.filter (fun m => decide (m.op = nR1_8.op) && decide (m.params = nR1_8.params) &&
-      decide (m.ins.getD 3 0 = nR1_8.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_8.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_8, nR1_8] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
@@ -23045,35 +22826,17 @@ def nR1_9 : NodeDecl := { rank := 1, op := "OpName.FW_attn_sliding_window", ins 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_9 : ringAttnBuddies sm_goal_3 nSM_9 = [nSM_9] := by
-  show (List.filter (fun m => decide (m.op = nSM_9.op) && decide (m.params = nSM_9.params) &&
-      decide (m.ins.getD 3 0 = nSM_9.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_9.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_9]
-  rw [show (List.filter (fun m => decide (m.op = nSM_9.op) && decide (m.params = nSM_9.params) &&
-      decide (m.ins.getD 3 0 = nSM_9.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_9.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_9] from by rfl]
-  simp
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_9 : ringAttnBuddies pm_goal_3 nR0_9 = [nR0_9, nR1_9] := by
-  show (List.filter (fun m => decide (m.op = nR0_9.op) && decide (m.params = nR0_9.params) &&
-      decide (m.ins.getD 3 0 = nR0_9.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_9.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_9, nR1_9]
-  rw [show (List.filter (fun m => decide (m.op = nR0_9.op) && decide (m.params = nR0_9.params) &&
-      decide (m.ins.getD 3 0 = nR0_9.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_9.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_9, nR1_9] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_9 : ringAttnBuddies pm_goal_3 nR1_9 = [nR0_9, nR1_9] := by
-  show (List.filter (fun m => decide (m.op = nR1_9.op) && decide (m.params = nR1_9.params) &&
-      decide (m.ins.getD 3 0 = nR1_9.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_9.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_9, nR1_9]
-  rw [show (List.filter (fun m => decide (m.op = nR1_9.op) && decide (m.params = nR1_9.params) &&
-      decide (m.ins.getD 3 0 = nR1_9.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_9.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_9, nR1_9] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
@@ -24575,35 +24338,17 @@ def nR1_10 : NodeDecl := { rank := 1, op := "OpName.FW_attn_sliding_window", ins
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_10 : ringAttnBuddies sm_goal_3 nSM_10 = [nSM_10] := by
-  show (List.filter (fun m => decide (m.op = nSM_10.op) && decide (m.params = nSM_10.params) &&
-      decide (m.ins.getD 3 0 = nSM_10.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_10.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_10]
-  rw [show (List.filter (fun m => decide (m.op = nSM_10.op) && decide (m.params = nSM_10.params) &&
-      decide (m.ins.getD 3 0 = nSM_10.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_10.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_10] from by rfl]
-  simp
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_10 : ringAttnBuddies pm_goal_3 nR0_10 = [nR0_10, nR1_10] := by
-  show (List.filter (fun m => decide (m.op = nR0_10.op) && decide (m.params = nR0_10.params) &&
-      decide (m.ins.getD 3 0 = nR0_10.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_10.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_10, nR1_10]
-  rw [show (List.filter (fun m => decide (m.op = nR0_10.op) && decide (m.params = nR0_10.params) &&
-      decide (m.ins.getD 3 0 = nR0_10.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_10.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_10, nR1_10] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_10 : ringAttnBuddies pm_goal_3 nR1_10 = [nR0_10, nR1_10] := by
-  show (List.filter (fun m => decide (m.op = nR1_10.op) && decide (m.params = nR1_10.params) &&
-      decide (m.ins.getD 3 0 = nR1_10.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_10.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_10, nR1_10]
-  rw [show (List.filter (fun m => decide (m.op = nR1_10.op) && decide (m.params = nR1_10.params) &&
-      decide (m.ins.getD 3 0 = nR1_10.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_10.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_10, nR1_10] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
@@ -26105,35 +25850,17 @@ def nR1_11 : NodeDecl := { rank := 1, op := "OpName.FW_attn_sliding_window", ins
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_11 : ringAttnBuddies sm_goal_3 nSM_11 = [nSM_11] := by
-  show (List.filter (fun m => decide (m.op = nSM_11.op) && decide (m.params = nSM_11.params) &&
-      decide (m.ins.getD 3 0 = nSM_11.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_11.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_11]
-  rw [show (List.filter (fun m => decide (m.op = nSM_11.op) && decide (m.params = nSM_11.params) &&
-      decide (m.ins.getD 3 0 = nSM_11.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_11.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_11] from by rfl]
-  simp
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_11 : ringAttnBuddies pm_goal_3 nR0_11 = [nR0_11, nR1_11] := by
-  show (List.filter (fun m => decide (m.op = nR0_11.op) && decide (m.params = nR0_11.params) &&
-      decide (m.ins.getD 3 0 = nR0_11.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_11.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_11, nR1_11]
-  rw [show (List.filter (fun m => decide (m.op = nR0_11.op) && decide (m.params = nR0_11.params) &&
-      decide (m.ins.getD 3 0 = nR0_11.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_11.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_11, nR1_11] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_11 : ringAttnBuddies pm_goal_3 nR1_11 = [nR0_11, nR1_11] := by
-  show (List.filter (fun m => decide (m.op = nR1_11.op) && decide (m.params = nR1_11.params) &&
-      decide (m.ins.getD 3 0 = nR1_11.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_11.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_11, nR1_11]
-  rw [show (List.filter (fun m => decide (m.op = nR1_11.op) && decide (m.params = nR1_11.params) &&
-      decide (m.ins.getD 3 0 = nR1_11.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_11.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_11, nR1_11] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 
 set_option maxRecDepth 1000000 in
@@ -26936,33 +26663,15 @@ def nR1_12 : NodeDecl :=
 -- Buddy proofs (ring attention requires proving nodes are buddies)
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_12 : ringAttnBuddies sm_goal_3 nSM_12 = [nSM_12] := by
-  show (List.filter (fun m => decide (m.op = nSM_12.op) && decide (m.params = nSM_12.params) &&
-      decide (m.ins.getD 3 0 = nSM_12.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_12.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_12]
-  rw [show (List.filter (fun m => decide (m.op = nSM_12.op) && decide (m.params = nSM_12.params) &&
-      decide (m.ins.getD 3 0 = nSM_12.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_12.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_12] from by rfl]
-  simp
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_12 : ringAttnBuddies pm_goal_3 nR0_12 = [nR0_12, nR1_12] := by
-  show (List.filter (fun m => decide (m.op = nR0_12.op) && decide (m.params = nR0_12.params) &&
-      decide (m.ins.getD 3 0 = nR0_12.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_12.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_12, nR1_12]
-  rw [show (List.filter (fun m => decide (m.op = nR0_12.op) && decide (m.params = nR0_12.params) &&
-      decide (m.ins.getD 3 0 = nR0_12.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_12.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_12, nR1_12] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_12 : ringAttnBuddies pm_goal_3 nR1_12 = [nR0_12, nR1_12] := by
-  show (List.filter (fun m => decide (m.op = nR1_12.op) && decide (m.params = nR1_12.params) &&
-      decide (m.ins.getD 3 0 = nR1_12.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_12.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_12, nR1_12]
-  rw [show (List.filter (fun m => decide (m.op = nR1_12.op) && decide (m.params = nR1_12.params) &&
-      decide (m.ins.getD 3 0 = nR1_12.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_12.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_12, nR1_12] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 /-! ## L12 TID Lookup Table
 
@@ -30411,33 +30120,15 @@ def nR1_13 : NodeDecl :=
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_13 : ringAttnBuddies sm_goal_3 nSM_13 = [nSM_13] := by
-  show (List.filter (fun m => decide (m.op = nSM_13.op) && decide (m.params = nSM_13.params) &&
-      decide (m.ins.getD 3 0 = nSM_13.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_13.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_13]
-  rw [show (List.filter (fun m => decide (m.op = nSM_13.op) && decide (m.params = nSM_13.params) &&
-      decide (m.ins.getD 3 0 = nSM_13.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_13.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_13] from by rfl]
-  simp
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_13 : ringAttnBuddies pm_goal_3 nR0_13 = [nR0_13, nR1_13] := by
-  show (List.filter (fun m => decide (m.op = nR0_13.op) && decide (m.params = nR0_13.params) &&
-      decide (m.ins.getD 3 0 = nR0_13.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_13.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_13, nR1_13]
-  rw [show (List.filter (fun m => decide (m.op = nR0_13.op) && decide (m.params = nR0_13.params) &&
-      decide (m.ins.getD 3 0 = nR0_13.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_13.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_13, nR1_13] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_13 : ringAttnBuddies pm_goal_3 nR1_13 = [nR0_13, nR1_13] := by
-  show (List.filter (fun m => decide (m.op = nR1_13.op) && decide (m.params = nR1_13.params) &&
-      decide (m.ins.getD 3 0 = nR1_13.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_13.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_13, nR1_13]
-  rw [show (List.filter (fun m => decide (m.op = nR1_13.op) && decide (m.params = nR1_13.params) &&
-      decide (m.ins.getD 3 0 = nR1_13.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_13.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_13, nR1_13] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 /-! ## L13 pre-attention denote-unfold chain (SM side)
 
@@ -33211,31 +32902,13 @@ def nR1_14 : NodeDecl :=
 -- Buddy proofs (ring attention requires proving nodes are buddies)
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_14 : ringAttnBuddies sm_goal_3 nSM_14 = [nSM_14] := by
-  show (List.filter (fun m => decide (m.op = nSM_14.op) && decide (m.params = nSM_14.params) &&
-      decide (m.ins.getD 3 0 = nSM_14.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_14.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_14]
-  rw [show (List.filter (fun m => decide (m.op = nSM_14.op) && decide (m.params = nSM_14.params) &&
-      decide (m.ins.getD 3 0 = nSM_14.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_14.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_14] from by rfl]
-  simp
+  native_decide
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_14 : ringAttnBuddies pm_goal_3 nR0_14 = [nR0_14, nR1_14] := by
-  show (List.filter (fun m => decide (m.op = nR0_14.op) && decide (m.params = nR0_14.params) &&
-      decide (m.ins.getD 3 0 = nR0_14.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_14.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_14, nR1_14]
-  rw [show (List.filter (fun m => decide (m.op = nR0_14.op) && decide (m.params = nR0_14.params) &&
-      decide (m.ins.getD 3 0 = nR0_14.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_14.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_14, nR1_14] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_14 : ringAttnBuddies pm_goal_3 nR1_14 = [nR0_14, nR1_14] := by
-  show (List.filter (fun m => decide (m.op = nR1_14.op) && decide (m.params = nR1_14.params) &&
-      decide (m.ins.getD 3 0 = nR1_14.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_14.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_14, nR1_14]
-  rw [show (List.filter (fun m => decide (m.op = nR1_14.op) && decide (m.params = nR1_14.params) &&
-      decide (m.ins.getD 3 0 = nR1_14.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_14.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_14, nR1_14] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 /-! ## L12 TID Lookup Table
 
@@ -36074,31 +35747,13 @@ def nR1_15 : NodeDecl :=
 -- Buddy proofs (ring attention requires proving nodes are buddies)
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_15 : ringAttnBuddies sm_goal_3 nSM_15 = [nSM_15] := by
-  show (List.filter (fun m => decide (m.op = nSM_15.op) && decide (m.params = nSM_15.params) &&
-      decide (m.ins.getD 3 0 = nSM_15.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_15.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_15]
-  rw [show (List.filter (fun m => decide (m.op = nSM_15.op) && decide (m.params = nSM_15.params) &&
-      decide (m.ins.getD 3 0 = nSM_15.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_15.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_15] from by rfl]
-  simp
+  native_decide
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_15 : ringAttnBuddies pm_goal_3 nR0_15 = [nR0_15, nR1_15] := by
-  show (List.filter (fun m => decide (m.op = nR0_15.op) && decide (m.params = nR0_15.params) &&
-      decide (m.ins.getD 3 0 = nR0_15.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_15.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_15, nR1_15]
-  rw [show (List.filter (fun m => decide (m.op = nR0_15.op) && decide (m.params = nR0_15.params) &&
-      decide (m.ins.getD 3 0 = nR0_15.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_15.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_15, nR1_15] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_15 : ringAttnBuddies pm_goal_3 nR1_15 = [nR0_15, nR1_15] := by
-  show (List.filter (fun m => decide (m.op = nR1_15.op) && decide (m.params = nR1_15.params) &&
-      decide (m.ins.getD 3 0 = nR1_15.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_15.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_15, nR1_15]
-  rw [show (List.filter (fun m => decide (m.op = nR1_15.op) && decide (m.params = nR1_15.params) &&
-      decide (m.ins.getD 3 0 = nR1_15.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_15.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_15, nR1_15] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 /-! ## L12 TID Lookup Table
 
@@ -38945,33 +38600,15 @@ def nR1_16 : NodeDecl :=
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_16 : ringAttnBuddies sm_goal_3 nSM_16 = [nSM_16] := by
-  show (List.filter (fun m => decide (m.op = nSM_16.op) && decide (m.params = nSM_16.params) &&
-      decide (m.ins.getD 3 0 = nSM_16.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_16.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_16]
-  rw [show (List.filter (fun m => decide (m.op = nSM_16.op) && decide (m.params = nSM_16.params) &&
-      decide (m.ins.getD 3 0 = nSM_16.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_16.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_16] from by rfl]
-  simp
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_16 : ringAttnBuddies pm_goal_3 nR0_16 = [nR0_16, nR1_16] := by
-  show (List.filter (fun m => decide (m.op = nR0_16.op) && decide (m.params = nR0_16.params) &&
-      decide (m.ins.getD 3 0 = nR0_16.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_16.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_16, nR1_16]
-  rw [show (List.filter (fun m => decide (m.op = nR0_16.op) && decide (m.params = nR0_16.params) &&
-      decide (m.ins.getD 3 0 = nR0_16.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_16.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_16, nR1_16] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_16 : ringAttnBuddies pm_goal_3 nR1_16 = [nR0_16, nR1_16] := by
-  show (List.filter (fun m => decide (m.op = nR1_16.op) && decide (m.params = nR1_16.params) &&
-      decide (m.ins.getD 3 0 = nR1_16.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_16.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_16, nR1_16]
-  rw [show (List.filter (fun m => decide (m.op = nR1_16.op) && decide (m.params = nR1_16.params) &&
-      decide (m.ins.getD 3 0 = nR1_16.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_16.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_16, nR1_16] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 /-! ## L16 attention denote <-> applyNodeRingAttn_zigzag bridges -/
 
@@ -41671,33 +41308,15 @@ def nR1_17 : NodeDecl :=
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_17 : ringAttnBuddies sm_goal_3 nSM_17 = [nSM_17] := by
-  show (List.filter (fun m => decide (m.op = nSM_17.op) && decide (m.params = nSM_17.params) &&
-      decide (m.ins.getD 3 0 = nSM_17.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_17.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_17]
-  rw [show (List.filter (fun m => decide (m.op = nSM_17.op) && decide (m.params = nSM_17.params) &&
-      decide (m.ins.getD 3 0 = nSM_17.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_17.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_17] from by rfl]
-  simp
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_17 : ringAttnBuddies pm_goal_3 nR0_17 = [nR0_17, nR1_17] := by
-  show (List.filter (fun m => decide (m.op = nR0_17.op) && decide (m.params = nR0_17.params) &&
-      decide (m.ins.getD 3 0 = nR0_17.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_17.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_17, nR1_17]
-  rw [show (List.filter (fun m => decide (m.op = nR0_17.op) && decide (m.params = nR0_17.params) &&
-      decide (m.ins.getD 3 0 = nR0_17.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_17.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_17, nR1_17] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_17 : ringAttnBuddies pm_goal_3 nR1_17 = [nR0_17, nR1_17] := by
-  show (List.filter (fun m => decide (m.op = nR1_17.op) && decide (m.params = nR1_17.params) &&
-      decide (m.ins.getD 3 0 = nR1_17.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_17.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_17, nR1_17]
-  rw [show (List.filter (fun m => decide (m.op = nR1_17.op) && decide (m.params = nR1_17.params) &&
-      decide (m.ins.getD 3 0 = nR1_17.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_17.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_17, nR1_17] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 /-! ## L17 attention denote <-> applyNodeRingAttn_zigzag bridges -/
 
@@ -44395,33 +44014,15 @@ def nR1_18 : NodeDecl :=
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_18 : ringAttnBuddies sm_goal_3 nSM_18 = [nSM_18] := by
-  show (List.filter (fun m => decide (m.op = nSM_18.op) && decide (m.params = nSM_18.params) &&
-      decide (m.ins.getD 3 0 = nSM_18.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_18.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_18]
-  rw [show (List.filter (fun m => decide (m.op = nSM_18.op) && decide (m.params = nSM_18.params) &&
-      decide (m.ins.getD 3 0 = nSM_18.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_18.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_18] from by rfl]
-  simp
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_18 : ringAttnBuddies pm_goal_3 nR0_18 = [nR0_18, nR1_18] := by
-  show (List.filter (fun m => decide (m.op = nR0_18.op) && decide (m.params = nR0_18.params) &&
-      decide (m.ins.getD 3 0 = nR0_18.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_18.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_18, nR1_18]
-  rw [show (List.filter (fun m => decide (m.op = nR0_18.op) && decide (m.params = nR0_18.params) &&
-      decide (m.ins.getD 3 0 = nR0_18.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_18.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_18, nR1_18] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_18 : ringAttnBuddies pm_goal_3 nR1_18 = [nR0_18, nR1_18] := by
-  show (List.filter (fun m => decide (m.op = nR1_18.op) && decide (m.params = nR1_18.params) &&
-      decide (m.ins.getD 3 0 = nR1_18.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_18.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_18, nR1_18]
-  rw [show (List.filter (fun m => decide (m.op = nR1_18.op) && decide (m.params = nR1_18.params) &&
-      decide (m.ins.getD 3 0 = nR1_18.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_18.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_18, nR1_18] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 /-! ## L18 attention denote <-> applyNodeRingAttn_zigzag bridges -/
 
@@ -47116,33 +46717,15 @@ def nR1_19 : NodeDecl :=
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_19 : ringAttnBuddies sm_goal_3 nSM_19 = [nSM_19] := by
-  show (List.filter (fun m => decide (m.op = nSM_19.op) && decide (m.params = nSM_19.params) &&
-      decide (m.ins.getD 3 0 = nSM_19.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_19.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_19]
-  rw [show (List.filter (fun m => decide (m.op = nSM_19.op) && decide (m.params = nSM_19.params) &&
-      decide (m.ins.getD 3 0 = nSM_19.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_19.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_19] from by rfl]
-  simp
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_19 : ringAttnBuddies pm_goal_3 nR0_19 = [nR0_19, nR1_19] := by
-  show (List.filter (fun m => decide (m.op = nR0_19.op) && decide (m.params = nR0_19.params) &&
-      decide (m.ins.getD 3 0 = nR0_19.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_19.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_19, nR1_19]
-  rw [show (List.filter (fun m => decide (m.op = nR0_19.op) && decide (m.params = nR0_19.params) &&
-      decide (m.ins.getD 3 0 = nR0_19.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_19.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_19, nR1_19] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_19 : ringAttnBuddies pm_goal_3 nR1_19 = [nR0_19, nR1_19] := by
-  show (List.filter (fun m => decide (m.op = nR1_19.op) && decide (m.params = nR1_19.params) &&
-      decide (m.ins.getD 3 0 = nR1_19.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_19.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_19, nR1_19]
-  rw [show (List.filter (fun m => decide (m.op = nR1_19.op) && decide (m.params = nR1_19.params) &&
-      decide (m.ins.getD 3 0 = nR1_19.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_19.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_19, nR1_19] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 /-! ## L19 attention denote <-> applyNodeRingAttn_zigzag bridges -/
 
@@ -49835,33 +49418,15 @@ def nR1_20 : NodeDecl :=
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_20 : ringAttnBuddies sm_goal_3 nSM_20 = [nSM_20] := by
-  show (List.filter (fun m => decide (m.op = nSM_20.op) && decide (m.params = nSM_20.params) &&
-      decide (m.ins.getD 3 0 = nSM_20.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_20.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_20]
-  rw [show (List.filter (fun m => decide (m.op = nSM_20.op) && decide (m.params = nSM_20.params) &&
-      decide (m.ins.getD 3 0 = nSM_20.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_20.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_20] from by rfl]
-  simp
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_20 : ringAttnBuddies pm_goal_3 nR0_20 = [nR0_20, nR1_20] := by
-  show (List.filter (fun m => decide (m.op = nR0_20.op) && decide (m.params = nR0_20.params) &&
-      decide (m.ins.getD 3 0 = nR0_20.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_20.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_20, nR1_20]
-  rw [show (List.filter (fun m => decide (m.op = nR0_20.op) && decide (m.params = nR0_20.params) &&
-      decide (m.ins.getD 3 0 = nR0_20.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_20.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_20, nR1_20] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_20 : ringAttnBuddies pm_goal_3 nR1_20 = [nR0_20, nR1_20] := by
-  show (List.filter (fun m => decide (m.op = nR1_20.op) && decide (m.params = nR1_20.params) &&
-      decide (m.ins.getD 3 0 = nR1_20.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_20.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_20, nR1_20]
-  rw [show (List.filter (fun m => decide (m.op = nR1_20.op) && decide (m.params = nR1_20.params) &&
-      decide (m.ins.getD 3 0 = nR1_20.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_20.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_20, nR1_20] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 /-! ## L20 attention denote <-> applyNodeRingAttn_zigzag bridges -/
 
@@ -52556,33 +52121,15 @@ def nR1_21 : NodeDecl :=
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_21 : ringAttnBuddies sm_goal_3 nSM_21 = [nSM_21] := by
-  show (List.filter (fun m => decide (m.op = nSM_21.op) && decide (m.params = nSM_21.params) &&
-      decide (m.ins.getD 3 0 = nSM_21.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_21.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_21]
-  rw [show (List.filter (fun m => decide (m.op = nSM_21.op) && decide (m.params = nSM_21.params) &&
-      decide (m.ins.getD 3 0 = nSM_21.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_21.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_21] from by rfl]
-  simp
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_21 : ringAttnBuddies pm_goal_3 nR0_21 = [nR0_21, nR1_21] := by
-  show (List.filter (fun m => decide (m.op = nR0_21.op) && decide (m.params = nR0_21.params) &&
-      decide (m.ins.getD 3 0 = nR0_21.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_21.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_21, nR1_21]
-  rw [show (List.filter (fun m => decide (m.op = nR0_21.op) && decide (m.params = nR0_21.params) &&
-      decide (m.ins.getD 3 0 = nR0_21.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_21.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_21, nR1_21] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_21 : ringAttnBuddies pm_goal_3 nR1_21 = [nR0_21, nR1_21] := by
-  show (List.filter (fun m => decide (m.op = nR1_21.op) && decide (m.params = nR1_21.params) &&
-      decide (m.ins.getD 3 0 = nR1_21.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_21.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_21, nR1_21]
-  rw [show (List.filter (fun m => decide (m.op = nR1_21.op) && decide (m.params = nR1_21.params) &&
-      decide (m.ins.getD 3 0 = nR1_21.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_21.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_21, nR1_21] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 /-! ## L21 attention denote <-> applyNodeRingAttn_zigzag bridges -/
 
@@ -55276,33 +54823,15 @@ def nR1_22 : NodeDecl :=
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_22 : ringAttnBuddies sm_goal_3 nSM_22 = [nSM_22] := by
-  show (List.filter (fun m => decide (m.op = nSM_22.op) && decide (m.params = nSM_22.params) &&
-      decide (m.ins.getD 3 0 = nSM_22.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_22.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_22]
-  rw [show (List.filter (fun m => decide (m.op = nSM_22.op) && decide (m.params = nSM_22.params) &&
-      decide (m.ins.getD 3 0 = nSM_22.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_22.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_22] from by rfl]
-  simp
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_22 : ringAttnBuddies pm_goal_3 nR0_22 = [nR0_22, nR1_22] := by
-  show (List.filter (fun m => decide (m.op = nR0_22.op) && decide (m.params = nR0_22.params) &&
-      decide (m.ins.getD 3 0 = nR0_22.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_22.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_22, nR1_22]
-  rw [show (List.filter (fun m => decide (m.op = nR0_22.op) && decide (m.params = nR0_22.params) &&
-      decide (m.ins.getD 3 0 = nR0_22.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_22.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_22, nR1_22] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_22 : ringAttnBuddies pm_goal_3 nR1_22 = [nR0_22, nR1_22] := by
-  show (List.filter (fun m => decide (m.op = nR1_22.op) && decide (m.params = nR1_22.params) &&
-      decide (m.ins.getD 3 0 = nR1_22.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_22.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_22, nR1_22]
-  rw [show (List.filter (fun m => decide (m.op = nR1_22.op) && decide (m.params = nR1_22.params) &&
-      decide (m.ins.getD 3 0 = nR1_22.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_22.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_22, nR1_22] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 /-! ## L22 attention denote <-> applyNodeRingAttn_zigzag bridges -/
 
@@ -57994,33 +57523,15 @@ def nR1_23 : NodeDecl :=
 
 set_option maxRecDepth 1000000 in
 theorem buddy_sm_23 : ringAttnBuddies sm_goal_3 nSM_23 = [nSM_23] := by
-  show (List.filter (fun m => decide (m.op = nSM_23.op) && decide (m.params = nSM_23.params) &&
-      decide (m.ins.getD 3 0 = nSM_23.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_23.ins.getD 4 0))
-      sm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nSM_23]
-  rw [show (List.filter (fun m => decide (m.op = nSM_23.op) && decide (m.params = nSM_23.params) &&
-      decide (m.ins.getD 3 0 = nSM_23.ins.getD 3 0) && decide (m.ins.getD 4 0 = nSM_23.ins.getD 4 0))
-      sm_goal_3.nodes) = [nSM_23] from by rfl]
-  simp
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r0_23 : ringAttnBuddies pm_goal_3 nR0_23 = [nR0_23, nR1_23] := by
-  show (List.filter (fun m => decide (m.op = nR0_23.op) && decide (m.params = nR0_23.params) &&
-      decide (m.ins.getD 3 0 = nR0_23.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_23.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_23, nR1_23]
-  rw [show (List.filter (fun m => decide (m.op = nR0_23.op) && decide (m.params = nR0_23.params) &&
-      decide (m.ins.getD 3 0 = nR0_23.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR0_23.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_23, nR1_23] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 set_option maxRecDepth 1000000 in
 theorem buddy_r1_23 : ringAttnBuddies pm_goal_3 nR1_23 = [nR0_23, nR1_23] := by
-  show (List.filter (fun m => decide (m.op = nR1_23.op) && decide (m.params = nR1_23.params) &&
-      decide (m.ins.getD 3 0 = nR1_23.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_23.ins.getD 4 0))
-      pm_goal_3.nodes).mergeSort (fun a b => decide (a.rank ≤ b.rank)) = [nR0_23, nR1_23]
-  rw [show (List.filter (fun m => decide (m.op = nR1_23.op) && decide (m.params = nR1_23.params) &&
-      decide (m.ins.getD 3 0 = nR1_23.ins.getD 3 0) && decide (m.ins.getD 4 0 = nR1_23.ins.getD 4 0))
-      pm_goal_3.nodes) = [nR0_23, nR1_23] from by rfl]
-  apply List.mergeSort_of_pairwise; decide
+  native_decide
 
 /-! ## L23 attention denote <-> applyNodeRingAttn_zigzag bridges -/
 
