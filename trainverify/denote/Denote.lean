@@ -55,6 +55,25 @@ structure NodeDecl where
   params : List Nat := []
   deriving Repr, DecidableEq
 
+/-- Rank-independent identity assigned by Verdict to one logical call. -/
+structure LogicalNodeId where
+  cid : Nat
+  mb : Nat
+  irname : String
+  deriving Repr, DecidableEq
+
+/-- A stable reference to a concrete replica without changing `NodeDecl`. -/
+structure NodeRef where
+  rank : Rank
+  primaryOutTid : Tid
+  deriving Repr, DecidableEq
+
+/-- Exact, ordered replicas of one logical call in this graph. -/
+structure ReplicaGroupDecl where
+  logical : LogicalNodeId
+  members : List NodeRef
+  deriving Repr, DecidableEq
+
 /-- A graph/program is a list of node equations, plus `numRanks`.
 
 `numRanks` is used for shape-level definitions of sharding/collectives (Chunk/AllGather/AllReduce).
@@ -66,7 +85,37 @@ so `denoteGraph` is a single forward fold (not a fixpoint / repeated store scan)
 structure GraphDecl where
   numRanks : Nat
   nodes : List NodeDecl
+  replicaGroups : List ReplicaGroupDecl := []
   deriving Repr, DecidableEq
+
+/-- Resolve a generated `NodeRef`. Ambiguous references deliberately fail. -/
+def GraphDecl.resolveNodeRef? (g : GraphDecl) (ref : NodeRef) : Option NodeDecl :=
+  match g.nodes.filter (fun n => n.rank = ref.rank && n.outs.head? = some ref.primaryOutTid) with
+  | [n] => some n
+  | _ => none
+
+/-- Find the unique declaration containing this concrete node reference. -/
+def GraphDecl.replicaGroupFor? (g : GraphDecl) (n : NodeDecl) : Option ReplicaGroupDecl :=
+  match n.outs.head? with
+  | none => none
+  | some tid =>
+      let ref : NodeRef := { rank := n.rank, primaryOutTid := tid }
+      match g.replicaGroups.filter (fun group => ref ∈ group.members) with
+      | [group] => some group
+      | _ => none
+
+/-- Resolve exact replica metadata, preserving declared member order.
+    Missing, ambiguous, duplicate-rank, or stale metadata fails closed to `[n]`. -/
+def GraphDecl.replicaBuddies (g : GraphDecl) (n : NodeDecl) : List NodeDecl :=
+  match g.replicaGroupFor? n with
+  | none => [n]
+  | some group =>
+      if (group.members.map (·.rank)).Nodup then
+        match group.members.mapM g.resolveNodeRef? with
+        | some buddies => if n ∈ buddies then buddies else [n]
+        | none => [n]
+      else
+        [n]
 
 /-
 A lineage goal for an observable output.
@@ -6795,7 +6844,7 @@ theorem denoteGraph_tid_eq_of_forall_not_mem_outs (g : GraphDecl) (nodes : List 
   -- Induct via the graph-level unfolding lemma `denoteGraph_nodes_cons`.
   induction nodes generalizing init with
   | nil =>
-      simp
+      rfl
   | cons n ns ih =>
       have hn : tid ∉ n.outs := h n (by simp)
       have hns : ∀ n' ∈ ns, tid ∉ n'.outs := by
@@ -6844,12 +6893,12 @@ theorem denoteGraph_tid_eq_of_suffix_no_writes
 /-- Apply `denoteGraph_nodes_cons` while tolerating the `{ numRanks := n, nodes := X }` form
     (i.e. structure literals where `g` is not explicit). -/
 theorem denoteGraph_cons_eq (g : GraphDecl) (n : NodeDecl) (ns : List NodeDecl) (init : Store) :
-    denoteGraph { numRanks := g.numRanks, nodes := n :: ns } init =
-      denoteGraph { numRanks := g.numRanks, nodes := ns } (applyNode g init n) := by
-  have h1 : ({ numRanks := g.numRanks, nodes := n :: ns } : GraphDecl) =
+    denoteGraph (GraphDecl.mk g.numRanks (n :: ns) g.replicaGroups) init =
+      denoteGraph (GraphDecl.mk g.numRanks ns g.replicaGroups) (applyNode g init n) := by
+  have h1 : GraphDecl.mk g.numRanks (n :: ns) g.replicaGroups =
       { g with nodes := n :: ns } := by
     cases g; rfl
-  have h2 : ({ numRanks := g.numRanks, nodes := ns } : GraphDecl) =
+  have h2 : GraphDecl.mk g.numRanks ns g.replicaGroups =
       { g with nodes := ns } := by
     cases g; rfl
   rw [h1, h2, denoteGraph_nodes_cons]
@@ -21158,20 +21207,15 @@ computes full attention. `denoteGraph_ringAttn` folds this variant.
 Non-`FW_attn_zigzag` ops are unchanged, so `denoteGraph_ringAttn = denoteGraph`
 whenever the graph contains no zigzag nodes (Pattern_1/2/4/5 unaffected).
 
-Buddy detection: two `FW_attn_zigzag` nodes are buddies iff they share the same
-`op`, `params`, `cuQ` (ins.getD 3 0), and `cuK` (ins.getD 4 0). Buddies are sorted
-by `rank` so shard ordering is deterministic.
+Buddy detection uses exact, ordered replica-group metadata emitted from Verdict's
+SM↔PM original-op alignment grid. Expanded PM cids are rank-local and are never
+used directly as cross-rank identity; lookup never guesses from op metadata.
 -/
 
-/-- The list of `FW_attn_zigzag` nodes in `g.nodes` that are buddies of `n`
-    (share op, params, cuQ, cuK). Sorted ascending by `rank`. Includes `n` itself. -/
+/-- Exact declared replicas of `n`, in declaration order. Missing or malformed
+    metadata is a singleton: cross-rank membership is never guessed. -/
 def ringAttnBuddies (g : GraphDecl) (n : NodeDecl) : List NodeDecl :=
-  let cuQ := n.ins.getD 3 0
-  let cuK := n.ins.getD 4 0
-  let candidates := g.nodes.filter fun m =>
-    m.op = n.op && m.params = n.params &&
-    m.ins.getD 3 0 = cuQ && m.ins.getD 4 0 = cuK
-  candidates.mergeSort (fun a b => a.rank ≤ b.rank)
+  g.replicaBuddies n
 
 /-- Reconstruct the full q, k, v tensors by allgather over buddy shards,
     then compute `fw_attn_varlen`, then chunk back to this rank's shard.

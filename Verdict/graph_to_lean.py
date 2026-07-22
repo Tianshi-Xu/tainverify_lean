@@ -39,7 +39,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -211,6 +211,37 @@ def infer_coarse_lineages_from_expanded(GsE: Any, GpE: Any) -> List[Any]:
 	return lineages
 
 
+def aligned_logical_node_ids(
+	GsE: Any, GpE: Any
+) -> Tuple[Dict[int, Tuple[int, int, str]], Dict[int, Tuple[int, int, str]]]:
+	"""Return SM/PM node-object maps from Verdict's original-op alignment.
+
+	The expanded PM graph assigns rank-local cids, so only the alignment grid is
+	authoritative for replica identity.  The current YOCO A0.4B authority has one
+	DP group and one microbatch; reject broader layouts until their process-group
+	scope is threaded explicitly instead of silently over-grouping them.
+	"""
+	from nnscaler_backend import build_lineage as bl  # type: ignore
+
+	if GpE.W.num_dp != 1 or GpE.W.num_mb != 1:
+		raise ValueError(
+			"replica-group emission currently requires num_dp=1 and num_mb=1; "
+			"exact subgroup scope is unavailable for broader layouts"
+		)
+	Gs_ops = [n for n in GsE.nodes() if bl._is_original_op(GsE.node_opname(n))]
+	Gp_ops = [n for n in GpE.nodes() if bl._is_original_op(GpE.node_opname(n))]
+	grid = bl._reorganize_Gp_nodes(Gp_ops, GpE)
+	sm_ids: Dict[int, Tuple[int, int, str]] = {}
+	pm_ids: Dict[int, Tuple[int, int, str]] = {}
+	for node_ptr, snode in enumerate(Gs_ops):
+		logical = _logical_node_id(snode)
+		sm_ids[id(snode)] = logical
+		for tp in range(GpE.W.num_tp):
+			pnode = grid[0][tp][0][node_ptr]
+			pm_ids[id(pnode)] = logical
+	return sm_ids, pm_ids
+
+
 def _build_producer_index(G: Any) -> Dict[int, List[int]]:
 	prod: Dict[int, List[int]] = {}
 	for i, n in enumerate(G.nodes()):
@@ -290,6 +321,90 @@ def _safe_str_op(op: Any) -> str:
 
 def _node_rank(node: Any) -> int:
 	return int(getattr(node, "rank", 0) or 0)
+
+
+REPLICA_GROUP_OPS = frozenset({
+	"OpName.FW_attn_sliding_window",
+	"OpName.FW_attn_zigzag",
+	"OpName.FW_maybe_shuffle",
+	"OpName.FW_maybe_unshuffle",
+	"OpName.FW_all2all_moe_gmm",
+})
+
+
+@dataclass(frozen=True)
+class ReplicaGroup:
+	"""Rank-independent logical identity and exact ordered concrete members."""
+
+	logical: Tuple[int, int, str]
+	members: Tuple[Tuple[int, int], ...]
+
+
+def _logical_node_id(node: Any) -> Tuple[int, int, str]:
+	"""Verdict's stable compact key: `(cid, mb, irname)`, never op metadata."""
+	missing = [field for field in ("cid", "mb", "irname") if not hasattr(node, field)]
+	if missing:
+		raise ValueError(f"replica node lacks logical identity fields: {', '.join(missing)}")
+	return (int(node.cid), int(node.mb), str(node.irname))
+
+
+def derive_replica_groups(
+	G: Any,
+	nodes: Sequence[Any],
+	logical_ids: Mapping[int, Tuple[int, int, str]],
+) -> List[ReplicaGroup]:
+	"""Build exact replica groups using the SM↔PM alignment authority.
+
+	Expanded PM ``cid`` values are rank-local and therefore are *not* a replica
+	identity. ``logical_ids`` is keyed by Python object identity and is produced
+	from Verdict's original-op alignment grid.
+	"""
+	selected = [n for n in nodes if _safe_str_op(G.node_opname(n)) in REPLICA_GROUP_OPS]
+	by_logical: Dict[Tuple[int, int, str], List[Any]] = {}
+	for node in selected:
+		logical = logical_ids.get(id(node))
+		if logical is None:
+			raise ValueError(
+				f"cross-rank node lacks SM-aligned logical identity: "
+				f"rank={_node_rank(node)} op={_safe_str_op(G.node_opname(node))}"
+			)
+		by_logical.setdefault(logical, []).append(node)
+
+	groups: List[ReplicaGroup] = []
+	listed: set[int] = set()
+	for logical, replicas in by_logical.items():
+		ordered = sorted(replicas, key=_node_rank)
+		ranks = [_node_rank(n) for n in ordered]
+		if len(ranks) != len(set(ranks)):
+			raise ValueError(f"duplicate replica member rank for logical node {logical}: {ranks}")
+		members: List[Tuple[int, int]] = []
+		for node in ordered:
+			outs = list(G.node_outputs(node))
+			if not outs:
+				raise ValueError(f"replica node {logical} on rank {_node_rank(node)} has no primary output")
+			members.append((_node_rank(node), int(outs[0].tid)))
+			if id(node) in listed:
+				raise ValueError(f"replica node {logical} was listed more than once")
+			listed.add(id(node))
+		groups.append(ReplicaGroup(logical=logical, members=tuple(members)))
+
+	if listed != {id(n) for n in selected}:
+		raise ValueError("missing or unlisted replica node")
+	return groups
+
+
+def _lean_replica_groups(groups: Sequence[ReplicaGroup]) -> str:
+	decls: List[str] = []
+	for group in groups:
+		cid, mb, irname = group.logical
+		members = ", ".join(
+			f"{{ rank := {rank}, primaryOutTid := {tid} }}" for rank, tid in group.members
+		)
+		decls.append(
+			"{ logical := { cid := " + str(cid) + ", mb := " + str(mb)
+			+ f', irname := "{escape_lean_string(irname)}" }}, members := [{members}] }}'
+		)
+	return "[" + ", ".join(decls) + "]"
 
 
 def _infer_chunk_dim(in_shape: List[int], out_shape: List[int], num_parts: int) -> Optional[int]:
@@ -1389,6 +1504,8 @@ def emit_lean_spec(
 	pm_nodes: List[Any],
 	sm_graph: Any,
 	pm_graph: Any,
+	sm_logical_ids: Mapping[int, Tuple[int, int, str]],
+	pm_logical_ids: Mapping[int, Tuple[int, int, str]],
 	init_goals: List[SelectedLineage],
 	goals: List[SelectedLineage],
 	goal_deps: Optional[List[GoalDependency]] = None,
@@ -1464,7 +1581,12 @@ def emit_lean_spec(
 			num_ranks = 1
 		else:
 			num_ranks = max((_node_rank(n) for n in nodes), default=0) + 1
-		lines.append(f"  refine {{ numRanks := {num_ranks}, nodes := ?_ }}")
+		replica_ids = sm_logical_ids if G is sm_graph else pm_logical_ids
+		replica_groups = derive_replica_groups(G, nodes, replica_ids)
+		lines.append(
+			f"  refine {{ numRanks := {num_ranks}, nodes := ?_, "
+			f"replicaGroups := {_lean_replica_groups(replica_groups)} }}"
+		)
 		lines.append("  exact [")
 		
 		seen_wred: set[tuple[int, ...]] = set()
@@ -2010,7 +2132,12 @@ def emit_lean_spec(
 					num_ranks = max((_node_rank(n) for n in nodes), default=0) + 1
 				local_num_parts = num_ranks
 				embedding_params = _embedding_offset_params_by_node(G, nodes, num_parts=local_num_parts)
-				goal_lines.append(f"  refine {{ numRanks := {num_ranks}, nodes := ?_ }}")
+				replica_ids = sm_logical_ids if G is sm_graph else pm_logical_ids
+				replica_groups = derive_replica_groups(G, nodes, replica_ids)
+				goal_lines.append(
+					f"  refine {{ numRanks := {num_ranks}, nodes := ?_, "
+					f"replicaGroups := {_lean_replica_groups(replica_groups)} }}"
+				)
 				goal_lines.append("  exact [")
 				for n in nodes:
 					op = escape_lean_string(_safe_str_op(G.node_opname(n)))
@@ -2626,6 +2753,7 @@ def main() -> None:
 	v = load_verifier(args.sm_pkl, args.pm_pkl)
 	GsE, GpE = v.get_graph()  # expanded
 	GsC, _GpC = v.get_graph_compact()  # compact (stable for leaf detection)
+	sm_logical_ids, pm_logical_ids = aligned_logical_node_ids(GsE, GpE)
 
 	t0 = time.perf_counter()
 	coarse = infer_coarse_lineages_from_expanded(GsE, GpE)
@@ -3020,6 +3148,8 @@ def main() -> None:
 		pm_nodes=pm_nodes,
 		sm_graph=GsE,
 		pm_graph=GpE,
+		sm_logical_ids=sm_logical_ids,
+		pm_logical_ids=pm_logical_ids,
 		init_goals=init_selected,
 		goals=selected,
 		goal_deps=goal_deps,

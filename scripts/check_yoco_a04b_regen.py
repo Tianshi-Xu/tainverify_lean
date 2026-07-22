@@ -50,6 +50,21 @@ def _nodes(text: str, graph: str, next_graph: str | None) -> list[list[Any]]:
     return result
 
 
+def _replica_groups(text: str, graph: str, next_graph: str | None) -> list[list[Any]]:
+    region = _definition_region(text, graph, next_graph)
+    result: list[list[Any]] = []
+    pattern = re.compile(
+        r'\{ logical := \{ cid := (\d+), mb := (\d+), irname := "([^"]+)" \}, '
+        r'members := \[(.*?)\] \}'
+    )
+    for cid, mb, irname, members_body in pattern.findall(region):
+        members = [[int(rank), int(tid)] for rank, tid in re.findall(
+            r"rank := (\d+), primaryOutTid := (\d+)", members_body
+        )]
+        result.append([int(cid), int(mb), irname, members])
+    return result
+
+
 def _shapes(text: str, graph: str) -> list[list[Any]]:
     region = _definition_region(text, f"{graph}InitShapes")
     result: list[list[Any]] = []
@@ -82,6 +97,10 @@ def extract_snapshot(data: bytes) -> dict[str, Any]:
     text = data.decode("utf-8")
     return {
         "ordered_nodes": {"sm": _nodes(text, "sm", "pm"), "pm": _nodes(text, "pm", None)},
+        "replica_groups": {
+            "sm": _replica_groups(text, "sm", "pm"),
+            "pm": _replica_groups(text, "pm", None),
+        },
         "shapes": {"sm": _shapes(text, "sm"), "pm": _shapes(text, "pm")},
         "init_lineages": _lineages(text, "initGoal_"),
         "final_goal_tids": _nat_list_definition(text, "obsTids"),
