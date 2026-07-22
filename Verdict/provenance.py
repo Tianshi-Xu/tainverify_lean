@@ -1,0 +1,143 @@
+"""Deterministic, immutable provenance records for generated Lean snapshots."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import platform
+import re
+import subprocess
+from importlib import metadata
+from pathlib import Path
+from typing import Any, Iterable, Mapping, Sequence
+
+
+_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+_PATH_FLAGS = {
+    "--sm-pkl": "$AUTHORITY_DIR",
+    "--pm-pkl": "$AUTHORITY_DIR",
+    "--metadata-json": "$AUTHORITY_DIR",
+    "--out": "$OUTPUT_DIR",
+    "--manifest-out": "$OUTPUT_DIR",
+    "--goals-out-dir": "$OUTPUT_DIR",
+    "--spec-out": "$OUTPUT_DIR",
+    "--llm-train-repo": "$LLM_TRAIN_REPO",
+    "--nnscaler-repo": "$NNSCALER_REPO",
+}
+
+
+class ProvenanceError(ValueError):
+    """The requested provenance record is incomplete or inconsistent."""
+
+
+def sha256_file(path: str | Path, chunk_size: int = 1024 * 1024) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        while chunk := stream.read(chunk_size):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def git_revision(repo: str | Path) -> str:
+    path = Path(repo)
+    try:
+        revision = subprocess.run(
+            ["git", "-C", str(path), "rev-parse", "HEAD"],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip().lower()
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ProvenanceError(f"cannot resolve git revision for {path}: {exc}") from exc
+    _validate_commit("revision", revision)
+    return revision
+
+
+def installed_package_versions(names: Iterable[str]) -> dict[str, str]:
+    versions: dict[str, str] = {}
+    for name in sorted(set(names)):
+        try:
+            versions[name] = metadata.version(name)
+        except metadata.PackageNotFoundError as exc:
+            raise ProvenanceError(f"required package version unavailable: {name}") from exc
+    return versions
+
+
+def normalize_command(command: Sequence[str]) -> list[str]:
+    """Remove checkout-specific absolute paths while retaining reproducible operands."""
+    normalized: list[str] = []
+    path_prefix: str | None = None
+    for token in command:
+        if path_prefix is not None:
+            normalized.append(f"{path_prefix}/{Path(token).name}")
+            path_prefix = None
+            continue
+        normalized.append(str(token).replace("\\", "/"))
+        path_prefix = _PATH_FLAGS.get(str(token))
+    return normalized
+
+
+def deterministic_json_bytes(value: Mapping[str, Any]) -> bytes:
+    return (json.dumps(value, sort_keys=True, indent=2, separators=(",", ": ")) + "\n").encode("utf-8")
+
+
+def _validate_commit(field: str, revision: str) -> None:
+    if not revision:
+        raise ProvenanceError(f"missing authority revision: {field}")
+    if not _COMMIT_RE.fullmatch(revision.lower()):
+        raise ProvenanceError(f"{field} must be a full 40-character git commit")
+
+
+def _check_expected(field: str, actual: str, expected: Mapping[str, str]) -> None:
+    declared = expected.get(field)
+    if declared is not None and declared.lower() != actual:
+        raise ProvenanceError(f"{field} mismatch: declared {declared}, computed {actual}")
+
+
+def build_manifest(
+    *, model: str, sm_pkl: str | Path, pm_pkl: str | Path,
+    metadata_files: Sequence[str | Path], llm_train_commit: str,
+    nnscaler_commit: str, emitter: str | Path, generated_lean: str | Path,
+    command: Sequence[str], packages: Mapping[str, str],
+    deduplicated_intermediate_tids: Sequence[int], final_goal_tids: Sequence[int],
+    intermediate_goal_tids: Sequence[int], expected_hashes: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    _validate_commit("llm_train_commit", llm_train_commit)
+    _validate_commit("nnscaler_commit", nnscaler_commit)
+    if not model:
+        raise ProvenanceError("model is required")
+    expected = expected_hashes or {}
+    sm_hash = sha256_file(sm_pkl)
+    pm_hash = sha256_file(pm_pkl)
+    _check_expected("sm_pkl_sha256", sm_hash, expected)
+    _check_expected("pm_pkl_sha256", pm_hash, expected)
+    metadata_hashes: dict[str, str] = {}
+    for source in metadata_files:
+        name = Path(source).name
+        if name in metadata_hashes:
+            raise ProvenanceError(f"duplicate metadata basename: {name}")
+        metadata_hashes[name] = sha256_file(source)
+        _check_expected(f"metadata_sha256.{name}", metadata_hashes[name], expected)
+    return {
+        "command": normalize_command(command),
+        "deduplicated_intermediate_tids": sorted(set(map(int, deduplicated_intermediate_tids))),
+        "emitter_sha256": sha256_file(emitter),
+        "final_goal_count": len(set(map(int, final_goal_tids))),
+        "final_goal_tids": sorted(set(map(int, final_goal_tids))),
+        "generated_lean_sha256": sha256_file(generated_lean),
+        "intermediate_goal_count": len(set(map(int, intermediate_goal_tids))),
+        "intermediate_goal_tids": sorted(set(map(int, intermediate_goal_tids))),
+        "llm_train_commit": llm_train_commit.lower(),
+        "metadata_sha256": dict(sorted(metadata_hashes.items())),
+        "model": model,
+        "nnscaler_commit": nnscaler_commit.lower(),
+        "packages": dict(sorted((str(k), str(v)) for k, v in packages.items())),
+        "pm_pkl_sha256": pm_hash,
+        "python": platform.python_version(),
+        "schema_version": 1,
+        "sm_pkl_sha256": sm_hash,
+    }
+
+
+def write_manifest(path: str | Path, manifest: Mapping[str, Any]) -> None:
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(deterministic_json_bytes(manifest))
