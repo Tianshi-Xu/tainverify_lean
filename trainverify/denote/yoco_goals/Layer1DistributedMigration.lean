@@ -821,7 +821,7 @@ The following gear keeps the production semantics visible: buddy shards are
 contiguously gathered on dim 0, one full `fw_attn_varlen` (with the original
 window parameter) is evaluated, and the result is chunked on dim 0. -/
 
-private theorem foldl_take_split_at_not_written_distributed
+theorem foldl_take_split_at_not_written_distributed
     (g : GraphDecl) (nodes : List NodeDecl) (s : Store) (tid : Tid)
     (j k : Nat) (hjk : j ≤ k)
     (hnil : ((nodes.take k).drop j).all (fun n => !n.outs.isEmpty) = true)
@@ -842,7 +842,7 @@ private theorem foldl_take_split_at_not_written_distributed
   rw [hsplit, List.foldl_append]
   exact foldl_applyNodeDistributed_at_not_written g _ _ tid hnil' h'
 
-private theorem recon_attn_sliding_window_2tp_distributed
+theorem recon_attn_sliding_window_2tp_distributed
     (initSM initPM : Store) (g : LineageGoal)
     (nSM nR0 nR1 : NodeDecl) (foldSM foldPM foldPM' : Store)
     (oSM oR0 oR1 : Tid) (L nh kh : Nat)
