@@ -815,6 +815,305 @@ theorem recon_intermediateGoal_4747_distributed (initSM initPM : Store)
 #print axioms recon_intermediateGoal_4746_distributed
 #print axioms recon_intermediateGoal_4747_distributed
 
+/-! ## Layer-1 sliding attention over distributed folds
+
+The following gear keeps the production semantics visible: buddy shards are
+contiguously gathered on dim 0, one full `fw_attn_varlen` (with the original
+window parameter) is evaluated, and the result is chunked on dim 0. -/
+
+private theorem foldl_take_split_at_not_written_distributed
+    (g : GraphDecl) (nodes : List NodeDecl) (s : Store) (tid : Tid)
+    (j k : Nat) (hjk : j ≤ k)
+    (hnil : ((nodes.take k).drop j).all (fun n => !n.outs.isEmpty) = true)
+    (h : ((nodes.take k).drop j).all (fun n => !n.outs.contains tid) = true) :
+    (nodes.take k).foldl (applyNodeDistributed g) s tid =
+      (nodes.take j).foldl (applyNodeDistributed g) s tid := by
+  have hnil' : ∀ n ∈ (nodes.take k).drop j, n.outs ≠ [] := by
+    intro n hn
+    have hn := (List.all_eq_true.mp hnil) n hn
+    simpa using hn
+  have h' : ∀ n ∈ (nodes.take k).drop j, tid ∉ n.outs := by
+    intro n hn
+    have ht := (List.all_eq_true.mp h) n hn
+    simpa using ht
+  have hsplit : nodes.take k = nodes.take j ++ (nodes.take k).drop j := by
+    rw [show nodes.take j = (nodes.take k).take j by rw [List.take_take, min_eq_left hjk]]
+    rw [List.take_append_drop]
+  rw [hsplit, List.foldl_append]
+  exact foldl_applyNodeDistributed_at_not_written g _ _ tid hnil' h'
+
+private theorem recon_attn_sliding_window_2tp_distributed
+    (initSM initPM : Store) (g : LineageGoal)
+    (nSM nR0 nR1 : NodeDecl) (foldSM foldPM foldPM' : Store)
+    (oSM oR0 oR1 : Tid) (L nh kh : Nat)
+    (hL : 0 < L) (hnh : 0 < nh) (hkh : 0 < kh)
+    (hSMred : denoteGraphDistributed sm initSM oSM =
+      applyNodeRingAttn_sliding_window sm foldSM nSM)
+    (hR0red : denoteGraphDistributed pm initPM oR0 =
+      applyNodeRingAttn_sliding_window pm foldPM nR0)
+    (hR1red : denoteGraphDistributed pm initPM oR1 =
+      applyNodeRingAttn_sliding_window pm foldPM' nR1)
+    (hbridge : applyNodeRingAttn_sliding_window pm foldPM nR1 =
+      applyNodeRingAttn_sliding_window pm foldPM' nR1)
+    (hbuddySM : ringAttnBuddies sm nSM = [nSM])
+    (hbuddyR0 : ringAttnBuddies pm nR0 = [nR0, nR1])
+    (hbuddyR1 : ringAttnBuddies pm nR1 = [nR0, nR1])
+    (hidx0 : (([nR0, nR1].findIdx? (fun m => m.rank = nR0.rank)).getD 0) = 0)
+    (hidx1 : (([nR0, nR1].findIdx? (fun m => m.rank = nR1.rank)).getD 0) = 1)
+    (hq : 0 < (foldSM (nSM.ins.getD 0 0)).shape.length)
+    (hk : 0 < (foldSM (nSM.ins.getD 1 0)).shape.length)
+    (hv : 0 < (foldSM (nSM.ins.getD 2 0)).shape.length)
+    (hqfull : foldSM (nSM.ins.getD 0 0) = allGatherPrimDimN 0 2 0
+      [foldPM (nR0.ins.getD 0 0), foldPM (nR1.ins.getD 0 0)])
+    (hkfull : foldSM (nSM.ins.getD 1 0) = allGatherPrimDimN 0 2 0
+      [foldPM (nR0.ins.getD 1 0), foldPM (nR1.ins.getD 1 0)])
+    (hvfull : foldSM (nSM.ins.getD 2 0) = allGatherPrimDimN 0 2 0
+      [foldPM (nR0.ins.getD 2 0), foldPM (nR1.ins.getD 2 0)])
+    (hcuQ : foldSM (nSM.ins.getD 3 0) = foldPM (nR0.ins.getD 3 0))
+    (hcuK : foldSM (nSM.ins.getD 4 0) = foldPM (nR0.ins.getD 4 0))
+    (hcuQsame : foldPM (nR0.ins.getD 3 0) = foldPM (nR1.ins.getD 3 0))
+    (hcuKsame : foldPM (nR0.ins.getD 4 0) = foldPM (nR1.ins.getD 4 0))
+    (hparams : nSM.params = nR0.params) (hparams' : nR0.params = nR1.params)
+    (hfullShape : (fw_attn_varlen
+      (allGatherPrimDimN 0 2 0 [foldPM (nR0.ins.getD 0 0), foldPM (nR1.ins.getD 0 0)])
+      (allGatherPrimDimN 0 2 0 [foldPM (nR0.ins.getD 1 0), foldPM (nR1.ins.getD 1 0)])
+      (allGatherPrimDimN 0 2 0 [foldPM (nR0.ins.getD 2 0), foldPM (nR1.ins.getD 2 0)])
+      (foldPM (nR0.ins.getD 3 0)) (foldPM (nR0.ins.getD 4 0))
+      (nR0.params.getD 0 1) (nR0.params.getD 1 1) (nR0.params.getD 2 1)
+      (nR0.params.getD 3 1) (decide (nR0.params.getD 4 0 ≠ 0))
+      (nR0.params.getD 5 0)).shape = [2 * L, nh, kh])
+    (hfullShape' : (fw_attn_varlen
+      (allGatherPrimDimN 0 2 0 [foldPM' (nR0.ins.getD 0 0), foldPM' (nR1.ins.getD 0 0)])
+      (allGatherPrimDimN 0 2 0 [foldPM' (nR0.ins.getD 1 0), foldPM' (nR1.ins.getD 1 0)])
+      (allGatherPrimDimN 0 2 0 [foldPM' (nR0.ins.getD 2 0), foldPM' (nR1.ins.getD 2 0)])
+      (foldPM' (nR1.ins.getD 3 0)) (foldPM' (nR1.ins.getD 4 0))
+      (nR1.params.getD 0 1) (nR1.params.getD 1 1) (nR1.params.getD 2 1)
+      (nR1.params.getD 3 1) (decide (nR1.params.getD 4 0 ≠ 0))
+      (nR1.params.getD 5 0)).shape = [2 * L, nh, kh])
+    (htp : g.tps = [{ rank := 0, tid := oR0 }, { rank := 1, tid := oR1 }])
+    (hgd : g.gatherDim = 0) (hrep : g.replicated = false)
+    (hts : g.ts = oSM) (htss : g.tsShape = [2 * L, nh, kh])
+    (htps : g.tpShapes = [[L, nh, kh], [L, nh, kh]]) :
+    InitGoalHolds pm.numRanks g (denoteGraphDistributed sm initSM)
+      (denoteGraphDistributed pm initPM) := by
+  have hrec := applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair
+    sm pm foldSM foldPM nSM nR0 nR1 L nh kh hL hnh hkh hbuddySM hbuddyR0
+    hbuddyR1 hidx0 hidx1 hq hk hv hqfull hkfull hvfull hcuQ hcuK hcuQsame
+    hcuKsame hparams hparams' hfullShape
+  have hval : denoteGraphDistributed sm initSM oSM = allGatherPrimDimN 0 pm.numRanks 0
+      [denoteGraphDistributed pm initPM oR0, denoteGraphDistributed pm initPM oR1] := by
+    rw [hSMred, hrec, hbridge, ← hR0red, ← hR1red, show pm.numRanks = 2 from rfl]
+  have hs0 : (denoteGraphDistributed pm initPM oR0).shape = [L, nh, kh] := by
+    rw [hR0red, applyNodeRingAttn_sliding_window_pair_eq_chunk pm foldPM nR0 nR0 nR1 0
+      hbuddyR0 hidx0, chunkPrimDimN_shape 0 2 0 _ [2 * L, nh, kh] hfullShape (by omega)]
+    simp only [List.set, List.getD_cons_zero]
+    rw [show 2 * L / 2 = L from by omega]
+  have hs1 : (denoteGraphDistributed pm initPM oR1).shape = [L, nh, kh] := by
+    rw [hR1red, applyNodeRingAttn_sliding_window_pair_eq_chunk pm foldPM' nR1 nR0 nR1 1
+      hbuddyR1 hidx1, chunkPrimDimN_shape 0 2 1 _ [2 * L, nh, kh] hfullShape' (by omega)]
+    simp only [List.set, List.getD_cons_zero]
+    rw [show 2 * L / 2 = L from by omega]
+  have hs : (denoteGraphDistributed sm initSM oSM).shape = [2 * L, nh, kh] := by
+    rw [hval, show pm.numRanks = 2 from rfl,
+      allGatherPrimDimN_shape 0 2 [denoteGraphDistributed pm initPM oR0,
+        denoteGraphDistributed pm initPM oR1] [L, nh, kh] (by simpa using hs0)]
+    simp only [List.set, List.getD_cons_zero]
+    rw [show L * 2 = 2 * L from by omega]
+  exact wrap_2tp_allGather_gen _ _ g oSM oR0 oR1 [2 * L, nh, kh] [L, nh, kh]
+    htp hgd hrep hts htss htps (by intro h; simpa using congrArg List.length h)
+    hval hs hs0 hs1
+
+private def layer1SmSliding : NodeDecl := nSM_L1
+private def layer1PmSliding0 : NodeDecl := nR0_L1
+private def layer1PmSliding1 : NodeDecl := nR1_L1
+
+-- Split concrete certificates keep native reduction away from the large proof term.
+set_option maxRecDepth 1000000 in
+theorem layer1_sm_node48 : sm.nodes[48]'(by native_decide) = layer1SmSliding := by native_decide
+set_option maxRecDepth 1000000 in
+theorem layer1_pm_node144 : pm.nodes[144]'(by native_decide) = layer1PmSliding0 := by native_decide
+set_option maxRecDepth 1000000 in
+theorem layer1_pm_node145 : pm.nodes[145]'(by native_decide) = layer1PmSliding1 := by native_decide
+set_option maxRecDepth 1000000 in
+theorem layer1_sm_buddy_sliding : ringAttnBuddies sm layer1SmSliding = [layer1SmSliding] := by native_decide
+set_option maxRecDepth 1000000 in
+theorem layer1_pm_buddy_sliding0 : ringAttnBuddies pm layer1PmSliding0 = [layer1PmSliding0, layer1PmSliding1] := by native_decide
+set_option maxRecDepth 1000000 in
+theorem layer1_pm_buddy_sliding1 : ringAttnBuddies pm layer1PmSliding1 = [layer1PmSliding0, layer1PmSliding1] := by native_decide
+
+set_option maxRecDepth 10000000 in
+set_option maxHeartbeats 12000000 in
+theorem recon_intermediateGoal_4750_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4750
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) := by
+  have gq := recon_intermediateGoal_4746_distributed initSM initPM hSM hPM hInit
+  have gk := recon_intermediateGoal_4747_distributed initSM initPM hSM hPM hInit
+  have gv := recon_intermediateGoal_4744_distributed initSM initPM hSM hPM hInit
+  have hqv := oneTp_valeq intermediateGoal_4746 _ _ 4746 rfl rfl rfl rfl gq
+  have hkv := oneTp_valeq intermediateGoal_4747 _ _ 4747 rfl rfl rfl rfl gk
+  have hvv := oneTp_valeq intermediateGoal_4744 _ _ 4744 rfl rfl rfl rfl gv
+  have hqs : (denoteGraphDistributed pm initPM 4746).shape = [2 * 2048, 16, 64] := by
+    rw [← hqv]; exact gq.1
+  have hks : (denoteGraphDistributed pm initPM 4747).shape = [2 * 2048, 4, 64] := by
+    rw [← hkv]; exact gk.1
+  have hvs : (denoteGraphDistributed pm initPM 4744).shape = [2 * 2048, 4, 64] := by
+    rw [← hvv]; exact gv.1
+  have hcu4748 := distributed_init_singleton_value initSM initPM hInit initGoal_4748
+    (by native_decide) 4748 rfl rfl rfl rfl layer1_sm_nodes_nonempty
+    (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have hcu4749 := distributed_init_singleton_value initSM initPM hInit initGoal_4749
+    (by native_decide) 4749 rfl rfl rfl rfl layer1_sm_nodes_nonempty
+    (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have c7619 := distributed_reduce1 pm initPM 140
+    {rank := 0, op := "OpName.ChunkPrim", ins := [4746], outs := [7619], params := [0]}
+    4746 7619 (chunkPrimDimN 0 pm.numRanks 0) (by native_decide) (by native_decide)
+    (by decide) (fun s => applyNode_chunkPrimDimN_out pm s 0 4746 7619 0)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have c7620 := distributed_reduce1 pm initPM 142
+    {rank := 1, op := "OpName.ChunkPrim", ins := [4746], outs := [7620], params := [0]}
+    4746 7620 (chunkPrimDimN 0 pm.numRanks 1) (by native_decide) (by native_decide)
+    (by decide) (fun s => applyNode_chunkPrimDimN_out pm s 1 4746 7620 0)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have c7621 := distributed_reduce1 pm initPM 141
+    {rank := 0, op := "OpName.ChunkPrim", ins := [4747], outs := [7621], params := [0]}
+    4747 7621 (chunkPrimDimN 0 pm.numRanks 0) (by native_decide) (by native_decide)
+    (by decide) (fun s => applyNode_chunkPrimDimN_out pm s 0 4747 7621 0)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have c7622 := distributed_reduce1 pm initPM 143
+    {rank := 1, op := "OpName.ChunkPrim", ins := [4747], outs := [7622], params := [0]}
+    4747 7622 (chunkPrimDimN 0 pm.numRanks 1) (by native_decide) (by native_decide)
+    (by decide) (fun s => applyNode_chunkPrimDimN_out pm s 1 4747 7622 0)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have c7607 := distributed_reduce1 pm initPM 138
+    {rank := 0, op := "OpName.ChunkPrim", ins := [4744], outs := [7607], params := [0]}
+    4744 7607 (chunkPrimDimN 0 pm.numRanks 0) (by native_decide) (by native_decide)
+    (by decide) (fun s => applyNode_chunkPrimDimN_out pm s 0 4744 7607 0)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have c7608 := distributed_reduce1 pm initPM 139
+    {rank := 1, op := "OpName.ChunkPrim", ins := [4744], outs := [7608], params := [0]}
+    4744 7608 (chunkPrimDimN 0 pm.numRanks 1) (by native_decide) (by native_decide)
+    (by decide) (fun s => applyNode_chunkPrimDimN_out pm s 1 4744 7608 0)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  let fs := (sm.nodes.take 48).foldl (applyNodeDistributed sm) initSM
+  let fp := (pm.nodes.take 144).foldl (applyNodeDistributed pm) initPM
+  let fp' := (pm.nodes.take 145).foldl (applyNodeDistributed pm) initPM
+  have bs (t : Tid) (hn : ∀ n ∈ sm.nodes.drop 48, n.outs ≠ [])
+      (hw : ∀ n ∈ sm.nodes.drop 48, t ∉ n.outs) : fs t = denoteGraphDistributed sm initSM t :=
+    distributed_prefix_read sm initSM 48 t hn hw
+  have bp (t : Tid) (hn : ∀ n ∈ pm.nodes.drop 144, n.outs ≠ [])
+      (hw : ∀ n ∈ pm.nodes.drop 144, t ∉ n.outs) : fp t = denoteGraphDistributed pm initPM t :=
+    distributed_prefix_read pm initPM 144 t hn hw
+  have hqfull : fs 4746 = allGatherPrimDimN 0 2 0 [fp 7619, fp 7620] := by
+    rw [bs 4746 (by native_decide) (by native_decide), bp 7619 (by native_decide) (by native_decide),
+      bp 7620 (by native_decide) (by native_decide), c7619, c7620, hqv,
+      show pm.numRanks = 2 from rfl]
+    exact (allGather0_reconstruct_chunks_3d 2048 16 64 (by omega) (by omega) (by omega) _ hqs).symm
+  have hkfull : fs 4747 = allGatherPrimDimN 0 2 0 [fp 7621, fp 7622] := by
+    rw [bs 4747 (by native_decide) (by native_decide), bp 7621 (by native_decide) (by native_decide),
+      bp 7622 (by native_decide) (by native_decide), c7621, c7622, hkv,
+      show pm.numRanks = 2 from rfl]
+    exact (allGather0_reconstruct_chunks_3d 2048 4 64 (by omega) (by omega) (by omega) _ hks).symm
+  have hvfull : fs 4744 = allGatherPrimDimN 0 2 0 [fp 7607, fp 7608] := by
+    rw [bs 4744 (by native_decide) (by native_decide), bp 7607 (by native_decide) (by native_decide),
+      bp 7608 (by native_decide) (by native_decide), c7607, c7608, hvv,
+      show pm.numRanks = 2 from rfl]
+    exact (allGather0_reconstruct_chunks_3d 2048 4 64 (by omega) (by omega) (by omega) _ hvs).symm
+  have hqpos : 0 < (fs (layer1SmSliding.ins.getD 0 0)).shape.length := by
+    show 0 < (fs 4746).shape.length
+    rw [bs 4746 (by native_decide) (by native_decide), hqv, hqs]; decide
+  have hkpos : 0 < (fs (layer1SmSliding.ins.getD 1 0)).shape.length := by
+    show 0 < (fs 4747).shape.length
+    rw [bs 4747 (by native_decide) (by native_decide), hkv, hks]; decide
+  have hvpos : 0 < (fs (layer1SmSliding.ins.getD 2 0)).shape.length := by
+    show 0 < (fs 4744).shape.length
+    rw [bs 4744 (by native_decide) (by native_decide), hvv, hvs]; decide
+  have hcuQ : fs 4748 = fp 4748 := by
+    rw [bs 4748 (by native_decide) (by native_decide), bp 4748 (by native_decide) (by native_decide), hcu4748]
+  have hcuK : fs 4749 = fp 4749 := by
+    rw [bs 4749 (by native_decide) (by native_decide), bp 4749 (by native_decide) (by native_decide), hcu4749]
+  have e7619 : fp 7619 = fp' 7619 :=
+    (foldl_take_split_at_not_written_distributed pm pm.nodes initPM 7619 144 145
+      (by omega) (by native_decide) (by native_decide)).symm
+  have e7620 : fp 7620 = fp' 7620 :=
+    (foldl_take_split_at_not_written_distributed pm pm.nodes initPM 7620 144 145
+      (by omega) (by native_decide) (by native_decide)).symm
+  have e7621 : fp 7621 = fp' 7621 :=
+    (foldl_take_split_at_not_written_distributed pm pm.nodes initPM 7621 144 145
+      (by omega) (by native_decide) (by native_decide)).symm
+  have e7622 : fp 7622 = fp' 7622 :=
+    (foldl_take_split_at_not_written_distributed pm pm.nodes initPM 7622 144 145
+      (by omega) (by native_decide) (by native_decide)).symm
+  have e7607 : fp 7607 = fp' 7607 :=
+    (foldl_take_split_at_not_written_distributed pm pm.nodes initPM 7607 144 145
+      (by omega) (by native_decide) (by native_decide)).symm
+  have e7608 : fp 7608 = fp' 7608 :=
+    (foldl_take_split_at_not_written_distributed pm pm.nodes initPM 7608 144 145
+      (by omega) (by native_decide) (by native_decide)).symm
+  have e4748 : fp 4748 = fp' 4748 :=
+    (foldl_take_split_at_not_written_distributed pm pm.nodes initPM 4748 144 145
+      (by omega) (by native_decide) (by native_decide)).symm
+  have e4749 : fp 4749 = fp' 4749 :=
+    (foldl_take_split_at_not_written_distributed pm pm.nodes initPM 4749 144 145
+      (by omega) (by native_decide) (by native_decide)).symm
+  have bridge : applyNodeRingAttn_sliding_window pm fp layer1PmSliding1 =
+      applyNodeRingAttn_sliding_window pm fp' layer1PmSliding1 := by
+    apply attn_sw_store_congr
+    · rw [layer1_pm_buddy_sliding1]; intro m hm; fin_cases hm
+      · exact e7619
+      · exact e7620
+    · rw [layer1_pm_buddy_sliding1]; intro m hm; fin_cases hm
+      · exact e7621
+      · exact e7622
+    · rw [layer1_pm_buddy_sliding1]; intro m hm; fin_cases hm
+      · exact e7607
+      · exact e7608
+    · exact e4748
+    · exact e4749
+  have rSM : denoteGraphDistributed sm initSM 4750 =
+      applyNodeRingAttn_sliding_window sm fs layer1SmSliding := by
+    rw [distributed_node_core sm initSM 48 layer1SmSliding 4750 (by native_decide)
+      layer1_sm_node48 (by decide) (by native_decide) (by native_decide)]
+    exact applyNodeRingAttn_sliding_window_out sm _ 0 4746 4747 4744 4748 4749 4750
+      [16, 4, 64, 64, 1, 512]
+  have rP0 : denoteGraphDistributed pm initPM 7623 =
+      applyNodeRingAttn_sliding_window pm fp layer1PmSliding0 := by
+    rw [distributed_node_core pm initPM 144 layer1PmSliding0 7623 (by native_decide)
+      layer1_pm_node144 (by decide) (by native_decide) (by native_decide)]
+    exact applyNodeRingAttn_sliding_window_out pm _ 0 7619 7621 7607 4748 4749 7623
+      [16, 4, 64, 64, 1, 512]
+  have rP1 : denoteGraphDistributed pm initPM 7624 =
+      applyNodeRingAttn_sliding_window pm fp' layer1PmSliding1 := by
+    rw [distributed_node_core pm initPM 145 layer1PmSliding1 7624 (by native_decide)
+      layer1_pm_node145 (by decide) (by native_decide) (by native_decide)]
+    exact applyNodeRingAttn_sliding_window_out pm _ 1 7620 7622 7608 4748 4749 7624
+      [16, 4, 64, 64, 1, 512]
+  have hfull : (fw_attn_varlen
+      (allGatherPrimDimN 0 2 0 [fp 7619, fp 7620])
+      (allGatherPrimDimN 0 2 0 [fp 7621, fp 7622])
+      (allGatherPrimDimN 0 2 0 [fp 7607, fp 7608])
+      (fp 4748) (fp 4749) 16 4 64 64 true 512).shape = [2 * 2048, 16, 64] := by
+    rw [fw_attn_varlen_shape_p3, ← hqfull,
+      bs 4746 (by native_decide) (by native_decide), hqv, hqs]
+    rfl
+  have hfull' : (fw_attn_varlen
+      (allGatherPrimDimN 0 2 0 [fp' 7619, fp' 7620])
+      (allGatherPrimDimN 0 2 0 [fp' 7621, fp' 7622])
+      (allGatherPrimDimN 0 2 0 [fp' 7607, fp' 7608])
+      (fp' 4748) (fp' 4749) 16 4 64 64 true 512).shape = [2 * 2048, 16, 64] := by
+    rw [← e7619, ← e7620, ← e7621, ← e7622, ← e7607, ← e7608,
+      ← e4748, ← e4749]
+    exact hfull
+  exact recon_attn_sliding_window_2tp_distributed initSM initPM intermediateGoal_4750
+    layer1SmSliding layer1PmSliding0 layer1PmSliding1 fs fp fp' 4750 7623 7624
+    2048 16 64 (by omega) (by omega) (by omega) rSM rP0 rP1 bridge
+    layer1_sm_buddy_sliding layer1_pm_buddy_sliding0 layer1_pm_buddy_sliding1
+    (by native_decide) (by native_decide) hqpos hkpos hvpos hqfull hkfull hvfull
+    hcuQ hcuK rfl rfl rfl rfl hfull hfull' rfl rfl rfl rfl rfl rfl
+
+#print axioms recon_intermediateGoal_4750_distributed
+
 private def layer1SmMoe : NodeDecl :=
   { rank := 0, op := "OpName.FW_all2all_moe_gmm",
     ins := [7471, 4763, 4764, 4766, 4767], outs := [4768],
