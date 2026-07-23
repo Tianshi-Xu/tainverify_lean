@@ -463,6 +463,358 @@ theorem recon_intermediateGoal_4738_distributed (initSM initPM : Store)
 
 #print axioms recon_intermediateGoal_4738_distributed
 
+/-! ## Layer-1 Q/K/V and rotary fan-out
+
+All leaves below are recovered directly from `hInit`; distributed never-written
+facts lift them to the final stores.  Thus this post-MoE chain does not pass
+through any ring reconstruction theorem. -/
+
+theorem distributed_init_singleton_value (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (gW : LineageGoal) (hgW : gW ∈ initGoals) (W : Tid)
+    (htp : gW.tps = [{ rank := 0, tid := W }]) (hgd : gW.gatherDim = 0)
+    (hrep : gW.replicated = false) (hts : gW.ts = W)
+    (hsmNil : ∀ n ∈ sm.nodes, n.outs ≠ []) (hsm : ∀ n ∈ sm.nodes, W ∉ n.outs)
+    (hpmNil : ∀ n ∈ pm.nodes, n.outs ≠ []) (hpm : ∀ n ∈ pm.nodes, W ∉ n.outs) :
+    denoteGraphDistributed sm initSM W = denoteGraphDistributed pm initPM W := by
+  have hg := hInit gW hgW
+  unfold InitGoalHolds at hg
+  have hv := hg.2.2
+  rw [reconstructForGoal_of_not_replicated gW pm.numRanks _ hrep, htp, hts, hgd] at hv
+  simp only [List.map, reconstructWithDim] at hv
+  rw [denoteGraphDistributed, foldl_applyNodeDistributed_at_not_written sm sm.nodes initSM W hsmNil hsm,
+    denoteGraphDistributed, foldl_applyNodeDistributed_at_not_written pm pm.nodes initPM W hpmNil hpm]
+  exact hv
+
+theorem distributed_init_singleton_shape (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (gW : LineageGoal) (hgW : gW ∈ initGoals) (W : Tid) (sh : Shape)
+    (htsShape : gW.tsShape = sh) (hts : gW.ts = W)
+    (hsmNil : ∀ n ∈ sm.nodes, n.outs ≠ []) (hsm : ∀ n ∈ sm.nodes, W ∉ n.outs) :
+    (denoteGraphDistributed sm initSM W).shape = sh := by
+  have hg := hInit gW hgW
+  unfold InitGoalHolds at hg
+  rw [denoteGraphDistributed,
+    foldl_applyNodeDistributed_at_not_written sm sm.nodes initSM W hsmNil hsm]
+  rw [← hts, ← htsShape]
+  exact hg.1
+
+private def layer1SmFanout : NodeDecl :=
+  { rank := 0, op := "OpName.FW_multiref", ins := [4738],
+    outs := [7444, 7448, 7452], params := [3] }
+private def layer1PmFanout : NodeDecl :=
+  { rank := 1, op := "OpName.FW_multiref", ins := [4738],
+    outs := [14689, 14693, 14697], params := [3] }
+private def layer1SmRotary : NodeDecl :=
+  { rank := 0, op := "OpName.FW_rotary_embedding",
+    ins := [4691, 4745, 4740, 4742], outs := [4746, 4747], params := [16, 4] }
+private def layer1PmRotary : NodeDecl :=
+  { rank := 1, op := "OpName.FW_rotary_embedding",
+    ins := [11854, 4745, 4740, 4742], outs := [4746, 4747], params := [16, 4] }
+
+-- Keep node and suffix reductions in separate kernel certificates.
+set_option maxRecDepth 1000000 in
+theorem layer1_sm_node43 : sm.nodes[43]'(by native_decide) = layer1SmFanout := by native_decide
+set_option maxRecDepth 1000000 in
+theorem layer1_pm_node129 : pm.nodes[129]'(by native_decide) = layer1PmFanout := by native_decide
+set_option maxRecDepth 1000000 in
+theorem layer1_sm_node47 : sm.nodes[47]'(by native_decide) = layer1SmRotary := by native_decide
+set_option maxRecDepth 1000000 in
+theorem layer1_pm_node137 : pm.nodes[137]'(by native_decide) = layer1PmRotary := by native_decide
+private def layer1PmCache : NodeDecl :=
+  { rank := 1, op := "OpName.FW_multiref", ins := [4691],
+    outs := (List.range 12).map (fun r => 11853 + r),
+    params := [((List.range 12).map (fun r => 11853 + r)).length] }
+set_option maxRecDepth 1000000 in
+theorem layer1_pm_node14 : pm.nodes[14]'(by native_decide) = layer1PmCache := by native_decide
+set_option maxRecDepth 1000000 in
+theorem layer1_pm_drop15_nonempty : ∀ n ∈ pm.nodes.drop 15, n.outs ≠ [] := by native_decide
+set_option maxRecDepth 1000000 in
+theorem layer1_pm_drop15_no11854 : ∀ n ∈ pm.nodes.drop 15, 11854 ∉ n.outs := by native_decide
+set_option maxRecDepth 1000000 in
+theorem layer1_pm_drop14_nonempty : ∀ n ∈ pm.nodes.drop 14, n.outs ≠ [] := by native_decide
+set_option maxRecDepth 1000000 in
+theorem layer1_pm_drop14_no4691 : ∀ n ∈ pm.nodes.drop 14, 4691 ∉ n.outs := by native_decide
+set_option maxRecDepth 1000000 in
+theorem layer1_sm_nodes_nonempty : ∀ n ∈ sm.nodes, n.outs ≠ [] := by native_decide
+set_option maxRecDepth 1000000 in
+theorem layer1_pm_nodes_nonempty : ∀ n ∈ pm.nodes, n.outs ≠ [] := by native_decide
+
+set_option maxRecDepth 10000000 in
+set_option maxHeartbeats 4000000 in
+theorem recon_intermediateGoal_4740_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4740
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) := by
+  have h4738 := recon_intermediateGoal_4738_distributed initSM initPM hSM hPM hInit
+  have hv4738 := oneTp_valeq intermediateGoal_4738 _ _ 4738 rfl rfl rfl rfl h4738
+  have hs4738 : (denoteGraphDistributed sm initSM 4738).shape = [4096, 1024] := by
+    have hs := h4738.1; simpa [intermediateGoal_4738] using hs
+  have s7444 : denoteGraphDistributed sm initSM 7444 = id (denoteGraphDistributed sm initSM 4738) :=
+    distributed_reduce1 sm initSM 43 layer1SmFanout 4738 7444 id (by native_decide)
+      layer1_sm_node43 (by decide)
+      (fun s => applyNode_fw_multiref3_first_out' sm s 0 4738 7444 7448 7452)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p14689 : denoteGraphDistributed pm initPM 14689 = id (denoteGraphDistributed pm initPM 4738) :=
+    distributed_reduce1 pm initPM 129 layer1PmFanout 4738 14689 id (by native_decide)
+      layer1_pm_node129 (by decide)
+      (fun s => applyNode_fw_multiref3_first_out' pm s 1 4738 14689 14693 14697)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at s7444 p14689
+  have hw := distributed_init_singleton_value initSM initPM hInit initGoal_4739
+    (by native_decide) 4739 rfl rfl rfl rfl layer1_sm_nodes_nonempty
+    (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have hsw := distributed_init_singleton_shape initSM initPM hInit initGoal_4739
+    (by native_decide) 4739 [16, 64, 1024] rfl rfl layer1_sm_nodes_nonempty (by native_decide)
+  have rSM : denoteGraphDistributed sm initSM 4740 =
+      fw_per_head_linear (denoteGraphDistributed sm initSM 7444) (denoteGraphDistributed sm initSM 4739) :=
+    distributed_reduce2 sm initSM 44
+      { rank := 0, op := "OpName.FW_per_head_mix_precision_linear", ins := [7444, 4739], outs := [4740] }
+      7444 4739 4740 fw_per_head_linear (by native_decide) (by native_decide) (by decide)
+      (fun s => applyNode_fw_per_head_mix_precision_linear_out sm s 0 7444 4739 4740 [])
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rPM : denoteGraphDistributed pm initPM 4740 =
+      fw_per_head_linear (denoteGraphDistributed pm initPM 14689) (denoteGraphDistributed pm initPM 4739) :=
+    distributed_reduce2 pm initPM 133
+      { rank := 1, op := "OpName.FW_per_head_mix_precision_linear", ins := [14689, 4739], outs := [4740] }
+      14689 4739 4740 fw_per_head_linear (by native_decide) (by native_decide) (by decide)
+      (fun s => applyNode_fw_per_head_mix_precision_linear_out pm s 1 14689 4739 4740 [])
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hval : denoteGraphDistributed sm initSM 4740 = denoteGraphDistributed pm initPM 4740 := by
+    rw [rSM, rPM, s7444, p14689, hv4738, hw]
+  have hshape : (denoteGraphDistributed sm initSM 4740).shape = [4096, 16, 64] := by
+    rw [rSM]; exact fw_per_head_linear_shape_3d _ _ 4096 1024 16 64 (by rw [s7444]; exact hs4738) hsw
+  exact wrap_1tp_gen _ _ intermediateGoal_4740 4740 [4096, 16, 64]
+    rfl rfl rfl rfl rfl rfl hval hshape
+
+set_option maxRecDepth 10000000 in
+set_option maxHeartbeats 4000000 in
+theorem recon_intermediateGoal_4742_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4742
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) := by
+  have h4738 := recon_intermediateGoal_4738_distributed initSM initPM hSM hPM hInit
+  have hv4738 := oneTp_valeq intermediateGoal_4738 _ _ 4738 rfl rfl rfl rfl h4738
+  have hs4738 : (denoteGraphDistributed sm initSM 4738).shape = [4096, 1024] := by
+    have hs := h4738.1; simpa [intermediateGoal_4738] using hs
+  have s7448 : denoteGraphDistributed sm initSM 7448 = id (denoteGraphDistributed sm initSM 4738) :=
+    distributed_reduce1 sm initSM 43 layer1SmFanout 4738 7448 id (by native_decide)
+      layer1_sm_node43 (by decide)
+      (fun s => applyNode_fw_multiref3_second_out' sm s 0 4738 7444 7448 7452 (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p14693 : denoteGraphDistributed pm initPM 14693 = id (denoteGraphDistributed pm initPM 4738) :=
+    distributed_reduce1 pm initPM 129 layer1PmFanout 4738 14693 id (by native_decide)
+      layer1_pm_node129 (by decide)
+      (fun s => applyNode_fw_multiref3_second_out' pm s 1 4738 14689 14693 14697 (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at s7448 p14693
+  have hw := distributed_init_singleton_value initSM initPM hInit initGoal_4741
+    (by native_decide) 4741 rfl rfl rfl rfl layer1_sm_nodes_nonempty
+    (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have hsw := distributed_init_singleton_shape initSM initPM hInit initGoal_4741
+    (by native_decide) 4741 [4, 64, 1024] rfl rfl layer1_sm_nodes_nonempty (by native_decide)
+  have rSM : denoteGraphDistributed sm initSM 4742 =
+      fw_per_head_linear (denoteGraphDistributed sm initSM 7448) (denoteGraphDistributed sm initSM 4741) :=
+    distributed_reduce2 sm initSM 45
+      { rank := 0, op := "OpName.FW_per_head_mix_precision_linear", ins := [7448, 4741], outs := [4742] }
+      7448 4741 4742 fw_per_head_linear (by native_decide) (by native_decide) (by decide)
+      (fun s => applyNode_fw_per_head_mix_precision_linear_out sm s 0 7448 4741 4742 [])
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rPM : denoteGraphDistributed pm initPM 4742 =
+      fw_per_head_linear (denoteGraphDistributed pm initPM 14693) (denoteGraphDistributed pm initPM 4741) :=
+    distributed_reduce2 pm initPM 134
+      { rank := 1, op := "OpName.FW_per_head_mix_precision_linear", ins := [14693, 4741], outs := [4742] }
+      14693 4741 4742 fw_per_head_linear (by native_decide) (by native_decide) (by decide)
+      (fun s => applyNode_fw_per_head_mix_precision_linear_out pm s 1 14693 4741 4742 [])
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hval : denoteGraphDistributed sm initSM 4742 = denoteGraphDistributed pm initPM 4742 := by
+    rw [rSM, rPM, s7448, p14693, hv4738, hw]
+  have hshape : (denoteGraphDistributed sm initSM 4742).shape = [4096, 4, 64] := by
+    rw [rSM]; exact fw_per_head_linear_shape_3d _ _ 4096 1024 4 64 (by rw [s7448]; exact hs4738) hsw
+  exact wrap_1tp_gen _ _ intermediateGoal_4742 4742 [4096, 4, 64]
+    rfl rfl rfl rfl rfl rfl hval hshape
+
+set_option maxRecDepth 10000000 in
+set_option maxHeartbeats 4000000 in
+theorem recon_intermediateGoal_4744_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4744
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) := by
+  have h4738 := recon_intermediateGoal_4738_distributed initSM initPM hSM hPM hInit
+  have hv4738 := oneTp_valeq intermediateGoal_4738 _ _ 4738 rfl rfl rfl rfl h4738
+  have hs4738 : (denoteGraphDistributed sm initSM 4738).shape = [4096, 1024] := by
+    have hs := h4738.1; simpa [intermediateGoal_4738] using hs
+  have s7452 : denoteGraphDistributed sm initSM 7452 = id (denoteGraphDistributed sm initSM 4738) :=
+    distributed_reduce1 sm initSM 43 layer1SmFanout 4738 7452 id (by native_decide)
+      layer1_sm_node43 (by decide)
+      (fun s => applyNode_fw_multiref3_third_out' sm s 0 4738 7444 7448 7452 (by decide) (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p14697 : denoteGraphDistributed pm initPM 14697 = id (denoteGraphDistributed pm initPM 4738) :=
+    distributed_reduce1 pm initPM 129 layer1PmFanout 4738 14697 id (by native_decide)
+      layer1_pm_node129 (by decide)
+      (fun s => applyNode_fw_multiref3_third_out' pm s 1 4738 14689 14693 14697 (by decide) (by decide))
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at s7452 p14697
+  have hw := distributed_init_singleton_value initSM initPM hInit initGoal_4743
+    (by native_decide) 4743 rfl rfl rfl rfl layer1_sm_nodes_nonempty
+    (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have hsw := distributed_init_singleton_shape initSM initPM hInit initGoal_4743
+    (by native_decide) 4743 [4, 64, 1024] rfl rfl layer1_sm_nodes_nonempty (by native_decide)
+  have rSM : denoteGraphDistributed sm initSM 4744 =
+      fw_per_head_linear (denoteGraphDistributed sm initSM 7452) (denoteGraphDistributed sm initSM 4743) :=
+    distributed_reduce2 sm initSM 46
+      { rank := 0, op := "OpName.FW_per_head_mix_precision_linear", ins := [7452, 4743], outs := [4744] }
+      7452 4743 4744 fw_per_head_linear (by native_decide) (by native_decide) (by decide)
+      (fun s => applyNode_fw_per_head_mix_precision_linear_out sm s 0 7452 4743 4744 [])
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rPM : denoteGraphDistributed pm initPM 4744 =
+      fw_per_head_linear (denoteGraphDistributed pm initPM 14697) (denoteGraphDistributed pm initPM 4743) :=
+    distributed_reduce2 pm initPM 135
+      { rank := 1, op := "OpName.FW_per_head_mix_precision_linear", ins := [14697, 4743], outs := [4744] }
+      14697 4743 4744 fw_per_head_linear (by native_decide) (by native_decide) (by decide)
+      (fun s => applyNode_fw_per_head_mix_precision_linear_out pm s 1 14697 4743 4744 [])
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hval : denoteGraphDistributed sm initSM 4744 = denoteGraphDistributed pm initPM 4744 := by
+    rw [rSM, rPM, s7452, p14697, hv4738, hw]
+  have hshape : (denoteGraphDistributed sm initSM 4744).shape = [4096, 4, 64] := by
+    rw [rSM]; exact fw_per_head_linear_shape_3d _ _ 4096 1024 4 64 (by rw [s7452]; exact hs4738) hsw
+  exact wrap_1tp_gen _ _ intermediateGoal_4744 4744 [4096, 4, 64]
+    rfl rfl rfl rfl rfl rfl hval hshape
+
+theorem layer1_rotary_cache_distributed (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    denoteGraphDistributed sm initSM 4691 = denoteGraphDistributed pm initPM 11854 := by
+  have hbase := distributed_init_singleton_value initSM initPM hInit initGoal_4691
+    (by native_decide) 4691 rfl rfl rfl rfl layer1_sm_nodes_nonempty
+    (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have hcopy : denoteGraphDistributed pm initPM 11854 = id (denoteGraphDistributed pm initPM 4691) :=
+    distributed_reduce1 pm initPM 14 layer1PmCache 4691 11854 id (by native_decide)
+      layer1_pm_node14 (by decide)
+      (fun s => by
+        rw [applyNodeRingAttn_eq_applyNode_of_not_ring pm s layer1PmCache (by decide) (by decide)]
+        unfold layer1PmCache
+        rw [applyNode_fw_multiref_mem_out pm s 1 4691
+          ((List.range 12).map (fun r => 11853 + r)) 11854 (by native_decide), id_eq])
+      layer1_pm_drop15_nonempty layer1_pm_drop15_no11854
+      layer1_pm_drop14_nonempty layer1_pm_drop14_no4691
+  rw [hcopy, id_eq]
+  exact hbase
+
+set_option maxRecDepth 10000000 in
+set_option maxHeartbeats 4000000 in
+theorem recon_intermediateGoal_4746_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4746
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) := by
+  have h4740 := recon_intermediateGoal_4740_distributed initSM initPM hSM hPM hInit
+  have hv4740 := oneTp_valeq intermediateGoal_4740 _ _ 4740 rfl rfl rfl rfl h4740
+  have hs4740 : (denoteGraphDistributed sm initSM 4740).shape = [4096, 16, 64] := by
+    have hs := h4740.1; simpa [intermediateGoal_4740] using hs
+  have h4742 := recon_intermediateGoal_4742_distributed initSM initPM hSM hPM hInit
+  have hv4742 := oneTp_valeq intermediateGoal_4742 _ _ 4742 rfl rfl rfl rfl h4742
+  have hw := distributed_init_singleton_value initSM initPM hInit initGoal_4745
+    (by native_decide) 4745 rfl rfl rfl rfl layer1_sm_nodes_nonempty
+    (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have hcache := layer1_rotary_cache_distributed initSM initPM hInit
+  have rSM : denoteGraphDistributed sm initSM 4746 =
+      (fw_rotary_embedding (denoteGraphDistributed sm initSM 4691)
+        (denoteGraphDistributed sm initSM 4745) (denoteGraphDistributed sm initSM 4740)
+        (denoteGraphDistributed sm initSM 4742) 16 4).1 := by
+    rw [distributed_node_core sm initSM 47 layer1SmRotary 4746 (by native_decide)
+      layer1_sm_node47 (by decide) (by native_decide) (by native_decide),
+      applyNodeRingAttn_eq_applyNode_of_not_ring sm _ layer1SmRotary (by decide) (by decide)]
+    rw [show layer1SmRotary =
+      { rank := 0, op := "OpName.FW_rotary_embedding", ins := [4691, 4745, 4740, 4742],
+        outs := [4746, 4747], params := [16, 4] } by rfl,
+      applyNode_fw_rotary_embedding_fst_out,
+      distributed_prefix_read sm initSM 47 4691 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 47 4745 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 47 4740 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 47 4742 (by native_decide) (by native_decide)]
+  have rPM : denoteGraphDistributed pm initPM 4746 =
+      (fw_rotary_embedding (denoteGraphDistributed pm initPM 11854)
+        (denoteGraphDistributed pm initPM 4745) (denoteGraphDistributed pm initPM 4740)
+        (denoteGraphDistributed pm initPM 4742) 16 4).1 := by
+    rw [distributed_node_core pm initPM 137 layer1PmRotary 4746 (by native_decide)
+      layer1_pm_node137 (by decide) (by native_decide) (by native_decide),
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm _ layer1PmRotary (by decide) (by decide)]
+    rw [show layer1PmRotary =
+      { rank := 1, op := "OpName.FW_rotary_embedding", ins := [11854, 4745, 4740, 4742],
+        outs := [4746, 4747], params := [16, 4] } by rfl,
+      applyNode_fw_rotary_embedding_fst_out,
+      distributed_prefix_read pm initPM 137 11854 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 137 4745 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 137 4740 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 137 4742 (by native_decide) (by native_decide)]
+  have hval : denoteGraphDistributed sm initSM 4746 = denoteGraphDistributed pm initPM 4746 := by
+    rw [rSM, rPM, hcache, hw, hv4740, hv4742]
+  have hshape : (denoteGraphDistributed sm initSM 4746).shape = [4096, 16, 64] := by
+    rw [rSM, fw_rotary_embedding_fst_shape]; exact hs4740
+  exact wrap_1tp_gen _ _ intermediateGoal_4746 4746 [4096, 16, 64]
+    rfl rfl rfl rfl rfl rfl hval hshape
+
+set_option maxRecDepth 10000000 in
+set_option maxHeartbeats 4000000 in
+theorem recon_intermediateGoal_4747_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4747
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) := by
+  have h4740 := recon_intermediateGoal_4740_distributed initSM initPM hSM hPM hInit
+  have hv4740 := oneTp_valeq intermediateGoal_4740 _ _ 4740 rfl rfl rfl rfl h4740
+  have h4742 := recon_intermediateGoal_4742_distributed initSM initPM hSM hPM hInit
+  have hv4742 := oneTp_valeq intermediateGoal_4742 _ _ 4742 rfl rfl rfl rfl h4742
+  have hs4742 : (denoteGraphDistributed sm initSM 4742).shape = [4096, 4, 64] := by
+    have hs := h4742.1; simpa [intermediateGoal_4742] using hs
+  have hw := distributed_init_singleton_value initSM initPM hInit initGoal_4745
+    (by native_decide) 4745 rfl rfl rfl rfl layer1_sm_nodes_nonempty
+    (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have hcache := layer1_rotary_cache_distributed initSM initPM hInit
+  have rSM : denoteGraphDistributed sm initSM 4747 =
+      (fw_rotary_embedding (denoteGraphDistributed sm initSM 4691)
+        (denoteGraphDistributed sm initSM 4745) (denoteGraphDistributed sm initSM 4740)
+        (denoteGraphDistributed sm initSM 4742) 16 4).2 := by
+    rw [distributed_node_core sm initSM 47 layer1SmRotary 4747 (by native_decide)
+      layer1_sm_node47 (by decide) (by native_decide) (by native_decide),
+      applyNodeRingAttn_eq_applyNode_of_not_ring sm _ layer1SmRotary (by decide) (by decide)]
+    rw [show layer1SmRotary =
+      { rank := 0, op := "OpName.FW_rotary_embedding", ins := [4691, 4745, 4740, 4742],
+        outs := [4746, 4747], params := [16, 4] } by rfl,
+      applyNode_fw_rotary_embedding_snd_out _ _ _ _ _ 4691 4745 4740 4742 4746 4747 (by decide),
+      distributed_prefix_read sm initSM 47 4691 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 47 4745 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 47 4740 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 47 4742 (by native_decide) (by native_decide)]
+  have rPM : denoteGraphDistributed pm initPM 4747 =
+      (fw_rotary_embedding (denoteGraphDistributed pm initPM 11854)
+        (denoteGraphDistributed pm initPM 4745) (denoteGraphDistributed pm initPM 4740)
+        (denoteGraphDistributed pm initPM 4742) 16 4).2 := by
+    rw [distributed_node_core pm initPM 137 layer1PmRotary 4747 (by native_decide)
+      layer1_pm_node137 (by decide) (by native_decide) (by native_decide),
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm _ layer1PmRotary (by decide) (by decide)]
+    rw [show layer1PmRotary =
+      { rank := 1, op := "OpName.FW_rotary_embedding", ins := [11854, 4745, 4740, 4742],
+        outs := [4746, 4747], params := [16, 4] } by rfl,
+      applyNode_fw_rotary_embedding_snd_out _ _ _ _ _ 11854 4745 4740 4742 4746 4747 (by decide),
+      distributed_prefix_read pm initPM 137 11854 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 137 4745 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 137 4740 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 137 4742 (by native_decide) (by native_decide)]
+  have hval : denoteGraphDistributed sm initSM 4747 = denoteGraphDistributed pm initPM 4747 := by
+    rw [rSM, rPM, hcache, hw, hv4740, hv4742]
+  have hshape : (denoteGraphDistributed sm initSM 4747).shape = [4096, 4, 64] := by
+    rw [rSM, fw_rotary_embedding_snd_shape]; exact hs4742
+  exact wrap_1tp_gen _ _ intermediateGoal_4747 4747 [4096, 4, 64]
+    rfl rfl rfl rfl rfl rfl hval hshape
+
+#print axioms recon_intermediateGoal_4744_distributed
+#print axioms recon_intermediateGoal_4746_distributed
+#print axioms recon_intermediateGoal_4747_distributed
+
 private def layer1SmMoe : NodeDecl :=
   { rank := 0, op := "OpName.FW_all2all_moe_gmm",
     ins := [7471, 4763, 4764, 4766, 4767], outs := [4768],
