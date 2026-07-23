@@ -1,0 +1,2565 @@
+{
+  "audit_table": [
+    {
+      "buddy_tids": [
+        7863,
+        7864
+      ],
+      "goal_tid": 4822,
+      "kind": "sliding",
+      "layer": 3,
+      "pm_node_indices": [
+        279,
+        282
+      ],
+      "sm_node_index": 109,
+      "state": "ready"
+    },
+    {
+      "buddy_tids": [
+        8049,
+        8050
+      ],
+      "goal_tid": 4876,
+      "kind": "sliding",
+      "layer": 4,
+      "pm_node_indices": [
+        357,
+        360
+      ],
+      "sm_node_index": 148,
+      "state": "ready"
+    },
+    {
+      "buddy_tids": [
+        8235,
+        8236
+      ],
+      "goal_tid": 4930,
+      "kind": "sliding",
+      "layer": 5,
+      "pm_node_indices": [
+        435,
+        438
+      ],
+      "sm_node_index": 187,
+      "state": "ready"
+    },
+    {
+      "buddy_tids": [
+        8421,
+        8422
+      ],
+      "goal_tid": 4984,
+      "kind": "sliding",
+      "layer": 6,
+      "pm_node_indices": [
+        513,
+        516
+      ],
+      "sm_node_index": 226,
+      "state": "ready"
+    },
+    {
+      "buddy_tids": [
+        8607,
+        8608
+      ],
+      "goal_tid": 5038,
+      "kind": "sliding",
+      "layer": 7,
+      "pm_node_indices": [
+        591,
+        594
+      ],
+      "sm_node_index": 265,
+      "state": "ready"
+    },
+    {
+      "buddy_tids": [
+        8793,
+        8794
+      ],
+      "goal_tid": 5092,
+      "kind": "sliding",
+      "layer": 8,
+      "pm_node_indices": [
+        669,
+        672
+      ],
+      "sm_node_index": 304,
+      "state": "ready"
+    },
+    {
+      "buddy_tids": [
+        8979,
+        8980
+      ],
+      "goal_tid": 5146,
+      "kind": "sliding",
+      "layer": 9,
+      "pm_node_indices": [
+        747,
+        750
+      ],
+      "sm_node_index": 343,
+      "state": "ready"
+    },
+    {
+      "buddy_tids": [
+        9165,
+        9166
+      ],
+      "goal_tid": 5200,
+      "kind": "sliding",
+      "layer": 10,
+      "pm_node_indices": [
+        825,
+        828
+      ],
+      "sm_node_index": 382,
+      "state": "ready"
+    },
+    {
+      "buddy_tids": [
+        9351,
+        9352
+      ],
+      "goal_tid": 5254,
+      "kind": "sliding",
+      "layer": 11,
+      "pm_node_indices": [
+        903,
+        906
+      ],
+      "sm_node_index": 421,
+      "state": "ready"
+    },
+    {
+      "buddy_tids": [
+        9537,
+        9538
+      ],
+      "goal_tid": 5308,
+      "kind": "sliding",
+      "layer": 12,
+      "pm_node_indices": [
+        981,
+        984
+      ],
+      "sm_node_index": 460,
+      "state": "ready"
+    },
+    {
+      "buddy_tids": [
+        9741,
+        9742
+      ],
+      "goal_tid": 5365,
+      "kind": "zigzag",
+      "layer": 13,
+      "pm_node_indices": [
+        1116,
+        1119
+      ],
+      "sm_node_index": 527,
+      "state": "blocked"
+    },
+    {
+      "buddy_tids": [
+        9913,
+        9914
+      ],
+      "goal_tid": 5414,
+      "kind": "zigzag",
+      "layer": 14,
+      "pm_node_indices": [
+        1186,
+        1189
+      ],
+      "sm_node_index": 562,
+      "state": "blocked"
+    },
+    {
+      "buddy_tids": [
+        10085,
+        10086
+      ],
+      "goal_tid": 5463,
+      "kind": "zigzag",
+      "layer": 15,
+      "pm_node_indices": [
+        1256,
+        1259
+      ],
+      "sm_node_index": 597,
+      "state": "blocked"
+    },
+    {
+      "buddy_tids": [
+        10257,
+        10258
+      ],
+      "goal_tid": 5512,
+      "kind": "zigzag",
+      "layer": 16,
+      "pm_node_indices": [
+        1326,
+        1329
+      ],
+      "sm_node_index": 632,
+      "state": "blocked"
+    },
+    {
+      "buddy_tids": [
+        10429,
+        10430
+      ],
+      "goal_tid": 5561,
+      "kind": "zigzag",
+      "layer": 17,
+      "pm_node_indices": [
+        1396,
+        1399
+      ],
+      "sm_node_index": 667,
+      "state": "blocked"
+    },
+    {
+      "buddy_tids": [
+        10601,
+        10602
+      ],
+      "goal_tid": 5610,
+      "kind": "zigzag",
+      "layer": 18,
+      "pm_node_indices": [
+        1466,
+        1469
+      ],
+      "sm_node_index": 702,
+      "state": "blocked"
+    },
+    {
+      "buddy_tids": [
+        10773,
+        10774
+      ],
+      "goal_tid": 5659,
+      "kind": "zigzag",
+      "layer": 19,
+      "pm_node_indices": [
+        1536,
+        1539
+      ],
+      "sm_node_index": 737,
+      "state": "blocked"
+    },
+    {
+      "buddy_tids": [
+        10945,
+        10946
+      ],
+      "goal_tid": 5708,
+      "kind": "zigzag",
+      "layer": 20,
+      "pm_node_indices": [
+        1606,
+        1609
+      ],
+      "sm_node_index": 772,
+      "state": "blocked"
+    },
+    {
+      "buddy_tids": [
+        11117,
+        11118
+      ],
+      "goal_tid": 5757,
+      "kind": "zigzag",
+      "layer": 21,
+      "pm_node_indices": [
+        1676,
+        1679
+      ],
+      "sm_node_index": 807,
+      "state": "blocked"
+    },
+    {
+      "buddy_tids": [
+        11289,
+        11290
+      ],
+      "goal_tid": 5806,
+      "kind": "zigzag",
+      "layer": 22,
+      "pm_node_indices": [
+        1746,
+        1749
+      ],
+      "sm_node_index": 842,
+      "state": "blocked"
+    },
+    {
+      "buddy_tids": [
+        11461,
+        11462
+      ],
+      "goal_tid": 5855,
+      "kind": "zigzag",
+      "layer": 23,
+      "pm_node_indices": [
+        1816,
+        1819
+      ],
+      "sm_node_index": 877,
+      "state": "blocked"
+    },
+    {
+      "buddy_tids": [
+        11633,
+        11634
+      ],
+      "goal_tid": 5904,
+      "kind": "zigzag",
+      "layer": 24,
+      "pm_node_indices": [
+        1886,
+        1891
+      ],
+      "sm_node_index": 912,
+      "state": "blocked"
+    }
+  ],
+  "entries": [
+    {
+      "affine_group": "sliding-moe-l3-l12",
+      "affine_ordinal": 0,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 7863
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 7864
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          7863,
+          7864
+        ],
+        "sm": 4822
+      },
+      "kind": "sliding",
+      "layer": 3,
+      "migration": {
+        "blocker": null,
+        "fail_closed": false,
+        "state": "ready"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              14766,
+              7853,
+              7855,
+              7859,
+              7861
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              7863
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              14789,
+              7854,
+              7856,
+              7860,
+              7862
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              7864
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            7523,
+            4817,
+            4818,
+            4820,
+            4821
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            4822
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          279,
+          282
+        ],
+        "sm": 109
+      }
+    },
+    {
+      "affine_group": "sliding-moe-l3-l12",
+      "affine_ordinal": 1,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 8049
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 8050
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          8049,
+          8050
+        ],
+        "sm": 4876
+      },
+      "kind": "sliding",
+      "layer": 4,
+      "migration": {
+        "blocker": null,
+        "fail_closed": false,
+        "state": "ready"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              14870,
+              8039,
+              8041,
+              8045,
+              8047
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              8049
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              14893,
+              8040,
+              8042,
+              8046,
+              8048
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              8050
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            7575,
+            4871,
+            4872,
+            4874,
+            4875
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            4876
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          357,
+          360
+        ],
+        "sm": 148
+      }
+    },
+    {
+      "affine_group": "sliding-moe-l3-l12",
+      "affine_ordinal": 2,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 8235
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 8236
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          8235,
+          8236
+        ],
+        "sm": 4930
+      },
+      "kind": "sliding",
+      "layer": 5,
+      "migration": {
+        "blocker": null,
+        "fail_closed": false,
+        "state": "ready"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              14974,
+              8225,
+              8227,
+              8231,
+              8233
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              8235
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              14997,
+              8226,
+              8228,
+              8232,
+              8234
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              8236
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            7627,
+            4925,
+            4926,
+            4928,
+            4929
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            4930
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          435,
+          438
+        ],
+        "sm": 187
+      }
+    },
+    {
+      "affine_group": "sliding-moe-l3-l12",
+      "affine_ordinal": 3,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 8421
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 8422
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          8421,
+          8422
+        ],
+        "sm": 4984
+      },
+      "kind": "sliding",
+      "layer": 6,
+      "migration": {
+        "blocker": null,
+        "fail_closed": false,
+        "state": "ready"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              15078,
+              8411,
+              8413,
+              8417,
+              8419
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              8421
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              15101,
+              8412,
+              8414,
+              8418,
+              8420
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              8422
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            7679,
+            4979,
+            4980,
+            4982,
+            4983
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            4984
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          513,
+          516
+        ],
+        "sm": 226
+      }
+    },
+    {
+      "affine_group": "sliding-moe-l3-l12",
+      "affine_ordinal": 4,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 8607
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 8608
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          8607,
+          8608
+        ],
+        "sm": 5038
+      },
+      "kind": "sliding",
+      "layer": 7,
+      "migration": {
+        "blocker": null,
+        "fail_closed": false,
+        "state": "ready"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              15182,
+              8597,
+              8599,
+              8603,
+              8605
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              8607
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              15205,
+              8598,
+              8600,
+              8604,
+              8606
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              8608
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            7731,
+            5033,
+            5034,
+            5036,
+            5037
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5038
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          591,
+          594
+        ],
+        "sm": 265
+      }
+    },
+    {
+      "affine_group": "sliding-moe-l3-l12",
+      "affine_ordinal": 5,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 8793
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 8794
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          8793,
+          8794
+        ],
+        "sm": 5092
+      },
+      "kind": "sliding",
+      "layer": 8,
+      "migration": {
+        "blocker": null,
+        "fail_closed": false,
+        "state": "ready"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              15286,
+              8783,
+              8785,
+              8789,
+              8791
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              8793
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              15309,
+              8784,
+              8786,
+              8790,
+              8792
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              8794
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            7783,
+            5087,
+            5088,
+            5090,
+            5091
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5092
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          669,
+          672
+        ],
+        "sm": 304
+      }
+    },
+    {
+      "affine_group": "sliding-moe-l3-l12",
+      "affine_ordinal": 6,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 8979
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 8980
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          8979,
+          8980
+        ],
+        "sm": 5146
+      },
+      "kind": "sliding",
+      "layer": 9,
+      "migration": {
+        "blocker": null,
+        "fail_closed": false,
+        "state": "ready"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              15390,
+              8969,
+              8971,
+              8975,
+              8977
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              8979
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              15413,
+              8970,
+              8972,
+              8976,
+              8978
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              8980
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            7835,
+            5141,
+            5142,
+            5144,
+            5145
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5146
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          747,
+          750
+        ],
+        "sm": 343
+      }
+    },
+    {
+      "affine_group": "sliding-moe-l3-l12",
+      "affine_ordinal": 7,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 9165
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 9166
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          9165,
+          9166
+        ],
+        "sm": 5200
+      },
+      "kind": "sliding",
+      "layer": 10,
+      "migration": {
+        "blocker": null,
+        "fail_closed": false,
+        "state": "ready"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              15494,
+              9155,
+              9157,
+              9161,
+              9163
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              9165
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              15517,
+              9156,
+              9158,
+              9162,
+              9164
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              9166
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            7887,
+            5195,
+            5196,
+            5198,
+            5199
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5200
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          825,
+          828
+        ],
+        "sm": 382
+      }
+    },
+    {
+      "affine_group": "sliding-moe-l3-l12",
+      "affine_ordinal": 8,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 9351
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 9352
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          9351,
+          9352
+        ],
+        "sm": 5254
+      },
+      "kind": "sliding",
+      "layer": 11,
+      "migration": {
+        "blocker": null,
+        "fail_closed": false,
+        "state": "ready"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              15598,
+              9341,
+              9343,
+              9347,
+              9349
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              9351
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              15621,
+              9342,
+              9344,
+              9348,
+              9350
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              9352
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            7939,
+            5249,
+            5250,
+            5252,
+            5253
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5254
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          903,
+          906
+        ],
+        "sm": 421
+      }
+    },
+    {
+      "affine_group": "sliding-moe-l3-l12",
+      "affine_ordinal": 9,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 9537
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 9538
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          9537,
+          9538
+        ],
+        "sm": 5308
+      },
+      "kind": "sliding",
+      "layer": 12,
+      "migration": {
+        "blocker": null,
+        "fail_closed": false,
+        "state": "ready"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              15702,
+              9527,
+              9529,
+              9533,
+              9535
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              9537
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              15725,
+              9528,
+              9530,
+              9534,
+              9536
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              9538
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            7991,
+            5303,
+            5304,
+            5306,
+            5307
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5308
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          981,
+          984
+        ],
+        "sm": 460
+      }
+    },
+    {
+      "affine_group": "zigzag-moe-l13-l24",
+      "affine_ordinal": 0,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 9741
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 9742
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          9741,
+          9742
+        ],
+        "sm": 5365
+      },
+      "kind": "zigzag",
+      "layer": 13,
+      "migration": {
+        "blocker": "zigzag distributed migration is not authorised by this metadata set",
+        "fail_closed": true,
+        "state": "blocked"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              16008,
+              9731,
+              9733,
+              9737,
+              9739
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              9741
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              16031,
+              9732,
+              9734,
+              9738,
+              9740
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              9742
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            8162,
+            5360,
+            5361,
+            5363,
+            5364
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5365
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          1116,
+          1119
+        ],
+        "sm": 527
+      }
+    },
+    {
+      "affine_group": "zigzag-moe-l13-l24",
+      "affine_ordinal": 1,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 9913
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 9914
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          9913,
+          9914
+        ],
+        "sm": 5414
+      },
+      "kind": "zigzag",
+      "layer": 14,
+      "migration": {
+        "blocker": "zigzag distributed migration is not authorised by this metadata set",
+        "fail_closed": true,
+        "state": "blocked"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              16086,
+              9903,
+              9905,
+              9909,
+              9911
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              9913
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              16109,
+              9904,
+              9906,
+              9910,
+              9912
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              9914
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            8201,
+            5409,
+            5410,
+            5412,
+            5413
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5414
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          1186,
+          1189
+        ],
+        "sm": 562
+      }
+    },
+    {
+      "affine_group": "zigzag-moe-l13-l24",
+      "affine_ordinal": 2,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 10085
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 10086
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          10085,
+          10086
+        ],
+        "sm": 5463
+      },
+      "kind": "zigzag",
+      "layer": 15,
+      "migration": {
+        "blocker": "zigzag distributed migration is not authorised by this metadata set",
+        "fail_closed": true,
+        "state": "blocked"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              16164,
+              10075,
+              10077,
+              10081,
+              10083
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              10085
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              16187,
+              10076,
+              10078,
+              10082,
+              10084
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              10086
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            8240,
+            5458,
+            5459,
+            5461,
+            5462
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5463
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          1256,
+          1259
+        ],
+        "sm": 597
+      }
+    },
+    {
+      "affine_group": "zigzag-moe-l13-l24",
+      "affine_ordinal": 3,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 10257
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 10258
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          10257,
+          10258
+        ],
+        "sm": 5512
+      },
+      "kind": "zigzag",
+      "layer": 16,
+      "migration": {
+        "blocker": "zigzag distributed migration is not authorised by this metadata set",
+        "fail_closed": true,
+        "state": "blocked"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              16242,
+              10247,
+              10249,
+              10253,
+              10255
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              10257
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              16265,
+              10248,
+              10250,
+              10254,
+              10256
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              10258
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            8279,
+            5507,
+            5508,
+            5510,
+            5511
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5512
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          1326,
+          1329
+        ],
+        "sm": 632
+      }
+    },
+    {
+      "affine_group": "zigzag-moe-l13-l24",
+      "affine_ordinal": 4,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 10429
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 10430
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          10429,
+          10430
+        ],
+        "sm": 5561
+      },
+      "kind": "zigzag",
+      "layer": 17,
+      "migration": {
+        "blocker": "zigzag distributed migration is not authorised by this metadata set",
+        "fail_closed": true,
+        "state": "blocked"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              16320,
+              10419,
+              10421,
+              10425,
+              10427
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              10429
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              16343,
+              10420,
+              10422,
+              10426,
+              10428
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              10430
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            8318,
+            5556,
+            5557,
+            5559,
+            5560
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5561
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          1396,
+          1399
+        ],
+        "sm": 667
+      }
+    },
+    {
+      "affine_group": "zigzag-moe-l13-l24",
+      "affine_ordinal": 5,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 10601
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 10602
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          10601,
+          10602
+        ],
+        "sm": 5610
+      },
+      "kind": "zigzag",
+      "layer": 18,
+      "migration": {
+        "blocker": "zigzag distributed migration is not authorised by this metadata set",
+        "fail_closed": true,
+        "state": "blocked"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              16398,
+              10591,
+              10593,
+              10597,
+              10599
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              10601
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              16421,
+              10592,
+              10594,
+              10598,
+              10600
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              10602
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            8357,
+            5605,
+            5606,
+            5608,
+            5609
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5610
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          1466,
+          1469
+        ],
+        "sm": 702
+      }
+    },
+    {
+      "affine_group": "zigzag-moe-l13-l24",
+      "affine_ordinal": 6,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 10773
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 10774
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          10773,
+          10774
+        ],
+        "sm": 5659
+      },
+      "kind": "zigzag",
+      "layer": 19,
+      "migration": {
+        "blocker": "zigzag distributed migration is not authorised by this metadata set",
+        "fail_closed": true,
+        "state": "blocked"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              16476,
+              10763,
+              10765,
+              10769,
+              10771
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              10773
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              16499,
+              10764,
+              10766,
+              10770,
+              10772
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              10774
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            8396,
+            5654,
+            5655,
+            5657,
+            5658
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5659
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          1536,
+          1539
+        ],
+        "sm": 737
+      }
+    },
+    {
+      "affine_group": "zigzag-moe-l13-l24",
+      "affine_ordinal": 7,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 10945
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 10946
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          10945,
+          10946
+        ],
+        "sm": 5708
+      },
+      "kind": "zigzag",
+      "layer": 20,
+      "migration": {
+        "blocker": "zigzag distributed migration is not authorised by this metadata set",
+        "fail_closed": true,
+        "state": "blocked"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              16554,
+              10935,
+              10937,
+              10941,
+              10943
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              10945
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              16577,
+              10936,
+              10938,
+              10942,
+              10944
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              10946
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            8435,
+            5703,
+            5704,
+            5706,
+            5707
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5708
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          1606,
+          1609
+        ],
+        "sm": 772
+      }
+    },
+    {
+      "affine_group": "zigzag-moe-l13-l24",
+      "affine_ordinal": 8,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 11117
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 11118
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          11117,
+          11118
+        ],
+        "sm": 5757
+      },
+      "kind": "zigzag",
+      "layer": 21,
+      "migration": {
+        "blocker": "zigzag distributed migration is not authorised by this metadata set",
+        "fail_closed": true,
+        "state": "blocked"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              16632,
+              11107,
+              11109,
+              11113,
+              11115
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              11117
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              16655,
+              11108,
+              11110,
+              11114,
+              11116
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              11118
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            8474,
+            5752,
+            5753,
+            5755,
+            5756
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5757
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          1676,
+          1679
+        ],
+        "sm": 807
+      }
+    },
+    {
+      "affine_group": "zigzag-moe-l13-l24",
+      "affine_ordinal": 9,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 11289
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 11290
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          11289,
+          11290
+        ],
+        "sm": 5806
+      },
+      "kind": "zigzag",
+      "layer": 22,
+      "migration": {
+        "blocker": "zigzag distributed migration is not authorised by this metadata set",
+        "fail_closed": true,
+        "state": "blocked"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              16710,
+              11279,
+              11281,
+              11285,
+              11287
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              11289
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              16733,
+              11280,
+              11282,
+              11286,
+              11288
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              11290
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            8513,
+            5801,
+            5802,
+            5804,
+            5805
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5806
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          1746,
+          1749
+        ],
+        "sm": 842
+      }
+    },
+    {
+      "affine_group": "zigzag-moe-l13-l24",
+      "affine_ordinal": 10,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 11461
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 11462
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          11461,
+          11462
+        ],
+        "sm": 5855
+      },
+      "kind": "zigzag",
+      "layer": 23,
+      "migration": {
+        "blocker": "zigzag distributed migration is not authorised by this metadata set",
+        "fail_closed": true,
+        "state": "blocked"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              16788,
+              11451,
+              11453,
+              11457,
+              11459
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              11461
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              16811,
+              11452,
+              11454,
+              11458,
+              11460
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              11462
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            8552,
+            5850,
+            5851,
+            5853,
+            5854
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5855
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          1816,
+          1819
+        ],
+        "sm": 877
+      }
+    },
+    {
+      "affine_group": "zigzag-moe-l13-l24",
+      "affine_ordinal": 11,
+      "buddy_ordering": [
+        {
+          "ordinal": 0,
+          "rank": 0,
+          "tid": 11633
+        },
+        {
+          "ordinal": 1,
+          "rank": 1,
+          "tid": 11634
+        }
+      ],
+      "goal_tids": {
+        "pm": [
+          11633,
+          11634
+        ],
+        "sm": 5904
+      },
+      "kind": "zigzag",
+      "layer": 24,
+      "migration": {
+        "blocker": "zigzag distributed migration is not authorised by this metadata set",
+        "fail_closed": true,
+        "state": "blocked"
+      },
+      "node_decls": {
+        "pm": [
+          {
+            "ins": [
+              16866,
+              11623,
+              11625,
+              11629,
+              11631
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              11633
+            ],
+            "params": [
+              64,
+              0,
+              32,
+              8
+            ],
+            "rank": 0
+          },
+          {
+            "ins": [
+              16889,
+              11624,
+              11626,
+              11630,
+              11632
+            ],
+            "op": "OpName.FW_all2all_moe_gmm",
+            "outs": [
+              11634
+            ],
+            "params": [
+              64,
+              32,
+              64,
+              8
+            ],
+            "rank": 1
+          }
+        ],
+        "sm": {
+          "ins": [
+            8591,
+            5899,
+            5900,
+            5902,
+            5903
+          ],
+          "op": "OpName.FW_all2all_moe_gmm",
+          "outs": [
+            5904
+          ],
+          "params": [
+            64,
+            0,
+            64,
+            8
+          ],
+          "rank": 0
+        }
+      },
+      "node_indices": {
+        "pm": [
+          1886,
+          1891
+        ],
+        "sm": 912
+      }
+    }
+  ],
+  "model": "YOCO-MoE-A0.4B",
+  "schema_version": 1,
+  "source": {
+    "generated_lean_sha256": "08a7632d16c7ba305c41083b6f437fd578f60691e6191677403be2223dc67bac",
+    "graph": "trainverify/denote/GeneratedYOCOMoE.lean",
+    "manifest": "trainverify/denote/GeneratedYOCOMoE.manifest.json"
+  }
+}
