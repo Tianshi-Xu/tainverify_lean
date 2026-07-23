@@ -579,4 +579,607 @@ theorem recon_intermediateGoal_4787_distributed (initSM initPM : Store)
 
 #print axioms recon_intermediateGoal_4787_distributed
 
+/-! ### Residual, norm, and per-head tail (pure distributed evaluator) -/
+
+private theorem l2d_add (g : GraphDecl) (init : Store) (k r x y o : Nat)
+    (hk : k < g.nodes.length)
+    (hn : g.nodes[k]'hk = { rank := r, op := "OpName.FW_add", ins := [x, y], outs := [o] })
+    (hdn : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ [])
+    (hdw : ∀ n ∈ g.nodes.drop (k + 1), o ∉ n.outs)
+    (hpn : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hpx : ∀ n ∈ g.nodes.drop k, x ∉ n.outs)
+    (hpy : ∀ n ∈ g.nodes.drop k, y ∉ n.outs) :
+    denoteGraphDistributed g init o =
+      elemwiseAdd (denoteGraphDistributed g init x) (denoteGraphDistributed g init y) :=
+  distributed_reduce2 g init k _ x y o elemwiseAdd hk hn (by simp)
+    (fun s => applyNode_fw_add2_out g s r x y o) hdn hdw hpn hpx hpy
+
+private theorem l2d_float (g : GraphDecl) (init : Store) (k r i o : Nat)
+    (hk : k < g.nodes.length)
+    (hn : g.nodes[k]'hk = { rank := r, op := "OpName.FW_float", ins := [i], outs := [o] })
+    (hdn : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ [])
+    (hdw : ∀ n ∈ g.nodes.drop (k + 1), o ∉ n.outs)
+    (hpn : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hpw : ∀ n ∈ g.nodes.drop k, i ∉ n.outs) :
+    denoteGraphDistributed g init o = denoteGraphDistributed g init i := by
+  have h := distributed_reduce1 g init k _ i o id hk hn (by simp)
+    (fun s => applyNode_fw_float_out g s r i o []) hdn hdw hpn hpw
+  simpa only [id_eq] using h
+
+private theorem l2d_rms (g : GraphDecl) (init : Store) (k r x w o : Nat)
+    (hk : k < g.nodes.length)
+    (hn : g.nodes[k]'hk = { rank := r, op := "OpName.FW_rms_norm", ins := [x, w], outs := [o] })
+    (hdn : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ [])
+    (hdw : ∀ n ∈ g.nodes.drop (k + 1), o ∉ n.outs)
+    (hpn : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hpx : ∀ n ∈ g.nodes.drop k, x ∉ n.outs)
+    (hpw : ∀ n ∈ g.nodes.drop k, w ∉ n.outs) :
+    denoteGraphDistributed g init o =
+      fw_rms_norm (denoteGraphDistributed g init x) (denoteGraphDistributed g init w) :=
+  distributed_reduce2 g init k _ x w o fw_rms_norm hk hn (by simp)
+    (fun s => applyNode_fw_rms_norm_out_1p g s r x w o) hdn hdw hpn hpx hpw
+
+private theorem l2d_perhead (g : GraphDecl) (init : Store) (k r x w o : Nat)
+    (hk : k < g.nodes.length)
+    (hn : g.nodes[k]'hk =
+      { rank := r, op := "OpName.FW_per_head_mix_precision_linear", ins := [x, w], outs := [o] })
+    (hdn : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ [])
+    (hdw : ∀ n ∈ g.nodes.drop (k + 1), o ∉ n.outs)
+    (hpn : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hpx : ∀ n ∈ g.nodes.drop k, x ∉ n.outs)
+    (hpw : ∀ n ∈ g.nodes.drop k, w ∉ n.outs) :
+    denoteGraphDistributed g init o =
+      fw_per_head_linear (denoteGraphDistributed g init x) (denoteGraphDistributed g init w) :=
+  distributed_reduce2 g init k _ x w o fw_per_head_linear hk hn (by simp)
+    (fun s => applyNode_fw_per_head_mix_precision_linear_out g s r x w o [])
+    hdn hdw hpn hpx hpw
+
+private theorem l2d_goal7460_rel (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    Gather2Rel (denoteGraphDistributed sm initSM 7460)
+      (denoteGraphDistributed pm initPM 12011) (denoteGraphDistributed pm initPM 12012)
+      [4096, 1024] [2048, 1024] := by
+  have h57 := recon_intermediateGoal_4757_distributed initSM initPM hSM hPM hInit
+  have hv57 := oneTp_valeq intermediateGoal_4757 _ _ 4757 rfl rfl rfl rfl h57
+  have hs57 : (denoteGraphDistributed sm initSM 4757).shape = [4096, 1024] := h57.1
+  have ss := distributed_reduce1 sm initSM 55
+    { rank := 0, op := "OpName.FW_multiref", ins := [4757], outs := [7456, 7460], params := [2] }
+    4757 7460 id (by native_decide) (by native_decide) (by decide)
+    (fun s => applyNode_fw_multiref2_second_out' sm s 0 4757 7456 7460 (by decide))
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have sp := distributed_reduce1 pm initPM 160
+    { rank := 1, op := "OpName.FW_multiref", ins := [4757], outs := [11889, 11890], params := [2] }
+    4757 11890 id (by native_decide) (by native_decide) (by decide)
+    (fun s => applyNode_fw_multiref2_second_out' pm s 1 4757 11889 11890 (by decide))
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at ss sp
+  have hp : (denoteGraphDistributed pm initPM 11890).shape = [4096, 1024] := by
+    rw [sp, ← hv57]; exact hs57
+  have c0 := l2d_chunk pm initPM 162 0 11890 12011 0 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have c1 := l2d_chunk pm initPM 164 1 11890 12012 0 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hs0 : (denoteGraphDistributed pm initPM 12011).shape = [2048, 1024] := by
+    rw [c0, chunkPrimDimN_shape 0 pm.numRanks 0 _ [4096, 1024] hp (by native_decide)]; rfl
+  have hs1 : (denoteGraphDistributed pm initPM 12012).shape = [2048, 1024] := by
+    rw [c1, chunkPrimDimN_shape 0 pm.numRanks 1 _ [4096, 1024] hp (by native_decide)]; rfl
+  refine ⟨?_, ?_, hs0, hs1, by decide⟩
+  · rw [ss, hv57, ← sp, c0, c1]
+    exact (allGather0_reconstruct_chunks_2d 2048 1024 (by omega) (by omega) _ hp).symm
+  · rw [ss]; exact hs57
+
+private theorem l2d_add4788_rel (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    Gather2Rel (denoteGraphDistributed sm initSM 4788)
+      (denoteGraphDistributed pm initPM 7755) (denoteGraphDistributed pm initPM 7756)
+      [4096, 1024] [2048, 1024] := by
+  have h68 := Gather2Rel.of_initGoalHolds _ _ intermediateGoal_4768 4768 7677 7678
+    [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl (by decide)
+    (recon_intermediateGoal_4768_distributed initSM initPM hSM hPM hInit)
+  have h87 := Gather2Rel.of_initGoalHolds _ _ intermediateGoal_4787 4787 7751 7752
+    [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl (by decide)
+    (recon_intermediateGoal_4787_distributed initSM initPM hSM hPM hInit)
+  have rs := l2d_add sm initSM 77 0 4768 4787 4788 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r0 := l2d_add pm initPM 215 0 7677 7751 7755 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r1 := l2d_add pm initPM 216 1 7678 7752 7756 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  refine ⟨?_, ?_, ?_, ?_, by decide⟩
+  · rw [rs, h68.value, h87.value,
+      fw_add_allGather0_commute_2_2048_1024 _ _ _ _ h68.shard0_shape h68.shard1_shape
+        h87.shard0_shape h87.shard1_shape, r0, r1]
+  · rw [rs]; exact elemwiseAdd_shape_of_shapes _ _ [4096, 1024] h68.full_shape h87.full_shape
+  · rw [r0]; exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h68.shard0_shape h87.shard0_shape
+  · rw [r1]; exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] h68.shard1_shape h87.shard1_shape
+
+theorem recon_intermediateGoal_4788_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4788
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) :=
+  Gather2Rel.to_initGoalHolds _ _ intermediateGoal_4788 4788 7755 7756
+    [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl
+    (l2d_add4788_rel initSM initPM hSM hPM hInit)
+
+private theorem l2d_float4789_rel (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    Gather2Rel (denoteGraphDistributed sm initSM 4789)
+      (denoteGraphDistributed pm initPM 7761) (denoteGraphDistributed pm initPM 7762)
+      [4096, 1024] [2048, 1024] := by
+  have h := l2d_add4788_rel initSM initPM hSM hPM hInit
+  have rs := l2d_float sm initSM 78 0 4788 4789 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r0 := l2d_float pm initPM 217 0 7755 7761 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r1 := l2d_float pm initPM 218 1 7756 7762 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  exact ⟨by rw [rs, h.value, r0, r1], by rw [rs]; exact h.full_shape,
+    by rw [r0]; exact h.shard0_shape, by rw [r1]; exact h.shard1_shape, by decide⟩
+
+theorem recon_intermediateGoal_4789_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4789
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) :=
+  Gather2Rel.to_initGoalHolds _ _ intermediateGoal_4789 4789 7761 7762
+    [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl
+    (l2d_float4789_rel initSM initPM hSM hPM hInit)
+
+private theorem l2d_add4790_rel (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    Gather2Rel (denoteGraphDistributed sm initSM 4790)
+      (denoteGraphDistributed pm initPM 7765) (denoteGraphDistributed pm initPM 7766)
+      [4096, 1024] [2048, 1024] := by
+  have ha := l2d_goal7460_rel initSM initPM hSM hPM hInit
+  have hb := l2d_float4789_rel initSM initPM hSM hPM hInit
+  have rs := l2d_add sm initSM 79 0 7460 4789 4790 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r0 := l2d_add pm initPM 219 0 12011 7761 7765 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r1 := l2d_add pm initPM 220 1 12012 7762 7766 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  refine ⟨?_, ?_, ?_, ?_, by decide⟩
+  · rw [rs, ha.value, hb.value,
+      fw_add_allGather0_commute_2_2048_1024 _ _ _ _ ha.shard0_shape ha.shard1_shape
+        hb.shard0_shape hb.shard1_shape, r0, r1]
+  · rw [rs]; exact elemwiseAdd_shape_of_shapes _ _ [4096, 1024] ha.full_shape hb.full_shape
+  · rw [r0]; exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] ha.shard0_shape hb.shard0_shape
+  · rw [r1]; exact elemwiseAdd_shape_of_shapes _ _ [2048, 1024] ha.shard1_shape hb.shard1_shape
+
+theorem recon_intermediateGoal_4790_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4790
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) :=
+  Gather2Rel.to_initGoalHolds _ _ intermediateGoal_4790 4790 7765 7766
+    [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl
+    (l2d_add4790_rel initSM initPM hSM hPM hInit)
+
+private theorem l2d_rms4792_rel (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    Gather2Rel (denoteGraphDistributed sm initSM 4792)
+      (denoteGraphDistributed pm initPM 7769) (denoteGraphDistributed pm initPM 7770)
+      [4096, 1024] [2048, 1024] := by
+  have h90 := l2d_add4790_rel initSM initPM hSM hPM hInit
+  have s := distributed_reduce1 sm initSM 80
+    { rank := 0, op := "OpName.FW_multiref", ins := [4790], outs := [7487, 7491], params := [2] }
+    4790 7487 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref2_first_out sm st 0 4790 7487 7491)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p0 := distributed_reduce1 pm initPM 221
+    { rank := 0, op := "OpName.FW_multiref", ins := [7765], outs := [14701, 14705], params := [2] }
+    7765 14701 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref2_first_out pm st 0 7765 14701 14705)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p1 := distributed_reduce1 pm initPM 222
+    { rank := 1, op := "OpName.FW_multiref", ins := [7766], outs := [14709, 14713], params := [2] }
+    7766 14709 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref2_first_out pm st 1 7766 14709 14713)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at s p0 p1
+  have hw := distributed_init_singleton_value initSM initPM hInit initGoal_4791 (by native_decide) 4791
+    rfl rfl rfl rfl layer1_sm_nodes_nonempty (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have rs := l2d_rms sm initSM 81 0 7487 4791 4792 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r0 := l2d_rms pm initPM 223 0 14701 4791 7769 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r1 := l2d_rms pm initPM 224 1 14709 4791 7770 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hs0 : (denoteGraphDistributed pm initPM 14701).shape = [2048, 1024] := by rw [p0]; exact h90.shard0_shape
+  have hs1 : (denoteGraphDistributed pm initPM 14709).shape = [2048, 1024] := by rw [p1]; exact h90.shard1_shape
+  refine ⟨?_, ?_, ?_, ?_, by decide⟩
+  · rw [rs, s, h90.value, ← p0, ← p1, hw,
+      fw_rms_norm_allGather0_commute_2 _ _ _ 2048 1024 (by omega) (by omega) hs0 hs1, r0, r1]
+  · rw [rs]; exact fw_rms_norm_shape2 _ _ 4096 1024 (by rw [s]; exact h90.full_shape)
+  · rw [r0]; exact fw_rms_norm_shape2 _ _ 2048 1024 hs0
+  · rw [r1]; exact fw_rms_norm_shape2 _ _ 2048 1024 hs1
+
+theorem recon_intermediateGoal_4792_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4792
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) :=
+  Gather2Rel.to_initGoalHolds _ _ intermediateGoal_4792 4792 7769 7770
+    [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl
+    (l2d_rms4792_rel initSM initPM hSM hPM hInit)
+
+private theorem l2d_perhead_gather (x x0 x1 w out out0 out1 : Tensor)
+    (heads : Nat) (hx : Gather2Rel x x0 x1 [4096, 1024] [2048, 1024])
+    (hw : w.shape = [heads, 64, 1024])
+    (hn : out = fw_per_head_linear x w)
+    (hn0 : out0 = fw_per_head_linear x0 w)
+    (hn1 : out1 = fw_per_head_linear x1 w)
+    (hh : 0 < heads) :
+    Gather2Rel out out0 out1 [4096, heads, 64] [2048, heads, 64] := by
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · rw [hn, hn0, hn1, hx.value,
+      fw_per_head_mix_precision_linear_allGather0_commute_2 _ _ _ 2048 1024 heads 64
+        (by omega) (by omega) hh (by omega) hx.shard0_shape hx.shard1_shape hw]
+  · rw [hn]; exact fw_per_head_linear_shape_3d _ _ 4096 1024 heads 64 hx.full_shape hw
+  · rw [hn0]; exact fw_per_head_linear_shape_3d _ _ 2048 1024 heads 64 hx.shard0_shape hw
+  · rw [hn1]; exact fw_per_head_linear_shape_3d _ _ 2048 1024 heads 64 hx.shard1_shape hw
+  · intro heq
+    have := congrArg List.length heq
+    norm_num at this
+
+private theorem l2d_q4794_rel (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    Gather2Rel (denoteGraphDistributed sm initSM 4794)
+      (denoteGraphDistributed pm initPM 7771) (denoteGraphDistributed pm initPM 7772)
+      [4096, 16, 64] [2048, 16, 64] := by
+  have h92 := l2d_rms4792_rel initSM initPM hSM hPM hInit
+  have s := distributed_reduce1 sm initSM 82
+    { rank := 0, op := "OpName.FW_multiref", ins := [4792], outs := [7496, 7500, 7504], params := [3] }
+    4792 7496 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref3_first_out' sm st 0 4792 7496 7500 7504)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p0 := distributed_reduce1 pm initPM 225
+    { rank := 0, op := "OpName.FW_multiref", ins := [7769], outs := [14718, 14722, 14726], params := [3] }
+    7769 14718 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref3_first_out' pm st 0 7769 14718 14722 14726)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p1 := distributed_reduce1 pm initPM 226
+    { rank := 1, op := "OpName.FW_multiref", ins := [7770], outs := [14731, 14735, 14739], params := [3] }
+    7770 14731 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref3_first_out' pm st 1 7770 14731 14735 14739)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at s p0 p1
+  have src : Gather2Rel (denoteGraphDistributed sm initSM 7496)
+      (denoteGraphDistributed pm initPM 14718) (denoteGraphDistributed pm initPM 14731)
+      [4096, 1024] [2048, 1024] := by
+    refine ⟨by rw [s, h92.value, p0, p1], by rw [s]; exact h92.full_shape,
+      by rw [p0]; exact h92.shard0_shape, by rw [p1]; exact h92.shard1_shape, by decide⟩
+  have hwv := distributed_init_singleton_value initSM initPM hInit initGoal_4793 (by native_decide) 4793
+    rfl rfl rfl rfl layer1_sm_nodes_nonempty (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have hws := distributed_init_singleton_shape initSM initPM hInit initGoal_4793 (by native_decide) 4793
+    [16, 64, 1024] rfl rfl layer1_sm_nodes_nonempty (by native_decide)
+  have hpw : (denoteGraphDistributed pm initPM 4793).shape = [16, 64, 1024] := by rw [← hwv]; exact hws
+  have rs := l2d_perhead sm initSM 83 0 7496 4793 4794 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r0 := l2d_perhead pm initPM 227 0 14718 4793 7771 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r1 := l2d_perhead pm initPM 230 1 14731 4793 7772 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  apply l2d_perhead_gather _ _ _ (denoteGraphDistributed pm initPM 4793) _ _ _ 16 src hpw
+  · rw [rs, hwv]
+  · exact r0
+  · exact r1
+  · omega
+
+theorem recon_intermediateGoal_4794_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4794
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) :=
+  Gather2Rel.to_initGoalHolds _ _ intermediateGoal_4794 4794 7771 7772
+    [4096, 16, 64] [2048, 16, 64] rfl rfl rfl rfl rfl rfl
+    (l2d_q4794_rel initSM initPM hSM hPM hInit)
+
+private theorem l2d_k4796_rel (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    Gather2Rel (denoteGraphDistributed sm initSM 4796)
+      (denoteGraphDistributed pm initPM 7783) (denoteGraphDistributed pm initPM 7784)
+      [4096, 4, 64] [2048, 4, 64] := by
+  have h92 := l2d_rms4792_rel initSM initPM hSM hPM hInit
+  have s := distributed_reduce1 sm initSM 82
+    { rank := 0, op := "OpName.FW_multiref", ins := [4792], outs := [7496, 7500, 7504], params := [3] }
+    4792 7500 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref3_second_out' sm st 0 4792 7496 7500 7504 (by decide))
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p0 := distributed_reduce1 pm initPM 225
+    { rank := 0, op := "OpName.FW_multiref", ins := [7769], outs := [14718, 14722, 14726], params := [3] }
+    7769 14722 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref3_second_out' pm st 0 7769 14718 14722 14726 (by decide))
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p1 := distributed_reduce1 pm initPM 226
+    { rank := 1, op := "OpName.FW_multiref", ins := [7770], outs := [14731, 14735, 14739], params := [3] }
+    7770 14735 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref3_second_out' pm st 1 7770 14731 14735 14739 (by decide))
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at s p0 p1
+  have src : Gather2Rel (denoteGraphDistributed sm initSM 7500)
+      (denoteGraphDistributed pm initPM 14722) (denoteGraphDistributed pm initPM 14735)
+      [4096, 1024] [2048, 1024] := by
+    refine ⟨by rw [s, h92.value, p0, p1], by rw [s]; exact h92.full_shape,
+      by rw [p0]; exact h92.shard0_shape, by rw [p1]; exact h92.shard1_shape, by decide⟩
+  have hwv := distributed_init_singleton_value initSM initPM hInit initGoal_4795 (by native_decide) 4795
+    rfl rfl rfl rfl layer1_sm_nodes_nonempty (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have hws := distributed_init_singleton_shape initSM initPM hInit initGoal_4795 (by native_decide) 4795
+    [4, 64, 1024] rfl rfl layer1_sm_nodes_nonempty (by native_decide)
+  have hpw : (denoteGraphDistributed pm initPM 4795).shape = [4, 64, 1024] := by rw [← hwv]; exact hws
+  have rs := l2d_perhead sm initSM 84 0 7500 4795 4796 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r0 := l2d_perhead pm initPM 228 0 14722 4795 7783 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r1 := l2d_perhead pm initPM 231 1 14735 4795 7784 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  apply l2d_perhead_gather _ _ _ (denoteGraphDistributed pm initPM 4795) _ _ _ 4 src hpw
+  · rw [rs, hwv]
+  · exact r0
+  · exact r1
+  · omega
+
+theorem recon_intermediateGoal_4796_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4796
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) :=
+  Gather2Rel.to_initGoalHolds _ _ intermediateGoal_4796 4796 7783 7784
+    [4096, 4, 64] [2048, 4, 64] rfl rfl rfl rfl rfl rfl
+    (l2d_k4796_rel initSM initPM hSM hPM hInit)
+
+private theorem l2d_v4798_rel (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    Gather2Rel (denoteGraphDistributed sm initSM 4798)
+      (denoteGraphDistributed pm initPM 7793) (denoteGraphDistributed pm initPM 7794)
+      [4096, 4, 64] [2048, 4, 64] := by
+  have h92 := l2d_rms4792_rel initSM initPM hSM hPM hInit
+  have s := distributed_reduce1 sm initSM 82
+    { rank := 0, op := "OpName.FW_multiref", ins := [4792], outs := [7496, 7500, 7504], params := [3] }
+    4792 7504 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref3_third_out' sm st 0 4792 7496 7500 7504 (by decide) (by decide))
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p0 := distributed_reduce1 pm initPM 225
+    { rank := 0, op := "OpName.FW_multiref", ins := [7769], outs := [14718, 14722, 14726], params := [3] }
+    7769 14726 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref3_third_out' pm st 0 7769 14718 14722 14726 (by decide) (by decide))
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p1 := distributed_reduce1 pm initPM 226
+    { rank := 1, op := "OpName.FW_multiref", ins := [7770], outs := [14731, 14735, 14739], params := [3] }
+    7770 14739 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref3_third_out' pm st 1 7770 14731 14735 14739 (by decide) (by decide))
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at s p0 p1
+  have src : Gather2Rel (denoteGraphDistributed sm initSM 7504)
+      (denoteGraphDistributed pm initPM 14726) (denoteGraphDistributed pm initPM 14739)
+      [4096, 1024] [2048, 1024] := by
+    refine ⟨by rw [s, h92.value, p0, p1], by rw [s]; exact h92.full_shape,
+      by rw [p0]; exact h92.shard0_shape, by rw [p1]; exact h92.shard1_shape, by decide⟩
+  have hwv := distributed_init_singleton_value initSM initPM hInit initGoal_4797 (by native_decide) 4797
+    rfl rfl rfl rfl layer1_sm_nodes_nonempty (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have hws := distributed_init_singleton_shape initSM initPM hInit initGoal_4797 (by native_decide) 4797
+    [4, 64, 1024] rfl rfl layer1_sm_nodes_nonempty (by native_decide)
+  have hpw : (denoteGraphDistributed pm initPM 4797).shape = [4, 64, 1024] := by rw [← hwv]; exact hws
+  have rs := l2d_perhead sm initSM 85 0 7504 4797 4798 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r0 := l2d_perhead pm initPM 229 0 14726 4797 7793 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r1 := l2d_perhead pm initPM 232 1 14739 4797 7794 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  apply l2d_perhead_gather _ _ _ (denoteGraphDistributed pm initPM 4797) _ _ _ 4 src hpw
+  · rw [rs, hwv]
+  · exact r0
+  · exact r1
+  · omega
+
+theorem recon_intermediateGoal_4798_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4798
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) :=
+  Gather2Rel.to_initGoalHolds _ _ intermediateGoal_4798 4798 7793 7794
+    [4096, 4, 64] [2048, 4, 64] rfl rfl rfl rfl rfl rfl
+    (l2d_v4798_rel initSM initPM hSM hPM hInit)
+
+#print axioms recon_intermediateGoal_4798_distributed
+
+private theorem l2d_rotary_cache (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    denoteGraphDistributed sm initSM 4691 = denoteGraphDistributed pm initPM 11855 := by
+  have hbase := distributed_init_singleton_value initSM initPM hInit initGoal_4691
+    (by native_decide) 4691 rfl rfl rfl rfl layer1_sm_nodes_nonempty
+    (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have hcopy : denoteGraphDistributed pm initPM 11855 = id (denoteGraphDistributed pm initPM 4691) :=
+    distributed_reduce1 pm initPM 14
+      { rank := 1, op := "OpName.FW_multiref", ins := [4691],
+        outs := (List.range 12).map (fun r => 11853 + r),
+        params := [((List.range 12).map (fun r => 11853 + r)).length] }
+      4691 11855 id (by native_decide) (by native_decide) (by decide)
+      (fun s => by
+        rw [applyNodeRingAttn_eq_applyNode_of_not_ring pm s _ (by decide) (by decide)]
+        rw [applyNode_fw_multiref_mem_out pm s 1 4691
+          ((List.range 12).map (fun r => 11853 + r)) 11855 (by native_decide), id_eq])
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  rw [hcopy, id_eq]
+  exact hbase
+
+set_option maxHeartbeats 8000000 in
+private theorem l2d_rotary_rels (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    Gather2Rel (denoteGraphDistributed sm initSM 4800)
+      (denoteGraphDistributed pm initPM 7805) (denoteGraphDistributed pm initPM 7806)
+      [4096, 16, 64] [2048, 16, 64] ∧
+    Gather2Rel (denoteGraphDistributed sm initSM 4801)
+      (denoteGraphDistributed pm initPM 7807) (denoteGraphDistributed pm initPM 7808)
+      [4096, 4, 64] [2048, 4, 64] := by
+  have hq := l2d_q4794_rel initSM initPM hSM hPM hInit
+  have hk := l2d_k4796_rel initSM initPM hSM hPM hInit
+  have hcache := l2d_rotary_cache initSM initPM hInit
+  have hpos := distributed_init_singleton_value initSM initPM hInit initGoal_4799 (by native_decide) 4799
+    rfl rfl rfl rfl layer1_sm_nodes_nonempty (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have hspos := distributed_init_singleton_shape initSM initPM hInit initGoal_4799 (by native_decide) 4799
+    [4096] rfl rfl layer1_sm_nodes_nonempty (by native_decide)
+  have c0 := l2d_chunk pm initPM 2 0 4799 7803 0 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have c1 := l2d_chunk pm initPM 15 1 4799 7804 0 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have c0' : denoteGraphDistributed pm initPM 7803 =
+      chunkPrimDimN 0 2 0 (denoteGraphDistributed pm initPM 4799) := c0
+  have c1' : denoteGraphDistributed pm initPM 7804 =
+      chunkPrimDimN 0 2 1 (denoteGraphDistributed pm initPM 4799) := c1
+  have qSM : denoteGraphDistributed sm initSM 4800 =
+      (fw_rotary_embedding (denoteGraphDistributed sm initSM 4691)
+        (denoteGraphDistributed sm initSM 4799) (denoteGraphDistributed sm initSM 4794)
+        (denoteGraphDistributed sm initSM 4796) 16 4).1 := by
+    rw [distributed_node_core sm initSM 86
+      { rank := 0, op := "OpName.FW_rotary_embedding", ins := [4691, 4799, 4794, 4796],
+        outs := [4800, 4801], params := [16, 4] } 4800
+      (by native_decide) (by native_decide) (by decide) (by native_decide) (by native_decide),
+      applyNodeRingAttn_eq_applyNode_of_not_ring sm _ _ (by decide) (by decide),
+      applyNode_fw_rotary_embedding_fst_out,
+      distributed_prefix_read sm initSM 86 4691 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 86 4799 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 86 4794 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 86 4796 (by native_decide) (by native_decide)]
+  have kSM : denoteGraphDistributed sm initSM 4801 =
+      (fw_rotary_embedding (denoteGraphDistributed sm initSM 4691)
+        (denoteGraphDistributed sm initSM 4799) (denoteGraphDistributed sm initSM 4794)
+        (denoteGraphDistributed sm initSM 4796) 16 4).2 := by
+    rw [distributed_node_core sm initSM 86
+      { rank := 0, op := "OpName.FW_rotary_embedding", ins := [4691, 4799, 4794, 4796],
+        outs := [4800, 4801], params := [16, 4] } 4801
+      (by native_decide) (by native_decide) (by decide) (by native_decide) (by native_decide),
+      applyNodeRingAttn_eq_applyNode_of_not_ring sm _ _ (by decide) (by decide),
+      applyNode_fw_rotary_embedding_snd_out _ _ _ _ _ 4691 4799 4794 4796 4800 4801 (by decide),
+      distributed_prefix_read sm initSM 86 4691 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 86 4799 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 86 4794 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 86 4796 (by native_decide) (by native_decide)]
+  have q0 : denoteGraphDistributed pm initPM 7805 =
+      (fw_rotary_embedding (denoteGraphDistributed pm initPM 11855)
+        (denoteGraphDistributed pm initPM 7803) (denoteGraphDistributed pm initPM 7771)
+        (denoteGraphDistributed pm initPM 7783) 16 4).1 := by
+    rw [distributed_node_core pm initPM 233
+      { rank := 0, op := "OpName.FW_rotary_embedding", ins := [11855, 7803, 7771, 7783],
+        outs := [7805, 7807], params := [16, 4] } 7805
+      (by native_decide) (by native_decide) (by decide) (by native_decide) (by native_decide),
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm _ _ (by decide) (by decide),
+      applyNode_fw_rotary_embedding_fst_out,
+      distributed_prefix_read pm initPM 233 11855 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 233 7803 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 233 7771 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 233 7783 (by native_decide) (by native_decide)]
+  have k0 : denoteGraphDistributed pm initPM 7807 =
+      (fw_rotary_embedding (denoteGraphDistributed pm initPM 11855)
+        (denoteGraphDistributed pm initPM 7803) (denoteGraphDistributed pm initPM 7771)
+        (denoteGraphDistributed pm initPM 7783) 16 4).2 := by
+    rw [distributed_node_core pm initPM 233
+      { rank := 0, op := "OpName.FW_rotary_embedding", ins := [11855, 7803, 7771, 7783],
+        outs := [7805, 7807], params := [16, 4] } 7807
+      (by native_decide) (by native_decide) (by decide) (by native_decide) (by native_decide),
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm _ _ (by decide) (by decide),
+      applyNode_fw_rotary_embedding_snd_out _ _ _ _ _ 11855 7803 7771 7783 7805 7807 (by decide),
+      distributed_prefix_read pm initPM 233 11855 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 233 7803 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 233 7771 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 233 7783 (by native_decide) (by native_decide)]
+  have q1 : denoteGraphDistributed pm initPM 7806 =
+      (fw_rotary_embedding (denoteGraphDistributed pm initPM 11855)
+        (denoteGraphDistributed pm initPM 7804) (denoteGraphDistributed pm initPM 7772)
+        (denoteGraphDistributed pm initPM 7784) 16 4).1 := by
+    rw [distributed_node_core pm initPM 234
+      { rank := 1, op := "OpName.FW_rotary_embedding", ins := [11855, 7804, 7772, 7784],
+        outs := [7806, 7808], params := [16, 4] } 7806
+      (by native_decide) (by native_decide) (by decide) (by native_decide) (by native_decide),
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm _ _ (by decide) (by decide),
+      applyNode_fw_rotary_embedding_fst_out,
+      distributed_prefix_read pm initPM 234 11855 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 234 7804 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 234 7772 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 234 7784 (by native_decide) (by native_decide)]
+  have k1 : denoteGraphDistributed pm initPM 7808 =
+      (fw_rotary_embedding (denoteGraphDistributed pm initPM 11855)
+        (denoteGraphDistributed pm initPM 7804) (denoteGraphDistributed pm initPM 7772)
+        (denoteGraphDistributed pm initPM 7784) 16 4).2 := by
+    rw [distributed_node_core pm initPM 234
+      { rank := 1, op := "OpName.FW_rotary_embedding", ins := [11855, 7804, 7772, 7784],
+        outs := [7806, 7808], params := [16, 4] } 7808
+      (by native_decide) (by native_decide) (by decide) (by native_decide) (by native_decide),
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm _ _ (by decide) (by decide),
+      applyNode_fw_rotary_embedding_snd_out _ _ _ _ _ 11855 7804 7772 7784 7806 7808 (by decide),
+      distributed_prefix_read pm initPM 234 11855 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 234 7804 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 234 7772 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 234 7784 (by native_decide) (by native_decide)]
+  have qval : denoteGraphDistributed sm initSM 4800 = allGatherPrimDimN 0 2 0
+      [denoteGraphDistributed pm initPM 7805, denoteGraphDistributed pm initPM 7806] := by
+    rw [qSM]
+    simp only [fw_rotary_embedding]
+    rw [hq.value,
+      fw_rotary_apply_allGather0_commute_2_1d (denoteGraphDistributed sm initSM 4691)
+        (denoteGraphDistributed sm initSM 4799) (denoteGraphDistributed pm initPM 7771)
+        (denoteGraphDistributed pm initPM 7772) 2048 16 64 (by omega) (by omega) (by omega)
+        hspos hq.shard0_shape hq.shard1_shape,
+      hcache, hpos, ← c0', ← c1', q0, q1]
+    simp only [fw_rotary_embedding]
+  have kval : denoteGraphDistributed sm initSM 4801 = allGatherPrimDimN 0 2 0
+      [denoteGraphDistributed pm initPM 7807, denoteGraphDistributed pm initPM 7808] := by
+    rw [kSM]
+    simp only [fw_rotary_embedding]
+    rw [hk.value,
+      fw_rotary_apply_allGather0_commute_2_1d (denoteGraphDistributed sm initSM 4691)
+        (denoteGraphDistributed sm initSM 4799) (denoteGraphDistributed pm initPM 7783)
+        (denoteGraphDistributed pm initPM 7784) 2048 4 64 (by omega) (by omega) (by omega)
+        hspos hk.shard0_shape hk.shard1_shape,
+      hcache, hpos, ← c0', ← c1', k0, k1]
+    simp only [fw_rotary_embedding]
+  have qs0 : (denoteGraphDistributed pm initPM 7805).shape = [2048, 16, 64] := by
+    rw [q0]; simp only [fw_rotary_embedding]
+    exact fw_rotary_apply_shape_c2a _ _ _ 2048 16 64 hq.shard0_shape
+  have qs1 : (denoteGraphDistributed pm initPM 7806).shape = [2048, 16, 64] := by
+    rw [q1]; simp only [fw_rotary_embedding]
+    exact fw_rotary_apply_shape_c2a _ _ _ 2048 16 64 hq.shard1_shape
+  have ks0 : (denoteGraphDistributed pm initPM 7807).shape = [2048, 4, 64] := by
+    rw [k0]; simp only [fw_rotary_embedding]
+    exact fw_rotary_apply_shape_c2a _ _ _ 2048 4 64 hk.shard0_shape
+  have ks1 : (denoteGraphDistributed pm initPM 7808).shape = [2048, 4, 64] := by
+    rw [k1]; simp only [fw_rotary_embedding]
+    exact fw_rotary_apply_shape_c2a _ _ _ 2048 4 64 hk.shard1_shape
+  refine ⟨⟨qval, ?_, qs0, qs1, by decide⟩, ⟨kval, ?_, ks0, ks1, by decide⟩⟩
+  · rw [qval, allGatherPrimDimN_shape 0 2 _ [2048, 16, 64] (by simp [qs0])]
+    rfl
+  · rw [kval, allGatherPrimDimN_shape 0 2 _ [2048, 4, 64] (by simp [ks0])]
+    rfl
+
+theorem recon_intermediateGoal_4800_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4800
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) :=
+  Gather2Rel.to_initGoalHolds _ _ intermediateGoal_4800 4800 7805 7806
+    [4096, 16, 64] [2048, 16, 64] rfl rfl rfl rfl rfl rfl
+    (l2d_rotary_rels initSM initPM hSM hPM hInit).1
+
+theorem recon_intermediateGoal_4801_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4801
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) :=
+  Gather2Rel.to_initGoalHolds _ _ intermediateGoal_4801 4801 7807 7808
+    [4096, 4, 64] [2048, 4, 64] rfl rfl rfl rfl rfl rfl
+    (l2d_rotary_rels initSM initPM hSM hPM hInit).2
+
+#print axioms recon_intermediateGoal_4800_distributed
+#print axioms recon_intermediateGoal_4801_distributed
+
 end TrainVerify.Denote.GeneratedPatterns
