@@ -1788,6 +1788,273 @@ theorem recon_intermediateGoal_5111_distributed (initSM initPM : Store)
     [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl
     (l7d_5111_rel initSM initPM hSM hPM hInit)
 
+/-! ### Layer-8 public token bridge and faithful full-expert MoE. -/
+
+private theorem l7d_token7783_rel (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    Gather2Rel (denoteGraphDistributed sm initSM 7783)
+      (denoteGraphDistributed pm initPM 15286) (denoteGraphDistributed pm initPM 15309)
+      [4096, 1024] [2048, 1024] := by
+  have h := l7d_5083_rel initSM initPM hSM hPM hInit
+  have s := distributed_reduce1 sm initSM 291
+    { rank := 0, op := "OpName.FW_multiref", ins := [5083],
+      outs := [7779, 7783, 7787, 7791, 7795], params := [5] }
+    5083 7783 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref5_at_pos1_out sm st 0 5083 7779 7783 7787 7791 7795 (by decide))
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p0 := distributed_reduce1 pm initPM 643
+    { rank := 0, op := "OpName.FW_multiref", ins := [8773],
+      outs := [15282, 15286, 15290, 15294, 15298], params := [5] }
+    8773 15286 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref5_at_pos1_out pm st 0 8773 15282 15286 15290 15294 15298 (by decide))
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have p1 := distributed_reduce1 pm initPM 644
+    { rank := 1, op := "OpName.FW_multiref", ins := [8774],
+      outs := [15305, 15309, 15313, 15317, 15321], params := [5] }
+    8774 15309 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref5_at_pos1_out pm st 1 8774 15305 15309 15313 15317 15321 (by decide))
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at s p0 p1
+  exact ⟨by rw [s, h.value, ← p0, ← p1], by rw [s]; exact h.full_shape,
+    by rw [p0]; exact h.shard0_shape, by rw [p1]; exact h.shard1_shape, by decide⟩
+
+/-- Public pure-distributed exact 2-TP bridge for `mref5-pos1(5083)`. -/
+theorem recon_intermediateGoal_7783_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_7783
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) :=
+  Gather2Rel.to_initGoalHolds _ _ intermediateGoal_7783 7783 15286 15309
+    [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl
+    (l7d_token7783_rel initSM initPM hSM hPM hInit)
+
+private def layer8SmMoe : NodeDecl :=
+  { rank := 0, op := "OpName.FW_all2all_moe_gmm",
+    ins := [7783, 5087, 5088, 5090, 5091], outs := [5092], params := [64, 0, 64, 8] }
+private def layer8PmMoe0 : NodeDecl :=
+  { rank := 0, op := "OpName.FW_all2all_moe_gmm",
+    ins := [15286, 8783, 8785, 8789, 8791], outs := [8793], params := [64, 0, 32, 8] }
+private def layer8PmMoe1 : NodeDecl :=
+  { rank := 1, op := "OpName.FW_all2all_moe_gmm",
+    ins := [15309, 8784, 8786, 8790, 8792], outs := [8794], params := [64, 32, 64, 8] }
+
+set_option maxRecDepth 1000000 in
+private theorem layer8_sm_node304 : sm.nodes[304]'(by native_decide) = layer8SmMoe := by native_decide
+set_option maxRecDepth 1000000 in
+private theorem layer8_pm_node669 : pm.nodes[669]'(by native_decide) = layer8PmMoe0 := by native_decide
+set_option maxRecDepth 1000000 in
+private theorem layer8_pm_node672 : pm.nodes[672]'(by native_decide) = layer8PmMoe1 := by native_decide
+set_option maxRecDepth 1000000 in
+private theorem layer8_sm_buddies : sm.replicaBuddies layer8SmMoe = [layer8SmMoe] := by native_decide
+set_option maxRecDepth 1000000 in
+private theorem layer8_pm_buddies0 :
+    pm.replicaBuddies layer8PmMoe0 = [layer8PmMoe0, layer8PmMoe1] := by native_decide
+set_option maxRecDepth 1000000 in
+private theorem layer8_pm_buddies1 :
+    pm.replicaBuddies layer8PmMoe1 = [layer8PmMoe0, layer8PmMoe1] := by native_decide
+
+set_option maxRecDepth 10000000 in
+set_option maxHeartbeats 12000000 in
+/-- Faithful pure-distributed full-expert reconstruction of MoE `5092`, exact 2-TP. -/
+theorem recon_intermediateGoal_5092_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_5092
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) := by
+  have hi := l7d_token7783_rel initSM initPM hSM hPM hInit
+  have hrp := l7d_topk_fst_rel initSM initPM hSM hPM hInit
+  have hrm := l7d_topk_snd_rel initSM initPM hSM hPM hInit
+  have hW13 := hInit initGoal_5090 (by native_decide)
+  have hW2 := hInit initGoal_5091 (by native_decide)
+  have hsW13 := hW13.2.1
+  have hsW2 := hW2.2.1
+  simp only [initGoal_5090, List.map, List.cons.injEq, and_true] at hsW13
+  simp only [initGoal_5091, List.map, List.cons.injEq, and_true] at hsW2
+  have hsW13A : (denoteGraphDistributed pm initPM 8789).shape = [32, 1024, 1024] := by
+    rw [denoteGraphDistributed,
+      foldl_applyNodeDistributed_at_not_written pm pm.nodes initPM 8789
+        layer1_pm_nodes_nonempty (by native_decide)]
+    exact hsW13.1
+  have hsW13B : (denoteGraphDistributed pm initPM 8790).shape = [32, 1024, 1024] := by
+    rw [denoteGraphDistributed,
+      foldl_applyNodeDistributed_at_not_written pm pm.nodes initPM 8790
+        layer1_pm_nodes_nonempty (by native_decide)]
+    exact hsW13.2
+  have hsW2A : (denoteGraphDistributed pm initPM 8791).shape = [32, 1024, 512] := by
+    rw [denoteGraphDistributed,
+      foldl_applyNodeDistributed_at_not_written pm pm.nodes initPM 8791
+        layer1_pm_nodes_nonempty (by native_decide)]
+    exact hsW2.1
+  have hsW2B : (denoteGraphDistributed pm initPM 8792).shape = [32, 1024, 512] := by
+    rw [denoteGraphDistributed,
+      foldl_applyNodeDistributed_at_not_written pm pm.nodes initPM 8792
+        layer1_pm_nodes_nonempty (by native_decide)]
+    exact hsW2.2
+  have hbrW13 : denoteGraphDistributed sm initSM 5090 = allGatherPrimDimN 0 2 0
+      [denoteGraphDistributed pm initPM 8789, denoteGraphDistributed pm initPM 8790] := by
+    have hv := hW13.2.2
+    rw [reconstructForGoal_of_not_replicated initGoal_5090 pm.numRanks _ rfl] at hv
+    simp only [initGoal_5090, List.map] at hv
+    rw [reconstructWithDim_cons_cons_nonscalar 0 pm.numRanks 0 _ _ []
+      (by rw [hsW13.1]; decide)] at hv
+    have ds : denoteGraphDistributed sm initSM 5090 = initSM 5090 := by
+      rw [denoteGraphDistributed]
+      exact foldl_applyNodeDistributed_at_not_written sm sm.nodes initSM 5090
+        layer1_sm_nodes_nonempty (by native_decide)
+    have dp0 : denoteGraphDistributed pm initPM 8789 = initPM 8789 := by
+      rw [denoteGraphDistributed]
+      exact foldl_applyNodeDistributed_at_not_written pm pm.nodes initPM 8789
+        layer1_pm_nodes_nonempty (by native_decide)
+    have dp1 : denoteGraphDistributed pm initPM 8790 = initPM 8790 := by
+      rw [denoteGraphDistributed]
+      exact foldl_applyNodeDistributed_at_not_written pm pm.nodes initPM 8790
+        layer1_pm_nodes_nonempty (by native_decide)
+    rw [ds, dp0, dp1]
+    exact hv
+  have hbrW2 : denoteGraphDistributed sm initSM 5091 = allGatherPrimDimN 0 2 0
+      [denoteGraphDistributed pm initPM 8791, denoteGraphDistributed pm initPM 8792] := by
+    have hv := hW2.2.2
+    rw [reconstructForGoal_of_not_replicated initGoal_5091 pm.numRanks _ rfl] at hv
+    simp only [initGoal_5091, List.map] at hv
+    rw [reconstructWithDim_cons_cons_nonscalar 0 pm.numRanks 0 _ _ []
+      (by rw [hsW2.1]; decide)] at hv
+    have ds : denoteGraphDistributed sm initSM 5091 = initSM 5091 := by
+      rw [denoteGraphDistributed]
+      exact foldl_applyNodeDistributed_at_not_written sm sm.nodes initSM 5091
+        layer1_sm_nodes_nonempty (by native_decide)
+    have dp0 : denoteGraphDistributed pm initPM 8791 = initPM 8791 := by
+      rw [denoteGraphDistributed]
+      exact foldl_applyNodeDistributed_at_not_written pm pm.nodes initPM 8791
+        layer1_pm_nodes_nonempty (by native_decide)
+    have dp1 : denoteGraphDistributed pm initPM 8792 = initPM 8792 := by
+      rw [denoteGraphDistributed]
+      exact foldl_applyNodeDistributed_at_not_written pm pm.nodes initPM 8792
+        layer1_pm_nodes_nonempty (by native_decide)
+    rw [ds, dp0, dp1]
+    exact hv
+  have hW13single : allGatherPrimDimN 0 1 0 [denoteGraphDistributed sm initSM 5090] =
+      denoteGraphDistributed sm initSM 5090 := by
+    have hs : (denoteGraphDistributed sm initSM 5090).shape = [64, 1024, 1024] := by
+      rw [hbrW13, allGatherPrimDimN_shape 0 2 _ [32, 1024, 1024] (by simp [hsW13A])]
+      simp [List.set]
+    exact allGatherPrimDimN_singleton_eq 0 _ (by rw [hs]; decide)
+  have hW2single : allGatherPrimDimN 0 1 0 [denoteGraphDistributed sm initSM 5091] =
+      denoteGraphDistributed sm initSM 5091 := by
+    have hs : (denoteGraphDistributed sm initSM 5091).shape = [64, 1024, 512] := by
+      rw [hbrW2, allGatherPrimDimN_shape 0 2 _ [32, 1024, 512] (by simp [hsW2A])]
+      simp [List.set]
+    exact allGatherPrimDimN_singleton_eq 0 _ (by rw [hs]; decide)
+  have hSMout : denoteGraphDistributed sm initSM 5092 =
+      fw_all2all_moe_gmm_full (denoteGraphDistributed sm initSM 7783)
+        (denoteGraphDistributed sm initSM 5087) (denoteGraphDistributed sm initSM 5088)
+        [denoteGraphDistributed pm initPM 8789, denoteGraphDistributed pm initPM 8790]
+        [denoteGraphDistributed pm initPM 8791, denoteGraphDistributed pm initPM 8792]
+        64 8 (((10 : Nat) : Scalar)) := by
+    have hk : 304 < sm.nodes.length := by native_decide
+    rw [distributed_moe_reduce sm initSM 304 layer8SmMoe 5092 hk
+      (show sm.nodes[304]'hk = layer8SmMoe from layer8_sm_node304)
+      rfl rfl (by native_decide) (by native_decide)]
+    unfold applyNodeFullExpertMoE_value
+    rw [layer8_sm_buddies]
+    simp only [layer8SmMoe, List.map, List.getD, List.getElem?_cons_zero,
+      List.getElem?_cons_succ, List.getElem?_nil, Option.getD_some, Option.getD_none]
+    rw [foldl_take_distributed_eq sm initSM 7783 304 (by native_decide) (by native_decide),
+      foldl_take_distributed_eq sm initSM 5087 304 (by native_decide) (by native_decide),
+      foldl_take_distributed_eq sm initSM 5088 304 (by native_decide) (by native_decide),
+      foldl_take_distributed_eq sm initSM 5090 304 (by native_decide) (by native_decide),
+      foldl_take_distributed_eq sm initSM 5091 304 (by native_decide) (by native_decide)]
+    unfold fw_all2all_moe_gmm_full
+    simp only [List.length_cons, List.length_nil]
+    rw [hW13single, hW2single, hbrW13, hbrW2]
+  have hP0 : denoteGraphDistributed pm initPM 8793 =
+      fw_all2all_moe_gmm_full (denoteGraphDistributed pm initPM 15286)
+        (denoteGraphDistributed pm initPM 8783) (denoteGraphDistributed pm initPM 8785)
+        [denoteGraphDistributed pm initPM 8789, denoteGraphDistributed pm initPM 8790]
+        [denoteGraphDistributed pm initPM 8791, denoteGraphDistributed pm initPM 8792]
+        64 8 (((10 : Nat) : Scalar)) := by
+    have hk : 669 < pm.nodes.length := by native_decide
+    rw [distributed_moe_reduce pm initPM 669 layer8PmMoe0 8793 hk
+      (show pm.nodes[669]'hk = layer8PmMoe0 from layer8_pm_node669)
+      rfl rfl (by native_decide) (by native_decide)]
+    unfold applyNodeFullExpertMoE_value
+    rw [layer8_pm_buddies0]
+    simp only [layer8PmMoe0, layer8PmMoe1, List.map, List.getD, List.getElem?_cons_zero,
+      List.getElem?_cons_succ, List.getElem?_nil, Option.getD_some, Option.getD_none]
+    rw [foldl_take_distributed_eq pm initPM 15286 669 (by native_decide) (by native_decide),
+      foldl_take_distributed_eq pm initPM 8783 669 (by native_decide) (by native_decide),
+      foldl_take_distributed_eq pm initPM 8785 669 (by native_decide) (by native_decide),
+      foldl_take_distributed_eq pm initPM 8789 669 (by native_decide) (by native_decide),
+      foldl_take_distributed_eq pm initPM 8790 669 (by native_decide) (by native_decide),
+      foldl_take_distributed_eq pm initPM 8791 669 (by native_decide) (by native_decide),
+      foldl_take_distributed_eq pm initPM 8792 669 (by native_decide) (by native_decide)]
+  have hP1 : denoteGraphDistributed pm initPM 8794 =
+      fw_all2all_moe_gmm_full (denoteGraphDistributed pm initPM 15309)
+        (denoteGraphDistributed pm initPM 8784) (denoteGraphDistributed pm initPM 8786)
+        [denoteGraphDistributed pm initPM 8789, denoteGraphDistributed pm initPM 8790]
+        [denoteGraphDistributed pm initPM 8791, denoteGraphDistributed pm initPM 8792]
+        64 8 (((10 : Nat) : Scalar)) := by
+    have hk : 672 < pm.nodes.length := by native_decide
+    rw [distributed_moe_reduce pm initPM 672 layer8PmMoe1 8794 hk
+      (show pm.nodes[672]'hk = layer8PmMoe1 from layer8_pm_node672)
+      rfl rfl (by native_decide) (by native_decide)]
+    unfold applyNodeFullExpertMoE_value
+    rw [layer8_pm_buddies1]
+    simp only [layer8PmMoe0, layer8PmMoe1, List.map, List.getD, List.getElem?_cons_zero,
+      List.getElem?_cons_succ, List.getElem?_nil, Option.getD_some, Option.getD_none]
+    rw [foldl_take_distributed_eq pm initPM 15309 672 (by native_decide) (by native_decide),
+      foldl_take_distributed_eq pm initPM 8784 672 (by native_decide) (by native_decide),
+      foldl_take_distributed_eq pm initPM 8786 672 (by native_decide) (by native_decide),
+      foldl_take_distributed_eq pm initPM 8789 672 (by native_decide) (by native_decide),
+      foldl_take_distributed_eq pm initPM 8790 672 (by native_decide) (by native_decide),
+      foldl_take_distributed_eq pm initPM 8791 672 (by native_decide) (by native_decide),
+      foldl_take_distributed_eq pm initPM 8792 672 (by native_decide) (by native_decide)]
+  have hc := fw_all2all_moe_gmm_full_split_commute_2
+    (denoteGraphDistributed pm initPM 15286) (denoteGraphDistributed pm initPM 15309)
+    (denoteGraphDistributed pm initPM 8783) (denoteGraphDistributed pm initPM 8784)
+    (denoteGraphDistributed pm initPM 8785) (denoteGraphDistributed pm initPM 8786)
+    (denoteGraphDistributed pm initPM 8789) (denoteGraphDistributed pm initPM 8790)
+    (denoteGraphDistributed pm initPM 8791) (denoteGraphDistributed pm initPM 8792)
+    2048 1024 32 8 1024 512 (((10 : Nat) : Scalar))
+    (by omega) (by omega) (by omega) (by omega) (by omega) rfl
+    hi.shard0_shape hi.shard1_shape hrp.shard0_shape hrp.shard1_shape
+    hrm.shard0_shape hrm.shard1_shape hsW13A hsW13B hsW2A hsW2B
+  have hval : denoteGraphDistributed sm initSM 5092 = allGatherPrimDimN 0 pm.numRanks 0
+      [denoteGraphDistributed pm initPM 8793, denoteGraphDistributed pm initPM 8794] := by
+    rw [hSMout, hi.value, hrp.value, hrm.value, hc, ← hP0, ← hP1,
+      show pm.numRanks = 2 from rfl]
+  have hsP0 : (denoteGraphDistributed pm initPM 8793).shape = [2048, 1024] := by
+    rw [hP0]
+    exact fw_all2all_moe_gmm_full_shape
+      (input := denoteGraphDistributed pm initPM 15286)
+      (rp := denoteGraphDistributed pm initPM 8783)
+      (rm := denoteGraphDistributed pm initPM 8785)
+      (w13s := [denoteGraphDistributed pm initPM 8789, denoteGraphDistributed pm initPM 8790])
+      (w2s := [denoteGraphDistributed pm initPM 8791, denoteGraphDistributed pm initPM 8792])
+      (numExp := 64) (topK := 8) (swigluLimit := (((10 : Nat) : Scalar)))
+      (lDim := 2048) (hModel := 1024)
+      (by rw [hi.shard0_shape]; rfl) (by rw [hi.shard0_shape]; rfl)
+  have hsP1 : (denoteGraphDistributed pm initPM 8794).shape = [2048, 1024] := by
+    rw [hP1]
+    exact fw_all2all_moe_gmm_full_shape
+      (input := denoteGraphDistributed pm initPM 15309)
+      (rp := denoteGraphDistributed pm initPM 8784)
+      (rm := denoteGraphDistributed pm initPM 8786)
+      (w13s := [denoteGraphDistributed pm initPM 8789, denoteGraphDistributed pm initPM 8790])
+      (w2s := [denoteGraphDistributed pm initPM 8791, denoteGraphDistributed pm initPM 8792])
+      (numExp := 64) (topK := 8) (swigluLimit := (((10 : Nat) : Scalar)))
+      (lDim := 2048) (hModel := 1024)
+      (by rw [hi.shard1_shape]; rfl) (by rw [hi.shard1_shape]; rfl)
+  have hsSM : (denoteGraphDistributed sm initSM 5092).shape = [4096, 1024] := by
+    rw [hval, show pm.numRanks = 2 from rfl,
+      allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsP0])]
+    simp [List.set]
+  exact wrap_2tp_allGather_gen _ _ intermediateGoal_5092 5092 8793 8794
+    [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl (by decide)
+    hval hsSM hsP0 hsP1
+
+#print axioms recon_intermediateGoal_7783_distributed
+#print axioms recon_intermediateGoal_5092_distributed
 #print axioms recon_intermediateGoal_5062_distributed
 #print axioms recon_intermediateGoal_5064_distributed
 #print axioms recon_intermediateGoal_5066_distributed
