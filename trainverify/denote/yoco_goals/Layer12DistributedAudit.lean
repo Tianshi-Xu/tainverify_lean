@@ -1,4 +1,4 @@
-import denote.yoco_goals.Layer12DistributedContinuation
+import denote.yoco_goals.Layer12DistributedBoundaryContinuation
 
 /-! Axiom audit for the pure-distributed layer-12 frontier.
 
@@ -26,6 +26,23 @@ namespace TrainVerify.Denote.GeneratedPatterns
 #print axioms recon_intermediateGoal_5302_distributed
 #print axioms recon_intermediateGoal_5303_distributed
 #print axioms recon_intermediateGoal_5304_distributed
+
+-- Layer-12 boundary product/gating branch.
+#print axioms recon_intermediateGoal_5309_distributed
+#print axioms recon_intermediateGoal_5314_distributed
+#print axioms recon_intermediateGoal_5318_distributed
+#print axioms recon_intermediateGoal_5311_distributed
+#print axioms recon_intermediateGoal_5316_distributed
+#print axioms recon_intermediateGoal_5320_distributed
+#print axioms recon_intermediateGoal_5312_distributed
+#print axioms recon_intermediateGoal_5317_distributed
+#print axioms recon_intermediateGoal_5321_distributed
+#print axioms recon_intermediateGoal_5313_distributed
+#print axioms recon_intermediateGoal_5322_distributed
+#print axioms recon_intermediateGoal_5323_distributed
+#print axioms recon_intermediateGoal_5325_distributed
+#print axioms recon_intermediateGoal_5326_distributed
+#print axioms recon_intermediateGoal_5327_distributed
 
 -- Migrated from DistributedMigrationGears.lean.
 #print axioms Gather2Rel.of_initGoalHolds
