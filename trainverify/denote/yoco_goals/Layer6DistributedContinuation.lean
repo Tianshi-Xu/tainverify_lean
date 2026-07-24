@@ -1327,6 +1327,261 @@ theorem recon_intermediateGoal_5027_distributed (initSM initPM : Store)
   exact wrap_2tp_allGather_gen _ _ intermediateGoal_5027 5027 8583 8584
     [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl (by decide) hv hs hs0 hs1
 
+/-! ## Pure-distributed layer-7 router entrance -/
+
+private theorem l6d_norm_linear (g : GraphDecl) (init : Store) (k r x w o : Nat)
+    (hk : k < g.nodes.length)
+    (hn : g.nodes[k]'hk =
+      { rank := r, op := "OpName.FW_norm_linear", ins := [x, w], outs := [o] })
+    (hdn : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ [])
+    (hdw : ∀ n ∈ g.nodes.drop (k + 1), o ∉ n.outs)
+    (hpn : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hpx : ∀ n ∈ g.nodes.drop k, x ∉ n.outs)
+    (hpw : ∀ n ∈ g.nodes.drop k, w ∉ n.outs) :
+    denoteGraphDistributed g init o =
+      fw_norm_linear (denoteGraphDistributed g init x) (denoteGraphDistributed g init w) :=
+  distributed_reduce2 g init k _ x w o fw_norm_linear hk hn (by simp)
+    (fun st => applyNode_fw_norm_linear_out g st r x w o) hdn hdw hpn hpx hpw
+
+private theorem l6d_rms5029_rel (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    Gather2Rel (denoteGraphDistributed sm initSM 5029)
+      (denoteGraphDistributed pm initPM 8587) (denoteGraphDistributed pm initPM 8588)
+      [4096, 1024] [2048, 1024] := by
+  have h := Gather2Rel.of_initGoalHolds _ _ intermediateGoal_5027 5027 8583 8584
+    [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl (by decide)
+    (recon_intermediateGoal_5027_distributed initSM initPM hSM hPM hInit)
+  have ms := distributed_reduce1 sm initSM 250
+    { rank := 0, op := "OpName.FW_multiref", ins := [5027], outs := [7716, 7720], params := [2] }
+    5027 7716 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref2_first_out sm st 0 5027 7716 7720)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have m0 := distributed_reduce1 pm initPM 561
+    { rank := 0, op := "OpName.FW_multiref", ins := [8583], outs := [15159, 15163], params := [2] }
+    8583 15159 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref2_first_out pm st 0 8583 15159 15163)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have m1 := distributed_reduce1 pm initPM 562
+    { rank := 1, op := "OpName.FW_multiref", ins := [8584], outs := [15167, 15171], params := [2] }
+    8584 15167 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref2_first_out pm st 1 8584 15167 15171)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at ms m0 m1
+  have hw := distributed_init_singleton_value initSM initPM hInit initGoal_5028
+    (by native_decide) 5028 rfl rfl rfl rfl layer1_sm_nodes_nonempty
+    (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have rs := l6d_rms sm initSM 251 0 7716 5028 5029 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r0 := l6d_rms pm initPM 563 0 15159 5028 8587 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r1 := l6d_rms pm initPM 564 1 15167 5028 8588 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hs0 : (denoteGraphDistributed pm initPM 15159).shape = [2048, 1024] := by rw [m0]; exact h.shard0_shape
+  have hs1 : (denoteGraphDistributed pm initPM 15167).shape = [2048, 1024] := by rw [m1]; exact h.shard1_shape
+  refine ⟨?_, ?_, ?_, ?_, by decide⟩
+  · rw [rs, ms, h.value, ← m0, ← m1, hw,
+      fw_rms_norm_allGather0_commute_2 _ _ _ 2048 1024 (by omega) (by omega) hs0 hs1, r0, r1]
+  · rw [rs]; exact fw_rms_norm_shape2 _ _ 4096 1024 (by rw [ms]; exact h.full_shape)
+  · rw [r0]; exact fw_rms_norm_shape2 _ _ 2048 1024 hs0
+  · rw [r1]; exact fw_rms_norm_shape2 _ _ 2048 1024 hs1
+
+/-- Pure-distributed exact 2-TP reconstruction of the router RMSNorm. -/
+theorem recon_intermediateGoal_5029_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_5029
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) :=
+  Gather2Rel.to_initGoalHolds _ _ intermediateGoal_5029 5029 8587 8588
+    [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl
+    (l6d_rms5029_rel initSM initPM hSM hPM hInit)
+
+private theorem l6d_float5030_rel (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    Gather2Rel (denoteGraphDistributed sm initSM 5030)
+      (denoteGraphDistributed pm initPM 8589) (denoteGraphDistributed pm initPM 8590)
+      [4096, 1024] [2048, 1024] := by
+  have h := l6d_rms5029_rel initSM initPM hSM hPM hInit
+  have ms := distributed_reduce1 sm initSM 252
+    { rank := 0, op := "OpName.FW_multiref", ins := [5029],
+      outs := [7727, 7731, 7735, 7739, 7743], params := [5] }
+    5029 7727 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref_first_out' sm st 0 4 5029 7727 [7731, 7735, 7739, 7743])
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have m0 := distributed_reduce1 pm initPM 565
+    { rank := 0, op := "OpName.FW_multiref", ins := [8587],
+      outs := [15178, 15182, 15186, 15190, 15194], params := [5] }
+    8587 15178 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref_first_out' pm st 0 4 8587 15178 [15182, 15186, 15190, 15194])
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have m1 := distributed_reduce1 pm initPM 566
+    { rank := 1, op := "OpName.FW_multiref", ins := [8588],
+      outs := [15201, 15205, 15209, 15213, 15217], params := [5] }
+    8588 15201 id (by native_decide) (by native_decide) (by decide)
+    (fun st => applyNode_fw_multiref_first_out' pm st 1 4 8588 15201 [15205, 15209, 15213, 15217])
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rs := l6d_float sm initSM 253 0 7727 5030 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r0 := l6d_float pm initPM 567 0 15178 8589 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r1 := l6d_float pm initPM 571 1 15201 8590 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  simp only [id_eq] at ms m0 m1
+  exact ⟨by rw [rs, ms, h.value, ← m0, ← m1, r0, r1],
+    by rw [rs, ms]; exact h.full_shape, by rw [r0, m0]; exact h.shard0_shape,
+    by rw [r1, m1]; exact h.shard1_shape, by decide⟩
+
+/-- Pure-distributed exact 2-TP reconstruction of the first router `mref5` float. -/
+theorem recon_intermediateGoal_5030_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_5030
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) :=
+  Gather2Rel.to_initGoalHolds _ _ intermediateGoal_5030 5030 8589 8590
+    [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl
+    (l6d_float5030_rel initSM initPM hSM hPM hInit)
+
+private theorem l6d_logits5032_rel (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    Gather2Rel (denoteGraphDistributed sm initSM 5032)
+      (denoteGraphDistributed pm initPM 8595) (denoteGraphDistributed pm initPM 8596)
+      [4096, 64] [2048, 64] := by
+  have h := l6d_float5030_rel initSM initPM hSM hPM hInit
+  have hw := distributed_init_singleton_value initSM initPM hInit initGoal_5031
+    (by native_decide) 5031 rfl rfl rfl rfl layer1_sm_nodes_nonempty
+    (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have hws := distributed_init_singleton_shape initSM initPM hInit initGoal_5031
+    (by native_decide) 5031 [64, 1024] rfl rfl layer1_sm_nodes_nonempty (by native_decide)
+  have hpw : (denoteGraphDistributed pm initPM 5031).shape = [64, 1024] := by rw [← hw]; exact hws
+  have rs := l6d_norm_linear sm initSM 257 0 5030 5031 5032 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r0 := l6d_norm_linear pm initPM 575 0 8589 5031 8595 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r1 := l6d_norm_linear pm initPM 579 1 8590 5031 8596 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  refine ⟨?_, ?_, ?_, ?_, by decide⟩
+  · rw [rs, h.value, hw, fw_norm_linear_allGather0_commute_2 _ _ _ 2048 1024 64
+      (by omega) (by omega) (by omega) h.shard0_shape h.shard1_shape hpw, r0, r1]
+  · rw [rs]; exact fw_norm_linear_2d_shape 4096 1024 64 _ _ (by decide) h.full_shape hws
+  · rw [r0]; exact fw_norm_linear_2d_shape 2048 1024 64 _ _ (by decide) h.shard0_shape hpw
+  · rw [r1]; exact fw_norm_linear_2d_shape 2048 1024 64 _ _ (by decide) h.shard1_shape hpw
+
+/-- Pure-distributed exact 2-TP reconstruction of the router logits. -/
+theorem recon_intermediateGoal_5032_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_5032
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) :=
+  Gather2Rel.to_initGoalHolds _ _ intermediateGoal_5032 5032 8595 8596
+    [4096, 64] [2048, 64] rfl rfl rfl rfl rfl rfl
+    (l6d_logits5032_rel initSM initPM hSM hPM hInit)
+
+private theorem l6d_distributed_reduce1_at (g : GraphDecl) (init : Store) (k : Nat)
+    (node : NodeDecl) (inTid outTid : Tid) (opfun : Tensor → Tensor)
+    (hk : k < g.nodes.length) (hnode : g.nodes[k]'hk = node)
+    (hmoe : node.op ≠ "OpName.FW_all2all_moe_gmm")
+    (happly : applyNodeRingAttn g ((g.nodes.take k).foldl (applyNodeDistributed g) init) node outTid =
+      opfun (((g.nodes.take k).foldl (applyNodeDistributed g) init) inTid))
+    (hdrop_nil : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ [])
+    (hdrop : ∀ n ∈ g.nodes.drop (k + 1), outTid ∉ n.outs)
+    (hpre_nil : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hpre : ∀ n ∈ g.nodes.drop k, inTid ∉ n.outs) :
+    denoteGraphDistributed g init outTid = opfun (denoteGraphDistributed g init inTid) := by
+  rw [distributed_node_core g init k node outTid hk hnode hmoe hdrop_nil hdrop,
+    happly, distributed_prefix_read g init k inTid hpre_nil hpre]
+
+private theorem l6d_topk_common (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    Gather2Rel (denoteGraphDistributed sm initSM 5032)
+      (denoteGraphDistributed pm initPM 8595) (denoteGraphDistributed pm initPM 8596)
+      [4096, 64] [2048, 64]
+    ∧ ((sm.nodes.take 261).foldl (applyNodeDistributed sm) initSM 5032).shape.reverse.head? = some 64
+    ∧ ((pm.nodes.take 583).foldl (applyNodeDistributed pm) initPM 8595).shape.reverse.head? = some 64
+    ∧ ((pm.nodes.take 587).foldl (applyNodeDistributed pm) initPM 8596).shape.reverse.head? = some 64 := by
+  have h := l6d_logits5032_rel initSM initPM hSM hPM hInit
+  refine ⟨h, ?_, ?_, ?_⟩
+  · rw [distributed_prefix_read sm initSM 261 5032 (by native_decide) (by native_decide), h.full_shape]; rfl
+  · rw [distributed_prefix_read pm initPM 583 8595 (by native_decide) (by native_decide), h.shard0_shape]; rfl
+  · rw [distributed_prefix_read pm initPM 587 8596 (by native_decide) (by native_decide), h.shard1_shape]; rfl
+
+private theorem l6d_topk5033_rel (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    Gather2Rel (denoteGraphDistributed sm initSM 5033)
+      (denoteGraphDistributed pm initPM 8597) (denoteGraphDistributed pm initPM 8598)
+      [4096, 64] [2048, 64] := by
+  obtain ⟨h, ls, l0, l1⟩ := l6d_topk_common initSM initPM hSM hPM hInit
+  have rs := l6d_distributed_reduce1_at sm initSM 261
+    { rank := 0, op := "OpName.FW_topk_routing", ins := [5032], outs := [5033, 5034, 5035], params := [8, 1] }
+    5032 5033 (fun t => (fw_topk_routing t 8 64).1) (by native_decide) (by native_decide) (by decide)
+    (applyNode_topk81_fst sm ((sm.nodes.take 261).foldl (applyNodeDistributed sm) initSM) 0 5032 5033 5034 5035 ls)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r0 := l6d_distributed_reduce1_at pm initPM 583
+    { rank := 0, op := "OpName.FW_topk_routing", ins := [8595], outs := [8597, 8599, 8601], params := [8, 1] }
+    8595 8597 (fun t => (fw_topk_routing t 8 64).1) (by native_decide) (by native_decide) (by decide)
+    (applyNode_topk81_fst pm ((pm.nodes.take 583).foldl (applyNodeDistributed pm) initPM) 0 8595 8597 8599 8601 l0)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r1 := l6d_distributed_reduce1_at pm initPM 587
+    { rank := 1, op := "OpName.FW_topk_routing", ins := [8596], outs := [8598, 8600, 8602], params := [8, 1] }
+    8596 8598 (fun t => (fw_topk_routing t 8 64).1) (by native_decide) (by native_decide) (by decide)
+    (applyNode_topk81_fst pm ((pm.nodes.take 587).foldl (applyNodeDistributed pm) initPM) 1 8596 8598 8600 8602 l1)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  refine ⟨?_, ?_, ?_, ?_, by decide⟩
+  · rw [rs, h.value,
+      fw_topk_routing_fst_allGather0_commute_2_of _ _ 2048 8 64 (by omega) (by omega)
+        h.shard0_shape h.shard1_shape, r0, r1]
+  · rw [rs]; exact fw_topk_routing_fst_shape _ 8 64 4096 (by rw [h.full_shape]; rfl)
+  · rw [r0]; exact fw_topk_routing_fst_shape _ 8 64 2048 (by rw [h.shard0_shape]; rfl)
+  · rw [r1]; exact fw_topk_routing_fst_shape _ 8 64 2048 (by rw [h.shard1_shape]; rfl)
+
+/-- Pure-distributed exact 2-TP reconstruction of router routing probabilities. -/
+theorem recon_intermediateGoal_5033_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_5033
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) :=
+  Gather2Rel.to_initGoalHolds _ _ intermediateGoal_5033 5033 8597 8598
+    [4096, 64] [2048, 64] rfl rfl rfl rfl rfl rfl
+    (l6d_topk5033_rel initSM initPM hSM hPM hInit)
+
+/-- Pure-distributed exact 2-TP reconstruction of the router routing map. -/
+theorem recon_intermediateGoal_5034_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_5034
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) := by
+  obtain ⟨h, ls, l0, l1⟩ := l6d_topk_common initSM initPM hSM hPM hInit
+  have rs := l6d_distributed_reduce1_at sm initSM 261
+    { rank := 0, op := "OpName.FW_topk_routing", ins := [5032], outs := [5033, 5034, 5035], params := [8, 1] }
+    5032 5034 (fun t => (fw_topk_routing t 8 64).2.1) (by native_decide) (by native_decide) (by decide)
+    (applyNode_topk81_snd sm ((sm.nodes.take 261).foldl (applyNodeDistributed sm) initSM) 0 5032 5033 5034 5035 (by decide) ls)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r0 := l6d_distributed_reduce1_at pm initPM 583
+    { rank := 0, op := "OpName.FW_topk_routing", ins := [8595], outs := [8597, 8599, 8601], params := [8, 1] }
+    8595 8599 (fun t => (fw_topk_routing t 8 64).2.1) (by native_decide) (by native_decide) (by decide)
+    (applyNode_topk81_snd pm ((pm.nodes.take 583).foldl (applyNodeDistributed pm) initPM) 0 8595 8597 8599 8601 (by decide) l0)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have r1 := l6d_distributed_reduce1_at pm initPM 587
+    { rank := 1, op := "OpName.FW_topk_routing", ins := [8596], outs := [8598, 8600, 8602], params := [8, 1] }
+    8596 8600 (fun t => (fw_topk_routing t 8 64).2.1) (by native_decide) (by native_decide) (by decide)
+    (applyNode_topk81_snd pm ((pm.nodes.take 587).foldl (applyNodeDistributed pm) initPM) 1 8596 8598 8600 8602 (by decide) l1)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have rel : Gather2Rel (denoteGraphDistributed sm initSM 5034)
+      (denoteGraphDistributed pm initPM 8599) (denoteGraphDistributed pm initPM 8600)
+      [4096, 64] [2048, 64] := by
+    refine ⟨?_, ?_, ?_, ?_, by decide⟩
+    · rw [rs, h.value,
+        fw_topk_routing_snd_fst_allGather0_commute_2_of _ _ 2048 8 64 (by omega) (by omega)
+          h.shard0_shape h.shard1_shape, r0, r1]
+    · rw [rs]; exact fw_topk_routing_snd_shape _ 8 64 4096 (by rw [h.full_shape]; rfl)
+    · rw [r0]; exact fw_topk_routing_snd_shape _ 8 64 2048 (by rw [h.shard0_shape]; rfl)
+    · rw [r1]; exact fw_topk_routing_snd_shape _ 8 64 2048 (by rw [h.shard1_shape]; rfl)
+  exact Gather2Rel.to_initGoalHolds _ _ intermediateGoal_5034 5034 8599 8600
+    [4096, 64] [2048, 64] rfl rfl rfl rfl rfl rfl rel
+
 #print axioms recon_intermediateGoal_7679_distributed
 #print axioms recon_intermediateGoal_4984_distributed
 #print axioms recon_intermediateGoal_5006_distributed
@@ -1341,5 +1596,10 @@ theorem recon_intermediateGoal_5027_distributed (initSM initPM : Store)
 #print axioms recon_intermediateGoal_5024_distributed
 #print axioms recon_intermediateGoal_7699_distributed
 #print axioms recon_intermediateGoal_5027_distributed
+#print axioms recon_intermediateGoal_5029_distributed
+#print axioms recon_intermediateGoal_5030_distributed
+#print axioms recon_intermediateGoal_5032_distributed
+#print axioms recon_intermediateGoal_5033_distributed
+#print axioms recon_intermediateGoal_5034_distributed
 
 end TrainVerify.Denote.GeneratedPatterns
