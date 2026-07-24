@@ -688,6 +688,185 @@ theorem recon_intermediateGoal_5176_distributed (initSM initPM : Store)
     [4096, 4, 64] [2048, 4, 64] rfl rfl rfl rfl rfl rfl
     (l9d_5176_rel initSM initPM hSM hPM hInit)
 
+private theorem l9d_chunk (g : GraphDecl) (init : Store) (k r i o d : Nat)
+    (hk : k < g.nodes.length)
+    (hn : g.nodes[k]'hk =
+      { rank := r, op := "OpName.ChunkPrim", ins := [i], outs := [o], params := [d] })
+    (hdn : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ [])
+    (hdw : ∀ n ∈ g.nodes.drop (k + 1), o ∉ n.outs)
+    (hpn : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hpw : ∀ n ∈ g.nodes.drop k, i ∉ n.outs) :
+    denoteGraphDistributed g init o =
+      chunkPrimDimN d g.numRanks r (denoteGraphDistributed g init i) :=
+  distributed_reduce1 g init k _ i o (fun t => chunkPrimDimN d g.numRanks r t)
+    hk hn (by simp) (fun st => applyNode_chunkPrimDimN_out g st r i o d) hdn hdw hpn hpw
+
+/-- Distributed cache agreement for the layer-9 PM rotary-cache replica. -/
+private theorem l9d_rotary_cache_11862 (initSM initPM : Store)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    denoteGraphDistributed sm initSM 4691 = denoteGraphDistributed pm initPM 11862 := by
+  have hsource := sm_pm_rotary_cache_agree initSM initPM hInit 11862 9 (by norm_num) rfl
+  have hbase := distributed_init_singleton_value initSM initPM hInit initGoal_4691
+    (by native_decide) 4691 rfl rfl rfl rfl layer1_sm_nodes_nonempty
+    (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have hcopy : denoteGraphDistributed pm initPM 11862 = id (denoteGraphDistributed pm initPM 4691) :=
+    distributed_reduce1 pm initPM 14
+      { rank := 1, op := "OpName.FW_multiref", ins := [4691],
+        outs := (List.range 12).map (fun r => 11853 + r),
+        params := [((List.range 12).map (fun r => 11853 + r)).length] }
+      4691 11862 id (by native_decide) (by native_decide) (by decide)
+      (fun st => by
+        rw [applyNodeRingAttn_eq_applyNode_of_not_ring pm st _ (by decide) (by decide)]
+        rw [applyNode_fw_multiref_mem_out pm st 1 4691
+          ((List.range 12).map (fun r => 11853 + r)) 11862 (by native_decide), id_eq])
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  rw [hcopy, id_eq]
+  exact hbase
+
+set_option maxHeartbeats 8000000 in
+private theorem l9d_rotary5178_5179_rels (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    Gather2Rel (denoteGraphDistributed sm initSM 5178)
+      (denoteGraphDistributed pm initPM 9107) (denoteGraphDistributed pm initPM 9108)
+      [4096, 16, 64] [2048, 16, 64] ∧
+    Gather2Rel (denoteGraphDistributed sm initSM 5179)
+      (denoteGraphDistributed pm initPM 9109) (denoteGraphDistributed pm initPM 9110)
+      [4096, 4, 64] [2048, 4, 64] := by
+  have hq := l9d_5172_rel initSM initPM hSM hPM hInit
+  have hk := l9d_5174_rel initSM initPM hSM hPM hInit
+  have hcache := l9d_rotary_cache_11862 initSM initPM hInit
+  have hpos := distributed_init_singleton_value initSM initPM hInit initGoal_5177
+    (by native_decide) 5177 rfl rfl rfl rfl layer1_sm_nodes_nonempty
+    (by native_decide) layer1_pm_nodes_nonempty (by native_decide)
+  have hspos := distributed_init_singleton_shape initSM initPM hInit initGoal_5177
+    (by native_decide) 5177 [4096] rfl rfl layer1_sm_nodes_nonempty (by native_decide)
+  have c0 := l9d_chunk pm initPM 9 0 5177 9105 0 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have c1 := l9d_chunk pm initPM 22 1 5177 9106 0 (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have c0' : denoteGraphDistributed pm initPM 9105 = chunkPrimDimN 0 2 0
+      (denoteGraphDistributed pm initPM 5177) := c0
+  have c1' : denoteGraphDistributed pm initPM 9106 = chunkPrimDimN 0 2 1
+      (denoteGraphDistributed pm initPM 5177) := c1
+  have qSM : denoteGraphDistributed sm initSM 5178 =
+      (fw_rotary_embedding (denoteGraphDistributed sm initSM 4691) (denoteGraphDistributed sm initSM 5177)
+        (denoteGraphDistributed sm initSM 5172) (denoteGraphDistributed sm initSM 5174) 16 4).1 := by
+    rw [distributed_node_core sm initSM 359
+      { rank := 0, op := "OpName.FW_rotary_embedding", ins := [4691, 5177, 5172, 5174], outs := [5178, 5179], params := [16, 4] }
+      5178 (by native_decide) (by native_decide) (by decide) (by native_decide) (by native_decide),
+      applyNodeRingAttn_eq_applyNode_of_not_ring sm _ _ (by decide) (by decide),
+      applyNode_fw_rotary_embedding_fst_out,
+      distributed_prefix_read sm initSM 359 4691 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 359 5177 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 359 5172 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 359 5174 (by native_decide) (by native_decide)]
+  have kSM : denoteGraphDistributed sm initSM 5179 =
+      (fw_rotary_embedding (denoteGraphDistributed sm initSM 4691) (denoteGraphDistributed sm initSM 5177)
+        (denoteGraphDistributed sm initSM 5172) (denoteGraphDistributed sm initSM 5174) 16 4).2 := by
+    rw [distributed_node_core sm initSM 359
+      { rank := 0, op := "OpName.FW_rotary_embedding", ins := [4691, 5177, 5172, 5174], outs := [5178, 5179], params := [16, 4] }
+      5179 (by native_decide) (by native_decide) (by decide) (by native_decide) (by native_decide),
+      applyNodeRingAttn_eq_applyNode_of_not_ring sm _ _ (by decide) (by decide),
+      applyNode_fw_rotary_embedding_snd_out _ _ _ _ _ 4691 5177 5172 5174 5178 5179 (by decide),
+      distributed_prefix_read sm initSM 359 4691 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 359 5177 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 359 5172 (by native_decide) (by native_decide),
+      distributed_prefix_read sm initSM 359 5174 (by native_decide) (by native_decide)]
+  have q0 : denoteGraphDistributed pm initPM 9107 =
+      (fw_rotary_embedding (denoteGraphDistributed pm initPM 11862) (denoteGraphDistributed pm initPM 9105)
+        (denoteGraphDistributed pm initPM 9073) (denoteGraphDistributed pm initPM 9085) 16 4).1 := by
+    rw [distributed_node_core pm initPM 779
+      { rank := 0, op := "OpName.FW_rotary_embedding", ins := [11862, 9105, 9073, 9085], outs := [9107, 9109], params := [16, 4] }
+      9107 (by native_decide) (by native_decide) (by decide) (by native_decide) (by native_decide),
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm _ _ (by decide) (by decide), applyNode_fw_rotary_embedding_fst_out,
+      distributed_prefix_read pm initPM 779 11862 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 779 9105 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 779 9073 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 779 9085 (by native_decide) (by native_decide)]
+  have k0 : denoteGraphDistributed pm initPM 9109 =
+      (fw_rotary_embedding (denoteGraphDistributed pm initPM 11862) (denoteGraphDistributed pm initPM 9105)
+        (denoteGraphDistributed pm initPM 9073) (denoteGraphDistributed pm initPM 9085) 16 4).2 := by
+    rw [distributed_node_core pm initPM 779
+      { rank := 0, op := "OpName.FW_rotary_embedding", ins := [11862, 9105, 9073, 9085], outs := [9107, 9109], params := [16, 4] }
+      9109 (by native_decide) (by native_decide) (by decide) (by native_decide) (by native_decide),
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm _ _ (by decide) (by decide),
+      applyNode_fw_rotary_embedding_snd_out _ _ _ _ _ 11862 9105 9073 9085 9107 9109 (by decide),
+      distributed_prefix_read pm initPM 779 11862 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 779 9105 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 779 9073 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 779 9085 (by native_decide) (by native_decide)]
+  have q1 : denoteGraphDistributed pm initPM 9108 =
+      (fw_rotary_embedding (denoteGraphDistributed pm initPM 11862) (denoteGraphDistributed pm initPM 9106)
+        (denoteGraphDistributed pm initPM 9074) (denoteGraphDistributed pm initPM 9086) 16 4).1 := by
+    rw [distributed_node_core pm initPM 780
+      { rank := 1, op := "OpName.FW_rotary_embedding", ins := [11862, 9106, 9074, 9086], outs := [9108, 9110], params := [16, 4] }
+      9108 (by native_decide) (by native_decide) (by decide) (by native_decide) (by native_decide),
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm _ _ (by decide) (by decide), applyNode_fw_rotary_embedding_fst_out,
+      distributed_prefix_read pm initPM 780 11862 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 780 9106 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 780 9074 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 780 9086 (by native_decide) (by native_decide)]
+  have k1 : denoteGraphDistributed pm initPM 9110 =
+      (fw_rotary_embedding (denoteGraphDistributed pm initPM 11862) (denoteGraphDistributed pm initPM 9106)
+        (denoteGraphDistributed pm initPM 9074) (denoteGraphDistributed pm initPM 9086) 16 4).2 := by
+    rw [distributed_node_core pm initPM 780
+      { rank := 1, op := "OpName.FW_rotary_embedding", ins := [11862, 9106, 9074, 9086], outs := [9108, 9110], params := [16, 4] }
+      9110 (by native_decide) (by native_decide) (by decide) (by native_decide) (by native_decide),
+      applyNodeRingAttn_eq_applyNode_of_not_ring pm _ _ (by decide) (by decide),
+      applyNode_fw_rotary_embedding_snd_out _ _ _ _ _ 11862 9106 9074 9086 9108 9110 (by decide),
+      distributed_prefix_read pm initPM 780 11862 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 780 9106 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 780 9074 (by native_decide) (by native_decide),
+      distributed_prefix_read pm initPM 780 9086 (by native_decide) (by native_decide)]
+  have qval : denoteGraphDistributed sm initSM 5178 = allGatherPrimDimN 0 2 0
+      [denoteGraphDistributed pm initPM 9107, denoteGraphDistributed pm initPM 9108] := by
+    rw [qSM]; simp only [fw_rotary_embedding]
+    rw [hq.value, fw_rotary_apply_allGather0_commute_2_1d (denoteGraphDistributed sm initSM 4691)
+      (denoteGraphDistributed sm initSM 5177) (denoteGraphDistributed pm initPM 9073)
+      (denoteGraphDistributed pm initPM 9074) 2048 16 64 (by omega) (by omega) (by omega)
+      hspos hq.shard0_shape hq.shard1_shape, hcache, hpos, ← c0', ← c1', q0, q1]
+    simp only [fw_rotary_embedding]
+  have kval : denoteGraphDistributed sm initSM 5179 = allGatherPrimDimN 0 2 0
+      [denoteGraphDistributed pm initPM 9109, denoteGraphDistributed pm initPM 9110] := by
+    rw [kSM]; simp only [fw_rotary_embedding]
+    rw [hk.value, fw_rotary_apply_allGather0_commute_2_1d (denoteGraphDistributed sm initSM 4691)
+      (denoteGraphDistributed sm initSM 5177) (denoteGraphDistributed pm initPM 9085)
+      (denoteGraphDistributed pm initPM 9086) 2048 4 64 (by omega) (by omega) (by omega)
+      hspos hk.shard0_shape hk.shard1_shape, hcache, hpos, ← c0', ← c1', k0, k1]
+    simp only [fw_rotary_embedding]
+  have qs0 : (denoteGraphDistributed pm initPM 9107).shape = [2048, 16, 64] := by
+    rw [q0]; simp only [fw_rotary_embedding]; exact fw_rotary_apply_shape_c2a _ _ _ 2048 16 64 hq.shard0_shape
+  have qs1 : (denoteGraphDistributed pm initPM 9108).shape = [2048, 16, 64] := by
+    rw [q1]; simp only [fw_rotary_embedding]; exact fw_rotary_apply_shape_c2a _ _ _ 2048 16 64 hq.shard1_shape
+  have ks0 : (denoteGraphDistributed pm initPM 9109).shape = [2048, 4, 64] := by
+    rw [k0]; simp only [fw_rotary_embedding]; exact fw_rotary_apply_shape_c2a _ _ _ 2048 4 64 hk.shard0_shape
+  have ks1 : (denoteGraphDistributed pm initPM 9110).shape = [2048, 4, 64] := by
+    rw [k1]; simp only [fw_rotary_embedding]; exact fw_rotary_apply_shape_c2a _ _ _ 2048 4 64 hk.shard1_shape
+  refine ⟨⟨qval, ?_, qs0, qs1, by decide⟩, ⟨kval, ?_, ks0, ks1, by decide⟩⟩
+  · rw [qval, allGatherPrimDimN_shape 0 2 _ [2048, 16, 64] (by simp [qs0])]; rfl
+  · rw [kval, allGatherPrimDimN_shape 0 2 _ [2048, 4, 64] (by simp [ks0])]; rfl
+
+/-- Public pure-distributed exact 2-TP reconstruction of the layer-9 rotary Q output. -/
+theorem recon_intermediateGoal_5178_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_5178
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) :=
+  Gather2Rel.to_initGoalHolds _ _ intermediateGoal_5178 5178 9107 9108
+    [4096, 16, 64] [2048, 16, 64] rfl rfl rfl rfl rfl rfl
+    (l9d_rotary5178_5179_rels initSM initPM hSM hPM hInit).1
+
+/-- Public pure-distributed exact 2-TP reconstruction of the layer-9 rotary K output. -/
+theorem recon_intermediateGoal_5179_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_5179
+      (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM) :=
+  Gather2Rel.to_initGoalHolds _ _ intermediateGoal_5179 5179 9109 9110
+    [4096, 4, 64] [2048, 4, 64] rfl rfl rfl rfl rfl rfl
+    (l9d_rotary5178_5179_rels initSM initPM hSM hPM hInit).2
+
 #print axioms recon_intermediateGoal_7835_distributed
 #print axioms recon_intermediateGoal_5146_distributed
 #print axioms recon_intermediateGoal_7824_distributed
@@ -698,5 +877,7 @@ theorem recon_intermediateGoal_5176_distributed (initSM initPM : Store)
 #print axioms recon_intermediateGoal_5172_distributed
 #print axioms recon_intermediateGoal_5174_distributed
 #print axioms recon_intermediateGoal_5176_distributed
+#print axioms recon_intermediateGoal_5178_distributed
+#print axioms recon_intermediateGoal_5179_distributed
 
 end TrainVerify.Denote.GeneratedPatterns
