@@ -316,7 +316,6 @@ theorem recon_intermediateGoal_5243_distributed (initSM initPM : Store)
   exact wrap_2tp_allGather_gen _ _ intermediateGoal_5243 5243 9327 9328
     [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl (by decide) hv hs hs0 hs1
 
-#print axioms recon_intermediateGoal_5243_distributed
 
 /-! ### Layer-11 router front, pure-distributed exact 2-TP. -/
 
@@ -600,8 +599,6 @@ theorem recon_intermediateGoal_5250_distributed (initSM initPM : Store)
   · rw [r0]; exact fw_topk_routing_snd_shape _ 8 64 2048 (by rw [h.shard0_shape]; rfl)
   · rw [r1]; exact fw_topk_routing_snd_shape _ 8 64 2048 (by rw [h.shard1_shape]; rfl)
 
-#print axioms recon_intermediateGoal_5249_distributed
-#print axioms recon_intermediateGoal_5250_distributed
 
 /-! ### Layer-11 router product/gating continuation, pure-distributed exact 2-TP. -/
 
@@ -1258,7 +1255,6 @@ theorem recon_intermediateGoal_5273_distributed (initSM initPM : Store)
   Gather2Rel.to_initGoalHolds _ _ intermediateGoal_5273 5273 9425 9426
     [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl
     (l11d_mul5273_rel initSM initPM hSM hPM hInit)
-#print axioms recon_intermediateGoal_5273_distributed
 
 /-! ### Layer-11 faithful full-expert MoE, pure-distributed exact 2-TP. -/
 
@@ -1673,8 +1669,5 @@ theorem recon_intermediateGoal_5276_distributed (initSM initPM : Store)
     [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl
     (l11d_add5276_rel initSM initPM hSM hPM hInit)
 
-#print axioms recon_intermediateGoal_7939_distributed
-#print axioms recon_intermediateGoal_5254_distributed
-#print axioms recon_intermediateGoal_5276_distributed
 
 end TrainVerify.Denote.GeneratedPatterns

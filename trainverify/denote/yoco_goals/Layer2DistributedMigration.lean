@@ -592,7 +592,6 @@ theorem recon_intermediateGoal_4787_distributed (initSM initPM : Store)
   exact Gather2Rel.to_initGoalHolds _ _ intermediateGoal_4787 4787 7751 7752
     [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl rel
 
-#print axioms recon_intermediateGoal_4787_distributed
 
 /-! ### Residual, norm, and per-head tail (pure distributed evaluator) -/
 
@@ -1005,7 +1004,6 @@ theorem recon_intermediateGoal_4798_distributed (initSM initPM : Store)
     [4096, 4, 64] [2048, 4, 64] rfl rfl rfl rfl rfl rfl
     (l2d_v4798_rel initSM initPM hSM hPM hInit)
 
-#print axioms recon_intermediateGoal_4798_distributed
 
 private theorem l2d_rotary_cache (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
@@ -1194,8 +1192,6 @@ theorem recon_intermediateGoal_4801_distributed (initSM initPM : Store)
     [4096, 4, 64] [2048, 4, 64] rfl rfl rfl rfl rfl rfl
     (l2d_rotary_rels initSM initPM hSM hPM hInit).2
 
-#print axioms recon_intermediateGoal_4800_distributed
-#print axioms recon_intermediateGoal_4801_distributed
 
 private def layer2SmSliding : NodeDecl :=
   { rank := 0, op := "OpName.FW_attn_sliding_window",
@@ -1374,7 +1370,6 @@ theorem recon_intermediateGoal_4804_distributed (initSM initPM : Store)
     (by native_decide) (by native_decide) hqpos hkpos hvpos hqfull hkfull hvfull
     hcuQ hcuK rfl rfl rfl rfl hfull hfull' rfl rfl rfl rfl rfl rfl
 
-#print axioms recon_intermediateGoal_4804_distributed
 
 /-! ### Post-attention residual tail (pure distributed evaluator) -/
 
@@ -8390,82 +8385,16 @@ theorem recon_intermediateGoal_5003_distributed (initSM initPM : Store)
     [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl
     (l2d_mul5003_rel initSM initPM hSM hPM hInit)
 
-#print axioms recon_intermediateGoal_4989_distributed
-#print axioms recon_intermediateGoal_4998_distributed
-#print axioms recon_intermediateGoal_4999_distributed
-#print axioms recon_intermediateGoal_5001_distributed
-#print axioms recon_intermediateGoal_5002_distributed
-#print axioms recon_intermediateGoal_5003_distributed
 
-#print axioms recon_intermediateGoal_4988_distributed
-#print axioms recon_intermediateGoal_4993_distributed
-#print axioms recon_intermediateGoal_4997_distributed
 
-#print axioms recon_intermediateGoal_4979_distributed
-#print axioms recon_intermediateGoal_4980_distributed
-#print axioms recon_intermediateGoal_4970_distributed
-#print axioms recon_intermediateGoal_4973_distributed
-#print axioms recon_intermediateGoal_4966_distributed
-#print axioms recon_intermediateGoal_4962_distributed
-#print axioms recon_intermediateGoal_4963_distributed
-#print axioms recon_intermediateGoal_4954_distributed
-#print axioms recon_intermediateGoal_4956_distributed
-#print axioms recon_intermediateGoal_4958_distributed
-#print axioms recon_intermediateGoal_4960_distributed
-#print axioms recon_intermediateGoal_4952_distributed
-#print axioms recon_intermediateGoal_4930_distributed
-#print axioms recon_intermediateGoal_7627_distributed
-#print axioms recon_intermediateGoal_4949_distributed
 
-#print axioms recon_intermediateGoal_4934_distributed
-#print axioms recon_intermediateGoal_4939_distributed
-#print axioms recon_intermediateGoal_4943_distributed
 
-#print axioms recon_intermediateGoal_4925_distributed
-#print axioms recon_intermediateGoal_4926_distributed
-#print axioms recon_intermediateGoal_4916_distributed
-#print axioms recon_intermediateGoal_4919_distributed
-#print axioms recon_intermediateGoal_4912_distributed
-#print axioms recon_intermediateGoal_4908_distributed
-#print axioms recon_intermediateGoal_4909_distributed
-#print axioms recon_intermediateGoal_4900_distributed
-#print axioms recon_intermediateGoal_4902_distributed
-#print axioms recon_intermediateGoal_4904_distributed
-#print axioms recon_intermediateGoal_4906_distributed
 
-#print axioms recon_intermediateGoal_4898_distributed
-#print axioms recon_intermediateGoal_4895_distributed
-#print axioms recon_intermediateGoal_7575_distributed
-#print axioms recon_intermediateGoal_4876_distributed
 
-#print axioms recon_intermediateGoal_4880_distributed
-#print axioms recon_intermediateGoal_4885_distributed
-#print axioms recon_intermediateGoal_4889_distributed
 
-#print axioms recon_intermediateGoal_4871_distributed
-#print axioms recon_intermediateGoal_4872_distributed
 
-#print axioms recon_intermediateGoal_4862_distributed
-#print axioms recon_intermediateGoal_4865_distributed
 
-#print axioms recon_intermediateGoal_4854_distributed
-#print axioms recon_intermediateGoal_4855_distributed
-#print axioms recon_intermediateGoal_4858_distributed
-#print axioms recon_intermediateGoal_4846_distributed
-#print axioms recon_intermediateGoal_4848_distributed
-#print axioms recon_intermediateGoal_4850_distributed
-#print axioms recon_intermediateGoal_4852_distributed
 
-#print axioms recon_intermediateGoal_4841_distributed
-#print axioms recon_intermediateGoal_4842_distributed
-#print axioms recon_intermediateGoal_4844_distributed
 
-#print axioms recon_intermediateGoal_4826_distributed
-#print axioms recon_intermediateGoal_4831_distributed
-#print axioms recon_intermediateGoal_4835_distributed
-#print axioms recon_intermediateGoal_4811_distributed
-#print axioms recon_intermediateGoal_4817_distributed
-#print axioms recon_intermediateGoal_4818_distributed
-#print axioms recon_intermediateGoal_4822_distributed
 
 end TrainVerify.Denote.GeneratedPatterns

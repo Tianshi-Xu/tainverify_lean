@@ -1617,22 +1617,6 @@ theorem recon_intermediateGoal_5196_distributed (initSM initPM : Store)
   exact Gather2Rel.to_initGoalHolds _ _ intermediateGoal_5196 5196 9157 9158
     [4096, 64] [2048, 64] rfl rfl rfl rfl rfl rfl rel
 
-#print axioms recon_intermediateGoal_5195_distributed
-#print axioms recon_intermediateGoal_5196_distributed
 
-#print axioms recon_intermediateGoal_7835_distributed
-#print axioms recon_intermediateGoal_5146_distributed
-#print axioms recon_intermediateGoal_7824_distributed
-#print axioms recon_intermediateGoal_5166_distributed
-#print axioms recon_intermediateGoal_5167_distributed
-#print axioms recon_intermediateGoal_5168_distributed
-#print axioms recon_intermediateGoal_5170_distributed
-#print axioms recon_intermediateGoal_5172_distributed
-#print axioms recon_intermediateGoal_5174_distributed
-#print axioms recon_intermediateGoal_5176_distributed
-#print axioms recon_intermediateGoal_5178_distributed
-#print axioms recon_intermediateGoal_5179_distributed
-#print axioms recon_intermediateGoal_5182_distributed
-#print axioms recon_intermediateGoal_5189_distributed
 
 end TrainVerify.Denote.GeneratedPatterns

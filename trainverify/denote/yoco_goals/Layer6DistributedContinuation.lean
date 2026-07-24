@@ -2653,45 +2653,5 @@ theorem recon_intermediateGoal_5060_distributed (initSM initPM : Store)
   exact wrap_2tp_allGather_gen _ _ intermediateGoal_5060 5060 8695 8696
     [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl (by decide) hv hs hs0 hs1
 
-#print axioms recon_intermediateGoal_7679_distributed
-#print axioms recon_intermediateGoal_4984_distributed
-#print axioms recon_intermediateGoal_5006_distributed
-#print axioms recon_intermediateGoal_5008_distributed
-#print axioms recon_intermediateGoal_5010_distributed
-#print axioms recon_intermediateGoal_5012_distributed
-#print axioms recon_intermediateGoal_5014_distributed
-#print axioms recon_intermediateGoal_5016_distributed
-#print axioms recon_intermediateGoal_5017_distributed
-#print axioms recon_intermediateGoal_5020_distributed
-#print axioms recon_intermediateGoal_5021_distributed
-#print axioms recon_intermediateGoal_5024_distributed
-#print axioms recon_intermediateGoal_7699_distributed
-#print axioms recon_intermediateGoal_5027_distributed
-#print axioms recon_intermediateGoal_5029_distributed
-#print axioms recon_intermediateGoal_5030_distributed
-#print axioms recon_intermediateGoal_5032_distributed
-#print axioms recon_intermediateGoal_5033_distributed
-#print axioms recon_intermediateGoal_5034_distributed
-#print axioms recon_intermediateGoal_5039_distributed
-#print axioms recon_intermediateGoal_5044_distributed
-#print axioms recon_intermediateGoal_5048_distributed
-#print axioms recon_intermediateGoal_5041_distributed
-#print axioms recon_intermediateGoal_5046_distributed
-#print axioms recon_intermediateGoal_5050_distributed
-#print axioms recon_intermediateGoal_5042_distributed
-#print axioms recon_intermediateGoal_5047_distributed
-#print axioms recon_intermediateGoal_5051_distributed
-#print axioms recon_intermediateGoal_5043_distributed
-#print axioms recon_intermediateGoal_5052_distributed
-#print axioms recon_intermediateGoal_5053_distributed
-#print axioms recon_intermediateGoal_5055_distributed
-#print axioms recon_intermediateGoal_5056_distributed
-#print axioms recon_intermediateGoal_5057_distributed
-#print axioms recon_intermediateGoal_7731_distributed
-#print axioms recon_intermediateGoal_5038_distributed
-#print axioms recon_intermediateGoal_7720_distributed
-#print axioms recon_intermediateGoal_5058_distributed
-#print axioms recon_intermediateGoal_5059_distributed
-#print axioms recon_intermediateGoal_5060_distributed
 
 end TrainVerify.Denote.GeneratedPatterns

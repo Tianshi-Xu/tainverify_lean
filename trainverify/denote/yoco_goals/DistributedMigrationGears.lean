@@ -203,12 +203,5 @@ theorem gather2Rel_witness (a b : Tensor) (sh : Shape)
       (allGatherPrimDimN 0 2 0 [a, b]).shape sh := by
   exact ⟨rfl, rfl, ha, hb, hne⟩
 
-#print axioms Gather2Rel.of_initGoalHolds
-#print axioms Gather2Rel.to_initGoalHolds
-#print axioms distributed_reduce_fixed
-#print axioms distributed_reduce_fixed_one
-#print axioms distributed_reduce_fixed_two
-#print axioms gather2Rel_fullExpertMoE_boundary
-#print axioms gather2Rel_witness
 
 end TrainVerify.Denote.GeneratedPatterns

@@ -511,6 +511,5 @@ theorem recon_intermediateGoal_4714_distributed (initSM initPM : Store)
   exact wrap_1tp_gen (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM)
     intermediateGoal_4714 4714 [4096, 1024] rfl rfl rfl rfl rfl rfl hval hSMshape
 
-#print axioms recon_intermediateGoal_4714_distributed
 
 end TrainVerify.Denote.GeneratedPatterns

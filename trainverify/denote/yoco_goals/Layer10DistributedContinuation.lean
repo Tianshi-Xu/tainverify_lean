@@ -708,7 +708,6 @@ theorem recon_intermediateGoal_5219_distributed (initSM initPM : Store)
   Gather2Rel.to_initGoalHolds _ _ intermediateGoal_5219 5219 9239 9240
     [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl
     (l10d_mul5219_rel initSM initPM hSM hPM hInit)
-#print axioms recon_intermediateGoal_5219_distributed
 
 /-! ### Layer-10 faithful full-expert MoE, pure-distributed exact 2-TP. -/
 
@@ -982,8 +981,6 @@ theorem recon_intermediateGoal_5200_distributed (initSM initPM : Store)
     [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl (by decide)
     hval hsSM hsP0 hsP1
 
-#print axioms recon_intermediateGoal_7887_distributed
-#print axioms recon_intermediateGoal_5200_distributed
 
 /-! ### Layer-10 post-MoE residual tail, pure-distributed exact 2-TP. -/
 
@@ -1436,8 +1433,6 @@ theorem recon_intermediateGoal_5230_distributed (initSM initPM : Store)
     [4096, 4, 64] [2048, 4, 64] rfl rfl rfl rfl rfl rfl
     (l10d_v5230_rel initSM initPM hSM hPM hInit)
 
-#print axioms recon_intermediateGoal_5222_distributed
-#print axioms recon_intermediateGoal_5230_distributed
 
 /-! ### Layer-10 rotary Q/K, pure-distributed exact 2-TP. -/
 
@@ -1802,8 +1797,5 @@ theorem recon_intermediateGoal_5236_distributed (initSM initPM : Store)
     (by native_decide) (by native_decide) hqpos hkpos hvpos hqfull hkfull hvfull
     hcuQ hcuK rfl rfl rfl rfl hfull hfull' rfl rfl rfl rfl rfl rfl
 
-#print axioms recon_intermediateGoal_5232_distributed
-#print axioms recon_intermediateGoal_5233_distributed
-#print axioms recon_intermediateGoal_5236_distributed
 
 end TrainVerify.Denote.GeneratedPatterns

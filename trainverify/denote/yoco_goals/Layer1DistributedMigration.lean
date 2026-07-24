@@ -257,7 +257,6 @@ theorem recon_intermediateGoal_4734_distributed (initSM initPM : Store)
   exact wrap_1tp_gen (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM)
     intermediateGoal_4734 4734 [4096, 1024] rfl rfl rfl rfl rfl rfl hval hshape
 
-#print axioms recon_intermediateGoal_4734_distributed
 
 /-! ## 4735–4738 — mechanical post-MoE chain
 
@@ -461,7 +460,6 @@ theorem recon_intermediateGoal_4738_distributed (initSM initPM : Store)
   exact wrap_1tp_gen (denoteGraphDistributed sm initSM) (denoteGraphDistributed pm initPM)
     intermediateGoal_4738 4738 [4096, 1024] rfl rfl rfl rfl rfl rfl hval hshape
 
-#print axioms recon_intermediateGoal_4738_distributed
 
 /-! ## Layer-1 Q/K/V and rotary fan-out
 
@@ -811,9 +809,6 @@ theorem recon_intermediateGoal_4747_distributed (initSM initPM : Store)
   exact wrap_1tp_gen _ _ intermediateGoal_4747 4747 [4096, 4, 64]
     rfl rfl rfl rfl rfl rfl hval hshape
 
-#print axioms recon_intermediateGoal_4744_distributed
-#print axioms recon_intermediateGoal_4746_distributed
-#print axioms recon_intermediateGoal_4747_distributed
 
 /-! ## Layer-1 sliding attention over distributed folds
 
@@ -1112,7 +1107,6 @@ theorem recon_intermediateGoal_4750_distributed (initSM initPM : Store)
     (by native_decide) (by native_decide) hqpos hkpos hvpos hqfull hkfull hvfull
     hcuQ hcuK rfl rfl rfl rfl hfull hfull' rfl rfl rfl rfl rfl rfl
 
-#print axioms recon_intermediateGoal_4750_distributed
 
 private def layer1SmMoe : NodeDecl :=
   { rank := 0, op := "OpName.FW_all2all_moe_gmm",

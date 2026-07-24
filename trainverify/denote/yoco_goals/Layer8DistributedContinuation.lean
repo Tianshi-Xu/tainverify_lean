@@ -1809,12 +1809,5 @@ theorem recon_intermediateGoal_5165_distributed (initSM initPM : Store)
     [4096, 1024] [2048, 1024] rfl rfl rfl rfl rfl rfl
     (l9d_mul5165_rel initSM initPM hSM hPM hInit)
 
-#print axioms recon_intermediateGoal_5165_distributed
-#print axioms recon_intermediateGoal_5124_distributed
-#print axioms recon_intermediateGoal_5125_distributed
-#print axioms recon_intermediateGoal_5128_distributed
-#print axioms recon_intermediateGoal_5135_distributed
-#print axioms recon_intermediateGoal_5141_distributed
-#print axioms recon_intermediateGoal_5142_distributed
 
 end TrainVerify.Denote.GeneratedPatterns
