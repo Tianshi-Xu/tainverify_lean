@@ -201,5 +201,75 @@ theorem generated_nonshuffle_delegates :
   · native_decide
   · native_decide
 
+/-! ## Arbitrary-store pre-shuffle compatibility
+
+These are denotation theorems rather than tests of `shuffleStore`: they hold for every
+initial store.  SM's first collective is node 472 and PM's is node 1003.  In
+particular, PM node 1004 may be an `AllGather`; choosing prefix 1003 is sound because
+none of the source tids below is rewritten by the remaining graph. -/
+
+private theorem smPreShuffleFacts :
+    (∀ n ∈ sm.nodes.take 472,
+      n.op ≠ "OpName.FW_maybe_shuffle" ∧
+      n.op ≠ "OpName.FW_maybe_unshuffle") ∧
+    (∀ n ∈ sm.nodes.drop 472, n.outs ≠ []) ∧
+    (∀ n ∈ sm.nodes.drop 472,
+      5330 ∉ n.outs ∧ 8011 ∉ n.outs ∧ 5337 ∉ n.outs) := by
+  native_decide
+
+private theorem pmPreShuffleFacts :
+    (∀ n ∈ pm.nodes.take 1003,
+      n.op ≠ "OpName.FW_maybe_shuffle" ∧
+      n.op ≠ "OpName.FW_maybe_unshuffle") ∧
+    (∀ n ∈ pm.nodes.drop 1003, n.outs ≠ []) ∧
+    (∀ n ∈ pm.nodes.drop 1003,
+      9625 ∉ n.outs ∧ 9626 ∉ n.outs ∧
+      13257 ∉ n.outs ∧ 13258 ∉ n.outs ∧ 5337 ∉ n.outs) := by
+  native_decide
+
+/-- SM's pre-shuffle producer and both inputs read by its first shuffle retain the
+old distributed denotation for arbitrary initialization. -/
+theorem sm_pre_shuffle_distributed_bridges (initSM : Store) :
+    denoteGraphDistributedFaithful sm initSM 5330 =
+        denoteGraphDistributed sm initSM 5330 ∧
+    denoteGraphDistributedFaithful sm initSM 8011 =
+        denoteGraphDistributed sm initSM 8011 ∧
+    denoteGraphDistributedFaithful sm initSM 5337 =
+        denoteGraphDistributed sm initSM 5337 := by
+  have hf := smPreShuffleFacts
+  refine ⟨?_, ?_, ?_⟩
+  · exact denoteGraphDistributedFaithful_eq_distributed_of_prefix
+      sm initSM 5330 472 hf.1 hf.2.1 (fun n hn => (hf.2.2 n hn).1)
+  · exact denoteGraphDistributedFaithful_eq_distributed_of_prefix
+      sm initSM 8011 472 hf.1 hf.2.1 (fun n hn => (hf.2.2 n hn).2.1)
+  · exact denoteGraphDistributedFaithful_eq_distributed_of_prefix
+      sm initSM 5337 472 hf.1 hf.2.1 (fun n hn => (hf.2.2 n hn).2.2)
+
+/-- PM's two early products, the two mref sources consumed at the first shuffle,
+and their metadata retain the old denotation for arbitrary initialization. -/
+theorem pm_pre_shuffle_distributed_bridges (initPM : Store) :
+    denoteGraphDistributedFaithful pm initPM 9625 =
+        denoteGraphDistributed pm initPM 9625 ∧
+    denoteGraphDistributedFaithful pm initPM 9626 =
+        denoteGraphDistributed pm initPM 9626 ∧
+    denoteGraphDistributedFaithful pm initPM 13257 =
+        denoteGraphDistributed pm initPM 13257 ∧
+    denoteGraphDistributedFaithful pm initPM 13258 =
+        denoteGraphDistributed pm initPM 13258 ∧
+    denoteGraphDistributedFaithful pm initPM 5337 =
+        denoteGraphDistributed pm initPM 5337 := by
+  have hf := pmPreShuffleFacts
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · exact denoteGraphDistributedFaithful_eq_distributed_of_prefix
+      pm initPM 9625 1003 hf.1 hf.2.1 (fun n hn => (hf.2.2 n hn).1)
+  · exact denoteGraphDistributedFaithful_eq_distributed_of_prefix
+      pm initPM 9626 1003 hf.1 hf.2.1 (fun n hn => (hf.2.2 n hn).2.1)
+  · exact denoteGraphDistributedFaithful_eq_distributed_of_prefix
+      pm initPM 13257 1003 hf.1 hf.2.1 (fun n hn => (hf.2.2 n hn).2.2.1)
+  · exact denoteGraphDistributedFaithful_eq_distributed_of_prefix
+      pm initPM 13258 1003 hf.1 hf.2.1 (fun n hn => (hf.2.2 n hn).2.2.2.1)
+  · exact denoteGraphDistributedFaithful_eq_distributed_of_prefix
+      pm initPM 5337 1003 hf.1 hf.2.1 (fun n hn => (hf.2.2 n hn).2.2.2.2)
+
 end
 end TrainVerify.Denote.DistributedFaithfulRegression

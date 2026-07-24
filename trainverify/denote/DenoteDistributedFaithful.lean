@@ -97,6 +97,171 @@ theorem applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
   unfold applyNodeDistributedFaithful
   rw [if_neg hshuffle, if_neg hunshuffle]
 
+/-- A faithful step cannot change a tensor id which is not one of the node's
+outputs.  The nonempty-output premise is inherited from the distributed evaluator's
+fail-closed `getD` handling; every generated graph node satisfies it. -/
+theorem applyNodeDistributedFaithful_eq_of_not_mem_outs
+    (g : GraphDecl) (s : Store) (n : NodeDecl) (tid : Tid)
+    (hnil : n.outs ≠ []) (h : tid ∉ n.outs) :
+    applyNodeDistributedFaithful g s n tid = s tid := by
+  unfold applyNodeDistributedFaithful
+  by_cases hshuffle : n.op = "OpName.FW_maybe_shuffle"
+  · rw [if_pos hshuffle]
+    unfold storeCollectiveOutputs
+    apply storeSet_eq_of_not_mem_fst
+    simpa using h
+  · rw [if_neg hshuffle]
+    by_cases hunshuffle : n.op = "OpName.FW_maybe_unshuffle"
+    · rw [if_pos hunshuffle]
+      unfold storeCollectiveOutputs
+      apply storeSet_eq_of_not_mem_fst
+      simpa using h
+    · rw [if_neg hunshuffle]
+      unfold applyNodeDistributed
+      by_cases hmoe : n.op = "OpName.FW_all2all_moe_gmm"
+      · rw [if_pos hmoe]
+        have hmem : n.outs.getD 0 0 ∈ n.outs := by
+          cases hout : n.outs with
+          | nil => exact absurd hout hnil
+          | cons a rest => rw [List.getD_cons_zero]; exact List.mem_cons_self
+        have hneq : tid ≠ n.outs.getD 0 0 := by
+          intro heq
+          exact h (heq ▸ hmem)
+        apply storeSet_eq_of_not_mem_fst
+        simpa using hneq
+      · rw [if_neg hmoe]
+        exact applyNodeRingAttn_skip g s n tid hnil h
+
+/-- Folding faithful steps preserves an id that no remaining node writes. -/
+theorem foldl_applyNodeDistributedFaithful_at_not_written
+    (g : GraphDecl) (nodes : List NodeDecl) (s : Store) (tid : Tid)
+    (hnil : ∀ n ∈ nodes, n.outs ≠ [])
+    (hwrite : ∀ n ∈ nodes, tid ∉ n.outs) :
+    (nodes.foldl (applyNodeDistributedFaithful g) s) tid = s tid := by
+  induction nodes generalizing s with
+  | nil => rfl
+  | cons a rest ih =>
+    simp only [List.foldl]
+    rw [ih]
+    · exact applyNodeDistributedFaithful_eq_of_not_mem_outs g s a tid
+        (hnil a List.mem_cons_self) (hwrite a List.mem_cons_self)
+    · intro n hn
+      exact hnil n (List.mem_cons_of_mem a hn)
+    · intro n hn
+      exact hwrite n (List.mem_cons_of_mem a hn)
+
+/-- The previous distributed fold has the same read-preservation property. -/
+theorem foldl_applyNodeDistributed_at_not_written
+    (g : GraphDecl) (nodes : List NodeDecl) (s : Store) (tid : Tid)
+    (hnil : ∀ n ∈ nodes, n.outs ≠ [])
+    (hwrite : ∀ n ∈ nodes, tid ∉ n.outs) :
+    (nodes.foldl (applyNodeDistributed g) s) tid = s tid := by
+  induction nodes generalizing s with
+  | nil => rfl
+  | cons a rest ih =>
+    simp only [List.foldl]
+    rw [ih]
+    · unfold applyNodeDistributed
+      by_cases hmoe : a.op = "OpName.FW_all2all_moe_gmm"
+      · rw [if_pos hmoe]
+        have hmem : a.outs.getD 0 0 ∈ a.outs := by
+          cases hout : a.outs with
+          | nil => exact absurd hout (hnil a List.mem_cons_self)
+          | cons x xs => rw [List.getD_cons_zero]; exact List.mem_cons_self
+        have hneq : tid ≠ a.outs.getD 0 0 := by
+          intro heq
+          exact hwrite a List.mem_cons_self (heq ▸ hmem)
+        apply storeSet_eq_of_not_mem_fst
+        simpa using hneq
+      · rw [if_neg hmoe]
+        exact applyNodeRingAttn_skip g s a tid
+          (hnil a List.mem_cons_self) (hwrite a List.mem_cons_self)
+    · intro n hn
+      exact hnil n (List.mem_cons_of_mem a hn)
+    · intro n hn
+      exact hwrite n (List.mem_cons_of_mem a hn)
+
+/-- On a collective-free list, the faithful and previous distributed folds agree
+extensionally, for every initial store. -/
+theorem foldl_applyNodeDistributedFaithful_eq_applyNodeDistributed
+    (g : GraphDecl) (nodes : List NodeDecl) (s : Store)
+    (hops : ∀ n ∈ nodes,
+      n.op ≠ "OpName.FW_maybe_shuffle" ∧
+      n.op ≠ "OpName.FW_maybe_unshuffle") :
+    nodes.foldl (applyNodeDistributedFaithful g) s =
+      nodes.foldl (applyNodeDistributed g) s := by
+  induction nodes generalizing s with
+  | nil => rfl
+  | cons a rest ih =>
+    simp only [List.foldl]
+    rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
+      g s a (hops a List.mem_cons_self).1 (hops a List.mem_cons_self).2]
+    apply ih
+    intro n hn
+    exact hops n (List.mem_cons_of_mem a hn)
+
+/-- Prefix form of conservative compatibility. -/
+theorem foldl_take_applyNodeDistributedFaithful_eq_applyNodeDistributed
+    (g : GraphDecl) (nodes : List NodeDecl) (s : Store) (k : Nat)
+    (hops : ∀ n ∈ nodes.take k,
+      n.op ≠ "OpName.FW_maybe_shuffle" ∧
+      n.op ≠ "OpName.FW_maybe_unshuffle") :
+    (nodes.take k).foldl (applyNodeDistributedFaithful g) s =
+      (nodes.take k).foldl (applyNodeDistributed g) s :=
+  foldl_applyNodeDistributedFaithful_eq_applyNodeDistributed g (nodes.take k) s hops
+
+/-- Read an id from a faithful full-graph denotation at any prefix after its final
+writer. -/
+theorem denoteGraphDistributedFaithful_eq_prefix
+    (g : GraphDecl) (init : Store) (tid : Tid) (k : Nat)
+    (hnil : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hwrite : ∀ n ∈ g.nodes.drop k, tid ∉ n.outs) :
+    denoteGraphDistributedFaithful g init tid =
+      ((g.nodes.take k).foldl (applyNodeDistributedFaithful g) init) tid := by
+  unfold denoteGraphDistributedFaithful
+  have hsplit : g.nodes.take k ++ g.nodes.drop k = g.nodes :=
+    List.take_append_drop k g.nodes
+  calc
+    (g.nodes.foldl (applyNodeDistributedFaithful g) init) tid =
+        ((g.nodes.take k ++ g.nodes.drop k).foldl
+          (applyNodeDistributedFaithful g) init) tid := by rw [hsplit]
+    _ = ((g.nodes.take k).foldl (applyNodeDistributedFaithful g) init) tid := by
+      rw [List.foldl_append]
+      exact foldl_applyNodeDistributedFaithful_at_not_written g _ _ tid hnil hwrite
+
+/-- Previous-distributed counterpart of the faithful prefix read theorem. -/
+theorem denoteGraphDistributed_eq_prefix
+    (g : GraphDecl) (init : Store) (tid : Tid) (k : Nat)
+    (hnil : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hwrite : ∀ n ∈ g.nodes.drop k, tid ∉ n.outs) :
+    denoteGraphDistributed g init tid =
+      ((g.nodes.take k).foldl (applyNodeDistributed g) init) tid := by
+  unfold denoteGraphDistributed
+  have hsplit : g.nodes.take k ++ g.nodes.drop k = g.nodes :=
+    List.take_append_drop k g.nodes
+  calc
+    (g.nodes.foldl (applyNodeDistributed g) init) tid =
+        ((g.nodes.take k ++ g.nodes.drop k).foldl
+          (applyNodeDistributed g) init) tid := by rw [hsplit]
+    _ = ((g.nodes.take k).foldl (applyNodeDistributed g) init) tid := by
+      rw [List.foldl_append]
+      exact foldl_applyNodeDistributed_at_not_written g _ _ tid hnil hwrite
+
+/-- Bridge to the previous distributed denotation for any id whose relevant prefix
+precedes the first faithful collective and which is not rewritten afterwards. -/
+theorem denoteGraphDistributedFaithful_eq_distributed_of_prefix
+    (g : GraphDecl) (init : Store) (tid : Tid) (k : Nat)
+    (hops : ∀ n ∈ g.nodes.take k,
+      n.op ≠ "OpName.FW_maybe_shuffle" ∧
+      n.op ≠ "OpName.FW_maybe_unshuffle")
+    (hnil : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hwrite : ∀ n ∈ g.nodes.drop k, tid ∉ n.outs) :
+    denoteGraphDistributedFaithful g init tid =
+      denoteGraphDistributed g init tid := by
+  rw [denoteGraphDistributedFaithful_eq_prefix g init tid k hnil hwrite]
+  rw [foldl_take_applyNodeDistributedFaithful_eq_applyNodeDistributed g g.nodes init k hops]
+  exact (denoteGraphDistributed_eq_prefix g init tid k hnil hwrite).symm
+
 /-- With a singleton replica group and generated `[1, 0]` parameters, shuffle
 collapses extensionally to the node's data input. -/
 theorem applyNodeFaithfulShuffleValue_cpSize_one
