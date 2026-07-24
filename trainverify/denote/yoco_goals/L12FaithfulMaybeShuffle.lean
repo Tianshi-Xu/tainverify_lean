@@ -62,6 +62,51 @@ private theorem l12_pm_shuffle_outputs_final :
     (∀ n ∈ pm.nodes.drop 1006, 9656 ∉ n.outs) := by
   native_decide
 
+-- Graph facts for the faithful 5338 -> 5340 RMSNorm continuation.  Keeping these
+-- scans out of the proof avoids repeating large generated-graph reductions.
+set_option maxRecDepth 1000000 in
+private theorem l12_sm_5340_graph_facts :
+    sm.nodes[474]'(by native_decide) =
+      { rank := 0, op := "OpName.FW_multiref", ins := [5338],
+        outs := [8139, 8143], params := [2] } ∧
+    (∀ n ∈ sm.nodes.drop 475, 8139 ∉ n.outs) ∧
+    (∀ n ∈ sm.nodes.drop 474, 5338 ∉ n.outs) ∧
+    sm.nodes[477]'(by native_decide) =
+      { rank := 0, op := "OpName.FW_rms_norm", ins := [8139, 5339], outs := [5340] } ∧
+    (∀ n ∈ sm.nodes.drop 478, 5340 ∉ n.outs) ∧
+    (∀ n ∈ sm.nodes.drop 477, 8139 ∉ n.outs) ∧
+    (∀ n ∈ sm.nodes.drop 477, 5339 ∉ n.outs) := by
+  native_decide
+
+set_option maxRecDepth 1000000 in
+private theorem l12_pm_5340_graph_facts :
+    pm.nodes[1006]'(by native_decide) =
+      { rank := 0, op := "OpName.FW_multiref", ins := [9655],
+        outs := [15969, 15973], params := [2] } ∧
+    (∀ n ∈ pm.nodes.drop 1007, 15969 ∉ n.outs) ∧
+    (∀ n ∈ pm.nodes.drop 1006, 9655 ∉ n.outs) ∧
+    pm.nodes[1009]'(by native_decide) =
+      { rank := 1, op := "OpName.FW_multiref", ins := [9656],
+        outs := [15977, 15981], params := [2] } ∧
+    (∀ n ∈ pm.nodes.drop 1010, 15977 ∉ n.outs) ∧
+    (∀ n ∈ pm.nodes.drop 1009, 9656 ∉ n.outs) ∧
+    pm.nodes[1010]'(by native_decide) =
+      { rank := 0, op := "OpName.FW_rms_norm", ins := [15969, 5339], outs := [9657] } ∧
+    (∀ n ∈ pm.nodes.drop 1011, 9657 ∉ n.outs) ∧
+    (∀ n ∈ pm.nodes.drop 1010, 15969 ∉ n.outs) ∧
+    (∀ n ∈ pm.nodes.drop 1010, 5339 ∉ n.outs) ∧
+    pm.nodes[1013]'(by native_decide) =
+      { rank := 1, op := "OpName.FW_rms_norm", ins := [15977, 5339], outs := [9658] } ∧
+    (∀ n ∈ pm.nodes.drop 1014, 9658 ∉ n.outs) ∧
+    (∀ n ∈ pm.nodes.drop 1013, 15977 ∉ n.outs) ∧
+    (∀ n ∈ pm.nodes.drop 1013, 5339 ∉ n.outs) := by
+  native_decide
+
+set_option maxRecDepth 1000000 in
+private theorem l12_weight5339_not_written :
+    (∀ n ∈ sm.nodes, 5339 ∉ n.outs) ∧ (∀ n ∈ pm.nodes, 5339 ∉ n.outs) := by
+  native_decide
+
 -- Keep the large graph-membership decisions shared instead of recompiling the
 -- same suffix scans at every argument of `distributed_reduce1`.
 set_option maxRecDepth 1000000 in
@@ -261,6 +306,122 @@ theorem recon_zigzagGoal_5338_distributed (initSM initPM : Store)
   · rw [hpbr.2.2.2.1, p13258]
     exact h30.shard1_shape
   · exact hCu
+
+set_option maxRecDepth 10000000 in
+set_option maxHeartbeats 12000000 in
+/-- Faithful generated goal 5340: row-local RMSNorm preserves the zigzag layout
+relation established at 5338. -/
+theorem recon_zigzagGoal_5340_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hCu : ZigzagCuWF
+      (decodeCuSeqlens (denoteGraphDistributedFaithful pm initPM 5337))
+      [denoteGraphDistributedFaithful pm initPM 13257,
+       denoteGraphDistributedFaithful pm initPM 13258] 2) :
+    Zigzag2Rel
+      (denoteGraphDistributedFaithful sm initSM 5340)
+      (denoteGraphDistributedFaithful pm initPM 9657)
+      (denoteGraphDistributedFaithful pm initPM 9658)
+      (denoteGraphDistributedFaithful pm initPM 5337)
+      [4096, 1024] [2048, 1024] := by
+  have h38 := recon_zigzagGoal_5338_distributed initSM initPM hSM hPM hInit hCu
+  have hsnil (k : Nat) : ∀ n ∈ sm.nodes.drop k, n.outs ≠ [] := by
+    intro n hn
+    exact layer1_sm_nodes_nonempty n (List.mem_of_mem_drop hn)
+  have hpnil (k : Nat) : ∀ n ∈ pm.nodes.drop k, n.outs ≠ [] := by
+    intro n hn
+    exact layer1_pm_nodes_nonempty n (List.mem_of_mem_drop hn)
+  rcases l12_sm_5340_graph_facts with
+    ⟨sn0, sout0, sin0, sr0, srout, srin0, srw⟩
+  rcases l12_pm_5340_graph_facts with
+    ⟨pn0, pout0, pin0, pn1, pout1, pin1,
+      pr0, prout0, prin0, prw0, pr1, prout1, prin1, prw1⟩
+  have s8139 : denoteGraphDistributedFaithful sm initSM 8139 =
+      denoteGraphDistributedFaithful sm initSM 5338 := by
+    have h := denoteGraphDistributedFaithful_reduce1 sm initSM 474
+      { rank := 0, op := "OpName.FW_multiref", ins := [5338],
+        outs := [8139, 8143], params := [2] }
+      5338 8139 id (by native_decide) sn0 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+          (by decide) (by decide)]
+        exact applyNode_fw_multiref2_first_out sm s 0 5338 8139 8143)
+      (hsnil 475) sout0 (hsnil 474) sin0
+    simpa only [id_eq] using h
+  have p15969 : denoteGraphDistributedFaithful pm initPM 15969 =
+      denoteGraphDistributedFaithful pm initPM 9655 := by
+    have h := denoteGraphDistributedFaithful_reduce1 pm initPM 1006
+      { rank := 0, op := "OpName.FW_multiref", ins := [9655],
+        outs := [15969, 15973], params := [2] }
+      9655 15969 id (by native_decide) pn0 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+          (by decide) (by decide)]
+        exact applyNode_fw_multiref2_first_out pm s 0 9655 15969 15973)
+      (hpnil 1007) pout0 (hpnil 1006) pin0
+    simpa only [id_eq] using h
+  have p15977 : denoteGraphDistributedFaithful pm initPM 15977 =
+      denoteGraphDistributedFaithful pm initPM 9656 := by
+    have h := denoteGraphDistributedFaithful_reduce1 pm initPM 1009
+      { rank := 1, op := "OpName.FW_multiref", ins := [9656],
+        outs := [15977, 15981], params := [2] }
+      9656 15977 id (by native_decide) pn1 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+          (by decide) (by decide)]
+        exact applyNode_fw_multiref2_first_out pm s 1 9656 15977 15981)
+      (hpnil 1010) pout1 (hpnil 1009) pin1
+    simpa only [id_eq] using h
+  have rSM : denoteGraphDistributedFaithful sm initSM 5340 =
+      fw_rms_norm (denoteGraphDistributedFaithful sm initSM 8139)
+        (denoteGraphDistributedFaithful sm initSM 5339) := by
+    exact denoteGraphDistributedFaithful_reduce2 sm initSM 477
+      { rank := 0, op := "OpName.FW_rms_norm", ins := [8139, 5339], outs := [5340] }
+      8139 5339 5340 fw_rms_norm (by native_decide) sr0 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+          (by decide) (by decide)]
+        exact applyNode_fw_rms_norm_out_1p sm s 0 8139 5339 5340)
+      (hsnil 478) srout (hsnil 477) srin0 srw
+  have rP0 : denoteGraphDistributedFaithful pm initPM 9657 =
+      fw_rms_norm (denoteGraphDistributedFaithful pm initPM 15969)
+        (denoteGraphDistributedFaithful pm initPM 5339) := by
+    exact denoteGraphDistributedFaithful_reduce2 pm initPM 1010
+      { rank := 0, op := "OpName.FW_rms_norm", ins := [15969, 5339], outs := [9657] }
+      15969 5339 9657 fw_rms_norm (by native_decide) pr0 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+          (by decide) (by decide)]
+        exact applyNode_fw_rms_norm_out_1p pm s 0 15969 5339 9657)
+      (hpnil 1011) prout0 (hpnil 1010) prin0 prw0
+  have rP1 : denoteGraphDistributedFaithful pm initPM 9658 =
+      fw_rms_norm (denoteGraphDistributedFaithful pm initPM 15977)
+        (denoteGraphDistributedFaithful pm initPM 5339) := by
+    exact denoteGraphDistributedFaithful_reduce2 pm initPM 1013
+      { rank := 1, op := "OpName.FW_rms_norm", ins := [15977, 5339], outs := [9658] }
+      15977 5339 9658 fw_rms_norm (by native_decide) pr1 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+          (by decide) (by decide)]
+        exact applyNode_fw_rms_norm_out_1p pm s 1 15977 5339 9658)
+      (hpnil 1014) prout1 (hpnil 1013) prin1 prw1
+  have hwInit : initSM 5339 = initPM 5339 :=
+    recon_weight initSM initPM hInit initGoal_5339 (by native_decide) 5339
+      rfl rfl rfl rfl
+  have hsw : denoteGraphDistributedFaithful sm initSM 5339 = initSM 5339 := by
+    unfold denoteGraphDistributedFaithful
+    exact foldl_applyNodeDistributedFaithful_at_not_written sm sm.nodes initSM 5339
+      layer1_sm_nodes_nonempty l12_weight5339_not_written.1
+  have hpw : denoteGraphDistributedFaithful pm initPM 5339 = initPM 5339 := by
+    unfold denoteGraphDistributedFaithful
+    exact foldl_applyNodeDistributedFaithful_at_not_written pm pm.nodes initPM 5339
+      layer1_pm_nodes_nonempty l12_weight5339_not_written.2
+  have hw : denoteGraphDistributedFaithful sm initSM 5339 =
+      denoteGraphDistributedFaithful pm initPM 5339 := by
+    rw [hsw, hpw]
+    exact hwInit
+  rw [rSM, rP0, rP1, s8139, p15969, p15977, hw]
+  exact Zigzag2Rel.rms_norm 2048 1024 h38 (by decide) (by decide) rfl
 
 end
 end TrainVerify.Denote.GeneratedPatterns

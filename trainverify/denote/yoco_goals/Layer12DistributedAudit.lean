@@ -53,8 +53,9 @@ namespace TrainVerify.Denote.GeneratedPatterns
 #print axioms recon_intermediateGoal_5334_distributed
 #print axioms recon_intermediateGoal_5336_distributed
 
--- Faithful source-witness reconstruction of the layer-12 zigzag shuffle.
+-- Faithful source-witness reconstruction of the layer-12 zigzag shuffle and RMSNorm.
 #print axioms recon_zigzagGoal_5338_distributed
+#print axioms recon_zigzagGoal_5340_distributed
 
 -- Migrated from DistributedMigrationGears.lean.
 #print axioms Gather2Rel.of_initGoalHolds
