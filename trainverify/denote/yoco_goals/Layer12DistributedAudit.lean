@@ -13,6 +13,15 @@ namespace TrainVerify.Denote.GeneratedPatterns
 #print axioms recon_intermediateGoal_5287_distributed
 #print axioms recon_intermediateGoal_5290_distributed
 
+-- Layer-12 post-attention projection and residual.
+#print axioms recon_intermediateGoal_5291_distributed
+#print axioms recon_intermediateGoal_5292_distributed
+#print axioms recon_intermediateGoal_5294_distributed
+#print axioms recon_intermediateGoal_5295_distributed
+#print axioms recon_intermediateGoal_5296_distributed
+#print axioms recon_intermediateGoal_7959_distributed
+#print axioms recon_intermediateGoal_5297_distributed
+
 -- Migrated from DistributedMigrationGears.lean.
 #print axioms Gather2Rel.of_initGoalHolds
 #print axioms Gather2Rel.to_initGoalHolds
