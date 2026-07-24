@@ -23,6 +23,10 @@ def full : Tensor := allGatherPrimDimN 0 2 0 [x0, x1]
 def z0 : Tensor := fw_maybe_shuffle_collective [x0, x1] (decodeCuSeqlens cu) 2 0
 def z1 : Tensor := fw_maybe_shuffle_collective [x0, x1] (decodeCuSeqlens cu) 2 1
 
+/-- A concrete compatible RMSNorm scale, not a shape-only proxy. -/
+def rmsWeight : Tensor :=
+  Tensor.mkShape [1] (fun _ => (2 : Scalar))
+
 def observe4 (x : Tensor) : List Scalar := (List.range 4).map (valAt x)
 
 @[simp] theorem x0_shape : x0.shape = [4, 1] := rfl
@@ -78,6 +82,19 @@ theorem concrete_zigzag2Rel : Zigzag2Rel full z0 z1 cu [8, 1] [4, 1] := by
 theorem concrete_nonvacuity :
     ∃ full z0 z1 cu, Zigzag2Rel full z0 z1 cu [8, 1] [4, 1] :=
   ⟨full, z0, z1, cu, concrete_zigzag2Rel⟩
+
+/-- RED/GREEN regression: actual RMSNorm outputs preserve the faithful zigzag
+source relation with the same concrete full and shard shapes. -/
+theorem concrete_rms_norm_zigzag2Rel :
+    Zigzag2Rel
+      (fw_rms_norm full rmsWeight)
+      (fw_rms_norm z0 rmsWeight)
+      (fw_rms_norm z1 rmsWeight)
+      cu [8, 1] [4, 1] := by
+  apply Zigzag2Rel.rms_norm (lDim := 4) (h := 1) concrete_zigzag2Rel
+  · norm_num
+  · norm_num
+  · rfl
 
 theorem shard_shapes : x0.shape = [4, 1] ∧ x1.shape = [4, 1] ∧
     z0.shape = [4, 1] ∧ z1.shape = [4, 1] := by

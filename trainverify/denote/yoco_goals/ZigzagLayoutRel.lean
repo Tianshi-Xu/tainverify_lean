@@ -4,7 +4,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: TrainVerify contributors
 -/
 import denote.DenoteDistributedFaithful
-import denote.yoco_goals.DistributedMigrationGears
 
 /-!
 # Source-witness relation for two-rank zigzag layouts
@@ -117,6 +116,44 @@ theorem output_shapes {full z0 z1 cu : Tensor} {fullShape shardShape : Shape}
     (h : Zigzag2Rel full z0 z1 cu fullShape shardShape) :
     full.shape = fullShape ∧ z0.shape = shardShape ∧ z1.shape = shardShape :=
   ⟨h.full_shape, h.rank0_shape, h.rank1_shape⟩
+
+/-- Row-local RMSNorm preserves the full/source/shuffled value relation. -/
+theorem rms_norm
+    {full z0 z1 cu w : Tensor} {fullShape shardShape : Shape}
+    (lDim h : Nat)
+    (hrel : Zigzag2Rel full z0 z1 cu fullShape shardShape)
+    (hl : 0 < lDim) (hh : 0 < h)
+    (hshard : shardShape = [lDim, h]) :
+    Zigzag2Rel
+      (fw_rms_norm full w) (fw_rms_norm z0 w) (fw_rms_norm z1 w)
+      cu fullShape shardShape := by
+  rcases hrel with ⟨source0, source1, hs⟩
+  have hs0 : source0.shape = [lDim, h] := hs.source0_shape.trans hshard
+  have hs1 : source1.shape = [lDim, h] := hs.source1_shape.trans hshard
+  have hfullValue := fw_rms_norm_allGather0_commute_2_core
+    source0 source1 w lDim h hl hh hs0 hs1
+  have hfullActual : full.shape = [lDim * 2, h] := by
+    rw [hs.full_value, allGatherPrimDimN_shape 0 2 _ [lDim, h]]
+    · simp [List.set, List.getD]
+    · simp [hs0]
+  refine ⟨fw_rms_norm source0 w, fw_rms_norm source1 w, ?_, ?_, ?_, ?_,
+    (fw_rms_norm_shape_2d source0 w lDim h hs0).trans hshard.symm,
+    (fw_rms_norm_shape_2d source1 w lDim h hs1).trans hshard.symm, ?_, ?_,
+    ZigzagCuWF.rms_norm_cp2 _ source0 source1 w lDim h hs.cu_wf hs0 hs1⟩
+  · rw [hs.full_value]
+    exact hfullValue
+  · rw [hs.rank0_value]
+    exact fw_rms_norm_shuffle_collective_cp2 source0 source1 w
+      (decodeCuSeqlens cu) lDim h 0 hl hh (by decide) hs0 hs1
+  · rw [hs.rank1_value]
+    exact fw_rms_norm_shuffle_collective_cp2 source0 source1 w
+      (decodeCuSeqlens cu) lDim h 1 hl hh (by decide) hs0 hs1
+  · rw [fw_rms_norm_shape_2d full w (lDim * 2) h hfullActual]
+    exact hfullActual.symm.trans hs.full_shape
+  · rw [fw_rms_norm_shape_2d z0 w lDim h (hs.rank0_shape.trans hshard)]
+    exact hshard.symm
+  · rw [fw_rms_norm_shape_2d z1 w lDim h (hs.rank1_shape.trans hshard)]
+    exact hshard.symm
 
 end Zigzag2Rel
 end
