@@ -229,6 +229,54 @@ theorem denoteGraphDistributedFaithful_eq_prefix
       rw [List.foldl_append]
       exact foldl_applyNodeDistributedFaithful_at_not_written g _ _ tid hnil hwrite
 
+/-- Expose one faithful node whose output is not overwritten by the suffix. -/
+theorem denoteGraphDistributedFaithful_node_core
+    (g : GraphDecl) (init : Store) (k : Nat) (node : NodeDecl) (outTid : Tid)
+    (hk : k < g.nodes.length) (hnode : g.nodes[k]'hk = node)
+    (hnil : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ [])
+    (hwrite : ∀ n ∈ g.nodes.drop (k + 1), outTid ∉ n.outs) :
+    denoteGraphDistributedFaithful g init outTid =
+      applyNodeDistributedFaithful g
+        ((g.nodes.take k).foldl (applyNodeDistributedFaithful g) init) node outTid := by
+  rw [denoteGraphDistributedFaithful_eq_prefix g init outTid (k + 1) hnil hwrite]
+  have hstep := congrFun
+    (foldl_take_succ (applyNodeDistributedFaithful g) g.nodes init k hk) outTid
+  rw [hstep, hnode]
+
+/-- Read an input of node `k` from the final faithful denotation when that node and
+suffix do not write it. -/
+theorem denoteGraphDistributedFaithful_prefix_read
+    (g : GraphDecl) (init : Store) (k : Nat) (tid : Tid)
+    (hnil : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hwrite : ∀ n ∈ g.nodes.drop k, tid ∉ n.outs) :
+    ((g.nodes.take k).foldl (applyNodeDistributedFaithful g) init) tid =
+      denoteGraphDistributedFaithful g init tid :=
+  (denoteGraphDistributedFaithful_eq_prefix g init tid k hnil hwrite).symm
+
+/-- Reduce a faithful node whose local output equation has three store reads. -/
+theorem denoteGraphDistributedFaithful_reduce3
+    (g : GraphDecl) (init : Store) (k : Nat) (node : NodeDecl)
+    (in0 in1 in2 outTid : Tid) (opfun : Tensor → Tensor → Tensor → Tensor)
+    (hk : k < g.nodes.length) (hnode : g.nodes[k]'hk = node)
+    (happly : ∀ s, applyNodeDistributedFaithful g s node outTid =
+      opfun (s in0) (s in1) (s in2))
+    (hafterNil : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ [])
+    (hafterWrite : ∀ n ∈ g.nodes.drop (k + 1), outTid ∉ n.outs)
+    (hpreNil : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hpre0 : ∀ n ∈ g.nodes.drop k, in0 ∉ n.outs)
+    (hpre1 : ∀ n ∈ g.nodes.drop k, in1 ∉ n.outs)
+    (hpre2 : ∀ n ∈ g.nodes.drop k, in2 ∉ n.outs) :
+    denoteGraphDistributedFaithful g init outTid =
+      opfun (denoteGraphDistributedFaithful g init in0)
+        (denoteGraphDistributedFaithful g init in1)
+        (denoteGraphDistributedFaithful g init in2) := by
+  rw [denoteGraphDistributedFaithful_node_core g init k node outTid hk hnode
+      hafterNil hafterWrite,
+    happly,
+    denoteGraphDistributedFaithful_prefix_read g init k in0 hpreNil hpre0,
+    denoteGraphDistributedFaithful_prefix_read g init k in1 hpreNil hpre1,
+    denoteGraphDistributedFaithful_prefix_read g init k in2 hpreNil hpre2]
+
 /-- Previous-distributed counterpart of the faithful prefix read theorem. -/
 theorem denoteGraphDistributed_eq_prefix
     (g : GraphDecl) (init : Store) (tid : Tid) (k : Nat)
