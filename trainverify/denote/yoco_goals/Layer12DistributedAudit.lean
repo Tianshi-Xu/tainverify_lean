@@ -49,6 +49,9 @@ namespace TrainVerify.Denote.GeneratedPatterns
 #print axioms recon_intermediateGoal_5328_distributed
 #print axioms recon_intermediateGoal_5329_distributed
 #print axioms recon_intermediateGoal_5330_distributed
+#print axioms recon_intermediateGoal_5332_distributed
+#print axioms recon_intermediateGoal_5334_distributed
+#print axioms recon_intermediateGoal_5336_distributed
 
 -- Migrated from DistributedMigrationGears.lean.
 #print axioms Gather2Rel.of_initGoalHolds
