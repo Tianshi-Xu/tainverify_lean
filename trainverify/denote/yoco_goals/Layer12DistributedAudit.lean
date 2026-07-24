@@ -26,6 +26,8 @@ namespace TrainVerify.Denote.GeneratedPatterns
 #print axioms recon_intermediateGoal_5302_distributed
 #print axioms recon_intermediateGoal_5303_distributed
 #print axioms recon_intermediateGoal_5304_distributed
+#print axioms recon_intermediateGoal_7991_distributed
+#print axioms recon_intermediateGoal_5308_distributed
 
 -- Layer-12 boundary product/gating branch.
 #print axioms recon_intermediateGoal_5309_distributed
