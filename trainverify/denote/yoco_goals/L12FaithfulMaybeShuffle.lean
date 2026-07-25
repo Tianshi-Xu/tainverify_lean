@@ -107,6 +107,38 @@ private theorem l12_weight5339_not_written :
     (∀ n ∈ sm.nodes, 5339 ∉ n.outs) ∧ (∀ n ∈ pm.nodes, 5339 ∉ n.outs) := by
   native_decide
 
+-- Hoisted generated-graph facts for the faithful 5342 per-head continuation.
+set_option maxRecDepth 1000000 in
+private theorem l12_sm_5342_graph_facts :
+    sm.nodes[480]'(by native_decide) =
+      { rank := 0, op := "OpName.FW_per_head_mix_precision_linear",
+        ins := [5340, 5341], outs := [5342] } ∧
+    (∀ n ∈ sm.nodes.drop 481, 5342 ∉ n.outs) ∧
+    (∀ n ∈ sm.nodes.drop 480, 5340 ∉ n.outs) ∧
+    (∀ n ∈ sm.nodes.drop 480, 5341 ∉ n.outs) := by
+  native_decide
+
+set_option maxRecDepth 1000000 in
+private theorem l12_pm_5342_graph_facts :
+    pm.nodes[1014]'(by native_decide) =
+      { rank := 0, op := "OpName.FW_per_head_mix_precision_linear",
+        ins := [9657, 5341], outs := [9659] } ∧
+    (∀ n ∈ pm.nodes.drop 1015, 9659 ∉ n.outs) ∧
+    (∀ n ∈ pm.nodes.drop 1014, 9657 ∉ n.outs) ∧
+    (∀ n ∈ pm.nodes.drop 1014, 5341 ∉ n.outs) ∧
+    pm.nodes[1019]'(by native_decide) =
+      { rank := 1, op := "OpName.FW_per_head_mix_precision_linear",
+        ins := [9658, 5341], outs := [9660] } ∧
+    (∀ n ∈ pm.nodes.drop 1020, 9660 ∉ n.outs) ∧
+    (∀ n ∈ pm.nodes.drop 1019, 9658 ∉ n.outs) ∧
+    (∀ n ∈ pm.nodes.drop 1019, 5341 ∉ n.outs) := by
+  native_decide
+
+set_option maxRecDepth 1000000 in
+private theorem l12_weight5341_not_written :
+    (∀ n ∈ sm.nodes, 5341 ∉ n.outs) ∧ (∀ n ∈ pm.nodes, 5341 ∉ n.outs) := by
+  native_decide
+
 -- Keep the large graph-membership decisions shared instead of recompiling the
 -- same suffix scans at every argument of `distributed_reduce1`.
 set_option maxRecDepth 1000000 in
@@ -422,6 +454,92 @@ theorem recon_zigzagGoal_5340_distributed (initSM initPM : Store)
     exact hwInit
   rw [rSM, rP0, rP1, s8139, p15969, p15977, hw]
   exact Zigzag2Rel.rms_norm 2048 1024 h38 (by decide) (by decide) rfl
+
+set_option maxRecDepth 10000000 in
+set_option maxHeartbeats 12000000 in
+/-- Faithful generated goal 5342: a replicated Q weight transports the zigzag
+relation through the row-local per-head linear operation. -/
+theorem recon_zigzagGoal_5342_distributed (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hCu : ZigzagCuWF
+      (decodeCuSeqlens (denoteGraphDistributedFaithful pm initPM 5337))
+      [denoteGraphDistributedFaithful pm initPM 13257,
+       denoteGraphDistributedFaithful pm initPM 13258] 2) :
+    Zigzag2Rel
+      (denoteGraphDistributedFaithful sm initSM 5342)
+      (denoteGraphDistributedFaithful pm initPM 9659)
+      (denoteGraphDistributedFaithful pm initPM 9660)
+      (denoteGraphDistributedFaithful pm initPM 5337)
+      [4096, 16, 64] [2048, 16, 64] := by
+  have h40 := recon_zigzagGoal_5340_distributed initSM initPM hSM hPM hInit hCu
+  have hsnil (k : Nat) : ∀ n ∈ sm.nodes.drop k, n.outs ≠ [] := by
+    intro n hn
+    exact layer1_sm_nodes_nonempty n (List.mem_of_mem_drop hn)
+  have hpnil (k : Nat) : ∀ n ∈ pm.nodes.drop k, n.outs ≠ [] := by
+    intro n hn
+    exact layer1_pm_nodes_nonempty n (List.mem_of_mem_drop hn)
+  rcases l12_sm_5342_graph_facts with ⟨sn, sout, sin, sw⟩
+  rcases l12_pm_5342_graph_facts with ⟨pn0, pout0, pin0, pw0,
+    pn1, pout1, pin1, pw1⟩
+  have rSM : denoteGraphDistributedFaithful sm initSM 5342 =
+      fw_per_head_linear (denoteGraphDistributedFaithful sm initSM 5340)
+        (denoteGraphDistributedFaithful sm initSM 5341) := by
+    exact denoteGraphDistributedFaithful_reduce2 sm initSM 480
+      { rank := 0, op := "OpName.FW_per_head_mix_precision_linear",
+        ins := [5340, 5341], outs := [5342] }
+      5340 5341 5342 fw_per_head_linear (by native_decide) sn (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+          (by decide) (by decide)]
+        exact applyNode_fw_per_head_mix_precision_linear_out sm s 0 5340 5341 5342 [])
+      (hsnil 481) sout (hsnil 480) sin sw
+  have rP0 : denoteGraphDistributedFaithful pm initPM 9659 =
+      fw_per_head_linear (denoteGraphDistributedFaithful pm initPM 9657)
+        (denoteGraphDistributedFaithful pm initPM 5341) := by
+    exact denoteGraphDistributedFaithful_reduce2 pm initPM 1014
+      { rank := 0, op := "OpName.FW_per_head_mix_precision_linear",
+        ins := [9657, 5341], outs := [9659] }
+      9657 5341 9659 fw_per_head_linear (by native_decide) pn0 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+          (by decide) (by decide)]
+        exact applyNode_fw_per_head_mix_precision_linear_out pm s 0 9657 5341 9659 [])
+      (hpnil 1015) pout0 (hpnil 1014) pin0 pw0
+  have rP1 : denoteGraphDistributedFaithful pm initPM 9660 =
+      fw_per_head_linear (denoteGraphDistributedFaithful pm initPM 9658)
+        (denoteGraphDistributedFaithful pm initPM 5341) := by
+    exact denoteGraphDistributedFaithful_reduce2 pm initPM 1019
+      { rank := 1, op := "OpName.FW_per_head_mix_precision_linear",
+        ins := [9658, 5341], outs := [9660] }
+      9658 5341 9660 fw_per_head_linear (by native_decide) pn1 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+          (by decide) (by decide)]
+        exact applyNode_fw_per_head_mix_precision_linear_out pm s 1 9658 5341 9660 [])
+      (hpnil 1020) pout1 (hpnil 1019) pin1 pw1
+  have hwInit : initSM 5341 = initPM 5341 :=
+    recon_weight initSM initPM hInit initGoal_5341 (by native_decide) 5341
+      rfl rfl rfl rfl
+  have hsw : denoteGraphDistributedFaithful sm initSM 5341 = initSM 5341 := by
+    unfold denoteGraphDistributedFaithful
+    exact foldl_applyNodeDistributedFaithful_at_not_written sm sm.nodes initSM 5341
+      layer1_sm_nodes_nonempty l12_weight5341_not_written.1
+  have hpw : denoteGraphDistributedFaithful pm initPM 5341 = initPM 5341 := by
+    unfold denoteGraphDistributedFaithful
+    exact foldl_applyNodeDistributedFaithful_at_not_written pm pm.nodes initPM 5341
+      layer1_pm_nodes_nonempty l12_weight5341_not_written.2
+  have hw : denoteGraphDistributedFaithful sm initSM 5341 =
+      denoteGraphDistributedFaithful pm initPM 5341 := by
+    rw [hsw, hpw]
+    exact hwInit
+  have hwShape : (denoteGraphDistributedFaithful pm initPM 5341).shape =
+      [16, 64, 1024] := by
+    rw [hpw]
+    exact hPM 5341 [16, 64, 1024] (by native_decide)
+  rw [rSM, rP0, rP1, hw]
+  exact Zigzag2Rel.per_head_linear 2048 1024 16 64 h40 hwShape
+    (by decide) (by decide) (by decide) (by decide)
 
 end
 end TrainVerify.Denote.GeneratedPatterns
