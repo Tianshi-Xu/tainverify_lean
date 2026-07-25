@@ -3,6 +3,7 @@
     Provenance: GeneratedYOCOMoE.manifest.json
 -/
 import denote.Denote
+import denote.InputValueClasses
 
 set_option linter.style.longLine false
 set_option linter.style.nativeDecide false
@@ -2868,6 +2869,18 @@ def pm : GraphDecl := by
     { rank := 0, op := "OpName.AllGatherPrim", ins := [11837, 11838], outs := [4673], params := [0] },
     { rank := 0, op := "OpName.AllGatherPrim", ins := [11839, 11840], outs := [4674], params := [0] },
   ]
+
+def smInputValueClasses : List InputValueClass := [
+  { source := "getitem:root=4188:key=cu_seqlens_k", tids := [4695, 4749, 4803, 4857, 4911, 4965, 5019, 5073, 5127, 5181, 5235, 5289, 5346, 5395, 5444, 5493, 5542, 5591, 5640, 5689, 5738, 5787, 5836, 5885] },
+  { source := "getitem:root=4188:key=cu_seqlens_q", tids := [4694, 4748, 4802, 4856, 4910, 4964, 5018, 5072, 5126, 5180, 5234, 5288, 5337, 5345, 5394, 5443, 5492, 5541, 5590, 5639, 5688, 5737, 5786, 5835, 5884, 5927] },
+  { source := "getitem:root=4188:key=positions", tids := [4690, 4745, 4799, 4853, 4907, 4961, 5015, 5069, 5123, 5177, 5231, 5285] },
+]
+
+def pmInputValueClasses : List InputValueClass := [
+  { source := "getitem:root=4188:key=cu_seqlens_k", tids := [4695, 4749, 4803, 4857, 4911, 4965, 5019, 5073, 5127, 5181, 5235, 5289, 5346, 5395, 5444, 5493, 5542, 5591, 5640, 5689, 5738, 5787, 5836, 5885] },
+  { source := "getitem:root=4188:key=cu_seqlens_q", tids := [4694, 4748, 4802, 4856, 4910, 4964, 5018, 5072, 5126, 5180, 5234, 5288, 5337, 5345, 5394, 5443, 5492, 5541, 5590, 5639, 5688, 5737, 5786, 5835, 5884, 5927] },
+  { source := "getitem:root=4188:key=positions", tids := [4690, 4745, 4799, 4853, 4907, 4961, 5015, 5069, 5123, 5177, 5231, 5285] },
+]
 
 def smInitShapes : List (Tid × Shape) := [
   (4673, [4096]),
