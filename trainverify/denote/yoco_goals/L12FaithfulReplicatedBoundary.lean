@@ -83,6 +83,55 @@ private theorem l12_boundary_pm_not_written (k tid : Nat)
     ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
     ⟨rfl, rfl⟩ <;> native_decide +revert
 
+-- Hoist the generated graph scans used by the faithful `FW_to` reconstructions.
+set_option maxRecDepth 1000000 in
+private theorem l12_fw_to_sm_facts :
+    sm.nodes[478]'(by native_decide) =
+      { rank := 0, op := "OpName.FW_multiref", ins := [5334],
+        outs := [8033, 8037, 8041, 8045, 8049, 8053, 8057, 8061, 8065, 8069, 8073, 8077], params := [12] } ∧
+    sm.nodes[481]'(by native_decide) =
+      { rank := 0, op := "OpName.FW_to", ins := [8033], outs := [5343] } ∧
+    sm.nodes[479]'(by native_decide) =
+      { rank := 0, op := "OpName.FW_multiref", ins := [5336],
+        outs := [8091, 8095, 8099, 8103, 8107, 8111, 8115, 8119, 8123, 8127, 8131, 8135], params := [12] } ∧
+    sm.nodes[493]'(by native_decide) =
+      { rank := 0, op := "OpName.FW_to", ins := [8091], outs := [5344] } := by
+  native_decide
+
+set_option maxRecDepth 1000000 in
+private theorem l12_fw_to_pm_facts :
+    pm.nodes[1021]'(by native_decide) =
+      { rank := 1, op := "OpName.FW_multiref", ins := [5334],
+        outs := [15815, 15819, 15823, 15827, 15831, 15835, 15839, 15843, 15847, 15851, 15855, 15859], params := [12] } ∧
+    pm.nodes[1036]'(by native_decide) =
+      { rank := 1, op := "OpName.FW_to", ins := [15815], outs := [5343] } ∧
+    pm.nodes[1023]'(by native_decide) =
+      { rank := 1, op := "OpName.FW_multiref", ins := [5336],
+        outs := [15921, 15925, 15929, 15933, 15937, 15941, 15945, 15949, 15953, 15957, 15961, 15965], params := [12] } ∧
+    pm.nodes[1060]'(by native_decide) =
+      { rank := 1, op := "OpName.FW_to", ins := [15921], outs := [5344] } := by
+  native_decide
+
+private theorem l12_fw_to_sm_not_written (k tid : Nat)
+    (h : (k, tid) ∈
+      [(479, 8033), (478, 5334), (482, 5343), (481, 8033),
+       (480, 8091), (479, 5336), (494, 5344), (493, 8091)]) :
+    ∀ n ∈ sm.nodes.drop k, tid ∉ n.outs := by
+  simp only [List.mem_cons, List.not_mem_nil, Prod.mk.injEq, or_false] at h
+  rcases h with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
+    ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;>
+    native_decide +revert
+
+private theorem l12_fw_to_pm_not_written (k tid : Nat)
+    (h : (k, tid) ∈
+      [(1022, 15815), (1021, 5334), (1037, 5343), (1036, 15815),
+       (1024, 15921), (1023, 5336), (1061, 5344), (1060, 15921)]) :
+    ∀ n ∈ pm.nodes.drop k, tid ∉ n.outs := by
+  simp only [List.mem_cons, List.not_mem_nil, Prod.mk.injEq, or_false] at h
+  rcases h with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
+    ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;>
+    native_decide +revert
+
 private theorem faithful_nonempty_sm (k : Nat) : ∀ n ∈ sm.nodes.drop k, n.outs ≠ [] := by
   intro n hn
   exact layer1_sm_nodes_nonempty n (List.mem_of_mem_drop hn)
@@ -381,6 +430,132 @@ theorem recon_intermediateGoal_5336_faithful (initSM initPM : Store)
     rw [rSM, s8019]
     exact fw_per_head_linear_shape_3d _ _ 4096 1024 4 64 hs32 hsw
   exact wrap_1tp_gen _ _ intermediateGoal_5336 5336 [4096, 4, 64]
+    rfl rfl rfl rfl rfl rfl hval hshape
+
+set_option maxRecDepth 10000000 in
+set_option maxHeartbeats 12000000 in
+/-- Faithful replicated first K-cache cast from the global K projection. -/
+theorem recon_intermediateGoal_5343_faithful (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_5343
+      (denoteGraphDistributedFaithful sm initSM)
+      (denoteGraphDistributedFaithful pm initPM) := by
+  have h34 := recon_intermediateGoal_5334_faithful initSM initPM hSM hPM hInit
+  have hv34 := oneTp_valeq intermediateGoal_5334 _ _ 5334 rfl rfl rfl rfl h34
+  have hs34 : (denoteGraphDistributedFaithful sm initSM 5334).shape = [4096, 4, 64] := by
+    have h := h34.1
+    simpa [intermediateGoal_5334] using h
+  rcases l12_fw_to_sm_facts with ⟨sn478, sn481, _, _⟩
+  rcases l12_fw_to_pm_facts with ⟨pn1021, pn1036, _, _⟩
+  have s8033 : denoteGraphDistributedFaithful sm initSM 8033 =
+      denoteGraphDistributedFaithful sm initSM 5334 := by
+    exact denoteGraphDistributedFaithful_reduce1 sm initSM 478 _ 5334 8033 (fun x => x)
+      (by native_decide) sn478 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _ (by decide) (by decide)]
+        exact applyNode_fw_multiref_first_out' sm s 0 11 5334 8033
+          [8037, 8041, 8045, 8049, 8053, 8057, 8061, 8065, 8069, 8073, 8077])
+      (faithful_nonempty_sm 479) (l12_fw_to_sm_not_written 479 8033 (by decide))
+      (faithful_nonempty_sm 478) (l12_fw_to_sm_not_written 478 5334 (by decide))
+  have p15815 : denoteGraphDistributedFaithful pm initPM 15815 =
+      denoteGraphDistributedFaithful pm initPM 5334 := by
+    exact denoteGraphDistributedFaithful_reduce1 pm initPM 1021 _ 5334 15815 (fun x => x)
+      (by native_decide) pn1021 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _ (by decide) (by decide)]
+        exact applyNode_fw_multiref_first_out' pm s 1 11 5334 15815
+          [15819, 15823, 15827, 15831, 15835, 15839, 15843, 15847, 15851, 15855, 15859])
+      (faithful_nonempty_pm 1022) (l12_fw_to_pm_not_written 1022 15815 (by decide))
+      (faithful_nonempty_pm 1021) (l12_fw_to_pm_not_written 1021 5334 (by decide))
+  have rSM : denoteGraphDistributedFaithful sm initSM 5343 =
+      denoteGraphDistributedFaithful sm initSM 8033 := by
+    exact denoteGraphDistributedFaithful_reduce1 sm initSM 481 _ 8033 5343 (fun x => x)
+      (by native_decide) sn481 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _ (by decide) (by decide)]
+        exact applyNode_fw_to_out sm s 0 8033 5343 [])
+      (faithful_nonempty_sm 482) (l12_fw_to_sm_not_written 482 5343 (by decide))
+      (faithful_nonempty_sm 481) (l12_fw_to_sm_not_written 481 8033 (by decide))
+  have rPM : denoteGraphDistributedFaithful pm initPM 5343 =
+      denoteGraphDistributedFaithful pm initPM 15815 := by
+    exact denoteGraphDistributedFaithful_reduce1 pm initPM 1036 _ 15815 5343 (fun x => x)
+      (by native_decide) pn1036 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _ (by decide) (by decide)]
+        exact applyNode_fw_to_out pm s 1 15815 5343 [])
+      (faithful_nonempty_pm 1037) (l12_fw_to_pm_not_written 1037 5343 (by decide))
+      (faithful_nonempty_pm 1036) (l12_fw_to_pm_not_written 1036 15815 (by decide))
+  have hval : denoteGraphDistributedFaithful sm initSM 5343 =
+      denoteGraphDistributedFaithful pm initPM 5343 := by
+    rw [rSM, rPM, s8033, p15815, hv34]
+  have hshape : (denoteGraphDistributedFaithful sm initSM 5343).shape = [4096, 4, 64] := by
+    rw [rSM, s8033]
+    exact hs34
+  exact wrap_1tp_gen _ _ intermediateGoal_5343 5343 [4096, 4, 64]
+    rfl rfl rfl rfl rfl rfl hval hshape
+
+set_option maxRecDepth 10000000 in
+set_option maxHeartbeats 12000000 in
+/-- Faithful replicated first V-cache cast from the global V projection. -/
+theorem recon_intermediateGoal_5344_faithful (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_5344
+      (denoteGraphDistributedFaithful sm initSM)
+      (denoteGraphDistributedFaithful pm initPM) := by
+  have h36 := recon_intermediateGoal_5336_faithful initSM initPM hSM hPM hInit
+  have hv36 := oneTp_valeq intermediateGoal_5336 _ _ 5336 rfl rfl rfl rfl h36
+  have hs36 : (denoteGraphDistributedFaithful sm initSM 5336).shape = [4096, 4, 64] := by
+    have h := h36.1
+    simpa [intermediateGoal_5336] using h
+  rcases l12_fw_to_sm_facts with ⟨_, _, sn479, sn493⟩
+  rcases l12_fw_to_pm_facts with ⟨_, _, pn1023, pn1060⟩
+  have s8091 : denoteGraphDistributedFaithful sm initSM 8091 =
+      denoteGraphDistributedFaithful sm initSM 5336 := by
+    exact denoteGraphDistributedFaithful_reduce1 sm initSM 479 _ 5336 8091 (fun x => x)
+      (by native_decide) sn479 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _ (by decide) (by decide)]
+        exact applyNode_fw_multiref_first_out' sm s 0 11 5336 8091
+          [8095, 8099, 8103, 8107, 8111, 8115, 8119, 8123, 8127, 8131, 8135])
+      (faithful_nonempty_sm 480) (l12_fw_to_sm_not_written 480 8091 (by decide))
+      (faithful_nonempty_sm 479) (l12_fw_to_sm_not_written 479 5336 (by decide))
+  have p15921 : denoteGraphDistributedFaithful pm initPM 15921 =
+      denoteGraphDistributedFaithful pm initPM 5336 := by
+    exact denoteGraphDistributedFaithful_reduce1 pm initPM 1023 _ 5336 15921 (fun x => x)
+      (by native_decide) pn1023 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _ (by decide) (by decide)]
+        exact applyNode_fw_multiref_first_out' pm s 1 11 5336 15921
+          [15925, 15929, 15933, 15937, 15941, 15945, 15949, 15953, 15957, 15961, 15965])
+      (faithful_nonempty_pm 1024) (l12_fw_to_pm_not_written 1024 15921 (by decide))
+      (faithful_nonempty_pm 1023) (l12_fw_to_pm_not_written 1023 5336 (by decide))
+  have rSM : denoteGraphDistributedFaithful sm initSM 5344 =
+      denoteGraphDistributedFaithful sm initSM 8091 := by
+    exact denoteGraphDistributedFaithful_reduce1 sm initSM 493 _ 8091 5344 (fun x => x)
+      (by native_decide) sn493 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _ (by decide) (by decide)]
+        exact applyNode_fw_to_out sm s 0 8091 5344 [])
+      (faithful_nonempty_sm 494) (l12_fw_to_sm_not_written 494 5344 (by decide))
+      (faithful_nonempty_sm 493) (l12_fw_to_sm_not_written 493 8091 (by decide))
+  have rPM : denoteGraphDistributedFaithful pm initPM 5344 =
+      denoteGraphDistributedFaithful pm initPM 15921 := by
+    exact denoteGraphDistributedFaithful_reduce1 pm initPM 1060 _ 15921 5344 (fun x => x)
+      (by native_decide) pn1060 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _ (by decide) (by decide)]
+        exact applyNode_fw_to_out pm s 1 15921 5344 [])
+      (faithful_nonempty_pm 1061) (l12_fw_to_pm_not_written 1061 5344 (by decide))
+      (faithful_nonempty_pm 1060) (l12_fw_to_pm_not_written 1060 15921 (by decide))
+  have hval : denoteGraphDistributedFaithful sm initSM 5344 =
+      denoteGraphDistributedFaithful pm initPM 5344 := by
+    rw [rSM, rPM, s8091, p15921, hv36]
+  have hshape : (denoteGraphDistributedFaithful sm initSM 5344).shape = [4096, 4, 64] := by
+    rw [rSM, s8091]
+    exact hs36
+  exact wrap_1tp_gen _ _ intermediateGoal_5344 5344 [4096, 4, 64]
     rfl rfl rfl rfl rfl rfl hval hshape
 
 end
