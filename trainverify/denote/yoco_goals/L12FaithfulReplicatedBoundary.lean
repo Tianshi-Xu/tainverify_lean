@@ -28,7 +28,8 @@ private theorem l12_boundary_sm_facts :
       { rank := 0, op := "OpName.FW_per_head_mix_precision_linear", ins := [8019, 5335], outs := [5336] } ∧
     (∀ n ∈ sm.nodes, 5331 ∉ n.outs ∧ 5333 ∉ n.outs ∧ 5335 ∉ n.outs) ∧
     (∀ n ∈ sm.nodes.take 472,
-      n.op ≠ "OpName.FW_maybe_shuffle" ∧ n.op ≠ "OpName.FW_maybe_unshuffle") := by
+      n.op ≠ "OpName.FW_maybe_shuffle" ∧ n.op ≠ "OpName.FW_maybe_unshuffle" ∧
+        n.op ≠ "OpName.FW_attn_zigzag") := by
   native_decide
 
 set_option maxRecDepth 1000000 in
@@ -49,7 +50,8 @@ private theorem l12_boundary_pm_facts :
       { rank := 1, op := "OpName.FW_per_head_mix_precision_linear", ins := [15753, 5335], outs := [5336] } ∧
     (∀ n ∈ pm.nodes, 5331 ∉ n.outs ∧ 5333 ∉ n.outs ∧ 5335 ∉ n.outs) ∧
     (∀ n ∈ pm.nodes.take 1003,
-      n.op ≠ "OpName.FW_maybe_shuffle" ∧ n.op ≠ "OpName.FW_maybe_unshuffle") := by
+      n.op ≠ "OpName.FW_maybe_shuffle" ∧ n.op ≠ "OpName.FW_maybe_unshuffle" ∧
+        n.op ≠ "OpName.FW_attn_zigzag") := by
   native_decide
 
 private theorem l12_boundary_sm_not_written (k tid : Nat)

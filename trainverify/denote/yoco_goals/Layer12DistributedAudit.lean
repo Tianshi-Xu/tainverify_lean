@@ -1,4 +1,4 @@
-import denote.yoco_goals.L12FaithfulReplicatedBoundary
+import denote.yoco_goals.L12FaithfulZigzagAttention
 
 /-! Axiom audit for the pure-distributed layer-12 frontier.
 
@@ -64,6 +64,7 @@ namespace TrainVerify.Denote.GeneratedPatterns
 #print axioms recon_intermediateGoal_5336_faithful
 #print axioms recon_intermediateGoal_5343_faithful
 #print axioms recon_intermediateGoal_5344_faithful
+#print axioms recon_zigzagGoal_5347_faithful
 
 -- Faithful CP2 single-sequence inverse and relation-level source recovery.
 #print axioms TrainVerify.Denote.ZigzagCollective.zigzag_cp2_single_index_inverse
