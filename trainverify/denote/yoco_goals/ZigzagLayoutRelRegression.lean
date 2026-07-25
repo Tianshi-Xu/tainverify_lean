@@ -102,6 +102,32 @@ theorem concrete_rms_norm_zigzag2Rel :
   · norm_num
   · rfl
 
+/-- Actual Tensor regression for the source-pinned CP2 single-sequence inverse. -/
+theorem concrete_tensor_unshuffle_inverse :
+    fw_maybe_unshuffle_collective [z0, z1] (decodeCuSeqlens cu) 2 0 = x0 ∧
+    fw_maybe_unshuffle_collective [z0, z1] (decodeCuSeqlens cu) 2 1 = x1 := by
+  rw [decode_cu]
+  constructor
+  · unfold z0 z1
+    rw [decode_cu]
+    simpa only [List.getD_cons_zero] using
+      (fw_maybe_unshuffle_shuffle_collective_cp2_single
+        x0 x1 4 0 [1] (by decide) (by decide) (by decide) x0_shape x1_shape)
+  · unfold z0 z1
+    rw [decode_cu]
+    simpa only [List.getD_cons_succ, List.getD_cons_zero] using
+      (fw_maybe_unshuffle_shuffle_collective_cp2_single
+        x0 x1 4 1 [1] (by decide) (by decide) (by decide) x0_shape x1_shape)
+
+/-- The relation-level recovery theorem is inhabited by the same actual tensors. -/
+theorem concrete_relation_unshuffle_sources :
+    ∃ source0 source1,
+      full = allGatherPrimDimN 0 2 0 [source0, source1] ∧
+      fw_maybe_unshuffle_collective [z0, z1] (decodeCuSeqlens cu) 2 0 = source0 ∧
+      fw_maybe_unshuffle_collective [z0, z1] (decodeCuSeqlens cu) 2 1 = source1 := by
+  exact Zigzag2Rel.unshuffle_sources_single 4 [1] concrete_zigzag2Rel
+    (by decide) (by decide) rfl decode_cu
+
 /-- Concrete RED/GREEN regression for the generic per-head-linear transport.
 These are actual Denote tensors, with full output `[8, 2, 1]` and shuffled
 rank outputs `[4, 2, 1]`. -/

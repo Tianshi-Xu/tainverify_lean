@@ -150,6 +150,226 @@ theorem fw_maybe_unshuffle_collective_valAt
   unfold valAt zeroTensor Tensor.mkShape
   simp [prodShape]
 
+/-- A two-entry cumulative-sequence list is determined by its first and last
+entries.  This is useful when a shape proof gives the decoded metadata length
+while `ZigzagCuWF` supplies its endpoints. -/
+theorem list_eq_pair_of_length_head_last (cu : List Nat) (last : Nat)
+    (hlen : cu.length = 2) (hhead : cu.head?.getD 0 = 0)
+    (hlast : listLast! cu = last) : cu = [0, last] := by
+  rcases cu with _ | ⟨a, cu⟩
+  · simp at hlen
+  rcases cu with _ | ⟨b, cu⟩
+  · simp at hlen
+  rcases cu with _ | ⟨c, cu⟩
+  · simp only [List.head?_cons, Option.getD_some] at hhead
+    simp [listLast!] at hlast
+    subst a
+    subst b
+    rfl
+  · simp at hlen
+
+/-- For one CP2 sequence, the inverse metadata lookup followed by the forward
+zigzag lookup recovers every in-range global token. -/
+theorem zigzag_cp2_single_index_inverse (lDim rank token : Nat)
+    (hl : 0 < lDim) (heven : lDim % 2 = 0)
+    (hrank : rank < 2) (htoken : token < lDim) :
+    let g := rank * lDim + token
+    let r := destRank [0, 2 * lDim] 2 g
+    let k := zigzagInvOffset [0, 2 * lDim] 2 r g
+    r < 2 ∧ k < lDim ∧ zigzagPos [0, 2 * lDim] 2 r k = g := by
+  obtain ⟨d, rfl⟩ : ∃ d, lDim = 2 * d := ⟨lDim / 2, by omega⟩
+  have hd : 0 < d := by omega
+  have hhalf : 2 * d / 2 = d := by omega
+  have hslice : 2 * (2 * d) / 4 = d := by
+    calc
+      2 * (2 * d) / 4 = 2 * (2 * d) / (2 * 2) := rfl
+      _ = (2 * d) / 2 := Nat.mul_div_mul_left (m := 2) (2 * d) 2 (by omega)
+      _ = d := by omega
+  have hsliceRaw : 2 * (2 * d) / (2 * 2) = d := hslice
+  have hquot : (rank * (2 * d) + token) / d =
+      2 * rank + if token < d then 0 else 1 := by
+    rcases rank with _ | rank
+    · simp only [Nat.zero_mul, Nat.zero_add]
+      split_ifs with ht
+      · rw [Nat.div_eq_of_lt ht]
+      · rw [Nat.div_eq_of_lt_le (k := 1) (by omega) (by omega)]
+    · have : rank = 0 := by omega
+      subst rank
+      split_ifs with ht
+      · rw [Nat.div_eq_of_lt_le (k := 2) (by omega) (by omega)]
+      · rw [Nat.div_eq_of_lt_le (k := 3) (by omega) (by omega)]
+  norm_num [destRank, zigzagInvOffset, zigzagPos, destRankAux,
+    zigzagInvOffsetAux, zigzagPosAux, sliceSizeAt, List.getD, hd, hhalf,
+    hslice, hsliceRaw, hquot]
+  rcases rank with _ | rank
+  · norm_num at hquot ⊢
+    split_ifs <;> omega
+  · have : rank = 0 := by omega
+    subst rank
+    norm_num at hquot ⊢
+    split_ifs <;> omega
+
+/-- For a single even-length sequence, faithful CP2 unshuffle is a left inverse
+of faithful CP2 shuffle on tensors of arbitrary trailing shape. -/
+theorem fw_maybe_unshuffle_shuffle_collective_cp2_single
+    (source0 source1 : Tensor) (lDim rank : Nat) (tail : Shape)
+    (hl : 0 < lDim) (heven : lDim % 2 = 0) (hrank : rank < 2)
+    (hs0 : source0.shape = lDim :: tail)
+    (hs1 : source1.shape = lDim :: tail) :
+    fw_maybe_unshuffle_collective
+        [fw_maybe_shuffle_collective [source0, source1] [0, 2 * lDim] 2 0,
+         fw_maybe_shuffle_collective [source0, source1] [0, 2 * lDim] 2 1]
+        [0, 2 * lDim] 2 rank =
+      [source0, source1].getD rank (zeroTensor []) := by
+  have hfold : ∀ (sh : Shape) (n : Nat),
+      List.foldl (fun acc d => acc * d) n sh =
+        n * List.foldl (fun acc d => acc * d) 1 sh := by
+    intro sh
+    induction sh with
+    | nil => intro n; simp only [List.foldl, Nat.mul_one]
+    | cons a sh ih =>
+      intro n
+      simp only [List.foldl]
+      calc
+        List.foldl (fun acc d => acc * d) (n * a) sh =
+            (n * a) * List.foldl (fun acc d => acc * d) 1 sh := ih (n * a)
+        _ = n * (a * List.foldl (fun acc d => acc * d) 1 sh) :=
+          Nat.mul_assoc n a _
+        _ = n * List.foldl (fun acc d => acc * d) (1 * a) sh := by
+          rw [Nat.one_mul]
+          exact congrArg (fun x => n * x) (ih a).symm
+  have hprodCons : ∀ (n : Nat) (sh : Shape),
+      prodShape (n :: sh) = n * prodShape sh := by
+    intro n sh
+    unfold prodShape
+    simp only [List.foldl, Nat.one_mul]
+    exact hfold sh n
+  have hr : rank = 0 ∨ rank = 1 := by omega
+  have hsource : ([source0, source1].getD rank (zeroTensor [])).shape =
+      lDim :: tail := by
+    rcases hr with hr0 | hr1
+    · rw [hr0]
+      simpa only [List.getD_cons_zero] using hs0
+    · rw [hr1]
+      simpa only [List.getD_cons_succ, List.getD_cons_zero] using hs1
+  have hz0 : (fw_maybe_shuffle_collective [source0, source1]
+      [0, 2 * lDim] 2 0).shape = lDim :: tail := by
+    rw [fw_maybe_shuffle_collective_shape]
+    exact hs0
+  have hz1 : (fw_maybe_shuffle_collective [source0, source1]
+      [0, 2 * lDim] 2 1).shape = lDim :: tail := by
+    rw [fw_maybe_shuffle_collective_shape]
+    exact hs1
+  have hzrank :
+      ([fw_maybe_shuffle_collective [source0, source1] [0, 2 * lDim] 2 0,
+        fw_maybe_shuffle_collective [source0, source1] [0, 2 * lDim] 2 1].getD
+          rank (zeroTensor [])).shape = lDim :: tail := by
+    rcases hr with hr0 | hr1
+    · rw [hr0]
+      simpa only [List.getD_cons_zero] using hz0
+    · rw [hr1]
+      simpa only [List.getD_cons_succ, List.getD_cons_zero] using hz1
+  apply Tensor.ext
+  · rw [fw_maybe_unshuffle_collective_shape, hzrank, hsource]
+  · intro i hi
+    rw [fw_maybe_unshuffle_collective_shape, hzrank] at hi
+    let stride := prodShape tail
+    have hiprod : prodShape (lDim :: tail) = lDim * stride := hprodCons _ _
+    have hib : i < lDim * stride := by
+      rw [← hiprod]
+      exact hi
+    have hstride : 0 < stride := by
+      by_contra hnpos
+      have hzero : stride = 0 := Nat.eq_zero_of_not_pos hnpos
+      rw [hzero, Nat.mul_zero] at hib
+      exact Nat.not_lt_zero i hib
+    let token := i / stride
+    let h := i % stride
+    have htoken : token < lDim := by
+      dsimp [token]
+      apply Nat.div_lt_iff_lt_mul hstride |>.mpr
+      simpa only [Nat.mul_comm] using hib
+    have hh : h < stride := Nat.mod_lt _ hstride
+    have hiEq : i = token * stride + h := by
+      dsimp [token, h]
+      calc
+        i = stride * (i / stride) + i % stride :=
+          (Nat.div_add_mod i stride).symm
+        _ = i / stride * stride + i % stride := by ring
+    let g := rank * lDim + token
+    let r := destRank [0, 2 * lDim] 2 g
+    let k := zigzagInvOffset [0, 2 * lDim] 2 r g
+    have hinv := zigzag_cp2_single_index_inverse lDim rank token
+      hl heven hrank htoken
+    change r < 2 ∧ k < lDim ∧ zigzagPos [0, 2 * lDim] 2 r k = g at hinv
+    rcases hinv with ⟨hrlt, hklt, hforward⟩
+    have hzshape :
+        ([fw_maybe_shuffle_collective [source0, source1] [0, 2 * lDim] 2 0,
+          fw_maybe_shuffle_collective [source0, source1] [0, 2 * lDim] 2 1].getD
+            r (zeroTensor [])).shape = lDim :: tail := by
+      have hrCases : r = 0 ∨ r = 1 := by omega
+      rcases hrCases with h0 | h1
+      · rw [h0]
+        exact hz0
+      · rw [h1]
+        exact hz1
+    have hkindex : k * stride + h < prodShape (lDim :: tail) := by
+      calc
+        k * stride + h < k * stride + stride := Nat.add_lt_add_left hh _
+        _ = (k + 1) * stride := by ring
+        _ ≤ lDim * stride := Nat.mul_le_mul_right stride (by omega)
+        _ = prodShape (lDim :: tail) := hiprod.symm
+    have hselected :
+        [fw_maybe_shuffle_collective [source0, source1] [0, 2 * lDim] 2 0,
+          fw_maybe_shuffle_collective [source0, source1] [0, 2 * lDim] 2 1].getD
+            r (zeroTensor []) =
+          fw_maybe_shuffle_collective [source0, source1] [0, 2 * lDim] 2 r := by
+      have hrCases : r = 0 ∨ r = 1 := by omega
+      rcases hrCases with h0 | h1
+      · rw [h0]
+        rfl
+      · rw [h1]
+        rfl
+    have hsourceSelected :
+        ([source0, source1].getD r (zeroTensor [])).shape = lDim :: tail := by
+      have hrCases : r = 0 ∨ r = 1 := by omega
+      rcases hrCases with h0 | h1
+      · rw [h0]
+        exact hs0
+      · rw [h1]
+        exact hs1
+    rw [fw_maybe_unshuffle_collective_valAt _ _ 2 rank i (by omega)]
+    · simp only [hzrank, List.tail_cons, List.getD_cons_zero]
+      change valAt
+          ([fw_maybe_shuffle_collective [source0, source1] [0, 2 * lDim] 2 0,
+            fw_maybe_shuffle_collective [source0, source1] [0, 2 * lDim] 2 1].getD
+              r (zeroTensor [])) (k * stride + h) = _
+      rw [hselected]
+      rw [fw_maybe_shuffle_collective_valAt _ _ 2 r (k * stride + h) (by omega)]
+      · simp only [hsourceSelected, List.tail_cons, List.getD_cons_zero]
+        have hkdiv : (k * stride + h) / stride = k := by
+          rw [Nat.add_comm (k * stride) h, Nat.mul_comm k stride,
+            Nat.add_mul_div_left h k hstride, Nat.div_eq_of_lt hh, Nat.zero_add]
+        have hkmod : (k * stride + h) % stride = h := by
+          rw [Nat.add_comm (k * stride) h, Nat.mul_comm k stride,
+            Nat.add_mul_mod_self_left h stride k, Nat.mod_eq_of_lt hh]
+        rw [hkdiv, hkmod]
+        unfold gatherFromRank
+        rw [hforward]
+        have hgdiv : g / lDim = rank := by
+          dsimp [g]
+          rw [show rank * lDim + token = token + lDim * rank by ring,
+            Nat.add_mul_div_left _ _ hl, Nat.div_eq_of_lt htoken, Nat.zero_add]
+        have hgmod : g % lDim = token := by
+          dsimp [g]
+          rw [show rank * lDim + token = token + lDim * rank by ring,
+            Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt htoken]
+        rw [hgdiv, hgmod, hiEq]
+      · rw [hsourceSelected]
+        exact hkindex
+    · rw [hzrank]
+      exact hi
+
 /-- Lightweight core form of the dim-0 RMSNorm/all-gather commute theorem.
 Row-wise reduction is orthogonal to dim-0 sharding. -/
 theorem fw_rms_norm_allGather0_commute_2_core

@@ -90,6 +90,32 @@ theorem sources {full z0 z1 cu : Tensor} {fullShape shardShape : Shape}
   rcases h with ⟨source0, source1, hs⟩
   exact ⟨source0, source1, hs.source0_shape, hs.source1_shape, hs.cu_wf⟩
 
+/-- For one even-length CP2 sequence, unshuffling the two public zigzag shards
+recovers the hidden ordinary source witnesses on both ranks. -/
+theorem unshuffle_sources_single
+    {full z0 z1 cu : Tensor} {fullShape shardShape : Shape}
+    (lDim : Nat) (tail : Shape)
+    (h : Zigzag2Rel full z0 z1 cu fullShape shardShape)
+    (hl : 0 < lDim) (heven : lDim % 2 = 0)
+    (hshard : shardShape = lDim :: tail)
+    (hdecoded : decodeCuSeqlens cu = [0, 2 * lDim]) :
+    ∃ source0 source1,
+      full = allGatherPrimDimN 0 2 0 [source0, source1] ∧
+      fw_maybe_unshuffle_collective [z0, z1] (decodeCuSeqlens cu) 2 0 = source0 ∧
+      fw_maybe_unshuffle_collective [z0, z1] (decodeCuSeqlens cu) 2 1 = source1 := by
+  rcases h with ⟨source0, source1, hs⟩
+  have hs0 : source0.shape = lDim :: tail := hs.source0_shape.trans hshard
+  have hs1 : source1.shape = lDim :: tail := hs.source1_shape.trans hshard
+  refine ⟨source0, source1, hs.full_value, ?_, ?_⟩
+  · rw [hs.rank0_value, hs.rank1_value, hdecoded]
+    simpa only [List.getD_cons_zero] using
+      (fw_maybe_unshuffle_shuffle_collective_cp2_single
+        source0 source1 lDim 0 tail hl heven (by decide) hs0 hs1)
+  · rw [hs.rank0_value, hs.rank1_value, hdecoded]
+    simpa only [List.getD_cons_succ, List.getD_cons_zero] using
+      (fw_maybe_unshuffle_shuffle_collective_cp2_single
+        source0 source1 lDim 1 tail hl heven (by decide) hs0 hs1)
+
 /-- Accessor for the exact full shape. -/
 theorem full_shape {full z0 z1 cu : Tensor} {fullShape shardShape : Shape}
     (h : Zigzag2Rel full z0 z1 cu fullShape shardShape) :

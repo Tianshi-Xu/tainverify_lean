@@ -65,6 +65,11 @@ namespace TrainVerify.Denote.GeneratedPatterns
 #print axioms recon_intermediateGoal_5343_faithful
 #print axioms recon_intermediateGoal_5344_faithful
 
+-- Faithful CP2 single-sequence inverse and relation-level source recovery.
+#print axioms TrainVerify.Denote.ZigzagCollective.zigzag_cp2_single_index_inverse
+#print axioms TrainVerify.Denote.ZigzagCollective.fw_maybe_unshuffle_shuffle_collective_cp2_single
+#print axioms Zigzag2Rel.unshuffle_sources_single
+
 -- Migrated from DistributedMigrationGears.lean.
 #print axioms Gather2Rel.of_initGoalHolds
 #print axioms Gather2Rel.to_initGoalHolds
