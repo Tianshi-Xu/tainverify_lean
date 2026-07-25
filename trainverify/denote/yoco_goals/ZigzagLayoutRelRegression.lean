@@ -27,6 +27,12 @@ def z1 : Tensor := fw_maybe_shuffle_collective [x0, x1] (decodeCuSeqlens cu) 2 1
 def rmsWeight : Tensor :=
   Tensor.mkShape [1] (fun _ => (2 : Scalar))
 
+/-- A concrete two-head per-head-linear weight `[hW, dW, k] = [2, 1, 1]`. -/
+def perHeadWeight : Tensor :=
+  Tensor.mkShape [2, 1, 1] (fun i => if i.val = 0 then 2 else 3)
+
+@[simp] theorem perHeadWeight_shape : perHeadWeight.shape = [2, 1, 1] := rfl
+
 def observe4 (x : Tensor) : List Scalar := (List.range 4).map (valAt x)
 
 @[simp] theorem x0_shape : x0.shape = [4, 1] := rfl
@@ -95,6 +101,26 @@ theorem concrete_rms_norm_zigzag2Rel :
   · norm_num
   · norm_num
   · rfl
+
+/-- Concrete RED/GREEN regression for the generic per-head-linear transport.
+These are actual Denote tensors, with full output `[8, 2, 1]` and shuffled
+rank outputs `[4, 2, 1]`. -/
+theorem concrete_per_head_linear_zigzag2Rel :
+    Zigzag2Rel
+      (fw_per_head_linear full perHeadWeight)
+      (fw_per_head_linear z0 perHeadWeight)
+      (fw_per_head_linear z1 perHeadWeight)
+      cu [8, 2, 1] [4, 2, 1] := by
+  apply Zigzag2Rel.per_head_linear (lDim := 4) (k := 1) (hW := 2) (dW := 1)
+    concrete_zigzag2Rel perHeadWeight_shape
+  all_goals norm_num
+
+/-- The concrete outputs expose the promised three-dimensional shapes. -/
+theorem concrete_per_head_linear_shapes :
+    (fw_per_head_linear full perHeadWeight).shape = [8, 2, 1] ∧
+    (fw_per_head_linear z0 perHeadWeight).shape = [4, 2, 1] ∧
+    (fw_per_head_linear z1 perHeadWeight).shape = [4, 2, 1] :=
+  concrete_per_head_linear_zigzag2Rel.output_shapes
 
 theorem shard_shapes : x0.shape = [4, 1] ∧ x1.shape = [4, 1] ∧
     z0.shape = [4, 1] ∧ z1.shape = [4, 1] := by

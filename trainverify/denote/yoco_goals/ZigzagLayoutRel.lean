@@ -155,6 +155,45 @@ theorem rms_norm
   · rw [fw_rms_norm_shape_2d z1 w lDim h (hs.rank1_shape.trans hshard)]
     exact hshard.symm
 
+/-- A replicated per-head weight preserves the source-witness zigzag relation.
+The operation is row-local: it commutes both with the ordinary dim-0 gather and
+with each faithful shuffled rank. -/
+theorem per_head_linear
+    {full z0 z1 cu w : Tensor} (lDim k hW dW : Nat)
+    (hrel : Zigzag2Rel full z0 z1 cu [lDim * 2, k] [lDim, k])
+    (hw : w.shape = [hW, dW, k])
+    (hl : 0 < lDim) (hk : 0 < k) (hhW : 0 < hW) (hdW : 0 < dW) :
+    Zigzag2Rel
+      (fw_per_head_linear full w)
+      (fw_per_head_linear z0 w)
+      (fw_per_head_linear z1 w)
+      cu [lDim * 2, hW, dW] [lDim, hW, dW] := by
+  rcases hrel with ⟨source0, source1, hs⟩
+  have hs0 : source0.shape = [lDim, k] := hs.source0_shape
+  have hs1 : source1.shape = [lDim, k] := hs.source1_shape
+  have hfullActual : full.shape = [lDim * 2, k] := hs.full_shape
+  have hp0 := fw_per_head_linear_shape_2d source0 w lDim k hW dW hs0 hw
+  have hp1 := fw_per_head_linear_shape_2d source1 w lDim k hW dW hs1 hw
+  refine ⟨fw_per_head_linear source0 w, fw_per_head_linear source1 w,
+    ?_, ?_, ?_, ?_, hp0, hp1, ?_, ?_,
+    ZigzagCuWF.per_head_linear_cp2 _ source0 source1 w lDim k hW dW
+      hs.cu_wf hs0 hs1 hw⟩
+  · rw [hs.full_value]
+    exact fw_per_head_mix_precision_linear_allGather0_commute_2
+      source0 source1 w lDim k hW dW hl hk hhW hdW hs0 hs1 hw
+  · rw [hs.rank0_value]
+    exact fw_per_head_linear_shuffle_collective_cp2
+      source0 source1 w (decodeCuSeqlens cu) lDim k hW dW 0
+      hl hk hhW hdW (by decide) hs0 hs1 hw
+  · rw [hs.rank1_value]
+    exact fw_per_head_linear_shuffle_collective_cp2
+      source0 source1 w (decodeCuSeqlens cu) lDim k hW dW 1
+      hl hk hhW hdW (by decide) hs0 hs1 hw
+  · exact fw_per_head_linear_shape_2d full w (lDim * 2) k hW dW
+      hfullActual hw
+  · exact fw_per_head_linear_shape_2d z0 w lDim k hW dW hs.rank0_shape hw
+  · exact fw_per_head_linear_shape_2d z1 w lDim k hW dW hs.rank1_shape hw
+
 end Zigzag2Rel
 end
 end TrainVerify.Denote.GeneratedPatterns

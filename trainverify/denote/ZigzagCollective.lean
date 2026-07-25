@@ -287,6 +287,55 @@ theorem fw_rms_norm_valAt_2d (x w : Tensor) (rows hidden i : Nat)
     simpa [prodShape] using hi
   simp [hip]
 
+/-- Per-head linear maps `[rows, k]` to `[rows, hW, dW]`. -/
+theorem fw_per_head_linear_shape_2d (x w : Tensor) (rows k hW dW : Nat)
+    (hx : x.shape = [rows, k]) (hw : w.shape = [hW, dW, k]) :
+    (fw_per_head_linear x w).shape = [rows, hW, dW] := by
+  unfold fw_per_head_linear
+  rw [hx, hw]
+  rfl
+
+/-- In-bounds value formula for the 2-D input branch of per-head linear. -/
+theorem fw_per_head_linear_valAt_2d (x w : Tensor) (rows k hW dW i : Nat)
+    (hhW : 0 < hW) (hdW : 0 < dW)
+    (hx : x.shape = [rows, k]) (hw : w.shape = [hW, dW, k])
+    (hi : i < rows * hW * dW) :
+    valAt (fw_per_head_linear x w) i =
+      ∑ c ∈ Finset.range k,
+        valAt x (i / (hW * dW) * k + c) *
+          valAt w ((i % (hW * dW) / dW * dW + i % (hW * dW) % dW) * k + c) := by
+  unfold fw_per_head_linear
+  rw [hx, hw]
+  simp only [List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append,
+    if_neg (by positivity : hW * dW ≠ 0), if_neg (Nat.ne_of_gt hdW)]
+  rw [valAt_of_lt]
+  · rfl
+  · simpa [Tensor.mkShape, prodShape] using hi
+
+/-- Applying per-head linear to both CP2 source shards preserves packed-sequence
+well-formedness, since its contract depends only on metadata and shard shapes. -/
+theorem ZigzagCuWF.per_head_linear_cp2
+    (cu : List Nat) (source0 source1 w : Tensor) (lDim k hW dW : Nat)
+    (hwf : ZigzagCuWF cu [source0, source1] 2)
+    (hs0 : source0.shape = [lDim, k])
+    (hs1 : source1.shape = [lDim, k])
+    (hw : w.shape = [hW, dW, k]) :
+    ZigzagCuWF cu [fw_per_head_linear source0 w, fw_per_head_linear source1 w] 2 := by
+  have hp0 := fw_per_head_linear_shape_2d source0 w lDim k hW dW hs0 hw
+  have hp1 := fw_per_head_linear_shape_2d source1 w lDim k hW dW hs1 hw
+  refine ⟨hwf.cp_pos, rfl, hwf.cu_starts_zero, hwf.cu_has_endpoint,
+    hwf.monotone, hwf.divisible, ?_, ?_, ?_⟩
+  · intro x hx
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+    rcases hx with rfl | rfl <;> simp [hp0, hp1]
+  · intro x hx
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+    rcases hx with rfl | rfl
+    · rfl
+    · simp only [List.getD_cons_zero]
+      rw [hp1, hp0]
+  · simpa only [List.getD_cons_zero, hp0, hs0] using hwf.local_tokens
+
 /-- Applying RMSNorm to both CP2 source shards preserves packed-sequence
 well-formedness, because the contract depends only on metadata and shard shapes. -/
 theorem ZigzagCuWF.rms_norm_cp2
@@ -492,6 +541,177 @@ theorem fw_rms_norm_shuffle_collective_cp2
           simp only [valAt_zeroTensor_empty, zero_mul]
     · rw [hlocalRms]
       simpa [prodShape] using hrowIndex j hj
+
+/-- A faithful CP2 shuffle commutes with per-head linear. -/
+theorem fw_per_head_linear_shuffle_collective_cp2
+    (source0 source1 w : Tensor) (cu : List Nat) (lDim k hW dW rank : Nat)
+    (hl : 0 < lDim) (hk : 0 < k) (hhW : 0 < hW) (hdW : 0 < dW)
+    (hrank : rank < 2)
+    (hs0 : source0.shape = [lDim, k])
+    (hs1 : source1.shape = [lDim, k])
+    (hw : w.shape = [hW, dW, k]) :
+    fw_per_head_linear
+        (fw_maybe_shuffle_collective [source0, source1] cu 2 rank) w =
+      fw_maybe_shuffle_collective
+        [fw_per_head_linear source0 w, fw_per_head_linear source1 w] cu 2 rank := by
+  have hr : rank = 0 ∨ rank = 1 := by omega
+  have hlocal : ([source0, source1].getD rank (zeroTensor [])).shape = [lDim, k] := by
+    rcases hr with rfl | rfl <;> simp [List.getD, hs0, hs1]
+  have hp0 := fw_per_head_linear_shape_2d source0 w lDim k hW dW hs0 hw
+  have hp1 := fw_per_head_linear_shape_2d source1 w lDim k hW dW hs1 hw
+  have hlocalP :
+      ([fw_per_head_linear source0 w, fw_per_head_linear source1 w].getD rank
+        (zeroTensor [])).shape = [lDim, hW, dW] := by
+    rcases hr with rfl | rfl <;> simp [List.getD, hp0, hp1]
+  have hchunkP :
+      ([fw_per_head_linear source0 w, fw_per_head_linear source1 w].getD rank
+        (zeroTensor [])).shape.getD 0 0 = lDim := by rw [hlocalP]; rfl
+  have hstrideP :
+      prodShape ([fw_per_head_linear source0 w, fw_per_head_linear source1 w].getD rank
+        (zeroTensor [])).shape.tail = hW * dW := by
+    rw [hlocalP]
+    simp [prodShape]
+  have hshuffleShape :
+      (fw_maybe_shuffle_collective [source0, source1] cu 2 rank).shape = [lDim, k] := by
+    rw [fw_maybe_shuffle_collective_shape]
+    exact hlocal
+  have hleftShape := fw_per_head_linear_shape_2d
+    (fw_maybe_shuffle_collective [source0, source1] cu 2 rank) w
+    lDim k hW dW hshuffleShape hw
+  apply Tensor.ext
+  · rw [hleftShape, fw_maybe_shuffle_collective_shape, hlocalP]
+  · intro idx hidx
+    rw [hleftShape] at hidx
+    have hib : idx < lDim * hW * dW := by simpa [prodShape] using hidx
+    have hhd : 0 < hW * dW := by positivity
+    let row := idx / (hW * dW)
+    let rem := idx % (hW * dW)
+    have hrem : rem < hW * dW := Nat.mod_lt _ hhd
+    have hrow : row < lDim := by
+      dsimp [row]
+      exact Nat.div_lt_iff_lt_mul hhd |>.mpr (by simpa [Nat.mul_assoc] using hib)
+    let global := zigzagPos cu 2 rank row
+    let srcRank := global / lDim
+    let srcRow := global % lDim
+    have hsrcRow : srcRow < lDim := Nat.mod_lt _ hl
+    have hidxEq : idx = row * (hW * dW) + rem := by
+      dsimp [row, rem]
+      calc
+        idx = (hW * dW) * (idx / (hW * dW)) + idx % (hW * dW) :=
+          (Nat.div_add_mod idx (hW * dW)).symm
+        _ = idx / (hW * dW) * (hW * dW) + idx % (hW * dW) := by ring
+    have hinput (c : Nat) (hc : c < k) :
+        valAt (fw_maybe_shuffle_collective [source0, source1] cu 2 rank)
+            (row * k + c) =
+          valAt ([source0, source1].getD srcRank (zeroTensor []))
+            (srcRow * k + c) := by
+      rw [fw_maybe_shuffle_collective_valAt _ _ 2 rank _ (by omega)]
+      · simp only [hlocal, List.tail_cons, prodShape, List.foldl, Nat.one_mul]
+        rw [show row * k + c = c + k * row by ring,
+          Nat.add_mul_div_left _ _ hk, Nat.div_eq_of_lt hc, Nat.zero_add,
+          Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hc]
+        rfl
+      · rw [hlocal]
+        simp only [prodShape, List.foldl, Nat.mul_one, Nat.one_mul]
+        calc
+          row * k + c < row * k + k := Nat.add_lt_add_left hc _
+          _ = (row + 1) * k := by ring
+          _ ≤ lDim * k := Nat.mul_le_mul_right k (by omega)
+    dsimp only [srcRank, srcRow] at hinput
+    rw [hidxEq]
+    rw [fw_per_head_linear_valAt_2d _ w lDim k hW dW _ hhW hdW hshuffleShape hw]
+    · rw [show row * (hW * dW) + rem = rem + (hW * dW) * row by ring,
+          Nat.add_mul_div_left _ _ hhd, Nat.div_eq_of_lt hrem, Nat.zero_add,
+          Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hrem]
+      rw [fw_maybe_shuffle_collective_valAt _ _ 2 rank _ (by omega)]
+      · simp only [hchunkP, hstrideP]
+        rw [Nat.add_mul_div_left _ _ hhd, Nat.div_eq_of_lt hrem, Nat.zero_add,
+          Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hrem]
+        unfold gatherFromRank
+        dsimp only [srcRank, srcRow, global]
+        change
+          (∑ c ∈ Finset.range k,
+            valAt (fw_maybe_shuffle_collective [source0, source1] cu 2 rank)
+                (row * k + c) *
+              valAt w ((rem / dW * dW + rem % dW) * k + c)) =
+            valAt ([fw_per_head_linear source0 w, fw_per_head_linear source1 w].getD
+              (global / lDim) (zeroTensor []))
+              (global % lDim * (hW * dW) + rem)
+        by_cases hs0r : global / lDim = 0
+        · simp only [hs0r, List.getD, List.getElem?_cons_zero, Option.getD_some]
+          rw [fw_per_head_linear_valAt_2d source0 w lDim k hW dW _ hhW hdW hs0 hw]
+          · rw [show global % lDim * (hW * dW) + rem =
+                rem + (hW * dW) * (global % lDim) by ring,
+              Nat.add_mul_div_left _ _ hhd, Nat.div_eq_of_lt hrem, Nat.zero_add,
+              Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hrem]
+            apply Finset.sum_congr rfl
+            intro c hc
+            rw [hinput c (Finset.mem_range.mp hc)]
+            simp only [hs0r, List.getD, List.getElem?_cons_zero, Option.getD_some]
+          · calc
+              global % lDim * (hW * dW) + rem <
+                  global % lDim * (hW * dW) + hW * dW := Nat.add_lt_add_left hrem _
+              _ = (global % lDim + 1) * (hW * dW) := by ring
+              _ ≤ lDim * (hW * dW) :=
+                Nat.mul_le_mul_right (hW * dW) (by omega)
+              _ = lDim * hW * dW := by ring
+        · by_cases hs1r : global / lDim = 1
+          · simp only [hs1r, List.getD, List.getElem?_cons_succ,
+              List.getElem?_cons_zero, Option.getD_some]
+            rw [fw_per_head_linear_valAt_2d source1 w lDim k hW dW _ hhW hdW hs1 hw]
+            · rw [show global % lDim * (hW * dW) + rem =
+                  rem + (hW * dW) * (global % lDim) by ring,
+                Nat.add_mul_div_left _ _ hhd, Nat.div_eq_of_lt hrem, Nat.zero_add,
+                Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hrem]
+              apply Finset.sum_congr rfl
+              intro c hc
+              rw [hinput c (Finset.mem_range.mp hc)]
+              simp only [hs1r, List.getD, List.getElem?_cons_succ,
+                List.getElem?_cons_zero, Option.getD_some]
+            · calc
+                global % lDim * (hW * dW) + rem <
+                    global % lDim * (hW * dW) + hW * dW := Nat.add_lt_add_left hrem _
+                _ = (global % lDim + 1) * (hW * dW) := by ring
+                _ ≤ lDim * (hW * dW) :=
+                  Nat.mul_le_mul_right (hW * dW) (by omega)
+                _ = lDim * hW * dW := by ring
+          · have hnot : ¬ global / lDim < 2 := by
+              intro hlt
+              cases hq : global / lDim with
+              | zero => exact hs0r hq
+              | succ q =>
+                cases q with
+                | zero => exact hs1r hq
+                | succ q =>
+                  rw [hq] at hlt
+                  exact (Nat.not_lt_of_ge
+                    (Nat.succ_le_succ (Nat.succ_le_succ (Nat.zero_le q)))) hlt
+            have hget : [source0, source1].getD (global / lDim) (zeroTensor []) =
+                zeroTensor [] := by simp [List.getD, hnot]
+            have hgetP :
+                [fw_per_head_linear source0 w, fw_per_head_linear source1 w].getD
+                  (global / lDim) (zeroTensor []) = zeroTensor [] := by
+              simp [List.getD, hnot]
+            rw [hgetP, valAt_zeroTensor_empty]
+            apply Finset.sum_eq_zero
+            intro c hc
+            rw [hinput c (Finset.mem_range.mp hc), hget,
+              valAt_zeroTensor_empty, zero_mul]
+      · rw [hlocalP]
+        simp only [prodShape, List.foldl, Nat.mul_one]
+        have hb : rem + hW * dW * row < lDim * (hW * dW) := by
+          calc
+            rem + hW * dW * row < hW * dW + hW * dW * row :=
+              Nat.add_lt_add_right hrem _
+            _ = (row + 1) * (hW * dW) := by ring
+            _ ≤ lDim * (hW * dW) := Nat.mul_le_mul_right _ (by omega)
+        simpa only [Nat.one_mul, Nat.mul_assoc] using hb
+    · calc
+        row * (hW * dW) + rem < row * (hW * dW) + hW * dW :=
+          Nat.add_lt_add_left hrem _
+        _ = (row + 1) * hW * dW := by ring
+        _ ≤ lDim * hW * dW := by
+          exact Nat.mul_le_mul_right dW (Nat.mul_le_mul_right hW (by omega))
 
 end
 end TrainVerify.Denote.ZigzagCollective
