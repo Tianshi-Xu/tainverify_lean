@@ -1,4 +1,4 @@
-import denote.yoco_goals.L12FaithfulMaybeShuffle
+import denote.yoco_goals.L12FaithfulReplicatedBoundary
 
 /-! Axiom audit for the pure-distributed layer-12 frontier.
 
@@ -57,6 +57,11 @@ namespace TrainVerify.Denote.GeneratedPatterns
 #print axioms recon_zigzagGoal_5338_distributed
 #print axioms recon_zigzagGoal_5340_distributed
 #print axioms recon_zigzagGoal_5342_distributed
+
+-- Faithful replicated singleton boundary goals.
+#print axioms recon_intermediateGoal_5332_faithful
+#print axioms recon_intermediateGoal_5334_faithful
+#print axioms recon_intermediateGoal_5336_faithful
 
 -- Migrated from DistributedMigrationGears.lean.
 #print axioms Gather2Rel.of_initGoalHolds
