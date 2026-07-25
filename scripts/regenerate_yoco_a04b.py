@@ -29,6 +29,18 @@ NNSCALER = Path(os.environ.get(
 STUBS = NNSCALER.parent / "stubs"
 
 
+def ensure_torch_recompile_limit(torch_module, entry_factory=None) -> bool:
+    """Install Torch 2.6's missing Dynamo key; return whether it was added."""
+    config = torch_module._dynamo.config._config
+    if "recompile_limit" in config:
+        return False
+    if entry_factory is None:
+        from torch.utils._config_module import Config, _ConfigEntry
+        entry_factory = lambda: _ConfigEntry(Config(default=32, value_type=int))
+    config["recompile_limit"] = entry_factory()
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
@@ -43,6 +55,10 @@ def main() -> None:
     sys.path.insert(0, str(NNSCALER))
 
     import triton_shim  # noqa: F401
+    import torch
+    # The archived graph only needs this import-time knob to exist. Torch 2.6
+    # predates the public key used by the pinned llm-train checkout.
+    ensure_torch_recompile_limit(torch)
     from triton.runtime.driver import driver as driver_config
 
     class CPUDriver:

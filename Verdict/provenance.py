@@ -99,6 +99,7 @@ def build_manifest(
     command: Sequence[str], packages: Mapping[str, str],
     deduplicated_intermediate_tids: Sequence[int], final_goal_tids: Sequence[int],
     intermediate_goal_tids: Sequence[int], expected_hashes: Mapping[str, str] | None = None,
+    input_value_classes: Mapping[str, Sequence[tuple[str, Sequence[int]]]] | None = None,
 ) -> dict[str, Any]:
     _validate_commit("llm_train_commit", llm_train_commit)
     _validate_commit("nnscaler_commit", nnscaler_commit)
@@ -116,6 +117,13 @@ def build_manifest(
             raise ProvenanceError(f"duplicate metadata basename: {name}")
         metadata_hashes[name] = sha256_file(source)
         _check_expected(f"metadata_sha256.{name}", metadata_hashes[name], expected)
+    class_data = {
+        side: [
+            {"source": str(source), "tids": sorted(set(map(int, tids)))}
+            for source, tids in sorted(classes)
+        ]
+        for side, classes in sorted((input_value_classes or {}).items())
+    }
     return {
         "command": normalize_command(command),
         "deduplicated_intermediate_tids": sorted(set(map(int, deduplicated_intermediate_tids))),
@@ -125,6 +133,8 @@ def build_manifest(
         "generated_lean_sha256": sha256_file(generated_lean),
         "intermediate_goal_count": len(set(map(int, intermediate_goal_tids))),
         "intermediate_goal_tids": sorted(set(map(int, intermediate_goal_tids))),
+        "input_value_class_count": sum(len(classes) for classes in class_data.values()),
+        "input_value_classes": class_data,
         "llm_train_commit": llm_train_commit.lower(),
         "metadata_sha256": dict(sorted(metadata_hashes.items())),
         "model": model,
@@ -132,7 +142,7 @@ def build_manifest(
         "packages": dict(sorted((str(k), str(v)) for k, v in packages.items())),
         "pm_pkl_sha256": pm_hash,
         "python": platform.python_version(),
-        "schema_version": 1,
+        "schema_version": 2,
         "sm_pkl_sha256": sm_hash,
     }
 

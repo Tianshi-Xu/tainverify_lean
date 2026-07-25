@@ -93,6 +93,18 @@ def _nat_list_definition(text: str, name: str) -> list[int]:
     return [int(item.strip()) for item in match.group(1).split(",")]
 
 
+def _input_value_classes(text: str, graph: str) -> list[list[Any]]:
+    region = _definition_region(text, f"{graph}InputValueClasses")
+    result: list[list[Any]] = []
+    pattern = re.compile(
+        r'\{ source := "((?:[^"\\]|\\.)*)", tids := \[([0-9, ]*)\] \}'
+    )
+    for source, tids_body in pattern.findall(region):
+        tids = [int(item.strip()) for item in tids_body.split(",") if item.strip()]
+        result.append([bytes(source, "utf-8").decode("unicode_escape"), tids])
+    return result
+
+
 def extract_snapshot(data: bytes) -> dict[str, Any]:
     text = data.decode("utf-8")
     return {
@@ -102,6 +114,10 @@ def extract_snapshot(data: bytes) -> dict[str, Any]:
             "pm": _replica_groups(text, "pm", None),
         },
         "shapes": {"sm": _shapes(text, "sm"), "pm": _shapes(text, "pm")},
+        "input_value_classes": {
+            "sm": _input_value_classes(text, "sm"),
+            "pm": _input_value_classes(text, "pm"),
+        },
         "init_lineages": _lineages(text, "initGoal_"),
         "final_goal_tids": _nat_list_definition(text, "obsTids"),
         "intermediate_goal_tids": sorted(map(int, _lineages(text, "intermediateGoal_").keys())),
@@ -136,17 +152,66 @@ def compare_snapshots(
     )
 
 
+def audit_metadata_extension(
+    authority_lean: Path, candidate_lean: Path,
+    authority_manifest: Path, candidate_manifest: Path,
+) -> None:
+    """Audit a metadata-only candidate without overwriting the authority snapshot."""
+    authority_snapshot = extract_snapshot(authority_lean.read_bytes())
+    candidate_bytes = candidate_lean.read_bytes()
+    candidate_snapshot = extract_snapshot(candidate_bytes)
+    structural_keys = set(authority_snapshot) - {"input_value_classes"}
+    assert all(
+        candidate_snapshot[key] == authority_snapshot[key] for key in structural_keys
+    ), "baseline graph nodes, replica groups, shapes, lineages, or goal sets differ"
+    assert any(candidate_snapshot["input_value_classes"].values()), (
+        "candidate has no input value-equivalence classes"
+    )
+
+    _, authority_meta = _load_manifest(authority_manifest)
+    _, candidate_meta = _load_manifest(candidate_manifest)
+    mutable = {
+        "emitter_sha256", "generated_lean_sha256", "schema_version",
+        "input_value_class_count", "input_value_classes",
+    }
+    assert {
+        key: value for key, value in candidate_meta.items() if key not in mutable
+    } == {
+        key: value for key, value in authority_meta.items() if key not in mutable
+    }, "authority provenance changed outside the metadata extension"
+    expected_manifest_classes = {
+        side: [{"source": source, "tids": tids} for source, tids in classes]
+        for side, classes in candidate_snapshot["input_value_classes"].items()
+    }
+    assert candidate_meta.get("input_value_classes") == expected_manifest_classes
+    assert candidate_meta.get("input_value_class_count") == sum(
+        len(classes) for classes in expected_manifest_classes.values()
+    )
+    assert candidate_meta.get("schema_version") == 2
+    assert candidate_meta.get("generated_lean_sha256") == _sha256(candidate_bytes)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expected-lean", type=Path, default=DEFAULT_LEAN)
     parser.add_argument("--expected-manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--regenerated-lean", type=Path, required=True)
     parser.add_argument("--regenerated-manifest", type=Path, required=True)
-    args = parser.parse_args()
-    compare_snapshots(
-        args.expected_lean, args.regenerated_lean,
-        args.expected_manifest, args.regenerated_manifest,
+    parser.add_argument(
+        "--metadata-extension", action="store_true",
+        help="audit an intentional value-class extension while preserving authority structure",
     )
+    args = parser.parse_args()
+    if args.metadata_extension:
+        audit_metadata_extension(
+            args.expected_lean, args.regenerated_lean,
+            args.expected_manifest, args.regenerated_manifest,
+        )
+    else:
+        compare_snapshots(
+            args.expected_lean, args.regenerated_lean,
+            args.expected_manifest, args.regenerated_manifest,
+        )
     snapshot = extract_snapshot(args.regenerated_lean.read_bytes())
     print(
         "YOCO A0.4B regeneration matches: "

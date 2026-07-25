@@ -20,6 +20,12 @@ def pm : GraphDecl := by
   ]
 def smInitShapes : List (Nat × List Nat) := [(1, [4])]
 def pmInitShapes : List (Nat × List Nat) := [(10, [4])]
+def smInputValueClasses : List InputValueClass := [
+  { source := \"getitem:root=4188:key=cu_seqlens_q\", tids := [5337, 5345] },
+]
+def pmInputValueClasses : List InputValueClass := [
+  { source := \"getitem:root=4188:key=cu_seqlens_q\", tids := [5337, 5345] },
+]
 def initGoal_1 : LineageGoal :=
   { ts := 1, tsShape := [4], tps := [{ rank := 0, tid := 10 }], tpShapes := [[4]] }
 def obsTids : List Nat := [2]
@@ -36,6 +42,10 @@ def test_snapshot_extractor_covers_all_structural_sets():
     assert snapshot["ordered_nodes"]["pm"]
     assert snapshot["shapes"]["sm"] == [[1, [4]]]
     assert snapshot["init_lineages"] == {"1": [[0, 10]]}
+    assert snapshot["input_value_classes"]["sm"] == [
+        ["getitem:root=4188:key=cu_seqlens_q", [5337, 5345]]
+    ]
+    assert snapshot["input_value_classes"]["pm"] == snapshot["input_value_classes"]["sm"]
     assert snapshot["final_goal_tids"] == [2]
     assert snapshot["intermediate_goal_tids"] == [3]
 

@@ -6,6 +6,7 @@ from Verdict.graph_to_lean import (
     SelectedLineage,
     canonicalize_init_lineage_multiref,
     deduplicate_intermediate_lineages,
+    derive_input_value_classes,
 )
 
 
@@ -21,6 +22,12 @@ class Node:
     ins: tuple[Tensor, ...]
     outs: tuple[Tensor, ...]
     rank: int = 0
+    kwargs: dict | None = None
+
+
+@dataclass(frozen=True)
+class Root:
+    _id: int
 
 
 class Graph:
@@ -32,6 +39,7 @@ class Graph:
     def node_inputs(self, n): return list(n.ins)
     def node_outputs(self, n): return list(n.outs)
     def tensor_shape(self, t): return list(t.shape)
+    def node_kwargs(self, n): return n.kwargs or {}
 
 
 def test_init_lineage_follows_fw_multiref_to_source_leaf():
@@ -85,3 +93,39 @@ def test_final_goals_win_over_intermediate_goals():
     kept, removed = deduplicate_intermediate_lineages(final, intermediate)
     assert set(kept) == {4681}
     assert removed == [4680]
+
+
+def test_getitem_provenance_forms_deterministic_input_value_classes():
+    root = Root(4188)
+    other_root = Root(9000)
+    graph = Graph([
+        Node("OpName.FW_pyfunc", (), (Tensor(5345, (2,)),), rank=1,
+             kwargs={"__consts": [root, "cu_seqlens_q"]}),
+        Node("OpName.FW_pyfunc", (), (Tensor(5337, (2,)),), rank=0,
+             kwargs={"__consts": [root, "cu_seqlens_q"]}),
+        # Rank replicas use the same tid and must not duplicate it.
+        Node("OpName.FW_pyfunc", (), (Tensor(5337, (2,)),), rank=1,
+             kwargs={"__consts": [root, "cu_seqlens_q"]}),
+        Node("OpName.FW_pyfunc", (), (Tensor(5346, (2,)),),
+             kwargs={"__consts": [root, "cu_seqlens_k"]}),
+        Node("OpName.FW_pyfunc", (), (Tensor(6000, (2,)),),
+             kwargs={"__consts": [other_root, "cu_seqlens_q"]}),
+    ])
+
+    assert derive_input_value_classes(graph) == [
+        ("getitem:root=4188:key=cu_seqlens_q", (5337, 5345)),
+    ]
+
+
+def test_getitem_provenance_ignores_malformed_non_tensor_and_singleton_classes():
+    root = Root(7)
+    graph = Graph([
+        Node("OpName.BW_pyfunc", (), (Tensor(1, (2,)),),
+             kwargs={"__consts": [root, "x"]}),
+        Node("OpName.FW_pyfunc", (), (Tensor(2, (2,)),),
+             kwargs={"__consts": [root, 123]}),
+        Node("OpName.FW_pyfunc", (), (Tensor(3, (2,)),),
+             kwargs={"__consts": [object(), "x"]}),
+        Node("OpName.FW_pyfunc", (), (), kwargs={"__consts": [root, "x"]}),
+    ])
+    assert derive_input_value_classes(graph) == []

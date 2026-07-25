@@ -43,6 +43,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 
 ROOT = Path(__file__).resolve().parent.parent
+KW_CONSTS_KEY = "__consts"
 
 DEFAULT_SM_GRAPH = ROOT / "genmodel" / "mgeners" / "attn_mgener_dp1_pp1_tp1_nm1_gbs16_dim128_seq64_nh8_ly1.pkl"
 DEFAULT_PM_GRAPH = ROOT / "genmodel" / "mgeners" / "attn_mgener_dp1_pp1_tp4_nm1_gbs16_dim128_seq64_nh8_ly1.pkl"
@@ -321,6 +322,61 @@ def _safe_str_op(op: Any) -> str:
 
 def _node_rank(node: Any) -> int:
 	return int(getattr(node, "rank", 0) or 0)
+
+
+InputValueClass = Tuple[str, Tuple[int, ...]]
+
+
+def derive_input_value_classes(
+	G: Any, eligible_tids: Optional[Iterable[int]] = None
+) -> List[InputValueClass]:
+	"""Recover equal input tensors from filtered ``FW_pyfunc`` getitem nodes.
+
+	nnScaler records a getitem's structured constants as ``[root, key]`` under
+	``KW_CONSTS_KEY``. Expanded PM graphs repeat those nodes per rank, so tids
+	are set-deduplicated. Python object identity is deliberately never used:
+	the IR object's stable ``_id`` and string key form the provenance identity.
+	Only tensor outputs are accepted; singleton classes carry no equality
+	information and are omitted.
+	"""
+	eligible = None if eligible_tids is None else {int(tid) for tid in eligible_tids}
+	grouped: Dict[Tuple[int, str], set[int]] = {}
+	for node in G.nodes():
+		if _safe_str_op(G.node_opname(node)).split(".")[-1] != "FW_pyfunc":
+			continue
+		consts = G.node_kwargs(node).get(KW_CONSTS_KEY)
+		if not isinstance(consts, (list, tuple)) or len(consts) != 2:
+			continue
+		root, key = consts
+		root_id = getattr(root, "_id", None)
+		if not isinstance(root_id, int) or not isinstance(key, str):
+			continue
+		for output in G.node_outputs(node):
+			tid = getattr(output, "tid", None)
+			if not isinstance(tid, int) or (eligible is not None and tid not in eligible):
+				continue
+			try:
+				G.tensor_shape(output)
+			except Exception:
+				continue
+			grouped.setdefault((root_id, key), set()).add(tid)
+
+	classes: List[InputValueClass] = []
+	for (root_id, key), tids in sorted(grouped.items()):
+		ordered_tids = tuple(sorted(tids))
+		if len(ordered_tids) > 1:
+			classes.append((f"getitem:root={root_id}:key={key}", ordered_tids))
+	return classes
+
+
+def _lean_input_value_classes(classes: Sequence[InputValueClass]) -> str:
+	if not classes:
+		return "[]"
+	items = [
+		f'{{ source := "{escape_lean_string(source)}", tids := {lean_list_nat(tids)} }}'
+		for source, tids in classes
+	]
+	return "[\n  " + ",\n  ".join(items) + ",\n]"
 
 
 REPLICA_GROUP_OPS = frozenset({
@@ -1506,6 +1562,8 @@ def emit_lean_spec(
 	pm_graph: Any,
 	sm_logical_ids: Mapping[int, Tuple[int, int, str]],
 	pm_logical_ids: Mapping[int, Tuple[int, int, str]],
+	sm_input_value_classes: Sequence[InputValueClass],
+	pm_input_value_classes: Sequence[InputValueClass],
 	init_goals: List[SelectedLineage],
 	goals: List[SelectedLineage],
 	goal_deps: Optional[List[GoalDependency]] = None,
@@ -1540,6 +1598,7 @@ def emit_lean_spec(
 		lines.append(f"    Provenance: {manifest_name}")
 	lines.append(f"-/")
 	lines.append("import denote.Denote")
+	lines.append("import denote.InputValueClasses")
 	lines.append("")
 	lines.append("set_option linter.style.longLine false")
 	lines.append("set_option linter.style.nativeDecide false")
@@ -1633,6 +1692,17 @@ def emit_lean_spec(
 
 	_emit_graph("sm", sm_nodes, sm_graph, num_parts=1)
 	_emit_graph("pm", pm_nodes, pm_graph, num_parts=pm_num_ranks)
+
+	lines.append(
+		"def smInputValueClasses : List InputValueClass := "
+		+ _lean_input_value_classes(sm_input_value_classes)
+	)
+	lines.append("")
+	lines.append(
+		"def pmInputValueClasses : List InputValueClass := "
+		+ _lean_input_value_classes(pm_input_value_classes)
+	)
+	lines.append("")
 
 	# When a boundary tid exists in both SM and PM, it is usually a shared input (e.g. activations,
 	# labels, loss-grad). Prefer the SM shape for those tids to avoid backend-specific ambiguities
@@ -2932,6 +3002,8 @@ def main() -> None:
 	t0 = time.perf_counter()
 	sm_nodes = _filter_nodes(GsE, set(sm_needed_tids))
 	pm_nodes = _filter_nodes(GpE, set(pm_needed_tids))
+	sm_input_value_classes = derive_input_value_classes(GsE, sm_needed_tids)
+	pm_input_value_classes = derive_input_value_classes(GpE, pm_needed_tids)
 
 	# Ensure the denotational fold is a true topological fold across ranks.
 	sm_nodes = _toposort_nodes(GsE, sm_nodes)
@@ -3150,6 +3222,8 @@ def main() -> None:
 		pm_graph=GpE,
 		sm_logical_ids=sm_logical_ids,
 		pm_logical_ids=pm_logical_ids,
+		sm_input_value_classes=sm_input_value_classes,
+		pm_input_value_classes=pm_input_value_classes,
 		init_goals=init_selected,
 		goals=selected,
 		goal_deps=goal_deps,
@@ -3198,6 +3272,10 @@ def main() -> None:
 			deduplicated_intermediate_tids=deduplicated_intermediate_tids,
 			final_goal_tids=[g.ts for g in selected],
 			intermediate_goal_tids=sorted(intermediate_lineages),
+			input_value_classes={
+				"sm": sm_input_value_classes,
+				"pm": pm_input_value_classes,
+			},
 			expected_hashes=expected_hashes,
 		)
 		write_manifest(args.manifest_out, manifest)
