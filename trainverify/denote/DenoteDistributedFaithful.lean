@@ -10,11 +10,14 @@ import denote.ZigzagCollective
 
 This evaluator composes the existing distributed evaluator (including its faithful
 full-expert MoE and graph-aware ring-attention branches) with the value-faithful
-cross-rank semantics for forward `maybe_shuffle` and `maybe_unshuffle`.
+cross-rank semantics for forward `maybe_shuffle`, `maybe_unshuffle`, and zigzag
+attention.
 
 Replica order is exactly `GraphDecl.replicaBuddies`; it is never inferred or sorted.
-Generated inputs have order `[data, cu_seqlens]`, and generated parameters have order
-`[cpSize, cpRank]`. Missing metadata therefore inherits the existing fail-closed
+Shuffle inputs have order `[data, cu_seqlens]` and parameters `[cpSize, cpRank]`.
+Zigzag attention inputs are `[Q, K, V, cuQ, cuKV]` with parameters
+`[qHeads, kvHeads, qDim, vDim, causal, window]`; graph rank count and node rank supply
+its CP coordinates. Missing replica metadata inherits the existing fail-closed
 singleton behavior of `replicaBuddies`.
 -/
 
@@ -41,6 +44,21 @@ noncomputable def applyNodeFaithfulUnshuffleValue
   fw_maybe_unshuffle_collective dataShards cu
     (n.params.getD 0 1) (n.params.getD 1 0)
 
+/-- Cross-rank value of a generated forward zigzag-attention node.  Only Q is
+collected from ordered replica buddies; K/V and both cu tensors are node-local,
+matching the Python wrapper's already-replicated K/V contract. -/
+noncomputable def applyNodeFaithfulZigzagAttnValue
+    (g : GraphDecl) (s : Store) (n : NodeDecl) : Tensor :=
+  let buddies := g.replicaBuddies n
+  let qShards := buddies.map (fun m => s (m.ins.getD 0 0))
+  fw_attn_zigzag_collective qShards
+    (s (n.ins.getD 1 0)) (s (n.ins.getD 2 0))
+    (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
+    (n.params.getD 0 0) (n.params.getD 1 0)
+    (n.params.getD 2 0) (n.params.getD 3 0)
+    (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0)
+    g.numRanks n.rank
+
 /-- Store one collective value at every output declared by the node. -/
 noncomputable def storeCollectiveOutputs
     (s : Store) (n : NodeDecl) (value : Tensor) : Store :=
@@ -54,6 +72,8 @@ noncomputable def applyNodeDistributedFaithful
     storeCollectiveOutputs s n (applyNodeFaithfulShuffleValue g s n)
   else if n.op = "OpName.FW_maybe_unshuffle" then
     storeCollectiveOutputs s n (applyNodeFaithfulUnshuffleValue g s n)
+  else if n.op = "OpName.FW_attn_zigzag" then
+    storeCollectiveOutputs s n (applyNodeFaithfulZigzagAttnValue g s n)
   else
     applyNodeDistributed g s n
 
@@ -88,14 +108,30 @@ theorem applyNodeDistributedFaithful_unshuffle_out
   unfold applyNodeDistributedFaithful storeCollectiveOutputs
   simp [storeSet]
 
-/-- The extension is conservative away from the two forward collectives. -/
+/-- A generated singleton-output zigzag-attention node writes its faithful value. -/
+theorem applyNodeDistributedFaithful_zigzag_attn_out
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (qTid kTid vTid cuQTid cuKVTid outTid : Tid) (params : List Nat) :
+    applyNodeDistributedFaithful g s
+      { rank := rank, op := "OpName.FW_attn_zigzag",
+        ins := [qTid, kTid, vTid, cuQTid, cuKVTid], outs := [outTid],
+        params := params } outTid =
+      applyNodeFaithfulZigzagAttnValue g s
+        { rank := rank, op := "OpName.FW_attn_zigzag",
+          ins := [qTid, kTid, vTid, cuQTid, cuKVTid], outs := [outTid],
+          params := params } := by
+  unfold applyNodeDistributedFaithful storeCollectiveOutputs
+  simp [storeSet]
+
+/-- The extension is conservative away from its three forward collectives. -/
 theorem applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
     (g : GraphDecl) (s : Store) (n : NodeDecl)
     (hshuffle : n.op ≠ "OpName.FW_maybe_shuffle")
-    (hunshuffle : n.op ≠ "OpName.FW_maybe_unshuffle") :
+    (hunshuffle : n.op ≠ "OpName.FW_maybe_unshuffle")
+    (hattn : n.op ≠ "OpName.FW_attn_zigzag" := by decide) :
     applyNodeDistributedFaithful g s n = applyNodeDistributed g s n := by
   unfold applyNodeDistributedFaithful
-  rw [if_neg hshuffle, if_neg hunshuffle]
+  rw [if_neg hshuffle, if_neg hunshuffle, if_neg hattn]
 
 /-- A faithful step cannot change a tensor id which is not one of the node's
 outputs.  The nonempty-output premise is inherited from the distributed evaluator's
@@ -117,20 +153,26 @@ theorem applyNodeDistributedFaithful_eq_of_not_mem_outs
       apply storeSet_eq_of_not_mem_fst
       simpa using h
     · rw [if_neg hunshuffle]
-      unfold applyNodeDistributed
-      by_cases hmoe : n.op = "OpName.FW_all2all_moe_gmm"
-      · rw [if_pos hmoe]
-        have hmem : n.outs.getD 0 0 ∈ n.outs := by
-          cases hout : n.outs with
-          | nil => exact absurd hout hnil
-          | cons a rest => rw [List.getD_cons_zero]; exact List.mem_cons_self
-        have hneq : tid ≠ n.outs.getD 0 0 := by
-          intro heq
-          exact h (heq ▸ hmem)
+      by_cases hattn : n.op = "OpName.FW_attn_zigzag"
+      · rw [if_pos hattn]
+        unfold storeCollectiveOutputs
         apply storeSet_eq_of_not_mem_fst
-        simpa using hneq
-      · rw [if_neg hmoe]
-        exact applyNodeRingAttn_skip g s n tid hnil h
+        simpa using h
+      · rw [if_neg hattn]
+        unfold applyNodeDistributed
+        by_cases hmoe : n.op = "OpName.FW_all2all_moe_gmm"
+        · rw [if_pos hmoe]
+          have hmem : n.outs.getD 0 0 ∈ n.outs := by
+            cases hout : n.outs with
+            | nil => exact absurd hout hnil
+            | cons a rest => rw [List.getD_cons_zero]; exact List.mem_cons_self
+          have hneq : tid ≠ n.outs.getD 0 0 := by
+            intro heq
+            exact h (heq ▸ hmem)
+          apply storeSet_eq_of_not_mem_fst
+          simpa using hneq
+        · rw [if_neg hmoe]
+          exact applyNodeRingAttn_skip g s n tid hnil h
 
 /-- Folding faithful steps preserves an id that no remaining node writes. -/
 theorem foldl_applyNodeDistributedFaithful_at_not_written
@@ -187,7 +229,8 @@ theorem foldl_applyNodeDistributedFaithful_eq_applyNodeDistributed
     (g : GraphDecl) (nodes : List NodeDecl) (s : Store)
     (hops : ∀ n ∈ nodes,
       n.op ≠ "OpName.FW_maybe_shuffle" ∧
-      n.op ≠ "OpName.FW_maybe_unshuffle") :
+      n.op ≠ "OpName.FW_maybe_unshuffle" ∧
+      n.op ≠ "OpName.FW_attn_zigzag") :
     nodes.foldl (applyNodeDistributedFaithful g) s =
       nodes.foldl (applyNodeDistributed g) s := by
   induction nodes generalizing s with
@@ -195,7 +238,8 @@ theorem foldl_applyNodeDistributedFaithful_eq_applyNodeDistributed
   | cons a rest ih =>
     simp only [List.foldl]
     rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
-      g s a (hops a List.mem_cons_self).1 (hops a List.mem_cons_self).2]
+      g s a (hops a List.mem_cons_self).1 (hops a List.mem_cons_self).2.1
+        (hops a List.mem_cons_self).2.2]
     apply ih
     intro n hn
     exact hops n (List.mem_cons_of_mem a hn)
@@ -205,7 +249,8 @@ theorem foldl_take_applyNodeDistributedFaithful_eq_applyNodeDistributed
     (g : GraphDecl) (nodes : List NodeDecl) (s : Store) (k : Nat)
     (hops : ∀ n ∈ nodes.take k,
       n.op ≠ "OpName.FW_maybe_shuffle" ∧
-      n.op ≠ "OpName.FW_maybe_unshuffle") :
+      n.op ≠ "OpName.FW_maybe_unshuffle" ∧
+      n.op ≠ "OpName.FW_attn_zigzag") :
     (nodes.take k).foldl (applyNodeDistributedFaithful g) s =
       (nodes.take k).foldl (applyNodeDistributed g) s :=
   foldl_applyNodeDistributedFaithful_eq_applyNodeDistributed g (nodes.take k) s hops
@@ -339,7 +384,8 @@ theorem denoteGraphDistributedFaithful_eq_distributed_of_prefix
     (g : GraphDecl) (init : Store) (tid : Tid) (k : Nat)
     (hops : ∀ n ∈ g.nodes.take k,
       n.op ≠ "OpName.FW_maybe_shuffle" ∧
-      n.op ≠ "OpName.FW_maybe_unshuffle")
+      n.op ≠ "OpName.FW_maybe_unshuffle" ∧
+      n.op ≠ "OpName.FW_attn_zigzag")
     (hnil : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
     (hwrite : ∀ n ∈ g.nodes.drop k, tid ∉ n.outs) :
     denoteGraphDistributedFaithful g init tid =

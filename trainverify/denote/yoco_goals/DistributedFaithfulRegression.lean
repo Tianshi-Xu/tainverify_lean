@@ -200,6 +200,7 @@ theorem generated_nonshuffle_delegates :
   apply applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
   · native_decide
   · native_decide
+  · native_decide
 
 /-! ## Arbitrary-store pre-shuffle compatibility
 
@@ -211,7 +212,8 @@ none of the source tids below is rewritten by the remaining graph. -/
 private theorem smPreShuffleFacts :
     (∀ n ∈ sm.nodes.take 472,
       n.op ≠ "OpName.FW_maybe_shuffle" ∧
-      n.op ≠ "OpName.FW_maybe_unshuffle") ∧
+      n.op ≠ "OpName.FW_maybe_unshuffle" ∧
+      n.op ≠ "OpName.FW_attn_zigzag") ∧
     (∀ n ∈ sm.nodes.drop 472, n.outs ≠ []) ∧
     (∀ n ∈ sm.nodes.drop 472,
       5330 ∉ n.outs ∧ 8011 ∉ n.outs ∧ 5337 ∉ n.outs) := by
@@ -220,7 +222,8 @@ private theorem smPreShuffleFacts :
 private theorem pmPreShuffleFacts :
     (∀ n ∈ pm.nodes.take 1003,
       n.op ≠ "OpName.FW_maybe_shuffle" ∧
-      n.op ≠ "OpName.FW_maybe_unshuffle") ∧
+      n.op ≠ "OpName.FW_maybe_unshuffle" ∧
+      n.op ≠ "OpName.FW_attn_zigzag") ∧
     (∀ n ∈ pm.nodes.drop 1003, n.outs ≠ []) ∧
     (∀ n ∈ pm.nodes.drop 1003,
       9625 ∉ n.outs ∧ 9626 ∉ n.outs ∧
