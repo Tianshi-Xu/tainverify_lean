@@ -408,5 +408,22 @@ theorem applyNodeFaithfulShuffleValue_cpSize_one
   rw [hcp, hrank]
   exact fw_maybe_shuffle_collective_cpSize_one _ _ _ rfl
 
+/-- Mirror of `applyNodeFaithfulShuffleValue_cpSize_one` for the unshuffle side.
+The single-machine graph's `FW_maybe_unshuffle` (generated node 924) carries
+`params = [1, 0]` and a singleton replica group, so the collective degenerates to
+the identity on its data input — matching the Python early-return branch for
+`cpSize = 1`. -/
+theorem applyNodeFaithfulUnshuffleValue_cpSize_one
+    (g : GraphDecl) (s : Store) (n : NodeDecl)
+    (hbuddy : g.replicaBuddies n = [n])
+    (hcp : n.params.getD 0 1 = 1)
+    (hrank : n.params.getD 1 0 = 0) :
+    applyNodeFaithfulUnshuffleValue g s n = s (n.ins.getD 0 0) := by
+  unfold applyNodeFaithfulUnshuffleValue
+  rw [hbuddy]
+  simp only [List.map]
+  rw [hcp, hrank]
+  exact fw_maybe_unshuffle_collective_cpSize_one _ _ _ rfl
+
 end
 end TrainVerify.Denote
