@@ -73,12 +73,14 @@ private theorem sw_p1 : pm.nodes[107]'(by native_decide) = swPm1 := by native_de
 
 set_option maxRecDepth 10000000 in
 set_option maxHeartbeats 16000000 in
-theorem recon_intermediateGoal_4728_faithful (initSM initPM : Store)
+theorem sw_shards (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_4728
-      (denoteGraphDistributedFaithful sm initSM)
-      (denoteGraphDistributedFaithful pm initPM) := by
+    denoteGraphDistributedFaithful pm initPM 7543 =
+        chunkPrimDimN 0 2 0 (denoteGraphDistributedFaithful sm initSM 4728) ∧
+      denoteGraphDistributedFaithful pm initPM 7544 =
+        chunkPrimDimN 0 2 1 (denoteGraphDistributedFaithful sm initSM 4728) ∧
+      (denoteGraphDistributedFaithful sm initSM 4728).shape = [4096, 512] := by
   have hg := recon_intermediateGoal_4723_faithful initSM initPM hSM hPM hInit
   have hu := recon_intermediateGoal_4727_faithful initSM initPM hSM hPM hInit
   have hgv : denoteGraphDistributedFaithful sm initSM 4723 =
@@ -189,6 +191,17 @@ theorem recon_intermediateGoal_4728_faithful (initSM initPM : Store)
       (by omega) (by omega) (by omega) (by omega), hgv, huv]
   have hswsh : (denoteGraphDistributedFaithful sm initSM 4728).shape = [4096, 512] := by
     rw [rSM]; unfold fw_swiglu; simp [Tensor.mkShape, hus]
+  exact ⟨hsh0, hsh1, hswsh⟩
+
+set_option maxRecDepth 10000000 in
+set_option maxHeartbeats 16000000 in
+theorem recon_intermediateGoal_4728_faithful (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
+    InitGoalHolds pm.numRanks intermediateGoal_4728
+      (denoteGraphDistributedFaithful sm initSM)
+      (denoteGraphDistributedFaithful pm initPM) := by
+  obtain ⟨hsh0, hsh1, hswsh⟩ := sw_shards initSM initPM hSM hPM hInit
   have hchsh : ∀ r, (chunkPrimDimN 0 2 r
       (denoteGraphDistributedFaithful sm initSM 4728)).shape = [2048, 512] := by
     intro r
