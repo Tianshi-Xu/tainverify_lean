@@ -8271,6 +8271,15 @@ def CoarseLineageHoldsWithInit (sm pm : GraphDecl) (goal : LineageGoal)
     reconstructForGoal goal numParts tps = reconstructWithDim goal.gatherDim numParts 0 tps := by
   unfold reconstructForGoal; rw [h]; rfl
 
+/-- Dual of the previous lemma: a replicated goal reconstructs to the rank-0
+    shard. Rewriting through this avoids asking a tactic to normalise
+    `reconstructForGoal`'s branch, which is expensive enough to exhaust the
+    heartbeat budget on the generated goals. -/
+@[simp] theorem reconstructForGoal_of_replicated (goal : LineageGoal) (numParts : Nat)
+    (tps : List Tensor) (h : goal.replicated = true) :
+    reconstructForGoal goal numParts tps = tps.headD (zeroTensor goal.tsShape) := by
+  unfold reconstructForGoal; rw [h]; rfl
+
 /-!
 ## Incremental lineage goals with intermediate prerequisites
 
