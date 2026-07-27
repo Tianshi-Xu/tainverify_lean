@@ -69,11 +69,12 @@ private theorem l2mr_pm_facts :
   native_decide
 
 private def l2mrSmPairs : List (Nat × Nat) :=
-  [(474, 8015), (473, 5332), (475, 8143), (474, 5338)]
+  [(474, 8015), (473, 5332), (475, 8143), (474, 5338), (475, 8139)]
 
 private def l2mrPmPairs : List (Nat × Nat) :=
   [(1012, 15741), (1011, 5332), (1013, 15749), (1012, 5332),
-   (1007, 15973), (1006, 9655), (1010, 15981), (1009, 9656)]
+   (1007, 15973), (1006, 9655), (1010, 15981), (1009, 9656),
+   (1007, 15969), (1010, 15977)]
 
 set_option maxRecDepth 1000000 in
 private theorem l2mr_sm_not_written_all :
@@ -216,6 +217,56 @@ theorem recon_zigzagGoal_8143_faithful (initSM initPM : Store)
         rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _ (by decide) (by decide)]
         exact applyNode_fw_multiref2_second_out' pm s 1 9656 15977 15981 (by decide))
       (l2mr_nonempty_pm 1010) (l2mr_pm_not_written 1010 15981 (by decide))
+      (l2mr_nonempty_pm 1009) (l2mr_pm_not_written 1009 9656 (by decide))
+  rw [sred, pred0, pred1]
+  exact hparent
+-- The sibling of `8143`: same multiref, first output instead of second.
+set_option maxRecDepth 10000000 in
+set_option maxHeartbeats 16000000 in
+theorem recon_zigzagGoal_8139_faithful (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hValues : InputValueClassesHold smInputValueClasses initSM ∧
+      InputValueClassesHold pmInputValueClasses initPM)
+    (hCu : ZigzagCuWF
+      (decodeCuSeqlens (denoteGraphDistributedFaithful pm initPM 5337))
+      [denoteGraphDistributedFaithful pm initPM 13257,
+       denoteGraphDistributedFaithful pm initPM 13258] 2) :
+    Zigzag2Rel
+      (denoteGraphDistributedFaithful sm initSM 8139)
+      (denoteGraphDistributedFaithful pm initPM 15969)
+      (denoteGraphDistributedFaithful pm initPM 15977)
+      (denoteGraphDistributedFaithful pm initPM 5337)
+      [4096, 1024] [2048, 1024] := by
+  have hparent := recon_zigzagGoal_5338_distributed initSM initPM hSM hPM hInit hCu
+  rcases l2mr_sm_facts with ⟨_, sn474⟩
+  rcases l2mr_pm_facts with ⟨_, _, pn1006, pn1009⟩
+  have sred : denoteGraphDistributedFaithful sm initSM 8139 =
+      denoteGraphDistributedFaithful sm initSM 5338 := by
+    exact denoteGraphDistributedFaithful_reduce1 sm initSM 474 _ 5338 8139 (fun x => x)
+      (by native_decide) sn474 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _ (by decide) (by decide)]
+        exact applyNode_fw_multiref2_first_out sm s 0 5338 8139 8143)
+      (l2mr_nonempty_sm 475) (l2mr_sm_not_written 475 8139 (by decide))
+      (l2mr_nonempty_sm 474) (l2mr_sm_not_written 474 5338 (by decide))
+  have pred0 : denoteGraphDistributedFaithful pm initPM 15969 =
+      denoteGraphDistributedFaithful pm initPM 9655 := by
+    exact denoteGraphDistributedFaithful_reduce1 pm initPM 1006 _ 9655 15969 (fun x => x)
+      (by native_decide) pn1006 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _ (by decide) (by decide)]
+        exact applyNode_fw_multiref2_first_out pm s 0 9655 15969 15973)
+      (l2mr_nonempty_pm 1007) (l2mr_pm_not_written 1007 15969 (by decide))
+      (l2mr_nonempty_pm 1006) (l2mr_pm_not_written 1006 9655 (by decide))
+  have pred1 : denoteGraphDistributedFaithful pm initPM 15977 =
+      denoteGraphDistributedFaithful pm initPM 9656 := by
+    exact denoteGraphDistributedFaithful_reduce1 pm initPM 1009 _ 9656 15977 (fun x => x)
+      (by native_decide) pn1009 (by
+        intro s
+        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _ (by decide) (by decide)]
+        exact applyNode_fw_multiref2_first_out pm s 1 9656 15977 15981)
+      (l2mr_nonempty_pm 1010) (l2mr_pm_not_written 1010 15977 (by decide))
       (l2mr_nonempty_pm 1009) (l2mr_pm_not_written 1009 9656 (by decide))
   rw [sred, pred0, pred1]
   exact hparent
