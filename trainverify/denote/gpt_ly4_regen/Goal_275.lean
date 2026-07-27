@@ -72,6 +72,7 @@ theorem prove_goal_275_cut : goal_275_stmt_cut := by
   have h605_gather : initSM 605 = allGatherPrimDimN 1 4 0
       [initPM 1665, initPM 1666, initPM 1667, initPM 1668] := by
     rw [h605_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1665_shape]; decide)
   -- AllToAll result for each rank: allToAllPrimWithDims 4 r [shards] 1 2 = chunkPrimDimN 2 4 r (initSM 605)
   have halltoall : ∀ r, allToAllPrimWithDims 4 r
@@ -121,17 +122,21 @@ theorem prove_goal_275_cut : goal_275_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_275, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape = [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape = [1, 8, 32]
     show (denoteGraph sm_goal_275 initSM 961).shape = _
     rw [hsm]; exact h605_shape
-  · -- PM tps shapes = [[1,8,8], [1,8,8], [1,8,8], [1,8,8]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tps shapes = [[1,8,8], [1,8,8], [1,8,8], [1,8,8]]
     show [(denoteGraph pm_goal_275 initPM 1693).shape,
           (denoteGraph pm_goal_275 initPM 1694).shape,
           (denoteGraph pm_goal_275 initPM 1695).shape,
           (denoteGraph pm_goal_275 initPM 1696).shape] = _
     rw [hpm0, hpm1, hpm2, hpm3, halltoall 0, halltoall 1, halltoall 2, halltoall 3,
         hchunk_shape 0, hchunk_shape 1, hchunk_shape 2, hchunk_shape 3]
-  · -- Value equality
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     show denoteGraph sm_goal_275 initSM 961 = reconstructWithDim _ _ _ _
     rw [show pm_goal_275.numRanks = 4 from rfl,
         hsm, hpm0, hpm1, hpm2, hpm3, halltoall 0, halltoall 1, halltoall 2, halltoall 3,

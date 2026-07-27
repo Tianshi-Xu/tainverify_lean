@@ -115,6 +115,7 @@ theorem prove_goal_177_cut : goal_177_stmt_cut := by
     [initPM 2117, initPM 2118, initPM 2119, initPM 2120] with hCdef
   have h633_gather : initSM 633 = C := by
     rw [h633_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h2117_shape]; decide)
   have hC_shape : C.shape = [1, 8, 128] := by
     rw [hCdef]
@@ -125,6 +126,7 @@ theorem prove_goal_177_cut : goal_177_stmt_cut := by
   have h803_gather : initSM 803 = allGatherPrimDimN 1 4 0
       [initPM 2158, initPM 2160, initPM 2162, initPM 2164] := by
     rw [h803_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2158_shape]; decide)
   -- chunk shapes for dim-1 chunks of C
   have hchunk1_shape : ∀ r, (chunkPrimDimN 1 4 r C).shape = [1, 2, 128] := by
@@ -227,9 +229,11 @@ theorem prove_goal_177_cut : goal_177_stmt_cut := by
   -- Discharge the three conjuncts.
   simp only [goal_177, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape
     rw [hsm, hG, hG_shape]
-  · -- PM tp shapes
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes
     rw [hpm0, hpm1, hpm2, hpm3]
     have hch : ∀ r, (chunkPrimDimN 2 4 r (allGatherPrimDimN 1 4 0 [Y0, Y1, Y2, Y3])).shape
         = [1, 8, 32] := by
@@ -237,9 +241,11 @@ theorem prove_goal_177_cut : goal_177_stmt_cut := by
       rw [chunkPrimDimN_shape 2 4 r _ _ hG_shape (by omega)]
       simp [List.set, List.getD]
     simp only [hch]
-  · -- Value equality
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality
     rw [hsm, hG, hpm0, hpm1, hpm2, hpm3]
     show allGatherPrimDimN 1 4 0 [Y0, Y1, Y2, Y3] = reconstructWithDim 2 4 0 _
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by
       rw [chunkPrimDimN_shape 2 4 0 _ _ hG_shape (by omega)]; decide)]
     exact (allGather_chunkPrimDimN_roundtrip_dim2_4_1_8_128 _ hG_shape).symm

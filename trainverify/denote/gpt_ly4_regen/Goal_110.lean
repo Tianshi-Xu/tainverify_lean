@@ -93,6 +93,7 @@ theorem prove_goal_110_cut : goal_110_stmt_cut := by
   have h722_gather : initSM 722 = allGatherPrimDimN 2 4 0
       [initPM 1131, initPM 1134, initPM 1137, initPM 1140] := by
     rw [h722_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1131_shape]; decide)
   have h722_shape : (initSM 722).shape = [1, 8, 32] := hInit111.1
   -- Init shapes of the AllToAll(idim=1,odim=2) inputs (each [1,2,32]).
@@ -211,12 +212,15 @@ theorem prove_goal_110_cut : goal_110_stmt_cut := by
   -- Discharge the three conjuncts.
   simp only [goal_110, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [1, 8, 32]
     rw [hsm, hdw_sm]; exact h722_shape
-  · -- PM tp shapes: [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]]
     rw [hpm1102', hpm1104', hpm1106', hpm1108',
         hchunk722 0, hchunk722 1, hchunk722 2, hchunk722 3]
-  · -- Value equality: smStore 721 = reconstructWithDim 1 4 0 [pmStore 1102, ...]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 721 = reconstructWithDim 1 4 0 [pmStore 1102, ...]
     rw [hsm, hdw_sm, hpm1102', hpm1104', hpm1106', hpm1108',
         show pm_goal_110.numRanks = 4 from rfl,
         reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [hchunk722 0]; decide)]

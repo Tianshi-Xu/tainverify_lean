@@ -64,7 +64,7 @@ theorem prove_goal_222_cut : goal_222_stmt_cut := by
   have h860_eq : initSM 860 = initPM 860 := by
     have hrec := hInit223.2.2
     simp only [goal_223, pm_goal_222, List.map] at hrec
-    rw [hrec]; exact reconstructWithDim_singleton ..
+    rw [hrec]; (first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip); exact reconstructWithDim_singleton ..
   have h860_shapeP : (initPM 860).shape = [1, 8, 32] := by rw [← h860_eq]; exact h860_shape
   -- x (1051): gather on dim 2 from [2841,2842,2843,2844]
   have hInit305 : InitGoalHolds pm_goal_222.numRanks goal_305 initSM initPM := by
@@ -88,6 +88,7 @@ theorem prove_goal_222_cut : goal_222_stmt_cut := by
   have h1051_gather : initSM 1051 = allGatherPrimDimN 2 4 0
       [initPM 2841, initPM 2842, initPM 2843, initPM 2844] := by
     rw [h1051_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h2841_shape]; decide)
   -- w (678): gather on dim 1 from [2845,2846,2847,2848]
   have hInit678 : InitGoalHolds pm_goal_222.numRanks initGoal_678 initSM initPM := by
@@ -111,6 +112,7 @@ theorem prove_goal_222_cut : goal_222_stmt_cut := by
   have h678_gather : initSM 678 = allGatherPrimDimN 1 4 0
       [initPM 2845, initPM 2846, initPM 2847, initPM 2848] := by
     rw [h678_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2845_shape]; decide)
   -- SM store: dX of full BW_linear
   have hsm : (denoteGraph sm_goal_222 initSM) 859 =
@@ -174,10 +176,12 @@ theorem prove_goal_222_cut : goal_222_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_222, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · show (denoteGraph sm_goal_222 initSM 859).shape = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show (denoteGraph sm_goal_222 initSM 859).shape = _
     rw [hsm]
     exact bw_linear_3d_snd_shape 1 8 32 32 _ _ _ h860_shape h1051_shape h678_shape
-  · show [(denoteGraph pm_goal_222 initPM 2862).shape,
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show [(denoteGraph pm_goal_222 initPM 2862).shape,
           (denoteGraph pm_goal_222 initPM 2864).shape,
           (denoteGraph pm_goal_222 initPM 2866).shape,
           (denoteGraph pm_goal_222 initPM 2868).shape] = _
@@ -186,7 +190,8 @@ theorem prove_goal_222_cut : goal_222_stmt_cut := by
                bw_linear_3d_snd_shape 1 8 32 8 _ _ _ h860_shapeP h2842_shape h2846_shape,
                bw_linear_3d_snd_shape 1 8 32 8 _ _ _ h860_shapeP h2843_shape h2847_shape,
                bw_linear_3d_snd_shape 1 8 32 8 _ _ _ h860_shapeP h2844_shape h2848_shape]
-  · show denoteGraph sm_goal_222 initSM 859 =
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show denoteGraph sm_goal_222 initSM 859 =
       reconstructWithDim 1 4 0 [denoteGraph pm_goal_222 initPM 2862,
         denoteGraph pm_goal_222 initPM 2864, denoteGraph pm_goal_222 initPM 2866,
         denoteGraph pm_goal_222 initPM 2868]

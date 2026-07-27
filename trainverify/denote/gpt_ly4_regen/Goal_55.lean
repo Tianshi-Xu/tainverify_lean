@@ -90,17 +90,20 @@ theorem prove_goal_55_cut : goal_55_stmt_cut := by
   have h638_eq : initSM 638 = initPM 638 := by
     have hrec := hInit638.2.2
     simp only [initGoal_638, pm_goal_55, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   have h639_eq : initSM 639 = initPM 639 := by
     have hrec := hInit639.2.2
     simp only [initGoal_639, pm_goal_55, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   -- Convert reconstructWithDim to allGatherPrimDimN (non-scalar shards)
   have h989_gather : initSM 989 = allGatherPrimDimN 1 4 0
       [initPM 2225, initPM 2226, initPM 2227, initPM 2228] := by
     rw [h989_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2225_shape]; decide)
   -- SM store: smStore 640 = fw_layernorm (initSM 989) (initSM 638) (initSM 639)
   have hsm : (denoteGraph sm_goal_55 initSM) 640 =
@@ -152,17 +155,20 @@ theorem prove_goal_55_cut : goal_55_stmt_cut := by
   -- Prove the three conjuncts
   simp only [goal_55, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM shape: [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM shape: [1, 8, 32]
     rw [hsm]
     exact fw_layernorm_shape_1_8_32 (initSM 989) (initSM 638) (initSM 639) h989_shape
-  · -- PM tp shapes: [[1,2,32], [1,2,32], [1,2,32], [1,2,32]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[1,2,32], [1,2,32], [1,2,32], [1,2,32]]
     rw [hpm0, hpm1, hpm2, hpm3]
     have hs0 := fw_layernorm_shape_1_2_32 (initPM 2225) (initPM 638) (initPM 639) h2225_shape
     have hs1 := fw_layernorm_shape_1_2_32 (initPM 2226) (initPM 638) (initPM 639) h2226_shape
     have hs2 := fw_layernorm_shape_1_2_32 (initPM 2227) (initPM 638) (initPM 639) h2227_shape
     have hs3 := fw_layernorm_shape_1_2_32 (initPM 2228) (initPM 638) (initPM 639) h2228_shape
     simp [hs0, hs1, hs2, hs3]
-  · -- Value equality: smStore 640 = reconstructWithDim 1 4 0 [pmStore 2229,...,2232]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 640 = reconstructWithDim 1 4 0 [pmStore 2229,...,2232]
     rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
     symm
     apply reconstructWithDim_cons_cons_nonscalar

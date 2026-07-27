@@ -76,6 +76,7 @@ theorem prove_goal_67_cut : goal_67_stmt_cut := by
     rcases h4 with rfl | rfl | rfl | rfl <;> simp [hxs, e1, e2, e3, e4]
   have h654_gather : initSM 654 = allGatherPrimDimN 2 4 0 xs := by
     rw [h654_eq, hxs]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [e1]; decide)
   -- SM store: smStore 655 = fw_div 2 (initSM 654)
   have hsm : (denoteGraph sm_goal_67 initSM) 655 = fw_div ((2 : Nat) : Scalar) (initSM 654) := by
@@ -111,14 +112,18 @@ theorem prove_goal_67_cut : goal_67_stmt_cut := by
       simp [hxs, List.map]
     rw [hmap]
     symm
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [fw_div_shape_g67, e1]; decide)
   -- Discharge the three conjuncts
   simp only [goal_67, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm, fw_div_shape_g67, h654_shape]
-  · rw [hpm0, hpm1, hpm2, hpm3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, fw_div_shape_g67, h654_shape]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm0, hpm1, hpm2, hpm3]
     simp only [fw_div_shape_g67, e1, e2, e3, e4]
-  · have hnr : pm_goal_67.numRanks = 4 := rfl
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    have hnr : pm_goal_67.numRanks = 4 := rfl
     rw [hsm, hpm0, hpm1, hpm2, hpm3, hnr, hkey]
 
 end TrainVerify.Denote.GeneratedGoals

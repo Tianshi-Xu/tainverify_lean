@@ -77,6 +77,7 @@ theorem prove_goal_78_cut : goal_78_stmt_cut := by
     have hrec := hInit77.2.2
     simp only [goal_77, pm_goal_78, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar _ _ _ _ _ _ (by rw [h2701_shape]; decide)
   -- Extract initGoal_670: W (tid 670) gathered on dim1 from shards 2725..2728
   have hInit670 : InitGoalHolds pm_goal_78.numRanks initGoal_670 initSM initPM := by
@@ -87,6 +88,7 @@ theorem prove_goal_78_cut : goal_78_stmt_cut := by
     have hrec := hInit670.2.2
     simp only [initGoal_670, pm_goal_78, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar _ _ _ _ _ _ (by rw [h2725_shape]; decide)
   -- AllToAll unfold helper
   have halltoall : ∀ r, r < 4 →
@@ -188,19 +190,24 @@ theorem prove_goal_78_cut : goal_78_stmt_cut := by
   -- Discharge 3 conjuncts
   simp only [goal_78, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape
     show (denoteGraph sm_goal_78 initSM 671).shape = _
     rw [hsm]
     exact fw_linear_3d_shape 1 8 128 32 _ _ h669_shape h670_shape
-  · -- PM tps shapes
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tps shapes
     show [(denoteGraph pm_goal_78 initPM 671).shape] = _
     rw [hpm_reduce, ← hkey2, ← hsm]
     simp
     exact fw_linear_3d_shape 1 8 128 32 _ _ h669_shape h670_shape
-  · -- Value equality
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     show denoteGraph sm_goal_78 initSM 671 = reconstructWithDim _ _ _ _
     rw [hsm, hkey2, ← hpm_reduce]
     symm
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_singleton ..
 
 #print axioms prove_goal_78_cut

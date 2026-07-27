@@ -70,6 +70,7 @@ theorem prove_goal_2_cut : goal_2_stmt_cut := by
   have h714_eq : initSM 714 = initPM 714 := by
     have hrec := hInit714.2.2
     simp only [initGoal_714, pm_goal_2, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   -- Shape facts
@@ -94,6 +95,7 @@ theorem prove_goal_2_cut : goal_2_stmt_cut := by
   have h563_gather : initSM 563 = allGatherPrimDimN 0 4 0
       [initPM 1065, initPM 1066, initPM 1067, initPM 1068] := by
     rw [h563_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _ (by rw [h1065_shape]; decide)
   -- SM store: smStore 564 = fw_embedding (initSM 714) (initSM 563)
   have hsm : (denoteGraph sm_goal_2 initSM) 564 = fw_embedding (initSM 714) (initSM 563) := by
@@ -145,11 +147,13 @@ theorem prove_goal_2_cut : goal_2_stmt_cut := by
           congr 1
   -- Prove the three conjuncts of goal_2
   refine ⟨?_, ?_, ?_⟩
-  · -- SM shape: [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM shape: [1, 8, 32]
     change (denoteGraph sm_goal_2 initSM 564).shape = [1, 8, 32]
     rw [hsm, fw_embedding_shape, h714_shape, h563_shape]
     simp [lastD]
-  · -- PM tp shapes: [[1, 8, 32]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[1, 8, 32]]
     change [(denoteGraph pm_goal_2 initPM 564).shape] = [[1, 8, 32]]
     rw [hpm_list]
     rw [allReducePrim_shape 4 0
@@ -160,8 +164,10 @@ theorem prove_goal_2_cut : goal_2_stmt_cut := by
         (fw_embedding_offset 0 (initPM 714) (initPM 1065)) rfl]
     rw [fw_embedding_offset_shape, h1065_shape, h714_pm_shape]
     simp [lastD]
-  · -- Value equality: smStore 564 = reconstructWithDim 0 4 0 [pmStore 564]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 564 = reconstructWithDim 0 4 0 [pmStore 564]
     change denoteGraph sm_goal_2 initSM 564 = reconstructWithDim 0 4 0 [denoteGraph pm_goal_2 initPM 564]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [hsm, h714_eq, h563_gather, hkey, ← hpm_list, reconstructWithDim_singleton]
 
 end TrainVerify.Denote.GeneratedGoals

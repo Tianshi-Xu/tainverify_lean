@@ -80,6 +80,7 @@ theorem prove_goal_231_cut : goal_231_stmt_cut := by
   have h873_gather : initSM 873 = allGatherPrimDimN 3 4 0
       [initPM 3083, initPM 3086, initPM 3089, initPM 3092] := by
     rw [h873_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h3083_shape]; decide)
   -- goal_93: tensor 691 (= x, second operand) is replicated (singleton)
   have hInit691 : InitGoalHolds pm_goal_231.numRanks goal_93 initSM initPM := by
@@ -89,7 +90,7 @@ theorem prove_goal_231_cut : goal_231_stmt_cut := by
   have h691_eq : initSM 691 = initPM 691 := by
     have hrec := hInit691.2.2
     simp only [goal_93, pm_goal_231, List.map] at hrec
-    rw [hrec]; exact reconstructWithDim_singleton _ _ _ _
+    rw [hrec]; (first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip); exact reconstructWithDim_singleton _ _ _ _
   have hs691 := hInit691.2.1
   simp only [goal_93, List.map, List.cons.injEq, and_true] at hs691
   have h691_shape : (initPM 691).shape = [1, 4, 8, 8] := hs691
@@ -259,19 +260,22 @@ theorem prove_goal_231_cut : goal_231_stmt_cut := by
   -- discharge the three conjuncts
   simp only [goal_231, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape
     rw [hsm868]
     show (batchedMatmul (transpose2d (initSM 691)) (initSM 873)).shape = _
     rw [h691_eq, h873_gather, ← hZeq]
     exact hZ_shape
-  · -- PM shard shapes
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM shard shapes
     rw [hf0_chunk, hf1_chunk, hf2_chunk, hf3_chunk,
         chunkPrimDimN_shape 2 4 0 _ _ hZ_shape (by omega),
         chunkPrimDimN_shape 2 4 1 _ _ hZ_shape (by omega),
         chunkPrimDimN_shape 2 4 2 _ _ hZ_shape (by omega),
         chunkPrimDimN_shape 2 4 3 _ _ hZ_shape (by omega)]
     simp [List.set, List.getD]
-  · -- value
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- value
     rw [hsm868]
     show batchedMatmul (transpose2d (initSM 691)) (initSM 873) = _
     rw [show pm_goal_231.numRanks = 4 from rfl]

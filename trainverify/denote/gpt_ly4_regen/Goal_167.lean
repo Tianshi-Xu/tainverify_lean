@@ -71,6 +71,7 @@ theorem prove_goal_167_cut : goal_167_stmt_cut := by
   have h791_eq : initSM 791 = initPM 791 := by
     have hrec := hInit791.2.2
     simp only [goal_168, pm_goal_167, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   have h791_shape : (initSM 791).shape = [1, 8, 4, 8] := hInit791.1
@@ -141,13 +142,17 @@ theorem prove_goal_167_cut : goal_167_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_167, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm]; exact h791_shape
-  · rw [hpm0', hpm1', hpm2', hpm3']
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm]; exact h791_shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm0', hpm1', hpm2', hpm3']
     simp [hc 0, hc 1, hc 2, hc 3]
-  · rw [hsm, hpm0', hpm1', hpm2', hpm3']
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hpm0', hpm1', hpm2', hpm3']
     show initSM 791 = reconstructWithDim 3 4 0
       [chunkPrimDimN 3 4 0 (initPM 791), chunkPrimDimN 3 4 1 (initPM 791),
        chunkPrimDimN 3 4 2 (initPM 791), chunkPrimDimN 3 4 3 (initPM 791)]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [hc 0]; decide)]
     rw [allGatherPrimDimN_chunkPrimDimN_id_dim3_4_1_8_4_8_g167 (initPM 791) h791pm_shape]
     exact h791_eq

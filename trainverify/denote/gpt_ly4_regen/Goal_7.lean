@@ -80,6 +80,7 @@ theorem prove_goal_7_cut : goal_7_stmt_cut := by
   have hX_gather : initSM 922 = allGatherPrimDimN 1 4 0
       [initPM 1201, initPM 1202, initPM 1203, initPM 1204] := by
     rw [hX_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1201_shape]; decide)
   -- Extract initGoal_573: W is replicated
   have hInitW : InitGoalHolds pm_goal_7.numRanks initGoal_573 initSM initPM := by
@@ -88,7 +89,7 @@ theorem prove_goal_7_cut : goal_7_stmt_cut := by
   have hW_eq : initSM 573 = initPM 573 := by
     have hrec := hInitW.2.2
     simp only [initGoal_573, pm_goal_7, List.map] at hrec
-    rw [hrec]; exact reconstructWithDim_singleton ..
+    rw [hrec]; (first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip); exact reconstructWithDim_singleton ..
   have hW_pm_shape : (initPM 573).shape = [32, 32] := by
     rw [← hW_eq]; exact hW_sm_shape
   -- SM store
@@ -123,16 +124,19 @@ theorem prove_goal_7_cut : goal_7_stmt_cut := by
     exact hdist
   -- Discharge 3 conjuncts
   refine ⟨?_, ?_, ?_⟩
-  · show (denoteGraph sm_goal_7 initSM 574).shape = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show (denoteGraph sm_goal_7 initSM 574).shape = _
     rw [hsm]
     exact fw_linear_3d_shape 1 8 32 32 _ _ hX_shape hW_sm_shape
-  · show [(denoteGraph pm_goal_7 initPM 574).shape] = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show [(denoteGraph pm_goal_7 initPM 574).shape] = _
     rw [hpm]
     congr 1
     exact allGatherPrimDimN_shape 1 4 _ [1, 2, 32] (by
       simp only [List.map, List.head?, Option.map, Option.getD]
       exact fw_linear_3d_shape 1 2 32 32 _ _ h1201_shape hW_pm_shape)
-  · show denoteGraph sm_goal_7 initSM 574 = reconstructWithDim _ _ _ _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show denoteGraph sm_goal_7 initSM 574 = reconstructWithDim _ _ _ _
     rw [hsm, hkey, ← hpm]
     exact (reconstructWithDim_singleton ..).symm
 

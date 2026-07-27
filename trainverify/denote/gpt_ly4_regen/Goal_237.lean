@@ -77,6 +77,7 @@ theorem prove_goal_237_cut : goal_237_stmt_cut := by
   have h875_eq : initSM 875 = initPM 875 := by
     have hrec := hInit875.2.2
     simp only [goal_238, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [hrec, reconstructWithDim_singleton]
   have hpm875_shape : (initPM 875).shape = [1, 8, 4, 8] := by rw [← h875_eq]; exact h875_shape
   -- SM store: BW_contiguous identity
@@ -116,11 +117,15 @@ theorem prove_goal_237_cut : goal_237_stmt_cut := by
   simp only [goal_237, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
     LineageGoal.gatherDim, List.map, Piece.tid]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm]; exact h875_shape
-  · rw [hpm0', hpm1', hpm2', hpm3']
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm]; exact h875_shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm0', hpm1', hpm2', hpm3']
     simp only [hchunk1_shape]
-  · rw [hsm, hpm0', hpm1', hpm2', hpm3', h875_eq]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hpm0', hpm1', hpm2', hpm3', h875_eq]
     symm
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     simp only [reconstructWithDim_cons_cons_nonscalar (h := by rw [hchunk1_shape 0]; decide)]
     exact allGatherPrimDimN_chunkPrimDimN_id_dim1_4_1_8_4_8_g237 (initPM 875) hpm875_shape
 

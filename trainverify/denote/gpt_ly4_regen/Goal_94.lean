@@ -73,6 +73,7 @@ theorem prove_goal_94_cut : goal_94_stmt_cut := by
   have h691_rec : initSM 691 = initPM 691 := by
     have hrec := hInit691.2.2
     simp only [goal_93, pm_goal_94, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [hrec, reconstructWithDim_singleton]
   -- reconstruct relation for 687
   have h687_rec : initSM 687 = reconstructWithDim 2 4 0
@@ -89,6 +90,7 @@ theorem prove_goal_94_cut : goal_94_stmt_cut := by
   have h687_gather : initSM 687 = allGatherPrimDimN 2 4 0
       [initPM 2949, initPM 2950, initPM 2951, initPM 2952] := by
     rw [h687_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h2949_shape]; decide)
   -- the AllToAll outputs equal chunks (along dim 3) of the gathered SM input 687
   have halltoall : ∀ r,
@@ -168,11 +170,14 @@ theorem prove_goal_94_cut : goal_94_stmt_cut := by
   simp only [goal_94, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
     LineageGoal.gatherDim, List.map, Piece.tid]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm]
     exact fw_matmul_shape_1_4_8_8 _ _ hInit691.1 h687_shape
-  · rw [hpm0, hpm1, hpm2, hpm3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm0, hpm1, hpm2, hpm3]
     simp [hpiece_shape 0, hpiece_shape 1, hpiece_shape 2, hpiece_shape 3]
-  · rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
     symm
     apply reconstructWithDim_cons_cons_nonscalar
     rw [hpm0, hpiece_shape 0]

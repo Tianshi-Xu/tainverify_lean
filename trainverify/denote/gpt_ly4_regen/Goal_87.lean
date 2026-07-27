@@ -58,6 +58,7 @@ theorem prove_goal_87_cut : goal_87_stmt_cut := by
   have h684_eq : initSM 684 = initPM 684 := by
     have hrec := hInit.2.2
     simp only [goal_86, pm_goal_87, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   have h684pm_shape : (initPM 684).shape = [1, 8, 4, 8] := by rw [← h684_eq]; exact h684_shape
@@ -107,14 +108,17 @@ theorem prove_goal_87_cut : goal_87_stmt_cut := by
   -- Three conjuncts
   simp only [goal_87, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape
     rw [hsm]
     simp only [transposeAxes, Tensor.mkShape, listSwapAt, h684_shape, List.getD, List.set,
       List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
-  · -- PM tp shapes
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes
     rw [hpm0, hpm1, hpm2, hpm3]
     simp [htp_shape 0 (by omega), htp_shape 1 (by omega), htp_shape 2 (by omega), htp_shape 3 (by omega)]
-  · -- Value equality
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality
     rw [hsm, h684_eq, hbridge, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
     symm
     apply reconstructWithDim_cons_cons_nonscalar

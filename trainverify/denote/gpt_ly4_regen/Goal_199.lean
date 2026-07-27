@@ -74,6 +74,7 @@ theorem prove_goal_199_cut : goal_199_stmt_cut := by
     have hrec := hInitG.2.2
     simp only [goal_200, LineageGoal.tps, LineageGoal.gatherDim, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [hG0]; decide)
   -- init alignment for the softmax output y (tensor 655 = goal_67)
   have hInitY : InitGoalHolds pm_goal_199.numRanks goal_67 initSM initPM := by
@@ -94,6 +95,7 @@ theorem prove_goal_199_cut : goal_199_stmt_cut := by
     have hrec := hInitY.2.2
     simp only [goal_67, LineageGoal.tps, LineageGoal.gatherDim, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [hY0]; decide)
   -- SM store
   have hsm : (denoteGraph sm_goal_199 initSM) 829 = bw_softmax (initSM 830) (initSM 655) := by
@@ -158,15 +160,19 @@ theorem prove_goal_199_cut : goal_199_stmt_cut := by
   simp only [goal_199, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
     LineageGoal.gatherDim, List.map, Piece.tid]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape
     rw [hsm]
     exact bw_softmax_shape_g199 _ _ [1, 4, 8] 8 hy_shape
-  · -- PM tp shapes
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes
     rw [hpm0, hpm1, hpm2, hpm3]
     rw [hp0, hp1, hp2, hp3]
-  · -- value equality
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- value equality
     rw [hsm, hpm0, hpm1, hpm2, hpm3, hbridge]
     rw [show pm_goal_199.numRanks = 4 from rfl]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [hp0]; decide)]
 
 end TrainVerify.Denote.GeneratedGoals

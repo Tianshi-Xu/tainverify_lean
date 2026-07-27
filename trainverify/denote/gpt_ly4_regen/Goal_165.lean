@@ -84,6 +84,7 @@ theorem prove_goal_165_cut : goal_165_stmt_cut := by
   have h617_gather : initSM 617 = allGatherPrimDimN 3 4 0
       [initPM 1829, initPM 1830, initPM 1831, initPM 1832] := by
     rw [h617_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h1829_shape]; decide)
   have hY617_shape : (allGatherPrimDimN 3 4 0
       [initPM 1829, initPM 1830, initPM 1831, initPM 1832]).shape = [1, 4, 8, 8] := by
@@ -97,7 +98,7 @@ theorem prove_goal_165_cut : goal_165_stmt_cut := by
   have h789_eq : initSM 789 = initPM 789 := by
     have hrec := hInit789.2.2
     simp only [goal_166, pm_goal_165, List.map] at hrec
-    rw [hrec]; exact reconstructWithDim_singleton _ _ _ _
+    rw [hrec]; (first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip); exact reconstructWithDim_singleton _ _ _ _
   have hs789 := hInit789.2.1
   simp only [goal_166, List.map, List.cons.injEq, and_true] at hs789
   have h789_shape : (initPM 789).shape = [1, 4, 8, 8] := hs789
@@ -305,19 +306,22 @@ theorem prove_goal_165_cut : goal_165_stmt_cut := by
   -- discharge the three conjuncts
   simp only [goal_165, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape
     rw [hsm788]
     show (batchedMatmul (initSM 789) (transpose2d (initSM 617))).shape = _
     rw [h789_eq, h617_gather, ← hZeq]
     exact hZ_shape
-  · -- PM shard shapes
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM shard shapes
     rw [hf0_chunk, hf1_chunk, hf2_chunk, hf3_chunk,
         chunkPrimDimN_shape 2 4 0 _ _ hZ_shape (by omega),
         chunkPrimDimN_shape 2 4 1 _ _ hZ_shape (by omega),
         chunkPrimDimN_shape 2 4 2 _ _ hZ_shape (by omega),
         chunkPrimDimN_shape 2 4 3 _ _ hZ_shape (by omega)]
     simp [List.set, List.getD]
-  · -- value
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- value
     rw [hsm788]
     show batchedMatmul (initSM 789) (transpose2d (initSM 617)) = _
     rw [show pm_goal_165.numRanks = 4 from rfl]

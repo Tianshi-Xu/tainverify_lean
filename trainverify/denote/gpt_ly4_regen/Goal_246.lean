@@ -68,6 +68,7 @@ theorem prove_goal_246_cut : goal_246_stmt_cut := by
   have h886_eq : initSM 886 = initPM 886 := by
     have hrec := hInit247.2.2
     simp only [goal_247, pm_goal_246, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h886_shape : (initSM 886).shape = [1, 8, 128] := hInit247.1
   have h886_shapeP : (initPM 886).shape = [1, 8, 128] := by rw [← h886_eq]; exact h886_shape
@@ -80,6 +81,7 @@ theorem prove_goal_246_cut : goal_246_stmt_cut := by
       allGatherPrimDimN 1 4 0 [initPM 3205, initPM 3206, initPM 3207, initPM 3208] := by
     have hrec := hInit100.2.2
     simp only [goal_100, pm_goal_246, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _
         (by rw [h3205_shape]; decide)] at hrec
     exact hrec
@@ -235,13 +237,17 @@ theorem prove_goal_246_cut : goal_246_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_246, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm, bw_linear_3d_snd_shape 1 8 128 32 _ _ _ h886_shape h701_shape h702_shape]
-  · rw [hpm0, hpm1, hpm2, hpm3,
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, bw_linear_3d_snd_shape 1 8 128 32 _ _ _ h886_shape h701_shape h702_shape]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm0, hpm1, hpm2, hpm3,
         bw_linear_3d_snd_shape 1 8 128 8 _ _ _ h886_shapeP hch0 h3237_shape,
         bw_linear_3d_snd_shape 1 8 128 8 _ _ _ h886_shapeP hch1 h3238_shape,
         bw_linear_3d_snd_shape 1 8 128 8 _ _ _ h886_shapeP hch2 h3239_shape,
         bw_linear_3d_snd_shape 1 8 128 8 _ _ _ h886_shapeP hch3 h3240_shape]
-  · rw [hsm, hkey, hpm0, hpm1, hpm2, hpm3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hkey, hpm0, hpm1, hpm2, hpm3]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 1 pm_goal_246.numRanks 0 _ _ _ (by
       rw [bw_linear_3d_snd_shape 1 8 128 8 _ _ _ h886_shapeP hch0 h3237_shape]; decide)]
     rfl

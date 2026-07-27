@@ -106,6 +106,7 @@ theorem prove_goal_144_cut : goal_144_stmt_cut := by
   have h600_eq : initSM 600 = initPM 600 := by
     have hrec := hInit600.2.2
     simp only [initGoal_600, pm_goal_144, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h600_shape : (initSM 600).shape = [32, 128] := hInit600.1
   have h600_shapeP : (initPM 600).shape = [32, 128] := by rw [← h600_eq]; exact h600_shape
@@ -127,10 +128,12 @@ theorem prove_goal_144_cut : goal_144_stmt_cut := by
   have h763_gather : initSM 763 = allGatherPrimDimN 1 4 0
       [initPM 1619, initPM 1622, initPM 1625, initPM 1628] := by
     rw [h763_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1619_shape]; decide)
   have h599_gather : initSM 599 = allGatherPrimDimN 2 4 0
       [initPM 1585, initPM 1586, initPM 1587, initPM 1588] := by
     rw [h599_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1585_shape]; decide)
   -- gathered full-tensor shapes
   have hGfull_shape : (allGatherPrimDimN 1 4 0
@@ -211,13 +214,15 @@ theorem prove_goal_144_cut : goal_144_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_144, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [32, 128]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [32, 128]
     rw [hsm, hkey]; unfold cross_dp_wred
     rw [tensorSum_shape,
         bw_linear_3d_snd_shape 1 2 32 128 (initPM 1619) (allToAllPrimWithDims 4 0
           [initPM 1585, initPM 1586, initPM 1587, initPM 1588] 2 1) (initPM 600)
           h1619_shape hA0_shape h600_shapeP]
-  · -- PM tp shapes: [[32, 128]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[32, 128]]
     rw [hpm]; unfold cross_dp_wred
     rw [show [(tensorSum
         [(bw_linear (initPM 1619) (allToAllPrimWithDims 4 0
@@ -233,7 +238,9 @@ theorem prove_goal_144_cut : goal_144_stmt_cut := by
           bw_linear_3d_snd_shape 1 2 32 128 (initPM 1619) (allToAllPrimWithDims 4 0
             [initPM 1585, initPM 1586, initPM 1587, initPM 1588] 2 1) (initPM 600)
             h1619_shape hA0_shape h600_shapeP]]
-  · -- Value equality: smStore 762 = reconstructWithDim 0 4 0 [pmStore 1618]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 762 = reconstructWithDim 0 4 0 [pmStore 1618]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [hsm, hkey, ← hpm, reconstructWithDim_singleton]
 
 end TrainVerify.Denote.GeneratedGoals

@@ -74,6 +74,7 @@ theorem prove_goal_121_cut : goal_121_stmt_cut := by
     exact h
   have hrec_ag : initSM 738 = allGatherPrimDimN 3 4 0
       [initPM 1274, initPM 1276, initPM 1278, initPM 1280] := by
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [hrec]; rw [reconstructWithDim_cons_cons_nonscalar]; rw [hc0]; decide
   -- SM computation
   have hsm : (denoteGraph sm_goal_121 initSM) 737 = transposeAxes 1 2 (initSM 738) := by
@@ -97,16 +98,22 @@ theorem prove_goal_121_cut : goal_121_stmt_cut := by
   simp only [goal_121, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
     LineageGoal.gatherDim, List.map, Piece.tid]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape
     rw [hsm]
     simp only [transposeAxes, Tensor.mkShape, listSwapAt, hgrad_shape, List.getD, List.set,
       List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
-  · -- PM tp shapes
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes
     rw [hpm, allGatherPrimDimN_shape 3 4 _ [1, 8, 4, 2]]
-    · simp [List.set, List.getD]
-    · simp [transposeAxes, Tensor.mkShape, listSwapAt, hc0, List.getD, List.set,
+    · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+      simp [List.set, List.getD]
+    · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+      simp [transposeAxes, Tensor.mkShape, listSwapAt, hc0, List.getD, List.set,
         List.head?, Option.map, Option.getD]
-  · -- Value equality
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_singleton, hsm, hpm]
     exact hbridge
 

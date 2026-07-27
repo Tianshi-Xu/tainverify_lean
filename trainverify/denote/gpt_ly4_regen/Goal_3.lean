@@ -63,11 +63,13 @@ theorem prove_goal_3_cut : goal_3_stmt_cut := by
   have h716_eq : initSM 716 = initPM 716 := by
     have hrec := hInit716.2.2
     simp only [initGoal_716, pm_goal_3, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   have h565_eq : initSM 565 = initPM 565 := by
     have hrec := hInit565.2.2
     simp only [initGoal_565, pm_goal_3, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   -- Shape facts
@@ -121,12 +123,15 @@ theorem prove_goal_3_cut : goal_3_stmt_cut := by
   -- Prove the three conjuncts of goal_3
   simp only [goal_3, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [1, 8, 32]
     rw [hsm, fw_embedding_shape, h716_shape, h565_shape]; rfl
-  · -- PM tp shapes: [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]]
     rw [hpm0, hpm1, hpm2, hpm3]
     simp [hsh 0, hsh 1, hsh 2, hsh 3]
-  · -- Value equality
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality
     rw [hsm, h716_eq, h565_eq, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
     symm
     apply reconstructWithDim_cons_cons_nonscalar

@@ -52,6 +52,7 @@ theorem prove_goal_151_cut : goal_151_stmt_cut := by
   have h779_eq : initSM 779 = initPM 779 := by
     have hrec := hInit779.2.2
     simp only [goal_156, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   have hInit607 : InitGoalHolds pm_goal_151.numRanks goal_31 initSM initPM := by
@@ -61,6 +62,7 @@ theorem prove_goal_151_cut : goal_151_stmt_cut := by
   have h607_eq : initSM 607 = initPM 607 := by
     have hrec := hInit607.2.2
     simp only [goal_31, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   have hgrad_shape : (initSM 779).shape = [1, 8, 4, 8] := hInit779.1
@@ -79,8 +81,11 @@ theorem prove_goal_151_cut : goal_151_stmt_cut := by
     simp [fw_view, Tensor.mkShape, hgrad_shape, prodShape]
   simp only [goal_151, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm, hview_shape]
-  · rw [hpm, ← hview_eq, hview_shape]
-  · rw [hsm, hpm, reconstructWithDim_singleton, hview_eq]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hview_shape]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm, ← hview_eq, hview_shape]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hpm, reconstructWithDim_singleton, hview_eq]
 
 end TrainVerify.Denote.GeneratedGoals

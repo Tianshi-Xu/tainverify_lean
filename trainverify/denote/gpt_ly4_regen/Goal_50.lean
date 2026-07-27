@@ -79,6 +79,7 @@ theorem prove_goal_50_cut : goal_50_stmt_cut := by
   have hX_gather : initSM 977 = allGatherPrimDimN 1 4 0
       [initPM 2081, initPM 2082, initPM 2083, initPM 2084] := by
     rw [hX_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2081_shape]; decide)
   -- Replicated weights 629 (gamma) and 630 (beta)
   have hInitW : InitGoalHolds pm_goal_50.numRanks initGoal_629 initSM initPM := by
@@ -88,11 +89,11 @@ theorem prove_goal_50_cut : goal_50_stmt_cut := by
   have hW_eq : initSM 629 = initPM 629 := by
     have hrec := hInitW.2.2
     simp only [initGoal_629, pm_goal_50, List.map] at hrec
-    rw [hrec]; exact reconstructWithDim_singleton ..
+    rw [hrec]; (first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip); exact reconstructWithDim_singleton ..
   have hB_eq : initSM 630 = initPM 630 := by
     have hrec := hInitB.2.2
     simp only [initGoal_630, pm_goal_50, List.map] at hrec
-    rw [hrec]; exact reconstructWithDim_singleton ..
+    rw [hrec]; (first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip); exact reconstructWithDim_singleton ..
   -- SM store
   have hsm : (denoteGraph sm_goal_50 initSM) 631 =
       fw_layernorm (initSM 977) (initSM 629) (initSM 630) := by
@@ -129,16 +130,19 @@ theorem prove_goal_50_cut : goal_50_stmt_cut := by
   -- Discharge 3 conjuncts
   simp only [goal_50, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · show (denoteGraph sm_goal_50 initSM 631).shape = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show (denoteGraph sm_goal_50 initSM 631).shape = _
     rw [hsm]
     exact fw_layernorm_shape_1_8_32 (initSM 977) (initSM 629) (initSM 630) hX_shape
-  · show [(denoteGraph pm_goal_50 initPM 631).shape] = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show [(denoteGraph pm_goal_50 initPM 631).shape] = _
     rw [hpm]
     congr 1
     exact allGatherPrimDimN_shape 1 4 _ [1, 2, 32] (by
       simp only [List.map, List.head?, Option.map, Option.getD]
       exact fw_layernorm_shape_1_2_32 (initPM 2081) (initPM 629) (initPM 630) h2081_shape)
-  · show denoteGraph sm_goal_50 initSM 631 = reconstructWithDim _ _ _ _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show denoteGraph sm_goal_50 initSM 631 = reconstructWithDim _ _ _ _
     rw [hsm, hkey, ← hpm]
     exact (reconstructWithDim_singleton ..).symm
 

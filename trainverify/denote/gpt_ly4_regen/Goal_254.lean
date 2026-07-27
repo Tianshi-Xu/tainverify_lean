@@ -88,6 +88,7 @@ theorem prove_goal_254_cut : goal_254_stmt_cut := by
   have h895_gather : initSM 895 = allGatherPrimDimN 2 4 0
       [initPM 3387, initPM 3390, initPM 3393, initPM 3396] := by
     rw [h895_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h3387_shape]; decide)
   -- initGoal_711: shard shapes [32,32] and reconstruct of w=711
   have htp711 := hInit711.2.1
@@ -108,11 +109,13 @@ theorem prove_goal_254_cut : goal_254_stmt_cut := by
   have h711_gather : initSM 711 = allGatherPrimDimN 0 4 0
       [initPM 3369, initPM 3370, initPM 3371, initPM 3372] := by
     rw [h711_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _ (by rw [h3369_shape]; decide)
   -- goal_105: x=710 shared (singleton)
   have h710_eq : initSM 710 = initPM 710 := by
     have hrec := hInit710.2.2
     simp only [goal_105, pm_goal_254, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h710_shape : (initSM 710).shape = [1, 8, 32] := hInit710.1
   have h710_shapeP : (initPM 710).shape = [1, 8, 32] := by rw [← h710_eq]; exact h710_shape
@@ -196,13 +199,17 @@ theorem prove_goal_254_cut : goal_254_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_254, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [1, 8, 32]
     rw [hsm, hkey]; exact hRshape
-  · -- PM tp shapes
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes
     rw [hc0, hc1, hc2, hc3, hcshape 0, hcshape 1, hcshape 2, hcshape 3]
-  · -- Value equality
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality
     rw [hsm, hkey, hc0, hc1, hc2, hc3]
     rw [show pm_goal_254.numRanks = 4 from rfl]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [hcshape 0]; decide)]
     rw [allGatherPrimDimN_chunkPrimDimN_id_dim1_4_32 _ hRshape]
 

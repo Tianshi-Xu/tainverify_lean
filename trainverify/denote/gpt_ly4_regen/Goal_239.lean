@@ -72,6 +72,7 @@ theorem prove_goal_239_cut : goal_239_stmt_cut := by
   have h878_eq : initSM 878 = initPM 878 := by
     have hrec := hInit241.2.2
     simp only [goal_241, pm_goal_239, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h878_shape : (initSM 878).shape = [1, 8, 32] := hInit241.1
   have h878_shapeP : (initPM 878).shape = [1, 8, 32] := by rw [← h878_eq]; exact h878_shape
@@ -79,6 +80,7 @@ theorem prove_goal_239_cut : goal_239_stmt_cut := by
   have h695_eq : initSM 695 = initPM 695 := by
     have hrec := hInit97.2.2
     simp only [goal_97, pm_goal_239, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h695_shape : (initSM 695).shape = [1, 8, 32] := hInit97.1
   have h695_shapeP : (initPM 695).shape = [1, 8, 32] := by rw [← h695_eq]; exact h695_shape
@@ -101,6 +103,7 @@ theorem prove_goal_239_cut : goal_239_stmt_cut := by
   have h696_gather : initSM 696 = allGatherPrimDimN 1 4 0
       [initPM 3145, initPM 3146, initPM 3147, initPM 3148] := by
     rw [h696_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h3145_shape]; decide)
   -- SM store: dX (first output, tid 876) of BW_linear on full tensors
   have hsm : (denoteGraph sm_goal_239 initSM) 876 =
@@ -143,11 +146,15 @@ theorem prove_goal_239_cut : goal_239_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_239, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [1, 8, 32]
     rw [hsm, hkey, allGatherPrimDimN_shape 2 4 _ [1, 8, 8] hRhead]; decide
-  · -- PM tp shapes: [[1, 8, 32]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[1, 8, 32]]
     rw [hpm, allGatherPrimDimN_shape 2 4 _ [1, 8, 8] hRhead]; decide
-  · -- Value equality: smStore 876 = reconstructWithDim _ _ _ [pmStore 876]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 876 = reconstructWithDim _ _ _ [pmStore 876]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [hsm, hkey, ← hpm, reconstructWithDim_singleton]
 
 end TrainVerify.Denote.GeneratedGoals

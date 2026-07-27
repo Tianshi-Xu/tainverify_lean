@@ -82,6 +82,7 @@ theorem prove_goal_28_cut : goal_28_stmt_cut := by
   have h599_gather : initSM 599 = allGatherPrimDimN 2 4 0
       [initPM 1585, initPM 1586, initPM 1587, initPM 1588] := by
     rw [h599_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1585_shape]; decide)
   -- Extract initGoal_600: W (tid 600) is replicated
   have hInit600 : InitGoalHolds pm_goal_28.numRanks initGoal_600 initSM initPM := by
@@ -90,7 +91,7 @@ theorem prove_goal_28_cut : goal_28_stmt_cut := by
   have h600_eq : initSM 600 = initPM 600 := by
     have hrec := hInit600.2.2
     simp only [initGoal_600, pm_goal_28, List.map] at hrec
-    rw [hrec]; exact reconstructWithDim_singleton ..
+    rw [hrec]; (first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip); exact reconstructWithDim_singleton ..
   have h600_pm_shape : (initPM 600).shape = [32, 128] := by
     rw [← h600_eq]; exact h600_shape
   -- AllToAll results: allToAllPrimWithDims 4 r [shards] 2 1 = chunkPrimDimN 1 4 r (initSM 599)
@@ -178,11 +179,13 @@ theorem prove_goal_28_cut : goal_28_stmt_cut := by
   -- Discharge 3 conjuncts
   simp only [goal_28, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape = [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape = [1, 8, 32]
     show (denoteGraph sm_goal_28 initSM 601).shape = _
     rw [hsm]
     exact fw_linear_3d_shape 1 8 128 32 _ _ h599_shape h600_shape
-  · -- PM tps shapes
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tps shapes
     show [(denoteGraph pm_goal_28 initPM 1605).shape,
           (denoteGraph pm_goal_28 initPM 1606).shape,
           (denoteGraph pm_goal_28 initPM 1607).shape,
@@ -192,7 +195,9 @@ theorem prove_goal_28_cut : goal_28_stmt_cut := by
         fw_linear_3d_shape 1 2 128 32 _ _ (hchunk_shape 1) h600_pm_shape,
         fw_linear_3d_shape 1 2 128 32 _ _ (hchunk_shape 2) h600_pm_shape,
         fw_linear_3d_shape 1 2 128 32 _ _ (hchunk_shape 3) h600_pm_shape]
-  · -- Value equality
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     show denoteGraph sm_goal_28 initSM 601 = reconstructWithDim _ _ _ _
     rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
     symm

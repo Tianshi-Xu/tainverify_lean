@@ -74,6 +74,7 @@ theorem prove_goal_227_cut : goal_227_stmt_cut := by
     have hrec := hInit870.2.2
     simp only [goal_233, pm_goal_227, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h3010_shape]; decide)
   -- goal_90: tensor 688 (= y) is the dim-3 gather of shards 2973/2974/2975/2976
   have hInit688 : InitGoalHolds pm_goal_227.numRanks goal_90 initSM initPM := by
@@ -89,6 +90,7 @@ theorem prove_goal_227_cut : goal_227_stmt_cut := by
     have hrec := hInit688.2.2
     simp only [goal_90, pm_goal_227, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h2973_shape]; decide)
   -- Relate the g-shards to dim-1 chunks of 870
   have hg_chunk0 : chunkPrimDimN 1 4 0 (initSM 870) = initPM 3010 := by
@@ -191,12 +193,16 @@ theorem prove_goal_227_cut : goal_227_stmt_cut := by
   simp only [goal_227, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
     LineageGoal.gatherDim, List.map, Piece.tid]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm]; exact hV_shape
-  · rw [hbw0', hbw1', hbw2', hbw3',
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm]; exact hV_shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hbw0', hbw1', hbw2', hbw3',
         hpiece 0 (by omega), hpiece 1 (by omega), hpiece 2 (by omega), hpiece 3 (by omega)]
-  · rw [hsm]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm]
     symm
     rw [hbw0', hbw1', hbw2', hbw3']
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     simp only [reconstructWithDim_cons_cons_nonscalar (h := by rw [hpiece 0 (by omega)]; decide)]
     exact hVsplit.symm
 

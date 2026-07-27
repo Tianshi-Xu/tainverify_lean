@@ -71,6 +71,7 @@ theorem prove_goal_4_cut : goal_4_stmt_cut := by
   have h564_eq : initSM 564 = initPM 564 := by
     have hrec := hInit564.2.2
     simp only [goal_2, pm_goal_4, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   have h564_shape : (initSM 564).shape = [1, 8, 32] := hInit564.1
@@ -88,6 +89,7 @@ theorem prove_goal_4_cut : goal_4_stmt_cut := by
   have h566_gather : initSM 566 = allGatherPrimDimN 1 4 0
       [initPM 1089, initPM 1090, initPM 1091, initPM 1092] := by
     rw [h566_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1089_shape]; decide)
   -- AllToAll re-shards 566: allToAll(...) = chunk_r(566) on dim 2
   have hata : ∀ r, allToAllPrimWithDims 4 r
@@ -151,15 +153,18 @@ theorem prove_goal_4_cut : goal_4_stmt_cut := by
   -- Prove the three conjuncts
   simp only [goal_4, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm]
     exact elemwiseAdd_shape_of_shapes _ _ _ h564_shape h566_shape
-  · rw [hpm0', hpm1', hpm2', hpm3']
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm0', hpm1', hpm2', hpm3']
     have hs0 := elemwiseAdd_shape_of_shapes _ _ _ (hc564 0) (hc566 0)
     have hs1 := elemwiseAdd_shape_of_shapes _ _ _ (hc564 1) (hc566 1)
     have hs2 := elemwiseAdd_shape_of_shapes _ _ _ (hc564 2) (hc566 2)
     have hs3 := elemwiseAdd_shape_of_shapes _ _ _ (hc564 3) (hc566 3)
     simp [hs0, hs1, hs2, hs3]
-  · rw [hsm, hkey, ← hpm0', ← hpm1', ← hpm2', ← hpm3']
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hkey, ← hpm0', ← hpm1', ← hpm2', ← hpm3']
     symm
     apply reconstructWithDim_cons_cons_nonscalar
     rw [hpm0']
