@@ -89,11 +89,44 @@ goals with the ordinary-gather statement while the late members are genuinely
 zigzag would be exactly the "downstream success over broken upstream" failure
 mode the rule exists to prevent.
 
-## Suggested next step
+## Which reading is right: the emitter is shape-only
 
-Run the semantic witness in the other direction: instantiate the graph on a
-concrete store where the zigzag ownership is observable (the
-`ZigzagSemanticWitness.positions4` construction generalises) and evaluate both
-sides of `goal_3` under `denoteGraphDistributedFaithful`. If they differ, that
-is a machine-checked refutation of the generated goal, which is a more useful
-artifact than a stuck proof.
+Settled by reading the emitter. `Verdict/graph_to_lean.py`:
+
+```python
+def _infer_gather_dim(ts_shape, tp_shape, num_pieces) -> int:
+    """Infer which dimension was split by comparing SM and PM shard shapes."""
+    for dim in range(len(ts_shape)):
+        if tp_shape[dim] * num_pieces == ts_shape[dim]:
+            ...
+            return dim
+    return 0
+```
+
+`gatherDim` and `replicated` are both derived **only** from shape arithmetic —
+`tp_shape[dim] * num_pieces == ts_shape[dim]` and `tp_shape == ts_shape`. Nothing
+in the goal emitter consults ownership, replica groups, or whether the tensor is
+downstream of a `FW_maybe_shuffle`. `REPLICA_GROUP_OPS` (which does list
+`FW_maybe_shuffle`/`FW_maybe_unshuffle`) is used for *node* replica metadata, not
+for lineage-goal layout.
+
+A zigzag shard and a contiguous shard have **identical shapes** (`[2048, 64]`
+either way — that is the whole point of the `ZigzagSemanticWitness` shape-equal /
+value-different counterexample). So the emitter cannot distinguish them even in
+principle, and emits `gatherDim := 1, replicated := false` for `goal_3`/`goal_4`
+regardless of the fact that 12 of the 24 stacked rows are zigzag-owned.
+
+This is reading **1**: the generated goal is wrong, and it is an upstream emitter
+bug rather than a missing proof. The same blind spot presumably affects any other
+goal whose shards are zigzag-owned but shape-identical; `goal_3`/`goal_4` are
+simply where it became load-bearing, because the stack forces all 24 members into
+one uniform statement.
+
+## Suggested next step (revised)
+
+Fix belongs in `Verdict/graph_to_lean.py`, not in Lean: the goal emitter needs an
+ownership input (is this tid downstream of a shuffle with no matching unshuffle?)
+and should refuse to emit a plain `gatherDim` goal for zigzag-owned shards. Until
+that lands, `goal_3`/`goal_4` should be reported as **not covered** rather than
+proven — proving them as stated would certify a false statement.
+
