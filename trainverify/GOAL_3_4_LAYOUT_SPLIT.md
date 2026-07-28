@@ -176,13 +176,57 @@ than silent.
 
 ### Where goal_3 / goal_4 stand now
 
-They are correctly reported as open rather than emitted as false statements. To
-actually cover them, the reconstruction predicate itself needs a zigzag-aware
-form (a `LineageGoal` variant carrying the CP layout, discharged against
-`Zigzag2Rel` instead of `reconstructWithDim`). That is a Denote/emitter design
-change, not a proof, and it is the honest next step.
+They are correctly reported as open rather than emitted as false statements.
+
+The zigzag-aware goal form now exists and is emitted:
+`ZigzagLineageGoal` / `ZigzagGoalHolds` (commits `27bc69fc`, `9e4182b7`) carry
+the cu tid and discharge against `Zigzag2Rel`. On YOCO-MoE, 505 of the 507
+suppressed goals are re-emitted in that true form. `goal_3`/`goal_4` are the
+remaining two: they are 1-tp `AllGatherPrim`s, so they have no two-shard zigzag
+form yet.
 
 The dim-0→dim-1 stack/gather commute lemma remains landed and correct
 (`fw_stack_allGather0_eq_allGather1_stack`, kernel triple only); it will be
-directly reusable once the goals can be stated truthfully.
+directly reusable once those two can be stated truthfully.
+
+## The blast radius: hand-written proofs were consuming the bug
+
+Removing the false goals surfaced something more serious than the goals
+themselves. `Pattern_4` derived, for 12 of its 24 stacked members:
+
+```lean
+have hb_5359 : initSM 5359 = allGatherPrimDimN 0 pm_goal_4.numRanks 0
+    [initPM 9729, initPM 9730] :=
+  extract_dual intermediateGoal_5359 ...
+```
+
+Those 12 tids are **exactly** the post-shuffle members identified independently
+by dataflow closure. Two unrelated routes to the same partition. `Pattern_1` had
+3 more. The step only typechecked because the emitter *published*
+`intermediateGoal_5359` as an ordinary-gather goal — the proof was consuming the
+emitter's bug as a hypothesis.
+
+**Nothing unsound was ever concluded**, and the reason is worth recording:
+
+1. Patterns target `goal_N_stmt_cut`, over the **sliced** graph. `pm_goal_3` /
+   `pm_goal_4` are built from `ChunkPrim` and contain no shuffle, so the
+   cut-level statements are true.
+2. The cut→full lift never existed. Only `Goal_5_CutToFull.lean` was ever
+   emitted, and `Instances.prove_goal_{3,4}_from_pattern_{3,4}` was `sorry`.
+
+That `sorry`, which read as a mundane emitter limitation ("non-base cut_to_full
+bridge missing"), was load-bearing: it was the only thing standing between a
+false goal and a claimed proof.
+
+The repair lifts the assumption to an explicit hypothesis parameter
+(`ZigzagCutGatherHyp`) rather than deleting the step or re-deriving it, so the
+dependency is visible instead of silently inherited. Details in
+`PATTERN_4_ZIGZAG_DEPENDENCY.md`.
+
+`ZigzagReconstruction.lean` needed a different treatment: all 90 of its theorems
+are stated over `denoteGraph_ringAttn`, which models the shuffle as identity
+(AGENTS #24 — shape-correct, value-lossy for cpSize > 1). On that track the
+ordinary-gather record is the correct statement, so its 12 goal records are
+re-declared module-locally rather than published globally, where they could be
+mistaken for faithful-track goals.
 
