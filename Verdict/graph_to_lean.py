@@ -324,6 +324,94 @@ def _node_rank(node: Any) -> int:
 	return int(getattr(node, "rank", 0) or 0)
 
 
+# --- CP zigzag ownership ------------------------------------------------------
+#
+# A context-parallel `FW_maybe_shuffle` rearranges which *global* sequence
+# positions a rank owns: under cp=2 rank 0 owns positions [0, 3] rather than the
+# contiguous [0, 1]. `FW_maybe_unshuffle` puts it back.
+#
+# The shard SHAPE is identical either way, so shape-based layout inference
+# (`_infer_gather_dim` / the `replicated` test) cannot see the difference. A
+# lineage goal whose PM shards are zigzag-owned but which is emitted as an
+# ordinary `gatherDim` reconstruction is therefore a FALSE statement, not merely
+# a hard one.
+#
+# We recover ownership structurally: a tid is zigzag-owned iff its backward
+# dataflow closure reaches a `FW_maybe_shuffle` output without first being
+# stopped by a `FW_maybe_unshuffle` output. Stopping at unshuffle outputs is what
+# makes this correct for tensors that were shuffled and then restored.
+
+SHUFFLE_OPS = ("FW_maybe_shuffle", "BW_maybe_shuffle")
+UNSHUFFLE_OPS = ("FW_maybe_unshuffle", "BW_maybe_unshuffle")
+
+
+def _collective_output_tids(G: Any, op_substrings: Sequence[str]) -> List[int]:
+	"""Output tids of every node whose op name contains one of `op_substrings`."""
+	out: set[int] = set()
+	for n in G.nodes():
+		op = _safe_str_op(G.node_opname(n))
+		if any(s in op for s in op_substrings):
+			for t in G.node_outputs(n):
+				out.add(int(t.tid))
+	return sorted(out)
+
+
+def build_zigzag_owner_predicate(G: Any):
+	"""Return `is_zigzag_owned(tid) -> bool` for a parallel-machine graph.
+
+	Cached shuffle/unshuffle tid sets are computed once; the per-tid closure is
+	computed lazily and memoised, so calling this for every emitted goal stays
+	affordable on the ~2000-node graphs.
+	"""
+	shuffle_outs = set(_collective_output_tids(G, SHUFFLE_OPS))
+	unshuffle_outs = set(_collective_output_tids(G, UNSHUFFLE_OPS))
+	memo: Dict[int, bool] = {}
+	# Build the producer index ONCE. `backward_closure_tids_until` rebuilds it on
+	# every call, which is quadratic when asked for ~1150 goals on a 2000-node
+	# graph, so the walk is inlined here against a shared index.
+	prod: Dict[int, List[int]] = _build_producer_index(G) if shuffle_outs else {}
+	nodes = list(G.nodes()) if shuffle_outs else []
+	ins_cache: Dict[int, List[int]] = {}
+
+	def _node_in_tids(node_idx: int) -> List[int]:
+		got = ins_cache.get(node_idx)
+		if got is None:
+			got = [int(t.tid) for t in G.node_inputs(nodes[node_idx])]
+			ins_cache[node_idx] = got
+		return got
+
+	def is_zigzag_owned(tid: int) -> bool:
+		tid = int(tid)
+		if not shuffle_outs:
+			return False
+		if tid in memo:
+			return memo[tid]
+		# An unshuffle output is by definition back in contiguous ownership.
+		if tid in unshuffle_outs:
+			memo[tid] = False
+			return False
+		seen: set[int] = {tid}
+		stack: List[int] = [tid]
+		verdict = False
+		while stack:
+			cur = stack.pop()
+			if cur in shuffle_outs:
+				verdict = True
+				break
+			# Do not expand past a restored (unshuffled) tensor.
+			if cur != tid and cur in unshuffle_outs:
+				continue
+			for node_idx in prod.get(cur, []):
+				for t_id in _node_in_tids(node_idx):
+					if t_id not in seen:
+						seen.add(t_id)
+						stack.append(t_id)
+		memo[tid] = verdict
+		return verdict
+
+	return is_zigzag_owned
+
+
 InputValueClass = Tuple[str, Tuple[int, ...]]
 
 
@@ -1710,6 +1798,80 @@ def emit_lean_spec(
 	# This is crucial for the decidable `graphShapesCheck` gate.
 	_sm_prefer: Dict[int, List[int]] = _build_sm_prefer(sm_graph, sm_nodes)
 
+	# Structural CP-ownership oracle. Shape inference cannot distinguish a zigzag
+	# shard from a contiguous one (identical shapes), so goals over zigzag-owned
+	# shards must not be emitted as ordinary gathers. See `build_zigzag_owner_predicate`.
+	_is_zigzag_owned = build_zigzag_owner_predicate(pm_graph)
+	zigzag_suppressed: List[Tuple[str, int, List[int]]] = []
+	suppressed_def_names: set[str] = set()
+
+	def _zigzag_shards_of(g: SelectedLineage) -> List[int]:
+		"""PM tps of `g` that are zigzag-owned. Empty for replicated goals."""
+		tp_shapes_local: List[List[int]] = []
+		for (_r, tp_tid) in g.tps:
+			if int(tp_tid) in _sm_prefer:
+				tp_shapes_local.append(list(_sm_prefer[int(tp_tid)]))
+			else:
+				shp, _i = _shape_init_from_graph_by_tid(pm_graph, tp_tid)
+				tp_shapes_local.append(shp or [])
+		ts_shape_local = _shape_init_from_graph_by_tid(sm_graph, g.ts)[0] or []
+		is_replicated = (
+			len(g.tps) > 1
+			and ts_shape_local
+			and all(s == ts_shape_local for s in tp_shapes_local if s)
+		)
+		if is_replicated:
+			return []
+		return sorted(int(t) for (_r, t) in g.tps if _is_zigzag_owned(int(t)))
+
+	# Precompute the whole suppression set BEFORE anything is emitted: `obsTids`
+	# and the `goalChunk_*` lists are written early, so they must already know
+	# which goals will be dropped.
+	def _precompute_suppression() -> None:
+		zig_by_name: Dict[str, List[int]] = {}
+		for g in init_goals:
+			bad = _zigzag_shards_of(g)
+			if bad:
+				zig_by_name[f"initGoal_{g.ts}"] = bad
+		goal_tid_set_pre: set[int] = {int(g.ts) for g in goals}
+		for g in goals:
+			bad = _zigzag_shards_of(g)
+			if bad:
+				zig_by_name[f"goal_{_goal_id(int(g.ts))}"] = bad
+		if intermediate_lineages:
+			for ts, lin in intermediate_lineages.items():
+				if int(ts) in goal_tid_set_pre:
+					continue
+				bad = _zigzag_shards_of(lin)
+				if bad:
+					zig_by_name[f"intermediateGoal_{ts}"] = bad
+		for name, bad in zig_by_name.items():
+			suppressed_def_names.add(name)
+			zigzag_suppressed.append((name, -1, bad))
+		# NOTE: deliberately NO transitive suppression.
+		#
+		# An earlier version of this gate also suppressed any goal that lost a
+		# prereq to the rule above, on the theory that a goal emitted with a
+		# weaker hypothesis set "looks provable and is not". That reasoning is
+		# backwards: dropping a hypothesis makes the statement STRONGER, not
+		# false. Such a goal is still sound to state — it may simply be harder,
+		# or need a different route.
+		#
+		# It is also empirically wrong. `goal_1`/`goal_2` (the loss head, tids
+		# 4673/4674) have prereq lists full of zigzag intermediates, yet both are
+		# machine-checked on the faithful full-graph track
+		# (`L23FaithfulLossGoals.lean`, kernel triple + native_decide). Their own
+		# PM tensors sit AFTER the graph's `FW_maybe_unshuffle`, so they are
+		# contiguous and their statements are true; the proof reaches them
+		# through the zigzag relation rather than through ordinary-gather
+		# prereqs. Suppressing them would have discarded two already-proven
+		# goals.
+		#
+		# So the gate fires on one condition only: the goal's OWN tps are
+		# zigzag-owned, which is exactly when its statement is false.
+
+	_precompute_suppression()
+
 	# emit_all_shapes=True: Output shapes for ALL tensors, not just initial ones.
 	# This is needed because operations like view/reshape have output shapes that
 	# cannot be inferred from input shapes alone.
@@ -1731,7 +1893,8 @@ def emit_lean_spec(
 					return dim
 		return 0
 
-	def _emit_goal_def(def_name: str, g: SelectedLineage, *, for_init: bool) -> None:
+	def _emit_goal_def(def_name: str, g: SelectedLineage, *, for_init: bool) -> bool:
+		"""Emit the goal def. Returns False if suppressed (caller must skip the name)."""
 		ts_shape = _shape_init_from_graph_by_tid(sm_graph, g.ts)[0] or []
 		tp_shapes: List[List[int]] = []
 		# Same preference logic as init env: if a tp tid is a shared boundary tid, prefer SM shape.
@@ -1756,6 +1919,39 @@ def emit_lean_spec(
 			and ts_shape
 			and all(tp_shape == ts_shape for tp_shape in tp_shapes if tp_shape)
 		)
+		# CP-ownership gate. The goal asserts `SM ts = reconstruct(PM tps)`. That
+		# is valid only if the PM tensors are in ordinary contiguous ownership.
+		# Shapes cannot tell us this (a zigzag shard and a contiguous shard have
+		# the same shape), so it is decided structurally on the PM dataflow in
+		# `_precompute_suppression`, which also handles the transitive case of a
+		# goal losing a prereq.
+		if def_name in suppressed_def_names:
+			reason = next(
+				(bad for (nm, _ts, bad) in zigzag_suppressed if nm == def_name), []
+			)
+			lines.append(f"-- SUPPRESSED: {def_name} (ts = {g.ts}).")
+			lines.append(
+				"--   Blocked on CP zigzag ownership: tids "
+				+ ", ".join(str(t) for t in reason)
+			)
+			lines.append(
+				"--   are downstream of FW_maybe_shuffle with no intervening FW_maybe_unshuffle,"
+			)
+			lines.append(
+				"--   so they do not ordinary-gather to the single-machine tensor. Shape"
+			)
+			lines.append(
+				"--   inference cannot see this — a zigzag shard and a contiguous shard have"
+			)
+			lines.append(
+				"--   identical shapes — so emitting a plain `gatherDim` goal here would assert"
+			)
+			lines.append(
+				"--   something false. This tensor needs the zigzag relation (`Zigzag2Rel`),"
+			)
+			lines.append("--   not `reconstructWithDim`.")
+			lines.append("")
+			return False
 		if num_pieces > 1 and ts_shape and ts_shape != [1] and tp_shapes and tp_shapes[0] and not replicated:
 			actual_tp_shape = tp_shapes[0]
 			gather_dim = _infer_gather_dim(ts_shape, actual_tp_shape, num_pieces)
@@ -1799,26 +1995,29 @@ def emit_lean_spec(
 			+ " }"
 		)
 		lines.append("")
+		return True
 
 	# Initial-alignment goals: boundary inputs/params that must match between SM and PM.
 	init_def_names: List[str] = []
 	for g in init_goals:
 		def_name = f"initGoal_{g.ts}"
-		init_def_names.append(def_name)
-		_emit_goal_def(def_name, g, for_init=True)
+		if _emit_goal_def(def_name, g, for_init=True):
+			init_def_names.append(def_name)
 
 	lines.append("def initGoals : List LineageGoal := [" + ", ".join(init_def_names) + "]")
 	lines.append("")
 
 	# Goals: one per observable output.
-	lines.append("def obsTids : List Nat := [" + ", ".join(str(g.ts) for g in goals) + "]")
+	# `obsTids` must track the goals that actually got emitted.
+	_emitted_goal_ts = [g.ts for g in goals if f"goal_{_goal_id(g.ts)}" not in suppressed_def_names]
+	lines.append("def obsTids : List Nat := [" + ", ".join(str(t) for t in _emitted_goal_ts) + "]")
 	lines.append("")
 	goal_def_names: List[str] = []
 	for g in goals:
 		gid = _goal_id(g.ts)
 		def_name = f"goal_{gid}"
-		goal_def_names.append(def_name)
-		_emit_goal_def(def_name, g, for_init=False)
+		if _emit_goal_def(def_name, g, for_init=False):
+			goal_def_names.append(def_name)
 
 	goal_chunk_size = 8
 	goal_chunk_names: List[str] = []
@@ -2002,8 +2201,30 @@ def emit_lean_spec(
 		return f"intermediateGoal_{inter_ts}"
 
 	def _prereq_list_expr(dep: GoalDependency) -> str:
-		prereq_names = [_prereq_def_name(int(inter_ts)) for (inter_ts, _) in dep.prereq_intermediate_goals]
-		return "[" + ", ".join(prereq_names) + "]"
+		# A suppressed prereq has no Lean definition, so it cannot be named here.
+		# Dropping it WEAKENS the hypothesis set, which makes the resulting goal
+		# strictly stronger — sound to state, just harder to prove. That is the
+		# right trade: `goal_1`/`goal_2` are proven exactly this way, reaching
+		# their conclusions through the zigzag relation instead of through
+		# ordinary-gather prereqs. The dropped names are listed in a comment so
+		# the loss is visible rather than silent.
+		kept = []
+		dropped = []
+		for (inter_ts, _) in dep.prereq_intermediate_goals:
+			nm = _prereq_def_name(int(inter_ts))
+			(dropped if nm in suppressed_def_names else kept).append(nm)
+		if dropped:
+			lines.append(
+				"-- NOTE: "
+				+ str(len(dropped))
+				+ " prereq(s) omitted (zigzag-owned, no goal emitted): "
+				+ ", ".join(dropped[:8])
+				+ (" …" if len(dropped) > 8 else "")
+			)
+			lines.append(
+				"--   The goal below is therefore STRONGER than generated (fewer hypotheses)."
+			)
+		return "[" + ", ".join(kept) + "]"
 
 	# Emit intermediate lineage goal definitions ONLY for tids not already goals
 	intermediate_def_names: List[str] = []
@@ -2014,8 +2235,8 @@ def emit_lean_spec(
 			lines.append("-- Intermediate tensor lineage goals (not already regular goals)")
 			for inter_ts, inter_lin in sorted(non_goal_intermediates.items()):
 				def_name = f"intermediateGoal_{inter_ts}"
-				intermediate_def_names.append(def_name)
-				_emit_goal_def(def_name, inter_lin, for_init=False)
+				if _emit_goal_def(def_name, inter_lin, for_init=False):
+					intermediate_def_names.append(def_name)
 			lines.append("")
 			lines.append("-- Proof obligations (intermediate goals)")
 			for def_name in intermediate_def_names:
@@ -2027,6 +2248,8 @@ def emit_lean_spec(
 		goal_ts = int(g.ts)
 		gid = _goal_id(goal_ts)
 		def_name = f"goal_{gid}"
+		if def_name in suppressed_def_names:
+			continue
 		dep = deps_by_ts.get(goal_ts)
 		
 		if dep and dep.prereq_intermediate_goals:
@@ -2772,6 +2995,33 @@ def emit_lean_spec(
 
 	out_path.parent.mkdir(parents=True, exist_ok=True)
 	out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+	if zigzag_suppressed:
+		# Loud, not silent: a dropped goal is a coverage hole, and reporting a
+		# coverage percentage that quietly excludes them would overstate it.
+		print("")
+		print("=" * 72)
+		print(
+			f"CP ZIGZAG OWNERSHIP: suppressed {len(zigzag_suppressed)} goal(s)."
+		)
+		print(
+			"These tensors are downstream of FW_maybe_shuffle with no intervening"
+		)
+		print(
+			"FW_maybe_unshuffle, so their PM shards do NOT ordinary-gather to the"
+		)
+		print(
+			"single-machine tensor. Emitting them as plain `gatherDim` goals would"
+		)
+		print("assert something false, so no goal was emitted for them.")
+		print("")
+		print("They are NOT proven and NOT covered. Count them as open.")
+		print("-" * 72)
+		for name, ts, bad in sorted(zigzag_suppressed):
+			where = f" (ts={ts})" if ts >= 0 else ""
+			print(f"  {name}{where}: zigzag tids {bad}")
+		print("=" * 72)
+		print("")
 
 	if emit_spec_template and spec_out_path is not None:
 		if spec_out_path.exists() and not overwrite_spec:
