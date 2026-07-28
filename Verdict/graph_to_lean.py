@@ -357,7 +357,12 @@ def _collective_output_tids(G: Any, op_substrings: Sequence[str]) -> List[int]:
 
 
 def build_zigzag_owner_predicate(G: Any):
-	"""Return `is_zigzag_owned(tid) -> bool` for a parallel-machine graph.
+	"""Return `(is_zigzag_owned, zigzag_cu_of)` for a parallel-machine graph.
+
+	`is_zigzag_owned(tid) -> bool` answers whether `tid` is in CP zigzag layout.
+	`zigzag_cu_of(tid) -> Optional[int]` additionally hands back the cu_seqlens
+	tid that pins that layout, which a `ZigzagLineageGoal` must carry explicitly
+	because ownership is not recoverable from shapes.
 
 	Cached shuffle/unshuffle tid sets are computed once; the per-tid closure is
 	computed lazily and memoised, so calling this for every emitted goal stays
@@ -365,7 +370,17 @@ def build_zigzag_owner_predicate(G: Any):
 	"""
 	shuffle_outs = set(_collective_output_tids(G, SHUFFLE_OPS))
 	unshuffle_outs = set(_collective_output_tids(G, UNSHUFFLE_OPS))
-	memo: Dict[int, bool] = {}
+	# shuffle output tid -> the cu_seqlens tid that node read (`ins[1]`, per the
+	# generated `FW_maybe_shuffle` calling convention: [data, cu_seqlens]).
+	shuffle_cu: Dict[int, int] = {}
+	for n in G.nodes():
+		op = _safe_str_op(G.node_opname(n))
+		if any(s in op for s in SHUFFLE_OPS):
+			ins = [int(t.tid) for t in G.node_inputs(n)]
+			if len(ins) >= 2:
+				for t in G.node_outputs(n):
+					shuffle_cu[int(t.tid)] = ins[1]
+	memo_cu: Dict[int, Optional[int]] = {}
 	# Build the producer index ONCE. `backward_closure_tids_until` rebuilds it on
 	# every call, which is quadratic when asked for ~1150 goals on a 2000-node
 	# graph, so the walk is inlined here against a shared index.
@@ -381,22 +396,29 @@ def build_zigzag_owner_predicate(G: Any):
 		return got
 
 	def is_zigzag_owned(tid: int) -> bool:
+		return zigzag_cu_of(tid) is not None
+
+	def zigzag_cu_of(tid: int) -> Optional[int]:
+		"""The cu_seqlens tid pinning `tid`'s zigzag layout, or None if contiguous.
+
+		Returned so the emitter can state a `ZigzagLineageGoal`, which needs the
+		cu tid explicitly: CP ownership is not recoverable from shapes.
+		"""
 		tid = int(tid)
 		if not shuffle_outs:
-			return False
-		if tid in memo:
-			return memo[tid]
-		# An unshuffle output is by definition back in contiguous ownership.
+			return None
+		if tid in memo_cu:
+			return memo_cu[tid]
 		if tid in unshuffle_outs:
-			memo[tid] = False
-			return False
+			memo_cu[tid] = None
+			return None
 		seen: set[int] = {tid}
 		stack: List[int] = [tid]
-		verdict = False
+		found: Optional[int] = None
 		while stack:
 			cur = stack.pop()
 			if cur in shuffle_outs:
-				verdict = True
+				found = shuffle_cu.get(cur)
 				break
 			# Do not expand past a restored (unshuffled) tensor.
 			if cur != tid and cur in unshuffle_outs:
@@ -406,10 +428,10 @@ def build_zigzag_owner_predicate(G: Any):
 					if t_id not in seen:
 						seen.add(t_id)
 						stack.append(t_id)
-		memo[tid] = verdict
-		return verdict
+		memo_cu[tid] = found
+		return found
 
-	return is_zigzag_owned
+	return is_zigzag_owned, zigzag_cu_of
 
 
 InputValueClass = Tuple[str, Tuple[int, ...]]
@@ -1687,6 +1709,12 @@ def emit_lean_spec(
 	lines.append(f"-/")
 	lines.append("import denote.Denote")
 	lines.append("import denote.InputValueClasses")
+	# Zigzag-aware goal form. Imported unconditionally: it is cheap (the module
+	# only depends on `ZigzagLayoutRel`, deliberately kept clear of generated
+	# graphs to avoid an import cycle), and emitting it conditionally would make
+	# the generated header depend on suppression state that is not computed until
+	# after `_sm_prefer` is built.
+	lines.append("import denote.yoco_goals.ZigzagGoalStatement")
 	lines.append("")
 	lines.append("set_option linter.style.longLine false")
 	lines.append("set_option linter.style.nativeDecide false")
@@ -1801,9 +1829,10 @@ def emit_lean_spec(
 	# Structural CP-ownership oracle. Shape inference cannot distinguish a zigzag
 	# shard from a contiguous one (identical shapes), so goals over zigzag-owned
 	# shards must not be emitted as ordinary gathers. See `build_zigzag_owner_predicate`.
-	_is_zigzag_owned = build_zigzag_owner_predicate(pm_graph)
+	_is_zigzag_owned, _zigzag_cu_of = build_zigzag_owner_predicate(pm_graph)
 	zigzag_suppressed: List[Tuple[str, int, List[int]]] = []
 	suppressed_def_names: set[str] = set()
+	zigzag_goal_names: List[str] = []
 
 	def _zigzag_shards_of(g: SelectedLineage) -> List[int]:
 		"""PM tps of `g` that are zigzag-owned. Empty for replicated goals."""
@@ -1929,27 +1958,61 @@ def emit_lean_spec(
 			reason = next(
 				(bad for (nm, _ts, bad) in zigzag_suppressed if nm == def_name), []
 			)
-			lines.append(f"-- SUPPRESSED: {def_name} (ts = {g.ts}).")
+			# Emit the goal in its TRUE form rather than only refusing the false
+			# one. `ZigzagLineageGoal` carries the cu tid that pins the layout and
+			# is discharged against `Zigzag2Rel`
+			# (see `denote/yoco_goals/ZigzagLineageGoal.lean`).
+			cu_tids = sorted({
+				c for (_r, t) in g.tps
+				if (c := _zigzag_cu_of(int(t))) is not None
+			})
+			lines.append(f"-- NOT an ordinary gather: {def_name} (ts = {g.ts}).")
 			lines.append(
-				"--   Blocked on CP zigzag ownership: tids "
-				+ ", ".join(str(t) for t in reason)
+				"--   PM tids " + ", ".join(str(t) for t in reason) +
+				" are in CP zigzag layout (downstream of FW_maybe_shuffle,"
 			)
 			lines.append(
-				"--   are downstream of FW_maybe_shuffle with no intervening FW_maybe_unshuffle,"
+				"--   no intervening FW_maybe_unshuffle). They have the SAME shapes as"
 			)
 			lines.append(
-				"--   so they do not ordinary-gather to the single-machine tensor. Shape"
+				"--   contiguous shards but different ownership, so `reconstructWithDim`"
 			)
 			lines.append(
-				"--   inference cannot see this — a zigzag shard and a contiguous shard have"
+				"--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,"
 			)
 			lines.append(
-				"--   identical shapes — so emitting a plain `gatherDim` goal here would assert"
+				"--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2)."
 			)
-			lines.append(
-				"--   something false. This tensor needs the zigzag relation (`Zigzag2Rel`),"
-			)
-			lines.append("--   not `reconstructWithDim`.")
+			if len(cu_tids) == 1 and len(g.tps) == 2:
+				zz_tps = "[" + ", ".join(
+					f"{{ rank := {r}, tid := {t} }}" for r, t in g.tps
+				) + "]"
+				zz_tp_shapes = "[" + ", ".join(
+					"[" + ", ".join(str(int(x)) for x in shp) + "]" for shp in tp_shapes
+				) + "]"
+				lines.append(
+					f"def {def_name}_zigzag : "
+					"TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :="
+				)
+				lines.append(
+					"  { ts := "
+					+ str(g.ts)
+					+ ", tsShape := "
+					+ ("[" + ", ".join(str(int(x)) for x in ts_shape) + "]")
+					+ ", tps := "
+					+ zz_tps
+					+ ", tpShapes := "
+					+ zz_tp_shapes
+					+ ", cuTid := "
+					+ str(cu_tids[0])
+					+ ", cpSize := 2 }"
+				)
+				zigzag_goal_names.append(f"{def_name}_zigzag")
+			else:
+				lines.append(
+					"--   (no ZigzagLineageGoal emitted: needs exactly 2 tps sharing one cu"
+					f" tid; got {len(g.tps)} tps, cu tids {cu_tids})"
+				)
 			lines.append("")
 			return False
 		if num_pieces > 1 and ts_shape and ts_shape != [1] and tp_shapes and tp_shapes[0] and not replicated:
@@ -2465,9 +2528,67 @@ def emit_lean_spec(
 				goal_lines.append(f"def goal_{gid}_cut_initGoals : List LineageGoal := initGoals")
 			goal_lines.append("")
 
+			# A suppressed goal has no `goal_N` definition, so the *full-graph*
+			# statement cannot be formed. The CUT-graph statement is a different
+			# matter and stays: the sliced subgraph contains no shuffle (it is
+			# built from ChunkPrim), so the cut obligation is a true, provable
+			# statement — Pattern_3/Pattern_4 address exactly that. Only the
+			# cut-to-full lift is impossible, and that bridge is skipped below.
+			#
+			# Emit a local goal record for the cut so `goal_N_stmt_cut` does not
+			# dangle on the suppressed global name.
+			if f"goal_{gid}" in suppressed_def_names:
+				_cut_ts_shape = _shape_init_from_graph_by_tid(sm_graph, sl.goal.ts)[0] or []
+				_cut_tp_shapes: List[List[int]] = []
+				for (_r, _tp) in sl.goal.tps:
+					if int(_tp) in _sm_prefer:
+						_cut_tp_shapes.append(list(_sm_prefer[int(_tp)]))
+					else:
+						_s, _ = _shape_init_from_graph_by_tid(pm_graph, _tp)
+						_cut_tp_shapes.append(_s or [])
+				_cut_dim = 0
+				if len(sl.goal.tps) > 1 and _cut_ts_shape and _cut_tp_shapes[0]:
+					_cut_dim = _infer_gather_dim(
+						_cut_ts_shape, _cut_tp_shapes[0], len(sl.goal.tps)
+					)
+				goal_lines.append(
+					f"-- goal_{gid} has no global (full-graph) statement: its PM shards are"
+				)
+				goal_lines.append(
+					"-- CP zigzag-owned, so an ordinary gather over them is false. See"
+				)
+				goal_lines.append(
+					"-- ZigzagGoalRefutation.gatheredZigzag_ne_full. The CUT graph below is"
+				)
+				goal_lines.append(
+					"-- shuffle-free, so this local obligation is sound and provable."
+				)
+				goal_lines.append(f"def goal_{gid}_cut_goal : LineageGoal :=")
+				goal_lines.append(
+					"  { ts := "
+					+ str(sl.goal.ts)
+					+ ", tsShape := "
+					+ ("[" + ", ".join(str(int(x)) for x in _cut_ts_shape) + "]")
+					+ ", tps := ["
+					+ ", ".join(
+						f"{{ rank := {r}, tid := {t} }}" for r, t in sl.goal.tps
+					)
+					+ "], tpShapes := ["
+					+ ", ".join(
+						"[" + ", ".join(str(int(x)) for x in s) + "]"
+						for s in _cut_tp_shapes
+					)
+					+ "]"
+					+ (f", gatherDim := {_cut_dim}" if _cut_dim != 0 else "")
+					+ " }"
+				)
+				goal_lines.append("")
+				cut_goal_ref = f"goal_{gid}_cut_goal"
+			else:
+				cut_goal_ref = f"goal_{gid}"
 			goal_lines.append(f"def goal_{gid}_stmt_cut : Prop :=")
 			goal_lines.append(
-				f"  CoarseLineageHoldsWithInit {sm_name} {pm_name} goal_{gid}"
+				f"  CoarseLineageHoldsWithInit {sm_name} {pm_name} {cut_goal_ref}"
 				f" {sm_name}InitEnv {pm_name}InitEnv goal_{gid}_cut_initGoals"
 			)
 			goal_lines.append("")
@@ -2485,6 +2606,16 @@ def emit_lean_spec(
 			# for the design walkthrough.
 			# ------------------------------------------------------------------
 			ctf_path = goals_out_dir / f"Goal_{gid}_CutToFull.lean"
+			if f"goal_{gid}" in suppressed_def_names:
+				# Nothing to lift: there is no `goal_N_stmt_cut` and no `goal_N`.
+				ctf_path.write_text(
+					f"/- Goal {gid} is in CP zigzag layout and has no ordinary-gather\n"
+					f"    statement, so there is no cut_to_full bridge to emit.\n"
+					f"    See the `_zigzag` goal in {module_name} and\n"
+					f"    denote.yoco_goals.ZigzagGoalRefutation. -/\n",
+					encoding="utf-8",
+				)
+				continue
 			# Derive goals_module_prefix from goals_out_dir (e.g. "yoco_goals" → "denote.yoco_goals").
 			goals_dir_name = goals_out_dir.name
 			ctf_lines = _emit_cut_to_full(
@@ -2990,6 +3121,21 @@ def emit_lean_spec(
 		main_lines.append("")
 		(goals_out_dir / "MainTheorem.lean").write_text("\n".join(main_lines) + "\n", encoding="utf-8")
 
+	if zigzag_goal_names:
+		lines.append(
+			"-- Zigzag-layout lineage goals: the TRUE statement for the CP tensors that"
+		)
+		lines.append(
+			"-- cannot be stated as ordinary gathers. Discharged against `Zigzag2Rel`"
+		)
+		lines.append("-- (see denote/yoco_goals/ZigzagLineageGoal.lean).")
+		lines.append(
+			"def zigzagGoals : List TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal := ["
+			+ ", ".join(zigzag_goal_names)
+			+ "]"
+		)
+		lines.append("")
+
 	lines.append("end TrainVerify.Denote.Generated")
 	lines.append("")
 
@@ -3015,7 +3161,13 @@ def emit_lean_spec(
 		)
 		print("assert something false, so no goal was emitted for them.")
 		print("")
-		print("They are NOT proven and NOT covered. Count them as open.")
+		print(
+			f"{len(zigzag_goal_names)} of them were re-emitted as ZigzagLineageGoal"
+		)
+		print("(the true statement, discharged against Zigzag2Rel). The rest have no")
+		print("statable form yet.")
+		print("")
+		print("NONE of them are proven. Count them all as open.")
 		print("-" * 72)
 		for name, ts, bad in sorted(zigzag_suppressed):
 			where = f" (ts={ts})" if ts >= 0 else ""

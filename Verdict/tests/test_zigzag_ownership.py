@@ -51,7 +51,7 @@ class Graph:
 def test_no_shuffle_means_nothing_is_zigzag():
     a, b = Tensor(1), Tensor(2)
     g = Graph([Node("OpName.FW_linear", (a,), (b,))])
-    is_zigzag = build_zigzag_owner_predicate(g)
+    is_zigzag, _cu_of = build_zigzag_owner_predicate(g)
     assert not is_zigzag(1)
     assert not is_zigzag(2)
 
@@ -59,7 +59,7 @@ def test_no_shuffle_means_nothing_is_zigzag():
 def test_direct_shuffle_output_is_zigzag():
     src, cu, sh = Tensor(1), Tensor(2), Tensor(3)
     g = Graph([Node("OpName.FW_maybe_shuffle", (src, cu), (sh,))])
-    is_zigzag = build_zigzag_owner_predicate(g)
+    is_zigzag, _cu_of = build_zigzag_owner_predicate(g)
     assert is_zigzag(3)
     # The shuffle's own input is upstream of it, hence still contiguous.
     assert not is_zigzag(1)
@@ -75,7 +75,7 @@ def test_zigzag_propagates_through_downstream_ops():
             Node("OpName.FW_topk_routing", (mid,), (out,)),
         ]
     )
-    is_zigzag = build_zigzag_owner_predicate(g)
+    is_zigzag, _cu_of = build_zigzag_owner_predicate(g)
     assert is_zigzag(5)
     assert is_zigzag(4)
 
@@ -91,7 +91,7 @@ def test_unshuffle_restores_contiguous_ownership():
             Node("OpName.FW_rms_norm", (unsh,), (after,)),
         ]
     )
-    is_zigzag = build_zigzag_owner_predicate(g)
+    is_zigzag, _cu_of = build_zigzag_owner_predicate(g)
     assert is_zigzag(4), "still zigzag before the unshuffle"
     assert not is_zigzag(5), "the unshuffle output is restored"
     assert not is_zigzag(6), "and so is everything after it"
@@ -115,7 +115,7 @@ def test_a_branch_that_bypasses_the_unshuffle_stays_zigzag():
             Node("OpName.FW_rms_norm", (unsh,), (head,)),
         ]
     )
-    is_zigzag = build_zigzag_owner_predicate(g)
+    is_zigzag, _cu_of = build_zigzag_owner_predicate(g)
     assert not is_zigzag(7), "the loss head is downstream of the unshuffle"
     assert is_zigzag(5), "the routing branch bypassed it and is still zigzag"
 
@@ -130,7 +130,7 @@ def test_mixed_stack_has_both_kinds_of_member():
             Node("OpName.FW_topk_routing", (sh,), (post,)),
         ]
     )
-    is_zigzag = build_zigzag_owner_predicate(g)
+    is_zigzag, _cu_of = build_zigzag_owner_predicate(g)
     members = [1, 5]
     verdicts = [is_zigzag(t) for t in members]
     assert verdicts == [False, True], (
@@ -141,7 +141,7 @@ def test_mixed_stack_has_both_kinds_of_member():
 def test_predicate_is_memoised_and_stable():
     src, cu, sh = Tensor(1), Tensor(2), Tensor(3)
     g = Graph([Node("OpName.FW_maybe_shuffle", (src, cu), (sh,))])
-    is_zigzag = build_zigzag_owner_predicate(g)
+    is_zigzag, _cu_of = build_zigzag_owner_predicate(g)
     assert [is_zigzag(3) for _ in range(5)] == [True] * 5
     assert [is_zigzag(1) for _ in range(5)] == [False] * 5
 
@@ -154,8 +154,43 @@ def test_backward_ops_are_also_recognised():
             Node("OpName.BW_linear", (sh,), (out,)),
         ]
     )
-    is_zigzag = build_zigzag_owner_predicate(g)
+    is_zigzag, _cu_of = build_zigzag_owner_predicate(g)
     assert is_zigzag(4)
+
+
+def test_cu_tid_is_recovered_for_a_zigzag_tensor():
+    """The emitter needs the cu tid to state a ZigzagLineageGoal.
+
+    Ownership is not recoverable from shapes, so the cu_seqlens tensor that
+    pins the layout must be carried explicitly in the goal. It is read off the
+    shuffle node's second input, per the generated `[data, cu_seqlens]` calling
+    convention.
+    """
+    src, cu, sh, out = Tensor(1), Tensor(2), Tensor(3), Tensor(4)
+    g = Graph(
+        [
+            Node("OpName.FW_maybe_shuffle", (src, cu), (sh,)),
+            Node("OpName.FW_linear", (sh,), (out,)),
+        ]
+    )
+    is_zigzag, cu_of = build_zigzag_owner_predicate(g)
+    assert is_zigzag(4)
+    assert cu_of(4) == 2, "cu tid propagates to downstream zigzag tensors"
+    assert cu_of(3) == 2, "and is available at the shuffle output itself"
+    assert cu_of(1) is None, "contiguous tensors have no cu tid"
+
+
+def test_cu_of_is_none_after_unshuffle():
+    src, cu, sh, unsh = Tensor(1), Tensor(2), Tensor(3), Tensor(4)
+    g = Graph(
+        [
+            Node("OpName.FW_maybe_shuffle", (src, cu), (sh,)),
+            Node("OpName.FW_maybe_unshuffle", (sh, cu), (unsh,)),
+        ]
+    )
+    _is_zigzag, cu_of = build_zigzag_owner_predicate(g)
+    assert cu_of(3) == 2
+    assert cu_of(4) is None
 
 
 def test_a_tensor_after_the_unshuffle_is_clean_even_with_zigzag_ancestry():
@@ -183,7 +218,7 @@ def test_a_tensor_after_the_unshuffle_is_clean_even_with_zigzag_ancestry():
             Node("OpName.FW_inner_chunk_ce", (norm,), (loss,)),
         ]
     )
-    is_zigzag = build_zigzag_owner_predicate(g)
+    is_zigzag, _cu_of = build_zigzag_owner_predicate(g)
     assert is_zigzag(4), "the deep tensor really is zigzag"
     assert not is_zigzag(7), (
         "the loss head is contiguous despite zigzag ancestry — suppressing it "
