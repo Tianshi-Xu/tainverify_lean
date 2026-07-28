@@ -122,11 +122,67 @@ goal whose shards are zigzag-owned but shape-identical; `goal_3`/`goal_4` are
 simply where it became load-bearing, because the stack forces all 24 members into
 one uniform statement.
 
-## Suggested next step (revised)
+## Status update: emitter fixed (commit `8ae7f544`)
 
-Fix belongs in `Verdict/graph_to_lean.py`, not in Lean: the goal emitter needs an
-ownership input (is this tid downstream of a shuffle with no matching unshuffle?)
-and should refuse to emit a plain `gatherDim` goal for zigzag-owned shards. Until
-that lands, `goal_3`/`goal_4` should be reported as **not covered** rather than
-proven — proving them as stated would certify a false statement.
+The fix landed in `Verdict/graph_to_lean.py`. Ownership is now recovered
+structurally rather than guessed from shapes:
+
+> a tid is zigzag-owned iff its backward dataflow closure reaches a
+> `FW_maybe_shuffle` output without being stopped by a `FW_maybe_unshuffle`
+> output.
+
+Goals whose own `tps` are zigzag-owned are suppressed: an explanatory comment
+replaces the `def`, the name is dropped from `obsTids` / `goals` / prereq lists
+so the module still builds, and a loud summary is printed at generation time
+saying they are **not covered**.
+
+### What changed on a real regeneration
+
+Running `scripts/regenerate_yoco_a04b.py` against the archived authority pkls:
+
+* 507 goals suppressed, including `goal_3` and `goal_4`
+* `goal_1`, `goal_2`, `goal_5` survive
+* graph node lines (2829), shape entries (8611) and all 359 `initGoal`s are
+  **byte-identical** to the checked-in version — the change is confined to the
+  goal set
+
+### Cross-check against existing proofs
+
+Of the 505 suppressed intermediate goals:
+
+* **0** had a faithful `InitGoalHolds` proof
+* 502 were proven only as `Zigzag2Rel` — exactly the relation the emitter now
+  says cannot be restated as an ordinary gather
+* 3 had no faithful theorem at all
+
+So the suppression contradicts nothing that was already proven. The `Zigzag2Rel`
+proofs remain valid and are now the *only* claim made about those tensors, which
+is the correct state of affairs.
+
+### One correction to my own reasoning
+
+An earlier draft of the gate also suppressed goals *transitively*, on the theory
+that losing a prereq makes a goal "look provable but not be". That is backwards:
+dropping a hypothesis makes a statement **stronger**, not false. It was also
+empirically wrong — it flagged `goal_1`/`goal_2`, which are machine-checked in
+`L23FaithfulLossGoals.lean`. Their PM tensors sit *after* the graph's
+unshuffle, so they are contiguous and their statements are true even though
+their ancestry is full of zigzag tensors. The rule now fires on a goal's own
+`tps` only, and a regression test pins that.
+
+Where a prereq is genuinely dropped, the emitter leaves a `-- NOTE:` marking the
+resulting goal as stronger than generated, so the weakening is visible rather
+than silent.
+
+### Where goal_3 / goal_4 stand now
+
+They are correctly reported as open rather than emitted as false statements. To
+actually cover them, the reconstruction predicate itself needs a zigzag-aware
+form (a `LineageGoal` variant carrying the CP layout, discharged against
+`Zigzag2Rel` instead of `reconstructWithDim`). That is a Denote/emitter design
+change, not a proof, and it is the honest next step.
+
+The dim-0→dim-1 stack/gather commute lemma remains landed and correct
+(`fw_stack_allGather0_eq_allGather1_stack`, kernel triple only); it will be
+directly reusable once the goals can be stated truthfully.
 
