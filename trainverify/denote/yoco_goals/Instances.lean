@@ -38,13 +38,39 @@ theorem prove_goal_1_from_pattern_1 : goal_1_stmt := by
 theorem prove_goal_2_from_pattern_2 : goal_2_stmt := by
   sorry -- Requires Goal_2_CutToFull.lean (blocked on non-base emitter)
 
-/-- Goal 3: non-base, cut_to_full bridge missing. -/
-theorem prove_goal_3_from_pattern_3 : goal_3_stmt := by
+/- Goals 3 and 4 are blocked for a DIFFERENT and permanent reason than 1/2.
+
+   There is no `goal_3_stmt` / `goal_4_stmt` any more, and there never can be:
+   those statements are FALSE, not merely unproven. Both goals stack the 24
+   per-layer routing tensors; 12 of those members are produced after the CP2
+   `FW_maybe_shuffle` and are zigzag-owned, while the goal asserted one uniform
+   ordinary dim-1 gather over all 24.
+
+   `ZigzagGoalRefutation.gatheredZigzag_ne_full` machine-checks this on a
+   concrete cp=2 fixture: the ordinary gather of the zigzag shards has the same
+   SHAPE as the contiguous tensor but disagrees in value at flat index 2 (6
+   versus 2). Shape checking cannot see the difference, which is why the emitter
+   produced these goals in the first place. `Verdict/graph_to_lean.py` now
+   refuses to emit them and states the true obligations as `ZigzagLineageGoal`s.
+
+   The CUT statements are a different matter and remain sound: `pm_goal_3` /
+   `pm_goal_4` are sliced subgraphs built from `ChunkPrim` with no shuffle in
+   them, so Pattern_3 / Pattern_4 prove true things. It is precisely the
+   cut-to-full lift that is impossible — which is why those two bridges were
+   never emitted and these theorems were always `sorry`. -/
+
+/-- Goal 3: stated over the cut, which is shuffle-free and sound. There is no
+    full-graph statement to bridge to (see the note above). -/
+theorem prove_goal_3_from_pattern_3 : goal_3_stmt_cut := by
   sorry -- Pattern_3 itself needs its own hand-proof; separately blocked
 
-/-- Goal 4: non-base, cut_to_full bridge missing. -/
-theorem prove_goal_4_from_pattern_4 : goal_4_stmt := by
-  sorry -- Pattern_4 itself needs its own hand-proof; separately blocked
+/-- Goal 4: stated over the cut. Pattern_4 discharges it outright, so this is no
+    longer a `sorry` — the previous `sorry` was owed entirely to the impossible
+    cut-to-full lift, not to any gap in Pattern_4. -/
+theorem prove_goal_4_from_pattern_4
+    (hZZ : ∀ initSM initPM, ZigzagCutGatherHyp initSM initPM) :
+    goal_4_stmt_cut :=
+  prove_pattern_4 hZZ pattern_4_target.goal_4
 
 /-- Goal 5: base, has working cut_to_full bridge. ✅ -/
 theorem prove_goal_5_from_pattern_5 : goal_5_stmt := by

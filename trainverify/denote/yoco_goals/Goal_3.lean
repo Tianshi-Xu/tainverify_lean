@@ -3563,15 +3563,23 @@ def pm_goal_3InitEnv : ShapeEnv := shapeEnvOfList pm_goal_3InitShapes
 def goal_3_prereqs : List LineageGoal := [goal_5]
 def goal_3_cut_initGoals : List LineageGoal := initGoals ++ goal_3_prereqs
 
+-- goal_3 has no global (full-graph) statement: its PM shards are CP
+-- zigzag-owned, so an ordinary gather over them is false. See
+-- ZigzagGoalRefutation.gatheredZigzag_ne_full, which exhibits a concrete cp=2
+-- disagreement at flat index 2 (6 vs 2). The CUT graph below is shuffle-free
+-- (built from ChunkPrim), so this local obligation is sound and provable.
+def goal_3_cut_goal : LineageGoal :=
+  { ts := 4675, tsShape := [24, 4096, 64], tps := [{ rank := 0, tid := 4675 }], tpShapes := [[24, 4096, 64]] }
+
 def goal_3_stmt_cut : Prop :=
-  CoarseLineageHoldsWithInit sm_goal_3 pm_goal_3 goal_3 sm_goal_3InitEnv pm_goal_3InitEnv goal_3_cut_initGoals
+  CoarseLineageHoldsWithInit sm_goal_3 pm_goal_3 goal_3_cut_goal sm_goal_3InitEnv pm_goal_3InitEnv goal_3_cut_initGoals
 
 
 /-- Ring-attention-aware goal statement — mirror of Pattern_3.lean's
     `goal_3_stmt_cut_ringAttn`, adapted to the faithful graph. Uses
     `CoarseLineageHoldsWithInit_ringAttn` for the zigzag ring-attn semantics. -/
 def goal_3_stmt_cut_ringAttn : Prop :=
-  CoarseLineageHoldsWithInit_ringAttn sm_goal_3 pm_goal_3 goal_3
+  CoarseLineageHoldsWithInit_ringAttn sm_goal_3 pm_goal_3 goal_3_cut_goal
     sm_goal_3InitEnv pm_goal_3InitEnv goal_3_cut_initGoals
 
 

@@ -31,6 +31,57 @@ set_option maxHeartbeats 1600000
 
 namespace TrainVerify.Denote.GeneratedPatterns
 
+/-! ### Ring-attention-track goal records for the CP zigzag attention outputs
+
+These 12 tids are CP zigzag-owned, so `Verdict/graph_to_lean.py` no longer emits
+an `intermediateGoal_N` for them: on the FAITHFUL full graph an ordinary gather
+over their shards is false (`ZigzagGoalRefutation.gatheredZigzag_ne_full`), and
+the true obligation is the emitted `intermediateGoal_N_zigzag`
+(`ZigzagLineageGoal`, discharged against `Zigzag2Rel`).
+
+Every theorem in THIS file is stated over `denoteGraph_ringAttn`, which models
+the shuffle as identity (AGENTS #24: shape-correct, value-lossy for cpSize > 1).
+On that track the ordinary-gather record is the right statement, so the records
+are re-declared here — scoped to this module rather than published globally, so
+they cannot be mistaken for faithful-track goals.
+-/
+
+def intermediateGoal_5347 : LineageGoal :=
+  { ts := 5347, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9687 }, { rank := 1, tid := 9688 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+
+def intermediateGoal_5396 : LineageGoal :=
+  { ts := 5396, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9859 }, { rank := 1, tid := 9860 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+
+def intermediateGoal_5445 : LineageGoal :=
+  { ts := 5445, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10031 }, { rank := 1, tid := 10032 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+
+def intermediateGoal_5494 : LineageGoal :=
+  { ts := 5494, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10203 }, { rank := 1, tid := 10204 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+
+def intermediateGoal_5543 : LineageGoal :=
+  { ts := 5543, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10375 }, { rank := 1, tid := 10376 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+
+def intermediateGoal_5592 : LineageGoal :=
+  { ts := 5592, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10547 }, { rank := 1, tid := 10548 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+
+def intermediateGoal_5641 : LineageGoal :=
+  { ts := 5641, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10719 }, { rank := 1, tid := 10720 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+
+def intermediateGoal_5690 : LineageGoal :=
+  { ts := 5690, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10891 }, { rank := 1, tid := 10892 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+
+def intermediateGoal_5739 : LineageGoal :=
+  { ts := 5739, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11063 }, { rank := 1, tid := 11064 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+
+def intermediateGoal_5788 : LineageGoal :=
+  { ts := 5788, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11235 }, { rank := 1, tid := 11236 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+
+def intermediateGoal_5837 : LineageGoal :=
+  { ts := 5837, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11407 }, { rank := 1, tid := 11408 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+
+def intermediateGoal_5886 : LineageGoal :=
+  { ts := 5886, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11579 }, { rank := 1, tid := 11580 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.GeneratedGoals

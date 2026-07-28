@@ -844,7 +844,7 @@ theorem denote_pm_goal_3_4675 (initPM : Store) :
     `cu_bound_of_value_pin`.
 
     The body is an inline expansion of `goal_3_stmt_cut_ringAttn`'s conclusion
-    (`CoarseLineageHoldsWithInit_ringAttn sm_goal_3 pm_goal_3 goal_3 ...`), since
+    (`CoarseLineageHoldsWithInit_ringAttn sm_goal_3 pm_goal_3 goal_3_cut_goal ...`), since
     the auto-generated statement cannot be modified.
 
     Non-vacuity: the 12 pins are satisfiable (see
@@ -869,11 +869,11 @@ def goal_3_stmt_with_pins : Prop :=
     initPM 5885 = cu_pin_value →
     let smStore := denoteGraph_ringAttn sm_goal_3 initSM
     let pmStore := denoteGraph_ringAttn pm_goal_3 initPM
-    let ts := smStore goal_3.ts
-    let tps := goal_3.tps.map (fun p => pmStore p.tid)
-    ts.shape = goal_3.tsShape ∧
-      (tps.map (fun t => t.shape)) = goal_3.tpShapes ∧
-      ts = reconstructWithDim goal_3.gatherDim pm_goal_3.numRanks 0 tps
+    let ts := smStore goal_3_cut_goal.ts
+    let tps := goal_3_cut_goal.tps.map (fun p => pmStore p.tid)
+    ts.shape = goal_3_cut_goal.tsShape ∧
+      (tps.map (fun t => t.shape)) = goal_3_cut_goal.tpShapes ∧
+      ts = reconstructWithDim goal_3_cut_goal.gatherDim pm_goal_3.numRanks 0 tps
 
 set_option maxHeartbeats 8000000 in
 theorem goal_3_stmt_with_pins_of_router_commutes
@@ -919,11 +919,11 @@ theorem goal_3_stmt_with_pins_of_router_commutes
     rw [allGatherPrimDimN_shape 0 2 _ [2048, 64] hhd]
     simp only [List.set, List.getD_cons_zero]
   refine ⟨?_, ?_, ?_⟩
-  · simp only [goal_3]
+  · simp only [goal_3_cut_goal]
     rw [denote_sm_goal_3_4675 initSM]
     have hfs := fw_stack_shape ([denoteGraph_ringAttn sm_goal_3 initSM 4710, denoteGraph_ringAttn sm_goal_3 initSM 4764, denoteGraph_ringAttn sm_goal_3 initSM 4818, denoteGraph_ringAttn sm_goal_3 initSM 4872, denoteGraph_ringAttn sm_goal_3 initSM 4926, denoteGraph_ringAttn sm_goal_3 initSM 4980, denoteGraph_ringAttn sm_goal_3 initSM 5034, denoteGraph_ringAttn sm_goal_3 initSM 5088, denoteGraph_ringAttn sm_goal_3 initSM 5142, denoteGraph_ringAttn sm_goal_3 initSM 5196, denoteGraph_ringAttn sm_goal_3 initSM 5250, denoteGraph_ringAttn sm_goal_3 initSM 5304, denoteGraph_ringAttn sm_goal_3 initSM 5361, denoteGraph_ringAttn sm_goal_3 initSM 5410, denoteGraph_ringAttn sm_goal_3 initSM 5459, denoteGraph_ringAttn sm_goal_3 initSM 5508, denoteGraph_ringAttn sm_goal_3 initSM 5557, denoteGraph_ringAttn sm_goal_3 initSM 5606, denoteGraph_ringAttn sm_goal_3 initSM 5655, denoteGraph_ringAttn sm_goal_3 initSM 5704, denoteGraph_ringAttn sm_goal_3 initSM 5753, denoteGraph_ringAttn sm_goal_3 initSM 5802, denoteGraph_ringAttn sm_goal_3 initSM 5851, denoteGraph_ringAttn sm_goal_3 initSM 5900] : List Tensor) [4096, 64] (by simpa using hzhead)
     rw [hfs]; norm_num
-  · simp only [goal_3, List.map_cons, List.map_nil]
+  · simp only [goal_3_cut_goal, List.map_cons, List.map_nil]
     rw [denote_pm_goal_3_4675 initPM, denote_pm_goal_3_stack_r0 initPM, denote_pm_goal_3_stack_r1 initPM]
     have hnr : pm_goal_3.numRanks = 2 := rfl
     rw [hnr]
@@ -933,7 +933,7 @@ theorem goal_3_stmt_with_pins_of_router_commutes
       simp only [List.head?_cons, Option.map_some, Option.getD_some]; exact hstack0
     rw [allGatherPrimDimN_shape 1 2 _ [24, 2048, 64] hstackhead]
     norm_num [List.set]
-  · simp only [goal_3, List.map_cons, List.map_nil, reconstructWithDim_singleton]
+  · simp only [goal_3_cut_goal, List.map_cons, List.map_nil, reconstructWithDim_singleton]
     rw [denote_sm_goal_3_4675 initSM, denote_pm_goal_3_4675 initPM, denote_pm_goal_3_stack_r0 initPM, denote_pm_goal_3_stack_r1 initPM]
     have hnr : pm_goal_3.numRanks = 2 := rfl
     rw [hnr]

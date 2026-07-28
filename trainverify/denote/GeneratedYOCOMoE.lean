@@ -4,6 +4,7 @@
 -/
 import denote.Denote
 import denote.InputValueClasses
+import denote.yoco_goals.ZigzagGoalStatement
 
 set_option linter.style.longLine false
 set_option linter.style.nativeDecide false
@@ -12582,7 +12583,7 @@ def initGoal_5931 : LineageGoal :=
 
 def initGoals : List LineageGoal := [initGoal_4677, initGoal_4678, initGoal_4679, initGoal_4682, initGoal_4684, initGoal_4686, initGoal_4688, initGoal_4690, initGoal_4691, initGoal_4694, initGoal_4695, initGoal_4699, initGoal_4704, initGoal_4707, initGoal_4712, initGoal_4713, initGoal_4716, initGoal_4721, initGoal_4725, initGoal_4730, initGoal_4737, initGoal_4739, initGoal_4741, initGoal_4743, initGoal_4745, initGoal_4748, initGoal_4749, initGoal_4753, initGoal_4758, initGoal_4761, initGoal_4766, initGoal_4767, initGoal_4770, initGoal_4775, initGoal_4779, initGoal_4784, initGoal_4791, initGoal_4793, initGoal_4795, initGoal_4797, initGoal_4799, initGoal_4802, initGoal_4803, initGoal_4807, initGoal_4812, initGoal_4815, initGoal_4820, initGoal_4821, initGoal_4824, initGoal_4829, initGoal_4833, initGoal_4838, initGoal_4845, initGoal_4847, initGoal_4849, initGoal_4851, initGoal_4853, initGoal_4856, initGoal_4857, initGoal_4861, initGoal_4866, initGoal_4869, initGoal_4874, initGoal_4875, initGoal_4878, initGoal_4883, initGoal_4887, initGoal_4892, initGoal_4899, initGoal_4901, initGoal_4903, initGoal_4905, initGoal_4907, initGoal_4910, initGoal_4911, initGoal_4915, initGoal_4920, initGoal_4923, initGoal_4928, initGoal_4929, initGoal_4932, initGoal_4937, initGoal_4941, initGoal_4946, initGoal_4953, initGoal_4955, initGoal_4957, initGoal_4959, initGoal_4961, initGoal_4964, initGoal_4965, initGoal_4969, initGoal_4974, initGoal_4977, initGoal_4982, initGoal_4983, initGoal_4986, initGoal_4991, initGoal_4995, initGoal_5000, initGoal_5007, initGoal_5009, initGoal_5011, initGoal_5013, initGoal_5015, initGoal_5018, initGoal_5019, initGoal_5023, initGoal_5028, initGoal_5031, initGoal_5036, initGoal_5037, initGoal_5040, initGoal_5045, initGoal_5049, initGoal_5054, initGoal_5061, initGoal_5063, initGoal_5065, initGoal_5067, initGoal_5069, initGoal_5072, initGoal_5073, initGoal_5077, initGoal_5082, initGoal_5085, initGoal_5090, initGoal_5091, initGoal_5094, initGoal_5099, initGoal_5103, initGoal_5108, initGoal_5115, initGoal_5117, initGoal_5119, initGoal_5121, initGoal_5123, initGoal_5126, initGoal_5127, initGoal_5131, initGoal_5136, initGoal_5139, initGoal_5144, initGoal_5145, initGoal_5148, initGoal_5153, initGoal_5157, initGoal_5162, initGoal_5169, initGoal_5171, initGoal_5173, initGoal_5175, initGoal_5177, initGoal_5180, initGoal_5181, initGoal_5185, initGoal_5190, initGoal_5193, initGoal_5198, initGoal_5199, initGoal_5202, initGoal_5207, initGoal_5211, initGoal_5216, initGoal_5223, initGoal_5225, initGoal_5227, initGoal_5229, initGoal_5231, initGoal_5234, initGoal_5235, initGoal_5239, initGoal_5244, initGoal_5247, initGoal_5252, initGoal_5253, initGoal_5256, initGoal_5261, initGoal_5265, initGoal_5270, initGoal_5277, initGoal_5279, initGoal_5281, initGoal_5283, initGoal_5285, initGoal_5288, initGoal_5289, initGoal_5293, initGoal_5298, initGoal_5301, initGoal_5306, initGoal_5307, initGoal_5310, initGoal_5315, initGoal_5319, initGoal_5324, initGoal_5331, initGoal_5333, initGoal_5335, initGoal_5337, initGoal_5339, initGoal_5341, initGoal_5345, initGoal_5346, initGoal_5350, initGoal_5355, initGoal_5358, initGoal_5363, initGoal_5364, initGoal_5367, initGoal_5372, initGoal_5376, initGoal_5381, initGoal_5388, initGoal_5390, initGoal_5394, initGoal_5395, initGoal_5399, initGoal_5404, initGoal_5407, initGoal_5412, initGoal_5413, initGoal_5416, initGoal_5421, initGoal_5425, initGoal_5430, initGoal_5437, initGoal_5439, initGoal_5443, initGoal_5444, initGoal_5448, initGoal_5453, initGoal_5456, initGoal_5461, initGoal_5462, initGoal_5465, initGoal_5470, initGoal_5474, initGoal_5479, initGoal_5486, initGoal_5488, initGoal_5492, initGoal_5493, initGoal_5497, initGoal_5502, initGoal_5505, initGoal_5510, initGoal_5511, initGoal_5514, initGoal_5519, initGoal_5523, initGoal_5528, initGoal_5535, initGoal_5537, initGoal_5541, initGoal_5542, initGoal_5546, initGoal_5551, initGoal_5554, initGoal_5559, initGoal_5560, initGoal_5563, initGoal_5568, initGoal_5572, initGoal_5577, initGoal_5584, initGoal_5586, initGoal_5590, initGoal_5591, initGoal_5595, initGoal_5600, initGoal_5603, initGoal_5608, initGoal_5609, initGoal_5612, initGoal_5617, initGoal_5621, initGoal_5626, initGoal_5633, initGoal_5635, initGoal_5639, initGoal_5640, initGoal_5644, initGoal_5649, initGoal_5652, initGoal_5657, initGoal_5658, initGoal_5661, initGoal_5666, initGoal_5670, initGoal_5675, initGoal_5682, initGoal_5684, initGoal_5688, initGoal_5689, initGoal_5693, initGoal_5698, initGoal_5701, initGoal_5706, initGoal_5707, initGoal_5710, initGoal_5715, initGoal_5719, initGoal_5724, initGoal_5731, initGoal_5733, initGoal_5737, initGoal_5738, initGoal_5742, initGoal_5747, initGoal_5750, initGoal_5755, initGoal_5756, initGoal_5759, initGoal_5764, initGoal_5768, initGoal_5773, initGoal_5780, initGoal_5782, initGoal_5786, initGoal_5787, initGoal_5791, initGoal_5796, initGoal_5799, initGoal_5804, initGoal_5805, initGoal_5808, initGoal_5813, initGoal_5817, initGoal_5822, initGoal_5829, initGoal_5831, initGoal_5835, initGoal_5836, initGoal_5840, initGoal_5845, initGoal_5848, initGoal_5853, initGoal_5854, initGoal_5857, initGoal_5862, initGoal_5866, initGoal_5871, initGoal_5878, initGoal_5880, initGoal_5884, initGoal_5885, initGoal_5889, initGoal_5894, initGoal_5897, initGoal_5902, initGoal_5903, initGoal_5906, initGoal_5911, initGoal_5915, initGoal_5920, initGoal_5927, initGoal_5929, initGoal_5931]
 
-def obsTids : List Nat := [4673, 4674, 4675, 4676, 4680]
+def obsTids : List Nat := [4673, 4674, 4680]
 
 def goal_1 : LineageGoal :=
   { ts := 4673, tsShape := [4096], tps := [{ rank := 0, tid := 4673 }], tpShapes := [[4096]] }
@@ -12590,16 +12591,26 @@ def goal_1 : LineageGoal :=
 def goal_2 : LineageGoal :=
   { ts := 4674, tsShape := [4096], tps := [{ rank := 0, tid := 4674 }], tpShapes := [[4096]] }
 
-def goal_3 : LineageGoal :=
-  { ts := 4675, tsShape := [24, 4096, 64], tps := [{ rank := 0, tid := 4675 }], tpShapes := [[24, 4096, 64]] }
+-- NOT an ordinary gather: goal_3 (ts = 4675).
+--   PM tids 4675 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   (no ZigzagLineageGoal emitted: needs exactly 2 tps sharing one cu tid; got 1 tps, cu tids [5337])
 
-def goal_4 : LineageGoal :=
-  { ts := 4676, tsShape := [24, 4096, 64], tps := [{ rank := 0, tid := 4676 }], tpShapes := [[24, 4096, 64]] }
+-- NOT an ordinary gather: goal_4 (ts = 4676).
+--   PM tids 4676 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   (no ZigzagLineageGoal emitted: needs exactly 2 tps sharing one cu tid; got 1 tps, cu tids [5337])
 
 def goal_5 : LineageGoal :=
   { ts := 4680, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 4680 }], tpShapes := [[4096, 1024]] }
 
-def goalChunk_1 : List LineageGoal := [goal_1, goal_2, goal_3, goal_4, goal_5]
+def goalChunk_1 : List LineageGoal := [goal_1, goal_2, goal_5]
 def goals : List LineageGoal := goalChunk_1
 
 -- Auto shape/dimension checks skipped for this large generated graph.
@@ -13949,14 +13960,32 @@ def intermediateGoal_5334 : LineageGoal :=
 def intermediateGoal_5336 : LineageGoal :=
   { ts := 5336, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5336 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5338 : LineageGoal :=
-  { ts := 5338, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9655 }, { rank := 1, tid := 9656 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5338 (ts = 5338).
+--   PM tids 9655, 9656 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5338_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5338, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9655 }, { rank := 1, tid := 9656 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5340 : LineageGoal :=
-  { ts := 5340, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9657 }, { rank := 1, tid := 9658 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5340 (ts = 5340).
+--   PM tids 9657, 9658 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5340_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5340, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9657 }, { rank := 1, tid := 9658 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5342 : LineageGoal :=
-  { ts := 5342, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9659 }, { rank := 1, tid := 9660 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5342 (ts = 5342).
+--   PM tids 9659, 9660 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5342_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5342, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9659 }, { rank := 1, tid := 9660 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
 def intermediateGoal_5343 : LineageGoal :=
   { ts := 5343, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5343 }], tpShapes := [[4096, 4, 64]] }
@@ -13964,104 +13993,302 @@ def intermediateGoal_5343 : LineageGoal :=
 def intermediateGoal_5344 : LineageGoal :=
   { ts := 5344, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5344 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5347 : LineageGoal :=
-  { ts := 5347, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9687 }, { rank := 1, tid := 9688 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5347 (ts = 5347).
+--   PM tids 9687, 9688 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5347_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5347, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9687 }, { rank := 1, tid := 9688 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5348 : LineageGoal :=
-  { ts := 5348, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9689 }, { rank := 1, tid := 9690 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5348 (ts = 5348).
+--   PM tids 9689, 9690 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5348_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5348, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9689 }, { rank := 1, tid := 9690 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5349 : LineageGoal :=
-  { ts := 5349, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9695 }, { rank := 1, tid := 9696 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5349 (ts = 5349).
+--   PM tids 9695, 9696 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5349_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5349, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9695 }, { rank := 1, tid := 9696 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5351 : LineageGoal :=
-  { ts := 5351, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9699 }, { rank := 1, tid := 9700 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5351 (ts = 5351).
+--   PM tids 9699, 9700 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5351_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5351, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9699 }, { rank := 1, tid := 9700 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5352 : LineageGoal :=
-  { ts := 5352, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9709 }, { rank := 1, tid := 9710 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5352 (ts = 5352).
+--   PM tids 9709, 9710 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5352_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5352, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9709 }, { rank := 1, tid := 9710 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5353 : LineageGoal :=
-  { ts := 5353, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9713 }, { rank := 1, tid := 9714 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5353 (ts = 5353).
+--   PM tids 9713, 9714 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5353_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5353, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9713 }, { rank := 1, tid := 9714 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5354 : LineageGoal :=
-  { ts := 5354, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9717 }, { rank := 1, tid := 9718 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5354 (ts = 5354).
+--   PM tids 9717, 9718 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5354_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5354, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9717 }, { rank := 1, tid := 9718 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5356 : LineageGoal :=
-  { ts := 5356, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9721 }, { rank := 1, tid := 9722 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5356 (ts = 5356).
+--   PM tids 9721, 9722 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5356_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5356, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9721 }, { rank := 1, tid := 9722 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5357 : LineageGoal :=
-  { ts := 5357, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9723 }, { rank := 1, tid := 9724 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5357 (ts = 5357).
+--   PM tids 9723, 9724 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5357_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5357, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9723 }, { rank := 1, tid := 9724 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5359 : LineageGoal :=
-  { ts := 5359, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9729 }, { rank := 1, tid := 9730 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5359 (ts = 5359).
+--   PM tids 9729, 9730 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5359_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5359, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9729 }, { rank := 1, tid := 9730 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5360 : LineageGoal :=
-  { ts := 5360, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9731 }, { rank := 1, tid := 9732 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5360 (ts = 5360).
+--   PM tids 9731, 9732 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5360_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5360, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9731 }, { rank := 1, tid := 9732 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5361 : LineageGoal :=
-  { ts := 5361, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9733 }, { rank := 1, tid := 9734 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5361 (ts = 5361).
+--   PM tids 9733, 9734 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5361_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5361, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9733 }, { rank := 1, tid := 9734 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5365 : LineageGoal :=
-  { ts := 5365, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9741 }, { rank := 1, tid := 9742 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5365 (ts = 5365).
+--   PM tids 9741, 9742 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5365_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5365, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9741 }, { rank := 1, tid := 9742 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5366 : LineageGoal :=
-  { ts := 5366, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9743 }, { rank := 1, tid := 9744 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5366 (ts = 5366).
+--   PM tids 9743, 9744 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5366_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5366, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9743 }, { rank := 1, tid := 9744 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5368 : LineageGoal :=
-  { ts := 5368, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9747 }, { rank := 1, tid := 9748 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5368 (ts = 5368).
+--   PM tids 9747, 9748 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5368_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5368, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9747 }, { rank := 1, tid := 9748 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5369 : LineageGoal :=
-  { ts := 5369, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9753 }, { rank := 1, tid := 9754 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5369 (ts = 5369).
+--   PM tids 9753, 9754 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5369_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5369, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9753 }, { rank := 1, tid := 9754 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5370 : LineageGoal :=
-  { ts := 5370, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9755 }, { rank := 1, tid := 9756 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5370 (ts = 5370).
+--   PM tids 9755, 9756 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5370_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5370, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9755 }, { rank := 1, tid := 9756 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5371 : LineageGoal :=
-  { ts := 5371, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9757 }, { rank := 1, tid := 9758 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5371 (ts = 5371).
+--   PM tids 9757, 9758 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5371_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5371, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9757 }, { rank := 1, tid := 9758 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5373 : LineageGoal :=
-  { ts := 5373, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9761 }, { rank := 1, tid := 9762 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5373 (ts = 5373).
+--   PM tids 9761, 9762 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5373_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5373, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9761 }, { rank := 1, tid := 9762 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5374 : LineageGoal :=
-  { ts := 5374, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9771 }, { rank := 1, tid := 9772 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5374 (ts = 5374).
+--   PM tids 9771, 9772 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5374_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5374, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9771 }, { rank := 1, tid := 9772 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5375 : LineageGoal :=
-  { ts := 5375, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9775 }, { rank := 1, tid := 9776 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5375 (ts = 5375).
+--   PM tids 9775, 9776 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5375_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5375, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9775 }, { rank := 1, tid := 9776 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5377 : LineageGoal :=
-  { ts := 5377, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9779 }, { rank := 1, tid := 9780 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5377 (ts = 5377).
+--   PM tids 9779, 9780 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5377_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5377, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9779 }, { rank := 1, tid := 9780 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5378 : LineageGoal :=
-  { ts := 5378, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9789 }, { rank := 1, tid := 9790 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5378 (ts = 5378).
+--   PM tids 9789, 9790 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5378_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5378, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9789 }, { rank := 1, tid := 9790 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5379 : LineageGoal :=
-  { ts := 5379, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9793 }, { rank := 1, tid := 9794 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5379 (ts = 5379).
+--   PM tids 9793, 9794 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5379_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5379, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9793 }, { rank := 1, tid := 9794 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5380 : LineageGoal :=
-  { ts := 5380, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9795 }, { rank := 1, tid := 9796 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5380 (ts = 5380).
+--   PM tids 9795, 9796 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5380_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5380, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9795 }, { rank := 1, tid := 9796 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5382 : LineageGoal :=
-  { ts := 5382, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9801 }, { rank := 1, tid := 9802 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5382 (ts = 5382).
+--   PM tids 9801, 9802 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5382_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5382, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9801 }, { rank := 1, tid := 9802 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5383 : LineageGoal :=
-  { ts := 5383, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9811 }, { rank := 1, tid := 9812 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5383 (ts = 5383).
+--   PM tids 9811, 9812 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5383_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5383, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9811 }, { rank := 1, tid := 9812 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5384 : LineageGoal :=
-  { ts := 5384, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9815 }, { rank := 1, tid := 9816 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5384 (ts = 5384).
+--   PM tids 9815, 9816 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5384_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5384, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9815 }, { rank := 1, tid := 9816 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5385 : LineageGoal :=
-  { ts := 5385, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9819 }, { rank := 1, tid := 9820 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5385 (ts = 5385).
+--   PM tids 9819, 9820 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5385_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5385, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9819 }, { rank := 1, tid := 9820 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5386 : LineageGoal :=
-  { ts := 5386, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9825 }, { rank := 1, tid := 9826 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5386 (ts = 5386).
+--   PM tids 9825, 9826 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5386_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5386, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9825 }, { rank := 1, tid := 9826 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5387 : LineageGoal :=
-  { ts := 5387, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9829 }, { rank := 1, tid := 9830 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5387 (ts = 5387).
+--   PM tids 9829, 9830 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5387_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5387, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9829 }, { rank := 1, tid := 9830 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5389 : LineageGoal :=
-  { ts := 5389, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9833 }, { rank := 1, tid := 9834 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5389 (ts = 5389).
+--   PM tids 9833, 9834 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5389_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5389, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9833 }, { rank := 1, tid := 9834 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5391 : LineageGoal :=
-  { ts := 5391, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9835 }, { rank := 1, tid := 9836 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5391 (ts = 5391).
+--   PM tids 9835, 9836 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5391_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5391, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9835 }, { rank := 1, tid := 9836 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
 def intermediateGoal_5392 : LineageGoal :=
   { ts := 5392, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5392 }], tpShapes := [[4096, 4, 64]] }
@@ -14069,104 +14296,302 @@ def intermediateGoal_5392 : LineageGoal :=
 def intermediateGoal_5393 : LineageGoal :=
   { ts := 5393, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5393 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5396 : LineageGoal :=
-  { ts := 5396, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9859 }, { rank := 1, tid := 9860 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5396 (ts = 5396).
+--   PM tids 9859, 9860 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5396_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5396, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9859 }, { rank := 1, tid := 9860 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5397 : LineageGoal :=
-  { ts := 5397, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9861 }, { rank := 1, tid := 9862 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5397 (ts = 5397).
+--   PM tids 9861, 9862 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5397_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5397, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9861 }, { rank := 1, tid := 9862 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5398 : LineageGoal :=
-  { ts := 5398, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9867 }, { rank := 1, tid := 9868 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5398 (ts = 5398).
+--   PM tids 9867, 9868 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5398_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5398, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9867 }, { rank := 1, tid := 9868 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5400 : LineageGoal :=
-  { ts := 5400, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9871 }, { rank := 1, tid := 9872 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5400 (ts = 5400).
+--   PM tids 9871, 9872 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5400_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5400, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9871 }, { rank := 1, tid := 9872 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5401 : LineageGoal :=
-  { ts := 5401, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9881 }, { rank := 1, tid := 9882 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5401 (ts = 5401).
+--   PM tids 9881, 9882 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5401_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5401, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9881 }, { rank := 1, tid := 9882 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5402 : LineageGoal :=
-  { ts := 5402, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9885 }, { rank := 1, tid := 9886 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5402 (ts = 5402).
+--   PM tids 9885, 9886 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5402_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5402, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9885 }, { rank := 1, tid := 9886 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5403 : LineageGoal :=
-  { ts := 5403, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9889 }, { rank := 1, tid := 9890 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5403 (ts = 5403).
+--   PM tids 9889, 9890 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5403_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5403, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9889 }, { rank := 1, tid := 9890 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5405 : LineageGoal :=
-  { ts := 5405, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9893 }, { rank := 1, tid := 9894 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5405 (ts = 5405).
+--   PM tids 9893, 9894 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5405_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5405, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9893 }, { rank := 1, tid := 9894 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5406 : LineageGoal :=
-  { ts := 5406, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9895 }, { rank := 1, tid := 9896 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5406 (ts = 5406).
+--   PM tids 9895, 9896 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5406_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5406, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9895 }, { rank := 1, tid := 9896 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5408 : LineageGoal :=
-  { ts := 5408, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9901 }, { rank := 1, tid := 9902 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5408 (ts = 5408).
+--   PM tids 9901, 9902 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5408_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5408, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9901 }, { rank := 1, tid := 9902 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5409 : LineageGoal :=
-  { ts := 5409, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9903 }, { rank := 1, tid := 9904 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5409 (ts = 5409).
+--   PM tids 9903, 9904 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5409_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5409, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9903 }, { rank := 1, tid := 9904 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5410 : LineageGoal :=
-  { ts := 5410, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9905 }, { rank := 1, tid := 9906 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5410 (ts = 5410).
+--   PM tids 9905, 9906 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5410_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5410, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9905 }, { rank := 1, tid := 9906 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5414 : LineageGoal :=
-  { ts := 5414, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9913 }, { rank := 1, tid := 9914 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5414 (ts = 5414).
+--   PM tids 9913, 9914 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5414_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5414, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9913 }, { rank := 1, tid := 9914 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5415 : LineageGoal :=
-  { ts := 5415, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9915 }, { rank := 1, tid := 9916 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5415 (ts = 5415).
+--   PM tids 9915, 9916 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5415_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5415, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9915 }, { rank := 1, tid := 9916 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5417 : LineageGoal :=
-  { ts := 5417, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9919 }, { rank := 1, tid := 9920 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5417 (ts = 5417).
+--   PM tids 9919, 9920 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5417_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5417, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9919 }, { rank := 1, tid := 9920 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5418 : LineageGoal :=
-  { ts := 5418, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9925 }, { rank := 1, tid := 9926 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5418 (ts = 5418).
+--   PM tids 9925, 9926 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5418_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5418, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9925 }, { rank := 1, tid := 9926 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5419 : LineageGoal :=
-  { ts := 5419, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9927 }, { rank := 1, tid := 9928 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5419 (ts = 5419).
+--   PM tids 9927, 9928 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5419_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5419, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9927 }, { rank := 1, tid := 9928 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5420 : LineageGoal :=
-  { ts := 5420, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9929 }, { rank := 1, tid := 9930 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5420 (ts = 5420).
+--   PM tids 9929, 9930 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5420_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5420, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9929 }, { rank := 1, tid := 9930 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5422 : LineageGoal :=
-  { ts := 5422, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9933 }, { rank := 1, tid := 9934 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5422 (ts = 5422).
+--   PM tids 9933, 9934 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5422_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5422, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9933 }, { rank := 1, tid := 9934 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5423 : LineageGoal :=
-  { ts := 5423, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9943 }, { rank := 1, tid := 9944 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5423 (ts = 5423).
+--   PM tids 9943, 9944 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5423_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5423, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9943 }, { rank := 1, tid := 9944 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5424 : LineageGoal :=
-  { ts := 5424, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9947 }, { rank := 1, tid := 9948 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5424 (ts = 5424).
+--   PM tids 9947, 9948 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5424_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5424, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9947 }, { rank := 1, tid := 9948 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5426 : LineageGoal :=
-  { ts := 5426, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9951 }, { rank := 1, tid := 9952 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5426 (ts = 5426).
+--   PM tids 9951, 9952 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5426_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5426, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9951 }, { rank := 1, tid := 9952 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5427 : LineageGoal :=
-  { ts := 5427, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9961 }, { rank := 1, tid := 9962 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5427 (ts = 5427).
+--   PM tids 9961, 9962 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5427_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5427, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9961 }, { rank := 1, tid := 9962 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5428 : LineageGoal :=
-  { ts := 5428, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9965 }, { rank := 1, tid := 9966 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5428 (ts = 5428).
+--   PM tids 9965, 9966 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5428_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5428, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9965 }, { rank := 1, tid := 9966 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5429 : LineageGoal :=
-  { ts := 5429, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9967 }, { rank := 1, tid := 9968 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5429 (ts = 5429).
+--   PM tids 9967, 9968 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5429_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5429, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9967 }, { rank := 1, tid := 9968 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5431 : LineageGoal :=
-  { ts := 5431, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9973 }, { rank := 1, tid := 9974 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5431 (ts = 5431).
+--   PM tids 9973, 9974 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5431_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5431, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9973 }, { rank := 1, tid := 9974 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5432 : LineageGoal :=
-  { ts := 5432, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9983 }, { rank := 1, tid := 9984 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5432 (ts = 5432).
+--   PM tids 9983, 9984 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5432_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5432, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9983 }, { rank := 1, tid := 9984 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5433 : LineageGoal :=
-  { ts := 5433, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9987 }, { rank := 1, tid := 9988 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5433 (ts = 5433).
+--   PM tids 9987, 9988 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5433_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5433, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9987 }, { rank := 1, tid := 9988 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5434 : LineageGoal :=
-  { ts := 5434, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9991 }, { rank := 1, tid := 9992 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5434 (ts = 5434).
+--   PM tids 9991, 9992 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5434_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5434, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9991 }, { rank := 1, tid := 9992 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5435 : LineageGoal :=
-  { ts := 5435, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9997 }, { rank := 1, tid := 9998 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5435 (ts = 5435).
+--   PM tids 9997, 9998 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5435_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5435, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9997 }, { rank := 1, tid := 9998 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5436 : LineageGoal :=
-  { ts := 5436, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10001 }, { rank := 1, tid := 10002 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5436 (ts = 5436).
+--   PM tids 10001, 10002 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5436_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5436, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10001 }, { rank := 1, tid := 10002 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5438 : LineageGoal :=
-  { ts := 5438, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10005 }, { rank := 1, tid := 10006 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5438 (ts = 5438).
+--   PM tids 10005, 10006 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5438_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5438, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10005 }, { rank := 1, tid := 10006 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5440 : LineageGoal :=
-  { ts := 5440, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10007 }, { rank := 1, tid := 10008 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5440 (ts = 5440).
+--   PM tids 10007, 10008 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5440_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5440, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10007 }, { rank := 1, tid := 10008 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
 def intermediateGoal_5441 : LineageGoal :=
   { ts := 5441, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5441 }], tpShapes := [[4096, 4, 64]] }
@@ -14174,104 +14599,302 @@ def intermediateGoal_5441 : LineageGoal :=
 def intermediateGoal_5442 : LineageGoal :=
   { ts := 5442, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5442 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5445 : LineageGoal :=
-  { ts := 5445, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10031 }, { rank := 1, tid := 10032 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5445 (ts = 5445).
+--   PM tids 10031, 10032 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5445_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5445, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10031 }, { rank := 1, tid := 10032 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5446 : LineageGoal :=
-  { ts := 5446, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10033 }, { rank := 1, tid := 10034 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5446 (ts = 5446).
+--   PM tids 10033, 10034 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5446_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5446, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10033 }, { rank := 1, tid := 10034 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5447 : LineageGoal :=
-  { ts := 5447, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10039 }, { rank := 1, tid := 10040 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5447 (ts = 5447).
+--   PM tids 10039, 10040 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5447_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5447, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10039 }, { rank := 1, tid := 10040 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5449 : LineageGoal :=
-  { ts := 5449, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10043 }, { rank := 1, tid := 10044 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5449 (ts = 5449).
+--   PM tids 10043, 10044 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5449_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5449, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10043 }, { rank := 1, tid := 10044 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5450 : LineageGoal :=
-  { ts := 5450, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10053 }, { rank := 1, tid := 10054 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5450 (ts = 5450).
+--   PM tids 10053, 10054 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5450_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5450, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10053 }, { rank := 1, tid := 10054 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5451 : LineageGoal :=
-  { ts := 5451, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10057 }, { rank := 1, tid := 10058 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5451 (ts = 5451).
+--   PM tids 10057, 10058 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5451_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5451, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10057 }, { rank := 1, tid := 10058 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5452 : LineageGoal :=
-  { ts := 5452, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10061 }, { rank := 1, tid := 10062 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5452 (ts = 5452).
+--   PM tids 10061, 10062 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5452_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5452, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10061 }, { rank := 1, tid := 10062 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5454 : LineageGoal :=
-  { ts := 5454, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10065 }, { rank := 1, tid := 10066 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5454 (ts = 5454).
+--   PM tids 10065, 10066 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5454_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5454, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10065 }, { rank := 1, tid := 10066 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5455 : LineageGoal :=
-  { ts := 5455, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10067 }, { rank := 1, tid := 10068 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5455 (ts = 5455).
+--   PM tids 10067, 10068 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5455_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5455, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10067 }, { rank := 1, tid := 10068 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5457 : LineageGoal :=
-  { ts := 5457, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10073 }, { rank := 1, tid := 10074 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5457 (ts = 5457).
+--   PM tids 10073, 10074 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5457_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5457, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10073 }, { rank := 1, tid := 10074 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5458 : LineageGoal :=
-  { ts := 5458, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10075 }, { rank := 1, tid := 10076 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5458 (ts = 5458).
+--   PM tids 10075, 10076 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5458_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5458, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10075 }, { rank := 1, tid := 10076 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5459 : LineageGoal :=
-  { ts := 5459, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10077 }, { rank := 1, tid := 10078 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5459 (ts = 5459).
+--   PM tids 10077, 10078 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5459_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5459, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10077 }, { rank := 1, tid := 10078 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5463 : LineageGoal :=
-  { ts := 5463, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10085 }, { rank := 1, tid := 10086 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5463 (ts = 5463).
+--   PM tids 10085, 10086 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5463_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5463, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10085 }, { rank := 1, tid := 10086 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5464 : LineageGoal :=
-  { ts := 5464, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10087 }, { rank := 1, tid := 10088 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5464 (ts = 5464).
+--   PM tids 10087, 10088 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5464_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5464, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10087 }, { rank := 1, tid := 10088 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5466 : LineageGoal :=
-  { ts := 5466, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10091 }, { rank := 1, tid := 10092 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5466 (ts = 5466).
+--   PM tids 10091, 10092 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5466_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5466, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10091 }, { rank := 1, tid := 10092 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5467 : LineageGoal :=
-  { ts := 5467, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10097 }, { rank := 1, tid := 10098 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5467 (ts = 5467).
+--   PM tids 10097, 10098 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5467_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5467, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10097 }, { rank := 1, tid := 10098 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5468 : LineageGoal :=
-  { ts := 5468, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10099 }, { rank := 1, tid := 10100 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5468 (ts = 5468).
+--   PM tids 10099, 10100 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5468_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5468, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10099 }, { rank := 1, tid := 10100 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5469 : LineageGoal :=
-  { ts := 5469, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10101 }, { rank := 1, tid := 10102 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5469 (ts = 5469).
+--   PM tids 10101, 10102 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5469_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5469, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10101 }, { rank := 1, tid := 10102 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5471 : LineageGoal :=
-  { ts := 5471, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10105 }, { rank := 1, tid := 10106 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5471 (ts = 5471).
+--   PM tids 10105, 10106 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5471_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5471, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10105 }, { rank := 1, tid := 10106 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5472 : LineageGoal :=
-  { ts := 5472, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10115 }, { rank := 1, tid := 10116 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5472 (ts = 5472).
+--   PM tids 10115, 10116 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5472_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5472, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10115 }, { rank := 1, tid := 10116 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5473 : LineageGoal :=
-  { ts := 5473, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10119 }, { rank := 1, tid := 10120 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5473 (ts = 5473).
+--   PM tids 10119, 10120 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5473_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5473, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10119 }, { rank := 1, tid := 10120 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5475 : LineageGoal :=
-  { ts := 5475, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10123 }, { rank := 1, tid := 10124 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5475 (ts = 5475).
+--   PM tids 10123, 10124 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5475_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5475, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10123 }, { rank := 1, tid := 10124 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5476 : LineageGoal :=
-  { ts := 5476, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10133 }, { rank := 1, tid := 10134 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5476 (ts = 5476).
+--   PM tids 10133, 10134 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5476_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5476, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10133 }, { rank := 1, tid := 10134 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5477 : LineageGoal :=
-  { ts := 5477, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10137 }, { rank := 1, tid := 10138 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5477 (ts = 5477).
+--   PM tids 10137, 10138 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5477_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5477, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10137 }, { rank := 1, tid := 10138 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5478 : LineageGoal :=
-  { ts := 5478, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10139 }, { rank := 1, tid := 10140 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5478 (ts = 5478).
+--   PM tids 10139, 10140 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5478_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5478, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10139 }, { rank := 1, tid := 10140 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5480 : LineageGoal :=
-  { ts := 5480, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10145 }, { rank := 1, tid := 10146 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5480 (ts = 5480).
+--   PM tids 10145, 10146 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5480_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5480, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10145 }, { rank := 1, tid := 10146 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5481 : LineageGoal :=
-  { ts := 5481, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10155 }, { rank := 1, tid := 10156 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5481 (ts = 5481).
+--   PM tids 10155, 10156 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5481_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5481, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10155 }, { rank := 1, tid := 10156 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5482 : LineageGoal :=
-  { ts := 5482, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10159 }, { rank := 1, tid := 10160 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5482 (ts = 5482).
+--   PM tids 10159, 10160 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5482_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5482, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10159 }, { rank := 1, tid := 10160 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5483 : LineageGoal :=
-  { ts := 5483, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10163 }, { rank := 1, tid := 10164 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5483 (ts = 5483).
+--   PM tids 10163, 10164 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5483_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5483, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10163 }, { rank := 1, tid := 10164 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5484 : LineageGoal :=
-  { ts := 5484, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10169 }, { rank := 1, tid := 10170 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5484 (ts = 5484).
+--   PM tids 10169, 10170 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5484_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5484, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10169 }, { rank := 1, tid := 10170 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5485 : LineageGoal :=
-  { ts := 5485, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10173 }, { rank := 1, tid := 10174 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5485 (ts = 5485).
+--   PM tids 10173, 10174 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5485_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5485, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10173 }, { rank := 1, tid := 10174 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5487 : LineageGoal :=
-  { ts := 5487, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10177 }, { rank := 1, tid := 10178 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5487 (ts = 5487).
+--   PM tids 10177, 10178 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5487_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5487, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10177 }, { rank := 1, tid := 10178 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5489 : LineageGoal :=
-  { ts := 5489, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10179 }, { rank := 1, tid := 10180 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5489 (ts = 5489).
+--   PM tids 10179, 10180 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5489_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5489, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10179 }, { rank := 1, tid := 10180 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
 def intermediateGoal_5490 : LineageGoal :=
   { ts := 5490, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5490 }], tpShapes := [[4096, 4, 64]] }
@@ -14279,104 +14902,302 @@ def intermediateGoal_5490 : LineageGoal :=
 def intermediateGoal_5491 : LineageGoal :=
   { ts := 5491, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5491 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5494 : LineageGoal :=
-  { ts := 5494, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10203 }, { rank := 1, tid := 10204 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5494 (ts = 5494).
+--   PM tids 10203, 10204 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5494_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5494, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10203 }, { rank := 1, tid := 10204 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5495 : LineageGoal :=
-  { ts := 5495, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10205 }, { rank := 1, tid := 10206 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5495 (ts = 5495).
+--   PM tids 10205, 10206 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5495_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5495, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10205 }, { rank := 1, tid := 10206 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5496 : LineageGoal :=
-  { ts := 5496, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10211 }, { rank := 1, tid := 10212 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5496 (ts = 5496).
+--   PM tids 10211, 10212 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5496_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5496, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10211 }, { rank := 1, tid := 10212 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5498 : LineageGoal :=
-  { ts := 5498, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10215 }, { rank := 1, tid := 10216 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5498 (ts = 5498).
+--   PM tids 10215, 10216 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5498_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5498, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10215 }, { rank := 1, tid := 10216 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5499 : LineageGoal :=
-  { ts := 5499, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10225 }, { rank := 1, tid := 10226 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5499 (ts = 5499).
+--   PM tids 10225, 10226 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5499_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5499, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10225 }, { rank := 1, tid := 10226 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5500 : LineageGoal :=
-  { ts := 5500, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10229 }, { rank := 1, tid := 10230 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5500 (ts = 5500).
+--   PM tids 10229, 10230 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5500_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5500, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10229 }, { rank := 1, tid := 10230 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5501 : LineageGoal :=
-  { ts := 5501, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10233 }, { rank := 1, tid := 10234 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5501 (ts = 5501).
+--   PM tids 10233, 10234 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5501_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5501, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10233 }, { rank := 1, tid := 10234 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5503 : LineageGoal :=
-  { ts := 5503, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10237 }, { rank := 1, tid := 10238 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5503 (ts = 5503).
+--   PM tids 10237, 10238 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5503_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5503, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10237 }, { rank := 1, tid := 10238 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5504 : LineageGoal :=
-  { ts := 5504, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10239 }, { rank := 1, tid := 10240 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5504 (ts = 5504).
+--   PM tids 10239, 10240 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5504_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5504, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10239 }, { rank := 1, tid := 10240 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5506 : LineageGoal :=
-  { ts := 5506, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10245 }, { rank := 1, tid := 10246 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5506 (ts = 5506).
+--   PM tids 10245, 10246 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5506_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5506, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10245 }, { rank := 1, tid := 10246 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5507 : LineageGoal :=
-  { ts := 5507, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10247 }, { rank := 1, tid := 10248 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5507 (ts = 5507).
+--   PM tids 10247, 10248 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5507_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5507, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10247 }, { rank := 1, tid := 10248 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5508 : LineageGoal :=
-  { ts := 5508, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10249 }, { rank := 1, tid := 10250 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5508 (ts = 5508).
+--   PM tids 10249, 10250 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5508_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5508, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10249 }, { rank := 1, tid := 10250 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5512 : LineageGoal :=
-  { ts := 5512, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10257 }, { rank := 1, tid := 10258 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5512 (ts = 5512).
+--   PM tids 10257, 10258 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5512_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5512, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10257 }, { rank := 1, tid := 10258 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5513 : LineageGoal :=
-  { ts := 5513, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10259 }, { rank := 1, tid := 10260 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5513 (ts = 5513).
+--   PM tids 10259, 10260 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5513_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5513, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10259 }, { rank := 1, tid := 10260 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5515 : LineageGoal :=
-  { ts := 5515, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10263 }, { rank := 1, tid := 10264 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5515 (ts = 5515).
+--   PM tids 10263, 10264 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5515_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5515, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10263 }, { rank := 1, tid := 10264 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5516 : LineageGoal :=
-  { ts := 5516, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10269 }, { rank := 1, tid := 10270 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5516 (ts = 5516).
+--   PM tids 10269, 10270 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5516_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5516, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10269 }, { rank := 1, tid := 10270 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5517 : LineageGoal :=
-  { ts := 5517, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10271 }, { rank := 1, tid := 10272 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5517 (ts = 5517).
+--   PM tids 10271, 10272 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5517_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5517, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10271 }, { rank := 1, tid := 10272 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5518 : LineageGoal :=
-  { ts := 5518, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10273 }, { rank := 1, tid := 10274 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5518 (ts = 5518).
+--   PM tids 10273, 10274 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5518_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5518, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10273 }, { rank := 1, tid := 10274 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5520 : LineageGoal :=
-  { ts := 5520, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10277 }, { rank := 1, tid := 10278 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5520 (ts = 5520).
+--   PM tids 10277, 10278 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5520_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5520, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10277 }, { rank := 1, tid := 10278 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5521 : LineageGoal :=
-  { ts := 5521, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10287 }, { rank := 1, tid := 10288 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5521 (ts = 5521).
+--   PM tids 10287, 10288 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5521_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5521, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10287 }, { rank := 1, tid := 10288 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5522 : LineageGoal :=
-  { ts := 5522, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10291 }, { rank := 1, tid := 10292 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5522 (ts = 5522).
+--   PM tids 10291, 10292 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5522_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5522, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10291 }, { rank := 1, tid := 10292 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5524 : LineageGoal :=
-  { ts := 5524, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10295 }, { rank := 1, tid := 10296 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5524 (ts = 5524).
+--   PM tids 10295, 10296 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5524_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5524, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10295 }, { rank := 1, tid := 10296 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5525 : LineageGoal :=
-  { ts := 5525, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10305 }, { rank := 1, tid := 10306 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5525 (ts = 5525).
+--   PM tids 10305, 10306 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5525_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5525, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10305 }, { rank := 1, tid := 10306 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5526 : LineageGoal :=
-  { ts := 5526, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10309 }, { rank := 1, tid := 10310 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5526 (ts = 5526).
+--   PM tids 10309, 10310 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5526_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5526, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10309 }, { rank := 1, tid := 10310 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5527 : LineageGoal :=
-  { ts := 5527, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10311 }, { rank := 1, tid := 10312 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5527 (ts = 5527).
+--   PM tids 10311, 10312 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5527_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5527, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10311 }, { rank := 1, tid := 10312 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5529 : LineageGoal :=
-  { ts := 5529, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10317 }, { rank := 1, tid := 10318 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5529 (ts = 5529).
+--   PM tids 10317, 10318 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5529_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5529, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10317 }, { rank := 1, tid := 10318 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5530 : LineageGoal :=
-  { ts := 5530, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10327 }, { rank := 1, tid := 10328 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5530 (ts = 5530).
+--   PM tids 10327, 10328 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5530_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5530, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10327 }, { rank := 1, tid := 10328 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5531 : LineageGoal :=
-  { ts := 5531, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10331 }, { rank := 1, tid := 10332 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5531 (ts = 5531).
+--   PM tids 10331, 10332 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5531_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5531, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10331 }, { rank := 1, tid := 10332 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5532 : LineageGoal :=
-  { ts := 5532, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10335 }, { rank := 1, tid := 10336 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5532 (ts = 5532).
+--   PM tids 10335, 10336 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5532_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5532, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10335 }, { rank := 1, tid := 10336 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5533 : LineageGoal :=
-  { ts := 5533, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10341 }, { rank := 1, tid := 10342 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5533 (ts = 5533).
+--   PM tids 10341, 10342 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5533_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5533, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10341 }, { rank := 1, tid := 10342 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5534 : LineageGoal :=
-  { ts := 5534, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10345 }, { rank := 1, tid := 10346 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5534 (ts = 5534).
+--   PM tids 10345, 10346 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5534_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5534, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10345 }, { rank := 1, tid := 10346 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5536 : LineageGoal :=
-  { ts := 5536, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10349 }, { rank := 1, tid := 10350 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5536 (ts = 5536).
+--   PM tids 10349, 10350 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5536_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5536, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10349 }, { rank := 1, tid := 10350 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5538 : LineageGoal :=
-  { ts := 5538, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10351 }, { rank := 1, tid := 10352 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5538 (ts = 5538).
+--   PM tids 10351, 10352 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5538_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5538, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10351 }, { rank := 1, tid := 10352 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
 def intermediateGoal_5539 : LineageGoal :=
   { ts := 5539, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5539 }], tpShapes := [[4096, 4, 64]] }
@@ -14384,104 +15205,302 @@ def intermediateGoal_5539 : LineageGoal :=
 def intermediateGoal_5540 : LineageGoal :=
   { ts := 5540, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5540 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5543 : LineageGoal :=
-  { ts := 5543, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10375 }, { rank := 1, tid := 10376 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5543 (ts = 5543).
+--   PM tids 10375, 10376 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5543_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5543, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10375 }, { rank := 1, tid := 10376 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5544 : LineageGoal :=
-  { ts := 5544, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10377 }, { rank := 1, tid := 10378 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5544 (ts = 5544).
+--   PM tids 10377, 10378 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5544_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5544, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10377 }, { rank := 1, tid := 10378 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5545 : LineageGoal :=
-  { ts := 5545, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10383 }, { rank := 1, tid := 10384 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5545 (ts = 5545).
+--   PM tids 10383, 10384 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5545_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5545, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10383 }, { rank := 1, tid := 10384 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5547 : LineageGoal :=
-  { ts := 5547, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10387 }, { rank := 1, tid := 10388 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5547 (ts = 5547).
+--   PM tids 10387, 10388 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5547_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5547, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10387 }, { rank := 1, tid := 10388 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5548 : LineageGoal :=
-  { ts := 5548, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10397 }, { rank := 1, tid := 10398 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5548 (ts = 5548).
+--   PM tids 10397, 10398 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5548_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5548, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10397 }, { rank := 1, tid := 10398 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5549 : LineageGoal :=
-  { ts := 5549, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10401 }, { rank := 1, tid := 10402 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5549 (ts = 5549).
+--   PM tids 10401, 10402 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5549_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5549, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10401 }, { rank := 1, tid := 10402 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5550 : LineageGoal :=
-  { ts := 5550, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10405 }, { rank := 1, tid := 10406 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5550 (ts = 5550).
+--   PM tids 10405, 10406 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5550_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5550, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10405 }, { rank := 1, tid := 10406 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5552 : LineageGoal :=
-  { ts := 5552, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10409 }, { rank := 1, tid := 10410 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5552 (ts = 5552).
+--   PM tids 10409, 10410 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5552_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5552, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10409 }, { rank := 1, tid := 10410 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5553 : LineageGoal :=
-  { ts := 5553, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10411 }, { rank := 1, tid := 10412 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5553 (ts = 5553).
+--   PM tids 10411, 10412 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5553_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5553, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10411 }, { rank := 1, tid := 10412 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5555 : LineageGoal :=
-  { ts := 5555, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10417 }, { rank := 1, tid := 10418 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5555 (ts = 5555).
+--   PM tids 10417, 10418 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5555_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5555, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10417 }, { rank := 1, tid := 10418 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5556 : LineageGoal :=
-  { ts := 5556, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10419 }, { rank := 1, tid := 10420 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5556 (ts = 5556).
+--   PM tids 10419, 10420 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5556_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5556, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10419 }, { rank := 1, tid := 10420 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5557 : LineageGoal :=
-  { ts := 5557, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10421 }, { rank := 1, tid := 10422 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5557 (ts = 5557).
+--   PM tids 10421, 10422 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5557_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5557, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10421 }, { rank := 1, tid := 10422 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5561 : LineageGoal :=
-  { ts := 5561, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10429 }, { rank := 1, tid := 10430 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5561 (ts = 5561).
+--   PM tids 10429, 10430 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5561_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5561, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10429 }, { rank := 1, tid := 10430 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5562 : LineageGoal :=
-  { ts := 5562, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10431 }, { rank := 1, tid := 10432 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5562 (ts = 5562).
+--   PM tids 10431, 10432 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5562_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5562, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10431 }, { rank := 1, tid := 10432 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5564 : LineageGoal :=
-  { ts := 5564, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10435 }, { rank := 1, tid := 10436 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5564 (ts = 5564).
+--   PM tids 10435, 10436 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5564_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5564, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10435 }, { rank := 1, tid := 10436 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5565 : LineageGoal :=
-  { ts := 5565, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10441 }, { rank := 1, tid := 10442 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5565 (ts = 5565).
+--   PM tids 10441, 10442 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5565_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5565, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10441 }, { rank := 1, tid := 10442 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5566 : LineageGoal :=
-  { ts := 5566, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10443 }, { rank := 1, tid := 10444 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5566 (ts = 5566).
+--   PM tids 10443, 10444 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5566_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5566, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10443 }, { rank := 1, tid := 10444 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5567 : LineageGoal :=
-  { ts := 5567, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10445 }, { rank := 1, tid := 10446 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5567 (ts = 5567).
+--   PM tids 10445, 10446 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5567_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5567, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10445 }, { rank := 1, tid := 10446 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5569 : LineageGoal :=
-  { ts := 5569, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10449 }, { rank := 1, tid := 10450 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5569 (ts = 5569).
+--   PM tids 10449, 10450 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5569_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5569, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10449 }, { rank := 1, tid := 10450 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5570 : LineageGoal :=
-  { ts := 5570, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10459 }, { rank := 1, tid := 10460 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5570 (ts = 5570).
+--   PM tids 10459, 10460 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5570_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5570, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10459 }, { rank := 1, tid := 10460 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5571 : LineageGoal :=
-  { ts := 5571, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10463 }, { rank := 1, tid := 10464 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5571 (ts = 5571).
+--   PM tids 10463, 10464 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5571_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5571, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10463 }, { rank := 1, tid := 10464 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5573 : LineageGoal :=
-  { ts := 5573, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10467 }, { rank := 1, tid := 10468 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5573 (ts = 5573).
+--   PM tids 10467, 10468 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5573_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5573, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10467 }, { rank := 1, tid := 10468 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5574 : LineageGoal :=
-  { ts := 5574, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10477 }, { rank := 1, tid := 10478 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5574 (ts = 5574).
+--   PM tids 10477, 10478 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5574_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5574, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10477 }, { rank := 1, tid := 10478 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5575 : LineageGoal :=
-  { ts := 5575, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10481 }, { rank := 1, tid := 10482 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5575 (ts = 5575).
+--   PM tids 10481, 10482 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5575_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5575, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10481 }, { rank := 1, tid := 10482 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5576 : LineageGoal :=
-  { ts := 5576, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10483 }, { rank := 1, tid := 10484 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5576 (ts = 5576).
+--   PM tids 10483, 10484 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5576_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5576, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10483 }, { rank := 1, tid := 10484 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5578 : LineageGoal :=
-  { ts := 5578, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10489 }, { rank := 1, tid := 10490 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5578 (ts = 5578).
+--   PM tids 10489, 10490 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5578_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5578, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10489 }, { rank := 1, tid := 10490 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5579 : LineageGoal :=
-  { ts := 5579, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10499 }, { rank := 1, tid := 10500 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5579 (ts = 5579).
+--   PM tids 10499, 10500 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5579_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5579, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10499 }, { rank := 1, tid := 10500 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5580 : LineageGoal :=
-  { ts := 5580, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10503 }, { rank := 1, tid := 10504 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5580 (ts = 5580).
+--   PM tids 10503, 10504 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5580_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5580, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10503 }, { rank := 1, tid := 10504 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5581 : LineageGoal :=
-  { ts := 5581, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10507 }, { rank := 1, tid := 10508 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5581 (ts = 5581).
+--   PM tids 10507, 10508 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5581_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5581, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10507 }, { rank := 1, tid := 10508 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5582 : LineageGoal :=
-  { ts := 5582, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10513 }, { rank := 1, tid := 10514 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5582 (ts = 5582).
+--   PM tids 10513, 10514 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5582_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5582, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10513 }, { rank := 1, tid := 10514 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5583 : LineageGoal :=
-  { ts := 5583, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10517 }, { rank := 1, tid := 10518 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5583 (ts = 5583).
+--   PM tids 10517, 10518 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5583_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5583, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10517 }, { rank := 1, tid := 10518 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5585 : LineageGoal :=
-  { ts := 5585, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10521 }, { rank := 1, tid := 10522 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5585 (ts = 5585).
+--   PM tids 10521, 10522 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5585_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5585, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10521 }, { rank := 1, tid := 10522 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5587 : LineageGoal :=
-  { ts := 5587, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10523 }, { rank := 1, tid := 10524 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5587 (ts = 5587).
+--   PM tids 10523, 10524 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5587_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5587, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10523 }, { rank := 1, tid := 10524 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
 def intermediateGoal_5588 : LineageGoal :=
   { ts := 5588, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5588 }], tpShapes := [[4096, 4, 64]] }
@@ -14489,104 +15508,302 @@ def intermediateGoal_5588 : LineageGoal :=
 def intermediateGoal_5589 : LineageGoal :=
   { ts := 5589, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5589 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5592 : LineageGoal :=
-  { ts := 5592, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10547 }, { rank := 1, tid := 10548 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5592 (ts = 5592).
+--   PM tids 10547, 10548 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5592_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5592, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10547 }, { rank := 1, tid := 10548 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5593 : LineageGoal :=
-  { ts := 5593, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10549 }, { rank := 1, tid := 10550 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5593 (ts = 5593).
+--   PM tids 10549, 10550 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5593_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5593, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10549 }, { rank := 1, tid := 10550 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5594 : LineageGoal :=
-  { ts := 5594, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10555 }, { rank := 1, tid := 10556 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5594 (ts = 5594).
+--   PM tids 10555, 10556 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5594_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5594, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10555 }, { rank := 1, tid := 10556 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5596 : LineageGoal :=
-  { ts := 5596, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10559 }, { rank := 1, tid := 10560 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5596 (ts = 5596).
+--   PM tids 10559, 10560 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5596_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5596, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10559 }, { rank := 1, tid := 10560 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5597 : LineageGoal :=
-  { ts := 5597, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10569 }, { rank := 1, tid := 10570 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5597 (ts = 5597).
+--   PM tids 10569, 10570 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5597_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5597, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10569 }, { rank := 1, tid := 10570 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5598 : LineageGoal :=
-  { ts := 5598, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10573 }, { rank := 1, tid := 10574 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5598 (ts = 5598).
+--   PM tids 10573, 10574 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5598_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5598, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10573 }, { rank := 1, tid := 10574 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5599 : LineageGoal :=
-  { ts := 5599, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10577 }, { rank := 1, tid := 10578 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5599 (ts = 5599).
+--   PM tids 10577, 10578 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5599_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5599, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10577 }, { rank := 1, tid := 10578 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5601 : LineageGoal :=
-  { ts := 5601, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10581 }, { rank := 1, tid := 10582 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5601 (ts = 5601).
+--   PM tids 10581, 10582 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5601_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5601, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10581 }, { rank := 1, tid := 10582 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5602 : LineageGoal :=
-  { ts := 5602, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10583 }, { rank := 1, tid := 10584 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5602 (ts = 5602).
+--   PM tids 10583, 10584 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5602_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5602, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10583 }, { rank := 1, tid := 10584 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5604 : LineageGoal :=
-  { ts := 5604, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10589 }, { rank := 1, tid := 10590 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5604 (ts = 5604).
+--   PM tids 10589, 10590 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5604_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5604, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10589 }, { rank := 1, tid := 10590 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5605 : LineageGoal :=
-  { ts := 5605, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10591 }, { rank := 1, tid := 10592 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5605 (ts = 5605).
+--   PM tids 10591, 10592 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5605_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5605, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10591 }, { rank := 1, tid := 10592 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5606 : LineageGoal :=
-  { ts := 5606, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10593 }, { rank := 1, tid := 10594 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5606 (ts = 5606).
+--   PM tids 10593, 10594 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5606_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5606, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10593 }, { rank := 1, tid := 10594 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5610 : LineageGoal :=
-  { ts := 5610, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10601 }, { rank := 1, tid := 10602 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5610 (ts = 5610).
+--   PM tids 10601, 10602 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5610_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5610, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10601 }, { rank := 1, tid := 10602 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5611 : LineageGoal :=
-  { ts := 5611, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10603 }, { rank := 1, tid := 10604 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5611 (ts = 5611).
+--   PM tids 10603, 10604 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5611_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5611, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10603 }, { rank := 1, tid := 10604 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5613 : LineageGoal :=
-  { ts := 5613, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10607 }, { rank := 1, tid := 10608 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5613 (ts = 5613).
+--   PM tids 10607, 10608 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5613_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5613, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10607 }, { rank := 1, tid := 10608 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5614 : LineageGoal :=
-  { ts := 5614, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10613 }, { rank := 1, tid := 10614 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5614 (ts = 5614).
+--   PM tids 10613, 10614 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5614_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5614, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10613 }, { rank := 1, tid := 10614 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5615 : LineageGoal :=
-  { ts := 5615, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10615 }, { rank := 1, tid := 10616 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5615 (ts = 5615).
+--   PM tids 10615, 10616 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5615_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5615, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10615 }, { rank := 1, tid := 10616 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5616 : LineageGoal :=
-  { ts := 5616, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10617 }, { rank := 1, tid := 10618 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5616 (ts = 5616).
+--   PM tids 10617, 10618 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5616_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5616, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10617 }, { rank := 1, tid := 10618 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5618 : LineageGoal :=
-  { ts := 5618, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10621 }, { rank := 1, tid := 10622 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5618 (ts = 5618).
+--   PM tids 10621, 10622 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5618_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5618, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10621 }, { rank := 1, tid := 10622 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5619 : LineageGoal :=
-  { ts := 5619, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10631 }, { rank := 1, tid := 10632 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5619 (ts = 5619).
+--   PM tids 10631, 10632 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5619_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5619, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10631 }, { rank := 1, tid := 10632 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5620 : LineageGoal :=
-  { ts := 5620, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10635 }, { rank := 1, tid := 10636 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5620 (ts = 5620).
+--   PM tids 10635, 10636 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5620_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5620, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10635 }, { rank := 1, tid := 10636 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5622 : LineageGoal :=
-  { ts := 5622, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10639 }, { rank := 1, tid := 10640 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5622 (ts = 5622).
+--   PM tids 10639, 10640 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5622_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5622, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10639 }, { rank := 1, tid := 10640 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5623 : LineageGoal :=
-  { ts := 5623, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10649 }, { rank := 1, tid := 10650 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5623 (ts = 5623).
+--   PM tids 10649, 10650 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5623_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5623, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10649 }, { rank := 1, tid := 10650 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5624 : LineageGoal :=
-  { ts := 5624, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10653 }, { rank := 1, tid := 10654 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5624 (ts = 5624).
+--   PM tids 10653, 10654 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5624_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5624, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10653 }, { rank := 1, tid := 10654 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5625 : LineageGoal :=
-  { ts := 5625, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10655 }, { rank := 1, tid := 10656 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5625 (ts = 5625).
+--   PM tids 10655, 10656 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5625_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5625, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10655 }, { rank := 1, tid := 10656 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5627 : LineageGoal :=
-  { ts := 5627, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10661 }, { rank := 1, tid := 10662 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5627 (ts = 5627).
+--   PM tids 10661, 10662 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5627_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5627, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10661 }, { rank := 1, tid := 10662 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5628 : LineageGoal :=
-  { ts := 5628, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10671 }, { rank := 1, tid := 10672 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5628 (ts = 5628).
+--   PM tids 10671, 10672 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5628_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5628, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10671 }, { rank := 1, tid := 10672 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5629 : LineageGoal :=
-  { ts := 5629, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10675 }, { rank := 1, tid := 10676 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5629 (ts = 5629).
+--   PM tids 10675, 10676 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5629_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5629, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10675 }, { rank := 1, tid := 10676 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5630 : LineageGoal :=
-  { ts := 5630, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10679 }, { rank := 1, tid := 10680 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5630 (ts = 5630).
+--   PM tids 10679, 10680 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5630_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5630, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10679 }, { rank := 1, tid := 10680 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5631 : LineageGoal :=
-  { ts := 5631, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10685 }, { rank := 1, tid := 10686 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5631 (ts = 5631).
+--   PM tids 10685, 10686 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5631_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5631, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10685 }, { rank := 1, tid := 10686 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5632 : LineageGoal :=
-  { ts := 5632, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10689 }, { rank := 1, tid := 10690 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5632 (ts = 5632).
+--   PM tids 10689, 10690 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5632_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5632, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10689 }, { rank := 1, tid := 10690 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5634 : LineageGoal :=
-  { ts := 5634, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10693 }, { rank := 1, tid := 10694 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5634 (ts = 5634).
+--   PM tids 10693, 10694 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5634_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5634, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10693 }, { rank := 1, tid := 10694 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5636 : LineageGoal :=
-  { ts := 5636, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10695 }, { rank := 1, tid := 10696 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5636 (ts = 5636).
+--   PM tids 10695, 10696 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5636_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5636, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10695 }, { rank := 1, tid := 10696 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
 def intermediateGoal_5637 : LineageGoal :=
   { ts := 5637, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5637 }], tpShapes := [[4096, 4, 64]] }
@@ -14594,104 +15811,302 @@ def intermediateGoal_5637 : LineageGoal :=
 def intermediateGoal_5638 : LineageGoal :=
   { ts := 5638, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5638 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5641 : LineageGoal :=
-  { ts := 5641, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10719 }, { rank := 1, tid := 10720 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5641 (ts = 5641).
+--   PM tids 10719, 10720 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5641_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5641, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10719 }, { rank := 1, tid := 10720 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5642 : LineageGoal :=
-  { ts := 5642, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10721 }, { rank := 1, tid := 10722 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5642 (ts = 5642).
+--   PM tids 10721, 10722 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5642_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5642, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10721 }, { rank := 1, tid := 10722 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5643 : LineageGoal :=
-  { ts := 5643, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10727 }, { rank := 1, tid := 10728 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5643 (ts = 5643).
+--   PM tids 10727, 10728 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5643_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5643, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10727 }, { rank := 1, tid := 10728 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5645 : LineageGoal :=
-  { ts := 5645, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10731 }, { rank := 1, tid := 10732 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5645 (ts = 5645).
+--   PM tids 10731, 10732 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5645_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5645, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10731 }, { rank := 1, tid := 10732 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5646 : LineageGoal :=
-  { ts := 5646, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10741 }, { rank := 1, tid := 10742 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5646 (ts = 5646).
+--   PM tids 10741, 10742 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5646_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5646, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10741 }, { rank := 1, tid := 10742 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5647 : LineageGoal :=
-  { ts := 5647, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10745 }, { rank := 1, tid := 10746 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5647 (ts = 5647).
+--   PM tids 10745, 10746 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5647_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5647, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10745 }, { rank := 1, tid := 10746 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5648 : LineageGoal :=
-  { ts := 5648, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10749 }, { rank := 1, tid := 10750 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5648 (ts = 5648).
+--   PM tids 10749, 10750 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5648_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5648, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10749 }, { rank := 1, tid := 10750 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5650 : LineageGoal :=
-  { ts := 5650, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10753 }, { rank := 1, tid := 10754 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5650 (ts = 5650).
+--   PM tids 10753, 10754 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5650_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5650, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10753 }, { rank := 1, tid := 10754 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5651 : LineageGoal :=
-  { ts := 5651, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10755 }, { rank := 1, tid := 10756 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5651 (ts = 5651).
+--   PM tids 10755, 10756 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5651_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5651, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10755 }, { rank := 1, tid := 10756 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5653 : LineageGoal :=
-  { ts := 5653, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10761 }, { rank := 1, tid := 10762 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5653 (ts = 5653).
+--   PM tids 10761, 10762 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5653_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5653, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10761 }, { rank := 1, tid := 10762 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5654 : LineageGoal :=
-  { ts := 5654, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10763 }, { rank := 1, tid := 10764 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5654 (ts = 5654).
+--   PM tids 10763, 10764 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5654_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5654, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10763 }, { rank := 1, tid := 10764 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5655 : LineageGoal :=
-  { ts := 5655, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10765 }, { rank := 1, tid := 10766 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5655 (ts = 5655).
+--   PM tids 10765, 10766 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5655_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5655, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10765 }, { rank := 1, tid := 10766 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5659 : LineageGoal :=
-  { ts := 5659, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10773 }, { rank := 1, tid := 10774 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5659 (ts = 5659).
+--   PM tids 10773, 10774 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5659_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5659, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10773 }, { rank := 1, tid := 10774 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5660 : LineageGoal :=
-  { ts := 5660, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10775 }, { rank := 1, tid := 10776 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5660 (ts = 5660).
+--   PM tids 10775, 10776 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5660_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5660, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10775 }, { rank := 1, tid := 10776 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5662 : LineageGoal :=
-  { ts := 5662, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10779 }, { rank := 1, tid := 10780 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5662 (ts = 5662).
+--   PM tids 10779, 10780 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5662_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5662, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10779 }, { rank := 1, tid := 10780 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5663 : LineageGoal :=
-  { ts := 5663, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10785 }, { rank := 1, tid := 10786 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5663 (ts = 5663).
+--   PM tids 10785, 10786 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5663_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5663, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10785 }, { rank := 1, tid := 10786 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5664 : LineageGoal :=
-  { ts := 5664, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10787 }, { rank := 1, tid := 10788 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5664 (ts = 5664).
+--   PM tids 10787, 10788 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5664_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5664, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10787 }, { rank := 1, tid := 10788 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5665 : LineageGoal :=
-  { ts := 5665, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10789 }, { rank := 1, tid := 10790 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5665 (ts = 5665).
+--   PM tids 10789, 10790 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5665_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5665, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10789 }, { rank := 1, tid := 10790 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5667 : LineageGoal :=
-  { ts := 5667, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10793 }, { rank := 1, tid := 10794 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5667 (ts = 5667).
+--   PM tids 10793, 10794 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5667_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5667, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10793 }, { rank := 1, tid := 10794 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5668 : LineageGoal :=
-  { ts := 5668, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10803 }, { rank := 1, tid := 10804 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5668 (ts = 5668).
+--   PM tids 10803, 10804 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5668_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5668, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10803 }, { rank := 1, tid := 10804 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5669 : LineageGoal :=
-  { ts := 5669, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10807 }, { rank := 1, tid := 10808 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5669 (ts = 5669).
+--   PM tids 10807, 10808 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5669_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5669, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10807 }, { rank := 1, tid := 10808 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5671 : LineageGoal :=
-  { ts := 5671, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10811 }, { rank := 1, tid := 10812 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5671 (ts = 5671).
+--   PM tids 10811, 10812 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5671_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5671, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10811 }, { rank := 1, tid := 10812 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5672 : LineageGoal :=
-  { ts := 5672, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10821 }, { rank := 1, tid := 10822 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5672 (ts = 5672).
+--   PM tids 10821, 10822 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5672_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5672, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10821 }, { rank := 1, tid := 10822 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5673 : LineageGoal :=
-  { ts := 5673, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10825 }, { rank := 1, tid := 10826 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5673 (ts = 5673).
+--   PM tids 10825, 10826 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5673_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5673, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10825 }, { rank := 1, tid := 10826 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5674 : LineageGoal :=
-  { ts := 5674, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10827 }, { rank := 1, tid := 10828 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5674 (ts = 5674).
+--   PM tids 10827, 10828 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5674_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5674, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10827 }, { rank := 1, tid := 10828 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5676 : LineageGoal :=
-  { ts := 5676, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10833 }, { rank := 1, tid := 10834 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5676 (ts = 5676).
+--   PM tids 10833, 10834 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5676_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5676, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10833 }, { rank := 1, tid := 10834 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5677 : LineageGoal :=
-  { ts := 5677, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10843 }, { rank := 1, tid := 10844 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5677 (ts = 5677).
+--   PM tids 10843, 10844 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5677_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5677, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10843 }, { rank := 1, tid := 10844 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5678 : LineageGoal :=
-  { ts := 5678, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10847 }, { rank := 1, tid := 10848 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5678 (ts = 5678).
+--   PM tids 10847, 10848 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5678_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5678, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10847 }, { rank := 1, tid := 10848 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5679 : LineageGoal :=
-  { ts := 5679, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10851 }, { rank := 1, tid := 10852 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5679 (ts = 5679).
+--   PM tids 10851, 10852 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5679_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5679, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10851 }, { rank := 1, tid := 10852 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5680 : LineageGoal :=
-  { ts := 5680, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10857 }, { rank := 1, tid := 10858 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5680 (ts = 5680).
+--   PM tids 10857, 10858 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5680_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5680, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10857 }, { rank := 1, tid := 10858 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5681 : LineageGoal :=
-  { ts := 5681, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10861 }, { rank := 1, tid := 10862 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5681 (ts = 5681).
+--   PM tids 10861, 10862 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5681_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5681, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10861 }, { rank := 1, tid := 10862 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5683 : LineageGoal :=
-  { ts := 5683, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10865 }, { rank := 1, tid := 10866 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5683 (ts = 5683).
+--   PM tids 10865, 10866 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5683_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5683, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10865 }, { rank := 1, tid := 10866 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5685 : LineageGoal :=
-  { ts := 5685, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10867 }, { rank := 1, tid := 10868 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5685 (ts = 5685).
+--   PM tids 10867, 10868 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5685_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5685, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10867 }, { rank := 1, tid := 10868 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
 def intermediateGoal_5686 : LineageGoal :=
   { ts := 5686, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5686 }], tpShapes := [[4096, 4, 64]] }
@@ -14699,104 +16114,302 @@ def intermediateGoal_5686 : LineageGoal :=
 def intermediateGoal_5687 : LineageGoal :=
   { ts := 5687, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5687 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5690 : LineageGoal :=
-  { ts := 5690, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10891 }, { rank := 1, tid := 10892 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5690 (ts = 5690).
+--   PM tids 10891, 10892 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5690_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5690, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10891 }, { rank := 1, tid := 10892 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5691 : LineageGoal :=
-  { ts := 5691, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10893 }, { rank := 1, tid := 10894 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5691 (ts = 5691).
+--   PM tids 10893, 10894 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5691_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5691, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10893 }, { rank := 1, tid := 10894 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5692 : LineageGoal :=
-  { ts := 5692, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10899 }, { rank := 1, tid := 10900 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5692 (ts = 5692).
+--   PM tids 10899, 10900 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5692_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5692, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10899 }, { rank := 1, tid := 10900 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5694 : LineageGoal :=
-  { ts := 5694, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10903 }, { rank := 1, tid := 10904 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5694 (ts = 5694).
+--   PM tids 10903, 10904 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5694_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5694, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10903 }, { rank := 1, tid := 10904 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5695 : LineageGoal :=
-  { ts := 5695, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10913 }, { rank := 1, tid := 10914 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5695 (ts = 5695).
+--   PM tids 10913, 10914 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5695_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5695, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10913 }, { rank := 1, tid := 10914 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5696 : LineageGoal :=
-  { ts := 5696, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10917 }, { rank := 1, tid := 10918 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5696 (ts = 5696).
+--   PM tids 10917, 10918 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5696_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5696, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10917 }, { rank := 1, tid := 10918 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5697 : LineageGoal :=
-  { ts := 5697, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10921 }, { rank := 1, tid := 10922 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5697 (ts = 5697).
+--   PM tids 10921, 10922 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5697_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5697, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10921 }, { rank := 1, tid := 10922 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5699 : LineageGoal :=
-  { ts := 5699, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10925 }, { rank := 1, tid := 10926 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5699 (ts = 5699).
+--   PM tids 10925, 10926 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5699_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5699, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10925 }, { rank := 1, tid := 10926 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5700 : LineageGoal :=
-  { ts := 5700, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10927 }, { rank := 1, tid := 10928 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5700 (ts = 5700).
+--   PM tids 10927, 10928 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5700_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5700, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10927 }, { rank := 1, tid := 10928 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5702 : LineageGoal :=
-  { ts := 5702, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10933 }, { rank := 1, tid := 10934 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5702 (ts = 5702).
+--   PM tids 10933, 10934 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5702_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5702, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10933 }, { rank := 1, tid := 10934 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5703 : LineageGoal :=
-  { ts := 5703, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10935 }, { rank := 1, tid := 10936 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5703 (ts = 5703).
+--   PM tids 10935, 10936 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5703_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5703, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10935 }, { rank := 1, tid := 10936 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5704 : LineageGoal :=
-  { ts := 5704, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10937 }, { rank := 1, tid := 10938 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5704 (ts = 5704).
+--   PM tids 10937, 10938 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5704_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5704, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10937 }, { rank := 1, tid := 10938 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5708 : LineageGoal :=
-  { ts := 5708, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10945 }, { rank := 1, tid := 10946 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5708 (ts = 5708).
+--   PM tids 10945, 10946 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5708_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5708, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10945 }, { rank := 1, tid := 10946 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5709 : LineageGoal :=
-  { ts := 5709, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10947 }, { rank := 1, tid := 10948 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5709 (ts = 5709).
+--   PM tids 10947, 10948 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5709_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5709, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10947 }, { rank := 1, tid := 10948 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5711 : LineageGoal :=
-  { ts := 5711, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10951 }, { rank := 1, tid := 10952 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5711 (ts = 5711).
+--   PM tids 10951, 10952 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5711_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5711, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10951 }, { rank := 1, tid := 10952 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5712 : LineageGoal :=
-  { ts := 5712, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10957 }, { rank := 1, tid := 10958 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5712 (ts = 5712).
+--   PM tids 10957, 10958 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5712_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5712, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10957 }, { rank := 1, tid := 10958 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5713 : LineageGoal :=
-  { ts := 5713, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10959 }, { rank := 1, tid := 10960 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5713 (ts = 5713).
+--   PM tids 10959, 10960 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5713_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5713, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10959 }, { rank := 1, tid := 10960 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5714 : LineageGoal :=
-  { ts := 5714, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10961 }, { rank := 1, tid := 10962 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5714 (ts = 5714).
+--   PM tids 10961, 10962 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5714_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5714, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10961 }, { rank := 1, tid := 10962 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5716 : LineageGoal :=
-  { ts := 5716, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10965 }, { rank := 1, tid := 10966 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5716 (ts = 5716).
+--   PM tids 10965, 10966 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5716_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5716, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10965 }, { rank := 1, tid := 10966 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5717 : LineageGoal :=
-  { ts := 5717, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10975 }, { rank := 1, tid := 10976 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5717 (ts = 5717).
+--   PM tids 10975, 10976 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5717_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5717, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10975 }, { rank := 1, tid := 10976 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5718 : LineageGoal :=
-  { ts := 5718, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10979 }, { rank := 1, tid := 10980 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5718 (ts = 5718).
+--   PM tids 10979, 10980 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5718_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5718, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10979 }, { rank := 1, tid := 10980 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5720 : LineageGoal :=
-  { ts := 5720, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10983 }, { rank := 1, tid := 10984 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5720 (ts = 5720).
+--   PM tids 10983, 10984 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5720_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5720, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10983 }, { rank := 1, tid := 10984 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5721 : LineageGoal :=
-  { ts := 5721, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10993 }, { rank := 1, tid := 10994 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5721 (ts = 5721).
+--   PM tids 10993, 10994 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5721_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5721, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10993 }, { rank := 1, tid := 10994 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5722 : LineageGoal :=
-  { ts := 5722, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10997 }, { rank := 1, tid := 10998 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5722 (ts = 5722).
+--   PM tids 10997, 10998 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5722_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5722, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10997 }, { rank := 1, tid := 10998 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5723 : LineageGoal :=
-  { ts := 5723, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10999 }, { rank := 1, tid := 11000 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5723 (ts = 5723).
+--   PM tids 10999, 11000 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5723_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5723, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10999 }, { rank := 1, tid := 11000 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5725 : LineageGoal :=
-  { ts := 5725, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11005 }, { rank := 1, tid := 11006 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5725 (ts = 5725).
+--   PM tids 11005, 11006 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5725_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5725, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11005 }, { rank := 1, tid := 11006 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5726 : LineageGoal :=
-  { ts := 5726, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11015 }, { rank := 1, tid := 11016 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5726 (ts = 5726).
+--   PM tids 11015, 11016 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5726_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5726, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11015 }, { rank := 1, tid := 11016 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5727 : LineageGoal :=
-  { ts := 5727, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11019 }, { rank := 1, tid := 11020 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5727 (ts = 5727).
+--   PM tids 11019, 11020 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5727_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5727, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11019 }, { rank := 1, tid := 11020 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5728 : LineageGoal :=
-  { ts := 5728, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11023 }, { rank := 1, tid := 11024 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5728 (ts = 5728).
+--   PM tids 11023, 11024 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5728_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5728, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11023 }, { rank := 1, tid := 11024 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5729 : LineageGoal :=
-  { ts := 5729, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11029 }, { rank := 1, tid := 11030 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5729 (ts = 5729).
+--   PM tids 11029, 11030 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5729_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5729, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11029 }, { rank := 1, tid := 11030 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5730 : LineageGoal :=
-  { ts := 5730, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11033 }, { rank := 1, tid := 11034 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5730 (ts = 5730).
+--   PM tids 11033, 11034 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5730_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5730, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11033 }, { rank := 1, tid := 11034 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5732 : LineageGoal :=
-  { ts := 5732, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11037 }, { rank := 1, tid := 11038 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5732 (ts = 5732).
+--   PM tids 11037, 11038 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5732_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5732, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11037 }, { rank := 1, tid := 11038 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5734 : LineageGoal :=
-  { ts := 5734, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11039 }, { rank := 1, tid := 11040 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5734 (ts = 5734).
+--   PM tids 11039, 11040 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5734_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5734, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11039 }, { rank := 1, tid := 11040 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
 def intermediateGoal_5735 : LineageGoal :=
   { ts := 5735, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5735 }], tpShapes := [[4096, 4, 64]] }
@@ -14804,104 +16417,302 @@ def intermediateGoal_5735 : LineageGoal :=
 def intermediateGoal_5736 : LineageGoal :=
   { ts := 5736, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5736 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5739 : LineageGoal :=
-  { ts := 5739, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11063 }, { rank := 1, tid := 11064 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5739 (ts = 5739).
+--   PM tids 11063, 11064 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5739_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5739, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11063 }, { rank := 1, tid := 11064 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5740 : LineageGoal :=
-  { ts := 5740, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11065 }, { rank := 1, tid := 11066 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5740 (ts = 5740).
+--   PM tids 11065, 11066 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5740_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5740, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11065 }, { rank := 1, tid := 11066 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5741 : LineageGoal :=
-  { ts := 5741, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11071 }, { rank := 1, tid := 11072 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5741 (ts = 5741).
+--   PM tids 11071, 11072 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5741_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5741, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11071 }, { rank := 1, tid := 11072 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5743 : LineageGoal :=
-  { ts := 5743, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11075 }, { rank := 1, tid := 11076 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5743 (ts = 5743).
+--   PM tids 11075, 11076 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5743_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5743, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11075 }, { rank := 1, tid := 11076 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5744 : LineageGoal :=
-  { ts := 5744, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11085 }, { rank := 1, tid := 11086 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5744 (ts = 5744).
+--   PM tids 11085, 11086 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5744_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5744, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11085 }, { rank := 1, tid := 11086 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5745 : LineageGoal :=
-  { ts := 5745, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11089 }, { rank := 1, tid := 11090 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5745 (ts = 5745).
+--   PM tids 11089, 11090 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5745_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5745, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11089 }, { rank := 1, tid := 11090 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5746 : LineageGoal :=
-  { ts := 5746, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11093 }, { rank := 1, tid := 11094 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5746 (ts = 5746).
+--   PM tids 11093, 11094 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5746_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5746, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11093 }, { rank := 1, tid := 11094 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5748 : LineageGoal :=
-  { ts := 5748, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11097 }, { rank := 1, tid := 11098 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5748 (ts = 5748).
+--   PM tids 11097, 11098 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5748_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5748, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11097 }, { rank := 1, tid := 11098 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5749 : LineageGoal :=
-  { ts := 5749, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11099 }, { rank := 1, tid := 11100 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5749 (ts = 5749).
+--   PM tids 11099, 11100 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5749_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5749, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11099 }, { rank := 1, tid := 11100 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5751 : LineageGoal :=
-  { ts := 5751, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11105 }, { rank := 1, tid := 11106 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5751 (ts = 5751).
+--   PM tids 11105, 11106 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5751_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5751, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11105 }, { rank := 1, tid := 11106 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5752 : LineageGoal :=
-  { ts := 5752, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11107 }, { rank := 1, tid := 11108 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5752 (ts = 5752).
+--   PM tids 11107, 11108 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5752_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5752, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11107 }, { rank := 1, tid := 11108 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5753 : LineageGoal :=
-  { ts := 5753, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11109 }, { rank := 1, tid := 11110 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5753 (ts = 5753).
+--   PM tids 11109, 11110 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5753_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5753, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11109 }, { rank := 1, tid := 11110 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5757 : LineageGoal :=
-  { ts := 5757, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11117 }, { rank := 1, tid := 11118 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5757 (ts = 5757).
+--   PM tids 11117, 11118 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5757_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5757, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11117 }, { rank := 1, tid := 11118 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5758 : LineageGoal :=
-  { ts := 5758, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11119 }, { rank := 1, tid := 11120 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5758 (ts = 5758).
+--   PM tids 11119, 11120 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5758_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5758, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11119 }, { rank := 1, tid := 11120 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5760 : LineageGoal :=
-  { ts := 5760, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11123 }, { rank := 1, tid := 11124 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5760 (ts = 5760).
+--   PM tids 11123, 11124 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5760_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5760, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11123 }, { rank := 1, tid := 11124 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5761 : LineageGoal :=
-  { ts := 5761, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11129 }, { rank := 1, tid := 11130 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5761 (ts = 5761).
+--   PM tids 11129, 11130 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5761_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5761, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11129 }, { rank := 1, tid := 11130 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5762 : LineageGoal :=
-  { ts := 5762, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11131 }, { rank := 1, tid := 11132 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5762 (ts = 5762).
+--   PM tids 11131, 11132 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5762_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5762, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11131 }, { rank := 1, tid := 11132 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5763 : LineageGoal :=
-  { ts := 5763, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11133 }, { rank := 1, tid := 11134 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5763 (ts = 5763).
+--   PM tids 11133, 11134 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5763_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5763, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11133 }, { rank := 1, tid := 11134 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5765 : LineageGoal :=
-  { ts := 5765, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11137 }, { rank := 1, tid := 11138 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5765 (ts = 5765).
+--   PM tids 11137, 11138 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5765_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5765, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11137 }, { rank := 1, tid := 11138 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5766 : LineageGoal :=
-  { ts := 5766, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11147 }, { rank := 1, tid := 11148 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5766 (ts = 5766).
+--   PM tids 11147, 11148 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5766_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5766, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11147 }, { rank := 1, tid := 11148 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5767 : LineageGoal :=
-  { ts := 5767, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11151 }, { rank := 1, tid := 11152 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5767 (ts = 5767).
+--   PM tids 11151, 11152 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5767_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5767, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11151 }, { rank := 1, tid := 11152 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5769 : LineageGoal :=
-  { ts := 5769, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11155 }, { rank := 1, tid := 11156 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5769 (ts = 5769).
+--   PM tids 11155, 11156 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5769_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5769, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11155 }, { rank := 1, tid := 11156 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5770 : LineageGoal :=
-  { ts := 5770, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11165 }, { rank := 1, tid := 11166 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5770 (ts = 5770).
+--   PM tids 11165, 11166 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5770_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5770, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11165 }, { rank := 1, tid := 11166 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5771 : LineageGoal :=
-  { ts := 5771, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11169 }, { rank := 1, tid := 11170 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5771 (ts = 5771).
+--   PM tids 11169, 11170 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5771_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5771, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11169 }, { rank := 1, tid := 11170 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5772 : LineageGoal :=
-  { ts := 5772, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11171 }, { rank := 1, tid := 11172 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5772 (ts = 5772).
+--   PM tids 11171, 11172 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5772_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5772, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11171 }, { rank := 1, tid := 11172 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5774 : LineageGoal :=
-  { ts := 5774, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11177 }, { rank := 1, tid := 11178 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5774 (ts = 5774).
+--   PM tids 11177, 11178 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5774_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5774, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11177 }, { rank := 1, tid := 11178 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5775 : LineageGoal :=
-  { ts := 5775, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11187 }, { rank := 1, tid := 11188 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5775 (ts = 5775).
+--   PM tids 11187, 11188 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5775_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5775, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11187 }, { rank := 1, tid := 11188 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5776 : LineageGoal :=
-  { ts := 5776, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11191 }, { rank := 1, tid := 11192 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5776 (ts = 5776).
+--   PM tids 11191, 11192 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5776_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5776, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11191 }, { rank := 1, tid := 11192 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5777 : LineageGoal :=
-  { ts := 5777, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11195 }, { rank := 1, tid := 11196 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5777 (ts = 5777).
+--   PM tids 11195, 11196 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5777_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5777, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11195 }, { rank := 1, tid := 11196 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5778 : LineageGoal :=
-  { ts := 5778, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11201 }, { rank := 1, tid := 11202 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5778 (ts = 5778).
+--   PM tids 11201, 11202 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5778_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5778, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11201 }, { rank := 1, tid := 11202 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5779 : LineageGoal :=
-  { ts := 5779, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11205 }, { rank := 1, tid := 11206 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5779 (ts = 5779).
+--   PM tids 11205, 11206 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5779_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5779, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11205 }, { rank := 1, tid := 11206 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5781 : LineageGoal :=
-  { ts := 5781, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11209 }, { rank := 1, tid := 11210 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5781 (ts = 5781).
+--   PM tids 11209, 11210 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5781_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5781, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11209 }, { rank := 1, tid := 11210 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5783 : LineageGoal :=
-  { ts := 5783, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11211 }, { rank := 1, tid := 11212 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5783 (ts = 5783).
+--   PM tids 11211, 11212 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5783_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5783, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11211 }, { rank := 1, tid := 11212 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
 def intermediateGoal_5784 : LineageGoal :=
   { ts := 5784, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5784 }], tpShapes := [[4096, 4, 64]] }
@@ -14909,104 +16720,302 @@ def intermediateGoal_5784 : LineageGoal :=
 def intermediateGoal_5785 : LineageGoal :=
   { ts := 5785, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5785 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5788 : LineageGoal :=
-  { ts := 5788, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11235 }, { rank := 1, tid := 11236 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5788 (ts = 5788).
+--   PM tids 11235, 11236 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5788_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5788, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11235 }, { rank := 1, tid := 11236 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5789 : LineageGoal :=
-  { ts := 5789, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11237 }, { rank := 1, tid := 11238 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5789 (ts = 5789).
+--   PM tids 11237, 11238 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5789_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5789, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11237 }, { rank := 1, tid := 11238 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5790 : LineageGoal :=
-  { ts := 5790, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11243 }, { rank := 1, tid := 11244 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5790 (ts = 5790).
+--   PM tids 11243, 11244 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5790_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5790, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11243 }, { rank := 1, tid := 11244 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5792 : LineageGoal :=
-  { ts := 5792, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11247 }, { rank := 1, tid := 11248 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5792 (ts = 5792).
+--   PM tids 11247, 11248 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5792_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5792, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11247 }, { rank := 1, tid := 11248 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5793 : LineageGoal :=
-  { ts := 5793, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11257 }, { rank := 1, tid := 11258 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5793 (ts = 5793).
+--   PM tids 11257, 11258 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5793_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5793, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11257 }, { rank := 1, tid := 11258 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5794 : LineageGoal :=
-  { ts := 5794, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11261 }, { rank := 1, tid := 11262 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5794 (ts = 5794).
+--   PM tids 11261, 11262 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5794_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5794, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11261 }, { rank := 1, tid := 11262 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5795 : LineageGoal :=
-  { ts := 5795, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11265 }, { rank := 1, tid := 11266 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5795 (ts = 5795).
+--   PM tids 11265, 11266 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5795_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5795, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11265 }, { rank := 1, tid := 11266 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5797 : LineageGoal :=
-  { ts := 5797, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11269 }, { rank := 1, tid := 11270 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5797 (ts = 5797).
+--   PM tids 11269, 11270 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5797_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5797, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11269 }, { rank := 1, tid := 11270 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5798 : LineageGoal :=
-  { ts := 5798, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11271 }, { rank := 1, tid := 11272 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5798 (ts = 5798).
+--   PM tids 11271, 11272 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5798_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5798, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11271 }, { rank := 1, tid := 11272 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5800 : LineageGoal :=
-  { ts := 5800, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11277 }, { rank := 1, tid := 11278 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5800 (ts = 5800).
+--   PM tids 11277, 11278 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5800_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5800, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11277 }, { rank := 1, tid := 11278 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5801 : LineageGoal :=
-  { ts := 5801, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11279 }, { rank := 1, tid := 11280 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5801 (ts = 5801).
+--   PM tids 11279, 11280 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5801_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5801, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11279 }, { rank := 1, tid := 11280 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5802 : LineageGoal :=
-  { ts := 5802, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11281 }, { rank := 1, tid := 11282 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5802 (ts = 5802).
+--   PM tids 11281, 11282 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5802_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5802, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11281 }, { rank := 1, tid := 11282 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5806 : LineageGoal :=
-  { ts := 5806, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11289 }, { rank := 1, tid := 11290 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5806 (ts = 5806).
+--   PM tids 11289, 11290 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5806_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5806, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11289 }, { rank := 1, tid := 11290 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5807 : LineageGoal :=
-  { ts := 5807, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11291 }, { rank := 1, tid := 11292 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5807 (ts = 5807).
+--   PM tids 11291, 11292 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5807_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5807, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11291 }, { rank := 1, tid := 11292 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5809 : LineageGoal :=
-  { ts := 5809, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11295 }, { rank := 1, tid := 11296 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5809 (ts = 5809).
+--   PM tids 11295, 11296 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5809_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5809, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11295 }, { rank := 1, tid := 11296 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5810 : LineageGoal :=
-  { ts := 5810, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11301 }, { rank := 1, tid := 11302 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5810 (ts = 5810).
+--   PM tids 11301, 11302 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5810_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5810, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11301 }, { rank := 1, tid := 11302 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5811 : LineageGoal :=
-  { ts := 5811, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11303 }, { rank := 1, tid := 11304 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5811 (ts = 5811).
+--   PM tids 11303, 11304 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5811_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5811, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11303 }, { rank := 1, tid := 11304 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5812 : LineageGoal :=
-  { ts := 5812, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11305 }, { rank := 1, tid := 11306 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5812 (ts = 5812).
+--   PM tids 11305, 11306 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5812_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5812, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11305 }, { rank := 1, tid := 11306 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5814 : LineageGoal :=
-  { ts := 5814, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11309 }, { rank := 1, tid := 11310 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5814 (ts = 5814).
+--   PM tids 11309, 11310 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5814_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5814, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11309 }, { rank := 1, tid := 11310 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5815 : LineageGoal :=
-  { ts := 5815, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11319 }, { rank := 1, tid := 11320 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5815 (ts = 5815).
+--   PM tids 11319, 11320 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5815_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5815, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11319 }, { rank := 1, tid := 11320 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5816 : LineageGoal :=
-  { ts := 5816, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11323 }, { rank := 1, tid := 11324 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5816 (ts = 5816).
+--   PM tids 11323, 11324 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5816_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5816, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11323 }, { rank := 1, tid := 11324 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5818 : LineageGoal :=
-  { ts := 5818, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11327 }, { rank := 1, tid := 11328 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5818 (ts = 5818).
+--   PM tids 11327, 11328 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5818_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5818, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11327 }, { rank := 1, tid := 11328 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5819 : LineageGoal :=
-  { ts := 5819, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11337 }, { rank := 1, tid := 11338 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5819 (ts = 5819).
+--   PM tids 11337, 11338 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5819_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5819, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11337 }, { rank := 1, tid := 11338 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5820 : LineageGoal :=
-  { ts := 5820, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11341 }, { rank := 1, tid := 11342 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5820 (ts = 5820).
+--   PM tids 11341, 11342 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5820_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5820, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11341 }, { rank := 1, tid := 11342 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5821 : LineageGoal :=
-  { ts := 5821, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11343 }, { rank := 1, tid := 11344 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5821 (ts = 5821).
+--   PM tids 11343, 11344 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5821_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5821, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11343 }, { rank := 1, tid := 11344 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5823 : LineageGoal :=
-  { ts := 5823, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11349 }, { rank := 1, tid := 11350 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5823 (ts = 5823).
+--   PM tids 11349, 11350 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5823_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5823, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11349 }, { rank := 1, tid := 11350 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5824 : LineageGoal :=
-  { ts := 5824, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11359 }, { rank := 1, tid := 11360 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5824 (ts = 5824).
+--   PM tids 11359, 11360 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5824_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5824, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11359 }, { rank := 1, tid := 11360 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5825 : LineageGoal :=
-  { ts := 5825, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11363 }, { rank := 1, tid := 11364 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5825 (ts = 5825).
+--   PM tids 11363, 11364 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5825_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5825, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11363 }, { rank := 1, tid := 11364 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5826 : LineageGoal :=
-  { ts := 5826, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11367 }, { rank := 1, tid := 11368 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5826 (ts = 5826).
+--   PM tids 11367, 11368 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5826_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5826, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11367 }, { rank := 1, tid := 11368 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5827 : LineageGoal :=
-  { ts := 5827, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11373 }, { rank := 1, tid := 11374 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5827 (ts = 5827).
+--   PM tids 11373, 11374 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5827_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5827, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11373 }, { rank := 1, tid := 11374 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5828 : LineageGoal :=
-  { ts := 5828, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11377 }, { rank := 1, tid := 11378 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5828 (ts = 5828).
+--   PM tids 11377, 11378 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5828_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5828, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11377 }, { rank := 1, tid := 11378 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5830 : LineageGoal :=
-  { ts := 5830, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11381 }, { rank := 1, tid := 11382 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5830 (ts = 5830).
+--   PM tids 11381, 11382 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5830_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5830, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11381 }, { rank := 1, tid := 11382 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5832 : LineageGoal :=
-  { ts := 5832, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11383 }, { rank := 1, tid := 11384 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5832 (ts = 5832).
+--   PM tids 11383, 11384 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5832_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5832, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11383 }, { rank := 1, tid := 11384 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
 def intermediateGoal_5833 : LineageGoal :=
   { ts := 5833, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5833 }], tpShapes := [[4096, 4, 64]] }
@@ -15014,104 +17023,302 @@ def intermediateGoal_5833 : LineageGoal :=
 def intermediateGoal_5834 : LineageGoal :=
   { ts := 5834, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5834 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5837 : LineageGoal :=
-  { ts := 5837, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11407 }, { rank := 1, tid := 11408 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5837 (ts = 5837).
+--   PM tids 11407, 11408 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5837_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5837, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11407 }, { rank := 1, tid := 11408 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5838 : LineageGoal :=
-  { ts := 5838, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11409 }, { rank := 1, tid := 11410 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5838 (ts = 5838).
+--   PM tids 11409, 11410 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5838_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5838, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11409 }, { rank := 1, tid := 11410 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5839 : LineageGoal :=
-  { ts := 5839, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11415 }, { rank := 1, tid := 11416 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5839 (ts = 5839).
+--   PM tids 11415, 11416 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5839_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5839, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11415 }, { rank := 1, tid := 11416 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5841 : LineageGoal :=
-  { ts := 5841, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11419 }, { rank := 1, tid := 11420 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5841 (ts = 5841).
+--   PM tids 11419, 11420 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5841_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5841, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11419 }, { rank := 1, tid := 11420 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5842 : LineageGoal :=
-  { ts := 5842, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11429 }, { rank := 1, tid := 11430 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5842 (ts = 5842).
+--   PM tids 11429, 11430 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5842_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5842, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11429 }, { rank := 1, tid := 11430 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5843 : LineageGoal :=
-  { ts := 5843, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11433 }, { rank := 1, tid := 11434 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5843 (ts = 5843).
+--   PM tids 11433, 11434 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5843_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5843, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11433 }, { rank := 1, tid := 11434 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5844 : LineageGoal :=
-  { ts := 5844, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11437 }, { rank := 1, tid := 11438 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5844 (ts = 5844).
+--   PM tids 11437, 11438 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5844_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5844, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11437 }, { rank := 1, tid := 11438 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5846 : LineageGoal :=
-  { ts := 5846, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11441 }, { rank := 1, tid := 11442 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5846 (ts = 5846).
+--   PM tids 11441, 11442 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5846_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5846, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11441 }, { rank := 1, tid := 11442 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5847 : LineageGoal :=
-  { ts := 5847, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11443 }, { rank := 1, tid := 11444 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5847 (ts = 5847).
+--   PM tids 11443, 11444 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5847_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5847, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11443 }, { rank := 1, tid := 11444 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5849 : LineageGoal :=
-  { ts := 5849, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11449 }, { rank := 1, tid := 11450 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5849 (ts = 5849).
+--   PM tids 11449, 11450 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5849_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5849, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11449 }, { rank := 1, tid := 11450 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5850 : LineageGoal :=
-  { ts := 5850, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11451 }, { rank := 1, tid := 11452 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5850 (ts = 5850).
+--   PM tids 11451, 11452 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5850_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5850, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11451 }, { rank := 1, tid := 11452 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5851 : LineageGoal :=
-  { ts := 5851, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11453 }, { rank := 1, tid := 11454 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5851 (ts = 5851).
+--   PM tids 11453, 11454 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5851_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5851, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11453 }, { rank := 1, tid := 11454 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5855 : LineageGoal :=
-  { ts := 5855, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11461 }, { rank := 1, tid := 11462 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5855 (ts = 5855).
+--   PM tids 11461, 11462 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5855_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5855, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11461 }, { rank := 1, tid := 11462 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5856 : LineageGoal :=
-  { ts := 5856, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11463 }, { rank := 1, tid := 11464 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5856 (ts = 5856).
+--   PM tids 11463, 11464 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5856_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5856, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11463 }, { rank := 1, tid := 11464 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5858 : LineageGoal :=
-  { ts := 5858, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11467 }, { rank := 1, tid := 11468 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5858 (ts = 5858).
+--   PM tids 11467, 11468 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5858_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5858, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11467 }, { rank := 1, tid := 11468 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5859 : LineageGoal :=
-  { ts := 5859, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11473 }, { rank := 1, tid := 11474 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5859 (ts = 5859).
+--   PM tids 11473, 11474 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5859_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5859, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11473 }, { rank := 1, tid := 11474 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5860 : LineageGoal :=
-  { ts := 5860, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11475 }, { rank := 1, tid := 11476 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5860 (ts = 5860).
+--   PM tids 11475, 11476 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5860_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5860, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11475 }, { rank := 1, tid := 11476 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5861 : LineageGoal :=
-  { ts := 5861, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11477 }, { rank := 1, tid := 11478 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5861 (ts = 5861).
+--   PM tids 11477, 11478 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5861_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5861, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11477 }, { rank := 1, tid := 11478 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5863 : LineageGoal :=
-  { ts := 5863, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11481 }, { rank := 1, tid := 11482 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5863 (ts = 5863).
+--   PM tids 11481, 11482 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5863_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5863, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11481 }, { rank := 1, tid := 11482 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5864 : LineageGoal :=
-  { ts := 5864, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11491 }, { rank := 1, tid := 11492 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5864 (ts = 5864).
+--   PM tids 11491, 11492 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5864_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5864, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11491 }, { rank := 1, tid := 11492 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5865 : LineageGoal :=
-  { ts := 5865, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11495 }, { rank := 1, tid := 11496 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5865 (ts = 5865).
+--   PM tids 11495, 11496 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5865_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5865, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11495 }, { rank := 1, tid := 11496 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5867 : LineageGoal :=
-  { ts := 5867, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11499 }, { rank := 1, tid := 11500 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5867 (ts = 5867).
+--   PM tids 11499, 11500 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5867_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5867, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11499 }, { rank := 1, tid := 11500 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5868 : LineageGoal :=
-  { ts := 5868, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11509 }, { rank := 1, tid := 11510 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5868 (ts = 5868).
+--   PM tids 11509, 11510 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5868_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5868, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11509 }, { rank := 1, tid := 11510 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5869 : LineageGoal :=
-  { ts := 5869, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11513 }, { rank := 1, tid := 11514 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5869 (ts = 5869).
+--   PM tids 11513, 11514 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5869_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5869, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11513 }, { rank := 1, tid := 11514 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5870 : LineageGoal :=
-  { ts := 5870, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11515 }, { rank := 1, tid := 11516 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5870 (ts = 5870).
+--   PM tids 11515, 11516 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5870_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5870, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11515 }, { rank := 1, tid := 11516 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5872 : LineageGoal :=
-  { ts := 5872, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11521 }, { rank := 1, tid := 11522 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5872 (ts = 5872).
+--   PM tids 11521, 11522 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5872_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5872, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11521 }, { rank := 1, tid := 11522 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5873 : LineageGoal :=
-  { ts := 5873, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11531 }, { rank := 1, tid := 11532 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5873 (ts = 5873).
+--   PM tids 11531, 11532 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5873_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5873, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11531 }, { rank := 1, tid := 11532 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5874 : LineageGoal :=
-  { ts := 5874, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11535 }, { rank := 1, tid := 11536 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5874 (ts = 5874).
+--   PM tids 11535, 11536 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5874_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5874, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11535 }, { rank := 1, tid := 11536 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5875 : LineageGoal :=
-  { ts := 5875, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11539 }, { rank := 1, tid := 11540 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5875 (ts = 5875).
+--   PM tids 11539, 11540 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5875_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5875, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11539 }, { rank := 1, tid := 11540 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5876 : LineageGoal :=
-  { ts := 5876, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11545 }, { rank := 1, tid := 11546 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5876 (ts = 5876).
+--   PM tids 11545, 11546 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5876_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5876, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11545 }, { rank := 1, tid := 11546 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5877 : LineageGoal :=
-  { ts := 5877, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11549 }, { rank := 1, tid := 11550 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5877 (ts = 5877).
+--   PM tids 11549, 11550 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5877_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5877, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11549 }, { rank := 1, tid := 11550 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5879 : LineageGoal :=
-  { ts := 5879, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11553 }, { rank := 1, tid := 11554 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5879 (ts = 5879).
+--   PM tids 11553, 11554 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5879_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5879, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11553 }, { rank := 1, tid := 11554 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5881 : LineageGoal :=
-  { ts := 5881, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11555 }, { rank := 1, tid := 11556 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5881 (ts = 5881).
+--   PM tids 11555, 11556 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5881_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5881, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11555 }, { rank := 1, tid := 11556 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
 def intermediateGoal_5882 : LineageGoal :=
   { ts := 5882, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5882 }], tpShapes := [[4096, 4, 64]] }
@@ -15119,98 +17326,284 @@ def intermediateGoal_5882 : LineageGoal :=
 def intermediateGoal_5883 : LineageGoal :=
   { ts := 5883, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 5883 }], tpShapes := [[4096, 4, 64]] }
 
-def intermediateGoal_5886 : LineageGoal :=
-  { ts := 5886, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11579 }, { rank := 1, tid := 11580 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5886 (ts = 5886).
+--   PM tids 11579, 11580 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5886_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5886, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11579 }, { rank := 1, tid := 11580 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5887 : LineageGoal :=
-  { ts := 5887, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11581 }, { rank := 1, tid := 11582 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5887 (ts = 5887).
+--   PM tids 11581, 11582 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5887_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5887, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11581 }, { rank := 1, tid := 11582 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5888 : LineageGoal :=
-  { ts := 5888, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11587 }, { rank := 1, tid := 11588 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5888 (ts = 5888).
+--   PM tids 11587, 11588 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5888_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5888, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11587 }, { rank := 1, tid := 11588 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5890 : LineageGoal :=
-  { ts := 5890, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11591 }, { rank := 1, tid := 11592 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5890 (ts = 5890).
+--   PM tids 11591, 11592 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5890_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5890, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11591 }, { rank := 1, tid := 11592 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5891 : LineageGoal :=
-  { ts := 5891, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11601 }, { rank := 1, tid := 11602 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5891 (ts = 5891).
+--   PM tids 11601, 11602 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5891_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5891, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11601 }, { rank := 1, tid := 11602 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5892 : LineageGoal :=
-  { ts := 5892, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11605 }, { rank := 1, tid := 11606 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5892 (ts = 5892).
+--   PM tids 11605, 11606 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5892_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5892, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11605 }, { rank := 1, tid := 11606 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5893 : LineageGoal :=
-  { ts := 5893, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11609 }, { rank := 1, tid := 11610 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5893 (ts = 5893).
+--   PM tids 11609, 11610 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5893_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5893, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11609 }, { rank := 1, tid := 11610 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5895 : LineageGoal :=
-  { ts := 5895, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11613 }, { rank := 1, tid := 11614 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5895 (ts = 5895).
+--   PM tids 11613, 11614 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5895_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5895, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11613 }, { rank := 1, tid := 11614 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5896 : LineageGoal :=
-  { ts := 5896, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11615 }, { rank := 1, tid := 11616 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5896 (ts = 5896).
+--   PM tids 11615, 11616 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5896_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5896, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11615 }, { rank := 1, tid := 11616 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5898 : LineageGoal :=
-  { ts := 5898, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11621 }, { rank := 1, tid := 11622 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5898 (ts = 5898).
+--   PM tids 11621, 11622 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5898_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5898, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11621 }, { rank := 1, tid := 11622 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5899 : LineageGoal :=
-  { ts := 5899, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11623 }, { rank := 1, tid := 11624 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5899 (ts = 5899).
+--   PM tids 11623, 11624 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5899_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5899, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11623 }, { rank := 1, tid := 11624 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5900 : LineageGoal :=
-  { ts := 5900, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11625 }, { rank := 1, tid := 11626 }], tpShapes := [[2048, 64], [2048, 64]] }
+-- NOT an ordinary gather: intermediateGoal_5900 (ts = 5900).
+--   PM tids 11625, 11626 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5900_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5900, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11625 }, { rank := 1, tid := 11626 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5904 : LineageGoal :=
-  { ts := 5904, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11633 }, { rank := 1, tid := 11634 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5904 (ts = 5904).
+--   PM tids 11633, 11634 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5904_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5904, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11633 }, { rank := 1, tid := 11634 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5905 : LineageGoal :=
-  { ts := 5905, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11635 }, { rank := 1, tid := 11636 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5905 (ts = 5905).
+--   PM tids 11635, 11636 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5905_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5905, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11635 }, { rank := 1, tid := 11636 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5907 : LineageGoal :=
-  { ts := 5907, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11639 }, { rank := 1, tid := 11640 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5907 (ts = 5907).
+--   PM tids 11639, 11640 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5907_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5907, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11639 }, { rank := 1, tid := 11640 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5908 : LineageGoal :=
-  { ts := 5908, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11645 }, { rank := 1, tid := 11646 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5908 (ts = 5908).
+--   PM tids 11645, 11646 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5908_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5908, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11645 }, { rank := 1, tid := 11646 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5909 : LineageGoal :=
-  { ts := 5909, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11647 }, { rank := 1, tid := 11648 }], tpShapes := [[2048, 1], [2048, 1]] }
+-- NOT an ordinary gather: intermediateGoal_5909 (ts = 5909).
+--   PM tids 11647, 11648 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5909_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5909, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11647 }, { rank := 1, tid := 11648 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5910 : LineageGoal :=
-  { ts := 5910, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11649 }, { rank := 1, tid := 11650 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5910 (ts = 5910).
+--   PM tids 11649, 11650 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5910_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5910, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11649 }, { rank := 1, tid := 11650 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5912 : LineageGoal :=
-  { ts := 5912, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11653 }, { rank := 1, tid := 11654 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5912 (ts = 5912).
+--   PM tids 11653, 11654 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5912_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5912, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11653 }, { rank := 1, tid := 11654 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5913 : LineageGoal :=
-  { ts := 5913, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11663 }, { rank := 1, tid := 11664 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5913 (ts = 5913).
+--   PM tids 11663, 11664 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5913_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5913, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11663 }, { rank := 1, tid := 11664 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5914 : LineageGoal :=
-  { ts := 5914, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11667 }, { rank := 1, tid := 11668 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5914 (ts = 5914).
+--   PM tids 11667, 11668 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5914_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5914, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11667 }, { rank := 1, tid := 11668 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5916 : LineageGoal :=
-  { ts := 5916, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11671 }, { rank := 1, tid := 11672 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5916 (ts = 5916).
+--   PM tids 11671, 11672 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5916_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5916, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11671 }, { rank := 1, tid := 11672 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5917 : LineageGoal :=
-  { ts := 5917, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11681 }, { rank := 1, tid := 11682 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5917 (ts = 5917).
+--   PM tids 11681, 11682 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5917_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5917, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11681 }, { rank := 1, tid := 11682 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5918 : LineageGoal :=
-  { ts := 5918, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11685 }, { rank := 1, tid := 11686 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5918 (ts = 5918).
+--   PM tids 11685, 11686 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5918_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5918, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11685 }, { rank := 1, tid := 11686 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5919 : LineageGoal :=
-  { ts := 5919, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11687 }, { rank := 1, tid := 11688 }], tpShapes := [[2048, 512], [2048, 512]] }
+-- NOT an ordinary gather: intermediateGoal_5919 (ts = 5919).
+--   PM tids 11687, 11688 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5919_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5919, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11687 }, { rank := 1, tid := 11688 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5921 : LineageGoal :=
-  { ts := 5921, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11693 }, { rank := 1, tid := 11694 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5921 (ts = 5921).
+--   PM tids 11693, 11694 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5921_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5921, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11693 }, { rank := 1, tid := 11694 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5922 : LineageGoal :=
-  { ts := 5922, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11703 }, { rank := 1, tid := 11704 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5922 (ts = 5922).
+--   PM tids 11703, 11704 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5922_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5922, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11703 }, { rank := 1, tid := 11704 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5923 : LineageGoal :=
-  { ts := 5923, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11707 }, { rank := 1, tid := 11708 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5923 (ts = 5923).
+--   PM tids 11707, 11708 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5923_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5923, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11707 }, { rank := 1, tid := 11708 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5924 : LineageGoal :=
-  { ts := 5924, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11711 }, { rank := 1, tid := 11712 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5924 (ts = 5924).
+--   PM tids 11711, 11712 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5924_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5924, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11711 }, { rank := 1, tid := 11712 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5925 : LineageGoal :=
-  { ts := 5925, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11717 }, { rank := 1, tid := 11718 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5925 (ts = 5925).
+--   PM tids 11717, 11718 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5925_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5925, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11717 }, { rank := 1, tid := 11718 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
-def intermediateGoal_5926 : LineageGoal :=
-  { ts := 5926, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11721 }, { rank := 1, tid := 11722 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_5926 (ts = 5926).
+--   PM tids 11721, 11722 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_5926_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 5926, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11721 }, { rank := 1, tid := 11722 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
 def intermediateGoal_5928 : LineageGoal :=
   { ts := 5928, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11727 }, { rank := 1, tid := 11728 }], tpShapes := [[2048, 1024], [2048, 1024]] }
@@ -15734,329 +18127,977 @@ def intermediateGoal_8131 : LineageGoal :=
 def intermediateGoal_8135 : LineageGoal :=
   { ts := 8135, tsShape := [4096, 4, 64], tps := [{ rank := 0, tid := 15917 }, { rank := 1, tid := 15965 }], tpShapes := [[4096, 4, 64], [4096, 4, 64]], replicated := true }
 
-def intermediateGoal_8139 : LineageGoal :=
-  { ts := 8139, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 15969 }, { rank := 1, tid := 15977 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8143 : LineageGoal :=
-  { ts := 8143, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 15973 }, { rank := 1, tid := 15981 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8147 : LineageGoal :=
-  { ts := 8147, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 15985 }, { rank := 1, tid := 15993 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8151 : LineageGoal :=
-  { ts := 8151, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 15989 }, { rank := 1, tid := 15997 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8158 : LineageGoal :=
-  { ts := 8158, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16004 }, { rank := 1, tid := 16027 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8162 : LineageGoal :=
-  { ts := 8162, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16008 }, { rank := 1, tid := 16031 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8166 : LineageGoal :=
-  { ts := 8166, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16012 }, { rank := 1, tid := 16035 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8170 : LineageGoal :=
-  { ts := 8170, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16016 }, { rank := 1, tid := 16039 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8174 : LineageGoal :=
-  { ts := 8174, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16020 }, { rank := 1, tid := 16043 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8178 : LineageGoal :=
-  { ts := 8178, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16047 }, { rank := 1, tid := 16055 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8182 : LineageGoal :=
-  { ts := 8182, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16051 }, { rank := 1, tid := 16059 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8186 : LineageGoal :=
-  { ts := 8186, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16063 }, { rank := 1, tid := 16071 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8190 : LineageGoal :=
-  { ts := 8190, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16067 }, { rank := 1, tid := 16075 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8197 : LineageGoal :=
-  { ts := 8197, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16082 }, { rank := 1, tid := 16105 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8201 : LineageGoal :=
-  { ts := 8201, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16086 }, { rank := 1, tid := 16109 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8205 : LineageGoal :=
-  { ts := 8205, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16090 }, { rank := 1, tid := 16113 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8209 : LineageGoal :=
-  { ts := 8209, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16094 }, { rank := 1, tid := 16117 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8213 : LineageGoal :=
-  { ts := 8213, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16098 }, { rank := 1, tid := 16121 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8217 : LineageGoal :=
-  { ts := 8217, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16125 }, { rank := 1, tid := 16133 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8221 : LineageGoal :=
-  { ts := 8221, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16129 }, { rank := 1, tid := 16137 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8225 : LineageGoal :=
-  { ts := 8225, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16141 }, { rank := 1, tid := 16149 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8229 : LineageGoal :=
-  { ts := 8229, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16145 }, { rank := 1, tid := 16153 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8236 : LineageGoal :=
-  { ts := 8236, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16160 }, { rank := 1, tid := 16183 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8240 : LineageGoal :=
-  { ts := 8240, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16164 }, { rank := 1, tid := 16187 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8244 : LineageGoal :=
-  { ts := 8244, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16168 }, { rank := 1, tid := 16191 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8248 : LineageGoal :=
-  { ts := 8248, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16172 }, { rank := 1, tid := 16195 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8252 : LineageGoal :=
-  { ts := 8252, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16176 }, { rank := 1, tid := 16199 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8256 : LineageGoal :=
-  { ts := 8256, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16203 }, { rank := 1, tid := 16211 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8260 : LineageGoal :=
-  { ts := 8260, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16207 }, { rank := 1, tid := 16215 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8264 : LineageGoal :=
-  { ts := 8264, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16219 }, { rank := 1, tid := 16227 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8268 : LineageGoal :=
-  { ts := 8268, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16223 }, { rank := 1, tid := 16231 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8275 : LineageGoal :=
-  { ts := 8275, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16238 }, { rank := 1, tid := 16261 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8279 : LineageGoal :=
-  { ts := 8279, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16242 }, { rank := 1, tid := 16265 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8283 : LineageGoal :=
-  { ts := 8283, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16246 }, { rank := 1, tid := 16269 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8287 : LineageGoal :=
-  { ts := 8287, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16250 }, { rank := 1, tid := 16273 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8291 : LineageGoal :=
-  { ts := 8291, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16254 }, { rank := 1, tid := 16277 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8295 : LineageGoal :=
-  { ts := 8295, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16281 }, { rank := 1, tid := 16289 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8299 : LineageGoal :=
-  { ts := 8299, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16285 }, { rank := 1, tid := 16293 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8303 : LineageGoal :=
-  { ts := 8303, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16297 }, { rank := 1, tid := 16305 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8307 : LineageGoal :=
-  { ts := 8307, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16301 }, { rank := 1, tid := 16309 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8314 : LineageGoal :=
-  { ts := 8314, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16316 }, { rank := 1, tid := 16339 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8318 : LineageGoal :=
-  { ts := 8318, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16320 }, { rank := 1, tid := 16343 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8322 : LineageGoal :=
-  { ts := 8322, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16324 }, { rank := 1, tid := 16347 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8326 : LineageGoal :=
-  { ts := 8326, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16328 }, { rank := 1, tid := 16351 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8330 : LineageGoal :=
-  { ts := 8330, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16332 }, { rank := 1, tid := 16355 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8334 : LineageGoal :=
-  { ts := 8334, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16359 }, { rank := 1, tid := 16367 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8338 : LineageGoal :=
-  { ts := 8338, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16363 }, { rank := 1, tid := 16371 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8342 : LineageGoal :=
-  { ts := 8342, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16375 }, { rank := 1, tid := 16383 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8346 : LineageGoal :=
-  { ts := 8346, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16379 }, { rank := 1, tid := 16387 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8353 : LineageGoal :=
-  { ts := 8353, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16394 }, { rank := 1, tid := 16417 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8357 : LineageGoal :=
-  { ts := 8357, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16398 }, { rank := 1, tid := 16421 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8361 : LineageGoal :=
-  { ts := 8361, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16402 }, { rank := 1, tid := 16425 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8365 : LineageGoal :=
-  { ts := 8365, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16406 }, { rank := 1, tid := 16429 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8369 : LineageGoal :=
-  { ts := 8369, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16410 }, { rank := 1, tid := 16433 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8373 : LineageGoal :=
-  { ts := 8373, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16437 }, { rank := 1, tid := 16445 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8377 : LineageGoal :=
-  { ts := 8377, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16441 }, { rank := 1, tid := 16449 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8381 : LineageGoal :=
-  { ts := 8381, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16453 }, { rank := 1, tid := 16461 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8385 : LineageGoal :=
-  { ts := 8385, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16457 }, { rank := 1, tid := 16465 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8392 : LineageGoal :=
-  { ts := 8392, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16472 }, { rank := 1, tid := 16495 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8396 : LineageGoal :=
-  { ts := 8396, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16476 }, { rank := 1, tid := 16499 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8400 : LineageGoal :=
-  { ts := 8400, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16480 }, { rank := 1, tid := 16503 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8404 : LineageGoal :=
-  { ts := 8404, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16484 }, { rank := 1, tid := 16507 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8408 : LineageGoal :=
-  { ts := 8408, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16488 }, { rank := 1, tid := 16511 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8412 : LineageGoal :=
-  { ts := 8412, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16515 }, { rank := 1, tid := 16523 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8416 : LineageGoal :=
-  { ts := 8416, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16519 }, { rank := 1, tid := 16527 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8420 : LineageGoal :=
-  { ts := 8420, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16531 }, { rank := 1, tid := 16539 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8424 : LineageGoal :=
-  { ts := 8424, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16535 }, { rank := 1, tid := 16543 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8431 : LineageGoal :=
-  { ts := 8431, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16550 }, { rank := 1, tid := 16573 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8435 : LineageGoal :=
-  { ts := 8435, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16554 }, { rank := 1, tid := 16577 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8439 : LineageGoal :=
-  { ts := 8439, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16558 }, { rank := 1, tid := 16581 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8443 : LineageGoal :=
-  { ts := 8443, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16562 }, { rank := 1, tid := 16585 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8447 : LineageGoal :=
-  { ts := 8447, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16566 }, { rank := 1, tid := 16589 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8451 : LineageGoal :=
-  { ts := 8451, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16593 }, { rank := 1, tid := 16601 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8455 : LineageGoal :=
-  { ts := 8455, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16597 }, { rank := 1, tid := 16605 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8459 : LineageGoal :=
-  { ts := 8459, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16609 }, { rank := 1, tid := 16617 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8463 : LineageGoal :=
-  { ts := 8463, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16613 }, { rank := 1, tid := 16621 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8470 : LineageGoal :=
-  { ts := 8470, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16628 }, { rank := 1, tid := 16651 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8474 : LineageGoal :=
-  { ts := 8474, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16632 }, { rank := 1, tid := 16655 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8478 : LineageGoal :=
-  { ts := 8478, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16636 }, { rank := 1, tid := 16659 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8482 : LineageGoal :=
-  { ts := 8482, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16640 }, { rank := 1, tid := 16663 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8486 : LineageGoal :=
-  { ts := 8486, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16644 }, { rank := 1, tid := 16667 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8490 : LineageGoal :=
-  { ts := 8490, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16671 }, { rank := 1, tid := 16679 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8494 : LineageGoal :=
-  { ts := 8494, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16675 }, { rank := 1, tid := 16683 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8498 : LineageGoal :=
-  { ts := 8498, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16687 }, { rank := 1, tid := 16695 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8502 : LineageGoal :=
-  { ts := 8502, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16691 }, { rank := 1, tid := 16699 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8509 : LineageGoal :=
-  { ts := 8509, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16706 }, { rank := 1, tid := 16729 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8513 : LineageGoal :=
-  { ts := 8513, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16710 }, { rank := 1, tid := 16733 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8517 : LineageGoal :=
-  { ts := 8517, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16714 }, { rank := 1, tid := 16737 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8521 : LineageGoal :=
-  { ts := 8521, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16718 }, { rank := 1, tid := 16741 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8525 : LineageGoal :=
-  { ts := 8525, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16722 }, { rank := 1, tid := 16745 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8529 : LineageGoal :=
-  { ts := 8529, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16749 }, { rank := 1, tid := 16757 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8533 : LineageGoal :=
-  { ts := 8533, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16753 }, { rank := 1, tid := 16761 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8537 : LineageGoal :=
-  { ts := 8537, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16765 }, { rank := 1, tid := 16773 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8541 : LineageGoal :=
-  { ts := 8541, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16769 }, { rank := 1, tid := 16777 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8548 : LineageGoal :=
-  { ts := 8548, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16784 }, { rank := 1, tid := 16807 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8552 : LineageGoal :=
-  { ts := 8552, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16788 }, { rank := 1, tid := 16811 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8556 : LineageGoal :=
-  { ts := 8556, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16792 }, { rank := 1, tid := 16815 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8560 : LineageGoal :=
-  { ts := 8560, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16796 }, { rank := 1, tid := 16819 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8564 : LineageGoal :=
-  { ts := 8564, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16800 }, { rank := 1, tid := 16823 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8568 : LineageGoal :=
-  { ts := 8568, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16827 }, { rank := 1, tid := 16835 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8572 : LineageGoal :=
-  { ts := 8572, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16831 }, { rank := 1, tid := 16839 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8576 : LineageGoal :=
-  { ts := 8576, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16843 }, { rank := 1, tid := 16851 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8580 : LineageGoal :=
-  { ts := 8580, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16847 }, { rank := 1, tid := 16855 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8587 : LineageGoal :=
-  { ts := 8587, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16862 }, { rank := 1, tid := 16885 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8591 : LineageGoal :=
-  { ts := 8591, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16866 }, { rank := 1, tid := 16889 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8595 : LineageGoal :=
-  { ts := 8595, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16870 }, { rank := 1, tid := 16893 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8599 : LineageGoal :=
-  { ts := 8599, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16874 }, { rank := 1, tid := 16897 }], tpShapes := [[2048, 1024], [2048, 1024]] }
-
-def intermediateGoal_8603 : LineageGoal :=
-  { ts := 8603, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16878 }, { rank := 1, tid := 16901 }], tpShapes := [[2048, 1024], [2048, 1024]] }
+-- NOT an ordinary gather: intermediateGoal_8139 (ts = 8139).
+--   PM tids 15969, 15977 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8139_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8139, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 15969 }, { rank := 1, tid := 15977 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8143 (ts = 8143).
+--   PM tids 15973, 15981 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8143_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8143, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 15973 }, { rank := 1, tid := 15981 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8147 (ts = 8147).
+--   PM tids 15985, 15993 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8147_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8147, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 15985 }, { rank := 1, tid := 15993 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8151 (ts = 8151).
+--   PM tids 15989, 15997 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8151_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8151, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 15989 }, { rank := 1, tid := 15997 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8158 (ts = 8158).
+--   PM tids 16004, 16027 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8158_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8158, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16004 }, { rank := 1, tid := 16027 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8162 (ts = 8162).
+--   PM tids 16008, 16031 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8162_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8162, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16008 }, { rank := 1, tid := 16031 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8166 (ts = 8166).
+--   PM tids 16012, 16035 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8166_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8166, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16012 }, { rank := 1, tid := 16035 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8170 (ts = 8170).
+--   PM tids 16016, 16039 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8170_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8170, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16016 }, { rank := 1, tid := 16039 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8174 (ts = 8174).
+--   PM tids 16020, 16043 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8174_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8174, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16020 }, { rank := 1, tid := 16043 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8178 (ts = 8178).
+--   PM tids 16047, 16055 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8178_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8178, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16047 }, { rank := 1, tid := 16055 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8182 (ts = 8182).
+--   PM tids 16051, 16059 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8182_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8182, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16051 }, { rank := 1, tid := 16059 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8186 (ts = 8186).
+--   PM tids 16063, 16071 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8186_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8186, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16063 }, { rank := 1, tid := 16071 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8190 (ts = 8190).
+--   PM tids 16067, 16075 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8190_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8190, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16067 }, { rank := 1, tid := 16075 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8197 (ts = 8197).
+--   PM tids 16082, 16105 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8197_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8197, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16082 }, { rank := 1, tid := 16105 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8201 (ts = 8201).
+--   PM tids 16086, 16109 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8201_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8201, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16086 }, { rank := 1, tid := 16109 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8205 (ts = 8205).
+--   PM tids 16090, 16113 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8205_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8205, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16090 }, { rank := 1, tid := 16113 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8209 (ts = 8209).
+--   PM tids 16094, 16117 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8209_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8209, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16094 }, { rank := 1, tid := 16117 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8213 (ts = 8213).
+--   PM tids 16098, 16121 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8213_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8213, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16098 }, { rank := 1, tid := 16121 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8217 (ts = 8217).
+--   PM tids 16125, 16133 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8217_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8217, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16125 }, { rank := 1, tid := 16133 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8221 (ts = 8221).
+--   PM tids 16129, 16137 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8221_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8221, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16129 }, { rank := 1, tid := 16137 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8225 (ts = 8225).
+--   PM tids 16141, 16149 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8225_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8225, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16141 }, { rank := 1, tid := 16149 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8229 (ts = 8229).
+--   PM tids 16145, 16153 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8229_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8229, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16145 }, { rank := 1, tid := 16153 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8236 (ts = 8236).
+--   PM tids 16160, 16183 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8236_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8236, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16160 }, { rank := 1, tid := 16183 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8240 (ts = 8240).
+--   PM tids 16164, 16187 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8240_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8240, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16164 }, { rank := 1, tid := 16187 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8244 (ts = 8244).
+--   PM tids 16168, 16191 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8244_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8244, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16168 }, { rank := 1, tid := 16191 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8248 (ts = 8248).
+--   PM tids 16172, 16195 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8248_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8248, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16172 }, { rank := 1, tid := 16195 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8252 (ts = 8252).
+--   PM tids 16176, 16199 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8252_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8252, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16176 }, { rank := 1, tid := 16199 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8256 (ts = 8256).
+--   PM tids 16203, 16211 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8256_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8256, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16203 }, { rank := 1, tid := 16211 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8260 (ts = 8260).
+--   PM tids 16207, 16215 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8260_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8260, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16207 }, { rank := 1, tid := 16215 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8264 (ts = 8264).
+--   PM tids 16219, 16227 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8264_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8264, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16219 }, { rank := 1, tid := 16227 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8268 (ts = 8268).
+--   PM tids 16223, 16231 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8268_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8268, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16223 }, { rank := 1, tid := 16231 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8275 (ts = 8275).
+--   PM tids 16238, 16261 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8275_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8275, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16238 }, { rank := 1, tid := 16261 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8279 (ts = 8279).
+--   PM tids 16242, 16265 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8279_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8279, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16242 }, { rank := 1, tid := 16265 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8283 (ts = 8283).
+--   PM tids 16246, 16269 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8283_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8283, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16246 }, { rank := 1, tid := 16269 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8287 (ts = 8287).
+--   PM tids 16250, 16273 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8287_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8287, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16250 }, { rank := 1, tid := 16273 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8291 (ts = 8291).
+--   PM tids 16254, 16277 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8291_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8291, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16254 }, { rank := 1, tid := 16277 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8295 (ts = 8295).
+--   PM tids 16281, 16289 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8295_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8295, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16281 }, { rank := 1, tid := 16289 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8299 (ts = 8299).
+--   PM tids 16285, 16293 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8299_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8299, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16285 }, { rank := 1, tid := 16293 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8303 (ts = 8303).
+--   PM tids 16297, 16305 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8303_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8303, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16297 }, { rank := 1, tid := 16305 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8307 (ts = 8307).
+--   PM tids 16301, 16309 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8307_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8307, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16301 }, { rank := 1, tid := 16309 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8314 (ts = 8314).
+--   PM tids 16316, 16339 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8314_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8314, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16316 }, { rank := 1, tid := 16339 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8318 (ts = 8318).
+--   PM tids 16320, 16343 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8318_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8318, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16320 }, { rank := 1, tid := 16343 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8322 (ts = 8322).
+--   PM tids 16324, 16347 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8322_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8322, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16324 }, { rank := 1, tid := 16347 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8326 (ts = 8326).
+--   PM tids 16328, 16351 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8326_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8326, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16328 }, { rank := 1, tid := 16351 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8330 (ts = 8330).
+--   PM tids 16332, 16355 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8330_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8330, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16332 }, { rank := 1, tid := 16355 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8334 (ts = 8334).
+--   PM tids 16359, 16367 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8334_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8334, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16359 }, { rank := 1, tid := 16367 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8338 (ts = 8338).
+--   PM tids 16363, 16371 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8338_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8338, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16363 }, { rank := 1, tid := 16371 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8342 (ts = 8342).
+--   PM tids 16375, 16383 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8342_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8342, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16375 }, { rank := 1, tid := 16383 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8346 (ts = 8346).
+--   PM tids 16379, 16387 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8346_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8346, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16379 }, { rank := 1, tid := 16387 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8353 (ts = 8353).
+--   PM tids 16394, 16417 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8353_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8353, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16394 }, { rank := 1, tid := 16417 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8357 (ts = 8357).
+--   PM tids 16398, 16421 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8357_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8357, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16398 }, { rank := 1, tid := 16421 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8361 (ts = 8361).
+--   PM tids 16402, 16425 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8361_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8361, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16402 }, { rank := 1, tid := 16425 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8365 (ts = 8365).
+--   PM tids 16406, 16429 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8365_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8365, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16406 }, { rank := 1, tid := 16429 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8369 (ts = 8369).
+--   PM tids 16410, 16433 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8369_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8369, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16410 }, { rank := 1, tid := 16433 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8373 (ts = 8373).
+--   PM tids 16437, 16445 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8373_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8373, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16437 }, { rank := 1, tid := 16445 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8377 (ts = 8377).
+--   PM tids 16441, 16449 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8377_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8377, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16441 }, { rank := 1, tid := 16449 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8381 (ts = 8381).
+--   PM tids 16453, 16461 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8381_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8381, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16453 }, { rank := 1, tid := 16461 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8385 (ts = 8385).
+--   PM tids 16457, 16465 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8385_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8385, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16457 }, { rank := 1, tid := 16465 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8392 (ts = 8392).
+--   PM tids 16472, 16495 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8392_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8392, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16472 }, { rank := 1, tid := 16495 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8396 (ts = 8396).
+--   PM tids 16476, 16499 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8396_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8396, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16476 }, { rank := 1, tid := 16499 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8400 (ts = 8400).
+--   PM tids 16480, 16503 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8400_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8400, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16480 }, { rank := 1, tid := 16503 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8404 (ts = 8404).
+--   PM tids 16484, 16507 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8404_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8404, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16484 }, { rank := 1, tid := 16507 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8408 (ts = 8408).
+--   PM tids 16488, 16511 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8408_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8408, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16488 }, { rank := 1, tid := 16511 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8412 (ts = 8412).
+--   PM tids 16515, 16523 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8412_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8412, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16515 }, { rank := 1, tid := 16523 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8416 (ts = 8416).
+--   PM tids 16519, 16527 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8416_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8416, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16519 }, { rank := 1, tid := 16527 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8420 (ts = 8420).
+--   PM tids 16531, 16539 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8420_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8420, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16531 }, { rank := 1, tid := 16539 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8424 (ts = 8424).
+--   PM tids 16535, 16543 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8424_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8424, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16535 }, { rank := 1, tid := 16543 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8431 (ts = 8431).
+--   PM tids 16550, 16573 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8431_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8431, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16550 }, { rank := 1, tid := 16573 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8435 (ts = 8435).
+--   PM tids 16554, 16577 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8435_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8435, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16554 }, { rank := 1, tid := 16577 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8439 (ts = 8439).
+--   PM tids 16558, 16581 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8439_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8439, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16558 }, { rank := 1, tid := 16581 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8443 (ts = 8443).
+--   PM tids 16562, 16585 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8443_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8443, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16562 }, { rank := 1, tid := 16585 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8447 (ts = 8447).
+--   PM tids 16566, 16589 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8447_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8447, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16566 }, { rank := 1, tid := 16589 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8451 (ts = 8451).
+--   PM tids 16593, 16601 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8451_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8451, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16593 }, { rank := 1, tid := 16601 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8455 (ts = 8455).
+--   PM tids 16597, 16605 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8455_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8455, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16597 }, { rank := 1, tid := 16605 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8459 (ts = 8459).
+--   PM tids 16609, 16617 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8459_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8459, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16609 }, { rank := 1, tid := 16617 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8463 (ts = 8463).
+--   PM tids 16613, 16621 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8463_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8463, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16613 }, { rank := 1, tid := 16621 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8470 (ts = 8470).
+--   PM tids 16628, 16651 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8470_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8470, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16628 }, { rank := 1, tid := 16651 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8474 (ts = 8474).
+--   PM tids 16632, 16655 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8474_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8474, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16632 }, { rank := 1, tid := 16655 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8478 (ts = 8478).
+--   PM tids 16636, 16659 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8478_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8478, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16636 }, { rank := 1, tid := 16659 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8482 (ts = 8482).
+--   PM tids 16640, 16663 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8482_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8482, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16640 }, { rank := 1, tid := 16663 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8486 (ts = 8486).
+--   PM tids 16644, 16667 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8486_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8486, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16644 }, { rank := 1, tid := 16667 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8490 (ts = 8490).
+--   PM tids 16671, 16679 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8490_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8490, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16671 }, { rank := 1, tid := 16679 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8494 (ts = 8494).
+--   PM tids 16675, 16683 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8494_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8494, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16675 }, { rank := 1, tid := 16683 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8498 (ts = 8498).
+--   PM tids 16687, 16695 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8498_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8498, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16687 }, { rank := 1, tid := 16695 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8502 (ts = 8502).
+--   PM tids 16691, 16699 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8502_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8502, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16691 }, { rank := 1, tid := 16699 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8509 (ts = 8509).
+--   PM tids 16706, 16729 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8509_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8509, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16706 }, { rank := 1, tid := 16729 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8513 (ts = 8513).
+--   PM tids 16710, 16733 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8513_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8513, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16710 }, { rank := 1, tid := 16733 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8517 (ts = 8517).
+--   PM tids 16714, 16737 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8517_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8517, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16714 }, { rank := 1, tid := 16737 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8521 (ts = 8521).
+--   PM tids 16718, 16741 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8521_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8521, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16718 }, { rank := 1, tid := 16741 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8525 (ts = 8525).
+--   PM tids 16722, 16745 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8525_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8525, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16722 }, { rank := 1, tid := 16745 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8529 (ts = 8529).
+--   PM tids 16749, 16757 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8529_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8529, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16749 }, { rank := 1, tid := 16757 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8533 (ts = 8533).
+--   PM tids 16753, 16761 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8533_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8533, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16753 }, { rank := 1, tid := 16761 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8537 (ts = 8537).
+--   PM tids 16765, 16773 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8537_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8537, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16765 }, { rank := 1, tid := 16773 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8541 (ts = 8541).
+--   PM tids 16769, 16777 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8541_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8541, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16769 }, { rank := 1, tid := 16777 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8548 (ts = 8548).
+--   PM tids 16784, 16807 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8548_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8548, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16784 }, { rank := 1, tid := 16807 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8552 (ts = 8552).
+--   PM tids 16788, 16811 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8552_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8552, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16788 }, { rank := 1, tid := 16811 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8556 (ts = 8556).
+--   PM tids 16792, 16815 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8556_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8556, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16792 }, { rank := 1, tid := 16815 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8560 (ts = 8560).
+--   PM tids 16796, 16819 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8560_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8560, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16796 }, { rank := 1, tid := 16819 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8564 (ts = 8564).
+--   PM tids 16800, 16823 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8564_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8564, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16800 }, { rank := 1, tid := 16823 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8568 (ts = 8568).
+--   PM tids 16827, 16835 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8568_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8568, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16827 }, { rank := 1, tid := 16835 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8572 (ts = 8572).
+--   PM tids 16831, 16839 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8572_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8572, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16831 }, { rank := 1, tid := 16839 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8576 (ts = 8576).
+--   PM tids 16843, 16851 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8576_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8576, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16843 }, { rank := 1, tid := 16851 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8580 (ts = 8580).
+--   PM tids 16847, 16855 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8580_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8580, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16847 }, { rank := 1, tid := 16855 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8587 (ts = 8587).
+--   PM tids 16862, 16885 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8587_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8587, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16862 }, { rank := 1, tid := 16885 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8591 (ts = 8591).
+--   PM tids 16866, 16889 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8591_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8591, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16866 }, { rank := 1, tid := 16889 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8595 (ts = 8595).
+--   PM tids 16870, 16893 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8595_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8595, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16870 }, { rank := 1, tid := 16893 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8599 (ts = 8599).
+--   PM tids 16874, 16897 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8599_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8599, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16874 }, { rank := 1, tid := 16897 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
+
+-- NOT an ordinary gather: intermediateGoal_8603 (ts = 8603).
+--   PM tids 16878, 16901 are in CP zigzag layout (downstream of FW_maybe_shuffle,
+--   no intervening FW_maybe_unshuffle). They have the SAME shapes as
+--   contiguous shards but different ownership, so `reconstructWithDim`
+--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
+--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+def intermediateGoal_8603_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
+  { ts := 8603, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16878 }, { rank := 1, tid := 16901 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
 
 -- Proof obligations (intermediate goals)
@@ -17404,119 +20445,11 @@ def intermediateGoal_5334_stmt : Prop :=
 def intermediateGoal_5336_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5336 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5338_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5338 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5340_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5340 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5342_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5342 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5343_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5343 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5344_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5344 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5347_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5347 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5348_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5348 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5349_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5349 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5351_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5351 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5352_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5352 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5353_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5353 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5354_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5354 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5356_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5356 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5357_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5357 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5359_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5359 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5360_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5360 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5361_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5361 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5365_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5365 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5366_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5366 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5368_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5368 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5369_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5369 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5370_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5370 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5371_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5371 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5373_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5373 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5374_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5374 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5375_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5375 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5377_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5377 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5378_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5378 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5379_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5379 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5380_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5380 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5382_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5382 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5383_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5383 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5384_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5384 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5385_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5385 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5386_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5386 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5387_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5387 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5389_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5389 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5391_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5391 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5392_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5392 smInitEnv pmInitEnv initGoals
@@ -17524,209 +20457,11 @@ def intermediateGoal_5392_stmt : Prop :=
 def intermediateGoal_5393_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5393 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5396_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5396 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5397_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5397 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5398_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5398 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5400_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5400 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5401_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5401 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5402_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5402 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5403_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5403 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5405_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5405 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5406_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5406 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5408_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5408 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5409_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5409 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5410_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5410 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5414_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5414 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5415_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5415 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5417_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5417 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5418_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5418 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5419_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5419 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5420_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5420 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5422_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5422 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5423_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5423 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5424_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5424 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5426_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5426 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5427_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5427 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5428_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5428 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5429_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5429 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5431_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5431 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5432_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5432 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5433_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5433 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5434_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5434 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5435_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5435 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5436_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5436 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5438_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5438 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5440_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5440 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5441_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5441 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5442_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5442 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5445_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5445 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5446_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5446 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5447_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5447 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5449_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5449 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5450_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5450 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5451_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5451 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5452_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5452 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5454_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5454 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5455_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5455 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5457_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5457 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5458_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5458 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5459_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5459 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5463_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5463 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5464_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5464 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5466_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5466 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5467_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5467 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5468_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5468 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5469_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5469 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5471_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5471 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5472_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5472 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5473_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5473 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5475_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5475 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5476_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5476 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5477_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5477 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5478_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5478 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5480_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5480 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5481_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5481 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5482_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5482 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5483_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5483 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5484_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5484 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5485_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5485 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5487_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5487 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5489_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5489 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5490_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5490 smInitEnv pmInitEnv initGoals
@@ -17734,209 +20469,11 @@ def intermediateGoal_5490_stmt : Prop :=
 def intermediateGoal_5491_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5491 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5494_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5494 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5495_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5495 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5496_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5496 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5498_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5498 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5499_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5499 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5500_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5500 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5501_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5501 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5503_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5503 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5504_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5504 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5506_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5506 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5507_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5507 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5508_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5508 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5512_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5512 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5513_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5513 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5515_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5515 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5516_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5516 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5517_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5517 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5518_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5518 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5520_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5520 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5521_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5521 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5522_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5522 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5524_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5524 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5525_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5525 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5526_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5526 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5527_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5527 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5529_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5529 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5530_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5530 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5531_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5531 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5532_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5532 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5533_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5533 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5534_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5534 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5536_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5536 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5538_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5538 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5539_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5539 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5540_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5540 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5543_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5543 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5544_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5544 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5545_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5545 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5547_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5547 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5548_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5548 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5549_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5549 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5550_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5550 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5552_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5552 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5553_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5553 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5555_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5555 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5556_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5556 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5557_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5557 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5561_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5561 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5562_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5562 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5564_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5564 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5565_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5565 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5566_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5566 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5567_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5567 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5569_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5569 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5570_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5570 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5571_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5571 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5573_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5573 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5574_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5574 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5575_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5575 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5576_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5576 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5578_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5578 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5579_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5579 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5580_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5580 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5581_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5581 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5582_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5582 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5583_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5583 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5585_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5585 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5587_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5587 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5588_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5588 smInitEnv pmInitEnv initGoals
@@ -17944,209 +20481,11 @@ def intermediateGoal_5588_stmt : Prop :=
 def intermediateGoal_5589_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5589 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5592_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5592 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5593_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5593 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5594_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5594 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5596_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5596 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5597_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5597 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5598_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5598 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5599_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5599 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5601_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5601 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5602_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5602 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5604_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5604 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5605_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5605 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5606_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5606 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5610_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5610 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5611_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5611 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5613_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5613 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5614_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5614 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5615_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5615 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5616_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5616 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5618_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5618 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5619_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5619 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5620_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5620 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5622_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5622 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5623_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5623 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5624_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5624 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5625_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5625 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5627_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5627 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5628_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5628 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5629_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5629 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5630_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5630 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5631_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5631 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5632_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5632 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5634_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5634 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5636_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5636 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5637_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5637 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5638_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5638 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5641_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5641 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5642_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5642 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5643_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5643 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5645_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5645 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5646_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5646 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5647_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5647 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5648_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5648 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5650_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5650 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5651_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5651 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5653_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5653 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5654_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5654 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5655_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5655 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5659_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5659 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5660_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5660 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5662_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5662 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5663_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5663 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5664_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5664 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5665_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5665 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5667_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5667 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5668_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5668 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5669_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5669 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5671_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5671 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5672_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5672 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5673_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5673 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5674_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5674 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5676_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5676 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5677_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5677 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5678_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5678 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5679_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5679 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5680_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5680 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5681_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5681 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5683_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5683 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5685_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5685 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5686_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5686 smInitEnv pmInitEnv initGoals
@@ -18154,209 +20493,11 @@ def intermediateGoal_5686_stmt : Prop :=
 def intermediateGoal_5687_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5687 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5690_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5690 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5691_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5691 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5692_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5692 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5694_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5694 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5695_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5695 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5696_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5696 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5697_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5697 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5699_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5699 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5700_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5700 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5702_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5702 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5703_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5703 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5704_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5704 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5708_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5708 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5709_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5709 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5711_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5711 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5712_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5712 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5713_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5713 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5714_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5714 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5716_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5716 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5717_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5717 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5718_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5718 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5720_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5720 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5721_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5721 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5722_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5722 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5723_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5723 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5725_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5725 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5726_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5726 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5727_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5727 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5728_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5728 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5729_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5729 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5730_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5730 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5732_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5732 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5734_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5734 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5735_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5735 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5736_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5736 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5739_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5739 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5740_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5740 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5741_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5741 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5743_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5743 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5744_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5744 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5745_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5745 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5746_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5746 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5748_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5748 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5749_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5749 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5751_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5751 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5752_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5752 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5753_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5753 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5757_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5757 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5758_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5758 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5760_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5760 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5761_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5761 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5762_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5762 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5763_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5763 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5765_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5765 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5766_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5766 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5767_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5767 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5769_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5769 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5770_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5770 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5771_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5771 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5772_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5772 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5774_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5774 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5775_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5775 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5776_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5776 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5777_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5777 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5778_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5778 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5779_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5779 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5781_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5781 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5783_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5783 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5784_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5784 smInitEnv pmInitEnv initGoals
@@ -18364,308 +20505,17 @@ def intermediateGoal_5784_stmt : Prop :=
 def intermediateGoal_5785_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5785 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5788_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5788 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5789_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5789 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5790_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5790 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5792_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5792 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5793_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5793 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5794_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5794 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5795_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5795 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5797_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5797 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5798_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5798 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5800_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5800 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5801_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5801 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5802_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5802 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5806_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5806 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5807_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5807 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5809_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5809 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5810_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5810 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5811_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5811 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5812_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5812 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5814_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5814 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5815_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5815 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5816_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5816 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5818_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5818 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5819_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5819 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5820_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5820 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5821_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5821 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5823_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5823 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5824_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5824 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5825_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5825 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5826_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5826 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5827_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5827 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5828_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5828 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5830_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5830 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5832_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5832 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5833_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5833 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5834_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5834 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_5837_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5837 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5838_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5838 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5839_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5839 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5841_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5841 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5842_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5842 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5843_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5843 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5844_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5844 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5846_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5846 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5847_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5847 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5849_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5849 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5850_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5850 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5851_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5851 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5855_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5855 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5856_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5856 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5858_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5858 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5859_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5859 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5860_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5860 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5861_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5861 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5863_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5863 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5864_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5864 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5865_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5865 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5867_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5867 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5868_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5868 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5869_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5869 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5870_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5870 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5872_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5872 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5873_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5873 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5874_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5874 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5875_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5875 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5876_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5876 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5877_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5877 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5879_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5879 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5881_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5881 smInitEnv pmInitEnv initGoals
-
 def intermediateGoal_5882_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5882 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5883_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5883 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5886_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5886 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5887_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5887 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5888_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5888 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5890_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5890 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5891_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5891 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5892_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5892 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5893_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5893 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5895_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5895 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5896_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5896 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5898_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5898 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5899_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5899 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5900_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5900 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5904_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5904 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5905_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5905 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5907_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5907 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5908_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5908 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5909_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5909 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5910_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5910 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5912_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5912 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5913_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5913 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5914_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5914 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5916_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5916 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5917_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5917 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5918_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5918 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5919_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5919 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5921_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5921 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5922_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5922 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5923_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5923 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5924_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5924 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5925_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5925 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_5926_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_5926 smInitEnv pmInitEnv initGoals
 
 def intermediateGoal_5928_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_5928 smInitEnv pmInitEnv initGoals
@@ -19189,341 +21039,11 @@ def intermediateGoal_8131_stmt : Prop :=
 def intermediateGoal_8135_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm intermediateGoal_8135 smInitEnv pmInitEnv initGoals
 
-def intermediateGoal_8139_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8139 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8143_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8143 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8147_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8147 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8151_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8151 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8158_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8158 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8162_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8162 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8166_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8166 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8170_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8170 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8174_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8174 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8178_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8178 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8182_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8182 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8186_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8186 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8190_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8190 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8197_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8197 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8201_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8201 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8205_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8205 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8209_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8209 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8213_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8213 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8217_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8217 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8221_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8221 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8225_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8225 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8229_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8229 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8236_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8236 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8240_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8240 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8244_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8244 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8248_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8248 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8252_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8252 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8256_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8256 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8260_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8260 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8264_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8264 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8268_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8268 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8275_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8275 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8279_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8279 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8283_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8283 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8287_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8287 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8291_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8291 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8295_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8295 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8299_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8299 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8303_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8303 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8307_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8307 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8314_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8314 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8318_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8318 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8322_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8322 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8326_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8326 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8330_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8330 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8334_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8334 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8338_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8338 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8342_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8342 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8346_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8346 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8353_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8353 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8357_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8357 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8361_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8361 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8365_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8365 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8369_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8369 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8373_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8373 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8377_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8377 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8381_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8381 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8385_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8385 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8392_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8392 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8396_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8396 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8400_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8400 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8404_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8404 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8408_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8408 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8412_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8412 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8416_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8416 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8420_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8420 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8424_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8424 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8431_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8431 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8435_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8435 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8439_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8439 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8443_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8443 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8447_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8447 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8451_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8451 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8455_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8455 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8459_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8459 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8463_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8463 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8470_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8470 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8474_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8474 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8478_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8478 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8482_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8482 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8486_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8486 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8490_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8490 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8494_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8494 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8498_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8498 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8502_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8502 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8509_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8509 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8513_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8513 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8517_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8517 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8521_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8521 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8525_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8525 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8529_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8529 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8533_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8533 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8537_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8537 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8541_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8541 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8548_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8548 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8552_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8552 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8556_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8556 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8560_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8560 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8564_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8564 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8568_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8568 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8572_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8572 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8576_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8576 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8580_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8580 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8587_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8587 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8591_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8591 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8595_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8595 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8599_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8599 smInitEnv pmInitEnv initGoals
-
-def intermediateGoal_8603_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm intermediateGoal_8603 smInitEnv pmInitEnv initGoals
-
 def goal_1_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm goal_1 smInitEnv pmInitEnv initGoals
 
 def goal_2_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm goal_2 smInitEnv pmInitEnv initGoals
-
-def goal_3_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm goal_3 smInitEnv pmInitEnv initGoals
-
-def goal_4_stmt : Prop :=
-  CoarseLineageHoldsWithInit sm pm goal_4 smInitEnv pmInitEnv initGoals
 
 def goal_5_stmt : Prop :=
   CoarseLineageHoldsWithInit sm pm goal_5 smInitEnv pmInitEnv initGoals
@@ -19550,6 +21070,17 @@ to show no node outputs that tid.
 - goal_1 (tid=4673) depends on goals: [5]
 - goal_2 (tid=4674) depends on goals: [5]
 -/
+
+-- NOTE: 480 prereq(s) omitted (zigzag-owned, no goal emitted): intermediateGoal_5338, intermediateGoal_5340, intermediateGoal_5342, intermediateGoal_5347, intermediateGoal_5348, intermediateGoal_5349, intermediateGoal_5351, intermediateGoal_5352 …
+--   The goal below is therefore STRONGER than generated (fewer hypotheses).
+-- NOTE: 505 prereq(s) omitted (zigzag-owned, no goal emitted): intermediateGoal_5338, intermediateGoal_5340, intermediateGoal_5342, intermediateGoal_5347, intermediateGoal_5348, intermediateGoal_5349, intermediateGoal_5351, intermediateGoal_5352 …
+--   The goal below is therefore STRONGER than generated (fewer hypotheses).
+-- NOTE: 479 prereq(s) omitted (zigzag-owned, no goal emitted): intermediateGoal_5338, intermediateGoal_5340, intermediateGoal_5342, intermediateGoal_5347, intermediateGoal_5348, intermediateGoal_5349, intermediateGoal_5351, intermediateGoal_5352 …
+--   The goal below is therefore STRONGER than generated (fewer hypotheses).
+-- Zigzag-layout lineage goals: the TRUE statement for the CP tensors that
+-- cannot be stated as ordinary gathers. Discharged against `Zigzag2Rel`
+-- (see denote/yoco_goals/ZigzagLineageGoal.lean).
+def zigzagGoals : List TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal := [intermediateGoal_5338_zigzag, intermediateGoal_5340_zigzag, intermediateGoal_5342_zigzag, intermediateGoal_5347_zigzag, intermediateGoal_5348_zigzag, intermediateGoal_5349_zigzag, intermediateGoal_5351_zigzag, intermediateGoal_5352_zigzag, intermediateGoal_5353_zigzag, intermediateGoal_5354_zigzag, intermediateGoal_5356_zigzag, intermediateGoal_5357_zigzag, intermediateGoal_5359_zigzag, intermediateGoal_5360_zigzag, intermediateGoal_5361_zigzag, intermediateGoal_5365_zigzag, intermediateGoal_5366_zigzag, intermediateGoal_5368_zigzag, intermediateGoal_5369_zigzag, intermediateGoal_5370_zigzag, intermediateGoal_5371_zigzag, intermediateGoal_5373_zigzag, intermediateGoal_5374_zigzag, intermediateGoal_5375_zigzag, intermediateGoal_5377_zigzag, intermediateGoal_5378_zigzag, intermediateGoal_5379_zigzag, intermediateGoal_5380_zigzag, intermediateGoal_5382_zigzag, intermediateGoal_5383_zigzag, intermediateGoal_5384_zigzag, intermediateGoal_5385_zigzag, intermediateGoal_5386_zigzag, intermediateGoal_5387_zigzag, intermediateGoal_5389_zigzag, intermediateGoal_5391_zigzag, intermediateGoal_5396_zigzag, intermediateGoal_5397_zigzag, intermediateGoal_5398_zigzag, intermediateGoal_5400_zigzag, intermediateGoal_5401_zigzag, intermediateGoal_5402_zigzag, intermediateGoal_5403_zigzag, intermediateGoal_5405_zigzag, intermediateGoal_5406_zigzag, intermediateGoal_5408_zigzag, intermediateGoal_5409_zigzag, intermediateGoal_5410_zigzag, intermediateGoal_5414_zigzag, intermediateGoal_5415_zigzag, intermediateGoal_5417_zigzag, intermediateGoal_5418_zigzag, intermediateGoal_5419_zigzag, intermediateGoal_5420_zigzag, intermediateGoal_5422_zigzag, intermediateGoal_5423_zigzag, intermediateGoal_5424_zigzag, intermediateGoal_5426_zigzag, intermediateGoal_5427_zigzag, intermediateGoal_5428_zigzag, intermediateGoal_5429_zigzag, intermediateGoal_5431_zigzag, intermediateGoal_5432_zigzag, intermediateGoal_5433_zigzag, intermediateGoal_5434_zigzag, intermediateGoal_5435_zigzag, intermediateGoal_5436_zigzag, intermediateGoal_5438_zigzag, intermediateGoal_5440_zigzag, intermediateGoal_5445_zigzag, intermediateGoal_5446_zigzag, intermediateGoal_5447_zigzag, intermediateGoal_5449_zigzag, intermediateGoal_5450_zigzag, intermediateGoal_5451_zigzag, intermediateGoal_5452_zigzag, intermediateGoal_5454_zigzag, intermediateGoal_5455_zigzag, intermediateGoal_5457_zigzag, intermediateGoal_5458_zigzag, intermediateGoal_5459_zigzag, intermediateGoal_5463_zigzag, intermediateGoal_5464_zigzag, intermediateGoal_5466_zigzag, intermediateGoal_5467_zigzag, intermediateGoal_5468_zigzag, intermediateGoal_5469_zigzag, intermediateGoal_5471_zigzag, intermediateGoal_5472_zigzag, intermediateGoal_5473_zigzag, intermediateGoal_5475_zigzag, intermediateGoal_5476_zigzag, intermediateGoal_5477_zigzag, intermediateGoal_5478_zigzag, intermediateGoal_5480_zigzag, intermediateGoal_5481_zigzag, intermediateGoal_5482_zigzag, intermediateGoal_5483_zigzag, intermediateGoal_5484_zigzag, intermediateGoal_5485_zigzag, intermediateGoal_5487_zigzag, intermediateGoal_5489_zigzag, intermediateGoal_5494_zigzag, intermediateGoal_5495_zigzag, intermediateGoal_5496_zigzag, intermediateGoal_5498_zigzag, intermediateGoal_5499_zigzag, intermediateGoal_5500_zigzag, intermediateGoal_5501_zigzag, intermediateGoal_5503_zigzag, intermediateGoal_5504_zigzag, intermediateGoal_5506_zigzag, intermediateGoal_5507_zigzag, intermediateGoal_5508_zigzag, intermediateGoal_5512_zigzag, intermediateGoal_5513_zigzag, intermediateGoal_5515_zigzag, intermediateGoal_5516_zigzag, intermediateGoal_5517_zigzag, intermediateGoal_5518_zigzag, intermediateGoal_5520_zigzag, intermediateGoal_5521_zigzag, intermediateGoal_5522_zigzag, intermediateGoal_5524_zigzag, intermediateGoal_5525_zigzag, intermediateGoal_5526_zigzag, intermediateGoal_5527_zigzag, intermediateGoal_5529_zigzag, intermediateGoal_5530_zigzag, intermediateGoal_5531_zigzag, intermediateGoal_5532_zigzag, intermediateGoal_5533_zigzag, intermediateGoal_5534_zigzag, intermediateGoal_5536_zigzag, intermediateGoal_5538_zigzag, intermediateGoal_5543_zigzag, intermediateGoal_5544_zigzag, intermediateGoal_5545_zigzag, intermediateGoal_5547_zigzag, intermediateGoal_5548_zigzag, intermediateGoal_5549_zigzag, intermediateGoal_5550_zigzag, intermediateGoal_5552_zigzag, intermediateGoal_5553_zigzag, intermediateGoal_5555_zigzag, intermediateGoal_5556_zigzag, intermediateGoal_5557_zigzag, intermediateGoal_5561_zigzag, intermediateGoal_5562_zigzag, intermediateGoal_5564_zigzag, intermediateGoal_5565_zigzag, intermediateGoal_5566_zigzag, intermediateGoal_5567_zigzag, intermediateGoal_5569_zigzag, intermediateGoal_5570_zigzag, intermediateGoal_5571_zigzag, intermediateGoal_5573_zigzag, intermediateGoal_5574_zigzag, intermediateGoal_5575_zigzag, intermediateGoal_5576_zigzag, intermediateGoal_5578_zigzag, intermediateGoal_5579_zigzag, intermediateGoal_5580_zigzag, intermediateGoal_5581_zigzag, intermediateGoal_5582_zigzag, intermediateGoal_5583_zigzag, intermediateGoal_5585_zigzag, intermediateGoal_5587_zigzag, intermediateGoal_5592_zigzag, intermediateGoal_5593_zigzag, intermediateGoal_5594_zigzag, intermediateGoal_5596_zigzag, intermediateGoal_5597_zigzag, intermediateGoal_5598_zigzag, intermediateGoal_5599_zigzag, intermediateGoal_5601_zigzag, intermediateGoal_5602_zigzag, intermediateGoal_5604_zigzag, intermediateGoal_5605_zigzag, intermediateGoal_5606_zigzag, intermediateGoal_5610_zigzag, intermediateGoal_5611_zigzag, intermediateGoal_5613_zigzag, intermediateGoal_5614_zigzag, intermediateGoal_5615_zigzag, intermediateGoal_5616_zigzag, intermediateGoal_5618_zigzag, intermediateGoal_5619_zigzag, intermediateGoal_5620_zigzag, intermediateGoal_5622_zigzag, intermediateGoal_5623_zigzag, intermediateGoal_5624_zigzag, intermediateGoal_5625_zigzag, intermediateGoal_5627_zigzag, intermediateGoal_5628_zigzag, intermediateGoal_5629_zigzag, intermediateGoal_5630_zigzag, intermediateGoal_5631_zigzag, intermediateGoal_5632_zigzag, intermediateGoal_5634_zigzag, intermediateGoal_5636_zigzag, intermediateGoal_5641_zigzag, intermediateGoal_5642_zigzag, intermediateGoal_5643_zigzag, intermediateGoal_5645_zigzag, intermediateGoal_5646_zigzag, intermediateGoal_5647_zigzag, intermediateGoal_5648_zigzag, intermediateGoal_5650_zigzag, intermediateGoal_5651_zigzag, intermediateGoal_5653_zigzag, intermediateGoal_5654_zigzag, intermediateGoal_5655_zigzag, intermediateGoal_5659_zigzag, intermediateGoal_5660_zigzag, intermediateGoal_5662_zigzag, intermediateGoal_5663_zigzag, intermediateGoal_5664_zigzag, intermediateGoal_5665_zigzag, intermediateGoal_5667_zigzag, intermediateGoal_5668_zigzag, intermediateGoal_5669_zigzag, intermediateGoal_5671_zigzag, intermediateGoal_5672_zigzag, intermediateGoal_5673_zigzag, intermediateGoal_5674_zigzag, intermediateGoal_5676_zigzag, intermediateGoal_5677_zigzag, intermediateGoal_5678_zigzag, intermediateGoal_5679_zigzag, intermediateGoal_5680_zigzag, intermediateGoal_5681_zigzag, intermediateGoal_5683_zigzag, intermediateGoal_5685_zigzag, intermediateGoal_5690_zigzag, intermediateGoal_5691_zigzag, intermediateGoal_5692_zigzag, intermediateGoal_5694_zigzag, intermediateGoal_5695_zigzag, intermediateGoal_5696_zigzag, intermediateGoal_5697_zigzag, intermediateGoal_5699_zigzag, intermediateGoal_5700_zigzag, intermediateGoal_5702_zigzag, intermediateGoal_5703_zigzag, intermediateGoal_5704_zigzag, intermediateGoal_5708_zigzag, intermediateGoal_5709_zigzag, intermediateGoal_5711_zigzag, intermediateGoal_5712_zigzag, intermediateGoal_5713_zigzag, intermediateGoal_5714_zigzag, intermediateGoal_5716_zigzag, intermediateGoal_5717_zigzag, intermediateGoal_5718_zigzag, intermediateGoal_5720_zigzag, intermediateGoal_5721_zigzag, intermediateGoal_5722_zigzag, intermediateGoal_5723_zigzag, intermediateGoal_5725_zigzag, intermediateGoal_5726_zigzag, intermediateGoal_5727_zigzag, intermediateGoal_5728_zigzag, intermediateGoal_5729_zigzag, intermediateGoal_5730_zigzag, intermediateGoal_5732_zigzag, intermediateGoal_5734_zigzag, intermediateGoal_5739_zigzag, intermediateGoal_5740_zigzag, intermediateGoal_5741_zigzag, intermediateGoal_5743_zigzag, intermediateGoal_5744_zigzag, intermediateGoal_5745_zigzag, intermediateGoal_5746_zigzag, intermediateGoal_5748_zigzag, intermediateGoal_5749_zigzag, intermediateGoal_5751_zigzag, intermediateGoal_5752_zigzag, intermediateGoal_5753_zigzag, intermediateGoal_5757_zigzag, intermediateGoal_5758_zigzag, intermediateGoal_5760_zigzag, intermediateGoal_5761_zigzag, intermediateGoal_5762_zigzag, intermediateGoal_5763_zigzag, intermediateGoal_5765_zigzag, intermediateGoal_5766_zigzag, intermediateGoal_5767_zigzag, intermediateGoal_5769_zigzag, intermediateGoal_5770_zigzag, intermediateGoal_5771_zigzag, intermediateGoal_5772_zigzag, intermediateGoal_5774_zigzag, intermediateGoal_5775_zigzag, intermediateGoal_5776_zigzag, intermediateGoal_5777_zigzag, intermediateGoal_5778_zigzag, intermediateGoal_5779_zigzag, intermediateGoal_5781_zigzag, intermediateGoal_5783_zigzag, intermediateGoal_5788_zigzag, intermediateGoal_5789_zigzag, intermediateGoal_5790_zigzag, intermediateGoal_5792_zigzag, intermediateGoal_5793_zigzag, intermediateGoal_5794_zigzag, intermediateGoal_5795_zigzag, intermediateGoal_5797_zigzag, intermediateGoal_5798_zigzag, intermediateGoal_5800_zigzag, intermediateGoal_5801_zigzag, intermediateGoal_5802_zigzag, intermediateGoal_5806_zigzag, intermediateGoal_5807_zigzag, intermediateGoal_5809_zigzag, intermediateGoal_5810_zigzag, intermediateGoal_5811_zigzag, intermediateGoal_5812_zigzag, intermediateGoal_5814_zigzag, intermediateGoal_5815_zigzag, intermediateGoal_5816_zigzag, intermediateGoal_5818_zigzag, intermediateGoal_5819_zigzag, intermediateGoal_5820_zigzag, intermediateGoal_5821_zigzag, intermediateGoal_5823_zigzag, intermediateGoal_5824_zigzag, intermediateGoal_5825_zigzag, intermediateGoal_5826_zigzag, intermediateGoal_5827_zigzag, intermediateGoal_5828_zigzag, intermediateGoal_5830_zigzag, intermediateGoal_5832_zigzag, intermediateGoal_5837_zigzag, intermediateGoal_5838_zigzag, intermediateGoal_5839_zigzag, intermediateGoal_5841_zigzag, intermediateGoal_5842_zigzag, intermediateGoal_5843_zigzag, intermediateGoal_5844_zigzag, intermediateGoal_5846_zigzag, intermediateGoal_5847_zigzag, intermediateGoal_5849_zigzag, intermediateGoal_5850_zigzag, intermediateGoal_5851_zigzag, intermediateGoal_5855_zigzag, intermediateGoal_5856_zigzag, intermediateGoal_5858_zigzag, intermediateGoal_5859_zigzag, intermediateGoal_5860_zigzag, intermediateGoal_5861_zigzag, intermediateGoal_5863_zigzag, intermediateGoal_5864_zigzag, intermediateGoal_5865_zigzag, intermediateGoal_5867_zigzag, intermediateGoal_5868_zigzag, intermediateGoal_5869_zigzag, intermediateGoal_5870_zigzag, intermediateGoal_5872_zigzag, intermediateGoal_5873_zigzag, intermediateGoal_5874_zigzag, intermediateGoal_5875_zigzag, intermediateGoal_5876_zigzag, intermediateGoal_5877_zigzag, intermediateGoal_5879_zigzag, intermediateGoal_5881_zigzag, intermediateGoal_5886_zigzag, intermediateGoal_5887_zigzag, intermediateGoal_5888_zigzag, intermediateGoal_5890_zigzag, intermediateGoal_5891_zigzag, intermediateGoal_5892_zigzag, intermediateGoal_5893_zigzag, intermediateGoal_5895_zigzag, intermediateGoal_5896_zigzag, intermediateGoal_5898_zigzag, intermediateGoal_5899_zigzag, intermediateGoal_5900_zigzag, intermediateGoal_5904_zigzag, intermediateGoal_5905_zigzag, intermediateGoal_5907_zigzag, intermediateGoal_5908_zigzag, intermediateGoal_5909_zigzag, intermediateGoal_5910_zigzag, intermediateGoal_5912_zigzag, intermediateGoal_5913_zigzag, intermediateGoal_5914_zigzag, intermediateGoal_5916_zigzag, intermediateGoal_5917_zigzag, intermediateGoal_5918_zigzag, intermediateGoal_5919_zigzag, intermediateGoal_5921_zigzag, intermediateGoal_5922_zigzag, intermediateGoal_5923_zigzag, intermediateGoal_5924_zigzag, intermediateGoal_5925_zigzag, intermediateGoal_5926_zigzag, intermediateGoal_8139_zigzag, intermediateGoal_8143_zigzag, intermediateGoal_8147_zigzag, intermediateGoal_8151_zigzag, intermediateGoal_8158_zigzag, intermediateGoal_8162_zigzag, intermediateGoal_8166_zigzag, intermediateGoal_8170_zigzag, intermediateGoal_8174_zigzag, intermediateGoal_8178_zigzag, intermediateGoal_8182_zigzag, intermediateGoal_8186_zigzag, intermediateGoal_8190_zigzag, intermediateGoal_8197_zigzag, intermediateGoal_8201_zigzag, intermediateGoal_8205_zigzag, intermediateGoal_8209_zigzag, intermediateGoal_8213_zigzag, intermediateGoal_8217_zigzag, intermediateGoal_8221_zigzag, intermediateGoal_8225_zigzag, intermediateGoal_8229_zigzag, intermediateGoal_8236_zigzag, intermediateGoal_8240_zigzag, intermediateGoal_8244_zigzag, intermediateGoal_8248_zigzag, intermediateGoal_8252_zigzag, intermediateGoal_8256_zigzag, intermediateGoal_8260_zigzag, intermediateGoal_8264_zigzag, intermediateGoal_8268_zigzag, intermediateGoal_8275_zigzag, intermediateGoal_8279_zigzag, intermediateGoal_8283_zigzag, intermediateGoal_8287_zigzag, intermediateGoal_8291_zigzag, intermediateGoal_8295_zigzag, intermediateGoal_8299_zigzag, intermediateGoal_8303_zigzag, intermediateGoal_8307_zigzag, intermediateGoal_8314_zigzag, intermediateGoal_8318_zigzag, intermediateGoal_8322_zigzag, intermediateGoal_8326_zigzag, intermediateGoal_8330_zigzag, intermediateGoal_8334_zigzag, intermediateGoal_8338_zigzag, intermediateGoal_8342_zigzag, intermediateGoal_8346_zigzag, intermediateGoal_8353_zigzag, intermediateGoal_8357_zigzag, intermediateGoal_8361_zigzag, intermediateGoal_8365_zigzag, intermediateGoal_8369_zigzag, intermediateGoal_8373_zigzag, intermediateGoal_8377_zigzag, intermediateGoal_8381_zigzag, intermediateGoal_8385_zigzag, intermediateGoal_8392_zigzag, intermediateGoal_8396_zigzag, intermediateGoal_8400_zigzag, intermediateGoal_8404_zigzag, intermediateGoal_8408_zigzag, intermediateGoal_8412_zigzag, intermediateGoal_8416_zigzag, intermediateGoal_8420_zigzag, intermediateGoal_8424_zigzag, intermediateGoal_8431_zigzag, intermediateGoal_8435_zigzag, intermediateGoal_8439_zigzag, intermediateGoal_8443_zigzag, intermediateGoal_8447_zigzag, intermediateGoal_8451_zigzag, intermediateGoal_8455_zigzag, intermediateGoal_8459_zigzag, intermediateGoal_8463_zigzag, intermediateGoal_8470_zigzag, intermediateGoal_8474_zigzag, intermediateGoal_8478_zigzag, intermediateGoal_8482_zigzag, intermediateGoal_8486_zigzag, intermediateGoal_8490_zigzag, intermediateGoal_8494_zigzag, intermediateGoal_8498_zigzag, intermediateGoal_8502_zigzag, intermediateGoal_8509_zigzag, intermediateGoal_8513_zigzag, intermediateGoal_8517_zigzag, intermediateGoal_8521_zigzag, intermediateGoal_8525_zigzag, intermediateGoal_8529_zigzag, intermediateGoal_8533_zigzag, intermediateGoal_8537_zigzag, intermediateGoal_8541_zigzag, intermediateGoal_8548_zigzag, intermediateGoal_8552_zigzag, intermediateGoal_8556_zigzag, intermediateGoal_8560_zigzag, intermediateGoal_8564_zigzag, intermediateGoal_8568_zigzag, intermediateGoal_8572_zigzag, intermediateGoal_8576_zigzag, intermediateGoal_8580_zigzag, intermediateGoal_8587_zigzag, intermediateGoal_8591_zigzag, intermediateGoal_8595_zigzag, intermediateGoal_8599_zigzag, intermediateGoal_8603_zigzag]
 
 end TrainVerify.Denote.Generated
 
