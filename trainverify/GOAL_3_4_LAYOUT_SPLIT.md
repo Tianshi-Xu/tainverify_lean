@@ -120,6 +120,64 @@ Compensation was ruled out by reading `emit_ring` (computes `process_group`
 only, no reordering), `shuffle_varlen` (genuinely permutes), and `RVDLayout`
 (no permutation concept).
 
+## Blast radius: exactly two nodes, and cp really is > 1
+
+Both open questions from the first pass are now closed.
+
+**The shuffle genuinely fires on this graph.** `gen_args.json` records
+`pm: {plan_ngpus: 2, runtime_ngpus: 2, tp: 2}`, and `dp_sharded` defaults to
+`False` (`llm/arch/config.py:57`), so `enable_ring = not dp_sharded = True`.
+
+`wrap_maybe_shuffle` still early-returns unless `len(process_group) > 1`, and
+`process_group` is chosen by `emit_ring` from the input's partitioning:
+
+```python
+partition_dims = [(i, f // s) for i, (s, f) in
+                  enumerate(zip(sub_input.shape, full_input.shape)) if s != f]
+if partition_dims[0][0] == 0:
+    num = partition_dims[0][1]
+    ...  process_group = <num devices>
+elif partition_dims[0][0] == 1:
+    process_group = None     # <- no shuffle
+```
+
+The shuffle input is sharded on dim 0:
+
+```
+PM 13257 / 13258: [2048, 1024]      SM 8011: [4096, 1024]
+partition_dims = [(0, 2)]  ->  dim-0 branch, num = 2
+```
+
+So `process_group` has 2 devices, `shuffle_varlen` really runs, and cpSize = 2.
+This also confirms the emitter's `cpSize = num_parts` assumption is correct
+*here* — but note it is an assumption: `emit_ring` would pick
+`process_group=None` for a dim-1 partitioned input, where `num_parts` would
+still be 2. On a model that partitions the shuffle input on dim 1, the emitted
+`params` would overstate cpSize.
+
+**Only two collectives consume zigzag data.** Enumerating every cross-rank node
+in the PM graph and testing each input for zigzag ownership:
+
+```
+node   26 AllReducePrim  ins=[7391, 7392]   -> 4680
+node   55 AllGatherPrim  ins=[7445, 7446]   -> 4698
+node  108 AllGatherPrim  ins=[7491, 7492]   -> 4714
+node  111 AllGatherPrim  ins=[7545, 7546]   -> 4729
+node  150 AllGatherPrim  ins=[7631, 7632]   -> 4752
+node 1004 AllGatherPrim  ins=[14597, 14599] -> 11917
+node 1897 AllGatherPrim  ins=[11729, 11730] -> 4675   <-- ZIGZAG
+node 1898 AllGatherPrim  ins=[11781, 11782] -> 4676   <-- ZIGZAG
+node 1918 AllGatherPrim  ins=[11837, 11838] -> 4673
+node 1919 AllGatherPrim  ins=[11839, 11840] -> 4674
+```
+
+Exactly `goal_3` and `goal_4`. Node 1004 sits right after the shuffle but is
+fed by the *other* branch of a `FW_multiref` (`9625 -> [14597, 13257]`), i.e.
+the pre-shuffle value, so it is unaffected. Nodes 1918/1919 are the loss heads,
+downstream of the unshuffle.
+
+The impact on this model is therefore fully bounded: two goals, no more.
+
 ## What TrainVerify does now
 
 `Verdict/graph_to_lean.py` suppresses goals whose PM tensors are zigzag-owned,

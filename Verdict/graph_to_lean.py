@@ -799,6 +799,26 @@ def _get_node_params(G: Any, n: Any, num_parts: int = 0) -> Optional[List[int]]:
 	elif "FW_maybe_shuffle" in op or "BW_maybe_shuffle" in op \
 		or "FW_maybe_unshuffle" in op or "BW_maybe_unshuffle" in op:
 		# params: [cpSize, cpRank]. cpSize = num_parts (CP world size at this rank).
+		#
+		# CAVEAT (audited 2026-07-28): this equates cpSize with the graph's rank
+		# count, which is an assumption, not a fact read off the node. nnScaler
+		# picks the real process group in `emit_ring`
+		# (`nnscaler/customized_ops/ring_attention/maybe_shuffle.py`) from how the
+		# INPUT is partitioned:
+		#
+		#     partition_dims[0][0] == 0 -> process_group = <num devices>  (shuffles)
+		#     partition_dims[0][0] == 1 -> process_group = None           (identity)
+		#     no partition_dims         -> process_group = None           (identity)
+		#
+		# On YOCO-MoE the shuffle input is dim-0 sharded ([2048,1024] of
+		# [4096,1024]), so num_parts == real cpSize == 2 and this is correct. On a
+		# model that partitions the shuffle input on dim 1 — or not at all — the
+		# op is the identity while `num_parts` is still > 1, and these params
+		# would overstate cpSize, making the zigzag gate fire spuriously.
+		#
+		# Fixing that properly means deriving cpSize from the input/full shape
+		# ratio on dim 0 the way `emit_ring` does, which needs the parent-tensor
+		# shape the graph backend does not currently expose here.
 		cp_size = max(num_parts, 1)
 		cp_rank = _node_rank(n) % cp_size
 		return [cp_size, cp_rank]
