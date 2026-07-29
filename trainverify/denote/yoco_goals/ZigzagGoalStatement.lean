@@ -16,7 +16,7 @@ shards are in NNScaler's zigzag layout — under cp=2 rank 0 owns global positio
 
 The shard *shapes* are identical either way, which is why shape-based layout
 inference in the goal emitter could not distinguish them.
-`ZigzagGoalRefutation.gatheredZigzag_ne_full` machine-checks the disagreement on
+`trainverify/GOAL_3_4_LAYOUT_SPLIT.md` records the audited root cause, traced on
 a concrete cp=2 fixture.
 
 This module carries only the goal **structure** and its `Prop`, deliberately kept

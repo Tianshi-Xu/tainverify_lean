@@ -35,7 +35,7 @@ namespace TrainVerify.Denote.GeneratedPatterns
 
 These 12 tids are CP zigzag-owned, so `Verdict/graph_to_lean.py` no longer emits
 an `intermediateGoal_N` for them: on the FAITHFUL full graph an ordinary gather
-over their shards is false (`ZigzagGoalRefutation.gatheredZigzag_ne_full`), and
+over their shards is false (see trainverify/GOAL_3_4_LAYOUT_SPLIT.md), and
 the true obligation is the emitted `intermediateGoal_N_zigzag`
 (`ZigzagLineageGoal`, discharged against `Zigzag2Rel`).
 

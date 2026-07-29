@@ -1366,7 +1366,7 @@ theorem allGather0_chunk0_id_4096_64 (x : Tensor) (hx : x.shape = [4096, 64]) :
 /-- The 12 layer-12..23 routing members are CP zigzag-owned, so
 `intermediateGoal_N` is no longer emitted for them: an ordinary dim-0 gather over
 their shards is false on the full graph
-(`ZigzagGoalRefutation.gatheredZigzag_ne_full`).
+(see trainverify/GOAL_3_4_LAYOUT_SPLIT.md).
 
 This hypothesis states that ordinary-gather relation for the tids Pattern_4 needs.
 It is **not** provable on the full graph and must not be discharged there. It IS
@@ -1632,84 +1632,84 @@ theorem prove_goal_4
     have h9729_pm : (initPM 9729).shape = [2048, 64] := hPM 9729 [2048, 64] (by native_decide)
     -- tid 5359 is CP zigzag-owned; `intermediateGoal_5359` is no longer emitted
     -- because an ordinary gather over its shards is FALSE (see
-    -- ZigzagGoalRefutation.gatheredZigzag_ne_full). Taken as an explicit
+    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
     -- hypothesis so the dependency is visible rather than silently derived.
     have hb_5359 : initSM 5359 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 9729, initPM 9730] :=
       hZigzagGather 5359 9729 9730 (by decide)
     have h9901_pm : (initPM 9901).shape = [2048, 64] := hPM 9901 [2048, 64] (by native_decide)
     -- tid 5408 is CP zigzag-owned; `intermediateGoal_5408` is no longer emitted
     -- because an ordinary gather over its shards is FALSE (see
-    -- ZigzagGoalRefutation.gatheredZigzag_ne_full). Taken as an explicit
+    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
     -- hypothesis so the dependency is visible rather than silently derived.
     have hb_5408 : initSM 5408 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 9901, initPM 9902] :=
       hZigzagGather 5408 9901 9902 (by decide)
     have h10073_pm : (initPM 10073).shape = [2048, 64] := hPM 10073 [2048, 64] (by native_decide)
     -- tid 5457 is CP zigzag-owned; `intermediateGoal_5457` is no longer emitted
     -- because an ordinary gather over its shards is FALSE (see
-    -- ZigzagGoalRefutation.gatheredZigzag_ne_full). Taken as an explicit
+    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
     -- hypothesis so the dependency is visible rather than silently derived.
     have hb_5457 : initSM 5457 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10073, initPM 10074] :=
       hZigzagGather 5457 10073 10074 (by decide)
     have h10245_pm : (initPM 10245).shape = [2048, 64] := hPM 10245 [2048, 64] (by native_decide)
     -- tid 5506 is CP zigzag-owned; `intermediateGoal_5506` is no longer emitted
     -- because an ordinary gather over its shards is FALSE (see
-    -- ZigzagGoalRefutation.gatheredZigzag_ne_full). Taken as an explicit
+    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
     -- hypothesis so the dependency is visible rather than silently derived.
     have hb_5506 : initSM 5506 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10245, initPM 10246] :=
       hZigzagGather 5506 10245 10246 (by decide)
     have h10417_pm : (initPM 10417).shape = [2048, 64] := hPM 10417 [2048, 64] (by native_decide)
     -- tid 5555 is CP zigzag-owned; `intermediateGoal_5555` is no longer emitted
     -- because an ordinary gather over its shards is FALSE (see
-    -- ZigzagGoalRefutation.gatheredZigzag_ne_full). Taken as an explicit
+    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
     -- hypothesis so the dependency is visible rather than silently derived.
     have hb_5555 : initSM 5555 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10417, initPM 10418] :=
       hZigzagGather 5555 10417 10418 (by decide)
     have h10589_pm : (initPM 10589).shape = [2048, 64] := hPM 10589 [2048, 64] (by native_decide)
     -- tid 5604 is CP zigzag-owned; `intermediateGoal_5604` is no longer emitted
     -- because an ordinary gather over its shards is FALSE (see
-    -- ZigzagGoalRefutation.gatheredZigzag_ne_full). Taken as an explicit
+    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
     -- hypothesis so the dependency is visible rather than silently derived.
     have hb_5604 : initSM 5604 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10589, initPM 10590] :=
       hZigzagGather 5604 10589 10590 (by decide)
     have h10761_pm : (initPM 10761).shape = [2048, 64] := hPM 10761 [2048, 64] (by native_decide)
     -- tid 5653 is CP zigzag-owned; `intermediateGoal_5653` is no longer emitted
     -- because an ordinary gather over its shards is FALSE (see
-    -- ZigzagGoalRefutation.gatheredZigzag_ne_full). Taken as an explicit
+    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
     -- hypothesis so the dependency is visible rather than silently derived.
     have hb_5653 : initSM 5653 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10761, initPM 10762] :=
       hZigzagGather 5653 10761 10762 (by decide)
     have h10933_pm : (initPM 10933).shape = [2048, 64] := hPM 10933 [2048, 64] (by native_decide)
     -- tid 5702 is CP zigzag-owned; `intermediateGoal_5702` is no longer emitted
     -- because an ordinary gather over its shards is FALSE (see
-    -- ZigzagGoalRefutation.gatheredZigzag_ne_full). Taken as an explicit
+    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
     -- hypothesis so the dependency is visible rather than silently derived.
     have hb_5702 : initSM 5702 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10933, initPM 10934] :=
       hZigzagGather 5702 10933 10934 (by decide)
     have h11105_pm : (initPM 11105).shape = [2048, 64] := hPM 11105 [2048, 64] (by native_decide)
     -- tid 5751 is CP zigzag-owned; `intermediateGoal_5751` is no longer emitted
     -- because an ordinary gather over its shards is FALSE (see
-    -- ZigzagGoalRefutation.gatheredZigzag_ne_full). Taken as an explicit
+    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
     -- hypothesis so the dependency is visible rather than silently derived.
     have hb_5751 : initSM 5751 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 11105, initPM 11106] :=
       hZigzagGather 5751 11105 11106 (by decide)
     have h11277_pm : (initPM 11277).shape = [2048, 64] := hPM 11277 [2048, 64] (by native_decide)
     -- tid 5800 is CP zigzag-owned; `intermediateGoal_5800` is no longer emitted
     -- because an ordinary gather over its shards is FALSE (see
-    -- ZigzagGoalRefutation.gatheredZigzag_ne_full). Taken as an explicit
+    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
     -- hypothesis so the dependency is visible rather than silently derived.
     have hb_5800 : initSM 5800 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 11277, initPM 11278] :=
       hZigzagGather 5800 11277 11278 (by decide)
     have h11449_pm : (initPM 11449).shape = [2048, 64] := hPM 11449 [2048, 64] (by native_decide)
     -- tid 5849 is CP zigzag-owned; `intermediateGoal_5849` is no longer emitted
     -- because an ordinary gather over its shards is FALSE (see
-    -- ZigzagGoalRefutation.gatheredZigzag_ne_full). Taken as an explicit
+    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
     -- hypothesis so the dependency is visible rather than silently derived.
     have hb_5849 : initSM 5849 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 11449, initPM 11450] :=
       hZigzagGather 5849 11449 11450 (by decide)
     have h11621_pm : (initPM 11621).shape = [2048, 64] := hPM 11621 [2048, 64] (by native_decide)
     -- tid 5898 is CP zigzag-owned; `intermediateGoal_5898` is no longer emitted
     -- because an ordinary gather over its shards is FALSE (see
-    -- ZigzagGoalRefutation.gatheredZigzag_ne_full). Taken as an explicit
+    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
     -- hypothesis so the dependency is visible rather than silently derived.
     have hb_5898 : initSM 5898 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 11621, initPM 11622] :=
       hZigzagGather 5898 11621 11622 (by decide)

@@ -326,23 +326,89 @@ def _node_rank(node: Any) -> int:
 
 # --- CP zigzag ownership ------------------------------------------------------
 #
-# A context-parallel `FW_maybe_shuffle` rearranges which *global* sequence
-# positions a rank owns: under cp=2 rank 0 owns positions [0, 3] rather than the
-# contiguous [0, 1]. `FW_maybe_unshuffle` puts it back.
+# ROOT CAUSE (audited 2026-07-28 against nnScaler source, not inferred):
 #
-# The shard SHAPE is identical either way, so shape-based layout inference
-# (`_infer_gather_dim` / the `replicated` test) cannot see the difference. A
-# lineage goal whose PM shards are zigzag-owned but which is emitted as an
-# ordinary `gatherDim` reconstruction is therefore a FALSE statement, not merely
-# a hard one.
+# nnScaler's partition model is RVD — see `nnscaler/graph/gener/rvd/layout.py`:
 #
-# We recover ownership structurally: a tid is zigzag-owned iff its backward
-# dataflow closure reaches a `FW_maybe_shuffle` output without first being
-# stopped by a `FW_maybe_unshuffle` output. Stopping at unshuffle outputs is what
-# makes this correct for tensors that were shuffled and then restored.
+#     "This class assumes a full-tensor can only be uniformly partitioned /
+#      replicated on dimensions and values."
+#
+# R(eplicate) / V(alue-split) / D(imension-split). There is no representation
+# for a *permuted* sharding, and `IRTensor` carries no layout/permutation field.
+#
+# `wrap_maybe_shuffle` must therefore annotate itself as elementwise identity
+# (`nnscaler/customized_ops/ring_attention/maybe_shuffle.py`):
+#
+#     def maybe_anno(hidden_states, cu_seqlens, *args, **kwargs) -> str:
+#         return "l h, e^ -> l h"
+#
+# but its implementation (`shuffle_varlen` -> `_ShuffleVarlenA2A`, with
+# send_perm / recv_perm permutation tables over all_to_all) genuinely reorders
+# the `l` axis ACROSS ranks: under cp=2 rank 0 ends up owning global positions
+# [0, 1, 6, 7], not the contiguous [0, 1, 2, 3].
+#
+# Because the annotation says "identity", nnScaler treats the post-shuffle
+# tensor as an ordinary D-split and, when it needs the full tensor, inserts a
+# plain `AllGatherPrim`. At runtime that is
+# `nnscaler/runtime/adapter/collectives.py::all_gather`, i.e.
+#
+#     otensor = torch.concat(tuple(tensor_list), dim=dim)
+#
+# a naive rank-order concatenation. Concatenating zigzag shards yields
+# [0, 1, 6, 7, 2, 3, 4, 5], which is NOT the single-machine [0 .. 7].
+#
+# So a lineage goal over such a tensor is FALSE, not merely hard to prove. This
+# is an expressiveness gap in the RVD abstraction, NOT a bug in llm-train (whose
+# model.py uses the API correctly) and NOT an emitter mistake.
+#
+# ---------------------------------------------------------------------------
+# WHY THE TEST IS ON cpSize, NOT ON "does a shuffle appear in the ancestry"
+#
+# Both SM and PM graphs contain `FW_maybe_shuffle` nodes — the op is emitted
+# unconditionally. They differ only in the `params := [cpSize, cpRank]`:
+#
+#     SM node 472 : params := [1, 0]   <- cpSize = 1
+#     PM node 1003: params := [2, 0]   <- cpSize = 2
+#     PM node 1005: params := [2, 1]
+#
+# and `fw_maybe_shuffle_collective` short-circuits at cpSize = 1:
+#
+#     if cpSize = 1 then localTensor else <reorder>
+#
+# An earlier version of this gate tested only for the *presence* of a shuffle in
+# the backward closure. That is wrong: it would flag every tensor in a
+# single-device graph, where the shuffle is the identity and ordinary gather is
+# perfectly correct. Only a shuffle with cpSize > 1 actually permutes anything.
 
 SHUFFLE_OPS = ("FW_maybe_shuffle", "BW_maybe_shuffle")
 UNSHUFFLE_OPS = ("FW_maybe_unshuffle", "BW_maybe_unshuffle")
+
+
+def _reordering_shuffle_outputs(G: Any, num_parts: int) -> Dict[int, int]:
+	"""Outputs of shuffles that genuinely permute, mapped to their cu tid.
+
+	A `maybe_shuffle` node is emitted with `params := [cpSize, cpRank]` where
+	`cpSize = max(num_parts, 1)` (see `_get_node_params`). At cpSize <= 1 the op
+	is the identity — `fw_maybe_shuffle_collective` short-circuits with
+	`if cpSize = 1 then localTensor` — so it does not make its output
+	zigzag-owned and must not count as a reordering.
+
+	`num_parts` must therefore be the graph's real rank count. Passing 1 here
+	would silently classify every shuffle as an identity and disable the gate.
+	"""
+	if max(num_parts, 1) <= 1:
+		# Single-device graph: every shuffle is the identity, nothing is permuted.
+		return {}
+	out: Dict[int, int] = {}
+	for n in G.nodes():
+		op = _safe_str_op(G.node_opname(n))
+		if not any(s in op for s in SHUFFLE_OPS):
+			continue
+		ins = [int(t.tid) for t in G.node_inputs(n)]
+		cu = ins[1] if len(ins) >= 2 else -1
+		for t in G.node_outputs(n):
+			out[int(t.tid)] = cu
+	return out
 
 
 def _collective_output_tids(G: Any, op_substrings: Sequence[str]) -> List[int]:
@@ -356,7 +422,7 @@ def _collective_output_tids(G: Any, op_substrings: Sequence[str]) -> List[int]:
 	return sorted(out)
 
 
-def build_zigzag_owner_predicate(G: Any):
+def build_zigzag_owner_predicate(G: Any, num_parts: int):
 	"""Return `(is_zigzag_owned, zigzag_cu_of)` for a parallel-machine graph.
 
 	`is_zigzag_owned(tid) -> bool` answers whether `tid` is in CP zigzag layout.
@@ -364,22 +430,21 @@ def build_zigzag_owner_predicate(G: Any):
 	tid that pins that layout, which a `ZigzagLineageGoal` must carry explicitly
 	because ownership is not recoverable from shapes.
 
+	`num_parts` is the graph's rank count. It is REQUIRED: a `maybe_shuffle` at
+	cpSize = 1 is the identity, so a single-device graph has no zigzag ownership
+	at all and the predicate must answer False everywhere. See
+	`_reordering_shuffle_outputs`.
+
 	Cached shuffle/unshuffle tid sets are computed once; the per-tid closure is
 	computed lazily and memoised, so calling this for every emitted goal stays
 	affordable on the ~2000-node graphs.
 	"""
-	shuffle_outs = set(_collective_output_tids(G, SHUFFLE_OPS))
-	unshuffle_outs = set(_collective_output_tids(G, UNSHUFFLE_OPS))
 	# shuffle output tid -> the cu_seqlens tid that node read (`ins[1]`, per the
 	# generated `FW_maybe_shuffle` calling convention: [data, cu_seqlens]).
-	shuffle_cu: Dict[int, int] = {}
-	for n in G.nodes():
-		op = _safe_str_op(G.node_opname(n))
-		if any(s in op for s in SHUFFLE_OPS):
-			ins = [int(t.tid) for t in G.node_inputs(n)]
-			if len(ins) >= 2:
-				for t in G.node_outputs(n):
-					shuffle_cu[int(t.tid)] = ins[1]
+	# Only shuffles that actually permute (cpSize > 1) are included.
+	shuffle_cu: Dict[int, int] = _reordering_shuffle_outputs(G, num_parts)
+	shuffle_outs = set(shuffle_cu)
+	unshuffle_outs = set(_collective_output_tids(G, UNSHUFFLE_OPS))
 	memo_cu: Dict[int, Optional[int]] = {}
 	# Build the producer index ONCE. `backward_closure_tids_until` rebuilds it on
 	# every call, which is quadratic when asked for ~1150 goals on a 2000-node
@@ -1829,7 +1894,7 @@ def emit_lean_spec(
 	# Structural CP-ownership oracle. Shape inference cannot distinguish a zigzag
 	# shard from a contiguous one (identical shapes), so goals over zigzag-owned
 	# shards must not be emitted as ordinary gathers. See `build_zigzag_owner_predicate`.
-	_is_zigzag_owned, _zigzag_cu_of = build_zigzag_owner_predicate(pm_graph)
+	_is_zigzag_owned, _zigzag_cu_of = build_zigzag_owner_predicate(pm_graph, pm_num_ranks)
 	zigzag_suppressed: List[Tuple[str, int, List[int]]] = []
 	suppressed_def_names: set[str] = set()
 	zigzag_goal_names: List[str] = []
@@ -1978,10 +2043,16 @@ def emit_lean_spec(
 				"--   contiguous shards but different ownership, so `reconstructWithDim`"
 			)
 			lines.append(
-				"--   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,"
+				"--   is false for them. nnScaler's RVD model cannot express a permuted"
 			)
 			lines.append(
-				"--   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2)."
+				"--   sharding, so maybe_shuffle is annotated `l h -> l h` (identity) and the"
+			)
+			lines.append(
+				"--   runtime all_gather is a plain torch.concat over rank order, which does"
+			)
+			lines.append(
+				"--   NOT undo the zigzag. See trainverify/GOAL_3_4_LAYOUT_SPLIT.md."
 			)
 			if len(cu_tids) == 1 and len(g.tps) == 2:
 				zz_tps = "[" + ", ".join(
@@ -2558,7 +2629,7 @@ def emit_lean_spec(
 					"-- CP zigzag-owned, so an ordinary gather over them is false. See"
 				)
 				goal_lines.append(
-					"-- ZigzagGoalRefutation.gatheredZigzag_ne_full. The CUT graph below is"
+					"-- trainverify/GOAL_3_4_LAYOUT_SPLIT.md. The CUT graph below is"
 				)
 				goal_lines.append(
 					"-- shuffle-free, so this local obligation is sound and provable."
@@ -2612,7 +2683,7 @@ def emit_lean_spec(
 					f"/- Goal {gid} is in CP zigzag layout and has no ordinary-gather\n"
 					f"    statement, so there is no cut_to_full bridge to emit.\n"
 					f"    See the `_zigzag` goal in {module_name} and\n"
-					f"    denote.yoco_goals.ZigzagGoalRefutation. -/\n",
+					f"    trainverify/GOAL_3_4_LAYOUT_SPLIT.md. -/\n",
 					encoding="utf-8",
 				)
 				continue

@@ -3565,8 +3565,9 @@ def goal_3_cut_initGoals : List LineageGoal := initGoals ++ goal_3_prereqs
 
 -- goal_3 has no global (full-graph) statement: its PM shards are CP
 -- zigzag-owned, so an ordinary gather over them is false. See
--- ZigzagGoalRefutation.gatheredZigzag_ne_full, which exhibits a concrete cp=2
--- disagreement at flat index 2 (6 vs 2). The CUT graph below is shuffle-free
+-- trainverify/GOAL_3_4_LAYOUT_SPLIT.md: nnScaler's RVD model cannot express a
+-- permuted sharding, so the runtime all_gather is a plain rank-order concat
+-- that does not undo the zigzag. The CUT graph below is shuffle-free
 -- (built from ChunkPrim), so this local obligation is sound and provable.
 def goal_3_cut_goal : LineageGoal :=
   { ts := 4675, tsShape := [24, 4096, 64], tps := [{ rank := 0, tid := 4675 }], tpShapes := [[24, 4096, 64]] }

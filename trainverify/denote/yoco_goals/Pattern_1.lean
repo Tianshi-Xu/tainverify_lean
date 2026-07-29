@@ -4166,7 +4166,8 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
 
 `intermediateGoal_5893/5895/5898` are no longer emitted: on the FULL graph these
 tensors are zigzag-owned and an ordinary gather over their shards is false
-(`ZigzagGoalRefutation.gatheredZigzag_ne_full`). The relation is sound on this
+(nnScaler's RVD model cannot express a permuted sharding; see
+trainverify/GOAL_3_4_LAYOUT_SPLIT.md). The relation is sound on this
 CUT, whose sliced PM subgraph contains no `FW_maybe_shuffle`.
 
 Kept as an explicit parameter so the assumption is visible rather than silently
@@ -4249,19 +4250,19 @@ theorem prove_goal_1
     have h11631_shape : (initPM 11631).shape = [32, 1024, 512] := hPM 11631 [32, 1024, 512] (by native_decide)
     -- tid 5893 is CP zigzag-owned; `intermediateGoal_5893` is no longer emitted
     -- because an ordinary gather over its shards is FALSE on the full graph
-    -- (ZigzagGoalRefutation.gatheredZigzag_ne_full). Explicit hypothesis so
+    -- (see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Explicit hypothesis so
     -- the dependency is visible. See PATTERN_4_ZIGZAG_DEPENDENCY.md.
     have hb_5893 : initSM 5893 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11609, initPM 11610] :=
       hZigzagGather 5893 11609 11610 (by decide)
     -- tid 5895 is CP zigzag-owned; `intermediateGoal_5895` is no longer emitted
     -- because an ordinary gather over its shards is FALSE on the full graph
-    -- (ZigzagGoalRefutation.gatheredZigzag_ne_full). Explicit hypothesis so
+    -- (see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Explicit hypothesis so
     -- the dependency is visible. See PATTERN_4_ZIGZAG_DEPENDENCY.md.
     have hb_5895 : initSM 5895 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11613, initPM 11614] :=
       hZigzagGather 5895 11613 11614 (by decide)
     -- tid 5898 is CP zigzag-owned; `intermediateGoal_5898` is no longer emitted
     -- because an ordinary gather over its shards is FALSE on the full graph
-    -- (ZigzagGoalRefutation.gatheredZigzag_ne_full). Explicit hypothesis so
+    -- (see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Explicit hypothesis so
     -- the dependency is visible. See PATTERN_4_ZIGZAG_DEPENDENCY.md.
     have hb_5898 : initSM 5898 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11621, initPM 11622] :=
       hZigzagGather 5898 11621 11622 (by decide)

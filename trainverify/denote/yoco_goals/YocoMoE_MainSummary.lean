@@ -4,7 +4,11 @@
   YOCO-MoE (yoco_0.4B), summarising what TrainVerify has established so far:
 
   1. All 5 pattern-level proofs (`prove_pattern_1..5`) are complete
-     against their respective cut statements.
+     against their respective cut statements.  Patterns 1 and 4 are
+     parameterised by a CP-zigzag ordinary-gather hypothesis (sound on
+     their shuffle-free cut graphs, false on the full graph) — see the
+     note above `yoco_moe_cut_tier_main` and
+     `trainverify/GOAL_3_4_LAYOUT_SPLIT.md`.
   2. All 5 patterns' hypotheses are jointly satisfiable — i.e. there
      exist concrete `(initSM, initPM)` stores that satisfy every
      shape and init-goal constraint AND (for patterns with extra
@@ -12,11 +16,16 @@
        - Pattern_1: labels-bounded  (`< vocab`)
        - Pattern_3: 12 cu_seqlens pins  (`= cu_pin_value`)
      ruling out vacuity (∅ → anything).
-  3. The cut-to-full bridges for goal_1..4 (`Goal_N_CutToFull.lean`)
+  3. The cut-to-full bridges for goal_1/goal_2 (`Goal_N_CutToFull.lean`)
      are still pending — full-graph `all_goals_stmt` is deferred until
      the non-base cut→full emitter lands.  Goal_5 has its bridge and
      therefore `prove_goal_5_from_pattern_5 : goal_5_stmt` is fully
      sorry-free at the full-graph tier.
+
+     goal_3 and goal_4 are a different case: they have NO full-graph
+     statement and never can, because the equality they asserted is
+     false (CP zigzag shards do not ordinary-gather).  They are
+     reported as not covered rather than deferred.
 
   Axiom footprint (this file + all its transitive dependencies at
   the cut-tier claim below): the Lean-4 kernel triple
@@ -55,7 +64,24 @@ namespace TrainVerify.Denote.YocoMoE.Main
     proven against a witness that satisfies its full hypothesis
     package. The full-graph `all_goals_stmt` remains blocked on
     non-base cut→full bridges (structural, not model-specific). -/
-theorem yoco_moe_cut_tier_main :
+/- NOTE (2026-07-28): patterns 1 and 4 now take an explicit hypothesis.
+
+   Twelve of Pattern_4's stacked routing members (and three of Pattern_1's) are
+   CP zigzag-owned. `Verdict/graph_to_lean.py` no longer emits an ordinary-gather
+   `intermediateGoal_N` for them, because on the FULL graph that statement is
+   false: nnScaler's RVD model cannot express a permuted sharding, so
+   `maybe_shuffle` is annotated as identity and the runtime all_gather is a plain
+   rank-order `torch.concat` which does not undo the zigzag. See
+   `trainverify/GOAL_3_4_LAYOUT_SPLIT.md` for the audited chain.
+
+   The relation IS sound on these cut graphs — the sliced PM subgraphs are built
+   from `ChunkPrim` with no shuffle in them — so the patterns remain provable.
+   The assumption is threaded through as a parameter rather than discharged
+   internally, so that this top-level theorem states plainly what it rests on
+   instead of hiding it. -/
+theorem yoco_moe_cut_tier_main
+    (hZZ1 : ∀ initSM initPM, Pattern1ZigzagCutGatherHyp initSM initPM)
+    (hZZ4 : ∀ initSM initPM, ZigzagCutGatherHyp initSM initPM) :
     -- Pattern proofs complete
     pattern_1_stmt ∧
     pattern_2_stmt ∧
@@ -95,8 +121,8 @@ theorem yoco_moe_cut_tier_main :
       StoreShapesHold initSM sm_goal_4InitEnv ∧
       StoreShapesHold initPM pm_goal_4InitEnv ∧
       InitGoalsHold pm_goal_4.numRanks goal_4_cut_initGoals initSM initPM) := by
-  refine ⟨prove_pattern_1, prove_pattern_2, prove_pattern_3, prove_pattern_4,
-          prove_pattern_5,
+  refine ⟨prove_pattern_1 hZZ1, prove_pattern_2, prove_pattern_3,
+          prove_pattern_4 hZZ4, prove_pattern_5,
           pattern_1_joint_hypothesis_witness,
           pattern_2_joint_hypothesis_witness,
           pattern_3_joint_hypothesis_witness,

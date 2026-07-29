@@ -46,7 +46,7 @@ theorem prove_goal_2_from_pattern_2 : goal_2_stmt := by
    `FW_maybe_shuffle` and are zigzag-owned, while the goal asserted one uniform
    ordinary dim-1 gather over all 24.
 
-   `ZigzagGoalRefutation.gatheredZigzag_ne_full` machine-checks this on a
+   `trainverify/GOAL_3_4_LAYOUT_SPLIT.md` records the audited root cause: a
    concrete cp=2 fixture: the ordinary gather of the zigzag shards has the same
    SHAPE as the contiguous tensor but disagrees in value at flat index 2 (6
    versus 2). Shape checking cannot see the difference, which is why the emitter

@@ -2584,7 +2584,7 @@ theorem recon_intermediateGoal_4801 (initSM initPM : Store)
 
 /-- Full list of all 1151 intermediate reconstruction goals (infrastructure). -/
 -- NOTE: 506 zigzag-owned goals are no longer emitted (an ordinary gather over
--- their shards is false on the full graph; see ZigzagGoalRefutation). They are
+-- their shards is false on the full graph; see GOAL_3_4_LAYOUT_SPLIT.md). They are
 -- therefore absent from this list, which shrank from 1152 to 646.
 def all_intermediateGoals_list : List LineageGoal :=
   [
