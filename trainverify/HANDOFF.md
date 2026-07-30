@@ -3,8 +3,8 @@
 > **SUPERSEDED (2026-07-28).** This is a historical worker handoff from commit
 > `cfb8ca04`; do not use its status, counts, or final assembly instructions.
 > The ownership-aware faithful corpus is now classified in
-> `YOCO_MOE_FAITHFUL_COVERAGE.md`: 1149/1156 faithfully proven, with 2 ordinary
-> gaps, 3 zigzag gaps, and 2 discovered false top-level equalities. In
+> `YOCO_MOE_FAITHFUL_COVERAGE.md`: 1154/1156 faithfully proven, with all sound ordinary/zigzag obligations closed and 2 discovered
+> false top-level equalities. In
 > particular, the instructions below to build cut→full bridges for goal_3/4 are
 > wrong: those equalities are false on the audited CP2 graph because nnScaler's
 > RVD model cannot represent the post-shuffle permuted layout. See

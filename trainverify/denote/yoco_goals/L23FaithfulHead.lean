@@ -466,6 +466,30 @@ theorem recon_goal_5930_faithful_tids (initSM initPM : Store)
     ← l23hd_w5929 initSM initPM hInit]
   exact hrel
 
+/-- Exact generated per-goal packaging for tid 5930. -/
+theorem recon_intermediateGoal_5930_faithful (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hValues : InputValueClassesHold smInputValueClasses initSM ∧
+      InputValueClassesHold pmInputValueClasses initPM)
+    (hCu : ZigzagCuWF
+      (decodeCuSeqlens (denoteGraphDistributedFaithful pm initPM 5337))
+      [denoteGraphDistributedFaithful pm initPM 13257,
+       denoteGraphDistributedFaithful pm initPM 13258] 2)
+    (hx0 : (denoteGraphDistributedFaithful pm initPM 13257).shape.getD 0 0 = 2048) :
+    InitGoalHolds pm.numRanks intermediateGoal_5930
+      (denoteGraphDistributedFaithful sm initSM)
+      (denoteGraphDistributedFaithful pm initPM) := by
+  change InitGoalHolds 2 intermediateGoal_5930
+    (denoteGraphDistributedFaithful sm initSM)
+    (denoteGraphDistributedFaithful pm initPM)
+  exact Gather2Rel.to_initGoalHolds
+    (denoteGraphDistributedFaithful sm initSM)
+    (denoteGraphDistributedFaithful pm initPM) intermediateGoal_5930
+    5930 11833 11834 [4096, 1024] [2048, 1024]
+    (by rfl) (by rfl) (by rfl) (by rfl) (by rfl) (by rfl)
+    (recon_goal_5930_faithful_tids initSM initPM hSM hPM hInit hValues hCu hx0)
+
 /-- `.snd` (`z_losses = zScale * lse^2`) never reads the labels. -/
 theorem l23hd_snd_y_independent
     (x w y y' : Tensor) (vocab : Nat) (zScale : Scalar) :

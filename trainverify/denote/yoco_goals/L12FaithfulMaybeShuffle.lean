@@ -216,7 +216,7 @@ set_option maxHeartbeats 12000000 in
 /-- Faithful source-witness reconstruction of generated L12 `maybe_shuffle` goal 5338.
 The explicit `ZigzagCuWF` premise is the metadata contract required by the faithful
 collective semantics; no ordinary gather claim is made about the shuffled outputs. -/
-theorem recon_zigzagGoal_5338_distributed (initSM initPM : Store)
+theorem recon_zigzagGoal_5338_faithful (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hCu : ZigzagCuWF
@@ -345,7 +345,7 @@ set_option maxRecDepth 10000000 in
 set_option maxHeartbeats 12000000 in
 /-- Faithful generated goal 5340: row-local RMSNorm preserves the zigzag layout
 relation established at 5338. -/
-theorem recon_zigzagGoal_5340_distributed (initSM initPM : Store)
+theorem recon_zigzagGoal_5340_faithful (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hCu : ZigzagCuWF
@@ -358,7 +358,7 @@ theorem recon_zigzagGoal_5340_distributed (initSM initPM : Store)
       (denoteGraphDistributedFaithful pm initPM 9658)
       (denoteGraphDistributedFaithful pm initPM 5337)
       [4096, 1024] [2048, 1024] := by
-  have h38 := recon_zigzagGoal_5338_distributed initSM initPM hSM hPM hInit hCu
+  have h38 := recon_zigzagGoal_5338_faithful initSM initPM hSM hPM hInit hCu
   have hsnil (k : Nat) : ∀ n ∈ sm.nodes.drop k, n.outs ≠ [] := by
     intro n hn
     exact layer1_sm_nodes_nonempty n (List.mem_of_mem_drop hn)
@@ -461,7 +461,7 @@ set_option maxRecDepth 10000000 in
 set_option maxHeartbeats 12000000 in
 /-- Faithful generated goal 5342: a replicated Q weight transports the zigzag
 relation through the row-local per-head linear operation. -/
-theorem recon_zigzagGoal_5342_distributed (initSM initPM : Store)
+theorem recon_zigzagGoal_5342_faithful (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hCu : ZigzagCuWF
@@ -474,7 +474,7 @@ theorem recon_zigzagGoal_5342_distributed (initSM initPM : Store)
       (denoteGraphDistributedFaithful pm initPM 9660)
       (denoteGraphDistributedFaithful pm initPM 5337)
       [4096, 16, 64] [2048, 16, 64] := by
-  have h40 := recon_zigzagGoal_5340_distributed initSM initPM hSM hPM hInit hCu
+  have h40 := recon_zigzagGoal_5340_faithful initSM initPM hSM hPM hInit hCu
   have hsnil (k : Nat) : ∀ n ∈ sm.nodes.drop k, n.outs ≠ [] := by
     intro n hn
     exact layer1_sm_nodes_nonempty n (List.mem_of_mem_drop hn)
@@ -542,6 +542,14 @@ theorem recon_zigzagGoal_5342_distributed (initSM initPM : Store)
   rw [rSM, rP0, rP1, hw]
   exact Zigzag2Rel.per_head_linear 2048 1024 16 64 h40 hwShape
     (by decide) (by decide) (by decide) (by decide)
+
+/-! Compatibility aliases for older downstream modules. -/
+
+abbrev recon_zigzagGoal_5338_distributed := recon_zigzagGoal_5338_faithful
+
+abbrev recon_zigzagGoal_5340_distributed := recon_zigzagGoal_5340_faithful
+
+abbrev recon_zigzagGoal_5342_distributed := recon_zigzagGoal_5342_faithful
 
 end
 end TrainVerify.Denote.GeneratedPatterns

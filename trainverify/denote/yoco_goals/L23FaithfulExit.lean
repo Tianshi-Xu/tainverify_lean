@@ -256,6 +256,30 @@ theorem recon_goal_5928_faithful_tids (initSM initPM : Store)
   rw [l23ex_red_pm11727 initPM, l23ex_red_pm11728 initPM]
   exact recon_goal_5928_faithful initSM initPM hSM hPM hInit hValues hCu hx0
 
+/-- Exact generated per-goal packaging for tid 5928. -/
+theorem recon_intermediateGoal_5928_faithful (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
+    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
+    (hValues : InputValueClassesHold smInputValueClasses initSM ∧
+      InputValueClassesHold pmInputValueClasses initPM)
+    (hCu : ZigzagCuWF
+      (decodeCuSeqlens (denoteGraphDistributedFaithful pm initPM 5337))
+      [denoteGraphDistributedFaithful pm initPM 13257,
+       denoteGraphDistributedFaithful pm initPM 13258] 2)
+    (hx0 : (denoteGraphDistributedFaithful pm initPM 13257).shape.getD 0 0 = 2048) :
+    InitGoalHolds pm.numRanks intermediateGoal_5928
+      (denoteGraphDistributedFaithful sm initSM)
+      (denoteGraphDistributedFaithful pm initPM) := by
+  change InitGoalHolds 2 intermediateGoal_5928
+    (denoteGraphDistributedFaithful sm initSM)
+    (denoteGraphDistributedFaithful pm initPM)
+  exact Gather2Rel.to_initGoalHolds
+    (denoteGraphDistributedFaithful sm initSM)
+    (denoteGraphDistributedFaithful pm initPM) intermediateGoal_5928
+    5928 11727 11728 [4096, 1024] [2048, 1024]
+    (by rfl) (by rfl) (by rfl) (by rfl) (by rfl) (by rfl)
+    (recon_goal_5928_faithful_tids initSM initPM hSM hPM hInit hValues hCu hx0)
+
 /-! ### Past the exit: the trailing RMSNorm
 
 `5930` sits after `FW_maybe_unshuffle`, in ordinary dim-0 gather territory. It is

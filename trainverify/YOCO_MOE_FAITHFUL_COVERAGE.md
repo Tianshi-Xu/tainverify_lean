@@ -18,12 +18,12 @@ findings rather than disappearing from coverage.
 
 | class | total | faithfully proven | remaining |
 |---|---:|---:|---:|
-| ordinary contiguous ownership | 649 | 647 | 2 |
-| CP zigzag ownership (`Zigzag2Rel`) | 505 | 502 | 3 |
+| ordinary contiguous ownership | 649 | 649 | 0 |
+| CP zigzag ownership (`Zigzag2Rel`) | 505 | 505 | 0 |
 | discovered false equalities | 2 | 0 | 2 findings |
-| **total** | **1156** | **1149** | **7** |
+| **total** | **1156** | **1154** | **2 findings** |
 
-Overall per-goal faithful coverage: **1149 / 1156 = 99.39%**.
+Overall per-goal faithful coverage: **1154 / 1156 = 99.83%**.
 
 **This is NOT an end-to-end theorem count.** A per-goal theorem may carry
 caller-supplied value/layout hypotheses (`hValues`, `hCu`, `hx0`, etc.). The
@@ -31,7 +31,7 @@ cut-tier Pattern_1 / Pattern_4 chain no longer relies on an unconstrained
 `ZigzagCutGatherHyp`: the 15 relations are local `cutIntermediateGoal_*`
 boundary contracts included in the shuffle-free cut graphs' `InitGoalsHold`
 packages, and the existing zero-store joint witnesses establish satisfiability.
-Still, quote 99.39% only as per-goal faithful coverage; `Instances.lean` retains
+Still, quote 99.83% only as per-goal faithful coverage; `Instances.lean` retains
 cut→full `sorry`s for goals 1/2 and a raw cut-level `sorry` for goal 3 because
 Pattern_3 proves only the honest conditional `goal_3_stmt_with_pins`. Goal 4's
 sound cut instance is sorry-free; the false full-graph statements do not exist.
@@ -41,21 +41,24 @@ sound cut instance is sorry-free; the false full-graph statements do not exist.
 646 generated ordinary intermediate goals + 3 sound top-level goals
 (`goal_1`, `goal_2`, `goal_5`) = 649.
 
-* 644 / 646 intermediate goals have exact
+* all 646 intermediate goals have exact
   `recon_intermediateGoal_<tid>_faithful` theorems.
 * all 3 sound top-level goals have faithful proofs.
-* missing ordinary intermediates: tids **5928**, **5930**.
+* no ordinary intermediate remains open.
 
-Note: top-level `goal_5` also concerns tid 5928. Its top-level proof does not
-silently count as the missing intermediate theorem; these are separate members
-of the original 1156-obligation corpus.
+Note: top-level `goal_5` also concerns tid 5928. Its top-level proof is not used
+to inflate the intermediate count; `recon_intermediateGoal_5928_faithful` now
+packages the exact generated intermediate obligation separately.
 
 ### Zigzag class
 
-505 generated `ZigzagLineageGoal`s, of which 502 have exact
+505 generated `ZigzagLineageGoal`s; all 505 have exact
 `recon_zigzagGoal_<tid>_faithful : Zigzag2Rel ...` theorems.
 
-Missing zigzag intermediates: tids **5338**, **5340**, **5342**.
+No zigzag intermediate remains open. The last three were already proven in
+`L12FaithfulMaybeShuffle.lean` under the older `_distributed` naming; their
+canonical `_faithful` names are now the theorem declarations, with compatibility
+aliases for downstream modules.
 
 ### False findings
 

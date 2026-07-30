@@ -3,7 +3,7 @@
 > **SUPERSEDED AS A STATUS REPORT (2026-07-28).** This 2026-07-14..21 worker
 > journal remains useful for proof archaeology, but its counts and TODOs are not
 > current. Use `YOCO_MOE_FAITHFUL_COVERAGE.md` for the mechanical
-> ownership-aware count (1149/1156), `GOAL_3_4_LAYOUT_SPLIT.md` for the two
+> ownership-aware count (1154/1156), `GOAL_3_4_LAYOUT_SPLIT.md` for the two
 > false top-level equalities, and `UPSTREAM_NNSCALER_RVD_ZIGZAG.md` for the
 > nnScaler finding. Do not infer current coverage from the historical category
 > tables below.

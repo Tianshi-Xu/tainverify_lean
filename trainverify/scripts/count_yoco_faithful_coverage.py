@@ -60,4 +60,4 @@ print(f"false findings: {false_total}: {sorted(top_false)}")
 print(f"overall per-goal faithful: {done}/{total} = {100 * done / total:.2f}%")
 
 assert total == 1156, f"unexpected corpus size: {total}"
-assert done == 1149, f"coverage changed: {done}"
+assert done == 1154, f"coverage changed: {done}"
