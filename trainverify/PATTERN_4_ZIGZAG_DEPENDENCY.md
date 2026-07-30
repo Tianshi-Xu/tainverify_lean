@@ -1,74 +1,59 @@
-# Pattern_4 depended on the false ordinary-gather assumption
+# Pattern_4 and the 12 post-shuffle cut boundaries
 
-Recorded 2026-07-28, after the CP-zigzag ownership gate landed.
+Recorded 2026-07-28; corrected after the ownership-aware emitter landed.
 
 ## What surfaced
 
-`Pattern_4.lean` proves `goal_4_stmt_cut` and, to do so, unpacks all 24 stacked
-per-layer routing members via `extract_dual`, deriving for each one:
-
-```lean
-have hb_5359 : initSM 5359 = allGatherPrimDimN 0 pm_goal_4.numRanks 0
-    [initPM 9729, initPM 9730] :=
-  extract_dual intermediateGoal_5359 ...
-```
-
-That is exactly the ordinary dim-0 gather claim. Of the 24 members it unpacks,
-**12 are zigzag-owned**:
+`Pattern_4.lean` proves the **shuffle-free sliced graph** statement
+`goal_4_stmt_cut`. To assemble its 24-layer routing stack it needs ordinary
+dim-0 gather relations for 24 boundary tensors. Twelve correspond to values
+that are zigzag-owned in the faithful full graph:
 
 ```
 5359 5408 5457 5506 5555 5604 5653 5702 5751 5800 5849 5898
 ```
 
-These are precisely the layer-12..23 members produced after the CP2
-`FW_maybe_shuffle` — the same 12 identified independently by dataflow closure in
-`GOAL_3_4_LAYOUT_SPLIT.md`. Two independent routes to the same partition is
-strong evidence the split is real.
+The old emitter published those tids globally as ordinary-gather
+`intermediateGoal_N`s. That is false on the faithful full graph: nnScaler's RVD
+model cannot represent the permuted post-shuffle layout, so its runtime
+AllGatherPrim is a rank-order concat that does not undo the zigzag. See
+`GOAL_3_4_LAYOUT_SPLIT.md` for the audited source and executable reproduction.
 
-## Why this matters
+Removing the false globals correctly broke Pattern_4's old `extract_dual`
+derivations. Pattern_1 had the same issue for three boundaries: 5893, 5895,
+5898.
 
-`ZigzagGoalRefutation.gatheredZigzag_ne_full` machine-checks that an ordinary
-dim-0 gather of zigzag shards does **not** equal the contiguous tensor (same
-shape, disagreeing at flat index 2: 6 versus 2). So `hb_5359` and its eleven
-siblings assert something false about the full graph.
+## The cut graph is different
 
-They were derivable only because `intermediateGoal_5359` etc. *existed* as
-generated ordinary-gather goals — i.e. Pattern_4 was consuming the emitter's bug
-as a hypothesis. With those goals no longer emitted, the derivation correctly
-fails to typecheck.
+The relations are nevertheless valid **boundary contracts of the cut graph**.
+`pm_goal_4` is a sliced graph built from `ChunkPrim`; there is no shuffle in the
+cut. Its caller supplies contiguous shards, and the ordinary gather relation is
+sound and satisfiable there.
 
-This is the healthy outcome. The proof did not break; it stopped being able to
-assume a falsehood.
+The repair therefore does not reintroduce the globals and does not assume a
+universal `ZigzagCutGatherHyp`. Instead:
 
-## Why nothing unsound was ever *concluded*
+* `Goal_4.lean` re-declares 12 local `goal4CutIntermediateGoal_*` records;
+* `Goal_1.lean` re-declares 3 local `goal1CutIntermediateGoal_*` records;
+* each list is appended to the corresponding `goal_N_cut_initGoals`;
+* Pattern_1 / Pattern_4 extract the concrete relations from their existing
+  `hInit : InitGoalsHold ...` packages, exactly like other cut boundaries;
+* the existing zero-store joint witnesses prove those enlarged packages are
+  satisfiable.
 
-Two containment facts, both checked:
+Thus the top-level cut theorem remains unconditional on any new layout
+hypothesis, and its non-vacuity witness covers the contracts. The local names
+cannot be mistaken for faithful full-graph goals.
 
-1. `Pattern_4` targets `goal_4_stmt_cut`, over the **sliced** graph. `pm_goal_4`
-   is built from `ChunkPrim` and contains no shuffle at all, so the cut-level
-   statement is sound.
-2. The lift from cut to full never existed. There is no `Goal_4_CutToFull.lean`
-   (only `Goal_5_CutToFull.lean` was ever emitted), and
-   `Instances.prove_goal_4_from_pattern_4` was `sorry` from the start.
+## Containment
 
-So the false full-graph statement was never discharged. The `sorry` that looked
-like an emitter limitation ("non-base cut_to_full bridge missing") was in fact
-load-bearing: it was the only thing standing between a false goal and a claimed
-proof.
+No false full-graph theorem was concluded:
 
-## Current state
+1. Pattern_4 targets only `goal_4_stmt_cut`.
+2. There is no `Goal_4_CutToFull.lean`.
+3. The old `Instances.prove_goal_4_from_pattern_4` full-graph bridge was a
+   `sorry`; after the false full statement was removed, the instance now exposes
+   only the sound cut statement.
 
-`Pattern_4`'s 12 zigzag `extract_dual` steps do not compile against the corrected
-goal set, and should not be patched to compile. Making them work again would
-require re-introducing the false hypothesis.
-
-The honest repair is to restate those 12 members against `Zigzag2Rel` — the
-`ZigzagLineageGoal` form now emitted for them — and route the stack through
-`ZigzagGoalHolds.to_gather_after_unshuffle`, which converts a zigzag goal into a
-genuine `Gather2Rel` once the unshuffle has been applied. The stack/gather
-commute lemma needed downstream is already proven
-(`fw_stack_allGather0_eq_allGather1_stack`, kernel triple only).
-
-That is a real proof effort on 12 members, not a mechanical fix, and it is the
-remaining work for goal_4. Until it lands, goal_4 is **not covered** — which is
-what the emitter now reports.
+The full-graph `goal_3` / `goal_4` equalities remain two reported findings, not
+proof obligations that can honestly be closed.

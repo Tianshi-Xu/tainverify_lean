@@ -46,40 +46,40 @@ are re-declared here — scoped to this module rather than published globally, s
 they cannot be mistaken for faithful-track goals.
 -/
 
-def intermediateGoal_5347 : LineageGoal :=
+def ringAttnIntermediateGoal_5347 : LineageGoal :=
   { ts := 5347, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9687 }, { rank := 1, tid := 9688 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
-def intermediateGoal_5396 : LineageGoal :=
+def ringAttnIntermediateGoal_5396 : LineageGoal :=
   { ts := 5396, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9859 }, { rank := 1, tid := 9860 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
-def intermediateGoal_5445 : LineageGoal :=
+def ringAttnIntermediateGoal_5445 : LineageGoal :=
   { ts := 5445, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10031 }, { rank := 1, tid := 10032 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
-def intermediateGoal_5494 : LineageGoal :=
+def ringAttnIntermediateGoal_5494 : LineageGoal :=
   { ts := 5494, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10203 }, { rank := 1, tid := 10204 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
-def intermediateGoal_5543 : LineageGoal :=
+def ringAttnIntermediateGoal_5543 : LineageGoal :=
   { ts := 5543, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10375 }, { rank := 1, tid := 10376 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
-def intermediateGoal_5592 : LineageGoal :=
+def ringAttnIntermediateGoal_5592 : LineageGoal :=
   { ts := 5592, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10547 }, { rank := 1, tid := 10548 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
-def intermediateGoal_5641 : LineageGoal :=
+def ringAttnIntermediateGoal_5641 : LineageGoal :=
   { ts := 5641, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10719 }, { rank := 1, tid := 10720 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
-def intermediateGoal_5690 : LineageGoal :=
+def ringAttnIntermediateGoal_5690 : LineageGoal :=
   { ts := 5690, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10891 }, { rank := 1, tid := 10892 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
-def intermediateGoal_5739 : LineageGoal :=
+def ringAttnIntermediateGoal_5739 : LineageGoal :=
   { ts := 5739, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11063 }, { rank := 1, tid := 11064 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
-def intermediateGoal_5788 : LineageGoal :=
+def ringAttnIntermediateGoal_5788 : LineageGoal :=
   { ts := 5788, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11235 }, { rank := 1, tid := 11236 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
-def intermediateGoal_5837 : LineageGoal :=
+def ringAttnIntermediateGoal_5837 : LineageGoal :=
   { ts := 5837, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11407 }, { rank := 1, tid := 11408 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
-def intermediateGoal_5886 : LineageGoal :=
+def ringAttnIntermediateGoal_5886 : LineageGoal :=
   { ts := 5886, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11579 }, { rank := 1, tid := 11580 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]] }
 
 open TrainVerify.Denote
@@ -226,7 +226,7 @@ def nR1z0 : NodeDecl :=
   { rank := 1, op := "OpName.FW_attn_zigzag",
     ins := [9660, 5343, 5344, 5345, 5346], outs := [9688], params := [16, 4, 64, 64, 1, 0] }
 
-/- **Zigzag L0 (`intermediateGoal_5347`) over `denoteGraph_ringAttn`, conditional
+/- **Zigzag L0 (`ringAttnIntermediateGoal_5347`) over `denoteGraph_ringAttn`, conditional
     on the CP Q/K/V input reconstructions.**  The Q full-sharding commute
     (`hq_full`) and the K/V replication equalities (`hk_repl`/`hv_repl`) thread
     the incoming self-decoder residual carry through `per_head_mix_precision_linear
@@ -237,7 +237,7 @@ def nR1z0 : NodeDecl :=
     node reductions, buddy detection, cu-seqlens agreement, the r1 store bridge,
     and the CP reconstruction assembly — is discharged here. -/
 set_option maxHeartbeats 4000000 in
-theorem recon_intermediateGoal_5347_ringAttn_of_qkv (initSM initPM : Store)
+theorem recon_ringAttnIntermediateGoal_5347_ringAttn_of_qkv (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hq_full : (sm.nodes.take 505).foldl (applyNodeRingAttn sm) initSM 5342
         = allGatherPrimDimN 0 2 0
@@ -284,7 +284,7 @@ theorem recon_intermediateGoal_5347_ringAttn_of_qkv (initSM initPM : Store)
           ((pm.nodes.take 1073).foldl (applyNodeRingAttn pm) initPM 5345)
           ((pm.nodes.take 1073).foldl (applyNodeRingAttn pm) initPM 5346)
           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]) :
-    InitGoalHolds pm.numRanks intermediateGoal_5347
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5347
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   -- node reductions (denote ↔ applyNodeRingAttn_zigzag over prefix folds)
   have hSM5347 : denoteGraph_ringAttn sm initSM 5347
@@ -368,7 +368,7 @@ theorem recon_intermediateGoal_5347_ringAttn_of_qkv (initSM initPM : Store)
       = (pm.nodes.take 1072).foldl (applyNodeRingAttn pm) initPM 5346 := by
     rw [hSM5346, hPM5346, hcu5346]
   -- Fire the CP gear.
-  exact recon_attn_zigzag_2tp_layer_cp initSM initPM intermediateGoal_5347
+  exact recon_attn_zigzag_2tp_layer_cp initSM initPM ringAttnIntermediateGoal_5347
     nSMz0 nR0z0 nR1z0
     ((sm.nodes.take 505).foldl (applyNodeRingAttn sm) initSM)
     ((pm.nodes.take 1072).foldl (applyNodeRingAttn pm) initPM)
@@ -383,7 +383,7 @@ theorem recon_intermediateGoal_5347_ringAttn_of_qkv (initSM initPM : Store)
     hfull_shape hfull_shape'
     rfl rfl rfl rfl rfl rfl
 
-#check @recon_intermediateGoal_5347_ringAttn_of_qkv
+#check @recon_ringAttnIntermediateGoal_5347_ringAttn_of_qkv
 
 /-! ### Zigzag L1 firing (tid 5396) -/
 /-- SM zigzag L1 node (`outs = [5396]`). -/
@@ -401,7 +401,7 @@ def nR1z1 : NodeDecl :=
   { rank := 1, op := "OpName.FW_attn_zigzag",
     ins := [9836, 5392, 5393, 5394, 5395], outs := [9860], params := [16, 4, 64, 64, 1, 0] }
 
-/- **Zigzag L1 (`intermediateGoal_5396`) over `denoteGraph_ringAttn`, conditional
+/- **Zigzag L1 (`ringAttnIntermediateGoal_5396`) over `denoteGraph_ringAttn`, conditional
     on the CP Q/K/V input reconstructions.**  The Q full-sharding commute
     (`hq_full`) and the K/V replication equalities (`hk_repl`/`hv_repl`) thread
     the incoming self-decoder residual carry through `per_head_mix_precision_linear
@@ -412,7 +412,7 @@ def nR1z1 : NodeDecl :=
     node reductions, buddy detection, cu-seqlens agreement, the r1 store bridge,
     and the CP reconstruction assembly — is discharged here. -/
 set_option maxHeartbeats 4000000 in
-theorem recon_intermediateGoal_5396_ringAttn_of_qkv (initSM initPM : Store)
+theorem recon_ringAttnIntermediateGoal_5396_ringAttn_of_qkv (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hq_full : (sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM 5391
         = allGatherPrimDimN 0 2 0
@@ -459,7 +459,7 @@ theorem recon_intermediateGoal_5396_ringAttn_of_qkv (initSM initPM : Store)
           ((pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 5394)
           ((pm.nodes.take 1143).foldl (applyNodeRingAttn pm) initPM 5395)
           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]) :
-    InitGoalHolds pm.numRanks intermediateGoal_5396
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5396
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   -- node reductions (denote ↔ applyNodeRingAttn_zigzag over prefix folds)
   have hSM5396 : denoteGraph_ringAttn sm initSM 5396
@@ -543,7 +543,7 @@ theorem recon_intermediateGoal_5396_ringAttn_of_qkv (initSM initPM : Store)
       = (pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM 5395 := by
     rw [hSM5395, hPM5395, hcu5395]
   -- Fire the CP gear.
-  exact recon_attn_zigzag_2tp_layer_cp initSM initPM intermediateGoal_5396
+  exact recon_attn_zigzag_2tp_layer_cp initSM initPM ringAttnIntermediateGoal_5396
     nSMz1 nR0z1 nR1z1
     ((sm.nodes.take 540).foldl (applyNodeRingAttn sm) initSM)
     ((pm.nodes.take 1142).foldl (applyNodeRingAttn pm) initPM)
@@ -574,7 +574,7 @@ def nR1z2 : NodeDecl :=
   { rank := 1, op := "OpName.FW_attn_zigzag",
     ins := [10008, 5441, 5442, 5443, 5444], outs := [10032], params := [16, 4, 64, 64, 1, 0] }
 
-/- **Zigzag L2 (`intermediateGoal_5445`) over `denoteGraph_ringAttn`, conditional
+/- **Zigzag L2 (`ringAttnIntermediateGoal_5445`) over `denoteGraph_ringAttn`, conditional
     on the CP Q/K/V input reconstructions.**  The Q full-sharding commute
     (`hq_full`) and the K/V replication equalities (`hk_repl`/`hv_repl`) thread
     the incoming self-decoder residual carry through `per_head_mix_precision_linear
@@ -585,7 +585,7 @@ def nR1z2 : NodeDecl :=
     node reductions, buddy detection, cu-seqlens agreement, the r1 store bridge,
     and the CP reconstruction assembly — is discharged here. -/
 set_option maxHeartbeats 4000000 in
-theorem recon_intermediateGoal_5445_ringAttn_of_qkv (initSM initPM : Store)
+theorem recon_ringAttnIntermediateGoal_5445_ringAttn_of_qkv (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hq_full : (sm.nodes.take 575).foldl (applyNodeRingAttn sm) initSM 5440
         = allGatherPrimDimN 0 2 0
@@ -632,7 +632,7 @@ theorem recon_intermediateGoal_5445_ringAttn_of_qkv (initSM initPM : Store)
           ((pm.nodes.take 1213).foldl (applyNodeRingAttn pm) initPM 5443)
           ((pm.nodes.take 1213).foldl (applyNodeRingAttn pm) initPM 5444)
           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]) :
-    InitGoalHolds pm.numRanks intermediateGoal_5445
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5445
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   -- node reductions (denote ↔ applyNodeRingAttn_zigzag over prefix folds)
   have hSM5445 : denoteGraph_ringAttn sm initSM 5445
@@ -716,7 +716,7 @@ theorem recon_intermediateGoal_5445_ringAttn_of_qkv (initSM initPM : Store)
       = (pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM 5444 := by
     rw [hSM5444, hPM5444, hcu5444]
   -- Fire the CP gear.
-  exact recon_attn_zigzag_2tp_layer_cp initSM initPM intermediateGoal_5445
+  exact recon_attn_zigzag_2tp_layer_cp initSM initPM ringAttnIntermediateGoal_5445
     nSMz2 nR0z2 nR1z2
     ((sm.nodes.take 575).foldl (applyNodeRingAttn sm) initSM)
     ((pm.nodes.take 1212).foldl (applyNodeRingAttn pm) initPM)
@@ -747,7 +747,7 @@ def nR1z3 : NodeDecl :=
   { rank := 1, op := "OpName.FW_attn_zigzag",
     ins := [10180, 5490, 5491, 5492, 5493], outs := [10204], params := [16, 4, 64, 64, 1, 0] }
 
-/- **Zigzag L3 (`intermediateGoal_5494`) over `denoteGraph_ringAttn`, conditional
+/- **Zigzag L3 (`ringAttnIntermediateGoal_5494`) over `denoteGraph_ringAttn`, conditional
     on the CP Q/K/V input reconstructions.**  The Q full-sharding commute
     (`hq_full`) and the K/V replication equalities (`hk_repl`/`hv_repl`) thread
     the incoming self-decoder residual carry through `per_head_mix_precision_linear
@@ -758,7 +758,7 @@ def nR1z3 : NodeDecl :=
     node reductions, buddy detection, cu-seqlens agreement, the r1 store bridge,
     and the CP reconstruction assembly — is discharged here. -/
 set_option maxHeartbeats 4000000 in
-theorem recon_intermediateGoal_5494_ringAttn_of_qkv (initSM initPM : Store)
+theorem recon_ringAttnIntermediateGoal_5494_ringAttn_of_qkv (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hq_full : (sm.nodes.take 610).foldl (applyNodeRingAttn sm) initSM 5489
         = allGatherPrimDimN 0 2 0
@@ -805,7 +805,7 @@ theorem recon_intermediateGoal_5494_ringAttn_of_qkv (initSM initPM : Store)
           ((pm.nodes.take 1283).foldl (applyNodeRingAttn pm) initPM 5492)
           ((pm.nodes.take 1283).foldl (applyNodeRingAttn pm) initPM 5493)
           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]) :
-    InitGoalHolds pm.numRanks intermediateGoal_5494
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5494
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   -- node reductions (denote ↔ applyNodeRingAttn_zigzag over prefix folds)
   have hSM5494 : denoteGraph_ringAttn sm initSM 5494
@@ -889,7 +889,7 @@ theorem recon_intermediateGoal_5494_ringAttn_of_qkv (initSM initPM : Store)
       = (pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM 5493 := by
     rw [hSM5493, hPM5493, hcu5493]
   -- Fire the CP gear.
-  exact recon_attn_zigzag_2tp_layer_cp initSM initPM intermediateGoal_5494
+  exact recon_attn_zigzag_2tp_layer_cp initSM initPM ringAttnIntermediateGoal_5494
     nSMz3 nR0z3 nR1z3
     ((sm.nodes.take 610).foldl (applyNodeRingAttn sm) initSM)
     ((pm.nodes.take 1282).foldl (applyNodeRingAttn pm) initPM)
@@ -920,7 +920,7 @@ def nR1z4 : NodeDecl :=
   { rank := 1, op := "OpName.FW_attn_zigzag",
     ins := [10352, 5539, 5540, 5541, 5542], outs := [10376], params := [16, 4, 64, 64, 1, 0] }
 
-/- **Zigzag L4 (`intermediateGoal_5543`) over `denoteGraph_ringAttn`, conditional
+/- **Zigzag L4 (`ringAttnIntermediateGoal_5543`) over `denoteGraph_ringAttn`, conditional
     on the CP Q/K/V input reconstructions.**  The Q full-sharding commute
     (`hq_full`) and the K/V replication equalities (`hk_repl`/`hv_repl`) thread
     the incoming self-decoder residual carry through `per_head_mix_precision_linear
@@ -931,7 +931,7 @@ def nR1z4 : NodeDecl :=
     node reductions, buddy detection, cu-seqlens agreement, the r1 store bridge,
     and the CP reconstruction assembly — is discharged here. -/
 set_option maxHeartbeats 4000000 in
-theorem recon_intermediateGoal_5543_ringAttn_of_qkv (initSM initPM : Store)
+theorem recon_ringAttnIntermediateGoal_5543_ringAttn_of_qkv (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hq_full : (sm.nodes.take 645).foldl (applyNodeRingAttn sm) initSM 5538
         = allGatherPrimDimN 0 2 0
@@ -978,7 +978,7 @@ theorem recon_intermediateGoal_5543_ringAttn_of_qkv (initSM initPM : Store)
           ((pm.nodes.take 1353).foldl (applyNodeRingAttn pm) initPM 5541)
           ((pm.nodes.take 1353).foldl (applyNodeRingAttn pm) initPM 5542)
           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]) :
-    InitGoalHolds pm.numRanks intermediateGoal_5543
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5543
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   -- node reductions (denote ↔ applyNodeRingAttn_zigzag over prefix folds)
   have hSM5543 : denoteGraph_ringAttn sm initSM 5543
@@ -1062,7 +1062,7 @@ theorem recon_intermediateGoal_5543_ringAttn_of_qkv (initSM initPM : Store)
       = (pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM 5542 := by
     rw [hSM5542, hPM5542, hcu5542]
   -- Fire the CP gear.
-  exact recon_attn_zigzag_2tp_layer_cp initSM initPM intermediateGoal_5543
+  exact recon_attn_zigzag_2tp_layer_cp initSM initPM ringAttnIntermediateGoal_5543
     nSMz4 nR0z4 nR1z4
     ((sm.nodes.take 645).foldl (applyNodeRingAttn sm) initSM)
     ((pm.nodes.take 1352).foldl (applyNodeRingAttn pm) initPM)
@@ -1093,7 +1093,7 @@ def nR1z5 : NodeDecl :=
   { rank := 1, op := "OpName.FW_attn_zigzag",
     ins := [10524, 5588, 5589, 5590, 5591], outs := [10548], params := [16, 4, 64, 64, 1, 0] }
 
-/- **Zigzag L5 (`intermediateGoal_5592`) over `denoteGraph_ringAttn`, conditional
+/- **Zigzag L5 (`ringAttnIntermediateGoal_5592`) over `denoteGraph_ringAttn`, conditional
     on the CP Q/K/V input reconstructions.**  The Q full-sharding commute
     (`hq_full`) and the K/V replication equalities (`hk_repl`/`hv_repl`) thread
     the incoming self-decoder residual carry through `per_head_mix_precision_linear
@@ -1104,7 +1104,7 @@ def nR1z5 : NodeDecl :=
     node reductions, buddy detection, cu-seqlens agreement, the r1 store bridge,
     and the CP reconstruction assembly — is discharged here. -/
 set_option maxHeartbeats 4000000 in
-theorem recon_intermediateGoal_5592_ringAttn_of_qkv (initSM initPM : Store)
+theorem recon_ringAttnIntermediateGoal_5592_ringAttn_of_qkv (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hq_full : (sm.nodes.take 680).foldl (applyNodeRingAttn sm) initSM 5587
         = allGatherPrimDimN 0 2 0
@@ -1151,7 +1151,7 @@ theorem recon_intermediateGoal_5592_ringAttn_of_qkv (initSM initPM : Store)
           ((pm.nodes.take 1423).foldl (applyNodeRingAttn pm) initPM 5590)
           ((pm.nodes.take 1423).foldl (applyNodeRingAttn pm) initPM 5591)
           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]) :
-    InitGoalHolds pm.numRanks intermediateGoal_5592
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5592
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   -- node reductions (denote ↔ applyNodeRingAttn_zigzag over prefix folds)
   have hSM5592 : denoteGraph_ringAttn sm initSM 5592
@@ -1235,7 +1235,7 @@ theorem recon_intermediateGoal_5592_ringAttn_of_qkv (initSM initPM : Store)
       = (pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM 5591 := by
     rw [hSM5591, hPM5591, hcu5591]
   -- Fire the CP gear.
-  exact recon_attn_zigzag_2tp_layer_cp initSM initPM intermediateGoal_5592
+  exact recon_attn_zigzag_2tp_layer_cp initSM initPM ringAttnIntermediateGoal_5592
     nSMz5 nR0z5 nR1z5
     ((sm.nodes.take 680).foldl (applyNodeRingAttn sm) initSM)
     ((pm.nodes.take 1422).foldl (applyNodeRingAttn pm) initPM)
@@ -1266,7 +1266,7 @@ def nR1z6 : NodeDecl :=
   { rank := 1, op := "OpName.FW_attn_zigzag",
     ins := [10696, 5637, 5638, 5639, 5640], outs := [10720], params := [16, 4, 64, 64, 1, 0] }
 
-/- **Zigzag L6 (`intermediateGoal_5641`) over `denoteGraph_ringAttn`, conditional
+/- **Zigzag L6 (`ringAttnIntermediateGoal_5641`) over `denoteGraph_ringAttn`, conditional
     on the CP Q/K/V input reconstructions.**  The Q full-sharding commute
     (`hq_full`) and the K/V replication equalities (`hk_repl`/`hv_repl`) thread
     the incoming self-decoder residual carry through `per_head_mix_precision_linear
@@ -1277,7 +1277,7 @@ def nR1z6 : NodeDecl :=
     node reductions, buddy detection, cu-seqlens agreement, the r1 store bridge,
     and the CP reconstruction assembly — is discharged here. -/
 set_option maxHeartbeats 4000000 in
-theorem recon_intermediateGoal_5641_ringAttn_of_qkv (initSM initPM : Store)
+theorem recon_ringAttnIntermediateGoal_5641_ringAttn_of_qkv (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hq_full : (sm.nodes.take 715).foldl (applyNodeRingAttn sm) initSM 5636
         = allGatherPrimDimN 0 2 0
@@ -1324,7 +1324,7 @@ theorem recon_intermediateGoal_5641_ringAttn_of_qkv (initSM initPM : Store)
           ((pm.nodes.take 1493).foldl (applyNodeRingAttn pm) initPM 5639)
           ((pm.nodes.take 1493).foldl (applyNodeRingAttn pm) initPM 5640)
           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]) :
-    InitGoalHolds pm.numRanks intermediateGoal_5641
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5641
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   -- node reductions (denote ↔ applyNodeRingAttn_zigzag over prefix folds)
   have hSM5641 : denoteGraph_ringAttn sm initSM 5641
@@ -1408,7 +1408,7 @@ theorem recon_intermediateGoal_5641_ringAttn_of_qkv (initSM initPM : Store)
       = (pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM 5640 := by
     rw [hSM5640, hPM5640, hcu5640]
   -- Fire the CP gear.
-  exact recon_attn_zigzag_2tp_layer_cp initSM initPM intermediateGoal_5641
+  exact recon_attn_zigzag_2tp_layer_cp initSM initPM ringAttnIntermediateGoal_5641
     nSMz6 nR0z6 nR1z6
     ((sm.nodes.take 715).foldl (applyNodeRingAttn sm) initSM)
     ((pm.nodes.take 1492).foldl (applyNodeRingAttn pm) initPM)
@@ -1439,7 +1439,7 @@ def nR1z7 : NodeDecl :=
   { rank := 1, op := "OpName.FW_attn_zigzag",
     ins := [10868, 5686, 5687, 5688, 5689], outs := [10892], params := [16, 4, 64, 64, 1, 0] }
 
-/- **Zigzag L7 (`intermediateGoal_5690`) over `denoteGraph_ringAttn`, conditional
+/- **Zigzag L7 (`ringAttnIntermediateGoal_5690`) over `denoteGraph_ringAttn`, conditional
     on the CP Q/K/V input reconstructions.**  The Q full-sharding commute
     (`hq_full`) and the K/V replication equalities (`hk_repl`/`hv_repl`) thread
     the incoming self-decoder residual carry through `per_head_mix_precision_linear
@@ -1450,7 +1450,7 @@ def nR1z7 : NodeDecl :=
     node reductions, buddy detection, cu-seqlens agreement, the r1 store bridge,
     and the CP reconstruction assembly — is discharged here. -/
 set_option maxHeartbeats 4000000 in
-theorem recon_intermediateGoal_5690_ringAttn_of_qkv (initSM initPM : Store)
+theorem recon_ringAttnIntermediateGoal_5690_ringAttn_of_qkv (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hq_full : (sm.nodes.take 750).foldl (applyNodeRingAttn sm) initSM 5685
         = allGatherPrimDimN 0 2 0
@@ -1497,7 +1497,7 @@ theorem recon_intermediateGoal_5690_ringAttn_of_qkv (initSM initPM : Store)
           ((pm.nodes.take 1563).foldl (applyNodeRingAttn pm) initPM 5688)
           ((pm.nodes.take 1563).foldl (applyNodeRingAttn pm) initPM 5689)
           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]) :
-    InitGoalHolds pm.numRanks intermediateGoal_5690
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5690
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   -- node reductions (denote ↔ applyNodeRingAttn_zigzag over prefix folds)
   have hSM5690 : denoteGraph_ringAttn sm initSM 5690
@@ -1581,7 +1581,7 @@ theorem recon_intermediateGoal_5690_ringAttn_of_qkv (initSM initPM : Store)
       = (pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM 5689 := by
     rw [hSM5689, hPM5689, hcu5689]
   -- Fire the CP gear.
-  exact recon_attn_zigzag_2tp_layer_cp initSM initPM intermediateGoal_5690
+  exact recon_attn_zigzag_2tp_layer_cp initSM initPM ringAttnIntermediateGoal_5690
     nSMz7 nR0z7 nR1z7
     ((sm.nodes.take 750).foldl (applyNodeRingAttn sm) initSM)
     ((pm.nodes.take 1562).foldl (applyNodeRingAttn pm) initPM)
@@ -1612,7 +1612,7 @@ def nR1z8 : NodeDecl :=
   { rank := 1, op := "OpName.FW_attn_zigzag",
     ins := [11040, 5735, 5736, 5737, 5738], outs := [11064], params := [16, 4, 64, 64, 1, 0] }
 
-/- **Zigzag L8 (`intermediateGoal_5739`) over `denoteGraph_ringAttn`, conditional
+/- **Zigzag L8 (`ringAttnIntermediateGoal_5739`) over `denoteGraph_ringAttn`, conditional
     on the CP Q/K/V input reconstructions.**  The Q full-sharding commute
     (`hq_full`) and the K/V replication equalities (`hk_repl`/`hv_repl`) thread
     the incoming self-decoder residual carry through `per_head_mix_precision_linear
@@ -1623,7 +1623,7 @@ def nR1z8 : NodeDecl :=
     node reductions, buddy detection, cu-seqlens agreement, the r1 store bridge,
     and the CP reconstruction assembly — is discharged here. -/
 set_option maxHeartbeats 4000000 in
-theorem recon_intermediateGoal_5739_ringAttn_of_qkv (initSM initPM : Store)
+theorem recon_ringAttnIntermediateGoal_5739_ringAttn_of_qkv (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hq_full : (sm.nodes.take 785).foldl (applyNodeRingAttn sm) initSM 5734
         = allGatherPrimDimN 0 2 0
@@ -1670,7 +1670,7 @@ theorem recon_intermediateGoal_5739_ringAttn_of_qkv (initSM initPM : Store)
           ((pm.nodes.take 1633).foldl (applyNodeRingAttn pm) initPM 5737)
           ((pm.nodes.take 1633).foldl (applyNodeRingAttn pm) initPM 5738)
           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]) :
-    InitGoalHolds pm.numRanks intermediateGoal_5739
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5739
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   -- node reductions (denote ↔ applyNodeRingAttn_zigzag over prefix folds)
   have hSM5739 : denoteGraph_ringAttn sm initSM 5739
@@ -1754,7 +1754,7 @@ theorem recon_intermediateGoal_5739_ringAttn_of_qkv (initSM initPM : Store)
       = (pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM 5738 := by
     rw [hSM5738, hPM5738, hcu5738]
   -- Fire the CP gear.
-  exact recon_attn_zigzag_2tp_layer_cp initSM initPM intermediateGoal_5739
+  exact recon_attn_zigzag_2tp_layer_cp initSM initPM ringAttnIntermediateGoal_5739
     nSMz8 nR0z8 nR1z8
     ((sm.nodes.take 785).foldl (applyNodeRingAttn sm) initSM)
     ((pm.nodes.take 1632).foldl (applyNodeRingAttn pm) initPM)
@@ -1785,7 +1785,7 @@ def nR1z9 : NodeDecl :=
   { rank := 1, op := "OpName.FW_attn_zigzag",
     ins := [11212, 5784, 5785, 5786, 5787], outs := [11236], params := [16, 4, 64, 64, 1, 0] }
 
-/- **Zigzag L9 (`intermediateGoal_5788`) over `denoteGraph_ringAttn`, conditional
+/- **Zigzag L9 (`ringAttnIntermediateGoal_5788`) over `denoteGraph_ringAttn`, conditional
     on the CP Q/K/V input reconstructions.**  The Q full-sharding commute
     (`hq_full`) and the K/V replication equalities (`hk_repl`/`hv_repl`) thread
     the incoming self-decoder residual carry through `per_head_mix_precision_linear
@@ -1796,7 +1796,7 @@ def nR1z9 : NodeDecl :=
     node reductions, buddy detection, cu-seqlens agreement, the r1 store bridge,
     and the CP reconstruction assembly — is discharged here. -/
 set_option maxHeartbeats 4000000 in
-theorem recon_intermediateGoal_5788_ringAttn_of_qkv (initSM initPM : Store)
+theorem recon_ringAttnIntermediateGoal_5788_ringAttn_of_qkv (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hq_full : (sm.nodes.take 820).foldl (applyNodeRingAttn sm) initSM 5783
         = allGatherPrimDimN 0 2 0
@@ -1843,7 +1843,7 @@ theorem recon_intermediateGoal_5788_ringAttn_of_qkv (initSM initPM : Store)
           ((pm.nodes.take 1703).foldl (applyNodeRingAttn pm) initPM 5786)
           ((pm.nodes.take 1703).foldl (applyNodeRingAttn pm) initPM 5787)
           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]) :
-    InitGoalHolds pm.numRanks intermediateGoal_5788
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5788
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   -- node reductions (denote ↔ applyNodeRingAttn_zigzag over prefix folds)
   have hSM5788 : denoteGraph_ringAttn sm initSM 5788
@@ -1927,7 +1927,7 @@ theorem recon_intermediateGoal_5788_ringAttn_of_qkv (initSM initPM : Store)
       = (pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM 5787 := by
     rw [hSM5787, hPM5787, hcu5787]
   -- Fire the CP gear.
-  exact recon_attn_zigzag_2tp_layer_cp initSM initPM intermediateGoal_5788
+  exact recon_attn_zigzag_2tp_layer_cp initSM initPM ringAttnIntermediateGoal_5788
     nSMz9 nR0z9 nR1z9
     ((sm.nodes.take 820).foldl (applyNodeRingAttn sm) initSM)
     ((pm.nodes.take 1702).foldl (applyNodeRingAttn pm) initPM)
@@ -1958,7 +1958,7 @@ def nR1z10 : NodeDecl :=
   { rank := 1, op := "OpName.FW_attn_zigzag",
     ins := [11384, 5833, 5834, 5835, 5836], outs := [11408], params := [16, 4, 64, 64, 1, 0] }
 
-/- **Zigzag L10 (`intermediateGoal_5837`) over `denoteGraph_ringAttn`, conditional
+/- **Zigzag L10 (`ringAttnIntermediateGoal_5837`) over `denoteGraph_ringAttn`, conditional
     on the CP Q/K/V input reconstructions.**  The Q full-sharding commute
     (`hq_full`) and the K/V replication equalities (`hk_repl`/`hv_repl`) thread
     the incoming self-decoder residual carry through `per_head_mix_precision_linear
@@ -1969,7 +1969,7 @@ def nR1z10 : NodeDecl :=
     node reductions, buddy detection, cu-seqlens agreement, the r1 store bridge,
     and the CP reconstruction assembly — is discharged here. -/
 set_option maxHeartbeats 4000000 in
-theorem recon_intermediateGoal_5837_ringAttn_of_qkv (initSM initPM : Store)
+theorem recon_ringAttnIntermediateGoal_5837_ringAttn_of_qkv (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hq_full : (sm.nodes.take 855).foldl (applyNodeRingAttn sm) initSM 5832
         = allGatherPrimDimN 0 2 0
@@ -2016,7 +2016,7 @@ theorem recon_intermediateGoal_5837_ringAttn_of_qkv (initSM initPM : Store)
           ((pm.nodes.take 1773).foldl (applyNodeRingAttn pm) initPM 5835)
           ((pm.nodes.take 1773).foldl (applyNodeRingAttn pm) initPM 5836)
           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]) :
-    InitGoalHolds pm.numRanks intermediateGoal_5837
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5837
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   -- node reductions (denote ↔ applyNodeRingAttn_zigzag over prefix folds)
   have hSM5837 : denoteGraph_ringAttn sm initSM 5837
@@ -2100,7 +2100,7 @@ theorem recon_intermediateGoal_5837_ringAttn_of_qkv (initSM initPM : Store)
       = (pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM 5836 := by
     rw [hSM5836, hPM5836, hcu5836]
   -- Fire the CP gear.
-  exact recon_attn_zigzag_2tp_layer_cp initSM initPM intermediateGoal_5837
+  exact recon_attn_zigzag_2tp_layer_cp initSM initPM ringAttnIntermediateGoal_5837
     nSMz10 nR0z10 nR1z10
     ((sm.nodes.take 855).foldl (applyNodeRingAttn sm) initSM)
     ((pm.nodes.take 1772).foldl (applyNodeRingAttn pm) initPM)
@@ -2131,7 +2131,7 @@ def nR1z11 : NodeDecl :=
   { rank := 1, op := "OpName.FW_attn_zigzag",
     ins := [11556, 5882, 5883, 5884, 5885], outs := [11580], params := [16, 4, 64, 64, 1, 0] }
 
-/- **Zigzag L11 (`intermediateGoal_5886`) over `denoteGraph_ringAttn`, conditional
+/- **Zigzag L11 (`ringAttnIntermediateGoal_5886`) over `denoteGraph_ringAttn`, conditional
     on the CP Q/K/V input reconstructions.**  The Q full-sharding commute
     (`hq_full`) and the K/V replication equalities (`hk_repl`/`hv_repl`) thread
     the incoming self-decoder residual carry through `per_head_mix_precision_linear
@@ -2142,7 +2142,7 @@ def nR1z11 : NodeDecl :=
     node reductions, buddy detection, cu-seqlens agreement, the r1 store bridge,
     and the CP reconstruction assembly — is discharged here. -/
 set_option maxHeartbeats 4000000 in
-theorem recon_intermediateGoal_5886_ringAttn_of_qkv (initSM initPM : Store)
+theorem recon_ringAttnIntermediateGoal_5886_ringAttn_of_qkv (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hq_full : (sm.nodes.take 890).foldl (applyNodeRingAttn sm) initSM 5881
         = allGatherPrimDimN 0 2 0
@@ -2189,7 +2189,7 @@ theorem recon_intermediateGoal_5886_ringAttn_of_qkv (initSM initPM : Store)
           ((pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 5884)
           ((pm.nodes.take 1843).foldl (applyNodeRingAttn pm) initPM 5885)
           16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64]) :
-    InitGoalHolds pm.numRanks intermediateGoal_5886
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5886
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   -- node reductions (denote ↔ applyNodeRingAttn_zigzag over prefix folds)
   have hSM5886 : denoteGraph_ringAttn sm initSM 5886
@@ -2273,7 +2273,7 @@ theorem recon_intermediateGoal_5886_ringAttn_of_qkv (initSM initPM : Store)
       = (pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM 5885 := by
     rw [hSM5885, hPM5885, hcu5885]
   -- Fire the CP gear.
-  exact recon_attn_zigzag_2tp_layer_cp initSM initPM intermediateGoal_5886
+  exact recon_attn_zigzag_2tp_layer_cp initSM initPM ringAttnIntermediateGoal_5886
     nSMz11 nR0z11 nR1z11
     ((sm.nodes.take 890).foldl (applyNodeRingAttn sm) initSM)
     ((pm.nodes.take 1842).foldl (applyNodeRingAttn pm) initPM)
@@ -2288,17 +2288,17 @@ theorem recon_intermediateGoal_5886_ringAttn_of_qkv (initSM initPM : Store)
     hfull_shape hfull_shape'
     rfl rfl rfl rfl rfl rfl
 
-#check @recon_intermediateGoal_5396_ringAttn_of_qkv
-#check @recon_intermediateGoal_5445_ringAttn_of_qkv
-#check @recon_intermediateGoal_5494_ringAttn_of_qkv
-#check @recon_intermediateGoal_5543_ringAttn_of_qkv
-#check @recon_intermediateGoal_5592_ringAttn_of_qkv
-#check @recon_intermediateGoal_5641_ringAttn_of_qkv
-#check @recon_intermediateGoal_5690_ringAttn_of_qkv
-#check @recon_intermediateGoal_5739_ringAttn_of_qkv
-#check @recon_intermediateGoal_5788_ringAttn_of_qkv
-#check @recon_intermediateGoal_5837_ringAttn_of_qkv
-#check @recon_intermediateGoal_5886_ringAttn_of_qkv
+#check @recon_ringAttnIntermediateGoal_5396_ringAttn_of_qkv
+#check @recon_ringAttnIntermediateGoal_5445_ringAttn_of_qkv
+#check @recon_ringAttnIntermediateGoal_5494_ringAttn_of_qkv
+#check @recon_ringAttnIntermediateGoal_5543_ringAttn_of_qkv
+#check @recon_ringAttnIntermediateGoal_5592_ringAttn_of_qkv
+#check @recon_ringAttnIntermediateGoal_5641_ringAttn_of_qkv
+#check @recon_ringAttnIntermediateGoal_5690_ringAttn_of_qkv
+#check @recon_ringAttnIntermediateGoal_5739_ringAttn_of_qkv
+#check @recon_ringAttnIntermediateGoal_5788_ringAttn_of_qkv
+#check @recon_ringAttnIntermediateGoal_5837_ringAttn_of_qkv
+#check @recon_ringAttnIntermediateGoal_5886_ringAttn_of_qkv
 
 
 end TrainVerify.Denote.GeneratedPatterns

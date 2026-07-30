@@ -1363,29 +1363,14 @@ theorem allGather0_chunk0_id_4096_64 (x : Tensor) (hx : x.shape = [4096, 64]) :
     ring_nf
 
 
-/-- The 12 layer-12..23 routing members are CP zigzag-owned, so
-`intermediateGoal_N` is no longer emitted for them: an ordinary dim-0 gather over
-their shards is false on the full graph
-(see trainverify/GOAL_3_4_LAYOUT_SPLIT.md).
+/-! The 12 post-shuffle boundary contracts remain ordinary gathers ONLY in
+this sliced cut graph. `Goal_4.lean` re-declares them locally as
+`cutIntermediateGoal_*` and appends them to `goal_4_cut_initGoals`; they are not
+published as faithful full-graph goals. Thus the proof extracts them from
+`hInit` like every other cut boundary, without an extra global hypothesis. -/
 
-This hypothesis states that ordinary-gather relation for the tids Pattern_4 needs.
-It is **not** provable on the full graph and must not be discharged there. It IS
-sound on this cut: `pm_goal_4` is a sliced subgraph built from `ChunkPrim` with no
-`FW_maybe_shuffle` in it, so within the cut the shards really are contiguous.
-
-Making it an explicit parameter keeps the dependency visible. Previously it was
-derived silently from the emitter's incorrect goals, which is how a false
-assumption reached a proof unnoticed. See PATTERN_4_ZIGZAG_DEPENDENCY.md. -/
-def ZigzagCutGatherHyp (initSM initPM : Store) : Prop :=
-  ∀ (ts a b : Nat), ts ∈ [5359, 5408, 5457, 5506, 5555, 5604, 5653, 5702,
-                          5751, 5800, 5849, 5898] →
-    initSM ts = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM a, initPM b]
-
-theorem prove_goal_4
-    (hZZ : ∀ initSM initPM, ZigzagCutGatherHyp initSM initPM) :
-    goal_4_stmt_cut := by
+theorem prove_goal_4 : goal_4_stmt_cut := by
   intro initSM initPM hSM hPM hInit
-  have hZigzagGather := hZZ initSM initPM
   simp only [goal_4_cut_goal]
   have h4708_sm : (initSM 4708).shape = [4096, 64] := hSM 4708 [4096, 64] (by native_decide)
   have hpmR : pm_goal_4.numRanks = 2 := rfl
@@ -1631,88 +1616,100 @@ theorem prove_goal_4
         (by simp [intermediateGoal_5302]) (by rfl) (by rfl) (by rfl) h9525_pm
     have h9729_pm : (initPM 9729).shape = [2048, 64] := hPM 9729 [2048, 64] (by native_decide)
     -- tid 5359 is CP zigzag-owned; `intermediateGoal_5359` is no longer emitted
-    -- because an ordinary gather over its shards is FALSE (see
-    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
-    -- hypothesis so the dependency is visible rather than silently derived.
+    -- because an ordinary gather over its shards is FALSE on the full graph.
+    -- This local CUT boundary contract is extracted from hInit and jointly
+    -- witnessed; see trainverify/GOAL_3_4_LAYOUT_SPLIT.md.
     have hb_5359 : initSM 5359 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 9729, initPM 9730] :=
-      hZigzagGather 5359 9729 9730 (by decide)
+      extract_dual goal4CutIntermediateGoal_5359 (by native_decide) 9729 9730
+        (by simp [goal4CutIntermediateGoal_5359]) (by rfl) (by rfl) (by rfl) h9729_pm
     have h9901_pm : (initPM 9901).shape = [2048, 64] := hPM 9901 [2048, 64] (by native_decide)
     -- tid 5408 is CP zigzag-owned; `intermediateGoal_5408` is no longer emitted
-    -- because an ordinary gather over its shards is FALSE (see
-    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
-    -- hypothesis so the dependency is visible rather than silently derived.
+    -- because an ordinary gather over its shards is FALSE on the full graph.
+    -- This local CUT boundary contract is extracted from hInit and jointly
+    -- witnessed; see trainverify/GOAL_3_4_LAYOUT_SPLIT.md.
     have hb_5408 : initSM 5408 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 9901, initPM 9902] :=
-      hZigzagGather 5408 9901 9902 (by decide)
+      extract_dual goal4CutIntermediateGoal_5408 (by native_decide) 9901 9902
+        (by simp [goal4CutIntermediateGoal_5408]) (by rfl) (by rfl) (by rfl) h9901_pm
     have h10073_pm : (initPM 10073).shape = [2048, 64] := hPM 10073 [2048, 64] (by native_decide)
     -- tid 5457 is CP zigzag-owned; `intermediateGoal_5457` is no longer emitted
-    -- because an ordinary gather over its shards is FALSE (see
-    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
-    -- hypothesis so the dependency is visible rather than silently derived.
+    -- because an ordinary gather over its shards is FALSE on the full graph.
+    -- This local CUT boundary contract is extracted from hInit and jointly
+    -- witnessed; see trainverify/GOAL_3_4_LAYOUT_SPLIT.md.
     have hb_5457 : initSM 5457 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10073, initPM 10074] :=
-      hZigzagGather 5457 10073 10074 (by decide)
+      extract_dual goal4CutIntermediateGoal_5457 (by native_decide) 10073 10074
+        (by simp [goal4CutIntermediateGoal_5457]) (by rfl) (by rfl) (by rfl) h10073_pm
     have h10245_pm : (initPM 10245).shape = [2048, 64] := hPM 10245 [2048, 64] (by native_decide)
     -- tid 5506 is CP zigzag-owned; `intermediateGoal_5506` is no longer emitted
-    -- because an ordinary gather over its shards is FALSE (see
-    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
-    -- hypothesis so the dependency is visible rather than silently derived.
+    -- because an ordinary gather over its shards is FALSE on the full graph.
+    -- This local CUT boundary contract is extracted from hInit and jointly
+    -- witnessed; see trainverify/GOAL_3_4_LAYOUT_SPLIT.md.
     have hb_5506 : initSM 5506 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10245, initPM 10246] :=
-      hZigzagGather 5506 10245 10246 (by decide)
+      extract_dual goal4CutIntermediateGoal_5506 (by native_decide) 10245 10246
+        (by simp [goal4CutIntermediateGoal_5506]) (by rfl) (by rfl) (by rfl) h10245_pm
     have h10417_pm : (initPM 10417).shape = [2048, 64] := hPM 10417 [2048, 64] (by native_decide)
     -- tid 5555 is CP zigzag-owned; `intermediateGoal_5555` is no longer emitted
-    -- because an ordinary gather over its shards is FALSE (see
-    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
-    -- hypothesis so the dependency is visible rather than silently derived.
+    -- because an ordinary gather over its shards is FALSE on the full graph.
+    -- This local CUT boundary contract is extracted from hInit and jointly
+    -- witnessed; see trainverify/GOAL_3_4_LAYOUT_SPLIT.md.
     have hb_5555 : initSM 5555 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10417, initPM 10418] :=
-      hZigzagGather 5555 10417 10418 (by decide)
+      extract_dual goal4CutIntermediateGoal_5555 (by native_decide) 10417 10418
+        (by simp [goal4CutIntermediateGoal_5555]) (by rfl) (by rfl) (by rfl) h10417_pm
     have h10589_pm : (initPM 10589).shape = [2048, 64] := hPM 10589 [2048, 64] (by native_decide)
     -- tid 5604 is CP zigzag-owned; `intermediateGoal_5604` is no longer emitted
-    -- because an ordinary gather over its shards is FALSE (see
-    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
-    -- hypothesis so the dependency is visible rather than silently derived.
+    -- because an ordinary gather over its shards is FALSE on the full graph.
+    -- This local CUT boundary contract is extracted from hInit and jointly
+    -- witnessed; see trainverify/GOAL_3_4_LAYOUT_SPLIT.md.
     have hb_5604 : initSM 5604 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10589, initPM 10590] :=
-      hZigzagGather 5604 10589 10590 (by decide)
+      extract_dual goal4CutIntermediateGoal_5604 (by native_decide) 10589 10590
+        (by simp [goal4CutIntermediateGoal_5604]) (by rfl) (by rfl) (by rfl) h10589_pm
     have h10761_pm : (initPM 10761).shape = [2048, 64] := hPM 10761 [2048, 64] (by native_decide)
     -- tid 5653 is CP zigzag-owned; `intermediateGoal_5653` is no longer emitted
-    -- because an ordinary gather over its shards is FALSE (see
-    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
-    -- hypothesis so the dependency is visible rather than silently derived.
+    -- because an ordinary gather over its shards is FALSE on the full graph.
+    -- This local CUT boundary contract is extracted from hInit and jointly
+    -- witnessed; see trainverify/GOAL_3_4_LAYOUT_SPLIT.md.
     have hb_5653 : initSM 5653 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10761, initPM 10762] :=
-      hZigzagGather 5653 10761 10762 (by decide)
+      extract_dual goal4CutIntermediateGoal_5653 (by native_decide) 10761 10762
+        (by simp [goal4CutIntermediateGoal_5653]) (by rfl) (by rfl) (by rfl) h10761_pm
     have h10933_pm : (initPM 10933).shape = [2048, 64] := hPM 10933 [2048, 64] (by native_decide)
     -- tid 5702 is CP zigzag-owned; `intermediateGoal_5702` is no longer emitted
-    -- because an ordinary gather over its shards is FALSE (see
-    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
-    -- hypothesis so the dependency is visible rather than silently derived.
+    -- because an ordinary gather over its shards is FALSE on the full graph.
+    -- This local CUT boundary contract is extracted from hInit and jointly
+    -- witnessed; see trainverify/GOAL_3_4_LAYOUT_SPLIT.md.
     have hb_5702 : initSM 5702 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 10933, initPM 10934] :=
-      hZigzagGather 5702 10933 10934 (by decide)
+      extract_dual goal4CutIntermediateGoal_5702 (by native_decide) 10933 10934
+        (by simp [goal4CutIntermediateGoal_5702]) (by rfl) (by rfl) (by rfl) h10933_pm
     have h11105_pm : (initPM 11105).shape = [2048, 64] := hPM 11105 [2048, 64] (by native_decide)
     -- tid 5751 is CP zigzag-owned; `intermediateGoal_5751` is no longer emitted
-    -- because an ordinary gather over its shards is FALSE (see
-    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
-    -- hypothesis so the dependency is visible rather than silently derived.
+    -- because an ordinary gather over its shards is FALSE on the full graph.
+    -- This local CUT boundary contract is extracted from hInit and jointly
+    -- witnessed; see trainverify/GOAL_3_4_LAYOUT_SPLIT.md.
     have hb_5751 : initSM 5751 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 11105, initPM 11106] :=
-      hZigzagGather 5751 11105 11106 (by decide)
+      extract_dual goal4CutIntermediateGoal_5751 (by native_decide) 11105 11106
+        (by simp [goal4CutIntermediateGoal_5751]) (by rfl) (by rfl) (by rfl) h11105_pm
     have h11277_pm : (initPM 11277).shape = [2048, 64] := hPM 11277 [2048, 64] (by native_decide)
     -- tid 5800 is CP zigzag-owned; `intermediateGoal_5800` is no longer emitted
-    -- because an ordinary gather over its shards is FALSE (see
-    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
-    -- hypothesis so the dependency is visible rather than silently derived.
+    -- because an ordinary gather over its shards is FALSE on the full graph.
+    -- This local CUT boundary contract is extracted from hInit and jointly
+    -- witnessed; see trainverify/GOAL_3_4_LAYOUT_SPLIT.md.
     have hb_5800 : initSM 5800 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 11277, initPM 11278] :=
-      hZigzagGather 5800 11277 11278 (by decide)
+      extract_dual goal4CutIntermediateGoal_5800 (by native_decide) 11277 11278
+        (by simp [goal4CutIntermediateGoal_5800]) (by rfl) (by rfl) (by rfl) h11277_pm
     have h11449_pm : (initPM 11449).shape = [2048, 64] := hPM 11449 [2048, 64] (by native_decide)
     -- tid 5849 is CP zigzag-owned; `intermediateGoal_5849` is no longer emitted
-    -- because an ordinary gather over its shards is FALSE (see
-    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
-    -- hypothesis so the dependency is visible rather than silently derived.
+    -- because an ordinary gather over its shards is FALSE on the full graph.
+    -- This local CUT boundary contract is extracted from hInit and jointly
+    -- witnessed; see trainverify/GOAL_3_4_LAYOUT_SPLIT.md.
     have hb_5849 : initSM 5849 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 11449, initPM 11450] :=
-      hZigzagGather 5849 11449 11450 (by decide)
+      extract_dual goal4CutIntermediateGoal_5849 (by native_decide) 11449 11450
+        (by simp [goal4CutIntermediateGoal_5849]) (by rfl) (by rfl) (by rfl) h11449_pm
     have h11621_pm : (initPM 11621).shape = [2048, 64] := hPM 11621 [2048, 64] (by native_decide)
     -- tid 5898 is CP zigzag-owned; `intermediateGoal_5898` is no longer emitted
-    -- because an ordinary gather over its shards is FALSE (see
-    -- see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Taken as an explicit
-    -- hypothesis so the dependency is visible rather than silently derived.
+    -- because an ordinary gather over its shards is FALSE on the full graph.
+    -- This local CUT boundary contract is extracted from hInit and jointly
+    -- witnessed; see trainverify/GOAL_3_4_LAYOUT_SPLIT.md.
     have hb_5898 : initSM 5898 = allGatherPrimDimN 0 pm_goal_4.numRanks 0 [initPM 11621, initPM 11622] :=
-      hZigzagGather 5898 11621 11622 (by decide)
+      extract_dual goal4CutIntermediateGoal_5898 (by native_decide) 11621 11622
+        (by simp [goal4CutIntermediateGoal_5898]) (by rfl) (by rfl) (by rfl) h11621_pm
     -- Layer 0/1 special: rewrite initSM 4708/4762 = initPM 4708/4762, then softmax → allGather form.
     rw [hb_4708, hb_4762]
     -- Layer 2..23: rewrite initSM = allGather.
@@ -1957,11 +1954,9 @@ theorem prove_goal_4
     -- Now goal is: fw_stack (zipWith f as bs) = allGather_1 [fw_stack as, fw_stack bs].
     exact hLemmaB
 
-theorem prove_pattern_4
-    (hZZ : ∀ initSM initPM, ZigzagCutGatherHyp initSM initPM) :
-    pattern_4_stmt := by
+theorem prove_pattern_4 : pattern_4_stmt := by
   intro target h
   cases h
-  exact prove_goal_4 hZZ
+  exact prove_goal_4
 
 end TrainVerify.Denote.GeneratedPatterns

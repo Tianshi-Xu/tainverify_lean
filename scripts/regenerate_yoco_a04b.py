@@ -97,7 +97,7 @@ def main() -> None:
     sys.argv = [
         "graph_to_lean", "--sm-pkl", str(sm), "--pm-pkl", str(pm),
         "--out", str(args.out), "--module", "denote.GeneratedYOCOMoE",
-        "--max-goals", "5", "--split-goals",
+        "--max-goals", "5", "--split-goals", "--assume-cp-dim0-shuffle",
         "--goals-out-dir", str(args.goals_out_dir),
         "--manifest-out", str(args.manifest_out),
         "--llm-train-repo", str(LLM_TRAIN),

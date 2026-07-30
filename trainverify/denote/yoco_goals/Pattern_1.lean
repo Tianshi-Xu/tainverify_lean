@@ -4162,25 +4162,14 @@ theorem pm_chain_shape_4096 (initPM : Store) (hPM : StoreShapesHold initPM pm_go
     exact hfst0)]
   decide
 
-/-- Ordinary dim-0 gather for the CP zigzag-owned tids Pattern_1 consumes.
+/-! The three post-shuffle boundary contracts remain ordinary gathers ONLY in
+this sliced cut graph. `Goal_1.lean` re-declares them locally as
+`cutIntermediateGoal_*` and appends them to `goal_1_cut_initGoals`; they are not
+published as faithful full-graph goals. Thus the proof extracts them from
+`hInit` like every other cut boundary, without an extra global hypothesis. -/
 
-`intermediateGoal_5893/5895/5898` are no longer emitted: on the FULL graph these
-tensors are zigzag-owned and an ordinary gather over their shards is false
-(nnScaler's RVD model cannot express a permuted sharding; see
-trainverify/GOAL_3_4_LAYOUT_SPLIT.md). The relation is sound on this
-CUT, whose sliced PM subgraph contains no `FW_maybe_shuffle`.
-
-Kept as an explicit parameter so the assumption is visible rather than silently
-inherited from an incorrect generated goal. See PATTERN_4_ZIGZAG_DEPENDENCY.md. -/
-def Pattern1ZigzagCutGatherHyp (initSM initPM : Store) : Prop :=
-  ∀ (ts a b : Nat), ts ∈ [5893, 5895, 5898] →
-    initSM ts = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM a, initPM b]
-
-theorem prove_goal_1
-    (hZZ : ∀ initSM initPM, Pattern1ZigzagCutGatherHyp initSM initPM) :
-    goal_1_stmt_with_labels := by
+theorem prove_goal_1 : goal_1_stmt_with_labels := by
   intro initSM initPM hSM hPM hInit hlabels_from_caller
-  have hZigzagGather := hZZ initSM initPM
   simp only [goal_1]
   refine ⟨?shape, ?tp_shapes, ?value⟩
   case shape =>
@@ -4248,24 +4237,16 @@ theorem prove_goal_1
     have h11621_shape : (initPM 11621).shape = [2048, 64] := hPM 11621 [2048, 64] (by native_decide)
     have h11629_shape : (initPM 11629).shape = [32, 1024, 1024] := hPM 11629 [32, 1024, 1024] (by native_decide)
     have h11631_shape : (initPM 11631).shape = [32, 1024, 512] := hPM 11631 [32, 1024, 512] (by native_decide)
-    -- tid 5893 is CP zigzag-owned; `intermediateGoal_5893` is no longer emitted
-    -- because an ordinary gather over its shards is FALSE on the full graph
-    -- (see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Explicit hypothesis so
-    -- the dependency is visible. See PATTERN_4_ZIGZAG_DEPENDENCY.md.
+    -- Post-shuffle relations are explicit, satisfiable CUT boundary contracts.
     have hb_5893 : initSM 5893 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11609, initPM 11610] :=
-      hZigzagGather 5893 11609 11610 (by decide)
-    -- tid 5895 is CP zigzag-owned; `intermediateGoal_5895` is no longer emitted
-    -- because an ordinary gather over its shards is FALSE on the full graph
-    -- (see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Explicit hypothesis so
-    -- the dependency is visible. See PATTERN_4_ZIGZAG_DEPENDENCY.md.
+      extract_dual goal1CutIntermediateGoal_5893 (by native_decide) 5893 11609 11610 [2048, 1024]
+        (by rfl) (by rfl) (by rfl) (by rfl) h11609_shape (by decide)
     have hb_5895 : initSM 5895 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11613, initPM 11614] :=
-      hZigzagGather 5895 11613 11614 (by decide)
-    -- tid 5898 is CP zigzag-owned; `intermediateGoal_5898` is no longer emitted
-    -- because an ordinary gather over its shards is FALSE on the full graph
-    -- (see trainverify/GOAL_3_4_LAYOUT_SPLIT.md). Explicit hypothesis so
-    -- the dependency is visible. See PATTERN_4_ZIGZAG_DEPENDENCY.md.
+      extract_dual goal1CutIntermediateGoal_5895 (by native_decide) 5895 11613 11614 [2048, 1024]
+        (by rfl) (by rfl) (by rfl) (by rfl) h11613_shape (by decide)
     have hb_5898 : initSM 5898 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11621, initPM 11622] :=
-      hZigzagGather 5898 11621 11622 (by decide)
+      extract_dual goal1CutIntermediateGoal_5898 (by native_decide) 5898 11621 11622 [2048, 64]
+        (by rfl) (by rfl) (by rfl) (by rfl) h11621_shape (by decide)
     have hb_5902 : initSM 5902 = allGatherPrimDimN 0 pm_goal_1.numRanks 0 [initPM 11629, initPM 11630] :=
       extract_dual initGoal_5902 (by native_decide) 5902 11629 11630 [32, 1024, 1024]
         (by rfl) (by rfl) (by rfl) (by rfl) h11629_shape (by decide)
@@ -4849,11 +4830,9 @@ theorem prove_goal_1
           hlabels_bound (((0 : Nat) : Scalar))]
 
 
-theorem prove_pattern_1
-    (hZZ : ∀ initSM initPM, Pattern1ZigzagCutGatherHyp initSM initPM) :
-    pattern_1_stmt := by
+theorem prove_pattern_1 : pattern_1_stmt := by
   intro _ hpat
   cases hpat
-  exact prove_goal_1 hZZ
+  exact prove_goal_1
 
 end TrainVerify.Denote.GeneratedPatterns

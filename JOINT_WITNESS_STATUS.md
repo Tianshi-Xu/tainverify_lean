@@ -1,5 +1,11 @@
 # Pattern Joint Hypothesis Witness — 状态与决策请求
 
+> **SUPERSEDED (2026-07-28).** Historical status from commit `59a43d2b`.
+> Replicated reconstruction and joint witnesses subsequently landed; do not use
+> the blocker or decision request below as current state. The current top-level
+> cut-tier theorem is `YocoMoE_MainSummary.yoco_moe_cut_tier_main`; current
+> faithful coverage is in `trainverify/YOCO_MOE_FAITHFUL_COVERAGE.md`.
+
 **Session:** 2026-07-14  
 **Branch:** main (52b42b37 pushed)
 

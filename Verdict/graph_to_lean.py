@@ -104,6 +104,16 @@ def parse_args() -> argparse.Namespace:
 		),
 	)
 	p.add_argument(
+		"--assume-cp-dim0-shuffle",
+		action="store_true",
+		help=(
+			"Enable zigzag ownership suppression ONLY after auditing that the authority "
+			"graph's maybe_shuffle input is dim-0 partitioned, so nnScaler emit_ring "
+			"creates a multi-rank process group. Default false is conservative: graph "
+			"rank count alone is not cpSize."
+		),
+	)
+	p.add_argument(
 		"--use-tid-goal-ids",
 		action="store_true",
 		help=(
@@ -357,9 +367,9 @@ def _node_rank(node: Any) -> int:
 # a naive rank-order concatenation. Concatenating zigzag shards yields
 # [0, 1, 6, 7, 2, 3, 4, 5], which is NOT the single-machine [0 .. 7].
 #
-# So a lineage goal over such a tensor is FALSE, not merely hard to prove. This
-# is an expressiveness gap in the RVD abstraction, NOT a bug in llm-train (whose
-# model.py uses the API correctly) and NOT an emitter mistake.
+# So a lineage goal over such a tensor is FALSE, not merely hard to prove. The
+# root is an RVD expressiveness gap combined with the current identity annotation
+# / adapter integration contract. llm-train itself uses the API correctly.
 #
 # ---------------------------------------------------------------------------
 # WHY THE TEST IS ON cpSize, NOT ON "does a shuffle appear in the ancestry"
@@ -422,7 +432,9 @@ def _collective_output_tids(G: Any, op_substrings: Sequence[str]) -> List[int]:
 	return sorted(out)
 
 
-def build_zigzag_owner_predicate(G: Any, num_parts: int):
+def build_zigzag_owner_predicate(
+	G: Any, num_parts: int, *, cp_dim0_audited: bool = False
+):
 	"""Return `(is_zigzag_owned, zigzag_cu_of)` for a parallel-machine graph.
 
 	`is_zigzag_owned(tid) -> bool` answers whether `tid` is in CP zigzag layout.
@@ -430,10 +442,12 @@ def build_zigzag_owner_predicate(G: Any, num_parts: int):
 	tid that pins that layout, which a `ZigzagLineageGoal` must carry explicitly
 	because ownership is not recoverable from shapes.
 
-	`num_parts` is the graph's rank count. It is REQUIRED: a `maybe_shuffle` at
-	cpSize = 1 is the identity, so a single-device graph has no zigzag ownership
-	at all and the predicate must answer False everywhere. See
-	`_reordering_shuffle_outputs`.
+	`num_parts` is the graph's rank count, not automatically the op's cpSize.
+	When `cp_dim0_audited` is false the predicate conservatively marks nothing:
+	nnScaler `emit_ring` uses a multi-rank process group only for a dim-0
+	partitioned input; a dim-1 or unpartitioned input makes maybe_shuffle the
+	identity even when the graph has multiple ranks. Callers that audited dim-0
+	partitioning may opt in. See `_reordering_shuffle_outputs`.
 
 	Cached shuffle/unshuffle tid sets are computed once; the per-tid closure is
 	computed lazily and memoised, so calling this for every emitted goal stays
@@ -442,7 +456,9 @@ def build_zigzag_owner_predicate(G: Any, num_parts: int):
 	# shuffle output tid -> the cu_seqlens tid that node read (`ins[1]`, per the
 	# generated `FW_maybe_shuffle` calling convention: [data, cu_seqlens]).
 	# Only shuffles that actually permute (cpSize > 1) are included.
-	shuffle_cu: Dict[int, int] = _reordering_shuffle_outputs(G, num_parts)
+	shuffle_cu: Dict[int, int] = (
+		_reordering_shuffle_outputs(G, num_parts) if cp_dim0_audited else {}
+	)
 	shuffle_outs = set(shuffle_cu)
 	unshuffle_outs = set(_collective_output_tids(G, UNSHUFFLE_OPS))
 	memo_cu: Dict[int, Optional[int]] = {}
@@ -1771,6 +1787,7 @@ def emit_lean_spec(
 	segment_min_repeats: int = 2,
 	segment_max_period: int = 80,
 	manifest_name: Optional[str] = None,
+	cp_dim0_audited: bool = False,
 ) -> None:
 	# Build mapping from goal ts to sequential id (1-based) by default
 	goal_ts_to_seq_id: Dict[int, int] = {}
@@ -1914,7 +1931,9 @@ def emit_lean_spec(
 	# Structural CP-ownership oracle. Shape inference cannot distinguish a zigzag
 	# shard from a contiguous one (identical shapes), so goals over zigzag-owned
 	# shards must not be emitted as ordinary gathers. See `build_zigzag_owner_predicate`.
-	_is_zigzag_owned, _zigzag_cu_of = build_zigzag_owner_predicate(pm_graph, pm_num_ranks)
+	_is_zigzag_owned, _zigzag_cu_of = build_zigzag_owner_predicate(
+		pm_graph, pm_num_ranks, cp_dim0_audited=cp_dim0_audited
+	)
 	zigzag_suppressed: List[Tuple[str, int, List[int]]] = []
 	suppressed_def_names: set[str] = set()
 	zigzag_goal_names: List[str] = []
@@ -2036,9 +2055,10 @@ def emit_lean_spec(
 		# CP-ownership gate. The goal asserts `SM ts = reconstruct(PM tps)`. That
 		# is valid only if the PM tensors are in ordinary contiguous ownership.
 		# Shapes cannot tell us this (a zigzag shard and a contiguous shard have
-		# the same shape), so it is decided structurally on the PM dataflow in
-		# `_precompute_suppression`, which also handles the transitive case of a
-		# goal losing a prereq.
+		# the same shape), so ownership is decided structurally on the PM dataflow
+		# in `_precompute_suppression`. Suppression is deliberately NON-transitive:
+		# a sound downstream goal may drop a false zigzag prereq and become a
+		# stronger theorem (goal_1/goal_2 are the concrete regression case).
 		if def_name in suppressed_def_names:
 			reason = next(
 				(bad for (nm, _ts, bad) in zigzag_suppressed if nm == def_name), []
@@ -3729,6 +3749,7 @@ def main() -> None:
 		segment_min_repeats=int(args.segment_min_repeats),
 		segment_max_period=int(args.segment_max_period),
 		manifest_name=Path(args.manifest_out).name if args.manifest_out else None,
+		cp_dim0_audited=bool(args.assume_cp_dim0_shuffle),
 	)
 
 	if args.manifest_out:

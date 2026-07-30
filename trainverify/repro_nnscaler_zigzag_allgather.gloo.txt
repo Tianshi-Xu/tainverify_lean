@@ -1,0 +1,29 @@
+Backend: Gloo (CPU), two distributed ranks
+Date: 2026-07-30
+Command:
+  cd /home/argustest/.openclaw/workspace/iroha-tasks/trainverify-llm-train/nnscaler
+  NNSCALER_SOURCE_ROOT=$PWD \
+    /home/argustest/miniconda3/envs/verdict/bin/torchrun \
+    --standalone --nproc-per-node=2 \
+    /home/argustest/worktrees/tv-yoco-moe-bulk/trainverify/scripts/repro_nnscaler_zigzag_allgather.py
+
+The script directly loaded and executed nnScaler source files:
+  nnscaler/customized_ops/ring_attention/varlen_utils.py
+  nnscaler/runtime/adapter/collectives.py
+
+Output:
+REFERENCE_FULL       = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0]
+SHUFFLED_RANK_0      = [0.0, 1.0, 6.0, 7.0, 8.0, 9.0, 14.0, 15.0]
+SHUFFLED_RANK_1      = [2.0, 3.0, 4.0, 5.0, 10.0, 11.0, 12.0, 13.0]
+NAIVE_ALLGATHER      = [0.0, 1.0, 6.0, 7.0, 8.0, 9.0, 14.0, 15.0, 2.0, 3.0, 4.0, 5.0, 10.0, 11.0, 12.0, 13.0]
+UNSHUFFLE_ALLGATHER  = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0]
+NAIVE_EQUALS_FULL    = False
+CONTROL_EQUALS_FULL  = True
+LOCAL_ROUNDTRIP_OK   = True
+
+Exit code: 0
+
+Caveat: production uses CUDA/NCCL. Both configured GPU hosts timed out over SSH
+at audit time, so the CUDA/NCCL rerun remains pending. The permutation and
+rank-order concat source code exercised here is backend-independent; the pending
+run verifies the production collective backend as an additional guard.

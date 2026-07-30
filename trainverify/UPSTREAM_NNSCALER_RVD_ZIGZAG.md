@@ -1,8 +1,12 @@
 # nnScaler: RVD cannot express the layout `maybe_shuffle` produces
 
 Found by TrainVerify while formally verifying YOCO-MoE-A0.4B (SM 1 GPU vs
-PM 2 GPUs, `pcs/all2all_moe.yaml`). Reported as a **design limitation**, not a
-coding slip — the code is doing the only thing the abstraction allows.
+PM 2 GPUs, `pcs/all2all_moe.yaml`). Audited against nnScaler commit
+`1102e629ee68ab6f8f4a7c2e721ea894e5962131` and llm-train commit
+`30b80f546d46aacbf8316c983550c50a56bcd1ac`. The finding is a combination of
+an **RVD expressiveness limitation** and an unsafe custom-op annotation /
+adapter-integration contract. We do not prejudge which layer upstream should
+change.
 
 ## Summary
 
@@ -13,8 +17,10 @@ ordinary dim-0 split and inserts a plain `AllGatherPrim`, whose runtime is a
 naive `torch.concat` over rank order. Concatenating zigzag shards does not
 reconstruct the original sequence.
 
-Result: for any tensor gathered while still inside the shuffled region, the
-multi-GPU value differs from the single-GPU value.
+Result: the gather reconstructs permuted token order rather than canonical
+order. For row-distinguishing inputs (including the executable row-id fixture)
+the multi-GPU value differs from the single-GPU value. Degenerate inputs with
+identical exchanged rows may of course mask the mismatch numerically.
 
 ## The chain
 
@@ -26,7 +32,10 @@ multi-GPU value differs from the single-GPU value.
 R(eplicate) / V(alue-split) / D(imension-split) only. `IRTensor` carries no
 permutation or layout field.
 
-**2. So the annotation must claim identity.**
+**2. The current implementation chooses an identity annotation.** The present
+dimops/RVD representation cannot encode the permutation, but other conservative
+design choices are possible (reject partitioning, force replication, attach
+special layout metadata, or explicitly unshuffle before an adapter).
 `nnscaler/customized_ops/ring_attention/maybe_shuffle.py`:
 
 ```python
@@ -73,15 +82,52 @@ This graph really does shuffle: `dp_sharded` defaults False so
 (`[2048, 1024]` of `[4096, 1024]`), which sends `emit_ring` down the
 `partition_dims[0][0] == 0` branch and produces a 2-device `process_group`.
 
-## Consequence
+## Executable reproduction
 
-`all_routing_map` feeds the MoE balance loss in `nnscaler_train.py`. That
-computation is outside the traced graph, so we have **not** verified an
-end-to-end numerical impact and are not claiming one. What we can state is that
-the tensor itself differs between the 1-GPU and 2-GPU runs, so any consumer
-sensitive to row order sees different data. `loss_mask` and `tag_index` are
-indexed by original token position, which suggests sensitivity, but confirming
-that is a separate exercise.
+`trainverify/scripts/repro_nnscaler_zigzag_allgather.py` executes nnScaler's
+actual source implementations of `shuffle_varlen`, `unshuffle_varlen`, and
+runtime-adapter `all_gather` in two distributed processes. It has a CPU/Gloo
+fallback for machines without GPUs and runs unchanged under CUDA/NCCL when two
+GPUs are visible.
+
+Verified on dsp3 with two Gloo ranks (same permutation and rank-order gather
+code; only the collective backend differs):
+
+```text
+REFERENCE_FULL       = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+SHUFFLED_RANK_0      = [0, 1, 6, 7, 8, 9, 14, 15]
+SHUFFLED_RANK_1      = [2, 3, 4, 5, 10, 11, 12, 13]
+NAIVE_ALLGATHER      = [0, 1, 6, 7, 8, 9, 14, 15, 2, 3, 4, 5, 10, 11, 12, 13]
+UNSHUFFLE_ALLGATHER  = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+NAIVE_EQUALS_FULL    = False
+CONTROL_EQUALS_FULL  = True
+LOCAL_ROUNDTRIP_OK   = True
+```
+
+Command:
+
+```bash
+cd <nnscaler-source-root>
+NNSCALER_SOURCE_ROOT=$PWD torchrun --standalone --nproc-per-node=2 \
+  <trainverify>/scripts/repro_nnscaler_zigzag_allgather.py
+```
+
+A final CUDA/NCCL rerun remains desirable because production uses NCCL. It was
+not available at the time of this audit: both configured GPU hosts (`egpu1`,
+`iroha-gpu`) timed out at the SSH endpoint. The CPU result is nonetheless a
+real execution of the same nnScaler permutation and all-gather source; it is not
+a reimplementation or paper simulation.
+
+## Consequence and verified scope
+
+The verified claim stops at tids 4675/4676: the 1-GPU and 2-GPU tensors differ.
+Both are leaf outputs in the traced graph — no node consumes either tid.
+
+`all_routing_map` is consumed later by the MoE balance loss in
+`nnscaler_train.py`, but that computation is outside this graph. We therefore
+make **no claim** here about end-to-end loss or training impact. Establishing
+that would require tracing or separately testing the consumer. This report is
+about the invalid reconstruction of the leaf tensors themselves.
 
 ## Possible directions
 

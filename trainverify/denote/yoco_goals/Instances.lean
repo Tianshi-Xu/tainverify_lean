@@ -55,22 +55,22 @@ theorem prove_goal_2_from_pattern_2 : goal_2_stmt := by
 
    The CUT statements are a different matter and remain sound: `pm_goal_3` /
    `pm_goal_4` are sliced subgraphs built from `ChunkPrim` with no shuffle in
-   them, so Pattern_3 / Pattern_4 prove true things. It is precisely the
-   cut-to-full lift that is impossible — which is why those two bridges were
-   never emitted and these theorems were always `sorry`. -/
+   them. Pattern_4 proves its raw cut statement sorry-free. Pattern_3 proves
+   `goal_3_stmt_with_pins`, which requires 12 explicit cu_seqlens value pins;
+   turning that conditional theorem into the raw `goal_3_stmt_cut` is not valid,
+   so its raw cut instance remains `sorry`. No cut-to-full bridge is emitted for
+   either goal because the corresponding full-graph equalities are false. -/
 
-/-- Goal 3: stated over the cut, which is shuffle-free and sound. There is no
-    full-graph statement to bridge to (see the note above). -/
+/-- Goal 3: Pattern_3 proves the honest conditional `goal_3_stmt_with_pins`, not
+    the raw cut statement. Discharging the 12 pin assumptions is separate work. -/
 theorem prove_goal_3_from_pattern_3 : goal_3_stmt_cut := by
-  sorry -- Pattern_3 itself needs its own hand-proof; separately blocked
+  sorry
 
 /-- Goal 4: stated over the cut. Pattern_4 discharges it outright, so this is no
     longer a `sorry` — the previous `sorry` was owed entirely to the impossible
     cut-to-full lift, not to any gap in Pattern_4. -/
-theorem prove_goal_4_from_pattern_4
-    (hZZ : ∀ initSM initPM, ZigzagCutGatherHyp initSM initPM) :
-    goal_4_stmt_cut :=
-  prove_pattern_4 hZZ pattern_4_target.goal_4
+theorem prove_goal_4_from_pattern_4 : goal_4_stmt_cut :=
+  prove_pattern_4 pattern_4_target.goal_4
 
 /-- Goal 5: base, has working cut_to_full bridge. ✅ -/
 theorem prove_goal_5_from_pattern_5 : goal_5_stmt := by

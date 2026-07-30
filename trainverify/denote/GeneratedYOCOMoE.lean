@@ -12595,16 +12595,16 @@ def goal_2 : LineageGoal :=
 --   PM tids 4675 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 --   (no ZigzagLineageGoal emitted: needs exactly 2 tps sharing one cu tid; got 1 tps, cu tids [5337])
 
 -- NOT an ordinary gather: goal_4 (ts = 4676).
 --   PM tids 4676 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 --   (no ZigzagLineageGoal emitted: needs exactly 2 tps sharing one cu tid; got 1 tps, cu tids [5337])
 
 def goal_5 : LineageGoal :=
@@ -13964,8 +13964,8 @@ def intermediateGoal_5336 : LineageGoal :=
 --   PM tids 9655, 9656 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5338_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5338, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9655 }, { rank := 1, tid := 9656 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -13973,8 +13973,8 @@ def intermediateGoal_5338_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9657, 9658 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5340_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5340, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9657 }, { rank := 1, tid := 9658 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -13982,8 +13982,8 @@ def intermediateGoal_5340_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9659, 9660 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5342_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5342, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9659 }, { rank := 1, tid := 9660 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -13997,8 +13997,8 @@ def intermediateGoal_5344 : LineageGoal :=
 --   PM tids 9687, 9688 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5347_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5347, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9687 }, { rank := 1, tid := 9688 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14006,8 +14006,8 @@ def intermediateGoal_5347_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9689, 9690 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5348_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5348, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9689 }, { rank := 1, tid := 9690 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14015,8 +14015,8 @@ def intermediateGoal_5348_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9695, 9696 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5349_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5349, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9695 }, { rank := 1, tid := 9696 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14024,8 +14024,8 @@ def intermediateGoal_5349_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9699, 9700 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5351_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5351, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9699 }, { rank := 1, tid := 9700 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14033,8 +14033,8 @@ def intermediateGoal_5351_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9709, 9710 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5352_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5352, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9709 }, { rank := 1, tid := 9710 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14042,8 +14042,8 @@ def intermediateGoal_5352_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9713, 9714 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5353_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5353, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9713 }, { rank := 1, tid := 9714 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14051,8 +14051,8 @@ def intermediateGoal_5353_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9717, 9718 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5354_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5354, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9717 }, { rank := 1, tid := 9718 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14060,8 +14060,8 @@ def intermediateGoal_5354_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9721, 9722 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5356_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5356, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9721 }, { rank := 1, tid := 9722 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14069,8 +14069,8 @@ def intermediateGoal_5356_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9723, 9724 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5357_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5357, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9723 }, { rank := 1, tid := 9724 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14078,8 +14078,8 @@ def intermediateGoal_5357_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9729, 9730 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5359_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5359, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9729 }, { rank := 1, tid := 9730 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14087,8 +14087,8 @@ def intermediateGoal_5359_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9731, 9732 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5360_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5360, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9731 }, { rank := 1, tid := 9732 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14096,8 +14096,8 @@ def intermediateGoal_5360_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9733, 9734 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5361_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5361, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9733 }, { rank := 1, tid := 9734 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14105,8 +14105,8 @@ def intermediateGoal_5361_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9741, 9742 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5365_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5365, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9741 }, { rank := 1, tid := 9742 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14114,8 +14114,8 @@ def intermediateGoal_5365_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9743, 9744 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5366_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5366, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9743 }, { rank := 1, tid := 9744 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14123,8 +14123,8 @@ def intermediateGoal_5366_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9747, 9748 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5368_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5368, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9747 }, { rank := 1, tid := 9748 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -14132,8 +14132,8 @@ def intermediateGoal_5368_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9753, 9754 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5369_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5369, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9753 }, { rank := 1, tid := 9754 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -14141,8 +14141,8 @@ def intermediateGoal_5369_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9755, 9756 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5370_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5370, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9755 }, { rank := 1, tid := 9756 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -14150,8 +14150,8 @@ def intermediateGoal_5370_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9757, 9758 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5371_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5371, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9757 }, { rank := 1, tid := 9758 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14159,8 +14159,8 @@ def intermediateGoal_5371_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9761, 9762 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5373_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5373, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9761 }, { rank := 1, tid := 9762 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14168,8 +14168,8 @@ def intermediateGoal_5373_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9771, 9772 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5374_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5374, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9771 }, { rank := 1, tid := 9772 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14177,8 +14177,8 @@ def intermediateGoal_5374_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9775, 9776 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5375_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5375, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9775 }, { rank := 1, tid := 9776 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14186,8 +14186,8 @@ def intermediateGoal_5375_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9779, 9780 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5377_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5377, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9779 }, { rank := 1, tid := 9780 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14195,8 +14195,8 @@ def intermediateGoal_5377_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9789, 9790 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5378_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5378, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9789 }, { rank := 1, tid := 9790 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14204,8 +14204,8 @@ def intermediateGoal_5378_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9793, 9794 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5379_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5379, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9793 }, { rank := 1, tid := 9794 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14213,8 +14213,8 @@ def intermediateGoal_5379_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9795, 9796 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5380_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5380, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9795 }, { rank := 1, tid := 9796 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14222,8 +14222,8 @@ def intermediateGoal_5380_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9801, 9802 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5382_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5382, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9801 }, { rank := 1, tid := 9802 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14231,8 +14231,8 @@ def intermediateGoal_5382_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9811, 9812 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5383_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5383, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9811 }, { rank := 1, tid := 9812 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14240,8 +14240,8 @@ def intermediateGoal_5383_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9815, 9816 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5384_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5384, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9815 }, { rank := 1, tid := 9816 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14249,8 +14249,8 @@ def intermediateGoal_5384_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9819, 9820 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5385_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5385, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9819 }, { rank := 1, tid := 9820 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14258,8 +14258,8 @@ def intermediateGoal_5385_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9825, 9826 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5386_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5386, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9825 }, { rank := 1, tid := 9826 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14267,8 +14267,8 @@ def intermediateGoal_5386_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9829, 9830 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5387_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5387, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9829 }, { rank := 1, tid := 9830 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14276,8 +14276,8 @@ def intermediateGoal_5387_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9833, 9834 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5389_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5389, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9833 }, { rank := 1, tid := 9834 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14285,8 +14285,8 @@ def intermediateGoal_5389_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9835, 9836 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5391_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5391, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9835 }, { rank := 1, tid := 9836 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14300,8 +14300,8 @@ def intermediateGoal_5393 : LineageGoal :=
 --   PM tids 9859, 9860 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5396_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5396, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 9859 }, { rank := 1, tid := 9860 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14309,8 +14309,8 @@ def intermediateGoal_5396_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9861, 9862 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5397_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5397, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9861 }, { rank := 1, tid := 9862 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14318,8 +14318,8 @@ def intermediateGoal_5397_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9867, 9868 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5398_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5398, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9867 }, { rank := 1, tid := 9868 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14327,8 +14327,8 @@ def intermediateGoal_5398_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9871, 9872 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5400_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5400, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9871 }, { rank := 1, tid := 9872 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14336,8 +14336,8 @@ def intermediateGoal_5400_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9881, 9882 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5401_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5401, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9881 }, { rank := 1, tid := 9882 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14345,8 +14345,8 @@ def intermediateGoal_5401_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9885, 9886 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5402_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5402, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9885 }, { rank := 1, tid := 9886 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14354,8 +14354,8 @@ def intermediateGoal_5402_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9889, 9890 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5403_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5403, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9889 }, { rank := 1, tid := 9890 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14363,8 +14363,8 @@ def intermediateGoal_5403_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9893, 9894 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5405_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5405, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9893 }, { rank := 1, tid := 9894 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14372,8 +14372,8 @@ def intermediateGoal_5405_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9895, 9896 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5406_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5406, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9895 }, { rank := 1, tid := 9896 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14381,8 +14381,8 @@ def intermediateGoal_5406_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9901, 9902 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5408_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5408, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9901 }, { rank := 1, tid := 9902 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14390,8 +14390,8 @@ def intermediateGoal_5408_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9903, 9904 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5409_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5409, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9903 }, { rank := 1, tid := 9904 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14399,8 +14399,8 @@ def intermediateGoal_5409_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9905, 9906 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5410_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5410, tsShape := [4096, 64], tps := [{ rank := 0, tid := 9905 }, { rank := 1, tid := 9906 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14408,8 +14408,8 @@ def intermediateGoal_5410_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9913, 9914 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5414_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5414, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9913 }, { rank := 1, tid := 9914 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14417,8 +14417,8 @@ def intermediateGoal_5414_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9915, 9916 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5415_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5415, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9915 }, { rank := 1, tid := 9916 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14426,8 +14426,8 @@ def intermediateGoal_5415_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9919, 9920 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5417_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5417, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9919 }, { rank := 1, tid := 9920 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -14435,8 +14435,8 @@ def intermediateGoal_5417_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9925, 9926 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5418_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5418, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9925 }, { rank := 1, tid := 9926 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -14444,8 +14444,8 @@ def intermediateGoal_5418_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9927, 9928 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5419_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5419, tsShape := [4096, 1], tps := [{ rank := 0, tid := 9927 }, { rank := 1, tid := 9928 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -14453,8 +14453,8 @@ def intermediateGoal_5419_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9929, 9930 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5420_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5420, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9929 }, { rank := 1, tid := 9930 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14462,8 +14462,8 @@ def intermediateGoal_5420_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9933, 9934 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5422_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5422, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9933 }, { rank := 1, tid := 9934 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14471,8 +14471,8 @@ def intermediateGoal_5422_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9943, 9944 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5423_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5423, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9943 }, { rank := 1, tid := 9944 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14480,8 +14480,8 @@ def intermediateGoal_5423_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9947, 9948 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5424_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5424, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9947 }, { rank := 1, tid := 9948 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14489,8 +14489,8 @@ def intermediateGoal_5424_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9951, 9952 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5426_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5426, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9951 }, { rank := 1, tid := 9952 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14498,8 +14498,8 @@ def intermediateGoal_5426_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9961, 9962 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5427_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5427, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9961 }, { rank := 1, tid := 9962 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14507,8 +14507,8 @@ def intermediateGoal_5427_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9965, 9966 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5428_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5428, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9965 }, { rank := 1, tid := 9966 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14516,8 +14516,8 @@ def intermediateGoal_5428_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9967, 9968 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5429_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5429, tsShape := [4096, 512], tps := [{ rank := 0, tid := 9967 }, { rank := 1, tid := 9968 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14525,8 +14525,8 @@ def intermediateGoal_5429_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9973, 9974 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5431_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5431, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9973 }, { rank := 1, tid := 9974 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14534,8 +14534,8 @@ def intermediateGoal_5431_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9983, 9984 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5432_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5432, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9983 }, { rank := 1, tid := 9984 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14543,8 +14543,8 @@ def intermediateGoal_5432_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9987, 9988 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5433_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5433, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9987 }, { rank := 1, tid := 9988 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14552,8 +14552,8 @@ def intermediateGoal_5433_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9991, 9992 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5434_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5434, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9991 }, { rank := 1, tid := 9992 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14561,8 +14561,8 @@ def intermediateGoal_5434_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 9997, 9998 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5435_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5435, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 9997 }, { rank := 1, tid := 9998 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14570,8 +14570,8 @@ def intermediateGoal_5435_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10001, 10002 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5436_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5436, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10001 }, { rank := 1, tid := 10002 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14579,8 +14579,8 @@ def intermediateGoal_5436_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10005, 10006 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5438_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5438, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10005 }, { rank := 1, tid := 10006 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14588,8 +14588,8 @@ def intermediateGoal_5438_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10007, 10008 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5440_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5440, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10007 }, { rank := 1, tid := 10008 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14603,8 +14603,8 @@ def intermediateGoal_5442 : LineageGoal :=
 --   PM tids 10031, 10032 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5445_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5445, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10031 }, { rank := 1, tid := 10032 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14612,8 +14612,8 @@ def intermediateGoal_5445_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10033, 10034 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5446_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5446, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10033 }, { rank := 1, tid := 10034 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14621,8 +14621,8 @@ def intermediateGoal_5446_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10039, 10040 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5447_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5447, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10039 }, { rank := 1, tid := 10040 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14630,8 +14630,8 @@ def intermediateGoal_5447_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10043, 10044 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5449_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5449, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10043 }, { rank := 1, tid := 10044 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14639,8 +14639,8 @@ def intermediateGoal_5449_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10053, 10054 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5450_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5450, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10053 }, { rank := 1, tid := 10054 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14648,8 +14648,8 @@ def intermediateGoal_5450_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10057, 10058 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5451_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5451, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10057 }, { rank := 1, tid := 10058 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14657,8 +14657,8 @@ def intermediateGoal_5451_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10061, 10062 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5452_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5452, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10061 }, { rank := 1, tid := 10062 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14666,8 +14666,8 @@ def intermediateGoal_5452_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10065, 10066 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5454_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5454, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10065 }, { rank := 1, tid := 10066 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14675,8 +14675,8 @@ def intermediateGoal_5454_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10067, 10068 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5455_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5455, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10067 }, { rank := 1, tid := 10068 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14684,8 +14684,8 @@ def intermediateGoal_5455_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10073, 10074 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5457_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5457, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10073 }, { rank := 1, tid := 10074 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14693,8 +14693,8 @@ def intermediateGoal_5457_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10075, 10076 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5458_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5458, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10075 }, { rank := 1, tid := 10076 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14702,8 +14702,8 @@ def intermediateGoal_5458_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10077, 10078 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5459_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5459, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10077 }, { rank := 1, tid := 10078 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14711,8 +14711,8 @@ def intermediateGoal_5459_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10085, 10086 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5463_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5463, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10085 }, { rank := 1, tid := 10086 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14720,8 +14720,8 @@ def intermediateGoal_5463_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10087, 10088 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5464_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5464, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10087 }, { rank := 1, tid := 10088 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14729,8 +14729,8 @@ def intermediateGoal_5464_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10091, 10092 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5466_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5466, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10091 }, { rank := 1, tid := 10092 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -14738,8 +14738,8 @@ def intermediateGoal_5466_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10097, 10098 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5467_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5467, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10097 }, { rank := 1, tid := 10098 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -14747,8 +14747,8 @@ def intermediateGoal_5467_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10099, 10100 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5468_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5468, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10099 }, { rank := 1, tid := 10100 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -14756,8 +14756,8 @@ def intermediateGoal_5468_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10101, 10102 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5469_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5469, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10101 }, { rank := 1, tid := 10102 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14765,8 +14765,8 @@ def intermediateGoal_5469_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10105, 10106 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5471_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5471, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10105 }, { rank := 1, tid := 10106 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14774,8 +14774,8 @@ def intermediateGoal_5471_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10115, 10116 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5472_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5472, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10115 }, { rank := 1, tid := 10116 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14783,8 +14783,8 @@ def intermediateGoal_5472_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10119, 10120 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5473_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5473, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10119 }, { rank := 1, tid := 10120 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14792,8 +14792,8 @@ def intermediateGoal_5473_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10123, 10124 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5475_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5475, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10123 }, { rank := 1, tid := 10124 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14801,8 +14801,8 @@ def intermediateGoal_5475_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10133, 10134 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5476_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5476, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10133 }, { rank := 1, tid := 10134 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14810,8 +14810,8 @@ def intermediateGoal_5476_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10137, 10138 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5477_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5477, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10137 }, { rank := 1, tid := 10138 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14819,8 +14819,8 @@ def intermediateGoal_5477_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10139, 10140 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5478_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5478, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10139 }, { rank := 1, tid := 10140 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -14828,8 +14828,8 @@ def intermediateGoal_5478_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10145, 10146 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5480_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5480, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10145 }, { rank := 1, tid := 10146 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14837,8 +14837,8 @@ def intermediateGoal_5480_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10155, 10156 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5481_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5481, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10155 }, { rank := 1, tid := 10156 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14846,8 +14846,8 @@ def intermediateGoal_5481_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10159, 10160 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5482_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5482, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10159 }, { rank := 1, tid := 10160 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14855,8 +14855,8 @@ def intermediateGoal_5482_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10163, 10164 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5483_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5483, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10163 }, { rank := 1, tid := 10164 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14864,8 +14864,8 @@ def intermediateGoal_5483_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10169, 10170 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5484_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5484, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10169 }, { rank := 1, tid := 10170 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14873,8 +14873,8 @@ def intermediateGoal_5484_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10173, 10174 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5485_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5485, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10173 }, { rank := 1, tid := 10174 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14882,8 +14882,8 @@ def intermediateGoal_5485_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10177, 10178 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5487_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5487, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10177 }, { rank := 1, tid := 10178 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14891,8 +14891,8 @@ def intermediateGoal_5487_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10179, 10180 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5489_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5489, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10179 }, { rank := 1, tid := 10180 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14906,8 +14906,8 @@ def intermediateGoal_5491 : LineageGoal :=
 --   PM tids 10203, 10204 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5494_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5494, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10203 }, { rank := 1, tid := 10204 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14915,8 +14915,8 @@ def intermediateGoal_5494_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10205, 10206 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5495_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5495, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10205 }, { rank := 1, tid := 10206 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14924,8 +14924,8 @@ def intermediateGoal_5495_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10211, 10212 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5496_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5496, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10211 }, { rank := 1, tid := 10212 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14933,8 +14933,8 @@ def intermediateGoal_5496_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10215, 10216 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5498_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5498, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10215 }, { rank := 1, tid := 10216 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14942,8 +14942,8 @@ def intermediateGoal_5498_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10225, 10226 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5499_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5499, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10225 }, { rank := 1, tid := 10226 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14951,8 +14951,8 @@ def intermediateGoal_5499_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10229, 10230 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5500_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5500, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10229 }, { rank := 1, tid := 10230 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14960,8 +14960,8 @@ def intermediateGoal_5500_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10233, 10234 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5501_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5501, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10233 }, { rank := 1, tid := 10234 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14969,8 +14969,8 @@ def intermediateGoal_5501_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10237, 10238 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5503_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5503, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10237 }, { rank := 1, tid := 10238 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14978,8 +14978,8 @@ def intermediateGoal_5503_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10239, 10240 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5504_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5504, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10239 }, { rank := 1, tid := 10240 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -14987,8 +14987,8 @@ def intermediateGoal_5504_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10245, 10246 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5506_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5506, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10245 }, { rank := 1, tid := 10246 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -14996,8 +14996,8 @@ def intermediateGoal_5506_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10247, 10248 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5507_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5507, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10247 }, { rank := 1, tid := 10248 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15005,8 +15005,8 @@ def intermediateGoal_5507_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10249, 10250 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5508_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5508, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10249 }, { rank := 1, tid := 10250 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15014,8 +15014,8 @@ def intermediateGoal_5508_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10257, 10258 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5512_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5512, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10257 }, { rank := 1, tid := 10258 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15023,8 +15023,8 @@ def intermediateGoal_5512_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10259, 10260 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5513_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5513, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10259 }, { rank := 1, tid := 10260 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15032,8 +15032,8 @@ def intermediateGoal_5513_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10263, 10264 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5515_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5515, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10263 }, { rank := 1, tid := 10264 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -15041,8 +15041,8 @@ def intermediateGoal_5515_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10269, 10270 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5516_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5516, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10269 }, { rank := 1, tid := 10270 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -15050,8 +15050,8 @@ def intermediateGoal_5516_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10271, 10272 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5517_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5517, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10271 }, { rank := 1, tid := 10272 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -15059,8 +15059,8 @@ def intermediateGoal_5517_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10273, 10274 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5518_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5518, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10273 }, { rank := 1, tid := 10274 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15068,8 +15068,8 @@ def intermediateGoal_5518_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10277, 10278 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5520_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5520, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10277 }, { rank := 1, tid := 10278 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15077,8 +15077,8 @@ def intermediateGoal_5520_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10287, 10288 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5521_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5521, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10287 }, { rank := 1, tid := 10288 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15086,8 +15086,8 @@ def intermediateGoal_5521_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10291, 10292 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5522_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5522, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10291 }, { rank := 1, tid := 10292 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15095,8 +15095,8 @@ def intermediateGoal_5522_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10295, 10296 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5524_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5524, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10295 }, { rank := 1, tid := 10296 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15104,8 +15104,8 @@ def intermediateGoal_5524_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10305, 10306 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5525_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5525, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10305 }, { rank := 1, tid := 10306 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15113,8 +15113,8 @@ def intermediateGoal_5525_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10309, 10310 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5526_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5526, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10309 }, { rank := 1, tid := 10310 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15122,8 +15122,8 @@ def intermediateGoal_5526_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10311, 10312 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5527_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5527, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10311 }, { rank := 1, tid := 10312 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15131,8 +15131,8 @@ def intermediateGoal_5527_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10317, 10318 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5529_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5529, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10317 }, { rank := 1, tid := 10318 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15140,8 +15140,8 @@ def intermediateGoal_5529_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10327, 10328 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5530_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5530, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10327 }, { rank := 1, tid := 10328 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15149,8 +15149,8 @@ def intermediateGoal_5530_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10331, 10332 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5531_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5531, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10331 }, { rank := 1, tid := 10332 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15158,8 +15158,8 @@ def intermediateGoal_5531_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10335, 10336 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5532_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5532, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10335 }, { rank := 1, tid := 10336 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15167,8 +15167,8 @@ def intermediateGoal_5532_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10341, 10342 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5533_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5533, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10341 }, { rank := 1, tid := 10342 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15176,8 +15176,8 @@ def intermediateGoal_5533_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10345, 10346 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5534_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5534, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10345 }, { rank := 1, tid := 10346 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15185,8 +15185,8 @@ def intermediateGoal_5534_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10349, 10350 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5536_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5536, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10349 }, { rank := 1, tid := 10350 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15194,8 +15194,8 @@ def intermediateGoal_5536_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10351, 10352 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5538_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5538, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10351 }, { rank := 1, tid := 10352 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15209,8 +15209,8 @@ def intermediateGoal_5540 : LineageGoal :=
 --   PM tids 10375, 10376 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5543_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5543, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10375 }, { rank := 1, tid := 10376 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15218,8 +15218,8 @@ def intermediateGoal_5543_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10377, 10378 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5544_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5544, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10377 }, { rank := 1, tid := 10378 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15227,8 +15227,8 @@ def intermediateGoal_5544_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10383, 10384 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5545_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5545, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10383 }, { rank := 1, tid := 10384 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15236,8 +15236,8 @@ def intermediateGoal_5545_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10387, 10388 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5547_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5547, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10387 }, { rank := 1, tid := 10388 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15245,8 +15245,8 @@ def intermediateGoal_5547_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10397, 10398 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5548_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5548, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10397 }, { rank := 1, tid := 10398 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15254,8 +15254,8 @@ def intermediateGoal_5548_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10401, 10402 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5549_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5549, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10401 }, { rank := 1, tid := 10402 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15263,8 +15263,8 @@ def intermediateGoal_5549_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10405, 10406 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5550_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5550, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10405 }, { rank := 1, tid := 10406 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15272,8 +15272,8 @@ def intermediateGoal_5550_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10409, 10410 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5552_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5552, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10409 }, { rank := 1, tid := 10410 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15281,8 +15281,8 @@ def intermediateGoal_5552_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10411, 10412 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5553_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5553, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10411 }, { rank := 1, tid := 10412 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15290,8 +15290,8 @@ def intermediateGoal_5553_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10417, 10418 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5555_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5555, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10417 }, { rank := 1, tid := 10418 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15299,8 +15299,8 @@ def intermediateGoal_5555_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10419, 10420 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5556_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5556, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10419 }, { rank := 1, tid := 10420 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15308,8 +15308,8 @@ def intermediateGoal_5556_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10421, 10422 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5557_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5557, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10421 }, { rank := 1, tid := 10422 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15317,8 +15317,8 @@ def intermediateGoal_5557_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10429, 10430 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5561_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5561, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10429 }, { rank := 1, tid := 10430 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15326,8 +15326,8 @@ def intermediateGoal_5561_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10431, 10432 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5562_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5562, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10431 }, { rank := 1, tid := 10432 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15335,8 +15335,8 @@ def intermediateGoal_5562_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10435, 10436 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5564_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5564, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10435 }, { rank := 1, tid := 10436 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -15344,8 +15344,8 @@ def intermediateGoal_5564_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10441, 10442 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5565_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5565, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10441 }, { rank := 1, tid := 10442 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -15353,8 +15353,8 @@ def intermediateGoal_5565_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10443, 10444 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5566_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5566, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10443 }, { rank := 1, tid := 10444 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -15362,8 +15362,8 @@ def intermediateGoal_5566_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10445, 10446 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5567_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5567, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10445 }, { rank := 1, tid := 10446 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15371,8 +15371,8 @@ def intermediateGoal_5567_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10449, 10450 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5569_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5569, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10449 }, { rank := 1, tid := 10450 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15380,8 +15380,8 @@ def intermediateGoal_5569_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10459, 10460 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5570_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5570, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10459 }, { rank := 1, tid := 10460 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15389,8 +15389,8 @@ def intermediateGoal_5570_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10463, 10464 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5571_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5571, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10463 }, { rank := 1, tid := 10464 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15398,8 +15398,8 @@ def intermediateGoal_5571_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10467, 10468 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5573_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5573, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10467 }, { rank := 1, tid := 10468 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15407,8 +15407,8 @@ def intermediateGoal_5573_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10477, 10478 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5574_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5574, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10477 }, { rank := 1, tid := 10478 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15416,8 +15416,8 @@ def intermediateGoal_5574_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10481, 10482 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5575_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5575, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10481 }, { rank := 1, tid := 10482 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15425,8 +15425,8 @@ def intermediateGoal_5575_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10483, 10484 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5576_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5576, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10483 }, { rank := 1, tid := 10484 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15434,8 +15434,8 @@ def intermediateGoal_5576_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10489, 10490 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5578_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5578, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10489 }, { rank := 1, tid := 10490 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15443,8 +15443,8 @@ def intermediateGoal_5578_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10499, 10500 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5579_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5579, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10499 }, { rank := 1, tid := 10500 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15452,8 +15452,8 @@ def intermediateGoal_5579_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10503, 10504 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5580_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5580, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10503 }, { rank := 1, tid := 10504 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15461,8 +15461,8 @@ def intermediateGoal_5580_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10507, 10508 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5581_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5581, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10507 }, { rank := 1, tid := 10508 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15470,8 +15470,8 @@ def intermediateGoal_5581_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10513, 10514 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5582_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5582, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10513 }, { rank := 1, tid := 10514 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15479,8 +15479,8 @@ def intermediateGoal_5582_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10517, 10518 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5583_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5583, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10517 }, { rank := 1, tid := 10518 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15488,8 +15488,8 @@ def intermediateGoal_5583_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10521, 10522 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5585_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5585, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10521 }, { rank := 1, tid := 10522 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15497,8 +15497,8 @@ def intermediateGoal_5585_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10523, 10524 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5587_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5587, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10523 }, { rank := 1, tid := 10524 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15512,8 +15512,8 @@ def intermediateGoal_5589 : LineageGoal :=
 --   PM tids 10547, 10548 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5592_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5592, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10547 }, { rank := 1, tid := 10548 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15521,8 +15521,8 @@ def intermediateGoal_5592_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10549, 10550 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5593_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5593, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10549 }, { rank := 1, tid := 10550 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15530,8 +15530,8 @@ def intermediateGoal_5593_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10555, 10556 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5594_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5594, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10555 }, { rank := 1, tid := 10556 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15539,8 +15539,8 @@ def intermediateGoal_5594_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10559, 10560 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5596_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5596, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10559 }, { rank := 1, tid := 10560 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15548,8 +15548,8 @@ def intermediateGoal_5596_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10569, 10570 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5597_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5597, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10569 }, { rank := 1, tid := 10570 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15557,8 +15557,8 @@ def intermediateGoal_5597_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10573, 10574 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5598_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5598, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10573 }, { rank := 1, tid := 10574 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15566,8 +15566,8 @@ def intermediateGoal_5598_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10577, 10578 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5599_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5599, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10577 }, { rank := 1, tid := 10578 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15575,8 +15575,8 @@ def intermediateGoal_5599_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10581, 10582 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5601_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5601, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10581 }, { rank := 1, tid := 10582 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15584,8 +15584,8 @@ def intermediateGoal_5601_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10583, 10584 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5602_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5602, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10583 }, { rank := 1, tid := 10584 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15593,8 +15593,8 @@ def intermediateGoal_5602_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10589, 10590 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5604_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5604, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10589 }, { rank := 1, tid := 10590 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15602,8 +15602,8 @@ def intermediateGoal_5604_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10591, 10592 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5605_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5605, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10591 }, { rank := 1, tid := 10592 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15611,8 +15611,8 @@ def intermediateGoal_5605_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10593, 10594 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5606_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5606, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10593 }, { rank := 1, tid := 10594 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15620,8 +15620,8 @@ def intermediateGoal_5606_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10601, 10602 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5610_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5610, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10601 }, { rank := 1, tid := 10602 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15629,8 +15629,8 @@ def intermediateGoal_5610_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10603, 10604 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5611_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5611, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10603 }, { rank := 1, tid := 10604 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15638,8 +15638,8 @@ def intermediateGoal_5611_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10607, 10608 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5613_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5613, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10607 }, { rank := 1, tid := 10608 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -15647,8 +15647,8 @@ def intermediateGoal_5613_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10613, 10614 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5614_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5614, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10613 }, { rank := 1, tid := 10614 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -15656,8 +15656,8 @@ def intermediateGoal_5614_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10615, 10616 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5615_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5615, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10615 }, { rank := 1, tid := 10616 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -15665,8 +15665,8 @@ def intermediateGoal_5615_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10617, 10618 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5616_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5616, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10617 }, { rank := 1, tid := 10618 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15674,8 +15674,8 @@ def intermediateGoal_5616_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10621, 10622 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5618_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5618, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10621 }, { rank := 1, tid := 10622 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15683,8 +15683,8 @@ def intermediateGoal_5618_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10631, 10632 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5619_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5619, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10631 }, { rank := 1, tid := 10632 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15692,8 +15692,8 @@ def intermediateGoal_5619_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10635, 10636 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5620_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5620, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10635 }, { rank := 1, tid := 10636 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15701,8 +15701,8 @@ def intermediateGoal_5620_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10639, 10640 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5622_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5622, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10639 }, { rank := 1, tid := 10640 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15710,8 +15710,8 @@ def intermediateGoal_5622_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10649, 10650 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5623_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5623, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10649 }, { rank := 1, tid := 10650 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15719,8 +15719,8 @@ def intermediateGoal_5623_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10653, 10654 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5624_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5624, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10653 }, { rank := 1, tid := 10654 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15728,8 +15728,8 @@ def intermediateGoal_5624_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10655, 10656 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5625_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5625, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10655 }, { rank := 1, tid := 10656 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15737,8 +15737,8 @@ def intermediateGoal_5625_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10661, 10662 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5627_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5627, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10661 }, { rank := 1, tid := 10662 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15746,8 +15746,8 @@ def intermediateGoal_5627_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10671, 10672 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5628_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5628, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10671 }, { rank := 1, tid := 10672 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15755,8 +15755,8 @@ def intermediateGoal_5628_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10675, 10676 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5629_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5629, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10675 }, { rank := 1, tid := 10676 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15764,8 +15764,8 @@ def intermediateGoal_5629_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10679, 10680 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5630_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5630, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10679 }, { rank := 1, tid := 10680 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15773,8 +15773,8 @@ def intermediateGoal_5630_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10685, 10686 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5631_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5631, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10685 }, { rank := 1, tid := 10686 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15782,8 +15782,8 @@ def intermediateGoal_5631_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10689, 10690 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5632_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5632, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10689 }, { rank := 1, tid := 10690 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15791,8 +15791,8 @@ def intermediateGoal_5632_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10693, 10694 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5634_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5634, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10693 }, { rank := 1, tid := 10694 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15800,8 +15800,8 @@ def intermediateGoal_5634_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10695, 10696 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5636_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5636, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10695 }, { rank := 1, tid := 10696 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15815,8 +15815,8 @@ def intermediateGoal_5638 : LineageGoal :=
 --   PM tids 10719, 10720 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5641_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5641, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10719 }, { rank := 1, tid := 10720 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15824,8 +15824,8 @@ def intermediateGoal_5641_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10721, 10722 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5642_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5642, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10721 }, { rank := 1, tid := 10722 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15833,8 +15833,8 @@ def intermediateGoal_5642_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10727, 10728 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5643_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5643, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10727 }, { rank := 1, tid := 10728 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15842,8 +15842,8 @@ def intermediateGoal_5643_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10731, 10732 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5645_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5645, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10731 }, { rank := 1, tid := 10732 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15851,8 +15851,8 @@ def intermediateGoal_5645_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10741, 10742 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5646_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5646, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10741 }, { rank := 1, tid := 10742 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15860,8 +15860,8 @@ def intermediateGoal_5646_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10745, 10746 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5647_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5647, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10745 }, { rank := 1, tid := 10746 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15869,8 +15869,8 @@ def intermediateGoal_5647_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10749, 10750 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5648_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5648, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10749 }, { rank := 1, tid := 10750 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15878,8 +15878,8 @@ def intermediateGoal_5648_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10753, 10754 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5650_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5650, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10753 }, { rank := 1, tid := 10754 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15887,8 +15887,8 @@ def intermediateGoal_5650_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10755, 10756 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5651_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5651, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10755 }, { rank := 1, tid := 10756 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15896,8 +15896,8 @@ def intermediateGoal_5651_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10761, 10762 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5653_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5653, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10761 }, { rank := 1, tid := 10762 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15905,8 +15905,8 @@ def intermediateGoal_5653_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10763, 10764 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5654_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5654, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10763 }, { rank := 1, tid := 10764 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15914,8 +15914,8 @@ def intermediateGoal_5654_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10765, 10766 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5655_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5655, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10765 }, { rank := 1, tid := 10766 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -15923,8 +15923,8 @@ def intermediateGoal_5655_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10773, 10774 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5659_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5659, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10773 }, { rank := 1, tid := 10774 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15932,8 +15932,8 @@ def intermediateGoal_5659_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10775, 10776 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5660_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5660, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10775 }, { rank := 1, tid := 10776 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15941,8 +15941,8 @@ def intermediateGoal_5660_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10779, 10780 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5662_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5662, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10779 }, { rank := 1, tid := 10780 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -15950,8 +15950,8 @@ def intermediateGoal_5662_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10785, 10786 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5663_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5663, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10785 }, { rank := 1, tid := 10786 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -15959,8 +15959,8 @@ def intermediateGoal_5663_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10787, 10788 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5664_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5664, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10787 }, { rank := 1, tid := 10788 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -15968,8 +15968,8 @@ def intermediateGoal_5664_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10789, 10790 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5665_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5665, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10789 }, { rank := 1, tid := 10790 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -15977,8 +15977,8 @@ def intermediateGoal_5665_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10793, 10794 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5667_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5667, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10793 }, { rank := 1, tid := 10794 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15986,8 +15986,8 @@ def intermediateGoal_5667_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10803, 10804 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5668_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5668, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10803 }, { rank := 1, tid := 10804 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -15995,8 +15995,8 @@ def intermediateGoal_5668_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10807, 10808 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5669_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5669, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10807 }, { rank := 1, tid := 10808 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16004,8 +16004,8 @@ def intermediateGoal_5669_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10811, 10812 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5671_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5671, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10811 }, { rank := 1, tid := 10812 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16013,8 +16013,8 @@ def intermediateGoal_5671_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10821, 10822 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5672_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5672, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10821 }, { rank := 1, tid := 10822 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16022,8 +16022,8 @@ def intermediateGoal_5672_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10825, 10826 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5673_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5673, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10825 }, { rank := 1, tid := 10826 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16031,8 +16031,8 @@ def intermediateGoal_5673_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10827, 10828 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5674_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5674, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10827 }, { rank := 1, tid := 10828 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16040,8 +16040,8 @@ def intermediateGoal_5674_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10833, 10834 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5676_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5676, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10833 }, { rank := 1, tid := 10834 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16049,8 +16049,8 @@ def intermediateGoal_5676_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10843, 10844 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5677_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5677, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10843 }, { rank := 1, tid := 10844 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16058,8 +16058,8 @@ def intermediateGoal_5677_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10847, 10848 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5678_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5678, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10847 }, { rank := 1, tid := 10848 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16067,8 +16067,8 @@ def intermediateGoal_5678_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10851, 10852 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5679_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5679, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10851 }, { rank := 1, tid := 10852 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16076,8 +16076,8 @@ def intermediateGoal_5679_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10857, 10858 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5680_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5680, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10857 }, { rank := 1, tid := 10858 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16085,8 +16085,8 @@ def intermediateGoal_5680_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10861, 10862 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5681_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5681, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10861 }, { rank := 1, tid := 10862 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16094,8 +16094,8 @@ def intermediateGoal_5681_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10865, 10866 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5683_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5683, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10865 }, { rank := 1, tid := 10866 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16103,8 +16103,8 @@ def intermediateGoal_5683_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10867, 10868 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5685_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5685, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10867 }, { rank := 1, tid := 10868 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -16118,8 +16118,8 @@ def intermediateGoal_5687 : LineageGoal :=
 --   PM tids 10891, 10892 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5690_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5690, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 10891 }, { rank := 1, tid := 10892 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -16127,8 +16127,8 @@ def intermediateGoal_5690_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10893, 10894 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5691_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5691, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10893 }, { rank := 1, tid := 10894 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16136,8 +16136,8 @@ def intermediateGoal_5691_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10899, 10900 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5692_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5692, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10899 }, { rank := 1, tid := 10900 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16145,8 +16145,8 @@ def intermediateGoal_5692_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10903, 10904 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5694_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5694, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10903 }, { rank := 1, tid := 10904 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16154,8 +16154,8 @@ def intermediateGoal_5694_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10913, 10914 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5695_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5695, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10913 }, { rank := 1, tid := 10914 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16163,8 +16163,8 @@ def intermediateGoal_5695_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10917, 10918 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5696_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5696, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10917 }, { rank := 1, tid := 10918 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16172,8 +16172,8 @@ def intermediateGoal_5696_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10921, 10922 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5697_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5697, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10921 }, { rank := 1, tid := 10922 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16181,8 +16181,8 @@ def intermediateGoal_5697_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10925, 10926 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5699_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5699, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10925 }, { rank := 1, tid := 10926 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16190,8 +16190,8 @@ def intermediateGoal_5699_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10927, 10928 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5700_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5700, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10927 }, { rank := 1, tid := 10928 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16199,8 +16199,8 @@ def intermediateGoal_5700_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10933, 10934 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5702_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5702, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10933 }, { rank := 1, tid := 10934 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -16208,8 +16208,8 @@ def intermediateGoal_5702_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10935, 10936 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5703_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5703, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10935 }, { rank := 1, tid := 10936 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -16217,8 +16217,8 @@ def intermediateGoal_5703_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10937, 10938 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5704_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5704, tsShape := [4096, 64], tps := [{ rank := 0, tid := 10937 }, { rank := 1, tid := 10938 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -16226,8 +16226,8 @@ def intermediateGoal_5704_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10945, 10946 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5708_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5708, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10945 }, { rank := 1, tid := 10946 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16235,8 +16235,8 @@ def intermediateGoal_5708_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10947, 10948 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5709_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5709, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10947 }, { rank := 1, tid := 10948 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16244,8 +16244,8 @@ def intermediateGoal_5709_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10951, 10952 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5711_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5711, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10951 }, { rank := 1, tid := 10952 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -16253,8 +16253,8 @@ def intermediateGoal_5711_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10957, 10958 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5712_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5712, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10957 }, { rank := 1, tid := 10958 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -16262,8 +16262,8 @@ def intermediateGoal_5712_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10959, 10960 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5713_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5713, tsShape := [4096, 1], tps := [{ rank := 0, tid := 10959 }, { rank := 1, tid := 10960 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -16271,8 +16271,8 @@ def intermediateGoal_5713_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10961, 10962 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5714_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5714, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10961 }, { rank := 1, tid := 10962 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16280,8 +16280,8 @@ def intermediateGoal_5714_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10965, 10966 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5716_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5716, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10965 }, { rank := 1, tid := 10966 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16289,8 +16289,8 @@ def intermediateGoal_5716_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10975, 10976 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5717_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5717, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10975 }, { rank := 1, tid := 10976 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16298,8 +16298,8 @@ def intermediateGoal_5717_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10979, 10980 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5718_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5718, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 10979 }, { rank := 1, tid := 10980 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16307,8 +16307,8 @@ def intermediateGoal_5718_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10983, 10984 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5720_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5720, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10983 }, { rank := 1, tid := 10984 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16316,8 +16316,8 @@ def intermediateGoal_5720_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10993, 10994 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5721_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5721, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10993 }, { rank := 1, tid := 10994 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16325,8 +16325,8 @@ def intermediateGoal_5721_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10997, 10998 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5722_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5722, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10997 }, { rank := 1, tid := 10998 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16334,8 +16334,8 @@ def intermediateGoal_5722_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 10999, 11000 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5723_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5723, tsShape := [4096, 512], tps := [{ rank := 0, tid := 10999 }, { rank := 1, tid := 11000 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16343,8 +16343,8 @@ def intermediateGoal_5723_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11005, 11006 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5725_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5725, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11005 }, { rank := 1, tid := 11006 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16352,8 +16352,8 @@ def intermediateGoal_5725_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11015, 11016 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5726_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5726, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11015 }, { rank := 1, tid := 11016 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16361,8 +16361,8 @@ def intermediateGoal_5726_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11019, 11020 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5727_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5727, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11019 }, { rank := 1, tid := 11020 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16370,8 +16370,8 @@ def intermediateGoal_5727_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11023, 11024 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5728_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5728, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11023 }, { rank := 1, tid := 11024 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16379,8 +16379,8 @@ def intermediateGoal_5728_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11029, 11030 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5729_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5729, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11029 }, { rank := 1, tid := 11030 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16388,8 +16388,8 @@ def intermediateGoal_5729_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11033, 11034 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5730_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5730, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11033 }, { rank := 1, tid := 11034 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16397,8 +16397,8 @@ def intermediateGoal_5730_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11037, 11038 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5732_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5732, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11037 }, { rank := 1, tid := 11038 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16406,8 +16406,8 @@ def intermediateGoal_5732_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11039, 11040 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5734_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5734, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11039 }, { rank := 1, tid := 11040 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -16421,8 +16421,8 @@ def intermediateGoal_5736 : LineageGoal :=
 --   PM tids 11063, 11064 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5739_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5739, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11063 }, { rank := 1, tid := 11064 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -16430,8 +16430,8 @@ def intermediateGoal_5739_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11065, 11066 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5740_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5740, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11065 }, { rank := 1, tid := 11066 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16439,8 +16439,8 @@ def intermediateGoal_5740_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11071, 11072 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5741_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5741, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11071 }, { rank := 1, tid := 11072 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16448,8 +16448,8 @@ def intermediateGoal_5741_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11075, 11076 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5743_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5743, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11075 }, { rank := 1, tid := 11076 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16457,8 +16457,8 @@ def intermediateGoal_5743_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11085, 11086 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5744_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5744, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11085 }, { rank := 1, tid := 11086 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16466,8 +16466,8 @@ def intermediateGoal_5744_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11089, 11090 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5745_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5745, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11089 }, { rank := 1, tid := 11090 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16475,8 +16475,8 @@ def intermediateGoal_5745_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11093, 11094 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5746_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5746, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11093 }, { rank := 1, tid := 11094 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16484,8 +16484,8 @@ def intermediateGoal_5746_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11097, 11098 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5748_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5748, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11097 }, { rank := 1, tid := 11098 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16493,8 +16493,8 @@ def intermediateGoal_5748_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11099, 11100 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5749_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5749, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11099 }, { rank := 1, tid := 11100 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16502,8 +16502,8 @@ def intermediateGoal_5749_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11105, 11106 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5751_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5751, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11105 }, { rank := 1, tid := 11106 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -16511,8 +16511,8 @@ def intermediateGoal_5751_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11107, 11108 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5752_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5752, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11107 }, { rank := 1, tid := 11108 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -16520,8 +16520,8 @@ def intermediateGoal_5752_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11109, 11110 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5753_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5753, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11109 }, { rank := 1, tid := 11110 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -16529,8 +16529,8 @@ def intermediateGoal_5753_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11117, 11118 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5757_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5757, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11117 }, { rank := 1, tid := 11118 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16538,8 +16538,8 @@ def intermediateGoal_5757_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11119, 11120 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5758_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5758, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11119 }, { rank := 1, tid := 11120 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16547,8 +16547,8 @@ def intermediateGoal_5758_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11123, 11124 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5760_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5760, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11123 }, { rank := 1, tid := 11124 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -16556,8 +16556,8 @@ def intermediateGoal_5760_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11129, 11130 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5761_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5761, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11129 }, { rank := 1, tid := 11130 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -16565,8 +16565,8 @@ def intermediateGoal_5761_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11131, 11132 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5762_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5762, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11131 }, { rank := 1, tid := 11132 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -16574,8 +16574,8 @@ def intermediateGoal_5762_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11133, 11134 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5763_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5763, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11133 }, { rank := 1, tid := 11134 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16583,8 +16583,8 @@ def intermediateGoal_5763_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11137, 11138 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5765_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5765, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11137 }, { rank := 1, tid := 11138 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16592,8 +16592,8 @@ def intermediateGoal_5765_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11147, 11148 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5766_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5766, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11147 }, { rank := 1, tid := 11148 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16601,8 +16601,8 @@ def intermediateGoal_5766_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11151, 11152 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5767_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5767, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11151 }, { rank := 1, tid := 11152 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16610,8 +16610,8 @@ def intermediateGoal_5767_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11155, 11156 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5769_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5769, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11155 }, { rank := 1, tid := 11156 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16619,8 +16619,8 @@ def intermediateGoal_5769_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11165, 11166 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5770_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5770, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11165 }, { rank := 1, tid := 11166 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16628,8 +16628,8 @@ def intermediateGoal_5770_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11169, 11170 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5771_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5771, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11169 }, { rank := 1, tid := 11170 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16637,8 +16637,8 @@ def intermediateGoal_5771_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11171, 11172 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5772_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5772, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11171 }, { rank := 1, tid := 11172 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16646,8 +16646,8 @@ def intermediateGoal_5772_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11177, 11178 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5774_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5774, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11177 }, { rank := 1, tid := 11178 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16655,8 +16655,8 @@ def intermediateGoal_5774_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11187, 11188 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5775_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5775, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11187 }, { rank := 1, tid := 11188 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16664,8 +16664,8 @@ def intermediateGoal_5775_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11191, 11192 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5776_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5776, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11191 }, { rank := 1, tid := 11192 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16673,8 +16673,8 @@ def intermediateGoal_5776_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11195, 11196 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5777_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5777, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11195 }, { rank := 1, tid := 11196 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16682,8 +16682,8 @@ def intermediateGoal_5777_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11201, 11202 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5778_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5778, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11201 }, { rank := 1, tid := 11202 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16691,8 +16691,8 @@ def intermediateGoal_5778_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11205, 11206 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5779_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5779, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11205 }, { rank := 1, tid := 11206 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16700,8 +16700,8 @@ def intermediateGoal_5779_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11209, 11210 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5781_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5781, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11209 }, { rank := 1, tid := 11210 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16709,8 +16709,8 @@ def intermediateGoal_5781_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11211, 11212 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5783_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5783, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11211 }, { rank := 1, tid := 11212 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -16724,8 +16724,8 @@ def intermediateGoal_5785 : LineageGoal :=
 --   PM tids 11235, 11236 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5788_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5788, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11235 }, { rank := 1, tid := 11236 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -16733,8 +16733,8 @@ def intermediateGoal_5788_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11237, 11238 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5789_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5789, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11237 }, { rank := 1, tid := 11238 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16742,8 +16742,8 @@ def intermediateGoal_5789_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11243, 11244 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5790_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5790, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11243 }, { rank := 1, tid := 11244 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16751,8 +16751,8 @@ def intermediateGoal_5790_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11247, 11248 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5792_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5792, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11247 }, { rank := 1, tid := 11248 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16760,8 +16760,8 @@ def intermediateGoal_5792_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11257, 11258 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5793_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5793, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11257 }, { rank := 1, tid := 11258 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16769,8 +16769,8 @@ def intermediateGoal_5793_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11261, 11262 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5794_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5794, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11261 }, { rank := 1, tid := 11262 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16778,8 +16778,8 @@ def intermediateGoal_5794_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11265, 11266 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5795_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5795, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11265 }, { rank := 1, tid := 11266 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16787,8 +16787,8 @@ def intermediateGoal_5795_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11269, 11270 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5797_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5797, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11269 }, { rank := 1, tid := 11270 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16796,8 +16796,8 @@ def intermediateGoal_5797_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11271, 11272 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5798_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5798, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11271 }, { rank := 1, tid := 11272 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16805,8 +16805,8 @@ def intermediateGoal_5798_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11277, 11278 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5800_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5800, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11277 }, { rank := 1, tid := 11278 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -16814,8 +16814,8 @@ def intermediateGoal_5800_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11279, 11280 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5801_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5801, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11279 }, { rank := 1, tid := 11280 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -16823,8 +16823,8 @@ def intermediateGoal_5801_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11281, 11282 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5802_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5802, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11281 }, { rank := 1, tid := 11282 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -16832,8 +16832,8 @@ def intermediateGoal_5802_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11289, 11290 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5806_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5806, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11289 }, { rank := 1, tid := 11290 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16841,8 +16841,8 @@ def intermediateGoal_5806_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11291, 11292 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5807_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5807, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11291 }, { rank := 1, tid := 11292 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16850,8 +16850,8 @@ def intermediateGoal_5807_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11295, 11296 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5809_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5809, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11295 }, { rank := 1, tid := 11296 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -16859,8 +16859,8 @@ def intermediateGoal_5809_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11301, 11302 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5810_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5810, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11301 }, { rank := 1, tid := 11302 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -16868,8 +16868,8 @@ def intermediateGoal_5810_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11303, 11304 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5811_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5811, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11303 }, { rank := 1, tid := 11304 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -16877,8 +16877,8 @@ def intermediateGoal_5811_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11305, 11306 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5812_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5812, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11305 }, { rank := 1, tid := 11306 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16886,8 +16886,8 @@ def intermediateGoal_5812_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11309, 11310 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5814_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5814, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11309 }, { rank := 1, tid := 11310 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16895,8 +16895,8 @@ def intermediateGoal_5814_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11319, 11320 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5815_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5815, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11319 }, { rank := 1, tid := 11320 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16904,8 +16904,8 @@ def intermediateGoal_5815_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11323, 11324 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5816_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5816, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11323 }, { rank := 1, tid := 11324 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16913,8 +16913,8 @@ def intermediateGoal_5816_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11327, 11328 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5818_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5818, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11327 }, { rank := 1, tid := 11328 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16922,8 +16922,8 @@ def intermediateGoal_5818_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11337, 11338 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5819_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5819, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11337 }, { rank := 1, tid := 11338 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16931,8 +16931,8 @@ def intermediateGoal_5819_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11341, 11342 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5820_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5820, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11341 }, { rank := 1, tid := 11342 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16940,8 +16940,8 @@ def intermediateGoal_5820_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11343, 11344 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5821_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5821, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11343 }, { rank := 1, tid := 11344 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -16949,8 +16949,8 @@ def intermediateGoal_5821_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11349, 11350 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5823_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5823, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11349 }, { rank := 1, tid := 11350 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16958,8 +16958,8 @@ def intermediateGoal_5823_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11359, 11360 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5824_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5824, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11359 }, { rank := 1, tid := 11360 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16967,8 +16967,8 @@ def intermediateGoal_5824_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11363, 11364 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5825_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5825, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11363 }, { rank := 1, tid := 11364 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16976,8 +16976,8 @@ def intermediateGoal_5825_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11367, 11368 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5826_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5826, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11367 }, { rank := 1, tid := 11368 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16985,8 +16985,8 @@ def intermediateGoal_5826_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11373, 11374 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5827_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5827, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11373 }, { rank := 1, tid := 11374 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -16994,8 +16994,8 @@ def intermediateGoal_5827_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11377, 11378 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5828_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5828, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11377 }, { rank := 1, tid := 11378 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17003,8 +17003,8 @@ def intermediateGoal_5828_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11381, 11382 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5830_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5830, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11381 }, { rank := 1, tid := 11382 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17012,8 +17012,8 @@ def intermediateGoal_5830_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11383, 11384 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5832_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5832, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11383 }, { rank := 1, tid := 11384 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -17027,8 +17027,8 @@ def intermediateGoal_5834 : LineageGoal :=
 --   PM tids 11407, 11408 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5837_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5837, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11407 }, { rank := 1, tid := 11408 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -17036,8 +17036,8 @@ def intermediateGoal_5837_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11409, 11410 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5838_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5838, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11409 }, { rank := 1, tid := 11410 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17045,8 +17045,8 @@ def intermediateGoal_5838_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11415, 11416 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5839_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5839, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11415 }, { rank := 1, tid := 11416 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17054,8 +17054,8 @@ def intermediateGoal_5839_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11419, 11420 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5841_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5841, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11419 }, { rank := 1, tid := 11420 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17063,8 +17063,8 @@ def intermediateGoal_5841_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11429, 11430 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5842_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5842, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11429 }, { rank := 1, tid := 11430 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17072,8 +17072,8 @@ def intermediateGoal_5842_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11433, 11434 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5843_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5843, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11433 }, { rank := 1, tid := 11434 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17081,8 +17081,8 @@ def intermediateGoal_5843_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11437, 11438 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5844_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5844, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11437 }, { rank := 1, tid := 11438 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17090,8 +17090,8 @@ def intermediateGoal_5844_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11441, 11442 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5846_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5846, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11441 }, { rank := 1, tid := 11442 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17099,8 +17099,8 @@ def intermediateGoal_5846_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11443, 11444 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5847_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5847, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11443 }, { rank := 1, tid := 11444 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17108,8 +17108,8 @@ def intermediateGoal_5847_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11449, 11450 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5849_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5849, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11449 }, { rank := 1, tid := 11450 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -17117,8 +17117,8 @@ def intermediateGoal_5849_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11451, 11452 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5850_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5850, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11451 }, { rank := 1, tid := 11452 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -17126,8 +17126,8 @@ def intermediateGoal_5850_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11453, 11454 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5851_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5851, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11453 }, { rank := 1, tid := 11454 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -17135,8 +17135,8 @@ def intermediateGoal_5851_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11461, 11462 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5855_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5855, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11461 }, { rank := 1, tid := 11462 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17144,8 +17144,8 @@ def intermediateGoal_5855_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11463, 11464 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5856_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5856, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11463 }, { rank := 1, tid := 11464 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17153,8 +17153,8 @@ def intermediateGoal_5856_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11467, 11468 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5858_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5858, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11467 }, { rank := 1, tid := 11468 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -17162,8 +17162,8 @@ def intermediateGoal_5858_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11473, 11474 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5859_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5859, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11473 }, { rank := 1, tid := 11474 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -17171,8 +17171,8 @@ def intermediateGoal_5859_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11475, 11476 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5860_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5860, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11475 }, { rank := 1, tid := 11476 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -17180,8 +17180,8 @@ def intermediateGoal_5860_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11477, 11478 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5861_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5861, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11477 }, { rank := 1, tid := 11478 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17189,8 +17189,8 @@ def intermediateGoal_5861_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11481, 11482 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5863_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5863, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11481 }, { rank := 1, tid := 11482 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -17198,8 +17198,8 @@ def intermediateGoal_5863_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11491, 11492 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5864_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5864, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11491 }, { rank := 1, tid := 11492 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -17207,8 +17207,8 @@ def intermediateGoal_5864_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11495, 11496 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5865_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5865, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11495 }, { rank := 1, tid := 11496 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17216,8 +17216,8 @@ def intermediateGoal_5865_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11499, 11500 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5867_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5867, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11499 }, { rank := 1, tid := 11500 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -17225,8 +17225,8 @@ def intermediateGoal_5867_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11509, 11510 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5868_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5868, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11509 }, { rank := 1, tid := 11510 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -17234,8 +17234,8 @@ def intermediateGoal_5868_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11513, 11514 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5869_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5869, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11513 }, { rank := 1, tid := 11514 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -17243,8 +17243,8 @@ def intermediateGoal_5869_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11515, 11516 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5870_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5870, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11515 }, { rank := 1, tid := 11516 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -17252,8 +17252,8 @@ def intermediateGoal_5870_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11521, 11522 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5872_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5872, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11521 }, { rank := 1, tid := 11522 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17261,8 +17261,8 @@ def intermediateGoal_5872_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11531, 11532 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5873_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5873, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11531 }, { rank := 1, tid := 11532 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17270,8 +17270,8 @@ def intermediateGoal_5873_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11535, 11536 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5874_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5874, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11535 }, { rank := 1, tid := 11536 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17279,8 +17279,8 @@ def intermediateGoal_5874_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11539, 11540 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5875_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5875, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11539 }, { rank := 1, tid := 11540 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17288,8 +17288,8 @@ def intermediateGoal_5875_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11545, 11546 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5876_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5876, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11545 }, { rank := 1, tid := 11546 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17297,8 +17297,8 @@ def intermediateGoal_5876_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11549, 11550 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5877_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5877, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11549 }, { rank := 1, tid := 11550 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17306,8 +17306,8 @@ def intermediateGoal_5877_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11553, 11554 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5879_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5879, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11553 }, { rank := 1, tid := 11554 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17315,8 +17315,8 @@ def intermediateGoal_5879_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11555, 11556 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5881_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5881, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11555 }, { rank := 1, tid := 11556 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -17330,8 +17330,8 @@ def intermediateGoal_5883 : LineageGoal :=
 --   PM tids 11579, 11580 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5886_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5886, tsShape := [4096, 16, 64], tps := [{ rank := 0, tid := 11579 }, { rank := 1, tid := 11580 }], tpShapes := [[2048, 16, 64], [2048, 16, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -17339,8 +17339,8 @@ def intermediateGoal_5886_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11581, 11582 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5887_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5887, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11581 }, { rank := 1, tid := 11582 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17348,8 +17348,8 @@ def intermediateGoal_5887_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11587, 11588 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5888_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5888, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11587 }, { rank := 1, tid := 11588 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17357,8 +17357,8 @@ def intermediateGoal_5888_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11591, 11592 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5890_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5890, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11591 }, { rank := 1, tid := 11592 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17366,8 +17366,8 @@ def intermediateGoal_5890_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11601, 11602 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5891_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5891, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11601 }, { rank := 1, tid := 11602 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17375,8 +17375,8 @@ def intermediateGoal_5891_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11605, 11606 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5892_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5892, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11605 }, { rank := 1, tid := 11606 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17384,8 +17384,8 @@ def intermediateGoal_5892_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11609, 11610 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5893_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5893, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11609 }, { rank := 1, tid := 11610 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17393,8 +17393,8 @@ def intermediateGoal_5893_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11613, 11614 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5895_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5895, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11613 }, { rank := 1, tid := 11614 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17402,8 +17402,8 @@ def intermediateGoal_5895_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11615, 11616 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5896_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5896, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11615 }, { rank := 1, tid := 11616 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17411,8 +17411,8 @@ def intermediateGoal_5896_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11621, 11622 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5898_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5898, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11621 }, { rank := 1, tid := 11622 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -17420,8 +17420,8 @@ def intermediateGoal_5898_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11623, 11624 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5899_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5899, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11623 }, { rank := 1, tid := 11624 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -17429,8 +17429,8 @@ def intermediateGoal_5899_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11625, 11626 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5900_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5900, tsShape := [4096, 64], tps := [{ rank := 0, tid := 11625 }, { rank := 1, tid := 11626 }], tpShapes := [[2048, 64], [2048, 64]], cuTid := 5337, cpSize := 2 }
 
@@ -17438,8 +17438,8 @@ def intermediateGoal_5900_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11633, 11634 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5904_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5904, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11633 }, { rank := 1, tid := 11634 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17447,8 +17447,8 @@ def intermediateGoal_5904_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11635, 11636 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5905_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5905, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11635 }, { rank := 1, tid := 11636 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17456,8 +17456,8 @@ def intermediateGoal_5905_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11639, 11640 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5907_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5907, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11639 }, { rank := 1, tid := 11640 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -17465,8 +17465,8 @@ def intermediateGoal_5907_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11645, 11646 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5908_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5908, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11645 }, { rank := 1, tid := 11646 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -17474,8 +17474,8 @@ def intermediateGoal_5908_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11647, 11648 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5909_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5909, tsShape := [4096, 1], tps := [{ rank := 0, tid := 11647 }, { rank := 1, tid := 11648 }], tpShapes := [[2048, 1], [2048, 1]], cuTid := 5337, cpSize := 2 }
 
@@ -17483,8 +17483,8 @@ def intermediateGoal_5909_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11649, 11650 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5910_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5910, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11649 }, { rank := 1, tid := 11650 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17492,8 +17492,8 @@ def intermediateGoal_5910_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11653, 11654 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5912_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5912, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11653 }, { rank := 1, tid := 11654 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -17501,8 +17501,8 @@ def intermediateGoal_5912_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11663, 11664 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5913_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5913, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11663 }, { rank := 1, tid := 11664 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -17510,8 +17510,8 @@ def intermediateGoal_5913_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11667, 11668 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5914_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5914, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11667 }, { rank := 1, tid := 11668 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17519,8 +17519,8 @@ def intermediateGoal_5914_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11671, 11672 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5916_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5916, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11671 }, { rank := 1, tid := 11672 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -17528,8 +17528,8 @@ def intermediateGoal_5916_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11681, 11682 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5917_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5917, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11681 }, { rank := 1, tid := 11682 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -17537,8 +17537,8 @@ def intermediateGoal_5917_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11685, 11686 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5918_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5918, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11685 }, { rank := 1, tid := 11686 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -17546,8 +17546,8 @@ def intermediateGoal_5918_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11687, 11688 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5919_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5919, tsShape := [4096, 512], tps := [{ rank := 0, tid := 11687 }, { rank := 1, tid := 11688 }], tpShapes := [[2048, 512], [2048, 512]], cuTid := 5337, cpSize := 2 }
 
@@ -17555,8 +17555,8 @@ def intermediateGoal_5919_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11693, 11694 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5921_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5921, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11693 }, { rank := 1, tid := 11694 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17564,8 +17564,8 @@ def intermediateGoal_5921_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11703, 11704 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5922_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5922, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11703 }, { rank := 1, tid := 11704 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17573,8 +17573,8 @@ def intermediateGoal_5922_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11707, 11708 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5923_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5923, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11707 }, { rank := 1, tid := 11708 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17582,8 +17582,8 @@ def intermediateGoal_5923_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11711, 11712 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5924_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5924, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11711 }, { rank := 1, tid := 11712 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17591,8 +17591,8 @@ def intermediateGoal_5924_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11717, 11718 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5925_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5925, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11717 }, { rank := 1, tid := 11718 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -17600,8 +17600,8 @@ def intermediateGoal_5925_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 11721, 11722 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_5926_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 5926, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 11721 }, { rank := 1, tid := 11722 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18131,8 +18131,8 @@ def intermediateGoal_8135 : LineageGoal :=
 --   PM tids 15969, 15977 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8139_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8139, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 15969 }, { rank := 1, tid := 15977 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18140,8 +18140,8 @@ def intermediateGoal_8139_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 15973, 15981 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8143_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8143, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 15973 }, { rank := 1, tid := 15981 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18149,8 +18149,8 @@ def intermediateGoal_8143_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 15985, 15993 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8147_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8147, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 15985 }, { rank := 1, tid := 15993 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18158,8 +18158,8 @@ def intermediateGoal_8147_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 15989, 15997 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8151_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8151, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 15989 }, { rank := 1, tid := 15997 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18167,8 +18167,8 @@ def intermediateGoal_8151_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16004, 16027 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8158_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8158, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16004 }, { rank := 1, tid := 16027 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18176,8 +18176,8 @@ def intermediateGoal_8158_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16008, 16031 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8162_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8162, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16008 }, { rank := 1, tid := 16031 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18185,8 +18185,8 @@ def intermediateGoal_8162_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16012, 16035 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8166_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8166, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16012 }, { rank := 1, tid := 16035 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18194,8 +18194,8 @@ def intermediateGoal_8166_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16016, 16039 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8170_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8170, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16016 }, { rank := 1, tid := 16039 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18203,8 +18203,8 @@ def intermediateGoal_8170_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16020, 16043 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8174_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8174, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16020 }, { rank := 1, tid := 16043 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18212,8 +18212,8 @@ def intermediateGoal_8174_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16047, 16055 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8178_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8178, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16047 }, { rank := 1, tid := 16055 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18221,8 +18221,8 @@ def intermediateGoal_8178_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16051, 16059 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8182_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8182, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16051 }, { rank := 1, tid := 16059 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18230,8 +18230,8 @@ def intermediateGoal_8182_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16063, 16071 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8186_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8186, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16063 }, { rank := 1, tid := 16071 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18239,8 +18239,8 @@ def intermediateGoal_8186_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16067, 16075 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8190_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8190, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16067 }, { rank := 1, tid := 16075 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18248,8 +18248,8 @@ def intermediateGoal_8190_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16082, 16105 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8197_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8197, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16082 }, { rank := 1, tid := 16105 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18257,8 +18257,8 @@ def intermediateGoal_8197_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16086, 16109 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8201_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8201, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16086 }, { rank := 1, tid := 16109 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18266,8 +18266,8 @@ def intermediateGoal_8201_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16090, 16113 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8205_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8205, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16090 }, { rank := 1, tid := 16113 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18275,8 +18275,8 @@ def intermediateGoal_8205_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16094, 16117 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8209_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8209, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16094 }, { rank := 1, tid := 16117 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18284,8 +18284,8 @@ def intermediateGoal_8209_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16098, 16121 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8213_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8213, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16098 }, { rank := 1, tid := 16121 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18293,8 +18293,8 @@ def intermediateGoal_8213_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16125, 16133 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8217_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8217, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16125 }, { rank := 1, tid := 16133 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18302,8 +18302,8 @@ def intermediateGoal_8217_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16129, 16137 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8221_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8221, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16129 }, { rank := 1, tid := 16137 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18311,8 +18311,8 @@ def intermediateGoal_8221_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16141, 16149 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8225_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8225, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16141 }, { rank := 1, tid := 16149 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18320,8 +18320,8 @@ def intermediateGoal_8225_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16145, 16153 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8229_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8229, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16145 }, { rank := 1, tid := 16153 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18329,8 +18329,8 @@ def intermediateGoal_8229_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16160, 16183 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8236_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8236, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16160 }, { rank := 1, tid := 16183 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18338,8 +18338,8 @@ def intermediateGoal_8236_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16164, 16187 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8240_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8240, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16164 }, { rank := 1, tid := 16187 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18347,8 +18347,8 @@ def intermediateGoal_8240_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16168, 16191 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8244_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8244, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16168 }, { rank := 1, tid := 16191 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18356,8 +18356,8 @@ def intermediateGoal_8244_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16172, 16195 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8248_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8248, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16172 }, { rank := 1, tid := 16195 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18365,8 +18365,8 @@ def intermediateGoal_8248_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16176, 16199 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8252_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8252, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16176 }, { rank := 1, tid := 16199 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18374,8 +18374,8 @@ def intermediateGoal_8252_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16203, 16211 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8256_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8256, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16203 }, { rank := 1, tid := 16211 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18383,8 +18383,8 @@ def intermediateGoal_8256_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16207, 16215 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8260_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8260, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16207 }, { rank := 1, tid := 16215 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18392,8 +18392,8 @@ def intermediateGoal_8260_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16219, 16227 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8264_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8264, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16219 }, { rank := 1, tid := 16227 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18401,8 +18401,8 @@ def intermediateGoal_8264_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16223, 16231 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8268_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8268, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16223 }, { rank := 1, tid := 16231 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18410,8 +18410,8 @@ def intermediateGoal_8268_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16238, 16261 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8275_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8275, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16238 }, { rank := 1, tid := 16261 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18419,8 +18419,8 @@ def intermediateGoal_8275_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16242, 16265 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8279_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8279, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16242 }, { rank := 1, tid := 16265 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18428,8 +18428,8 @@ def intermediateGoal_8279_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16246, 16269 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8283_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8283, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16246 }, { rank := 1, tid := 16269 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18437,8 +18437,8 @@ def intermediateGoal_8283_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16250, 16273 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8287_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8287, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16250 }, { rank := 1, tid := 16273 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18446,8 +18446,8 @@ def intermediateGoal_8287_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16254, 16277 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8291_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8291, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16254 }, { rank := 1, tid := 16277 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18455,8 +18455,8 @@ def intermediateGoal_8291_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16281, 16289 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8295_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8295, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16281 }, { rank := 1, tid := 16289 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18464,8 +18464,8 @@ def intermediateGoal_8295_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16285, 16293 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8299_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8299, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16285 }, { rank := 1, tid := 16293 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18473,8 +18473,8 @@ def intermediateGoal_8299_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16297, 16305 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8303_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8303, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16297 }, { rank := 1, tid := 16305 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18482,8 +18482,8 @@ def intermediateGoal_8303_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16301, 16309 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8307_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8307, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16301 }, { rank := 1, tid := 16309 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18491,8 +18491,8 @@ def intermediateGoal_8307_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16316, 16339 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8314_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8314, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16316 }, { rank := 1, tid := 16339 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18500,8 +18500,8 @@ def intermediateGoal_8314_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16320, 16343 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8318_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8318, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16320 }, { rank := 1, tid := 16343 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18509,8 +18509,8 @@ def intermediateGoal_8318_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16324, 16347 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8322_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8322, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16324 }, { rank := 1, tid := 16347 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18518,8 +18518,8 @@ def intermediateGoal_8322_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16328, 16351 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8326_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8326, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16328 }, { rank := 1, tid := 16351 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18527,8 +18527,8 @@ def intermediateGoal_8326_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16332, 16355 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8330_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8330, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16332 }, { rank := 1, tid := 16355 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18536,8 +18536,8 @@ def intermediateGoal_8330_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16359, 16367 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8334_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8334, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16359 }, { rank := 1, tid := 16367 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18545,8 +18545,8 @@ def intermediateGoal_8334_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16363, 16371 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8338_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8338, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16363 }, { rank := 1, tid := 16371 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18554,8 +18554,8 @@ def intermediateGoal_8338_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16375, 16383 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8342_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8342, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16375 }, { rank := 1, tid := 16383 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18563,8 +18563,8 @@ def intermediateGoal_8342_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16379, 16387 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8346_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8346, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16379 }, { rank := 1, tid := 16387 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18572,8 +18572,8 @@ def intermediateGoal_8346_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16394, 16417 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8353_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8353, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16394 }, { rank := 1, tid := 16417 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18581,8 +18581,8 @@ def intermediateGoal_8353_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16398, 16421 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8357_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8357, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16398 }, { rank := 1, tid := 16421 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18590,8 +18590,8 @@ def intermediateGoal_8357_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16402, 16425 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8361_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8361, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16402 }, { rank := 1, tid := 16425 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18599,8 +18599,8 @@ def intermediateGoal_8361_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16406, 16429 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8365_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8365, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16406 }, { rank := 1, tid := 16429 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18608,8 +18608,8 @@ def intermediateGoal_8365_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16410, 16433 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8369_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8369, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16410 }, { rank := 1, tid := 16433 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18617,8 +18617,8 @@ def intermediateGoal_8369_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16437, 16445 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8373_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8373, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16437 }, { rank := 1, tid := 16445 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18626,8 +18626,8 @@ def intermediateGoal_8373_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16441, 16449 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8377_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8377, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16441 }, { rank := 1, tid := 16449 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18635,8 +18635,8 @@ def intermediateGoal_8377_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16453, 16461 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8381_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8381, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16453 }, { rank := 1, tid := 16461 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18644,8 +18644,8 @@ def intermediateGoal_8381_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16457, 16465 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8385_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8385, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16457 }, { rank := 1, tid := 16465 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18653,8 +18653,8 @@ def intermediateGoal_8385_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16472, 16495 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8392_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8392, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16472 }, { rank := 1, tid := 16495 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18662,8 +18662,8 @@ def intermediateGoal_8392_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16476, 16499 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8396_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8396, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16476 }, { rank := 1, tid := 16499 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18671,8 +18671,8 @@ def intermediateGoal_8396_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16480, 16503 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8400_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8400, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16480 }, { rank := 1, tid := 16503 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18680,8 +18680,8 @@ def intermediateGoal_8400_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16484, 16507 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8404_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8404, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16484 }, { rank := 1, tid := 16507 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18689,8 +18689,8 @@ def intermediateGoal_8404_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16488, 16511 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8408_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8408, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16488 }, { rank := 1, tid := 16511 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18698,8 +18698,8 @@ def intermediateGoal_8408_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16515, 16523 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8412_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8412, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16515 }, { rank := 1, tid := 16523 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18707,8 +18707,8 @@ def intermediateGoal_8412_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16519, 16527 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8416_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8416, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16519 }, { rank := 1, tid := 16527 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18716,8 +18716,8 @@ def intermediateGoal_8416_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16531, 16539 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8420_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8420, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16531 }, { rank := 1, tid := 16539 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18725,8 +18725,8 @@ def intermediateGoal_8420_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16535, 16543 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8424_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8424, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16535 }, { rank := 1, tid := 16543 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18734,8 +18734,8 @@ def intermediateGoal_8424_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16550, 16573 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8431_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8431, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16550 }, { rank := 1, tid := 16573 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18743,8 +18743,8 @@ def intermediateGoal_8431_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16554, 16577 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8435_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8435, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16554 }, { rank := 1, tid := 16577 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18752,8 +18752,8 @@ def intermediateGoal_8435_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16558, 16581 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8439_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8439, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16558 }, { rank := 1, tid := 16581 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18761,8 +18761,8 @@ def intermediateGoal_8439_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16562, 16585 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8443_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8443, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16562 }, { rank := 1, tid := 16585 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18770,8 +18770,8 @@ def intermediateGoal_8443_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16566, 16589 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8447_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8447, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16566 }, { rank := 1, tid := 16589 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18779,8 +18779,8 @@ def intermediateGoal_8447_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16593, 16601 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8451_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8451, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16593 }, { rank := 1, tid := 16601 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18788,8 +18788,8 @@ def intermediateGoal_8451_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16597, 16605 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8455_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8455, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16597 }, { rank := 1, tid := 16605 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18797,8 +18797,8 @@ def intermediateGoal_8455_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16609, 16617 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8459_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8459, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16609 }, { rank := 1, tid := 16617 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18806,8 +18806,8 @@ def intermediateGoal_8459_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16613, 16621 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8463_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8463, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16613 }, { rank := 1, tid := 16621 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18815,8 +18815,8 @@ def intermediateGoal_8463_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16628, 16651 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8470_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8470, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16628 }, { rank := 1, tid := 16651 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18824,8 +18824,8 @@ def intermediateGoal_8470_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16632, 16655 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8474_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8474, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16632 }, { rank := 1, tid := 16655 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18833,8 +18833,8 @@ def intermediateGoal_8474_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16636, 16659 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8478_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8478, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16636 }, { rank := 1, tid := 16659 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18842,8 +18842,8 @@ def intermediateGoal_8478_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16640, 16663 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8482_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8482, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16640 }, { rank := 1, tid := 16663 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18851,8 +18851,8 @@ def intermediateGoal_8482_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16644, 16667 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8486_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8486, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16644 }, { rank := 1, tid := 16667 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18860,8 +18860,8 @@ def intermediateGoal_8486_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16671, 16679 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8490_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8490, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16671 }, { rank := 1, tid := 16679 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18869,8 +18869,8 @@ def intermediateGoal_8490_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16675, 16683 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8494_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8494, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16675 }, { rank := 1, tid := 16683 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18878,8 +18878,8 @@ def intermediateGoal_8494_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16687, 16695 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8498_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8498, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16687 }, { rank := 1, tid := 16695 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18887,8 +18887,8 @@ def intermediateGoal_8498_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16691, 16699 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8502_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8502, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16691 }, { rank := 1, tid := 16699 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18896,8 +18896,8 @@ def intermediateGoal_8502_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16706, 16729 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8509_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8509, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16706 }, { rank := 1, tid := 16729 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18905,8 +18905,8 @@ def intermediateGoal_8509_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16710, 16733 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8513_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8513, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16710 }, { rank := 1, tid := 16733 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18914,8 +18914,8 @@ def intermediateGoal_8513_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16714, 16737 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8517_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8517, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16714 }, { rank := 1, tid := 16737 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18923,8 +18923,8 @@ def intermediateGoal_8517_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16718, 16741 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8521_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8521, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16718 }, { rank := 1, tid := 16741 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18932,8 +18932,8 @@ def intermediateGoal_8521_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16722, 16745 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8525_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8525, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16722 }, { rank := 1, tid := 16745 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18941,8 +18941,8 @@ def intermediateGoal_8525_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16749, 16757 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8529_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8529, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16749 }, { rank := 1, tid := 16757 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18950,8 +18950,8 @@ def intermediateGoal_8529_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16753, 16761 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8533_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8533, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16753 }, { rank := 1, tid := 16761 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18959,8 +18959,8 @@ def intermediateGoal_8533_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16765, 16773 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8537_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8537, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16765 }, { rank := 1, tid := 16773 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18968,8 +18968,8 @@ def intermediateGoal_8537_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16769, 16777 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8541_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8541, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16769 }, { rank := 1, tid := 16777 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18977,8 +18977,8 @@ def intermediateGoal_8541_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16784, 16807 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8548_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8548, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16784 }, { rank := 1, tid := 16807 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18986,8 +18986,8 @@ def intermediateGoal_8548_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16788, 16811 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8552_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8552, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16788 }, { rank := 1, tid := 16811 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -18995,8 +18995,8 @@ def intermediateGoal_8552_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16792, 16815 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8556_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8556, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16792 }, { rank := 1, tid := 16815 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -19004,8 +19004,8 @@ def intermediateGoal_8556_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16796, 16819 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8560_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8560, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16796 }, { rank := 1, tid := 16819 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -19013,8 +19013,8 @@ def intermediateGoal_8560_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16800, 16823 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8564_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8564, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16800 }, { rank := 1, tid := 16823 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -19022,8 +19022,8 @@ def intermediateGoal_8564_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16827, 16835 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8568_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8568, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16827 }, { rank := 1, tid := 16835 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -19031,8 +19031,8 @@ def intermediateGoal_8568_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16831, 16839 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8572_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8572, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16831 }, { rank := 1, tid := 16839 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -19040,8 +19040,8 @@ def intermediateGoal_8572_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16843, 16851 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8576_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8576, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16843 }, { rank := 1, tid := 16851 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -19049,8 +19049,8 @@ def intermediateGoal_8576_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16847, 16855 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8580_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8580, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16847 }, { rank := 1, tid := 16855 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -19058,8 +19058,8 @@ def intermediateGoal_8580_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16862, 16885 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8587_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8587, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16862 }, { rank := 1, tid := 16885 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -19067,8 +19067,8 @@ def intermediateGoal_8587_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16866, 16889 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8591_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8591, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16866 }, { rank := 1, tid := 16889 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -19076,8 +19076,8 @@ def intermediateGoal_8591_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16870, 16893 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8595_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8595, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16870 }, { rank := 1, tid := 16893 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -19085,8 +19085,8 @@ def intermediateGoal_8595_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16874, 16897 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8599_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8599, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16874 }, { rank := 1, tid := 16897 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
@@ -19094,8 +19094,8 @@ def intermediateGoal_8599_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLi
 --   PM tids 16878, 16901 are in CP zigzag layout (downstream of FW_maybe_shuffle,
 --   no intervening FW_maybe_unshuffle). They have the SAME shapes as
 --   contiguous shards but different ownership, so `reconstructWithDim`
---   is false for them — see ZigzagGoalRefutation.gatheredZigzag_ne_full,
---   which exhibits a concrete cp=2 disagreement at flat index 2 (6 vs 2).
+--   is false for them: nnScaler's rank-order concat does not undo zigzag.
+--   See trainverify/GOAL_3_4_LAYOUT_SPLIT.md for the audited source chain.
 def intermediateGoal_8603_zigzag : TrainVerify.Denote.GeneratedPatterns.ZigzagLineageGoal :=
   { ts := 8603, tsShape := [4096, 1024], tps := [{ rank := 0, tid := 16878 }, { rank := 1, tid := 16901 }], tpShapes := [[2048, 1024], [2048, 1024]], cuTid := 5337, cpSize := 2 }
 
