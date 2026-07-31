@@ -4,6 +4,7 @@
    re-checked by `native_decide` against the real graph).  Hand-written faithful
    K/V casts + de-smuggled zigzag entry 5494 appended.  See PROGRESS "Worker #27". -/
 import denote.yoco_goals.ZigzagL1Body
+import denote.yoco_goals.RingAttnLineageGoals
 
 set_option linter.style.longLine false
 set_option linter.style.setOption false
@@ -27,20 +28,20 @@ theorem recon_intermediateGoal_5446_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5446
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5446
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have h5347 := recon_intermediateGoal_5445_ringAttn initSM initPM hSM hPM hInit hWF
   -- extract the 5445 shard shapes [2048,16,64]
   have hshapes := h5347.2.1
-  simp only [intermediateGoal_5445, List.map, List.cons.injEq, and_true] at hshapes
+  simp only [ringAttnIntermediateGoal_5445, List.map, List.cons.injEq, and_true] at hshapes
   obtain ⟨hs9687, hs9688⟩ := hshapes
   -- extract the 5445 value reconstruction
   have hval47 : denoteGraph_ringAttn sm initSM 5445
       = allGatherPrimDimN 0 2 0
           [denoteGraph_ringAttn pm initPM 10031, denoteGraph_ringAttn pm initPM 10032] := by
     have hv := h5347.2.2
-    rw [reconstructForGoal_of_not_replicated intermediateGoal_5445 pm.numRanks _ rfl] at hv
-    simp only [intermediateGoal_5445, List.map] at hv
+    rw [reconstructForGoal_of_not_replicated ringAttnIntermediateGoal_5445 pm.numRanks _ rfl] at hv
+    simp only [ringAttnIntermediateGoal_5445, List.map] at hv
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm.numRanks 0 _ _ []
           (by rw [hs9687]; decide)] at hv
     exact hv
@@ -71,25 +72,25 @@ theorem recon_intermediateGoal_5446_ringAttn (initSM initPM : Store)
   have hs9690 : (denoteGraph_ringAttn pm initPM 10034).shape = [2048, 1024] := by rw [rP1]; rfl
   have hs5348 : (denoteGraph_ringAttn sm initSM 5446).shape = [4096, 1024] := by rw [rSM]; rfl
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5446 5446 10033 10034 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5446 5446 10033 10034 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval48 hs5348 hs9689 hs9690
 
 theorem recon_intermediateGoal_5447_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5447
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5447
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have h5348 := recon_intermediateGoal_5446_ringAttn initSM initPM hSM hPM hInit hWF
   have hshapes := h5348.2.1
-  simp only [intermediateGoal_5446, List.map, List.cons.injEq, and_true] at hshapes
+  simp only [ringAttnIntermediateGoal_5446, List.map, List.cons.injEq, and_true] at hshapes
   obtain ⟨hs9689, hs9690⟩ := hshapes
   have hval48 : denoteGraph_ringAttn sm initSM 5446
       = allGatherPrimDimN 0 2 0
           [denoteGraph_ringAttn pm initPM 10033, denoteGraph_ringAttn pm initPM 10034] := by
     have hv := h5348.2.2
-    rw [reconstructForGoal_of_not_replicated intermediateGoal_5446 pm.numRanks _ rfl] at hv
-    simp only [intermediateGoal_5446, List.map] at hv
+    rw [reconstructForGoal_of_not_replicated ringAttnIntermediateGoal_5446 pm.numRanks _ rfl] at hv
+    simp only [ringAttnIntermediateGoal_5446, List.map] at hv
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm.numRanks 0 _ _ []
           (by rw [hs9689]; decide)] at hv
     exact hv
@@ -117,27 +118,27 @@ theorem recon_intermediateGoal_5447_ringAttn (initSM initPM : Store)
   have hs9696 : (denoteGraph_ringAttn pm initPM 10040).shape = [2048, 1024] := by rw [rP1]; rfl
   have hs5349 : (denoteGraph_ringAttn sm initSM 5447).shape = [4096, 1024] := by rw [rSM]; rfl
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5447 5447 10039 10040 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5447 5447 10039 10040 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval49 hs5349 hs9695 hs9696
 
 theorem recon_intermediateGoal_5449_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5449
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5449
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have h5349 := recon_intermediateGoal_5447_ringAttn initSM initPM hSM hPM hInit hWF
   have hshapes := h5349.2.1
-  simp only [intermediateGoal_5447, List.map, List.cons.injEq, and_true] at hshapes
+  simp only [ringAttnIntermediateGoal_5447, List.map, List.cons.injEq, and_true] at hshapes
   obtain ⟨hs9695, hs9696⟩ := hshapes
   have hs5349sm : (denoteGraph_ringAttn sm initSM 5447).shape = [4096, 1024] := by
-    have := h5349.1; simpa [intermediateGoal_5447] using this
+    have := h5349.1; simpa [ringAttnIntermediateGoal_5447] using this
   have hval49 : denoteGraph_ringAttn sm initSM 5447
       = allGatherPrimDimN 0 2 0
           [denoteGraph_ringAttn pm initPM 10039, denoteGraph_ringAttn pm initPM 10040] := by
     have hv := h5349.2.2
-    rw [reconstructForGoal_of_not_replicated intermediateGoal_5447 pm.numRanks _ rfl] at hv
-    simp only [intermediateGoal_5447, List.map] at hv
+    rw [reconstructForGoal_of_not_replicated ringAttnIntermediateGoal_5447 pm.numRanks _ rfl] at hv
+    simp only [ringAttnIntermediateGoal_5447, List.map] at hv
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm.numRanks 0 _ _ []
           (by rw [hs9695]; decide)] at hv
     exact hv
@@ -190,16 +191,16 @@ theorem recon_intermediateGoal_5449_ringAttn (initSM initPM : Store)
   have hs5351 : (denoteGraph_ringAttn sm initSM 5449).shape = [4096, 1024] := by
     rw [rSM]; exact fw_linear_2d_shape 4096 1024 1024 _ _ hs5349sm hsw5350
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5449 5449 10043 10044 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5449 5449 10043 10044 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval51 hs5351 hs9699 hs9700
 
 theorem recon_intermediateGoal_5450_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5450
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5450
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
-  obtain ⟨hbr51, hs9699, hs9700⟩ := twoTp_gather _ _ intermediateGoal_5449 5449 10043 10044
+  obtain ⟨hbr51, hs9699, hs9700⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5449 5449 10043 10044
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5449_ringAttn initSM initPM hSM hPM hInit hWF)
   have rSM : denoteGraph_ringAttn sm initSM 5450
@@ -232,17 +233,17 @@ theorem recon_intermediateGoal_5450_ringAttn (initSM initPM : Store)
   have hs9710 : (denoteGraph_ringAttn pm initPM 10054).shape = [2048, 1024] := by rw [rP1]; rfl
   have hs5352 : (denoteGraph_ringAttn sm initSM 5450).shape = [4096, 1024] := by rw [rSM]; rfl
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5450 5450 10053 10054 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5450 5450 10053 10054 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hs5352 hs9709 hs9710
 
 theorem recon_intermediateGoal_5451_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5451
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5451
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hbr52, hs9709, hs9710⟩ := twoTp_gather _ _ intermediateGoal_5450 5450 10053 10054
+  obtain ⟨hbr52, hs9709, hs9710⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5450 5450 10053 10054
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5450_ringAttn initSM initPM hSM hPM hInit hWF)
   have rSM : denoteGraph_ringAttn sm initSM 5451 = id (denoteGraph_ringAttn sm initSM 5450) :=
@@ -274,17 +275,17 @@ theorem recon_intermediateGoal_5451_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5451 5451 10057 10058 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5451 5451 10057 10058 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_8221_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_8221
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_8221
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg38, hs9655, hs9656⟩ := twoTp_gather _ _ intermediateGoal_5436 5436 10001 10002
+  obtain ⟨hg38, hs9655, hs9656⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5436 5436 10001 10002
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5436_ringAttn initSM initPM hSM hPM hInit hWF)
   have s8143 : denoteGraph_ringAttn sm initSM 8221 = denoteGraph_ringAttn sm initSM 5436 :=
@@ -317,20 +318,20 @@ theorem recon_intermediateGoal_8221_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_8221 8221 16129 16137 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_8221 8221 16129 16137 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5452_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5452
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5452
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hval8143, hs15973, hs15981⟩ := twoTp_gather _ _ intermediateGoal_8221 8221 16129 16137
+  obtain ⟨hval8143, hs15973, hs15981⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_8221 8221 16129 16137
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_8221_ringAttn initSM initPM hSM hPM hInit hWF)
-  obtain ⟨hbr53, hs9713, hs9714⟩ := twoTp_gather _ _ intermediateGoal_5451 5451 10057 10058
+  obtain ⟨hbr53, hs9713, hs9714⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5451 5451 10057 10058
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5451_ringAttn initSM initPM hSM hPM hInit hWF)
   have rSM : denoteGraph_ringAttn sm initSM 5452
@@ -368,17 +369,17 @@ theorem recon_intermediateGoal_5452_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5452 5452 10061 10062 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5452 5452 10061 10062 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5454_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5454
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5454
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg54, hs9717, hs9718⟩ := twoTp_gather _ _ intermediateGoal_5452 5452 10061 10062
+  obtain ⟨hg54, hs9717, hs9718⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5452 5452 10061 10062
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5452_ringAttn initSM initPM hSM hPM hInit hWF)
   have s8147 : denoteGraph_ringAttn sm initSM 8225 = id (denoteGraph_ringAttn sm initSM 5452) :=
@@ -446,17 +447,17 @@ theorem recon_intermediateGoal_5454_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5454 5454 10065 10066 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5454 5454 10065 10066 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5455_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5455
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5455
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg56, hs9721, hs9722⟩ := twoTp_gather _ _ intermediateGoal_5454 5454 10065 10066
+  obtain ⟨hg56, hs9721, hs9722⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5454 5454 10065 10066
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5454_ringAttn initSM initPM hSM hPM hInit hWF)
   have s8158 : denoteGraph_ringAttn sm initSM 8236 = id (denoteGraph_ringAttn sm initSM 5454) :=
@@ -508,17 +509,17 @@ theorem recon_intermediateGoal_5455_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5455 5455 10067 10068 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5455 5455 10067 10068 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5457_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5457
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5457
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg57, hs9723, hs9724⟩ := twoTp_gather _ _ intermediateGoal_5455 5455 10067 10068
+  obtain ⟨hg57, hs9723, hs9724⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5455 5455 10067 10068
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5455_ringAttn initSM initPM hSM hPM hInit hWF)
   have hw5358 : denoteGraph_ringAttn sm initSM 5456 = denoteGraph_ringAttn pm initPM 5456 :=
@@ -565,17 +566,17 @@ theorem recon_intermediateGoal_5457_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 64] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5457 5457 10073 10074 [4096, 64] [2048, 64]
+    ringAttnIntermediateGoal_5457 5457 10073 10074 [4096, 64] [2048, 64]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5458_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5458
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5458
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg59, hs9729, hs9730⟩ := twoTp_gather _ _ intermediateGoal_5457 5457 10073 10074
+  obtain ⟨hg59, hs9729, hs9730⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5457 5457 10073 10074
     [2048, 64] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5457_ringAttn initSM initPM hSM hPM hInit hWF)
   have hs5359sm : (denoteGraph_ringAttn sm initSM 5457).shape = [4096, 64] := by
@@ -636,17 +637,17 @@ theorem recon_intermediateGoal_5458_ringAttn (initSM initPM : Store)
   have hsp1 : (denoteGraph_ringAttn pm initPM 10076).shape = [2048, 64] := by
     rw [rP1]; exact fw_topk_routing_fst_shape _ 8 64 2048 (by rw [hs9730]; rfl)
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5458 5458 10075 10076 [4096, 64] [2048, 64]
+    ringAttnIntermediateGoal_5458 5458 10075 10076 [4096, 64] [2048, 64]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5459_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5459
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5459
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg59, hs9729, hs9730⟩ := twoTp_gather _ _ intermediateGoal_5457 5457 10073 10074
+  obtain ⟨hg59, hs9729, hs9730⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5457 5457 10073 10074
     [2048, 64] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5457_ringAttn initSM initPM hSM hPM hInit hWF)
   have hs5359sm : (denoteGraph_ringAttn sm initSM 5457).shape = [4096, 64] := by
@@ -707,17 +708,17 @@ theorem recon_intermediateGoal_5459_ringAttn (initSM initPM : Store)
   have hsp1 : (denoteGraph_ringAttn pm initPM 10078).shape = [2048, 64] := by
     rw [rP1]; exact fw_topk_routing_snd_shape _ 8 64 2048 (by rw [hs9730]; rfl)
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5459 5459 10077 10078 [4096, 64] [2048, 64]
+    ringAttnIntermediateGoal_5459 5459 10077 10078 [4096, 64] [2048, 64]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5464_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5464
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5464
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg56, hs9721, hs9722⟩ := twoTp_gather _ _ intermediateGoal_5454 5454 10065 10066
+  obtain ⟨hg56, hs9721, hs9722⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5454 5454 10065 10066
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5454_ringAttn initSM initPM hSM hPM hInit hWF)
   have s8166 : denoteGraph_ringAttn sm initSM 8244 = id (denoteGraph_ringAttn sm initSM 5454) :=
@@ -764,17 +765,17 @@ theorem recon_intermediateGoal_5464_ringAttn (initSM initPM : Store)
   have hsp1 : (denoteGraph_ringAttn pm initPM 10088).shape = [2048, 1024] := by rw [rP1]; rfl
   have hshape : (denoteGraph_ringAttn sm initSM 5464).shape = [4096, 1024] := by rw [rSM]; rfl
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5464 5464 10087 10088 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5464 5464 10087 10088 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5466_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5466
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5466
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg66, hs9743, hs9744⟩ := twoTp_gather _ _ intermediateGoal_5464 5464 10087 10088
+  obtain ⟨hg66, hs9743, hs9744⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5464 5464 10087 10088
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5464_ringAttn initSM initPM hSM hPM hInit hWF)
   have hw : denoteGraph_ringAttn sm initSM 5465 = denoteGraph_ringAttn pm initPM 5465 :=
@@ -819,17 +820,17 @@ theorem recon_intermediateGoal_5466_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5466 5466 10091 10092 [4096, 1] [2048, 1]
+    ringAttnIntermediateGoal_5466 5466 10091 10092 [4096, 1] [2048, 1]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5467_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5467
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5467
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg68, hs9747, hs9748⟩ := twoTp_gather _ _ intermediateGoal_5466 5466 10091 10092
+  obtain ⟨hg68, hs9747, hs9748⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5466 5466 10091 10092
     [2048, 1] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5466_ringAttn initSM initPM hSM hPM hInit hWF)
   have rSM : denoteGraph_ringAttn sm initSM 5467
@@ -862,17 +863,17 @@ theorem recon_intermediateGoal_5467_ringAttn (initSM initPM : Store)
   have hsp1 : (denoteGraph_ringAttn pm initPM 10098).shape = [2048, 1] := by rw [rP1]; rfl
   have hshape : (denoteGraph_ringAttn sm initSM 5467).shape = [4096, 1] := by rw [rSM]; rfl
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5467 5467 10097 10098 [4096, 1] [2048, 1]
+    ringAttnIntermediateGoal_5467 5467 10097 10098 [4096, 1] [2048, 1]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5468_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5468
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5468
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg69, hs9753, hs9754⟩ := twoTp_gather _ _ intermediateGoal_5467 5467 10097 10098
+  obtain ⟨hg69, hs9753, hs9754⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5467 5467 10097 10098
     [2048, 1] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5467_ringAttn initSM initPM hSM hPM hInit hWF)
   have rSM : denoteGraph_ringAttn sm initSM 5468 = fw_sigmoid (denoteGraph_ringAttn sm initSM 5467) :=
@@ -906,17 +907,17 @@ theorem recon_intermediateGoal_5468_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5468 5468 10099 10100 [4096, 1] [2048, 1]
+    ringAttnIntermediateGoal_5468 5468 10099 10100 [4096, 1] [2048, 1]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5469_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5469
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5469
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg56, hs9721, hs9722⟩ := twoTp_gather _ _ intermediateGoal_5454 5454 10065 10066
+  obtain ⟨hg56, hs9721, hs9722⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5454 5454 10065 10066
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5454_ringAttn initSM initPM hSM hPM hInit hWF)
   have s8170 : denoteGraph_ringAttn sm initSM 8248 = id (denoteGraph_ringAttn sm initSM 5454) :=
@@ -963,17 +964,17 @@ theorem recon_intermediateGoal_5469_ringAttn (initSM initPM : Store)
   have hsp1 : (denoteGraph_ringAttn pm initPM 10102).shape = [2048, 1024] := by rw [rP1]; rfl
   have hshape : (denoteGraph_ringAttn sm initSM 5469).shape = [4096, 1024] := by rw [rSM]; rfl
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5469 5469 10101 10102 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5469 5469 10101 10102 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5471_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5471
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5471
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg71, hs9757, hs9758⟩ := twoTp_gather _ _ intermediateGoal_5469 5469 10101 10102
+  obtain ⟨hg71, hs9757, hs9758⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5469 5469 10101 10102
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5469_ringAttn initSM initPM hSM hPM hInit hWF)
   have hw : denoteGraph_ringAttn sm initSM 5470 = denoteGraph_ringAttn pm initPM 5470 :=
@@ -1018,17 +1019,17 @@ theorem recon_intermediateGoal_5471_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 512] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5471 5471 10105 10106 [4096, 512] [2048, 512]
+    ringAttnIntermediateGoal_5471 5471 10105 10106 [4096, 512] [2048, 512]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5472_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5472
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5472
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg73, hs9761, hs9762⟩ := twoTp_gather _ _ intermediateGoal_5471 5471 10105 10106
+  obtain ⟨hg73, hs9761, hs9762⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5471 5471 10105 10106
     [2048, 512] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5471_ringAttn initSM initPM hSM hPM hInit hWF)
   have rSM : denoteGraph_ringAttn sm initSM 5472
@@ -1061,17 +1062,17 @@ theorem recon_intermediateGoal_5472_ringAttn (initSM initPM : Store)
   have hsp1 : (denoteGraph_ringAttn pm initPM 10116).shape = [2048, 512] := by rw [rP1]; rfl
   have hshape : (denoteGraph_ringAttn sm initSM 5472).shape = [4096, 512] := by rw [rSM]; rfl
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5472 5472 10115 10116 [4096, 512] [2048, 512]
+    ringAttnIntermediateGoal_5472 5472 10115 10116 [4096, 512] [2048, 512]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5473_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5473
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5473
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg56, hs9721, hs9722⟩ := twoTp_gather _ _ intermediateGoal_5454 5454 10065 10066
+  obtain ⟨hg56, hs9721, hs9722⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5454 5454 10065 10066
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5454_ringAttn initSM initPM hSM hPM hInit hWF)
   have s8174 : denoteGraph_ringAttn sm initSM 8252 = id (denoteGraph_ringAttn sm initSM 5454) :=
@@ -1118,17 +1119,17 @@ theorem recon_intermediateGoal_5473_ringAttn (initSM initPM : Store)
   have hsp1 : (denoteGraph_ringAttn pm initPM 10120).shape = [2048, 1024] := by rw [rP1]; rfl
   have hshape : (denoteGraph_ringAttn sm initSM 5473).shape = [4096, 1024] := by rw [rSM]; rfl
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5473 5473 10119 10120 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5473 5473 10119 10120 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5475_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5475
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5475
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg75, hs9775, hs9776⟩ := twoTp_gather _ _ intermediateGoal_5473 5473 10119 10120
+  obtain ⟨hg75, hs9775, hs9776⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5473 5473 10119 10120
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5473_ringAttn initSM initPM hSM hPM hInit hWF)
   have hw : denoteGraph_ringAttn sm initSM 5474 = denoteGraph_ringAttn pm initPM 5474 :=
@@ -1173,17 +1174,17 @@ theorem recon_intermediateGoal_5475_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 512] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5475 5475 10123 10124 [4096, 512] [2048, 512]
+    ringAttnIntermediateGoal_5475 5475 10123 10124 [4096, 512] [2048, 512]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5476_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5476
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5476
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg77, hs9779, hs9780⟩ := twoTp_gather _ _ intermediateGoal_5475 5475 10123 10124
+  obtain ⟨hg77, hs9779, hs9780⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5475 5475 10123 10124
     [2048, 512] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5475_ringAttn initSM initPM hSM hPM hInit hWF)
   have rSM : denoteGraph_ringAttn sm initSM 5476
@@ -1216,20 +1217,20 @@ theorem recon_intermediateGoal_5476_ringAttn (initSM initPM : Store)
   have hsp1 : (denoteGraph_ringAttn pm initPM 10134).shape = [2048, 512] := by rw [rP1]; rfl
   have hshape : (denoteGraph_ringAttn sm initSM 5476).shape = [4096, 512] := by rw [rSM]; rfl
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5476 5476 10133 10134 [4096, 512] [2048, 512]
+    ringAttnIntermediateGoal_5476 5476 10133 10134 [4096, 512] [2048, 512]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5477_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5477
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5477
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg74, hs9771, hs9772⟩ := twoTp_gather _ _ intermediateGoal_5472 5472 10115 10116
+  obtain ⟨hg74, hs9771, hs9772⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5472 5472 10115 10116
     [2048, 512] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5472_ringAttn initSM initPM hSM hPM hInit hWF)
-  obtain ⟨hg78, hs9789, hs9790⟩ := twoTp_gather _ _ intermediateGoal_5476 5476 10133 10134
+  obtain ⟨hg78, hs9789, hs9790⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5476 5476 10133 10134
     [2048, 512] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5476_ringAttn initSM initPM hSM hPM hInit hWF)
   have rSM : denoteGraph_ringAttn sm initSM 5477
@@ -1267,17 +1268,17 @@ theorem recon_intermediateGoal_5477_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 512] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5477 5477 10137 10138 [4096, 512] [2048, 512]
+    ringAttnIntermediateGoal_5477 5477 10137 10138 [4096, 512] [2048, 512]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5478_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5478
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5478
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg79, hs9793, hs9794⟩ := twoTp_gather _ _ intermediateGoal_5477 5477 10137 10138
+  obtain ⟨hg79, hs9793, hs9794⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5477 5477 10137 10138
     [2048, 512] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5477_ringAttn initSM initPM hSM hPM hInit hWF)
   have rSM : denoteGraph_ringAttn sm initSM 5478
@@ -1304,17 +1305,17 @@ theorem recon_intermediateGoal_5478_ringAttn (initSM initPM : Store)
   have hsp1 : (denoteGraph_ringAttn pm initPM 10140).shape = [2048, 512] := by rw [rP1]; rfl
   have hshape : (denoteGraph_ringAttn sm initSM 5478).shape = [4096, 512] := by rw [rSM]; rfl
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5478 5478 10139 10140 [4096, 512] [2048, 512]
+    ringAttnIntermediateGoal_5478 5478 10139 10140 [4096, 512] [2048, 512]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5480_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5480
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5480
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg80, hs9795, hs9796⟩ := twoTp_gather _ _ intermediateGoal_5478 5478 10139 10140
+  obtain ⟨hg80, hs9795, hs9796⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5478 5478 10139 10140
     [2048, 512] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5478_ringAttn initSM initPM hSM hPM hInit hWF)
   have hw : denoteGraph_ringAttn sm initSM 5479 = denoteGraph_ringAttn pm initPM 5479 :=
@@ -1359,17 +1360,17 @@ theorem recon_intermediateGoal_5480_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5480 5480 10145 10146 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5480 5480 10145 10146 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5481_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5481
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5481
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg82, hs9801, hs9802⟩ := twoTp_gather _ _ intermediateGoal_5480 5480 10145 10146
+  obtain ⟨hg82, hs9801, hs9802⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5480 5480 10145 10146
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5480_ringAttn initSM initPM hSM hPM hInit hWF)
   have rSM : denoteGraph_ringAttn sm initSM 5481
@@ -1402,20 +1403,20 @@ theorem recon_intermediateGoal_5481_ringAttn (initSM initPM : Store)
   have hsp1 : (denoteGraph_ringAttn pm initPM 10156).shape = [2048, 1024] := by rw [rP1]; rfl
   have hshape : (denoteGraph_ringAttn sm initSM 5481).shape = [4096, 1024] := by rw [rSM]; rfl
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5481 5481 10155 10156 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5481 5481 10155 10156 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5482_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5482
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5482
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hg70, hs9755, hs9756⟩ := twoTp_gather _ _ intermediateGoal_5468 5468 10099 10100
+  obtain ⟨hg70, hs9755, hs9756⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5468 5468 10099 10100
     [2048, 1] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5468_ringAttn initSM initPM hSM hPM hInit hWF)
-  obtain ⟨hg83, hs9811, hs9812⟩ := twoTp_gather _ _ intermediateGoal_5481 5481 10155 10156
+  obtain ⟨hg83, hs9811, hs9812⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5481 5481 10155 10156
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5481_ringAttn initSM initPM hSM hPM hInit hWF)
   have rSM : denoteGraph_ringAttn sm initSM 5482
@@ -1453,18 +1454,18 @@ theorem recon_intermediateGoal_5482_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5482 5482 10159 10160 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5482 5482 10159 10160 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5463_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5463
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5463
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
   -- Token bridge: 8240 = mref5-pos1(5454).
-  obtain ⟨hbr13, hs9721, hs9722⟩ := twoTp_gather _ _ intermediateGoal_5454 5454 10065 10066
+  obtain ⟨hbr13, hs9721, hs9722⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5454 5454 10065 10066
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5454_ringAttn initSM initPM hSM hPM hInit hWF)
   have s8162 : denoteGraph_ringAttn sm initSM 8240 = id (denoteGraph_ringAttn sm initSM 5454) :=
@@ -1498,10 +1499,10 @@ theorem recon_intermediateGoal_5463_ringAttn (initSM initPM : Store)
           [denoteGraph_ringAttn pm initPM 16164, denoteGraph_ringAttn pm initPM 16187] := by
     rw [s8162, hbr13, hnr, ← p16008, ← p16031]
   -- Routing-probs / routing-map bridges (already 2-tp, no chunk).
-  obtain ⟨hbrRp0, hsRpA, hsRpB⟩ := twoTp_gather _ _ intermediateGoal_5458 5458 10075 10076
+  obtain ⟨hbrRp0, hsRpA, hsRpB⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5458 5458 10075 10076
     [2048, 64] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5458_ringAttn initSM initPM hSM hPM hInit hWF)
-  obtain ⟨hbrRm0, hsRmA, hsRmB⟩ := twoTp_gather _ _ intermediateGoal_5459 5459 10077 10078
+  obtain ⟨hbrRm0, hsRmA, hsRmB⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5459 5459 10077 10078
     [2048, 64] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5459_ringAttn initSM initPM hSM hPM hInit hWF)
   have hbrRp : denoteGraph_ringAttn sm initSM 5458
@@ -1610,17 +1611,17 @@ theorem recon_intermediateGoal_5463_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5463 5463 10085 10086 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5463 5463 10085 10086 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_8229_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_8229
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_8229
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hbr, hs9717, hs9718⟩ := twoTp_gather _ _ intermediateGoal_5452 5452 10061 10062
+  obtain ⟨hbr, hs9717, hs9718⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5452 5452 10061 10062
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5452_ringAttn initSM initPM hSM hPM hInit hWF)
   have rSM : denoteGraph_ringAttn sm initSM 8229 = id (denoteGraph_ringAttn sm initSM 5452) :=
@@ -1652,20 +1653,20 @@ theorem recon_intermediateGoal_8229_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_8229 8229 16145 16153 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_8229 8229 16145 16153 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5483_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5483
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5483
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hbrA, hs9741, hs9742⟩ := twoTp_gather _ _ intermediateGoal_5463 5463 10085 10086
+  obtain ⟨hbrA, hs9741, hs9742⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5463 5463 10085 10086
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5463_ringAttn initSM initPM hSM hPM hInit hWF)
-  obtain ⟨hbrB, hs9815, hs9816⟩ := twoTp_gather _ _ intermediateGoal_5482 5482 10159 10160
+  obtain ⟨hbrB, hs9815, hs9816⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5482 5482 10159 10160
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5482_ringAttn initSM initPM hSM hPM hInit hWF)
   have rSM : denoteGraph_ringAttn sm initSM 5483
@@ -1703,17 +1704,17 @@ theorem recon_intermediateGoal_5483_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5483 5483 10163 10164 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5483 5483 10163 10164 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5484_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5484
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5484
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hbr, hs9819, hs9820⟩ := twoTp_gather _ _ intermediateGoal_5483 5483 10163 10164
+  obtain ⟨hbr, hs9819, hs9820⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5483 5483 10163 10164
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5483_ringAttn initSM initPM hSM hPM hInit hWF)
   have rSM : denoteGraph_ringAttn sm initSM 5484 = id (denoteGraph_ringAttn sm initSM 5483) :=
@@ -1745,20 +1746,20 @@ theorem recon_intermediateGoal_5484_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5484 5484 10169 10170 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5484 5484 10169 10170 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5485_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5485
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5485
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hbrA, hs15989, hs15997⟩ := twoTp_gather _ _ intermediateGoal_8229 8229 16145 16153
+  obtain ⟨hbrA, hs15989, hs15997⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_8229 8229 16145 16153
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_8229_ringAttn initSM initPM hSM hPM hInit hWF)
-  obtain ⟨hbrB, hs9825, hs9826⟩ := twoTp_gather _ _ intermediateGoal_5484 5484 10169 10170
+  obtain ⟨hbrB, hs9825, hs9826⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5484 5484 10169 10170
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5484_ringAttn initSM initPM hSM hPM hInit hWF)
   have rSM : denoteGraph_ringAttn sm initSM 5485
@@ -1796,17 +1797,17 @@ theorem recon_intermediateGoal_5485_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5485 5485 10173 10174 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5485 5485 10173 10174 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5487_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5487
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5487
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hbr87, hs9829, hs9830⟩ := twoTp_gather _ _ intermediateGoal_5485 5485 10173 10174
+  obtain ⟨hbr87, hs9829, hs9830⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5485 5485 10173 10174
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5485_ringAttn initSM initPM hSM hPM hInit hWF)
   have s8178 : denoteGraph_ringAttn sm initSM 8256 = id (denoteGraph_ringAttn sm initSM 5485) :=
@@ -1874,17 +1875,17 @@ theorem recon_intermediateGoal_5487_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 1024] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5487 5487 10177 10178 [4096, 1024] [2048, 1024]
+    ringAttnIntermediateGoal_5487 5487 10177 10178 [4096, 1024] [2048, 1024]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 theorem recon_intermediateGoal_5489_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5489
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5489
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   have hnr : pm.numRanks = 2 := rfl
-  obtain ⟨hbr89, hs9833, hs9834⟩ := twoTp_gather _ _ intermediateGoal_5487 5487 10177 10178
+  obtain ⟨hbr89, hs9833, hs9834⟩ := twoTp_gather _ _ ringAttnIntermediateGoal_5487 5487 10177 10178
     [2048, 1024] rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5487_ringAttn initSM initPM hSM hPM hInit hWF)
   have hw5390 : denoteGraph_ringAttn sm initSM 5488 = denoteGraph_ringAttn pm initPM 5488 :=
@@ -1931,7 +1932,7 @@ theorem recon_intermediateGoal_5489_ringAttn (initSM initPM : Store)
     rw [hval, hnr, allGatherPrimDimN_shape 0 2 _ [2048, 16, 64] (by simp [hsp0])]
     simp [List.set, List.getD]
   exact wrap_2tp_allGather_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
-    intermediateGoal_5489 5489 10179 10180 [4096, 16, 64] [2048, 16, 64]
+    ringAttnIntermediateGoal_5489 5489 10179 10180 [4096, 16, 64] [2048, 16, 64]
     rfl rfl rfl rfl rfl rfl (by decide) hval hshape hsp0 hsp1
 
 /-- 5490 — layer-2 next-block K cast `FW_to(mref-leg(5)_3(5334))`.
@@ -2028,7 +2029,7 @@ theorem recon_intermediateGoal_5491_ringAttn (initSM initPM : Store)
   exact wrap_1tp_gen (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM)
     intermediateGoal_5491 5491 [4096, 4, 64] rfl rfl rfl rfl rfl rfl hval hshape
 
-/-- **Faithful, de-smuggled layer-2 next-zigzag entry `intermediateGoal_5494`** (Worker #27).
+/-- **Faithful, de-smuggled layer-2 next-zigzag entry `ringAttnIntermediateGoal_5494`** (Worker #27).
     +49·2 periodic analogue of faithful `5396`: Q/K/V lineage discharged from
     reconstructed `5489` (2-tp gather over PM `10179`/`10180`), `5490`/`5491` (replicated
     casts), bridged full↔prefix via `foldl_prefix_eq_full_ringAttn'` (SM node 610 /
@@ -2038,15 +2039,15 @@ theorem recon_intermediateGoal_5494_ringAttn (initSM initPM : Store)
     (hSM : StoreShapesHold initSM smInitEnv) (hPM : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (hWF : WellFormed_YOCOMoE_A04B initSM initPM) :
-    InitGoalHolds pm.numRanks intermediateGoal_5494
+    InitGoalHolds pm.numRanks ringAttnIntermediateGoal_5494
       (denoteGraph_ringAttn sm initSM) (denoteGraph_ringAttn pm initPM) := by
   obtain ⟨hQval, hQs0, hQs1⟩ := twoTp_gather (denoteGraph_ringAttn sm initSM)
-    (denoteGraph_ringAttn pm initPM) intermediateGoal_5489 5489 10179 10180 [2048, 16, 64]
+    (denoteGraph_ringAttn pm initPM) ringAttnIntermediateGoal_5489 5489 10179 10180 [2048, 16, 64]
     rfl rfl rfl rfl rfl (by decide)
     (recon_intermediateGoal_5489_ringAttn initSM initPM hSM hPM hInit hWF)
   have hQshapeSM : (denoteGraph_ringAttn sm initSM 5489).shape = [4096, 16, 64] := by
     have h := (recon_intermediateGoal_5489_ringAttn initSM initPM hSM hPM hInit hWF).1
-    simpa [intermediateGoal_5489] using h
+    simpa [ringAttnIntermediateGoal_5489] using h
   have h5490 := recon_intermediateGoal_5490_ringAttn initSM initPM hSM hPM hInit hWF
   have hKval : denoteGraph_ringAttn sm initSM 5490 = denoteGraph_ringAttn pm initPM 5490 :=
     oneTp_valeq intermediateGoal_5490 _ _ 5490 rfl rfl rfl rfl h5490
@@ -2148,7 +2149,7 @@ theorem recon_intermediateGoal_5494_ringAttn (initSM initPM : Store)
         16 4 64 64 (decide ((1 : Nat) ≠ 0)) 0).shape = [2 * 2048, 16, 64] := by
     rw [fw_attn_varlen_shape_p3, allGatherPrimDimN_shape 0 2 _ [2048, 16, 64] (by simp [hsh10179_1])]
     decide
-  exact recon_intermediateGoal_5494_ringAttn_of_qkv initSM initPM hInit
+  exact recon_ringAttnIntermediateGoal_5494_ringAttn_of_qkv initSM initPM hInit
     hq_full hk_repl hv_repl hq_sm hk_sm hv_sm hk_shape hv_shape h_bound hfull_shape hfull_shape' 
 
 end TrainVerify.Denote.GeneratedPatterns

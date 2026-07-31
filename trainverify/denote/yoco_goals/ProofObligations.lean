@@ -3,16 +3,18 @@
 All five pattern bodies are proved. `Instances.lean` exports each pattern under
 its strongest honest statement shape:
 
-* goal 1: labels-in-vocabulary contract;
-* goal 2: shuffle-free cut statement;
-* goal 3: 12 cu-seqlens pins contract;
+* goal 1: full ring-aware theorem with labels-in-vocabulary contract;
+* goal 2: full ring-aware theorem via verified final-store fixed point;
+* goal 3: cut theorem with 12 pins derived from generated cu-seqlens provenance
+  plus one jointly witnessed anchor;
 * goal 4: shuffle-free cut statement;
 * goal 5: valid full-graph statement via generated cut-to-full bridge.
 
 `MainTheorem.lean` no longer composes the invalid historical five-way
 `all_goals_stmt`. It proves `yoco_moe_corrected_main`, combining direct
-`denoteGraphDistributedFaithful` full results for sound goals 1/2/5, the honest
-pattern tier above, and the ownership-aware emitted-corpus shape. Full goals
+`denoteGraphDistributedFaithful` value equalities for goals 1/2 and the complete
+Goal 5 result, the strongest verified tier above, and the ownership-aware
+emitted-corpus shape. Full goals
 3/4 are source/runtime findings on the audited CP2 graph, not open Lean proof
 obligations.
 -/

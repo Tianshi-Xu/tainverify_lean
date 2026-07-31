@@ -16,9 +16,10 @@ full-graph equalities. That specification is not true on the audited CP2 graph:
 router-stack goals 3/4 gather zigzag-owned shards before unshuffle. This module
 therefore composes exactly the claims that are both meaningful and proved:
 
-* full-graph distributed-faithful results for top-level goals 1, 2, and 5;
-* the strongest honest cut/pattern statement for each of the five historical
-  goals (including labels and cu-seqlens caller contracts where required);
+* full-graph distributed-faithful value equalities for top-level goals 1/2,
+  plus the complete Goal 5 lineage result;
+* the strongest verified statement for each historical goal: full ring-aware for
+  goals 1/2, provenance-derived cut for goal 3, cut for goal 4, and full for 5;
 * a kernel-checked emitted-corpus shape showing that the generated full-goal
   list now contains only goals 1, 2, and 5 and that the ordinary/zigzag lists
   retain their audited cardinalities.
@@ -44,9 +45,9 @@ open TrainVerify.Denote.GeneratedPatternInstances
 namespace TrainVerify.Denote.YocoMoE.CorrectedMain
 noncomputable section
 
-/-- The three sound top-level full-graph faithful obligations, under the exact
-caller contracts consumed by their proofs. -/
-def FaithfulTopLevelMain : Prop :=
+/-- The three sound top-level distributed-faithful results. Goals 1/2 expose
+their proved value equalities; Goal 5 exposes the complete lineage result. -/
+def FaithfulTopLevelValueMain : Prop :=
   ∀ (initSM initPM : Store),
     StoreShapesHold initSM smInitEnv →
     StoreShapesHold initPM pmInitEnv →
@@ -68,12 +69,14 @@ def FaithfulTopLevelMain : Prop :=
         (denoteGraphDistributedFaithful sm initSM)
         (denoteGraphDistributedFaithful pm initPM)
 
-/-- All five historical pattern packages, stated honestly rather than coerced to
-one unconditional full-graph statement shape. -/
+/-- The five historical obligations at their strongest verified levels:
+Goals 1/2 are full ring-aware theorems, Goal 3 is the cut theorem under the
+generated value-class plus anchor contract, Goal 4 remains cut-only because its
+ordinary full equality is false, and Goal 5 is full. -/
 def HonestPatternTier : Prop :=
-  goal_1_stmt_with_labels ∧
-  goal_2_stmt_cut ∧
-  goal_3_stmt_with_pins ∧
+  goal_1_stmt_ringAttn_full_with_labels ∧
+  goal_2_stmt_ringAttn_full ∧
+  TrainVerify.Denote.YocoMoE.Goal3Pins.goal_3_stmt_with_value_class ∧
   goal_4_stmt_cut ∧
   goal_5_stmt
 
@@ -85,8 +88,8 @@ def EmittedCorpusShape : Prop :=
   zigzagGoals.length = 505
 
 /-- Direct composition of the three sound faithful top-level proofs. -/
-theorem faithful_top_level_main : FaithfulTopLevelMain := by
-  unfold FaithfulTopLevelMain
+theorem faithful_top_level_value_main : FaithfulTopLevelValueMain := by
+  unfold FaithfulTopLevelValueMain
   intro initSM initPM hSM hPM hInit hValues hCu hx0 hlabels
   refine ⟨?_, ?_, ?_⟩
   · exact recon_goal_4673_faithful initSM initPM hSM hPM hInit hValues hCu hx0 hlabels
@@ -96,8 +99,8 @@ theorem faithful_top_level_main : FaithfulTopLevelMain := by
 /-- The old pattern tier is now completely sorry-free once each instance keeps
 its real caller contract. -/
 theorem honest_pattern_tier : HonestPatternTier := by
-  exact ⟨prove_goal_1_from_pattern_1,
-    prove_goal_2_from_pattern_2,
+  exact ⟨prove_goal_1_full_ringAttn,
+    prove_goal_2_full_from_pattern_2,
     prove_goal_3_from_pattern_3,
     prove_goal_4_from_pattern_4,
     prove_goal_5_from_pattern_5⟩
@@ -115,8 +118,8 @@ label bound as caller contracts; this theorem does not claim a joint witness for
 those full-tier assumptions. Pattern-tier non-vacuity witnesses are provided by
 `YocoMoE_MainSummary.lean`. -/
 theorem yoco_moe_corrected_main :
-    FaithfulTopLevelMain ∧ HonestPatternTier ∧ EmittedCorpusShape := by
-  exact ⟨faithful_top_level_main, honest_pattern_tier, emitted_corpus_shape⟩
+    FaithfulTopLevelValueMain ∧ HonestPatternTier ∧ EmittedCorpusShape := by
+  exact ⟨faithful_top_level_value_main, honest_pattern_tier, emitted_corpus_shape⟩
 
 end
 end TrainVerify.Denote.YocoMoE.CorrectedMain

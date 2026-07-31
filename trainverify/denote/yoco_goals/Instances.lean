@@ -19,6 +19,9 @@ import denote.yoco_goals.Pattern_3
 import denote.yoco_goals.Pattern_4
 import denote.yoco_goals.Pattern_5
 import denote.yoco_goals.Goal_5_CutToFull
+import denote.yoco_goals.Goal_1_FullRing
+import denote.yoco_goals.Goal_2_CutToFull
+import denote.yoco_goals.Goal_3_Pins
 
 set_option maxRecDepth 100000
 
@@ -29,17 +32,22 @@ open TrainVerify.Denote.GeneratedPatterns
 
 namespace TrainVerify.Denote.GeneratedPatternInstances
 
-/-- Goal 1's honest instance. Cross-entropy correctness needs the caller's
-    labels-in-vocabulary contract, so the unconditional legacy `goal_1_stmt`
-    is intentionally not exported. -/
+/-- Goal 1's cut instance, retaining the caller-side labels contract. -/
 theorem prove_goal_1_from_pattern_1 : goal_1_stmt_with_labels :=
   prove_pattern_1 pattern_1_target.goal_1
 
-/-- Goal 2's proven shuffle-free cut instance. The corrected faithful full-graph
-    theorem uses the direct `denoteGraphDistributedFaithful` proof instead of
-    pretending that the legacy non-base cut has an automatic lift. -/
+/-- Goal 1 on the real full ring-aware graph, proved independently by final
+RMSNorm reconstruction plus cross-entropy sharding. -/
+theorem prove_goal_1_full_ringAttn : goal_1_stmt_ringAttn_full_with_labels :=
+  prove_goal_1_ringAttn_full
+
+/-- Goal 2's proven cut instance. -/
 theorem prove_goal_2_from_pattern_2 : goal_2_stmt_cut :=
   prove_pattern_2 pattern_2_target.goal_2
+
+/-- Goal 2's verified non-base fixed-point lift to the full ring-aware graph. -/
+theorem prove_goal_2_full_from_pattern_2 : goal_2_stmt_ringAttn_full :=
+  goal_2_cut_to_full_ringAttn prove_goal_2_from_pattern_2
 
 /- Goals 3 and 4 are blocked for a DIFFERENT and permanent reason than 1/2.
 
@@ -59,16 +67,17 @@ theorem prove_goal_2_from_pattern_2 : goal_2_stmt_cut :=
    The CUT statements are a different matter and remain sound: `pm_goal_3` /
    `pm_goal_4` are sliced subgraphs built from `ChunkPrim` with no shuffle in
    them. Pattern_4 proves its raw cut statement sorry-free. Pattern_3 proves
-   `goal_3_stmt_with_pins`, which requires 12 explicit cu_seqlens value pins;
-   turning that conditional theorem into the raw `goal_3_stmt_cut` is not valid.
-   The instance below therefore exports the conditional statement directly. No
+   `goal_3_stmt_with_pins`; the twelve pins are now discharged from the generated
+   `pmInputValueClasses` provenance contract plus one anchor value.
+   The instance below exports that concrete jointly witnessed input contract. No
    cut-to-full bridge is emitted for either goal because the corresponding
    full-graph equalities are false. -/
 
-/-- Goal 3's honest instance. The 12 cu-seqlens pins are part of the caller
-    contract; dropping them would strengthen the theorem invalidly. -/
-theorem prove_goal_3_from_pattern_3 : goal_3_stmt_with_pins :=
-  prove_pattern_3 pattern_3_target.goal_3
+/-- Goal 3's twelve cu-seqlens pins are derived from the generated same-source
+value class and one anchor equation, rather than supplied independently. -/
+theorem prove_goal_3_from_pattern_3 :
+    TrainVerify.Denote.YocoMoE.Goal3Pins.goal_3_stmt_with_value_class :=
+  TrainVerify.Denote.YocoMoE.Goal3Pins.prove_goal_3_from_value_class
 
 /-- Goal 4: stated over the cut. Pattern_4 discharges it outright, so this is no
     longer a `sorry` — the previous `sorry` was owed entirely to the impossible
