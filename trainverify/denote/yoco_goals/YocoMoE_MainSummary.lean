@@ -17,11 +17,12 @@
        - Pattern_1: labels-bounded  (`< vocab`)
        - Pattern_3: 12 cu_seqlens pins  (`= cu_pin_value`)
      ruling out vacuity (∅ → anything).
-  3. The cut-to-full bridges for goal_1/goal_2 (`Goal_N_CutToFull.lean`)
-     are still pending — full-graph `all_goals_stmt` is deferred until
-     the non-base cut→full emitter lands.  Goal_5 has its bridge and
-     therefore `prove_goal_5_from_pattern_5 : goal_5_stmt` is fully
-     sorry-free at the full-graph tier.
+  3. This module intentionally remains the cut-tier summary. The historical
+     unconditional five-goal `all_goals_stmt` is not a valid target: goal 1
+     needs a labels contract, goal 3 needs 12 pins, and full goals 3/4 are false
+     on CP2. `MainTheorem.lean` now provides the corrected full theorem by
+     composing direct distributed-faithful proofs for sound goals 1/2/5 with
+     the honest pattern contracts and emitted-corpus shape.
 
      goal_3 and goal_4 are a different case: on the currently audited CP2 graph
      their generated full-graph equalities are false (CP zigzag shards do not
@@ -56,16 +57,17 @@ namespace TrainVerify.Denote.YocoMoE.Main
 
 /-- YOCO-MoE cut-tier main theorem.
 
-    This is the strongest statement we can currently make without the
-    cut-to-full bridges for goals 1..4.  Its content:
+    This remains the non-vacuous cut-pattern summary. The corrected
+    distributed-faithful full theorem is `yoco_moe_corrected_main` in
+    `MainTheorem.lean`. Its content here:
 
     * Every pattern-level proof (`prove_pattern_N`) holds.
     * Every pattern's hypothesis set is jointly satisfiable (non-vacuous).
 
     Together, these establish that each cut-graph goal is genuinely
-    proven against a witness that satisfies its full hypothesis
-    package. The full-graph `all_goals_stmt` remains blocked on
-    non-base cut→full bridges (structural, not model-specific). -/
+    proven against a witness that satisfies its full hypothesis package.
+    They are retained as a pattern-level companion to the corrected faithful
+    full theorem, not coerced back into the invalid legacy `all_goals_stmt`. -/
 /- NOTE (2026-07-28): 15 post-shuffle relations are false as faithful
    FULL-graph ordinary-gather goals, but sound as explicit boundary contracts of
    the shuffle-free CUT graphs. Goal_1/Goal_4 re-declare them locally as

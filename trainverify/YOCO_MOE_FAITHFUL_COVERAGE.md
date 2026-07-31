@@ -31,10 +31,13 @@ cut-tier Pattern_1 / Pattern_4 chain no longer relies on an unconstrained
 `ZigzagCutGatherHyp`: the 15 relations are local `cutIntermediateGoal_*`
 boundary contracts included in the shuffle-free cut graphs' `InitGoalsHold`
 packages, and the existing zero-store joint witnesses establish satisfiability.
-Still, quote 99.83% only as per-goal faithful coverage; `Instances.lean` retains
-cut→full `sorry`s for goals 1/2 and a raw cut-level `sorry` for goal 3 because
-Pattern_3 proves only the honest conditional `goal_3_stmt_with_pins`. Goal 4's
-sound cut instance is sorry-free; the false full-graph statements do not exist.
+The legacy `Instances.lean` layer is now also sorry-free: it exports the honest
+labels-contract statement for goal 1, cut statement for goal 2, pins-contract
+statement for goal 3, cut statement for goal 4, and full statement for goal 5.
+`MainTheorem.lean` composes the direct distributed-faithful full proofs for sound
+goals 1/2/5 with those honest pattern contracts and the emitted-corpus shape.
+The two omitted full goals remain findings justified by the separate
+source/runtime audit, not by the Lean bookkeeping theorem.
 
 ### Ordinary class
 

@@ -1,32 +1,34 @@
-/- Auto-generated human proof obligation index.
+/- YOCO-MoE proof obligation index (completed).
 
-This is the intended entry point for human proof work.
-Files imported here contain the reusable theorems whose bodies still need proofs.
-`Instances.lean` projects Pattern_N proofs to concrete goals, and
-`MainTheorem.lean` composes those projections into `all_goals_stmt`.
+All five pattern bodies are proved. `Instances.lean` exports each pattern under
+its strongest honest statement shape:
 
-Optional segment proof packages: none
+* goal 1: labels-in-vocabulary contract;
+* goal 2: shuffle-free cut statement;
+* goal 3: 12 cu-seqlens pins contract;
+* goal 4: shuffle-free cut statement;
+* goal 5: valid full-graph statement via generated cut-to-full bridge.
 
-Pattern proof obligations for all_goals_stmt:
-  - Pattern_1.lean: prove_pattern_1  -- instances=1, ops/instance: SM=25, PM=53, ops=[OpName.FW_multiref, OpName.FW_reshape, OpName.FW_mix_precision_linear, OpName.FW_topk_routing, OpName.FW_view, OpName.FW_all2all_moe_gmm, OpName.FW_sigmoid, OpName.FW_swiglu, ...]; concrete goals: 1
-  - Pattern_2.lean: prove_pattern_2  -- instances=1, ops/instance: SM=1, PM=5, ops=[OpName.FW_inner_chunk_ce, OpName.ChunkPrim, OpName.AllGatherPrim]; concrete goals: 2
-  - Pattern_3.lean: prove_pattern_3  -- instances=1, ops/instance: SM=903, PM=1866, ops=[OpName.FW_float, OpName.FW_multiref, OpName.FW_rms_norm, OpName.FW_per_head_mix_precision_linear, OpName.FW_rotary_embedding, OpName.FW_attn_sliding_window, OpName.FW_reshape, OpName.FW_mix_precision_linear, ...]; concrete goals: 3
-  - Pattern_4.lean: prove_pattern_4  -- instances=1, ops/instance: SM=25, PM=55, ops=[OpName.FW_topk_routing, OpName.FW_stack, OpName.ChunkPrim, OpName.AllGatherPrim]; concrete goals: 4
-  - Pattern_5.lean: prove_pattern_5  -- instances=1, ops/instance: SM=1, PM=3, ops=[OpName.FW_embedding, OpName.AllReducePrim]; concrete goals: 5
+`MainTheorem.lean` no longer composes the invalid historical five-way
+`all_goals_stmt`. It proves `yoco_moe_corrected_main`, combining direct
+`denoteGraphDistributedFaithful` full results for sound goals 1/2/5, the honest
+pattern tier above, and the ownership-aware emitted-corpus shape. Full goals
+3/4 are source/runtime findings on the audited CP2 graph, not open Lean proof
+obligations.
 -/
-import denote.yoco_goals.Pattern_1
-import denote.yoco_goals.Pattern_2
-import denote.yoco_goals.Pattern_3
-import denote.yoco_goals.Pattern_4
-import denote.yoco_goals.Pattern_5
+import denote.yoco_goals.MainTheorem
 
 set_option maxRecDepth 100000
 
 namespace TrainVerify.Denote.GeneratedProofObligations
 
+/-- No optional segment package remains open. -/
 def optionalSegmentProofPackageCount : Nat := 0
-def humanPatternProofCount : Nat := 5
-def humanProofObligationCount : Nat := 5
+
+/-- Five pattern packages are complete under their honest contracts. -/
+def completedPatternProofCount : Nat := 5
+
+/-- No human proof body remains open in the YOCO goal ecosystem. -/
+def humanProofObligationCount : Nat := 0
 
 end TrainVerify.Denote.GeneratedProofObligations
-
