@@ -104,20 +104,24 @@ theorem prove_goal_296_cut : goal_296_stmt_cut := by
   have hW_eq : initSM 664 = initPM 664 := by
     have hrec := hInitW.2.2
     simp only [initGoal_664, pm_goal_296, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have hW_shape : (initSM 664).shape = [32] := hInitW.1
   have hB_eq : initSM 665 = initPM 665 := by
     have hrec := hInitB.2.2
     simp only [initGoal_665, pm_goal_296, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   -- Convert to allGatherPrimDimN
   have hG_gather : initSM 842 = allGatherPrimDimN 1 4 0
       [initPM 2656, initPM 2660, initPM 2664, initPM 2668] := by
     rw [hG_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2656_shape]; decide)
   have hX_gather : initSM 1020 = allGatherPrimDimN 1 4 0
       [initPM 2637, initPM 2638, initPM 2639, initPM 2640] := by
     rw [hX_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2637_shape]; decide)
   -- SM store (dx output, index 0 = 1021)
   have hsm : (denoteGraph sm_goal_296 initSM) 1021 =
@@ -191,13 +195,16 @@ theorem prove_goal_296_cut : goal_296_stmt_cut := by
   -- Three conjuncts
   simp only [goal_296, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm, bw_layernorm_dx_shape _ _ _ _ 32 [8, 1] (by rw [hX_shape]; rfl), hX_shape]
-  · rw [hpm0, hpm1, hpm2, hpm3,
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, bw_layernorm_dx_shape _ _ _ _ 32 [8, 1] (by rw [hX_shape]; rfl), hX_shape]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm0, hpm1, hpm2, hpm3,
         bw_layernorm_dx_shape _ _ _ _ 32 [2, 1] (by rw [h2637_shape]; rfl), h2637_shape,
         bw_layernorm_dx_shape _ _ _ _ 32 [2, 1] (by rw [h2638_shape]; rfl), h2638_shape,
         bw_layernorm_dx_shape _ _ _ _ 32 [2, 1] (by rw [h2639_shape]; rfl), h2639_shape,
         bw_layernorm_dx_shape _ _ _ _ 32 [2, 1] (by rw [h2640_shape]; rfl), h2640_shape]
-  · rw [hsm, hkey, hpm0, hpm1, hpm2, hpm3,
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hkey, hpm0, hpm1, hpm2, hpm3,
         reconstructWithDim_cons_cons_nonscalar 1 pm_goal_296.numRanks 0 _ _ _ (by rw [hdx0_shape]; decide)]
     rfl
 

@@ -74,6 +74,7 @@ theorem prove_goal_26_cut : goal_26_stmt_cut := by
   have h597_gather : initSM 597 = allGatherPrimDimN 0 4 0
       [initPM 1557, initPM 1558, initPM 1559, initPM 1560] := by
     rw [h597_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _ (by rw [h1557_shape]; decide)
   have hInit25 : InitGoalHolds pm_goal_26.numRanks goal_25 initSM initPM := by
     apply hInitGoals; simp only [goal_26_cut_initGoals, goal_26_prereqs]; decide
@@ -81,7 +82,7 @@ theorem prove_goal_26_cut : goal_26_stmt_cut := by
   have h596_eq : initSM 596 = initPM 596 := by
     have hrec := hInit25.2.2
     simp only [goal_25, pm_goal_26, List.map] at hrec
-    rw [hrec]; exact reconstructWithDim_singleton ..
+    rw [hrec]; (first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip); exact reconstructWithDim_singleton ..
   have hsm : (denoteGraph sm_goal_26 initSM) 598 = fw_linear (initSM 596) (initSM 597) := by
     simp only [sm_goal_26, denoteGraph, List.foldl]
     rw [applyNode_fw_linear_out]
@@ -135,9 +136,11 @@ theorem prove_goal_26_cut : goal_26_stmt_cut := by
     exact hdist
   simp only [goal_26, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · show (denoteGraph sm_goal_26 initSM 598).shape = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show (denoteGraph sm_goal_26 initSM 598).shape = _
     rw [hsm]; exact fw_linear_3d_shape 1 8 32 128 _ _ h596_shape h597_shape
-  · show [(denoteGraph pm_goal_26 initPM 1561).shape,
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show [(denoteGraph pm_goal_26 initPM 1561).shape,
           (denoteGraph pm_goal_26 initPM 1562).shape,
           (denoteGraph pm_goal_26 initPM 1563).shape,
           (denoteGraph pm_goal_26 initPM 1564).shape] = _
@@ -147,7 +150,8 @@ theorem prove_goal_26_cut : goal_26_stmt_cut := by
                fw_linear_3d_shape 1 8 32 32 _ _ h596_pm h1558_shape,
                fw_linear_3d_shape 1 8 32 32 _ _ h596_pm h1559_shape,
                fw_linear_3d_shape 1 8 32 32 _ _ h596_pm h1560_shape]
-  · show denoteGraph sm_goal_26 initSM 598 =
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show denoteGraph sm_goal_26 initSM 598 =
       reconstructWithDim 2 4 0 [denoteGraph pm_goal_26 initPM 1561,
         denoteGraph pm_goal_26 initPM 1562, denoteGraph pm_goal_26 initPM 1563,
         denoteGraph pm_goal_26 initPM 1564]

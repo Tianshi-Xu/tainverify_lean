@@ -68,6 +68,7 @@ theorem prove_goal_184_cut : goal_184_stmt_cut := by
   have h1005_eq : initSM 1005 = initPM 1008 := by
     have hrec := hInit1005.2.2
     simp only [goal_290, pm_goal_184, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [hrec, reconstructWithDim_singleton]
   have h1005_shape : (initSM 1005).shape = [1, 8, 32] := hInit1005.1
   have h1008_shape : (initPM 1008).shape = [1, 8, 32] := by rw [← h1005_eq]; exact h1005_shape
@@ -79,6 +80,7 @@ theorem prove_goal_184_cut : goal_184_stmt_cut := by
   have h1009_eq : initSM 1009 = initPM 1009 := by
     have hrec := hInit1009.2.2
     simp only [goal_292, pm_goal_184, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [hrec, reconstructWithDim_singleton]
   have h1009_shape : (initSM 1009).shape = [1, 8, 32] := hInit1009.1
   have h1009pm_shape : (initPM 1009).shape = [1, 8, 32] := by rw [← h1009_eq]; exact h1009_shape
@@ -109,6 +111,7 @@ theorem prove_goal_184_cut : goal_184_stmt_cut := by
   have h1013_gather : initSM 1013 = allGatherPrimDimN 1 4 0
       [initPM 2329, initPM 2332, initPM 2335, initPM 2338] := by
     rw [h1013_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2329_shape]; decide)
   -- SM store: tensorSum [initSM 1005, initSM 1009, initSM 1013]
   have hsm : (denoteGraph sm_goal_184 initSM) 811 =
@@ -150,10 +153,14 @@ theorem prove_goal_184_cut : goal_184_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_184, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm, tensorSum_shape]; exact h1005_shape
-  · simp only [hpm_2244, hpm_2248, hpm_2252, hpm_2256, tensorSum_shape, hchunk1008]
-  · rw [hsm, hkey, ← hpm_2244, ← hpm_2248, ← hpm_2252, ← hpm_2256]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, tensorSum_shape]; exact h1005_shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    simp only [hpm_2244, hpm_2248, hpm_2252, hpm_2256, tensorSum_shape, hchunk1008]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hkey, ← hpm_2244, ← hpm_2248, ← hpm_2252, ← hpm_2256]
     symm
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _
       (by rw [hpm_2244, tensorSum_shape, hchunk1008]; decide)
 

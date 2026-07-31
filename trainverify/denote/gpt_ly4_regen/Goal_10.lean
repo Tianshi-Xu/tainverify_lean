@@ -61,6 +61,7 @@ theorem prove_goal_10_cut : goal_10_stmt_cut := by
   have h577_eq : initSM 577 = initPM 577 := by
     have hrec := hInit.2.2
     simp only [goal_9, pm_goal_10, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   have h577pm_shape : (initPM 577).shape = [1, 8, 4, 8] := by rw [← h577_eq]; exact h577_shape
@@ -105,12 +106,15 @@ theorem prove_goal_10_cut : goal_10_stmt_cut := by
       List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
   simp only [goal_10, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm]
     simp only [transposeAxes, Tensor.mkShape, listSwapAt, h577_shape, List.getD, List.set,
       List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]
-  · rw [hpm0, hpm1, hpm2, hpm3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm0, hpm1, hpm2, hpm3]
     simp [htp_shape 0 (by omega), htp_shape 1 (by omega), htp_shape 2 (by omega), htp_shape 3 (by omega)]
-  · rw [hsm, h577_eq, hbridge, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, h577_eq, hbridge, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
     symm
     apply reconstructWithDim_cons_cons_nonscalar
     rw [hpm0, htp_shape 0 (by omega)]

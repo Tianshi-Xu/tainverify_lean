@@ -85,6 +85,7 @@ theorem prove_goal_179_cut : goal_179_stmt_cut := by
   have h634_eq : initSM 634 = initPM 634 := by
     have hrec := hInit52.2.2
     simp only [goal_52, pm_goal_179, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h634_shape : (initSM 634).shape = [1, 8, 128] := hInit52.1
   have h634P_shape : (initPM 634).shape = [1, 8, 128] := by rw [← h634_eq]; exact h634_shape
@@ -109,10 +110,12 @@ theorem prove_goal_179_cut : goal_179_stmt_cut := by
   have h805_gather : initSM 805 = allGatherPrimDimN 2 4 0
       [initPM 2183, initPM 2186, initPM 2189, initPM 2192] := by
     rw [h805_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h2183_shape]; decide)
   have h635_gather : initSM 635 = allGatherPrimDimN 0 4 0
       [initPM 2165, initPM 2166, initPM 2167, initPM 2168] := by
     rw [h635_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _ (by rw [h2165_shape]; decide)
   -- SM store: dW (output index 1) of BW_linear on full tensors
   have hsm : (denoteGraph sm_goal_179 initSM) 804 =
@@ -144,15 +147,18 @@ theorem prove_goal_179_cut : goal_179_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_179, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [32, 128]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [32, 128]
     rw [hsm, bw_linear_3d_snd_shape 1 8 32 128 _ _ _ h805_shape h634_shape h635_shape]
-  · -- PM tp shapes: [[8, 128], [8, 128], [8, 128], [8, 128]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[8, 128], [8, 128], [8, 128], [8, 128]]
     rw [hpm0, hpm1, hpm2, hpm3,
         bw_linear_3d_snd_shape 1 8 8 128 _ _ _ h2183_shape h634P_shape h2165_shape,
         bw_linear_3d_snd_shape 1 8 8 128 _ _ _ h2186_shape h634P_shape h2166_shape,
         bw_linear_3d_snd_shape 1 8 8 128 _ _ _ h2189_shape h634P_shape h2167_shape,
         bw_linear_3d_snd_shape 1 8 8 128 _ _ _ h2192_shape h634P_shape h2168_shape]
-  · -- Value equality: smStore 804 = reconstructWithDim 0 4 0 [pm dW shards]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 804 = reconstructWithDim 0 4 0 [pm dW shards]
     rw [show pm_goal_179.numRanks = 4 from rfl,
         hpm0, hpm1, hpm2, hpm3,
         reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _

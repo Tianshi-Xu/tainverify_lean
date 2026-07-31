@@ -1,0 +1,37 @@
+import denote.gpt_ly4_regen.Goal_161_Data
+
+open TrainVerify.Denote
+open TrainVerify.Denote.Generated
+
+namespace TrainVerify.Denote.GeneratedGoals
+
+-- Split out of Goal_161.lean and restructured for Lean v4.31.
+-- The v4.27 proof reduced this against the full 16-node fold; under v4.31 the
+-- `by decide` side goals of `repeat rw [applyNode_eq_of_not_mem_outs]`, and the
+-- trailing `rfl`, make the kernel accumulate def-eq state without converging
+-- (~3.5 GB/min; 27+ GB RSS measured on Goal_124). Truncating to the prefix that
+-- ends at the writing node puts it at the head of the fold, so the same rewrites
+-- close it against a much smaller graph.
+-- Proof content is otherwise the v4.27 proof from commit c4f01699.
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 400000 in
+theorem b66_0_161 (initPM : Store) :
+    (denoteGraph pm_goal_161 initPM) 1966 =
+      (bw_matmul ((denoteGraph pm_goal_161 initPM) 789) ((denoteGraph pm_goal_161 initPM) 1945)
+        ((denoteGraph pm_goal_161 initPM) 1949)).2 := by
+  have hL : denoteGraph pm_goal_161 initPM 1966
+          = denoteGraph {pm_goal_161 with nodes := pm_goal_161.nodes.take 9} initPM 1966 :=
+    denoteGraph_tid_eq_of_suffix_no_writes pm_goal_161 initPM 1966 _ _
+      (List.take_append_drop 9 _).symm (by decide)
+  have hR : ∀ t : Tid, t = 1945 ∨ t = 1949 →
+      denoteGraph pm_goal_161 initPM t
+        = denoteGraph {pm_goal_161 with nodes := pm_goal_161.nodes.take 8} initPM t := by
+    rintro t (rfl | rfl) <;>
+      exact denoteGraph_tid_eq_of_suffix_no_writes pm_goal_161 initPM _ _ _
+        (List.take_append_drop 8 _).symm (by decide)
+  rw [hL, hR 1945 (by tauto), hR 1949 (by tauto)]
+  simp only [pm_goal_161, denoteGraph, GraphDecl.nodes, List.take, List.foldl, List.map]
+  rw [applyNode_bw_matmul_snd_out (hne := by decide)]
+  congr 1 <;> repeat rw [applyNode_eq_of_not_mem_outs (h := by decide)]
+
+end TrainVerify.Denote.GeneratedGoals

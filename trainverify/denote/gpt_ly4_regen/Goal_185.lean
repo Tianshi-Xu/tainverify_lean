@@ -69,6 +69,7 @@ theorem prove_goal_185_cut : goal_185_stmt_cut := by
   have h816_eq : initSM 816 = initPM 816 := by
     have hrec := hInit186.2.2
     simp only [goal_186, pm_goal_185, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h816_shape : (initSM 816).shape = [1, 8, 32] := hInit186.1
   have h816_shapeP : (initPM 816).shape = [1, 8, 32] := by rw [← h816_eq]; exact h816_shape
@@ -76,6 +77,7 @@ theorem prove_goal_185_cut : goal_185_stmt_cut := by
   have h1004_eq : initSM 1004 = initPM 999 := by
     have hrec := hInit289.2.2
     simp only [goal_289, pm_goal_185, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h1004_shape : (initSM 1004).shape = [1, 8, 32] := hInit289.1
   have h999_shapeP : (initPM 999).shape = [1, 8, 32] := by rw [← h1004_eq]; exact h1004_shape
@@ -169,11 +171,13 @@ theorem prove_goal_185_cut : goal_185_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_185, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape [32,32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape [32,32]
     rw [hsm, hkey, allGatherPrimDimN_shape 0 4 _ [8, 32] (by
       simp [bw_linear_3d_snd_shape 1 8 8 32 _ _ _ hch0 h999_shapeP h2257_shape])]
     decide
-  · -- PM shard shapes [[8,32],[8,32],[8,32],[8,32]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM shard shapes [[8,32],[8,32],[8,32],[8,32]]
     have hch1 : (chunkPrimDimN 2 4 1 (initPM 816)).shape = [1, 8, 8] := by
       rw [chunkPrimDimN_shape 2 4 1 (initPM 816) _ h816_shapeP (by omega)]; simp [List.set, List.getD]
     have hch2 : (chunkPrimDimN 2 4 2 (initPM 816)).shape = [1, 8, 8] := by
@@ -185,8 +189,10 @@ theorem prove_goal_185_cut : goal_185_stmt_cut := by
         bw_linear_3d_snd_shape 1 8 8 32 _ _ _ hch1 h999_shapeP h2258_shape,
         bw_linear_3d_snd_shape 1 8 8 32 _ _ _ hch2 h999_shapeP h2259_shape,
         bw_linear_3d_snd_shape 1 8 8 32 _ _ _ hch3 h999_shapeP h2260_shape]
-  · -- value equality: smStore 815 = reconstructWithDim 0 4 0 [pm shards]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- value equality: smStore 815 = reconstructWithDim 0 4 0 [pm shards]
     rw [hsm, hkey, hpm0, hpm1, hpm2, hpm3]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_185.numRanks 0 _ _ _ (by
       rw [bw_linear_3d_snd_shape 1 8 8 32 _ _ _ hch0 h999_shapeP h2257_shape]; decide)]
     rfl

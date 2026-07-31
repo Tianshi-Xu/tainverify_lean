@@ -71,6 +71,7 @@ theorem prove_goal_71_cut : goal_71_stmt_cut := by
     have hrec := hInit.2.2
     simp only [goal_70, LineageGoal.tps, LineageGoal.gatherDim, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2533]; decide)
   -- SM store: smStore 659 = initSM 658 (FW_contiguous is identity)
   have hsm : (denoteGraph sm_goal_71 initSM) 659 = initSM 658 := by
@@ -109,8 +110,10 @@ theorem prove_goal_71_cut : goal_71_stmt_cut := by
   simp only [goal_71, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
     LineageGoal.gatherDim, List.map, Piece.tid]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm, h658_shape]
-  · rw [hpm']
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, h658_shape]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm']
     have hchunk_shape : ∀ r, (chunkPrimDimN 3 4 r (initSM 658)).shape = [1, 8, 4, 2] := by
       intro r
       rw [chunkPrimDimN_shape 3 4 r _ _ h658_shape (by omega)]
@@ -121,7 +124,8 @@ theorem prove_goal_71_cut : goal_71_stmt_cut := by
       simp [List.head?, Option.map, hchunk_shape 0]
     rw [allGatherPrimDimN_shape 3 4 _ [1, 8, 4, 2] hhead]
     simp [List.set, List.getD]
-  · rw [reconstructWithDim_singleton, hsm, hpm']
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [reconstructWithDim_singleton, hsm, hpm']
     exact hbridge
 
 end TrainVerify.Denote.GeneratedGoals

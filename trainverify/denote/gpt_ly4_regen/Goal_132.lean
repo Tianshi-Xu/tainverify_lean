@@ -71,6 +71,7 @@ theorem prove_goal_132_cut : goal_132_stmt_cut := by
   have h749_eq : initSM 749 = initPM 749 := by
     have hrec := hInit133.2.2
     simp only [goal_133, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   have h749pm_shape : (initPM 749).shape = [1, 8, 4, 8] := by rw [← h749_eq]; exact h749_shape
@@ -137,9 +138,12 @@ theorem prove_goal_132_cut : goal_132_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_132, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm]; exact h749_shape
-  · rw [hpm0', hpm1', hpm2', hpm3', hcshape 0, hcshape 1, hcshape 2, hcshape 3]
-  · rw [hsm, hpm0', hpm1', hpm2', hpm3', h749_eq,
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm]; exact h749_shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm0', hpm1', hpm2', hpm3', hcshape 0, hcshape 1, hcshape 2, hcshape 3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hpm0', hpm1', hpm2', hpm3', h749_eq,
         reconstructWithDim_cons_cons_nonscalar 3 _ 0 _ _ _ (by rw [hcshape 0]; decide)]
     exact (allGatherPrimDimN_chunkPrimDimN_id_dim3_4_8_4_8_g132 (initPM 749) h749pm_shape).symm
 

@@ -145,6 +145,7 @@ theorem goal_19_cut_to_full (h : goal_19_stmt_cut) : goal_19_stmt := by
   have h586_repl : Ssm 586 = Spm 586 := by
     have hrec := hg18.2.2
     simp only [goal_18, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   have h586_pmsh : (Spm 586).shape = [1, 4, 8, 8] := by rw [← h586_repl]; exact h586_smsh

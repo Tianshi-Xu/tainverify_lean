@@ -81,6 +81,7 @@ theorem prove_goal_107_cut : goal_107_stmt_cut := by
   have h563_gather : initSM 563 = allGatherPrimDimN 0 4 0
       [initPM 1065, initPM 1066, initPM 1067, initPM 1068] := by
     rw [h563_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _ (by rw [h1065_shape]; decide)
   -- Extract init alignment for goal_108 (tensor 719 is replicated)
   have hInit719 : InitGoalHolds pm_goal_107.numRanks goal_108 initSM initPM := by
@@ -90,6 +91,7 @@ theorem prove_goal_107_cut : goal_107_stmt_cut := by
   have h719_eq : initSM 719 = initPM 719 := by
     have hrec := hInit719.2.2
     simp only [goal_108, pm_goal_107, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   -- Extract init alignment for initGoal_714 (tensor 714 is replicated)
@@ -100,6 +102,7 @@ theorem prove_goal_107_cut : goal_107_stmt_cut := by
   have h714_eq : initSM 714 = initPM 714 := by
     have hrec := hInit714.2.2
     simp only [initGoal_714, pm_goal_107, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   -- SM store: smStore 718 = bw_embedding(initSM 719, initSM 714, initSM 563)
@@ -168,12 +171,15 @@ theorem prove_goal_107_cut : goal_107_stmt_cut := by
   -- Prove the three conjuncts
   simp only [goal_107, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM shape: [128, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM shape: [128, 32]
     rw [hsm, bw_embedding_shape, h563_shape]
-  · -- PM tp shapes: [[32,32],[32,32],[32,32],[32,32]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[32,32],[32,32],[32,32],[32,32]]
     rw [hpm0, hpm1, hpm2, hpm3]
     simp [bw_embedding_offset_shape, h1065_shape, h1066_shape, h1067_shape, h1068_shape]
-  · -- Value equality: smStore 718 = reconstructWithDim 0 4 0 [pmStore 1081..1084]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 718 = reconstructWithDim 0 4 0 [pmStore 1081..1084]
     rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
     -- LHS = allGatherPrimDimN 0 4 0 [pmStore 1081, ..., 1084]
     -- Need to show this = reconstructWithDim 0 4 0 [pmStore 1081, ..., 1084]

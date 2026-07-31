@@ -71,6 +71,7 @@ theorem prove_goal_18_cut : goal_18_stmt_cut := by
     have hrec := hInit.2.2
     simp only [goal_17, LineageGoal.tps, LineageGoal.gatherDim, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1369]; decide)
   -- chunk shapes for dim-2 split of [1,4,8,8]
   have hchunk_shape : ∀ r, (chunkPrimDimN 2 4 r (initSM 585)).shape = [1, 4, 2, 8] := by
@@ -123,10 +124,13 @@ theorem prove_goal_18_cut : goal_18_stmt_cut := by
   simp only [goal_18, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
     LineageGoal.gatherDim, List.map, Piece.tid]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm, softmax_shape_g18, h585_shape]
-  · rw [hpm', allGatherPrimDimN_shape 2 4 _ [1, 4, 2, 8] hhead_sm]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, softmax_shape_g18, h585_shape]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm', allGatherPrimDimN_shape 2 4 _ [1, 4, 2, 8] hhead_sm]
     simp [List.set, List.getD]
-  · rw [reconstructWithDim_singleton, hsm, hpm']
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [reconstructWithDim_singleton, hsm, hpm']
     exact hbridge
 
 end TrainVerify.Denote.GeneratedGoals

@@ -73,6 +73,7 @@ theorem prove_goal_245_cut : goal_245_stmt_cut := by
   have h886eq : initSM 886 = initPM 886 := by
     have hrec := hInit247.2.2
     simp only [goal_247, pm_goal_245, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h886shapeS : (initSM 886).shape = [1, 8, 128] := hInit247.1
   have h886shapeP : (initPM 886).shape = [1, 8, 128] := by rw [← h886eq]; exact h886shapeS
@@ -97,6 +98,7 @@ theorem prove_goal_245_cut : goal_245_stmt_cut := by
   have h702_gather : initSM 702 = allGatherPrimDimN 1 4 0
       [initPM 3237, initPM 3238, initPM 3239, initPM 3240] := by
     rw [h702_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h3237_shape]; decide)
   -- init shapes from the shape environments
   have h701shapeS : (initSM 701).shape = [1, 8, 32] := hSmInit 701 [1, 8, 32] (by decide)
@@ -195,14 +197,18 @@ theorem prove_goal_245_cut : goal_245_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_245, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape [1, 8, 32]
     rw [hsm]
     exact bw_linear_3d_fst_shape 1 8 128 32 _ _ _ h886shapeS h701shapeS h702shapeS
-  · -- PM tp shapes
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes
     rw [hpm0, hpm1, hpm2, hpm3, hch 0, hch 1, hch 2, hch 3]
-  · -- Value equality
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality
     rw [hsm, hpm0, hpm1, hpm2, hpm3]
     rw [show pm_goal_245.numRanks = 4 from rfl]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [hch 0]; decide)]
     rw [allGatherPrimDimN_chunkPrimDimN_id_dim1_4_32 _ hTshape]
     rw [← bw_linear_dx_csplit_dim1_4_1_8_8_g245 (initPM 886)

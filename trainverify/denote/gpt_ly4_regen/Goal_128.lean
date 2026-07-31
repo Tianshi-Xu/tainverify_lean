@@ -85,6 +85,7 @@ theorem prove_goal_128_cut : goal_128_stmt_cut := by
   have h745_gather : initSM 745 = allGatherPrimDimN 1 4 0
       [initPM 1382, initPM 1384, initPM 1386, initPM 1388] := by
     rw [h745_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1382_shape]; decide)
   -- Per-rank bw_div result shapes
   have hY_shape : (bw_div (2 : Scalar) (initPM 1382)).shape = [1, 1, 8, 8] := by
@@ -136,11 +137,15 @@ theorem prove_goal_128_cut : goal_128_stmt_cut := by
   -- Discharge the three conjuncts.
   simp only [goal_128, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape
     rw [hsm, hG, hG_shape]
-  · -- PM tp shapes (single tp)
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes (single tp)
     rw [hpm, hG_shape]
-  · -- Value equality
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [hsm, hG, hpm, reconstructWithDim_singleton]
 
 end TrainVerify.Denote.GeneratedGoals

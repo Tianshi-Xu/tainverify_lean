@@ -102,20 +102,24 @@ theorem prove_goal_183_cut : goal_183_stmt_cut := by
   have hW_eq : initSM 638 = initPM 638 := by
     have hrec := hInitW.2.2
     simp only [initGoal_638, pm_goal_183, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have hW_shape : (initSM 638).shape = [32] := hInitW.1
   have hB_eq : initSM 639 = initPM 639 := by
     have hrec := hInitB.2.2
     simp only [initGoal_639, pm_goal_183, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   -- Convert to allGatherPrimDimN
   have hX_gather : initSM 989 = allGatherPrimDimN 1 4 0
       [initPM 2225, initPM 2226, initPM 2227, initPM 2228] := by
     rw [hX_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2225_shape]; decide)
   have hG_gather : initSM 811 = allGatherPrimDimN 1 4 0
       [initPM 2244, initPM 2248, initPM 2252, initPM 2256] := by
     rw [hG_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2244_shape]; decide)
   -- SM store
   have hsm : (denoteGraph sm_goal_183 initSM) 810 =
@@ -150,13 +154,17 @@ theorem prove_goal_183_cut : goal_183_stmt_cut := by
   simp only [goal_183, List.map]
   have hb568 : (initPM 639).shape = [32] := by rw [← hB_eq]; exact hInitB.1
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm, hkey]; unfold cross_dp_wred
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hkey]; unfold cross_dp_wred
     rw [tensorSum_shape, bw_layernorm_db_shape _ _ _ _ 32 [2, 1] (by rw [h2225_shape]; decide)]
     exact hb568
-  · rw [hpm]; unfold cross_dp_wred
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm]; unfold cross_dp_wred
     rw [show [(tensorSum _).shape] = [[32]] from by
       rw [tensorSum_shape, bw_layernorm_db_shape _ _ _ _ 32 [2, 1] (by rw [h2225_shape]; decide), hb568]]
-  · rw [hsm, hkey, ← hpm]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hkey, ← hpm]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_singleton]
 
 

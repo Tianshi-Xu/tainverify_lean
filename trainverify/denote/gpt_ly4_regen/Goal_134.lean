@@ -84,6 +84,7 @@ theorem prove_goal_134_cut : goal_134_stmt_cut := by
   have h752_gather : initSM 752 = allGatherPrimDimN 2 4 0
       [initPM 1491, initPM 1494, initPM 1497, initPM 1500] := by
     rw [h752_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1491_shape]; decide)
   -- initGoal_591: shard shapes [8,32] and reconstruct of w=591
   have htp591 := hInit591.2.1
@@ -104,11 +105,13 @@ theorem prove_goal_134_cut : goal_134_stmt_cut := by
   have h591_gather : initSM 591 = allGatherPrimDimN 0 4 0
       [initPM 1473, initPM 1474, initPM 1475, initPM 1476] := by
     rw [h591_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _ (by rw [h1473_shape]; decide)
   -- goal_22: x=590 shared (singleton)
   have h590_eq : initSM 590 = initPM 590 := by
     have hrec := hInit22.2.2
     simp only [goal_22, pm_goal_134, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h590_shape : (initSM 590).shape = [1, 8, 32] := hInit22.1
   have h590_shapeP : (initPM 590).shape = [1, 8, 32] := by rw [← h590_eq]; exact h590_shape
@@ -151,11 +154,15 @@ theorem prove_goal_134_cut : goal_134_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_134, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [1, 8, 32]
     rw [hsm, hkey, allReducePrim_shape 4 0 _ _ hRhead, hdx0shape]
-  · -- PM tp shapes: [[1, 8, 32]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[1, 8, 32]]
     rw [hpm, allReducePrim_shape 4 0 _ _ hRhead, hdx0shape]
-  · -- Value equality: smStore 750 = reconstructWithDim 0 4 0 [pmStore 750]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 750 = reconstructWithDim 0 4 0 [pmStore 750]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [hsm, hkey, ← hpm, reconstructWithDim_singleton]
 
 end TrainVerify.Denote.GeneratedGoals

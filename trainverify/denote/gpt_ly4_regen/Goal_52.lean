@@ -70,6 +70,7 @@ theorem prove_goal_52_cut : goal_52_stmt_cut := by
     have hrec := hInit.2.2
     simp only [goal_51, LineageGoal.tps, LineageGoal.gatherDim, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h2117]; decide)
   -- SM store: smStore 634 = fw_gelu (initSM 633)
   have hsm : (denoteGraph sm_goal_52 initSM) 634 = fw_gelu (initSM 633) := by
@@ -130,12 +131,17 @@ theorem prove_goal_52_cut : goal_52_stmt_cut := by
   simp only [goal_52, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
     LineageGoal.gatherDim, List.map, Piece.tid]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm, fw_gelu_shape, h633_shape]
-  · rw [hpm', allGatherPrimDimN_shape 1 4 _ [1, 2, 128]]
-    · simp [List.set, List.getD]
-    · simp [fw_gelu_shape, chunkPrimDimN_shape, h633_shape, List.getD, List.set,
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, fw_gelu_shape, h633_shape]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm', allGatherPrimDimN_shape 1 4 _ [1, 2, 128]]
+    · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+      simp [List.set, List.getD]
+    · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+      simp [fw_gelu_shape, chunkPrimDimN_shape, h633_shape, List.getD, List.set,
         List.head?, Option.map, Option.getD]
-  · rw [reconstructWithDim_singleton, hsm, hpm']
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [reconstructWithDim_singleton, hsm, hpm']
     exact hbridge
 
 end TrainVerify.Denote.GeneratedGoals

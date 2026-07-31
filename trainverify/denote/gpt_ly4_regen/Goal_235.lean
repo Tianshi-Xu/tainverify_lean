@@ -84,6 +84,7 @@ theorem prove_goal_235_cut : goal_235_stmt_cut := by
     have hrec := hInit873.2.2
     simp only [goal_236, pm_goal_235, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h3083_shape]; decide)
   -- goal_89: tensor 687 (= y) is the dim-2 gather of shards 2949,2950,2951,2952
   have hInit687 : InitGoalHolds pm_goal_235.numRanks goal_89 initSM initPM := by
@@ -94,6 +95,7 @@ theorem prove_goal_235_cut : goal_235_stmt_cut := by
     have hrec := hInit687.2.2
     simp only [goal_89, pm_goal_235, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h2949_shape]; decide)
   -- y-chunk shapes (per-rank y shard = chunk dim3 of 687)
   have hyc : ∀ r, (chunkPrimDimN 3 4 r (initSM 687)).shape = [1, 4, 8, 2] := by
@@ -336,9 +338,11 @@ theorem prove_goal_235_cut : goal_235_stmt_cut := by
   -- Discharge the 3 conjuncts
   simp only [goal_235, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · show (denoteGraph sm_goal_235 initSM 872).shape = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show (denoteGraph sm_goal_235 initSM 872).shape = _
     rw [hsm_eq_pm, hpm872_shape]
-  · show [(denoteGraph pm_goal_235 initPM 3058).shape, (denoteGraph pm_goal_235 initPM 3060).shape,
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show [(denoteGraph pm_goal_235 initPM 3058).shape, (denoteGraph pm_goal_235 initPM 3060).shape,
       (denoteGraph pm_goal_235 initPM 3062).shape, (denoteGraph pm_goal_235 initPM 3064).shape] = _
     rw [hchunk0, hchunk1, hchunk2, hchunk3]
     rw [chunkPrimDimN_shape 1 4 0 _ _ hpm872_shape (by omega),
@@ -346,11 +350,13 @@ theorem prove_goal_235_cut : goal_235_stmt_cut := by
         chunkPrimDimN_shape 1 4 2 _ _ hpm872_shape (by omega),
         chunkPrimDimN_shape 1 4 3 _ _ hpm872_shape (by omega)]
     simp [List.set, List.getD]
-  · show denoteGraph sm_goal_235 initSM 872 = reconstructWithDim _ _ _ _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show denoteGraph sm_goal_235 initSM 872 = reconstructWithDim _ _ _ _
     rw [hchunk0, hchunk1, hchunk2, hchunk3]
     have hchunk0_ne : (chunkPrimDimN 1 4 0 (denoteGraph pm_goal_235 initPM 872)).shape ≠ [1] := by
       rw [chunkPrimDimN_shape 1 4 0 _ _ hpm872_shape (by omega)]
       simp [List.set, List.getD]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar _ _ _ _ _ _ hchunk0_ne]
     rw [show pm_goal_235.numRanks = 4 from rfl]
     rw [allGatherPrimDimN_chunkPrimDimN_id_dim1_4_8_8 _ hpm872_shape]

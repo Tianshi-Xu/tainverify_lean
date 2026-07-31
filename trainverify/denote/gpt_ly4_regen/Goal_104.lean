@@ -88,6 +88,7 @@ theorem prove_goal_104_cut : goal_104_stmt_cut := by
   have h706_eq : initSM 706 = initPM 706 := by
     have hrec := hInit706.2.2
     simp only [goal_103, pm_goal_104, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   have h706_shape : (initSM 706).shape = [1, 8, 32] := hInit706.1
@@ -95,6 +96,7 @@ theorem prove_goal_104_cut : goal_104_stmt_cut := by
   have h1067_gather : initSM 1067 = allGatherPrimDimN 1 4 0
       [initPM 3313, initPM 3314, initPM 3315, initPM 3316] := by
     rw [h1067_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h3313_shape]; decide)
   -- SM store: smStore 707 = elemwiseAdd (initSM 1067) (initSM 706)
   have hsm : (denoteGraph sm_goal_104 initSM) 707 =
@@ -164,10 +166,12 @@ theorem prove_goal_104_cut : goal_104_stmt_cut := by
   -- Prove the three conjuncts
   simp only [goal_104, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM shape: [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM shape: [1, 8, 32]
     rw [hsm]
     exact elemwiseAdd_shape_of_shapes _ _ _ h1067_shape h706_shape
-  · -- PM tp shapes: [[1,2,32], [1,2,32], [1,2,32], [1,2,32]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[1,2,32], [1,2,32], [1,2,32], [1,2,32]]
     rw [hpm0, hpm1, hpm2, hpm3]
     have h706pm_shape : (initPM 706).shape = [1, 8, 32] := by rw [← h706_eq]; exact h706_shape
     have hchk : ∀ r, r < 4 → (chunkPrimDimN 1 4 r (initPM 706)).shape = [1, 2, 32] := by
@@ -177,7 +181,8 @@ theorem prove_goal_104_cut : goal_104_stmt_cut := by
     have hs2 := elemwiseAdd_shape_of_shapes _ _ _ h3315_shape (hchk 2 (by omega))
     have hs3 := elemwiseAdd_shape_of_shapes _ _ _ h3316_shape (hchk 3 (by omega))
     simp [hs0, hs1, hs2, hs3]
-  · -- Value equality: smStore 707 = reconstructWithDim 1 4 0 [pmStore 3321,...,3324]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 707 = reconstructWithDim 1 4 0 [pmStore 3321,...,3324]
     rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
     symm
     apply reconstructWithDim_cons_cons_nonscalar

@@ -68,6 +68,7 @@ theorem prove_goal_247_cut : goal_247_stmt_cut := by
   have h703_eq : initSM 703 = initPM 703 := by
     have hrec := hInit703.2.2
     simp only [goal_101, pm_goal_247, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h703_shape : (initSM 703).shape = [1, 8, 128] := hInit703.1
   have h703_shapeP : (initPM 703).shape = [1, 8, 128] := by rw [← h703_eq]; exact h703_shape
@@ -90,6 +91,7 @@ theorem prove_goal_247_cut : goal_247_stmt_cut := by
   have h887_gather : initSM 887 = allGatherPrimDimN 1 4 0
       [initPM 3278, initPM 3280, initPM 3282, initPM 3284] := by
     rw [h887_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h3278_shape]; decide)
   -- chunk shapes for dim-1 chunks of x=703
   have hchunk_shape : ∀ r, (chunkPrimDimN 1 4 r (initPM 703)).shape = [1, 2, 128] := by
@@ -164,11 +166,15 @@ theorem prove_goal_247_cut : goal_247_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_247, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [1, 8, 128]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [1, 8, 128]
     rw [hsm, hkey, allGatherPrimDimN_shape 1 4 _ [1, 2, 128] hRhead]; decide
-  · -- PM tp shapes: [[1, 8, 128]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[1, 8, 128]]
     rw [hpm, allGatherPrimDimN_shape 1 4 _ [1, 2, 128] hRhead]; decide
-  · -- Value equality: smStore 886 = reconstructWithDim _ _ _ [pmStore 886]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 886 = reconstructWithDim _ _ _ [pmStore 886]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [hsm, hkey, ← hpm, reconstructWithDim_singleton]
 
 end TrainVerify.Denote.GeneratedGoals

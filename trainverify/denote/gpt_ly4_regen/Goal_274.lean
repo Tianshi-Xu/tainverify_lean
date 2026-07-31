@@ -177,11 +177,14 @@ theorem prove_goal_274_cut : goal_274_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_274, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [1, 8, 32]
     rw [hsm, hdx_sm]; exact h795_shape
-  · -- PM tp shapes: [[1,8,8],[1,8,8],[1,8,8],[1,8,8]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[1,8,8],[1,8,8],[1,8,8],[1,8,8]]
     rw [hpm0, hpm1, hpm2, hpm3, h2071_shape, h2074_shape, h2077_shape, h2080_shape]
-  · -- Value equality: smStore 951 = reconstructWithDim 2 _ 0 [pmStore ...]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 951 = reconstructWithDim 2 _ 0 [pmStore ...]
     rw [hsm, hdx_sm, hpm0, hpm1, hpm2, hpm3, h795_rec]
 
 end TrainVerify.Denote.GeneratedGoals

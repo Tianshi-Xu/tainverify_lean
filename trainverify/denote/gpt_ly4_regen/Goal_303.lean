@@ -70,6 +70,7 @@ theorem prove_goal_303_cut : goal_303_stmt_cut := by
   have h675_gather : initSM 675 = allGatherPrimDimN 1 4 0
       [initPM 2785, initPM 2786, initPM 2787, initPM 2788] := by
     rw [h675_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2785_shape]; decide)
   -- Shapes of the dim-2 chunks of the source.
   have hchunk_shape : ∀ r, (chunkPrimDimN 2 4 r (initSM 675)).shape = [1, 8, 8] := by
@@ -130,11 +131,15 @@ theorem prove_goal_303_cut : goal_303_stmt_cut := by
   -- Discharge the three conjuncts of the coarse lineage goal.
   simp only [goal_303, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm]; exact h675_shape
-  · rw [hpm0, hpm1, hpm2, hpm3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm]; exact h675_shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm0, hpm1, hpm2, hpm3]
     rw [hchunk_shape 0, hchunk_shape 1, hchunk_shape 2, hchunk_shape 3]
-  · rw [hsm, hpm0, hpm1, hpm2, hpm3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hpm0, hpm1, hpm2, hpm3]
     rw [show pm_goal_303.numRanks = 4 from rfl]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [hchunk_shape 0]; decide)]
     exact (allGatherPrimDimN_chunkPrimDimN_id_dim2_4_1_8_32_g303 (initSM 675) h675_shape).symm
 

@@ -91,6 +91,7 @@ theorem prove_goal_163_cut : goal_163_stmt_cut := by
   have h787_gather : initSM 787 = allGatherPrimDimN 2 4 0
       [initPM 1922, initPM 1924, initPM 1926, initPM 1928] := by
     rw [h787_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1922_shape]; decide)
   -- Per-rank bw_div results.
   set Y0 : Tensor := bw_div ((2 : ℕ) : Scalar) (initPM 1922) with hY0
@@ -166,9 +167,11 @@ theorem prove_goal_163_cut : goal_163_stmt_cut := by
   -- Discharge the three conjuncts.
   simp only [goal_163, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape
     rw [hsm, hG, hG_shape]
-  · -- PM tp shapes
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes
     rw [hpm0, hpm1, hpm2, hpm3]
     have hch : ∀ r, (chunkPrimDimN 1 4 r (allGatherPrimDimN 2 4 0 [Y0, Y1, Y2, Y3])).shape
         = [1, 1, 8, 8] := by
@@ -176,9 +179,11 @@ theorem prove_goal_163_cut : goal_163_stmt_cut := by
       rw [chunkPrimDimN_shape 1 4 r _ _ hG_shape (by omega)]
       simp [List.set, List.getD]
     simp only [hch]
-  · -- Value equality
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality
     rw [hsm, hG, hpm0, hpm1, hpm2, hpm3]
     show allGatherPrimDimN 2 4 0 [Y0, Y1, Y2, Y3] = reconstructWithDim 1 4 0 _
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by
       rw [chunkPrimDimN_shape 1 4 0 _ _ hG_shape (by omega)]; decide)]
     exact (allGatherPrimDimN_chunkPrimDimN_id_dim1_4_8_8 _ hG_shape).symm

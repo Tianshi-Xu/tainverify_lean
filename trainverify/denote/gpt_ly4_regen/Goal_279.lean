@@ -71,6 +71,7 @@ theorem prove_goal_279_cut : goal_279_stmt_cut := by
   have h605_gather : initSM 605 = allGatherPrimDimN 1 4 0
       [initPM 1665, initPM 1666, initPM 1667, initPM 1668] := by
     rw [h605_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1665_shape]; decide)
   -- AllToAll: gather inputs on dim1, chunk on dim2 → chunkPrimDimN 2 4 r (initSM 605)
   have halltoall : ∀ r, r < 4 →
@@ -127,17 +128,21 @@ theorem prove_goal_279_cut : goal_279_stmt_cut := by
   -- Discharge the 3 conjuncts
   simp only [goal_279, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · show (denoteGraph sm_goal_279 initSM 969).shape = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show (denoteGraph sm_goal_279 initSM 969).shape = _
     rw [hsm, h605_shape]
-  · show [(denoteGraph pm_goal_279 initPM 1749).shape,
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show [(denoteGraph pm_goal_279 initPM 1749).shape,
           (denoteGraph pm_goal_279 initPM 1750).shape,
           (denoteGraph pm_goal_279 initPM 1751).shape,
           (denoteGraph pm_goal_279 initPM 1752).shape] = _
     rw [hpm0, hpm1, hpm2, hpm3,
         hchunk_shape 0, hchunk_shape 1, hchunk_shape 2, hchunk_shape 3]
-  · show denoteGraph sm_goal_279 initSM 969 = reconstructWithDim _ _ _ _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show denoteGraph sm_goal_279 initSM 969 = reconstructWithDim _ _ _ _
     rw [hsm, hpm0, hpm1, hpm2, hpm3]
     symm
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 2 _ 0 _ _ _ (by rw [hchunk_shape 0]; decide)]
     exact allGatherPrimDimN_chunkPrimDimN_id_dim2_4_1_8_32_g279 (initSM 605) h605_shape
 

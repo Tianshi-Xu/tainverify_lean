@@ -79,6 +79,7 @@ theorem prove_goal_109_cut : goal_109_stmt_cut := by
   have h716_eq : initSM 716 = initPM 716 := by
     have hrec := hInit716.2.2
     simp only [initGoal_716, pm_goal_109, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h716_shape : (initSM 716).shape = [1, 8] := hInit716.1
   have h716_shapeP : (initPM 716).shape = [1, 8] := by rw [← h716_eq]; exact h716_shape
@@ -86,6 +87,7 @@ theorem prove_goal_109_cut : goal_109_stmt_cut := by
   have h565_eq : initSM 565 = initPM 565 := by
     have hrec := hInit565.2.2
     simp only [initGoal_565, pm_goal_109, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h565_shape : (initSM 565).shape = [8, 32] := hInit565.1
   have h565_shapeP : (initPM 565).shape = [8, 32] := by rw [← h565_eq]; exact h565_shape
@@ -93,6 +95,7 @@ theorem prove_goal_109_cut : goal_109_stmt_cut := by
   have h721_gather : initSM 721 = allGatherPrimDimN 1 4 0
       [initPM 1102, initPM 1104, initPM 1106, initPM 1108] := by
     rw [h721_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1102_shape]; decide)
   -- SM store: full bw_embedding
   have hsm : (denoteGraph sm_goal_109 initSM) 720 =
@@ -123,13 +126,17 @@ theorem prove_goal_109_cut : goal_109_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_109, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [8, 32]
     rw [hsm, hkey]; unfold cross_dp_wred
     rw [tensorSum_shape, bw_embedding_shape]; exact h565_shapeP
-  · -- PM tp shapes: [[8, 32]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[8, 32]]
     rw [hpm]; unfold cross_dp_wred
     rw [tensorSum_shape, bw_embedding_shape, h565_shapeP]
-  · -- Value equality: smStore 720 = reconstructWithDim 0 4 0 [pmStore 1101]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 720 = reconstructWithDim 0 4 0 [pmStore 1101]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [hsm, hkey, ← hpm, reconstructWithDim_singleton]
 
 end TrainVerify.Denote.GeneratedGoals
