@@ -1,3 +1,0 @@
-import denote.W11Scratch
-open TrainVerify.Denote.W11Scratch
-#print axioms fw_view_allGather0_reshape_16_64_2

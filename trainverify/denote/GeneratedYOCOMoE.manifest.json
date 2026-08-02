@@ -12,6 +12,7 @@
     "--max-goals",
     "5",
     "--split-goals",
+    "--assume-cp-dim0-shuffle",
     "--goals-out-dir",
     "$OUTPUT_DIR/goals",
     "--manifest-out",
@@ -44,7 +45,7 @@
   "deduplicated_intermediate_tids": [
     4680
   ],
-  "emitter_sha256": "19c4fca016b94dfab47ded4881b9029d86534c4a625aadb21d4e6157656495e5",
+  "emitter_sha256": "d6c813a1a9752ced170ce23fed881b55958e256f22de446565f3a275b033c7c5",
   "final_goal_count": 5,
   "final_goal_tids": [
     4673,
@@ -53,7 +54,7 @@
     4676,
     4680
   ],
-  "generated_lean_sha256": "627892c217e156c8d58f2e6c08d843c85922e721b57269ca45e61961d8f82c37",
+  "generated_lean_sha256": "71cc367e6ec1068ca6ca4ff1c086ae0411ad51ef772cae9a571a63044d1f08e9",
   "input_value_class_count": 6,
   "input_value_classes": {
     "pm": [
