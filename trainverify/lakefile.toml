@@ -13,12 +13,12 @@ weak.linter.style.longLine = false
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
-rev = "v4.31.0"
+rev = "v4.32.2"
 
 [[lean_lib]]
 name = "Trainverify"
 
 [[lean_lib]]
 name = "denote"
-roots = ["denote"]
+globs = ["denote.+"]
 moreLeanArgs = ["--tstack=65536"]
