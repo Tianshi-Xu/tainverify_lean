@@ -280,6 +280,7 @@ theorem goal_28_cut_to_full (h : goal_28_stmt_cut) : goal_28_stmt := by
   have h600_repl : Ssm 600 = Spm 600 := by
     have hrec := hg600.2.2
     simp only [initGoal_600, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   have h600_pmsh : (Spm 600).shape = [32, 128] := by rw [← h600_repl]; exact h600_smsh

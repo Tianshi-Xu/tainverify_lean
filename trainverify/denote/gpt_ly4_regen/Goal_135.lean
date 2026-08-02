@@ -85,6 +85,7 @@ theorem prove_goal_135_cut : goal_135_stmt_cut := by
   have h590_eq : initSM 590 = initPM 590 := by
     have hrec := hInit22.2.2
     simp only [goal_22, pm_goal_135, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h590_shape : (initSM 590).shape = [1, 8, 32] := hInit22.1
   have h590P_shape : (initPM 590).shape = [1, 8, 32] := by rw [← h590_eq]; exact h590_shape
@@ -109,10 +110,12 @@ theorem prove_goal_135_cut : goal_135_stmt_cut := by
   have h752_gather : initSM 752 = allGatherPrimDimN 2 4 0
       [initPM 1491, initPM 1494, initPM 1497, initPM 1500] := by
     rw [h752_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1491_shape]; decide)
   have h591_gather : initSM 591 = allGatherPrimDimN 0 4 0
       [initPM 1473, initPM 1474, initPM 1475, initPM 1476] := by
     rw [h591_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _ (by rw [h1473_shape]; decide)
   -- SM store: dW (output index 1) of BW_linear on full tensors
   have hsm : (denoteGraph sm_goal_135 initSM) 751 =
@@ -144,15 +147,18 @@ theorem prove_goal_135_cut : goal_135_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_135, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [32, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [32, 32]
     rw [hsm, bw_linear_3d_snd_shape 1 8 32 32 _ _ _ h752_shape h590_shape h591_shape]
-  · -- PM tp shapes: [[8, 32], [8, 32], [8, 32], [8, 32]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[8, 32], [8, 32], [8, 32], [8, 32]]
     rw [hpm0, hpm1, hpm2, hpm3,
         bw_linear_3d_snd_shape 1 8 8 32 _ _ _ h1491_shape h590P_shape h1473_shape,
         bw_linear_3d_snd_shape 1 8 8 32 _ _ _ h1494_shape h590P_shape h1474_shape,
         bw_linear_3d_snd_shape 1 8 8 32 _ _ _ h1497_shape h590P_shape h1475_shape,
         bw_linear_3d_snd_shape 1 8 8 32 _ _ _ h1500_shape h590P_shape h1476_shape]
-  · -- Value equality: smStore 751 = reconstructWithDim 0 4 0 [pm dW shards]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 751 = reconstructWithDim 0 4 0 [pm dW shards]
     rw [show pm_goal_135.numRanks = 4 from rfl,
         hpm0, hpm1, hpm2, hpm3,
         reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _

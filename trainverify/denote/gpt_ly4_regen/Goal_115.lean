@@ -85,12 +85,14 @@ theorem prove_goal_115_cut : goal_115_stmt_cut := by
   have h732_eq : initSM 732 = initPM 732 := by
     have hrec := hInit116.2.2
     simp only [goal_116, pm_goal_115, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h732_shape : (initSM 732).shape = [1, 8, 32] := hInit116.1
   -- initGoal_571: initSM 571 = initPM 571 (replicated)
   have h571_eq : initSM 571 = initPM 571 := by
     have hrec := hInit571.2.2
     simp only [initGoal_571, pm_goal_115, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h571_shape : (initSM 571).shape = [32, 32] := hInit571.1
   -- shapes of shared init tensors on PM side
@@ -102,6 +104,7 @@ theorem prove_goal_115_cut : goal_115_stmt_cut := by
   have h918_gather : initSM 918 = allGatherPrimDimN 1 4 0
       [initPM 1173, initPM 1174, initPM 1175, initPM 1176] := by
     rw [h918_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1173_shape]; decide)
   -- SM store: dW (output index 1) of BW_linear on full tensors
   have hsm : (denoteGraph sm_goal_115 initSM) 731 =
@@ -133,12 +136,14 @@ theorem prove_goal_115_cut : goal_115_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_115, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [32, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [32, 32]
     rw [hsm, hkey]; unfold cross_dp_wred
     rw [tensorSum_shape,
         bw_linear_3d_snd_shape 1 2 32 32 (chunkPrimDimN 1 4 0 (initPM 732))
           (initPM 1173) (initPM 571) hchunk0_shape h1173_shape h571_shapeP]
-  · -- PM tp shapes: [[32, 32]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[32, 32]]
     rw [hpm]; unfold cross_dp_wred
     rw [show [(tensorSum
         [(bw_linear (chunkPrimDimN 1 4 0 (initPM 732)) (initPM 1173) (initPM 571)).2,
@@ -149,7 +154,9 @@ theorem prove_goal_115_cut : goal_115_stmt_cut := by
       rw [tensorSum_shape,
           bw_linear_3d_snd_shape 1 2 32 32 (chunkPrimDimN 1 4 0 (initPM 732))
             (initPM 1173) (initPM 571) hchunk0_shape h1173_shape h571_shapeP]]
-  · -- Value equality: smStore 731 = reconstructWithDim 0 4 0 [pmStore 1190]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 731 = reconstructWithDim 0 4 0 [pmStore 1190]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [hsm, hkey, ← hpm, reconstructWithDim_singleton]
 
 end TrainVerify.Denote.GeneratedGoals

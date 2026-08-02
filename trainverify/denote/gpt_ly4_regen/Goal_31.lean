@@ -76,6 +76,7 @@ theorem prove_goal_31_cut : goal_31_stmt_cut := by
     have hrec := hInit275.2.2
     simp only [goal_275, pm_goal_31, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar _ _ _ _ _ _ (by rw [h1693_shape]; decide)
   -- Extract initGoal_606: W (tid 606) gathered on dim1 from shards 1697..1700
   have hInit606 : InitGoalHolds pm_goal_31.numRanks initGoal_606 initSM initPM := by
@@ -86,6 +87,7 @@ theorem prove_goal_31_cut : goal_31_stmt_cut := by
     have hrec := hInit606.2.2
     simp only [initGoal_606, pm_goal_31, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar _ _ _ _ _ _ (by rw [h1697_shape]; decide)
   -- W : allGatherPrimDimN 1 == allGatherPrim (both gather last dim of [32,8])
   have hWhead : (([initPM 1697, initPM 1698, initPM 1699, initPM 1700] : List Tensor).head?.map
@@ -186,16 +188,20 @@ theorem prove_goal_31_cut : goal_31_stmt_cut := by
   -- Discharge the 3 conjuncts
   simp only [goal_31, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · show (denoteGraph sm_goal_31 initSM 607).shape = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show (denoteGraph sm_goal_31 initSM 607).shape = _
     rw [hsm]
     exact fw_linear_3d_shape 1 8 32 32 _ _ h961_shape h606_shape
-  · show [(denoteGraph pm_goal_31 initPM 607).shape] = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show [(denoteGraph pm_goal_31 initPM 607).shape] = _
     rw [hpm_reduce, ← hkey2, ← hsm]
     simp
     exact fw_linear_3d_shape 1 8 32 32 _ _ h961_shape h606_shape
-  · show denoteGraph sm_goal_31 initSM 607 = reconstructWithDim _ _ _ _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show denoteGraph sm_goal_31 initSM 607 = reconstructWithDim _ _ _ _
     rw [hsm, hkey2, ← hpm_reduce]
     symm
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_singleton ..
 
 #print axioms prove_goal_31_cut

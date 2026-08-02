@@ -88,6 +88,7 @@ theorem prove_goal_178_cut : goal_178_stmt_cut := by
   have h805_gather : initSM 805 = allGatherPrimDimN 2 4 0
       [initPM 2183, initPM 2186, initPM 2189, initPM 2192] := by
     rw [h805_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h2183_shape]; decide)
   -- initGoal_635: shard shapes [8,128] and reconstruct of w=635
   have htp635 := hInit635.2.1
@@ -108,11 +109,13 @@ theorem prove_goal_178_cut : goal_178_stmt_cut := by
   have h635_gather : initSM 635 = allGatherPrimDimN 0 4 0
       [initPM 2165, initPM 2166, initPM 2167, initPM 2168] := by
     rw [h635_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _ (by rw [h2165_shape]; decide)
   -- goal_52: x=634 shared (singleton)
   have h634_eq : initSM 634 = initPM 634 := by
     have hrec := hInit634.2.2
     simp only [goal_52, pm_goal_178, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h634_shape : (initSM 634).shape = [1, 8, 128] := hInit634.1
   have h634_shapeP : (initPM 634).shape = [1, 8, 128] := by rw [← h634_eq]; exact h634_shape
@@ -197,13 +200,17 @@ theorem prove_goal_178_cut : goal_178_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_178, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [1, 8, 128]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [1, 8, 128]
     rw [hsm, hkey]; exact hRshape
-  · -- PM tp shapes: [[1, 2, 128], [1, 2, 128], [1, 2, 128], [1, 2, 128]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[1, 2, 128], [1, 2, 128], [1, 2, 128], [1, 2, 128]]
     rw [hc0, hc1, hc2, hc3, hcshape 0, hcshape 1, hcshape 2, hcshape 3]
-  · -- Value equality: smStore 803 = reconstructWithDim 1 4 0 [chunks of AllReduce output]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 803 = reconstructWithDim 1 4 0 [chunks of AllReduce output]
     rw [hsm, hkey, hc0, hc1, hc2, hc3]
     rw [show pm_goal_178.numRanks = 4 from rfl]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [hcshape 0]; decide)]
     rw [allGatherPrimDimN_chunkPrimDimN_id_dim1_4_128 _ hRshape]
 

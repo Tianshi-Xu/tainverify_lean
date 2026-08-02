@@ -75,7 +75,7 @@ theorem prove_goal_210_cut : goal_210_stmt_cut := by
   have h844_eq : initSM 844 = initPM 844 := by
     have hrec := hInit212.2.2
     simp only [goal_212, pm_goal_210, List.map] at hrec
-    rw [hrec]; exact reconstructWithDim_singleton ..
+    rw [hrec]; (first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip); exact reconstructWithDim_singleton ..
   have h844_shapeP : (initPM 844).shape = [1, 8, 128] := by rw [← h844_eq]; exact h844_shape
   -- x (666): shape only (goal_75); shard shapes 2641..2644 = [1,2,32]
   have hInit75 : InitGoalHolds pm_goal_210.numRanks goal_75 initSM initPM := by
@@ -106,6 +106,7 @@ theorem prove_goal_210_cut : goal_210_stmt_cut := by
   have h667_gather : initSM 667 = allGatherPrimDimN 1 4 0
       [initPM 2673, initPM 2674, initPM 2675, initPM 2676] := by
     rw [h667_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2673_shape]; decide)
   -- Per-rank x shards (from the input AllToAll(dim1->dim2)); values irrelevant for dX.
   set X0 : Tensor := allToAllPrimWithDims 4 0 [initPM 2641, initPM 2642, initPM 2643, initPM 2644] 1 2 with hX0
@@ -187,17 +188,21 @@ theorem prove_goal_210_cut : goal_210_stmt_cut := by
   -- Discharge the three conjuncts.
   simp only [goal_210, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm, hkey]; exact hG_shape
-  · rw [hpm0, hpm1, hpm2, hpm3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hkey]; exact hG_shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm0, hpm1, hpm2, hpm3]
     have hch : ∀ r, (chunkPrimDimN 1 4 r (allGatherPrimDimN 2 4 0 [Y0, Y1, Y2, Y3])).shape
         = [1, 2, 32] := by
       intro r
       rw [chunkPrimDimN_shape 1 4 r _ _ hG_shape (by omega)]
       simp [List.set, List.getD]
     simp only [hch]
-  · rw [hsm, hkey, hpm0, hpm1, hpm2, hpm3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hkey, hpm0, hpm1, hpm2, hpm3]
     rw [show pm_goal_210.numRanks = 4 from rfl]
     symm
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by
       rw [chunkPrimDimN_shape 1 4 0 _ _ hG_shape (by omega)]; decide)]
     exact allGatherPrimDimN_chunkPrimDimN_id_dim1_4_32 _ hG_shape

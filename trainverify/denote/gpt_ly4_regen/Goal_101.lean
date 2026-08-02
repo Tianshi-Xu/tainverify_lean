@@ -76,6 +76,7 @@ theorem prove_goal_101_cut : goal_101_stmt_cut := by
     have hrec := hInit75.2.2
     simp only [goal_100, pm_goal_101, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar _ _ _ _ _ _ (by rw [h2641_shape]; decide)
   -- Extract initGoal_702: W (tid 702) gathered on dim1 from shards 3237..2676
   have hInit667 : InitGoalHolds pm_goal_101.numRanks initGoal_702 initSM initPM := by
@@ -86,6 +87,7 @@ theorem prove_goal_101_cut : goal_101_stmt_cut := by
     have hrec := hInit667.2.2
     simp only [initGoal_702, pm_goal_101, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar _ _ _ _ _ _ (by rw [h2673_shape]; decide)
   -- AllToAll unfold helper
   have halltoall : ∀ r, r < 4 →
@@ -187,19 +189,24 @@ theorem prove_goal_101_cut : goal_101_stmt_cut := by
   -- Discharge 3 conjuncts
   simp only [goal_101, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape
     show (denoteGraph sm_goal_101 initSM 703).shape = _
     rw [hsm]
     exact fw_linear_3d_shape 1 8 32 128 _ _ h666_shape h667_shape
-  · -- PM tps shapes
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tps shapes
     show [(denoteGraph pm_goal_101 initPM 703).shape] = _
     rw [hpm_reduce, ← hkey2, ← hsm]
     simp
     exact fw_linear_3d_shape 1 8 32 128 _ _ h666_shape h667_shape
-  · -- Value equality
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     show denoteGraph sm_goal_101 initSM 703 = reconstructWithDim _ _ _ _
     rw [hsm, hkey2, ← hpm_reduce]
     symm
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_singleton ..
 
 #print axioms prove_goal_101_cut

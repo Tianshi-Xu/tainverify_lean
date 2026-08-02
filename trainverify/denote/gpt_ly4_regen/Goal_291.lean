@@ -65,6 +65,7 @@ theorem prove_goal_291_cut : goal_291_stmt_cut := by
   have hX_gather : initSM 640 = allGatherPrimDimN 1 4 0
       [initPM 2229, initPM 2230, initPM 2231, initPM 2232] := by
     rw [hX_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2229_shape]; decide)
   -- SM store: the second multiref output (1008) equals the input (640)
   have hsm : (denoteGraph sm_goal_291 initSM) 1008 = initSM 640 := by
@@ -78,15 +79,18 @@ theorem prove_goal_291_cut : goal_291_stmt_cut := by
     simp only [List.map]
     congr 1
   refine ⟨?_, ?_, ?_⟩
-  · show (denoteGraph sm_goal_291 initSM 1008).shape = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show (denoteGraph sm_goal_291 initSM 1008).shape = _
     rw [hsm]; exact hX_shape
-  · show [(denoteGraph pm_goal_291 initPM 1000).shape] = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show [(denoteGraph pm_goal_291 initPM 1000).shape] = _
     rw [hpm]
     congr 1
     exact allGatherPrimDimN_shape 1 4 _ [1, 2, 32] (by
       simp only [List.map, List.head?, Option.map, Option.getD]
       exact h2229_shape)
-  · show denoteGraph sm_goal_291 initSM 1008 = reconstructWithDim _ _ _ _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show denoteGraph sm_goal_291 initSM 1008 = reconstructWithDim _ _ _ _
     rw [hsm, hX_gather, ← hpm]
     exact (reconstructWithDim_singleton ..).symm
 

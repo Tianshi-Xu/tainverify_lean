@@ -61,7 +61,7 @@ theorem prove_goal_8_cut : goal_8_stmt_cut := by
   have h926_eq : initSM 926 = initPM 917 := by
     have hrec := hInit265.2.2
     simp only [goal_265, pm_goal_8, List.map] at hrec
-    rw [hrec]; exact reconstructWithDim_singleton ..
+    rw [hrec]; (first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip); exact reconstructWithDim_singleton ..
   have h917_shape : (initPM 917).shape = [1, 8, 32] := by
     rw [← h926_eq]; exact h926_shape
   -- Extract initGoal_575: W is sharded on dim 0
@@ -86,6 +86,7 @@ theorem prove_goal_8_cut : goal_8_stmt_cut := by
     have hrec := hInit575.2.2
     simp only [initGoal_575, pm_goal_8, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 0 4 0 _ _ _ (by rw [h1229_shape]; decide)
   -- SM store
   have hsm : (denoteGraph sm_goal_8 initSM) 576 = fw_linear (initSM 926) (initSM 575) := by
@@ -118,16 +119,19 @@ theorem prove_goal_8_cut : goal_8_stmt_cut := by
     exact hdist
   -- Discharge 3 conjuncts
   refine ⟨?_, ?_, ?_⟩
-  · show (denoteGraph sm_goal_8 initSM 576).shape = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show (denoteGraph sm_goal_8 initSM 576).shape = _
     rw [hsm]
     exact fw_linear_3d_shape 1 8 32 32 _ _ h926_shape h575_sm_shape
-  · show [(denoteGraph pm_goal_8 initPM 576).shape] = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show [(denoteGraph pm_goal_8 initPM 576).shape] = _
     rw [hpm]
     congr 1
     exact allGatherPrimDimN_shape 2 4 _ [1, 8, 8] (by
       simp only [List.map, List.head?, Option.map, Option.getD]
       exact fw_linear_3d_shape 1 8 32 8 _ _ h917_shape h1229_shape)
-  · show denoteGraph sm_goal_8 initSM 576 = reconstructWithDim _ _ _ _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show denoteGraph sm_goal_8 initSM 576 = reconstructWithDim _ _ _ _
     rw [hsm, hkey, ← hpm]
     exact (reconstructWithDim_singleton ..).symm
 

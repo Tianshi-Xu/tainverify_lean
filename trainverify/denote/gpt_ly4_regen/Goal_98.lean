@@ -71,7 +71,7 @@ theorem prove_goal_98_cut : goal_98_stmt_cut := by
   have h695_eq : initSM 695 = initPM 695 := by
     have hrec := hInit97.2.2
     simp only [goal_97, pm_goal_98, List.map] at hrec
-    rw [hrec]; exact reconstructWithDim_singleton ..
+    rw [hrec]; (first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip); exact reconstructWithDim_singleton ..
   -- Extract initGoal_696: W (tid 696) gathered on dim1 from shards 3145..3148
   have hInit696 : InitGoalHolds pm_goal_98.numRanks initGoal_696 initSM initPM := by
     apply hInitGoals; simp only [goal_98_cut_initGoals, goal_98_prereqs]; decide
@@ -81,6 +81,7 @@ theorem prove_goal_98_cut : goal_98_stmt_cut := by
     have hrec := hInit696.2.2
     simp only [initGoal_696, pm_goal_98, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar _ _ _ _ _ _ (by rw [h3145_shape]; decide)
   -- SM store
   have hsm : (denoteGraph sm_goal_98 initSM) 697 = fw_linear (initSM 695) (initSM 696) := by
@@ -166,16 +167,20 @@ theorem prove_goal_98_cut : goal_98_stmt_cut := by
   -- Discharge 3 conjuncts
   simp only [goal_98, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · show (denoteGraph sm_goal_98 initSM 697).shape = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show (denoteGraph sm_goal_98 initSM 697).shape = _
     rw [hsm]
     exact fw_linear_3d_shape 1 8 32 32 _ _ h695_shape h696_shape
-  · show [(denoteGraph pm_goal_98 initPM 697).shape] = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show [(denoteGraph pm_goal_98 initPM 697).shape] = _
     rw [hpm_reduce, ← hkey2, ← hsm]
     simp
     exact fw_linear_3d_shape 1 8 32 32 _ _ h695_shape h696_shape
-  · show denoteGraph sm_goal_98 initSM 697 = reconstructWithDim _ _ _ _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show denoteGraph sm_goal_98 initSM 697 = reconstructWithDim _ _ _ _
     rw [hsm, hkey2, ← hpm_reduce]
     symm
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_singleton ..
 
 #print axioms prove_goal_98_cut

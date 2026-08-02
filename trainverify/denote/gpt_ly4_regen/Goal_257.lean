@@ -71,6 +71,7 @@ theorem prove_goal_257_cut : goal_257_stmt_cut := by
   have h567_gather : initSM 567 = allGatherPrimDimN 2 4 0
       [initPM 1117, initPM 1118, initPM 1119, initPM 1120] := by
     rw [h567_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1117_shape]; decide)
   -- SM store: first output of FW_multiref equals the input
   have hsm : (denoteGraph sm_goal_257 initSM) 903 = initSM 567 := by
@@ -120,17 +121,21 @@ theorem prove_goal_257_cut : goal_257_stmt_cut := by
   -- Discharge the 3 conjuncts
   simp only [goal_257, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · show (denoteGraph sm_goal_257 initSM 903).shape = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show (denoteGraph sm_goal_257 initSM 903).shape = _
     rw [hsm, h567_shape]
-  · show [(denoteGraph pm_goal_257 initPM 1141).shape,
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show [(denoteGraph pm_goal_257 initPM 1141).shape,
           (denoteGraph pm_goal_257 initPM 1142).shape,
           (denoteGraph pm_goal_257 initPM 1143).shape,
           (denoteGraph pm_goal_257 initPM 1144).shape] = _
     rw [hpm0, hpm1, hpm2, hpm3, hconv 0, hconv 1, hconv 2, hconv 3,
         hchunk_shape 0, hchunk_shape 1, hchunk_shape 2, hchunk_shape 3]
-  · show denoteGraph sm_goal_257 initSM 903 = reconstructWithDim _ _ _ _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show denoteGraph sm_goal_257 initSM 903 = reconstructWithDim _ _ _ _
     rw [hsm, hpm0, hpm1, hpm2, hpm3, hconv 0, hconv 1, hconv 2, hconv 3,
         show pm_goal_257.numRanks = 4 from rfl]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [hchunk_shape 0]; decide)]
     exact (allGatherPrimDimN_chunkPrimDimN_id_dim1_4_32 (initSM 567) h567_shape).symm
 

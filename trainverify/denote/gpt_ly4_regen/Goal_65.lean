@@ -78,6 +78,7 @@ theorem prove_goal_65_cut : goal_65_stmt_cut := by
     have hrec := hInit.2.2
     simp only [goal_62, LineageGoal.tps, LineageGoal.gatherDim, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h2369]; decide)
   have hsm : (denoteGraph sm_goal_65 initSM) 653 = transposeAxes 2 3 (initSM 650) := by
     simp only [sm_goal_65, denoteGraph, GraphDecl.nodes, List.foldl]
@@ -115,13 +116,18 @@ theorem prove_goal_65_cut : goal_65_stmt_cut := by
   simp only [goal_65, LineageGoal.tsShape, LineageGoal.tps, LineageGoal.tpShapes,
     LineageGoal.gatherDim, List.map, Piece.tid]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm]
     simp [transposeAxes, Tensor.mkShape, h650_shape, listSwapAt, List.getD, List.set]
-  · rw [hpm', allGatherPrimDimN_shape 1 4 _ [1, 1, 8, 8]]
-    · simp [List.set, List.getD]
-    · simp [transposeAxes, Tensor.mkShape, chunkPrimDimN_shape, h650_shape, List.getD, List.set,
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm', allGatherPrimDimN_shape 1 4 _ [1, 1, 8, 8]]
+    · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+      simp [List.set, List.getD]
+    · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+      simp [transposeAxes, Tensor.mkShape, chunkPrimDimN_shape, h650_shape, List.getD, List.set,
         listSwapAt, List.head?, Option.map, Option.getD]
-  · rw [reconstructWithDim_singleton, hsm, hpm']
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [reconstructWithDim_singleton, hsm, hpm']
     exact hbridge
 
 end TrainVerify.Denote.GeneratedGoals

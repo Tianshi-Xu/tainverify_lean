@@ -71,6 +71,7 @@ theorem prove_goal_127_cut : goal_127_stmt_cut := by
   have h578_gather : initSM 578 = allGatherPrimDimN 3 4 0
       [initPM 1261, initPM 1262, initPM 1263, initPM 1264] := by
     rw [h578_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h1261_shape]; decide)
   -- goal_128: tensor 744 (= g) is replicated (singleton)
   have hInit744 : InitGoalHolds pm_goal_127.numRanks goal_128 initSM initPM := by
@@ -80,7 +81,7 @@ theorem prove_goal_127_cut : goal_127_stmt_cut := by
   have h744_eq : initSM 744 = initPM 744 := by
     have hrec := hInit744.2.2
     simp only [goal_128, pm_goal_127, List.map] at hrec
-    rw [hrec]; exact reconstructWithDim_singleton _ _ _ _
+    rw [hrec]; (first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip); exact reconstructWithDim_singleton _ _ _ _
   have hs744 := hInit744.2.1
   simp only [goal_128, List.map, List.cons.injEq, and_true] at hs744
   have h744_shape : (initPM 744).shape = [1, 4, 8, 8] := hs744
@@ -155,15 +156,19 @@ theorem prove_goal_127_cut : goal_127_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_127, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM tensor shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM tensor shape
     rw [heq_main, allGatherPrimDimN_shape 2 4 _ [1, 4, 2, 8] (by simp [hpm1346_shape])]
     decide
-  · -- PM shard shapes
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM shard shapes
     rw [hpm1346_shape, hpm1348_shape, hpm1350_shape, hpm1352_shape]
-  · -- value: dY = reconstructWithDim 2 4 0 [shards]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- value: dY = reconstructWithDim 2 4 0 [shards]
     change (denoteGraph sm_goal_127 initSM) 743 = reconstructWithDim 2 4 0
       [(denoteGraph pm_goal_127 initPM) 1346, (denoteGraph pm_goal_127 initPM) 1348,
        (denoteGraph pm_goal_127 initPM) 1350, (denoteGraph pm_goal_127 initPM) 1352]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [hpm1346_shape]; decide)]
     exact heq_main
 

@@ -66,6 +66,7 @@ theorem prove_goal_271_cut : goal_271_stmt_cut := by
     simp only [goal_29, List.map] at htp_shapes
     have h1637_shape : (initPM 1637).shape = [1, 8, 8] := by
       have := congrArg (List.getD · 0 []) htp_shapes; simp at this; exact this
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h1637_shape]; decide)
   -- chunk shape helper
   have hchunk_shape : ∀ r, (chunkPrimDimN 1 4 r (initSM 602)).shape = [1, 2, 32] := by
@@ -120,10 +121,14 @@ theorem prove_goal_271_cut : goal_271_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_271, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm, h602_shape]
-  · rw [hpm0, hpm1, hpm2, hpm3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, h602_shape]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm0, hpm1, hpm2, hpm3]
     rw [hchunk_shape 0, hchunk_shape 1, hchunk_shape 2, hchunk_shape 3]
-  · rw [hsm, hpm0, hpm1, hpm2, hpm3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hpm0, hpm1, hpm2, hpm3]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 1 pm_goal_271.numRanks 0
           (chunkPrimDimN 1 4 0 (initSM 602)) (chunkPrimDimN 1 4 1 (initSM 602))
           [chunkPrimDimN 1 4 2 (initSM 602), chunkPrimDimN 1 4 3 (initSM 602)]

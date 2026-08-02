@@ -85,6 +85,7 @@ theorem prove_goal_114_cut : goal_114_stmt_cut := by
   have h919_gather : initSM 919 = allGatherPrimDimN 1 4 0
       [initPM 1189, initPM 1192, initPM 1195, initPM 1198] := by
     rw [h919_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1189_shape]; decide)
   -- Prereq goal_264: tensor 923 = allGather dim 1 of shards [1217,1220,1223,1226]
   have hInit923 : InitGoalHolds pm_goal_114.numRanks goal_264 initSM initPM := by
@@ -112,6 +113,7 @@ theorem prove_goal_114_cut : goal_114_stmt_cut := by
   have h923_gather : initSM 923 = allGatherPrimDimN 1 4 0
       [initPM 1217, initPM 1220, initPM 1223, initPM 1226] := by
     rw [h923_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1217_shape]; decide)
   -- Prereq goal_266: tensor 927 = singleton [926] (replication), so 927 = 926
   have hInit927 : InitGoalHolds pm_goal_114.numRanks goal_266 initSM initPM := by
@@ -121,6 +123,7 @@ theorem prove_goal_114_cut : goal_114_stmt_cut := by
   have h927_eq : initSM 927 = initPM 926 := by
     have hrec := hInit927.2.2
     simp only [goal_266, pm_goal_114, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [hrec, reconstructWithDim_singleton]
   have htp266 := hInit927.2.1
   simp only [goal_266, List.map] at htp266
@@ -161,16 +164,20 @@ theorem prove_goal_114_cut : goal_114_stmt_cut := by
   -- Prove the three conjuncts
   simp only [goal_114, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [1, 8, 32]
     rw [hsm, tensorSum_shape, h919_gather]
     rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 32] (by simp [h1189_shape])]
     simp [List.set, List.getD]
-  · -- PM tp shapes: all [1, 2, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: all [1, 2, 32]
     simp only [hpm_1160, hpm_1164, hpm_1168, hpm_1172, tensorSum_shape, h1189_shape,
       h1192_shape, h1195_shape, h1198_shape]
-  · -- Value equality
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality
     rw [hsm, hkey, ← hpm_1160, ← hpm_1164, ← hpm_1168, ← hpm_1172]
     symm
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _
       (by rw [hpm_1160, tensorSum_shape, h1189_shape]; decide)
 

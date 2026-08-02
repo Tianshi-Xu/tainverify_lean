@@ -72,6 +72,7 @@ theorem prove_goal_21_cut : goal_21_stmt_cut := by
   have h588_gather : initSM 588 = allGatherPrimDimN 3 4 0
       [initPM 1433, initPM 1434, initPM 1435, initPM 1436] := by
     rw [h588_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h1433_shape]; decide)
   -- AllToAll results: allToAllPrimWithDims 4 r [shards] 3 1 = chunkPrimDimN 1 4 r (initSM 588)
   have halltoall : ∀ r, r < 4 →
@@ -133,11 +134,15 @@ theorem prove_goal_21_cut : goal_21_stmt_cut := by
   -- Discharge the 3 conjuncts
   simp only [goal_21, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · show (denoteGraph sm_goal_21 initSM 589).shape = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show (denoteGraph sm_goal_21 initSM 589).shape = _
     rw [hsm]; exact h588_shape
-  · show [(denoteGraph pm_goal_21 initPM 589).shape] = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show [(denoteGraph pm_goal_21 initPM 589).shape] = _
     rw [hpm589, h588_shape]
-  · show denoteGraph sm_goal_21 initSM 589 = reconstructWithDim _ _ _ _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show denoteGraph sm_goal_21 initSM 589 = reconstructWithDim _ _ _ _
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hsm | skip
     rw [hsm, reconstructWithDim_singleton, hpm589]
 
 end TrainVerify.Denote.GeneratedGoals

@@ -80,7 +80,7 @@ theorem prove_goal_140_cut : goal_140_stmt_cut := by
   have h596_eq : initSM 596 = initPM 596 := by
     have hrec := hInit25.2.2
     simp only [goal_25, pm_goal_140, List.map] at hrec
-    rw [hrec]; exact reconstructWithDim_singleton ..
+    rw [hrec]; (first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip); exact reconstructWithDim_singleton ..
   -- Extract goal_142: grad (tid 760) gathered on dim2 from shards 1575,1578,1581,1584
   have hInit142 : InitGoalHolds pm_goal_140.numRanks goal_142 initSM initPM := by
     apply hInitGoals; decide
@@ -89,6 +89,7 @@ theorem prove_goal_140_cut : goal_140_stmt_cut := by
     have hrec := hInit142.2.2
     simp only [goal_142, pm_goal_140, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar _ _ _ _ _ _ (by rw [h1575_shape]; decide)
   -- Extract initGoal_597: W (tid 597) gathered on dim0 from shards 1557..1560
   have hInit597 : InitGoalHolds pm_goal_140.numRanks initGoal_597 initSM initPM := by
@@ -98,6 +99,7 @@ theorem prove_goal_140_cut : goal_140_stmt_cut := by
     have hrec := hInit597.2.2
     simp only [initGoal_597, pm_goal_140, List.map] at hrec
     rw [hrec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar _ _ _ _ _ _ (by rw [h1557_shape]; decide)
   -- SM store 758 = dX = (bw_linear grad x w).1
   have hsm : denoteGraph sm_goal_140 initSM 758 =
@@ -216,9 +218,11 @@ theorem prove_goal_140_cut : goal_140_stmt_cut := by
   -- Discharge 3 conjuncts
   simp only [goal_140, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · show (denoteGraph sm_goal_140 initSM 758).shape = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show (denoteGraph sm_goal_140 initSM 758).shape = _
     rw [hsm_eq_pm, hpm758_shape]
-  · show [(denoteGraph pm_goal_140 initPM 1544).shape, (denoteGraph pm_goal_140 initPM 1548).shape,
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show [(denoteGraph pm_goal_140 initPM 1544).shape, (denoteGraph pm_goal_140 initPM 1548).shape,
       (denoteGraph pm_goal_140 initPM 1552).shape, (denoteGraph pm_goal_140 initPM 1556).shape] = _
     rw [hchunk0, hchunk1, hchunk2, hchunk3]
     rw [chunkPrimDimN_shape 1 4 0 _ _ hpm758_shape (by omega),
@@ -226,11 +230,13 @@ theorem prove_goal_140_cut : goal_140_stmt_cut := by
         chunkPrimDimN_shape 1 4 2 _ _ hpm758_shape (by omega),
         chunkPrimDimN_shape 1 4 3 _ _ hpm758_shape (by omega)]
     simp [List.set, List.getD]
-  · show denoteGraph sm_goal_140 initSM 758 = reconstructWithDim _ _ _ _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show denoteGraph sm_goal_140 initSM 758 = reconstructWithDim _ _ _ _
     rw [hchunk0, hchunk1, hchunk2, hchunk3]
     have hchunk0_ne : (chunkPrimDimN 1 4 0 (denoteGraph pm_goal_140 initPM 758)).shape ≠ [1] := by
       rw [chunkPrimDimN_shape 1 4 0 _ _ hpm758_shape (by omega)]
       simp [List.set, List.getD]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar _ _ _ _ _ _ hchunk0_ne]
     rw [show pm_goal_140.numRanks = 4 from rfl]
     rw [allGatherPrimDimN_chunkPrimDimN_id_dim1_4_32 _ hpm758_shape]

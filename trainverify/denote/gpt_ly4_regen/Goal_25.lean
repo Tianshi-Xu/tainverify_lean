@@ -78,6 +78,7 @@ theorem prove_goal_25_cut : goal_25_stmt_cut := by
   have hX_gather : initSM 934 = allGatherPrimDimN 1 4 0
       [initPM 1525, initPM 1526, initPM 1527, initPM 1528] := by
     rw [hX_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1525_shape]; decide)
   -- Replicated weight (594) and bias (595)
   have hInitW : InitGoalHolds pm_goal_25.numRanks initGoal_594 initSM initPM := by
@@ -87,11 +88,13 @@ theorem prove_goal_25_cut : goal_25_stmt_cut := by
   have hW_eq : initSM 594 = initPM 594 := by
     have hrec := hInitW.2.2
     simp only [initGoal_594, pm_goal_25, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   have hB_eq : initSM 595 = initPM 595 := by
     have hrec := hInitB.2.2
     simp only [initGoal_595, pm_goal_25, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   -- SM store
@@ -129,16 +132,19 @@ theorem prove_goal_25_cut : goal_25_stmt_cut := by
     simpa [List.map] using hdist
   -- Discharge 3 conjuncts
   refine ⟨?_, ?_, ?_⟩
-  · show (denoteGraph sm_goal_25 initSM 596).shape = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show (denoteGraph sm_goal_25 initSM 596).shape = _
     rw [hsm]
     exact fw_layernorm_shape_1_8_32 (initSM 934) (initSM 594) (initSM 595) hX_shape
-  · show [(denoteGraph pm_goal_25 initPM 596).shape] = _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show [(denoteGraph pm_goal_25 initPM 596).shape] = _
     rw [hpm]
     congr 1
     exact allGatherPrimDimN_shape 1 4 _ [1, 2, 32] (by
       simp only [List.map, List.head?, Option.map, Option.getD]
       exact fw_layernorm_shape_1_2_32 (initPM 1525) (initPM 594) (initPM 595) h1525_shape)
-  · show denoteGraph sm_goal_25 initSM 596 = reconstructWithDim _ _ _ _
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    show denoteGraph sm_goal_25 initSM 596 = reconstructWithDim _ _ _ _
     rw [hsm, hkey, ← hpm]
     exact (reconstructWithDim_singleton ..).symm
 

@@ -67,6 +67,7 @@ theorem prove_goal_262_cut : goal_262_stmt_cut := by
   have h732_eq : initSM 732 = initPM 732 := by
     have hrec := hInit116.2.2
     simp only [goal_116, pm_goal_262, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h732_shape : (initSM 732).shape = [1, 8, 32] := hInit116.1
   have h732P_shape : (initPM 732).shape = [1, 8, 32] := by rw [← h732_eq]; exact h732_shape
@@ -90,11 +91,13 @@ theorem prove_goal_262_cut : goal_262_stmt_cut := by
   have h918_gather : initSM 918 = allGatherPrimDimN 1 4 0
       [initPM 1173, initPM 1174, initPM 1175, initPM 1176] := by
     rw [h918_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1173_shape]; decide)
   -- initGoal_571: w=571 shared (singleton)
   have h571_eq : initSM 571 = initPM 571 := by
     have hrec := hInit571.2.2
     simp only [initGoal_571, pm_goal_262, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h571_shape : (initSM 571).shape = [32, 32] := hInit571.1
   have h571P_shape : (initPM 571).shape = [32, 32] := by rw [← h571_eq]; exact h571_shape
@@ -176,15 +179,18 @@ theorem prove_goal_262_cut : goal_262_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_262, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [1, 8, 32]
     rw [hsm, bw_linear_3d_fst_shape 1 8 32 32 _ _ _ h732_shape h918_shape h571_shape]
-  · -- PM tp shapes: [[1,2,32], [1,2,32], [1,2,32], [1,2,32]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[1,2,32], [1,2,32], [1,2,32], [1,2,32]]
     rw [hpm0, hpm1, hpm2, hpm3,
         bw_linear_3d_fst_shape 1 2 32 32 _ _ _ hc0g h1173_shape h571P_shape,
         bw_linear_3d_fst_shape 1 2 32 32 _ _ _ hc1g h1174_shape h571P_shape,
         bw_linear_3d_fst_shape 1 2 32 32 _ _ _ hc2g h1175_shape h571P_shape,
         bw_linear_3d_fst_shape 1 2 32 32 _ _ _ hc3g h1176_shape h571P_shape]
-  · -- Value equality: smStore 919 = reconstructWithDim 1 4 0 [pm dX shards]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 919 = reconstructWithDim 1 4 0 [pm dX shards]
     rw [show pm_goal_262.numRanks = 4 from rfl,
         hpm0, hpm1, hpm2, hpm3,
         reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _

@@ -76,7 +76,7 @@ theorem prove_goal_213_cut : goal_213_stmt_cut := by
   have h847_eq : initSM 847 = initPM 847 := by
     have hrec := hInit847.2.2
     simp only [goal_215, pm_goal_213, List.map] at hrec
-    rw [hrec]; exact reconstructWithDim_singleton _ _ _ _
+    rw [hrec]; (first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip); exact reconstructWithDim_singleton _ _ _ _
   have h847_shape : (initSM 847).shape = [1, 8, 32] := hInit847.1
   have h847_shapeP : (initPM 847).shape = [1, 8, 32] := by rw [← h847_eq]; exact h847_shape
   -- goal_77: x = 669 dim-1 gather of shards 2701..2704 (each [1,2,128])
@@ -112,6 +112,7 @@ theorem prove_goal_213_cut : goal_213_stmt_cut := by
   have h670_gather : initSM 670 = allGatherPrimDimN 1 4 0
       [initPM 2725, initPM 2726, initPM 2727, initPM 2728] := by
     rw [h670_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h2725_shape]; decide)
   -- SM store: 845 = dX (first output) of BW_linear on full tensors
   have hsm : (denoteGraph sm_goal_213 initSM) 845 =
@@ -303,16 +304,19 @@ theorem prove_goal_213_cut : goal_213_stmt_cut := by
   -- discharge the three conjuncts
   simp only [goal_213, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape
     rw [hsm, ← hZeq]; exact hZ_shape
-  · -- PM shard shapes
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM shard shapes
     rw [hf0_chunk, hf1_chunk, hf2_chunk, hf3_chunk,
         chunkPrimDimN_shape 1 4 0 _ _ hZ_shape (by omega),
         chunkPrimDimN_shape 1 4 1 _ _ hZ_shape (by omega),
         chunkPrimDimN_shape 1 4 2 _ _ hZ_shape (by omega),
         chunkPrimDimN_shape 1 4 3 _ _ hZ_shape (by omega)]
     simp [List.set, List.getD]
-  · -- value
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- value
     rw [hsm]
     rw [show pm_goal_213.numRanks = 4 from rfl]
     rw [hf0_chunk, hf1_chunk, hf2_chunk, hf3_chunk,

@@ -79,6 +79,7 @@ theorem prove_goal_27_cut : goal_27_stmt_cut := by
   -- 598 reconstruct is a nonscalar allGather
   have h598_gather : initSM 598 = allGatherPrimDimN 2 4 0 xs := by
     rw [h598_eq, hxs]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [e1]; decide)
   -- SM store: smStore 599 = fw_gelu (initSM 598)
   have hsm : (denoteGraph sm_goal_27 initSM) 599 = fw_gelu (initSM 598) := by
@@ -113,14 +114,18 @@ theorem prove_goal_27_cut : goal_27_stmt_cut := by
          fw_gelu (initPM 1563), fw_gelu (initPM 1564)] := by simp [hxs, List.map]
     rw [hmap]
     symm
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [fw_gelu_shape, e1]; decide)
   -- Discharge the three conjuncts
   simp only [goal_27, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm, fw_gelu_shape, h598_shape]
-  · rw [hpm0, hpm1, hpm2, hpm3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, fw_gelu_shape, h598_shape]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm0, hpm1, hpm2, hpm3]
     simp only [fw_gelu_shape, e1, e2, e3, e4]
-  · have hnr : pm_goal_27.numRanks = 4 := rfl
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    have hnr : pm_goal_27.numRanks = 4 := rfl
     rw [hsm, hpm0, hpm1, hpm2, hpm3, hnr, hkey]
 
 end TrainVerify.Denote.GeneratedGoals

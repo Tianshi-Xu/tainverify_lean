@@ -88,12 +88,14 @@ theorem prove_goal_241_cut : goal_241_stmt_cut := by
   have h879_gather : initSM 879 = allGatherPrimDimN 1 4 0
       [initPM 3191, initPM 3194, initPM 3197, initPM 3200] := by
     rw [h879_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h3191_shape]; decide)
   have h879_shape : (initSM 879).shape = [1, 8, 32] := hInit242.1
   -- goal_98: y=697 shared (singleton)
   have h697_eq : initSM 697 = initPM 697 := by
     have hrec := hInit98.2.2
     simp only [goal_98, pm_goal_241, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have h697_shape : (initSM 697).shape = [1, 8, 32] := hInit98.1
   have h697_shapeP : (initPM 697).shape = [1, 8, 32] := by rw [← h697_eq]; exact h697_shape
@@ -141,11 +143,15 @@ theorem prove_goal_241_cut : goal_241_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_241, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [1, 8, 32]
     rw [hsm, hdy_sm]; exact h879_shape
-  · -- PM tp shapes: [[1, 8, 32]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[1, 8, 32]]
     rw [hpm', allGatherPrimDimN_shape 1 4 _ [1, 2, 32] hRhead]; decide
-  · -- Value equality: smStore 878 = reconstructWithDim _ _ _ [pmStore 878]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 878 = reconstructWithDim _ _ _ [pmStore 878]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_singleton]; exact hfinal
 
 end TrainVerify.Denote.GeneratedGoals

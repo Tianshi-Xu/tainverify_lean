@@ -96,7 +96,7 @@ theorem goal_2_cut_to_full (h : goal_2_stmt_cut) : goal_2_stmt := by
   -- 把 goal 里的 denoteGraph sm/pm 在相关 tid 上换成迷你图
   show (denoteGraph sm initSM goal_2.ts).shape = _ ∧
     _ = _ ∧
-    denoteGraph sm initSM goal_2.ts = reconstructWithDim goal_2.gatherDim pm_goal_2.numRanks 0 _
+    denoteGraph sm initSM goal_2.ts = reconstructForGoal goal_2 pm_goal_2.numRanks _
   simp only [goal_2, List.map, sm_frame_564 initSM, pm_frame_564 initPM]
   simp only [goal_2, List.map] at hcut
   exact hcut

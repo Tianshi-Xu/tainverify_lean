@@ -209,12 +209,14 @@ theorem goal_25_cut_to_full (h : goal_25_stmt_cut) : goal_25_stmt := by
   have h594_pmsh : (Spm 594).shape = [32] := by
     have h := h594_full.2.2
     simp only [initGoal_594, List.map] at h
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at h | skip
     rw [reconstructWithDim_singleton] at h
     -- h : Ssm 594 = Spm 594  (opaque forms); goal already (Spm 594).shape
     rw [← h]; exact h594_smsh
   have h595_pmsh : (Spm 595).shape = [32] := by
     have h := h595_full.2.2
     simp only [initGoal_595, List.map] at h
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at h | skip
     rw [reconstructWithDim_singleton] at h
     rw [← h]; exact h595_smsh
   have hPM25 : StoreShapesHold Spm pm_goal_25InitEnv := by

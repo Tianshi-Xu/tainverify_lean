@@ -59,6 +59,7 @@ theorem prove_goal_256_cut : goal_256_stmt_cut := by
   have hG_eq : initSM 896 = initPM 896 := by
     have hrec := hInitG.2.2
     simp only [initGoal_896, pm_goal_256, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   -- x gather (712, dim 2)
   have hX_rec : initSM 712 = reconstructWithDim 2 4 0
@@ -79,6 +80,7 @@ theorem prove_goal_256_cut : goal_256_stmt_cut := by
   have hX_gather : initSM 712 = allGatherPrimDimN 2 4 0
       [initPM 3373, initPM 3374, initPM 3375, initPM 3376] := by
     rw [hX_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h3373_shape]; decide)
   -- SM store (output 895)
   have hsm : (denoteGraph sm_goal_256 initSM) 895 = bw_sum (initSM 896) (initSM 712) := by
@@ -131,13 +133,16 @@ theorem prove_goal_256_cut : goal_256_stmt_cut := by
   -- Three conjuncts
   simp only [goal_256, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm, bw_sum_shape, hX_gather,
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, bw_sum_shape, hX_gather,
         allGatherPrimDimN_shape 2 4 [initPM 3373, initPM 3374, initPM 3375, initPM 3376] [1, 8, 32] (by simp [h3373_shape])]
     decide
-  · rw [hpm0, hpm1, hpm2, hpm3,
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm0, hpm1, hpm2, hpm3,
         bw_sum_shape, h3373_shape, bw_sum_shape, h3374_shape,
         bw_sum_shape, h3375_shape, bw_sum_shape, h3376_shape]
-  · rw [hsm, hkey, hpm0, hpm1, hpm2, hpm3,
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hkey, hpm0, hpm1, hpm2, hpm3,
         reconstructWithDim_cons_cons_nonscalar 2 pm_goal_256.numRanks 0 _ _ _ (by rw [hout0_shape]; decide)]
     rfl
 

@@ -66,6 +66,7 @@ theorem prove_goal_19_cut : goal_19_stmt_cut := by
   have h586_eq : initSM 586 = initPM 586 := by
     have hrec := hInit586.2.2
     simp only [goal_18, pm_goal_19, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec
     exact hrec
   have h586pm_shape : (initPM 586).shape = [1, 4, 8, 8] := by rw [← h586_eq]; exact h586_shape
@@ -93,6 +94,7 @@ theorem prove_goal_19_cut : goal_19_stmt_cut := by
   have h582_gather : initSM 582 = allGatherPrimDimN 3 4 0
       [initPM 1309, initPM 1310, initPM 1311, initPM 1312] := by
     rw [h582_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 3 4 0 _ _ _ (by rw [h1309_shape]; decide)
   -- per-shard output shapes
   have hm0_shape : (fw_matmul (initPM 586) (initPM 1309)).shape = [1, 4, 8, 2] :=
@@ -137,15 +139,18 @@ theorem prove_goal_19_cut : goal_19_stmt_cut := by
   -- discharge the three conjuncts
   simp only [goal_19, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm, hkey]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hkey]
     have hhd : (([fw_matmul (initPM 586) (initPM 1309), fw_matmul (initPM 586) (initPM 1310),
         fw_matmul (initPM 586) (initPM 1311), fw_matmul (initPM 586) (initPM 1312)] :
         List Tensor).head?.map (fun t => t.shape)).getD [] = [1, 4, 8, 2] := by simp [hm0_shape]
     rw [allGatherPrimDimN_shape 3 4 _ _ hhd]
     simp [List.set, List.getD]
-  · rw [hpm0, hpm1, hpm2, hpm3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm0, hpm1, hpm2, hpm3]
     simp [hm0_shape, hm1_shape, hm2_shape, hm3_shape]
-  · rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
     symm
     apply reconstructWithDim_cons_cons_nonscalar
     rw [hpm0, hm0_shape]

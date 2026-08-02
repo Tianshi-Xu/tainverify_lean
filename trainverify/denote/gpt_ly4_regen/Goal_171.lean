@@ -98,6 +98,7 @@ theorem prove_goal_171_cut : goal_171_stmt_cut := by
   have h795_gather : initSM 795 = allGatherPrimDimN 2 4 0
       [initPM 2071, initPM 2074, initPM 2077, initPM 2080] := by
     rw [h795_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 2 4 0 _ _ _ (by rw [h2071_shape]; decide)
   have hG_shape : (allGatherPrimDimN 2 4 0
       [initPM 2071, initPM 2074, initPM 2077, initPM 2080]).shape = [1, 8, 32] := by
@@ -211,13 +212,17 @@ theorem prove_goal_171_cut : goal_171_stmt_cut := by
   -- Discharge the three conjuncts
   simp only [goal_171, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape: [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape: [1, 8, 32]
     rw [hsm, hdy_sm]; exact h795_shape
-  · -- PM tp shapes: [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tp shapes: [[1, 2, 32], [1, 2, 32], [1, 2, 32], [1, 2, 32]]
     rw [hpm0, hpm1, hpm2, hpm3, hcshape 0, hcshape 1, hcshape 2, hcshape 3]
-  · -- Value equality: smStore 794 = reconstructWithDim 1 4 0 [pm tps]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality: smStore 794 = reconstructWithDim 1 4 0 [pm tps]
     rw [hsm, hdy_sm, h795_gather, hpm0, hpm1, hpm2, hpm3]
     rw [show pm_goal_171.numRanks = 4 from rfl]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [hcshape 0]; decide)]
     rw [allGatherPrimDimN_chunkPrimDimN_id_dim1_4_32 _ hG_shape]
 

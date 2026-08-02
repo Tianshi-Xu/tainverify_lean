@@ -101,20 +101,24 @@ theorem prove_goal_272_cut : goal_272_stmt_cut := by
   have hW_eq : initSM 603 = initPM 603 := by
     have hrec := hInitW.2.2
     simp only [initGoal_603, pm_goal_272, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   have hW_shape : (initSM 603).shape = [32] := hInitW.1
   have hB_eq : initSM 604 = initPM 604 := by
     have hrec := hInitB.2.2
     simp only [initGoal_604, pm_goal_272, List.map] at hrec
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] at hrec | skip
     rw [reconstructWithDim_singleton] at hrec; exact hrec
   -- Convert to allGatherPrimDimN
   have hX_gather : initSM 946 = allGatherPrimDimN 1 4 0
       [initPM 1661, initPM 1662, initPM 1663, initPM 1664] := by
     rw [hX_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1661_shape]; decide)
   have hG_gather : initSM 769 = allGatherPrimDimN 1 4 0
       [initPM 1680, initPM 1684, initPM 1688, initPM 1692] := by
     rw [hG_rec]
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     exact reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [h1680_shape]; decide)
   -- SM store (dx output, index 0)
   have hsm : (denoteGraph sm_goal_272 initSM) 947 =
@@ -179,12 +183,16 @@ theorem prove_goal_272_cut : goal_272_stmt_cut := by
   have hdx3_shape : (bw_layernorm (initPM 1692) (initPM 1664) (initPM 603) (initPM 604)).1.shape = [1, 2, 32] := by
     rw [bw_layernorm_dx_shape _ _ _ _ 32 [2, 1] (by rw [h1664_shape]; rfl), h1664_shape]
   refine ⟨?_, ?_, ?_⟩
-  · rw [hsm, hkey]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hkey]
     rw [allGatherPrimDimN_shape 1 4 _ [1, 2, 32] (by simp [hdx0_shape])]
     simp [List.set, List.getD]
-  · rw [hpm0, hpm1, hpm2, hpm3, hdx0_shape, hdx1_shape, hdx2_shape, hdx3_shape]
-  · rw [hsm, hkey, hpm0, hpm1, hpm2, hpm3]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hpm0, hpm1, hpm2, hpm3, hdx0_shape, hdx1_shape, hdx2_shape, hdx3_shape]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    rw [hsm, hkey, hpm0, hpm1, hpm2, hpm3]
     show allGatherPrimDimN 1 4 0 _ = reconstructWithDim 1 4 0 _
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     rw [reconstructWithDim_cons_cons_nonscalar 1 4 0 _ _ _ (by rw [hdx0_shape]; decide)]
 
 end TrainVerify.Denote.GeneratedGoals

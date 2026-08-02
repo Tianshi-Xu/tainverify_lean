@@ -61,7 +61,7 @@ theorem prove_goal_48_cut : goal_48_stmt_cut := by
   have h625_eq : initSM 625 = initPM 625 := by
     have hrec := hInit47.2.2
     simp only [goal_47, pm_goal_48, List.map] at hrec
-    rw [hrec]; exact reconstructWithDim_singleton ..
+    rw [hrec]; (first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip); exact reconstructWithDim_singleton ..
   have h625_pm_shape : (initPM 625).shape = [1, 8, 32] := by
     rw [← h625_eq]; exact h625_shape
   -- Extract initGoal_626: W (tid 626) is replicated
@@ -71,7 +71,7 @@ theorem prove_goal_48_cut : goal_48_stmt_cut := by
   have h626_eq : initSM 626 = initPM 626 := by
     have hrec := hInit626.2.2
     simp only [initGoal_626, pm_goal_48, List.map] at hrec
-    rw [hrec]; exact reconstructWithDim_singleton ..
+    rw [hrec]; (first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip); exact reconstructWithDim_singleton ..
   have h626_pm_shape : (initPM 626).shape = [32, 32] := by
     rw [← h626_eq]; exact h626_shape
   -- Chunk shapes
@@ -115,21 +115,27 @@ theorem prove_goal_48_cut : goal_48_stmt_cut := by
       (by intro x hx
           simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
           rcases hx with rfl | rfl | rfl | rfl
-          · exact hchunk_shape 0
-          · exact hchunk_shape 1
-          · exact hchunk_shape 2
-          · exact hchunk_shape 3)
+          · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+            exact hchunk_shape 0
+          · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+            exact hchunk_shape 1
+          · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+            exact hchunk_shape 2
+          · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+            exact hchunk_shape 3)
       h626_pm_shape
     simp only [List.map] at hdist
     exact hdist
   -- Discharge 3 conjuncts
   simp only [goal_48, List.map]
   refine ⟨?_, ?_, ?_⟩
-  · -- SM output shape = [1, 8, 32]
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- SM output shape = [1, 8, 32]
     show (denoteGraph sm_goal_48 initSM 627).shape = _
     rw [hsm]
     exact fw_linear_3d_shape 1 8 32 32 _ _ h625_shape h626_shape
-  · -- PM tps shapes
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- PM tps shapes
     show [(denoteGraph pm_goal_48 initPM 2025).shape,
           (denoteGraph pm_goal_48 initPM 2026).shape,
           (denoteGraph pm_goal_48 initPM 2027).shape,
@@ -139,7 +145,9 @@ theorem prove_goal_48_cut : goal_48_stmt_cut := by
         fw_linear_3d_shape 1 2 32 32 _ _ (hchunk_shape 1) h626_pm_shape,
         fw_linear_3d_shape 1 2 32 32 _ _ (hchunk_shape 2) h626_pm_shape,
         fw_linear_3d_shape 1 2 32 32 _ _ (hchunk_shape 3) h626_pm_shape]
-  · -- Value equality
+  · first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
+    -- Value equality
+    first | rw [reconstructForGoal_of_not_replicated _ _ _ (by rfl)] | skip
     show denoteGraph sm_goal_48 initSM 627 = reconstructWithDim _ _ _ _
     rw [hsm, hkey, ← hpm0, ← hpm1, ← hpm2, ← hpm3]
     symm
