@@ -3,7 +3,7 @@ Copyright (c) TrainVerify contributors.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: TrainVerify contributors
 -/
-import denote.MultirefGeneral
+import denote.yoco_goals.GeneratedMultirefCertificates
 import denote.yoco_goals.SDRegionBridge
 import denote.yoco_goals.SDTLayer6C_0
 
@@ -28,30 +28,6 @@ open TrainVerify.Denote.GeneratedGoals
 
 noncomputable section
 
-private def fnSm7747 : NodeDecl :=
-  { rank := 0, op := "OpName.FW_multiref", ins := [5060], outs := [7747, 7751],
-    params := [2] }
-
-private def fnPm15221 : NodeDecl :=
-  { rank := 0, op := "OpName.FW_multiref", ins := [8695], outs := [15221, 15225],
-    params := [2] }
-
-private def fnPm15229 : NodeDecl :=
-  { rank := 1, op := "OpName.FW_multiref", ins := [8696], outs := [15229, 15233],
-    params := [2] }
-
-set_option maxRecDepth 1000000 in
-private theorem fn_sn7747 : sm.nodes[275]'(by native_decide) = fnSm7747 := by
-  native_decide
-
-set_option maxRecDepth 1000000 in
-private theorem fn_pn15221 : pm.nodes[611]'(by native_decide) = fnPm15221 := by
-  native_decide
-
-set_option maxRecDepth 1000000 in
-private theorem fn_pn15229 : pm.nodes[612]'(by native_decide) = fnPm15229 := by
-  native_decide
-
 set_option maxRecDepth 10000000 in
 set_option maxHeartbeats 16000000 in
 theorem recon_intermediateGoal_7747_faithful (initSM initPM : Store)
@@ -62,38 +38,14 @@ theorem recon_intermediateGoal_7747_faithful (initSM initPM : Store)
       (denoteGraphDistributedFaithful pm initPM) := by
   have hparent := recon_intermediateGoal_5060_faithful initSM initPM hSM hPM hInit
   have rSM : denoteGraphDistributedFaithful sm initSM 7747 =
-      denoteGraphDistributedFaithful sm initSM 5060 := by
-    refine denoteGraphDistributedFaithful_reduce1 sm initSM 275 fnSm7747 5060 7747
-      (fun x => x) (by native_decide) fn_sn7747 ?_
-      (fun n hn => layer1_sm_nodes_nonempty n (List.mem_of_mem_drop hn)) (by native_decide)
-      (fun n hn => layer1_sm_nodes_nonempty n (List.mem_of_mem_drop hn)) (by native_decide)
-    intro st
-    unfold fnSm7747
-    rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
-      (by decide) (by decide)]
-    exact applyNode_fw_multiref_at sm st 0 5060 [7747, 7751] 2 rfl 7747 (by decide)
+      denoteGraphDistributedFaithful sm initSM 5060 :=
+    denoteGraphDistributedFaithful_multiref sm initSM multirefCert_sm_7747_7747
   have rPM0 : denoteGraphDistributedFaithful pm initPM 15221 =
-      denoteGraphDistributedFaithful pm initPM 8695 := by
-    refine denoteGraphDistributedFaithful_reduce1 pm initPM 611 fnPm15221 8695 15221
-      (fun x => x) (by native_decide) fn_pn15221 ?_
-      (fun n hn => layer1_pm_nodes_nonempty n (List.mem_of_mem_drop hn)) (by native_decide)
-      (fun n hn => layer1_pm_nodes_nonempty n (List.mem_of_mem_drop hn)) (by native_decide)
-    intro st
-    unfold fnPm15221
-    rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
-      (by decide) (by decide)]
-    exact applyNode_fw_multiref_at pm st 0 8695 [15221, 15225] 2 rfl 15221 (by decide)
+      denoteGraphDistributedFaithful pm initPM 8695 :=
+    denoteGraphDistributedFaithful_multiref pm initPM multirefCert_pm_7747_15221
   have rPM1 : denoteGraphDistributedFaithful pm initPM 15229 =
-      denoteGraphDistributedFaithful pm initPM 8696 := by
-    refine denoteGraphDistributedFaithful_reduce1 pm initPM 612 fnPm15229 8696 15229
-      (fun x => x) (by native_decide) fn_pn15229 ?_
-      (fun n hn => layer1_pm_nodes_nonempty n (List.mem_of_mem_drop hn)) (by native_decide)
-      (fun n hn => layer1_pm_nodes_nonempty n (List.mem_of_mem_drop hn)) (by native_decide)
-    intro st
-    unfold fnPm15229
-    rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
-      (by decide) (by decide)]
-    exact applyNode_fw_multiref_at pm st 1 8696 [15229, 15233] 2 rfl 15229 (by decide)
+      denoteGraphDistributedFaithful pm initPM 8696 :=
+    denoteGraphDistributedFaithful_multiref pm initPM multirefCert_pm_7747_15229
   -- The goal's reconstruction is the parent's with each tid rewritten, so the
   -- parent's three components transfer directly.
   obtain ⟨h1, h2, h3⟩ := hparent

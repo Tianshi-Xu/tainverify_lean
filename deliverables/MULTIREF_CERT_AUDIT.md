@@ -45,10 +45,12 @@ lineage theorem and are intentionally not absorbed into this graph certificate.
 
 The minimal pilot generates and kernel-checks the three graph certificates for
 two-shard goal 7747. A regression proves all three exact denotation equalities.
-The existing production lineage theorem was not rewritten: its deep dependency
-build did not finish within repeated 600-second gates on this host, so claiming
-production LOC/build savings would be unsupported. The mechanism and pilot are
-landed independently, with no Route 1 statement change and no identity-model
+`SDFanOutShardPilot.lean` now consumes those certificates in the production
+lineage theorem, replacing three local node declarations, three node-index
+proofs, and three repeated faithful reductions. Its public theorem header is
+unchanged; the file shrinks by 48 net lines (7 insertions, 55 deletions).
+The mechanism remains a pilot rather than a claim that all fan-out proofs have
+already migrated, with no Route 1 statement change and no identity-model
 semantic downgrade.
 
 ## Gates
@@ -60,6 +62,7 @@ Passed:
 - `lake build denote.MultirefCertificate`;
 - `lake build denote.yoco_goals.GeneratedMultirefCertificates`;
 - `lake build denote.yoco_goals.MultirefCertificateRegression`;
+- `lake build denote.yoco_goals.SDFanOutShardPilot` after the production rewrite;
 - faithful coverage: ordinary 649/649, zigzag 505/505, overall 1154/1156 with
   the two existing false findings;
 - axiom audit: the generic reduction uses only `propext`, `Classical.choice`, and
