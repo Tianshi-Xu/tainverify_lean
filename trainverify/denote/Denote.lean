@@ -15376,8 +15376,8 @@ theorem bw_matmul_fst_split_dim1_4_1_4_8_8 (g y : Tensor)
   exact hsplit
 
 
-/-- `bw_add2` second output (dy) is the gradient itself when `g` and `y` share a shape. -/
-theorem bw_add2_snd_same_shape_g110 (g x y : Tensor) (h : g.shape = y.shape) :
+/-- `bw_add2` second output is the gradient itself when `g` and `y` share a shape. -/
+theorem bw_add2_snd_same_shape (g x y : Tensor) (h : g.shape = y.shape) :
     (bw_add2 g x y).2 = g := by
   show reduceBroadcast g.shape y.shape (fun k => valAt g k) = g
   rw [h, reduceBroadcast_same]
@@ -15386,8 +15386,8 @@ theorem bw_add2_snd_same_shape_g110 (g x y : Tensor) (h : g.shape = y.shape) :
   intro idx hidx
   simp [Tensor.mkShape, valAt_of_lt g idx hidx]
 
-/-- `applyNode` for ternary `BW_add` — second output (dy). -/
-theorem applyNode_bw_add2_snd_out_g110
+/-- `applyNode` for ternary `BW_add` — second output. -/
+theorem applyNode_bw_add2_snd_out
     (graph : GraphDecl) (s : Store) (rank : Nat)
     (gTid xTid yTid dxTid dyTid : Tid)
     (hne : dxTid ≠ dyTid) :
@@ -15401,14 +15401,23 @@ theorem applyNode_bw_add2_snd_out_g110
   unfold storeSet
   simp [List.find?, hne]
 
+/-- Compatibility alias for goal 110. -/
+theorem bw_add2_snd_same_shape_g110 (g x y : Tensor) (h : g.shape = y.shape) :
+    (bw_add2 g x y).2 = g :=
+  bw_add2_snd_same_shape g x y h
+
+/-- Compatibility alias for goal 110. -/
+theorem applyNode_bw_add2_snd_out_g110
+    (graph : GraphDecl) (s : Store) (rank : Nat)
+    (gTid xTid yTid dxTid dyTid : Tid)
+    (hne : dxTid ≠ dyTid) :
+    applyNode graph s { rank := rank, op := "OpName.BW_add", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dyTid =
+      (bw_add2 (s gTid) (s xTid) (s yTid)).2 :=
+  applyNode_bw_add2_snd_out graph s rank gTid xTid yTid dxTid dyTid hne
+
 theorem bw_add2_snd_same_shape_g171 (g x y : Tensor) (h : g.shape = y.shape) :
-    (bw_add2 g x y).2 = g := by
-  show reduceBroadcast g.shape y.shape (fun k => valAt g k) = g
-  rw [h, reduceBroadcast_same]
-  rw [← h]
-  apply Tensor.ext (by simp [Tensor.mkShape])
-  intro idx hidx
-  simp [Tensor.mkShape, valAt_of_lt g idx hidx]
+    (bw_add2 g x y).2 = g :=
+  bw_add2_snd_same_shape g x y h
 
 /-- `applyNode` for ternary `BW_add` — second output (dy). -/
 theorem applyNode_bw_add2_snd_out_g171
@@ -15416,26 +15425,15 @@ theorem applyNode_bw_add2_snd_out_g171
     (gTid xTid yTid dxTid dyTid : Tid)
     (hne : dxTid ≠ dyTid) :
     applyNode graph s { rank := rank, op := "OpName.BW_add", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dyTid =
-      (bw_add2 (s gTid) (s xTid) (s yTid)).2 := by
-  unfold applyNode
-  rw [show ([gTid, xTid, yTid] : List Tid).map s = [s gTid, s xTid, s yTid] from rfl,
-      evalOp_bw_add2]
-  change storeSet s [(dxTid, (bw_add2 (s gTid) (s xTid) (s yTid)).1),
-                     (dyTid, (bw_add2 (s gTid) (s xTid) (s yTid)).2)] dyTid = _
-  unfold storeSet
-  simp [List.find?, hne]
+      (bw_add2 (s gTid) (s xTid) (s yTid)).2 :=
+  applyNode_bw_add2_snd_out graph s rank gTid xTid yTid dxTid dyTid hne
 
 /-! ### batch10 BW_add g145 net-new lemmas -/
 
 /-- `bw_add2` second output (dY) equals the gradient when `g` and `y` share a shape. -/
 theorem bw_add2_snd_same_shape_g145 (g x y : Tensor) (h : g.shape = y.shape) :
-    (bw_add2 g x y).2 = g := by
-  show reduceBroadcast g.shape y.shape (fun k => valAt g k) = g
-  rw [h, reduceBroadcast_same]
-  rw [← h]
-  apply Tensor.ext (by simp [Tensor.mkShape])
-  intro idx hidx
-  simp [Tensor.mkShape, valAt_of_lt g idx hidx]
+    (bw_add2 g x y).2 = g :=
+  bw_add2_snd_same_shape g x y h
 
 /-- `applyNode` for ternary `BW_add` — second output (dy). -/
 theorem applyNode_bw_add2_snd_out_g145
@@ -15443,14 +15441,8 @@ theorem applyNode_bw_add2_snd_out_g145
     (gTid xTid yTid dxTid dyTid : Tid)
     (hne : dxTid ≠ dyTid) :
     applyNode graph s { rank := rank, op := "OpName.BW_add", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dyTid =
-      (bw_add2 (s gTid) (s xTid) (s yTid)).2 := by
-  unfold applyNode
-  rw [show ([gTid, xTid, yTid] : List Tid).map s = [s gTid, s xTid, s yTid] from rfl,
-      evalOp_bw_add2]
-  change storeSet s [(dxTid, (bw_add2 (s gTid) (s xTid) (s yTid)).1),
-                     (dyTid, (bw_add2 (s gTid) (s xTid) (s yTid)).2)] dyTid = _
-  unfold storeSet
-  simp [List.find?, hne]
+      (bw_add2 (s gTid) (s xTid) (s yTid)).2 :=
+  applyNode_bw_add2_snd_out graph s rank gTid xTid yTid dxTid dyTid hne
 
 /-- Value of `chunkPrimDimN 1 4 r x` (chunk along dim 1) for `x : [1,8,32]`.
     The shard has shape `[1,2,32]` (product 64); local flat `loc < 64` maps to
@@ -15542,13 +15534,8 @@ theorem allGather_chunkPrimDimN_roundtrip_dim1_4_1_8_32_g145 (x : Tensor)
   omega
 
 theorem bw_add2_snd_same_shape_g136 (g x y : Tensor) (h : g.shape = y.shape) :
-    (bw_add2 g x y).2 = g := by
-  show reduceBroadcast g.shape y.shape (fun k => valAt g k) = g
-  rw [h, reduceBroadcast_same]
-  rw [← h]
-  apply Tensor.ext (by simp [Tensor.mkShape])
-  intro idx hidx
-  simp [Tensor.mkShape, valAt_of_lt g idx hidx]
+    (bw_add2 g x y).2 = g :=
+  bw_add2_snd_same_shape g x y h
 
 /-- `applyNode` for ternary `BW_add` — second output (dy). -/
 theorem applyNode_bw_add2_snd_out_g136
@@ -15556,26 +15543,15 @@ theorem applyNode_bw_add2_snd_out_g136
     (gTid xTid yTid dxTid dyTid : Tid)
     (hne : dxTid ≠ dyTid) :
     applyNode graph s { rank := rank, op := "OpName.BW_add", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dyTid =
-      (bw_add2 (s gTid) (s xTid) (s yTid)).2 := by
-  unfold applyNode
-  rw [show ([gTid, xTid, yTid] : List Tid).map s = [s gTid, s xTid, s yTid] from rfl,
-      evalOp_bw_add2]
-  change storeSet s [(dxTid, (bw_add2 (s gTid) (s xTid) (s yTid)).1),
-                     (dyTid, (bw_add2 (s gTid) (s xTid) (s yTid)).2)] dyTid = _
-  unfold storeSet
-  simp [List.find?, hne]
+      (bw_add2 (s gTid) (s xTid) (s yTid)).2 :=
+  applyNode_bw_add2_snd_out graph s rank gTid xTid yTid dxTid dyTid hne
 
 /-! ## BW_add second-output (dW) helpers for goal_180 (AllToAll BW_add template) -/
 
 /-- `bw_add2` second output is the gradient itself when `g` and `y` share a shape. -/
 theorem bw_add2_snd_same_shape_g180 (g x y : Tensor) (h : g.shape = y.shape) :
-    (bw_add2 g x y).2 = g := by
-  show reduceBroadcast g.shape y.shape (fun k => valAt g k) = g
-  rw [h, reduceBroadcast_same]
-  rw [← h]
-  apply Tensor.ext (by simp [Tensor.mkShape])
-  intro idx hidx
-  simp [Tensor.mkShape, valAt_of_lt g idx hidx]
+    (bw_add2 g x y).2 = g :=
+  bw_add2_snd_same_shape g x y h
 
 /-- `applyNode` for ternary `BW_add` — second output (dW). -/
 theorem applyNode_bw_add2_snd_out_g180
@@ -15583,14 +15559,8 @@ theorem applyNode_bw_add2_snd_out_g180
     (gTid xTid yTid dxTid dyTid : Tid)
     (hne : dxTid ≠ dyTid) :
     applyNode graph s { rank := rank, op := "OpName.BW_add", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dyTid =
-      (bw_add2 (s gTid) (s xTid) (s yTid)).2 := by
-  unfold applyNode
-  rw [show ([gTid, xTid, yTid] : List Tid).map s = [s gTid, s xTid, s yTid] from rfl,
-      evalOp_bw_add2]
-  change storeSet s [(dxTid, (bw_add2 (s gTid) (s xTid) (s yTid)).1),
-                     (dyTid, (bw_add2 (s gTid) (s xTid) (s yTid)).2)] dyTid = _
-  unfold storeSet
-  simp [List.find?, hne]
+      (bw_add2 (s gTid) (s xTid) (s yTid)).2 :=
+  applyNode_bw_add2_snd_out graph s rank gTid xTid yTid dxTid dyTid hne
 
 /-- Roundtrip identity: gathering the four dim-2 chunks of a `[1,8,32]` tensor
     along dim 2 reconstructs the original tensor. -/
@@ -15656,13 +15626,8 @@ theorem allGatherPrimDimN_chunkPrimDimN_id_dim2_4_1_8_32_g180 (x : Tensor)
 
 /-- `bw_add2` second output (dy) equals the gradient when out shape = y shape. -/
 theorem bw_add2_snd_same_shape_g206 (g x y : Tensor) (h : g.shape = y.shape) :
-    (bw_add2 g x y).2 = g := by
-  show reduceBroadcast g.shape y.shape (fun k => valAt g k) = g
-  rw [h, reduceBroadcast_same]
-  rw [← h]
-  apply Tensor.ext (by simp [Tensor.mkShape])
-  intro idx hidx
-  simp [Tensor.mkShape, valAt_of_lt g idx hidx]
+    (bw_add2 g x y).2 = g :=
+  bw_add2_snd_same_shape g x y h
 
 /-- `applyNode` for ternary `BW_add` — second output (dy). -/
 theorem applyNode_bw_add2_snd_out_g206
@@ -15670,23 +15635,12 @@ theorem applyNode_bw_add2_snd_out_g206
     (gTid xTid yTid dxTid dyTid : Tid)
     (hne : dxTid ≠ dyTid) :
     applyNode graph s { rank := rank, op := "OpName.BW_add", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dyTid =
-      (bw_add2 (s gTid) (s xTid) (s yTid)).2 := by
-  unfold applyNode
-  rw [show ([gTid, xTid, yTid] : List Tid).map s = [s gTid, s xTid, s yTid] from rfl,
-      evalOp_bw_add2]
-  change storeSet s [(dxTid, (bw_add2 (s gTid) (s xTid) (s yTid)).1),
-                     (dyTid, (bw_add2 (s gTid) (s xTid) (s yTid)).2)] dyTid = _
-  unfold storeSet
-  simp [List.find?, hne]
+      (bw_add2 (s gTid) (s xTid) (s yTid)).2 :=
+  applyNode_bw_add2_snd_out graph s rank gTid xTid yTid dxTid dyTid hne
 
 theorem bw_add2_snd_same_shape_g215 (g x y : Tensor) (h : g.shape = y.shape) :
-    (bw_add2 g x y).2 = g := by
-  show reduceBroadcast g.shape y.shape (fun k => valAt g k) = g
-  rw [h, reduceBroadcast_same]
-  rw [← h]
-  apply Tensor.ext (by simp [Tensor.mkShape])
-  intro idx hidx
-  simp [Tensor.mkShape, valAt_of_lt g idx hidx]
+    (bw_add2 g x y).2 = g :=
+  bw_add2_snd_same_shape g x y h
 
 /-- `applyNode` for ternary `BW_add` — second output (dy). -/
 theorem applyNode_bw_add2_snd_out_g215
@@ -15694,23 +15648,12 @@ theorem applyNode_bw_add2_snd_out_g215
     (gTid xTid yTid dxTid dyTid : Tid)
     (hne : dxTid ≠ dyTid) :
     applyNode graph s { rank := rank, op := "OpName.BW_add", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dyTid =
-      (bw_add2 (s gTid) (s xTid) (s yTid)).2 := by
-  unfold applyNode
-  rw [show ([gTid, xTid, yTid] : List Tid).map s = [s gTid, s xTid, s yTid] from rfl,
-      evalOp_bw_add2]
-  change storeSet s [(dxTid, (bw_add2 (s gTid) (s xTid) (s yTid)).1),
-                     (dyTid, (bw_add2 (s gTid) (s xTid) (s yTid)).2)] dyTid = _
-  unfold storeSet
-  simp [List.find?, hne, hne.symm]
+      (bw_add2 (s gTid) (s xTid) (s yTid)).2 :=
+  applyNode_bw_add2_snd_out graph s rank gTid xTid yTid dxTid dyTid hne
 
 theorem bw_add2_snd_same_shape_g241 (g x y : Tensor) (h : g.shape = y.shape) :
-    (bw_add2 g x y).2 = g := by
-  show reduceBroadcast g.shape y.shape (fun k => valAt g k) = g
-  rw [h, reduceBroadcast_same]
-  rw [← h]
-  apply Tensor.ext (by simp [Tensor.mkShape])
-  intro idx hidx
-  simp [Tensor.mkShape, valAt_of_lt g idx hidx]
+    (bw_add2 g x y).2 = g :=
+  bw_add2_snd_same_shape g x y h
 
 /-- `applyNode` for ternary `BW_add` — second output (dy). -/
 theorem applyNode_bw_add2_snd_out_g241
@@ -15718,23 +15661,12 @@ theorem applyNode_bw_add2_snd_out_g241
     (gTid xTid yTid dxTid dyTid : Tid)
     (hne : dxTid ≠ dyTid) :
     applyNode graph s { rank := rank, op := "OpName.BW_add", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dyTid =
-      (bw_add2 (s gTid) (s xTid) (s yTid)).2 := by
-  unfold applyNode
-  rw [show ([gTid, xTid, yTid] : List Tid).map s = [s gTid, s xTid, s yTid] from rfl,
-      evalOp_bw_add2]
-  change storeSet s [(dxTid, (bw_add2 (s gTid) (s xTid) (s yTid)).1),
-                     (dyTid, (bw_add2 (s gTid) (s xTid) (s yTid)).2)] dyTid = _
-  unfold storeSet
-  simp [List.find?, hne]
+      (bw_add2 (s gTid) (s xTid) (s yTid)).2 :=
+  applyNode_bw_add2_snd_out graph s rank gTid xTid yTid dxTid dyTid hne
 
 theorem bw_add2_snd_same_shape_g250 (g x y : Tensor) (h : g.shape = y.shape) :
-    (bw_add2 g x y).2 = g := by
-  show reduceBroadcast g.shape y.shape (fun k => valAt g k) = g
-  rw [h, reduceBroadcast_same]
-  rw [← h]
-  apply Tensor.ext (by simp [Tensor.mkShape])
-  intro idx hidx
-  simp [Tensor.mkShape, valAt_of_lt g idx hidx]
+    (bw_add2 g x y).2 = g :=
+  bw_add2_snd_same_shape g x y h
 
 /-- `applyNode` for ternary `BW_add` — second output (dy). -/
 theorem applyNode_bw_add2_snd_out_g250
@@ -15742,14 +15674,8 @@ theorem applyNode_bw_add2_snd_out_g250
     (gTid xTid yTid dxTid dyTid : Tid)
     (hne : dxTid ≠ dyTid) :
     applyNode graph s { rank := rank, op := "OpName.BW_add", ins := [gTid, xTid, yTid], outs := [dxTid, dyTid] } dyTid =
-      (bw_add2 (s gTid) (s xTid) (s yTid)).2 := by
-  unfold applyNode
-  rw [show ([gTid, xTid, yTid] : List Tid).map s = [s gTid, s xTid, s yTid] from rfl,
-      evalOp_bw_add2]
-  change storeSet s [(dxTid, (bw_add2 (s gTid) (s xTid) (s yTid)).1),
-                     (dyTid, (bw_add2 (s gTid) (s xTid) (s yTid)).2)] dyTid = _
-  unfold storeSet
-  simp [List.find?, hne, hne.symm]
+      (bw_add2 (s gTid) (s xTid) (s yTid)).2 :=
+  applyNode_bw_add2_snd_out graph s rank gTid xTid yTid dxTid dyTid hne
 
 /-! ## BW_matmul dX row-dim (dim2) distribution helper (for goal_192 family)
 

@@ -1,5 +1,6 @@
 /- 真证 goal_2 桥。SM frame 已通(EXIT 0)。现攻 PM frame。 -/
 import denote.gpt_ly4_regen.Goal_2
+import denote.GraphGears
 
 set_option maxRecDepth 100000
 
@@ -8,31 +9,17 @@ namespace TrainVerify.Denote.GeneratedGoals
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 
--- 通用齿轮：shapeEnvOfList lookup 成功 → (tid,sh) 是成员
+-- 兼容旧桥 API；实现下沉到 graph-parameterized 公共层。
 theorem mem_of_shapeEnvOfList_eq_some {xs : List (Tid × Shape)} {tid sh}
-    (h : shapeEnvOfList xs tid = some sh) : (tid, sh) ∈ xs := by
-  unfold shapeEnvOfList at h
-  cases hf : xs.find? (fun p => p.1 = tid) with
-  | none => rw [hf] at h; simp at h
-  | some pair =>
-    rw [hf] at h
-    obtain ⟨t, s⟩ := pair
-    simp only [Option.some.injEq] at h
-    subst h
-    have hmem := List.mem_of_find?_eq_some hf
-    have hpred := List.find?_some hf
-    simp only [decide_eq_true_eq] at hpred
-    subst hpred
-    exact hmem
+    (h : shapeEnvOfList xs tid = some sh) : (tid, sh) ∈ xs :=
+  shapeEnvOfList_mem_of_eq_some h
 
 -- 通用弱化引理：small 每条目在 big 里 find? 到自己 → StoreShapesHold 弱化（子集）
 theorem storeShapes_weaken {init : Store} {small big : List (Tid × Shape)}
     (hsub : ∀ p ∈ small, shapeEnvOfList big p.1 = some p.2)
     (hbig : StoreShapesHold init (shapeEnvOfList big)) :
-    StoreShapesHold init (shapeEnvOfList small) := by
-  intro tid sh hsh
-  have hmem : (tid, sh) ∈ small := mem_of_shapeEnvOfList_eq_some hsh
-  exact hbig tid sh (hsub (tid, sh) hmem)
+    StoreShapesHold init (shapeEnvOfList small) :=
+  storeShapesHold_weaken hsub hbig
 
 -- base case: cut init = full init
 theorem goal_2_cutinit_eq : goal_2_cut_initGoals = initGoals := by

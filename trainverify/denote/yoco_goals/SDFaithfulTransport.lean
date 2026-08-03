@@ -78,11 +78,8 @@ theorem recon_intermediateGoal_4714_faithful (initSM initPM : Store)
     denote_faithful_eq_distributed_of_prefix pm initPM 4714 109
       sd_pm_4714_suffix sd_pm_4714_not_written sd_pm_4714_prefix_clean
   have hd := recon_intermediateGoal_4714_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_4714, List.map, reconstructForGoal,
-    reconstructWithDim_singleton] at hd ⊢
-  rw [hsm, hpm]
-  exact hd
+  exact InitGoalHolds_transfer_one_piece pm.numRanks intermediateGoal_4714
+    rfl hsm hpm hd
 
 end
 

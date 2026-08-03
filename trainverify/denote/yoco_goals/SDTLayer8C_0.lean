@@ -46,11 +46,8 @@ theorem recon_intermediateGoal_5116_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8885 692 (by decide) sdw_pm_8885
   have hp1 := sd_pm_faithful_eq initPM 8886 693 (by decide) sdw_pm_8886
   have hd := recon_intermediateGoal_5116_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5116, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5116
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5118 : ∀ n ∈ sm.nodes.drop 318, (5118 : Tid) ∉ n.outs := by
@@ -76,11 +73,8 @@ theorem recon_intermediateGoal_5118_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8887 696 (by decide) sdw_pm_8887
   have hp1 := sd_pm_faithful_eq initPM 8888 699 (by decide) sdw_pm_8888
   have hd := recon_intermediateGoal_5118_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5118, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5118
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5120 : ∀ n ∈ sm.nodes.drop 319, (5120 : Tid) ∉ n.outs := by
@@ -106,11 +100,8 @@ theorem recon_intermediateGoal_5120_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8899 697 (by decide) sdw_pm_8899
   have hp1 := sd_pm_faithful_eq initPM 8900 700 (by decide) sdw_pm_8900
   have hd := recon_intermediateGoal_5120_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5120, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5120
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5122 : ∀ n ∈ sm.nodes.drop 320, (5122 : Tid) ∉ n.outs := by
@@ -136,11 +127,8 @@ theorem recon_intermediateGoal_5122_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8909 698 (by decide) sdw_pm_8909
   have hp1 := sd_pm_faithful_eq initPM 8910 701 (by decide) sdw_pm_8910
   have hd := recon_intermediateGoal_5122_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5122, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5122
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5124 : ∀ n ∈ sm.nodes.drop 321, (5124 : Tid) ∉ n.outs := by
@@ -166,11 +154,8 @@ theorem recon_intermediateGoal_5124_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8921 702 (by decide) sdw_pm_8921
   have hp1 := sd_pm_faithful_eq initPM 8922 703 (by decide) sdw_pm_8922
   have hd := recon_intermediateGoal_5124_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5124, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5124
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5125 : ∀ n ∈ sm.nodes.drop 321, (5125 : Tid) ∉ n.outs := by
@@ -196,11 +181,8 @@ theorem recon_intermediateGoal_5125_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8923 702 (by decide) sdw_pm_8923
   have hp1 := sd_pm_faithful_eq initPM 8924 703 (by decide) sdw_pm_8924
   have hd := recon_intermediateGoal_5125_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5125, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5125
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5128 : ∀ n ∈ sm.nodes.drop 322, (5128 : Tid) ∉ n.outs := by
@@ -226,11 +208,8 @@ theorem recon_intermediateGoal_5128_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8925 704 (by decide) sdw_pm_8925
   have hp1 := sd_pm_faithful_eq initPM 8926 705 (by decide) sdw_pm_8926
   have hd := recon_intermediateGoal_5128_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5128, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5128
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5129 : ∀ n ∈ sm.nodes.drop 323, (5129 : Tid) ∉ n.outs := by
@@ -256,11 +235,8 @@ theorem recon_intermediateGoal_5129_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8927 706 (by decide) sdw_pm_8927
   have hp1 := sd_pm_faithful_eq initPM 8928 707 (by decide) sdw_pm_8928
   have hd := recon_intermediateGoal_5129_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5129, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5129
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5130 : ∀ n ∈ sm.nodes.drop 324, (5130 : Tid) ∉ n.outs := by
@@ -286,11 +262,8 @@ theorem recon_intermediateGoal_5130_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8933 708 (by decide) sdw_pm_8933
   have hp1 := sd_pm_faithful_eq initPM 8934 709 (by decide) sdw_pm_8934
   have hd := recon_intermediateGoal_5130_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5130, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5130
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5132 : ∀ n ∈ sm.nodes.drop 325, (5132 : Tid) ∉ n.outs := by
@@ -316,11 +289,8 @@ theorem recon_intermediateGoal_5132_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8937 710 (by decide) sdw_pm_8937
   have hp1 := sd_pm_faithful_eq initPM 8938 711 (by decide) sdw_pm_8938
   have hd := recon_intermediateGoal_5132_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5132, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5132
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5133 : ∀ n ∈ sm.nodes.drop 326, (5133 : Tid) ∉ n.outs := by
@@ -346,11 +316,8 @@ theorem recon_intermediateGoal_5133_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8947 712 (by decide) sdw_pm_8947
   have hp1 := sd_pm_faithful_eq initPM 8948 713 (by decide) sdw_pm_8948
   have hd := recon_intermediateGoal_5133_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5133, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5133
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5134 : ∀ n ∈ sm.nodes.drop 327, (5134 : Tid) ∉ n.outs := by
@@ -376,11 +343,8 @@ theorem recon_intermediateGoal_5134_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8951 714 (by decide) sdw_pm_8951
   have hp1 := sd_pm_faithful_eq initPM 8952 715 (by decide) sdw_pm_8952
   have hd := recon_intermediateGoal_5134_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5134, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5134
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5135 : ∀ n ∈ sm.nodes.drop 328, (5135 : Tid) ∉ n.outs := by
@@ -406,11 +370,8 @@ theorem recon_intermediateGoal_5135_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8955 716 (by decide) sdw_pm_8955
   have hp1 := sd_pm_faithful_eq initPM 8956 717 (by decide) sdw_pm_8956
   have hd := recon_intermediateGoal_5135_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5135, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5135
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5137 : ∀ n ∈ sm.nodes.drop 330, (5137 : Tid) ∉ n.outs := by
@@ -436,11 +397,8 @@ theorem recon_intermediateGoal_5137_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8959 720 (by decide) sdw_pm_8959
   have hp1 := sd_pm_faithful_eq initPM 8960 721 (by decide) sdw_pm_8960
   have hd := recon_intermediateGoal_5137_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5137, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5137
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5138 : ∀ n ∈ sm.nodes.drop 332, (5138 : Tid) ∉ n.outs := by
@@ -466,11 +424,8 @@ theorem recon_intermediateGoal_5138_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8961 724 (by decide) sdw_pm_8961
   have hp1 := sd_pm_faithful_eq initPM 8962 728 (by decide) sdw_pm_8962
   have hd := recon_intermediateGoal_5138_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5138, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5138
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5140 : ∀ n ∈ sm.nodes.drop 336, (5140 : Tid) ∉ n.outs := by
@@ -496,11 +451,8 @@ theorem recon_intermediateGoal_5140_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8967 732 (by decide) sdw_pm_8967
   have hp1 := sd_pm_faithful_eq initPM 8968 736 (by decide) sdw_pm_8968
   have hd := recon_intermediateGoal_5140_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5140, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5140
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5141 : ∀ n ∈ sm.nodes.drop 340, (5141 : Tid) ∉ n.outs := by
@@ -526,11 +478,8 @@ theorem recon_intermediateGoal_5141_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8969 740 (by decide) sdw_pm_8969
   have hp1 := sd_pm_faithful_eq initPM 8970 744 (by decide) sdw_pm_8970
   have hd := recon_intermediateGoal_5141_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5141, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5141
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5142 : ∀ n ∈ sm.nodes.drop 340, (5142 : Tid) ∉ n.outs := by
@@ -556,11 +505,8 @@ theorem recon_intermediateGoal_5142_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8971 740 (by decide) sdw_pm_8971
   have hp1 := sd_pm_faithful_eq initPM 8972 744 (by decide) sdw_pm_8972
   have hd := recon_intermediateGoal_5142_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5142, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5142
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5147 : ∀ n ∈ sm.nodes.drop 333, (5147 : Tid) ∉ n.outs := by
@@ -586,11 +532,8 @@ theorem recon_intermediateGoal_5147_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8981 725 (by decide) sdw_pm_8981
   have hp1 := sd_pm_faithful_eq initPM 8982 729 (by decide) sdw_pm_8982
   have hd := recon_intermediateGoal_5147_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5147, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5147
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5149 : ∀ n ∈ sm.nodes.drop 337, (5149 : Tid) ∉ n.outs := by
@@ -616,11 +559,8 @@ theorem recon_intermediateGoal_5149_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8985 733 (by decide) sdw_pm_8985
   have hp1 := sd_pm_faithful_eq initPM 8986 737 (by decide) sdw_pm_8986
   have hd := recon_intermediateGoal_5149_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5149, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5149
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5150 : ∀ n ∈ sm.nodes.drop 341, (5150 : Tid) ∉ n.outs := by
@@ -646,11 +586,8 @@ theorem recon_intermediateGoal_5150_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8991 741 (by decide) sdw_pm_8991
   have hp1 := sd_pm_faithful_eq initPM 8992 745 (by decide) sdw_pm_8992
   have hd := recon_intermediateGoal_5150_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5150, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5150
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5151 : ∀ n ∈ sm.nodes.drop 345, (5151 : Tid) ∉ n.outs := by
@@ -676,11 +613,8 @@ theorem recon_intermediateGoal_5151_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8993 749 (by decide) sdw_pm_8993
   have hp1 := sd_pm_faithful_eq initPM 8994 752 (by decide) sdw_pm_8994
   have hd := recon_intermediateGoal_5151_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5151, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5151
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5152 : ∀ n ∈ sm.nodes.drop 334, (5152 : Tid) ∉ n.outs := by
@@ -706,11 +640,8 @@ theorem recon_intermediateGoal_5152_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8995 726 (by decide) sdw_pm_8995
   have hp1 := sd_pm_faithful_eq initPM 8996 730 (by decide) sdw_pm_8996
   have hd := recon_intermediateGoal_5152_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5152, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5152
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5154 : ∀ n ∈ sm.nodes.drop 338, (5154 : Tid) ∉ n.outs := by
@@ -736,11 +667,8 @@ theorem recon_intermediateGoal_5154_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 8999 734 (by decide) sdw_pm_8999
   have hp1 := sd_pm_faithful_eq initPM 9000 738 (by decide) sdw_pm_9000
   have hd := recon_intermediateGoal_5154_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5154, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5154
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5155 : ∀ n ∈ sm.nodes.drop 342, (5155 : Tid) ∉ n.outs := by
@@ -766,11 +694,8 @@ theorem recon_intermediateGoal_5155_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 9009 742 (by decide) sdw_pm_9009
   have hp1 := sd_pm_faithful_eq initPM 9010 746 (by decide) sdw_pm_9010
   have hd := recon_intermediateGoal_5155_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5155, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5155
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5156 : ∀ n ∈ sm.nodes.drop 335, (5156 : Tid) ∉ n.outs := by
@@ -796,11 +721,8 @@ theorem recon_intermediateGoal_5156_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 9013 727 (by decide) sdw_pm_9013
   have hp1 := sd_pm_faithful_eq initPM 9014 731 (by decide) sdw_pm_9014
   have hd := recon_intermediateGoal_5156_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5156, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5156
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5158 : ∀ n ∈ sm.nodes.drop 339, (5158 : Tid) ∉ n.outs := by
@@ -826,11 +748,8 @@ theorem recon_intermediateGoal_5158_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 9017 735 (by decide) sdw_pm_9017
   have hp1 := sd_pm_faithful_eq initPM 9018 739 (by decide) sdw_pm_9018
   have hd := recon_intermediateGoal_5158_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5158, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5158
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5159 : ∀ n ∈ sm.nodes.drop 343, (5159 : Tid) ∉ n.outs := by
@@ -856,11 +775,8 @@ theorem recon_intermediateGoal_5159_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 9027 743 (by decide) sdw_pm_9027
   have hp1 := sd_pm_faithful_eq initPM 9028 747 (by decide) sdw_pm_9028
   have hd := recon_intermediateGoal_5159_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5159, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5159
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5160 : ∀ n ∈ sm.nodes.drop 346, (5160 : Tid) ∉ n.outs := by
@@ -886,11 +802,8 @@ theorem recon_intermediateGoal_5160_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 9031 750 (by decide) sdw_pm_9031
   have hp1 := sd_pm_faithful_eq initPM 9032 753 (by decide) sdw_pm_9032
   have hd := recon_intermediateGoal_5160_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5160, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5160
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5161 : ∀ n ∈ sm.nodes.drop 347, (5161 : Tid) ∉ n.outs := by
@@ -916,11 +829,8 @@ theorem recon_intermediateGoal_5161_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 9033 754 (by decide) sdw_pm_9033
   have hp1 := sd_pm_faithful_eq initPM 9034 755 (by decide) sdw_pm_9034
   have hd := recon_intermediateGoal_5161_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5161, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5161
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5163 : ∀ n ∈ sm.nodes.drop 348, (5163 : Tid) ∉ n.outs := by
@@ -946,11 +856,8 @@ theorem recon_intermediateGoal_5163_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 9039 756 (by decide) sdw_pm_9039
   have hp1 := sd_pm_faithful_eq initPM 9040 757 (by decide) sdw_pm_9040
   have hd := recon_intermediateGoal_5163_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5163, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5163
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5164 : ∀ n ∈ sm.nodes.drop 349, (5164 : Tid) ∉ n.outs := by
@@ -976,11 +883,8 @@ theorem recon_intermediateGoal_5164_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 9049 758 (by decide) sdw_pm_9049
   have hp1 := sd_pm_faithful_eq initPM 9050 759 (by decide) sdw_pm_9050
   have hd := recon_intermediateGoal_5164_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5164, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5164
+    rfl hs hp0 hp1 hd
 
 set_option maxRecDepth 1000000 in
 private theorem sdw_sm_5165 : ∀ n ∈ sm.nodes.drop 350, (5165 : Tid) ∉ n.outs := by
@@ -1006,11 +910,8 @@ theorem recon_intermediateGoal_5165_faithful (initSM initPM : Store)
   have hp0 := sd_pm_faithful_eq initPM 9053 760 (by decide) sdw_pm_9053
   have hp1 := sd_pm_faithful_eq initPM 9054 761 (by decide) sdw_pm_9054
   have hd := recon_intermediateGoal_5165_distributed initSM initPM hSM hPM hInit
-  unfold InitGoalHolds at hd ⊢
-  simp only [intermediateGoal_5165, List.map, reconstructForGoal, reconstructWithDim_singleton,
-    reconstructWithDim] at hd ⊢
-  rw [hs, hp0, hp1]
-  exact hd
+  exact InitGoalHolds_transfer_two_pieces pm.numRanks intermediateGoal_5165
+    rfl hs hp0 hp1 hd
 
 end
 

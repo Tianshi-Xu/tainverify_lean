@@ -3,6 +3,7 @@
    对所有 pattern 通用。集中放这里，所有 pattern import BridgeKit 复用。
    只依赖 GeneratedYOCOMoE(拿 sm/pm) + Denote(底层 foldl/suffix 引理)。 -/
 import denote.GeneratedYOCOMoE
+import denote.GraphGears
 
 set_option maxRecDepth 100000
 
@@ -15,54 +16,33 @@ open TrainVerify.Denote.Generated
 theorem sm_val (initSM : Store) (k : Nat) (out : Tid) (hk : k < sm.nodes.length)
     (hdrop : ∀ n ∈ sm.nodes.drop (k+1), out ∉ n.outs) :
     denoteGraph sm initSM out
-      = applyNode sm (denoteGraph { sm with nodes := sm.nodes.take k } initSM) sm.nodes[k] out := by
-  have e1 : denoteGraph sm initSM out
-      = denoteGraph { sm with nodes := sm.nodes.take (k+1) } initSM out :=
-    denoteGraph_tid_eq_of_suffix_no_writes sm initSM out (sm.nodes.take (k+1)) (sm.nodes.drop (k+1))
-      (List.take_append_drop (k+1) sm.nodes).symm hdrop
-  have hfn : applyNode { sm with nodes := sm.nodes.take (k+1) } = applyNode sm :=
-    applyNode_congr_numRanks _ _ rfl
-  have hfn' : applyNode { sm with nodes := sm.nodes.take k } = applyNode sm :=
-    applyNode_congr_numRanks _ _ rfl
-  rw [e1]
-  simp only [denoteGraph, hfn, hfn']
-  exact congrFun (foldl_take_succ (applyNode sm) sm.nodes initSM k hk) out
+      = applyNode sm (denoteGraph { sm with nodes := sm.nodes.take k } initSM) sm.nodes[k] out :=
+  denoteGraph_val_at_node sm initSM k out hk hdrop
 
 -- 后缀不写 tid 时，前缀算值 = 全图算值 (SM)
 theorem sm_prefix_eq (initSM : Store) (k : Nat) (tid : Tid)
     (hdrop : ∀ n ∈ sm.nodes.drop k, tid ∉ n.outs) :
     denoteGraph { sm with nodes := sm.nodes.take k } initSM tid = denoteGraph sm initSM tid :=
-  (denoteGraph_tid_eq_of_suffix_no_writes sm initSM tid (sm.nodes.take k) (sm.nodes.drop k)
-    (List.take_append_drop k sm.nodes).symm hdrop).symm
+  denoteGraph_prefix_eq sm initSM k tid hdrop
 
 -- 前 k+1 节点 store = 前 k 节点 store 喂 applyNode 第 k 节点 (PM 单步)
 theorem pm_step (initPM : Store) (k : Nat) (hk : k < pm.nodes.length) :
     denoteGraph {pm with nodes := pm.nodes.take (k+1)} initPM
-      = applyNode pm (denoteGraph {pm with nodes := pm.nodes.take k} initPM) pm.nodes[k] := by
-  have hfn : applyNode {pm with nodes := pm.nodes.take (k+1)} = applyNode pm :=
-    applyNode_congr_numRanks _ _ rfl
-  have hfn' : applyNode {pm with nodes := pm.nodes.take k} = applyNode pm :=
-    applyNode_congr_numRanks _ _ rfl
-  simp only [denoteGraph, hfn, hfn']
-  exact foldl_take_succ (applyNode pm) pm.nodes initPM k hk
+      = applyNode pm (denoteGraph {pm with nodes := pm.nodes.take k} initPM) pm.nodes[k] :=
+  denoteGraph_step pm initPM k hk
 
 -- 完整图算某 tid = (前 k 节点 store 喂 applyNode 第 k 节点) (PM)
 theorem pm_val (initPM : Store) (k : Nat) (out : Tid) (hk : k < pm.nodes.length)
     (hdrop : ∀ n ∈ pm.nodes.drop (k+1), out ∉ n.outs) :
     denoteGraph pm initPM out
-      = applyNode pm (denoteGraph {pm with nodes := pm.nodes.take k} initPM) pm.nodes[k] out := by
-  have e1 : denoteGraph pm initPM out
-      = denoteGraph {pm with nodes := pm.nodes.take (k+1)} initPM out :=
-    denoteGraph_tid_eq_of_suffix_no_writes pm initPM out (pm.nodes.take (k+1)) (pm.nodes.drop (k+1))
-      (List.take_append_drop (k+1) pm.nodes).symm hdrop
-  rw [e1, pm_step initPM k hk]
+      = applyNode pm (denoteGraph {pm with nodes := pm.nodes.take k} initPM) pm.nodes[k] out :=
+  denoteGraph_val_at_node pm initPM k out hk hdrop
 
 -- 后缀不写 tid 时，前缀算值 = 全图算值 (PM)
 theorem pm_prefix_eq (initPM : Store) (k : Nat) (tid : Tid)
     (hdrop : ∀ n ∈ pm.nodes.drop k, tid ∉ n.outs) :
     denoteGraph {pm with nodes := pm.nodes.take k} initPM tid = denoteGraph pm initPM tid :=
-  (denoteGraph_tid_eq_of_suffix_no_writes pm initPM tid (pm.nodes.take k) (pm.nodes.drop k)
-    (List.take_append_drop k pm.nodes).symm hdrop).symm
+  denoteGraph_prefix_eq pm initPM k tid hdrop
 
 -- ------------------------------------------------------------------------
 -- initGoals 保持：initGoals 条件是输入 tid 上的，SM/PM 都不重写输入，
@@ -86,23 +66,9 @@ theorem all_initGoal_tps_not_written :
     because neither graph rewrites any tid appearing in an initGoal. -/
 theorem initGoals_preserved (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM) :
-    InitGoalsHold pm.numRanks initGoals (denoteGraph sm initSM) (denoteGraph pm initPM) := by
-  intro g hg
-  have hg0 := hInit g hg
-  have hts : denoteGraph sm initSM g.ts = initSM g.ts := by
-    have hnw : ∀ n ∈ sm.nodes, g.ts ∉ n.outs := all_initGoal_ts_not_written g hg
-    have heq := denoteGraph_tid_eq_of_forall_not_mem_outs sm sm.nodes initSM g.ts hnw
-    simpa using heq
-  have htps : ∀ tp ∈ g.tps, denoteGraph pm initPM tp.tid = initPM tp.tid := by
-    intro tp htp
-    have hnw : ∀ n ∈ pm.nodes, tp.tid ∉ n.outs := all_initGoal_tps_not_written g hg tp htp
-    have heq := denoteGraph_tid_eq_of_forall_not_mem_outs pm pm.nodes initPM tp.tid hnw
-    simpa using heq
-  unfold InitGoalHolds at hg0 ⊢
-  simp only [hts]
-  rw [List.map_congr_left (g := fun p => initPM p.tid)]
-  · exact hg0
-  · intro tp htp; exact htps tp htp
+    InitGoalsHold pm.numRanks initGoals (denoteGraph sm initSM) (denoteGraph pm initPM) :=
+  initGoals_preserved_of_not_written sm pm initGoals initSM initPM
+    all_initGoal_ts_not_written all_initGoal_tps_not_written hInit
 
 -- ------------------------------------------------------------------------
 -- Prefix-of-prefix reduction: computing on `take K` graph but only needing tid
@@ -140,28 +106,14 @@ theorem pm_val_prefix (initPM : Store) (K k : Nat)
 
 /-- `shapeEnvOfList` lookup success ⇒ membership. -/
 theorem mem_of_shapeEnvOfList_eq_some {xs : List (Tid × Shape)} {tid sh}
-    (h : shapeEnvOfList xs tid = some sh) : (tid, sh) ∈ xs := by
-  unfold shapeEnvOfList at h
-  cases hf : xs.find? (fun p => p.1 = tid) with
-  | none => rw [hf] at h; simp at h
-  | some pair =>
-    rw [hf] at h
-    obtain ⟨t, s⟩ := pair
-    simp only [Option.some.injEq] at h
-    subst h
-    have hmem := List.mem_of_find?_eq_some hf
-    have hpred := List.find?_some hf
-    simp only [decide_eq_true_eq] at hpred
-    subst hpred
-    exact hmem
+    (h : shapeEnvOfList xs tid = some sh) : (tid, sh) ∈ xs :=
+  shapeEnvOfList_mem_of_eq_some h
 
 /-- Sub-env weakening for `StoreShapesHold`. -/
 theorem storeShapes_weaken {init : Store} {small big : List (Tid × Shape)}
     (hsub : ∀ p ∈ small, shapeEnvOfList big p.1 = some p.2)
     (hbig : StoreShapesHold init (shapeEnvOfList big)) :
-    StoreShapesHold init (shapeEnvOfList small) := by
-  intro tid sh hsh
-  have hmem : (tid, sh) ∈ small := mem_of_shapeEnvOfList_eq_some hsh
-  exact hbig tid sh (hsub (tid, sh) hmem)
+    StoreShapesHold init (shapeEnvOfList small) :=
+  storeShapesHold_weaken hsub hbig
 
 end TrainVerify.Denote.GeneratedPatterns

@@ -105,6 +105,37 @@ theorem InitGoalHolds_transfer (numParts : Nat) (gl : LineageGoal)
   rw [hts, List.map_congr_left (fun p hp => htps p hp)]
   exact h
 
+/-- Specialization of `InitGoalHolds_transfer` to a goal with one PM piece. -/
+theorem InitGoalHolds_transfer_one_piece (numParts : Nat) (gl : LineageGoal)
+    {smS smS' pmS pmS' : Store} {p0 : Piece}
+    (htps : gl.tps = [p0])
+    (hts : smS' gl.ts = smS gl.ts)
+    (hp0 : pmS' p0.tid = pmS p0.tid)
+    (h : InitGoalHolds numParts gl smS pmS) :
+    InitGoalHolds numParts gl smS' pmS' := by
+  apply InitGoalHolds_transfer numParts gl smS smS' pmS pmS' hts ?_ h
+  intro p hp
+  rw [htps] at hp
+  rcases List.mem_singleton.mp hp with rfl
+  exact hp0
+
+/-- Specialization of `InitGoalHolds_transfer` to a goal with two PM pieces. -/
+theorem InitGoalHolds_transfer_two_pieces (numParts : Nat) (gl : LineageGoal)
+    {smS smS' pmS pmS' : Store} {p0 p1 : Piece}
+    (htps : gl.tps = [p0, p1])
+    (hts : smS' gl.ts = smS gl.ts)
+    (hp0 : pmS' p0.tid = pmS p0.tid)
+    (hp1 : pmS' p1.tid = pmS p1.tid)
+    (h : InitGoalHolds numParts gl smS pmS) :
+    InitGoalHolds numParts gl smS' pmS' := by
+  apply InitGoalHolds_transfer numParts gl smS smS' pmS pmS' hts ?_ h
+  intro p hp
+  rw [htps] at hp
+  rcases List.mem_cons.mp hp with rfl | hp
+  · exact hp0
+  · rcases List.mem_singleton.mp hp with rfl
+    exact hp1
+
 /-- Specialization to the global SM graph: the first ring-attn node is
     `sm.nodes[9]`, so any tid unwritten by `sm.nodes.drop 9` is ring/plain-agnostic. -/
 theorem sm_ring_eq (initSM : Store) (T : Tid)
