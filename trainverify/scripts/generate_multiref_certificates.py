@@ -10,7 +10,9 @@ Lean checks those conditions against the complete generated graph.
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,6 +25,16 @@ NODE_RE = re.compile(
     r'^\s*\{ rank := (?P<rank>\d+), op := "(?P<op>[^"]+)", '
     r'ins := \[(?P<ins>[\d, ]*)\], outs := \[(?P<outs>[\d, ]*)\]'
     r'(?:, params := \[(?P<params>[\d, ]*)\])? \},\s*$'
+)
+COMPUTED_MULTIREF_OUTS_RE = re.compile(
+    r'^\s*\{ rank := (?P<rank>\d+), op := "OpName\.FW_multiref", '
+    r'ins := \[(?P<input>\d+)\], outs := \(\(List\.range (?P<count>\d+)\)'
+    r'\.map \(fun r => (?P<base>\d+) \+ r\)\), params := \[(?P<arity>\d+)\] \},\s*$'
+)
+COMPUTED_ZIGZAG_INS_RE = re.compile(
+    r'^\s*\{ rank := \d+, op := "OpName\.FW_attn_zigzag", '
+    r'ins := \(\(List\.range \d+\)\.map \(fun r => \d+ \+ r\)\), '
+    r'outs := \[[\d, ]+\], params := \[[\d, ]+\] \},\s*$'
 )
 GOAL_RE = re.compile(
     r"^def intermediateGoal_(?P<goal>\d+) : LineageGoal :=\n"
@@ -68,23 +80,45 @@ def parse_graphs(lines: list[str]) -> dict[str, list[Node | None]]:
             continue
         if in_nodes and current:
             match = NODE_RE.match(line)
-            if not match:
-                # A few collective nodes use computed input lists.  They still
-                # consume an index, but cannot produce a scalar multiref tid.
-                if line.lstrip().startswith("{ rank :="):
-                    graphs[current].append(None)
-                    continue
-                raise ValueError(f"unparsed {current} graph entry: {line}")
-            graphs[current].append(
-                Node(
-                    index=len(graphs[current]),
-                    rank=int(match["rank"]),
-                    op=match["op"],
-                    ins=numbers(match["ins"]),
-                    outs=numbers(match["outs"]),
-                    params=numbers(match["params"]),
+            if match:
+                graphs[current].append(
+                    Node(
+                        index=len(graphs[current]),
+                        rank=int(match["rank"]),
+                        op=match["op"],
+                        ins=numbers(match["ins"]),
+                        outs=numbers(match["outs"]),
+                        params=numbers(match["params"]),
+                    )
                 )
-            )
+                continue
+            computed = COMPUTED_MULTIREF_OUTS_RE.match(line)
+            if computed:
+                count = int(computed["count"])
+                arity = int(computed["arity"])
+                if count != arity:
+                    raise ValueError(
+                        f"{current} computed multiref count {count} != arity {arity}: {line}"
+                    )
+                base = int(computed["base"])
+                graphs[current].append(
+                    Node(
+                        index=len(graphs[current]),
+                        rank=int(computed["rank"]),
+                        op="OpName.FW_multiref",
+                        ins=(int(computed["input"]),),
+                        outs=tuple(range(base, base + count)),
+                        params=(arity,),
+                    )
+                )
+                continue
+            # The only other computed-list authority form is zigzag attention
+            # input construction. It consumes an index but cannot be a requested
+            # multiref producer. Every other unknown node syntax is an error.
+            if COMPUTED_ZIGZAG_INS_RE.match(line):
+                graphs[current].append(None)
+                continue
+            raise ValueError(f"unparsed {current} graph entry: {line}")
     if set(graphs) != {"sm", "pm"}:
         raise ValueError(f"expected sm/pm graphs, found {sorted(graphs)}")
     return graphs
@@ -93,8 +127,13 @@ def parse_graphs(lines: list[str]) -> dict[str, list[Node | None]]:
 def parse_goals(text: str) -> dict[int, tuple[int, tuple[int, ...]]]:
     result: dict[int, tuple[int, tuple[int, ...]]] = {}
     for match in GOAL_RE.finditer(text):
+        goal = int(match["goal"])
+        if goal in result:
+            raise ValueError(f"duplicate intermediate goal {goal}")
         tps = tuple(int(tid) for tid in re.findall(r"tid := (\d+)", match["tps"]))
-        result[int(match["goal"])] = (int(match["ts"]), tps)
+        if len(tps) != len(set(tps)):
+            raise ValueError(f"intermediate goal {goal} has duplicate PM tids")
+        result[goal] = (int(match["ts"]), tps)
     return result
 
 
@@ -146,6 +185,8 @@ def {name} : FaithfulMultirefCertificate {graph} where
 
 
 def render(goals_requested: tuple[int, ...]) -> str:
+    if len(goals_requested) != len(set(goals_requested)):
+        raise ValueError("duplicate --goals values would emit duplicate Lean declarations")
     text = AUTHORITY.read_text()
     graphs = parse_graphs(text.splitlines())
     goals = parse_goals(text)
@@ -176,19 +217,47 @@ noncomputable section
     return "\n".join(chunks)
 
 
+def write_atomic(path: Path, content: str) -> None:
+    """Replace generated output atomically without following an output symlink."""
+    if path.is_symlink():
+        raise ValueError(f"refusing to replace symlink output: {path}")
+    if path.resolve() == AUTHORITY.resolve():
+        raise ValueError(f"refusing to overwrite authority: {AUTHORITY}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--write", action="store_true")
     parser.add_argument("--goals", type=int, nargs="+", default=DEFAULT_GOALS)
     args = parser.parse_args()
+    if args.check and args.write:
+        parser.error("--check and --write are mutually exclusive")
     generated = render(tuple(args.goals))
-    if args.check:
+    # Checking is the safe default. Mutating output always requires --write.
+    if args.check or not args.write:
         if not args.output.exists() or args.output.read_text() != generated:
-            raise SystemExit(f"stale multiref certificates: run {Path(__file__).name}")
+            raise SystemExit(
+                f"stale multiref certificates: run {Path(__file__).name} --write"
+            )
         print(f"verified {args.output} from {AUTHORITY}")
     else:
-        args.output.write_text(generated)
+        write_atomic(args.output, generated)
         print(f"wrote {args.output}")
 
 
