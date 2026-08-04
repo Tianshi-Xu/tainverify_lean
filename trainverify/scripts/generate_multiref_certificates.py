@@ -36,11 +36,10 @@ COMPUTED_ZIGZAG_INS_RE = re.compile(
     r'ins := \(\(List\.range \d+\)\.map \(fun r => \d+ \+ r\)\), '
     r'outs := \[(?P<outs>[\d, ]+)\], params := \[(?P<params>[\d, ]+)\] \},\s*$'
 )
-GOAL_RE = re.compile(
-    r"^\s*def intermediateGoal_(?P<goal>\d+) : LineageGoal :=\n"
-    r"\s*\{ ts := (?P<ts>\d+),.*?tps := \[(?P<tps>.*?)\]",
-    re.M,
-)
+DEF_HEADER_RE = re.compile(r"^\s*def\s+(?P<name>[A-Za-z0-9_']+)", re.M)
+GOAL_NAME_RE = re.compile(r"intermediateGoal_(?P<goal>\d+)")
+GOAL_TS_RE = re.compile(r"\bts := (?P<ts>\d+)")
+GOAL_TPS_RE = re.compile(r"\btps := \[(?P<tps>.*?)\]", re.S)
 
 
 @dataclass(frozen=True)
@@ -139,14 +138,24 @@ def parse_graphs(lines: list[str]) -> dict[str, list[Node]]:
 
 def parse_goals(text: str) -> dict[int, tuple[int, tuple[int, ...]]]:
     result: dict[int, tuple[int, tuple[int, ...]]] = {}
-    for match in GOAL_RE.finditer(text):
-        goal = int(match["goal"])
+    declarations = list(DEF_HEADER_RE.finditer(text))
+    for index, declaration in enumerate(declarations):
+        name_match = GOAL_NAME_RE.fullmatch(declaration["name"])
+        if name_match is None:
+            continue
+        goal = int(name_match["goal"])
         if goal in result:
             raise ValueError(f"duplicate intermediate goal {goal}")
-        tps = tuple(int(tid) for tid in re.findall(r"tid := (\d+)", match["tps"]))
+        end = declarations[index + 1].start() if index + 1 < len(declarations) else len(text)
+        body = text[declaration.end() : end]
+        ts_match = GOAL_TS_RE.search(body)
+        tps_match = GOAL_TPS_RE.search(body)
+        if ts_match is None or tps_match is None:
+            raise ValueError(f"could not parse intermediate goal {goal}")
+        tps = tuple(int(tid) for tid in re.findall(r"tid := (\d+)", tps_match["tps"]))
         if len(tps) != len(set(tps)):
             raise ValueError(f"intermediate goal {goal} has duplicate PM tids")
-        result[goal] = (int(match["ts"]), tps)
+        result[goal] = (int(ts_match["ts"]), tps)
     return result
 
 

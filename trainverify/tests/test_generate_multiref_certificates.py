@@ -91,7 +91,8 @@ def test_duplicate_authority_goal_with_whitespace_is_rejected() -> None:
     duplicated = """def intermediateGoal_7 : LineageGoal :=
   { ts := 11, tps := [{ rank := 0, tid := 21 }] }
   def intermediateGoal_7 : LineageGoal :=
-  { ts := 12, tps := [{ rank := 0, tid := 22 }] }
+  { ts := 12,
+    tps := [{ rank := 0, tid := 22 }] }
 """
     with pytest.raises(ValueError, match="duplicate intermediate goal 7"):
         api["parse_goals"](duplicated)
