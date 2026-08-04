@@ -2,8 +2,18 @@ name: Verify
 
 on:
   push:
+    paths-ignore:
+      - "**/*.md"
   pull_request:
+    paths-ignore:
+      - "**/*.md"
   workflow_dispatch:
+    inputs:
+      full:
+        description: "Build the complete Lean corpus (slow on GitHub-hosted runners)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,7 +25,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.11"
       - run: python -m pip install pytest
       - name: Python regressions
         run: PYTHONPATH=. python -m pytest -q Verdict/tests scripts/tests trainverify/tests
@@ -24,12 +34,26 @@ jobs:
           python trainverify/scripts/generate_multiref_certificates.py --check
           python trainverify/scripts/count_yoco_faithful_coverage.py
 
-  lean:
+  lean-smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: trainverify
+          build-args: >-
+            denote.GraphGears
+            denote.MultirefCertificate
+            denote.yoco_goals.MultirefCertificateRegression
+
+  lean-full:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.full }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v5
       - uses: leanprover/lean-action@v1
         with:
           lake-package-directory: trainverify
           build-args: denote
-          use-mathlib-cache: "true"

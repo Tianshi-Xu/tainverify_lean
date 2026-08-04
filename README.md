@@ -45,6 +45,13 @@ cd trainverify
 lake build denote
 ```
 
+The complete Lean corpus is the release gate. GitHub-hosted push/PR CI runs a
+bounded kernel smoke over the core graph gears and generated multiref
+certificates. A full hosted build is available through `workflow_dispatch` with
+`full=true`; it is intentionally manual because a cold build of the generated
+corpus exceeds two hours on the hosted runner. Local or high-capacity-runner
+`lake build denote` remains mandatory before release.
+
 The checked-in YOCO authority can be regenerated only from the pinned llm-train/nnScaler revisions and artifact hashes recorded in `denote/GeneratedYOCOMoE.manifest.json`; use the repository regeneration scripts rather than editing generated graph data by hand.
 
 ## Trust discipline
