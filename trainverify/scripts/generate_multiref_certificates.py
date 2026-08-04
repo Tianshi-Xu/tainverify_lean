@@ -32,12 +32,12 @@ COMPUTED_MULTIREF_OUTS_RE = re.compile(
     r'\.map \(fun r => (?P<base>\d+) \+ r\)\), params := \[(?P<arity>\d+)\] \},\s*$'
 )
 COMPUTED_ZIGZAG_INS_RE = re.compile(
-    r'^\s*\{ rank := \d+, op := "OpName\.FW_attn_zigzag", '
+    r'^\s*\{ rank := (?P<rank>\d+), op := "OpName\.FW_attn_zigzag", '
     r'ins := \(\(List\.range \d+\)\.map \(fun r => \d+ \+ r\)\), '
-    r'outs := \[[\d, ]+\], params := \[[\d, ]+\] \},\s*$'
+    r'outs := \[(?P<outs>[\d, ]+)\], params := \[(?P<params>[\d, ]+)\] \},\s*$'
 )
 GOAL_RE = re.compile(
-    r"^def intermediateGoal_(?P<goal>\d+) : LineageGoal :=\n"
+    r"^\s*def intermediateGoal_(?P<goal>\d+) : LineageGoal :=\n"
     r"\s*\{ ts := (?P<ts>\d+),.*?tps := \[(?P<tps>.*?)\]",
     re.M,
 )
@@ -54,13 +54,16 @@ class Node:
 
 
 def numbers(text: str | None) -> tuple[int, ...]:
-    if not text:
+    if text is None or text == "":
         return ()
-    return tuple(int(value) for value in text.split(",") if value.strip())
+    fields = text.split(",")
+    if any(not field.strip() or not field.strip().isdigit() for field in fields):
+        raise ValueError(f"malformed numeric list: [{text}]")
+    return tuple(int(field.strip()) for field in fields)
 
 
-def parse_graphs(lines: list[str]) -> dict[str, list[Node | None]]:
-    graphs: dict[str, list[Node | None]] = {}
+def parse_graphs(lines: list[str]) -> dict[str, list[Node]]:
+    graphs: dict[str, list[Node]] = {}
     current: str | None = None
     in_nodes = False
     for line in lines:
@@ -112,11 +115,21 @@ def parse_graphs(lines: list[str]) -> dict[str, list[Node | None]]:
                     )
                 )
                 continue
-            # The only other computed-list authority form is zigzag attention
-            # input construction. It consumes an index but cannot be a requested
-            # multiref producer. Every other unknown node syntax is an error.
-            if COMPUTED_ZIGZAG_INS_RE.match(line):
-                graphs[current].append(None)
+            # Preserve output/operator identity for computed-input zigzag nodes.
+            # The input list itself is irrelevant to multiref certificate
+            # generation, but producer uniqueness must still see these writes.
+            zigzag = COMPUTED_ZIGZAG_INS_RE.match(line)
+            if zigzag:
+                graphs[current].append(
+                    Node(
+                        index=len(graphs[current]),
+                        rank=int(zigzag["rank"]),
+                        op="OpName.FW_attn_zigzag",
+                        ins=(),
+                        outs=numbers(zigzag["outs"]),
+                        params=numbers(zigzag["params"]),
+                    )
+                )
                 continue
             raise ValueError(f"unparsed {current} graph entry: {line}")
     if set(graphs) != {"sm", "pm"}:
@@ -137,8 +150,8 @@ def parse_goals(text: str) -> dict[int, tuple[int, tuple[int, ...]]]:
     return result
 
 
-def producer(nodes: list[Node | None], tid: int) -> Node:
-    matches = [node for node in nodes if node is not None and tid in node.outs]
+def producer(nodes: list[Node], tid: int) -> Node:
+    matches = [node for node in nodes if tid in node.outs]
     if len(matches) != 1:
         raise ValueError(f"tid {tid}: expected one producer, found {len(matches)}")
     node = matches[0]
@@ -218,9 +231,23 @@ noncomputable section
 
 
 def write_atomic(path: Path, content: str) -> None:
-    """Replace generated output atomically without following an output symlink."""
+    """Atomically replace only the canonical generated certificate file."""
+    path = path.absolute()
+    expected = DEFAULT_OUTPUT.absolute()
+    if path != expected:
+        raise ValueError(f"refusing non-canonical output path: {path}")
     if path.is_symlink():
         raise ValueError(f"refusing to replace symlink output: {path}")
+    root = ROOT.resolve()
+    try:
+        relative_parent = path.parent.relative_to(root)
+    except ValueError as error:
+        raise ValueError(f"output escapes repository root: {path}") from error
+    cursor = root
+    for component in relative_parent.parts:
+        cursor /= component
+        if cursor.is_symlink():
+            raise ValueError(f"refusing symlinked output parent: {cursor}")
     if path.resolve() == AUTHORITY.resolve():
         raise ValueError(f"refusing to overwrite authority: {AUTHORITY}")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -241,7 +268,6 @@ def write_atomic(path: Path, content: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--goals", type=int, nargs="+", default=DEFAULT_GOALS)
@@ -251,14 +277,14 @@ def main() -> None:
     generated = render(tuple(args.goals))
     # Checking is the safe default. Mutating output always requires --write.
     if args.check or not args.write:
-        if not args.output.exists() or args.output.read_text() != generated:
+        if not DEFAULT_OUTPUT.exists() or DEFAULT_OUTPUT.read_text() != generated:
             raise SystemExit(
                 f"stale multiref certificates: run {Path(__file__).name} --write"
             )
-        print(f"verified {args.output} from {AUTHORITY}")
+        print(f"verified {DEFAULT_OUTPUT} from {AUTHORITY}")
     else:
-        write_atomic(args.output, generated)
-        print(f"wrote {args.output}")
+        write_atomic(DEFAULT_OUTPUT, generated)
+        print(f"wrote {DEFAULT_OUTPUT}")
 
 
 if __name__ == "__main__":

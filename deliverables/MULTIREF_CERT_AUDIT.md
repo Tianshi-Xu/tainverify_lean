@@ -57,7 +57,7 @@ The generator is fail-closed at its mutation boundary: checking is the default,
 writing requires explicit `--write`, replacement is atomic, authority and
 symlink outputs are refused, duplicate goals/tids are rejected, computed
 multiref ranges are parsed explicitly, and every other unknown node syntax is
-an error. Six adversarial tests cover these cases.
+an error. Seven adversarial tests cover these cases.
 
 ## Gates
 
@@ -65,7 +65,7 @@ Passed:
 
 - certificate generator `--check` against `GeneratedYOCOMoE.lean`;
 - `python3 -m py_compile scripts/generate_multiref_certificates.py`;
-- Python regression suite: `48 passed`, including six generator mutation tests;
+- Python regression suite: `49 passed`, including seven generator mutation tests;
 - `lake build denote.MultirefCertificate`;
 - `lake build denote.yoco_goals.GeneratedMultirefCertificates`;
 - `lake build denote.yoco_goals.MultirefCertificateRegression`;
