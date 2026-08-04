@@ -1462,6 +1462,30 @@ def emit_lean_spec(
 					return dim
 		return 0
 
+	# ---- replicated-criterion defense (see iroha-tasks/replicated-criterion-fidelity.md) ----
+	# The shape heuristic (all tp shapes == ts shape) is *necessary* but not *sufficient* for
+	# `replicated := true`. A tensor can be full-shaped on every rank yet carry DIFFERENT values
+	# (unreduced partial sums, per-rank local statistics, rank-dependent masks/indices). Taking
+	# `tps.headD` for such a tensor silently drops the other ranks' information and weakens the
+	# emitted goal into a false proposition — a direct violation of upstream fidelity.
+	# We therefore cross-check the producing op: only ops with genuine "same value on every rank"
+	# semantics may be marked replicated.
+	REPLICATION_SAFE_OPS = ("FW_multiref", "AllReducePrim", "AllGatherPrim", "CROSS_DP_WRED")
+
+	_pm_producer_ops: Dict[int, List[str]] = {}
+	for _n in pm_graph.nodes():
+		_op = _safe_str_op(pm_graph.node_opname(_n))
+		for _t in pm_graph.node_outputs(_n):
+			_pm_producer_ops.setdefault(int(_t.tid), []).append(_op)
+
+	def _producing_ops_are_replication_safe(g: SelectedLineage) -> Tuple[bool, List[str]]:
+		ops: List[str] = []
+		for (_r, tp_tid) in g.tps:
+			ops.extend(_pm_producer_ops.get(int(tp_tid), ["<no-producer/boundary>"]))
+		uniq = sorted(set(ops))
+		safe = all(any(k in o for k in REPLICATION_SAFE_OPS) for o in uniq)
+		return safe, uniq
+
 	def _emit_goal_def(def_name: str, g: SelectedLineage, *, for_init: bool) -> None:
 		ts_shape = _shape_init_from_graph_by_tid(sm_graph, g.ts)[0] or []
 		tp_shapes: List[List[int]] = []
@@ -1487,6 +1511,29 @@ def emit_lean_spec(
 			and ts_shape
 			and all(tp_shape == ts_shape for tp_shape in tp_shapes if tp_shape)
 		)
+		# Fidelity gate: shape alone is not sufficient. Require the producing op to have
+		# genuine replication semantics, otherwise we would silently degrade the goal to
+		# "take rank 0" for a tensor whose ranks disagree in value.
+		if replicated:
+			_safe, _ops = _producing_ops_are_replication_safe(g)
+			if not _safe:
+				print(
+					f"WARNING: ts={g.ts} matches the *shape* replication heuristic "
+					f"(num_pieces={num_pieces}, all tpShapes == tsShape={ts_shape}) but its PM "
+					f"producing op(s) {_ops} are NOT in REPLICATION_SAFE_OPS. "
+					f"Refusing to emit `replicated := true` (would risk dropping per-rank values)."
+				)
+				replicated = False
+		elif num_pieces > 1:
+			# False-negative probe: producing op says "replicated" but shapes disagree.
+			_safe, _ops = _producing_ops_are_replication_safe(g)
+			if _safe and all(o.endswith("FW_multiref") or "multiref" in o for o in _ops):
+				if any(tp_shape and tp_shape != ts_shape for tp_shape in tp_shapes):
+					print(
+						f"NOTE: ts={g.ts} is produced by {_ops} but tpShapes {tp_shapes[:2]} != "
+						f"tsShape {ts_shape}; treated as sharded (allGather). "
+						f"This is expected when multiref forwards an already-sharded tensor."
+					)
 		if num_pieces > 1 and ts_shape and ts_shape != [1] and tp_shapes and tp_shapes[0] and not replicated:
 			actual_tp_shape = tp_shapes[0]
 			gather_dim = _infer_gather_dim(ts_shape, actual_tp_shape, num_pieces)
