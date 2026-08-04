@@ -14,12 +14,11 @@ Records PASS / FAIL / SKIP and reasons. Never leaves a tracked file modified.
 """
 import os, sys, re, subprocess, shutil, glob, json, time
 
-REPO = os.path.expanduser("~/.openclaw/workspace/tainverify_lean")
-TV   = os.path.join(REPO, "trainverify")
+HERE = os.path.dirname(os.path.abspath(__file__))
+TV   = os.path.dirname(HERE)
 DEN  = "denote/gpt_ly4_regen"
 DEND = os.path.join(TV, DEN)
-BACKUP = "/home/argustest/.copilot/session-state/bridge_backup"
-HERE = os.path.dirname(os.path.abspath(__file__))
+BACKUP = os.path.join(TV, ".lake", "bridge_backup")
 RESULTS_JSON = os.path.join(HERE, "regress_results.json")
 
 

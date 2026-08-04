@@ -26,9 +26,11 @@ if [[ -z "$N" ]]; then
 fi
 shift || true
 
-OUT_DEFAULT="/home/argustest/.openclaw/workspace/tainverify_lean/trainverify/denote/yoco_goals/Goal${N}Bridge_Auto.lean"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TRAINVERIFY_DIR="$(dirname "$SCRIPT_DIR")"
+OUT_DEFAULT="$TRAINVERIFY_DIR/denote/yoco_goals/Goal${N}Bridge_Auto.lean"
 
-cd "$(dirname "$0")"
+cd "$SCRIPT_DIR"
 
 BRIDGE_DENOTE_DIR=denote/yoco_goals \
 BRIDGE_GEN_FILE=GeneratedYOCOMoE.lean \

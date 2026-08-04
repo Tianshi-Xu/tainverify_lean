@@ -20,8 +20,9 @@ from probe import run_probe
 from renderer import render_family_a, InputSource
 from target_config import DENOTE_DIR as _RELDIR, GEN_FILE, MOD_PREFIX
 
-REPO = os.path.expanduser("~/.openclaw/workspace/tainverify_lean")
-TV   = os.path.join(REPO, "trainverify")
+HERE = os.path.dirname(os.path.abspath(__file__))
+TV   = os.path.dirname(HERE)
+REPO = os.path.dirname(TV)
 DENOTE = _RELDIR
 
 def trace_input_sources(ir: GoalIR) -> list:

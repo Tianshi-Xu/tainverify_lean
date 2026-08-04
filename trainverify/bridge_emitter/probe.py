@@ -93,7 +93,7 @@ def run_probe(root: str, import_mod: str, sm_tids: list, pm_tids: list,
 
 def main():
     # demo: probe goal_52's tids
-    root = os.path.expanduser("~/.openclaw/workspace/tainverify_lean")
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     import_mod = sys.argv[1] if len(sys.argv) > 1 else "denote.gpt_ly4_regen.Goal51Bridge"
     sm_tids = [int(x) for x in sys.argv[2].split(",")] if len(sys.argv) > 2 else [634]
     pm_tids = [int(x) for x in sys.argv[3].split(",")] if len(sys.argv) > 3 else [2141,2142,2143,2144,2145,2146,2147,2148,634]

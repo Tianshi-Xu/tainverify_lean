@@ -12,8 +12,9 @@ from probe import build_probe, DENOTE_DIR
 from emit import trace_input_sources, compute_imports
 from target_config import DENOTE_DIR as _RELDIR, MOD_PREFIX, GEN_FILE
 
-REPO = os.path.expanduser("~/.openclaw/workspace/tainverify_lean")
-TV   = os.path.join(REPO, "trainverify")
+HERE = os.path.dirname(os.path.abspath(__file__))
+TV   = os.path.dirname(HERE)
+REPO = os.path.dirname(TV)
 DENOTE = _RELDIR
 
 # Auto-detect pm.numRanks from generated-data file and expose via BRIDGE_PM_NUMRANKS

@@ -5,7 +5,8 @@
    `denoteGraph sm initSM` / `denoteGraph pm initPM`, packaged as per-op
    sub-lemmas joined by `InitGoalsHold_append`.
 
-   See PROGRESS.md / HANDOFF.md at repo root for coverage status.
+   See `YOCO_MOE_FAITHFUL_COVERAGE.md` for the mechanically checked current
+   coverage status.
 
    Strategy (validated): each goal's value obligation reduces the full-graph
    value at its `ts` (via `sm_val`/`pm_val` node reductions + the op's
@@ -1607,12 +1608,13 @@ theorem recon_intermediateGoal_4697_ringAttn (initSM initPM : Store)
     Those three input reconstructions are the attention/MoE-region 2-tp goals. For
     the lowest-tid 2-tp rotary goal `4800`, the SM q-input tid `4794` chains back
     through `2× FW_attn_sliding_window + 2× FW_all2all_moe_gmm + FW_topk_routing`
-    (empirically: 141 SM tids, min init leaf 4677) — the bespoke attention/MoE
-    region that has no reconstruction template yet (PROGRESS.md "Still gated").
+    (empirically: 141 SM tids, min init leaf 4677). This was the original reason
+    for introducing the conditional gear below; the faithful corpus has since
+    closed the sound obligations, as recorded in `YOCO_MOE_FAITHFUL_COVERAGE.md`.
 
     Hence the gears below are stated CONDITIONALLY on the input reconstructions
-    (zero sorry). They are the reusable machinery that fires the moment the
-    attention region is reconstructed: `recon_intermediateGoal_4800_of_inputs`
+    (zero sorry). They remain reusable local machinery:
+    `recon_intermediateGoal_4800_of_inputs`
     consumes exactly the three input intermediateGoal conclusions (`4794`/`4796`/
     `4799`) plus their PM shard shapes, and produces the rotary reconstruction. -/
 

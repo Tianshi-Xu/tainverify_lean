@@ -25,7 +25,7 @@ Exit 0 only if all requested goals wired AND (build skipped OR build green).
 """
 import os, sys, re, subprocess, argparse, glob
 
-REPO = os.path.expanduser("~/.openclaw/workspace/tainverify_lean/trainverify")
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEN = os.path.join(REPO, "denote/gpt_ly4_regen")
 MT = os.path.join(DEN, "MainTheorem.lean")
 OLEAN_DIR = os.path.join(REPO, ".lake/build/lib/lean/denote/gpt_ly4_regen")

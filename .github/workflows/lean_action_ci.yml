@@ -1,21 +1,35 @@
-name: Lean Action CI
+name: Verify
 
 on:
   push:
   pull_request:
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
-  contents: read # Read access to repository contents
-  pages: write # Write access to GitHub Pages
-  id-token: write # Write access to ID tokens
+  contents: read
 
 jobs:
-  build:
+  python:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pytest
+      - name: Python regressions
+        run: PYTHONPATH=. python -m pytest -q Verdict/tests scripts/tests trainverify/tests
+      - name: Generated certificate and coverage checks
+        run: |
+          python trainverify/scripts/generate_multiref_certificates.py --check
+          python trainverify/scripts/count_yoco_faithful_coverage.py
 
+  lean:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: leanprover/lean-action@v1
-      - uses: leanprover-community/docgen-action@v1
+        with:
+          lake-package-directory: trainverify
+          build-args: denote
+          use-mathlib-cache: "true"

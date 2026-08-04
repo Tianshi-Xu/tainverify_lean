@@ -185,7 +185,7 @@ def analyze(ir: GoalIR) -> Topology:
 # ---------- cli ----------
 def main():
     n = int(sys.argv[1])
-    root = os.path.expanduser("~/.openclaw/workspace/tainverify_lean")
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     if "--root" in sys.argv:
         root = sys.argv[sys.argv.index("--root") + 1]
     ir = load_goal_ir(n, root)
