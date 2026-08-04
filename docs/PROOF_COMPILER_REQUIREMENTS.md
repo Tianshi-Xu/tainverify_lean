@@ -36,6 +36,7 @@ The compiler must perform these stages deterministically:
 
 3. **Relation inference**
    - infer a typed relation for every relevant tensor edge, including replication, contiguous sharding, zigzag/permuted ownership, expert partitioning, and partial reductions;
+   - establish replication from value/ownership provenance across ranks: equal shapes are insufficient, and an identity fan-out such as `FW_multiref` does not by itself prove that rank-local values agree;
    - propagate explicit shape and value side conditions;
    - never replace a value-sensitive collective with an identity relation merely to make composition succeed.
 
