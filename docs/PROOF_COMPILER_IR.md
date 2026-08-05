@@ -111,16 +111,21 @@ Failures identify the first graph node/tensor and include the inferred relation,
 expected relation, rule candidates, or minimized tensor-mapping counterexample
 where applicable.
 
-## Remaining trust boundary
+## Lean kernel boundary
 
-Python output is untrusted. A complete proof-compiler result still requires:
+The initial kernel slice is documented in `PROOF_COMPILER_KERNEL.md`. It provides
+concrete value semantics for `equal`, `replicated`, and `contiguous_shard`, a
+proof-carrying generic rule composer, and one-command Lean generation/checking for
+closed unary-map rules. Python output remains untrusted until it passes that command.
 
-1. Lean declarations for the closed relation variants;
-2. a generic Lean checker/composer for every certificate node;
-3. theorem-name resolution against the installed rule library;
-4. authority hash verification and side-condition certificates;
-5. clean-cache kernel build, axiom/sorry/header audit;
-6. an unseen-architecture clean-room acceptance run.
+A complete proof compiler still requires:
 
-Until those land, `status=certificate` means “closed, validated certificate IR”,
-not “kernel theorem proved”.
+1. faithful value semantics for zigzag/expert/partial/permuted relations;
+2. n-ary, multi-output, collective, and semantic-attribute rule families;
+3. kernel verification of authority hashes and seed side-condition certificates;
+4. target-manifest SHA verification inside the trusted artifact chain;
+5. clean-cache acceptance on broader unseen architectures.
+
+`status=certificate` still means “closed, validated certificate IR”. Only the
+separate Lean command may emit `status=kernel_certificate`, and that currently
+means a kernel-accepted theorem conditional on explicit seed-authority hypotheses.

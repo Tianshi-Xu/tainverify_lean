@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "num_ranks": 1,
+  "target_manifest_sha256": "20cdb426daf7680a20a7b5059c8c895a4b1c6acf68ca6c5f4bfa05d297048081",
+  "sm_nodes": [
+    {
+      "logical_id": "unseen_identity",
+      "rank": 0,
+      "op": "OpName.FW_contiguous",
+      "ins": [101],
+      "outs": [102]
+    }
+  ],
+  "pm_nodes": [
+    {
+      "logical_id": "unseen_identity",
+      "rank": 0,
+      "op": "OpName.FW_contiguous",
+      "ins": [201],
+      "outs": [202]
+    }
+  ],
+  "input_relations": [
+    {
+      "sm_tid": 101,
+      "pm_tids": [{"rank": 0, "tid": 201}],
+      "relation": {"kind": "equal"},
+      "provenance": {
+        "kind": "authority_input",
+        "source": "kernel-fixture",
+        "authority_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "value_witness": {
+          "kind": "authority_tensor_mapping",
+          "sm_tid": 101,
+          "pm_tids": [{"rank": 0, "tid": 201}]
+        },
+        "ownership_witness": {"kind": "exact_rank_set", "ranks": [0]}
+      }
+    }
+  ],
+  "observables": [
+    {"sm_tid": 102, "pm_tids": [{"rank": 0, "tid": 202}]}
+  ]
+}

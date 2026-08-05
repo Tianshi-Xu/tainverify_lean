@@ -277,7 +277,7 @@ def validate_inputs(job: Any, library: Any) -> dict[str, Any] | None:
     required = {
         "name", "sm_op", "pm_op", "input_relations", "output_relations", "lean_theorem"
     }
-    allowed = required | {"sm_attrs", "pm_attrs"}
+    allowed = required | {"sm_attrs", "pm_attrs", "kernel_semantics"}
     for index, rule in enumerate(library["rules"]):
         path = f"rules[{index}]"
         if (
@@ -314,4 +314,14 @@ def validate_inputs(job: Any, library: Any) -> dict[str, Any] | None:
             return schema_failure(
                 "library", f"{path}.lean_theorem", "lean_symbol_must_be_qualified_string"
             )
+        if "kernel_semantics" in rule:
+            kernel_semantics = rule["kernel_semantics"]
+            if (
+                not isinstance(kernel_semantics, dict)
+                or kernel_semantics != {"kind": "unary_map"}
+            ):
+                return schema_failure(
+                    "library", f"{path}.kernel_semantics",
+                    "unsupported_kernel_semantics",
+                )
     return None

@@ -1,0 +1,19 @@
+{
+  "denotations": [
+    {
+      "op": "OpName.FW_contiguous",
+      "lean_definition": "TrainVerify.Denote.fw_contiguous"
+    }
+  ],
+  "rules": [
+    {
+      "name": "fw_contiguous_equal",
+      "sm_op": "OpName.FW_contiguous",
+      "pm_op": "OpName.FW_contiguous",
+      "input_relations": [{"kind": "equal"}],
+      "output_relations": [{"from_input": 0}],
+      "lean_theorem": "TrainVerify.Denote.ProofCompiler.fw_contiguous_equal",
+      "kernel_semantics": {"kind": "unary_map"}
+    }
+  ]
+}
