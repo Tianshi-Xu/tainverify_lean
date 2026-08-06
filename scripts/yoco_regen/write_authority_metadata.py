@@ -90,6 +90,7 @@ def validate_graph(mg, kind: str, plan: int, receipt: dict):
         "pkl_sha256": receipt.get("pkl_sha256"),
         "patched_parallel_py_sha256": receipt.get("patched_parallel_py_sha256"),
         "patched_llm_gemm_py_sha256": receipt.get("patched_llm_gemm_py_sha256"),
+        "comm_profile_sha256": receipt.get("comm_profile_sha256"),
     }:
         raise RuntimeError(f"{kind} receipt has unexpected fields or values")
     llm_patch_hash = receipt.get("patched_llm_gemm_py_sha256")
@@ -137,6 +138,7 @@ def main() -> None:
     parser.add_argument("--authority-dir", type=Path, required=True)
     parser.add_argument("--llm-train", type=Path, required=True)
     parser.add_argument("--nnscaler", type=Path, required=True)
+    parser.add_argument("--comm-profile", type=Path, required=True)
     parser.add_argument("--trust-local-pickle", action="store_true")
     args = parser.parse_args()
     if not args.trust_local_pickle:
@@ -152,6 +154,7 @@ def main() -> None:
         raise RuntimeError("nnScaler generation clone has unexpected modifications")
     from patch_mgener_dump import patch_source
     from patch_llm_cc12_gemm import patch_source as patch_llm_gemm_source
+    from comm_profile import profile_sha256
 
     clean_parallel = git_blob(
         nnscaler_repo, EXPECTED_NNS, "nnscaler/parallel.py").decode("utf-8")
@@ -165,6 +168,7 @@ def main() -> None:
     if digest(llm_train / "llm" / "kernel" / "gemm.py") != expected_llm_gemm_hash:
         raise RuntimeError("llm GEMM generation patch does not match canonical patch")
     nnscaler = configure_imports(llm_train, nnscaler_repo)
+    comm_profile_hash = profile_sha256(args.comm_profile.resolve())
     import dill
     import torch
 
@@ -197,6 +201,7 @@ def main() -> None:
         "nvidia_driver_version": next(iter(driver_versions)),
         "gpu_inventory": gpu_inventory,
         "trainverify_regen_commit": git_head(Path(__file__).resolve().parents[2]),
+        "comm_profile_sha256": comm_profile_hash,
     }
     hardware_hash = hashlib.sha256(
         json.dumps(
@@ -217,6 +222,8 @@ def main() -> None:
             raise RuntimeError(f"{kind} receipt/source hash mismatch")
         if receipt.get("patched_llm_gemm_py_sha256") != expected_llm_gemm_hash:
             raise RuntimeError(f"{kind} receipt/llm GEMM source hash mismatch")
+        if receipt.get("comm_profile_sha256") != comm_profile_hash:
+            raise RuntimeError(f"{kind} receipt/communication profile hash mismatch")
         if receipt.get("plan_ngpus") != plan or receipt.get("runtime_ngpus") != plan:
             raise RuntimeError(f"{kind} receipt topology mismatch")
         if receipt.get("policy") not in ALLOWED_POLICY_IDENTITIES:
@@ -237,6 +244,7 @@ def main() -> None:
             "receipt_sha256": digest(receipt_path),
             "patched_parallel_py_sha256": patched_parallel_hash,
             "patched_llm_gemm_py_sha256": expected_llm_gemm_hash,
+            "comm_profile_sha256": comm_profile_hash,
             "node_count": len(mg.execplan.graph.nodes()),
             "signature_counts": dict(sorted(counts.items())),
         }

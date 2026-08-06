@@ -53,6 +53,21 @@ configuration selection only, not operator values, graph annotations, model
 code, or the reviewed base revision. The patched `llm/kernel/gemm.py` digest is
 bound into both rank-0 dump receipts and final provenance metadata.
 
+Before generation, profile the actual two-GPU interconnect with the pinned
+nnScaler environment:
+
+```bash
+torchrun --standalone --nproc_per_node=2 -m nnscaler.profiler.benchmark_comm
+```
+
+The generator requires the resulting GPU-specific `comm/intra_2.json`, validates
+its closed primitive/size/timing schema, copies it once into an owner-only staged
+HOME, and makes nnScaler consume that immutable private copy through its normal
+default-profile lookup. The authority copy is a hardlink to the same validated
+inode. Its SHA-256 is bound into both receipts and the out-of-band hardware
+digest. Missing profile data is fatal; the nnScaler MI200 fallback is not
+production authority.
+
 ```bash
 export YOCO_LLM_TRAIN_REPO=/clean/pinned/llm-train
 export YOCO_NNSCALER_REPO=/clean/pinned/nnscaler
@@ -64,6 +79,7 @@ The output contains:
 
 - `sm_mgener.pkl`, `pm_mgener.pkl`
 - rank-0 dump receipts binding policy, topology, pickle hash, and patched-source hash
+- `comm_profile_intra_2.json`, measured on the actual two-GPU node
 - Verdict-compatible `sm_mgener.json`, `pm_mgener.json`
 - `sm_provenance.json`, `pm_provenance.json`
 - `gen_args.json` with exact revisions, topology, package versions, GPU model,

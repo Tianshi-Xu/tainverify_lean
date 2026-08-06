@@ -32,6 +32,7 @@ WORLD_KEYS = {
 }
 AUTHORITY_NAMES = (
     "sm_mgener.pkl", "pm_mgener.pkl", "gen_args.json",
+    "comm_profile_intra_2.json",
     "sm_mgener.json", "pm_mgener.json",
     "sm_provenance.json", "pm_provenance.json",
     "sm_mgener.pkl.receipt.json", "pm_mgener.pkl.receipt.json",
@@ -39,16 +40,19 @@ AUTHORITY_NAMES = (
 RECEIPT_KEYS = {
     "policy", "plan_ngpus", "runtime_ngpus", "pkl_sha256",
     "patched_parallel_py_sha256", "patched_llm_gemm_py_sha256",
+    "comm_profile_sha256",
 }
 RECORD_KEYS = {
     "authority", "policy", "plan_ngpus", "runtime_ngpus", "zero_group_size",
     "cp_size_runtime", "ep_size_runtime", "cp_size_codegen_sentinel",
     "pkl_sha256", "receipt_sha256", "patched_parallel_py_sha256",
     "patched_llm_gemm_py_sha256", "node_count", "signature_counts",
+    "comm_profile_sha256",
 }
 HARDWARE_KEYS = {
     "cuda_runtime_version", "nccl_version", "nvidia_driver_version",
     "gpu_inventory", "trainverify_regen_commit",
+    "comm_profile_sha256",
 }
 GPU_KEYS = {"index", "name", "total_memory_bytes", "compute_capability"}
 META_KEYS = {
@@ -57,7 +61,8 @@ META_KEYS = {
     "llm_hardware_patch", "nnscaler_commit", "nnscaler_version",
     "torch_version", "cuda_runtime_version", "nccl_version",
     "nvidia_driver_version", "gpu_inventory", "python_version", "host",
-    "trainverify_regen_commit", "hardware_sha256", "source_sha256", "sm", "pm",
+    "trainverify_regen_commit", "comm_profile_sha256", "hardware_sha256",
+    "source_sha256", "sm", "pm",
 }
 
 
@@ -90,6 +95,7 @@ def validate_receipt_schema(receipt: dict, plan: int) -> None:
         or not _is_lower_hex(receipt["pkl_sha256"], 64)
         or not _is_lower_hex(receipt["patched_parallel_py_sha256"], 64)
         or not _is_lower_hex(receipt["patched_llm_gemm_py_sha256"], 64)
+        or not _is_lower_hex(receipt["comm_profile_sha256"], 64)
     ):
         raise RuntimeError("receipt schema values mismatch")
 
@@ -111,6 +117,7 @@ def validate_record_schema(record: dict, plan: int) -> None:
         or not _is_lower_hex(record["receipt_sha256"], 64)
         or not _is_lower_hex(record["patched_parallel_py_sha256"], 64)
         or not _is_lower_hex(record["patched_llm_gemm_py_sha256"], 64)
+        or not _is_lower_hex(record["comm_profile_sha256"], 64)
         or not _strict_int(record["node_count"], minimum=1)
         or not isinstance(record["signature_counts"], dict)
         or not record["signature_counts"]
@@ -157,6 +164,8 @@ def validate_hardware_schema(hardware: dict) -> None:
         raise RuntimeError("hardware metadata NCCL version is invalid")
     if not _is_lower_hex(hardware["trainverify_regen_commit"], 40):
         raise RuntimeError("hardware metadata regen commit is invalid")
+    if not _is_lower_hex(hardware["comm_profile_sha256"], 64):
+        raise RuntimeError("hardware metadata communication profile hash is invalid")
 
 
 def hardware_sha256(hardware: dict) -> str:
@@ -312,6 +321,11 @@ def validate_authority(
     from scripts.yoco_regen.patch_llm_cc12_gemm import (
         patch_source as patch_llm_gemm_source,
     )
+    from scripts.yoco_regen.comm_profile import profile_sha256
+
+    comm_profile_hash = profile_sha256(files["comm_profile_intra_2.json"])
+    if comm_profile_hash != meta["comm_profile_sha256"]:
+        raise RuntimeError("communication profile hash mismatch")
 
     clean_parallel = git_blob(
         nnscaler, NNSCALER_REVISION, "nnscaler/parallel.py").decode("utf-8")
@@ -348,6 +362,8 @@ def validate_authority(
             raise RuntimeError(f"{kind} patched-source hash mismatch")
         if record.get("patched_llm_gemm_py_sha256") != patched_llm_gemm_hash:
             raise RuntimeError(f"{kind} patched llm GEMM source hash mismatch")
+        if record.get("comm_profile_sha256") != comm_profile_hash:
+            raise RuntimeError(f"{kind} communication profile hash mismatch")
         receipt_path = files[f"{kind}_mgener.pkl.receipt.json"]
         if record.get("receipt_sha256") != sha256(receipt_path):
             raise RuntimeError(f"{kind} receipt hash mismatch")
@@ -358,6 +374,7 @@ def validate_authority(
             or receipt.get("policy") not in ALLOWED_POLICY_IDENTITIES
             or receipt.get("patched_parallel_py_sha256") != patched_parallel_hash
             or receipt.get("patched_llm_gemm_py_sha256") != patched_llm_gemm_hash
+            or receipt.get("comm_profile_sha256") != comm_profile_hash
         ):
             raise RuntimeError(f"{kind} receipt semantics mismatch")
         provenance = json.loads(

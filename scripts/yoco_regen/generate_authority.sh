@@ -31,6 +31,10 @@ cleanup() {
     "$STAGE" "$STAGE_MARKER" "$STAGE_DEV" "$STAGE_INO" || true
 }
 trap cleanup EXIT
+IFS=$'\t' read -r PROFILE_HOME PROFILE_MARKER PROFILE_DEV PROFILE_INO < <(
+  python3 "$ROOT/scripts/yoco_regen/safe_cleanup.py" create \
+    "$STAGE" ".profile-home."
+)
 LLM_WORK="$STAGE/.llm-train-source"
 NNS_WORK="$STAGE/.nnscaler-source"
 git clone --quiet --no-hardlinks "$LLM" "$LLM_WORK"
@@ -43,6 +47,22 @@ read -r TRAINVERIFY_PATCHED_LLM_GEMM_SHA256 _ < <(
   sha256sum "$LLM_WORK/llm/kernel/gemm.py"
 )
 export TRAINVERIFY_PATCHED_LLM_GEMM_SHA256
+COMM_PROFILE_SOURCE="$(
+  PYTHONSAFEPATH=1 PYTHONPATH="$NNS_WORK" python3 -c \
+    'from nnscaler.autodist.util import get_default_profile_path; print(get_default_profile_path() / "comm" / "intra_2.json")'
+)"
+PROFILE_ARCH="$(
+  PYTHONSAFEPATH=1 PYTHONPATH="$NNS_WORK" python3 -c \
+    'from nnscaler.autodist.util import get_node_arch; print(get_node_arch())'
+)"
+PRIVATE_COMM_DIR="$PROFILE_HOME/.cache/nnscaler/autodist/1.0/$PROFILE_ARCH/comm"
+mkdir -p "$PRIVATE_COMM_DIR"
+TRAINVERIFY_COMM_PROFILE_SHA256="$(
+  python3 "$ROOT/scripts/yoco_regen/comm_profile.py" \
+    "$COMM_PROFILE_SOURCE" "$PRIVATE_COMM_DIR/intra_2.json"
+)"
+ln "$PRIVATE_COMM_DIR/intra_2.json" "$STAGE/comm_profile_intra_2.json"
+export TRAINVERIFY_COMM_PROFILE_SHA256
 export PYTHONPATH="$NNS_WORK:$LLM_WORK/llm:${PYTHONPATH:-}"
 export PYTHONSAFEPATH=1
 export PYTHONDONTWRITEBYTECODE=1
@@ -59,7 +79,7 @@ COMMON=(
 run_compile() {
   local kind="$1" plan="$2" port="$3"
   local dump="$STAGE/${kind}_mgener.pkl" gen="$STAGE/.nnscaler_${kind}"
-  MGENER_DUMP_PATH="$dump" torchrun \
+  HOME="$PROFILE_HOME" MGENER_DUMP_PATH="$dump" torchrun \
     --nproc_per_node="$plan" --nnodes=1 --node_rank=0 \
     --master_addr=127.0.0.1 --master_port="$port" \
     nnscaler_train.py "${COMMON[@]}" \
@@ -72,8 +92,12 @@ run_compile sm 1 29581
 run_compile pm 2 29582
 python3 "$ROOT/scripts/yoco_regen/write_authority_metadata.py" \
   --llm-train "$LLM_WORK" --nnscaler "$NNS_WORK" --authority-dir "$STAGE" \
+  --comm-profile "$STAGE/comm_profile_intra_2.json" \
   --trust-local-pickle
 rm -rf "$STAGE/.nnscaler_sm" "$STAGE/.nnscaler_pm" "$LLM_WORK" "$NNS_WORK"
+python3 "$ROOT/scripts/yoco_regen/safe_cleanup.py" cleanup \
+  "$PROFILE_HOME" "$PROFILE_MARKER" "$PROFILE_DEV" "$PROFILE_INO"
+[[ ! -e "$PROFILE_HOME" ]] || { echo 'FATAL: private profile HOME survived cleanup' >&2; exit 4; }
 python3 "$ROOT/scripts/yoco_regen/atomic_publish.py" "$STAGE" "$OUT"
 trap - EXIT
 STAGE=""

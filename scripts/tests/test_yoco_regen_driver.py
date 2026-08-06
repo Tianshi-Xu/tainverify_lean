@@ -10,6 +10,7 @@ import types
 import pytest
 
 from scripts.yoco_regen.patch_mgener_dump import MARKER, patch_source
+from scripts.yoco_regen.comm_profile import EXPECTED_SIZES_MB, validate_profile
 from scripts.yoco_regen.patch_llm_cc12_gemm import (
     MARKER as CC12_MARKER,
     patch_source as patch_cc12_source,
@@ -57,6 +58,23 @@ def test_cc12_gemm_patch_rejects_partial_source():
         )
 
 
+def test_communication_profile_schema_is_closed_and_finite():
+    profile = {
+        primitive: [EXPECTED_SIZES_MB, [0.001 * (index + 1) for index in range(12)]]
+        for primitive in ("all gather", "all reduce", "reduce scatter", "all to all")
+    }
+    validate_profile(profile)
+    with pytest.raises(RuntimeError, match="primitive schema"):
+        validate_profile({**profile, "attacker": profile["all gather"]})
+    invalid = {**profile, "all gather": [EXPECTED_SIZES_MB, [True] * 12]}
+    with pytest.raises(RuntimeError, match="invalid timing"):
+        validate_profile(invalid)
+    boolean_sizes = list(EXPECTED_SIZES_MB)
+    boolean_sizes[2] = True
+    with pytest.raises(RuntimeError, match="sizes mismatch"):
+        validate_profile({**profile, "all gather": [boolean_sizes, [0.001] * 12]})
+
+
 def _run_patched_dump(
     tmp_path, monkeypatch, local_rank, dump_function, llm_patch_hash: str | None = "c" * 64
 ):
@@ -75,6 +93,7 @@ def _run_patched_dump(
         monkeypatch.delenv("TRAINVERIFY_PATCHED_LLM_GEMM_SHA256", raising=False)
     else:
         monkeypatch.setenv("TRAINVERIFY_PATCHED_LLM_GEMM_SHA256", llm_patch_hash)
+    monkeypatch.setenv("TRAINVERIFY_COMM_PROFILE_SHA256", "e" * 64)
     namespace = {
         "__file__": str(source_path),
         "ModuleCodeGen": lambda *_args: {"ok": True},
@@ -107,6 +126,7 @@ def test_dump_patch_only_rank_zero_writes_receipt(tmp_path, monkeypatch):
     assert data["policy"] == "__main__.main.<locals>.autodist_wrapper"
     assert data["plan_ngpus"] == 2 and data["runtime_ngpus"] == 2
     assert data["patched_llm_gemm_py_sha256"] == "c" * 64
+    assert data["comm_profile_sha256"] == "e" * 64
 
 
 def test_dump_patch_rejects_missing_or_invalid_llm_patch_hash(tmp_path, monkeypatch):
@@ -175,6 +195,13 @@ def test_owned_stage_cleanup_requires_matching_marker(tmp_path):
     (nested / "payload").write_text("nested", encoding="utf-8")
     (stage / "payload-link").symlink_to("nested/payload")
     assert cleanup_owned_stage(stage, "owner-b", dev, ino) is False
+    assert (stage / "valuable").read_text(encoding="utf-8") == "keep"
+    cleanup_script = Path(__file__).resolve().parents[1] / "yoco_regen" / "safe_cleanup.py"
+    rejected = subprocess.run(
+        [sys.executable, str(cleanup_script), "cleanup", str(stage), "owner-b", str(dev), str(ino)],
+        check=False,
+    )
+    assert rejected.returncode != 0
     assert (stage / "valuable").read_text(encoding="utf-8") == "keep"
     assert cleanup_owned_stage(stage, real_marker, dev, ino) is True
     assert not stage.exists()
@@ -264,6 +291,7 @@ def _receipt(plan=1, policy="nnscaler_train.main.<locals>.autodist_wrapper"):
         "pkl_sha256": "a" * 64,
         "patched_parallel_py_sha256": "b" * 64,
         "patched_llm_gemm_py_sha256": "c" * 64,
+        "comm_profile_sha256": "e" * 64,
     }
 
 
@@ -281,6 +309,7 @@ def _authority_record(plan=1):
         "receipt_sha256": "d" * 64,
         "patched_parallel_py_sha256": "b" * 64,
         "patched_llm_gemm_py_sha256": "c" * 64,
+        "comm_profile_sha256": "e" * 64,
         "node_count": 1,
         "signature_counts": {"op": 1},
     }
@@ -299,6 +328,7 @@ def _hardware_meta():
         "nvidia_driver_version": "595.71.05",
         "gpu_inventory": [gpu, {**gpu, "index": 1}],
         "trainverify_regen_commit": "e" * 40,
+        "comm_profile_sha256": "f" * 64,
     }
 
 
@@ -420,6 +450,11 @@ def test_authority_script_pins_reviewed_llm_revision():
     assert "git clone --quiet --no-hardlinks" in script
     assert "patch_llm_cc12_gemm.py" in script
     assert "TRAINVERIFY_PATCHED_LLM_GEMM_SHA256" in script
+    assert "TRAINVERIFY_COMM_PROFILE_SHA256" in script
+    assert "comm_profile.py" in script
+    assert 'HOME="$PROFILE_HOME" MGENER_DUMP_PATH="$dump" torchrun' in script
+    assert 'ln "$PRIVATE_COMM_DIR/intra_2.json" "$STAGE/comm_profile_intra_2.json"' in script
+    assert 'safe_cleanup.py" cleanup' in script
     assert 'export PYTHONPATH="$NNS_WORK:$LLM_WORK/llm:${PYTHONPATH:-}"' in script
     assert "export PYTHONSAFEPATH=1" in script
     assert "git -C \"$NNS_SOURCE\" status" in script

@@ -115,7 +115,8 @@ def main() -> None:
         stage, marker, dev, ino = create_owned_stage(args.parent, args.prefix)
         print(f"{stage}\t{marker}\t{dev}\t{ino}")
     else:
-        cleanup_owned_stage(args.stage, args.marker, args.dev, args.ino)
+        if not cleanup_owned_stage(args.stage, args.marker, args.dev, args.ino):
+            raise SystemExit(3)
 
 
 if __name__ == "__main__":
