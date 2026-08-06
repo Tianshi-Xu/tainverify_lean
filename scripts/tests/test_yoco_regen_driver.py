@@ -246,6 +246,8 @@ def test_authority_script_pins_reviewed_llm_revision():
     assert "--partition_constraints_path ./pcs/all2all_moe.yaml" in script
     assert "TRAINVERIFY_EXPECTED_POLICY='main.<locals>.autodist_wrapper'" in script
     assert "git clone --quiet --no-hardlinks" in script
+    assert 'export PYTHONPATH="$NNS_WORK:$LLM_WORK/llm:${PYTHONPATH:-}"' in script
+    assert "export PYTHONSAFEPATH=1" in script
     assert "git -C \"$NNS_SOURCE\" status" in script
     assert "git -C \"$NNS\" restore" not in script
     assert "atomic_publish.py" in script

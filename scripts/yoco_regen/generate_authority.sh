@@ -38,7 +38,7 @@ git clone --quiet --no-hardlinks "$NNS_SOURCE" "$NNS_WORK"
 git -C "$LLM_WORK" checkout --quiet "$EXPECTED_LLM"
 git -C "$NNS_WORK" checkout --quiet "$EXPECTED_NNS"
 python3 "$ROOT/scripts/yoco_regen/patch_mgener_dump.py" "$NNS_WORK/nnscaler/parallel.py"
-export PYTHONPATH="$NNS_WORK:${PYTHONPATH:-}"
+export PYTHONPATH="$NNS_WORK:$LLM_WORK/llm:${PYTHONPATH:-}"
 export PYTHONSAFEPATH=1
 export PYTHONDONTWRITEBYTECODE=1
 export TRAINVERIFY_EXPECTED_POLICY='main.<locals>.autodist_wrapper'
