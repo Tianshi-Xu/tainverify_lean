@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import hmac
 import json
 import multiprocessing.pool
 import os
@@ -35,6 +36,175 @@ AUTHORITY_NAMES = (
     "sm_provenance.json", "pm_provenance.json",
     "sm_mgener.pkl.receipt.json", "pm_mgener.pkl.receipt.json",
 )
+RECEIPT_KEYS = {
+    "policy", "plan_ngpus", "runtime_ngpus", "pkl_sha256",
+    "patched_parallel_py_sha256", "patched_llm_gemm_py_sha256",
+}
+RECORD_KEYS = {
+    "authority", "policy", "plan_ngpus", "runtime_ngpus", "zero_group_size",
+    "cp_size_runtime", "ep_size_runtime", "cp_size_codegen_sentinel",
+    "pkl_sha256", "receipt_sha256", "patched_parallel_py_sha256",
+    "patched_llm_gemm_py_sha256", "node_count", "signature_counts",
+}
+HARDWARE_KEYS = {
+    "cuda_runtime_version", "nccl_version", "nvidia_driver_version",
+    "gpu_inventory", "trainverify_regen_commit",
+}
+GPU_KEYS = {"index", "name", "total_memory_bytes", "compute_capability"}
+META_KEYS = {
+    "authority", "model", "max_seq_len", "layers", "cross_layers",
+    "precision", "partition_constraints", "llm_train_commit",
+    "llm_hardware_patch", "nnscaler_commit", "nnscaler_version",
+    "torch_version", "cuda_runtime_version", "nccl_version",
+    "nvidia_driver_version", "gpu_inventory", "python_version", "host",
+    "trainverify_regen_commit", "hardware_sha256", "source_sha256", "sm", "pm",
+}
+
+
+def _strict_int(value, *, minimum: int = 0) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= minimum
+
+
+def _is_lower_hex(value, length: int) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == length
+        and all(c in "0123456789abcdef" for c in value)
+    )
+
+
+def _require_exact_keys(value, expected: set[str], label: str) -> None:
+    if not isinstance(value, dict) or set(value) != expected:
+        actual = set(value) if isinstance(value, dict) else type(value).__name__
+        raise RuntimeError(f"{label} schema mismatch: {actual}")
+
+
+def validate_receipt_schema(receipt: dict, plan: int) -> None:
+    _require_exact_keys(receipt, RECEIPT_KEYS, "receipt")
+    if (
+        receipt["policy"] not in ALLOWED_POLICY_IDENTITIES
+        or not _strict_int(receipt["plan_ngpus"], minimum=1)
+        or not _strict_int(receipt["runtime_ngpus"], minimum=1)
+        or receipt["plan_ngpus"] != plan
+        or receipt["runtime_ngpus"] != plan
+        or not _is_lower_hex(receipt["pkl_sha256"], 64)
+        or not _is_lower_hex(receipt["patched_parallel_py_sha256"], 64)
+        or not _is_lower_hex(receipt["patched_llm_gemm_py_sha256"], 64)
+    ):
+        raise RuntimeError("receipt schema values mismatch")
+
+
+def validate_record_schema(record: dict, plan: int) -> None:
+    _require_exact_keys(record, RECORD_KEYS, "provenance record")
+    if (
+        record["authority"] is not True
+        or record["policy"] != "pas_autodist"
+        or any(
+            not _strict_int(record[key], minimum=1) or record[key] != plan
+            for key in (
+            "plan_ngpus", "runtime_ngpus", "zero_group_size",
+            "cp_size_runtime", "ep_size_runtime",
+        ))
+        or not _strict_int(record["cp_size_codegen_sentinel"], minimum=0)
+        or record["cp_size_codegen_sentinel"] != 0
+        or not _is_lower_hex(record["pkl_sha256"], 64)
+        or not _is_lower_hex(record["receipt_sha256"], 64)
+        or not _is_lower_hex(record["patched_parallel_py_sha256"], 64)
+        or not _is_lower_hex(record["patched_llm_gemm_py_sha256"], 64)
+        or not _strict_int(record["node_count"], minimum=1)
+        or not isinstance(record["signature_counts"], dict)
+        or not record["signature_counts"]
+        or any(
+            not isinstance(key, str) or not key
+            or not _strict_int(count, minimum=0)
+            for key, count in record["signature_counts"].items()
+        )
+    ):
+        raise RuntimeError("provenance record schema values mismatch")
+
+
+def validate_hardware_schema(hardware: dict) -> None:
+    _require_exact_keys(hardware, HARDWARE_KEYS, "hardware metadata")
+    inventory = hardware["gpu_inventory"]
+    if not isinstance(inventory, list) or len(inventory) != 2:
+        raise RuntimeError("GPU inventory must contain exactly two devices")
+    normalized = []
+    for expected_index, gpu in enumerate(inventory):
+        _require_exact_keys(gpu, GPU_KEYS, "GPU inventory entry")
+        capability = gpu["compute_capability"]
+        if (
+            not _strict_int(gpu["index"], minimum=0)
+            or gpu["index"] != expected_index
+            or not isinstance(gpu["name"], str) or not gpu["name"]
+            or not _strict_int(gpu["total_memory_bytes"], minimum=1)
+            or not isinstance(capability, list) or len(capability) != 2
+            or not _strict_int(capability[0], minimum=8)
+            or not _strict_int(capability[1], minimum=0)
+        ):
+            raise RuntimeError("GPU inventory values mismatch")
+        normalized.append((gpu["name"], gpu["total_memory_bytes"], capability))
+    if normalized[0] != normalized[1]:
+        raise RuntimeError("GPU inventory is not homogeneous")
+    for key in ("cuda_runtime_version", "nvidia_driver_version"):
+        value = hardware[key]
+        if not isinstance(value, str) or not value or any(c not in "0123456789." for c in value):
+            raise RuntimeError(f"hardware metadata {key} is invalid")
+    nccl = hardware["nccl_version"]
+    if (
+        not isinstance(nccl, list) or len(nccl) != 3
+        or any(not _strict_int(part, minimum=0) for part in nccl)
+    ):
+        raise RuntimeError("hardware metadata NCCL version is invalid")
+    if not _is_lower_hex(hardware["trainverify_regen_commit"], 40):
+        raise RuntimeError("hardware metadata regen commit is invalid")
+
+
+def hardware_sha256(hardware: dict) -> str:
+    validate_hardware_schema(hardware)
+    payload = json.dumps(
+        hardware, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def validate_expected_hardware(hardware: dict, expected_sha256: str) -> None:
+    if not _is_lower_hex(expected_sha256, 64):
+        raise RuntimeError("trusted hardware SHA-256 is malformed")
+    actual = hardware_sha256(hardware)
+    if not hmac.compare_digest(actual, expected_sha256):
+        raise RuntimeError("trusted hardware SHA-256 mismatch")
+
+
+def validate_meta_schema(meta: dict) -> None:
+    _require_exact_keys(meta, META_KEYS, "gen_args")
+    if (
+        meta["authority"] is not True
+        or meta["model"] != "YOCO-MoE-A0.4B"
+        or not _strict_int(meta["max_seq_len"], minimum=1)
+        or meta["max_seq_len"] != 4096
+        or not _strict_int(meta["layers"], minimum=1)
+        or meta["layers"] != 24
+        or not _strict_int(meta["cross_layers"], minimum=1)
+        or meta["cross_layers"] != 12
+        or meta["precision"] != "fp32"
+        or meta["partition_constraints"] != "llm/pcs/all2all_moe.yaml"
+        or meta["llm_train_commit"] != LLM_REVISION
+        or meta["nnscaler_commit"] != NNSCALER_REVISION
+        or meta["llm_hardware_patch"] != "cc12_generic_triton_fallback_v1"
+        or any(
+            not isinstance(meta[key], str) or not meta[key]
+            for key in ("nnscaler_version", "torch_version", "python_version", "host")
+        )
+        or not _is_lower_hex(meta["hardware_sha256"], 64)
+        or not isinstance(meta["source_sha256"], dict)
+    ):
+        raise RuntimeError("gen_args schema values mismatch")
+    hardware = {key: meta[key] for key in HARDWARE_KEYS}
+    validate_hardware_schema(hardware)
+    if not hmac.compare_digest(meta["hardware_sha256"], hardware_sha256(hardware)):
+        raise RuntimeError("gen_args hardware SHA-256 mismatch")
+    validate_record_schema(meta["sm"], 1)
+    validate_record_schema(meta["pm"], 2)
 
 
 def sha256(path: Path) -> str:
@@ -117,26 +287,45 @@ def secure_copy_authority(source: Path, target: Path) -> None:
         os.close(directory_fd)
 
 
-def validate_authority(authority: Path, llm_train: Path, nnscaler: Path):
+def validate_authority(
+    authority: Path,
+    llm_train: Path,
+    nnscaler: Path,
+    expected_hardware_sha256: str,
+):
     files = {name: authority / name for name in AUTHORITY_NAMES}
     meta = json.loads(files["gen_args.json"].read_text(encoding="utf-8"))
+    validate_meta_schema(meta)
+    validate_expected_hardware(
+        {key: meta[key] for key in HARDWARE_KEYS}, expected_hardware_sha256,
+    )
     if meta.get("authority") is not True:
         raise RuntimeError("gen_args.json is not marked as production authority")
     if meta.get("llm_train_commit") != LLM_REVISION:
         raise RuntimeError("gen_args llm-train revision mismatch")
     if meta.get("nnscaler_commit") != NNSCALER_REVISION:
         raise RuntimeError("gen_args nnScaler revision mismatch")
+    if meta.get("llm_hardware_patch") != "cc12_generic_triton_fallback_v1":
+        raise RuntimeError("gen_args llm hardware patch mismatch")
 
     from scripts.yoco_regen.patch_mgener_dump import patch_source
+    from scripts.yoco_regen.patch_llm_cc12_gemm import (
+        patch_source as patch_llm_gemm_source,
+    )
 
     clean_parallel = git_blob(
         nnscaler, NNSCALER_REVISION, "nnscaler/parallel.py").decode("utf-8")
     patched_parallel_hash = digest_bytes(patch_source(clean_parallel).encode("utf-8"))
+    clean_llm_gemm = git_blob(
+        llm_train, LLM_REVISION, "llm/kernel/gemm.py").decode("utf-8")
+    patched_llm_gemm_hash = digest_bytes(
+        patch_llm_gemm_source(clean_llm_gemm).encode("utf-8"))
     expected_source_hashes = {
         "llm/arch/model.py": digest_bytes(
             git_blob(llm_train, LLM_REVISION, "llm/arch/model.py")),
         "llm/pcs/all2all_moe.yaml": digest_bytes(
             git_blob(llm_train, LLM_REVISION, "llm/pcs/all2all_moe.yaml")),
+        "llm/kernel/gemm.py.patched_cc12_fallback": patched_llm_gemm_hash,
         "nnscaler/parallel.py.patched": patched_parallel_hash,
         "nnscaler/customized_ops/ring_attention/maybe_shuffle.py": digest_bytes(
             git_blob(
@@ -157,14 +346,18 @@ def validate_authority(authority: Path, llm_train: Path, nnscaler: Path):
             raise RuntimeError(f"{kind} topology mismatch")
         if record.get("patched_parallel_py_sha256") != patched_parallel_hash:
             raise RuntimeError(f"{kind} patched-source hash mismatch")
+        if record.get("patched_llm_gemm_py_sha256") != patched_llm_gemm_hash:
+            raise RuntimeError(f"{kind} patched llm GEMM source hash mismatch")
         receipt_path = files[f"{kind}_mgener.pkl.receipt.json"]
         if record.get("receipt_sha256") != sha256(receipt_path):
             raise RuntimeError(f"{kind} receipt hash mismatch")
         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        validate_receipt_schema(receipt, plan)
         if (
             receipt.get("pkl_sha256") != actual
             or receipt.get("policy") not in ALLOWED_POLICY_IDENTITIES
             or receipt.get("patched_parallel_py_sha256") != patched_parallel_hash
+            or receipt.get("patched_llm_gemm_py_sha256") != patched_llm_gemm_hash
         ):
             raise RuntimeError(f"{kind} receipt semantics mismatch")
         provenance = json.loads(
@@ -261,6 +454,10 @@ def main():
     parser.add_argument("--nnscaler", type=Path, required=True)
     parser.add_argument("--snapshot-dir", type=Path, required=True)
     parser.add_argument(
+        "--expected-hardware-sha256", required=True,
+        help="SHA-256 captured out-of-band from the trusted GPU generation session",
+    )
+    parser.add_argument(
         "--trust-new-authority", action="store_true",
         help="acknowledge that pinned local pickle generation is the trust root",
     )
@@ -283,7 +480,9 @@ def main():
         materialize_source(nnscaler_source, NNSCALER_REVISION, nnscaler)
         authority = stage / "authority"
         secure_copy_authority(authority_source, authority)
-        _, files = validate_authority(authority, llm_train, nnscaler)
+        _, files = validate_authority(
+            authority, llm_train, nnscaler, args.expected_hardware_sha256,
+        )
         configure_runtime(llm_train, nnscaler)
         sys.argv = graph_to_lean_argv(llm_train, nnscaler, files, stage)
         from verdict.log import setup_logger

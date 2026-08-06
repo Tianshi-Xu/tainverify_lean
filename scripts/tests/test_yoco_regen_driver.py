@@ -10,6 +10,10 @@ import types
 import pytest
 
 from scripts.yoco_regen.patch_mgener_dump import MARKER, patch_source
+from scripts.yoco_regen.patch_llm_cc12_gemm import (
+    MARKER as CC12_MARKER,
+    patch_source as patch_cc12_source,
+)
 from scripts.yoco_regen.atomic_publish import rename_noreplace
 import scripts.yoco_regen.emit_yoco_a04b as emitter
 from scripts.yoco_regen.safe_cleanup import create_owned_stage, cleanup_owned_stage
@@ -28,7 +32,34 @@ def test_dump_patch_is_idempotent_and_atomic():
     assert patch_source(patched) == patched
 
 
-def _run_patched_dump(tmp_path, monkeypatch, local_rank, dump_function):
+def test_cc12_gemm_patch_is_exact_and_idempotent():
+    source = """def _pick_mgemm_configs():
+    if (_cuda_compute_capability_major() or 0) >= 10:
+        return B200_Mgemm_configs
+    return A100_H100_Mgemm_configs
+
+def _pick_kgemm_configs():
+    if (_cuda_compute_capability_major() or 0) >= 10:
+        return B200_Kgemm_configs
+    return A100_H100_Kgemm_configs
+"""
+    patched = patch_cc12_source(source)
+    assert CC12_MARKER in patched
+    assert patched.count("== 10") == 2
+    assert ">= 10" not in patched
+    assert patch_cc12_source(patched) == patched
+
+
+def test_cc12_gemm_patch_rejects_partial_source():
+    with pytest.raises(RuntimeError, match="exactly two"):
+        patch_cc12_source(
+            "if (_cuda_compute_capability_major() or 0) >= 10:\n    pass\n"
+        )
+
+
+def _run_patched_dump(
+    tmp_path, monkeypatch, local_rank, dump_function, llm_patch_hash: str | None = "c" * 64
+):
     source = "def build(pas_policy, compute_config):\n    mgener = ModuleCodeGen(execplan, 2)\n    return mgener\n"
     patched = patch_source(source)
     source_path = tmp_path / "parallel.py"
@@ -40,6 +71,10 @@ def _run_patched_dump(tmp_path, monkeypatch, local_rank, dump_function):
     monkeypatch.setenv("MGENER_DUMP_PATH", str(destination))
     monkeypatch.setenv("LOCAL_RANK", str(local_rank))
     monkeypatch.setenv("TRAINVERIFY_EXPECTED_POLICY", "autodist_wrapper")
+    if llm_patch_hash is None:
+        monkeypatch.delenv("TRAINVERIFY_PATCHED_LLM_GEMM_SHA256", raising=False)
+    else:
+        monkeypatch.setenv("TRAINVERIFY_PATCHED_LLM_GEMM_SHA256", llm_patch_hash)
     namespace = {
         "__file__": str(source_path),
         "ModuleCodeGen": lambda *_args: {"ok": True},
@@ -71,6 +106,15 @@ def test_dump_patch_only_rank_zero_writes_receipt(tmp_path, monkeypatch):
     data = json.loads(receipt.read_text(encoding="utf-8"))
     assert data["policy"] == "__main__.main.<locals>.autodist_wrapper"
     assert data["plan_ngpus"] == 2 and data["runtime_ngpus"] == 2
+    assert data["patched_llm_gemm_py_sha256"] == "c" * 64
+
+
+def test_dump_patch_rejects_missing_or_invalid_llm_patch_hash(tmp_path, monkeypatch):
+    with pytest.raises(RuntimeError, match="llm GEMM source hash"):
+        _run_patched_dump(tmp_path, monkeypatch, 0, pickle.dump, None)
+    with pytest.raises(RuntimeError, match="llm GEMM source hash"):
+        _run_patched_dump(tmp_path, monkeypatch, 0, pickle.dump, "not-a-hash")
+    assert not list(tmp_path.glob("*.pkl"))
 
 
 def test_dump_patch_cleans_temporary_files_on_failure(tmp_path, monkeypatch):
@@ -219,7 +263,135 @@ def _receipt(plan=1, policy="nnscaler_train.main.<locals>.autodist_wrapper"):
         "runtime_ngpus": plan,
         "pkl_sha256": "a" * 64,
         "patched_parallel_py_sha256": "b" * 64,
+        "patched_llm_gemm_py_sha256": "c" * 64,
     }
+
+
+def _authority_record(plan=1):
+    return {
+        "authority": True,
+        "policy": "pas_autodist",
+        "plan_ngpus": plan,
+        "runtime_ngpus": plan,
+        "zero_group_size": plan,
+        "cp_size_runtime": plan,
+        "ep_size_runtime": plan,
+        "cp_size_codegen_sentinel": 0,
+        "pkl_sha256": "a" * 64,
+        "receipt_sha256": "d" * 64,
+        "patched_parallel_py_sha256": "b" * 64,
+        "patched_llm_gemm_py_sha256": "c" * 64,
+        "node_count": 1,
+        "signature_counts": {"op": 1},
+    }
+
+
+def _hardware_meta():
+    gpu = {
+        "index": 0,
+        "name": "GPU",
+        "total_memory_bytes": 1024,
+        "compute_capability": [12, 0],
+    }
+    return {
+        "cuda_runtime_version": "12.8",
+        "nccl_version": [2, 27, 3],
+        "nvidia_driver_version": "595.71.05",
+        "gpu_inventory": [gpu, {**gpu, "index": 1}],
+        "trainverify_regen_commit": "e" * 40,
+    }
+
+
+def _full_meta():
+    hardware = _hardware_meta()
+    return {
+        "authority": True,
+        "model": "YOCO-MoE-A0.4B",
+        "max_seq_len": 4096,
+        "layers": 24,
+        "cross_layers": 12,
+        "precision": "fp32",
+        "partition_constraints": "llm/pcs/all2all_moe.yaml",
+        "llm_train_commit": emitter.LLM_REVISION,
+        "llm_hardware_patch": "cc12_generic_triton_fallback_v1",
+        "nnscaler_commit": emitter.NNSCALER_REVISION,
+        "nnscaler_version": "0.9",
+        "torch_version": "2.8.0+cu128",
+        "python_version": "3.12.3",
+        "host": "host",
+        "hardware_sha256": emitter.hardware_sha256(hardware),
+        "source_sha256": {"source": "a" * 64},
+        "sm": _authority_record(1),
+        "pm": _authority_record(2),
+        **hardware,
+    }
+
+
+def test_trusted_emitter_receipt_and_record_schemas_are_closed():
+    emitter.validate_receipt_schema(_receipt(), 1)
+    emitter.validate_record_schema(_authority_record(), 1)
+    for value, validator in (
+        (_receipt(), lambda x: emitter.validate_receipt_schema(x, 1)),
+        (_authority_record(), lambda x: emitter.validate_record_schema(x, 1)),
+    ):
+        missing = dict(value)
+        del missing["plan_ngpus"]
+        with pytest.raises(RuntimeError, match="schema"):
+            validator(missing)
+        extra = {**value, "attacker": True}
+        with pytest.raises(RuntimeError, match="schema"):
+            validator(extra)
+
+
+def test_trusted_emitter_hardware_schema_rejects_forgery_and_extras():
+    meta = _hardware_meta()
+    emitter.validate_hardware_schema(meta)
+    forged = {**meta, "gpu_inventory": [{
+        "index": 999,
+        "name": "FORGED",
+        "total_memory_bytes": 1,
+        "compute_capability": [0, 0],
+    }]}
+    with pytest.raises(RuntimeError, match="GPU"):
+        emitter.validate_hardware_schema(forged)
+    with pytest.raises(RuntimeError, match="schema"):
+        emitter.validate_hardware_schema({**meta, "attacker": True})
+    boolean_indices = {**meta, "gpu_inventory": [
+        {**meta["gpu_inventory"][0], "index": False},
+        {**meta["gpu_inventory"][1], "index": True},
+    ]}
+    with pytest.raises(RuntimeError, match="GPU"):
+        emitter.validate_hardware_schema(boolean_indices)
+
+
+def test_trusted_hardware_digest_rejects_coordinated_plausible_forgery():
+    original = _hardware_meta()
+    expected = emitter.hardware_sha256(original)
+    forged = {
+        **original,
+        "nvidia_driver_version": "999.999",
+        "cuda_runtime_version": "99.9",
+        "nccl_version": [99, 99, 99],
+        "trainverify_regen_commit": "f" * 40,
+        "gpu_inventory": [
+            {**gpu, "name": "FORGED", "compute_capability": [99, 9]}
+            for gpu in original["gpu_inventory"]
+        ],
+    }
+    emitter.validate_hardware_schema(forged)
+    with pytest.raises(RuntimeError, match="trusted hardware"):
+        emitter.validate_expected_hardware(forged, expected)
+
+
+def test_trusted_emitter_gen_args_schema_is_closed():
+    meta = _full_meta()
+    emitter.validate_meta_schema(meta)
+    with pytest.raises(RuntimeError, match="schema"):
+        emitter.validate_meta_schema({**meta, "attacker": True})
+    missing = dict(meta)
+    del missing["nvidia_driver_version"]
+    with pytest.raises(RuntimeError, match="schema"):
+        emitter.validate_meta_schema(missing)
 
 
 def test_authority_graph_gate_accepts_only_full_autodist_graph():
@@ -246,6 +418,8 @@ def test_authority_script_pins_reviewed_llm_revision():
     assert "--partition_constraints_path ./pcs/all2all_moe.yaml" in script
     assert "TRAINVERIFY_EXPECTED_POLICY='main.<locals>.autodist_wrapper'" in script
     assert "git clone --quiet --no-hardlinks" in script
+    assert "patch_llm_cc12_gemm.py" in script
+    assert "TRAINVERIFY_PATCHED_LLM_GEMM_SHA256" in script
     assert 'export PYTHONPATH="$NNS_WORK:$LLM_WORK/llm:${PYTHONPATH:-}"' in script
     assert "export PYTHONSAFEPATH=1" in script
     assert "git -C \"$NNS_SOURCE\" status" in script

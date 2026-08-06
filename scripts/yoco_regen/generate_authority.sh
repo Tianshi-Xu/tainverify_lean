@@ -38,6 +38,11 @@ git clone --quiet --no-hardlinks "$NNS_SOURCE" "$NNS_WORK"
 git -C "$LLM_WORK" checkout --quiet "$EXPECTED_LLM"
 git -C "$NNS_WORK" checkout --quiet "$EXPECTED_NNS"
 python3 "$ROOT/scripts/yoco_regen/patch_mgener_dump.py" "$NNS_WORK/nnscaler/parallel.py"
+python3 "$ROOT/scripts/yoco_regen/patch_llm_cc12_gemm.py" "$LLM_WORK/llm/kernel/gemm.py"
+read -r TRAINVERIFY_PATCHED_LLM_GEMM_SHA256 _ < <(
+  sha256sum "$LLM_WORK/llm/kernel/gemm.py"
+)
+export TRAINVERIFY_PATCHED_LLM_GEMM_SHA256
 export PYTHONPATH="$NNS_WORK:$LLM_WORK/llm:${PYTHONPATH:-}"
 export PYTHONSAFEPATH=1
 export PYTHONDONTWRITEBYTECODE=1

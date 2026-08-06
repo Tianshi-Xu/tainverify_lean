@@ -46,6 +46,12 @@ llm-train's real `run_mode=compile` / `pas_autodist` path, full 24-layer model,
 sequence length 4096, and `pcs/all2all_moe.yaml`.
 Both source repositories are materialized as private, no-hardlink clones at the
 reviewed commits before any code executes. Neither caller checkout is modified.
+The private llm clone receives one canonical, hash-bound hardware compatibility
+patch: compute capability 12.x uses the generic A100/H100 Triton autotune
+candidate set instead of the B200-only candidate set. This changes launch
+configuration selection only, not operator values, graph annotations, model
+code, or the reviewed base revision. The patched `llm/kernel/gemm.py` digest is
+bound into both rank-0 dump receipts and final provenance metadata.
 
 ```bash
 export YOCO_LLM_TRAIN_REPO=/clean/pinned/llm-train
@@ -60,7 +66,9 @@ The output contains:
 - rank-0 dump receipts binding policy, topology, pickle hash, and patched-source hash
 - Verdict-compatible `sm_mgener.json`, `pm_mgener.json`
 - `sm_provenance.json`, `pm_provenance.json`
-- `gen_args.json` with exact revisions, topology, package versions, and hashes
+- `gen_args.json` with exact revisions, topology, package versions, GPU model,
+  memory, compute capability, NVIDIA driver, CUDA runtime, NCCL version, canonical
+  hardware-patch identity/hash, and artifact hashes
 - `.trainverify-stage-owner`, an inert random ownership marker retained for
   fail-closed cleanup auditing
 
@@ -74,12 +82,18 @@ python scripts/yoco_regen/emit_yoco_a04b.py \
   --authority-dir /output/yoco-a04b-9a1be1d \
   --llm-train /clean/pinned/llm-train \
   --nnscaler /clean/pinned/nnscaler \
+  --expected-hardware-sha256 <digest-captured-over-trusted-ssh> \
   --snapshot-dir /output/yoco-a04b-9a1be1d-lean-refresh \
   --trust-new-authority
 ```
 
 The explicit trust flag acknowledges that Python pickle is executable input and
 that the artifacts were produced locally by the pinned production generator.
+The expected hardware digest is a required out-of-band trust anchor. Capture
+`gen_args.json.hardware_sha256` directly from the GPU host over the already
+authenticated SSH session before transferring the authority directory, and
+store it separately from that directory. A digest read only from the transferred
+artifact is not an independent trust anchor and must not be used here.
 Before unpickling, the emitter verifies ownership, non-writable permissions,
 fixed revisions, world/provenance schemas, production policy, topology, and
 pickle hashes. It writes every generated file into a sibling staging directory

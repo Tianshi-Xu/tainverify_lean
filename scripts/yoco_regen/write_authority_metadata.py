@@ -89,8 +89,16 @@ def validate_graph(mg, kind: str, plan: int, receipt: dict):
         "runtime_ngpus": plan,
         "pkl_sha256": receipt.get("pkl_sha256"),
         "patched_parallel_py_sha256": receipt.get("patched_parallel_py_sha256"),
+        "patched_llm_gemm_py_sha256": receipt.get("patched_llm_gemm_py_sha256"),
     }:
         raise RuntimeError(f"{kind} receipt has unexpected fields or values")
+    llm_patch_hash = receipt.get("patched_llm_gemm_py_sha256")
+    if (
+        not isinstance(llm_patch_hash, str)
+        or len(llm_patch_hash) != 64
+        or any(c not in "0123456789abcdef" for c in llm_patch_hash)
+    ):
+        raise RuntimeError(f"{kind} receipt has invalid llm GEMM patch hash")
     policy = receipt.get("policy")
     if policy not in ALLOWED_POLICY_IDENTITIES:
         raise RuntimeError(f"{kind} receipt is not from llm-train autodist_wrapper")
@@ -138,22 +146,63 @@ def main() -> None:
     nnscaler_repo = args.nnscaler.resolve()
     if git_head(llm_train) != EXPECTED_LLM or git_head(nnscaler_repo) != EXPECTED_NNS:
         raise RuntimeError("source revision mismatch")
-    if git_status(llm_train):
-        raise RuntimeError("llm-train checkout is dirty")
+    if git_status(llm_train) != [" M llm/kernel/gemm.py"]:
+        raise RuntimeError("llm-train generation clone has unexpected modifications")
     if git_status(nnscaler_repo) != [" M nnscaler/parallel.py"]:
         raise RuntimeError("nnScaler generation clone has unexpected modifications")
     from patch_mgener_dump import patch_source
+    from patch_llm_cc12_gemm import patch_source as patch_llm_gemm_source
 
     clean_parallel = git_blob(
         nnscaler_repo, EXPECTED_NNS, "nnscaler/parallel.py").decode("utf-8")
     expected_patched_hash = digest_bytes(patch_source(clean_parallel).encode("utf-8"))
     if digest(nnscaler_repo / "nnscaler" / "parallel.py") != expected_patched_hash:
         raise RuntimeError("nnScaler generation patch does not match canonical patch")
+    clean_llm_gemm = git_blob(
+        llm_train, EXPECTED_LLM, "llm/kernel/gemm.py").decode("utf-8")
+    expected_llm_gemm_hash = digest_bytes(
+        patch_llm_gemm_source(clean_llm_gemm).encode("utf-8"))
+    if digest(llm_train / "llm" / "kernel" / "gemm.py") != expected_llm_gemm_hash:
+        raise RuntimeError("llm GEMM generation patch does not match canonical patch")
     nnscaler = configure_imports(llm_train, nnscaler_repo)
     import dill
     import torch
 
     patched_parallel_hash = expected_patched_hash
+    gpu_inventory = []
+    for index in range(torch.cuda.device_count()):
+        properties = torch.cuda.get_device_properties(index)
+        gpu_inventory.append({
+            "index": index,
+            "name": properties.name,
+            "total_memory_bytes": properties.total_memory,
+            "compute_capability": list(torch.cuda.get_device_capability(index)),
+        })
+    if len(gpu_inventory) != 2:
+        raise RuntimeError(f"production authority requires exactly two GPUs, got {len(gpu_inventory)}")
+    driver_versions = set(
+        subprocess.check_output(
+            [
+                "nvidia-smi", "--query-gpu=driver_version",
+                "--format=csv,noheader,nounits",
+            ],
+            text=True,
+        ).splitlines()
+    )
+    if len(driver_versions) != 1:
+        raise RuntimeError(f"inconsistent NVIDIA driver inventory: {sorted(driver_versions)}")
+    hardware = {
+        "cuda_runtime_version": torch.version.cuda,
+        "nccl_version": list(torch.cuda.nccl.version()),
+        "nvidia_driver_version": next(iter(driver_versions)),
+        "gpu_inventory": gpu_inventory,
+        "trainverify_regen_commit": git_head(Path(__file__).resolve().parents[2]),
+    }
+    hardware_hash = hashlib.sha256(
+        json.dumps(
+            hardware, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
     records = {}
     worlds = {}
     for kind, plan in (("sm", 1), ("pm", 2)):
@@ -166,6 +215,8 @@ def main() -> None:
             raise RuntimeError(f"{kind} receipt/pickle hash mismatch")
         if receipt.get("patched_parallel_py_sha256") != patched_parallel_hash:
             raise RuntimeError(f"{kind} receipt/source hash mismatch")
+        if receipt.get("patched_llm_gemm_py_sha256") != expected_llm_gemm_hash:
+            raise RuntimeError(f"{kind} receipt/llm GEMM source hash mismatch")
         if receipt.get("plan_ngpus") != plan or receipt.get("runtime_ngpus") != plan:
             raise RuntimeError(f"{kind} receipt topology mismatch")
         if receipt.get("policy") not in ALLOWED_POLICY_IDENTITIES:
@@ -185,6 +236,7 @@ def main() -> None:
             "pkl_sha256": digest(pkl),
             "receipt_sha256": digest(receipt_path),
             "patched_parallel_py_sha256": patched_parallel_hash,
+            "patched_llm_gemm_py_sha256": expected_llm_gemm_hash,
             "node_count": len(mg.execplan.graph.nodes()),
             "signature_counts": dict(sorted(counts.items())),
         }
@@ -199,6 +251,7 @@ def main() -> None:
             git_blob(llm_train, EXPECTED_LLM, "llm/arch/model.py")),
         "llm/pcs/all2all_moe.yaml": digest_bytes(
             git_blob(llm_train, EXPECTED_LLM, "llm/pcs/all2all_moe.yaml")),
+        "llm/kernel/gemm.py.patched_cc12_fallback": expected_llm_gemm_hash,
         "nnscaler/parallel.py.patched": patched_parallel_hash,
         "nnscaler/customized_ops/ring_attention/maybe_shuffle.py": digest_bytes(
             git_blob(
@@ -214,11 +267,14 @@ def main() -> None:
         "precision": "fp32",
         "partition_constraints": "llm/pcs/all2all_moe.yaml",
         "llm_train_commit": EXPECTED_LLM,
+        "llm_hardware_patch": "cc12_generic_triton_fallback_v1",
         "nnscaler_commit": EXPECTED_NNS,
         "nnscaler_version": nnscaler.__version__,
         "torch_version": torch.__version__,
         "python_version": platform.python_version(),
         "host": platform.node(),
+        "hardware_sha256": hardware_hash,
+        **hardware,
         "source_sha256": source_hashes,
         "sm": records["sm"],
         "pm": records["pm"],
