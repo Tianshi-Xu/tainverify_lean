@@ -824,6 +824,11 @@ def test_authority_script_pins_reviewed_llm_revision():
     assert "env=CLEAN_TOOL_ENV" in builder
     assert "NNSCALER_ARCHIVE_SHA256" in builder
     assert "unshare" not in builder
+    emitter = (
+        Path(__file__).resolve().parents[1] / "yoco_regen" / "emit_yoco_a04b.py"
+    ).read_text(encoding="utf-8")
+    assert '"--verifier-cache-dir", str(stage / "verifier-cache")' in emitter
+    assert 'shutil.rmtree(stage / "verifier-cache")' in emitter
     assert '"mount"' not in builder
 
 

@@ -154,6 +154,10 @@ def parse_args() -> argparse.Namespace:
 		help="Maximum repeated period, measured in concrete goals, for segment detection.",
 	)
 	p.add_argument("--manifest-out", help="Write an immutable deterministic provenance manifest.")
+	p.add_argument(
+		"--verifier-cache-dir",
+		help="Explicit writable cache directory for graph materialization.",
+	)
 	p.add_argument("--model", default="YOCO-MoE-A0.4B", help="Model identity recorded in the manifest.")
 	p.add_argument("--metadata-json", action="append", default=[], help="Authority metadata JSON (repeatable).")
 	p.add_argument(
@@ -177,7 +181,7 @@ def parse_args() -> argparse.Namespace:
 	return p.parse_args()
 
 
-def load_verifier(sm_path: str, pm_path: str):
+def load_verifier(sm_path: str, pm_path: str, cache_dir: str | None = None):
 	import sys
 
 	sys.path.extend([str(ROOT), str(ROOT / "genmodel"), str(ROOT / "Verdict")])
@@ -188,7 +192,8 @@ def load_verifier(sm_path: str, pm_path: str):
 	from z3_backend import z3Backend  # type: ignore
 	from analyze_graph import prepare  # type: ignore
 
-	Config.update_from_args([])
+	config_args = ["--cache_dir", cache_dir] if cache_dir is not None else []
+	Config.update_from_args(config_args)
 	prepare(Config)
 
 	return StageParallelVerifier(
@@ -3341,7 +3346,7 @@ def main() -> None:
 	out_path = Path(args.out)
 	spec_out_path = Path(args.spec_out)
 
-	v = load_verifier(args.sm_pkl, args.pm_pkl)
+	v = load_verifier(args.sm_pkl, args.pm_pkl, args.verifier_cache_dir)
 	GsE, GpE = v.get_graph()  # expanded
 	GsC, _GpC = v.get_graph_compact()  # compact (stable for leaf detection)
 	sm_logical_ids, pm_logical_ids = aligned_logical_node_ids(GsE, GpE)

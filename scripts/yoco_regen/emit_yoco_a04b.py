@@ -479,6 +479,7 @@ def graph_to_lean_argv(llm_train, nnscaler, files, stage):
         "--max-goals", "5", "--split-goals", "--assume-cp-dim0-shuffle",
         "--goals-out-dir", str(stage / "goals"),
         "--manifest-out", str(stage / "GeneratedYOCOMoE.manifest.json"),
+        "--verifier-cache-dir", str(stage / "verifier-cache"),
         "--llm-train-repo", str(llm_train),
         "--llm-train-revision", LLM_REVISION,
         "--nnscaler-repo", str(nnscaler),
@@ -549,6 +550,7 @@ def main():
             raise RuntimeError("emitter did not create nonempty Lean and manifest files")
         if not any((stage / "goals").iterdir()):
             raise RuntimeError("emitter created an empty goals directory")
+        shutil.rmtree(stage / "verifier-cache")
         shutil.rmtree(llm_train)
         shutil.rmtree(nnscaler)
         shutil.rmtree(authority)
