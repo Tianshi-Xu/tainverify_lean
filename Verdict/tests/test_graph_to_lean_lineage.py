@@ -4,10 +4,20 @@ import pytest
 
 from Verdict.graph_to_lean import (
     SelectedLineage,
+    _goals_module_prefix,
     canonicalize_init_lineage_multiref,
     deduplicate_intermediate_lineages,
     derive_input_value_classes,
 )
+
+
+def test_goals_module_prefix_for_top_level_and_nested_modules(tmp_path):
+    goals_dir = tmp_path / "proof_bins"
+    assert _goals_module_prefix("GeneratedSpec", goals_dir) == "proof_bins"
+    assert (
+        _goals_module_prefix("Acme.Custom.GeneratedSpec", goals_dir)
+        == "Acme.Custom.proof_bins"
+    )
 
 
 @dataclass(frozen=True)

@@ -859,6 +859,7 @@ def test_authority_script_pins_reviewed_llm_revision():
     ).read_text(encoding="utf-8")
     assert '"-S"' in sealed
     assert "PYTHONNOUSERSITE" in sealed
+    assert '"PYTHONHASHSEED": "0"' in sealed
     assert "TRAINVERIFY_WORKER_SHIM" in sealed
     assert "NNSCALER_ARCHIVE_SHA256" in sealed
     assert "memfd_create" in sealed
@@ -884,6 +885,20 @@ def test_authority_script_pins_reviewed_llm_revision():
     ).read_text(encoding="utf-8")
     assert '"--verifier-cache-dir", str(stage / "verifier-cache")' in emitter
     assert 'shutil.rmtree(stage / "verifier-cache")' in emitter
+    assert 'str(stage / "yoco_goals")' in emitter
+    assert '(stage / "yoco_goals").mkdir()' in emitter
+    assert 'stage / "goals"' not in emitter
+
+    generator = (
+        Path(__file__).resolve().parents[2] / "Verdict" / "graph_to_lean.py"
+    ).read_text(encoding="utf-8")
+    assert 'goal_lines.append("set_option maxRecDepth 100000")' in generator
+    assert 'pattern_file_lines.append(f"import {goals_module_prefix}.Goal_{gid}")' in generator
+    assert 'pattern_file_lines.append("open TrainVerify.Denote.GeneratedGoals")' in generator
+    assert 'instance_lines.append("open TrainVerify.Denote.GeneratedGoals")' in generator
+    assert "cut_to_full bridge omitted from this bounded snapshot" in generator
+    assert "Main full-goal composition omitted" in generator
+    assert 'goal_{gid}_cut_to_full prove_goal_{gid}_from_pattern_{pid}' in generator
     assert '"mount"' not in builder
 
 

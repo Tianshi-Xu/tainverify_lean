@@ -477,7 +477,7 @@ def graph_to_lean_argv(llm_train, nnscaler, files, stage):
         "--out", str(stage / "GeneratedYOCOMoE.lean"),
         "--module", "denote.GeneratedYOCOMoE",
         "--max-goals", "5", "--split-goals", "--assume-cp-dim0-shuffle",
-        "--goals-out-dir", str(stage / "goals"),
+        "--goals-out-dir", str(stage / "yoco_goals"),
         "--manifest-out", str(stage / "GeneratedYOCOMoE.manifest.json"),
         "--verifier-cache-dir", str(stage / "verifier-cache"),
         "--llm-train-repo", str(llm_train),
@@ -525,7 +525,7 @@ def main():
     stage, stage_marker, stage_dev, stage_ino = create_owned_stage(
         snapshot.parent, f".{snapshot.name}.staged-")
     try:
-        (stage / "goals").mkdir()
+        (stage / "yoco_goals").mkdir()
         llm_train = stage / ".llm-train-source"
         nnscaler = stage / ".nnscaler-source"
         materialize_source(llm_source, LLM_REVISION, llm_train)
@@ -548,8 +548,8 @@ def main():
         )
         if any(not path.is_file() or path.stat().st_size == 0 for path in required_files):
             raise RuntimeError("emitter did not create nonempty Lean and manifest files")
-        if not any((stage / "goals").iterdir()):
-            raise RuntimeError("emitter created an empty goals directory")
+        if not any((stage / "yoco_goals").iterdir()):
+            raise RuntimeError("emitter created an empty yoco_goals directory")
         shutil.rmtree(stage / "verifier-cache")
         shutil.rmtree(llm_train)
         shutil.rmtree(nnscaler)

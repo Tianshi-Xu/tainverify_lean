@@ -53,15 +53,18 @@ configuration selection only, not operator values, graph annotations, model
 code, or the reviewed base revision. The patched `llm/kernel/gemm.py` digest is
 bound into both rank-0 dump receipts and final provenance metadata.
 
-The pinned nnScaler dynamic-programming solver is built from a fixed-commit Git
-archive in an owner-only temporary tree. The full archive SHA-256 and the three
-direct build inputs are checked, the source tree is made read-only, and compiler
-outputs go to a separate private directory. Before building, the generator clears
-loader/compiler/Python injection variables; every builder process uses Python
-`-S`, an allowlisted environment and trusted absolute interpreter. The resulting
-ELF must equal the reviewed canonical digest, not a self-declared runtime hash.
-This output identity check remains authoritative even on hosts that prohibit
-unprivileged user or mount namespaces.
+The pinned nnScaler dynamic-programming solver is built directly from a
+fixed-commit Git archive without executing upstream `setup.py`. The full archive
+SHA-256 and three direct build inputs are checked in memory; C++ source, header,
+and compiler-produced assembly are then consumed through fully sealed memfds.
+The trusted driver uses fixed absolute compiler/linker/objcopy commands, restores
+the canonical source FILE symbol, and strips build-id and non-runtime symbol
+metadata so path-independent builds converge byte-for-byte. The resulting ELF
+must equal the reviewed canonical digest, and the output tree must be an exact
+`lstat`-checked set of two directories plus one unique regular file. Builder
+processes use a closed environment; accepted source and assembly bytes are never
+reopened from a mutable source tree. These checks remain authoritative even on
+hosts that prohibit unprivileged user or mount namespaces.
 
 Before each `torchrun`, the canonical fixed-commit archive, exact patched
 `parallel.py`, startup guard, and ELF are independently hashed. The archive,

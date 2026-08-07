@@ -251,6 +251,7 @@ def run_sealed(
             "PATH": "/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin",
             "PYTHONNOUSERSITE": "1",
             "PYTHONPATH": ":".join([runtime_path, *_runtime_paths(python_tail)]),
+            "PYTHONHASHSEED": "0",
             "PYTHONSAFEPATH": "1",
             "PYTHONDONTWRITEBYTECODE": "1",
             "TRAINVERIFY_DP_SOLVER_PATH": extension_path,

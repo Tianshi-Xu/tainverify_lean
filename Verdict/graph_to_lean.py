@@ -1262,6 +1262,16 @@ def escape_lean_string(s: str) -> str:
 	return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def _goals_module_prefix(module_name: str, goals_out_dir: Path) -> str:
+	"""Return the Lean module prefix for files emitted under goals_out_dir."""
+	module_parent = module_name.rpartition(".")[0]
+	return (
+		f"{module_parent}.{goals_out_dir.name}"
+		if module_parent
+		else goals_out_dir.name
+	)
+
+
 def lean_list_nat(xs: Sequence[int]) -> str:
 	if not xs:
 		return "[]"
@@ -2578,10 +2588,12 @@ def emit_lean_spec(
 	# Goal-sliced graphs are emitted into per-goal files (if requested).
 	if goal_slices and goals_out_dir is not None:
 		goals_out_dir.mkdir(parents=True, exist_ok=True)
+		goals_module_prefix = _goals_module_prefix(module_name, goals_out_dir)
 		deps_by_ts: Dict[int, GoalDependency] = {}
 		if goal_deps:
 			for dep in goal_deps:
 				deps_by_ts[dep.goal_ts] = dep
+		bridge_unavailable_gids: set[str] = set()
 
 		for i, sl in enumerate(goal_slices):
 			goal_ts = int(sl.goal.ts)
@@ -2593,6 +2605,8 @@ def emit_lean_spec(
 			goal_lines.append(f"    Goal: {gid} (tensor id: {goal_ts})")
 			goal_lines.append("-/")
 			goal_lines.append(f"import {module_name}")
+			goal_lines.append("")
+			goal_lines.append("set_option maxRecDepth 100000")
 			goal_lines.append("")
 			goal_lines.append("open TrainVerify.Denote")
 			goal_lines.append("open TrainVerify.Denote.Generated")
@@ -2730,7 +2744,21 @@ def emit_lean_spec(
 			# for the design walkthrough.
 			# ------------------------------------------------------------------
 			ctf_path = goals_out_dir / f"Goal_{gid}_CutToFull.lean"
+			missing_prereq_tids = [
+				int(ts) for ts, _ in (dep.prereq_intermediate_goals if dep else [])
+				if int(ts) not in goal_tid_set
+			]
+			if missing_prereq_tids:
+				bridge_unavailable_gids.add(gid)
+				ctf_path.write_text(
+					f"/- Goal {gid} cut_to_full bridge omitted from this bounded snapshot.\n"
+					f"    Required prerequisite goal tids were not selected: {missing_prereq_tids}.\n"
+					f"    Regenerate without --max-goals to emit the closed bridge dependency set. -/\n",
+					encoding="utf-8",
+				)
+				continue
 			if f"goal_{gid}" in suppressed_def_names:
+				bridge_unavailable_gids.add(gid)
 				# Nothing to lift: there is no `goal_N_stmt_cut` and no `goal_N`.
 				ctf_path.write_text(
 					f"/- Goal {gid} is in CP zigzag layout and has no ordinary-gather\n"
@@ -2740,8 +2768,15 @@ def emit_lean_spec(
 					encoding="utf-8",
 				)
 				continue
-			# Derive goals_module_prefix from goals_out_dir (e.g. "yoco_goals" → "denote.yoco_goals").
-			goals_dir_name = goals_out_dir.name
+			if dep and dep.prereq_intermediate_goals:
+				bridge_unavailable_gids.add(gid)
+				ctf_path.write_text(
+					f"/- Goal {gid} cut_to_full bridge omitted: non-base bridge generation "
+					"is not yet supported.\n"
+					"   Supporting slice facts alone do not constitute a bridge theorem. -/\n",
+					encoding="utf-8",
+				)
+				continue
 			ctf_lines = _emit_cut_to_full(
 				gid=gid,
 				sl=sl,
@@ -2749,7 +2784,7 @@ def emit_lean_spec(
 				sm_graph=sm_graph,
 				pm_graph=pm_graph,
 				module_name=module_name,
-				goals_module_prefix=f"denote.{goals_dir_name}",
+				goals_module_prefix=goals_module_prefix,
 				goal_id_fn=_goal_id,
 			)
 			ctf_path.write_text("\n".join(ctf_lines) + "\n", encoding="utf-8")
@@ -2757,11 +2792,6 @@ def emit_lean_spec(
 		# ------------------------------------------------------------------
 		# Pattern/instance/main skeletons
 		# ------------------------------------------------------------------
-		def _module_parent(mod : str) -> str:
-			parts = mod.split(".")
-			return ".".join(parts[:-1]) if len(parts) > 1 else mod
-
-		parent_module = _module_parent(module_name)
 
 		def _canonical_nodes(nodes: List[Any], G: Any, *, num_parts: int) -> Tuple[Tuple[Any, ...], ...]:
 			tid_to_sym: Dict[int, str] = {}
@@ -2811,9 +2841,12 @@ def emit_lean_spec(
 			pattern_file_lines.append(f"   Goals: {', '.join(members)}")
 			pattern_file_lines.append("-/")
 			pattern_file_lines.append(f"import {module_name}")
+			for gid in members:
+				pattern_file_lines.append(f"import {goals_module_prefix}.Goal_{gid}")
 			pattern_file_lines.append("")
 			pattern_file_lines.append("open TrainVerify.Denote")
 			pattern_file_lines.append("open TrainVerify.Denote.Generated")
+			pattern_file_lines.append("open TrainVerify.Denote.GeneratedGoals")
 			pattern_file_lines.append("")
 			pattern_file_lines.append("namespace TrainVerify.Denote.GeneratedPatterns")
 			pattern_file_lines.append("")
@@ -2839,7 +2872,7 @@ def emit_lean_spec(
 		pattern_lines.append("   Individual proof obligations live in Pattern_N.lean files.")
 		pattern_lines.append("-/")
 		for pid in sorted(pattern_members):
-			pattern_lines.append(f"import {parent_module}.Pattern_{pid}")
+			pattern_lines.append(f"import {goals_module_prefix}.Pattern_{pid}")
 		pattern_lines.append("")
 		pattern_lines.append("open TrainVerify.Denote")
 		pattern_lines.append("open TrainVerify.Denote.Generated")
@@ -2861,14 +2894,15 @@ def emit_lean_spec(
 		instance_lines: List[str] = []
 		instance_lines.append("/- Auto-generated pattern instances.")
 		instance_lines.append("   These theorems instantiate reusable Pattern_N proofs to concrete goals.")
-		instance_lines.append("   They intentionally avoid importing Goal_N cut-proof files; the all-goals")
-		instance_lines.append("   theorem is meant to depend on reusable pattern proofs only.")
+		instance_lines.append("   Pattern files import their concrete Goal_N statements, while this layer")
+		instance_lines.append("   composes the reusable pattern proofs only.")
 		instance_lines.append("-/")
 		for pid in sorted(pattern_members):
-			instance_lines.append(f"import {parent_module}.Pattern_{pid}")
+			instance_lines.append(f"import {goals_module_prefix}.Pattern_{pid}")
 		instance_lines.append("")
 		instance_lines.append("open TrainVerify.Denote")
 		instance_lines.append("open TrainVerify.Denote.Generated")
+		instance_lines.append("open TrainVerify.Denote.GeneratedGoals")
 		instance_lines.append("open TrainVerify.Denote.GeneratedPatterns")
 		instance_lines.append("")
 		instance_lines.append("namespace TrainVerify.Denote.GeneratedPatternInstances")
@@ -3058,7 +3092,7 @@ def emit_lean_spec(
 				seg_index_lines.append("   These patterns package small repeated concrete goal runs.")
 				seg_index_lines.append("-/")
 				for sid in range(1, len(segment_patterns) + 1):
-					seg_index_lines.append(f"import {parent_module}.SegmentPattern_{sid}")
+					seg_index_lines.append(f"import {goals_module_prefix}.SegmentPattern_{sid}")
 				seg_index_lines.append("")
 				seg_index_lines.append("open TrainVerify.Denote")
 				seg_index_lines.append("open TrainVerify.Denote.Generated")
@@ -3080,7 +3114,7 @@ def emit_lean_spec(
 				seg_inst_lines.append("   This optional layer is not used by MainTheorem's pattern-to-all_goals path.")
 				seg_inst_lines.append("-/")
 				for sid in range(1, len(segment_patterns) + 1):
-					seg_inst_lines.append(f"import {parent_module}.SegmentPattern_{sid}")
+					seg_inst_lines.append(f"import {goals_module_prefix}.SegmentPattern_{sid}")
 				seg_inst_lines.append("")
 				seg_inst_lines.append("open TrainVerify.Denote")
 				seg_inst_lines.append("open TrainVerify.Denote.Generated")
@@ -3150,7 +3184,7 @@ def emit_lean_spec(
 			obligation_lines.append("Pattern proof obligations for all_goals_stmt: none")
 		obligation_lines.append("-/")
 		for pid in sorted(main_patterns):
-			obligation_lines.append(f"import {parent_module}.Pattern_{pid}")
+			obligation_lines.append(f"import {goals_module_prefix}.Pattern_{pid}")
 		obligation_lines.append("")
 		obligation_lines.append("namespace TrainVerify.Denote.GeneratedProofObligations")
 		obligation_lines.append("")
@@ -3168,7 +3202,10 @@ def emit_lean_spec(
 		main_lines.append("/- Auto-generated main composition skeleton.")
 		main_lines.append("   This file composes reusable pattern proofs into all_goals_stmt.")
 		main_lines.append("-/")
-		main_lines.append(f"import {parent_module}.Instances")
+		main_lines.append(f"import {goals_module_prefix}.Instances")
+		for sl in goal_slices:
+			gid = _goal_id(int(sl.goal.ts))
+			main_lines.append(f"import {goals_module_prefix}.Goal_{gid}_CutToFull")
 		main_lines.append("")
 		main_lines.append("set_option maxRecDepth 100000")
 		main_lines.append("set_option linter.style.emptyLine false")
@@ -3223,7 +3260,9 @@ def emit_lean_spec(
 					pid = pattern_by_key[_pattern_key(sl)]
 					main_lines.append(f"{indent}cases hg with")
 					main_lines.append(f"{indent}| head =>")
-					main_lines.append(f"{indent}  exact prove_goal_{gid}_from_pattern_{pid}")
+					main_lines.append(
+						f"{indent}  exact goal_{gid}_cut_to_full prove_goal_{gid}_from_pattern_{pid}"
+					)
 					main_lines.append(f"{indent}| tail _ hg =>")
 					if idx == len(chunk) - 1:
 						main_lines.append(f"{indent}  cases hg")
@@ -3243,6 +3282,15 @@ def emit_lean_spec(
 		main_lines.append("")
 		main_lines.append("end TrainVerify.Denote.GeneratedMain")
 		main_lines.append("")
+		if bridge_unavailable_gids:
+			missing = sorted(bridge_unavailable_gids, key=lambda x: int(x))
+			main_lines = [
+				"/- Main full-goal composition omitted: this snapshot has no verified",
+				f"   cut_to_full bridge for goal ids {missing}.",
+				"   Pattern files remain explicit `sorry` proof-obligation skeletons;",
+				"   no cut statement is promoted to an all_goals_stmt theorem. -/",
+				"",
+			]
 		(goals_out_dir / "MainTheorem.lean").write_text("\n".join(main_lines) + "\n", encoding="utf-8")
 
 	if zigzag_goal_names:
