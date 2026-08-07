@@ -1200,6 +1200,26 @@ def test_snapshot_publish_rollback_never_moves_replacement(tmp_path, monkeypatch
     assert calls["rename"] == 1
 
 
+def test_emitter_main_sets_private_umask_before_parsing(monkeypatch):
+    events = []
+
+    class StopParser:
+        def __init__(self, *args, **kwargs):
+            events.append("parser")
+
+        def add_argument(self, *args, **kwargs):
+            return None
+
+        def parse_args(self):
+            raise RuntimeError("stop after parse")
+
+    monkeypatch.setattr(emitter.os, "umask", lambda mode: events.append(("umask", mode)))
+    monkeypatch.setattr(emitter.argparse, "ArgumentParser", StopParser)
+    with pytest.raises(RuntimeError, match="stop after parse"):
+        emitter.main()
+    assert events[0] == ("umask", 0o077)
+
+
 def test_emitter_lean_gate_uses_private_revision_and_propagates_failure(
     tmp_path, monkeypatch,
 ):

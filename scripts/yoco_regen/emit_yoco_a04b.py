@@ -721,6 +721,7 @@ def graph_to_lean_argv(llm_train, nnscaler, files, stage):
 
 
 def main():
+    os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--authority-dir", type=Path, required=True)
     parser.add_argument("--llm-train", type=Path, required=True)
