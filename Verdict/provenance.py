@@ -65,13 +65,25 @@ def normalize_command(command: Sequence[str]) -> list[str]:
     """Remove checkout-specific absolute paths while retaining reproducible operands."""
     normalized: list[str] = []
     path_prefix: str | None = None
+    artifact_file = False
     for token in command:
+        if artifact_file:
+            name, separator, raw_path = str(token).partition("=")
+            if not separator or not name or not raw_path:
+                raise ProvenanceError("--artifact-file must be NAME=PATH")
+            artifact_name = Path(raw_path.replace("\\", "/")).name
+            normalized.append(f"{name}=$AUTHORITY_DIR/{artifact_name}")
+            artifact_file = False
+            continue
         if path_prefix is not None:
             normalized.append(f"{path_prefix}/{Path(token).name}")
             path_prefix = None
             continue
         normalized.append(str(token).replace("\\", "/"))
+        artifact_file = str(token) == "--artifact-file"
         path_prefix = _PATH_FLAGS.get(str(token))
+    if artifact_file or path_prefix is not None:
+        raise ProvenanceError("path-bearing command flag is missing its operand")
     return normalized
 
 
@@ -99,6 +111,7 @@ def build_manifest(
     command: Sequence[str], packages: Mapping[str, str],
     deduplicated_intermediate_tids: Sequence[int], final_goal_tids: Sequence[int],
     intermediate_goal_tids: Sequence[int], expected_hashes: Mapping[str, str] | None = None,
+    artifact_files: Mapping[str, str | Path] | None = None,
     input_value_classes: Mapping[str, Sequence[tuple[str, Sequence[int]]]] | None = None,
 ) -> dict[str, Any]:
     _validate_commit("llm_train_commit", llm_train_commit)
@@ -117,6 +130,23 @@ def build_manifest(
             raise ProvenanceError(f"duplicate metadata basename: {name}")
         metadata_hashes[name] = sha256_file(source)
         _check_expected(f"metadata_sha256.{name}", metadata_hashes[name], expected)
+    artifact_hashes: dict[str, str] = {}
+    for name, source in sorted((artifact_files or {}).items()):
+        if not name or Path(name).name != name:
+            raise ProvenanceError(f"invalid artifact name: {name}")
+        if name in artifact_hashes:
+            raise ProvenanceError(f"duplicate artifact name: {name}")
+        artifact_hashes[name] = sha256_file(source)
+        expected_field = f"artifact_sha256.{name}"
+        if expected_field not in expected:
+            raise ProvenanceError(f"missing expected artifact hash: {name}")
+        _check_expected(expected_field, artifact_hashes[name], expected)
+    consumed_expected = {"sm_pkl_sha256", "pm_pkl_sha256"}
+    consumed_expected.update(f"metadata_sha256.{name}" for name in metadata_hashes)
+    consumed_expected.update(f"artifact_sha256.{name}" for name in artifact_hashes)
+    unexpected = set(expected) - consumed_expected
+    if unexpected:
+        raise ProvenanceError(f"unconsumed expected hashes: {sorted(unexpected)}")
     class_data = {
         side: [
             {"source": str(source), "tids": sorted(set(map(int, tids)))}
@@ -125,6 +155,7 @@ def build_manifest(
         for side, classes in sorted((input_value_classes or {}).items())
     }
     return {
+        "artifact_sha256": dict(sorted(artifact_hashes.items())),
         "command": normalize_command(command),
         "deduplicated_intermediate_tids": sorted(set(map(int, deduplicated_intermediate_tids))),
         "emitter_sha256": sha256_file(emitter),
@@ -142,7 +173,7 @@ def build_manifest(
         "packages": dict(sorted((str(k), str(v)) for k, v in packages.items())),
         "pm_pkl_sha256": pm_hash,
         "python": platform.python_version(),
-        "schema_version": 2,
+        "schema_version": 3,
         "sm_pkl_sha256": sm_hash,
     }
 

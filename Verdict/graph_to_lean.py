@@ -156,6 +156,10 @@ def parse_args() -> argparse.Namespace:
 	p.add_argument("--manifest-out", help="Write an immutable deterministic provenance manifest.")
 	p.add_argument("--model", default="YOCO-MoE-A0.4B", help="Model identity recorded in the manifest.")
 	p.add_argument("--metadata-json", action="append", default=[], help="Authority metadata JSON (repeatable).")
+	p.add_argument(
+		"--artifact-file", action="append", default=[], metavar="NAME=PATH",
+		help="Non-JSON authority artifact included and rehashed in the manifest (repeatable).",
+	)
 	p.add_argument("--llm-train-repo", help="Pinned llm-train git checkout used to create the authority artifacts.")
 	p.add_argument("--nnscaler-repo", help="Pinned nnScaler git checkout used to create the authority artifacts.")
 	p.add_argument("--llm-train-revision", help="Expected full llm-train commit; rejects a checkout mismatch.")
@@ -165,6 +169,10 @@ def parse_args() -> argparse.Namespace:
 	p.add_argument(
 		"--metadata-sha256", action="append", default=[], metavar="NAME=SHA256",
 		help="Expected authority metadata hash (repeatable).",
+	)
+	p.add_argument(
+		"--artifact-sha256", action="append", default=[], metavar="NAME=SHA256",
+		help="Expected non-JSON authority artifact hash (repeatable).",
 	)
 	return p.parse_args()
 
@@ -3777,6 +3785,22 @@ def main() -> None:
 				raise ProvenanceError("--metadata-sha256 must be NAME=SHA256")
 			name, digest = item.split("=", 1)
 			expected_hashes[f"metadata_sha256.{name}"] = digest
+		artifact_files: Dict[str, str] = {}
+		for item in args.artifact_file:
+			if "=" not in item:
+				raise ProvenanceError("--artifact-file must be NAME=PATH")
+			name, source = item.split("=", 1)
+			if not name or name in artifact_files:
+				raise ProvenanceError(f"invalid or duplicate artifact name: {name}")
+			artifact_files[name] = source
+		for item in args.artifact_sha256:
+			if "=" not in item:
+				raise ProvenanceError("--artifact-sha256 must be NAME=SHA256")
+			name, digest = item.split("=", 1)
+			key = f"artifact_sha256.{name}"
+			if key in expected_hashes:
+				raise ProvenanceError(f"duplicate artifact hash: {name}")
+			expected_hashes[key] = digest
 		manifest = build_manifest(
 			model=args.model, sm_pkl=args.sm_pkl, pm_pkl=args.pm_pkl,
 			metadata_files=args.metadata_json, llm_train_commit=llm_revision,
@@ -3791,6 +3815,7 @@ def main() -> None:
 				"pm": pm_input_value_classes,
 			},
 			expected_hashes=expected_hashes,
+			artifact_files=artifact_files,
 		)
 		write_manifest(args.manifest_out, manifest)
 		print(f"Wrote provenance manifest to: {args.manifest_out}")

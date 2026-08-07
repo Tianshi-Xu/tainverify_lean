@@ -78,7 +78,11 @@ def test_checked_in_yoco_a04b_goal_policy_and_lineage():
 
 
 def test_checker_detects_byte_mutation_even_when_structure_matches(tmp_path: Path):
-    manifest = {"schema_version": 1, "generated_lean_sha256": "unused"}
+    manifest = {
+        "schema_version": 3,
+        "artifact_sha256": {"nnscaler_dp_solver.so": "a" * 64},
+        "generated_lean_sha256": "unused",
+    }
     expected = tmp_path / "expected.lean"
     actual = tmp_path / "actual.lean"
     expected_manifest = tmp_path / "expected.json"
@@ -87,5 +91,5 @@ def test_checker_detects_byte_mutation_even_when_structure_matches(tmp_path: Pat
     actual.write_bytes((LEAN + "\n").encode())
     expected_manifest.write_text(json.dumps(manifest), encoding="utf-8")
     actual_manifest.write_text(json.dumps(manifest), encoding="utf-8")
-    with pytest.raises(AssertionError, match="Lean bytes"):
+    with pytest.raises(RuntimeError, match="Lean bytes"):
         compare_snapshots(expected, actual, expected_manifest, actual_manifest)

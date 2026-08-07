@@ -7,6 +7,7 @@ from Verdict.provenance import (
     ProvenanceError,
     build_manifest,
     deterministic_json_bytes,
+    normalize_command,
     sha256_file,
 )
 
@@ -78,3 +79,55 @@ def test_manifest_json_is_sorted_stable_and_path_independent(tmp_path):
         "--pm-pkl", "$AUTHORITY_DIR/pm.pkl",
     ]
     assert manifest["final_goal_tids"] == [1, 2, 3, 4, 5]
+    assert manifest["schema_version"] == 3
+
+
+def test_manifest_rehashes_binary_artifacts_and_rejects_unconsumed_hashes(tmp_path):
+    sm, pm, meta, lean, emitter = _inputs(tmp_path)
+    binary = tmp_path / "solver.so"
+    binary.write_bytes(b"\x7fELFsolver")
+    def make_manifest(*, artifact_files=None, expected_hashes=None):
+        return build_manifest(
+            model="YOCO-MoE-A0.4B", sm_pkl=sm, pm_pkl=pm,
+            metadata_files=[meta], llm_train_commit="1" * 40,
+            nnscaler_commit="2" * 40, emitter=emitter, generated_lean=lean,
+            command=["graph_to_lean"], packages={},
+            deduplicated_intermediate_tids=[], final_goal_tids=[],
+            intermediate_goal_tids=[], artifact_files=artifact_files,
+            expected_hashes=expected_hashes,
+        )
+    digest = sha256_file(binary)
+    manifest = make_manifest(
+        artifact_files={"solver.so": binary},
+        expected_hashes={"artifact_sha256.solver.so": digest},
+    )
+    assert manifest["artifact_sha256"] == {"solver.so": digest}
+    with pytest.raises(ProvenanceError, match="missing expected artifact hash"):
+        make_manifest(artifact_files={"solver.so": binary})
+    binary.write_bytes(b"\x7fELFchanged")
+    with pytest.raises(ProvenanceError, match="artifact_sha256.solver.so mismatch"):
+        make_manifest(
+            artifact_files={"solver.so": binary},
+            expected_hashes={"artifact_sha256.solver.so": digest},
+        )
+    with pytest.raises(ProvenanceError, match="unconsumed expected hashes"):
+        make_manifest(
+            expected_hashes={"artifact_sha256.unbound.so": "0" * 64},
+        )
+
+
+def test_artifact_file_command_path_is_stable_across_random_stages():
+    first = normalize_command([
+        "graph_to_lean", "--artifact-file",
+        "nnscaler_dp_solver.so=/first/.stage/authority/nnscaler_dp_solver.so",
+    ])
+    second = normalize_command([
+        "graph_to_lean", "--artifact-file",
+        "nnscaler_dp_solver.so=/second/.stage/authority/nnscaler_dp_solver.so",
+    ])
+    assert first == second == [
+        "graph_to_lean", "--artifact-file",
+        "nnscaler_dp_solver.so=$AUTHORITY_DIR/nnscaler_dp_solver.so",
+    ]
+    with pytest.raises(ProvenanceError, match="NAME=PATH"):
+        normalize_command(["graph_to_lean", "--artifact-file", "missing-separator"])

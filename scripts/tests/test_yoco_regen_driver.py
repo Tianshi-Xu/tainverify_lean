@@ -10,12 +10,21 @@ import types
 import pytest
 
 from scripts.yoco_regen.patch_mgener_dump import MARKER, patch_source
+from scripts.check_yoco_a04b_regen import _validate_candidate_manifest
 from scripts.yoco_regen.comm_profile import EXPECTED_SIZES_MB, validate_profile
+from scripts.yoco_regen.check_publication_allowlist import (
+    EXPECTED as PUBLICATION_FILES,
+    validate as validate_publication,
+)
 from scripts.yoco_regen.patch_llm_cc12_gemm import (
     MARKER as CC12_MARKER,
     patch_source as patch_cc12_source,
 )
-from scripts.yoco_regen.atomic_publish import rename_noreplace
+from scripts.yoco_regen.atomic_publish import publish_authority, rename_noreplace
+from scripts.yoco_regen.sealed_extension_exec import (
+    CLEAN_TOOL_ENV,
+    allowlisted_runtime_environment,
+)
 import scripts.yoco_regen.emit_yoco_a04b as emitter
 from scripts.yoco_regen.safe_cleanup import create_owned_stage, cleanup_owned_stage
 from scripts.yoco_regen.write_authority_metadata import validate_graph
@@ -94,6 +103,7 @@ def _run_patched_dump(
     else:
         monkeypatch.setenv("TRAINVERIFY_PATCHED_LLM_GEMM_SHA256", llm_patch_hash)
     monkeypatch.setenv("TRAINVERIFY_COMM_PROFILE_SHA256", "e" * 64)
+    monkeypatch.setenv("TRAINVERIFY_DP_SOLVER_SHA256", "f" * 64)
     namespace = {
         "__file__": str(source_path),
         "ModuleCodeGen": lambda *_args: {"ok": True},
@@ -127,6 +137,7 @@ def test_dump_patch_only_rank_zero_writes_receipt(tmp_path, monkeypatch):
     assert data["plan_ngpus"] == 2 and data["runtime_ngpus"] == 2
     assert data["patched_llm_gemm_py_sha256"] == "c" * 64
     assert data["comm_profile_sha256"] == "e" * 64
+    assert data["dp_solver_extension_sha256"] == "f" * 64
 
 
 def test_dump_patch_rejects_missing_or_invalid_llm_patch_hash(tmp_path, monkeypatch):
@@ -185,6 +196,185 @@ def test_secure_authority_copy_rejects_symlinks(tmp_path, monkeypatch):
     (bad_source / "payload").symlink_to("real")
     with pytest.raises(OSError):
         emitter.secure_copy_authority(bad_source, tmp_path / "bad-copy")
+
+
+def test_candidate_manifest_requires_schema_v3_solver_artifact():
+    with pytest.raises(RuntimeError, match="schema v3"):
+        _validate_candidate_manifest({"schema_version": 2})
+    with pytest.raises(RuntimeError, match="dp solver"):
+        _validate_candidate_manifest({"schema_version": 3, "artifact_sha256": {}})
+    _validate_candidate_manifest({
+        "schema_version": 3,
+        "artifact_sha256": {"nnscaler_dp_solver.so": "a" * 64},
+    })
+    optimized = subprocess.run(
+        [
+            sys.executable, "-O", "-c",
+            "from scripts.check_yoco_a04b_regen import _validate_candidate_manifest; "
+            "_validate_candidate_manifest({'schema_version': 2})",
+        ],
+        cwd=Path(__file__).resolve().parents[2],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert optimized.returncode != 0
+    assert "candidate manifest is not schema v3" in optimized.stderr
+
+
+def test_publication_allowlist_rejects_private_or_symlink_entries(tmp_path):
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    for name in PUBLICATION_FILES:
+        (stage / name).write_bytes(b"artifact")
+        (stage / name).chmod(0o444)
+    validate_publication(stage)
+    private = stage / ".dp-solver-build-output"
+    private.mkdir()
+    with pytest.raises(RuntimeError, match="allowlist"):
+        validate_publication(stage)
+    private.rmdir()
+    victim = stage / "gen_args.json"
+    victim.unlink()
+    victim.symlink_to("sm_mgener.json")
+    with pytest.raises(PermissionError, match="untrusted"):
+        validate_publication(stage)
+
+
+def test_atomic_publication_validates_the_same_directory_inode(tmp_path):
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    for name in PUBLICATION_FILES:
+        (stage / name).write_bytes(b"artifact")
+        (stage / name).chmod(0o444)
+    target = tmp_path / "authority"
+    publish_authority(stage, target)
+    assert not stage.exists()
+    validate_publication(target)
+
+    rejected = tmp_path / "rejected"
+    rejected.mkdir()
+    for name in PUBLICATION_FILES:
+        (rejected / name).write_bytes(b"artifact")
+        (rejected / name).chmod(0o444)
+    (rejected / ".private-build").mkdir()
+    with pytest.raises(RuntimeError, match="allowlist"):
+        publish_authority(rejected, tmp_path / "must-not-exist")
+    assert rejected.exists()
+    assert not (tmp_path / "must-not-exist").exists()
+
+    unsafe_parent = tmp_path / "unsafe-parent"
+    unsafe_parent.mkdir(mode=0o777)
+    unsafe_parent.chmod(0o777)
+    unsafe_stage = unsafe_parent / "stage"
+    unsafe_stage.mkdir()
+    for name in PUBLICATION_FILES:
+        (unsafe_stage / name).write_bytes(b"artifact")
+        (unsafe_stage / name).chmod(0o444)
+    with pytest.raises(PermissionError, match="owner-controlled"):
+        publish_authority(unsafe_stage, unsafe_parent / "authority")
+
+    unsafe_ancestor = tmp_path / "unsafe-ancestor"
+    unsafe_ancestor.mkdir(mode=0o777)
+    unsafe_ancestor.chmod(0o777)
+    trusted_immediate = unsafe_ancestor / "trusted-immediate"
+    trusted_immediate.mkdir(mode=0o700)
+    nested_stage = trusted_immediate / "stage"
+    nested_stage.mkdir()
+    for name in PUBLICATION_FILES:
+        (nested_stage / name).write_bytes(b"artifact")
+        (nested_stage / name).chmod(0o444)
+    with pytest.raises(PermissionError, match="ancestor"):
+        publish_authority(nested_stage, trusted_immediate / "authority")
+
+
+def test_runtime_and_tar_environments_are_closed(monkeypatch):
+    required = {
+        "HOME": "/private/home",
+        "MGENER_DUMP_PATH": "/stage/sm.pkl",
+        "TRAINVERIFY_EXPECTED_POLICY": "policy",
+        "TRAINVERIFY_PATCHED_LLM_GEMM_SHA256": "a" * 64,
+        "TRAINVERIFY_COMM_PROFILE_SHA256": "b" * 64,
+    }
+    poisoned = {
+        **required,
+        "LD_AUDIT": "/evil/audit.so",
+        "TAR_OPTIONS": "--checkpoint-action=exec=evil",
+        "DISABLE_COMM_FUSION": "1",
+        "DISABLE_INTRA_RVD": "1",
+        "TRACE_STRATEGY": "evil",
+    }
+    environment = allowlisted_runtime_environment(poisoned)
+    assert environment == required
+    assert set(CLEAN_TOOL_ENV) == {"LANG", "LC_ALL", "PATH"}
+    assert "TAR_OPTIONS" not in CLEAN_TOOL_ENV
+
+
+def test_generator_requires_external_clean_environment():
+    script = Path(__file__).resolve().parents[1] / "yoco_regen" / "generate_authority.sh"
+    result = subprocess.run(
+        ["/bin/bash", "--noprofile", "--norc", str(script)],
+        env={"YOCO_PYTHON": sys.executable},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "TRAINVERIFY_CLEAN_ENV" in result.stderr
+
+    poisoned = subprocess.run(
+        ["/bin/bash", "--noprofile", "--norc", str(script)],
+        env={
+            "HOME": "/tmp",
+            "TRAINVERIFY_CLEAN_ENV": "1",
+            "YOCO_PYTHON": sys.executable,
+            "YOCO_LLM_TRAIN_REPO": "/missing/llm",
+            "YOCO_NNSCALER_REPO": "/missing/nns",
+            "YOCO_AUTHORITY_OUT": "/missing/out",
+            "TRACE_STRATEGY": "ambient-control",
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert poisoned.returncode == 2
+    assert "unexpected inherited environment: TRACE_STRATEGY" in poisoned.stderr
+
+
+def test_safe_path_package_entrypoints_import_siblings():
+    root = Path(__file__).resolve().parents[2]
+    environment = {
+        "PATH": "/usr/bin:/bin",
+        "PYTHONNOUSERSITE": "1",
+        "PYTHONPATH": str(root),
+        "PYTHONSAFEPATH": "1",
+    }
+    for module in (
+        "scripts.yoco_regen.write_authority_metadata",
+        "scripts.yoco_regen.atomic_publish",
+    ):
+        result = subprocess.run(
+            [sys.executable, "-S", "-m", module, "--help"],
+            cwd=root,
+            env=environment,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 0, (module, result.stderr)
+    imports = subprocess.run(
+        [
+            sys.executable, "-S", "-c",
+            "from scripts.yoco_regen import write_authority_metadata as w; "
+            "from scripts.yoco_regen import patch_mgener_dump, patch_llm_cc12_gemm, comm_profile",
+        ],
+        cwd=root,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert imports.returncode == 0, imports.stderr
 
 
 def test_owned_stage_cleanup_requires_matching_marker(tmp_path):
@@ -292,6 +482,7 @@ def _receipt(plan=1, policy="nnscaler_train.main.<locals>.autodist_wrapper"):
         "patched_parallel_py_sha256": "b" * 64,
         "patched_llm_gemm_py_sha256": "c" * 64,
         "comm_profile_sha256": "e" * 64,
+        "dp_solver_extension_sha256": "f" * 64,
     }
 
 
@@ -310,6 +501,7 @@ def _authority_record(plan=1):
         "patched_parallel_py_sha256": "b" * 64,
         "patched_llm_gemm_py_sha256": "c" * 64,
         "comm_profile_sha256": "e" * 64,
+        "dp_solver_extension_sha256": "f" * 64,
         "node_count": 1,
         "signature_counts": {"op": 1},
     }
@@ -349,6 +541,7 @@ def _full_meta():
         "torch_version": "2.8.0+cu128",
         "python_version": "3.12.3",
         "host": "host",
+        "dp_solver_extension_sha256": "1" * 64,
         "hardware_sha256": emitter.hardware_sha256(hardware),
         "source_sha256": {"source": "a" * 64},
         "sm": _authority_record(1),
@@ -424,6 +617,23 @@ def test_trusted_emitter_gen_args_schema_is_closed():
         emitter.validate_meta_schema(missing)
 
 
+def test_dp_solver_binary_is_hashed_but_not_passed_as_json(tmp_path):
+    files = {}
+    for name in emitter.AUTHORITY_NAMES:
+        path = tmp_path / name
+        path.write_bytes(b"\x7fELF" if name == "nnscaler_dp_solver.so" else b"{}")
+        files[name] = path
+    argv = emitter.graph_to_lean_argv(tmp_path, tmp_path, files, tmp_path)
+    metadata_json_values = [
+        argv[index + 1] for index, value in enumerate(argv) if value == "--metadata-json"
+    ]
+    assert str(files["nnscaler_dp_solver.so"]) not in metadata_json_values
+    assert any(
+        isinstance(value, str) and value.startswith("nnscaler_dp_solver.so=")
+        for value in argv
+    )
+
+
 def test_authority_graph_gate_accepts_only_full_autodist_graph():
     counts = validate_graph(_fake_authority_graph(), "sm", 1, _receipt())
     assert counts[
@@ -447,20 +657,45 @@ def test_authority_script_pins_reviewed_llm_revision():
     assert "--plan_ngpus \"$plan\"" in script
     assert "--partition_constraints_path ./pcs/all2all_moe.yaml" in script
     assert "TRAINVERIFY_EXPECTED_POLICY='main.<locals>.autodist_wrapper'" in script
+    assert "umask 077" in script
+    assert "YOCO_PYTHON" in script
+    assert 'unset LD_AUDIT LD_PRELOAD LD_LIBRARY_PATH CC CXX' in script
+    assert '"$PYTHON" -S' in script
     assert "git clone --quiet --no-hardlinks" in script
     assert "patch_llm_cc12_gemm.py" in script
     assert "TRAINVERIFY_PATCHED_LLM_GEMM_SHA256" in script
     assert "TRAINVERIFY_COMM_PROFILE_SHA256" in script
     assert "comm_profile.py" in script
-    assert 'HOME="$PROFILE_HOME" MGENER_DUMP_PATH="$dump" torchrun' in script
+    assert "build_dp_solver.py" in script
+    assert "sealed_extension_exec.py" in script
+    assert "TRAINVERIFY_DP_SOLVER_SHA256" in script
+    assert 'HOME="$PROFILE_HOME" MGENER_DUMP_PATH="$dump"' in script
+    assert '"$TRAINVERIFY_DP_SOLVER_SHA256" "$NNS_WORK"' in script
+    assert '"$DP_SOLVER_SITE_GUARD/sitecustomize.py" "$LLM_WORK/llm" -- torchrun' in script
     assert 'ln "$PRIVATE_COMM_DIR/intra_2.json" "$STAGE/comm_profile_intra_2.json"' in script
     assert 'safe_cleanup.py" cleanup' in script
-    assert 'export PYTHONPATH="$NNS_WORK:$LLM_WORK/llm:${PYTHONPATH:-}"' in script
+    assert "dp_solver_sitecustomize.py" in script
     assert "export PYTHONSAFEPATH=1" in script
     assert "git -C \"$NNS_SOURCE\" status" in script
     assert "git -C \"$NNS\" restore" not in script
-    assert "atomic_publish.py" in script
+    assert "scripts.yoco_regen.atomic_publish" in script
     assert "trap - EXIT" in script
+    sealed = (
+        Path(__file__).resolve().parents[1]
+        / "yoco_regen" / "sealed_extension_exec.py"
+    ).read_text(encoding="utf-8")
+    assert '"-S"' in sealed
+    assert "PYTHONNOUSERSITE" in sealed
+    assert "TRAINVERIFY_WORKER_SHIM" in sealed
+    assert "NNSCALER_ARCHIVE_SHA256" in sealed
+    builder = (
+        Path(__file__).resolve().parents[1] / "yoco_regen" / "build_dp_solver.py"
+    ).read_text(encoding="utf-8")
+    assert "EXPECTED_EXTENSION_SHA256" in builder
+    assert 'sys.executable, "-S"' in builder
+    assert '"PATH": "/usr/bin:/bin"' in builder
+    assert "env=CLEAN_TOOL_ENV" in builder
+    assert "env=PYTHON_LAUNCH_ENV" in builder
 
 
 def test_cpu_smoke_is_explicitly_non_authoritative():

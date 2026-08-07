@@ -53,6 +53,34 @@ configuration selection only, not operator values, graph annotations, model
 code, or the reviewed base revision. The patched `llm/kernel/gemm.py` digest is
 bound into both rank-0 dump receipts and final provenance metadata.
 
+The pinned nnScaler dynamic-programming solver is built from a fixed-commit Git
+archive inside a namespace-private tmpfs. The full archive SHA-256 and the three
+direct build inputs are checked before the tmpfs is remounted read-only. Before
+building, the generator clears loader/compiler/Python injection variables; every
+builder process uses Python `-S`, an allowlisted environment and trusted absolute
+interpreter. The resulting ELF must equal the reviewed canonical digest, not a
+self-declared runtime hash. Before each `torchrun`, the canonical fixed-commit
+archive, exact patched `parallel.py`, startup guard, and ELF are independently
+hashed and copied into sealed memfds.
+The child mount namespace reconstructs the complete nnScaler package solely from
+those sealed bytes in a private read-only tmpfs; it never bind-mounts or reopens
+the live package tree. Both the torchrun controller and every worker start with
+Python `-S`, manually add but never process environment site-packages, and use a
+private read-only worker shim. This prevents `.pth` execution before the startup
+`sitecustomize` guard, which imports the solver first, checks its resolved path
+and hash, and calls `os._exit(126)` on any failure. Host-path replacement or
+site-packages fallback therefore cannot alter executable bytes. The build artifact
+is hardlinked into the authority; its SHA-256 plus the pinned archive/source
+hashes are bound through receipts and metadata. Generation uses `umask 077` and a
+fixed environment for archive extraction, while torchrun receives only the five
+explicitly required provenance/runtime fields plus generator-owned values; ambient
+nnScaler controls are never forwarded. A closed publication allowlist rejects any
+residual build/cache entry, directory, symlink, foreign inode, or group/world-
+writable artifact. Validation
+and no-replace rename occur in one dirfd-bound process, and the publication parent
+plus every non-sticky ancestor must be root/current-user-controlled and
+non-group/world-writable.
+
 Before generation, profile the actual two-GPU interconnect with the pinned
 nnScaler environment:
 
@@ -69,17 +97,27 @@ digest. Missing profile data is fatal; the nnScaler MI200 fallback is not
 production authority.
 
 ```bash
-export YOCO_LLM_TRAIN_REPO=/clean/pinned/llm-train
-export YOCO_NNSCALER_REPO=/clean/pinned/nnscaler
-export YOCO_AUTHORITY_OUT=/output/yoco-a04b-9a1be1d
-bash scripts/yoco_regen/generate_authority.sh
+/usr/bin/env -i \
+  HOME="$HOME" \
+  TRAINVERIFY_CLEAN_ENV=1 \
+  YOCO_PYTHON=/absolute/path/to/trusted/venv/bin/python \
+  YOCO_LLM_TRAIN_REPO=/clean/pinned/llm-train \
+  YOCO_NNSCALER_REPO=/clean/pinned/nnscaler \
+  YOCO_AUTHORITY_OUT=/output/yoco-a04b-9a1be1d \
+  /bin/bash --noprofile --norc scripts/yoco_regen/generate_authority.sh
 ```
+
+The external `env -i` boundary is mandatory: the generator rejects any inherited
+field outside its closed startup schema before the first Python process. This is
+what excludes loader variables such as `LD_AUDIT`; setting the sentinel in a broad
+ambient environment is intentionally rejected.
 
 The output contains:
 
 - `sm_mgener.pkl`, `pm_mgener.pkl`
 - rank-0 dump receipts binding policy, topology, pickle hash, and patched-source hash
 - `comm_profile_intra_2.json`, measured on the actual two-GPU node
+- `nnscaler_dp_solver.so`, the exact private-build solver consumed by AutoDist
 - Verdict-compatible `sm_mgener.json`, `pm_mgener.json`
 - `sm_provenance.json`, `pm_provenance.json`
 - `gen_args.json` with exact revisions, topology, package versions, GPU model,

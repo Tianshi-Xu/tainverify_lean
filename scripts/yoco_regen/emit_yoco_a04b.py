@@ -30,24 +30,26 @@ WORLD_KEYS = {
     "num_layers", "num_heads", "hidden_size", "seqlen",
     "n_activated_experts", "n_routed_experts",
 }
-AUTHORITY_NAMES = (
-    "sm_mgener.pkl", "pm_mgener.pkl", "gen_args.json",
-    "comm_profile_intra_2.json",
+METADATA_JSON_NAMES = (
+    "gen_args.json", "comm_profile_intra_2.json",
     "sm_mgener.json", "pm_mgener.json",
     "sm_provenance.json", "pm_provenance.json",
     "sm_mgener.pkl.receipt.json", "pm_mgener.pkl.receipt.json",
 )
+AUTHORITY_NAMES = (
+    "sm_mgener.pkl", "pm_mgener.pkl",
+) + METADATA_JSON_NAMES + ("nnscaler_dp_solver.so",)
 RECEIPT_KEYS = {
     "policy", "plan_ngpus", "runtime_ngpus", "pkl_sha256",
     "patched_parallel_py_sha256", "patched_llm_gemm_py_sha256",
-    "comm_profile_sha256",
+    "comm_profile_sha256", "dp_solver_extension_sha256",
 }
 RECORD_KEYS = {
     "authority", "policy", "plan_ngpus", "runtime_ngpus", "zero_group_size",
     "cp_size_runtime", "ep_size_runtime", "cp_size_codegen_sentinel",
     "pkl_sha256", "receipt_sha256", "patched_parallel_py_sha256",
     "patched_llm_gemm_py_sha256", "node_count", "signature_counts",
-    "comm_profile_sha256",
+    "comm_profile_sha256", "dp_solver_extension_sha256",
 }
 HARDWARE_KEYS = {
     "cuda_runtime_version", "nccl_version", "nvidia_driver_version",
@@ -62,7 +64,7 @@ META_KEYS = {
     "torch_version", "cuda_runtime_version", "nccl_version",
     "nvidia_driver_version", "gpu_inventory", "python_version", "host",
     "trainverify_regen_commit", "comm_profile_sha256", "hardware_sha256",
-    "source_sha256", "sm", "pm",
+    "dp_solver_extension_sha256", "source_sha256", "sm", "pm",
 }
 
 
@@ -96,6 +98,7 @@ def validate_receipt_schema(receipt: dict, plan: int) -> None:
         or not _is_lower_hex(receipt["patched_parallel_py_sha256"], 64)
         or not _is_lower_hex(receipt["patched_llm_gemm_py_sha256"], 64)
         or not _is_lower_hex(receipt["comm_profile_sha256"], 64)
+        or not _is_lower_hex(receipt["dp_solver_extension_sha256"], 64)
     ):
         raise RuntimeError("receipt schema values mismatch")
 
@@ -118,6 +121,7 @@ def validate_record_schema(record: dict, plan: int) -> None:
         or not _is_lower_hex(record["patched_parallel_py_sha256"], 64)
         or not _is_lower_hex(record["patched_llm_gemm_py_sha256"], 64)
         or not _is_lower_hex(record["comm_profile_sha256"], 64)
+        or not _is_lower_hex(record["dp_solver_extension_sha256"], 64)
         or not _strict_int(record["node_count"], minimum=1)
         or not isinstance(record["signature_counts"], dict)
         or not record["signature_counts"]
@@ -205,6 +209,7 @@ def validate_meta_schema(meta: dict) -> None:
             for key in ("nnscaler_version", "torch_version", "python_version", "host")
         )
         or not _is_lower_hex(meta["hardware_sha256"], 64)
+        or not _is_lower_hex(meta["dp_solver_extension_sha256"], 64)
         or not isinstance(meta["source_sha256"], dict)
     ):
         raise RuntimeError("gen_args schema values mismatch")
@@ -245,6 +250,12 @@ def git_blob(path: Path, revision: str, relative_path: str) -> bytes:
     return subprocess.check_output(
         ["git", "-C", str(path), "show", f"{revision}:{relative_path}"]
     )
+
+
+def git_archive_digest(path: Path, revision: str) -> str:
+    return digest_bytes(subprocess.check_output(
+        ["git", "-C", str(path), "archive", "--format=tar", revision]
+    ))
 
 
 def validate_source_checkouts(llm_train: Path, nnscaler: Path) -> None:
@@ -326,6 +337,12 @@ def validate_authority(
     comm_profile_hash = profile_sha256(files["comm_profile_intra_2.json"])
     if comm_profile_hash != meta["comm_profile_sha256"]:
         raise RuntimeError("communication profile hash mismatch")
+    dp_solver_file = files["nnscaler_dp_solver.so"]
+    if dp_solver_file.read_bytes()[:4] != b"\x7fELF":
+        raise RuntimeError("dp solver authority artifact is not ELF")
+    dp_solver_hash = sha256(dp_solver_file)
+    if dp_solver_hash != meta["dp_solver_extension_sha256"]:
+        raise RuntimeError("dp solver extension hash mismatch")
 
     clean_parallel = git_blob(
         nnscaler, NNSCALER_REVISION, "nnscaler/parallel.py").decode("utf-8")
@@ -335,6 +352,14 @@ def validate_authority(
     patched_llm_gemm_hash = digest_bytes(
         patch_llm_gemm_source(clean_llm_gemm).encode("utf-8"))
     expected_source_hashes = {
+        "nnscaler/fixed_commit_archive.tar": git_archive_digest(
+            nnscaler, NNSCALER_REVISION),
+        "nnscaler/setup.py": digest_bytes(
+            git_blob(nnscaler, NNSCALER_REVISION, "setup.py")),
+        "nnscaler/autodist/dp_solver.cpp": digest_bytes(
+            git_blob(nnscaler, NNSCALER_REVISION, "nnscaler/autodist/dp_solver.cpp")),
+        "nnscaler/autodist/dp_solver.h": digest_bytes(
+            git_blob(nnscaler, NNSCALER_REVISION, "nnscaler/autodist/dp_solver.h")),
         "llm/arch/model.py": digest_bytes(
             git_blob(llm_train, LLM_REVISION, "llm/arch/model.py")),
         "llm/pcs/all2all_moe.yaml": digest_bytes(
@@ -364,6 +389,8 @@ def validate_authority(
             raise RuntimeError(f"{kind} patched llm GEMM source hash mismatch")
         if record.get("comm_profile_sha256") != comm_profile_hash:
             raise RuntimeError(f"{kind} communication profile hash mismatch")
+        if record.get("dp_solver_extension_sha256") != dp_solver_hash:
+            raise RuntimeError(f"{kind} dp solver extension hash mismatch")
         receipt_path = files[f"{kind}_mgener.pkl.receipt.json"]
         if record.get("receipt_sha256") != sha256(receipt_path):
             raise RuntimeError(f"{kind} receipt hash mismatch")
@@ -375,6 +402,7 @@ def validate_authority(
             or receipt.get("patched_parallel_py_sha256") != patched_parallel_hash
             or receipt.get("patched_llm_gemm_py_sha256") != patched_llm_gemm_hash
             or receipt.get("comm_profile_sha256") != comm_profile_hash
+            or receipt.get("dp_solver_extension_sha256") != dp_solver_hash
         ):
             raise RuntimeError(f"{kind} receipt semantics mismatch")
         provenance = json.loads(
@@ -458,9 +486,15 @@ def graph_to_lean_argv(llm_train, nnscaler, files, stage):
         "--sm-pkl-sha256", sha256(files["sm_mgener.pkl"]),
         "--pm-pkl-sha256", sha256(files["pm_mgener.pkl"]),
     ]
-    for name in AUTHORITY_NAMES[2:]:
+    for name in METADATA_JSON_NAMES:
         command += ["--metadata-json", str(files[name])]
         command += ["--metadata-sha256", f"{name}={sha256(files[name])}"]
+    command += [
+        "--artifact-file",
+        f"nnscaler_dp_solver.so={files['nnscaler_dp_solver.so']}",
+        "--artifact-sha256",
+        f"nnscaler_dp_solver.so={sha256(files['nnscaler_dp_solver.so'])}",
+    ]
     return command
 
 

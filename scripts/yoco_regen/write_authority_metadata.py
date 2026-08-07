@@ -12,6 +12,10 @@ import sys
 import subprocess
 from pathlib import Path
 
+from .comm_profile import profile_sha256
+from .patch_llm_cc12_gemm import patch_source as patch_llm_gemm_source
+from .patch_mgener_dump import patch_source
+
 EXPECTED_LLM = "9a1be1d5fd1c063d80be82797692cdc7d23cfbef"
 EXPECTED_NNS = "d3d468ed23edb2f28aa8566b2dfb6ed49c5955cf"
 ALLOWED_POLICY_IDENTITIES = {
@@ -46,6 +50,13 @@ def git_blob(path: Path, revision: str, relative_path: str) -> bytes:
     return subprocess.check_output(
         ["git", "-C", str(path), "show", f"{revision}:{relative_path}"]
     )
+
+
+def git_archive_digest(path: Path, revision: str) -> str:
+    archive = subprocess.check_output(
+        ["git", "-C", str(path), "archive", "--format=tar", revision]
+    )
+    return digest_bytes(archive)
 
 
 def digest_bytes(content: bytes) -> str:
@@ -91,6 +102,7 @@ def validate_graph(mg, kind: str, plan: int, receipt: dict):
         "patched_parallel_py_sha256": receipt.get("patched_parallel_py_sha256"),
         "patched_llm_gemm_py_sha256": receipt.get("patched_llm_gemm_py_sha256"),
         "comm_profile_sha256": receipt.get("comm_profile_sha256"),
+        "dp_solver_extension_sha256": receipt.get("dp_solver_extension_sha256"),
     }:
         raise RuntimeError(f"{kind} receipt has unexpected fields or values")
     llm_patch_hash = receipt.get("patched_llm_gemm_py_sha256")
@@ -139,6 +151,7 @@ def main() -> None:
     parser.add_argument("--llm-train", type=Path, required=True)
     parser.add_argument("--nnscaler", type=Path, required=True)
     parser.add_argument("--comm-profile", type=Path, required=True)
+    parser.add_argument("--dp-solver-extension", type=Path, required=True)
     parser.add_argument("--trust-local-pickle", action="store_true")
     args = parser.parse_args()
     if not args.trust_local_pickle:
@@ -150,12 +163,19 @@ def main() -> None:
         raise RuntimeError("source revision mismatch")
     if git_status(llm_train) != [" M llm/kernel/gemm.py"]:
         raise RuntimeError("llm-train generation clone has unexpected modifications")
+    dp_solver_extension = args.dp_solver_extension.resolve()
+    expected_dp_solver = (
+        nnscaler_repo / "nnscaler" / "autodist" /
+        ("dp_solver" + __import__("sysconfig").get_config_var("EXT_SUFFIX"))
+    ).resolve()
+    if dp_solver_extension != expected_dp_solver or not dp_solver_extension.is_file():
+        raise RuntimeError("unexpected dp solver extension path")
+    if list((nnscaler_repo / "nnscaler" / "autodist").glob("dp_solver*.so")) != [
+        dp_solver_extension
+    ] or (nnscaler_repo / "build").exists():
+        raise RuntimeError("unexpected dp solver build artifacts")
     if git_status(nnscaler_repo) != [" M nnscaler/parallel.py"]:
         raise RuntimeError("nnScaler generation clone has unexpected modifications")
-    from patch_mgener_dump import patch_source
-    from patch_llm_cc12_gemm import patch_source as patch_llm_gemm_source
-    from comm_profile import profile_sha256
-
     clean_parallel = git_blob(
         nnscaler_repo, EXPECTED_NNS, "nnscaler/parallel.py").decode("utf-8")
     expected_patched_hash = digest_bytes(patch_source(clean_parallel).encode("utf-8"))
@@ -168,6 +188,12 @@ def main() -> None:
     if digest(llm_train / "llm" / "kernel" / "gemm.py") != expected_llm_gemm_hash:
         raise RuntimeError("llm GEMM generation patch does not match canonical patch")
     nnscaler = configure_imports(llm_train, nnscaler_repo)
+    authority_dp_solver = authority / "nnscaler_dp_solver.so"
+    if not authority_dp_solver.is_file() or not os.path.samestat(
+        dp_solver_extension.stat(), authority_dp_solver.stat()
+    ):
+        raise RuntimeError("authority dp solver is not the private-build inode")
+    dp_solver_hash = digest(dp_solver_extension)
     comm_profile_hash = profile_sha256(args.comm_profile.resolve())
     import dill
     import torch
@@ -224,6 +250,8 @@ def main() -> None:
             raise RuntimeError(f"{kind} receipt/llm GEMM source hash mismatch")
         if receipt.get("comm_profile_sha256") != comm_profile_hash:
             raise RuntimeError(f"{kind} receipt/communication profile hash mismatch")
+        if receipt.get("dp_solver_extension_sha256") != dp_solver_hash:
+            raise RuntimeError(f"{kind} receipt/dp solver extension hash mismatch")
         if receipt.get("plan_ngpus") != plan or receipt.get("runtime_ngpus") != plan:
             raise RuntimeError(f"{kind} receipt topology mismatch")
         if receipt.get("policy") not in ALLOWED_POLICY_IDENTITIES:
@@ -245,6 +273,7 @@ def main() -> None:
             "patched_parallel_py_sha256": patched_parallel_hash,
             "patched_llm_gemm_py_sha256": expected_llm_gemm_hash,
             "comm_profile_sha256": comm_profile_hash,
+            "dp_solver_extension_sha256": dp_solver_hash,
             "node_count": len(mg.execplan.graph.nodes()),
             "signature_counts": dict(sorted(counts.items())),
         }
@@ -255,6 +284,13 @@ def main() -> None:
             "seqlen": 4096, "n_activated_experts": 8, "n_routed_experts": 64,
         }
     source_hashes = {
+        "nnscaler/fixed_commit_archive.tar": git_archive_digest(
+            nnscaler_repo, EXPECTED_NNS),
+        "nnscaler/setup.py": digest_bytes(git_blob(nnscaler_repo, EXPECTED_NNS, "setup.py")),
+        "nnscaler/autodist/dp_solver.cpp": digest_bytes(
+            git_blob(nnscaler_repo, EXPECTED_NNS, "nnscaler/autodist/dp_solver.cpp")),
+        "nnscaler/autodist/dp_solver.h": digest_bytes(
+            git_blob(nnscaler_repo, EXPECTED_NNS, "nnscaler/autodist/dp_solver.h")),
         "llm/arch/model.py": digest_bytes(
             git_blob(llm_train, EXPECTED_LLM, "llm/arch/model.py")),
         "llm/pcs/all2all_moe.yaml": digest_bytes(
@@ -281,6 +317,7 @@ def main() -> None:
         "torch_version": torch.__version__,
         "python_version": platform.python_version(),
         "host": platform.node(),
+        "dp_solver_extension_sha256": dp_solver_hash,
         "hardware_sha256": hardware_hash,
         **hardware,
         "source_sha256": source_hashes,

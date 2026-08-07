@@ -9,12 +9,17 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LEAN = ROOT / "trainverify" / "denote" / "GeneratedYOCOMoE.lean"
 DEFAULT_MANIFEST = ROOT / "trainverify" / "denote" / "GeneratedYOCOMoE.manifest.json"
+
+
+def _require(condition: bool, message: str) -> None:
+    if not condition:
+        raise RuntimeError(message)
 
 
 def _sha256(data: bytes) -> str:
@@ -129,6 +134,22 @@ def _load_manifest(path: Path) -> tuple[bytes, dict[str, Any]]:
     return raw, json.loads(raw)
 
 
+def _validate_candidate_manifest(meta: dict[str, Any]) -> None:
+    _require(meta.get("schema_version") == 3, "candidate manifest is not schema v3")
+    artifacts = meta.get("artifact_sha256")
+    _require(isinstance(artifacts, dict) and set(artifacts) == {"nnscaler_dp_solver.so"},
+        "candidate manifest must contain exactly the dp solver artifact hash"
+    )
+    artifacts = cast(dict[str, Any], artifacts)
+    digest = artifacts["nnscaler_dp_solver.so"]
+    _require(
+        isinstance(digest, str)
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest),
+        "candidate dp solver artifact hash is malformed",
+    )
+
+
 def compare_snapshots(
     expected_lean: Path, regenerated_lean: Path,
     expected_manifest: Path, regenerated_manifest: Path,
@@ -137,17 +158,19 @@ def compare_snapshots(
     regenerated_bytes = regenerated_lean.read_bytes()
     expected_manifest_bytes, expected_meta = _load_manifest(expected_manifest)
     regenerated_manifest_bytes, regenerated_meta = _load_manifest(regenerated_manifest)
+    _validate_candidate_manifest(expected_meta)
+    _validate_candidate_manifest(regenerated_meta)
 
-    assert extract_snapshot(regenerated_bytes) == extract_snapshot(expected_bytes), (
+    _require(extract_snapshot(regenerated_bytes) == extract_snapshot(expected_bytes),
         "ordered nodes, shapes, init lineages, or final/intermediate goal sets differ"
     )
-    assert regenerated_manifest_bytes == expected_manifest_bytes, "manifest bytes differ"
-    assert regenerated_meta == expected_meta, "manifest values differ"
-    assert regenerated_bytes == expected_bytes, "Lean bytes differ"
-    assert expected_meta["generated_lean_sha256"] == _sha256(expected_bytes), (
+    _require(regenerated_manifest_bytes == expected_manifest_bytes, "manifest bytes differ")
+    _require(regenerated_meta == expected_meta, "manifest values differ")
+    _require(regenerated_bytes == expected_bytes, "Lean bytes differ")
+    _require(expected_meta["generated_lean_sha256"] == _sha256(expected_bytes),
         "checked-in manifest does not hash the checked-in Lean snapshot"
     )
-    assert regenerated_meta["generated_lean_sha256"] == _sha256(regenerated_bytes), (
+    _require(regenerated_meta["generated_lean_sha256"] == _sha256(regenerated_bytes),
         "regenerated manifest does not hash regenerated Lean"
     )
 
@@ -161,34 +184,41 @@ def audit_metadata_extension(
     candidate_bytes = candidate_lean.read_bytes()
     candidate_snapshot = extract_snapshot(candidate_bytes)
     structural_keys = set(authority_snapshot) - {"input_value_classes"}
-    assert all(
+    _require(all(
         candidate_snapshot[key] == authority_snapshot[key] for key in structural_keys
-    ), "baseline graph nodes, replica groups, shapes, lineages, or goal sets differ"
-    assert any(candidate_snapshot["input_value_classes"].values()), (
+    ), "baseline graph nodes, replica groups, shapes, lineages, or goal sets differ")
+    _require(any(candidate_snapshot["input_value_classes"].values()),
         "candidate has no input value-equivalence classes"
     )
 
     _, authority_meta = _load_manifest(authority_manifest)
     _, candidate_meta = _load_manifest(candidate_manifest)
+    _validate_candidate_manifest(authority_meta)
+    _validate_candidate_manifest(candidate_meta)
     mutable = {
         "emitter_sha256", "generated_lean_sha256", "schema_version",
         "input_value_class_count", "input_value_classes",
     }
-    assert {
+    _require(candidate_meta["artifact_sha256"] == authority_meta["artifact_sha256"],
+        "candidate changed the existing authority artifact hash"
+    )
+    _require({
         key: value for key, value in candidate_meta.items() if key not in mutable
     } == {
         key: value for key, value in authority_meta.items() if key not in mutable
-    }, "authority provenance changed outside the metadata extension"
+    }, "authority provenance changed outside the metadata extension")
     expected_manifest_classes = {
         side: [{"source": source, "tids": tids} for source, tids in classes]
         for side, classes in candidate_snapshot["input_value_classes"].items()
     }
-    assert candidate_meta.get("input_value_classes") == expected_manifest_classes
-    assert candidate_meta.get("input_value_class_count") == sum(
+    _require(candidate_meta.get("input_value_classes") == expected_manifest_classes,
+             "candidate manifest value classes differ from Lean")
+    _require(candidate_meta.get("input_value_class_count") == sum(
         len(classes) for classes in expected_manifest_classes.values()
-    )
-    assert candidate_meta.get("schema_version") == 2
-    assert candidate_meta.get("generated_lean_sha256") == _sha256(candidate_bytes)
+    ), "candidate manifest value-class count differs")
+    _require(candidate_meta.get("schema_version") == 3, "candidate manifest is not schema v3")
+    _require(candidate_meta.get("generated_lean_sha256") == _sha256(candidate_bytes),
+             "candidate manifest does not hash candidate Lean")
 
 
 def main() -> None:
