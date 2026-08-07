@@ -1,11 +1,18 @@
 from pathlib import Path
 from functools import partial
+import fcntl
+import hashlib
+import importlib
+import io
 import json
+import os
 import pickle
 import stat
 import subprocess
 import sys
+import tarfile
 import types
+import zipfile
 
 import pytest
 
@@ -23,6 +30,9 @@ from scripts.yoco_regen.patch_llm_cc12_gemm import (
 from scripts.yoco_regen.atomic_publish import publish_authority, rename_noreplace
 from scripts.yoco_regen.sealed_extension_exec import (
     CLEAN_TOOL_ENV,
+    _FULL_SEALS,
+    _runtime_zip,
+    _sealed_memfd,
     allowlisted_runtime_environment,
 )
 import scripts.yoco_regen.emit_yoco_a04b as emitter
@@ -106,6 +116,7 @@ def _run_patched_dump(
     monkeypatch.setenv("TRAINVERIFY_DP_SOLVER_SHA256", "f" * 64)
     namespace = {
         "__file__": str(source_path),
+        "__loader__": types.SimpleNamespace(get_data=lambda path: Path(path).read_bytes()),
         "ModuleCodeGen": lambda *_args: {"ok": True},
         "execplan": object(),
     }
@@ -308,6 +319,76 @@ def test_runtime_and_tar_environments_are_closed(monkeypatch):
     assert environment == required
     assert set(CLEAN_TOOL_ENV) == {"LANG", "LC_ALL", "PATH"}
     assert "TAR_OPTIONS" not in CLEAN_TOOL_ENV
+
+
+def test_memfd_runtime_is_fully_sealed_and_archive_links_cannot_escape():
+    descriptor = _sealed_memfd("test-runtime", b"sealed")
+    try:
+        assert fcntl.fcntl(descriptor, getattr(fcntl, "F_GET_SEALS", 1034)) == _FULL_SEALS
+        with pytest.raises(OSError):
+            os.write(descriptor, b"mutation")
+    finally:
+        os.close(descriptor)
+
+    archive = io.BytesIO()
+    with tarfile.open(fileobj=archive, mode="w") as handle:
+        parallel = tarfile.TarInfo("nnscaler/parallel.py")
+        parallel.size = len(b"old")
+        handle.addfile(parallel, io.BytesIO(b"old"))
+        package = tarfile.TarInfo("nnscaler/__init__.py")
+        package.size = 0
+        handle.addfile(package, io.BytesIO())
+    runtime = _runtime_zip(archive.getvalue(), b"patched", b"guard")
+    with zipfile.ZipFile(io.BytesIO(runtime)) as handle:
+        assert handle.read("nnscaler/parallel.py") == b"patched"
+        assert handle.read("sitecustomize.py") == b"guard"
+
+    escaping = io.BytesIO()
+    with tarfile.open(fileobj=escaping, mode="w") as handle:
+        link = tarfile.TarInfo("nnscaler/parallel.py")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "../../outside"
+        handle.addfile(link)
+    with pytest.raises(RuntimeError, match="escaping"):
+        _runtime_zip(escaping.getvalue(), b"patched", b"guard")
+
+
+def test_dump_receipt_hashes_parallel_source_loaded_from_memfd_zip(tmp_path, monkeypatch):
+    source = """class Config:
+    plan_ngpus = 2
+    runtime_ngpus = 2
+    pas_config = {}
+compute_config = Config()
+pas_policy = "policy"
+def ModuleCodeGen():
+    return {"authority": True}
+mgener_probe = ModuleCodeGen()
+"""
+    patched = patch_source(source)
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, mode="w", compression=zipfile.ZIP_STORED) as handle:
+        handle.writestr("receipt_probe.py", patched)
+    descriptor = _sealed_memfd("receipt-probe.zip", archive.getvalue())
+    destination = tmp_path / "authority.pkl"
+    monkeypatch.setenv("MGENER_DUMP_PATH", str(destination))
+    monkeypatch.setenv("LOCAL_RANK", "0")
+    monkeypatch.setenv("TRAINVERIFY_EXPECTED_POLICY", "policy")
+    monkeypatch.setenv("TRAINVERIFY_PATCHED_LLM_GEMM_SHA256", "a" * 64)
+    monkeypatch.setenv("TRAINVERIFY_COMM_PROFILE_SHA256", "b" * 64)
+    monkeypatch.setenv("TRAINVERIFY_DP_SOLVER_SHA256", "c" * 64)
+    monkeypatch.setitem(sys.modules, "dill", pickle)
+    runtime_path = f"/proc/{os.getpid()}/fd/{descriptor}"
+    sys.path.insert(0, runtime_path)
+    try:
+        importlib.import_module("receipt_probe")
+    finally:
+        sys.path.remove(runtime_path)
+        sys.modules.pop("receipt_probe", None)
+        os.close(descriptor)
+    receipt = json.loads((tmp_path / "authority.pkl.receipt.json").read_text())
+    assert receipt["patched_parallel_py_sha256"] == hashlib.sha256(
+        patched.encode("utf-8")
+    ).hexdigest()
 
 
 def test_generator_requires_external_clean_environment():
@@ -688,6 +769,11 @@ def test_authority_script_pins_reviewed_llm_revision():
     assert "PYTHONNOUSERSITE" in sealed
     assert "TRAINVERIFY_WORKER_SHIM" in sealed
     assert "NNSCALER_ARCHIVE_SHA256" in sealed
+    assert "memfd_create" in sealed
+    assert "F_ADD_SEALS" in sealed
+    assert "TRAINVERIFY_RUNTIME_ZIP_SHA256" in sealed
+    assert "unshare" not in sealed
+    assert "mount(" not in sealed
     builder = (
         Path(__file__).resolve().parents[1] / "yoco_regen" / "build_dp_solver.py"
     ).read_text(encoding="utf-8")
@@ -695,7 +781,9 @@ def test_authority_script_pins_reviewed_llm_revision():
     assert 'sys.executable, "-S"' in builder
     assert '"PATH": "/usr/bin:/bin"' in builder
     assert "env=CLEAN_TOOL_ENV" in builder
-    assert "env=PYTHON_LAUNCH_ENV" in builder
+    assert "NNSCALER_ARCHIVE_SHA256" in builder
+    assert "unshare" not in builder
+    assert '"mount"' not in builder
 
 
 def test_cpu_smoke_is_explicitly_non_authoritative():

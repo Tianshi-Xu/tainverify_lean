@@ -54,24 +54,28 @@ code, or the reviewed base revision. The patched `llm/kernel/gemm.py` digest is
 bound into both rank-0 dump receipts and final provenance metadata.
 
 The pinned nnScaler dynamic-programming solver is built from a fixed-commit Git
-archive inside a namespace-private tmpfs. The full archive SHA-256 and the three
-direct build inputs are checked before the tmpfs is remounted read-only. Before
-building, the generator clears loader/compiler/Python injection variables; every
-builder process uses Python `-S`, an allowlisted environment and trusted absolute
-interpreter. The resulting ELF must equal the reviewed canonical digest, not a
-self-declared runtime hash. Before each `torchrun`, the canonical fixed-commit
-archive, exact patched `parallel.py`, startup guard, and ELF are independently
-hashed and copied into sealed memfds.
-The child mount namespace reconstructs the complete nnScaler package solely from
-those sealed bytes in a private read-only tmpfs; it never bind-mounts or reopens
-the live package tree. Both the torchrun controller and every worker start with
-Python `-S`, manually add but never process environment site-packages, and use a
-private read-only worker shim. This prevents `.pth` execution before the startup
-`sitecustomize` guard, which imports the solver first, checks its resolved path
-and hash, and calls `os._exit(126)` on any failure. Host-path replacement or
-site-packages fallback therefore cannot alter executable bytes. The build artifact
-is hardlinked into the authority; its SHA-256 plus the pinned archive/source
-hashes are bound through receipts and metadata. Generation uses `umask 077` and a
+archive in an owner-only temporary tree. The full archive SHA-256 and the three
+direct build inputs are checked, the source tree is made read-only, and compiler
+outputs go to a separate private directory. Before building, the generator clears
+loader/compiler/Python injection variables; every builder process uses Python
+`-S`, an allowlisted environment and trusted absolute interpreter. The resulting
+ELF must equal the reviewed canonical digest, not a self-declared runtime hash.
+This output identity check remains authoritative even on hosts that prohibit
+unprivileged user or mount namespaces.
+
+Before each `torchrun`, the canonical fixed-commit archive, exact patched
+`parallel.py`, startup guard, and ELF are independently hashed. The archive,
+patched module and guard become a deterministic Python runtime ZIP in a fully
+sealed memfd; the ELF and worker shim use separate fully sealed memfds. No runtime
+package is extracted or mounted. Both the torchrun controller and every worker
+start with Python `-S` and resolve the runtime through `/proc/<holder>/fd/*` while
+the holder remains alive. This prevents `.pth` startup and host-path replacement.
+The `sitecustomize` guard rechecks both memfd seal sets and hashes, installs an
+exact-name extension finder for `nnscaler.autodist.dp_solver`, verifies the loaded
+module path, and calls `os._exit(126)` on any failure. Site-packages therefore
+cannot substitute solver or nnScaler code. The build artifact is hardlinked into
+the authority; its SHA-256 plus the pinned archive/source hashes are bound through
+receipts and metadata. Generation uses `umask 077` and a
 fixed environment for archive extraction, while torchrun receives only the five
 explicitly required provenance/runtime fields plus generator-owned values; ambient
 nnScaler controls are never forwarded. A closed publication allowlist rejects any

@@ -1,24 +1,26 @@
 #!/usr/bin/env python3
-"""Execute a command from a private package rebuilt solely from sealed inputs."""
+"""Execute torchrun from memfd-sealed nnScaler runtime and native bytes."""
 from __future__ import annotations
 
 import argparse
-import ctypes
 import fcntl
 import hashlib
+import io
 import os
+import posixpath
 import shlex
 import stat
 import subprocess
 import sys
 import sysconfig
-import tempfile
+import tarfile
+import zipfile
 from pathlib import Path
 
 NNSCALER_REVISION = "d3d468ed23edb2f28aa8566b2dfb6ed49c5955cf"
 NNSCALER_ARCHIVE_SHA256 = "fd919ddb50ee7bd380fd4588485ad843fd8a97fce115929b2466c837cdde7110"
-PATCHED_PARALLEL_SHA256 = "76ab814aec94a2a6bfe873bbdaedbfbdf2350c05db5183c20e94515ff8def0d0"
-SITE_GUARD_SHA256 = "aecdf2b615b400c4a615f2a3a50a5a91737d6c54e0a4e130c4e41a3fb3822555"
+PATCHED_PARALLEL_SHA256 = "6939204cdd858261bd6609d5b0ee415f79cce4f45c70a09484f07970ef7e95c4"
+SITE_GUARD_SHA256 = "93d0b856cb89bf22a89810120ee4d0944e6963eb51d45a63ae31b5d1cb71a2cf"
 CLEAN_TOOL_ENV = {"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PATH": "/usr/bin:/bin"}
 RUNTIME_INHERITED_KEYS = (
     "HOME",
@@ -39,6 +41,12 @@ elif mode == "script":
 else:
     raise RuntimeError("invalid sealed Python bootstrap mode")
 """
+_FULL_SEALS = (
+    getattr(fcntl, "F_SEAL_SEAL", 0x0001)
+    | getattr(fcntl, "F_SEAL_SHRINK", 0x0002)
+    | getattr(fcntl, "F_SEAL_GROW", 0x0004)
+    | getattr(fcntl, "F_SEAL_WRITE", 0x0008)
+)
 
 
 def _hash(content: bytes) -> str:
@@ -53,43 +61,104 @@ def allowlisted_runtime_environment(inherited: dict[str, str]) -> dict[str, str]
 
 
 def _read_regular(path: Path, expected_hash: str, *, elf: bool = False) -> bytes:
-    fd = os.open(path.absolute(), os.O_RDONLY | os.O_NOFOLLOW)
+    descriptor = os.open(path.absolute(), os.O_RDONLY | os.O_NOFOLLOW)
     try:
-        info = os.fstat(fd)
+        info = os.fstat(descriptor)
         if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
             raise PermissionError(f"untrusted runtime input inode: {path}")
-        chunks = []
-        while chunk := os.read(fd, 1 << 20):
-            chunks.append(chunk)
-        content = b"".join(chunks)
+        digest = hashlib.sha256()
+        content = bytearray()
+        while chunk := os.read(descriptor, 1 << 20):
+            digest.update(chunk)
+            content.extend(chunk)
     finally:
-        os.close(fd)
-    if (elf and not content.startswith(b"\x7fELF")) or _hash(content) != expected_hash:
+        os.close(descriptor)
+    result = bytes(content)
+    if (elf and not result.startswith(b"\x7fELF")) or digest.hexdigest() != expected_hash:
         raise RuntimeError(f"runtime input content mismatch: {path}")
-    return content
+    return result
 
 
-def _sealed_memfd(name: str, content: bytes) -> int:
+def _sealed_memfd(name: str, content: bytes, *, executable: bool = False) -> int:
     flags = getattr(os, "MFD_CLOEXEC", 0x0001) | getattr(os, "MFD_ALLOW_SEALING", 0x0002)
-    fd = os.memfd_create(name, flags)
-    os.write(fd, content)
-    os.lseek(fd, 0, os.SEEK_SET)
-    seals = (
-        getattr(fcntl, "F_SEAL_SEAL", 0x0001)
-        | getattr(fcntl, "F_SEAL_SHRINK", 0x0002)
-        | getattr(fcntl, "F_SEAL_GROW", 0x0004)
-        | getattr(fcntl, "F_SEAL_WRITE", 0x0008)
+    descriptor = os.memfd_create(name, flags)
+    try:
+        view = memoryview(content)
+        while view:
+            written = os.write(descriptor, view)
+            view = view[written:]
+        os.fchmod(descriptor, 0o555 if executable else 0o444)
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        fcntl.fcntl(descriptor, getattr(fcntl, "F_ADD_SEALS", 1033), _FULL_SEALS)
+        if fcntl.fcntl(descriptor, getattr(fcntl, "F_GET_SEALS", 1034)) != _FULL_SEALS:
+            raise RuntimeError("failed to fully seal runtime memfd")
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _zip_info(name: str, mode: int) -> zipfile.ZipInfo:
+    info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+    info.compress_type = zipfile.ZIP_STORED
+    info.create_system = 3
+    info.external_attr = (mode & 0o777) << 16
+    return info
+
+
+def _runtime_zip(archive: bytes, parallel: bytes, guard: bytes) -> bytes:
+    source = io.BytesIO(archive)
+    target = io.BytesIO()
+    saw_parallel = False
+    with tarfile.open(fileobj=source, mode="r:") as tar, zipfile.ZipFile(
+        target, mode="w", compression=zipfile.ZIP_STORED, strict_timestamps=True
+    ) as runtime:
+        for member in tar.getmembers():
+            name = member.name.rstrip("/")
+            path = Path(name)
+            if path.is_absolute() or ".." in path.parts:
+                raise RuntimeError(f"unsafe fixed archive member: {member.name}")
+            if member.issym():
+                target_name = posixpath.normpath(
+                    posixpath.join(posixpath.dirname(member.name), member.linkname)
+                )
+                if member.linkname.startswith("/") or target_name == ".." or target_name.startswith("../"):
+                    raise RuntimeError(f"escaping fixed archive symlink: {member.name}")
+                continue
+            if member.isdir():
+                continue
+            if not member.isfile():
+                raise RuntimeError(f"unsupported fixed archive member: {member.name}")
+            extracted = tar.extractfile(member)
+            if extracted is None:
+                raise RuntimeError(f"unreadable fixed archive member: {member.name}")
+            content = extracted.read()
+            if name == "nnscaler/parallel.py":
+                content = parallel
+                saw_parallel = True
+            if name.startswith("nnscaler/autodist/dp_solver.") and name.endswith(".so"):
+                raise RuntimeError("fixed archive unexpectedly contains dp solver extension")
+            runtime.writestr(_zip_info(name, 0o444), content)
+        if not saw_parallel:
+            raise RuntimeError("fixed archive is missing nnscaler/parallel.py")
+        runtime.writestr(_zip_info("sitecustomize.py", 0o444), guard)
+    return target.getvalue()
+
+
+def _runtime_paths(python_tail: Path) -> list[str]:
+    paths = [str(python_tail.resolve())]
+    python_executable = Path(sys.executable).absolute()
+    venv_site = (
+        python_executable.parent.parent / "lib"
+        / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
     )
-    fcntl.fcntl(fd, getattr(fcntl, "F_ADD_SEALS", 1033), seals)
-    return fd
-
-
-def _read_fd(fd: int) -> bytes:
-    os.lseek(fd, 0, os.SEEK_SET)
-    chunks = []
-    while chunk := os.read(fd, 1 << 20):
-        chunks.append(chunk)
-    return b"".join(chunks)
+    if venv_site.is_dir():
+        paths.append(str(venv_site))
+    for key in ("purelib", "platlib"):
+        value = sysconfig.get_paths().get(key)
+        if value and Path(value).is_dir() and value not in paths:
+            paths.append(value)
+    return paths
 
 
 def run_sealed(
@@ -103,198 +172,83 @@ def run_sealed(
     package_root = package_root.resolve()
     if not package_root.is_dir() or not python_tail.is_dir():
         raise RuntimeError("sealed execution support path is missing")
+    if not command or command[0] != "torchrun":
+        raise RuntimeError("sealed execution only accepts the torchrun entry point")
     extension_content = _read_regular(extension, expected_hash, elf=True)
     parallel_content = _read_regular(
         package_root / "nnscaler" / "parallel.py", PATCHED_PARALLEL_SHA256
     )
     guard_content = _read_regular(site_guard, SITE_GUARD_SHA256)
-    archive_content = subprocess.check_output([
-        "git", "-C", str(package_root), "archive", "--format=tar", NNSCALER_REVISION,
-    ])
+    archive_content = subprocess.check_output(
+        ["git", "-C", str(package_root), "archive", "--format=tar", NNSCALER_REVISION],
+        env=CLEAN_TOOL_ENV,
+    )
     if _hash(archive_content) != NNSCALER_ARCHIVE_SHA256:
         raise RuntimeError("fixed nnScaler archive hash mismatch before sealing")
+    runtime_content = _runtime_zip(archive_content, parallel_content, guard_content)
+    runtime_hash = _hash(runtime_content)
 
-    contents = [archive_content, parallel_content, guard_content, extension_content]
-    fds = [
-        _sealed_memfd(name, content)
-        for name, content in zip(
-            ("nnscaler-archive", "patched-parallel", "site-guard", "dp-solver"),
-            contents,
-        )
-    ]
+    python_executable = Path(sys.executable).absolute()
+    shim_content = (
+        "#!/bin/sh\n"
+        "if [ \"${1-}\" = -u ]; then shift; fi\n"
+        f"exec {shlex.quote(str(python_executable))} -S -c "
+        f"{shlex.quote(BOOTSTRAP)} script \"$@\"\n"
+    ).encode("utf-8")
+    runtime_fd = _sealed_memfd("nnscaler-runtime.zip", runtime_content)
+    extension_fd = _sealed_memfd(extension.name, extension_content, executable=True)
+    shim_fd = _sealed_memfd("python-worker", shim_content, executable=True)
+    descriptors = (runtime_fd, extension_fd, shim_fd)
     try:
-        launcher_environment = allowlisted_runtime_environment(dict(os.environ))
-        launcher_environment.update(CLEAN_TOOL_ENV)
-        launcher_environment.update({
+        owner = os.getpid()
+        runtime_path = f"/proc/{owner}/fd/{runtime_fd}"
+        extension_path = f"/proc/{owner}/fd/{extension_fd}"
+        shim_path = f"/proc/{owner}/fd/{shim_fd}"
+        environment = allowlisted_runtime_environment(dict(os.environ))
+        environment.update({
+            "CUDA_VISIBLE_DEVICES": "0,1",
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+            "PATH": "/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin",
             "PYTHONNOUSERSITE": "1",
+            "PYTHONPATH": ":".join([runtime_path, *_runtime_paths(python_tail)]),
             "PYTHONSAFEPATH": "1",
             "PYTHONDONTWRITEBYTECODE": "1",
+            "TRAINVERIFY_DP_SOLVER_PATH": extension_path,
+            "TRAINVERIFY_DP_SOLVER_SHA256": expected_hash,
+            "TRAINVERIFY_RUNTIME_ZIP_PATH": runtime_path,
+            "TRAINVERIFY_RUNTIME_ZIP_SHA256": runtime_hash,
+            "TRAINVERIFY_WORKER_SHIM": shim_path,
         })
         subprocess.run(
             [
-                "unshare", "--user", "--map-root-user", "--mount",
-                sys.executable, "-S", str(Path(__file__).resolve()), "_exec",
-                *(str(fd) for fd in fds), expected_hash,
-                extension.name, str(python_tail.resolve()), "--", *command,
+                str(python_executable), "-S", "-c", BOOTSTRAP,
+                "module", "torch.distributed.run", *command[1:],
             ],
-            pass_fds=tuple(fds),
-            env=launcher_environment,
+            env=environment,
+            pass_fds=descriptors,
             check=True,
         )
     finally:
-        for fd in fds:
-            os.close(fd)
-
-
-def _mount(mount, target: Path, flags: int = 0, data: bytes | None = None) -> None:
-    if mount(b"tmpfs", os.fsencode(target), b"tmpfs", flags, data) != 0:
-        error = ctypes.get_errno()
-        raise OSError(error, os.strerror(error), str(target))
-
-
-def _exec(
-    archive_fd: int,
-    parallel_fd: int,
-    guard_fd: int,
-    extension_fd: int,
-    expected_hash: str,
-    extension_name: str,
-    python_tail: Path,
-    command: list[str],
-) -> None:
-    if not command or not python_tail.is_dir():
-        raise RuntimeError("sealed execution command or tail is missing")
-    archive = _read_fd(archive_fd)
-    parallel = _read_fd(parallel_fd)
-    guard = _read_fd(guard_fd)
-    extension = _read_fd(extension_fd)
-    for fd in (archive_fd, parallel_fd, guard_fd, extension_fd):
-        os.close(fd)
-    if _hash(archive) != NNSCALER_ARCHIVE_SHA256:
-        raise RuntimeError("sealed nnScaler archive hash mismatch")
-    if _hash(parallel) != PATCHED_PARALLEL_SHA256:
-        raise RuntimeError("sealed parallel.py hash mismatch")
-    if _hash(guard) != SITE_GUARD_SHA256:
-        raise RuntimeError("sealed site guard hash mismatch")
-    if not extension.startswith(b"\x7fELF") or _hash(extension) != expected_hash:
-        raise RuntimeError("sealed dp solver hash mismatch")
-
-    libc = ctypes.CDLL(None, use_errno=True)
-    mount = libc.mount
-    mount.argtypes = [
-        ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
-        ctypes.c_ulong, ctypes.c_void_p,
-    ]
-    mount.restype = ctypes.c_int
-    ms_remount, ms_rdonly = 32, 1
-    private_root = Path(tempfile.mkdtemp(prefix="trainverify-sealed-runtime-"))
-    _mount(mount, private_root, data=b"mode=0700,size=1G")
-    private_package = private_root / "nnscaler-source"
-    private_guard = private_root / "guard"
-    private_package.mkdir()
-    private_guard.mkdir()
-    extracted = subprocess.run(
-        ["/usr/bin/tar", "-x", "-C", str(private_package)],
-        input=archive,
-        env=CLEAN_TOOL_ENV,
-    )
-    if extracted.returncode:
-        raise RuntimeError("failed to extract sealed nnScaler archive")
-    parallel_path = private_package / "nnscaler" / "parallel.py"
-    parallel_path.write_bytes(parallel)
-    parallel_path.chmod(0o444)
-    guard_path = private_guard / "sitecustomize.py"
-    guard_path.write_bytes(guard)
-    guard_path.chmod(0o444)
-    extension_path = private_package / "nnscaler" / "autodist" / extension_name
-    if extension_path.exists():
-        raise RuntimeError("fixed archive unexpectedly contains dp solver extension")
-    extension_path.write_bytes(extension)
-    extension_path.chmod(0o555)
-    bootstrap_path = private_root / "bootstrap.py"
-    bootstrap_path.write_text(BOOTSTRAP, encoding="utf-8")
-    bootstrap_path.chmod(0o444)
-    python_executable = Path(sys.executable).absolute()
-    worker_shim = private_root / "python-worker"
-    worker_shim.write_text(
-        "#!/bin/sh\n"
-        "if [ \"${1-}\" = -u ]; then shift; fi\n"
-        f"exec {shlex.quote(str(python_executable))} -S "
-        f"{shlex.quote(str(bootstrap_path))} script \"$@\"\n",
-        encoding="utf-8",
-    )
-    worker_shim.chmod(0o555)
-    _mount(mount, private_root, flags=ms_remount | ms_rdonly)
-    if _hash(extension_path.read_bytes()) != expected_hash:
-        raise RuntimeError("private dp solver materialization hash mismatch")
-
-    environment = allowlisted_runtime_environment(dict(os.environ))
-    environment["PYTHONPATH"] = f"{private_guard}:{private_package}:{python_tail.resolve()}"
-    runtime_paths = []
-    venv_site = (
-        python_executable.parent.parent / "lib"
-        / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
-    )
-    if venv_site.is_dir():
-        runtime_paths.append(str(venv_site))
-    for key in ("purelib", "platlib"):
-        value = sysconfig.get_paths().get(key)
-        if value and Path(value).is_dir() and value not in runtime_paths:
-            runtime_paths.append(value)
-    environment["PYTHONPATH"] += ":" + ":".join(runtime_paths)
-    environment["PYTHONSAFEPATH"] = "1"
-    environment["PYTHONNOUSERSITE"] = "1"
-    environment["PYTHONDONTWRITEBYTECODE"] = "1"
-    environment["CUDA_VISIBLE_DEVICES"] = "0,1"
-    environment["LANG"] = "C.UTF-8"
-    environment["LC_ALL"] = "C.UTF-8"
-    environment["PATH"] = "/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin"
-    environment["TRAINVERIFY_DP_SOLVER_PATH"] = str(extension_path)
-    environment["TRAINVERIFY_DP_SOLVER_SHA256"] = expected_hash
-    environment["TRAINVERIFY_WORKER_SHIM"] = str(worker_shim)
-    if command[0] != "torchrun":
-        raise RuntimeError("sealed execution only accepts the torchrun entry point")
-    os.execve(
-        python_executable,
-        [
-            str(python_executable), "-S", str(bootstrap_path),
-            "module", "torch.distributed.run", *command[1:],
-        ],
-        environment,
-    )
+        for descriptor in descriptors:
+            os.close(descriptor)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    sub = parser.add_subparsers(dest="action", required=True)
-    public = sub.add_parser("run")
-    public.add_argument("extension", type=Path)
-    public.add_argument("expected_hash")
-    public.add_argument("package_root", type=Path)
-    public.add_argument("site_guard", type=Path)
-    public.add_argument("python_tail", type=Path)
-    public.add_argument("command", nargs=argparse.REMAINDER)
-    private = sub.add_parser("_exec")
-    private.add_argument("archive_fd", type=int)
-    private.add_argument("parallel_fd", type=int)
-    private.add_argument("guard_fd", type=int)
-    private.add_argument("extension_fd", type=int)
-    private.add_argument("expected_hash")
-    private.add_argument("extension_name")
-    private.add_argument("python_tail", type=Path)
-    private.add_argument("command", nargs=argparse.REMAINDER)
+    parser.add_argument("action", choices=("run",))
+    parser.add_argument("extension", type=Path)
+    parser.add_argument("expected_hash")
+    parser.add_argument("package_root", type=Path)
+    parser.add_argument("site_guard", type=Path)
+    parser.add_argument("python_tail", type=Path)
+    parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
-    if args.action == "run":
-        run_sealed(
-            args.extension, args.expected_hash, args.package_root,
-            args.site_guard, args.python_tail, command,
-        )
-    else:
-        _exec(
-            args.archive_fd, args.parallel_fd, args.guard_fd, args.extension_fd,
-            args.expected_hash, args.extension_name, args.python_tail, command,
-        )
+    run_sealed(
+        args.extension, args.expected_hash, args.package_root,
+        args.site_guard, args.python_tail, command,
+    )
 
 
 if __name__ == "__main__":

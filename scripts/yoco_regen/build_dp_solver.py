@@ -1,75 +1,115 @@
 #!/usr/bin/env python3
-"""Build nnScaler's dp_solver from a fixed commit in a private read-only tmpfs."""
+"""Build nnScaler's canonical dp_solver without privileged namespaces."""
 from __future__ import annotations
 
 import argparse
 import hashlib
+import os
+import posixpath
 import shutil
+import stat
 import subprocess
 import sys
 import sysconfig
+import tarfile
 import tempfile
 from pathlib import Path
 
-SOURCE_PATHS = (
-    "setup.py",
-    "nnscaler/autodist/dp_solver.cpp",
-    "nnscaler/autodist/dp_solver.h",
-)
+NNSCALER_REVISION = "d3d468ed23edb2f28aa8566b2dfb6ed49c5955cf"
+NNSCALER_ARCHIVE_SHA256 = "fd919ddb50ee7bd380fd4588485ad843fd8a97fce115929b2466c837cdde7110"
+SOURCE_SHA256 = {
+    "setup.py": "40eb878e1f7fe0bb39afe1e319ee89763f5dfc4444223cb52f22bc4986b0c803",
+    "nnscaler/autodist/dp_solver.cpp": "4da50c4da2c0ea5cda6e9ddfb3cbf7f4a8bb856c6f1cef8f9c70a9c2f3c31b12",
+    "nnscaler/autodist/dp_solver.h": "9e7d49a014ee048af5ae5d04343db1e3184cdfbb2525c6bc3da61aafb970f80e",
+}
 EXPECTED_EXTENSION_SHA256 = "10635af2e67a56c2029296fbc7563952563a0d611e0cde41ac006f748ef08681"
 CLEAN_TOOL_ENV = {"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PATH": "/usr/bin:/bin"}
-PYTHON_LAUNCH_ENV = {
-    **CLEAN_TOOL_ENV,
-    "PYTHONNOUSERSITE": "1",
-    "PYTHONSAFEPATH": "1",
-    "PYTHONDONTWRITEBYTECODE": "1",
-}
 
 
 def sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            raise RuntimeError(f"not a regular build artifact: {path}")
+        digest = hashlib.sha256()
+        while chunk := os.read(descriptor, 1 << 20):
+            digest.update(chunk)
+        return digest.hexdigest()
+    finally:
+        os.close(descriptor)
 
 
-def git_blob_hash(repo: Path, revision: str, relative: str) -> str:
-    content = subprocess.check_output(
-        ["git", "-C", str(repo), "show", f"{revision}:{relative}"]
-    )
-    return hashlib.sha256(content).hexdigest()
+def _validate_archive_members(archive: bytes) -> None:
+    import io
+
+    with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as handle:
+        for member in handle.getmembers():
+            path = Path(member.name)
+            if path.is_absolute() or ".." in path.parts:
+                raise RuntimeError(f"unsafe fixed archive member: {member.name}")
+            if member.issym():
+                target = posixpath.normpath(
+                    posixpath.join(posixpath.dirname(member.name), member.linkname)
+                )
+                if member.linkname.startswith("/") or target == ".." or target.startswith("../"):
+                    raise RuntimeError(f"escaping fixed archive symlink: {member.name}")
+                continue
+            if not (member.isfile() or member.isdir()):
+                raise RuntimeError(f"unsupported fixed archive member: {member.name}")
 
 
-def _namespace_build(
-    repo: Path, revision: str, output: Path, archive_hash: str,
-    expected: dict[str, str],
-) -> None:
-    mountpoint = Path(tempfile.mkdtemp(prefix="trainverify-dp-input-"))
+def _make_source_tree_read_only(root: Path) -> None:
+    entries = sorted(root.rglob("*"), key=lambda path: len(path.parts), reverse=True)
+    for path in entries:
+        if path.is_symlink():
+            continue
+        path.chmod(0o500 if path.is_dir() else 0o400)
+    root.chmod(0o500)
+
+
+def _remove_private_tree(root: Path) -> None:
+    if not root.exists():
+        return
+    for path in sorted(root.rglob("*"), key=lambda item: len(item.parts)):
+        if path.is_dir() and not path.is_symlink():
+            path.chmod(0o700)
+        elif not path.is_symlink():
+            path.chmod(0o600)
+    root.chmod(0o700)
+    shutil.rmtree(root)
+    if root.exists():
+        raise RuntimeError(f"private build tree survived cleanup: {root}")
+
+
+def build(repo: Path, revision: str, output: Path) -> Path:
+    if revision != NNSCALER_REVISION:
+        raise RuntimeError("unexpected nnScaler revision")
+    repo = repo.resolve()
+    output = output.absolute()
+    output.mkdir(mode=0o700, parents=True, exist_ok=False)
+    source_root = Path(tempfile.mkdtemp(prefix="trainverify-dp-input-"))
     build_temp = Path(tempfile.mkdtemp(prefix="trainverify-dp-temp-"))
     try:
-        subprocess.run(
-            ["mount", "-t", "tmpfs", "-o", "mode=0700,size=1G", "tmpfs", str(mountpoint)],
-            check=True,
-        )
-        subprocess.run(
-            ["mount", "-t", "tmpfs", "-o", "mode=0700,size=1G", "tmpfs", str(build_temp)],
-            check=True,
-        )
         archive = subprocess.check_output(
-            ["git", "-C", str(repo), "archive", "--format=tar", revision]
+            ["git", "-C", str(repo), "archive", "--format=tar", revision],
+            env=CLEAN_TOOL_ENV,
         )
-        if hashlib.sha256(archive).hexdigest() != archive_hash:
+        if hashlib.sha256(archive).hexdigest() != NNSCALER_ARCHIVE_SHA256:
             raise RuntimeError("fixed nnScaler commit archive hash mismatch")
-        extract = subprocess.run(
-            ["/usr/bin/tar", "-x", "-C", str(mountpoint)],
+        _validate_archive_members(archive)
+        extracted = subprocess.run(
+            ["/usr/bin/tar", "-x", "-C", str(source_root)],
             input=archive,
             env=CLEAN_TOOL_ENV,
         )
-        if extract.returncode:
+        if extracted.returncode:
             raise RuntimeError("failed to materialize fixed nnScaler build input")
-        actual = {relative: sha256(mountpoint / relative) for relative in SOURCE_PATHS}
-        if actual != expected:
+        actual = {relative: sha256(source_root / relative) for relative in SOURCE_SHA256}
+        if actual != SOURCE_SHA256:
             raise RuntimeError(f"dp solver build input mismatch: {actual}")
-        subprocess.run(
-            ["mount", "-o", "remount,ro", "tmpfs", str(mountpoint)], check=True
-        )
+        _make_source_tree_read_only(source_root)
+
         venv_site = (
             Path(sys.executable).absolute().parent.parent / "lib"
             / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
@@ -89,44 +129,19 @@ def _namespace_build(
         }
         subprocess.run(
             [
-                sys.executable,
-                "-S",
-                str(mountpoint / "setup.py"),
-                "build_ext",
-                "--build-lib", str(output),
-                "--build-temp", str(build_temp),
+                sys.executable, "-S", str(source_root / "setup.py"), "build_ext",
+                "--build-lib", str(output), "--build-temp", str(build_temp),
             ],
-            cwd=mountpoint,
+            cwd=source_root,
             env=build_env,
             stdout=sys.stderr,
             stderr=sys.stderr,
             check=True,
         )
     finally:
-        subprocess.run(["umount", str(build_temp)], check=False)
-        shutil.rmtree(build_temp, ignore_errors=True)
-        try:
-            subprocess.run(["umount", str(mountpoint)], check=False)
-        finally:
-            shutil.rmtree(mountpoint, ignore_errors=True)
+        _remove_private_tree(build_temp)
+        _remove_private_tree(source_root)
 
-
-def build(repo: Path, revision: str, output: Path) -> Path:
-    repo = repo.resolve()
-    output = output.absolute()
-    output.mkdir(mode=0o700, parents=True, exist_ok=False)
-    expected = {relative: git_blob_hash(repo, revision, relative) for relative in SOURCE_PATHS}
-    archive_hash = hashlib.sha256(subprocess.check_output(
-        ["git", "-C", str(repo), "archive", "--format=tar", revision]
-    )).hexdigest()
-    command = [
-        "unshare", "--user", "--map-root-user", "--mount",
-        sys.executable, "-S", str(Path(__file__).resolve()), "_namespace_build",
-        str(repo), revision, str(output), archive_hash,
-    ]
-    for relative in SOURCE_PATHS:
-        command.extend([relative, expected[relative]])
-    subprocess.run(command, env=PYTHON_LAUNCH_ENV, check=True)
     suffix = sysconfig.get_config_var("EXT_SUFFIX")
     if not isinstance(suffix, str) or not suffix:
         raise RuntimeError("Python EXT_SUFFIX is unavailable")
@@ -146,31 +161,13 @@ def build(repo: Path, revision: str, output: Path) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    sub = parser.add_subparsers(dest="action", required=True)
-    public = sub.add_parser("build")
-    public.add_argument("repo", type=Path)
-    public.add_argument("revision")
-    public.add_argument("output", type=Path)
-    private = sub.add_parser("_namespace_build")
-    private.add_argument("repo", type=Path)
-    private.add_argument("revision")
-    private.add_argument("output", type=Path)
-    private.add_argument("archive_hash")
-    private.add_argument("hash_pairs", nargs="+")
+    parser.add_argument("action", choices=("build",))
+    parser.add_argument("repo", type=Path)
+    parser.add_argument("revision")
+    parser.add_argument("output", type=Path)
     args = parser.parse_args()
-    if args.action == "build":
-        extension = build(args.repo, args.revision, args.output)
-        print(f"{extension}\t{sha256(extension)}")
-        return
-    if len(args.hash_pairs) % 2:
-        raise RuntimeError("malformed source hash pairs")
-    expected = dict(zip(args.hash_pairs[::2], args.hash_pairs[1::2]))
-    if set(expected) != set(SOURCE_PATHS):
-        raise RuntimeError("incomplete dp solver source hash ledger")
-    _namespace_build(
-        args.repo.resolve(), args.revision, args.output.absolute(),
-        args.archive_hash, expected,
-    )
+    extension = build(args.repo, args.revision, args.output)
+    print(f"{extension}\t{sha256(extension)}")
 
 
 if __name__ == "__main__":
