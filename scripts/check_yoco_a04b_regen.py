@@ -8,7 +8,7 @@ import ast
 import hashlib
 import json
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
 
@@ -137,17 +137,40 @@ def _load_manifest(path: Path) -> tuple[bytes, dict[str, Any]]:
 def _validate_candidate_manifest(meta: dict[str, Any]) -> None:
     _require(meta.get("schema_version") == 3, "candidate manifest is not schema v3")
     artifacts = meta.get("artifact_sha256")
-    _require(isinstance(artifacts, dict) and set(artifacts) == {"nnscaler_dp_solver.so"},
-        "candidate manifest must contain exactly the dp solver artifact hash"
+    expected_artifacts = {"nnscaler_dp_solver.so", "comp_profile.json"}
+    _require(isinstance(artifacts, dict) and set(artifacts) == expected_artifacts,
+        "candidate manifest must contain exactly the solver and computation profile hashes"
     )
     artifacts = cast(dict[str, Any], artifacts)
-    digest = artifacts["nnscaler_dp_solver.so"]
-    _require(
-        isinstance(digest, str)
-        and len(digest) == 64
-        and all(character in "0123456789abcdef" for character in digest),
-        "candidate dp solver artifact hash is malformed",
-    )
+    for name in sorted(expected_artifacts):
+        digest = artifacts[name]
+        _require(
+            isinstance(digest, str)
+            and len(digest) == 64
+            and all(character in "0123456789abcdef" for character in digest),
+            f"candidate artifact hash is malformed: {name}",
+        )
+    snapshots = meta.get("snapshot_sha256")
+    if snapshots is not None:
+        _require(isinstance(snapshots, dict) and bool(snapshots),
+                 "candidate snapshot ledger must be a nonempty object")
+        snapshots = cast(dict[str, Any], snapshots)
+        for name, digest in snapshots.items():
+            _require(isinstance(name, str), "candidate snapshot path is not a string")
+            path = PurePosixPath(name)
+            _require(
+                not path.is_absolute()
+                and name == path.as_posix()
+                and all(part not in {"", ".", ".."} for part in path.parts)
+                and path.suffix == ".lean",
+                f"candidate snapshot path is malformed: {name}",
+            )
+            _require(
+                isinstance(digest, str)
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest),
+                f"candidate snapshot hash is malformed: {name}",
+            )
 
 
 def compare_snapshots(

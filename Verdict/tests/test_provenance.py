@@ -131,3 +131,32 @@ def test_artifact_file_command_path_is_stable_across_random_stages():
     ]
     with pytest.raises(ProvenanceError, match="NAME=PATH"):
         normalize_command(["graph_to_lean", "--artifact-file", "missing-separator"])
+
+
+def test_snapshot_ledger_hashes_relative_lean_paths_and_rejects_aliases(tmp_path):
+    sm, pm, meta, lean, emitter = _inputs(tmp_path)
+    goal = tmp_path / "Goal_1.lean"
+    goal.write_text("def goal := True\n", encoding="utf-8")
+    kwargs = dict(
+        model="YOCO-MoE-A0.4B", sm_pkl=sm, pm_pkl=pm,
+        metadata_files=[meta], llm_train_commit="1" * 40,
+        nnscaler_commit="2" * 40, emitter=emitter, generated_lean=lean,
+        command=[
+            "graph_to_lean", "--verifier-cache-dir",
+            str(tmp_path / ".random-stage" / "verifier-cache"),
+        ],
+        packages={}, deduplicated_intermediate_tids=[], final_goal_tids=[],
+        intermediate_goal_tids=[],
+    )
+    manifest = build_manifest(
+        **kwargs,
+        snapshot_files={"Generated.lean": lean, "yoco_goals/Goal_1.lean": goal},
+    )
+    assert manifest["snapshot_sha256"] == {
+        "Generated.lean": sha256_file(lean),
+        "yoco_goals/Goal_1.lean": sha256_file(goal),
+    }
+    assert manifest["command"][-1] == "$OUTPUT_DIR/verifier-cache"
+    for invalid in ("/absolute.lean", "../escape.lean", "a/../alias.lean", "bad.json"):
+        with pytest.raises(ProvenanceError, match="invalid snapshot path"):
+            build_manifest(**kwargs, snapshot_files={invalid: goal})

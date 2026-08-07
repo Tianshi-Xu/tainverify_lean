@@ -3854,6 +3854,12 @@ def main() -> None:
 			if key in expected_hashes:
 				raise ProvenanceError(f"duplicate artifact hash: {name}")
 			expected_hashes[key] = digest
+		snapshot_files: Dict[str, Path] = {out_path.name: out_path}
+		if args.split_goals:
+			goals_root = Path(args.goals_out_dir)
+			for snapshot_path in sorted(goals_root.iterdir(), key=lambda path: path.name):
+				if snapshot_path.is_file() and snapshot_path.suffix == ".lean":
+					snapshot_files[f"{goals_root.name}/{snapshot_path.name}"] = snapshot_path
 		manifest = build_manifest(
 			model=args.model, sm_pkl=args.sm_pkl, pm_pkl=args.pm_pkl,
 			metadata_files=args.metadata_json, llm_train_commit=llm_revision,
@@ -3869,6 +3875,7 @@ def main() -> None:
 			},
 			expected_hashes=expected_hashes,
 			artifact_files=artifact_files,
+			snapshot_files=snapshot_files,
 		)
 		write_manifest(args.manifest_out, manifest)
 		print(f"Wrote provenance manifest to: {args.manifest_out}")

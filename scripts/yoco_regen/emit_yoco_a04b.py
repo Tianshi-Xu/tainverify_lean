@@ -38,23 +38,48 @@ METADATA_JSON_NAMES = (
 )
 AUTHORITY_NAMES = (
     "sm_mgener.pkl", "pm_mgener.pkl",
-) + METADATA_JSON_NAMES + ("nnscaler_dp_solver.so",)
+) + METADATA_JSON_NAMES + ("nnscaler_dp_solver.so", "comp_profile.json")
+STATIC_GOAL_MODULES = (
+    "trainverify/denote/yoco_goals/ZigzagLayoutRel.lean",
+    "trainverify/denote/yoco_goals/ZigzagGoalStatement.lean",
+)
+GENERATED_GOAL_MODULES = (
+    "Goal_1.lean", "Goal_2.lean", "Goal_3.lean", "Goal_4.lean", "Goal_5.lean",
+    "Goal_1_CutToFull.lean", "Goal_2_CutToFull.lean", "Goal_3_CutToFull.lean",
+    "Goal_4_CutToFull.lean", "Goal_5_CutToFull.lean",
+    "Pattern_1.lean", "Pattern_2.lean", "Pattern_3.lean", "Pattern_4.lean",
+    "Pattern_5.lean", "Patterns.lean", "ProofObligations.lean", "Instances.lean",
+    "MainTheorem.lean",
+)
+EXPECTED_GOAL_MODULES = {
+    Path(relative_path).name for relative_path in STATIC_GOAL_MODULES
+} | set(GENERATED_GOAL_MODULES)
+LEAN_TARGETS = (
+    "denote.GeneratedYOCOMoE",
+    *(f"denote.yoco_goals.Goal_{index}" for index in range(1, 6)),
+    *(f"denote.yoco_goals.Goal_{index}_CutToFull" for index in range(1, 6)),
+    *(f"denote.yoco_goals.Pattern_{index}" for index in range(1, 6)),
+    "denote.yoco_goals.Patterns", "denote.yoco_goals.ProofObligations",
+    "denote.yoco_goals.Instances", "denote.yoco_goals.MainTheorem",
+)
 RECEIPT_KEYS = {
     "policy", "plan_ngpus", "runtime_ngpus", "pkl_sha256",
     "patched_parallel_py_sha256", "patched_llm_gemm_py_sha256",
-    "comm_profile_sha256", "dp_solver_extension_sha256",
+    "comm_profile_sha256", "comp_profile_sha256", "dp_solver_extension_sha256",
+    "canonicalized_comment_count", "canonicalized_code_count",
 }
 RECORD_KEYS = {
     "authority", "policy", "plan_ngpus", "runtime_ngpus", "zero_group_size",
     "cp_size_runtime", "ep_size_runtime", "cp_size_codegen_sentinel",
     "pkl_sha256", "receipt_sha256", "patched_parallel_py_sha256",
     "patched_llm_gemm_py_sha256", "node_count", "signature_counts",
-    "comm_profile_sha256", "dp_solver_extension_sha256",
+    "comm_profile_sha256", "comp_profile_sha256", "dp_solver_extension_sha256",
+    "canonicalized_comment_count", "canonicalized_code_count",
 }
 HARDWARE_KEYS = {
     "cuda_runtime_version", "nccl_version", "nvidia_driver_version",
     "gpu_inventory", "trainverify_regen_commit",
-    "comm_profile_sha256",
+    "comm_profile_sha256", "comp_profile_sha256",
 }
 GPU_KEYS = {"index", "name", "total_memory_bytes", "compute_capability"}
 META_KEYS = {
@@ -64,7 +89,7 @@ META_KEYS = {
     "torch_version", "cuda_runtime_version", "nccl_version",
     "nvidia_driver_version", "gpu_inventory", "python_version", "host",
     "trainverify_regen_commit", "comm_profile_sha256", "hardware_sha256",
-    "dp_solver_extension_sha256", "source_sha256", "sm", "pm",
+    "dp_solver_extension_sha256", "comp_profile_sha256", "source_sha256", "sm", "pm",
 }
 
 
@@ -98,7 +123,12 @@ def validate_receipt_schema(receipt: dict, plan: int) -> None:
         or not _is_lower_hex(receipt["patched_parallel_py_sha256"], 64)
         or not _is_lower_hex(receipt["patched_llm_gemm_py_sha256"], 64)
         or not _is_lower_hex(receipt["comm_profile_sha256"], 64)
+        or not _is_lower_hex(receipt["comp_profile_sha256"], 64)
         or not _is_lower_hex(receipt["dp_solver_extension_sha256"], 64)
+        or type(receipt["canonicalized_comment_count"]) is not int
+        or receipt["canonicalized_comment_count"] < 0
+        or type(receipt["canonicalized_code_count"]) is not int
+        or receipt["canonicalized_code_count"] < 0
     ):
         raise RuntimeError("receipt schema values mismatch")
 
@@ -121,7 +151,10 @@ def validate_record_schema(record: dict, plan: int) -> None:
         or not _is_lower_hex(record["patched_parallel_py_sha256"], 64)
         or not _is_lower_hex(record["patched_llm_gemm_py_sha256"], 64)
         or not _is_lower_hex(record["comm_profile_sha256"], 64)
+        or not _is_lower_hex(record["comp_profile_sha256"], 64)
         or not _is_lower_hex(record["dp_solver_extension_sha256"], 64)
+        or not _strict_int(record["canonicalized_comment_count"], minimum=0)
+        or not _strict_int(record["canonicalized_code_count"], minimum=0)
         or not _strict_int(record["node_count"], minimum=1)
         or not isinstance(record["signature_counts"], dict)
         or not record["signature_counts"]
@@ -170,6 +203,8 @@ def validate_hardware_schema(hardware: dict) -> None:
         raise RuntimeError("hardware metadata regen commit is invalid")
     if not _is_lower_hex(hardware["comm_profile_sha256"], 64):
         raise RuntimeError("hardware metadata communication profile hash is invalid")
+    if not _is_lower_hex(hardware["comp_profile_sha256"], 64):
+        raise RuntimeError("hardware metadata computation profile hash is invalid")
 
 
 def hardware_sha256(hardware: dict) -> str:
@@ -210,6 +245,7 @@ def validate_meta_schema(meta: dict) -> None:
         )
         or not _is_lower_hex(meta["hardware_sha256"], 64)
         or not _is_lower_hex(meta["dp_solver_extension_sha256"], 64)
+        or not _is_lower_hex(meta["comp_profile_sha256"], 64)
         or not isinstance(meta["source_sha256"], dict)
     ):
         raise RuntimeError("gen_args schema values mismatch")
@@ -231,6 +267,162 @@ def sha256(path: Path) -> str:
 
 def digest_bytes(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
+
+
+def _strict_json_bytes(content: bytes):
+    def reject_constant(value):
+        raise ValueError(f"non-finite JSON constant: {value}")
+
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplicate JSON key: {key}")
+            result[key] = value
+        return result
+
+    return json.loads(
+        content.decode("utf-8"),
+        object_pairs_hook=unique_object,
+        parse_constant=reject_constant,
+    )
+
+
+def _read_regular_at(directory_fd: int, name: str) -> bytes:
+    info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+        raise RuntimeError(f"untrusted snapshot inode: {name}")
+    if stat.S_IMODE(info.st_mode) & 0o022:
+        raise RuntimeError(f"group/world writable snapshot inode: {name}")
+    descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory_fd)
+    try:
+        opened = os.fstat(descriptor)
+        if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+            raise RuntimeError(f"snapshot inode changed during open: {name}")
+        chunks = []
+        while chunk := os.read(descriptor, 1 << 20):
+            chunks.append(chunk)
+        return b"".join(chunks)
+    finally:
+        os.close(descriptor)
+
+
+def verify_snapshot_fd(stage_fd: int) -> None:
+    top_entries = set(os.listdir(stage_fd))
+    expected_top = {
+        ".trainverify-stage-owner", "GeneratedYOCOMoE.lean",
+        "GeneratedYOCOMoE.manifest.json", "yoco_goals",
+    }
+    if top_entries != expected_top:
+        raise RuntimeError(f"unexpected snapshot top-level paths: {sorted(top_entries)}")
+    if not _read_regular_at(stage_fd, ".trainverify-stage-owner"):
+        raise RuntimeError("snapshot ownership marker is empty")
+    goals_info = os.stat("yoco_goals", dir_fd=stage_fd, follow_symlinks=False)
+    if (
+        not stat.S_ISDIR(goals_info.st_mode)
+        or goals_info.st_uid != os.getuid()
+        or stat.S_IMODE(goals_info.st_mode) & 0o022
+    ):
+        raise RuntimeError("snapshot yoco_goals is not a trusted directory")
+    manifest = _strict_json_bytes(
+        _read_regular_at(stage_fd, "GeneratedYOCOMoE.manifest.json")
+    )
+    ledger = manifest.get("snapshot_sha256") if isinstance(manifest, dict) else None
+    if not isinstance(ledger, dict):
+        raise RuntimeError("snapshot manifest is missing snapshot_sha256")
+    goals_fd = os.open(
+        "yoco_goals", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+        dir_fd=stage_fd,
+    )
+    try:
+        goal_entries = set(os.listdir(goals_fd))
+        if goal_entries != EXPECTED_GOAL_MODULES:
+            raise RuntimeError(f"unexpected yoco_goals paths: {sorted(goal_entries)}")
+        expected_ledger = {"GeneratedYOCOMoE.lean"} | {
+            f"yoco_goals/{name}" for name in EXPECTED_GOAL_MODULES
+        }
+        if set(ledger) != expected_ledger:
+            raise RuntimeError("snapshot manifest path ledger is not exact")
+        main_content = _read_regular_at(stage_fd, "GeneratedYOCOMoE.lean")
+        if ledger.get("GeneratedYOCOMoE.lean") != digest_bytes(main_content):
+            raise RuntimeError("snapshot main Lean digest mismatch")
+        for name in sorted(EXPECTED_GOAL_MODULES):
+            digest = ledger.get(f"yoco_goals/{name}")
+            if not _is_lower_hex(digest, 64):
+                raise RuntimeError(f"invalid snapshot digest: {name}")
+            if digest != digest_bytes(_read_regular_at(goals_fd, name)):
+                raise RuntimeError(f"snapshot Lean digest mismatch: {name}")
+    finally:
+        os.close(goals_fd)
+
+
+def verify_snapshot_stage(stage: Path) -> None:
+    stage_fd = os.open(stage, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        verify_snapshot_fd(stage_fd)
+    finally:
+        os.close(stage_fd)
+
+
+def validate_lean_snapshot(
+    stage: Path, lean_cache_project: Path, emitter_revision: str,
+) -> None:
+    packages = lean_cache_project.resolve() / ".lake" / "packages"
+    packages_info = packages.stat()
+    if (
+        not stat.S_ISDIR(packages_info.st_mode)
+        or packages_info.st_uid != os.getuid()
+        or stat.S_IMODE(packages_info.st_mode) & 0o022
+    ):
+        raise RuntimeError("untrusted Lean package cache")
+    validation_root, validation_marker, validation_dev, validation_ino = create_owned_stage(
+        stage.parent, ".trainverify-lean-validation-",
+    )
+    try:
+        repo = validation_root / "repo"
+        subprocess.run(
+            ["git", "clone", "--quiet", "--no-hardlinks", str(ROOT), str(repo)],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(repo), "checkout", "--quiet", emitter_revision],
+            check=True,
+        )
+        if git_head(repo) != emitter_revision or not git_clean(repo):
+            raise RuntimeError("Lean validation source materialization failed")
+        project = repo / "trainverify"
+        lake_dir = project / ".lake"
+        lake_dir.mkdir(mode=0o700)
+        os.symlink(packages, lake_dir / "packages", target_is_directory=True)
+        denote = project / "denote"
+        shutil.rmtree(denote / "yoco_goals")
+        shutil.copytree(stage / "yoco_goals", denote / "yoco_goals", symlinks=False)
+        shutil.copyfile(stage / "GeneratedYOCOMoE.lean", denote / "GeneratedYOCOMoE.lean")
+        lake = shutil.which("lake")
+        if lake is None:
+            raise RuntimeError("lake executable is unavailable")
+        subprocess.run(
+            [lake, "build", *LEAN_TARGETS],
+            cwd=project,
+            check=True,
+            env={
+                "HOME": os.environ["HOME"],
+                "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            },
+        )
+    except BaseException:
+        try:
+            cleanup_owned_stage(
+                validation_root, validation_marker, validation_dev, validation_ino,
+            )
+        except BaseException:
+            pass
+        raise
+    if not cleanup_owned_stage(
+        validation_root, validation_marker, validation_dev, validation_ino,
+    ):
+        raise RuntimeError("Lean validation stage identity changed before cleanup")
 
 
 def git_head(path: Path) -> str:
@@ -278,6 +470,24 @@ def materialize_source(source: Path, revision: str, target: Path) -> None:
         raise RuntimeError(f"private source materialization failed: {target}")
 
 
+def materialize_static_goal_modules(repo: Path, revision: str, target: Path) -> None:
+    for relative_path in STATIC_GOAL_MODULES:
+        content = git_blob(repo, revision, relative_path)
+        destination = target / Path(relative_path).name
+        descriptor = os.open(
+            destination,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o400,
+        )
+        try:
+            with os.fdopen(descriptor, "wb", closefd=False) as handle:
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+        finally:
+            os.close(descriptor)
+
+
 def secure_copy_authority(source: Path, target: Path) -> None:
     """Copy from one locked directory inode; never reopen source paths by name."""
     target.mkdir(mode=0o700)
@@ -312,6 +522,7 @@ def validate_authority(
     llm_train: Path,
     nnscaler: Path,
     expected_hardware_sha256: str,
+    emitter_revision: str,
 ):
     files = {name: authority / name for name in AUTHORITY_NAMES}
     meta = json.loads(files["gen_args.json"].read_text(encoding="utf-8"))
@@ -325,6 +536,8 @@ def validate_authority(
         raise RuntimeError("gen_args llm-train revision mismatch")
     if meta.get("nnscaler_commit") != NNSCALER_REVISION:
         raise RuntimeError("gen_args nnScaler revision mismatch")
+    if meta.get("trainverify_regen_commit") != emitter_revision:
+        raise RuntimeError("authority/emitter TrainVerify revision mismatch")
     if meta.get("llm_hardware_patch") != "cc12_generic_triton_fallback_v1":
         raise RuntimeError("gen_args llm hardware patch mismatch")
 
@@ -333,10 +546,14 @@ def validate_authority(
         patch_source as patch_llm_gemm_source,
     )
     from scripts.yoco_regen.comm_profile import profile_sha256
+    from scripts.yoco_regen.comp_profile import validate_artifact as validate_comp_profile
 
     comm_profile_hash = profile_sha256(files["comm_profile_intra_2.json"])
     if comm_profile_hash != meta["comm_profile_sha256"]:
         raise RuntimeError("communication profile hash mismatch")
+    comp_profile_hash = validate_comp_profile(files["comp_profile.json"])
+    if comp_profile_hash != meta["comp_profile_sha256"]:
+        raise RuntimeError("computation profile hash mismatch")
     dp_solver_file = files["nnscaler_dp_solver.so"]
     if dp_solver_file.read_bytes()[:4] != b"\x7fELF":
         raise RuntimeError("dp solver authority artifact is not ELF")
@@ -389,6 +606,8 @@ def validate_authority(
             raise RuntimeError(f"{kind} patched llm GEMM source hash mismatch")
         if record.get("comm_profile_sha256") != comm_profile_hash:
             raise RuntimeError(f"{kind} communication profile hash mismatch")
+        if record.get("comp_profile_sha256") != comp_profile_hash:
+            raise RuntimeError(f"{kind} computation profile hash mismatch")
         if record.get("dp_solver_extension_sha256") != dp_solver_hash:
             raise RuntimeError(f"{kind} dp solver extension hash mismatch")
         receipt_path = files[f"{kind}_mgener.pkl.receipt.json"]
@@ -402,7 +621,10 @@ def validate_authority(
             or receipt.get("patched_parallel_py_sha256") != patched_parallel_hash
             or receipt.get("patched_llm_gemm_py_sha256") != patched_llm_gemm_hash
             or receipt.get("comm_profile_sha256") != comm_profile_hash
+            or receipt.get("comp_profile_sha256") != comp_profile_hash
             or receipt.get("dp_solver_extension_sha256") != dp_solver_hash
+            or receipt.get("canonicalized_comment_count") != record.get("canonicalized_comment_count")
+            or receipt.get("canonicalized_code_count") != record.get("canonicalized_code_count")
         ):
             raise RuntimeError(f"{kind} receipt semantics mismatch")
         provenance = json.loads(
@@ -490,12 +712,11 @@ def graph_to_lean_argv(llm_train, nnscaler, files, stage):
     for name in METADATA_JSON_NAMES:
         command += ["--metadata-json", str(files[name])]
         command += ["--metadata-sha256", f"{name}={sha256(files[name])}"]
-    command += [
-        "--artifact-file",
-        f"nnscaler_dp_solver.so={files['nnscaler_dp_solver.so']}",
-        "--artifact-sha256",
-        f"nnscaler_dp_solver.so={sha256(files['nnscaler_dp_solver.so'])}",
-    ]
+    for name in ("nnscaler_dp_solver.so", "comp_profile.json"):
+        command += [
+            "--artifact-file", f"{name}={files[name]}",
+            "--artifact-sha256", f"{name}={sha256(files[name])}",
+        ]
     return command
 
 
@@ -505,6 +726,10 @@ def main():
     parser.add_argument("--llm-train", type=Path, required=True)
     parser.add_argument("--nnscaler", type=Path, required=True)
     parser.add_argument("--snapshot-dir", type=Path, required=True)
+    parser.add_argument(
+        "--lean-project", type=Path, required=True,
+        help="trusted Lean project providing the prebuilt .lake/packages cache",
+    )
     parser.add_argument(
         "--expected-hardware-sha256", required=True,
         help="SHA-256 captured out-of-band from the trusted GPU generation session",
@@ -520,12 +745,25 @@ def main():
     llm_source = args.llm_train.resolve()
     nnscaler_source = args.nnscaler.resolve()
     snapshot = args.snapshot_dir.absolute()
+    declared_materialization = os.environ.get("TRAINVERIFY_PRIVATE_MATERIALIZATION")
+    if (
+        not declared_materialization
+        or Path(declared_materialization).resolve() != ROOT.resolve()
+    ):
+        raise RuntimeError("emitter is not running from the declared private materialization")
+    root_info = ROOT.stat()
+    if root_info.st_uid != os.getuid() or stat.S_IMODE(root_info.st_mode) & 0o077:
+        raise RuntimeError("emitter TrainVerify materialization is not owner-private")
+    emitter_revision = git_head(ROOT)
+    if not git_clean(ROOT):
+        raise RuntimeError("emitter TrainVerify checkout is dirty")
     validate_source_checkouts(llm_source, nnscaler_source)
     snapshot.parent.mkdir(parents=True, exist_ok=True)
     stage, stage_marker, stage_dev, stage_ino = create_owned_stage(
         snapshot.parent, f".{snapshot.name}.staged-")
     try:
         (stage / "yoco_goals").mkdir()
+        materialize_static_goal_modules(ROOT, emitter_revision, stage / "yoco_goals")
         llm_train = stage / ".llm-train-source"
         nnscaler = stage / ".nnscaler-source"
         materialize_source(llm_source, LLM_REVISION, llm_train)
@@ -534,6 +772,7 @@ def main():
         secure_copy_authority(authority_source, authority)
         _, files = validate_authority(
             authority, llm_train, nnscaler, args.expected_hardware_sha256,
+            emitter_revision,
         )
         configure_runtime(llm_train, nnscaler)
         sys.argv = graph_to_lean_argv(llm_train, nnscaler, files, stage)
@@ -542,21 +781,19 @@ def main():
 
         setup_logger("ERROR")
         graph_to_lean.main()
-        required_files = (
-            stage / "GeneratedYOCOMoE.lean",
-            stage / "GeneratedYOCOMoE.manifest.json",
-        )
-        if any(not path.is_file() or path.stat().st_size == 0 for path in required_files):
-            raise RuntimeError("emitter did not create nonempty Lean and manifest files")
-        if not any((stage / "yoco_goals").iterdir()):
-            raise RuntimeError("emitter created an empty yoco_goals directory")
         shutil.rmtree(stage / "verifier-cache")
         shutil.rmtree(llm_train)
         shutil.rmtree(nnscaler)
         shutil.rmtree(authority)
-        from scripts.yoco_regen.atomic_publish import rename_noreplace
+        if git_head(ROOT) != emitter_revision or not git_clean(ROOT):
+            raise RuntimeError("emitter TrainVerify revision changed during emission")
+        verify_snapshot_stage(stage)
+        validate_lean_snapshot(stage, args.lean_project, emitter_revision)
+        if git_head(ROOT) != emitter_revision or not git_clean(ROOT):
+            raise RuntimeError("emitter TrainVerify revision changed during Lean validation")
+        from scripts.yoco_regen.atomic_publish import publish_validated_directory
 
-        rename_noreplace(stage, snapshot)
+        publish_validated_directory(stage, snapshot, verify_snapshot_fd)
     except BaseException:
         cleanup_owned_stage(stage, stage_marker, stage_dev, stage_ino)
         raise

@@ -20,6 +20,11 @@ import pytest
 from scripts.yoco_regen.patch_mgener_dump import MARKER, patch_source
 from scripts.check_yoco_a04b_regen import _validate_candidate_manifest
 from scripts.yoco_regen.comm_profile import EXPECTED_SIZES_MB, validate_profile
+from scripts.yoco_regen.comp_profile import (
+    copy_artifact as copy_comp_profile_artifact,
+    create_artifact as create_comp_profile_artifact,
+    extract_artifact as extract_comp_profile_artifact,
+)
 from scripts.yoco_regen.check_publication_allowlist import (
     EXPECTED as PUBLICATION_FILES,
     validate as validate_publication,
@@ -28,16 +33,22 @@ from scripts.yoco_regen.patch_llm_cc12_gemm import (
     MARKER as CC12_MARKER,
     patch_source as patch_cc12_source,
 )
-from scripts.yoco_regen.atomic_publish import publish_authority, rename_noreplace
+from scripts.yoco_regen.atomic_publish import (
+    publish_authority, publish_validated_directory, rename_noreplace,
+)
 from scripts.yoco_regen.build_dp_solver import _validate_build_output
 from scripts.yoco_regen.sealed_extension_exec import (
     CLEAN_TOOL_ENV,
     _FULL_SEALS,
     _runtime_zip,
     _sealed_memfd,
+    _worker_shim_content,
+    _parse_args as parse_sealed_exec_args,
     allowlisted_runtime_environment,
 )
 import scripts.yoco_regen.emit_yoco_a04b as emitter
+import scripts.yoco_regen.atomic_publish as atomic_publish
+import scripts.yoco_regen.safe_cleanup as safe_cleanup
 from scripts.yoco_regen.safe_cleanup import create_owned_stage, cleanup_owned_stage
 from scripts.yoco_regen.write_authority_metadata import validate_graph
 
@@ -84,6 +95,86 @@ def test_cc12_gemm_patch_rejects_partial_source():
         )
 
 
+def test_comp_profile_artifact_round_trip_and_rejects_ambiguous_inputs(tmp_path):
+    source = tmp_path / "comp"
+    source.mkdir()
+    original = json.dumps({
+        "shape : torch.float32 : True": {
+            "in_mem_info": [4], "param_mem_info": [], "buffer_mem_info": [],
+            "fw_span": 1.25, "bw_span": 2.5, "infer_memory": 4,
+            "train_mem_info": [4], "train_mem2in_idx": [0],
+        }
+    }, separators=(",", ":")).encode()
+    profile_file = source / "torch.add.json"
+    profile_file.write_bytes(original)
+    profile_file.chmod(0o400)
+    artifact = tmp_path / "comp_profile.json"
+    create_comp_profile_artifact(source, artifact)
+
+    extracted = tmp_path / "extracted"
+    extract_comp_profile_artifact(artifact, extracted)
+    assert (extracted / "torch.add.json").read_bytes() == original
+    assert create_comp_profile_artifact(extracted, tmp_path / "again.json") == artifact.read_bytes()
+    copied = tmp_path / "copied.json"
+    assert copy_comp_profile_artifact(artifact, copied) == hashlib.sha256(
+        artifact.read_bytes()
+    ).hexdigest()
+    assert copied.read_bytes() == artifact.read_bytes()
+    alias = tmp_path / "alias.json"
+    alias.symlink_to(artifact)
+    with pytest.raises(OSError):
+        copy_comp_profile_artifact(alias, tmp_path / "copy-from-alias.json")
+
+    (source / "rogue").symlink_to("missing")
+    with pytest.raises(RuntimeError, match="regular JSON files"):
+        create_comp_profile_artifact(source, tmp_path / "bad.json")
+    (source / "rogue").unlink()
+    (source / "nested").mkdir()
+    with pytest.raises(RuntimeError, match="regular JSON files"):
+        create_comp_profile_artifact(source, tmp_path / "bad.json")
+
+
+def test_comp_profile_artifact_rejects_noncanonical_json_and_tampering(tmp_path):
+    source = tmp_path / "comp"
+    source.mkdir()
+    artifact = tmp_path / "comp_profile.json"
+    profile_file = source / "torch.add.json"
+    for invalid in (b'{"a":1,"a":2}', b'{"a":NaN}', b'[]'):
+        if profile_file.exists():
+            profile_file.chmod(0o600)
+        profile_file.write_bytes(invalid)
+        profile_file.chmod(0o400)
+        with pytest.raises(RuntimeError):
+            create_comp_profile_artifact(source, artifact)
+
+    base_metrics = {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }
+    for bad_metrics in (
+        {**base_metrics, "train_mem_info": [4], "train_mem2in_idx": []},
+        {**base_metrics, "train_mem_info": [4], "train_mem2in_idx": [-2]},
+    ):
+        profile_file.chmod(0o600)
+        profile_file.write_text(json.dumps({"shape": bad_metrics}), encoding="utf-8")
+        profile_file.chmod(0o400)
+        with pytest.raises(RuntimeError):
+            create_comp_profile_artifact(source, artifact)
+
+    valid = {"shape": base_metrics}
+    profile_file.chmod(0o600)
+    profile_file.write_text(json.dumps(valid), encoding="utf-8")
+    profile_file.chmod(0o400)
+    create_comp_profile_artifact(source, artifact)
+    payload = json.loads(artifact.read_text(encoding="utf-8"))
+    payload["files"][0]["content_base64"] = "e30="
+    artifact.chmod(0o600)
+    artifact.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="content hash mismatch"):
+        extract_comp_profile_artifact(artifact, tmp_path / "out")
+
+
 def test_communication_profile_schema_is_closed_and_finite():
     profile = {
         primitive: [EXPECTED_SIZES_MB, [0.001 * (index + 1) for index in range(12)]]
@@ -102,7 +193,8 @@ def test_communication_profile_schema_is_closed_and_finite():
 
 
 def _run_patched_dump(
-    tmp_path, monkeypatch, local_rank, dump_function, llm_patch_hash: str | None = "c" * 64
+    tmp_path, monkeypatch, local_rank, dump_function, llm_patch_hash: str | None = "c" * 64,
+    module_codegen=None,
 ):
     source = "def build(pas_policy, compute_config):\n    mgener = ModuleCodeGen(execplan, 2)\n    return mgener\n"
     patched = patch_source(source)
@@ -120,11 +212,13 @@ def _run_patched_dump(
     else:
         monkeypatch.setenv("TRAINVERIFY_PATCHED_LLM_GEMM_SHA256", llm_patch_hash)
     monkeypatch.setenv("TRAINVERIFY_COMM_PROFILE_SHA256", "e" * 64)
+    monkeypatch.setenv("TRAINVERIFY_COMP_PROFILE_SHA256", "d" * 64)
+    monkeypatch.setenv("TRAINVERIFY_LLM_SOURCE_ROOT", "/trusted/llm")
     monkeypatch.setenv("TRAINVERIFY_DP_SOLVER_SHA256", "f" * 64)
     namespace = {
         "__file__": str(source_path),
         "__loader__": types.SimpleNamespace(get_data=lambda path: Path(path).read_bytes()),
-        "ModuleCodeGen": lambda *_args: {"ok": True},
+        "ModuleCodeGen": module_codegen or (lambda *_args: {"ok": True}),
         "execplan": object(),
     }
     exec(compile(patched, str(source_path), "exec"), namespace)
@@ -143,6 +237,34 @@ def _run_patched_dump(
     return destination
 
 
+def test_dump_patch_canonicalizes_only_dynamic_provenance_paths(tmp_path, monkeypatch):
+    def dynamic_function():
+        return None
+
+    dynamic_function.__code__ = dynamic_function.__code__.replace(
+        co_filename="/proc/123456/fd/3/nnscaler/graph/parser/register.py"
+    )
+    authority = types.SimpleNamespace(
+        _comment='File "/trusted/llm/arch/model.py", line 1, in forward',
+        callback=dynamic_function,
+    )
+    captured = {}
+    def capture_dump(obj, handle):
+        captured["comment"] = obj._comment
+        captured["filename"] = obj.callback.__code__.co_filename
+        pickle.dump({"captured": True}, handle)
+
+    destination = _run_patched_dump(
+        tmp_path, monkeypatch, 0, capture_dump,
+        module_codegen=lambda *_args: authority,
+    )
+    assert captured["comment"].startswith('File "/trainverify/llm/arch/model.py"')
+    assert captured["filename"] == "/trainverify/nnscaler/graph/parser/register.py"
+    receipt = json.loads(Path(str(destination) + ".receipt.json").read_text())
+    assert receipt["canonicalized_comment_count"] == 1
+    assert receipt["canonicalized_code_count"] == 1
+
+
 def test_dump_patch_only_rank_zero_writes_receipt(tmp_path, monkeypatch):
     rank1 = _run_patched_dump(tmp_path, monkeypatch, 1, pickle.dump)
     assert not rank1.exists()
@@ -155,6 +277,9 @@ def test_dump_patch_only_rank_zero_writes_receipt(tmp_path, monkeypatch):
     assert data["plan_ngpus"] == 2 and data["runtime_ngpus"] == 2
     assert data["patched_llm_gemm_py_sha256"] == "c" * 64
     assert data["comm_profile_sha256"] == "e" * 64
+    assert data["comp_profile_sha256"] == "d" * 64
+    assert data["canonicalized_comment_count"] == 0
+    assert data["canonicalized_code_count"] == 0
     assert data["dp_solver_extension_sha256"] == "f" * 64
 
 
@@ -216,14 +341,20 @@ def test_secure_authority_copy_rejects_symlinks(tmp_path, monkeypatch):
         emitter.secure_copy_authority(bad_source, tmp_path / "bad-copy")
 
 
-def test_candidate_manifest_requires_schema_v3_solver_artifact():
+def test_candidate_manifest_requires_schema_v3_solver_and_comp_profile_artifacts():
     with pytest.raises(RuntimeError, match="schema v3"):
         _validate_candidate_manifest({"schema_version": 2})
-    with pytest.raises(RuntimeError, match="dp solver"):
-        _validate_candidate_manifest({"schema_version": 3, "artifact_sha256": {}})
+    with pytest.raises(RuntimeError, match="computation profile"):
+        _validate_candidate_manifest({
+            "schema_version": 3,
+            "artifact_sha256": {"nnscaler_dp_solver.so": "a" * 64},
+        })
     _validate_candidate_manifest({
         "schema_version": 3,
-        "artifact_sha256": {"nnscaler_dp_solver.so": "a" * 64},
+        "artifact_sha256": {
+            "nnscaler_dp_solver.so": "a" * 64,
+            "comp_profile.json": "b" * 64,
+        },
     })
     optimized = subprocess.run(
         [
@@ -306,6 +437,55 @@ def test_atomic_publication_validates_the_same_directory_inode(tmp_path):
         publish_authority(nested_stage, trusted_immediate / "authority")
 
 
+def test_sealed_executor_parses_profile_options_before_remainder():
+    prefix = ["run", "solver.so", "a" * 64, "nnscaler", "guard.py", "llm"]
+    live = parse_sealed_exec_args(["--allow-live-comp-profile", *prefix, "--", "torchrun", "x"])
+    assert live.allow_live_comp_profile is True
+    assert live.command == ["torchrun", "x"]
+    frozen = parse_sealed_exec_args([
+        "--comp-profile", "comp_profile.json",
+        "--comp-profile-sha256", "b" * 64,
+        *prefix, "--", "torchrun", "x",
+    ])
+    assert frozen.comp_profile == Path("comp_profile.json")
+    assert frozen.comp_profile_sha256 == "b" * 64
+    assert frozen.command == ["torchrun", "x"]
+
+
+def test_worker_shim_supports_real_multiprocessing_spawn(tmp_path):
+    (tmp_path / "sitecustomize.py").write_text("READY = True\n", encoding="utf-8")
+    descriptor = _sealed_memfd(
+        "spawn-worker-shim", _worker_shim_content(Path(sys.executable)), executable=True,
+    )
+    shim_path = f"/proc/{os.getpid()}/fd/{descriptor}"
+    code = (
+        "import multiprocessing as mp, os\n"
+        "if __name__ == '__main__':\n"
+        "  mp.set_executable(os.environ['TRAINVERIFY_WORKER_SHIM'])\n"
+        "  p=mp.get_context('spawn').Process(target=os.getpid)\n"
+        "  p.start(); p.join(30)\n"
+        "  assert not p.is_alive() and p.exitcode == 0, (p.is_alive(), p.exitcode)\n"
+    )
+    environment = {
+        **os.environ,
+        "PYTHONPATH": str(tmp_path),
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "TRAINVERIFY_WORKER_SHIM": shim_path,
+    }
+    try:
+        result = subprocess.run(
+            [sys.executable, "-S", "-c", code],
+            env=environment,
+            pass_fds=(descriptor,),
+            text=True,
+            capture_output=True,
+            timeout=60,
+        )
+        assert result.returncode == 0, result.stderr
+    finally:
+        os.close(descriptor)
+
+
 def test_runtime_and_tar_environments_are_closed(monkeypatch):
     required = {
         "HOME": "/private/home",
@@ -313,6 +493,8 @@ def test_runtime_and_tar_environments_are_closed(monkeypatch):
         "TRAINVERIFY_EXPECTED_POLICY": "policy",
         "TRAINVERIFY_PATCHED_LLM_GEMM_SHA256": "a" * 64,
         "TRAINVERIFY_COMM_PROFILE_SHA256": "b" * 64,
+        "TRAINVERIFY_COMP_PROFILE_SHA256": "c" * 64,
+        "TRAINVERIFY_LLM_SOURCE_ROOT": "/trusted/llm",
     }
     poisoned = {
         **required,
@@ -452,6 +634,8 @@ mgener_probe = ModuleCodeGen()
     monkeypatch.setenv("TRAINVERIFY_EXPECTED_POLICY", "policy")
     monkeypatch.setenv("TRAINVERIFY_PATCHED_LLM_GEMM_SHA256", "a" * 64)
     monkeypatch.setenv("TRAINVERIFY_COMM_PROFILE_SHA256", "b" * 64)
+    monkeypatch.setenv("TRAINVERIFY_COMP_PROFILE_SHA256", "d" * 64)
+    monkeypatch.setenv("TRAINVERIFY_LLM_SOURCE_ROOT", "/trusted/llm")
     monkeypatch.setenv("TRAINVERIFY_DP_SOLVER_SHA256", "c" * 64)
     monkeypatch.setitem(sys.modules, "dill", pickle)
     runtime_path = f"/proc/{os.getpid()}/fd/{descriptor}"
@@ -570,6 +754,64 @@ def test_owned_stage_cleanup_rejects_replaced_inode_even_with_marker(tmp_path):
     assert cleanup_owned_stage(original, marker, dev, ino) is True
 
 
+def test_owned_stage_cleanup_restores_replacement_after_rename_race(
+    tmp_path, monkeypatch,
+):
+    stage, marker, dev, ino = create_owned_stage(tmp_path, "stage-")
+    preserved = tmp_path / "trusted-preserved"
+    replacement = tmp_path / "replacement"
+    replacement.mkdir()
+    (replacement / "unrelated").write_text("keep", encoding="utf-8")
+    real_renameat2 = safe_cleanup._renameat2
+    calls = {"count": 0}
+
+    def swap_then_rename(source_fd, source_name, target_fd, target_name):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            stage.rename(preserved)
+            replacement.rename(stage)
+        return real_renameat2(source_fd, source_name, target_fd, target_name)
+
+    monkeypatch.setattr(safe_cleanup, "_renameat2", swap_then_rename)
+    with pytest.raises(RuntimeError, match="stage inode changed"):
+        cleanup_owned_stage(stage, marker, dev, ino)
+    quarantine = next(tmp_path.glob(".*.cleanup-*"))
+    assert (quarantine / "unrelated").read_text(encoding="utf-8") == "keep"
+    assert preserved.is_dir()
+    assert not stage.exists()
+    assert calls["count"] == 1
+
+
+def test_owned_stage_cleanup_rollback_never_moves_replacement(
+    tmp_path, monkeypatch,
+):
+    stage, marker, dev, ino = create_owned_stage(tmp_path, "stage-")
+    replacement = tmp_path / "replacement"
+    replacement.mkdir()
+    (replacement / "unrelated").write_text("keep", encoding="utf-8")
+    preserved = tmp_path / "trusted-preserved"
+    real_renameat2 = safe_cleanup._renameat2
+    calls = {"count": 0}
+
+    def replace_after_quarantine(source_fd, source_name, target_fd, target_name):
+        calls["count"] += 1
+        result = real_renameat2(source_fd, source_name, target_fd, target_name)
+        if calls["count"] == 1:
+            quarantine = tmp_path / target_name
+            quarantine.rename(preserved)
+            replacement.rename(quarantine)
+        return result
+
+    monkeypatch.setattr(safe_cleanup, "_renameat2", replace_after_quarantine)
+    with pytest.raises(RuntimeError, match="stage inode changed"):
+        cleanup_owned_stage(stage, marker, dev, ino)
+    quarantine = next(tmp_path.glob(".*.cleanup-*"))
+    assert (quarantine / "unrelated").read_text(encoding="utf-8") == "keep"
+    assert preserved.is_dir()
+    assert not stage.exists()
+    assert calls["count"] == 1
+
+
 def test_stage_cleanup_has_no_path_recursive_delete():
     source = (
         Path(__file__).resolve().parents[1] / "yoco_regen" / "safe_cleanup.py"
@@ -643,7 +885,10 @@ def _receipt(plan=1, policy="nnscaler_train.main.<locals>.autodist_wrapper"):
         "patched_parallel_py_sha256": "b" * 64,
         "patched_llm_gemm_py_sha256": "c" * 64,
         "comm_profile_sha256": "e" * 64,
+        "comp_profile_sha256": "d" * 64,
         "dp_solver_extension_sha256": "f" * 64,
+        "canonicalized_comment_count": 1,
+        "canonicalized_code_count": 1,
     }
 
 
@@ -662,7 +907,10 @@ def _authority_record(plan=1):
         "patched_parallel_py_sha256": "b" * 64,
         "patched_llm_gemm_py_sha256": "c" * 64,
         "comm_profile_sha256": "e" * 64,
+        "comp_profile_sha256": "d" * 64,
         "dp_solver_extension_sha256": "f" * 64,
+        "canonicalized_comment_count": 1,
+        "canonicalized_code_count": 1,
         "node_count": 1,
         "signature_counts": {"op": 1},
     }
@@ -682,6 +930,7 @@ def _hardware_meta():
         "gpu_inventory": [gpu, {**gpu, "index": 1}],
         "trainverify_regen_commit": "e" * 40,
         "comm_profile_sha256": "f" * 64,
+        "comp_profile_sha256": "d" * 64,
     }
 
 
@@ -703,6 +952,7 @@ def _full_meta():
         "python_version": "3.12.3",
         "host": "host",
         "dp_solver_extension_sha256": "1" * 64,
+        "comp_profile_sha256": "d" * 64,
         "hardware_sha256": emitter.hardware_sha256(hardware),
         "source_sha256": {"source": "a" * 64},
         "sm": _authority_record(1),
@@ -765,6 +1015,10 @@ def test_trusted_hardware_digest_rejects_coordinated_plausible_forgery():
     emitter.validate_hardware_schema(forged)
     with pytest.raises(RuntimeError, match="trusted hardware"):
         emitter.validate_expected_hardware(forged, expected)
+    comp_forged = {**original, "comp_profile_sha256": "0" * 64}
+    emitter.validate_hardware_schema(comp_forged)
+    with pytest.raises(RuntimeError, match="trusted hardware"):
+        emitter.validate_expected_hardware(comp_forged, expected)
 
 
 def test_trusted_emitter_gen_args_schema_is_closed():
@@ -818,6 +1072,183 @@ def test_authority_graph_gate_accepts_only_full_autodist_graph():
         validate_graph(missing_runtime, "sm", 1, _receipt())
 
 
+def _write_snapshot_stage(root: Path) -> Path:
+    stage = root / "stage"
+    goals = stage / "yoco_goals"
+    goals.mkdir(parents=True, mode=0o700)
+    goals.chmod(0o700)
+    marker = stage / ".trainverify-stage-owner"
+    marker.write_text("owned", encoding="utf-8")
+    marker.chmod(0o400)
+    files = {"GeneratedYOCOMoE.lean": b"def generated : Nat := 1\n"}
+    for name in sorted(emitter.EXPECTED_GOAL_MODULES):
+        files[f"yoco_goals/{name}"] = f"-- {name}\n".encode()
+    for relative, content in files.items():
+        path = stage / relative
+        path.write_bytes(content)
+        path.chmod(0o400)
+    manifest = {
+        "snapshot_sha256": {
+            relative: hashlib.sha256(content).hexdigest()
+            for relative, content in files.items()
+        }
+    }
+    manifest_path = stage / "GeneratedYOCOMoE.manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    manifest_path.chmod(0o400)
+    return stage
+
+
+def test_emitter_snapshot_stage_ledger_is_exact_and_fail_closed(tmp_path):
+    stage = _write_snapshot_stage(tmp_path / "valid")
+    emitter.verify_snapshot_stage(stage)
+
+    missing = _write_snapshot_stage(tmp_path / "missing")
+    (missing / "yoco_goals" / "Goal_1.lean").unlink()
+    with pytest.raises(RuntimeError, match="unexpected yoco_goals paths"):
+        emitter.verify_snapshot_stage(missing)
+
+    extra = _write_snapshot_stage(tmp_path / "extra")
+    (extra / "yoco_goals" / "attacker.lean").write_text("axiom bad : False")
+    with pytest.raises(RuntimeError, match="unexpected yoco_goals paths"):
+        emitter.verify_snapshot_stage(extra)
+
+    tampered = _write_snapshot_stage(tmp_path / "tampered")
+    target = tampered / "yoco_goals" / "Goal_2.lean"
+    target.chmod(0o600)
+    target.write_text("-- changed\n", encoding="utf-8")
+    target.chmod(0o400)
+    with pytest.raises(RuntimeError, match="digest mismatch"):
+        emitter.verify_snapshot_stage(tampered)
+
+    linked = _write_snapshot_stage(tmp_path / "linked")
+    target = linked / "yoco_goals" / "Goal_3.lean"
+    target.unlink()
+    target.symlink_to("Goal_2.lean")
+    with pytest.raises(RuntimeError, match="untrusted snapshot inode"):
+        emitter.verify_snapshot_stage(linked)
+
+
+def test_snapshot_publish_binds_validated_stage_inode(tmp_path):
+    source = _write_snapshot_stage(tmp_path / "source")
+    replacement = _write_snapshot_stage(tmp_path / "replacement")
+    source.parent.chmod(0o700)
+    replacement.parent.chmod(0o700)
+    target = tmp_path / "published"
+    preserved = source.with_name("verified-preserved")
+    calls = {"count": 0}
+
+    def attack_after_validation(stage_fd):
+        emitter.verify_snapshot_fd(stage_fd)
+        calls["count"] += 1
+        if calls["count"] == 1:
+            source.rename(preserved)
+            replacement.rename(source)
+
+    with pytest.raises(RuntimeError, match="source entry differs"):
+        publish_validated_directory(source, target, attack_after_validation)
+    assert not target.exists()
+    assert preserved.is_dir()
+    assert source.is_dir()
+
+
+def test_snapshot_publish_rollback_never_moves_replacement(tmp_path, monkeypatch):
+    source = _write_snapshot_stage(tmp_path / "source")
+    source.parent.chmod(0o700)
+    target = tmp_path / "published"
+    preserved = tmp_path / "trusted-preserved"
+    calls = {"validator": 0, "rename": 0}
+    real_renameat2 = atomic_publish._renameat2
+
+    def counted_rename(*args):
+        calls["rename"] += 1
+        return real_renameat2(*args)
+
+    def replace_after_publish(stage_fd):
+        emitter.verify_snapshot_fd(stage_fd)
+        calls["validator"] += 1
+        if calls["validator"] == 2:
+            target.rename(preserved)
+            target.mkdir(mode=0o700)
+            (target / "attacker").write_text("replacement", encoding="utf-8")
+
+    monkeypatch.setattr(atomic_publish, "_renameat2", counted_rename)
+    with pytest.raises(RuntimeError, match="target changed"):
+        publish_validated_directory(source, target, replace_after_publish)
+    assert not source.exists()
+    assert (target / "attacker").read_text(encoding="utf-8") == "replacement"
+    assert preserved.is_dir()
+    assert calls["rename"] == 1
+
+
+def test_emitter_lean_gate_uses_private_revision_and_propagates_failure(
+    tmp_path, monkeypatch,
+):
+    stage = _write_snapshot_stage(tmp_path / "snapshot")
+    cache_project = tmp_path / "cache-project"
+    packages = cache_project / ".lake" / "packages"
+    packages.mkdir(parents=True, mode=0o700)
+    packages.chmod(0o700)
+    revision = "a" * 40
+    build_commands = []
+    fail_build = {"value": False}
+    replace_cleanup = {"value": False, "replacement": None, "preserved": None}
+
+    def fake_run(command, **kwargs):
+        if command[:3] == ["git", "clone", "--quiet"]:
+            repo = Path(command[-1])
+            goals = repo / "trainverify" / "denote" / "yoco_goals"
+            goals.mkdir(parents=True)
+            (goals / "old.lean").write_text("-- old\n")
+        elif command[0] == "/trusted/lake":
+            build_commands.append(command)
+            if fail_build["value"]:
+                raise subprocess.CalledProcessError(1, command)
+            if replace_cleanup["value"]:
+                validation_root = Path(kwargs["cwd"]).parents[1]
+                preserved = validation_root.with_name(validation_root.name + "-preserved")
+                validation_root.rename(preserved)
+                validation_root.mkdir()
+                (validation_root / "unrelated").write_text("keep", encoding="utf-8")
+                replace_cleanup["replacement"] = validation_root
+                replace_cleanup["preserved"] = preserved
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(emitter.subprocess, "run", fake_run)
+    monkeypatch.setattr(emitter, "git_head", lambda _repo: revision)
+    monkeypatch.setattr(emitter, "git_clean", lambda _repo: True)
+    monkeypatch.setattr(emitter.shutil, "which", lambda _name: "/trusted/lake")
+    emitter.validate_lean_snapshot(stage, cache_project, revision)
+    assert build_commands == [["/trusted/lake", "build", *emitter.LEAN_TARGETS]]
+    assert not list(stage.parent.glob(".trainverify-lean-validation-*"))
+
+    fail_build["value"] = True
+    with pytest.raises(subprocess.CalledProcessError):
+        emitter.validate_lean_snapshot(stage, cache_project, revision)
+    assert not list(stage.parent.glob(".trainverify-lean-validation-*"))
+
+    fail_build["value"] = False
+    replace_cleanup["value"] = True
+    with pytest.raises(RuntimeError, match="identity changed"):
+        emitter.validate_lean_snapshot(stage, cache_project, revision)
+    assert (replace_cleanup["replacement"] / "unrelated").read_text() == "keep"
+    assert replace_cleanup["preserved"].is_dir()
+
+
+def test_emitter_materializes_static_goal_modules_from_git_blob_no_replace(tmp_path):
+    target = tmp_path / "yoco_goals"
+    target.mkdir()
+    revision = emitter.git_head(emitter.ROOT)
+    emitter.materialize_static_goal_modules(emitter.ROOT, revision, target)
+    for relative_path in emitter.STATIC_GOAL_MODULES:
+        destination = target / Path(relative_path).name
+        assert destination.read_bytes() == emitter.git_blob(
+            emitter.ROOT, revision, relative_path,
+        )
+    with pytest.raises(FileExistsError):
+        emitter.materialize_static_goal_modules(emitter.ROOT, revision, target)
+
+
 def test_authority_script_pins_reviewed_llm_revision():
     script = (
         Path(__file__).resolve().parents[1]
@@ -844,7 +1275,15 @@ def test_authority_script_pins_reviewed_llm_revision():
     assert "TRAINVERIFY_DP_SOLVER_SHA256" in script
     assert 'HOME="$PROFILE_HOME" MGENER_DUMP_PATH="$dump"' in script
     assert '"$TRAINVERIFY_DP_SOLVER_SHA256" "$NNS_WORK"' in script
-    assert '"$DP_SOLVER_SITE_GUARD/sitecustomize.py" "$LLM_WORK/llm" -- torchrun' in script
+    assert '"$DP_SOLVER_SITE_GUARD/sitecustomize.py" "$LLM_WORK/llm"' in script
+    assert "--allow-live-comp-profile" in script
+    assert "scripts.yoco_regen.comp_profile create" in script
+    assert "scripts.yoco_regen.comp_profile copy" in script
+    assert "YOCO_COMP_PROFILE_ARTIFACT" in script
+    assert "TRAINVERIFY_PRIVATE_MATERIALIZATION" in script
+    assert '--trainverify-revision "$TRAINVERIFY_REV"' in script
+    assert '--comp-profile "$STAGE/comp_profile.json"' in script
+    assert "live computation profile directory survived freezing" in script
     assert 'ln "$PRIVATE_COMM_DIR/intra_2.json" "$STAGE/comm_profile_intra_2.json"' in script
     assert 'safe_cleanup.py" cleanup' in script
     assert "dp_solver_sitecustomize.py" in script
@@ -887,6 +1326,10 @@ def test_authority_script_pins_reviewed_llm_revision():
     assert 'shutil.rmtree(stage / "verifier-cache")' in emitter
     assert 'str(stage / "yoco_goals")' in emitter
     assert '(stage / "yoco_goals").mkdir()' in emitter
+    assert '"--lean-project", type=Path, required=True' in emitter
+    assert "validate_lean_snapshot(stage, args.lean_project, emitter_revision)" in emitter
+    assert "verify_snapshot_stage(stage)" in emitter
+    assert "TRAINVERIFY_PRIVATE_MATERIALIZATION" in emitter
     assert 'stage / "goals"' not in emitter
 
     generator = (

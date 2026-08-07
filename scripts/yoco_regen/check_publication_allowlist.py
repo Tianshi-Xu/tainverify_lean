@@ -10,6 +10,7 @@ from pathlib import Path
 EXPECTED = {
     ".trainverify-stage-owner",
     "comm_profile_intra_2.json",
+    "comp_profile.json",
     "gen_args.json",
     "nnscaler_dp_solver.so",
     "pm_mgener.json",

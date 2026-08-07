@@ -7,6 +7,7 @@ import ctypes
 import errno
 import os
 import stat
+from collections.abc import Callable
 from pathlib import Path
 
 try:
@@ -72,13 +73,14 @@ def rename_noreplace(source: Path, target: Path) -> None:
         os.close(source_parent)
 
 
-def publish_authority(source: Path, target: Path) -> None:
+def publish_validated_directory(
+    source: Path, target: Path, validator: Callable[[int], None],
+) -> None:
     source = source.absolute()
     target = target.absolute()
     source_parent = os.open(source.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     target_parent = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     stage_fd = -1
-    published = False
     try:
         _require_trusted_parent(source_parent, "source")
         _require_trusted_parent(target_parent, "target")
@@ -90,33 +92,37 @@ def publish_authority(source: Path, target: Path) -> None:
             dir_fd=source_parent,
         )
         expected = os.fstat(stage_fd)
-        validate_fd(stage_fd)
+        validator(stage_fd)
+        source_entry = os.stat(
+            source.name, dir_fd=source_parent, follow_symlinks=False,
+        )
+        if (source_entry.st_dev, source_entry.st_ino) != (expected.st_dev, expected.st_ino):
+            raise RuntimeError("source entry differs from validated stage")
         _renameat2(source_parent, source.name, target_parent, target.name)
-        published = True
         actual = os.stat(target.name, dir_fd=target_parent, follow_symlinks=False)
         if (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino):
             raise RuntimeError("published authority inode differs from validated stage")
-        validate_fd(stage_fd)
+        validator(stage_fd)
         os.fsync(stage_fd)
         os.fsync(target_parent)
         final = os.stat(target.name, dir_fd=target_parent, follow_symlinks=False)
         if (final.st_dev, final.st_ino) != (expected.st_dev, expected.st_ino):
             raise RuntimeError("target changed before publication completed")
     except BaseException:
-        if published:
-            try:
-                _renameat2(target_parent, target.name, source_parent, source.name)
-                os.fsync(source_parent)
-            except BaseException as rollback_error:
-                raise RuntimeError(
-                    "authority post-publication validation failed and rollback failed"
-                ) from rollback_error
+        # There is no Linux rename primitive that conditionally moves a directory
+        # entry by (dev, ino).  A stat-then-rename rollback would reopen the same
+        # TOCTOU window publication just closed.  Fail closed and leave the
+        # post-rename namespace untouched for explicit inspection/recovery.
         raise
     finally:
         if stage_fd >= 0:
             os.close(stage_fd)
         os.close(target_parent)
         os.close(source_parent)
+
+
+def publish_authority(source: Path, target: Path) -> None:
+    publish_validated_directory(source, target, validate_fd)
 
 
 def main() -> None:

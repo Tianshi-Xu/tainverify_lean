@@ -10,6 +10,11 @@ import tempfile
 import uuid
 from pathlib import Path
 
+try:
+    from .atomic_publish import _renameat2
+except ImportError:  # Direct script execution.
+    from atomic_publish import _renameat2
+
 MARKER_NAME = ".trainverify-stage-owner"
 
 
@@ -57,28 +62,36 @@ def cleanup_owned_stage(
         return False
     if info.st_dev != expected_dev or info.st_ino != expected_ino:
         return False
-    marker_path = stage / MARKER_NAME
-    try:
-        actual = marker_path.read_text(encoding="utf-8").strip()
-    except (FileNotFoundError, NotADirectoryError, OSError):
-        return False
-    if actual != marker:
-        return False
-
     parent = stage.parent
     parent_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     quarantine_name = f".{stage.name}.cleanup-{uuid.uuid4().hex}"
-    quarantine = parent / quarantine_name
+    stage_fd = -1
     try:
-        os.rename(stage.name, quarantine_name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+        stage_fd = os.open(
+            stage.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd,
+        )
+        opened = os.fstat(stage_fd)
+        if opened.st_dev != expected_dev or opened.st_ino != expected_ino:
+            return False
+        marker_fd = os.open(MARKER_NAME, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=stage_fd)
+        try:
+            with os.fdopen(marker_fd, "r", encoding="utf-8", closefd=False) as handle:
+                if handle.read().strip() != marker:
+                    return False
+        finally:
+            os.close(marker_fd)
+        source_entry = os.stat(stage.name, dir_fd=parent_fd, follow_symlinks=False)
+        if source_entry.st_dev != expected_dev or source_entry.st_ino != expected_ino:
+            return False
+        _renameat2(parent_fd, stage.name, parent_fd, quarantine_name)
         quarantine_fd = os.open(
             quarantine_name,
             os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
             dir_fd=parent_fd,
         )
         try:
-            moved = os.fstat(quarantine_fd)
-            if moved.st_dev != expected_dev or moved.st_ino != expected_ino:
+            moved_info = os.fstat(quarantine_fd)
+            if moved_info.st_dev != expected_dev or moved_info.st_ino != expected_ino:
                 raise RuntimeError("stage inode changed during cleanup")
             marker_fd = os.open(MARKER_NAME, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=quarantine_fd)
             try:
@@ -94,7 +107,15 @@ def cleanup_owned_stage(
         # Only an empty directory can be removed here. A substituted directory
         # containing unrelated data is never recursively traversed by path.
         os.rmdir(quarantine_name, dir_fd=parent_fd)
+    except BaseException:
+        # Never attempt path-based rollback after quarantine publication.  Linux
+        # cannot atomically rename only if an entry still has a given inode; a
+        # pre-rename identity check is itself racy.  Leave the namespace exactly
+        # as observed at failure for explicit inspection/recovery.
+        raise
     finally:
+        if stage_fd >= 0:
+            os.close(stage_fd)
         os.close(parent_fd)
     return True
 

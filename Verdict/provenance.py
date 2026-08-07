@@ -8,7 +8,7 @@ import platform
 import re
 import subprocess
 from importlib import metadata
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping, Sequence
 
 
@@ -21,6 +21,7 @@ _PATH_FLAGS = {
     "--manifest-out": "$OUTPUT_DIR",
     "--goals-out-dir": "$OUTPUT_DIR",
     "--spec-out": "$OUTPUT_DIR",
+    "--verifier-cache-dir": "$OUTPUT_DIR",
     "--llm-train-repo": "$LLM_TRAIN_REPO",
     "--nnscaler-repo": "$NNSCALER_REPO",
 }
@@ -113,6 +114,7 @@ def build_manifest(
     intermediate_goal_tids: Sequence[int], expected_hashes: Mapping[str, str] | None = None,
     artifact_files: Mapping[str, str | Path] | None = None,
     input_value_classes: Mapping[str, Sequence[tuple[str, Sequence[int]]]] | None = None,
+    snapshot_files: Mapping[str, str | Path] | None = None,
 ) -> dict[str, Any]:
     _validate_commit("llm_train_commit", llm_train_commit)
     _validate_commit("nnscaler_commit", nnscaler_commit)
@@ -154,6 +156,19 @@ def build_manifest(
         ]
         for side, classes in sorted((input_value_classes or {}).items())
     }
+    snapshot_hashes: dict[str, str] = {}
+    for name, source in sorted((snapshot_files or {}).items()):
+        normalized = str(name).replace("\\", "/")
+        path = PurePosixPath(normalized)
+        if (
+            not normalized or path.is_absolute() or normalized != path.as_posix()
+            or any(part in {"", ".", ".."} for part in path.parts)
+            or path.suffix != ".lean"
+        ):
+            raise ProvenanceError(f"invalid snapshot path: {name}")
+        if normalized in snapshot_hashes:
+            raise ProvenanceError(f"duplicate snapshot path: {normalized}")
+        snapshot_hashes[normalized] = sha256_file(source)
     return {
         "artifact_sha256": dict(sorted(artifact_hashes.items())),
         "command": normalize_command(command),
@@ -175,6 +190,7 @@ def build_manifest(
         "python": platform.python_version(),
         "schema_version": 3,
         "sm_pkl_sha256": sm_hash,
+        "snapshot_sha256": dict(sorted(snapshot_hashes.items())),
     }
 
 

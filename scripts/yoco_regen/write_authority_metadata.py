@@ -13,6 +13,7 @@ import subprocess
 from pathlib import Path
 
 from .comm_profile import profile_sha256
+from .comp_profile import validate_artifact as validate_comp_profile_artifact
 from .patch_llm_cc12_gemm import patch_source as patch_llm_gemm_source
 from .patch_mgener_dump import patch_source
 
@@ -106,9 +107,15 @@ def validate_graph(mg, kind: str, plan: int, receipt: dict):
         "patched_parallel_py_sha256": receipt.get("patched_parallel_py_sha256"),
         "patched_llm_gemm_py_sha256": receipt.get("patched_llm_gemm_py_sha256"),
         "comm_profile_sha256": receipt.get("comm_profile_sha256"),
+        "comp_profile_sha256": receipt.get("comp_profile_sha256"),
         "dp_solver_extension_sha256": receipt.get("dp_solver_extension_sha256"),
+        "canonicalized_comment_count": receipt.get("canonicalized_comment_count"),
+        "canonicalized_code_count": receipt.get("canonicalized_code_count"),
     }:
         raise RuntimeError(f"{kind} receipt has unexpected fields or values")
+    for field in ("canonicalized_comment_count", "canonicalized_code_count"):
+        if type(receipt[field]) is not int or receipt[field] < 0:
+            raise RuntimeError(f"{kind} receipt has invalid {field}")
     llm_patch_hash = receipt.get("patched_llm_gemm_py_sha256")
     if (
         not isinstance(llm_patch_hash, str)
@@ -159,7 +166,9 @@ def main() -> None:
     parser.add_argument("--llm-train", type=Path, required=True)
     parser.add_argument("--nnscaler", type=Path, required=True)
     parser.add_argument("--comm-profile", type=Path, required=True)
+    parser.add_argument("--comp-profile", type=Path, required=True)
     parser.add_argument("--dp-solver-extension", type=Path, required=True)
+    parser.add_argument("--trainverify-revision", required=True)
     parser.add_argument("--trust-local-pickle", action="store_true")
     args = parser.parse_args()
     if not args.trust_local_pickle:
@@ -167,6 +176,14 @@ def main() -> None:
     authority = args.authority_dir.resolve()
     llm_train = args.llm_train.resolve()
     nnscaler_repo = args.nnscaler.resolve()
+    trainverify_root = Path(__file__).resolve().parents[2]
+    if (
+        len(args.trainverify_revision) != 40
+        or any(character not in "0123456789abcdef" for character in args.trainverify_revision)
+        or git_head(trainverify_root) != args.trainverify_revision
+        or git_status(trainverify_root)
+    ):
+        raise RuntimeError("TrainVerify private materialization mismatch")
     if git_head(llm_train) != EXPECTED_LLM or git_head(nnscaler_repo) != EXPECTED_NNS:
         raise RuntimeError("source revision mismatch")
     if git_status(llm_train) != [" M llm/kernel/gemm.py"]:
@@ -203,6 +220,10 @@ def main() -> None:
         raise RuntimeError("authority dp solver is not the private-build inode")
     dp_solver_hash = digest(dp_solver_extension)
     comm_profile_hash = profile_sha256(args.comm_profile.resolve())
+    comp_profile = args.comp_profile.resolve()
+    if comp_profile != authority / "comp_profile.json":
+        raise RuntimeError("unexpected computation profile artifact path")
+    comp_profile_hash = validate_comp_profile_artifact(comp_profile)
     import dill
     import torch
 
@@ -234,8 +255,9 @@ def main() -> None:
         "nccl_version": list(torch.cuda.nccl.version()),
         "nvidia_driver_version": next(iter(driver_versions)),
         "gpu_inventory": gpu_inventory,
-        "trainverify_regen_commit": git_head(Path(__file__).resolve().parents[2]),
+        "trainverify_regen_commit": args.trainverify_revision,
         "comm_profile_sha256": comm_profile_hash,
+        "comp_profile_sha256": comp_profile_hash,
     }
     hardware_hash = hashlib.sha256(
         json.dumps(
@@ -258,6 +280,8 @@ def main() -> None:
             raise RuntimeError(f"{kind} receipt/llm GEMM source hash mismatch")
         if receipt.get("comm_profile_sha256") != comm_profile_hash:
             raise RuntimeError(f"{kind} receipt/communication profile hash mismatch")
+        if receipt.get("comp_profile_sha256") != comp_profile_hash:
+            raise RuntimeError(f"{kind} receipt/computation profile hash mismatch")
         if receipt.get("dp_solver_extension_sha256") != dp_solver_hash:
             raise RuntimeError(f"{kind} receipt/dp solver extension hash mismatch")
         if receipt.get("plan_ngpus") != plan or receipt.get("runtime_ngpus") != plan:
@@ -281,7 +305,10 @@ def main() -> None:
             "patched_parallel_py_sha256": patched_parallel_hash,
             "patched_llm_gemm_py_sha256": expected_llm_gemm_hash,
             "comm_profile_sha256": comm_profile_hash,
+            "comp_profile_sha256": comp_profile_hash,
             "dp_solver_extension_sha256": dp_solver_hash,
+            "canonicalized_comment_count": receipt["canonicalized_comment_count"],
+            "canonicalized_code_count": receipt["canonicalized_code_count"],
             "node_count": len(mg.execplan.graph.nodes()),
             "signature_counts": dict(sorted(counts.items())),
         }
@@ -326,6 +353,7 @@ def main() -> None:
         "python_version": platform.python_version(),
         "host": platform.node(),
         "dp_solver_extension_sha256": dp_solver_hash,
+        "comp_profile_sha256": comp_profile_hash,
         "hardware_sha256": hardware_hash,
         **hardware,
         "source_sha256": source_hashes,

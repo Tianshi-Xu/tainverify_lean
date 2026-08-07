@@ -20,8 +20,8 @@ from pathlib import PurePosixPath
 
 NNSCALER_REVISION = "d3d468ed23edb2f28aa8566b2dfb6ed49c5955cf"
 NNSCALER_ARCHIVE_SHA256 = "fd919ddb50ee7bd380fd4588485ad843fd8a97fce115929b2466c837cdde7110"
-PATCHED_PARALLEL_SHA256 = "6939204cdd858261bd6609d5b0ee415f79cce4f45c70a09484f07970ef7e95c4"
-SITE_GUARD_SHA256 = "93d0b856cb89bf22a89810120ee4d0944e6963eb51d45a63ae31b5d1cb71a2cf"
+PATCHED_PARALLEL_SHA256 = "5ce434c544546fbe27fc890e96c39db3191e91d47de6f338460e668e2e38f46c"
+SITE_GUARD_SHA256 = "7227a7e0696970a438ac9cb7820d9e4c88a866e86d1a65e99380114ad94bcfed"
 CLEAN_TOOL_ENV = {"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PATH": "/usr/bin:/bin"}
 RUNTIME_INHERITED_KEYS = (
     "HOME",
@@ -29,6 +29,8 @@ RUNTIME_INHERITED_KEYS = (
     "TRAINVERIFY_EXPECTED_POLICY",
     "TRAINVERIFY_PATCHED_LLM_GEMM_SHA256",
     "TRAINVERIFY_COMM_PROFILE_SHA256",
+    "TRAINVERIFY_COMP_PROFILE_SHA256",
+    "TRAINVERIFY_LLM_SOURCE_ROOT",
 )
 BOOTSTRAP = """import importlib, os, runpy, sys
 importlib.import_module("sitecustomize")
@@ -41,6 +43,14 @@ elif mode == "script":
     runpy.run_path(target, run_name="__main__")
 else:
     raise RuntimeError("invalid sealed Python bootstrap mode")
+"""
+SPAWN_BOOTSTRAP = """import importlib, os, sys
+importlib.import_module("sitecustomize")
+sys.executable = os.environ["TRAINVERIFY_WORKER_SHIM"]
+code = sys.argv[1]
+del sys.argv[1]
+namespace = {"__name__": "__main__", "__builtins__": __builtins__}
+exec(compile(code, "<multiprocessing-spawn>", "exec"), namespace, namespace)
 """
 _FULL_SEALS = (
     getattr(fcntl, "F_SEAL_SEAL", 0x0001)
@@ -200,6 +210,27 @@ def _runtime_paths(python_tail: Path) -> list[str]:
     return paths
 
 
+def _worker_shim_content(python_executable: Path) -> bytes:
+    return (
+        "#!/bin/sh\n"
+        "while [ \"$#\" -gt 0 ]; do\n"
+        "  case \"$1\" in\n"
+        "    -B|-S|-E|-s|-I|-O|-OO|-u) shift ;;\n"
+        "    *) break ;;\n"
+        "  esac\n"
+        "done\n"
+        "if [ \"${1-}\" = -c ]; then\n"
+        "  shift\n"
+        "  [ \"$#\" -ge 1 ] || exit 125\n"
+        f"  exec {shlex.quote(str(python_executable))} -S -c "
+        f"{shlex.quote(SPAWN_BOOTSTRAP)} \"$@\"\n"
+        "fi\n"
+        "case \"${1-}\" in -*) exit 125 ;; esac\n"
+        f"exec {shlex.quote(str(python_executable))} -S -c "
+        f"{shlex.quote(BOOTSTRAP)} script \"$@\"\n"
+    ).encode("utf-8")
+
+
 def run_sealed(
     extension: Path,
     expected_hash: str,
@@ -207,6 +238,10 @@ def run_sealed(
     site_guard: Path,
     python_tail: Path,
     command: list[str],
+    *,
+    comp_profile: Path | None = None,
+    comp_profile_hash: str | None = None,
+    allow_live_comp_profile: bool = False,
 ) -> None:
     package_root = package_root.resolve()
     if not package_root.is_dir() or not python_tail.is_dir():
@@ -226,18 +261,27 @@ def run_sealed(
         raise RuntimeError("fixed nnScaler archive hash mismatch before sealing")
     runtime_content = _runtime_zip(archive_content, parallel_content, guard_content)
     runtime_hash = _hash(runtime_content)
+    if allow_live_comp_profile == bool(comp_profile):
+        raise RuntimeError("exactly one computation profile mode is required")
+    comp_profile_content = None
+    if comp_profile is not None:
+        if not comp_profile_hash:
+            raise RuntimeError("frozen computation profile hash is required")
+        comp_profile_content = _read_regular(comp_profile, comp_profile_hash)
 
     python_executable = Path(sys.executable).absolute()
-    shim_content = (
-        "#!/bin/sh\n"
-        "if [ \"${1-}\" = -u ]; then shift; fi\n"
-        f"exec {shlex.quote(str(python_executable))} -S -c "
-        f"{shlex.quote(BOOTSTRAP)} script \"$@\"\n"
-    ).encode("utf-8")
+    shim_content = _worker_shim_content(python_executable)
     runtime_fd = _sealed_memfd("nnscaler-runtime.zip", runtime_content)
     extension_fd = _sealed_memfd(extension.name, extension_content, executable=True)
     shim_fd = _sealed_memfd("python-worker", shim_content, executable=True)
-    descriptors = (runtime_fd, extension_fd, shim_fd)
+    comp_profile_fd = (
+        _sealed_memfd("nnscaler-comp-profile.json", comp_profile_content)
+        if comp_profile_content is not None else None
+    )
+    descriptors = tuple(
+        descriptor for descriptor in (runtime_fd, extension_fd, shim_fd, comp_profile_fd)
+        if descriptor is not None
+    )
     try:
         owner = os.getpid()
         runtime_path = f"/proc/{owner}/fd/{runtime_fd}"
@@ -260,6 +304,13 @@ def run_sealed(
             "TRAINVERIFY_RUNTIME_ZIP_SHA256": runtime_hash,
             "TRAINVERIFY_WORKER_SHIM": shim_path,
         })
+        if comp_profile_fd is not None:
+            environment["TRAINVERIFY_COMP_PROFILE_PATH"] = (
+                f"/proc/{owner}/fd/{comp_profile_fd}"
+            )
+            environment["TRAINVERIFY_COMP_PROFILE_SHA256"] = str(comp_profile_hash)
+        else:
+            environment["TRAINVERIFY_ALLOW_LIVE_COMP_PROFILE"] = "1"
         subprocess.run(
             [
                 str(python_executable), "-S", "-c", BOOTSTRAP,
@@ -274,7 +325,7 @@ def run_sealed(
             os.close(descriptor)
 
 
-def main() -> None:
+def _parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("run",))
     parser.add_argument("extension", type=Path)
@@ -282,12 +333,22 @@ def main() -> None:
     parser.add_argument("package_root", type=Path)
     parser.add_argument("site_guard", type=Path)
     parser.add_argument("python_tail", type=Path)
+    parser.add_argument("--comp-profile", type=Path)
+    parser.add_argument("--comp-profile-sha256")
+    parser.add_argument("--allow-live-comp-profile", action="store_true")
     parser.add_argument("command", nargs=argparse.REMAINDER)
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def main() -> None:
+    args = _parse_args()
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     run_sealed(
         args.extension, args.expected_hash, args.package_root,
         args.site_guard, args.python_tail, command,
+        comp_profile=args.comp_profile,
+        comp_profile_hash=args.comp_profile_sha256,
+        allow_live_comp_profile=args.allow_live_comp_profile,
     )
 
 

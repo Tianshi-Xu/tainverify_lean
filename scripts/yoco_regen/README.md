@@ -69,7 +69,8 @@ hosts that prohibit unprivileged user or mount namespaces.
 Before each `torchrun`, the canonical fixed-commit archive, exact patched
 `parallel.py`, startup guard, and ELF are independently hashed. The archive,
 patched module and guard become a deterministic Python runtime ZIP in a fully
-sealed memfd; the ELF and worker shim use separate fully sealed memfds. No runtime
+sealed memfd; the ELF, worker shim, and authenticated computation profile use
+separate fully sealed memfds. No runtime
 package is extracted or mounted. Both the torchrun controller and every worker
 start with Python `-S` and resolve the runtime through `/proc/<holder>/fd/*` while
 the holder remains alive. This prevents `.pth` startup and host-path replacement.
@@ -79,7 +80,7 @@ module path, and calls `os._exit(126)` on any failure. Site-packages therefore
 cannot substitute solver or nnScaler code. The build artifact is hardlinked into
 the authority; its SHA-256 plus the pinned archive/source hashes are bound through
 receipts and metadata. Generation uses `umask 077` and a
-fixed environment for archive extraction, while torchrun receives only the five
+fixed environment for archive extraction, while torchrun receives only the six
 explicitly required provenance/runtime fields plus generator-owned values; ambient
 nnScaler controls are never forwarded. A closed publication allowlist rejects any
 residual build/cache entry, directory, symlink, foreign inode, or group/world-
@@ -103,15 +104,39 @@ inode. Its SHA-256 is bound into both receipts and the out-of-band hardware
 digest. Missing profile data is fatal; the nnScaler MI200 fallback is not
 production authority.
 
+The operator computation profile is captured and consumed in two distinct
+phases. A warmup SM compile followed by a warmup PM compile measures the union
+of concrete operator shapes into the private profile HOME. The generator then
+validates every per-operator JSON file with a closed finite schema and packages
+their exact bytes, per-file hashes, names, and deterministic order into the
+canonical `comp_profile.json` artifact. The live profile directory and warmup
+pickles are deleted before authority generation. Actual SM and PM compiles both
+receive the same artifact through a fourth fully sealed memfd. The sealed
+startup guard replaces `ProfileDataBase.load_ops`, `profile`, and `dump_ops`:
+it loads only the authenticated entries, fails on any missing operator instead
+of measuring it, and rejects any in-memory mutation instead of writing a cache.
+Thus timing noise is confined to the explicitly published profile artifact;
+both authority plans consume identical immutable costs. The artifact digest is
+also part of the out-of-band hardware trust envelope. A profile is tied to the
+hardware/software authority session and is not silently reused on another
+node. To reproduce a plan against an already authenticated profile from the same
+node/session, pass its absolute path as `YOCO_COMP_PROFILE_ARTIFACT`; the
+generator validates and copies the inode once, skips warmup, and still supplies
+only a sealed memfd to actual compiles.
+
 ```bash
+# First clone and checkout the reviewed TrainVerify commit into an owner-only
+# private directory. Run the command from that clone, not a development tree.
 /usr/bin/env -i \
   HOME="$HOME" \
   TRAINVERIFY_CLEAN_ENV=1 \
+  TRAINVERIFY_PRIVATE_MATERIALIZATION=/private/trainverify \
   YOCO_PYTHON=/absolute/path/to/trusted/venv/bin/python \
   YOCO_LLM_TRAIN_REPO=/clean/pinned/llm-train \
   YOCO_NNSCALER_REPO=/clean/pinned/nnscaler \
   YOCO_AUTHORITY_OUT=/output/yoco-a04b-9a1be1d \
-  /bin/bash --noprofile --norc scripts/yoco_regen/generate_authority.sh
+  /bin/bash --noprofile --norc \
+    /private/trainverify/scripts/yoco_regen/generate_authority.sh
 ```
 
 The external `env -i` boundary is mandatory: the generator rejects any inherited
@@ -124,6 +149,7 @@ The output contains:
 - `sm_mgener.pkl`, `pm_mgener.pkl`
 - rank-0 dump receipts binding policy, topology, pickle hash, and patched-source hash
 - `comm_profile_intra_2.json`, measured on the actual two-GPU node
+- `comp_profile.json`, exact live-GPU operator costs consumed from a sealed memfd
 - `nnscaler_dp_solver.so`, the exact private-build solver consumed by AutoDist
 - Verdict-compatible `sm_mgener.json`, `pm_mgener.json`
 - `sm_provenance.json`, `pm_provenance.json`
@@ -139,11 +165,13 @@ Do not infer PM changes by inspecting PM alone.
 ## Lean emission
 
 ```bash
-python scripts/yoco_regen/emit_yoco_a04b.py \
+TRAINVERIFY_PRIVATE_MATERIALIZATION=/private/trainverify \
+python /private/trainverify/scripts/yoco_regen/emit_yoco_a04b.py \
   --authority-dir /output/yoco-a04b-9a1be1d \
   --llm-train /clean/pinned/llm-train \
   --nnscaler /clean/pinned/nnscaler \
   --expected-hardware-sha256 <digest-captured-over-trusted-ssh> \
+  --lean-project /trusted/lean-project-with-lake-packages \
   --snapshot-dir /output/yoco-a04b-9a1be1d-lean-refresh \
   --trust-new-authority
 ```
@@ -159,7 +187,13 @@ Before unpickling, the emitter verifies ownership, non-writable permissions,
 fixed revisions, world/provenance schemas, production policy, topology, and
 pickle hashes. It writes every generated file into a sibling staging directory
 and atomically publishes one complete snapshot only after graph emission and
-manifest validation succeed.
+manifest validation and the fixed 20-target `lake build` both succeed. The
+manifest contains an exact relative path-to-SHA-256 ledger for the main Lean
+module, every split goal module, and both static zigzag dependency modules.
+Before publication the emitter holds directory descriptors, rejects any extra,
+missing, symlink, or special entry, and rehashes every listed file. The Lean
+validator clones the declared TrainVerify commit privately; `--lean-project`
+provides only the trusted `.lake/packages` dependency cache, never source files.
 
 The emitter serializes rank loading to avoid the multiprocessing/import
 deadlock seen with dynamically registered private-model operators. It computes

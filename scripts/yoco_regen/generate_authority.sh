@@ -8,7 +8,7 @@ if [[ "${TRAINVERIFY_CLEAN_ENV:-}" != 1 ]]; then
 fi
 while IFS= read -r _tv_env_name; do
   case "$_tv_env_name" in
-    HOME|PWD|SHLVL|TRAINVERIFY_CLEAN_ENV|YOCO_PYTHON|YOCO_LLM_TRAIN_REPO|YOCO_NNSCALER_REPO|YOCO_AUTHORITY_OUT|_) ;;
+    HOME|PWD|SHLVL|TRAINVERIFY_CLEAN_ENV|TRAINVERIFY_PRIVATE_MATERIALIZATION|YOCO_PYTHON|YOCO_LLM_TRAIN_REPO|YOCO_NNSCALER_REPO|YOCO_AUTHORITY_OUT|YOCO_COMP_PROFILE_ARTIFACT|_) ;;
     *) echo "FATAL: unexpected inherited environment: $_tv_env_name" >&2; exit 2 ;;
   esac
 done < <(compgen -e)
@@ -32,7 +32,27 @@ export PYTHONPATH="$VENV_SITE"
 LLM="$(realpath "$YOCO_LLM_TRAIN_REPO")"
 NNS_SOURCE="$(realpath "$YOCO_NNSCALER_REPO")"
 OUT="$(realpath -m "$YOCO_AUTHORITY_OUT")"
+EXTERNAL_COMP_PROFILE="${YOCO_COMP_PROFILE_ARTIFACT:-}"
+if [[ -n "$EXTERNAL_COMP_PROFILE" && "$EXTERNAL_COMP_PROFILE" != /* ]]; then
+  echo 'FATAL: YOCO_COMP_PROFILE_ARTIFACT must be absolute' >&2
+  exit 2
+fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+: "${TRAINVERIFY_PRIVATE_MATERIALIZATION:?set absolute private TrainVerify materialization}"
+[[ "$(realpath "$TRAINVERIFY_PRIVATE_MATERIALIZATION")" == "$ROOT" ]] || {
+  echo 'FATAL: script is not running from the declared private TrainVerify materialization' >&2
+  exit 2
+}
+ROOT_MODE="$(stat -c %a "$ROOT")"
+[[ "$(stat -c %u "$ROOT")" == "$(id -u)" ]] && (( (8#$ROOT_MODE & 8#077) == 0 )) || {
+  echo 'FATAL: TrainVerify materialization must be current-user-owned and owner-private' >&2
+  exit 2
+}
+TRAINVERIFY_REV="$(git -C "$ROOT" rev-parse HEAD)"
+[[ "$TRAINVERIFY_REV" =~ ^[0-9a-f]{40}$ ]] || { echo 'FATAL: invalid TrainVerify revision' >&2; exit 2; }
+[[ "$(git -C "$ROOT" status --porcelain --untracked-files=all)" == "" ]] || {
+  echo 'FATAL: private TrainVerify materialization is dirty' >&2; exit 2;
+}
 export PYTHONPATH="$ROOT:$VENV_SITE"
 EXPECTED_LLM=9a1be1d5fd1c063d80be82797692cdc7d23cfbef
 EXPECTED_NNS=d3d468ed23edb2f28aa8566b2dfb6ed49c5955cf
@@ -63,6 +83,7 @@ IFS=$'\t' read -r PROFILE_HOME PROFILE_MARKER PROFILE_DEV PROFILE_INO < <(
 )
 LLM_WORK="$STAGE/.llm-train-source"
 NNS_WORK="$STAGE/.nnscaler-source"
+export TRAINVERIFY_LLM_SOURCE_ROOT="$LLM_WORK/llm"
 git clone --quiet --no-hardlinks "$LLM" "$LLM_WORK"
 git clone --quiet --no-hardlinks "$NNS_SOURCE" "$NNS_WORK"
 git -C "$LLM_WORK" checkout --quiet "$EXPECTED_LLM"
@@ -115,12 +136,26 @@ COMMON=(
   --partition_constraints_path ./pcs/all2all_moe.yaml
 )
 run_compile() {
-  local kind="$1" plan="$2" port="$3"
+  local kind="$1" plan="$2" port="$3" profile_mode="$4"
   local dump="$STAGE/${kind}_mgener.pkl" gen="$STAGE/.nnscaler_${kind}"
+  local profile_args=()
+  if [[ "$profile_mode" == live ]]; then
+    profile_args=(--allow-live-comp-profile)
+  elif [[ "$profile_mode" == frozen ]]; then
+    profile_args=(
+      --comp-profile "$STAGE/comp_profile.json"
+      --comp-profile-sha256 "$TRAINVERIFY_COMP_PROFILE_SHA256"
+    )
+  else
+    echo "FATAL: invalid computation profile mode: $profile_mode" >&2
+    exit 2
+  fi
   HOME="$PROFILE_HOME" MGENER_DUMP_PATH="$dump" \
-  "$PYTHON" -S "$ROOT/scripts/yoco_regen/sealed_extension_exec.py" run \
+  "$PYTHON" -S "$ROOT/scripts/yoco_regen/sealed_extension_exec.py" \
+    "${profile_args[@]}" run \
     "$DP_SOLVER_EXTENSION" "$TRAINVERIFY_DP_SOLVER_SHA256" "$NNS_WORK" \
-    "$DP_SOLVER_SITE_GUARD/sitecustomize.py" "$LLM_WORK/llm" -- torchrun \
+    "$DP_SOLVER_SITE_GUARD/sitecustomize.py" "$LLM_WORK/llm" \
+    -- torchrun \
     --nproc_per_node="$plan" --nnodes=1 --node_rank=0 \
     --master_addr=127.0.0.1 --master_port="$port" \
     nnscaler_train.py "${COMMON[@]}" \
@@ -129,18 +164,49 @@ run_compile() {
   [[ -s "$dump" ]] || { echo "FATAL missing $dump" >&2; exit 3; }
   [[ -s "$dump.receipt.json" ]] || { echo "FATAL missing $dump.receipt.json" >&2; exit 3; }
 }
-run_compile sm 1 29581
-run_compile pm 2 29582
+if [[ -n "$EXTERNAL_COMP_PROFILE" ]]; then
+  TRAINVERIFY_COMP_PROFILE_SHA256="$(
+    "$PYTHON" -S -m scripts.yoco_regen.comp_profile copy \
+      "$EXTERNAL_COMP_PROFILE" "$STAGE/comp_profile.json"
+  )"
+else
+  TRAINVERIFY_COMP_PROFILE_SHA256="$(printf '0%.0s' {1..64})"
+  export TRAINVERIFY_COMP_PROFILE_SHA256
+  run_compile .warmup_sm 1 29581 live
+  run_compile .warmup_pm 2 29582 live
+  COMP_PROFILE_DIR="$PROFILE_HOME/.cache/nnscaler/autodist/1.0/$PROFILE_ARCH/comp"
+  "$PYTHON" -S -m scripts.yoco_regen.comp_profile create \
+    "$COMP_PROFILE_DIR" "$STAGE/comp_profile.json"
+  read -r TRAINVERIFY_COMP_PROFILE_SHA256 _ < <(sha256sum "$STAGE/comp_profile.json")
+  rm -rf "$COMP_PROFILE_DIR" \
+    "$STAGE/.warmup_sm_mgener.pkl" "$STAGE/.warmup_sm_mgener.pkl.receipt.json" \
+    "$STAGE/.warmup_pm_mgener.pkl" "$STAGE/.warmup_pm_mgener.pkl.receipt.json" \
+    "$STAGE/.nnscaler_.warmup_sm" "$STAGE/.nnscaler_.warmup_pm"
+  [[ ! -e "$COMP_PROFILE_DIR" ]] || {
+    echo 'FATAL: live computation profile directory survived freezing' >&2; exit 3;
+  }
+fi
+export TRAINVERIFY_COMP_PROFILE_SHA256
+run_compile sm 1 29583 frozen
+run_compile pm 2 29584 frozen
 "$PYTHON" -S -m scripts.yoco_regen.write_authority_metadata \
   --llm-train "$LLM_WORK" --nnscaler "$NNS_WORK" --authority-dir "$STAGE" \
   --comm-profile "$STAGE/comm_profile_intra_2.json" \
+  --comp-profile "$STAGE/comp_profile.json" \
   --dp-solver-extension "$DP_SOLVER_EXTENSION" \
+  --trainverify-revision "$TRAINVERIFY_REV" \
   --trust-local-pickle
 rm -rf "$STAGE/.nnscaler_sm" "$STAGE/.nnscaler_pm" \
   "$DP_SOLVER_BUILD_OUTPUT" "$DP_SOLVER_SITE_GUARD" "$LLM_WORK" "$NNS_WORK"
 "$PYTHON" -S "$ROOT/scripts/yoco_regen/safe_cleanup.py" cleanup \
   "$PROFILE_HOME" "$PROFILE_MARKER" "$PROFILE_DEV" "$PROFILE_INO"
 [[ ! -e "$PROFILE_HOME" ]] || { echo 'FATAL: private profile HOME survived cleanup' >&2; exit 4; }
+[[ "$(git -C "$ROOT" rev-parse HEAD)" == "$TRAINVERIFY_REV" ]] || {
+  echo 'FATAL: TrainVerify revision changed during generation' >&2; exit 4;
+}
+[[ "$(git -C "$ROOT" status --porcelain --untracked-files=all)" == "" ]] || {
+  echo 'FATAL: private TrainVerify materialization changed during generation' >&2; exit 4;
+}
 "$PYTHON" -S -m scripts.yoco_regen.atomic_publish "$STAGE" "$OUT"
 trap - EXIT
 STAGE=""

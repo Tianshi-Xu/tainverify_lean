@@ -80,7 +80,10 @@ def test_checked_in_yoco_a04b_goal_policy_and_lineage():
 def test_checker_detects_byte_mutation_even_when_structure_matches(tmp_path: Path):
     manifest = {
         "schema_version": 3,
-        "artifact_sha256": {"nnscaler_dp_solver.so": "a" * 64},
+        "artifact_sha256": {
+            "nnscaler_dp_solver.so": "a" * 64,
+            "comp_profile.json": "b" * 64,
+        },
         "generated_lean_sha256": "unused",
     }
     expected = tmp_path / "expected.lean"
