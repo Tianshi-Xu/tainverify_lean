@@ -126,6 +126,7 @@ def _runtime_zip(archive: bytes, parallel: bytes, guard: bytes) -> bytes:
                     raise RuntimeError(f"escaping fixed archive symlink: {member.name}")
                 continue
             if member.isdir():
+                runtime.writestr(_zip_info(name + "/", 0o555), b"")
                 continue
             if not member.isfile():
                 raise RuntimeError(f"unsupported fixed archive member: {member.name}")

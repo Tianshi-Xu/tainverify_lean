@@ -13,6 +13,7 @@ import sys
 import tarfile
 import types
 import zipfile
+import zipimport
 
 import pytest
 
@@ -38,6 +39,11 @@ from scripts.yoco_regen.sealed_extension_exec import (
 import scripts.yoco_regen.emit_yoco_a04b as emitter
 from scripts.yoco_regen.safe_cleanup import create_owned_stage, cleanup_owned_stage
 from scripts.yoco_regen.write_authority_metadata import validate_graph
+
+
+def _clear_zip_import_caches(path: str) -> None:
+    sys.path_importer_cache.pop(path, None)
+    getattr(zipimport, "_zip_directory_cache").pop(path, None)
 
 
 def test_dump_patch_is_idempotent_and_atomic():
@@ -338,10 +344,30 @@ def test_memfd_runtime_is_fully_sealed_and_archive_links_cannot_escape():
         package = tarfile.TarInfo("nnscaler/__init__.py")
         package.size = 0
         handle.addfile(package, io.BytesIO())
+        for name in ("namespace_probe", "namespace_probe/sub"):
+            directory = tarfile.TarInfo(name)
+            directory.type = tarfile.DIRTYPE
+            handle.addfile(directory)
+        module = tarfile.TarInfo("namespace_probe/sub/mod.py")
+        module.size = len(b"VALUE = 1729\n")
+        handle.addfile(module, io.BytesIO(b"VALUE = 1729\n"))
     runtime = _runtime_zip(archive.getvalue(), b"patched", b"guard")
     with zipfile.ZipFile(io.BytesIO(runtime)) as handle:
         assert handle.read("nnscaler/parallel.py") == b"patched"
         assert handle.read("sitecustomize.py") == b"guard"
+        assert "namespace_probe/sub/" in handle.namelist()
+    runtime_descriptor = _sealed_memfd("namespace-runtime.zip", runtime)
+    runtime_path = f"/proc/{os.getpid()}/fd/{runtime_descriptor}"
+    _clear_zip_import_caches(runtime_path)
+    sys.path.insert(0, runtime_path)
+    try:
+        assert importlib.import_module("namespace_probe.sub.mod").VALUE == 1729
+    finally:
+        sys.path.remove(runtime_path)
+        _clear_zip_import_caches(runtime_path)
+        for name in ("namespace_probe.sub.mod", "namespace_probe.sub", "namespace_probe"):
+            sys.modules.pop(name, None)
+        os.close(runtime_descriptor)
 
     escaping = io.BytesIO()
     with tarfile.open(fileobj=escaping, mode="w") as handle:
@@ -378,11 +404,13 @@ mgener_probe = ModuleCodeGen()
     monkeypatch.setenv("TRAINVERIFY_DP_SOLVER_SHA256", "c" * 64)
     monkeypatch.setitem(sys.modules, "dill", pickle)
     runtime_path = f"/proc/{os.getpid()}/fd/{descriptor}"
+    _clear_zip_import_caches(runtime_path)
     sys.path.insert(0, runtime_path)
     try:
         importlib.import_module("receipt_probe")
     finally:
         sys.path.remove(runtime_path)
+        _clear_zip_import_caches(runtime_path)
         sys.modules.pop("receipt_probe", None)
         os.close(descriptor)
     receipt = json.loads((tmp_path / "authority.pkl.receipt.json").read_text())
