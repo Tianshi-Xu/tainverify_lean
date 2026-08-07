@@ -29,6 +29,7 @@ from scripts.yoco_regen.patch_llm_cc12_gemm import (
     patch_source as patch_cc12_source,
 )
 from scripts.yoco_regen.atomic_publish import publish_authority, rename_noreplace
+from scripts.yoco_regen.build_dp_solver import _validate_build_output
 from scripts.yoco_regen.sealed_extension_exec import (
     CLEAN_TOOL_ENV,
     _FULL_SEALS,
@@ -377,6 +378,56 @@ def test_memfd_runtime_is_fully_sealed_and_archive_links_cannot_escape():
         handle.addfile(link)
     with pytest.raises(RuntimeError, match="escaping"):
         _runtime_zip(escaping.getvalue(), b"patched", b"guard")
+
+    duplicate = io.BytesIO()
+    with tarfile.open(fileobj=duplicate, mode="w") as handle:
+        for content in (b"first", b"second"):
+            member = tarfile.TarInfo("nnscaler/parallel.py")
+            member.size = len(content)
+            handle.addfile(member, io.BytesIO(content))
+    with pytest.raises(RuntimeError, match="duplicate"):
+        _runtime_zip(duplicate.getvalue(), b"patched", b"guard")
+
+    guard_collision = io.BytesIO()
+    with tarfile.open(fileobj=guard_collision, mode="w") as handle:
+        for name in ("nnscaler/parallel.py", "sitecustomize.py"):
+            member = tarfile.TarInfo(name)
+            member.size = 1
+            handle.addfile(member, io.BytesIO(b"x"))
+    with pytest.raises(RuntimeError, match="startup guard"):
+        _runtime_zip(guard_collision.getvalue(), b"patched", b"guard")
+
+    alias = io.BytesIO()
+    with tarfile.open(fileobj=alias, mode="w") as handle:
+        member = tarfile.TarInfo("./nnscaler/parallel.py")
+        member.size = 1
+        handle.addfile(member, io.BytesIO(b"x"))
+    with pytest.raises(RuntimeError, match="non-canonical"):
+        _runtime_zip(alias.getvalue(), b"patched", b"guard")
+
+
+def test_dp_solver_build_output_rejects_unknown_inodes(tmp_path):
+    output = tmp_path / "output"
+    extension = output / "nnscaler" / "autodist" / "dp_solver.so"
+    extension.parent.mkdir(parents=True)
+    extension.write_bytes(b"ELF")
+    _validate_build_output(output, extension)
+
+    rogue = output / "rogue"
+    rogue.symlink_to("missing")
+    with pytest.raises(RuntimeError, match="unexpected"):
+        _validate_build_output(output, extension)
+    rogue.unlink()
+
+    os.mkfifo(rogue)
+    with pytest.raises(RuntimeError, match="unexpected"):
+        _validate_build_output(output, extension)
+    rogue.unlink()
+
+    outside_link = tmp_path / "outside-link.so"
+    os.link(extension, outside_link)
+    with pytest.raises(RuntimeError, match="unique regular file"):
+        _validate_build_output(output, extension)
 
 
 def test_dump_receipt_hashes_parallel_source_loaded_from_memfd_zip(tmp_path, monkeypatch):
@@ -819,10 +870,14 @@ def test_authority_script_pins_reviewed_llm_revision():
         Path(__file__).resolve().parents[1] / "yoco_regen" / "build_dp_solver.py"
     ).read_text(encoding="utf-8")
     assert "EXPECTED_EXTENSION_SHA256" in builder
-    assert 'sys.executable, "-S"' in builder
     assert '"PATH": "/usr/bin:/bin"' in builder
     assert "env=CLEAN_TOOL_ENV" in builder
     assert "NNSCALER_ARCHIVE_SHA256" in builder
+    assert "memfd_create" in builder
+    assert "F_ADD_SEALS" in builder
+    assert '"-x", "c++"' in builder
+    assert 'source_root / "setup.py"' not in builder
+    assert '"build_ext"' not in builder
     assert "unshare" not in builder
     emitter = (
         Path(__file__).resolve().parents[1] / "yoco_regen" / "emit_yoco_a04b.py"

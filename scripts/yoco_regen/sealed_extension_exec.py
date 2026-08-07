@@ -16,6 +16,7 @@ import sysconfig
 import tarfile
 import zipfile
 from pathlib import Path
+from pathlib import PurePosixPath
 
 NNSCALER_REVISION = "d3d468ed23edb2f28aa8566b2dfb6ed49c5955cf"
 NNSCALER_ARCHIVE_SHA256 = "fd919ddb50ee7bd380fd4588485ad843fd8a97fce115929b2466c837cdde7110"
@@ -106,27 +107,56 @@ def _zip_info(name: str, mode: int) -> zipfile.ZipInfo:
     return info
 
 
+def _canonical_archive_name(raw: str, *, directory: bool) -> str:
+    candidate = raw[:-1] if directory and raw.endswith("/") else raw
+    if (
+        not candidate
+        or "\\" in candidate
+        or candidate.startswith("/")
+        or candidate.endswith("/")
+    ):
+        raise RuntimeError(f"non-canonical fixed archive member: {raw!r}")
+    path = PurePosixPath(candidate)
+    if (
+        any(part in ("", ".", "..") for part in path.parts)
+        or path.as_posix() != candidate
+    ):
+        raise RuntimeError(f"non-canonical fixed archive member: {raw!r}")
+    return candidate
+
+
 def _runtime_zip(archive: bytes, parallel: bytes, guard: bytes) -> bytes:
     source = io.BytesIO(archive)
     target = io.BytesIO()
-    saw_parallel = False
+    parallel_count = 0
+    seen: set[str] = set()
+    expected_zip_names: set[str] = {"sitecustomize.py"}
     with tarfile.open(fileobj=source, mode="r:") as tar, zipfile.ZipFile(
         target, mode="w", compression=zipfile.ZIP_STORED, strict_timestamps=True
     ) as runtime:
         for member in tar.getmembers():
-            name = member.name.rstrip("/")
-            path = Path(name)
-            if path.is_absolute() or ".." in path.parts:
-                raise RuntimeError(f"unsafe fixed archive member: {member.name}")
+            name = _canonical_archive_name(member.name, directory=member.isdir())
+            if name in seen:
+                raise RuntimeError(f"duplicate fixed archive member: {name}")
+            seen.add(name)
+            if name == "sitecustomize.py":
+                raise RuntimeError("fixed archive conflicts with sealed startup guard")
             if member.issym():
                 target_name = posixpath.normpath(
-                    posixpath.join(posixpath.dirname(member.name), member.linkname)
+                    posixpath.join(posixpath.dirname(name), member.linkname)
                 )
-                if member.linkname.startswith("/") or target_name == ".." or target_name.startswith("../"):
-                    raise RuntimeError(f"escaping fixed archive symlink: {member.name}")
+                if (
+                    not member.linkname
+                    or "\\" in member.linkname
+                    or member.linkname.startswith("/")
+                    or target_name == ".."
+                    or target_name.startswith("../")
+                ):
+                    raise RuntimeError(f"escaping fixed archive symlink: {name}")
                 continue
             if member.isdir():
                 runtime.writestr(_zip_info(name + "/", 0o555), b"")
+                expected_zip_names.add(name + "/")
                 continue
             if not member.isfile():
                 raise RuntimeError(f"unsupported fixed archive member: {member.name}")
@@ -136,14 +166,22 @@ def _runtime_zip(archive: bytes, parallel: bytes, guard: bytes) -> bytes:
             content = extracted.read()
             if name == "nnscaler/parallel.py":
                 content = parallel
-                saw_parallel = True
+                parallel_count += 1
             if name.startswith("nnscaler/autodist/dp_solver.") and name.endswith(".so"):
                 raise RuntimeError("fixed archive unexpectedly contains dp solver extension")
             runtime.writestr(_zip_info(name, 0o444), content)
-        if not saw_parallel:
-            raise RuntimeError("fixed archive is missing nnscaler/parallel.py")
+            expected_zip_names.add(name)
+        if parallel_count != 1:
+            raise RuntimeError("fixed archive must contain nnscaler/parallel.py exactly once")
         runtime.writestr(_zip_info("sitecustomize.py", 0o444), guard)
-    return target.getvalue()
+    result = target.getvalue()
+    with zipfile.ZipFile(io.BytesIO(result), mode="r") as runtime:
+        names = [entry.filename for entry in runtime.infolist()]
+        if len(names) != len(set(names)) or set(names) != expected_zip_names:
+            raise RuntimeError("sealed runtime ZIP member set is ambiguous")
+        for name in names:
+            _canonical_archive_name(name, directory=name.endswith("/"))
+    return result
 
 
 def _runtime_paths(python_tail: Path) -> list[str]:
