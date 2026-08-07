@@ -741,6 +741,25 @@ def test_owned_stage_cleanup_requires_matching_marker(tmp_path):
     assert not stage.exists()
 
 
+def test_safe_cleanup_direct_script_runs_under_python_s(tmp_path):
+    root = Path(__file__).resolve().parents[2]
+    cleanup_script = root / "scripts" / "yoco_regen" / "safe_cleanup.py"
+    result = subprocess.run(
+        [sys.executable, "-S", str(cleanup_script), "create", str(tmp_path), "direct-"],
+        cwd=root,
+        env={
+            "HOME": str(tmp_path),
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "PYTHONPATH": str(root),
+        },
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    stage_text, marker, dev, ino = result.stdout.strip().split("\t")
+    assert cleanup_owned_stage(Path(stage_text), marker, int(dev), int(ino)) is True
+
+
 def test_owned_stage_cleanup_rejects_replaced_inode_even_with_marker(tmp_path):
     stage, marker, dev, ino = create_owned_stage(tmp_path, "stage-")
     original = tmp_path / "original"

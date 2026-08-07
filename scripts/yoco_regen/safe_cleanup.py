@@ -11,9 +11,9 @@ import uuid
 from pathlib import Path
 
 try:
+    from scripts.yoco_regen.atomic_publish import _renameat2
+except ImportError:  # Package execution from an installed source tree.
     from .atomic_publish import _renameat2
-except ImportError:  # Direct script execution.
-    from atomic_publish import _renameat2
 
 MARKER_NAME = ".trainverify-stage-owner"
 
