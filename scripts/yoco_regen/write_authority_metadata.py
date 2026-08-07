@@ -119,10 +119,11 @@ def validate_graph(mg, kind: str, plan: int, receipt: dict):
     policy = receipt.get("policy")
     if policy not in ALLOWED_POLICY_IDENTITIES:
         raise RuntimeError(f"{kind} receipt is not from llm-train autodist_wrapper")
-    counts = collections.Counter(
-        getattr(node, "signature", type(node).__name__)
-        for node in mg.execplan.graph.nodes()
-    )
+    def node_signature(node) -> str:
+        signature = getattr(node, "signature", None)
+        return signature if isinstance(signature, str) and signature else type(node).__name__
+
+    counts = collections.Counter(node_signature(node) for node in mg.execplan.graph.nodes())
     minimum = {
         "nnscaler.customized_ops.ring_attention.maybe_shuffle.wrap_maybe_shuffle": 1,
         "nnscaler.customized_ops.ring_attention.maybe_shuffle.wrap_maybe_unshuffle": 25,

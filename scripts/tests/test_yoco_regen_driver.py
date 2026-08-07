@@ -574,6 +574,7 @@ def _fake_authority_graph(plan=1, missing_unshuffle=False, token_shape=(4096, 10
     nodes = []
     for signature, count in counts.items():
         nodes.extend(Node(signature, not nodes and index == 0) for index in range(count))
+    nodes.append(Node(None))
     graph = types.SimpleNamespace(nodes=lambda: nodes)
     return types.SimpleNamespace(
         devices=list(range(plan)),
@@ -745,6 +746,8 @@ def test_dp_solver_binary_is_hashed_but_not_passed_as_json(tmp_path):
 
 def test_authority_graph_gate_accepts_only_full_autodist_graph():
     counts = validate_graph(_fake_authority_graph(), "sm", 1, _receipt())
+    assert counts["Node"] == 1
+    assert all(isinstance(signature, str) for signature in counts)
     assert counts[
         "nnscaler.customized_ops.ring_attention.maybe_shuffle.wrap_maybe_unshuffle"
     ] == 25
