@@ -88,10 +88,14 @@ def configure_imports(llm_train: Path, nnscaler_repo: Path):
 
 
 def validate_graph(mg, kind: str, plan: int, receipt: dict):
+    devices = getattr(mg, "devices", None)
+    runtime_ndevs = getattr(mg, "runtime_ndevs", None)
     if (
-        sorted(mg.devices) != list(range(plan))
-        or mg.compute_config.plan_ngpus != plan
-        or mg.compute_config.runtime_ngpus != plan
+        not isinstance(devices, (list, tuple))
+        or any(type(device) is not int for device in devices)
+        or list(devices) != list(range(plan))
+        or type(runtime_ndevs) is not int
+        or runtime_ndevs != plan
     ):
         raise RuntimeError(f"{kind} topology mismatch")
     if receipt != {

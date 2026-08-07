@@ -577,7 +577,7 @@ def _fake_authority_graph(plan=1, missing_unshuffle=False):
     graph = types.SimpleNamespace(nodes=lambda: nodes)
     return types.SimpleNamespace(
         devices=list(range(plan)),
-        compute_config=types.SimpleNamespace(plan_ngpus=plan, runtime_ngpus=plan),
+        runtime_ndevs=plan,
         execplan=types.SimpleNamespace(graph=graph),
     )
 
@@ -752,6 +752,14 @@ def test_authority_graph_gate_accepts_only_full_autodist_graph():
         validate_graph(_fake_authority_graph(missing_unshuffle=True), "sm", 1, _receipt())
     with pytest.raises(RuntimeError, match="autodist_wrapper"):
         validate_graph(_fake_authority_graph(), "sm", 1, _receipt(policy="partial"))
+    wrong_runtime = _fake_authority_graph()
+    wrong_runtime.runtime_ndevs = 2
+    with pytest.raises(RuntimeError, match="topology"):
+        validate_graph(wrong_runtime, "sm", 1, _receipt())
+    missing_runtime = _fake_authority_graph()
+    del missing_runtime.runtime_ndevs
+    with pytest.raises(RuntimeError, match="topology"):
+        validate_graph(missing_runtime, "sm", 1, _receipt())
 
 
 def test_authority_script_pins_reviewed_llm_revision():
