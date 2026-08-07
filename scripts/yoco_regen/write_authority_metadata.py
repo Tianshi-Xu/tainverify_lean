@@ -144,8 +144,11 @@ def validate_graph(mg, kind: str, plan: int, receipt: dict):
             shape = getattr(tensor, "shape", None)
             if shape is not None:
                 shapes.add(tuple(shape))
-    if (1, 4096) not in shapes:
-        raise RuntimeError(f"{kind} does not contain the expected seq4096 token shape")
+    if not any(
+        shape and type(shape[0]) is int and shape[0] == 4096
+        for shape in shapes
+    ):
+        raise RuntimeError(f"{kind} does not contain the expected flattened seq4096 axis")
     return counts
 
 

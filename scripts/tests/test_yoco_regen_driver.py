@@ -547,7 +547,7 @@ def test_cpu_smoke_refuses_existing_output_before_import(tmp_path):
     assert valuable.read_bytes() == b"do-not-delete"
 
 
-def _fake_authority_graph(plan=1, missing_unshuffle=False):
+def _fake_authority_graph(plan=1, missing_unshuffle=False, token_shape=(4096, 1024)):
     counts = {
         "nnscaler.customized_ops.ring_attention.maybe_shuffle.wrap_maybe_shuffle": plan,
         "nnscaler.customized_ops.ring_attention.maybe_shuffle.wrap_maybe_unshuffle": 25 * plan,
@@ -563,7 +563,7 @@ def _fake_authority_graph(plan=1, missing_unshuffle=False):
     class Node:
         def __init__(self, signature, with_shape=False):
             self.signature = signature
-            self._values = [types.SimpleNamespace(shape=(1, 4096))] if with_shape else []
+            self._values = [types.SimpleNamespace(shape=token_shape)] if with_shape else []
 
         def inputs(self):
             return self._values
@@ -752,6 +752,8 @@ def test_authority_graph_gate_accepts_only_full_autodist_graph():
         validate_graph(_fake_authority_graph(missing_unshuffle=True), "sm", 1, _receipt())
     with pytest.raises(RuntimeError, match="autodist_wrapper"):
         validate_graph(_fake_authority_graph(), "sm", 1, _receipt(policy="partial"))
+    with pytest.raises(RuntimeError, match="flattened seq4096"):
+        validate_graph(_fake_authority_graph(token_shape=(1, 4096)), "sm", 1, _receipt())
     wrong_runtime = _fake_authority_graph()
     wrong_runtime.runtime_ndevs = 2
     with pytest.raises(RuntimeError, match="topology"):
