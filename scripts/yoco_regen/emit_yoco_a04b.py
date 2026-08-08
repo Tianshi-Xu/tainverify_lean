@@ -51,6 +51,7 @@ STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/CanonicalL23Norm.lean",
     "trainverify/denote/yoco_goals/CanonicalL23Output.lean",
     "trainverify/denote/yoco_goals/CanonicalL23Residual.lean",
+    "trainverify/denote/yoco_goals/CanonicalL23Router.lean",
     "trainverify/denote/yoco_goals/CanonicalLossBackboneTail.lean",
     "trainverify/denote/yoco_goals/CanonicalLossBackboneTailGoal2.lean",
     *(f"trainverify/denote/yoco_goals/CanonicalGoal4L{layer}Routing.lean" for layer in range(12, 24)),
@@ -76,6 +77,7 @@ GENERATED_GOAL_MODULES = (
 )
 REGISTERED_TOP_LEVEL_MODULES = {
     "EmbeddingHiddenShard.lean",
+    "ChunkGatherDim0.lean",
     "Gather2Rel.lean",
     "InnerChunkCEShard.lean",
     "InnerChunkCELossShard.lean",
