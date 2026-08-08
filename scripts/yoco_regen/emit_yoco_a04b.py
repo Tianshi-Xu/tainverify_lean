@@ -42,12 +42,16 @@ AUTHORITY_NAMES = (
 ) + METADATA_JSON_NAMES + ("nnscaler_dp_solver.so", "comp_profile.json")
 STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/BridgeKit.lean",
+    "trainverify/denote/yoco_goals/CanonicalGoal4L0Routing.lean",
+    "trainverify/denote/yoco_goals/CanonicalL23Output.lean",
     "trainverify/denote/yoco_goals/CanonicalLossBackboneTail.lean",
+    "trainverify/denote/yoco_goals/CanonicalLossBackboneTailGoal2.lean",
     *(f"trainverify/denote/yoco_goals/CanonicalGoal4L{layer}Routing.lean" for layer in range(12, 24)),
     "trainverify/denote/yoco_goals/FaithfulStackGather.lean",
     "trainverify/denote/yoco_goals/Goal_1_FaithfulHead.lean",
     "trainverify/denote/yoco_goals/Goal_2_FaithfulHead.lean",
     "trainverify/denote/yoco_goals/ZigzagLayoutRel.lean",
+    "trainverify/denote/yoco_goals/ZigzagPointwiseRel.lean",
     "trainverify/denote/yoco_goals/ZigzagGoalStatement.lean",
 )
 GENERATED_GOAL_MODULES = (
