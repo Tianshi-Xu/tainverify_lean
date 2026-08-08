@@ -30,6 +30,10 @@ Unlike `ZigzagCuWF`, this does not mention intermediate data shards, so generate
 lineage statements can state it directly on external inputs. -/
 structure PackedCuSeqlensWF (cu : Tensor) (totalTokens cpSize : Nat) : Prop where
   cp_pos : 0 < cpSize
+  /-- Goal 3/4's packed metadata describes one complete sequence.  Keeping this
+  fact inside the external-input contract lets faithful graph proofs derive the
+  decoded equality instead of asking callers for a computed equality. -/
+  decoded_single : decodeCuSeqlens cu = [0, totalTokens]
   starts_zero : (decodeCuSeqlens cu).head?.getD 0 = 0
   has_endpoint : 2 ≤ (decodeCuSeqlens cu).length
   monotone : ∀ s, s + 1 < (decodeCuSeqlens cu).length →
