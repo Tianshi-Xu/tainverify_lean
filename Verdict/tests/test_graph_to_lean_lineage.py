@@ -101,7 +101,9 @@ def test_faithful_topology_closes_to_external_inputs_without_goal_whitelist():
     graph = Graph(nodes)
 
     closed = close_nodes_to_external_inputs(graph, [loss.tid])
+    cut_after_collective = [nodes[-1]]
 
+    assert not _goal_requires_distributed_faithful(cut_after_collective, graph)
     assert closed == nodes
     assert _computed_boundary_tids(graph, closed) == []
     assert _goal_requires_distributed_faithful(closed, graph)

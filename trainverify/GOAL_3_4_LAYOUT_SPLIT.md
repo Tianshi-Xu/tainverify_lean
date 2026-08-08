@@ -1,11 +1,33 @@
 # goal_3 / goal_4: an RVD expressiveness gap in nnScaler
 
-**Status:** both goals are FALSE as generated. Not provable, and correctly no
-longer emitted. This file records the audited root cause.
+**Status:** the historical ordinary-evaluator and unconstrained-cut statements
+described below are false.  Current generation closes collective ancestry to real
+external inputs and emits a distributed-faithful full statement with explicit
+packed-cu input contracts.  That corrected statement is a new proof obligation;
+none of the historical counterexamples proves it false.
 
 **History note.** Earlier revisions of this document gave two different, WRONG
 explanations. Both are corrected below, and the wrong versions are stated
 explicitly so nobody re-derives them.
+
+## Independent cut-boundary counterexample
+
+One failed faithful revision still cut Goal 4 at the last 12 layer inputs
+
+```
+5625, 5679, 5733, 5787, 5841, 5895,
+5949, 6003, 6057, 6111, 6165, 6219
+```
+
+without adding lineage goals for them.  Shapes, input-value classes, and packed-cu
+metadata do not determine these tensors.  Replacing only `initSM 5625` by a different
+tensor of the same shape therefore preserved every premise while potentially changing
+the router output and final stack.  Goal 3 had the same defect.
+
+Adding `Ordinary2Rel`, `Zigzag2Rel`, or a computed output equality to the caller
+contract would only assume the missing theorem.  The generator now inspects complete
+backward ancestry before evaluator selection and closes faithful goals to genuine
+external inputs; their contracts contain only independently checkable input metadata.
 
 ## What the two goals are
 

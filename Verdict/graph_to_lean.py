@@ -3955,27 +3955,25 @@ def main() -> None:
 			needed_pm = pm_backward_until(pm_roots_goal, stop_pm_tids)
 			pm_nodes_goal = filter_pm_goal_nodes(set(needed_pm), stop_tids=set(stop_pm_tids))
 
-			# Faithful collectives cannot be cut at arbitrary activations: shape and
-			# metadata assumptions do not establish their SM/PM value relation.  If
-			# the candidate contains any operator whose semantics needs graph-wide
-			# replica/shuffle information, close BOTH sides to actual authority
-			# inputs.  This is deliberately operator/topology driven, never Goal-ID
-			# driven.
+			# Select semantics from the complete backward ancestry, not from an
+			# already-cut candidate: a prerequisite boundary can otherwise hide the
+			# very collective that requires faithful evaluation.
+			full_sm_nodes = _toposort_nodes(
+				GsE, close_nodes_to_external_inputs(GsE, [int(g.ts)])
+			)
+			full_pm_nodes = _toposort_nodes(
+				GpE,
+				_dedup_shared_collectives(
+					GpE, close_nodes_to_external_inputs(GpE, pm_roots_goal),
+				),
+			)
 			full_topology = (
-				_goal_requires_distributed_faithful(sm_nodes_goal, GsE)
-				or _goal_requires_distributed_faithful(pm_nodes_goal, GpE)
+				_goal_requires_distributed_faithful(full_sm_nodes, GsE)
+				or _goal_requires_distributed_faithful(full_pm_nodes, GpE)
 			)
 			if full_topology:
-				sm_nodes_goal = _toposort_nodes(
-					GsE, close_nodes_to_external_inputs(GsE, [int(g.ts)])
-				)
-				pm_nodes_goal = _toposort_nodes(
-					GpE,
-					_dedup_shared_collectives(
-						GpE,
-						close_nodes_to_external_inputs(GpE, pm_roots_goal),
-					),
-				)
+				sm_nodes_goal = full_sm_nodes
+				pm_nodes_goal = full_pm_nodes
 				missing_sm = _computed_boundary_tids(GsE, sm_nodes_goal)
 				missing_pm = _computed_boundary_tids(GpE, pm_nodes_goal)
 				if missing_sm or missing_pm:
