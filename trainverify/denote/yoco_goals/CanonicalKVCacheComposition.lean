@@ -2,6 +2,7 @@
 import denote.yoco_goals.CanonicalKVCacheNormRouter
 import denote.yoco_goals.CanonicalKVCacheExpertDown
 import denote.yoco_goals.CanonicalKVCacheDown
+import denote.yoco_goals.CanonicalKVCacheRouter
 
 set_option linter.style.longLine false
 set_option linter.style.nativeDecide false
@@ -66,7 +67,33 @@ theorem canonical_kv_cache_boundary_from_attention_output_and_router
   exact canonical_kv_cache_boundary_from_branch_inputs
     initSM initPM hResidual hExpert hGate hDown
 
+/-- Complete cache-source layer composition.  The preceding faithful attention
+output is the sole computed-lineage boundary; router probabilities and maps are
+derived internally from that same input. -/
+theorem canonical_kv_cache_boundary_from_attention_output
+    (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM sm_goal_1InitEnv)
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
+    (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
+    (hAttention : Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5562)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9632)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9633)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 1024] [2048, 1024]) :
+    Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5595)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9722)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9723)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 1024] [2048, 1024] := by
+  have hRouter := canonical_kv_cache_router_from_attention_output
+    initSM initPM hPM hInit hAttention
+  exact canonical_kv_cache_boundary_from_attention_output_and_router
+    initSM initPM hSM hPM hInit hAttention hRouter.1 hRouter.2
+
 #print axioms canonical_kv_cache_boundary_from_attention_output_and_router
+#print axioms canonical_kv_cache_boundary_from_attention_output
 
 end
 end TrainVerify.Denote.GeneratedPatterns
