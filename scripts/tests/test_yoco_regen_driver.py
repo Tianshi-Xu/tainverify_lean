@@ -1106,6 +1106,8 @@ def _write_snapshot_stage(root: Path) -> Path:
     marker.write_text("owned", encoding="utf-8")
     marker.chmod(0o400)
     files = {"GeneratedYOCOMoE.lean": b"def generated : Nat := 1\n"}
+    for name in sorted(emitter.REGISTERED_TOP_LEVEL_MODULES):
+        files[name] = f"-- {name}\n".encode()
     for name in sorted(emitter.EXPECTED_GOAL_MODULES):
         files[f"yoco_goals/{name}"] = f"-- {name}\n".encode()
     for relative, content in files.items():
@@ -1127,6 +1129,11 @@ def _write_snapshot_stage(root: Path) -> Path:
 def test_emitter_snapshot_stage_ledger_is_exact_and_fail_closed(tmp_path):
     stage = _write_snapshot_stage(tmp_path / "valid")
     emitter.verify_snapshot_stage(stage)
+
+    missing_helper = _write_snapshot_stage(tmp_path / "missing-helper")
+    (missing_helper / "EmbeddingHiddenShard.lean").unlink()
+    with pytest.raises(RuntimeError, match="unexpected snapshot top-level paths"):
+        emitter.verify_snapshot_stage(missing_helper)
 
     missing = _write_snapshot_stage(tmp_path / "missing")
     (missing / "yoco_goals" / "Goal_1.lean").unlink()
@@ -1376,6 +1383,13 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
             "source": source,
             "sha256": emitter.digest_bytes(blobs[source]),
         }
+    helper_destination = "EmbeddingHiddenShard.lean"
+    helper_source = "trainverify/denote/EmbeddingHiddenShard.lean"
+    blobs[helper_source] = b"theorem helper : True := by trivial\n"
+    modules[helper_destination] = {
+        "source": helper_source,
+        "sha256": emitter.digest_bytes(blobs[helper_source]),
+    }
     manifest_path = stage / "GeneratedYOCOMoE.manifest.json"
     manifest = {
         "snapshot_sha256": {
@@ -1398,12 +1412,21 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
     monkeypatch.setattr(emitter, "git_blob", lambda _repo, _rev, path: blobs[path])
     emitter.materialize_registered_proofs(tmp_path, "a" * 40, stage, registry)
     for destination, entry in modules.items():
+        if destination == helper_destination:
+            continue
         assert patterns[destination].read_bytes() == blobs[entry["source"]]
+    helper_path = stage / helper_destination
+    assert helper_path.read_bytes() == blobs[helper_source]
     refreshed = json.loads(manifest_path.read_text())
     for destination, path in patterns.items():
         assert refreshed["snapshot_sha256"][f"yoco_goals/{destination}"] == emitter.sha256(path)
+    assert refreshed["snapshot_sha256"][helper_destination] == emitter.sha256(helper_path)
 
     before = {name: path.read_bytes() for name, path in patterns.items()}
+    with pytest.raises(RuntimeError, match="top-level destination already exists"):
+        emitter.materialize_registered_proofs(tmp_path, "a" * 40, stage, registry)
+    assert {name: path.read_bytes() for name, path in patterns.items()} == before
+    helper_path.unlink()
     bad = json.loads(json.dumps(registry))
     bad["modules"]["Pattern_2.lean"]["sha256"] = "0" * 64
     with pytest.raises(RuntimeError, match="blob digest mismatch"):

@@ -52,6 +52,7 @@ GENERATED_GOAL_MODULES = (
     "Pattern_5.lean", "Patterns.lean", "ProofObligations.lean", "Instances.lean",
     "MainTheorem.lean",
 )
+REGISTERED_TOP_LEVEL_MODULES = {"EmbeddingHiddenShard.lean"}
 EXPECTED_GOAL_MODULES = {
     Path(relative_path).name for relative_path in STATIC_GOAL_MODULES
 } | set(GENERATED_GOAL_MODULES)
@@ -322,7 +323,7 @@ def verify_snapshot_fd(stage_fd: int) -> None:
     expected_top = {
         ".trainverify-stage-owner", "GeneratedYOCOMoE.lean",
         "GeneratedYOCOMoE.manifest.json", "yoco_goals",
-    }
+    } | REGISTERED_TOP_LEVEL_MODULES
     if top_entries != expected_top:
         raise RuntimeError(f"unexpected snapshot top-level paths: {sorted(top_entries)}")
     if not _read_regular_at(stage_fd, ".trainverify-stage-owner"):
@@ -350,12 +351,15 @@ def verify_snapshot_fd(stage_fd: int) -> None:
             raise RuntimeError(f"unexpected yoco_goals paths: {sorted(goal_entries)}")
         expected_ledger = {"GeneratedYOCOMoE.lean"} | {
             f"yoco_goals/{name}" for name in EXPECTED_GOAL_MODULES
-        }
+        } | REGISTERED_TOP_LEVEL_MODULES
         if set(ledger) != expected_ledger:
             raise RuntimeError("snapshot manifest path ledger is not exact")
         main_content = _read_regular_at(stage_fd, "GeneratedYOCOMoE.lean")
         if ledger.get("GeneratedYOCOMoE.lean") != digest_bytes(main_content):
             raise RuntimeError("snapshot main Lean digest mismatch")
+        for name in sorted(REGISTERED_TOP_LEVEL_MODULES):
+            if ledger.get(name) != digest_bytes(_read_regular_at(stage_fd, name)):
+                raise RuntimeError(f"snapshot top-level Lean digest mismatch: {name}")
         for name in sorted(EXPECTED_GOAL_MODULES):
             digest = ledger.get(f"yoco_goals/{name}")
             if not _is_lower_hex(digest, 64):
@@ -409,6 +413,8 @@ def validate_lean_snapshot(
         shutil.rmtree(denote / "yoco_goals")
         shutil.copytree(stage / "yoco_goals", denote / "yoco_goals", symlinks=False)
         shutil.copyfile(stage / "GeneratedYOCOMoE.lean", denote / "GeneratedYOCOMoE.lean")
+        for name in REGISTERED_TOP_LEVEL_MODULES:
+            shutil.copyfile(stage / name, denote / name)
         lake = shutil.which("lake")
         if lake is None:
             raise RuntimeError("lake executable is unavailable")
@@ -573,10 +579,12 @@ def validate_proof_registry(registry: dict, stage: Path) -> dict[str, dict[str, 
         raise RuntimeError("proof registry modules must be a nonempty object")
     for destination, entry in modules.items():
         destination_path = PurePosixPath(destination)
+        is_goal_module = destination in GENERATED_GOAL_MODULES
+        is_top_module = destination in REGISTERED_TOP_LEVEL_MODULES
         if (
             not isinstance(destination, str)
             or destination_path.name != destination
-            or destination not in GENERATED_GOAL_MODULES
+            or not (is_goal_module or is_top_module)
         ):
             raise RuntimeError(f"invalid proof registry destination: {destination}")
         _require_exact_keys(entry, PROOF_MODULE_KEYS, "proof registry module")
@@ -584,16 +592,22 @@ def validate_proof_registry(registry: dict, stage: Path) -> dict[str, dict[str, 
         if not isinstance(source, str):
             raise RuntimeError("proof registry source is invalid")
         source_path = PurePosixPath(source)
+        expected_source_parent = (
+            ("trainverify", "denote", "yoco_goals")
+            if is_goal_module else ("trainverify", "denote")
+        )
         if (
             source_path.is_absolute()
             or ".." in source_path.parts
             or "." in source_path.parts
-            or source_path.parts[:3] != ("trainverify", "denote", "yoco_goals")
+            or source_path.parts[:-1] != expected_source_parent
             or source_path.name != destination
         ):
             raise RuntimeError(f"invalid proof registry source: {source}")
         if not _is_lower_hex(entry["sha256"], 64):
             raise RuntimeError("proof registry module digest is invalid")
+        if is_top_module and os.path.lexists(stage / destination):
+            raise RuntimeError(f"proof registry top-level destination already exists: {destination}")
     targets = registry["proof_targets"]
     if (
         not isinstance(targets, list)
@@ -623,6 +637,19 @@ def _replace_private_regular(path: Path, content: bytes) -> None:
     os.replace(temporary, path)
 
 
+def _create_private_regular(path: Path, content: bytes) -> None:
+    descriptor = os.open(
+        path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o400,
+    )
+    try:
+        with os.fdopen(descriptor, "wb", closefd=False) as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+    finally:
+        os.close(descriptor)
+
+
 def _refresh_snapshot_ledger(stage: Path) -> None:
     manifest_path = stage / "GeneratedYOCOMoE.manifest.json"
     manifest = _strict_json_bytes(
@@ -632,7 +659,7 @@ def _refresh_snapshot_ledger(stage: Path) -> None:
     if not isinstance(ledger, dict):
         raise RuntimeError("snapshot manifest is missing snapshot_sha256")
     refreshed = {}
-    for relative_path in ledger:
+    for relative_path in set(ledger) | REGISTERED_TOP_LEVEL_MODULES:
         candidate = PurePosixPath(relative_path)
         if candidate.is_absolute() or ".." in candidate.parts or "." in candidate.parts:
             raise RuntimeError("snapshot ledger path is invalid")
@@ -663,7 +690,10 @@ def materialize_registered_proofs(
             )
         contents[destination] = content
     for destination, content in contents.items():
-        _replace_private_regular(stage / "yoco_goals" / destination, content)
+        if destination in REGISTERED_TOP_LEVEL_MODULES:
+            _create_private_regular(stage / destination, content)
+        else:
+            _replace_private_regular(stage / "yoco_goals" / destination, content)
     _refresh_snapshot_ledger(stage)
 
 

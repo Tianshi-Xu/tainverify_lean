@@ -19,7 +19,11 @@ match the freshly generated stage:
 A missing entry, unknown field, duplicate path, digest mismatch, missing proof module,
 or any `sorry`/`sorryAx`/`axiom`/`unsafe` token fails closed before Lean validation and before
 publication.  Registry proof paths are materialized from the declared TrainVerify Git
-blob, never from a mutable worktree pathname.
+blob, never from a mutable worktree pathname.  Proof dependencies outside
+`yoco_goals/` are also explicit closed-list entries: for example,
+`EmbeddingHiddenShard.lean` is materialized at the snapshot root and included in the
+same exact SHA-256 ledger.  Depending on a helper merely because it exists in the
+validation checkout is forbidden; missing or extra top-level modules fail closed.
 
 After the complete target build, the emitter creates a private validation-only Lean
 module containing `#print axioms` for all five registered targets.  It rejects missing
