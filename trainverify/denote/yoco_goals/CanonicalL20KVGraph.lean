@@ -1,6 +1,7 @@
 /- Canonical Goal 1, layer 20: faithful K/V cache graph reductions. -/
 import denote.yoco_goals.Goal_1
 import denote.DenoteMoE
+import denote.yoco_goals.CanonicalL20KVSemantic
 
 set_option linter.style.longLine false
 set_option linter.style.nativeDecide false
@@ -263,10 +264,135 @@ theorem canonical_l20_v_sm_reduce (initSM : Store) :
     (by native_decide) (by native_decide)
   rw [hc, hf, hp, hs, hr, hb]
 
+/-- Complete real PM L20 V graph relation on both ranks. -/
+theorem canonical_l20_v_pm_reduce (initPM : Store) :
+    denoteGraphDistributedFaithful pm_goal_1 initPM 11318 =
+      fw_per_head_linear
+        (fw_rms_norm (denoteGraphDistributedFaithful pm_goal_1 initPM 9722)
+          (denoteGraphDistributedFaithful pm_goal_1 initPM 5596))
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 5600) ∧
+    denoteGraphDistributedFaithful pm_goal_1 initPM 11319 =
+      fw_per_head_linear
+        (fw_rms_norm (denoteGraphDistributedFaithful pm_goal_1 initPM 9723)
+          (denoteGraphDistributedFaithful pm_goal_1 initPM 5596))
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 5600) := by
+  have hb0 := cL20KV_reduce_multiref pm_goal_1 initPM 1040 0 2 9722 15822
+    [15822, 15826] (by native_decide) (by native_decide) (by decide) (by decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hb1 := cL20KV_reduce_multiref pm_goal_1 initPM 1041 1 2 9723 15830
+    [15830, 15834] (by native_decide) (by native_decide) (by decide) (by decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hr0 := cL20KV_reduce_rms pm_goal_1 initPM 1042 0 15822 5596 9726
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide)
+  have hr1 := cL20KV_reduce_rms pm_goal_1 initPM 1044 1 15830 5596 9727
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide)
+  have hs0 := cL20KV_reduce_multiref pm_goal_1 initPM 1046 0 2 9726 15842
+    [15838, 15842] (by native_decide) (by native_decide) (by decide) (by decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hs1 := cL20KV_reduce_multiref pm_goal_1 initPM 1048 1 2 9727 15850
+    [15846, 15850] (by native_decide) (by native_decide) (by decide) (by decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hp0 := cL20KV_reduce_proj pm_goal_1 initPM 1051 0 15842 5600 9740
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide)
+  have hp1 := cL20KV_reduce_proj pm_goal_1 initPM 1054 1 15850 5600 9741
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide)
+  have hf0 := cL20KV_reduce_multiref pm_goal_1 initPM 1057 0 12 9740 16020
+    [15980, 15984, 15988, 15992, 15996, 16000, 16004, 16008, 16012, 16016,
+      16020, 16024]
+    (by native_decide) (by native_decide) (by decide) (by decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hf1 := cL20KV_reduce_multiref pm_goal_1 initPM 1059 1 12 9741 16078
+    [16038, 16042, 16046, 16050, 16054, 16058, 16062, 16066, 16070, 16074,
+      16078, 16082]
+    (by native_decide) (by native_decide) (by decide) (by decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hc0 := cL20KV_reduce_to pm_goal_1 initPM 1083 0 16020 11318
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+  have hc1 := cL20KV_reduce_to pm_goal_1 initPM 1107 1 16078 11319
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+  refine ⟨?_, ?_⟩
+  · rw [hc0, hf0, hp0, hs0, hr0, hb0]
+  · rw [hc1, hf1, hp1, hs1, hr1, hb1]
+
+private theorem cL20V_init_singleton_eq (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
+    (g : LineageGoal) (hg : g ∈ goal_1_full_initGoals) (tid : Tid)
+    (htp : g.tps = [{ rank := 0, tid := tid }])
+    (hgd : g.gatherDim = 0) (hrep : g.replicated = false) (hts : g.ts = tid) :
+    initSM tid = initPM tid := by
+  have h := hInit g hg
+  unfold InitGoalHolds at h
+  have hv := h.2.2
+  rw [reconstructForGoal_of_not_replicated g pm_goal_1.numRanks _ hrep,
+    htp, hts, hgd] at hv
+  simpa only [List.map, reconstructWithDim] using hv
+
+private theorem cL20V_weight_value (g : GraphDecl) (init : Store) (tid : Tid)
+    (hne : ∀ n ∈ g.nodes, n.outs ≠ []) (hnw : ∀ n ∈ g.nodes, tid ∉ n.outs) :
+    denoteGraphDistributedFaithful g init tid = init tid := by
+  unfold denoteGraphDistributedFaithful
+  exact foldl_applyNodeDistributedFaithful_at_not_written g g.nodes init tid hne hnw
+
+private theorem cL20V_weight_eq (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
+    (tid : Tid) (g : LineageGoal) (hg : g ∈ goal_1_full_initGoals)
+    (htp : g.tps = [{ rank := 0, tid := tid }])
+    (hgd : g.gatherDim = 0) (hrep : g.replicated = false) (hts : g.ts = tid)
+    (hsnw : ∀ n ∈ sm_goal_1.nodes, tid ∉ n.outs)
+    (hpnw : ∀ n ∈ pm_goal_1.nodes, tid ∉ n.outs) :
+    denoteGraphDistributedFaithful sm_goal_1 initSM tid =
+      denoteGraphDistributedFaithful pm_goal_1 initPM tid := by
+  have hi := cL20V_init_singleton_eq initSM initPM hInit g hg tid htp hgd hrep hts
+  rw [cL20V_weight_value sm_goal_1 initSM tid (by native_decide) hsnw,
+    cL20V_weight_value pm_goal_1 initPM tid (by native_decide) hpnw, hi]
+
+private theorem cL20V_proj_weight_shape (initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv) :
+    (denoteGraphDistributedFaithful pm_goal_1 initPM 5600).shape = [4, 64, 1024] := by
+  rw [cL20V_weight_value pm_goal_1 initPM 5600 (by native_decide) (by native_decide)]
+  exact hPM 5600 [4, 64, 1024] (by native_decide)
+
+/-- Full canonical L20 V SM/PM graph relation. -/
+theorem canonical_l20_v_relation
+    (initSM initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
+    (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
+    (hCache : Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5595)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9722)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9723)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 1024] [2048, 1024]) :
+    Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 6149)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11318)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11319)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 4, 64] [2048, 4, 64] := by
+  have hRmsW := cL20V_weight_eq initSM initPM hInit 5596 initGoal_5596
+    (by native_decide) rfl rfl rfl rfl (by native_decide) (by native_decide)
+  have hVW := cL20V_weight_eq initSM initPM hInit 5600 initGoal_5600
+    (by native_decide) rfl rfl rfl rfl (by native_decide) (by native_decide)
+  have hVShape := cL20V_proj_weight_shape initPM hPM
+  have hSemantic := canonical_l20_v_semantic hCache hRmsW hVW hVShape
+  have hPMr := canonical_l20_v_pm_reduce initPM
+  have hSMr := canonical_l20_v_sm_reduce initSM
+  rw [hSMr, hPMr.1, hPMr.2]
+  exact hSemantic
+
 #print axioms canonical_l20_k_sm_reduce
 #print axioms canonical_l20_k_pm0_reduce
 #print axioms canonical_l20_k_pm1_reduce
 #print axioms canonical_l20_v_sm_reduce
+#print axioms canonical_l20_v_pm_reduce
+#print axioms canonical_l20_v_relation
 
 end
 end TrainVerify.Denote.GeneratedPatterns
+
