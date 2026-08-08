@@ -12,10 +12,10 @@ This module refines Denote's intentionally local `fw_maybe_shuffle` /
 `fw_maybe_unshuffle` identity abstraction with semantics that can observe every rank's
 input shard.  It is a standalone collective model and is not wired into `evalOp`.
 
-The pinned authority is NNScaler 0.9, commit `1102e629`, in particular
-[`_compute_a2a_metadata`](https://github.com/microsoft/nnscaler/blob/1102e629/nnscaler/customized_ops/ring_attention/varlen_utils.py#L79-L165),
-[`shuffle_varlen`](https://github.com/microsoft/nnscaler/blob/1102e629/nnscaler/customized_ops/ring_attention/varlen_utils.py#L172-L189), and
-[`unshuffle_varlen`](https://github.com/microsoft/nnscaler/blob/1102e629/nnscaler/customized_ops/ring_attention/varlen_utils.py#L192-L209).
+The pinned authority is nnScaler commit `d3d468ed23edb2f28aa8566b2dfb6ed49c5955cf`, in particular
+[`_compute_a2a_metadata`](https://github.com/microsoft/nnscaler/blob/d3d468ed23edb2f28aa8566b2dfb6ed49c5955cf/nnscaler/customized_ops/ring_attention/varlen_utils.py#L79-L165),
+[`shuffle_varlen`](https://github.com/microsoft/nnscaler/blob/d3d468ed23edb2f28aa8566b2dfb6ed49c5955cf/nnscaler/customized_ops/ring_attention/varlen_utils.py#L172-L189), and
+[`unshuffle_varlen`](https://github.com/microsoft/nnscaler/blob/d3d468ed23edb2f28aa8566b2dfb6ed49c5955cf/nnscaler/customized_ops/ring_attention/varlen_utils.py#L192-L209).
 The index arithmetic is shared with the retained, documented helpers in
 `denote.Denote`: `zigzagPos`, `destRank`, `zigzagInvOffset`, and `gatherFromRank`.
 -/
