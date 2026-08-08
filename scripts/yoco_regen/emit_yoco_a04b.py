@@ -43,15 +43,20 @@ AUTHORITY_NAMES = (
 STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/BridgeKit.lean",
     "trainverify/denote/yoco_goals/CanonicalGoal4L0Routing.lean",
+    "trainverify/denote/yoco_goals/CanonicalL23Join.lean",
     "trainverify/denote/yoco_goals/CanonicalL23Output.lean",
+    "trainverify/denote/yoco_goals/CanonicalL23Residual.lean",
     "trainverify/denote/yoco_goals/CanonicalLossBackboneTail.lean",
     "trainverify/denote/yoco_goals/CanonicalLossBackboneTailGoal2.lean",
     *(f"trainverify/denote/yoco_goals/CanonicalGoal4L{layer}Routing.lean" for layer in range(12, 24)),
     "trainverify/denote/yoco_goals/FaithfulStackGather.lean",
     "trainverify/denote/yoco_goals/Goal_1_FaithfulHead.lean",
     "trainverify/denote/yoco_goals/Goal_2_FaithfulHead.lean",
+    "trainverify/denote/yoco_goals/ZigzagBroadcastMul.lean",
+    "trainverify/denote/yoco_goals/ZigzagElemwiseRel.lean",
     "trainverify/denote/yoco_goals/ZigzagLayoutRel.lean",
     "trainverify/denote/yoco_goals/ZigzagPointwiseRel.lean",
+    "trainverify/denote/yoco_goals/ZigzagRouterRel.lean",
     "trainverify/denote/yoco_goals/ZigzagGoalStatement.lean",
 )
 GENERATED_GOAL_MODULES = (
@@ -68,6 +73,7 @@ REGISTERED_TOP_LEVEL_MODULES = {
     "InnerChunkCEShard.lean",
     "InnerChunkCELossShard.lean",
     "PackedCuSeqlensWitness.lean",
+    "TopkGateScoreGather.lean",
 }
 EXPECTED_GOAL_MODULES = {
     Path(relative_path).name for relative_path in STATIC_GOAL_MODULES
