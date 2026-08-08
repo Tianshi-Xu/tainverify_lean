@@ -1,6 +1,7 @@
 /- Canonical Goal 4, layer 0: computed router gate-score relation. -/
 import denote.yoco_goals.Goal_4
 import denote.yoco_goals.FaithfulStackGather
+import denote.TopkGateScoreGather
 
 set_option maxRecDepth 1000000
 set_option maxHeartbeats 4000000
@@ -182,6 +183,63 @@ theorem g4l0_red_pm7847 (initPM : Store)
     (((pre 7841).shape.reverse.head?).getD 1)).2.2 = _
   rw [hread, hshape]
   rfl
+
+/-- The canonical layer-0 gate scores preserve the ordinary two-rank token
+layout.  The source relation is an internal layer-to-layer premise; the graph
+reductions compute all three target tensors. -/
+theorem canonical_goal4_l0_gate_scores
+    (initSM initPM : Store)
+    (hrel : Ordinary2Rel
+      (denoteGraphDistributedFaithful sm_goal_4 initSM 4962)
+      (denoteGraphDistributedFaithful pm_goal_4 initPM 7840)
+      (denoteGraphDistributedFaithful pm_goal_4 initPM 7841)
+      [4096, 64] [2048, 64]) :
+    Ordinary2Rel
+      (denoteGraphDistributedFaithful sm_goal_4 initSM 4965)
+      (denoteGraphDistributedFaithful pm_goal_4 initPM 7846)
+      (denoteGraphDistributedFaithful pm_goal_4 initPM 7847)
+      [4096, 64] [2048, 64] := by
+  have hsm := g4l0_red_sm4965 initSM hrel.full_shape
+  have hpm0 := g4l0_red_pm7846 initPM hrel.rank0_shape
+  have hpm1 := g4l0_red_pm7847 initPM hrel.rank1_shape
+  have hcommute := fw_topk_routing_gate_scores_allGather0_commute_2
+    2048 64 8 (by decide) (by decide)
+    (denoteGraphDistributedFaithful pm_goal_4 initPM 7840)
+    (denoteGraphDistributedFaithful pm_goal_4 initPM 7841)
+    hrel.rank0_shape hrel.rank1_shape
+  refine {
+    full_value := ?_
+    full_shape := ?_
+    rank0_shape := ?_
+    rank1_shape := ?_
+  }
+  · calc
+      denoteGraphDistributedFaithful sm_goal_4 initSM 4965 =
+          (fw_topk_routing
+            (denoteGraphDistributedFaithful sm_goal_4 initSM 4962) 8 64).2.2 := hsm
+      _ = (fw_topk_routing
+            (allGatherPrimDimN 0 2 0
+              [denoteGraphDistributedFaithful pm_goal_4 initPM 7840,
+               denoteGraphDistributedFaithful pm_goal_4 initPM 7841]) 8 64).2.2 :=
+        congrArg (fun x => (fw_topk_routing x 8 64).2.2) hrel.full_value
+      _ = allGatherPrimDimN 0 2 0
+            [(fw_topk_routing
+              (denoteGraphDistributedFaithful pm_goal_4 initPM 7840) 8 64).2.2,
+             (fw_topk_routing
+              (denoteGraphDistributedFaithful pm_goal_4 initPM 7841) 8 64).2.2] := hcommute
+      _ = allGatherPrimDimN 0 2 0
+            [denoteGraphDistributedFaithful pm_goal_4 initPM 7846,
+             denoteGraphDistributedFaithful pm_goal_4 initPM 7847] :=
+        congrArg (allGatherPrimDimN 0 2 0) (by rw [hpm0, hpm1])
+  · exact (congrArg Tensor.shape hsm).trans
+      (RowLocalShape_topk_thd 64 8 4096
+        (denoteGraphDistributedFaithful sm_goal_4 initSM 4962) hrel.full_shape)
+  · exact (congrArg Tensor.shape hpm0).trans
+      (RowLocalShape_topk_thd 64 8 2048
+        (denoteGraphDistributedFaithful pm_goal_4 initPM 7840) hrel.rank0_shape)
+  · exact (congrArg Tensor.shape hpm1).trans
+      (RowLocalShape_topk_thd 64 8 2048
+        (denoteGraphDistributedFaithful pm_goal_4 initPM 7841) hrel.rank1_shape)
 
 end
 end TrainVerify.Denote.GeneratedPatterns
