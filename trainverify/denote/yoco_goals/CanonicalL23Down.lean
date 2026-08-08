@@ -655,8 +655,8 @@ private theorem cL23d_weight_eq (initSM initPM : Store)
   exact hi
 
 private theorem cL23d_weight_shape (initPM : Store)
-    (hPM : StoreShapesHold initPM pmInitEnv) (W : Tid) (shape : Shape)
-    (henv : pmInitEnv W = some shape)
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv) (W : Tid) (shape : Shape)
+    (henv : pm_goal_1InitEnv W = some shape)
     (hpm : ∀ n ∈ pm_goal_1.nodes, W ∉ n.outs) :
     (denoteGraphDistributedFaithful pm_goal_1 initPM W).shape = shape := by
   rw [cL23d_leaf pm_goal_1 initPM W (by native_decide) hpm]
@@ -667,7 +667,7 @@ CP2 zigzag layout.  The only lineage premise is the shared normalized layer
 input; both up projections, SwiGLU, and the down projection are derived from
 faithful graph execution and externally initialized replicated weights. -/
 theorem canonical_l23_down_from_norm_input (initSM initPM : Store)
-    (hPM : StoreShapesHold initPM pmInitEnv)
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
     (hInit : InitGoalsHold pm_goal_1.numRanks initGoals initSM initPM)
     (hNorm : Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 6216)

@@ -59,7 +59,6 @@ including the projection-weight denotation facts, are derived inside the module.
 theorem canonical_l23_composition_to_gather (initSM initPM : Store)
     (hSM : StoreShapesHold initSM sm_goal_1InitEnv)
     (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
-    (hPMCanonical : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
     (hPacked : PackedCuSeqlensWF (initPM 6252) 4096 2)
     (hResidual : Zigzag2Rel
@@ -88,9 +87,9 @@ theorem canonical_l23_composition_to_gather (initSM initPM : Store)
   have hActivation := canonical_l23_activation_from_l22_inputs initSM initPM hInit
     hResidual hAttention hwEq hwShape
   have hRouter := canonical_l23_router_from_norm_input initSM initPM
-    hPMCanonical hInit hNorm
-  have hGate := canonical_l23_gate_from_norm_input initSM initPM hPMCanonical hInit hNorm
-  have hDown := canonical_l23_down_from_norm_input initSM initPM hPMCanonical hInit hNorm
+    hPM hInit hNorm
+  have hGate := canonical_l23_gate_from_norm_input initSM initPM hPM hInit hNorm
+  have hDown := canonical_l23_down_from_norm_input initSM initPM hPM hInit hNorm
   have hExpert := canonical_l23_expert_from_branch_inputs initSM initPM
     hSM hPM hInit hActivation hRouter.1 hRouter.2
   have hJoin := canonical_l23_join_from_branch_inputs initSM initPM hExpert hGate hDown
@@ -103,7 +102,6 @@ the head's genuine external well-formed-input condition. -/
 theorem canonical_goal_1_from_l22_boundaries (initSM initPM : Store)
     (hSM : StoreShapesHold initSM sm_goal_1InitEnv)
     (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
-    (hPMCanonical : StoreShapesHold initPM pmInitEnv)
     (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
     (hPacked : PackedCuSeqlensWF (initPM 6252) 4096 2)
     (hResidual : Zigzag2Rel
@@ -123,7 +121,7 @@ theorem canonical_goal_1_from_l22_boundaries (initSM initPM : Store)
       (denoteGraphDistributedFaithful sm_goal_1 initSM)
       (denoteGraphDistributedFaithful pm_goal_1 initPM) := by
   have hGather := canonical_l23_composition_to_gather initSM initPM hSM hPM
-    hPMCanonical hInit hPacked hResidual hAttention
+    hInit hPacked hResidual hAttention
   exact canonical_goal_1_from_norm initSM initPM hPM hInit hGather hlabels
 
 end

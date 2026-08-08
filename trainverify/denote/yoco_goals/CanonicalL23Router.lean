@@ -335,7 +335,7 @@ private theorem cL23r_weight_eq (initSM initPM : Store)
   exact hi
 
 private theorem cL23r_weight_shape (initPM : Store)
-    (hPM : StoreShapesHold initPM pmInitEnv) :
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv) :
     (denoteGraphDistributedFaithful pm_goal_1 initPM 6218).shape = [64, 1024] := by
   unfold denoteGraphDistributedFaithful
   rw [foldl_applyNodeDistributedFaithful_at_not_written pm_goal_1 pm_goal_1.nodes initPM
@@ -343,7 +343,7 @@ private theorem cL23r_weight_shape (initPM : Store)
   exact hPM 6218 [64, 1024] (by native_decide)
 
 private theorem cL23r_hdec (initPM : Store)
-    (hPM : StoreShapesHold initPM pmInitEnv)
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
     (hNorm : Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 6216)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11512)
@@ -376,7 +376,7 @@ private theorem cL23r_hdec (initPM : Store)
 /-- The canonical L23 routing probabilities and routing map are computed from the
 shared normalized input by the real norm-linear, chunk, and top-k graph nodes. -/
 theorem canonical_l23_router_from_norm_input (initSM initPM : Store)
-    (hPM : StoreShapesHold initPM pmInitEnv)
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
     (hInit : InitGoalsHold pm_goal_1.numRanks initGoals initSM initPM)
     (hNorm : Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 6216)

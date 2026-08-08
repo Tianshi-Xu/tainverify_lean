@@ -301,7 +301,7 @@ private theorem cL23gd_weight_eq (initSM initPM : Store)
   exact hi
 
 private theorem cL23gd_weight_shape (initPM : Store)
-    (hPM : StoreShapesHold initPM pmInitEnv) :
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv) :
     (denoteGraphDistributedFaithful pm_goal_1 initPM 6227).shape = [1, 1024] := by
   have e : denoteGraphDistributedFaithful pm_goal_1 initPM 6227 = initPM 6227 := by
     unfold denoteGraphDistributedFaithful
@@ -314,7 +314,7 @@ private theorem cL23gd_weight_shape (initPM : Store)
 Every intermediate relation (multiref, reshape, projection, view, sigmoid) is
 closed inside this theorem; callers provide no relation over a computed gate. -/
 theorem canonical_l23_gate_from_norm_input (initSM initPM : Store)
-    (hPM : StoreShapesHold initPM pmInitEnv)
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
     (hInit : InitGoalsHold pm_goal_1.numRanks initGoals initSM initPM)
     (hNorm : Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 6216)
