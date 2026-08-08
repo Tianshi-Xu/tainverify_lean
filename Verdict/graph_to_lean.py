@@ -436,6 +436,18 @@ def _goal_requires_distributed_faithful(
 	return False
 
 
+def _goal_slice_is_full_topology(
+	prereq_lineages: Sequence[Any], requires_distributed_faithful: bool,
+) -> bool:
+	"""Whether the emitted slice is closed to external inputs.
+
+	Evaluator choice is deliberately separate: ordinary semantics can still
+	describe a full ancestry, while a faithful collective forces ancestry closure
+	even when an incremental cut had computed prerequisites.
+	"""
+	return requires_distributed_faithful or not prereq_lineages
+
+
 def _node_rank(node: Any) -> int:
 	return int(getattr(node, "rank", 0) or 0)
 
@@ -2836,10 +2848,12 @@ def emit_lean_spec(
 			statement_name = f"goal_{gid}_stmt_{statement_suffix}"
 
 			# Full faithful statements expose only independently checkable authority
-			# input properties.  Never emit equality/layout assumptions for computed
-			# boundaries: complete topology above is what proves those relations.
+			# input properties.  Ordinary full statements (for example an embedding
+			# plus AllToAll whose ordinary semantics is already faithful) need no
+			# additional contract.  Never emit equality/layout assumptions for
+			# computed boundaries: complete topology above proves those relations.
 			contract_name: Optional[str] = None
-			if sl.full_topology:
+			if sl.full_topology and requires_distributed_faithful:
 				contract_name = f"Goal{gid}ExternalInputContract"
 				contract_clauses = [
 					"InputValueClassesHold smInputValueClasses initSM",
@@ -2919,12 +2933,14 @@ def emit_lean_spec(
 				if int(ts) not in goal_tid_set
 			]
 			if sl.full_topology:
+				closure_kind = "faithful_full" if requires_distributed_faithful else "full"
+				semantics = "full faithful" if requires_distributed_faithful else "full"
 				ctf_path.write_text(
 					f"import {goals_module_prefix}.Goal_{gid}\n\n"
 					"namespace TrainVerify.Denote.GeneratedGoals\n\n"
-					"/-- Generated closure certificate: the compatibility cut name is "
-					"definitionally the ancestry-closed full faithful statement. -/\n"
-					f"theorem goal_{gid}_faithful_full_closure : "
+					"/-- Generated naming certificate: the compatibility cut name is "
+					f"definitionally the ancestry-closed {semantics} statement. -/\n"
+					f"theorem goal_{gid}_{closure_kind}_closure : "
 					f"goal_{gid}_stmt_cut = goal_{gid}_stmt_full := rfl\n\n"
 					"end TrainVerify.Denote.GeneratedGoals\n",
 					encoding="utf-8",
@@ -3968,9 +3984,17 @@ def main() -> None:
 					GpE, close_nodes_to_external_inputs(GpE, pm_roots_goal),
 				),
 			)
-			full_topology = (
+			requires_distributed_faithful = (
 				_goal_requires_distributed_faithful(full_sm_nodes, GsE)
 				or _goal_requires_distributed_faithful(full_pm_nodes, GpE)
+			)
+			# "Full ancestry" and "requires the faithful evaluator" are independent.
+			# A goal with no computed prerequisite boundary is already closed to
+			# external inputs even when the ordinary evaluator is sufficient (YOCO
+			# Goal 5 is the canonical embedding+AllToAll example).  Conversely, any
+			# faithful collective forces us to discard a cut and close the ancestry.
+			full_topology = _goal_slice_is_full_topology(
+				prereq_lineages, requires_distributed_faithful,
 			)
 			if full_topology:
 				sm_nodes_goal = full_sm_nodes

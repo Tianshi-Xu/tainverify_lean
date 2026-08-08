@@ -14,7 +14,7 @@ namespace TrainVerify.Denote.GeneratedPatterns
 
 def pattern_5_goalIds : List Nat := [5]
 inductive pattern_5_target : Prop → Prop
-  | goal_5 : pattern_5_target goal_5_stmt_cut
+  | goal_5 : pattern_5_target goal_5_stmt_full
 
 def pattern_5_stmt : Prop :=
   ∀ {target : Prop}, pattern_5_target target → target
@@ -104,8 +104,8 @@ theorem denote_pm_goal_5_outputs (initPM : Store) :
       exact applyNode_allToAllPrimWithDims_out g S3 1 [7748, 7749] 7745 1 0]
     rw [hS3_7748, hS3_7749]
 
-/-- Final authority Goal 5, with no model-specific algebraic axiom. -/
-theorem prove_goal_5 : goal_5_stmt_cut := by
+/-- Final full-ancestry authority Goal 5, with no model-specific algebraic axiom. -/
+theorem prove_goal_5 : goal_5_stmt_full := by
   intro initSM initPM hSM hPM hInit
   simp only [goal_5]
   have h4930sm : (initSM 4930).shape = [4096] :=
@@ -150,7 +150,7 @@ theorem prove_goal_5 : goal_5_stmt_cut := by
   · simp only [List.map, reconstructForGoal, Bool.false_eq_true, if_false]
     rw [denote_sm_goal_5_4933, houts.1, houts.2]
     have hInit' : InitGoalsHold pm_goal_5.numRanks initGoals initSM initPM := by
-      unfold goal_5_cut_initGoals at hInit
+      unfold goal_5_full_initGoals at hInit
       exact hInit
     have hg4930 := hInit' initGoal_4930 (by native_decide)
     unfold InitGoalHolds at hg4930

@@ -40,10 +40,14 @@ def pm_goal_5InitShapes : List (Tid × Shape) := [
 
 def pm_goal_5InitEnv : ShapeEnv := shapeEnvOfList pm_goal_5InitShapes
 
-def goal_5_cut_initGoals : List LineageGoal := initGoals
+def goal_5_full_initGoals : List LineageGoal := initGoals
 
-def goal_5_stmt_cut : Prop :=
-  CoarseLineageHoldsWithInit sm_goal_5 pm_goal_5 goal_5 sm_goal_5InitEnv pm_goal_5InitEnv goal_5_cut_initGoals
+def goal_5_stmt_full : Prop :=
+  CoarseLineageHoldsWithInit sm_goal_5 pm_goal_5 goal_5 sm_goal_5InitEnv pm_goal_5InitEnv goal_5_full_initGoals
+
+-- Compatibility name only: this graph is already the complete backward
+-- ancestry from the embedding/AllToAll output to external inputs.
+abbrev goal_5_stmt_cut : Prop := goal_5_stmt_full
 
 end TrainVerify.Denote.GeneratedGoals
 

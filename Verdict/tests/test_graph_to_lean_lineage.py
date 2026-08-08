@@ -6,6 +6,7 @@ from Verdict.graph_to_lean import (
     SelectedLineage,
     _computed_boundary_tids,
     _goal_requires_distributed_faithful,
+    _goal_slice_is_full_topology,
     _goals_module_prefix,
     _uncovered_computed_boundary_tids,
     canonicalize_init_lineage_multiref,
@@ -72,6 +73,16 @@ def test_goal_faithful_evaluator_selection_is_collective_driven():
         Node("OpName.AllToAllPrim", (), ()),
         Node("OpName.AllGatherPrim", (), ()),
     ])
+
+
+def test_full_ancestry_is_independent_of_faithful_evaluator_selection():
+    # Goal 5: an external-input-closed embedding+AllToAll slice is full even
+    # though ordinary semantics already models its collectives faithfully.
+    assert _goal_slice_is_full_topology([], False)
+    # An actual computed cut remains a cut under ordinary semantics.
+    assert not _goal_slice_is_full_topology([object()], False)
+    # Faithful collectives force closure past any proposed computed boundary.
+    assert _goal_slice_is_full_topology([object()], True)
 
 
 def test_computed_cut_boundary_is_not_an_external_input():
