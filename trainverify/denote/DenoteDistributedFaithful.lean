@@ -44,21 +44,43 @@ noncomputable def applyNodeFaithfulUnshuffleValue
   fw_maybe_unshuffle_collective dataShards cu
     (n.params.getD 0 1) (n.params.getD 1 0)
 
-/-- Cross-rank value of a generated forward zigzag-attention node.  Q/K/V are
-collected from ordered replica buddies.  Q is unshuffled before gathering, while
-the wrapper's contiguous K/V source shards are gathered directly in rank order. -/
+/-- Whether all attention buddies name the same K/V tids as this node. -/
+def zigzagAttnUsesReplicatedKV (g : GraphDecl) (n : NodeDecl) : Bool :=
+  let buddies := g.replicaBuddies n
+  let kTid := n.ins.getD 1 0
+  let vTid := n.ins.getD 2 0
+  buddies.all (fun m => decide (m.ins.getD 1 0 = kTid)) &&
+    buddies.all (fun m => decide (m.ins.getD 2 0 = vTid))
+
+/-- Cross-rank value of a generated forward zigzag-attention node.  Generated
+nodes use two wrapper contracts which are not encoded in `params`: shared buddy
+K/V tids mean already-replicated K/V, while distinct buddy tids mean CP-sharded
+K/V gathered in process-group rank order.  Dispatch on that graph fact rather
+than on a Goal identifier. -/
 noncomputable def applyNodeFaithfulZigzagAttnValue
     (g : GraphDecl) (s : Store) (n : NodeDecl) : Tensor :=
   let buddies := g.replicaBuddies n
   let qShards := buddies.map (fun m => s (m.ins.getD 0 0))
-  let kShards := buddies.map (fun m => s (m.ins.getD 1 0))
-  let vShards := buddies.map (fun m => s (m.ins.getD 2 0))
-  fw_attn_zigzag_collective_sharded_kv qShards kShards vShards
-    (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
-    (n.params.getD 0 0) (n.params.getD 1 0)
-    (n.params.getD 2 0) (n.params.getD 3 0)
-    (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0)
-    g.numRanks n.rank
+  let kTids := buddies.map (fun m => m.ins.getD 1 0)
+  let vTids := buddies.map (fun m => m.ins.getD 2 0)
+  let kTid := n.ins.getD 1 0
+  let vTid := n.ins.getD 2 0
+  if zigzagAttnUsesReplicatedKV g n then
+    fw_attn_zigzag_collective qShards (s kTid) (s vTid)
+      (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
+      (n.params.getD 0 0) (n.params.getD 1 0)
+      (n.params.getD 2 0) (n.params.getD 3 0)
+      (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0)
+      g.numRanks n.rank
+  else
+    let kShards := kTids.map s
+    let vShards := vTids.map s
+    fw_attn_zigzag_collective_sharded_kv qShards kShards vShards
+      (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
+      (n.params.getD 0 0) (n.params.getD 1 0)
+      (n.params.getD 2 0) (n.params.getD 3 0)
+      (decide (n.params.getD 4 0 ≠ 0)) (n.params.getD 5 0)
+      g.numRanks n.rank
 
 /-- Store one collective value at every output declared by the node. -/
 noncomputable def storeCollectiveOutputs
