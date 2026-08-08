@@ -42,6 +42,7 @@ AUTHORITY_NAMES = (
 ) + METADATA_JSON_NAMES + ("nnscaler_dp_solver.so", "comp_profile.json")
 STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/BridgeKit.lean",
+    "trainverify/denote/yoco_goals/CanonicalLossBackboneTail.lean",
     *(f"trainverify/denote/yoco_goals/CanonicalGoal4L{layer}Routing.lean" for layer in range(12, 24)),
     "trainverify/denote/yoco_goals/FaithfulStackGather.lean",
     "trainverify/denote/yoco_goals/Goal_1_FaithfulHead.lean",
