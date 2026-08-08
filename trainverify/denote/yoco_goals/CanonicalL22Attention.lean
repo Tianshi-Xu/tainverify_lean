@@ -1,6 +1,8 @@
 /- Canonical Goal 1, layer 22: faithful reductions of the real attention nodes. -/
 import denote.yoco_goals.Goal_1
+import denote.yoco_goals.ZigzagLayoutRel
 import denote.ZigzagCollective
+import denote.DenoteMoE
 
 set_option linter.style.longLine false
 set_option linter.style.nativeDecide false
@@ -80,6 +82,20 @@ private theorem cL22A_reduce6
     denoteGraphDistributedFaithful_prefix_read g init k in4 hpreNil hpre4,
     denoteGraphDistributedFaithful_prefix_read g init k in5 hpreNil hpre5]
 
+private def cL22ASmQ : NodeDecl :=
+  { rank := 0, op := "OpName.FW_per_head_mix_precision_linear",
+    ins := [6199, 6200], outs := [6201] }
+private def cL22APmGatherQ : NodeDecl :=
+  { rank := 0, op := "OpName.AllGatherPrim", ins := [11452, 11453],
+    outs := [6199], params := [0] }
+private def cL22APmQ1 : NodeDecl :=
+  { rank := 1, op := "OpName.FW_per_head_mix_precision_linear",
+    ins := [6199, 6200], outs := [6201] }
+private def cL22APmQChunk0 : NodeDecl :=
+  { rank := 0, op := "OpName.ChunkPrim", ins := [6201], outs := [11454], params := [0] }
+private def cL22APmQChunk1 : NodeDecl :=
+  { rank := 1, op := "OpName.ChunkPrim", ins := [6201], outs := [11455], params := [0] }
+
 private def cL22ASmAttn : NodeDecl :=
   { rank := 0, op := "OpName.FW_attn_zigzag",
     ins := [6201, 6202, 6203, 6204, 6205], outs := [6206, 6207],
@@ -92,6 +108,13 @@ private def cL22APmAttn1 : NodeDecl :=
   { rank := 1, op := "OpName.FW_attn_zigzag",
     ins := [11455, 11467, 11473, 6204, 6205], outs := [11479, 6207],
     params := [16, 4, 64, 64, 1, 0] }
+
+private theorem cL22A_q_nodes :
+    sm_goal_1.nodes[889]'(by native_decide) = cL22ASmQ ∧
+    pm_goal_1.nodes[1944]'(by native_decide) = cL22APmGatherQ ∧
+    pm_goal_1.nodes[1946]'(by native_decide) = cL22APmQ1 ∧
+    pm_goal_1.nodes[1947]'(by native_decide) = cL22APmQChunk0 ∧
+    pm_goal_1.nodes[1948]'(by native_decide) = cL22APmQChunk1 := by native_decide
 
 private theorem cL22A_sm_node :
     sm_goal_1.nodes[890]'(by native_decide) = cL22ASmAttn := by native_decide
@@ -129,6 +152,85 @@ private theorem cL22A_pm_not_written (k tid : Nat)
     ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
     ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
     ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;> native_decide +revert
+
+/-- Exact canonical SM Q projection reduction. -/
+theorem canonical_l22_q_sm_reduce (initSM : Store) :
+    denoteGraphDistributedFaithful sm_goal_1 initSM 6201 =
+      fw_per_head_linear
+        (denoteGraphDistributedFaithful sm_goal_1 initSM 6199)
+        (denoteGraphDistributedFaithful sm_goal_1 initSM 6200) := by
+  refine denoteGraphDistributedFaithful_reduce2 sm_goal_1 initSM 889 cL22ASmQ
+    6199 6200 6201 fw_per_head_linear
+    (by native_decide) cL22A_q_nodes.1 ?_
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide)
+  intro s
+  unfold cL22ASmQ
+  rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+    (by decide) (by decide)]
+  exact applyNode_fw_per_head_mix_precision_linear_out sm_goal_1 s 0 6199 6200 6201 []
+
+/-- The canonical PM gathered Q input is the faithful dim-0 gather of both RMS shards. -/
+theorem canonical_l22_q_pm_gather_reduce (initPM : Store) :
+    denoteGraphDistributedFaithful pm_goal_1 initPM 6199 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraphDistributedFaithful pm_goal_1 initPM 11452,
+         denoteGraphDistributedFaithful pm_goal_1 initPM 11453] := by
+  refine denoteGraphDistributedFaithful_reduce2 pm_goal_1 initPM 1944 cL22APmGatherQ
+    11452 11453 6199 (fun x0 x1 => allGatherPrimDimN 0 2 0 [x0, x1])
+    (by native_decide) cL22A_q_nodes.2.1 ?_
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide)
+  intro s
+  unfold cL22APmGatherQ
+  rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+    (by decide) (by decide)]
+  exact applyNode_allGatherPrimDimN_out pm_goal_1 s 0 [11452, 11453] 6199 0
+
+/-- The shared canonical PM Q projection reduces after the true gather node. -/
+theorem canonical_l22_q_pm_full_reduce (initPM : Store) :
+    denoteGraphDistributedFaithful pm_goal_1 initPM 6201 =
+      fw_per_head_linear
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 6199)
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 6200) := by
+  refine denoteGraphDistributedFaithful_reduce2 pm_goal_1 initPM 1946 cL22APmQ1
+    6199 6200 6201 fw_per_head_linear
+    (by native_decide) cL22A_q_nodes.2.2.1 ?_
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide)
+  intro s
+  unfold cL22APmQ1
+  rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+    (by decide) (by decide)]
+  exact applyNode_fw_per_head_mix_precision_linear_out pm_goal_1 s 1 6199 6200 6201 []
+
+/-- The two canonical PM Q shards are real dim-0 chunks of the shared projection. -/
+theorem canonical_l22_q_pm_chunks_reduce (initPM : Store) :
+    denoteGraphDistributedFaithful pm_goal_1 initPM 11454 =
+        chunkPrimDimN 0 2 0 (denoteGraphDistributedFaithful pm_goal_1 initPM 6201) ∧
+      denoteGraphDistributedFaithful pm_goal_1 initPM 11455 =
+        chunkPrimDimN 0 2 1 (denoteGraphDistributedFaithful pm_goal_1 initPM 6201) := by
+  constructor
+  · refine denoteGraphDistributedFaithful_reduce1 pm_goal_1 initPM 1947 cL22APmQChunk0
+      6201 11454 (fun x => chunkPrimDimN 0 2 0 x)
+      (by native_decide) cL22A_q_nodes.2.2.2.1 ?_
+      (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide)
+    intro s
+    unfold cL22APmQChunk0
+    rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+      (by decide) (by decide)]
+    exact applyNode_chunkPrimDimN_out pm_goal_1 s 0 6201 11454 0
+  · refine denoteGraphDistributedFaithful_reduce1 pm_goal_1 initPM 1948 cL22APmQChunk1
+      6201 11455 (fun x => chunkPrimDimN 0 2 1 x)
+      (by native_decide) cL22A_q_nodes.2.2.2.2 ?_
+      (by native_decide) (by native_decide)
+      (by native_decide) (by native_decide)
+    intro s
+    unfold cL22APmQChunk1
+    rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+      (by decide) (by decide)]
+    exact applyNode_chunkPrimDimN_out pm_goal_1 s 1 6201 11455 0
 
 /-- The exact canonical SM L22 attention output reduces to faithful varlen attention. -/
 theorem canonical_l22_attention_sm_reduce (initSM : Store) :
