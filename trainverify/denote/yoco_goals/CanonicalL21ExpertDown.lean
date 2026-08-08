@@ -1,5 +1,5 @@
 /- Canonical Goal 1, layer 21: faithful remote-expert MoE output. -/
-import denote.yoco_goals.Goal_1
+import denote.yoco_goals.CanonicalL21Router
 import denote.yoco_goals.ZigzagMoEGmmRel
 
 set_option linter.style.longLine false
@@ -327,6 +327,33 @@ theorem canonical_l21_expert_from_branch_inputs (initSM initPM : Store)
     2048 1024 64 8 64 1024 512 (((10 : Nat) : Scalar))
     hX' hRP' hRM' (by decide) (by decide) (by decide) (by decide) (by decide)
     (by rw [← hbW13]; exact hw13shape) hdec
+
+/-- The canonical L21 remote-expert output from the exact L20 boundary.
+Activation and both routing relations are computed internally, so no graph
+intermediate relation is part of the caller contract. -/
+theorem canonical_l21_expert_from_layer20_output (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM sm_goal_1InitEnv)
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
+    (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
+    (hLayer20 : Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 6160)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11354)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11355)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 1024] [2048, 1024]) :
+    Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 6171)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11378)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11379)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 1024] [2048, 1024] := by
+  have hX := canonical_l21_activation_from_layer20_output initSM initPM hInit hLayer20
+  have hRouter :=
+    canonical_l21_router_from_layer20_output initSM initPM hPM hInit hLayer20
+  exact canonical_l21_expert_from_branch_inputs initSM initPM hSM hPM hInit
+    hX hRouter.1 hRouter.2
+
+#print axioms canonical_l21_expert_from_layer20_output
 
 end
 end TrainVerify.Denote.GeneratedPatterns
