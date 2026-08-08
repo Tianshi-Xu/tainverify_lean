@@ -52,6 +52,7 @@ STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/CanonicalL20AttentionComposition.lean",
     "trainverify/denote/yoco_goals/CanonicalL20KVGraph.lean",
     "trainverify/denote/yoco_goals/CanonicalL20KVSemantic.lean",
+    "trainverify/denote/yoco_goals/CanonicalL20KAlignment.lean",
     "trainverify/denote/yoco_goals/CanonicalL21ExpertDown.lean",
     "trainverify/denote/yoco_goals/CanonicalL21Down.lean",
     "trainverify/denote/yoco_goals/CanonicalL21NormRouter.lean",
