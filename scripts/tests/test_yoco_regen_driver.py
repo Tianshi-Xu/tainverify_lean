@@ -53,6 +53,12 @@ from scripts.yoco_regen.safe_cleanup import create_owned_stage, cleanup_owned_st
 from scripts.yoco_regen.write_authority_metadata import validate_graph
 
 
+PROOF_TARGETS = [
+    f"TrainVerify.Denote.GeneratedPatterns.prove_pattern_{index}"
+    for index in range(1, 6)
+]
+
+
 def _clear_zip_import_caches(path: str) -> None:
     sys.path_importer_cache.pop(path, None)
     getattr(zipimport, "_zip_directory_cache").pop(path, None)
@@ -1243,7 +1249,7 @@ def test_emitter_lean_gate_uses_private_revision_and_propagates_failure(
             build_commands.append(command)
             if fail_build["value"]:
                 raise subprocess.CalledProcessError(1, command)
-            if replace_cleanup["value"]:
+            if replace_cleanup["value"] and command[1:3] == ["env", "lean"]:
                 validation_root = Path(kwargs["cwd"]).parents[1]
                 preserved = validation_root.with_name(validation_root.name + "-preserved")
                 validation_root.rename(preserved)
@@ -1251,27 +1257,209 @@ def test_emitter_lean_gate_uses_private_revision_and_propagates_failure(
                 (validation_root / "unrelated").write_text("keep", encoding="utf-8")
                 replace_cleanup["replacement"] = validation_root
                 replace_cleanup["preserved"] = preserved
-        return types.SimpleNamespace(returncode=0)
+            if command[1:3] == ["env", "lean"]:
+                output = "".join(
+                    f"'{target}' does not depend on any axioms\n"
+                    for target in PROOF_TARGETS
+                )
+                return types.SimpleNamespace(returncode=0, stdout=output, stderr="")
+        return types.SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(emitter.subprocess, "run", fake_run)
     monkeypatch.setattr(emitter, "git_head", lambda _repo: revision)
     monkeypatch.setattr(emitter, "git_clean", lambda _repo: True)
     monkeypatch.setattr(emitter.shutil, "which", lambda _name: "/trusted/lake")
-    emitter.validate_lean_snapshot(stage, cache_project, revision)
-    assert build_commands == [["/trusted/lake", "build", *emitter.LEAN_TARGETS]]
+    emitter.validate_lean_snapshot(stage, cache_project, revision, PROOF_TARGETS)
+    assert build_commands == [
+        ["/trusted/lake", "build", *emitter.LEAN_TARGETS],
+        ["/trusted/lake", "env", "lean", "AxiomAudit.lean"],
+    ]
     assert not list(stage.parent.glob(".trainverify-lean-validation-*"))
 
     fail_build["value"] = True
     with pytest.raises(subprocess.CalledProcessError):
-        emitter.validate_lean_snapshot(stage, cache_project, revision)
+        emitter.validate_lean_snapshot(stage, cache_project, revision, PROOF_TARGETS)
     assert not list(stage.parent.glob(".trainverify-lean-validation-*"))
 
     fail_build["value"] = False
     replace_cleanup["value"] = True
     with pytest.raises(RuntimeError, match="identity changed"):
-        emitter.validate_lean_snapshot(stage, cache_project, revision)
+        emitter.validate_lean_snapshot(stage, cache_project, revision, PROOF_TARGETS)
     assert (replace_cleanup["replacement"] / "unrelated").read_text() == "keep"
     assert replace_cleanup["preserved"].is_dir()
+
+
+def test_emitter_proof_registry_binds_exact_generated_statements_and_blobs(
+    tmp_path, monkeypatch,
+):
+    stage = tmp_path / "stage"
+    goals = stage / "yoco_goals"
+    goals.mkdir(parents=True)
+    generated = b"generated"
+    generated_path = stage / "GeneratedYOCOMoE.lean"
+    generated_path.write_bytes(generated)
+    generated_path.chmod(0o600)
+    goal_bytes = {}
+    for index in range(1, 6):
+        content = f"goal-{index}".encode()
+        goal_bytes[f"Goal_{index}.lean"] = content
+        goal_path = goals / f"Goal_{index}.lean"
+        goal_path.write_bytes(content)
+        goal_path.chmod(0o600)
+    proof = b"proof without placeholders"
+    registry = {
+        "schema_version": 1,
+        "generated_lean_sha256": emitter.digest_bytes(generated),
+        "goal_sha256": {
+            name: emitter.digest_bytes(content) for name, content in goal_bytes.items()
+        },
+        "modules": {
+            "Pattern_2.lean": {
+                "source": "trainverify/denote/yoco_goals/Pattern_2.lean",
+                "sha256": emitter.digest_bytes(proof),
+            }
+        },
+        "proof_targets": PROOF_TARGETS,
+    }
+    monkeypatch.setattr(
+        emitter, "git_blob", lambda _repo, _rev, path: proof
+        if path.endswith("Pattern_2.lean") else b"",
+    )
+    loaded = emitter.validate_proof_registry(registry, stage)
+    assert loaded == registry["modules"]
+
+    bad = json.loads(json.dumps(registry))
+    bad["goal_sha256"]["Goal_1.lean"] = "0" * 64
+    with pytest.raises(RuntimeError, match="goal digest mismatch"):
+        emitter.validate_proof_registry(bad, stage)
+    bad = json.loads(json.dumps(registry))
+    bad["unknown"] = 1
+    with pytest.raises(RuntimeError, match="schema mismatch"):
+        emitter.validate_proof_registry(bad, stage)
+    bad = json.loads(json.dumps(registry))
+    bad["modules"]["../escape.lean"] = bad["modules"].pop("Pattern_2.lean")
+    with pytest.raises(RuntimeError, match="destination"):
+        emitter.validate_proof_registry(bad, stage)
+    bad = json.loads(json.dumps(registry))
+    bad["proof_targets"][0] = "bad target"
+    with pytest.raises(RuntimeError, match="targets"):
+        emitter.validate_proof_registry(bad, stage)
+
+
+def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
+    tmp_path, monkeypatch,
+):
+    stage = tmp_path / "stage"
+    goals = stage / "yoco_goals"
+    goals.mkdir(parents=True)
+    generated = stage / "GeneratedYOCOMoE.lean"
+    generated.write_bytes(b"generated")
+    generated.chmod(0o600)
+    goal_digests = {}
+    for index in range(1, 6):
+        path = goals / f"Goal_{index}.lean"
+        path.write_bytes(f"goal-{index}".encode())
+        path.chmod(0o600)
+        goal_digests[path.name] = emitter.sha256(path)
+    patterns = {}
+    blobs = {}
+    modules = {}
+    for index in (1, 2):
+        destination = f"Pattern_{index}.lean"
+        path = goals / destination
+        path.write_bytes(f"old-{index}".encode())
+        path.chmod(0o600)
+        patterns[destination] = path
+        source = f"trainverify/denote/yoco_goals/{destination}"
+        blobs[source] = f"theorem proof_{index} : True := by trivial\n".encode()
+        modules[destination] = {
+            "source": source,
+            "sha256": emitter.digest_bytes(blobs[source]),
+        }
+    manifest_path = stage / "GeneratedYOCOMoE.manifest.json"
+    manifest = {
+        "snapshot_sha256": {
+            "GeneratedYOCOMoE.lean": emitter.sha256(generated),
+            **{
+                f"yoco_goals/{name}": emitter.sha256(path)
+                for name, path in patterns.items()
+            },
+        }
+    }
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    manifest_path.chmod(0o600)
+    registry = {
+        "schema_version": 1,
+        "generated_lean_sha256": emitter.sha256(generated),
+        "goal_sha256": goal_digests,
+        "modules": modules,
+        "proof_targets": PROOF_TARGETS,
+    }
+    monkeypatch.setattr(emitter, "git_blob", lambda _repo, _rev, path: blobs[path])
+    emitter.materialize_registered_proofs(tmp_path, "a" * 40, stage, registry)
+    for destination, entry in modules.items():
+        assert patterns[destination].read_bytes() == blobs[entry["source"]]
+    refreshed = json.loads(manifest_path.read_text())
+    for destination, path in patterns.items():
+        assert refreshed["snapshot_sha256"][f"yoco_goals/{destination}"] == emitter.sha256(path)
+
+    before = {name: path.read_bytes() for name, path in patterns.items()}
+    bad = json.loads(json.dumps(registry))
+    bad["modules"]["Pattern_2.lean"]["sha256"] = "0" * 64
+    with pytest.raises(RuntimeError, match="blob digest mismatch"):
+        emitter.materialize_registered_proofs(tmp_path, "a" * 40, stage, bad)
+    assert {name: path.read_bytes() for name, path in patterns.items()} == before
+
+    proof2_source = modules["Pattern_2.lean"]["source"]
+    for token in (b"sorry", b"sorryAx", b"axiom", b"unsafe"):
+        blobs[proof2_source] = b"theorem x : True := by exact " + token + b"\n"
+        bad = json.loads(json.dumps(registry))
+        bad["modules"]["Pattern_2.lean"]["sha256"] = emitter.digest_bytes(
+            blobs[proof2_source]
+        )
+        with pytest.raises(RuntimeError, match="forbidden proof token"):
+            emitter.materialize_registered_proofs(tmp_path, "a" * 40, stage, bad)
+        assert {name: path.read_bytes() for name, path in patterns.items()} == before
+
+
+def test_emitter_rejects_nonbaseline_print_axioms_output():
+    target = PROOF_TARGETS[0]
+    baseline = (
+        f"'{target}' depends on axioms: [propext,\n Classical.choice,\n Quot.sound,\n "
+        f"{target}._native.native_decide.ax_1_2]\n"
+    )
+    emitter.validate_print_axioms_output(baseline, [target])
+    emitter.validate_print_axioms_output(
+        f"'{target}' does not depend on any axioms\n", [target]
+    )
+    for bad in (
+        "sorryAx", "Bad.customAxiom", "Bad.native_decide.ax_evil",
+        "Bad.native_decide.ax_1",
+    ):
+        with pytest.raises(RuntimeError, match="untrusted axioms"):
+            emitter.validate_print_axioms_output(
+                f"'{target}' depends on axioms: [{bad}]\n", [target]
+            )
+    with pytest.raises(RuntimeError, match="missing #print axioms"):
+        emitter.validate_print_axioms_output("", [target])
+
+
+def test_emitter_proof_registry_loader_requires_canonical_git_blob(monkeypatch):
+    registry = {
+        "schema_version": 1,
+        "generated_lean_sha256": "a" * 64,
+        "goal_sha256": {},
+        "modules": {},
+        "proof_targets": PROOF_TARGETS,
+    }
+    canonical = (
+        json.dumps(registry, sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode()
+    monkeypatch.setattr(emitter, "git_blob", lambda *_args: canonical)
+    assert emitter.load_proof_registry(Path("/unused"), "b" * 40) == registry
+    monkeypatch.setattr(emitter, "git_blob", lambda *_args: json.dumps(registry).encode())
+    with pytest.raises(RuntimeError, match="canonical JSON"):
+        emitter.load_proof_registry(Path("/unused"), "b" * 40)
 
 
 def test_emitter_materializes_static_goal_modules_from_git_blob_no_replace(tmp_path):
@@ -1366,7 +1554,9 @@ def test_authority_script_pins_reviewed_llm_revision():
     assert 'str(stage / "yoco_goals")' in emitter
     assert '(stage / "yoco_goals").mkdir()' in emitter
     assert '"--lean-project", type=Path, required=True' in emitter
-    assert "validate_lean_snapshot(stage, args.lean_project, emitter_revision)" in emitter
+    assert "validate_lean_snapshot(" in emitter
+    assert 'proof_registry["proof_targets"]' in emitter
+    assert "validate_print_axioms_output" in emitter
     assert "verify_snapshot_stage(stage)" in emitter
     assert "TRAINVERIFY_PRIVATE_MATERIALIZATION" in emitter
     assert 'stage / "goals"' not in emitter

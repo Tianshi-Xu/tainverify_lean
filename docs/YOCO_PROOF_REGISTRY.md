@@ -12,12 +12,19 @@ match the freshly generated stage:
 - SHA-256 of every `Goal_N.lean` statement consumed by the proof;
 - SHA-256 of every static contract/helper/proof module copied from the Git tree;
 - exact expected module/path set;
-- proof target name and its allowed `#print axioms` baseline.
+- exactly five fully qualified proof target names.  The allowed `#print axioms`
+  baseline is hard-coded in the emitter, not registry-controlled, so a proof commit
+  cannot widen its own trust base.
 
 A missing entry, unknown field, duplicate path, digest mismatch, missing proof module,
-or any `sorry`/`axiom`/`unsafe` token fails closed before Lean validation and before
+or any `sorry`/`sorryAx`/`axiom`/`unsafe` token fails closed before Lean validation and before
 publication.  Registry proof paths are materialized from the declared TrainVerify Git
 blob, never from a mutable worktree pathname.
+
+After the complete target build, the emitter creates a private validation-only Lean
+module containing `#print axioms` for all five registered targets.  It rejects missing
+audit output and every dependency outside `propext`, `Classical.choice`, `Quot.sound`,
+and the generated `native_decide` baseline.  This audit module is not published.
 
 Goal statement selection is semantic:
 

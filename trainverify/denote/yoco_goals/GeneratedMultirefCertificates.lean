@@ -12,17 +12,17 @@ open TrainVerify.Denote.Generated
 
 noncomputable section
 
--- Generated from `sm.nodes[275]`; all side conditions remain visible.
+-- Generated from `sm.nodes[2]`; all side conditions remain visible.
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 16000000 in
 -- Native evaluation checks finite predicates over the complete generated graph.
-def multirefCert_sm_7747_7747 : FaithfulMultirefCertificate sm where
-  index := 275
+def multirefCert_sm_7744_7744 : FaithfulMultirefCertificate sm where
+  index := 2
   rank := 0
-  input := 5060
-  outputs := [7747, 7751]
+  input := 4934
+  outputs := [7744, 7748]
   arity := 2
-  output := 7747
+  output := 7744
   inBounds := by native_decide
   nodeAt := by native_decide
   arityMatches := by decide
@@ -35,17 +35,17 @@ def multirefCert_sm_7747_7747 : FaithfulMultirefCertificate sm where
   prefixReadOutputsNonempty := by native_decide
   inputNotWrittenFromNode := by native_decide
 
--- Generated from `pm.nodes[611]`; all side conditions remain visible.
+-- Generated from `pm.nodes[32]`; all side conditions remain visible.
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 16000000 in
 -- Native evaluation checks finite predicates over the complete generated graph.
-def multirefCert_pm_7747_15221 : FaithfulMultirefCertificate pm where
-  index := 611
+def multirefCert_pm_7744_15438 : FaithfulMultirefCertificate pm where
+  index := 32
   rank := 0
-  input := 8695
-  outputs := [15221, 15225]
+  input := 7754
+  outputs := [15438, 15442]
   arity := 2
-  output := 15221
+  output := 15438
   inBounds := by native_decide
   nodeAt := by native_decide
   arityMatches := by decide
@@ -58,17 +58,17 @@ def multirefCert_pm_7747_15221 : FaithfulMultirefCertificate pm where
   prefixReadOutputsNonempty := by native_decide
   inputNotWrittenFromNode := by native_decide
 
--- Generated from `pm.nodes[612]`; all side conditions remain visible.
+-- Generated from `pm.nodes[33]`; all side conditions remain visible.
 set_option maxRecDepth 1000000 in
 set_option maxHeartbeats 16000000 in
 -- Native evaluation checks finite predicates over the complete generated graph.
-def multirefCert_pm_7747_15229 : FaithfulMultirefCertificate pm where
-  index := 612
+def multirefCert_pm_7744_15446 : FaithfulMultirefCertificate pm where
+  index := 33
   rank := 1
-  input := 8696
-  outputs := [15229, 15233]
+  input := 7755
+  outputs := [15446, 15450]
   arity := 2
-  output := 15229
+  output := 15446
   inBounds := by native_decide
   nodeAt := by native_decide
   arityMatches := by decide

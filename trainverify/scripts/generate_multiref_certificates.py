@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 AUTHORITY = ROOT / "denote/GeneratedYOCOMoE.lean"
 DEFAULT_OUTPUT = ROOT / "denote/yoco_goals/GeneratedMultirefCertificates.lean"
-DEFAULT_GOALS = (7747,)
+DEFAULT_GOALS = (7744,)
 
 NODE_RE = re.compile(
     r'^\s*\{ rank := (?P<rank>\d+), op := "(?P<op>[^"]+)", '

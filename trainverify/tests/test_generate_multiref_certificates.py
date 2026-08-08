@@ -37,12 +37,15 @@ def test_current_authority_preserves_computed_node_writes() -> None:
         node
         for nodes in graphs.values()
         for node in nodes
-        if node.outs == tuple(range(11853, 11865))
+        if node.op == "OpName.FW_multiref"
+        and node.ins in ((9728,), (9729,), (9740,), (9741,))
     ]
-    assert len(multirefs) == 2
+    assert len(multirefs) == 4
     assert all(node.op == "OpName.FW_multiref" for node in multirefs)
+    assert sorted(node.rank for node in multirefs) == [0, 0, 1, 1]
+    assert all(len(node.outs) == 12 for node in multirefs)
     assert any(
-        node.op == "OpName.FW_attn_zigzag" and node.outs == (5347,)
+        node.op == "OpName.FW_attn_zigzag" and node.outs == (5612, 5613)
         for node in graphs["sm"]
     )
 
@@ -83,7 +86,7 @@ def test_computed_zigzag_write_counts_for_producer_uniqueness() -> None:
 def test_duplicate_requested_goal_is_rejected() -> None:
     api = module()
     with pytest.raises(ValueError, match="duplicate --goals"):
-        api["render"]((7747, 7747))
+        api["render"]((7744, 7744))
 
 
 def test_duplicate_authority_goal_with_whitespace_is_rejected() -> None:

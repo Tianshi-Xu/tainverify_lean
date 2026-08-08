@@ -51,30 +51,20 @@ def test_snapshot_extractor_covers_all_structural_sets():
 
 
 def test_checked_in_yoco_a04b_goal_policy_and_lineage():
-    """Pins the goal policy after the CP-zigzag ownership gate.
+    """Pins the reviewed authority after paired CP2 unshuffle was generated.
 
-    `goal_3` (4675) and `goal_4` (4676) stack 24 per-layer routing tensors, 12
-    of which are produced after the CP2 `FW_maybe_shuffle` and are therefore
-    zigzag-owned. A zigzag shard and a contiguous shard have identical shapes,
-    so the emitter used to state these as ordinary dim-1 gathers — which is
-    false, not merely hard. `ZigzagGoalRefutation.gatheredZigzag_ne_full`
-    machine-checks the disagreement (flat index 2: 6 versus 2).
-
-    They are now omitted from the ordinary goal set and re-emitted as
-    `ZigzagLineageGoal`s where a two-shard form exists. Counting them as
-    covered would overstate coverage, so they are absent here on purpose.
+    Goals 3/4 are ordinary only at their *post-unshuffle* final outputs.  The
+    raw zigzag shards remain non-ordinary and are covered by separate layout
+    relations/refutation regressions.
     """
     snapshot = extract_snapshot(
         (ROOT / "trainverify/denote/GeneratedYOCOMoE.lean").read_bytes()
     )
-    assert snapshot["init_lineages"]["4691"] == [[0, 4691]]
-    assert snapshot["final_goal_tids"] == [4673, 4674, 4680]
-    assert 4675 not in snapshot["final_goal_tids"], "goal_3 is zigzag-owned"
-    assert 4676 not in snapshot["final_goal_tids"], "goal_4 is zigzag-owned"
-    # 1151 before the gate; the 505 zigzag-owned intermediates are now stated
-    # as ZigzagLineageGoals instead of false ordinary gathers.
+    assert snapshot["init_lineages"]["4930"] == [[0, 4930]]
+    assert snapshot["init_lineages"]["4932"] == [[0, 7746], [1, 7747]]
+    assert snapshot["final_goal_tids"] == [4926, 4927, 4928, 4929, 4933]
     assert len(snapshot["intermediate_goal_tids"]) == 646
-    assert 4680 not in snapshot["intermediate_goal_tids"]
+    assert 4933 not in snapshot["intermediate_goal_tids"]
 
 
 def test_checker_detects_byte_mutation_even_when_structure_matches(tmp_path: Path):

@@ -8,11 +8,12 @@ import hmac
 import json
 import multiprocessing.pool
 import os
+import re
 import shutil
 import stat
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from scripts.yoco_regen.safe_cleanup import create_owned_stage, cleanup_owned_stage
 
@@ -54,6 +55,15 @@ GENERATED_GOAL_MODULES = (
 EXPECTED_GOAL_MODULES = {
     Path(relative_path).name for relative_path in STATIC_GOAL_MODULES
 } | set(GENERATED_GOAL_MODULES)
+PROOF_REGISTRY_KEYS = {
+    "schema_version", "generated_lean_sha256", "goal_sha256", "modules",
+    "proof_targets",
+}
+PROOF_REGISTRY_GOALS = {f"Goal_{index}.lean" for index in range(1, 6)}
+PROOF_MODULE_KEYS = {"source", "sha256"}
+FORBIDDEN_PROOF_TOKEN = re.compile(rb"\b(?:sorry(?:Ax)?|axiom|unsafe)\b")
+PROOF_REGISTRY_PATH = "scripts/yoco_regen/yoco_proof_registry.json"
+LEAN_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_'.]*(?:\.[A-Za-z_][A-Za-z0-9_']*)+$")
 LEAN_TARGETS = (
     "denote.GeneratedYOCOMoE",
     *(f"denote.yoco_goals.Goal_{index}" for index in range(1, 6)),
@@ -366,6 +376,7 @@ def verify_snapshot_stage(stage: Path) -> None:
 
 def validate_lean_snapshot(
     stage: Path, lean_cache_project: Path, emitter_revision: str,
+    proof_targets: list[str],
 ) -> None:
     packages = lean_cache_project.resolve() / ".lake" / "packages"
     packages_info = packages.stat()
@@ -401,16 +412,35 @@ def validate_lean_snapshot(
         lake = shutil.which("lake")
         if lake is None:
             raise RuntimeError("lake executable is unavailable")
+        clean_env = {
+            "HOME": os.environ["HOME"],
+            "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        }
         subprocess.run(
             [lake, "build", *LEAN_TARGETS],
             cwd=project,
             check=True,
-            env={
-                "HOME": os.environ["HOME"],
-                "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
-                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-            },
+            env=clean_env,
         )
+        audit_path = project / "AxiomAudit.lean"
+        audit_path.write_text(
+            "\n".join(
+                [*(f"import denote.yoco_goals.Pattern_{index}" for index in range(1, 6)),
+                 *(f"#print axioms {target}" for target in proof_targets), ""]
+            ),
+            encoding="utf-8",
+        )
+        audit_path.chmod(0o600)
+        audited = subprocess.run(
+            [lake, "env", "lean", audit_path.name],
+            cwd=project,
+            check=True,
+            env=clean_env,
+            text=True,
+            capture_output=True,
+        )
+        validate_print_axioms_output(audited.stdout + audited.stderr, proof_targets)
     except BaseException:
         try:
             cleanup_owned_stage(
@@ -486,6 +516,194 @@ def materialize_static_goal_modules(repo: Path, revision: str, target: Path) -> 
                 os.fsync(handle.fileno())
         finally:
             os.close(descriptor)
+
+
+def _read_owned_regular(path: Path, label: str) -> bytes:
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.getuid()
+            or stat.S_IMODE(info.st_mode) & 0o022
+        ):
+            raise RuntimeError(f"untrusted {label} inode")
+        chunks = []
+        while chunk := os.read(descriptor, 1 << 20):
+            chunks.append(chunk)
+        return b"".join(chunks)
+    finally:
+        os.close(descriptor)
+
+
+def _regular_owned_digest(path: Path, label: str) -> str:
+    return digest_bytes(_read_owned_regular(path, label))
+
+
+def validate_proof_registry(registry: dict, stage: Path) -> dict[str, dict[str, str]]:
+    """Validate a registry against the exact freshly generated statements.
+
+    Blob bytes are checked during materialization; this first phase deliberately
+    validates all generated digests before any proof skeleton is replaced.
+    """
+    _require_exact_keys(registry, PROOF_REGISTRY_KEYS, "proof registry")
+    if registry["schema_version"] != 1:
+        raise RuntimeError("proof registry schema version mismatch")
+    generated_digest = registry["generated_lean_sha256"]
+    if not _is_lower_hex(generated_digest, 64):
+        raise RuntimeError("proof registry generated digest is invalid")
+    if not hmac.compare_digest(
+        _regular_owned_digest(stage / "GeneratedYOCOMoE.lean", "generated Lean"),
+        generated_digest,
+    ):
+        raise RuntimeError("proof registry generated Lean digest mismatch")
+
+    goal_digests = registry["goal_sha256"]
+    if not isinstance(goal_digests, dict) or set(goal_digests) != PROOF_REGISTRY_GOALS:
+        raise RuntimeError("proof registry goal digest schema mismatch")
+    for name, expected in goal_digests.items():
+        if not _is_lower_hex(expected, 64):
+            raise RuntimeError("proof registry goal digest is invalid")
+        actual = _regular_owned_digest(stage / "yoco_goals" / name, name)
+        if not hmac.compare_digest(actual, expected):
+            raise RuntimeError(f"proof registry goal digest mismatch: {name}")
+
+    modules = registry["modules"]
+    if not isinstance(modules, dict) or not modules:
+        raise RuntimeError("proof registry modules must be a nonempty object")
+    for destination, entry in modules.items():
+        destination_path = PurePosixPath(destination)
+        if (
+            not isinstance(destination, str)
+            or destination_path.name != destination
+            or destination not in GENERATED_GOAL_MODULES
+        ):
+            raise RuntimeError(f"invalid proof registry destination: {destination}")
+        _require_exact_keys(entry, PROOF_MODULE_KEYS, "proof registry module")
+        source = entry["source"]
+        if not isinstance(source, str):
+            raise RuntimeError("proof registry source is invalid")
+        source_path = PurePosixPath(source)
+        if (
+            source_path.is_absolute()
+            or ".." in source_path.parts
+            or "." in source_path.parts
+            or source_path.parts[:3] != ("trainverify", "denote", "yoco_goals")
+            or source_path.name != destination
+        ):
+            raise RuntimeError(f"invalid proof registry source: {source}")
+        if not _is_lower_hex(entry["sha256"], 64):
+            raise RuntimeError("proof registry module digest is invalid")
+    targets = registry["proof_targets"]
+    if (
+        not isinstance(targets, list)
+        or len(targets) != 5
+        or len(set(targets)) != len(targets)
+        or any(not isinstance(target, str) or not LEAN_NAME.fullmatch(target)
+               for target in targets)
+    ):
+        raise RuntimeError("proof registry targets are invalid")
+    return modules
+
+
+def _replace_private_regular(path: Path, content: bytes) -> None:
+    """Replace one regular file inside an owner-private stage."""
+    _regular_owned_digest(path, path.name)
+    temporary = path.with_name(f".{path.name}.proof-registry.tmp")
+    descriptor = os.open(
+        temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o400,
+    )
+    try:
+        with os.fdopen(descriptor, "wb", closefd=False) as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+    finally:
+        os.close(descriptor)
+    os.replace(temporary, path)
+
+
+def _refresh_snapshot_ledger(stage: Path) -> None:
+    manifest_path = stage / "GeneratedYOCOMoE.manifest.json"
+    manifest = _strict_json_bytes(
+        _read_owned_regular(manifest_path, "snapshot manifest")
+    )
+    ledger = manifest.get("snapshot_sha256") if isinstance(manifest, dict) else None
+    if not isinstance(ledger, dict):
+        raise RuntimeError("snapshot manifest is missing snapshot_sha256")
+    refreshed = {}
+    for relative_path in ledger:
+        candidate = PurePosixPath(relative_path)
+        if candidate.is_absolute() or ".." in candidate.parts or "." in candidate.parts:
+            raise RuntimeError("snapshot ledger path is invalid")
+        refreshed[relative_path] = _regular_owned_digest(
+            stage / Path(*candidate.parts), relative_path,
+        )
+    manifest["snapshot_sha256"] = refreshed
+    content = (
+        json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        + "\n"
+    ).encode("utf-8")
+    _replace_private_regular(manifest_path, content)
+
+
+def materialize_registered_proofs(
+    repo: Path, revision: str, stage: Path, registry: dict,
+) -> None:
+    modules = validate_proof_registry(registry, stage)
+    contents = {}
+    for destination, entry in modules.items():
+        content = git_blob(repo, revision, entry["source"])
+        if not hmac.compare_digest(digest_bytes(content), entry["sha256"]):
+            raise RuntimeError(f"proof registry blob digest mismatch: {destination}")
+        match = FORBIDDEN_PROOF_TOKEN.search(content)
+        if match:
+            raise RuntimeError(
+                f"forbidden proof token in {destination}: {match.group().decode('ascii')}"
+            )
+        contents[destination] = content
+    for destination, content in contents.items():
+        _replace_private_regular(stage / "yoco_goals" / destination, content)
+    _refresh_snapshot_ledger(stage)
+
+
+def validate_print_axioms_output(output: str, targets: list[str]) -> None:
+    allowed = {"propext", "Classical.choice", "Quot.sound"}
+    for target in targets:
+        escaped = re.escape(target)
+        no_axioms = re.search(
+            rf"'{escaped}' does not depend on any axioms", output,
+        )
+        matched = re.search(
+            rf"'{escaped}' depends on axioms: \[(.*?)\]", output, re.DOTALL,
+        )
+        if no_axioms:
+            continue
+        if not matched:
+            raise RuntimeError(f"missing #print axioms result: {target}")
+        names = [name.strip() for name in matched.group(1).split(",") if name.strip()]
+        rejected = [
+            name for name in names
+            if name not in allowed and not re.fullmatch(
+                r"[A-Za-z_][A-Za-z0-9_'.]*(?:\.[A-Za-z_][A-Za-z0-9_']*)+"
+                r"\._native\.native_decide\.ax_[0-9_]+",
+                name,
+            )
+        ]
+        if rejected or any("sorryAx" in name for name in names):
+            raise RuntimeError(f"untrusted axioms for {target}: {rejected or names}")
+
+
+def load_proof_registry(repo: Path, revision: str) -> dict:
+    content = git_blob(repo, revision, PROOF_REGISTRY_PATH)
+    registry = _strict_json_bytes(content)
+    canonical = (
+        json.dumps(registry, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        + "\n"
+    ).encode("utf-8")
+    if content != canonical:
+        raise RuntimeError("proof registry is not canonical JSON")
+    return registry
 
 
 def secure_copy_authority(source: Path, target: Path) -> None:
@@ -782,6 +1000,11 @@ def main():
 
         setup_logger("ERROR")
         graph_to_lean.main()
+        proof_registry = load_proof_registry(ROOT, emitter_revision)
+        materialize_registered_proofs(
+            ROOT, emitter_revision, stage,
+            proof_registry,
+        )
         shutil.rmtree(stage / "verifier-cache")
         shutil.rmtree(llm_train)
         shutil.rmtree(nnscaler)
@@ -789,7 +1012,10 @@ def main():
         if git_head(ROOT) != emitter_revision or not git_clean(ROOT):
             raise RuntimeError("emitter TrainVerify revision changed during emission")
         verify_snapshot_stage(stage)
-        validate_lean_snapshot(stage, args.lean_project, emitter_revision)
+        validate_lean_snapshot(
+            stage, args.lean_project, emitter_revision,
+            proof_registry["proof_targets"],
+        )
         if git_head(ROOT) != emitter_revision or not git_clean(ROOT):
             raise RuntimeError("emitter TrainVerify revision changed during Lean validation")
         from scripts.yoco_regen.atomic_publish import publish_validated_directory
