@@ -177,6 +177,64 @@ theorem canonical_l20_k_sm_reduce (initSM : Store) :
     (by native_decide) (by native_decide)
   rw [hc, hf, hp, hs, hr, hb]
 
+/-- Rank-0's complete real PM L20 K graph reduction. -/
+theorem canonical_l20_k_pm0_reduce (initPM : Store) :
+    denoteGraphDistributedFaithful pm_goal_1 initPM 11312 =
+      fw_per_head_linear
+        (fw_rms_norm (denoteGraphDistributedFaithful pm_goal_1 initPM 9722)
+          (denoteGraphDistributedFaithful pm_goal_1 initPM 5596))
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 5598) := by
+  have hb := cL20KV_reduce_multiref pm_goal_1 initPM 1040 0 2 9722 15822
+    [15822, 15826] (by native_decide) (by native_decide) (by decide) (by decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hr := cL20KV_reduce_rms pm_goal_1 initPM 1042 0 15822 5596 9726
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide)
+  have hs := cL20KV_reduce_multiref pm_goal_1 initPM 1046 0 2 9726 15838
+    [15838, 15842] (by native_decide) (by native_decide) (by decide) (by decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hp := cL20KV_reduce_proj pm_goal_1 initPM 1050 0 15838 5598 9728
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide)
+  have hf := cL20KV_reduce_multiref pm_goal_1 initPM 1056 0 12 9728 15904
+    [15864, 15868, 15872, 15876, 15880, 15884, 15888, 15892, 15896, 15900,
+      15904, 15908]
+    (by native_decide) (by native_decide) (by decide) (by decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hc := cL20KV_reduce_to pm_goal_1 initPM 1071 0 15904 11312
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+  rw [hc, hf, hp, hs, hr, hb]
+
+/-- Rank-1's complete real PM L20 K graph reduction. -/
+theorem canonical_l20_k_pm1_reduce (initPM : Store) :
+    denoteGraphDistributedFaithful pm_goal_1 initPM 11313 =
+      fw_per_head_linear
+        (fw_rms_norm (denoteGraphDistributedFaithful pm_goal_1 initPM 9723)
+          (denoteGraphDistributedFaithful pm_goal_1 initPM 5596))
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 5598) := by
+  have hb := cL20KV_reduce_multiref pm_goal_1 initPM 1041 1 2 9723 15830
+    [15830, 15834] (by native_decide) (by native_decide) (by decide) (by decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hr := cL20KV_reduce_rms pm_goal_1 initPM 1044 1 15830 5596 9727
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide)
+  have hs := cL20KV_reduce_multiref pm_goal_1 initPM 1048 1 2 9727 15846
+    [15846, 15850] (by native_decide) (by native_decide) (by decide) (by decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hp := cL20KV_reduce_proj pm_goal_1 initPM 1053 1 15846 5598 9729
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide)
+  have hf := cL20KV_reduce_multiref pm_goal_1 initPM 1058 1 12 9729 15962
+    [15922, 15926, 15930, 15934, 15938, 15942, 15946, 15950, 15954, 15958,
+      15962, 15966]
+    (by native_decide) (by native_decide) (by decide) (by decide)
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+  have hc := cL20KV_reduce_to pm_goal_1 initPM 1095 1 15962 11313
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide)
+  rw [hc, hf, hp, hs, hr, hb]
+
 /-- Complete real SM L20 V graph relation. -/
 theorem canonical_l20_v_sm_reduce (initSM : Store) :
     denoteGraphDistributedFaithful sm_goal_1 initSM 6149 =
@@ -206,6 +264,8 @@ theorem canonical_l20_v_sm_reduce (initSM : Store) :
   rw [hc, hf, hp, hs, hr, hb]
 
 #print axioms canonical_l20_k_sm_reduce
+#print axioms canonical_l20_k_pm0_reduce
+#print axioms canonical_l20_k_pm1_reduce
 #print axioms canonical_l20_v_sm_reduce
 
 end
