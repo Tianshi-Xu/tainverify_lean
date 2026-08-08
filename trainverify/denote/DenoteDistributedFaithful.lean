@@ -82,6 +82,27 @@ noncomputable def denoteGraphDistributedFaithful
     (g : GraphDecl) (init : Store) : Store :=
   g.nodes.foldl (applyNodeDistributedFaithful g) init
 
+/-- Lineage statement over the production distributed evaluator.
+
+This is the faithful analogue of `CoarseLineageHoldsWithInit`.  Initial-store
+shape and value contracts are unchanged; only graph evaluation is upgraded so
+cross-rank shuffle, unshuffle, zigzag attention, and full-expert MoE semantics
+match the authority computation. -/
+def CoarseLineageHoldsWithInitDistributedFaithful
+    (sm pm : GraphDecl) (goal : LineageGoal)
+    (smInit pmInit : ShapeEnv) (initGoals : List LineageGoal) : Prop :=
+  ∀ (initSM initPM : Store),
+    StoreShapesHold initSM smInit →
+    StoreShapesHold initPM pmInit →
+    InitGoalsHold pm.numRanks initGoals initSM initPM →
+    let smStore := denoteGraphDistributedFaithful sm initSM
+    let pmStore := denoteGraphDistributedFaithful pm initPM
+    let ts := smStore goal.ts
+    let tps := goal.tps.map (fun p => pmStore p.tid)
+    ts.shape = goal.tsShape ∧
+      (tps.map (fun t => t.shape)) = goal.tpShapes ∧
+      ts = reconstructForGoal goal pm.numRanks tps
+
 /-- A generated singleton-output shuffle writes its collective result. -/
 theorem applyNodeDistributedFaithful_shuffle_out
     (g : GraphDecl) (s : Store) (rank : Nat)

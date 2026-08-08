@@ -4,6 +4,7 @@ import pytest
 
 from Verdict.graph_to_lean import (
     SelectedLineage,
+    _goal_requires_distributed_faithful,
     _goals_module_prefix,
     canonicalize_init_lineage_multiref,
     deduplicate_intermediate_lineages,
@@ -50,6 +51,23 @@ class Graph:
     def node_outputs(self, n): return list(n.outs)
     def tensor_shape(self, t): return list(t.shape)
     def node_kwargs(self, n): return n.kwargs or {}
+
+
+def test_goal_faithful_evaluator_selection_is_collective_driven():
+    plain = [Node("OpName.FW_inner_chunk_ce", (), ())]
+    for op in (
+        "OpName.FW_maybe_shuffle",
+        "OpName.FW_maybe_unshuffle",
+        "OpName.FW_attn_zigzag",
+    ):
+        assert _goal_requires_distributed_faithful([Node(op, (), ())])
+    assert not _goal_requires_distributed_faithful(plain)
+    # Similar collectives already modeled faithfully by the ordinary evaluator
+    # do not switch the whole statement to the zigzag-distributed evaluator.
+    assert not _goal_requires_distributed_faithful([
+        Node("OpName.AllToAllPrim", (), ()),
+        Node("OpName.AllGatherPrim", (), ()),
+    ])
 
 
 def test_init_lineage_follows_fw_multiref_to_source_leaf():
