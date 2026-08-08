@@ -1,5 +1,6 @@
 /- Small reusable gears for sliding a 1TP/2TP boundary through a distributed graph. -/
 import denote.yoco_goals.Layer0DistributedMigration
+import denote.Gather2Rel
 
 set_option linter.style.longLine false
 set_option linter.style.setOption false
@@ -12,14 +13,6 @@ namespace TrainVerify.Denote.GeneratedPatterns
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated
 open TrainVerify.Denote.GeneratedGoals
-
-/-- A value and shape package for a dim-0 reconstruction from exactly two shards. -/
-structure Gather2Rel (full shard0 shard1 : Tensor) (fullShape shardShape : Shape) : Prop where
-  value : full = allGatherPrimDimN 0 2 0 [shard0, shard1]
-  full_shape : full.shape = fullShape
-  shard0_shape : shard0.shape = shardShape
-  shard1_shape : shard1.shape = shardShape
-  nonscalar : shardShape ≠ [1]
 
 /-- Unpack the standard non-replicated, dim-0, two-rank goal into `Gather2Rel`. -/
 theorem Gather2Rel.of_initGoalHolds
