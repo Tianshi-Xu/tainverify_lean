@@ -82,19 +82,19 @@ noncomputable def denoteGraphDistributedFaithful
     (g : GraphDecl) (init : Store) : Store :=
   g.nodes.foldl (applyNodeDistributedFaithful g) init
 
-/-- Lineage statement over the production distributed evaluator.
-
-This is the faithful analogue of `CoarseLineageHoldsWithInit`.  Initial-store
-shape and value contracts are unchanged; only graph evaluation is upgraded so
-cross-rank shuffle, unshuffle, zigzag attention, and full-expert MoE semantics
-match the authority computation. -/
-def CoarseLineageHoldsWithInitDistributedFaithful
+/-- Faithful lineage statement over the production distributed evaluator with an
+explicit caller-side input contract.  The contract is a hypothesis, not an axiom:
+generated YOCO goals use it for label-domain bounds and packed-sequence
+well-formedness that are runtime preconditions rather than graph-derived facts. -/
+def CoarseLineageHoldsWithInitDistributedFaithfulWithContract
     (sm pm : GraphDecl) (goal : LineageGoal)
-    (smInit pmInit : ShapeEnv) (initGoals : List LineageGoal) : Prop :=
+    (smInit pmInit : ShapeEnv) (initGoals : List LineageGoal)
+    (inputContract : Store → Store → Prop) : Prop :=
   ∀ (initSM initPM : Store),
     StoreShapesHold initSM smInit →
     StoreShapesHold initPM pmInit →
     InitGoalsHold pm.numRanks initGoals initSM initPM →
+    inputContract initSM initPM →
     let smStore := denoteGraphDistributedFaithful sm initSM
     let pmStore := denoteGraphDistributedFaithful pm initPM
     let ts := smStore goal.ts
@@ -102,6 +102,13 @@ def CoarseLineageHoldsWithInitDistributedFaithful
     ts.shape = goal.tsShape ∧
       (tps.map (fun t => t.shape)) = goal.tpShapes ∧
       ts = reconstructForGoal goal pm.numRanks tps
+
+/-- Faithful lineage statement without additional runtime preconditions. -/
+def CoarseLineageHoldsWithInitDistributedFaithful
+    (sm pm : GraphDecl) (goal : LineageGoal)
+    (smInit pmInit : ShapeEnv) (initGoals : List LineageGoal) : Prop :=
+  CoarseLineageHoldsWithInitDistributedFaithfulWithContract
+    sm pm goal smInit pmInit initGoals (fun _ _ => True)
 
 /-- A generated singleton-output shuffle writes its collective result. -/
 theorem applyNodeDistributedFaithful_shuffle_out

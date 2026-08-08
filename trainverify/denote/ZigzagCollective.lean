@@ -25,6 +25,20 @@ open TrainVerify.Denote
 namespace TrainVerify.Denote.ZigzagCollective
 noncomputable section
 
+/-- Caller-visible well-formedness contract for packed cumulative sequence metadata.
+Unlike `ZigzagCuWF`, this does not mention intermediate data shards, so generated
+lineage statements can state it directly on external inputs. -/
+structure PackedCuSeqlensWF (cu : Tensor) (totalTokens cpSize : Nat) : Prop where
+  cp_pos : 0 < cpSize
+  starts_zero : (decodeCuSeqlens cu).head?.getD 0 = 0
+  has_endpoint : 2 ≤ (decodeCuSeqlens cu).length
+  monotone : ∀ s, s + 1 < (decodeCuSeqlens cu).length →
+    (decodeCuSeqlens cu).getD s 0 ≤ (decodeCuSeqlens cu).getD (s + 1) 0
+  divisible : ∀ s, s + 1 < (decodeCuSeqlens cu).length →
+    ((decodeCuSeqlens cu).getD (s + 1) 0 -
+      (decodeCuSeqlens cu).getD s 0) % (2 * cpSize) = 0
+  endpoint : listLast! (decodeCuSeqlens cu) = totalTokens
+
 /-- Well-formed packed cumulative sequence metadata and a complete set of uniformly
 shaped local shards.  In addition to positive/rank-complete CP, boundaries start at
 zero, are monotone, every sequence admits the authority's `2 * cpSize` slicing, and
@@ -41,6 +55,30 @@ structure ZigzagCuWF (cu : List Nat) (xs : List Tensor) (cpSize : Nat) : Prop wh
   same_shape : ∀ x ∈ xs, x.shape = (xs.getD 0 (zeroTensor [])).shape
   local_tokens :
     (xs.getD 0 (zeroTensor [])).shape.getD 0 0 * cpSize = listLast! cu
+
+/-- Lift an external packed-metadata contract to the collective-local contract once
+rank completeness and shard shapes have been established from the generated graph. -/
+theorem PackedCuSeqlensWF.toZigzagCuWF
+    {cuTensor : Tensor} {xs : List Tensor} {totalTokens cpSize : Nat}
+    (hcu : PackedCuSeqlensWF cuTensor totalTokens cpSize)
+    (hranks : xs.length = cpSize)
+    (hnonempty : ∀ x ∈ xs, x.shape ≠ [])
+    (hsame : ∀ x ∈ xs, x.shape = (xs.getD 0 (zeroTensor [])).shape)
+    (hlocal : (xs.getD 0 (zeroTensor [])).shape.getD 0 0 * cpSize = totalTokens) :
+    ZigzagCuWF (decodeCuSeqlens cuTensor) xs cpSize := by
+  refine {
+    cp_pos := hcu.cp_pos
+    ranks := hranks
+    cu_starts_zero := hcu.starts_zero
+    cu_has_endpoint := hcu.has_endpoint
+    monotone := hcu.monotone
+    divisible := hcu.divisible
+    shapes_nonempty := hnonempty
+    same_shape := hsame
+    local_tokens := ?_
+  }
+  rw [hcu.endpoint]
+  exact hlocal
 
 /-- Convert ordinary contiguous rank shards to NNScaler's zigzag layout.
 
