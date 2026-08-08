@@ -1,5 +1,5 @@
 /- Canonical Goal 1 cache-source layer: ordinary SwiGLU/down-projection branch. -/
-import denote.yoco_goals.CanonicalKVCacheBoundary
+import denote.yoco_goals.Goal_1
 import denote.yoco_goals.FaithfulStackGather
 import denote.yoco_goals.ZigzagLayoutRel
 import denote.yoco_goals.ZigzagLinearRel

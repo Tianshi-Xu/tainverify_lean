@@ -1,5 +1,5 @@
 /- Canonical Goal 1 cache-source ordinary expert boundary. -/
-import denote.yoco_goals.CanonicalKVCacheExpertDown
+import denote.yoco_goals.Goal_1
 import denote.yoco_goals.FaithfulStackGather
 import denote.Gather2Rel
 

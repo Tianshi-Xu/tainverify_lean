@@ -66,34 +66,6 @@ private theorem cL22K_proj_weight_shape (initPM : Store)
   rw [hp]
   exact hPM 5598 [4, 64, 1024] (by native_decide)
 
-/-- The canonical L22 K graph tensors are related from the unique cache boundary.
-Weight equality and shape are discharged from the generated init contracts. -/
-theorem canonical_l22_k_relation
-    (initSM initPM : Store)
-    (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
-    (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
-    (hCache : Zigzag2Rel
-      (denoteGraphDistributedFaithful sm_goal_1 initSM 5595)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 9722)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 9723)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
-      [4096, 1024] [2048, 1024]) :
-    Zigzag2Rel
-      (denoteGraphDistributedFaithful sm_goal_1 initSM 6202)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 11466)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 11467)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
-      [4096, 4, 64] [2048, 4, 64] := by
-  have hRmsW := cL22K_rms_weight_eq initSM initPM hInit
-  have hKW := cL22K_proj_weight_eq initSM initPM hInit
-  have hKShape := cL22K_proj_weight_shape initPM hPM
-  have hSemantic := canonical_l22_k_semantic hCache hRmsW hKW hKShape
-  have hPM := canonical_l22_kv_pm_reduce initPM
-  have hPM0 := hPM.1
-  have hPM1 := hPM.2.1
-  have hSM := canonical_l22_k_sm_reduce initSM
-  rw [hSM, hPM0, hPM1]
-  exact hSemantic
 
 /-- The real canonical L22 K segment preserves ordinary rank-order gather. -/
 theorem canonical_l22_k_ordinary_relation
@@ -118,7 +90,6 @@ theorem canonical_l22_k_ordinary_relation
   rw [canonical_l22_k_sm_reduce initSM, hPM.1, hPM.2.1]
   exact hSemantic
 
-#print axioms canonical_l22_k_relation
 #print axioms canonical_l22_k_ordinary_relation
 
 end

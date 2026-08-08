@@ -1,5 +1,4 @@
 /- Canonical Goal 1, layer 22: align the faithful V graph values. -/
-import denote.yoco_goals.CanonicalKVCacheComposition
 import denote.yoco_goals.CanonicalL22VSemantic
 import denote.yoco_goals.CanonicalL22Attention
 
@@ -113,37 +112,7 @@ theorem canonical_l22_v_ordinary_relation
   rw [canonical_l22_v_pm1_reduce initPM]
   exact hSemantic
 
-/-- Close the canonical L22 V graph relation `6203 ↔ 11472/11473` from the
-sole preceding attention boundary. -/
-theorem canonical_l22_v_relation_from_attention_output
-    (initSM initPM : Store)
-    (hSM : StoreShapesHold initSM sm_goal_1InitEnv)
-    (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
-    (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
-    (hAttention : Zigzag2Rel
-      (denoteGraphDistributedFaithful sm_goal_1 initSM 5562)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 9632)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 9633)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
-      [4096, 1024] [2048, 1024]) :
-    Zigzag2Rel
-      (denoteGraphDistributedFaithful sm_goal_1 initSM 6203)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 11472)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 11473)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
-      [4096, 4, 64] [2048, 4, 64] := by
-  have hCache := canonical_kv_cache_boundary_from_attention_output
-    initSM initPM hSM hPM hInit hAttention
-  have hRmsW := canonical_l22_v_rms_weight_eq initSM initPM hInit
-  have hVW := canonical_l22_v_projection_weight_eq initSM initPM hInit
-  have hVShape := canonical_l22_v_projection_weight_shape initPM hPM
-  have hSemantic := canonical_l22_v_semantic hCache hRmsW hVW hVShape
-  rw [canonical_l22_v_sm_reduce initSM]
-  rw [canonical_l22_v_pm0_reduce initPM]
-  rw [canonical_l22_v_pm1_reduce initPM]
-  exact hSemantic
-
-#print axioms canonical_l22_v_relation_from_attention_output
+#print axioms canonical_l22_v_ordinary_relation
 
 end
 end TrainVerify.Denote.GeneratedPatterns
