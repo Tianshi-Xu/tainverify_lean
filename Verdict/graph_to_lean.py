@@ -343,7 +343,76 @@ def _safe_str_op(op: Any) -> str:
 		return repr(op)
 
 
+def _is_external_input_producer(G: Any, node: Any) -> bool:
+	"""Whether ``node`` belongs to the authority-input side of the graph."""
+	op = _safe_str_op(G.node_opname(node))
+	return "DATALOADER" in op or "pyfunc" in op.lower()
+
+
+def _computed_boundary_tids(G: Any, kept_nodes: Sequence[Any]) -> List[int]:
+	"""Read-before-written tids whose real graph producer was cut away.
+
+	Shapes and metadata do not constrain these values.  An empty result is the
+	mechanical certificate that the slice reaches external authority inputs.
+	"""
+	kept = set(kept_nodes)
+	produced_inside = {
+		int(t.tid) for node in kept_nodes for t in G.node_outputs(node)
+	}
+	read_inside = {
+		int(t.tid) for node in kept_nodes for t in G.node_inputs(node)
+	}
+	computed_by_tid: set[int] = set()
+	for node in G.nodes():
+		if node in kept or _is_external_input_producer(G, node):
+			continue
+		computed_by_tid.update(int(t.tid) for t in G.node_outputs(node))
+	return sorted((read_inside - produced_inside) & computed_by_tid)
+
+
+def _uncovered_computed_boundary_tids(
+	G: Any, kept_nodes: Sequence[Any], prerequisite_tids: Iterable[int]
+) -> List[int]:
+	"""Computed cut reads not justified by a generated lineage prerequisite."""
+	covered = {int(tid) for tid in prerequisite_tids}
+	return [
+		tid for tid in _computed_boundary_tids(G, kept_nodes)
+		if tid not in covered
+	]
+
+
+def close_nodes_to_external_inputs(G: Any, root_tids: Iterable[int]) -> List[Any]:
+	"""Return root ancestry without cutting across graph-computed tensors.
+
+	The choice is purely topology-driven.  Dataloader/pyfunc outputs terminate
+	the walk as genuine external inputs; original graph order is retained.
+	"""
+	producers: Dict[int, List[Any]] = {}
+	for node in G.nodes():
+		if _is_external_input_producer(G, node):
+			continue
+		for output in G.node_outputs(node):
+			producers.setdefault(int(output.tid), []).append(node)
+
+	needed_nodes: set[Any] = set()
+	seen_tids: set[int] = {int(tid) for tid in root_tids}
+	stack = list(seen_tids)
+	while stack:
+		tid = stack.pop()
+		for node in producers.get(tid, []):
+			if node in needed_nodes:
+				continue
+			needed_nodes.add(node)
+			for input_tensor in G.node_inputs(node):
+				input_tid = int(input_tensor.tid)
+				if input_tid not in seen_tids:
+					seen_tids.add(input_tid)
+					stack.append(input_tid)
+	return [node for node in G.nodes() if node in needed_nodes]
+
+
 _DISTRIBUTED_FAITHFUL_OPS = frozenset({
+	"OpName.FW_all2all_moe_gmm",
 	"OpName.FW_maybe_shuffle",
 	"OpName.FW_maybe_unshuffle",
 	"OpName.FW_attn_zigzag",
@@ -1112,6 +1181,10 @@ class GoalSlice:
 	goal: SelectedLineage
 	sm_nodes: List[Any]
 	pm_nodes: List[Any]
+	# True when a distributed-faithful operator forced complete ancestry to
+	# external inputs.  Such a graph is a direct full statement, not a cut whose
+	# computed boundary values may be supplied by the caller.
+	full_topology: bool = False
 
 
 def compute_goal_dependencies(
@@ -2684,8 +2757,12 @@ def emit_lean_spec(
 			_emit_init_env(goal_lines, name=sm_name, G=sm_graph, kept_nodes=sl.sm_nodes)
 			_emit_init_env(goal_lines, name=pm_name, G=pm_graph, kept_nodes=sl.pm_nodes, prefer_shapes=_sm_prefer_local)
 
-			# Local init goals: base initGoals plus prerequisite intermediate goals.
-			if dep and dep.prereq_intermediate_goals:
+			# Local init goals: topology-closed faithful graphs reach authority
+			# inputs directly and therefore take NO computed-lineage certificate from
+			# the caller. Ordinary cuts retain their generated prerequisites.
+			if sl.full_topology:
+				goal_lines.append(f"def goal_{gid}_full_initGoals : List LineageGoal := initGoals")
+			elif dep and dep.prereq_intermediate_goals:
 				goal_lines.append(
 					f"def goal_{gid}_prereqs : List LineageGoal := {_prereq_list_expr(dep)}"
 				)
@@ -2754,17 +2831,74 @@ def emit_lean_spec(
 				cut_goal_ref = f"goal_{gid}_cut_goal"
 			else:
 				cut_goal_ref = f"goal_{gid}"
-			goal_lines.append(f"def goal_{gid}_stmt_cut : Prop :=")
+			statement_suffix = "full" if sl.full_topology else "cut"
+			statement_name = f"goal_{gid}_stmt_{statement_suffix}"
+
+			# Full faithful statements expose only independently checkable authority
+			# input properties.  Never emit equality/layout assumptions for computed
+			# boundaries: complete topology above is what proves those relations.
+			contract_name: Optional[str] = None
+			if sl.full_topology:
+				contract_name = f"Goal{gid}ExternalInputContract"
+				contract_clauses = [
+					"InputValueClassesHold smInputValueClasses initSM",
+					"InputValueClassesHold pmInputValueClasses initPM",
+				]
+				pm_num_ranks_local = max((_node_rank(n) for n in sl.pm_nodes), default=0) + 1
+				packed_specs: set[Tuple[int, int]] = set()
+				label_specs: set[Tuple[int, int, int]] = set()
+				for node in sl.sm_nodes:
+					op = _safe_str_op(sm_graph.node_opname(node))
+					inputs = list(sm_graph.node_inputs(node))
+					if op == "OpName.FW_maybe_unshuffle" and len(inputs) >= 2:
+						data_shape = list(sm_graph.tensor_shape(inputs[0]))
+						if data_shape:
+							packed_specs.add((int(inputs[1].tid), int(data_shape[0])))
+					if op == "OpName.FW_inner_chunk_ce" and len(inputs) >= 3:
+						weight_shape = list(sm_graph.tensor_shape(inputs[1]))
+						label_shape = list(sm_graph.tensor_shape(inputs[2]))
+						if weight_shape and label_shape:
+							label_specs.add((
+								int(inputs[2].tid), int(label_shape[0]), int(weight_shape[0])
+							))
+				for cu_tid, token_count in sorted(packed_specs):
+					contract_clauses.append(
+						f"PackedCuSeqlensWF (initPM {cu_tid}) {token_count} {pm_num_ranks_local}"
+					)
+				for labels_tid, token_count, vocab in sorted(label_specs):
+					contract_clauses.append(
+						f"(∀ l < {token_count}, scalarToNat (valAt (initPM {labels_tid}) l) < {vocab})"
+					)
+				goal_lines.append(f"def {contract_name} (initSM initPM : Store) : Prop :=")
+				for clause_index, clause in enumerate(contract_clauses):
+					joiner = " ∧" if clause_index + 1 < len(contract_clauses) else ""
+					goal_lines.append(f"  {clause}{joiner}")
+				goal_lines.append("")
+
+			goal_lines.append(f"def {statement_name} : Prop :=")
 			lineage_predicate = (
-				"CoarseLineageHoldsWithInitDistributedFaithful"
+				("CoarseLineageHoldsWithInitDistributedFaithfulWithContract"
+				 if contract_name is not None else
+				 "CoarseLineageHoldsWithInitDistributedFaithful")
 				if requires_distributed_faithful
 				else "CoarseLineageHoldsWithInit"
 			)
+			init_goals_ref = (
+				f"goal_{gid}_full_initGoals" if sl.full_topology
+				else f"goal_{gid}_cut_initGoals"
+			)
 			goal_lines.append(
 				f"  {lineage_predicate} {sm_name} {pm_name} {cut_goal_ref}"
-				f" {sm_name}InitEnv {pm_name}InitEnv goal_{gid}_cut_initGoals"
+				f" {sm_name}InitEnv {pm_name}InitEnv {init_goals_ref}"
+				+ (f" {contract_name}" if contract_name is not None else "")
 			)
 			goal_lines.append("")
+			if sl.full_topology:
+				goal_lines.append(
+					f"-- Compatibility name only: this is the same ancestry-closed FULL theorem, not a caller-certified cut."
+				)
+				goal_lines.append(f"abbrev goal_{gid}_stmt_cut : Prop := {statement_name}")
+				goal_lines.append("")
 
 			goal_lines.append("end TrainVerify.Denote.GeneratedGoals")
 			goal_lines.append("")
@@ -2783,6 +2917,18 @@ def emit_lean_spec(
 				int(ts) for ts, _ in (dep.prereq_intermediate_goals if dep else [])
 				if int(ts) not in goal_tid_set
 			]
+			if sl.full_topology:
+				ctf_path.write_text(
+					f"import {goals_module_prefix}.Goal_{gid}\n\n"
+					"namespace TrainVerify.Denote.GeneratedGoals\n\n"
+					"/-- Generated closure certificate: the compatibility cut name is "
+					"definitionally the ancestry-closed full faithful statement. -/\n"
+					f"theorem goal_{gid}_faithful_full_closure : "
+					f"goal_{gid}_stmt_cut = goal_{gid}_stmt_full := rfl\n\n"
+					"end TrainVerify.Denote.GeneratedGoals\n",
+					encoding="utf-8",
+				)
+				continue
 			if requires_distributed_faithful:
 				bridge_unavailable_gids.add(gid)
 				ctf_path.write_text(
@@ -2875,6 +3021,9 @@ def emit_lean_spec(
 				pattern_hashes[pid] = hashlib.sha256(repr(key).encode("utf-8")).hexdigest()[:16]
 				pattern_members[pid] = []
 			pattern_members[pattern_by_key[key]].append(gid)
+		full_topology_by_gid = {
+			_goal_id(int(sl.goal.ts)): sl.full_topology for sl in goal_slices
+		}
 
 		for pid in sorted(pattern_members):
 			members = pattern_members[pid]
@@ -2897,7 +3046,10 @@ def emit_lean_spec(
 			pattern_file_lines.append(f"def pattern_{pid}_goalIds : List Nat := [{', '.join(members)}]")
 			pattern_file_lines.append(f"inductive pattern_{pid}_target : Prop → Prop")
 			for gid in members:
-				pattern_file_lines.append(f"  | goal_{gid} : pattern_{pid}_target goal_{gid}_stmt_cut")
+				stmt_suffix = "full" if full_topology_by_gid[gid] else "cut"
+				pattern_file_lines.append(
+					f"  | goal_{gid} : pattern_{pid}_target goal_{gid}_stmt_{stmt_suffix}"
+				)
 			pattern_file_lines.append("")
 			pattern_file_lines.append(f"def pattern_{pid}_stmt : Prop :=")
 			pattern_file_lines.append(f"  ∀ {{target : Prop}}, pattern_{pid}_target target → target")
@@ -2954,7 +3106,10 @@ def emit_lean_spec(
 		for sl in goal_slices:
 			gid = _goal_id(int(sl.goal.ts))
 			pid = pattern_by_key[_pattern_key(sl)]
-			instance_lines.append(f"theorem prove_goal_{gid}_from_pattern_{pid} : goal_{gid}_stmt_cut := by")
+			stmt_suffix = "full" if sl.full_topology else "cut"
+			instance_lines.append(
+				f"theorem prove_goal_{gid}_from_pattern_{pid} : goal_{gid}_stmt_{stmt_suffix} := by"
+			)
 			instance_lines.append(f"  exact prove_pattern_{pid} pattern_{pid}_target.goal_{gid}")
 			instance_lines.append("")
 		instance_lines.append("end TrainVerify.Denote.GeneratedPatternInstances")
@@ -3800,7 +3955,60 @@ def main() -> None:
 			needed_pm = pm_backward_until(pm_roots_goal, stop_pm_tids)
 			pm_nodes_goal = filter_pm_goal_nodes(set(needed_pm), stop_tids=set(stop_pm_tids))
 
-			goal_slices.append(GoalSlice(goal=g, sm_nodes=sm_nodes_goal, pm_nodes=pm_nodes_goal))
+			# Faithful collectives cannot be cut at arbitrary activations: shape and
+			# metadata assumptions do not establish their SM/PM value relation.  If
+			# the candidate contains any operator whose semantics needs graph-wide
+			# replica/shuffle information, close BOTH sides to actual authority
+			# inputs.  This is deliberately operator/topology driven, never Goal-ID
+			# driven.
+			full_topology = (
+				_goal_requires_distributed_faithful(sm_nodes_goal, GsE)
+				or _goal_requires_distributed_faithful(pm_nodes_goal, GpE)
+			)
+			if full_topology:
+				sm_nodes_goal = _toposort_nodes(
+					GsE, close_nodes_to_external_inputs(GsE, [int(g.ts)])
+				)
+				pm_nodes_goal = _toposort_nodes(
+					GpE,
+					_dedup_shared_collectives(
+						GpE,
+						close_nodes_to_external_inputs(GpE, pm_roots_goal),
+					),
+				)
+				missing_sm = _computed_boundary_tids(GsE, sm_nodes_goal)
+				missing_pm = _computed_boundary_tids(GpE, pm_nodes_goal)
+				if missing_sm or missing_pm:
+					raise ValueError(
+						f"faithful full topology for goal tid {g.ts} is not closed: "
+						f"SM={missing_sm}, PM={missing_pm}"
+					)
+			else:
+				# Every computed cut read must be named by the generated prerequisite
+				# package.  This catches the exact class of bug where (for example)
+				# 6214/6216/6219 were silently reclassified as arbitrary init values.
+				sm_prereqs = [int(lin.ts) for lin in prereq_lineages]
+				pm_prereqs = [
+					int(tp_tid) for lin in prereq_lineages for _rank, tp_tid in lin.tps
+				]
+				missing_sm = _uncovered_computed_boundary_tids(
+					GsE, sm_nodes_goal, sm_prereqs
+				)
+				missing_pm = _uncovered_computed_boundary_tids(
+					GpE, pm_nodes_goal, pm_prereqs
+				)
+				if missing_sm or missing_pm:
+					raise ValueError(
+						f"cut goal tid {g.ts} has computed reads without generated "
+						f"prerequisites: SM={missing_sm}, PM={missing_pm}"
+					)
+
+			goal_slices.append(GoalSlice(
+				goal=g,
+				sm_nodes=sm_nodes_goal,
+				pm_nodes=pm_nodes_goal,
+				full_topology=full_topology,
+			))
 			if len(goal_slices) % 100 == 0:
 				print(f"[graph_to_lean] sliced {len(goal_slices)} / {len(selected)} goals", flush=True)
 		print(f"[graph_to_lean] built {len(goal_slices)} goal slices in {time.perf_counter() - t0:.2f}s", flush=True)

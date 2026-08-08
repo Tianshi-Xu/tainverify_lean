@@ -39,6 +39,16 @@ Goal statement selection is semantic:
 - Goals 2 and 5 use the ordinary evaluator because their operators are already
   represented faithfully there.
 
+Faithful evaluator selection also changes the slicing rule.  A slice containing a
+replica/shuffle-aware collective is closed backwards on both SM and PM graphs until
+only genuine authority inputs remain.  A graph-computed read may not silently become
+an unconstrained cut-store value: changing such a value can preserve shapes and input
+metadata while changing the final loss.  The generator checks this mechanically and
+fails on every uncovered computed boundary.  For an ancestry-closed goal,
+`goal_N_stmt_full` is the primary statement and Pattern/Instance modules bind to it;
+the compatibility `goal_N_stmt_cut` name is only an abbreviation of that same full
+statement.  It is not a caller-supplied boundary certificate.
+
 The registry binds proofs to statements; it must never select a proof by Pattern hash
 alone because the old Pattern key omitted shapes, init goals, replica groups, and
 statement semantics.

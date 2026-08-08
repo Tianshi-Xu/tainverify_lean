@@ -4,9 +4,12 @@ import pytest
 
 from Verdict.graph_to_lean import (
     SelectedLineage,
+    _computed_boundary_tids,
     _goal_requires_distributed_faithful,
     _goals_module_prefix,
+    _uncovered_computed_boundary_tids,
     canonicalize_init_lineage_multiref,
+    close_nodes_to_external_inputs,
     deduplicate_intermediate_lineages,
     derive_input_value_classes,
 )
@@ -56,6 +59,7 @@ class Graph:
 def test_goal_faithful_evaluator_selection_is_collective_driven():
     plain = [Node("OpName.FW_inner_chunk_ce", (), ())]
     for op in (
+        "OpName.FW_all2all_moe_gmm",
         "OpName.FW_maybe_shuffle",
         "OpName.FW_maybe_unshuffle",
         "OpName.FW_attn_zigzag",
@@ -68,6 +72,39 @@ def test_goal_faithful_evaluator_selection_is_collective_driven():
         Node("OpName.AllToAllPrim", (), ()),
         Node("OpName.AllGatherPrim", (), ()),
     ])
+
+
+def test_computed_cut_boundary_is_not_an_external_input():
+    external = Tensor(10, (8,))
+    computed = Tensor(11, (8,))
+    result = Tensor(12, (8,))
+    producer = Node("OpName.FW_linear", (external,), (computed,))
+    consumer = Node("OpName.FW_all2all_moe_gmm", (computed,), (result,))
+    graph = Graph([producer, consumer])
+
+    assert _computed_boundary_tids(graph, [consumer]) == [11]
+    assert _computed_boundary_tids(graph, [producer, consumer]) == []
+    assert _uncovered_computed_boundary_tids(graph, [consumer], []) == [11]
+    assert _uncovered_computed_boundary_tids(graph, [consumer], [11]) == []
+
+
+def test_faithful_topology_closes_to_external_inputs_without_goal_whitelist():
+    external = Tensor(10, (8,))
+    computed = Tensor(11, (8,))
+    moe_out = Tensor(12, (8,))
+    loss = Tensor(13, (8,))
+    nodes = [
+        Node("OpName.FW_linear", (external,), (computed,)),
+        Node("OpName.FW_all2all_moe_gmm", (computed,), (moe_out,)),
+        Node("OpName.FW_inner_chunk_ce", (moe_out,), (loss,)),
+    ]
+    graph = Graph(nodes)
+
+    closed = close_nodes_to_external_inputs(graph, [loss.tid])
+
+    assert closed == nodes
+    assert _computed_boundary_tids(graph, closed) == []
+    assert _goal_requires_distributed_faithful(closed, graph)
 
 
 def test_init_lineage_follows_fw_multiref_to_source_leaf():
