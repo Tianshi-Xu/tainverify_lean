@@ -62,6 +62,7 @@ REGISTERED_TOP_LEVEL_MODULES = {
     "Gather2Rel.lean",
     "InnerChunkCEShard.lean",
     "InnerChunkCELossShard.lean",
+    "PackedCuSeqlensWitness.lean",
 }
 EXPECTED_GOAL_MODULES = {
     Path(relative_path).name for relative_path in STATIC_GOAL_MODULES
