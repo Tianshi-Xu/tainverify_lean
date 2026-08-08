@@ -731,7 +731,7 @@ def validate_print_axioms_output(output: str, targets: list[str]) -> None:
             name for name in names
             if name not in allowed and not re.fullmatch(
                 r"[A-Za-z_][A-Za-z0-9_'.]*(?:\.[A-Za-z_][A-Za-z0-9_']*)+"
-                r"\._native\.native_decide\.ax_[0-9_]+",
+                r"\._native\.native_decide\.ax_[0-9_]+✝*",
                 name,
             )
         ]

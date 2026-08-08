@@ -1466,11 +1466,17 @@ def test_emitter_rejects_nonbaseline_print_axioms_output():
     )
     emitter.validate_print_axioms_output(baseline, [target])
     emitter.validate_print_axioms_output(
+        f"'{target}' depends on axioms: "
+        f"[{target}._native.native_decide.ax_1_2✝]\n",
+        [target],
+    )
+    emitter.validate_print_axioms_output(
         f"'{target}' does not depend on any axioms\n", [target]
     )
     for bad in (
         "sorryAx", "Bad.customAxiom", "Bad.native_decide.ax_evil",
-        "Bad.native_decide.ax_1",
+        "Bad.native_decide.ax_1", "Bad.customAxiom✝",
+        "Bad.native_decide.ax_evil✝",
     ):
         with pytest.raises(RuntimeError, match="untrusted axioms"):
             emitter.validate_print_axioms_output(
