@@ -56,6 +56,8 @@ STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/CanonicalL21ResidualGate.lean",
     "trainverify/denote/yoco_goals/CanonicalL22Attention.lean",
     "trainverify/denote/yoco_goals/CanonicalL22AttentionComposition.lean",
+    "trainverify/denote/yoco_goals/CanonicalL22KSemantic.lean",
+    "trainverify/denote/yoco_goals/CanonicalL22VSemantic.lean",
     "trainverify/denote/yoco_goals/CanonicalL22Output.lean",
     "trainverify/denote/yoco_goals/CanonicalL22Residual.lean",
     "trainverify/denote/yoco_goals/CanonicalL23Composition.lean",
