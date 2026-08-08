@@ -2713,6 +2713,7 @@ def emit_lean_spec(
 			goal_lines.append("")
 			goal_lines.append("open TrainVerify.Denote")
 			goal_lines.append("open TrainVerify.Denote.Generated")
+			goal_lines.append("open TrainVerify.Denote.ZigzagCollective")
 			goal_lines.append("")
 			goal_lines.append("namespace TrainVerify.Denote.GeneratedGoals")
 			goal_lines.append("")
