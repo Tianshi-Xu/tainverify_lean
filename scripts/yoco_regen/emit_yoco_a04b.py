@@ -90,6 +90,7 @@ STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/Goal_2_FaithfulHead.lean",
     "trainverify/denote/yoco_goals/ZigzagBroadcastMul.lean",
     "trainverify/denote/yoco_goals/ZigzagAttentionRel.lean",
+    "trainverify/denote/yoco_goals/ZigzagShardedKVRegression.lean",
     "trainverify/denote/yoco_goals/ZigzagElemwiseRel.lean",
     "trainverify/denote/yoco_goals/ZigzagLayoutRel.lean",
     "trainverify/denote/yoco_goals/ZigzagLinearRel.lean",
