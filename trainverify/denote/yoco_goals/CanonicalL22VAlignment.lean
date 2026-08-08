@@ -89,6 +89,30 @@ theorem canonical_l22_v_pm1_reduce (initPM : Store) :
   have hKV := canonical_l22_kv_pm_reduce initPM
   exact hKV.2.2.2
 
+/-- The real canonical L22 V segment preserves ordinary rank-order gather. -/
+theorem canonical_l22_v_ordinary_relation
+    (initSM initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
+    (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
+    (hCache : Gather2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5595)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9722)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9723)
+      [4096, 1024] [2048, 1024]) :
+    Gather2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 6203)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11472)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11473)
+      [4096, 4, 64] [2048, 4, 64] := by
+  have hRmsW := canonical_l22_v_rms_weight_eq initSM initPM hInit
+  have hVW := canonical_l22_v_projection_weight_eq initSM initPM hInit
+  have hVShape := canonical_l22_v_projection_weight_shape initPM hPM
+  have hSemantic := canonical_l22_v_ordinary_semantic hCache hRmsW hVW hVShape
+  rw [canonical_l22_v_sm_reduce initSM]
+  rw [canonical_l22_v_pm0_reduce initPM]
+  rw [canonical_l22_v_pm1_reduce initPM]
+  exact hSemantic
+
 /-- Close the canonical L22 V graph relation `6203 ↔ 11472/11473` from the
 sole preceding attention boundary. -/
 theorem canonical_l22_v_relation_from_attention_output

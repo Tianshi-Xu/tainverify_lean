@@ -3,7 +3,7 @@ Copyright (c) TrainVerify contributors.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: TrainVerify contributors
 -/
-import denote.yoco_goals.DistributedMigrationGears
+import denote.Gather2Rel
 import denote.ZigzagCollective
 
 /-!
@@ -49,6 +49,37 @@ theorem Gather2Rel.rms_norm
     simp [List.set, List.getD]
   · exact fw_rms_norm_shape_2d shard0 w lDim hM hrel.shard0_shape
   · exact fw_rms_norm_shape_2d shard1 w lDim hM hrel.shard1_shape
+
+/-- A replicated per-head projection preserves a dim-0 two-shard gather relation. -/
+theorem Gather2Rel.per_head_linear
+    {full shard0 shard1 w : Tensor} (lDim k hW dW : Nat)
+    (hrel : Gather2Rel full shard0 shard1 [lDim * 2, k] [lDim, k])
+    (hw : w.shape = [hW, dW, k])
+    (hl : 0 < lDim) (hk : 0 < k) (hhW : 0 < hW) (hdW : 0 < dW) :
+    Gather2Rel (fw_per_head_linear full w) (fw_per_head_linear shard0 w)
+      (fw_per_head_linear shard1 w) [lDim * 2, hW, dW] [lDim, hW, dW] := by
+  have h0 := fw_per_head_linear_shape_2d shard0 w lDim k hW dW
+    hrel.shard0_shape hw
+  have h1 := fw_per_head_linear_shape_2d shard1 w lDim k hW dW
+    hrel.shard1_shape hw
+  refine ⟨?_, ?_, h0, h1, ?_⟩
+  · rw [hrel.value]
+    exact fw_per_head_mix_precision_linear_allGather0_commute_2
+      shard0 shard1 w lDim k hW dW hl hk hhW hdW
+      hrel.shard0_shape hrel.shard1_shape hw
+  · rw [hrel.value,
+      fw_per_head_mix_precision_linear_allGather0_commute_2
+        shard0 shard1 w lDim k hW dW hl hk hhW hdW
+        hrel.shard0_shape hrel.shard1_shape hw]
+    have hhead :
+        ((([fw_per_head_linear shard0 w, fw_per_head_linear shard1 w] : List Tensor)).head?.map
+          (fun t => t.shape)).getD [] = [lDim, hW, dW] := by
+      simp [h0]
+    rw [allGatherPrimDimN_shape 0 2 _ [lDim, hW, dW] hhead]
+    simp [List.set, List.getD]
+  · intro hscalar
+    have := congrArg List.length hscalar
+    simp at this
 
 end
 
