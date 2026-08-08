@@ -43,7 +43,10 @@ AUTHORITY_NAMES = (
 STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/BridgeKit.lean",
     "trainverify/denote/yoco_goals/CanonicalGoal4L0Routing.lean",
+    "trainverify/denote/yoco_goals/CanonicalL22Attention.lean",
     "trainverify/denote/yoco_goals/CanonicalL22Output.lean",
+    "trainverify/denote/yoco_goals/CanonicalL22Residual.lean",
+    "trainverify/denote/yoco_goals/CanonicalL23Composition.lean",
     "trainverify/denote/yoco_goals/CanonicalL23Expert.lean",
     "trainverify/denote/yoco_goals/CanonicalL23GateDown.lean",
     "trainverify/denote/yoco_goals/CanonicalL23Down.lean",
