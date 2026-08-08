@@ -60,6 +60,8 @@ STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/CanonicalL23Composition.lean",
     "trainverify/denote/yoco_goals/CanonicalKVCacheBoundary.lean",
     "trainverify/denote/yoco_goals/CanonicalKVCacheExpertDown.lean",
+    "trainverify/denote/yoco_goals/CanonicalKVCacheDown.lean",
+    "trainverify/denote/yoco_goals/CanonicalKVCacheNormRouter.lean",
     "trainverify/denote/yoco_goals/CanonicalKVCacheResidualGate.lean",
     "trainverify/denote/yoco_goals/CanonicalL23Expert.lean",
     "trainverify/denote/yoco_goals/CanonicalL23GateDown.lean",
