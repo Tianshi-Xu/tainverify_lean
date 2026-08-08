@@ -49,6 +49,19 @@ Run:
 python3 scripts/audit_yoco_sharded_kv_layout.py
 ```
 
+## Existing-test coverage gap
+
+The introducing nnScaler commit `a280599e4bb2d0beae5480baa11a27ec4d54f995` includes a real distributed numerical test, but that test slices K/V into ordinary contiguous halves before gathering. It does not pass K/V through the compiler-generated zigzag-owned ancestry seen by canonical L22. The wrapper-layout unit test checks that gather is called and checks shapes, but not token order. Thus neither test exercises the failing compiled layout.
+
+A second independent CP2/L=4 experiment produced:
+
+```text
+canonical output:         [1.0, 1.622459, 2.629657, 4.343080]
+rank-order gather output: [1.0, 4.5, 3.666667, 4.343080]
+maximum absolute error:   2.8775406688
+reordered positive control error: 0.0
+```
+
 ## TrainVerify consequence
 
 TrainVerify's faithful evaluator now models both graph contracts without hiding this discrepancy:
