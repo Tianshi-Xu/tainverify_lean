@@ -41,6 +41,10 @@ AUTHORITY_NAMES = (
     "sm_mgener.pkl", "pm_mgener.pkl",
 ) + METADATA_JSON_NAMES + ("nnscaler_dp_solver.so", "comp_profile.json")
 STATIC_GOAL_MODULES = (
+    "trainverify/denote/yoco_goals/BridgeKit.lean",
+    "trainverify/denote/yoco_goals/FaithfulStackGather.lean",
+    "trainverify/denote/yoco_goals/Goal_1_FaithfulHead.lean",
+    "trainverify/denote/yoco_goals/Goal_2_FaithfulHead.lean",
     "trainverify/denote/yoco_goals/ZigzagLayoutRel.lean",
     "trainverify/denote/yoco_goals/ZigzagGoalStatement.lean",
 )
@@ -52,7 +56,12 @@ GENERATED_GOAL_MODULES = (
     "Pattern_5.lean", "Patterns.lean", "ProofObligations.lean", "Instances.lean",
     "MainTheorem.lean",
 )
-REGISTERED_TOP_LEVEL_MODULES = {"EmbeddingHiddenShard.lean"}
+REGISTERED_TOP_LEVEL_MODULES = {
+    "EmbeddingHiddenShard.lean",
+    "Gather2Rel.lean",
+    "InnerChunkCEShard.lean",
+    "InnerChunkCELossShard.lean",
+}
 EXPECTED_GOAL_MODULES = {
     Path(relative_path).name for relative_path in STATIC_GOAL_MODULES
 } | set(GENERATED_GOAL_MODULES)
@@ -577,9 +586,14 @@ def validate_proof_registry(registry: dict, stage: Path) -> dict[str, dict[str, 
     modules = registry["modules"]
     if not isinstance(modules, dict) or not modules:
         raise RuntimeError("proof registry modules must be a nonempty object")
+    missing_top_helpers = REGISTERED_TOP_LEVEL_MODULES - set(modules)
+    if missing_top_helpers:
+        raise RuntimeError(
+            f"proof registry is missing top-level helpers: {sorted(missing_top_helpers)}"
+        )
     for destination, entry in modules.items():
         destination_path = PurePosixPath(destination)
-        is_goal_module = destination in GENERATED_GOAL_MODULES
+        is_goal_module = destination in EXPECTED_GOAL_MODULES
         is_top_module = destination in REGISTERED_TOP_LEVEL_MODULES
         if (
             not isinstance(destination, str)

@@ -1328,6 +1328,11 @@ def test_emitter_proof_registry_binds_exact_generated_statements_and_blobs(
         },
         "proof_targets": PROOF_TARGETS,
     }
+    for helper_destination in sorted(emitter.REGISTERED_TOP_LEVEL_MODULES):
+        registry["modules"][helper_destination] = {
+            "source": f"trainverify/denote/{helper_destination}",
+            "sha256": emitter.digest_bytes(proof),
+        }
     monkeypatch.setattr(
         emitter, "git_blob", lambda _repo, _rev, path: proof
         if path.endswith("Pattern_2.lean") else b"",
@@ -1383,13 +1388,15 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
             "source": source,
             "sha256": emitter.digest_bytes(blobs[source]),
         }
-    helper_destination = "EmbeddingHiddenShard.lean"
-    helper_source = "trainverify/denote/EmbeddingHiddenShard.lean"
-    blobs[helper_source] = b"theorem helper : True := by trivial\n"
-    modules[helper_destination] = {
-        "source": helper_source,
-        "sha256": emitter.digest_bytes(blobs[helper_source]),
-    }
+    for helper_destination in sorted(emitter.REGISTERED_TOP_LEVEL_MODULES):
+        helper_source = f"trainverify/denote/{helper_destination}"
+        blobs[helper_source] = (
+            f"theorem helper_{helper_destination.removesuffix('.lean')} : True := by trivial\n"
+        ).encode()
+        modules[helper_destination] = {
+            "source": helper_source,
+            "sha256": emitter.digest_bytes(blobs[helper_source]),
+        }
     manifest_path = stage / "GeneratedYOCOMoE.manifest.json"
     manifest = {
         "snapshot_sha256": {
@@ -1412,21 +1419,27 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
     monkeypatch.setattr(emitter, "git_blob", lambda _repo, _rev, path: blobs[path])
     emitter.materialize_registered_proofs(tmp_path, "a" * 40, stage, registry)
     for destination, entry in modules.items():
-        if destination == helper_destination:
+        if destination in emitter.REGISTERED_TOP_LEVEL_MODULES:
             continue
         assert patterns[destination].read_bytes() == blobs[entry["source"]]
-    helper_path = stage / helper_destination
-    assert helper_path.read_bytes() == blobs[helper_source]
+    helper_paths = {}
+    for helper_destination in sorted(emitter.REGISTERED_TOP_LEVEL_MODULES):
+        helper_source = modules[helper_destination]["source"]
+        helper_path = stage / helper_destination
+        helper_paths[helper_destination] = helper_path
+        assert helper_path.read_bytes() == blobs[helper_source]
     refreshed = json.loads(manifest_path.read_text())
     for destination, path in patterns.items():
         assert refreshed["snapshot_sha256"][f"yoco_goals/{destination}"] == emitter.sha256(path)
-    assert refreshed["snapshot_sha256"][helper_destination] == emitter.sha256(helper_path)
+    for helper_destination, helper_path in helper_paths.items():
+        assert refreshed["snapshot_sha256"][helper_destination] == emitter.sha256(helper_path)
 
     before = {name: path.read_bytes() for name, path in patterns.items()}
     with pytest.raises(RuntimeError, match="top-level destination already exists"):
         emitter.materialize_registered_proofs(tmp_path, "a" * 40, stage, registry)
     assert {name: path.read_bytes() for name, path in patterns.items()} == before
-    helper_path.unlink()
+    for helper_path in helper_paths.values():
+        helper_path.unlink()
     bad = json.loads(json.dumps(registry))
     bad["modules"]["Pattern_2.lean"]["sha256"] = "0" * 64
     with pytest.raises(RuntimeError, match="blob digest mismatch"):
