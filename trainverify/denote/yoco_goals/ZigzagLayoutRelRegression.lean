@@ -201,5 +201,37 @@ theorem observed_z1 : observe4 z1 = [2, 3, 4, 5] := by
   unfold observe4
   norm_num [List.range_succ, h0, h1, h2, h3]
 
+/-- Historical regression: ordinary rank-order gather of raw zigzag shards is
+still rejected. The faithful theorem succeeds only after paired unshuffle. -/
+theorem raw_ordinary_gather_ne_full :
+    allGatherPrimDimN 0 2 0 [z0, z1] ≠ full := by
+  intro h
+  have hv := congrArg (fun t => valAt t 2) h
+  have hz0 : valAt z0 2 = 6 := by
+    unfold z0
+    rw [fw_maybe_shuffle_collective_valAt] <;>
+      norm_num [decode_cu, gatherFromRank, zigzagPos, zigzagPosAux, sliceSizeAt,
+        List.getD, prodShape, x0, x1, Tensor.mkShape]
+  have hraw : valAt (allGatherPrimDimN 0 2 0 [z0, z1]) 2 = 6 := by
+    rw [allGatherPrimDimN0_valAt 2 4 1 [z0, z1]
+      (by decide) (by decide) (by decide)
+      (by simpa using concrete_zigzag2Rel.rank0_shape) (by
+        intro r hr
+        interval_cases r
+        · simpa [List.getD] using concrete_zigzag2Rel.rank0_shape
+        · simpa [List.getD] using concrete_zigzag2Rel.rank1_shape)
+      0 (by decide) 2 (by decide) 0 (by decide)]
+    simpa [List.getD] using hz0
+  have hfull2 : valAt full 2 = 2 := by
+    unfold full
+    rw [allGatherPrimDimN0_valAt 2 4 1 [x0, x1]
+      (by decide) (by decide) (by decide) (by simp) (by
+        intro r hr
+        interval_cases r <;> simp [List.getD]) 0 (by decide) 2 (by decide) 0 (by decide)]
+    change ((2 : Nat) : Scalar) = 2
+    norm_num
+  rw [hraw, hfull2] at hv
+  norm_num at hv
+
 end
 end TrainVerify.Denote.ZigzagLayoutRelRegression

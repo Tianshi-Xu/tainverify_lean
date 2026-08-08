@@ -116,6 +116,22 @@ theorem unshuffle_sources_single
       (fw_maybe_unshuffle_shuffle_collective_cp2_single
         source0 source1 lDim 1 tail hl heven (by decide) hs0 hs1)
 
+/-- Paired faithful unshuffle turns a CP2 zigzag relation back into the ordinary
+rank-order gather expected by downstream stack/gather reasoning. -/
+theorem unshuffle_gather_single
+    {full z0 z1 cu : Tensor} {fullShape shardShape : Shape}
+    (lDim : Nat) (tail : Shape)
+    (h : Zigzag2Rel full z0 z1 cu fullShape shardShape)
+    (hl : 0 < lDim) (heven : lDim % 2 = 0)
+    (hshard : shardShape = lDim :: tail)
+    (hdecoded : decodeCuSeqlens cu = [0, 2 * lDim]) :
+    full = allGatherPrimDimN 0 2 0
+      [fw_maybe_unshuffle_collective [z0, z1] (decodeCuSeqlens cu) 2 0,
+       fw_maybe_unshuffle_collective [z0, z1] (decodeCuSeqlens cu) 2 1] := by
+  obtain ⟨source0, source1, hfull, hu0, hu1⟩ :=
+    unshuffle_sources_single lDim tail h hl heven hshard hdecoded
+  rw [hfull, hu0, hu1]
+
 /-- Accessor for the exact full shape. -/
 theorem full_shape {full z0 z1 cu : Tensor} {fullShape shardShape : Shape}
     (h : Zigzag2Rel full z0 z1 cu fullShape shardShape) :
