@@ -129,7 +129,6 @@ private theorem cL22C_init_singleton_eq (initSM initPM : Store)
 set_option maxHeartbeats 4000000 in
 theorem canonical_l22_q_relation_from_l21
     (initSM initPM : Store)
-    (hSM : StoreShapesHold initSM sm_goal_1InitEnv)
     (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
     (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
     (hL21 : Zigzag2Rel
