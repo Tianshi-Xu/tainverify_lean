@@ -44,15 +44,16 @@ noncomputable def applyNodeFaithfulUnshuffleValue
   fw_maybe_unshuffle_collective dataShards cu
     (n.params.getD 0 1) (n.params.getD 1 0)
 
-/-- Cross-rank value of a generated forward zigzag-attention node.  Only Q is
-collected from ordered replica buddies; K/V and both cu tensors are node-local,
-matching the Python wrapper's already-replicated K/V contract. -/
+/-- Cross-rank value of a generated forward zigzag-attention node.  Q/K/V are
+collected from ordered replica buddies.  Q is unshuffled before gathering, while
+the wrapper's contiguous K/V source shards are gathered directly in rank order. -/
 noncomputable def applyNodeFaithfulZigzagAttnValue
     (g : GraphDecl) (s : Store) (n : NodeDecl) : Tensor :=
   let buddies := g.replicaBuddies n
   let qShards := buddies.map (fun m => s (m.ins.getD 0 0))
-  fw_attn_zigzag_collective qShards
-    (s (n.ins.getD 1 0)) (s (n.ins.getD 2 0))
+  let kShards := buddies.map (fun m => s (m.ins.getD 1 0))
+  let vShards := buddies.map (fun m => s (m.ins.getD 2 0))
+  fw_attn_zigzag_collective_sharded_kv qShards kShards vShards
     (s (n.ins.getD 3 0)) (s (n.ins.getD 4 0))
     (n.params.getD 0 0) (n.params.getD 1 0)
     (n.params.getD 2 0) (n.params.getD 3 0)

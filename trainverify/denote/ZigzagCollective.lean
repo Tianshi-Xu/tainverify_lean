@@ -119,10 +119,12 @@ noncomputable def fw_maybe_unshuffle_collective
       let srcOffset := zigzagInvOffset cu cpSize srcRank globalPos
       valAt (xs.getD srcRank (zeroTensor [])) (srcOffset * hiddenStride + h))
 
-/-- Source-faithful abstract semantics for NNScaler's forward zigzag attention.
+/-- Source-faithful abstract semantics for NNScaler's forward zigzag attention
+when K/V are already replicated at the generated node boundary.
 
-The Python kernel receives zigzag Q shards but already-replicated, full K/V.  The
-abstract global model first restores every Q shard to contiguous order, gathers Q,
+The legacy replicated-boundary helper models a Python kernel that receives zigzag Q
+shards but already-replicated, full K/V.  The abstract global model first restores
+every Q shard to contiguous order, gathers Q,
 runs varlen attention exactly once against the *local* K/V inputs, chunks the full
 result, and finally restores the caller's zigzag order.  In particular K and V are
 never gathered (which would incorrectly duplicate their sequence dimension). -/
@@ -143,6 +145,47 @@ noncomputable def fw_attn_zigzag_collective
     let linearOutShards := (List.range cpSize).map (fun r =>
       chunkPrimDimN 0 cpSize r fullOut)
     fw_maybe_shuffle_collective linearOutShards decodedCuQ cpSize cpRank
+
+/-- Source-faithful semantics for the fixed NNScaler wrapper's sharded-K/V path.
+
+Q follows the wrapper's existing zigzag inverse followed by a dim-0 gather.  K/V
+are contiguous source shards: `allgather_reducescatter(..., dim=0)` gathers them
+directly in process-group rank order, without applying Q's zigzag unshuffle. -/
+noncomputable def fw_attn_zigzag_collective_sharded_kv
+    (qShards kShards vShards : List Tensor) (cuQ cuKV : Tensor)
+    (qHeads kvHeads qDim vDim : Nat) (causal : Bool) (window : Nat)
+    (cpSize cpRank : Nat) : Tensor :=
+  if cpSize = 1 then
+    fw_attn_varlen
+      (qShards.getD cpRank (zeroTensor []))
+      (kShards.getD cpRank (zeroTensor []))
+      (vShards.getD cpRank (zeroTensor []))
+      cuQ cuKV qHeads kvHeads qDim vDim causal window
+  else
+    let decodedCuQ := decodeCuSeqlens cuQ
+    let linearQShards := (List.range cpSize).map (fun r =>
+      fw_maybe_unshuffle_collective qShards decodedCuQ cpSize r)
+    let fullQ := allGatherPrimDimN 0 cpSize 0 linearQShards
+    let fullK := allGatherPrimDimN 0 cpSize 0 kShards
+    let fullV := allGatherPrimDimN 0 cpSize 0 vShards
+    let fullOut := fw_attn_varlen fullQ fullK fullV cuQ cuKV
+      qHeads kvHeads qDim vDim causal window
+    let linearOutShards := (List.range cpSize).map (fun r =>
+      chunkPrimDimN 0 cpSize r fullOut)
+    fw_maybe_shuffle_collective linearOutShards decodedCuQ cpSize cpRank
+
+/-- The sharded-K/V wrapper has no collective communication at CP size one. -/
+@[simp] theorem fw_attn_zigzag_collective_sharded_kv_cpSize_one
+    (qShards kShards vShards : List Tensor) (cuQ cuKV : Tensor)
+    (qHeads kvHeads qDim vDim cpRank : Nat) (causal : Bool) (window : Nat) :
+    fw_attn_zigzag_collective_sharded_kv qShards kShards vShards cuQ cuKV
+        qHeads kvHeads qDim vDim causal window 1 cpRank =
+      fw_attn_varlen
+        (qShards.getD cpRank (zeroTensor []))
+        (kShards.getD cpRank (zeroTensor []))
+        (vShards.getD cpRank (zeroTensor []))
+        cuQ cuKV qHeads kvHeads qDim vDim causal window := by
+  simp [fw_attn_zigzag_collective_sharded_kv]
 
 /-- The one-rank branch is exactly ordinary varlen attention. -/
 @[simp] theorem fw_attn_zigzag_collective_cpSize_one
