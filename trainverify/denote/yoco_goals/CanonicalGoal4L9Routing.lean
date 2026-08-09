@@ -246,4 +246,3 @@ theorem canonical_goal4_l9_gate_scores
 end
 end TrainVerify.Denote.GeneratedPatterns
 
-
