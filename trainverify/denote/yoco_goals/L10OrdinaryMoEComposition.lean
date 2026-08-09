@@ -2,6 +2,8 @@
 import denote.yoco_goals.L10OrdinaryMoEBoundary
 import denote.yoco_goals.L10OrdinaryMoEExpert
 import denote.yoco_goals.L10OrdinaryMoENorm
+import denote.yoco_goals.L10OrdinaryQKV
+import denote.yoco_goals.CanonicalL10OrdinaryAttention
 
 set_option linter.style.longLine false
 set_option linter.style.nativeDecide false
@@ -87,7 +89,32 @@ theorem l10_ordinary_moe_composition (initSM initPM : Store)
     initSM initPM hResidualOrd hExpertOrd hGateOrd hDown
   exact gather2Rel_of_ordinary2Rel hBoundary (by decide)
 
+/-- End-to-end faithful L10 ordinary composition.  The only computed boundary
+supplied by the caller is the faithful incoming residual at `5485`; Q/K/V,
+sliding-window attention, the attention residual, and the complete MoE tail are
+all reconstructed on `sm_goal_1` / `pm_goal_1`. -/
+theorem l10_ordinary_faithful_composition (initSM initPM : Store)
+    (hSM : StoreShapesHold initSM sm_goal_1InitEnv)
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
+    (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
+    (hBoundary5485 : Gather2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5485)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9394)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9395)
+      [4096, 1024] [2048, 1024]) :
+    Gather2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5540)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9558)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9559)
+      [4096, 1024] [2048, 1024] := by
+  have hV := l10o_v5493_rel_from_boundary initSM initPM hInit hBoundary5485
+  have hQK := l10o_q5495_k5496_rels_from_boundary initSM initPM hInit hBoundary5485
+  have hAttention := l10o_residual5507_rel_from_boundary5485_of_qkv
+    initSM initPM hInit hBoundary5485 hQK.1 hQK.2 hV
+  exact l10_ordinary_moe_composition initSM initPM hSM hPM hInit hAttention
+
 #print axioms l10_ordinary_moe_composition
+#print axioms l10_ordinary_faithful_composition
 
 end
 end TrainVerify.Denote.GeneratedPatterns
