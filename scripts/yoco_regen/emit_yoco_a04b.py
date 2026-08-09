@@ -369,7 +369,8 @@ STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/ZigzagGoalStatement.lean",
 )
 GENERATED_GOAL_MODULES = (
-    "Goal_1.lean", "Goal_2.lean", "Goal_3.lean", "Goal_4.lean", "Goal_5.lean",
+    "Goal_1.lean", "Goal_1_Cut.lean", "Goal_2.lean", "Goal_3.lean",
+    "Goal_4.lean", "Goal_4_Cut.lean", "Goal_5.lean",
     "Goal_1_CutToFull.lean", "Goal_2_CutToFull.lean", "Goal_3_CutToFull.lean",
     "Goal_4_CutToFull.lean", "Goal_5_CutToFull.lean",
     "Pattern_1.lean", "Pattern_2.lean", "Pattern_3.lean", "Pattern_4.lean",

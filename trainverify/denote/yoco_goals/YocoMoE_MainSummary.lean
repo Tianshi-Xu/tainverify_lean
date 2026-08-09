@@ -84,9 +84,9 @@ theorem yoco_moe_cut_tier_main :
     pattern_5_stmt ∧
     -- Joint witness for P1 (with labels hypothesis)
     (∃ (initSM initPM : Store),
-      StoreShapesHold initSM sm_goal_1InitEnv ∧
-      StoreShapesHold initPM pm_goal_1InitEnv ∧
-      InitGoalsHold pm_goal_1.numRanks goal_1_cut_initGoals initSM initPM ∧
+      StoreShapesHold initSM sm_goal_1_cutInitEnv ∧
+      StoreShapesHold initPM pm_goal_1_cutInitEnv ∧
+      InitGoalsHold pm_goal_1_cut.numRanks goal_1_cut_initGoals initSM initPM ∧
       (∀ l : Nat, l < 4096 → scalarToNat (valAt (initPM 4678) l) < 154880)) ∧
     -- Joint witness for P2 (no extra hypothesis)
     (∃ (initSM initPM : Store),
@@ -112,9 +112,9 @@ theorem yoco_moe_cut_tier_main :
       initPM 5885 = cu_pin_value) ∧
     -- Joint witness for P4 (no extra hypothesis)
     (∃ (initSM initPM : Store),
-      StoreShapesHold initSM sm_goal_4InitEnv ∧
-      StoreShapesHold initPM pm_goal_4InitEnv ∧
-      InitGoalsHold pm_goal_4.numRanks goal_4_cut_initGoals initSM initPM) := by
+      StoreShapesHold initSM sm_goal_4_cutInitEnv ∧
+      StoreShapesHold initPM pm_goal_4_cutInitEnv ∧
+      InitGoalsHold pm_goal_4_cut.numRanks goal_4_cut_initGoals initSM initPM) := by
   refine ⟨prove_pattern_1_plain_legacy, prove_pattern_2, prove_pattern_3,
           prove_pattern_4, prove_pattern_5,
           pattern_1_joint_hypothesis_witness,

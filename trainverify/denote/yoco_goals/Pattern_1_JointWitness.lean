@@ -2,9 +2,9 @@
 
 Joint hypothesis witness for Pattern_1:
   ∃ (initSM initPM : Store),
-    StoreShapesHold initSM sm_goal_1InitEnv ∧
-    StoreShapesHold initPM pm_goal_1InitEnv ∧
-    InitGoalsHold pm_goal_1.numRanks goal_1_cut_initGoals initSM initPM ∧
+    StoreShapesHold initSM sm_goal_1_cutInitEnv ∧
+    StoreShapesHold initPM pm_goal_1_cutInitEnv ∧
+    InitGoalsHold pm_goal_1_cut.numRanks goal_1_cut_initGoals initSM initPM ∧
     (∀ l : Nat, l < 4096 → scalarToNat (valAt (initPM 4678) l) < 154880)
 
 This proves that the hypotheses of `goal_1_stmt_with_labels` are jointly
@@ -4100,18 +4100,18 @@ def shapeOfPM_P1 : Tid → Shape := lookupShape shapeOfPM_P1_list
     zeroStore shapeOfPM_P1` satisfies all four hypotheses simultaneously. -/
 theorem pattern_1_joint_hypothesis_witness :
     ∃ (initSM initPM : Store),
-      StoreShapesHold initSM sm_goal_1InitEnv ∧
-      StoreShapesHold initPM pm_goal_1InitEnv ∧
-      InitGoalsHold pm_goal_1.numRanks goal_1_cut_initGoals initSM initPM ∧
+      StoreShapesHold initSM sm_goal_1_cutInitEnv ∧
+      StoreShapesHold initPM pm_goal_1_cutInitEnv ∧
+      InitGoalsHold pm_goal_1_cut.numRanks goal_1_cut_initGoals initSM initPM ∧
       (∀ l : Nat, l < 4096 → scalarToNat (valAt (initPM 4678) l) < 154880) := by
   refine ⟨zeroStore shapeOfSM_P1, zeroStore shapeOfPM_P1, ?_, ?_, ?_, ?_⟩
-  · show StoreShapesHold (zeroStore shapeOfSM_P1) (shapeEnvOfList sm_goal_1InitShapes)
+  · show StoreShapesHold (zeroStore shapeOfSM_P1) (shapeEnvOfList sm_goal_1_cutInitShapes)
     apply zeroStore_shapes_hold_of_list
     native_decide
-  · show StoreShapesHold (zeroStore shapeOfPM_P1) (shapeEnvOfList pm_goal_1InitShapes)
+  · show StoreShapesHold (zeroStore shapeOfPM_P1) (shapeEnvOfList pm_goal_1_cutInitShapes)
     apply zeroStore_shapes_hold_of_list
     native_decide
-  · apply zeroStore2_initGoalsHold shapeOfSM_P1 shapeOfPM_P1 pm_goal_1.numRanks
+  · apply zeroStore2_initGoalsHold shapeOfSM_P1 shapeOfPM_P1 pm_goal_1_cut.numRanks
     native_decide
   · intro l _hl
     unfold zeroStore

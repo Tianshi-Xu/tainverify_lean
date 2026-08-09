@@ -2,9 +2,9 @@
 
 Joint hypothesis witness for Pattern_4:
   ∃ (initSM initPM : Store),
-    StoreShapesHold initSM sm_goal_4InitEnv ∧
-    StoreShapesHold initPM pm_goal_4InitEnv ∧
-    InitGoalsHold pm_goal_4.numRanks goal_4_cut_initGoals initSM initPM
+    StoreShapesHold initSM sm_goal_4_cutInitEnv ∧
+    StoreShapesHold initPM pm_goal_4_cutInitEnv ∧
+    InitGoalsHold pm_goal_4_cut.numRanks goal_4_cut_initGoals initSM initPM
 
 Pattern_4's stmt (goal_4_stmt_cut) has no extra hypothesis (unlike P1's
 `_with_labels` or P3's `_with_pins`), so the joint witness is just the
@@ -4094,17 +4094,17 @@ def shapeOfPM_P4 : Tid → Shape := lookupShape shapeOfPM_P4_list
     zeroStore shapeOfPM_P4` satisfies all three hypotheses simultaneously. -/
 theorem pattern_4_joint_hypothesis_witness :
     ∃ (initSM initPM : Store),
-      StoreShapesHold initSM sm_goal_4InitEnv ∧
-      StoreShapesHold initPM pm_goal_4InitEnv ∧
-      InitGoalsHold pm_goal_4.numRanks goal_4_cut_initGoals initSM initPM := by
+      StoreShapesHold initSM sm_goal_4_cutInitEnv ∧
+      StoreShapesHold initPM pm_goal_4_cutInitEnv ∧
+      InitGoalsHold pm_goal_4_cut.numRanks goal_4_cut_initGoals initSM initPM := by
   refine ⟨zeroStore shapeOfSM_P4, zeroStore shapeOfPM_P4, ?_, ?_, ?_⟩
-  · show StoreShapesHold (zeroStore shapeOfSM_P4) (shapeEnvOfList sm_goal_4InitShapes)
+  · show StoreShapesHold (zeroStore shapeOfSM_P4) (shapeEnvOfList sm_goal_4_cutInitShapes)
     apply zeroStore_shapes_hold_of_list
     native_decide
-  · show StoreShapesHold (zeroStore shapeOfPM_P4) (shapeEnvOfList pm_goal_4InitShapes)
+  · show StoreShapesHold (zeroStore shapeOfPM_P4) (shapeEnvOfList pm_goal_4_cutInitShapes)
     apply zeroStore_shapes_hold_of_list
     native_decide
-  · apply zeroStore2_initGoalsHold shapeOfSM_P4 shapeOfPM_P4 pm_goal_4.numRanks
+  · apply zeroStore2_initGoalsHold shapeOfSM_P4 shapeOfPM_P4 pm_goal_4_cut.numRanks
     native_decide
 
 end TrainVerify.Denote.GeneratedPatterns
