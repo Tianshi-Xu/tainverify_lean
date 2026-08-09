@@ -85,6 +85,7 @@ STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/CanonicalL23Router.lean",
     "trainverify/denote/yoco_goals/CanonicalLossBackboneTail.lean",
     "trainverify/denote/yoco_goals/CanonicalLossBackboneTailGoal2.lean",
+    "trainverify/denote/yoco_goals/CanonicalL10OrdinaryAttention.lean",
     "trainverify/denote/yoco_goals/L11OrdinaryQKV.lean",
     "trainverify/denote/yoco_goals/CanonicalL11OrdinaryAttention.lean",
     *(f"trainverify/denote/yoco_goals/CanonicalGoal4L{layer}Routing.lean" for layer in range(12, 24)),
