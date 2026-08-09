@@ -245,7 +245,7 @@ theorem canonical_l23_norm_from_l22_inputs (initSM initPM : Store)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11478)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11479)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
-      [4096, 1024] [2048, 1024])
+      [4096, 16, 64] [2048, 16, 64])
     (hProjectionWeight : denoteGraphDistributedFaithful sm_goal_1 initSM 6210 =
       denoteGraphDistributedFaithful pm_goal_1 initPM 6210)
     (hProjectionWeightShape :
@@ -275,7 +275,7 @@ theorem canonical_l23_activation_from_l22_inputs (initSM initPM : Store)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11478)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11479)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
-      [4096, 1024] [2048, 1024])
+      [4096, 16, 64] [2048, 16, 64])
     (hProjectionWeight : denoteGraphDistributedFaithful sm_goal_1 initSM 6210 =
       denoteGraphDistributedFaithful pm_goal_1 initPM 6210)
     (hProjectionWeightShape :

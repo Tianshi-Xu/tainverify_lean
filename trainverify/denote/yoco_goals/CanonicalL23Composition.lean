@@ -72,7 +72,7 @@ theorem canonical_l23_composition_to_gather (initSM initPM : Store)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11478)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11479)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
-      [4096, 1024] [2048, 1024]) :
+      [4096, 16, 64] [2048, 16, 64]) :
     Gather2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 6255)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11712)
@@ -115,7 +115,7 @@ theorem canonical_goal_1_from_l22_boundaries (initSM initPM : Store)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11478)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11479)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
-      [4096, 1024] [2048, 1024])
+      [4096, 16, 64] [2048, 16, 64])
     (hlabels : ∀ l < 4096, scalarToNat (valAt (initPM 4931) l) < 154880) :
     InitGoalHolds pm_goal_1.numRanks goal_1
       (denoteGraphDistributedFaithful sm_goal_1 initSM)

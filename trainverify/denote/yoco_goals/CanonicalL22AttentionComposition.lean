@@ -123,6 +123,21 @@ private theorem cL22C_init_singleton_eq (initSM initPM : Store)
     htp, hts, hgd] at hv
   simpa only [List.map, reconstructWithDim] using hv
 
+private theorem cL22C_chunk0_of_gather (x0 x1 : Tensor)
+    (hx0 : x0.shape = [2048, 16, 64])
+    (hx1 : x1.shape = [2048, 16, 64]) :
+    chunkPrimDimN 0 2 0 (allGatherPrimDimN 0 2 0 [x0, x1]) = x0 := by
+  exact chunk_allGather_cp2_dim0_3d x0 x1 2048 16 64 0 hx0 hx1
+    (by decide) (by decide) (by decide) (by decide)
+
+private theorem cL22C_chunk1_of_gather (x0 x1 : Tensor)
+    (hx0 : x0.shape = [2048, 16, 64])
+    (hx1 : x1.shape = [2048, 16, 64]) :
+    chunkPrimDimN 0 2 1 (allGatherPrimDimN 0 2 0 [x0, x1]) = x1 := by
+  simpa only [List.getD_cons_succ, List.getD_cons_zero] using
+    (chunk_allGather_cp2_dim0_3d x0 x1 2048 16 64 1 hx0 hx1
+      (by decide) (by decide) (by decide) (by decide))
+
 -- The canonical Q path is fully composed from the sole computed L21 boundary.
 -- The conclusion exposes the genuine zigzag Q relation immediately before attention;
 -- no Q computed relation is assumed.
@@ -139,10 +154,8 @@ theorem canonical_l22_q_relation_from_l21
       [4096, 1024] [2048, 1024]) :
     Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 6201)
-      (fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11452)
-        (denoteGraphDistributedFaithful pm_goal_1 initPM 6200))
-      (fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11453)
-        (denoteGraphDistributedFaithful pm_goal_1 initPM 6200))
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11454)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11455)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
       [4096, 16, 64] [2048, 16, 64] := by
   have hsmBase := cL22C_multiref_reduce sm_goal_1 initSM 887 0 2 6193 8929
@@ -201,9 +214,149 @@ theorem canonical_l22_q_relation_from_l21
       [16, 64, 1024] := by
     rw [hpmW]
     exact hPM 6200 [16, 64, 1024] (by native_decide)
-  rw [canonical_l22_q_sm_reduce initSM, hwEq]
-  exact Zigzag2Rel.per_head_linear 2048 1024 16 64 hRms hwShape
-    (by decide) (by decide) (by decide) (by decide)
+  have hProjected : Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 6201)
+      (fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11452)
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 6200))
+      (fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11453)
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 6200))
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 16, 64] [2048, 16, 64] := by
+    rw [canonical_l22_q_sm_reduce initSM, hwEq]
+    exact Zigzag2Rel.per_head_linear 2048 1024 16 64 hRms hwShape
+      (by decide) (by decide) (by decide) (by decide)
+  have hCommute := fw_per_head_mix_precision_linear_allGather0_commute_2
+    (denoteGraphDistributedFaithful pm_goal_1 initPM 11452)
+    (denoteGraphDistributedFaithful pm_goal_1 initPM 11453)
+    (denoteGraphDistributedFaithful pm_goal_1 initPM 6200)
+    2048 1024 16 64 (by decide) (by decide) (by decide) (by decide)
+    hRms.rank0_shape hRms.rank1_shape hwShape
+  have hFullPM : denoteGraphDistributedFaithful pm_goal_1 initPM 6201 =
+      allGatherPrimDimN 0 2 0
+        [fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11452)
+          (denoteGraphDistributedFaithful pm_goal_1 initPM 6200),
+         fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11453)
+          (denoteGraphDistributedFaithful pm_goal_1 initPM 6200)] := by
+    rw [canonical_l22_q_pm_full_reduce initPM,
+      canonical_l22_q_pm_gather_reduce initPM, hCommute]
+  have hChunks := canonical_l22_q_pm_chunks_reduce initPM
+  have hChunk0 : denoteGraphDistributedFaithful pm_goal_1 initPM 11454 =
+      fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11452)
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 6200) := by
+    calc
+      _ = chunkPrimDimN 0 2 0
+          (denoteGraphDistributedFaithful pm_goal_1 initPM 6201) := hChunks.1
+      _ = chunkPrimDimN 0 2 0 (allGatherPrimDimN 0 2 0
+          [fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11452)
+            (denoteGraphDistributedFaithful pm_goal_1 initPM 6200),
+           fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11453)
+            (denoteGraphDistributedFaithful pm_goal_1 initPM 6200)]) :=
+        congrArg (chunkPrimDimN 0 2 0) hFullPM
+      _ = _ := cL22C_chunk0_of_gather _ _
+        hProjected.rank0_shape hProjected.rank1_shape
+  have hChunk1 : denoteGraphDistributedFaithful pm_goal_1 initPM 11455 =
+      fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11453)
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 6200) := by
+    calc
+      _ = chunkPrimDimN 0 2 1
+          (denoteGraphDistributedFaithful pm_goal_1 initPM 6201) := hChunks.2
+      _ = chunkPrimDimN 0 2 1 (allGatherPrimDimN 0 2 0
+          [fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11452)
+            (denoteGraphDistributedFaithful pm_goal_1 initPM 6200),
+           fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11453)
+            (denoteGraphDistributedFaithful pm_goal_1 initPM 6200)]) :=
+        congrArg (chunkPrimDimN 0 2 1) hFullPM
+      _ = _ := cL22C_chunk1_of_gather _ _
+        hProjected.rank0_shape hProjected.rank1_shape
+  rw [hChunk0, hChunk1]
+  exact hProjected
+
+private theorem cL22C_leaf (g : GraphDecl) (init : Store) (tid : Tid)
+    (hnil : ∀ n ∈ g.nodes, n.outs ≠ [])
+    (hwrite : ∀ n ∈ g.nodes, tid ∉ n.outs) :
+    denoteGraphDistributedFaithful g init tid = init tid := by
+  unfold denoteGraphDistributedFaithful
+  exact foldl_applyNodeDistributedFaithful_at_not_written g g.nodes init tid hnil hwrite
+
+/-- The real L22 sharded-K/V attention nodes preserve the Q relation.  The
+query cumulative-sequence alias is obtained from the generated external-value
+class, while SM/PM metadata equality comes from the init lineage contract. -/
+theorem canonical_l22_attention_from_qkv
+    (initSM initPM : Store)
+    (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
+    (hPMValues : InputValueClassesHold pmInputValueClasses initPM)
+    (hPacked : PackedCuSeqlensWF (initPM 6252) 4096 2)
+    (hQ : Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 6201)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11454)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11455)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 16, 64] [2048, 16, 64])
+    (hK : Gather2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 6202)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11466)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11467)
+      [4096, 4, 64] [2048, 4, 64])
+    (hV : Gather2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 6203)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11472)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11473)
+      [4096, 4, 64] [2048, 4, 64]) :
+    Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 6206)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11478)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11479)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 16, 64] [2048, 16, 64] := by
+  have hsm6204 := cL22C_leaf sm_goal_1 initSM 6204
+    (by native_decide) (by native_decide)
+  have hpm6204 := cL22C_leaf pm_goal_1 initPM 6204
+    (by native_decide) (by native_decide)
+  have hsm6205 := cL22C_leaf sm_goal_1 initSM 6205
+    (by native_decide) (by native_decide)
+  have hpm6205 := cL22C_leaf pm_goal_1 initPM 6205
+    (by native_decide) (by native_decide)
+  have hpm6252 := cL22C_leaf pm_goal_1 initPM 6252
+    (by native_decide) (by native_decide)
+  have h6204Init := cL22C_init_singleton_eq initSM initPM hInit initGoal_6204
+    (by native_decide) 6204 rfl rfl rfl rfl
+  have h6205Init := cL22C_init_singleton_eq initSM initPM hInit initGoal_6205
+    (by native_decide) 6205 rfl rfl rfl rfl
+  have hMetaQ : denoteGraphDistributedFaithful sm_goal_1 initSM 6204 =
+      denoteGraphDistributedFaithful pm_goal_1 initPM 6204 := by
+    rw [hsm6204, hpm6204, h6204Init]
+  have hMetaKV : denoteGraphDistributedFaithful sm_goal_1 initSM 6205 =
+      denoteGraphDistributedFaithful pm_goal_1 initPM 6205 := by
+    rw [hsm6205, hpm6205, h6205Init]
+  have hInitAlias : initPM 6204 = initPM 6252 :=
+    InputValueClassesHold.eq_of_mem hPMValues (c := pmInputValueClasses[1])
+      (by native_decide) (by native_decide) (by native_decide)
+  have hMetaAlias : denoteGraphDistributedFaithful pm_goal_1 initPM 6204 =
+      denoteGraphDistributedFaithful pm_goal_1 initPM 6252 := by
+    rw [hpm6204, hpm6252, hInitAlias]
+  have hDecoded : decodeCuSeqlens
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252) = [0, 2 * 2048] := by
+    rw [hpm6252]
+    simpa only [Nat.reduceMul] using hPacked.decoded_single
+  rw [canonical_l22_attention_sm_reduce initSM,
+    canonical_l22_attention_pm0_reduce initPM,
+    canonical_l22_attention_pm1_reduce initPM,
+    hMetaQ, hMetaKV, hMetaAlias]
+  exact Zigzag2Rel.attn_zigzag_sharded_kv
+    (denoteGraphDistributedFaithful sm_goal_1 initSM 6201)
+    (denoteGraphDistributedFaithful pm_goal_1 initPM 11454)
+    (denoteGraphDistributedFaithful pm_goal_1 initPM 11455)
+    (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+    (denoteGraphDistributedFaithful sm_goal_1 initSM 6202)
+    (denoteGraphDistributedFaithful pm_goal_1 initPM 11466)
+    (denoteGraphDistributedFaithful pm_goal_1 initPM 11467)
+    (denoteGraphDistributedFaithful sm_goal_1 initSM 6203)
+    (denoteGraphDistributedFaithful pm_goal_1 initPM 11472)
+    (denoteGraphDistributedFaithful pm_goal_1 initPM 11473)
+    (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+    (denoteGraphDistributedFaithful pm_goal_1 initPM 6205)
+    2048 16 4 64 64 true 0 hQ hK hV rfl hDecoded
+    (by decide) (by decide) (by decide) (by decide) (by decide)
 
 end
 end TrainVerify.Denote.GeneratedPatterns

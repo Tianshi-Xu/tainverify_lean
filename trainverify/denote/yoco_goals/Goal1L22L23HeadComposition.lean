@@ -36,10 +36,8 @@ theorem canonical_l22_qkv_from_layer21_output
       [4096, 1024] [2048, 1024]) :
     Zigzag2Rel
         (denoteGraphDistributedFaithful sm_goal_1 initSM 6201)
-        (fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11452)
-          (denoteGraphDistributedFaithful pm_goal_1 initPM 6200))
-        (fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11453)
-          (denoteGraphDistributedFaithful pm_goal_1 initPM 6200))
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 11454)
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 11455)
         (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
         [4096, 16, 64] [2048, 16, 64] ∧
       Gather2Rel
@@ -57,14 +55,15 @@ theorem canonical_l22_qkv_from_layer21_output
     canonical_l22_k_ordinary_relation initSM initPM hPM hInit hCache,
     canonical_l22_v_ordinary_relation initSM initPM hPM hInit hCache⟩
 
-/-- Green suffix from the sole unresolved L22 attention-output relation through
-all of L23, unshuffle/RMSNorm, and the faithful Goal-1 CE loss head.  The L22
-residual bypass is derived from the L21 output rather than assumed. -/
-theorem canonical_goal_1_from_layer21_and_l22_attention
+/-- The canonical Goal-1 suffix is closed from the L21 boundary: Q/K/V, the
+real sharded-K/V attention nodes, their 3-D to 2-D reshape, the L22 residual
+bypass, all of L23, and the CE loss head are composed internally. -/
+theorem canonical_goal_1_from_layer21
     (initSM initPM : Store)
     (hSM : StoreShapesHold initSM sm_goal_1InitEnv)
     (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
     (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
+    (hPMValues : InputValueClassesHold Generated.pmInputValueClasses initPM)
     (hPacked : PackedCuSeqlensWF (initPM 6252) 4096 2)
     (hLayer21 : Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 6193)
@@ -72,16 +71,14 @@ theorem canonical_goal_1_from_layer21_and_l22_attention
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11445)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
       [4096, 1024] [2048, 1024])
-    (hAttention : Zigzag2Rel
-      (denoteGraphDistributedFaithful sm_goal_1 initSM 6206)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 11478)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 11479)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
-      [4096, 1024] [2048, 1024])
     (hlabels : ∀ l < 4096, scalarToNat (valAt (initPM 4931) l) < 154880) :
     InitGoalHolds pm_goal_1.numRanks Generated.goal_1
       (denoteGraphDistributedFaithful sm_goal_1 initSM)
       (denoteGraphDistributedFaithful pm_goal_1 initPM) := by
+  have hQKV := canonical_l22_qkv_from_layer21_output initSM initPM
+    hSM hPM hInit hLayer21
+  have hAttention := canonical_l22_attention_from_qkv initSM initPM hInit
+    hPMValues hPacked hQKV.1 hQKV.2.1 hQKV.2.2
   have hResidual := canonical_l22_residual_from_layer21_output initSM initPM hLayer21
   exact canonical_goal_1_from_l22_boundaries initSM initPM hSM hPM hInit hPacked
     hResidual hAttention hlabels
