@@ -13,7 +13,7 @@
 
    Each theorem below therefore exports the strongest statement actually proved,
    without `sorry` or impossible strengthening. -/
-import denote.yoco_goals.Pattern_1
+import denote.yoco_goals.Goal1PublicFaithful
 import denote.yoco_goals.Pattern_2
 import denote.yoco_goals.Pattern_3
 import denote.yoco_goals.Pattern_4
@@ -32,9 +32,11 @@ open TrainVerify.Denote.GeneratedPatterns
 
 namespace TrainVerify.Denote.GeneratedPatternInstances
 
-/-- Goal 1's cut instance, retaining the caller-side labels contract. -/
-theorem prove_goal_1_from_pattern_1 : goal_1_stmt_with_labels :=
-  prove_pattern_1 pattern_1_target.goal_1
+/-- Goal 1's public production theorem.  Unlike the legacy pattern-local
+plain-denotation result, this proves the generated ancestry-closed full statement
+under `denoteGraphDistributedFaithful` and the TID 4931 caller contract. -/
+theorem prove_goal_1_from_pattern_1 : goal_1_stmt_full :=
+  prove_pattern_1
 
 /-- Goal 1 on the real full ring-aware graph, proved independently by final
 RMSNorm reconstruction plus cross-entropy sharding. -/

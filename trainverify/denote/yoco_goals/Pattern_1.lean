@@ -4427,7 +4427,7 @@ theorem prove_goal_1 : goal_1_stmt_with_labels := by
           hlabels_bound (((0 : Nat) : Scalar))]
 
 
-theorem prove_pattern_1 : pattern_1_stmt := by
+theorem prove_pattern_1_plain_legacy : pattern_1_stmt := by
   intro _ hpat
   cases hpat
   exact prove_goal_1
