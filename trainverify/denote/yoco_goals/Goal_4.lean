@@ -3741,8 +3741,5 @@ def Goal4ExternalInputContract (initSM initPM : Store) : Prop :=
 def goal_4_stmt_full : Prop :=
   CoarseLineageHoldsWithInitDistributedFaithfulWithContract sm_goal_4 pm_goal_4 goal_4 sm_goal_4InitEnv pm_goal_4InitEnv goal_4_full_initGoals Goal4ExternalInputContract
 
--- Compatibility name only: this is the same ancestry-closed FULL theorem, not a caller-certified cut.
-abbrev goal_4_stmt_cut : Prop := goal_4_stmt_full
-
 end TrainVerify.Denote.GeneratedGoals
 
