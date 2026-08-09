@@ -273,6 +273,7 @@ STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/L14ZigzagMoEDown.lean",
     "trainverify/denote/yoco_goals/L14ZigzagMoEOutput.lean",
     "trainverify/denote/yoco_goals/L14ZigzagMoEComposition.lean",
+    "trainverify/denote/yoco_goals/Goal1ExternalToL14Composition.lean",
     *(f"trainverify/denote/yoco_goals/CanonicalGoal4L{layer}Routing.lean" for layer in range(12, 24)),
     "trainverify/denote/yoco_goals/FaithfulStackGather.lean",
     "trainverify/denote/yoco_goals/CanonicalGoal1EmbeddingEntry.lean",
