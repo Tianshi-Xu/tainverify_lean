@@ -153,6 +153,7 @@ STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/CanonicalL23Router.lean",
     "trainverify/denote/yoco_goals/CanonicalLossBackboneTail.lean",
     "trainverify/denote/yoco_goals/CanonicalLossBackboneTailGoal2.lean",
+    "trainverify/denote/yoco_goals/Goal2FaithfulFull.lean",
     "trainverify/denote/yoco_goals/CanonicalL0OrdinaryAttention.lean",
     "trainverify/denote/yoco_goals/CanonicalGoal1ExternalL0Composition.lean",
     "trainverify/denote/yoco_goals/Goal1L1L11CacheComposition.lean",
