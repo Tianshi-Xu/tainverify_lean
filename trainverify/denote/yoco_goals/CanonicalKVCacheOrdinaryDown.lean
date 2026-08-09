@@ -695,6 +695,118 @@ private theorem ordinary_linear
   exact fw_mix_precision_linear_allGather0_commute_2 rank0 rank1 w
     lDim inDim outDim hl hin hout h.rank0_shape h.rank1_shape hw
 
+/-- fw_swiglu commutes with dim-0 sharding. -/
+private theorem cKVCOd_swiglu_allGather0_commute_2 (a b c d : Tensor) (shard hidden : Nat)
+    (hshard : 0 < shard) (hhid : 0 < hidden)
+    (ha : a.shape = [shard, hidden]) (hb : b.shape = [shard, hidden])
+    (hc : c.shape = [shard, hidden]) (hd : d.shape = [shard, hidden]) :
+    fw_swiglu (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])
+      = allGatherPrimDimN 0 2 0 [fw_swiglu a c, fw_swiglu b d] := by
+  have hhead_ab : (([a, b] : List Tensor).head?.map (fun t => t.shape)).getD [] = [shard, hidden] := by simp [ha]
+  have hhead_cd : (([c, d] : List Tensor).head?.map (fun t => t.shape)).getD [] = [shard, hidden] := by simp [hc]
+  have hG_ab : (allGatherPrimDimN 0 2 0 [a, b]).shape = [shard * 2, hidden] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [shard, hidden] hhead_ab]; simp [List.set, List.getD]
+  have hG_cd : (allGatherPrimDimN 0 2 0 [c, d]).shape = [shard * 2, hidden] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [shard, hidden] hhead_cd]; simp [List.set, List.getD]
+  have hswig_shape : ∀ (g u : Tensor), u.shape = [shard, hidden] → (fw_swiglu g u).shape = [shard, hidden] := by
+    intro g u hu; unfold fw_swiglu Tensor.mkShape; simp; exact hu
+  have hswig_ac : (fw_swiglu a c).shape = [shard, hidden] := hswig_shape a c hc
+  have hswig_bd : (fw_swiglu b d).shape = [shard, hidden] := hswig_shape b d hd
+  have hhead_swig : (([fw_swiglu a c, fw_swiglu b d] : List Tensor).head?.map (fun t => t.shape)).getD [] = [shard, hidden] := by
+    simp [hswig_ac]
+  have hRHS_shape : (allGatherPrimDimN 0 2 0 [fw_swiglu a c, fw_swiglu b d]).shape = [shard * 2, hidden] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [shard, hidden] hhead_swig]; simp [List.set, List.getD]
+  apply Tensor.ext
+  · have hLHS_shape : (fw_swiglu (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])).shape = [shard * 2, hidden] := by
+      unfold fw_swiglu Tensor.mkShape; simp; exact hG_cd
+    rw [hLHS_shape, hRHS_shape]
+  · intro idx hidx
+    have hLHS_shape : (fw_swiglu (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])).shape = [shard * 2, hidden] := by
+      unfold fw_swiglu Tensor.mkShape; simp; exact hG_cd
+    rw [hLHS_shape] at hidx
+    have hidx_bound : idx < shard * 2 * hidden := by simpa [prodShape] using hidx
+    set row := idx / hidden with hrow_def
+    set j := idx % hidden with hj_def
+    have hj_lt : j < hidden := by rw [hj_def]; exact Nat.mod_lt _ hhid
+    have hrow_lt : row < 2 * shard := by
+      rw [hrow_def]; exact Nat.div_lt_iff_lt_mul hhid |>.mpr (by linarith [hidx_bound])
+    set r := row / shard with hr_def
+    set i := row % shard with hi_def
+    have hi_lt : i < shard := by rw [hi_def]; exact Nat.mod_lt _ hshard
+    have hr_lt : r < 2 := by
+      rw [hr_def]; exact Nat.div_lt_iff_lt_mul hshard |>.mpr (by linarith [hrow_lt])
+    have hidx_eq : idx = (r * shard + i) * hidden + j := by
+      rw [hr_def, hi_def, hj_def, hrow_def]
+      have h1 : row = shard * (row / shard) + row % shard := (Nat.div_add_mod row shard).symm
+      have h2 : idx = hidden * (idx / hidden) + idx % hidden := (Nat.div_add_mod idx hidden).symm
+      calc idx = hidden * (idx / hidden) + idx % hidden := h2
+        _ = row * hidden + j := by rw [← hrow_def, ← hj_def]; ring
+        _ = (shard * (row / shard) + row % shard) * hidden + j := by rw [← h1]
+        _ = (row / shard * shard + row % shard) * hidden + j := by ring
+    -- LHS at idx = silu(gather_ab[idx]) * gather_cd[idx]
+    have hLHS_val : valAt (fw_swiglu (allGatherPrimDimN 0 2 0 [a, b]) (allGatherPrimDimN 0 2 0 [c, d])) idx
+        = siluScalar (valAt (allGatherPrimDimN 0 2 0 [a, b]) idx) * valAt (allGatherPrimDimN 0 2 0 [c, d]) idx := by
+      unfold fw_swiglu Tensor.mkShape valAt
+      simp [hG_cd, prodShape]
+      simp [hidx_bound]
+    rw [hLHS_val]
+    have hshapes_ab : ∀ r' (_ : r' < 2),
+        (([a, b].getD r' (zeroTensor [shard, hidden]))).shape = [shard, hidden] := by
+      intro r' hr'; have : r' = 0 ∨ r' = 1 := by omega
+      rcases this with h | h <;> rw [h] <;> simp [List.getD, ha, hb]
+    have hshapes_cd : ∀ r' (_ : r' < 2),
+        (([c, d].getD r' (zeroTensor [shard, hidden]))).shape = [shard, hidden] := by
+      intro r' hr'; have : r' = 0 ∨ r' = 1 := by omega
+      rcases this with h | h <;> rw [h] <;> simp [List.getD, hc, hd]
+    have hshapes_swig : ∀ r' (_ : r' < 2),
+        (([fw_swiglu a c, fw_swiglu b d].getD r' (zeroTensor [shard, hidden]))).shape = [shard, hidden] := by
+      intro r' hr'; have : r' = 0 ∨ r' = 1 := by omega
+      rcases this with h | h <;> rw [h] <;> simp [List.getD, hswig_ac, hswig_bd]
+    rw [hidx_eq]
+    rw [allGatherPrimDimN0_valAt 2 shard hidden [a, b] (by omega) hshard hhid hhead_ab hshapes_ab
+          r hr_lt i hi_lt j hj_lt]
+    rw [allGatherPrimDimN0_valAt 2 shard hidden [c, d] (by omega) hshard hhid hhead_cd hshapes_cd
+          r hr_lt i hi_lt j hj_lt]
+    rw [allGatherPrimDimN0_valAt 2 shard hidden [fw_swiglu a c, fw_swiglu b d]
+          (by omega) hshard hhid hhead_swig hshapes_swig r hr_lt i hi_lt j hj_lt]
+    have hr_lt' : r = 0 ∨ r = 1 := by
+      interval_cases r
+      · exact Or.inl rfl
+      · exact Or.inr rfl
+    have hgetD_swig : [fw_swiglu a c, fw_swiglu b d].getD r (zeroTensor [shard, hidden]) =
+        fw_swiglu ([a, b].getD r (zeroTensor [shard, hidden])) ([c, d].getD r (zeroTensor [shard, hidden])) := by
+      rcases hr_lt' with h | h <;> rw [h] <;> simp [List.getD]
+    rw [hgetD_swig]
+    set g := [a, b].getD r (zeroTensor [shard, hidden]) with hg_def
+    set u := [c, d].getD r (zeroTensor [shard, hidden]) with hu_def
+    have hg_shape : g.shape = [shard, hidden] := hshapes_ab r hr_lt
+    have hu_shape : u.shape = [shard, hidden] := hshapes_cd r hr_lt
+    have hloc_bound : i * hidden + j < shard * hidden := by
+      have h1 : i * hidden + j < i * hidden + hidden := by omega
+      have h2 : i * hidden + hidden = (i + 1) * hidden := by ring
+      have h3 : (i + 1) * hidden ≤ shard * hidden := Nat.mul_le_mul_right _ (by omega)
+      omega
+    unfold fw_swiglu Tensor.mkShape valAt
+    simp [hu_shape, hg_shape, prodShape, hloc_bound]
+
+
+private theorem ordinary_swiglu
+    {fullA rankA0 rankA1 fullB rankB0 rankB1 : Tensor} (lDim hidden : Nat)
+    (hA : Ordinary2Rel fullA rankA0 rankA1 [lDim * 2, hidden] [lDim, hidden])
+    (hB : Ordinary2Rel fullB rankB0 rankB1 [lDim * 2, hidden] [lDim, hidden])
+    (hl : 0 < lDim) (hh : 0 < hidden) :
+    Ordinary2Rel (fw_swiglu fullA fullB) (fw_swiglu rankA0 rankB0)
+      (fw_swiglu rankA1 rankB1) [lDim * 2, hidden] [lDim, hidden] := by
+  refine {
+    full_value := ?_
+    full_shape := by unfold fw_swiglu Tensor.mkShape; simp; exact hB.full_shape
+    rank0_shape := by unfold fw_swiglu Tensor.mkShape; simp; exact hB.rank0_shape
+    rank1_shape := by unfold fw_swiglu Tensor.mkShape; simp; exact hB.rank1_shape
+  }
+  rw [hA.full_value, hB.full_value]
+  exact cKVCOd_swiglu_allGather0_commute_2 rankA0 rankA1 rankB0 rankB1
+    lDim hidden hl hh hA.rank0_shape hA.rank1_shape hB.rank0_shape hB.rank1_shape
+
 /-- Conditional ordinary down-projection tail.  Starting from the computed
 SwiGLU output relation, the theorem reduces the real reshape, down-linear, and
 view nodes and derives the final `5591 ↔ 9702/9703` ordinary relation. -/
@@ -733,7 +845,93 @@ theorem canonical_kv_cache_ordinary_down_from_swiglu (initSM initPM : Store)
   rw [cKVCOd_red_sm5591 initSM, cKVCOd_red_pm9702 initPM, cKVCOd_red_pm9703 initPM]
   exact ordinary_view hDownLinear
 
+/-- The complete ordinary replicated MLP/down branch, starting at the normalized
+attention output.  No computed SwiGLU intermediate is exposed to the caller. -/
+theorem canonical_kv_cache_ordinary_down_from_norm_input (initSM initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
+    (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
+    (hNorm : Ordinary2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5564)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9636)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9637)
+      [4096, 1024] [2048, 1024]) :
+    Ordinary2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5591)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9702)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9703)
+      [4096, 1024] [2048, 1024] := by
+  have hReshapeA : Ordinary2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5579)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9668)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9669)
+      [4096, 1024] [2048, 1024] := by
+    rw [cKVCOd_red_sm5579 initSM, cKVCOd_red_pm9668 initPM,
+      cKVCOd_red_pm9669 initPM, cKVCOd_red_sm13820 initSM,
+      cKVCOd_red_pm13820 initPM, cKVCOd_red_pm13821 initPM]
+    exact ordinary_view hNorm
+  have hwA := cKVCOd_weight_eq initSM initPM hInit initGoal_5580 (by native_decide)
+    5580 rfl rfl rfl rfl (by native_decide) (by native_decide)
+  have hsA := cKVCOd_weight_shape initPM hPM 5580 [512, 1024]
+    (by native_decide) (by native_decide)
+  have hLinearA : Ordinary2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5581)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9672)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9673)
+      [4096, 512] [2048, 512] := by
+    rw [cKVCOd_red_sm5581 initSM, cKVCOd_red_pm9672 initPM,
+      cKVCOd_red_pm9673 initPM, hwA]
+    exact ordinary_linear 2048 1024 512 hReshapeA hsA
+      (by decide) (by decide) (by decide)
+  have hViewA : Ordinary2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5582)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9674)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9675)
+      [4096, 512] [2048, 512] := by
+    rw [cKVCOd_red_sm5582 initSM, cKVCOd_red_pm9674 initPM,
+      cKVCOd_red_pm9675 initPM]
+    exact ordinary_view hLinearA
+  have hReshapeB : Ordinary2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5583)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9680)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9681)
+      [4096, 1024] [2048, 1024] := by
+    rw [cKVCOd_red_sm5583 initSM, cKVCOd_red_pm9680 initPM,
+      cKVCOd_red_pm9681 initPM, cKVCOd_red_sm13832 initSM,
+      cKVCOd_red_pm13832 initPM, cKVCOd_red_pm13833 initPM]
+    exact ordinary_view hNorm
+  have hwB := cKVCOd_weight_eq initSM initPM hInit initGoal_5584 (by native_decide)
+    5584 rfl rfl rfl rfl (by native_decide) (by native_decide)
+  have hsB := cKVCOd_weight_shape initPM hPM 5584 [512, 1024]
+    (by native_decide) (by native_decide)
+  have hLinearB : Ordinary2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5585)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9684)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9685)
+      [4096, 512] [2048, 512] := by
+    rw [cKVCOd_red_sm5585 initSM, cKVCOd_red_pm9684 initPM,
+      cKVCOd_red_pm9685 initPM, hwB]
+    exact ordinary_linear 2048 1024 512 hReshapeB hsB
+      (by decide) (by decide) (by decide)
+  have hViewB : Ordinary2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5586)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9686)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9687)
+      [4096, 512] [2048, 512] := by
+    rw [cKVCOd_red_sm5586 initSM, cKVCOd_red_pm9686 initPM,
+      cKVCOd_red_pm9687 initPM]
+    exact ordinary_view hLinearB
+  have hSwi : Ordinary2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5587)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9692)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9693)
+      [4096, 512] [2048, 512] := by
+    rw [cKVCOd_red_sm5587 initSM, cKVCOd_red_pm9692 initPM,
+      cKVCOd_red_pm9693 initPM]
+    exact ordinary_swiglu 2048 512 hViewA hViewB (by decide) (by decide)
+  exact canonical_kv_cache_ordinary_down_from_swiglu initSM initPM hPM hInit hSwi
+
 #print axioms canonical_kv_cache_ordinary_down_from_swiglu
+#print axioms canonical_kv_cache_ordinary_down_from_norm_input
 
 end
 end TrainVerify.Denote.GeneratedPatterns
