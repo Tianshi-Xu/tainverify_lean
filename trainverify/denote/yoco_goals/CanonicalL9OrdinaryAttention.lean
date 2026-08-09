@@ -22,57 +22,68 @@ open TrainVerify.Denote.GeneratedGoals
 private theorem l9a_node_core (g : GraphDecl) (init : Store) (k : Nat)
     (node : NodeDecl) (outTid : Tid) (hk : k < g.nodes.length)
     (hnode : g.nodes[k]'hk = node) (hmoe : node.op ≠ "OpName.FW_all2all_moe_gmm")
+    (hshuffle : node.op ≠ "OpName.FW_maybe_shuffle")
+    (hunshuffle : node.op ≠ "OpName.FW_maybe_unshuffle")
+    (hattn : node.op ≠ "OpName.FW_attn_zigzag")
     (hnil : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ [])
     (hw : ∀ n ∈ g.nodes.drop (k + 1), outTid ∉ n.outs) :
-    denoteGraphDistributed g init outTid =
-      applyNodeRingAttn g ((g.nodes.take k).foldl (applyNodeDistributed g) init) node outTid := by
-  rw [denoteGraphDistributed_eq_prefix g init outTid (k + 1) hnil hw]
-  have hstep := congrFun (foldl_take_succ (applyNodeDistributed g) g.nodes init k hk) outTid
+    denoteGraphDistributedFaithful g init outTid =
+      applyNodeRingAttn g ((g.nodes.take k).foldl (applyNodeDistributedFaithful g) init) node outTid := by
+  rw [denoteGraphDistributedFaithful_eq_prefix g init outTid (k + 1) hnil hw]
+  have hstep := congrFun (foldl_take_succ (applyNodeDistributedFaithful g) g.nodes init k hk) outTid
   rw [hstep, hnode]
+  rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
+    g _ node hshuffle hunshuffle hattn]
   unfold applyNodeDistributed
   rw [if_neg hmoe]
 
 private theorem l9a_prefix_read (g : GraphDecl) (init : Store) (k : Nat) (tid : Tid)
     (hnil : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
     (hw : ∀ n ∈ g.nodes.drop k, tid ∉ n.outs) :
-    ((g.nodes.take k).foldl (applyNodeDistributed g) init) tid =
-      denoteGraphDistributed g init tid :=
-  (denoteGraphDistributed_eq_prefix g init tid k hnil hw).symm
+    ((g.nodes.take k).foldl (applyNodeDistributedFaithful g) init) tid =
+      denoteGraphDistributedFaithful g init tid :=
+  (denoteGraphDistributedFaithful_eq_prefix g init tid k hnil hw).symm
 
 private theorem l9a_reduce1 (g : GraphDecl) (init : Store) (k : Nat)
     (node : NodeDecl) (i o : Tid) (f : Tensor → Tensor)
     (hk : k < g.nodes.length) (hn : g.nodes[k]'hk = node)
     (hm : node.op ≠ "OpName.FW_all2all_moe_gmm")
+    (hshuffle : node.op ≠ "OpName.FW_maybe_shuffle")
+    (hunshuffle : node.op ≠ "OpName.FW_maybe_unshuffle")
+    (hattn : node.op ≠ "OpName.FW_attn_zigzag")
     (ha : ∀ s, applyNodeRingAttn g s node o = f (s i))
     (hdn : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ [])
     (hdw : ∀ n ∈ g.nodes.drop (k + 1), o ∉ n.outs)
     (hpn : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
     (hpw : ∀ n ∈ g.nodes.drop k, i ∉ n.outs) :
-    denoteGraphDistributed g init o = f (denoteGraphDistributed g init i) := by
-  rw [l9a_node_core g init k node o hk hn hm hdn hdw, ha,
+    denoteGraphDistributedFaithful g init o = f (denoteGraphDistributedFaithful g init i) := by
+  rw [l9a_node_core g init k node o hk hn hm hshuffle hunshuffle hattn hdn hdw, ha,
     l9a_prefix_read g init k i hpn hpw]
 
 private theorem l9a_reduce2 (g : GraphDecl) (init : Store) (k : Nat)
     (node : NodeDecl) (x y o : Tid) (f : Tensor → Tensor → Tensor)
     (hk : k < g.nodes.length) (hn : g.nodes[k]'hk = node)
     (hm : node.op ≠ "OpName.FW_all2all_moe_gmm")
+    (hshuffle : node.op ≠ "OpName.FW_maybe_shuffle")
+    (hunshuffle : node.op ≠ "OpName.FW_maybe_unshuffle")
+    (hattn : node.op ≠ "OpName.FW_attn_zigzag")
     (ha : ∀ s, applyNodeRingAttn g s node o = f (s x) (s y))
     (hdn : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ [])
     (hdw : ∀ n ∈ g.nodes.drop (k + 1), o ∉ n.outs)
     (hpn : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
     (hpx : ∀ n ∈ g.nodes.drop k, x ∉ n.outs)
     (hpy : ∀ n ∈ g.nodes.drop k, y ∉ n.outs) :
-    denoteGraphDistributed g init o = f (denoteGraphDistributed g init x)
-      (denoteGraphDistributed g init y) := by
-  rw [l9a_node_core g init k node o hk hn hm hdn hdw, ha,
+    denoteGraphDistributedFaithful g init o = f (denoteGraphDistributedFaithful g init x)
+      (denoteGraphDistributedFaithful g init y) := by
+  rw [l9a_node_core g init k node o hk hn hm hshuffle hunshuffle hattn hdn hdw, ha,
     l9a_prefix_read g init k x hpn hpx, l9a_prefix_read g init k y hpn hpy]
 
 private theorem l9a_split (g : GraphDecl) (nodes : List NodeDecl) (s : Store)
     (tid j k : Nat) (hjk : j ≤ k)
     (hnil : ((nodes.take k).drop j).all (fun n => !n.outs.isEmpty) = true)
     (hw : ((nodes.take k).drop j).all (fun n => !n.outs.contains tid) = true) :
-    (nodes.take j).foldl (applyNodeDistributed g) s tid =
-      (nodes.take k).foldl (applyNodeDistributed g) s tid := by
+    (nodes.take j).foldl (applyNodeDistributedFaithful g) s tid =
+      (nodes.take k).foldl (applyNodeDistributedFaithful g) s tid := by
   have hnil' : ∀ n ∈ (nodes.take k).drop j, n.outs ≠ [] := by
     intro n hn; simpa using (List.all_eq_true.mp hnil n hn)
   have hw' : ∀ n ∈ (nodes.take k).drop j, tid ∉ n.outs := by
@@ -81,7 +92,7 @@ private theorem l9a_split (g : GraphDecl) (nodes : List NodeDecl) (s : Store)
     rw [show nodes.take j = (nodes.take k).take j by rw [List.take_take, min_eq_left hjk]]
     rw [List.take_append_drop]
   rw [hs, List.foldl_append]
-  exact (foldl_applyNodeDistributed_at_not_written g _ _ tid hnil' hw').symm
+  exact (foldl_applyNodeDistributedFaithful_at_not_written g _ _ tid hnil' hw').symm
 
 private theorem l9a_attn_congr (g : GraphDecl) (s s' : Store) (n : NodeDecl)
     (h0 : ∀ m ∈ ringAttnBuddies g n, s (m.ins.getD 0 0) = s' (m.ins.getD 0 0))
@@ -129,28 +140,28 @@ private theorem l9a_linear_shape (b i o : Nat) (x w : Tensor)
   rfl
 
 private theorem l9a_init_value (initSM initPM : Store)
-    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (gW : LineageGoal) (hg : gW ∈ initGoals) (W : Tid)
+    (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
+    (gW : LineageGoal) (hg : gW ∈ goal_1_full_initGoals) (W : Tid)
     (htp : gW.tps = [{ rank := 0, tid := W }]) (hgd : gW.gatherDim = 0)
     (hr : gW.replicated = false) (hts : gW.ts = W)
-    (hsm : ∀ n ∈ sm.nodes, W ∉ n.outs) (hpm : ∀ n ∈ pm.nodes, W ∉ n.outs) :
-    denoteGraphDistributed sm initSM W = denoteGraphDistributed pm initPM W := by
+    (hsm : ∀ n ∈ sm_goal_1.nodes, W ∉ n.outs) (hpm : ∀ n ∈ pm_goal_1.nodes, W ∉ n.outs) :
+    denoteGraphDistributedFaithful sm_goal_1 initSM W = denoteGraphDistributedFaithful pm_goal_1 initPM W := by
   have h := hInit gW hg
   have hv := h.2.2
-  rw [reconstructForGoal_of_not_replicated gW pm.numRanks _ hr, htp, hts, hgd] at hv
+  rw [reconstructForGoal_of_not_replicated gW pm_goal_1.numRanks _ hr, htp, hts, hgd] at hv
   simp only [List.map, reconstructWithDim] at hv
-  rw [denoteGraphDistributed, foldl_applyNodeDistributed_at_not_written sm sm.nodes initSM W
-    (by native_decide) hsm, denoteGraphDistributed,
-    foldl_applyNodeDistributed_at_not_written pm pm.nodes initPM W (by native_decide) hpm]
+  rw [denoteGraphDistributedFaithful, foldl_applyNodeDistributedFaithful_at_not_written sm_goal_1 sm_goal_1.nodes initSM W
+    (by native_decide) hsm, denoteGraphDistributedFaithful,
+    foldl_applyNodeDistributedFaithful_at_not_written pm_goal_1 pm_goal_1.nodes initPM W (by native_decide) hpm]
   exact hv
 
 private theorem l9a_init_shape (initSM initPM : Store)
-    (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (gW : LineageGoal) (hg : gW ∈ initGoals) (W : Tid) (sh : Shape)
-    (hsh : gW.tsShape = sh) (hts : gW.ts = W) (hsm : ∀ n ∈ sm.nodes, W ∉ n.outs) :
-    (denoteGraphDistributed sm initSM W).shape = sh := by
+    (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
+    (gW : LineageGoal) (hg : gW ∈ goal_1_full_initGoals) (W : Tid) (sh : Shape)
+    (hsh : gW.tsShape = sh) (hts : gW.ts = W) (hsm : ∀ n ∈ sm_goal_1.nodes, W ∉ n.outs) :
+    (denoteGraphDistributedFaithful sm_goal_1 initSM W).shape = sh := by
   have h := hInit gW hg
-  rw [denoteGraphDistributed, foldl_applyNodeDistributed_at_not_written sm sm.nodes initSM W
+  rw [denoteGraphDistributedFaithful, foldl_applyNodeDistributedFaithful_at_not_written sm_goal_1 sm_goal_1.nodes initSM W
     (by native_decide) hsm, ← hts, ← hsh]
   exact h.1
 
@@ -167,56 +178,56 @@ private def l9PmSliding1 : NodeDecl :=
     ins := [9271, 9273, 9259, 5442, 5443], outs := [9275, 5445],
     params := [16, 4, 64, 64, 1, 512] }
 
-private theorem l9_sm_sliding_node : sm.nodes[360]'(by native_decide) = l9SmSliding := by native_decide
-private theorem l9_pm_sliding_node0 : pm.nodes[805]'(by native_decide) = l9PmSliding0 := by native_decide
-private theorem l9_pm_sliding_node1 : pm.nodes[806]'(by native_decide) = l9PmSliding1 := by native_decide
-private theorem l9_sm_sliding_buddy : ringAttnBuddies sm l9SmSliding = [l9SmSliding] := by native_decide
-private theorem l9_pm_sliding_buddy0 : ringAttnBuddies pm l9PmSliding0 = [l9PmSliding0, l9PmSliding1] := by native_decide
-private theorem l9_pm_sliding_buddy1 : ringAttnBuddies pm l9PmSliding1 = [l9PmSliding0, l9PmSliding1] := by native_decide
+private theorem l9_sm_sliding_node : sm_goal_1.nodes[360]'(by native_decide) = l9SmSliding := by native_decide
+private theorem l9_pm_sliding_node0 : pm_goal_1.nodes[805]'(by native_decide) = l9PmSliding0 := by native_decide
+private theorem l9_pm_sliding_node1 : pm_goal_1.nodes[806]'(by native_decide) = l9PmSliding1 := by native_decide
+private theorem l9_sm_sliding_buddy : ringAttnBuddies sm_goal_1 l9SmSliding = [l9SmSliding] := by native_decide
+private theorem l9_pm_sliding_buddy0 : ringAttnBuddies pm_goal_1 l9PmSliding0 = [l9PmSliding0, l9PmSliding1] := by native_decide
+private theorem l9_pm_sliding_buddy1 : ringAttnBuddies pm_goal_1 l9PmSliding1 = [l9PmSliding0, l9PmSliding1] := by native_decide
 
 /-- Conditional faithful ordinary-CP2 reconstruction of the L9 sliding-window
 attention output.  The premises are precisely the Q/K/V gather relations and
 replicated cu-seqlens aliases at the attention boundary. -/
 theorem l9o_raw5444_rel_of_qkv
     (initSM initPM : Store)
-    (hq : Gather2Rel (denoteGraphDistributed sm initSM 5440)
-      (denoteGraphDistributed pm initPM 9270) (denoteGraphDistributed pm initPM 9271)
+    (hq : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5440)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9270) (denoteGraphDistributedFaithful pm_goal_1 initPM 9271)
       [4096, 16, 64] [2048, 16, 64])
-    (hk : Gather2Rel (denoteGraphDistributed sm initSM 5441)
-      (denoteGraphDistributed pm initPM 9272) (denoteGraphDistributed pm initPM 9273)
+    (hk : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5441)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9272) (denoteGraphDistributedFaithful pm_goal_1 initPM 9273)
       [4096, 4, 64] [2048, 4, 64])
-    (hv : Gather2Rel (denoteGraphDistributed sm initSM 5438)
-      (denoteGraphDistributed pm initPM 9258) (denoteGraphDistributed pm initPM 9259)
+    (hv : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5438)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9258) (denoteGraphDistributedFaithful pm_goal_1 initPM 9259)
       [4096, 4, 64] [2048, 4, 64])
-    (hcuQ : denoteGraphDistributed sm initSM 5442 = denoteGraphDistributed pm initPM 5442)
-    (hcuK : denoteGraphDistributed sm initSM 5443 = denoteGraphDistributed pm initPM 5443) :
-    Gather2Rel (denoteGraphDistributed sm initSM 5444)
-      (denoteGraphDistributed pm initPM 9274) (denoteGraphDistributed pm initPM 9275)
+    (hcuQ : denoteGraphDistributedFaithful sm_goal_1 initSM 5442 = denoteGraphDistributedFaithful pm_goal_1 initPM 5442)
+    (hcuK : denoteGraphDistributedFaithful sm_goal_1 initSM 5443 = denoteGraphDistributedFaithful pm_goal_1 initPM 5443) :
+    Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5444)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9274) (denoteGraphDistributedFaithful pm_goal_1 initPM 9275)
       [4096, 16, 64] [2048, 16, 64] := by
-  let fs := (sm.nodes.take 360).foldl (applyNodeDistributed sm) initSM
-  let fp := (pm.nodes.take 805).foldl (applyNodeDistributed pm) initPM
-  let fp' := (pm.nodes.take 806).foldl (applyNodeDistributed pm) initPM
-  have bs (t : Tid) (hn : ∀ n ∈ sm.nodes.drop 360, n.outs ≠ [])
-      (hw : ∀ n ∈ sm.nodes.drop 360, t ∉ n.outs) : fs t = denoteGraphDistributed sm initSM t :=
-    l9a_prefix_read sm initSM 360 t hn hw
-  have bp (t : Tid) (hn : ∀ n ∈ pm.nodes.drop 805, n.outs ≠ [])
-      (hw : ∀ n ∈ pm.nodes.drop 805, t ∉ n.outs) : fp t = denoteGraphDistributed pm initPM t :=
-    l9a_prefix_read pm initPM 805 t hn hw
-  have e9434 : fp 9270 = fp' 9270 := l9a_split pm pm.nodes initPM 9270 805 806
+  let fs := (sm_goal_1.nodes.take 360).foldl (applyNodeDistributedFaithful sm_goal_1) initSM
+  let fp := (pm_goal_1.nodes.take 805).foldl (applyNodeDistributedFaithful pm_goal_1) initPM
+  let fp' := (pm_goal_1.nodes.take 806).foldl (applyNodeDistributedFaithful pm_goal_1) initPM
+  have bs (t : Tid) (hn : ∀ n ∈ sm_goal_1.nodes.drop 360, n.outs ≠ [])
+      (hw : ∀ n ∈ sm_goal_1.nodes.drop 360, t ∉ n.outs) : fs t = denoteGraphDistributedFaithful sm_goal_1 initSM t :=
+    l9a_prefix_read sm_goal_1 initSM 360 t hn hw
+  have bp (t : Tid) (hn : ∀ n ∈ pm_goal_1.nodes.drop 805, n.outs ≠ [])
+      (hw : ∀ n ∈ pm_goal_1.nodes.drop 805, t ∉ n.outs) : fp t = denoteGraphDistributedFaithful pm_goal_1 initPM t :=
+    l9a_prefix_read pm_goal_1 initPM 805 t hn hw
+  have e9434 : fp 9270 = fp' 9270 := l9a_split pm_goal_1 pm_goal_1.nodes initPM 9270 805 806
     (by omega) (by native_decide) (by native_decide)
-  have e9435 : fp 9271 = fp' 9271 := l9a_split pm pm.nodes initPM 9271 805 806
+  have e9435 : fp 9271 = fp' 9271 := l9a_split pm_goal_1 pm_goal_1.nodes initPM 9271 805 806
     (by omega) (by native_decide) (by native_decide)
-  have e9436 : fp 9272 = fp' 9272 := l9a_split pm pm.nodes initPM 9272 805 806
+  have e9436 : fp 9272 = fp' 9272 := l9a_split pm_goal_1 pm_goal_1.nodes initPM 9272 805 806
     (by omega) (by native_decide) (by native_decide)
-  have e9437 : fp 9273 = fp' 9273 := l9a_split pm pm.nodes initPM 9273 805 806
+  have e9437 : fp 9273 = fp' 9273 := l9a_split pm_goal_1 pm_goal_1.nodes initPM 9273 805 806
     (by omega) (by native_decide) (by native_decide)
-  have e9422 : fp 9258 = fp' 9258 := l9a_split pm pm.nodes initPM 9258 805 806
+  have e9422 : fp 9258 = fp' 9258 := l9a_split pm_goal_1 pm_goal_1.nodes initPM 9258 805 806
     (by omega) (by native_decide) (by native_decide)
-  have e9423 : fp 9259 = fp' 9259 := l9a_split pm pm.nodes initPM 9259 805 806
+  have e9423 : fp 9259 = fp' 9259 := l9a_split pm_goal_1 pm_goal_1.nodes initPM 9259 805 806
     (by omega) (by native_decide) (by native_decide)
-  have e5497 : fp 5442 = fp' 5442 := l9a_split pm pm.nodes initPM 5442 805 806
+  have e5497 : fp 5442 = fp' 5442 := l9a_split pm_goal_1 pm_goal_1.nodes initPM 5442 805 806
     (by omega) (by native_decide) (by native_decide)
-  have e5498 : fp 5443 = fp' 5443 := l9a_split pm pm.nodes initPM 5443 805 806
+  have e5498 : fp 5443 = fp' 5443 := l9a_split pm_goal_1 pm_goal_1.nodes initPM 5443 805 806
     (by omega) (by native_decide) (by native_decide)
   have hqfull : fs 5440 = allGatherPrimDimN 0 2 0 [fp 9270, fp 9271] := by
     rw [bs 5440 (by native_decide) (by native_decide), bp 9270 (by native_decide) (by native_decide),
@@ -231,8 +242,8 @@ theorem l9o_raw5444_rel_of_qkv
     rw [bs 5442 (by native_decide) (by native_decide), bp 5442 (by native_decide) (by native_decide), hcuQ]
   have hcuK' : fs 5443 = fp 5443 := by
     rw [bs 5443 (by native_decide) (by native_decide), bp 5443 (by native_decide) (by native_decide), hcuK]
-  have bridge : applyNodeRingAttn_sliding_window pm fp l9PmSliding1 =
-      applyNodeRingAttn_sliding_window pm fp' l9PmSliding1 := by
+  have bridge : applyNodeRingAttn_sliding_window pm_goal_1 fp l9PmSliding1 =
+      applyNodeRingAttn_sliding_window pm_goal_1 fp' l9PmSliding1 := by
     apply l9a_attn_congr
     · rw [l9_pm_sliding_buddy1]; intro m hm; fin_cases hm
       · exact e9434
@@ -245,23 +256,23 @@ theorem l9o_raw5444_rel_of_qkv
       · exact e9423
     · exact e5497
     · exact e5498
-  have rSM : denoteGraphDistributed sm initSM 5444 =
-      applyNodeRingAttn_sliding_window sm fs l9SmSliding := by
-    rw [l9a_node_core sm initSM 360 l9SmSliding 5444 (by native_decide)
-      l9_sm_sliding_node (by decide) (by native_decide) (by native_decide)]
-    exact l9a_ring_sliding_first_out sm _ 0 5440 5441 5438 5442 5443 5444 5445
+  have rSM : denoteGraphDistributedFaithful sm_goal_1 initSM 5444 =
+      applyNodeRingAttn_sliding_window sm_goal_1 fs l9SmSliding := by
+    rw [l9a_node_core sm_goal_1 initSM 360 l9SmSliding 5444 (by native_decide)
+      l9_sm_sliding_node (by decide) (by decide) (by decide) (by decide) (by native_decide) (by native_decide)]
+    exact l9a_ring_sliding_first_out sm_goal_1 _ 0 5440 5441 5438 5442 5443 5444 5445
       [16, 4, 64, 64, 1, 512]
-  have rP0 : denoteGraphDistributed pm initPM 9274 =
-      applyNodeRingAttn_sliding_window pm fp l9PmSliding0 := by
-    rw [l9a_node_core pm initPM 805 l9PmSliding0 9274 (by native_decide)
-      l9_pm_sliding_node0 (by decide) (by native_decide) (by native_decide)]
-    exact l9a_ring_sliding_first_out pm _ 0 9270 9272 9258 5442 5443 9274 5445
+  have rP0 : denoteGraphDistributedFaithful pm_goal_1 initPM 9274 =
+      applyNodeRingAttn_sliding_window pm_goal_1 fp l9PmSliding0 := by
+    rw [l9a_node_core pm_goal_1 initPM 805 l9PmSliding0 9274 (by native_decide)
+      l9_pm_sliding_node0 (by decide) (by decide) (by decide) (by decide) (by native_decide) (by native_decide)]
+    exact l9a_ring_sliding_first_out pm_goal_1 _ 0 9270 9272 9258 5442 5443 9274 5445
       [16, 4, 64, 64, 1, 512]
-  have rP1 : denoteGraphDistributed pm initPM 9275 =
-      applyNodeRingAttn_sliding_window pm fp' l9PmSliding1 := by
-    rw [l9a_node_core pm initPM 806 l9PmSliding1 9275 (by native_decide)
-      l9_pm_sliding_node1 (by decide) (by native_decide) (by native_decide)]
-    exact l9a_ring_sliding_first_out pm _ 1 9271 9273 9259 5442 5443 9275 5445
+  have rP1 : denoteGraphDistributedFaithful pm_goal_1 initPM 9275 =
+      applyNodeRingAttn_sliding_window pm_goal_1 fp' l9PmSliding1 := by
+    rw [l9a_node_core pm_goal_1 initPM 806 l9PmSliding1 9275 (by native_decide)
+      l9_pm_sliding_node1 (by decide) (by decide) (by decide) (by decide) (by native_decide) (by native_decide)]
+    exact l9a_ring_sliding_first_out pm_goal_1 _ 1 9271 9273 9259 5442 5443 9275 5445
       [16, 4, 64, 64, 1, 512]
   have hfull : (fw_attn_varlen
       (allGatherPrimDimN 0 2 0 [fp 9270, fp 9271])
@@ -281,18 +292,18 @@ theorem l9o_raw5444_rel_of_qkv
       ← e5497, ← e5498]
     exact hfull
   have hrec := applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair
-    sm pm fs fp l9SmSliding l9PmSliding0 l9PmSliding1 2048 16 64
+    sm_goal_1 pm_goal_1 fs fp l9SmSliding l9PmSliding0 l9PmSliding1 2048 16 64
     (by omega) (by omega) (by omega) l9_sm_sliding_buddy l9_pm_sliding_buddy0
     l9_pm_sliding_buddy1 (by native_decide) (by native_decide)
     (by show 0 < (fs 5440).shape.length; rw [bs 5440 (by native_decide) (by native_decide), hq.full_shape]; decide)
     (by show 0 < (fs 5441).shape.length; rw [bs 5441 (by native_decide) (by native_decide), hk.full_shape]; decide)
     (by show 0 < (fs 5438).shape.length; rw [bs 5438 (by native_decide) (by native_decide), hv.full_shape]; decide)
     hqfull hkfull hvfull hcuQ' hcuK' rfl rfl rfl rfl hfull
-  have hval : denoteGraphDistributed sm initSM 5444 = allGatherPrimDimN 0 2 0
-      [denoteGraphDistributed pm initPM 9274, denoteGraphDistributed pm initPM 9275] := by
+  have hval : denoteGraphDistributedFaithful sm_goal_1 initSM 5444 = allGatherPrimDimN 0 2 0
+      [denoteGraphDistributedFaithful pm_goal_1 initPM 9274, denoteGraphDistributedFaithful pm_goal_1 initPM 9275] := by
     rw [rSM, hrec, bridge, ← rP0, ← rP1]
-  have hs0 : (denoteGraphDistributed pm initPM 9274).shape = [2048, 16, 64] := by
-    rw [rP0, applyNodeRingAttn_sliding_window_pair_eq_chunk pm fp l9PmSliding0
+  have hs0 : (denoteGraphDistributedFaithful pm_goal_1 initPM 9274).shape = [2048, 16, 64] := by
+    rw [rP0, applyNodeRingAttn_sliding_window_pair_eq_chunk pm_goal_1 fp l9PmSliding0
       l9PmSliding0 l9PmSliding1 0 l9_pm_sliding_buddy0 (by native_decide)]
     simp only [l9PmSliding0, l9PmSliding1, List.getD, List.getElem?_cons_succ,
       List.getElem?_cons_zero, Option.getD_some]
@@ -303,8 +314,8 @@ theorem l9o_raw5444_rel_of_qkv
       (fp 5442) (fp 5443) 16 4 64 64 true 512)).shape = [2048, 16, 64]
     rw [chunkPrimDimN_shape 0 2 0 _ [2 * 2048, 16, 64] hfull (by omega)]
     rfl
-  have hs1 : (denoteGraphDistributed pm initPM 9275).shape = [2048, 16, 64] := by
-    rw [rP1, applyNodeRingAttn_sliding_window_pair_eq_chunk pm fp' l9PmSliding1
+  have hs1 : (denoteGraphDistributedFaithful pm_goal_1 initPM 9275).shape = [2048, 16, 64] := by
+    rw [rP1, applyNodeRingAttn_sliding_window_pair_eq_chunk pm_goal_1 fp' l9PmSliding1
       l9PmSliding0 l9PmSliding1 1 l9_pm_sliding_buddy1 (by native_decide)]
     simp only [l9PmSliding0, l9PmSliding1, List.getD, List.getElem?_cons_succ,
       List.getElem?_cons_zero, Option.getD_some]
@@ -323,8 +334,9 @@ private theorem l9a_reshape (g : GraphDecl) (init : Store) (k r i o hd : Nat) (t
     (hn : g.nodes[k]'hk = { rank := r, op := "OpName.FW_reshape", ins := [i], outs := [o], params := hd :: tl })
     (hdn : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ []) (hdw : ∀ n ∈ g.nodes.drop (k + 1), o ∉ n.outs)
     (hpn : ∀ n ∈ g.nodes.drop k, n.outs ≠ []) (hpw : ∀ n ∈ g.nodes.drop k, i ∉ n.outs) :
-    denoteGraphDistributed g init o = fw_view (hd :: tl) (denoteGraphDistributed g init i) :=
+    denoteGraphDistributedFaithful g init o = fw_view (hd :: tl) (denoteGraphDistributedFaithful g init i) :=
   l9a_reduce1 g init k _ i o (fw_view (hd :: tl)) hk hn (by simp)
+    (by simp) (by simp) (by simp)
     (fun st => applyNode_fw_reshape_out g st r i o (hd :: tl)) hdn hdw hpn hpw
 
 private theorem l9a_view (g : GraphDecl) (init : Store) (k r i o hd : Nat) (tl : List Nat)
@@ -332,8 +344,9 @@ private theorem l9a_view (g : GraphDecl) (init : Store) (k r i o hd : Nat) (tl :
     (hn : g.nodes[k]'hk = { rank := r, op := "OpName.FW_view", ins := [i], outs := [o], params := hd :: tl })
     (hdn : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ []) (hdw : ∀ n ∈ g.nodes.drop (k + 1), o ∉ n.outs)
     (hpn : ∀ n ∈ g.nodes.drop k, n.outs ≠ []) (hpw : ∀ n ∈ g.nodes.drop k, i ∉ n.outs) :
-    denoteGraphDistributed g init o = fw_view (hd :: tl) (denoteGraphDistributed g init i) :=
+    denoteGraphDistributedFaithful g init o = fw_view (hd :: tl) (denoteGraphDistributedFaithful g init i) :=
   l9a_reduce1 g init k _ i o (fw_view (hd :: tl)) hk hn (by simp)
+    (by simp) (by simp) (by simp)
     (fun st => applyNode_fw_view_out g st r hd tl i o) hdn hdw hpn hpw
 
 private theorem l9a_linear (g : GraphDecl) (init : Store) (k r x w o : Nat)
@@ -342,16 +355,18 @@ private theorem l9a_linear (g : GraphDecl) (init : Store) (k r x w o : Nat)
     (hdn : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ []) (hdw : ∀ n ∈ g.nodes.drop (k + 1), o ∉ n.outs)
     (hpn : ∀ n ∈ g.nodes.drop k, n.outs ≠ []) (hpx : ∀ n ∈ g.nodes.drop k, x ∉ n.outs)
     (hpw : ∀ n ∈ g.nodes.drop k, w ∉ n.outs) :
-    denoteGraphDistributed g init o = fw_linear (denoteGraphDistributed g init x) (denoteGraphDistributed g init w) :=
+    denoteGraphDistributedFaithful g init o = fw_linear (denoteGraphDistributedFaithful g init x) (denoteGraphDistributedFaithful g init w) :=
   l9a_reduce2 g init k _ x w o fw_linear hk hn (by simp)
+    (by simp) (by simp) (by simp)
     (fun st => applyNode_fw_mix_precision_linear_out_1p g st r x w o) hdn hdw hpn hpx hpw
 
 private theorem l9a_float (g : GraphDecl) (init : Store) (k r i o : Nat)
     (hk : k < g.nodes.length) (hn : g.nodes[k]'hk = { rank := r, op := "OpName.FW_float", ins := [i], outs := [o] })
     (hdn : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ []) (hdw : ∀ n ∈ g.nodes.drop (k + 1), o ∉ n.outs)
     (hpn : ∀ n ∈ g.nodes.drop k, n.outs ≠ []) (hpw : ∀ n ∈ g.nodes.drop k, i ∉ n.outs) :
-    denoteGraphDistributed g init o = denoteGraphDistributed g init i := by
+    denoteGraphDistributedFaithful g init o = denoteGraphDistributedFaithful g init i := by
   have h := l9a_reduce1 g init k _ i o id hk hn (by simp)
+    (by simp) (by simp) (by simp)
     (fun st => applyNode_fw_float_out g st r i o []) hdn hdw hpn hpw
   simpa only [id_eq] using h
 
@@ -360,93 +375,94 @@ private theorem l9a_add (g : GraphDecl) (init : Store) (k r x y o : Nat)
     (hdn : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ []) (hdw : ∀ n ∈ g.nodes.drop (k + 1), o ∉ n.outs)
     (hpn : ∀ n ∈ g.nodes.drop k, n.outs ≠ []) (hpx : ∀ n ∈ g.nodes.drop k, x ∉ n.outs)
     (hpy : ∀ n ∈ g.nodes.drop k, y ∉ n.outs) :
-    denoteGraphDistributed g init o = elemwiseAdd (denoteGraphDistributed g init x) (denoteGraphDistributed g init y) :=
+    denoteGraphDistributedFaithful g init o = elemwiseAdd (denoteGraphDistributedFaithful g init x) (denoteGraphDistributedFaithful g init y) :=
   l9a_reduce2 g init k _ x y o elemwiseAdd hk hn (by simp)
+    (by simp) (by simp) (by simp)
     (fun st => applyNode_fw_add2_out g st r x y o) hdn hdw hpn hpx hpy
 
 /-- Conditional L9 attention projection and residual boundary, from raw attention
 and the bypass relation. -/
 theorem l9o_residual5452_rel_of_raw
-    (initSM initPM : Store) (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (hraw : Gather2Rel (denoteGraphDistributed sm initSM 5444)
-      (denoteGraphDistributed pm initPM 9274) (denoteGraphDistributed pm initPM 9275)
+    (initSM initPM : Store) (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
+    (hraw : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5444)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9274) (denoteGraphDistributedFaithful pm_goal_1 initPM 9275)
       [4096, 16, 64] [2048, 16, 64])
-    (hbypass : Gather2Rel (denoteGraphDistributed sm initSM 8216)
-      (denoteGraphDistributed pm initPM 15730) (denoteGraphDistributed pm initPM 15738)
+    (hbypass : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 8216)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 15730) (denoteGraphDistributedFaithful pm_goal_1 initPM 15738)
       [4096, 1024] [2048, 1024]) :
-    Gather2Rel (denoteGraphDistributed sm initSM 5452)
-      (denoteGraphDistributed pm initPM 9304) (denoteGraphDistributed pm initPM 9305)
+    Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5452)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9304) (denoteGraphDistributedFaithful pm_goal_1 initPM 9305)
       [4096, 1024] [2048, 1024] := by
-  have rs0 := l9a_reshape sm initSM 361 0 5444 5446 4096 [1024] (by native_decide) (by native_decide)
+  have rs0 := l9a_reshape sm_goal_1 initSM 361 0 5444 5446 4096 [1024] (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have r00 := l9a_reshape pm initPM 807 0 9274 9276 2048 [1024] (by native_decide) (by native_decide)
+  have r00 := l9a_reshape pm_goal_1 initPM 807 0 9274 9276 2048 [1024] (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have r10 := l9a_reshape pm initPM 808 1 9275 9277 2048 [1024] (by native_decide) (by native_decide)
+  have r10 := l9a_reshape pm_goal_1 initPM 808 1 9275 9277 2048 [1024] (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have h0 : Gather2Rel (denoteGraphDistributed sm initSM 5446) (denoteGraphDistributed pm initPM 9276)
-      (denoteGraphDistributed pm initPM 9277) [4096,1024] [2048,1024] := by
+  have h0 : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5446) (denoteGraphDistributedFaithful pm_goal_1 initPM 9276)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9277) [4096,1024] [2048,1024] := by
     refine ⟨?_, by rw [rs0]; rfl, by rw [r00]; rfl, by rw [r10]; rfl, by decide⟩
     rw [rs0, hraw.value, fw_view_allGather0_reshape_16_64_2_g12 _ _ hraw.shard0_shape hraw.shard1_shape, r00, r10]
-  have rs1 := l9a_reshape sm initSM 362 0 5446 5447 4096 [1024] (by native_decide) (by native_decide)
+  have rs1 := l9a_reshape sm_goal_1 initSM 362 0 5446 5447 4096 [1024] (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have r01 := l9a_reshape pm initPM 809 0 9276 9282 2048 [1024] (by native_decide) (by native_decide)
+  have r01 := l9a_reshape pm_goal_1 initPM 809 0 9276 9282 2048 [1024] (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have r11 := l9a_reshape pm initPM 810 1 9277 9283 2048 [1024] (by native_decide) (by native_decide)
+  have r11 := l9a_reshape pm_goal_1 initPM 810 1 9277 9283 2048 [1024] (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have h1 : Gather2Rel (denoteGraphDistributed sm initSM 5447) (denoteGraphDistributed pm initPM 9282)
-      (denoteGraphDistributed pm initPM 9283) [4096,1024] [2048,1024] := by
-    have es : denoteGraphDistributed sm initSM 5447 = denoteGraphDistributed sm initSM 5446 := by rw [rs1, fw_view_id_shape _ _ h0.full_shape]
-    have e0 : denoteGraphDistributed pm initPM 9282 = denoteGraphDistributed pm initPM 9276 := by rw [r01, fw_view_id_shape _ _ h0.shard0_shape]
-    have e1 : denoteGraphDistributed pm initPM 9283 = denoteGraphDistributed pm initPM 9277 := by rw [r11, fw_view_id_shape _ _ h0.shard1_shape]
+  have h1 : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5447) (denoteGraphDistributedFaithful pm_goal_1 initPM 9282)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9283) [4096,1024] [2048,1024] := by
+    have es : denoteGraphDistributedFaithful sm_goal_1 initSM 5447 = denoteGraphDistributedFaithful sm_goal_1 initSM 5446 := by rw [rs1, fw_view_id_shape _ _ h0.full_shape]
+    have e0 : denoteGraphDistributedFaithful pm_goal_1 initPM 9282 = denoteGraphDistributedFaithful pm_goal_1 initPM 9276 := by rw [r01, fw_view_id_shape _ _ h0.shard0_shape]
+    have e1 : denoteGraphDistributedFaithful pm_goal_1 initPM 9283 = denoteGraphDistributedFaithful pm_goal_1 initPM 9277 := by rw [r11, fw_view_id_shape _ _ h0.shard1_shape]
     exact ⟨by rw [es, h0.value, ← e0, ← e1], by rw [es]; exact h0.full_shape,
       by rw [e0]; exact h0.shard0_shape, by rw [e1]; exact h0.shard1_shape, by decide⟩
   have hw := l9a_init_value initSM initPM hInit initGoal_5448
     (by native_decide) 5448 rfl rfl rfl rfl (by native_decide) (by native_decide)
   have hws := l9a_init_shape initSM initPM hInit initGoal_5448
     (by native_decide) 5448 [1024,1024] rfl rfl (by native_decide)
-  have hpw : (denoteGraphDistributed pm initPM 5448).shape = [1024,1024] := by rw [← hw]; exact hws
-  have rsl := l9a_linear sm initSM 363 0 5447 5448 5449 (by native_decide) (by native_decide)
+  have hpw : (denoteGraphDistributedFaithful pm_goal_1 initPM 5448).shape = [1024,1024] := by rw [← hw]; exact hws
+  have rsl := l9a_linear sm_goal_1 initSM 363 0 5447 5448 5449 (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have r0l := l9a_linear pm initPM 811 0 9282 5448 9286 (by native_decide) (by native_decide)
+  have r0l := l9a_linear pm_goal_1 initPM 811 0 9282 5448 9286 (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have r1l := l9a_linear pm initPM 812 1 9283 5448 9287 (by native_decide) (by native_decide)
+  have r1l := l9a_linear pm_goal_1 initPM 812 1 9283 5448 9287 (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have hl : Gather2Rel (denoteGraphDistributed sm initSM 5449) (denoteGraphDistributed pm initPM 9286)
-      (denoteGraphDistributed pm initPM 9287) [4096,1024] [2048,1024] := by
+  have hl : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5449) (denoteGraphDistributedFaithful pm_goal_1 initPM 9286)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9287) [4096,1024] [2048,1024] := by
     refine ⟨?_, ?_, ?_, ?_, by decide⟩
     · rw [rsl, h1.value, hw, fw_mix_precision_linear_allGather0_commute_2 _ _ _ 2048 1024 1024
         (by omega) (by omega) (by omega) h1.shard0_shape h1.shard1_shape hpw, r0l, r1l]
     · rw [rsl]; exact l9a_linear_shape 4096 1024 1024 _ _ h1.full_shape hws
     · rw [r0l]; exact l9a_linear_shape 2048 1024 1024 _ _ h1.shard0_shape hpw
     · rw [r1l]; exact l9a_linear_shape 2048 1024 1024 _ _ h1.shard1_shape hpw
-  have rsv := l9a_view sm initSM 364 0 5449 5450 4096 [1024] (by native_decide) (by native_decide)
+  have rsv := l9a_view sm_goal_1 initSM 364 0 5449 5450 4096 [1024] (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have r0v := l9a_view pm initPM 813 0 9286 9296 2048 [1024] (by native_decide) (by native_decide)
+  have r0v := l9a_view pm_goal_1 initPM 813 0 9286 9296 2048 [1024] (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have r1v := l9a_view pm initPM 814 1 9287 9297 2048 [1024] (by native_decide) (by native_decide)
+  have r1v := l9a_view pm_goal_1 initPM 814 1 9287 9297 2048 [1024] (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have hvw : Gather2Rel (denoteGraphDistributed sm initSM 5450) (denoteGraphDistributed pm initPM 9296)
-      (denoteGraphDistributed pm initPM 9297) [4096,1024] [2048,1024] := by
-    have es : denoteGraphDistributed sm initSM 5450 = denoteGraphDistributed sm initSM 5449 := by rw [rsv, fw_view_id_shape _ _ hl.full_shape]
-    have e0 : denoteGraphDistributed pm initPM 9296 = denoteGraphDistributed pm initPM 9286 := by rw [r0v, fw_view_id_shape _ _ hl.shard0_shape]
-    have e1 : denoteGraphDistributed pm initPM 9297 = denoteGraphDistributed pm initPM 9287 := by rw [r1v, fw_view_id_shape _ _ hl.shard1_shape]
+  have hvw : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5450) (denoteGraphDistributedFaithful pm_goal_1 initPM 9296)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9297) [4096,1024] [2048,1024] := by
+    have es : denoteGraphDistributedFaithful sm_goal_1 initSM 5450 = denoteGraphDistributedFaithful sm_goal_1 initSM 5449 := by rw [rsv, fw_view_id_shape _ _ hl.full_shape]
+    have e0 : denoteGraphDistributedFaithful pm_goal_1 initPM 9296 = denoteGraphDistributedFaithful pm_goal_1 initPM 9286 := by rw [r0v, fw_view_id_shape _ _ hl.shard0_shape]
+    have e1 : denoteGraphDistributedFaithful pm_goal_1 initPM 9297 = denoteGraphDistributedFaithful pm_goal_1 initPM 9287 := by rw [r1v, fw_view_id_shape _ _ hl.shard1_shape]
     exact ⟨by rw [es, hl.value, ← e0, ← e1], by rw [es]; exact hl.full_shape,
       by rw [e0]; exact hl.shard0_shape, by rw [e1]; exact hl.shard1_shape, by decide⟩
-  have rsf := l9a_float sm initSM 365 0 5450 5451 (by native_decide) (by native_decide)
+  have rsf := l9a_float sm_goal_1 initSM 365 0 5450 5451 (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have r0f := l9a_float pm initPM 815 0 9296 9300 (by native_decide) (by native_decide)
+  have r0f := l9a_float pm_goal_1 initPM 815 0 9296 9300 (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have r1f := l9a_float pm initPM 816 1 9297 9301 (by native_decide) (by native_decide)
+  have r1f := l9a_float pm_goal_1 initPM 816 1 9297 9301 (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have hf : Gather2Rel (denoteGraphDistributed sm initSM 5451) (denoteGraphDistributed pm initPM 9300)
-      (denoteGraphDistributed pm initPM 9301) [4096,1024] [2048,1024] :=
+  have hf : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5451) (denoteGraphDistributedFaithful pm_goal_1 initPM 9300)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9301) [4096,1024] [2048,1024] :=
     ⟨by rw [rsf, hvw.value, ← r0f, ← r1f], by rw [rsf]; exact hvw.full_shape,
       by rw [r0f]; exact hvw.shard0_shape, by rw [r1f]; exact hvw.shard1_shape, by decide⟩
-  have rsa := l9a_add sm initSM 366 0 8216 5451 5452 (by native_decide) (by native_decide)
+  have rsa := l9a_add sm_goal_1 initSM 366 0 8216 5451 5452 (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have r0a := l9a_add pm initPM 817 0 15730 9300 9304 (by native_decide) (by native_decide)
+  have r0a := l9a_add pm_goal_1 initPM 817 0 15730 9300 9304 (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have r1a := l9a_add pm initPM 818 1 15738 9301 9305 (by native_decide) (by native_decide)
+  have r1a := l9a_add pm_goal_1 initPM 818 1 15738 9301 9305 (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)
   refine ⟨?_, ?_, ?_, ?_, by decide⟩
   · rw [rsa, hbypass.value, hf.value, elemwiseAdd_allGather0_commute_cp2 _ _ _ _
@@ -458,19 +474,19 @@ theorem l9o_residual5452_rel_of_raw
 
 /-- Full conditional L9 ordinary attention-to-residual boundary. -/
 theorem l9o_residual5452_rel_of_qkv
-    (initSM initPM : Store) (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (hq : Gather2Rel (denoteGraphDistributed sm initSM 5440) (denoteGraphDistributed pm initPM 9270)
-      (denoteGraphDistributed pm initPM 9271) [4096,16,64] [2048,16,64])
-    (hk : Gather2Rel (denoteGraphDistributed sm initSM 5441) (denoteGraphDistributed pm initPM 9272)
-      (denoteGraphDistributed pm initPM 9273) [4096,4,64] [2048,4,64])
-    (hv : Gather2Rel (denoteGraphDistributed sm initSM 5438) (denoteGraphDistributed pm initPM 9258)
-      (denoteGraphDistributed pm initPM 9259) [4096,4,64] [2048,4,64])
-    (hcuQ : denoteGraphDistributed sm initSM 5442 = denoteGraphDistributed pm initPM 5442)
-    (hcuK : denoteGraphDistributed sm initSM 5443 = denoteGraphDistributed pm initPM 5443)
-    (hbypass : Gather2Rel (denoteGraphDistributed sm initSM 8216) (denoteGraphDistributed pm initPM 15730)
-      (denoteGraphDistributed pm initPM 15738) [4096,1024] [2048,1024]) :
-    Gather2Rel (denoteGraphDistributed sm initSM 5452) (denoteGraphDistributed pm initPM 9304)
-      (denoteGraphDistributed pm initPM 9305) [4096,1024] [2048,1024] :=
+    (initSM initPM : Store) (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
+    (hq : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5440) (denoteGraphDistributedFaithful pm_goal_1 initPM 9270)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9271) [4096,16,64] [2048,16,64])
+    (hk : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5441) (denoteGraphDistributedFaithful pm_goal_1 initPM 9272)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9273) [4096,4,64] [2048,4,64])
+    (hv : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5438) (denoteGraphDistributedFaithful pm_goal_1 initPM 9258)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9259) [4096,4,64] [2048,4,64])
+    (hcuQ : denoteGraphDistributedFaithful sm_goal_1 initSM 5442 = denoteGraphDistributedFaithful pm_goal_1 initPM 5442)
+    (hcuK : denoteGraphDistributedFaithful sm_goal_1 initSM 5443 = denoteGraphDistributedFaithful pm_goal_1 initPM 5443)
+    (hbypass : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 8216) (denoteGraphDistributedFaithful pm_goal_1 initPM 15730)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 15738) [4096,1024] [2048,1024]) :
+    Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5452) (denoteGraphDistributedFaithful pm_goal_1 initPM 9304)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9305) [4096,1024] [2048,1024] :=
   l9o_residual5452_rel_of_raw initSM initPM hInit
     (l9o_raw5444_rel_of_qkv initSM initPM hq hk hv hcuQ hcuK) hbypass
 
@@ -479,40 +495,43 @@ theorem l9o_residual5452_rel_of_qkv
 L9 ordinary-QKV sibling is proved; the bypass and packed-cu aliases are
 reconstructed from graph nodes and init goals. -/
 theorem l9o_residual5452_rel_from_boundary5430_of_qkv
-    (initSM initPM : Store) (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (hboundary : Gather2Rel (denoteGraphDistributed sm initSM 5430)
-      (denoteGraphDistributed pm initPM 9230) (denoteGraphDistributed pm initPM 9231)
+    (initSM initPM : Store) (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
+    (hboundary : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5430)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9230) (denoteGraphDistributedFaithful pm_goal_1 initPM 9231)
       [4096,1024] [2048,1024])
-    (hq : Gather2Rel (denoteGraphDistributed sm initSM 5440)
-      (denoteGraphDistributed pm initPM 9270) (denoteGraphDistributed pm initPM 9271)
+    (hq : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5440)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9270) (denoteGraphDistributedFaithful pm_goal_1 initPM 9271)
       [4096,16,64] [2048,16,64])
-    (hk : Gather2Rel (denoteGraphDistributed sm initSM 5441)
-      (denoteGraphDistributed pm initPM 9272) (denoteGraphDistributed pm initPM 9273)
+    (hk : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5441)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9272) (denoteGraphDistributedFaithful pm_goal_1 initPM 9273)
       [4096,4,64] [2048,4,64])
-    (hv : Gather2Rel (denoteGraphDistributed sm initSM 5438)
-      (denoteGraphDistributed pm initPM 9258) (denoteGraphDistributed pm initPM 9259)
+    (hv : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5438)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9258) (denoteGraphDistributedFaithful pm_goal_1 initPM 9259)
       [4096,4,64] [2048,4,64]) :
-    Gather2Rel (denoteGraphDistributed sm initSM 5452)
-      (denoteGraphDistributed pm initPM 9304) (denoteGraphDistributed pm initPM 9305)
+    Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5452)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9304) (denoteGraphDistributedFaithful pm_goal_1 initPM 9305)
       [4096,1024] [2048,1024] := by
-  have ms := l9a_reduce1 sm initSM 353
+  have ms := l9a_reduce1 sm_goal_1 initSM 353
     { rank := 0, op := "OpName.FW_multiref", ins := [5430], outs := [8212, 8216], params := [2] }
     5430 8216 id (by native_decide) (by native_decide) (by decide)
-    (fun st => l9a_multiref_at sm st 0 5430 [8212, 8216] 2 rfl 8216 (by decide))
+    (by decide) (by decide) (by decide)
+    (fun st => l9a_multiref_at sm_goal_1 st 0 5430 [8212, 8216] 2 rfl 8216 (by decide))
     (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have m0 := l9a_reduce1 pm initPM 788
+  have m0 := l9a_reduce1 pm_goal_1 initPM 788
     { rank := 0, op := "OpName.FW_multiref", ins := [9230], outs := [15726, 15730], params := [2] }
     9230 15730 id (by native_decide) (by native_decide) (by decide)
-    (fun st => l9a_multiref_at pm st 0 9230 [15726, 15730] 2 rfl 15730 (by decide))
+    (by decide) (by decide) (by decide)
+    (fun st => l9a_multiref_at pm_goal_1 st 0 9230 [15726, 15730] 2 rfl 15730 (by decide))
     (by native_decide) (by native_decide) (by native_decide) (by native_decide)
-  have m1 := l9a_reduce1 pm initPM 789
+  have m1 := l9a_reduce1 pm_goal_1 initPM 789
     { rank := 1, op := "OpName.FW_multiref", ins := [9231], outs := [15734, 15738], params := [2] }
     9231 15738 id (by native_decide) (by native_decide) (by decide)
-    (fun st => l9a_multiref_at pm st 1 9231 [15734, 15738] 2 rfl 15738 (by decide))
+    (by decide) (by decide) (by decide)
+    (fun st => l9a_multiref_at pm_goal_1 st 1 9231 [15734, 15738] 2 rfl 15738 (by decide))
     (by native_decide) (by native_decide) (by native_decide) (by native_decide)
   simp only [id_eq] at ms m0 m1
-  have hbypass : Gather2Rel (denoteGraphDistributed sm initSM 8216)
-      (denoteGraphDistributed pm initPM 15730) (denoteGraphDistributed pm initPM 15738)
+  have hbypass : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 8216)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 15730) (denoteGraphDistributedFaithful pm_goal_1 initPM 15738)
       [4096,1024] [2048,1024] :=
     ⟨by rw [ms, hboundary.value, ← m0, ← m1], by rw [ms]; exact hboundary.full_shape,
       by rw [m0]; exact hboundary.shard0_shape, by rw [m1]; exact hboundary.shard1_shape,
@@ -527,12 +546,12 @@ theorem l9o_residual5452_rel_from_boundary5430_of_qkv
 incoming residual boundary: Q, K, and V are derived from their concrete graph
 nodes before the sliding-window attention and projection continuation. -/
 theorem l9o_residual5452_rel_from_boundary5430
-    (initSM initPM : Store) (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
-    (hboundary : Gather2Rel (denoteGraphDistributed sm initSM 5430)
-      (denoteGraphDistributed pm initPM 9230) (denoteGraphDistributed pm initPM 9231)
+    (initSM initPM : Store) (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
+    (hboundary : Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5430)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9230) (denoteGraphDistributedFaithful pm_goal_1 initPM 9231)
       [4096,1024] [2048,1024]) :
-    Gather2Rel (denoteGraphDistributed sm initSM 5452)
-      (denoteGraphDistributed pm initPM 9304) (denoteGraphDistributed pm initPM 9305)
+    Gather2Rel (denoteGraphDistributedFaithful sm_goal_1 initSM 5452)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9304) (denoteGraphDistributedFaithful pm_goal_1 initPM 9305)
       [4096,1024] [2048,1024] := by
   obtain ⟨hq, hk⟩ := l9o_q5440_k5441_rels_from_boundary initSM initPM hInit hboundary
   have hv := l9o_v5438_rel_from_boundary initSM initPM hInit hboundary
