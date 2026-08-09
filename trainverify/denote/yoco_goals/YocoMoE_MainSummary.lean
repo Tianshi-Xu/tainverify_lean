@@ -115,7 +115,7 @@ theorem yoco_moe_cut_tier_main :
       StoreShapesHold initSM sm_goal_4InitEnv ∧
       StoreShapesHold initPM pm_goal_4InitEnv ∧
       InitGoalsHold pm_goal_4.numRanks goal_4_cut_initGoals initSM initPM) := by
-  refine ⟨prove_pattern_1, prove_pattern_2, prove_pattern_3,
+  refine ⟨prove_pattern_1_plain_legacy, prove_pattern_2, prove_pattern_3,
           prove_pattern_4, prove_pattern_5,
           pattern_1_joint_hypothesis_witness,
           pattern_2_joint_hypothesis_witness,
