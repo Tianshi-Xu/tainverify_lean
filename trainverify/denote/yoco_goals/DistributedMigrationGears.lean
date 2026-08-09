@@ -1,6 +1,7 @@
 /- Small reusable gears for sliding a 1TP/2TP boundary through a distributed graph. -/
 import denote.yoco_goals.Layer0DistributedMigration
 import denote.Gather2Rel
+import denote.MoEFullSplitCommute
 
 set_option linter.style.longLine false
 set_option linter.style.setOption false
@@ -154,40 +155,6 @@ theorem distributed_reduce_fixed_two (g : GraphDecl) (init : Store) (k : Nat)
       · exact hpre1
       · exact hpre2)
   exact h
-
-/-- Parameterized full-expert 2TP MoE boundary gear. Graph-specific work is
-    isolated in the three node-value equations. -/
-theorem gather2Rel_fullExpertMoE_boundary
-    (input input0 input1 rp rp0 rp1 rm rm0 rm1
-      w13 w130 w131 w2 w20 w21 out out0 out1 : Tensor)
-    (L hM E topK tDim dDim : Nat) (swigluLimit : Scalar)
-    (hL : 0 < L) (hhM : 0 < hM) (hE : 0 < E)
-    (ht : 0 < tDim) (hd : 0 < dDim) (hteven : tDim = 2 * dDim)
-    (hinput : Gather2Rel input input0 input1 [L * 2, hM] [L, hM])
-    (hrp : Gather2Rel rp rp0 rp1 [L * 2, E * 2] [L, E * 2])
-    (hrm : Gather2Rel rm rm0 rm1 [L * 2, E * 2] [L, E * 2])
-    (hw13 : Gather2Rel w13 w130 w131 [E * 2, tDim, hM] [E, tDim, hM])
-    (hw2 : Gather2Rel w2 w20 w21 [E * 2, hM, dDim] [E, hM, dDim])
-    (hfullNode : out = fw_all2all_moe_gmm_full input rp rm
-      [w130, w131] [w20, w21] (E * 2) topK swigluLimit)
-    (hnode0 : out0 = fw_all2all_moe_gmm_full input0 rp0 rm0
-      [w130, w131] [w20, w21] (E * 2) topK swigluLimit)
-    (hnode1 : out1 = fw_all2all_moe_gmm_full input1 rp1 rm1
-      [w130, w131] [w20, w21] (E * 2) topK swigluLimit)
-    (houtShape : out.shape = [L * 2, hM])
-    (hout0Shape : out0.shape = [L, hM]) (hout1Shape : out1.shape = [L, hM]) :
-    Gather2Rel out out0 out1 [L * 2, hM] [L, hM] := by
-  refine ⟨?_, houtShape, hout0Shape, hout1Shape, ?_⟩
-  · rw [hfullNode, hnode0, hnode1, hinput.value, hrp.value, hrm.value]
-    exact fw_all2all_moe_gmm_full_split_commute_2
-      input0 input1 rp0 rp1 rm0 rm1 w130 w131 w20 w21
-      L hM E topK tDim dDim swigluLimit hL hhM hE ht hd hteven
-      hinput.shard0_shape hinput.shard1_shape
-      hrp.shard0_shape hrp.shard1_shape hrm.shard0_shape hrm.shard1_shape
-      hw13.shard0_shape hw13.shard1_shape hw2.shard0_shape hw2.shard1_shape
-  · intro heq
-    have hlen := congrArg List.length heq
-    norm_num at hlen
 
 /-- A non-vacuous witness for the relation itself. -/
 theorem gather2Rel_witness (a b : Tensor) (sh : Shape)
