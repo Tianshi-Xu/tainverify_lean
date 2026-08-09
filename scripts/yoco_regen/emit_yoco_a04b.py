@@ -42,6 +42,8 @@ AUTHORITY_NAMES = (
 ) + METADATA_JSON_NAMES + ("nnscaler_dp_solver.so", "comp_profile.json")
 STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/BridgeKit.lean",
+    "trainverify/denote/yoco_goals/JointWitnessCore.lean",
+    "trainverify/denote/yoco_goals/Goal1ExternalContractWitness.lean",
     "trainverify/denote/yoco_goals/CanonicalGoal4L0Routing.lean",
     "trainverify/denote/yoco_goals/CanonicalGoal4L1Routing.lean",
     "trainverify/denote/yoco_goals/CanonicalGoal4L2Routing.lean",
