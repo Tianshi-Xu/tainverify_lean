@@ -355,6 +355,8 @@ STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/Goal1PublicFaithful.lean",
     "trainverify/denote/yoco_goals/Goal_3_FaithfulFull.lean",
     "trainverify/denote/yoco_goals/Goal3L0L11RoutingCertificate.lean",
+    "trainverify/denote/yoco_goals/Goal3FaithfulRoutingLate.lean",
+    *(f"trainverify/denote/yoco_goals/CanonicalGoal3L{layer}Routing.lean" for layer in range(12, 24)),
     "trainverify/denote/yoco_goals/Goal4FaithfulRoutingStack.lean",
     *(f"trainverify/denote/yoco_goals/CanonicalGoal4L{layer}Routing.lean" for layer in range(3, 24)),
     "trainverify/denote/yoco_goals/FaithfulStackGather.lean",
