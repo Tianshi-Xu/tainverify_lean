@@ -38,15 +38,15 @@ open TrainVerify.Denote.ZigzagCollective
 
 noncomputable section
 
-private def goal4SmRoutingTids : List Tid :=
+def goal4SmRoutingTids : List Tid :=
   [4965, 5020, 5075, 5130, 5185, 5240, 5295, 5350, 5405, 5460, 5515, 5570,
    5657, 5711, 5765, 5819, 5873, 5927, 5981, 6035, 6089, 6143, 6197, 6251]
 
-private def goal4PmRouting0Tids : List Tid :=
+def goal4PmRouting0Tids : List Tid :=
   [7846, 8010, 8174, 8338, 8502, 8666, 8830, 8994, 9158, 9322, 9486, 9650,
    9910, 10064, 10218, 10372, 10526, 10680, 10834, 10988, 11142, 11296, 11450, 11604]
 
-private def goal4PmRouting1Tids : List Tid :=
+def goal4PmRouting1Tids : List Tid :=
   [7847, 8011, 8175, 8339, 8503, 8667, 8831, 8995, 9159, 9323, 9487, 9651,
    9911, 10065, 10219, 10373, 10527, 10681, 10835, 10989, 11143, 11297, 11451, 11605]
 
