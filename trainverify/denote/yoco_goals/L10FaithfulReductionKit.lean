@@ -84,7 +84,7 @@ theorem l10f_apply_multiref_at (g : GraphDecl) (s : Store) (rank xTid : Nat)
     (by simp) (by simp) (by simp)]
   unfold applyNodeDistributed
   rw [if_neg (by simp)]
-  exact l11o_apply_multiref_at g s rank xTid outs n hn outTid hmem
+  exact applyNode_fw_multiref_at g s rank xTid outs n hn outTid hmem
 
 /-- Faithful init-value bridge on the exact Goal-1 graph pair. -/
 theorem l10f_init_value (initSM initPM : Store)
@@ -164,7 +164,7 @@ theorem l10f_per_head (g : GraphDecl) (init : Store) (k r x w o : Nat)
         (by simp) (by simp) (by simp)]
       unfold applyNodeDistributed
       rw [if_neg (by simp)]
-      exact l11o_apply_per_head g s r x w o)
+      exact applyNode_fw_per_head_mix_precision_linear_out g s r x w o [])
     hdn hdw hpn hpx hpw
 
 /-- Faithful generated AllGather reduction. -/
