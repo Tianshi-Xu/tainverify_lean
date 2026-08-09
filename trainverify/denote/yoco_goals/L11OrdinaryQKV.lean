@@ -235,7 +235,7 @@ theorem l11o_allGather0_reconstruct_chunks_3d
     rw [hgetD]
     exact l11o_chunk0_3d_valAt Lshard d1 d2 hL hd1 hd2 T hT r hr row hrow col hcol inner hinner
 
-private theorem l11o_node_core (g : GraphDecl) (init : Store) (k : Nat)
+theorem l11o_node_core (g : GraphDecl) (init : Store) (k : Nat)
     (node : NodeDecl) (outTid : Tid)
     (hk : k < g.nodes.length) (hnode : g.nodes[k]'hk = node)
     (hmoe : node.op ≠ "OpName.FW_all2all_moe_gmm")
@@ -249,14 +249,14 @@ private theorem l11o_node_core (g : GraphDecl) (init : Store) (k : Nat)
   unfold applyNodeDistributed
   rw [if_neg hmoe]
 
-private theorem l11o_prefix_read (g : GraphDecl) (init : Store) (k : Nat) (tid : Tid)
+theorem l11o_prefix_read (g : GraphDecl) (init : Store) (k : Nat) (tid : Tid)
     (hpre_nil : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
     (hpre : ∀ n ∈ g.nodes.drop k, tid ∉ n.outs) :
     ((g.nodes.take k).foldl (applyNodeDistributed g) init) tid =
       denoteGraphDistributed g init tid :=
   (denoteGraphDistributed_eq_prefix g init tid k hpre_nil hpre).symm
 
-private theorem l11o_reduce1 (g : GraphDecl) (init : Store) (k : Nat)
+theorem l11o_reduce1 (g : GraphDecl) (init : Store) (k : Nat)
     (node : NodeDecl) (inTid outTid : Tid) (opfun : Tensor → Tensor)
     (hk : k < g.nodes.length) (hnode : g.nodes[k]'hk = node)
     (hmoe : node.op ≠ "OpName.FW_all2all_moe_gmm")
@@ -269,7 +269,7 @@ private theorem l11o_reduce1 (g : GraphDecl) (init : Store) (k : Nat)
   rw [l11o_node_core g init k node outTid hk hnode hmoe hdrop_nil hdrop,
     happly, l11o_prefix_read g init k inTid hpre_nil hpre]
 
-private theorem l11o_reduce2 (g : GraphDecl) (init : Store) (k : Nat)
+theorem l11o_reduce2 (g : GraphDecl) (init : Store) (k : Nat)
     (node : NodeDecl) (in1 in2 outTid : Tid) (opfun : Tensor → Tensor → Tensor)
     (hk : k < g.nodes.length) (hnode : g.nodes[k]'hk = node)
     (hmoe : node.op ≠ "OpName.FW_all2all_moe_gmm")
@@ -285,7 +285,7 @@ private theorem l11o_reduce2 (g : GraphDecl) (init : Store) (k : Nat)
     happly, l11o_prefix_read g init k in1 hpre_nil hpre1,
     l11o_prefix_read g init k in2 hpre_nil hpre2]
 
-private theorem l11o_reduce4 (g : GraphDecl) (init : Store) (k : Nat)
+theorem l11o_reduce4 (g : GraphDecl) (init : Store) (k : Nat)
     (node : NodeDecl) (in0 in1 in2 in3 outTid : Tid)
     (opfun : Tensor → Tensor → Tensor → Tensor → Tensor)
     (hk : k < g.nodes.length) (hnode : g.nodes[k]'hk = node)
@@ -308,7 +308,7 @@ private theorem l11o_reduce4 (g : GraphDecl) (init : Store) (k : Nat)
     l11o_prefix_read g init k in2 hpre_nil hpre2,
     l11o_prefix_read g init k in3 hpre_nil hpre3]
 
-private theorem l11o_init_value (initSM initPM : Store)
+theorem l11o_init_value (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (gW : LineageGoal) (hgW : gW ∈ initGoals) (W : Tid)
     (htp : gW.tps = [{ rank := 0, tid := W }]) (hgd : gW.gatherDim = 0)
@@ -326,7 +326,7 @@ private theorem l11o_init_value (initSM initPM : Store)
     foldl_applyNodeDistributed_at_not_written pm pm.nodes initPM W (by native_decide) hpm]
   exact hv
 
-private theorem l11o_init_shape (initSM initPM : Store)
+theorem l11o_init_shape (initSM initPM : Store)
     (hInit : InitGoalsHold pm.numRanks initGoals initSM initPM)
     (gW : LineageGoal) (hgW : gW ∈ initGoals) (W : Tid) (sh : Shape)
     (htsShape : gW.tsShape = sh) (hts : gW.ts = W)
@@ -339,7 +339,7 @@ private theorem l11o_init_shape (initSM initPM : Store)
   rw [← hts, ← htsShape]
   exact hg.1
 
-private theorem l11o_rms (g : GraphDecl) (init : Store) (k r x w o : Nat)
+theorem l11o_rms (g : GraphDecl) (init : Store) (k r x w o : Nat)
     (hk : k < g.nodes.length)
     (hn : g.nodes[k]'hk =
       { rank := r, op := "OpName.FW_rms_norm", ins := [x, w], outs := [o] })
@@ -353,7 +353,7 @@ private theorem l11o_rms (g : GraphDecl) (init : Store) (k r x w o : Nat)
   l11o_reduce2 g init k _ x w o fw_rms_norm hk hn (by simp)
     (fun st => applyNode_fw_rms_norm_out_1p g st r x w o) hdn hdw hpn hpx hpw
 
-private theorem l11o_apply_multiref_at (g : GraphDecl) (s : Store) (rank xTid : Nat)
+theorem l11o_apply_multiref_at (g : GraphDecl) (s : Store) (rank xTid : Nat)
     (outs : List Tid) (n : Nat) (hn : outs.length = n) (outTid : Tid)
     (hmem : outTid ∈ outs) :
     applyNodeRingAttn g s
@@ -362,7 +362,7 @@ private theorem l11o_apply_multiref_at (g : GraphDecl) (s : Store) (rank xTid : 
   rw [applyNodeRingAttn_eq_applyNode_of_not_ring g s _ (by simp) (by simp)]
   exact applyNode_fw_multiref_at g s rank xTid outs n hn outTid hmem
 
-private theorem l11o_apply_per_head (g : GraphDecl) (s : Store) (rank x w o : Nat) :
+theorem l11o_apply_per_head (g : GraphDecl) (s : Store) (rank x w o : Nat) :
     applyNodeRingAttn g s
       { rank := rank, op := "OpName.FW_per_head_mix_precision_linear",
         ins := [x, w], outs := [o] } o = fw_per_head_linear (s x) (s w) := by
@@ -375,7 +375,7 @@ private theorem l11o_apply_per_head (g : GraphDecl) (s : Store) (rank x w o : Na
   unfold storeSet
   simp [List.find?]
 
-private theorem l11o_per_head (g : GraphDecl) (init : Store) (k r x w o : Nat)
+theorem l11o_per_head (g : GraphDecl) (init : Store) (k r x w o : Nat)
     (hk : k < g.nodes.length)
     (hn : g.nodes[k]'hk =
       { rank := r, op := "OpName.FW_per_head_mix_precision_linear", ins := [x, w], outs := [o] })
@@ -390,14 +390,14 @@ private theorem l11o_per_head (g : GraphDecl) (init : Store) (k r x w o : Nat)
     (fun st => l11o_apply_per_head g st r x w o)
     hdn hdw hpn hpx hpw
 
-private theorem l11o_per_head_shape (x w : Tensor) (b k hW dW : Nat)
+theorem l11o_per_head_shape (x w : Tensor) (b k hW dW : Nat)
     (hx : x.shape = [b, k]) (hw : w.shape = [hW, dW, k]) :
     (fw_per_head_linear x w).shape = [b, hW, dW] := by
   unfold fw_per_head_linear
   rw [hx, hw]
   rfl
 
-private theorem l11o_allgather2 (g : GraphDecl) (init : Store) (k r x0 x1 o : Nat)
+theorem l11o_allgather2 (g : GraphDecl) (init : Store) (k r x0 x1 o : Nat)
     (hk : k < g.nodes.length)
     (hn : g.nodes[k]'hk =
       { rank := r, op := "OpName.AllGatherPrim", ins := [x0, x1], outs := [o], params := [0] })
@@ -415,7 +415,7 @@ private theorem l11o_allgather2 (g : GraphDecl) (init : Store) (k r x0 x1 o : Na
       exact applyNode_allGatherPrimDimN_out g st r [x0, x1] o 0)
     hdn hdw hpn hp0 hp1
 
-private theorem l11o_chunk (g : GraphDecl) (init : Store) (k r x o : Nat)
+theorem l11o_chunk (g : GraphDecl) (init : Store) (k r x o : Nat)
     (hk : k < g.nodes.length)
     (hn : g.nodes[k]'hk =
       { rank := r, op := "OpName.ChunkPrim", ins := [x], outs := [o], params := [0] })
@@ -432,7 +432,7 @@ private theorem l11o_chunk (g : GraphDecl) (init : Store) (k r x o : Nat)
       exact applyNode_chunkPrimDimN_out g st r x o 0)
     hdn hdw hpn hpx
 
-private theorem l11o_rotary_pos_congr (cs p p' x : Tensor) (L nh d : Nat)
+theorem l11o_rotary_pos_congr (cs p p' x : Tensor) (L nh d : Nat)
     (hx : x.shape = [L, nh, d])
     (hpos : ∀ l, l < L → valAt p l = valAt p' l) :
     fw_rotary_apply cs p x nh = fw_rotary_apply cs p' x nh := by
@@ -461,7 +461,7 @@ private theorem l11o_rotary_pos_congr (cs p p' x : Tensor) (L nh d : Nat)
     simp only [Tensor.mkShape]
     rw [hpos _ hl]
 
-private theorem l11o_chunk0_2_1d_valAt (P : Tensor) (L r i : Nat)
+theorem l11o_chunk0_2_1d_valAt (P : Tensor) (L r i : Nat)
     (hP : P.shape = [2 * L]) (hr : r < 2) (hi : i < L) :
     valAt (chunkPrimDimN 0 2 r P) i = valAt P (r * L + i) := by
   have hLpos : 0 < L := Nat.lt_of_le_of_lt (Nat.zero_le i) hi
@@ -484,7 +484,7 @@ private theorem l11o_chunk0_2_1d_valAt (P : Tensor) (L r i : Nat)
   congr 1
   ring
 
-private theorem l11o_rotary_allGather0_1d
+theorem l11o_rotary_allGather0_1d
     (cs P a b : Tensor) (L nh d : Nat)
     (hL : 0 < L) (hnh : 0 < nh) (hd : 0 < d)
     (hP : P.shape = [2 * L])
