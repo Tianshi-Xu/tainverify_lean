@@ -5,6 +5,7 @@ Authors: TrainVerify contributors
 -/
 import denote.yoco_goals.ZigzagLayoutRel
 import denote.DenoteMoE
+import denote.Gather2Rel
 
 /-!
 # Faithful zigzag attention preserves `Zigzag2Rel`
@@ -143,6 +144,90 @@ theorem allGather_chunk_cp2_dim0_3d
     congr 1
     ring
 
+/-- A dim-0 chunk selects the corresponding source of a two-way 3-D gather. -/
+theorem chunk_allGather_cp2_dim0_3d
+    (x0 x1 : Tensor) (lDim d1 d2 r : Nat)
+    (hx0 : x0.shape = [lDim, d1, d2])
+    (hx1 : x1.shape = [lDim, d1, d2])
+    (hl : 0 < lDim) (hd1 : 0 < d1) (hd2 : 0 < d2) (hr : r < 2) :
+    chunkPrimDimN 0 2 r (allGatherPrimDimN 0 2 0 [x0, x1]) =
+      [x0, x1].getD r (zeroTensor [lDim, d1, d2]) := by
+  have hhead : (([x0, x1] : List Tensor).head?.map (fun t => t.shape)).getD [] =
+      [lDim, d1, d2] := by
+    simp only [List.head?_cons, Option.map_some, Option.getD_some, hx0]
+  have hgetShape : ∀ r' (_ : r' < 2),
+      ([x0, x1].getD r' (zeroTensor [lDim, d1, d2])).shape = [lDim, d1, d2] := by
+    intro r' hr'
+    interval_cases r' <;>
+      simp only [List.getD_cons_zero, List.getD_cons_succ, hx0, hx1]
+  let full := allGatherPrimDimN 0 2 0 [x0, x1]
+  have hfull : full.shape = [2 * lDim, d1, d2] := by
+    dsimp [full]
+    rw [allGatherPrimDimN_shape 0 2 _ [lDim, d1, d2] hhead]
+    simp [List.set, List.getD, Nat.mul_comm]
+  have hchunk : (chunkPrimDimN 0 2 r full).shape = [lDim, d1, d2] := by
+    rw [chunkPrimDimN_shape 0 2 r full _ hfull (by omega)]
+    simp
+  apply Tensor.ext
+  · rw [hchunk, hgetShape r hr]
+  · intro idx hidx
+    rw [hchunk] at hidx
+    have hbound : idx < lDim * d1 * d2 := by
+      simpa [prodShape] using hidx
+    let row := idx / (d1 * d2)
+    let rem := idx % (d1 * d2)
+    let col := rem / d2
+    let inner := rem % d2
+    have hp : 0 < d1 * d2 := Nat.mul_pos hd1 hd2
+    have hrow : row < lDim := by
+      dsimp [row]
+      exact Nat.div_lt_iff_lt_mul hp |>.mpr (by simpa [Nat.mul_assoc] using hbound)
+    have hcol : col < d1 := by
+      dsimp [col, rem]
+      exact Nat.div_lt_iff_lt_mul hd2 |>.mpr (Nat.mod_lt _ hp)
+    have hinner : inner < d2 := by
+      dsimp [inner, rem]
+      exact Nat.mod_lt _ hd2
+    have hidxeq : idx = (row * d1 + col) * d2 + inner := by
+      have h1 : idx = row * (d1 * d2) + rem := by
+        dsimp [row, rem]
+        simpa [Nat.mul_comm] using (Nat.div_add_mod idx (d1 * d2)).symm
+      have h2 : rem = col * d2 + inner := by
+        dsimp [col, inner]
+        simpa [Nat.mul_comm] using (Nat.div_add_mod rem d2).symm
+      rw [h1, h2]
+      ring
+    have hlocal : idx < prodShape (chunkPrimDimN 0 2 r full).shape := by
+      rw [hchunk]
+      simpa [prodShape] using hbound
+    rw [valAt_of_lt _ _ hlocal]
+    unfold chunkPrimDimN
+    have hhalf : 2 * lDim / 2 = lDim := by omega
+    have hpne : d1 * d2 ≠ 0 := Nat.ne_of_gt hp
+    have hlocalne : lDim * (d1 * d2) ≠ 0 := by positivity
+    have hrmod : r % 2 = r := Nat.mod_eq_of_lt hr
+    have hsmall : idx < lDim * (d1 * d2) := by
+      simpa [Nat.mul_assoc] using hbound
+    have hrem : idx % (lDim * (d1 * d2)) = idx := Nat.mod_eq_of_lt hsmall
+    have hdiv : idx / (lDim * (d1 * d2)) = 0 := Nat.div_eq_of_lt hsmall
+    have hdivp : idx / (d1 * d2) = row := rfl
+    have hmodp : idx % (d1 * d2) = rem := rfl
+    simp only [hfull, Tensor.mkShape, List.getD_cons_zero, List.drop,
+      List.foldl_cons, List.foldl_nil, Nat.one_mul, hhalf,
+      show (2 : Nat) ≠ 0 by omega, if_false, hpne, hlocalne]
+    rw [hrmod, hdiv, hrem, hdivp, hmodp]
+    rw [Nat.zero_mul, Nat.zero_add]
+    have hremEq : rem = col * d2 + inner := by
+      dsimp [col, inner]
+      simpa [Nat.mul_comm] using (Nat.div_add_mod rem d2).symm
+    rw [hremEq]
+    have hindexEq : (r * lDim + row) * (d1 * d2) + (col * d2 + inner) =
+        ((r * lDim + row) * d1 + col) * d2 + inner := by ring
+    rw [hindexEq, hidxeq]
+    dsimp [full]
+    exact allGatherPrimDimN0_valAt_3D 2 lDim d1 d2 _ (by omega) hl hd1 hd2
+      hhead hgetShape r hr row hrow col hcol inner hinner
+
 /-- Replacing CP2 source tensors by tensors with the same local token dimension
 preserves cumulative-sequence well-formedness. -/
 theorem ZigzagCuWF.transport_cp2_3d
@@ -239,6 +324,92 @@ theorem attn_zigzag
     simp only [fw_attn_zigzag_collective, show (2 : Nat) ≠ 1 by omega, if_false,
       hcu, hdecoded, hrange, List.map]
     rw [hu0', hu1', ← hs.full_value]
+    dsimp only [out0, out1, fullOut]
+    rw [hcu]
+  · rw [hcu, hdecoded]
+    have hwf : ZigzagCuWF [0, 2 * lDim] [source0, source1] 2 := by
+      rw [← hdecoded]
+      exact hs.cu_wf
+    exact ZigzagCuWF.transport_cp2_3d [0, 2 * lDim] source0 source1 out0 out1
+      lDim qHeads vDim hwf (by rw [hs0]; rfl) ho0 ho1
+
+-- Faithful CP2 zigzag attention with ordinary rank-local K/V shards preserves
+-- the source-witness relation. Unlike `attn_zigzag`, this theorem gathers K/V in
+-- rank order and never assumes that either input is replicated.
+set_option maxHeartbeats 1600000 in
+theorem attn_zigzag_sharded_kv
+    (fullQ q0 q1 cuShuffle fullK k0 k1 fullV v0 v1 cuAttn cuKV : Tensor)
+    (lDim qHeads kvHeads qDim vDim : Nat) (causal : Bool) (window : Nat)
+    (hq : Zigzag2Rel fullQ q0 q1 cuShuffle
+      [2 * lDim, qHeads, qDim] [lDim, qHeads, qDim])
+    (hk : Gather2Rel fullK k0 k1
+      [2 * lDim, kvHeads, qDim] [lDim, kvHeads, qDim])
+    (hvrel : Gather2Rel fullV v0 v1
+      [2 * lDim, kvHeads, vDim] [lDim, kvHeads, vDim])
+    (hcu : cuAttn = cuShuffle)
+    (hdecoded : decodeCuSeqlens cuShuffle = [0, 2 * lDim])
+    (hl : 0 < lDim) (heven : lDim % 2 = 0)
+    (hh : 0 < qHeads) (_hd : 0 < qDim) (hv : 0 < vDim) :
+    Zigzag2Rel
+      (fw_attn_varlen fullQ fullK fullV cuAttn cuKV
+        qHeads kvHeads qDim vDim causal window)
+      (fw_attn_zigzag_collective_sharded_kv [q0, q1] [k0, k1] [v0, v1]
+        cuAttn cuKV qHeads kvHeads qDim vDim causal window 2 0)
+      (fw_attn_zigzag_collective_sharded_kv [q0, q1] [k0, k1] [v0, v1]
+        cuAttn cuKV qHeads kvHeads qDim vDim causal window 2 1)
+      cuAttn [2 * lDim, qHeads, vDim] [lDim, qHeads, vDim] := by
+  obtain ⟨source0, source1, hs⟩ := hq
+  have hs0 : source0.shape = [lDim, qHeads, qDim] := hs.source0_shape
+  have hs1 : source1.shape = [lDim, qHeads, qDim] := hs.source1_shape
+  have hu0 : fw_maybe_unshuffle_collective [q0, q1]
+      (decodeCuSeqlens cuShuffle) 2 0 = source0 := by
+    rw [hs.rank0_value, hs.rank1_value, hdecoded]
+    simpa only [List.getD_cons_zero] using
+      (fw_maybe_unshuffle_shuffle_collective_cp2_single
+        source0 source1 lDim 0 [qHeads, qDim] hl heven (by omega) hs0 hs1)
+  have hu1 : fw_maybe_unshuffle_collective [q0, q1]
+      (decodeCuSeqlens cuShuffle) 2 1 = source1 := by
+    rw [hs.rank0_value, hs.rank1_value, hdecoded]
+    simpa only [List.getD_cons_succ, List.getD_cons_zero] using
+      (fw_maybe_unshuffle_shuffle_collective_cp2_single
+        source0 source1 lDim 1 [qHeads, qDim] hl heven (by omega) hs0 hs1)
+  let fullOut := fw_attn_varlen fullQ fullK fullV cuAttn cuKV
+    qHeads kvHeads qDim vDim causal window
+  let out0 := chunkPrimDimN 0 2 0 fullOut
+  let out1 := chunkPrimDimN 0 2 1 fullOut
+  have hfullOut : fullOut.shape = [2 * lDim, qHeads, vDim] := by
+    apply fw_attn_varlen_shape
+    rw [hs.full_shape]
+    rfl
+  have ho0 : out0.shape = [lDim, qHeads, vDim] := by
+    dsimp [out0]
+    rw [chunkPrimDimN_shape 0 2 0 fullOut _ hfullOut (by omega)]
+    simp
+  have ho1 : out1.shape = [lDim, qHeads, vDim] := by
+    dsimp [out1]
+    rw [chunkPrimDimN_shape 0 2 1 fullOut _ hfullOut (by omega)]
+    simp
+  refine of_sources out0 out1 ?_ ?_ ?_ hfullOut ho0 ho1 ?_
+  · exact (allGather_chunk_cp2_dim0_3d fullOut lDim qHeads vDim
+      hfullOut hl hh hv).symm
+  · have hrange : List.range 2 = [0, 1] := by decide
+    have hu0' : fw_maybe_unshuffle_collective [q0, q1] [0, 2 * lDim] 2 0 = source0 := by
+      rwa [hdecoded] at hu0
+    have hu1' : fw_maybe_unshuffle_collective [q0, q1] [0, 2 * lDim] 2 1 = source1 := by
+      rwa [hdecoded] at hu1
+    simp only [fw_attn_zigzag_collective_sharded_kv,
+      show (2 : Nat) ≠ 1 by omega, if_false, hcu, hdecoded, hrange, List.map]
+    rw [hu0', hu1', ← hs.full_value, ← hk.value, ← hvrel.value]
+    dsimp only [out0, out1, fullOut]
+    rw [hcu]
+  · have hrange : List.range 2 = [0, 1] := by decide
+    have hu0' : fw_maybe_unshuffle_collective [q0, q1] [0, 2 * lDim] 2 0 = source0 := by
+      rwa [hdecoded] at hu0
+    have hu1' : fw_maybe_unshuffle_collective [q0, q1] [0, 2 * lDim] 2 1 = source1 := by
+      rwa [hdecoded] at hu1
+    simp only [fw_attn_zigzag_collective_sharded_kv,
+      show (2 : Nat) ≠ 1 by omega, if_false, hcu, hdecoded, hrange, List.map]
+    rw [hu0', hu1', ← hs.full_value, ← hk.value, ← hvrel.value]
     dsimp only [out0, out1, fullOut]
     rw [hcu]
   · rw [hcu, hdecoded]

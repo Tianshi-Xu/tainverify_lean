@@ -82,6 +82,45 @@ private theorem cL22A_reduce6
     denoteGraphDistributedFaithful_prefix_read g init k in4 hpreNil hpre4,
     denoteGraphDistributedFaithful_prefix_read g init k in5 hpreNil hpre5]
 
+private theorem cL22A_reduce8
+    (g : GraphDecl) (init : Store) (k : Nat) (node : NodeDecl)
+    (in0 in1 in2 in3 in4 in5 in6 in7 outTid : Tid)
+    (opfun : Tensor → Tensor → Tensor → Tensor → Tensor → Tensor → Tensor → Tensor → Tensor)
+    (hk : k < g.nodes.length) (hnode : g.nodes[k]'hk = node)
+    (happly : ∀ s, applyNodeDistributedFaithful g s node outTid =
+      opfun (s in0) (s in1) (s in2) (s in3) (s in4) (s in5) (s in6) (s in7))
+    (hafterNil : ∀ n ∈ g.nodes.drop (k + 1), n.outs ≠ [])
+    (hafterWrite : ∀ n ∈ g.nodes.drop (k + 1), outTid ∉ n.outs)
+    (hpreNil : ∀ n ∈ g.nodes.drop k, n.outs ≠ [])
+    (hpre0 : ∀ n ∈ g.nodes.drop k, in0 ∉ n.outs)
+    (hpre1 : ∀ n ∈ g.nodes.drop k, in1 ∉ n.outs)
+    (hpre2 : ∀ n ∈ g.nodes.drop k, in2 ∉ n.outs)
+    (hpre3 : ∀ n ∈ g.nodes.drop k, in3 ∉ n.outs)
+    (hpre4 : ∀ n ∈ g.nodes.drop k, in4 ∉ n.outs)
+    (hpre5 : ∀ n ∈ g.nodes.drop k, in5 ∉ n.outs)
+    (hpre6 : ∀ n ∈ g.nodes.drop k, in6 ∉ n.outs)
+    (hpre7 : ∀ n ∈ g.nodes.drop k, in7 ∉ n.outs) :
+    denoteGraphDistributedFaithful g init outTid =
+      opfun (denoteGraphDistributedFaithful g init in0)
+        (denoteGraphDistributedFaithful g init in1)
+        (denoteGraphDistributedFaithful g init in2)
+        (denoteGraphDistributedFaithful g init in3)
+        (denoteGraphDistributedFaithful g init in4)
+        (denoteGraphDistributedFaithful g init in5)
+        (denoteGraphDistributedFaithful g init in6)
+        (denoteGraphDistributedFaithful g init in7) := by
+  rw [denoteGraphDistributedFaithful_node_core g init k node outTid hk hnode
+      hafterNil hafterWrite,
+    happly,
+    denoteGraphDistributedFaithful_prefix_read g init k in0 hpreNil hpre0,
+    denoteGraphDistributedFaithful_prefix_read g init k in1 hpreNil hpre1,
+    denoteGraphDistributedFaithful_prefix_read g init k in2 hpreNil hpre2,
+    denoteGraphDistributedFaithful_prefix_read g init k in3 hpreNil hpre3,
+    denoteGraphDistributedFaithful_prefix_read g init k in4 hpreNil hpre4,
+    denoteGraphDistributedFaithful_prefix_read g init k in5 hpreNil hpre5,
+    denoteGraphDistributedFaithful_prefix_read g init k in6 hpreNil hpre6,
+    denoteGraphDistributedFaithful_prefix_read g init k in7 hpreNil hpre7]
+
 private def cL22ASmQ : NodeDecl :=
   { rank := 0, op := "OpName.FW_per_head_mix_precision_linear",
     ins := [6199, 6200], outs := [6201] }
@@ -268,25 +307,30 @@ theorem canonical_l22_attention_sm_reduce (initSM : Store) :
 /-- The exact canonical rank-0 PM L22 attention output uses both Q shards and local K/V. -/
 theorem canonical_l22_attention_pm0_reduce (initPM : Store) :
     denoteGraphDistributedFaithful pm_goal_1 initPM 11478 =
-      fw_attn_zigzag_collective
+      fw_attn_zigzag_collective_sharded_kv
         [denoteGraphDistributedFaithful pm_goal_1 initPM 11454,
          denoteGraphDistributedFaithful pm_goal_1 initPM 11455]
-        (denoteGraphDistributedFaithful pm_goal_1 initPM 11466)
-        (denoteGraphDistributedFaithful pm_goal_1 initPM 11472)
+        [denoteGraphDistributedFaithful pm_goal_1 initPM 11466,
+         denoteGraphDistributedFaithful pm_goal_1 initPM 11467]
+        [denoteGraphDistributedFaithful pm_goal_1 initPM 11472,
+         denoteGraphDistributedFaithful pm_goal_1 initPM 11473]
         (denoteGraphDistributedFaithful pm_goal_1 initPM 6204)
         (denoteGraphDistributedFaithful pm_goal_1 initPM 6205)
         16 4 64 64 true 0 2 0 := by
-  refine cL22A_reduce6 pm_goal_1 initPM 1949 cL22APmAttn0
-    11454 11455 11466 11472 6204 6205 11478
-    (fun q0 q1 k v cq ck => fw_attn_zigzag_collective
-      [q0, q1] k v cq ck 16 4 64 64 true 0 2 0)
+  refine cL22A_reduce8 pm_goal_1 initPM 1949 cL22APmAttn0
+    11454 11455 11466 11467 11472 11473 6204 6205 11478
+    (fun q0 q1 k0 k1 v0 v1 cq ck => fw_attn_zigzag_collective_sharded_kv
+      [q0, q1] [k0, k1] [v0, v1]
+      cq ck 16 4 64 64 true 0 2 0)
     (by native_decide) cL22A_pm_node0 ?_ (by native_decide)
     (cL22A_pm_not_written 1950 11478 (by decide))
     (by native_decide)
     (cL22A_pm_not_written 1949 11454 (by decide))
     (cL22A_pm_not_written 1949 11455 (by decide))
     (cL22A_pm_not_written 1949 11466 (by decide))
+    (cL22A_pm_not_written 1949 11467 (by decide))
     (cL22A_pm_not_written 1949 11472 (by decide))
+    (cL22A_pm_not_written 1949 11473 (by decide))
     (cL22A_pm_not_written 1949 6204 (by decide))
     (cL22A_pm_not_written 1949 6205 (by decide))
   intro s
@@ -304,24 +348,29 @@ theorem canonical_l22_attention_pm0_reduce (initPM : Store) :
 /-- The exact canonical rank-1 PM L22 attention output uses both Q shards and local K/V. -/
 theorem canonical_l22_attention_pm1_reduce (initPM : Store) :
     denoteGraphDistributedFaithful pm_goal_1 initPM 11479 =
-      fw_attn_zigzag_collective
+      fw_attn_zigzag_collective_sharded_kv
         [denoteGraphDistributedFaithful pm_goal_1 initPM 11454,
          denoteGraphDistributedFaithful pm_goal_1 initPM 11455]
-        (denoteGraphDistributedFaithful pm_goal_1 initPM 11467)
-        (denoteGraphDistributedFaithful pm_goal_1 initPM 11473)
+        [denoteGraphDistributedFaithful pm_goal_1 initPM 11466,
+         denoteGraphDistributedFaithful pm_goal_1 initPM 11467]
+        [denoteGraphDistributedFaithful pm_goal_1 initPM 11472,
+         denoteGraphDistributedFaithful pm_goal_1 initPM 11473]
         (denoteGraphDistributedFaithful pm_goal_1 initPM 6204)
         (denoteGraphDistributedFaithful pm_goal_1 initPM 6205)
         16 4 64 64 true 0 2 1 := by
-  refine cL22A_reduce6 pm_goal_1 initPM 1950 cL22APmAttn1
-    11454 11455 11467 11473 6204 6205 11479
-    (fun q0 q1 k v cq ck => fw_attn_zigzag_collective
-      [q0, q1] k v cq ck 16 4 64 64 true 0 2 1)
+  refine cL22A_reduce8 pm_goal_1 initPM 1950 cL22APmAttn1
+    11454 11455 11466 11467 11472 11473 6204 6205 11479
+    (fun q0 q1 k0 k1 v0 v1 cq ck => fw_attn_zigzag_collective_sharded_kv
+      [q0, q1] [k0, k1] [v0, v1]
+      cq ck 16 4 64 64 true 0 2 1)
     (by native_decide) cL22A_pm_node1 ?_ (by native_decide)
     (cL22A_pm_not_written 1951 11479 (by decide))
     (by native_decide)
     (cL22A_pm_not_written 1950 11454 (by decide))
     (cL22A_pm_not_written 1950 11455 (by decide))
+    (cL22A_pm_not_written 1950 11466 (by decide))
     (cL22A_pm_not_written 1950 11467 (by decide))
+    (cL22A_pm_not_written 1950 11472 (by decide))
     (cL22A_pm_not_written 1950 11473 (by decide))
     (cL22A_pm_not_written 1950 6204 (by decide))
     (cL22A_pm_not_written 1950 6205 (by decide))
