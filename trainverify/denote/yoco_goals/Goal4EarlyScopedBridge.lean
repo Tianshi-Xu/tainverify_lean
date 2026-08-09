@@ -251,8 +251,12 @@ private theorem goal4_early_pm_prefix_scoped (init : Store) :
     s4b (applyNodeDistributedFaithful pm_goal_1 s1b e1) he1
 
 private def goal4EarlyPmRoutingTids : List Tid :=
-  [7846, 7847, 8010, 8011, 8174, 8175, 8338, 8339, 8502, 8503, 8666, 8667,
-   8830, 8831, 8994, 8995, 9158, 9159, 9322, 9323, 9486, 9487, 9650, 9651]
+  [7840, 7841, 7846, 7847, 8004, 8005, 8010, 8011,
+   8168, 8169, 8174, 8175, 8332, 8333, 8338, 8339,
+   8496, 8497, 8502, 8503, 8660, 8661, 8666, 8667,
+   8824, 8825, 8830, 8831, 8988, 8989, 8994, 8995,
+   9152, 9153, 9158, 9159, 9316, 9317, 9322, 9323,
+   9480, 9481, 9486, 9487, 9644, 9645, 9650, 9651]
 
 private theorem goal4_early_pm_suffix_facts : ∀ tid ∈ goal4EarlyPmRoutingTids,
     (∀ n ∈ pm_goal_4.nodes.drop 1023, n.outs ≠ []) ∧
@@ -273,12 +277,12 @@ theorem goal4_early_pm_to_goal1 (init : Store) (tid : Tid)
   apply goal4_early_pm_prefix_scoped init tid
   unfold goal4EarlyPmRoutingTids at htid
   simp only [List.mem_cons, List.not_mem_nil, or_false] at htid
-  rcases htid with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-    rfl | rfl <;> decide
+  rcases htid with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide
 
 private def goal4EarlySmRoutingTids : List Tid :=
-  [4965, 5020, 5075, 5130, 5185, 5240, 5295, 5350, 5405, 5460, 5515, 5570]
+  [4962, 4965, 5017, 5020, 5072, 5075, 5127, 5130,
+   5182, 5185, 5237, 5240, 5292, 5295, 5347, 5350,
+   5402, 5405, 5457, 5460, 5512, 5515, 5567, 5570]
 
 private theorem goal4_early_sm_facts :
     sm_goal_4.numRanks = sm_goal_1.numRanks ∧

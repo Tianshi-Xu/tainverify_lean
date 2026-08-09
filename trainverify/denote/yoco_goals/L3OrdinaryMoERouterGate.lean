@@ -150,6 +150,40 @@ theorem sigmoid {full shard0 shard1 : Tensor} (lDim d : Nat)
 
 end Gather2Rel
 
+/-- The exact pre-top-k router logits preserve ordinary dim-0 layout.
+Unlike the probabilities/map theorem below, this exposes the third
+gate-score ancestry input required by downstream generated goals. -/
+theorem l3_ordinary_moe_logits_from_norm_input (initSM initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
+    (hInit : InitGoalsHold pm_goal_1.numRanks initGoals initSM initPM)
+    (hNorm : Gather2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5124)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 8324)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 8325)
+      [4096, 1024] [2048, 1024]) :
+    Gather2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5127)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 8332)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 8333)
+      [4096, 64] [2048, 64] := by
+  have hwEq := l3OMr_weight_eq initSM initPM hInit
+  have hwShape := l3OMr_weight_shape initPM hPM
+  have hLocal := Gather2Rel.norm_linear 2048 1024 64 hNorm hwShape
+    (by decide) (by decide) (by decide)
+  have hp0Shape := hLocal.shard0_shape
+  have hp1Shape := hLocal.shard1_shape
+  rw [l3OMr_red_sm5127 initSM, l3OMr_red_sm5125 initSM,
+    l3OMr_red_sm7932 initSM, hwEq,
+    l3OMr_red_pm8332 initPM, l3OMr_red_pm8333 initPM,
+    l3OMr_red_pm5127 initPM, l3OMr_red_pm5125 initPM,
+    l3OMr_red_pm11838 initPM, l3OMr_red_pm15320 initPM,
+    l3OMr_red_pm15322 initPM,
+    fw_norm_linear_allGather0_commute_2 _ _ _ 2048 1024 64
+      (by decide) (by decide) (by decide) hNorm.shard0_shape hNorm.shard1_shape hwShape,
+    l3OMr_chunk_gather0 _ _ hp0Shape hp1Shape,
+    l3OMr_chunk_gather1 _ _ hp0Shape hp1Shape]
+  exact hLocal
+
 /-- The real cache router probabilities and map preserve ordinary dim-0 layout.
 The gather/float/norm-linear/chunk/top-k graph path and replicated router weight
 are all discharged internally. -/
@@ -171,28 +205,7 @@ theorem l3_ordinary_moe_router_from_norm_input (initSM initPM : Store)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 8336)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 8337)
       [4096, 64] [2048, 64] := by
-  have hwEq := l3OMr_weight_eq initSM initPM hInit
-  have hwShape := l3OMr_weight_shape initPM hPM
-  have hLocal := Gather2Rel.norm_linear 2048 1024 64 hNorm hwShape
-    (by decide) (by decide) (by decide)
-  have hp0Shape := hLocal.shard0_shape
-  have hp1Shape := hLocal.shard1_shape
-  have hLogits : Gather2Rel
-      (denoteGraphDistributedFaithful sm_goal_1 initSM 5127)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 8332)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 8333)
-      [4096, 64] [2048, 64] := by
-    rw [l3OMr_red_sm5127 initSM, l3OMr_red_sm5125 initSM,
-      l3OMr_red_sm7932 initSM, hwEq,
-      l3OMr_red_pm8332 initPM, l3OMr_red_pm8333 initPM,
-      l3OMr_red_pm5127 initPM, l3OMr_red_pm5125 initPM,
-      l3OMr_red_pm11838 initPM, l3OMr_red_pm15320 initPM,
-      l3OMr_red_pm15322 initPM,
-      fw_norm_linear_allGather0_commute_2 _ _ _ 2048 1024 64
-        (by decide) (by decide) (by decide) hNorm.shard0_shape hNorm.shard1_shape hwShape,
-      l3OMr_chunk_gather0 _ _ hp0Shape hp1Shape,
-      l3OMr_chunk_gather1 _ _ hp0Shape hp1Shape]
-    exact hLocal
+  have hLogits := l3_ordinary_moe_logits_from_norm_input initSM initPM hPM hInit hNorm
   have hProbs := Gather2Rel.topk_probs 2048 64 8 hLogits (by decide) (by decide)
   have hMap := Gather2Rel.topk_map 2048 64 8 hLogits (by decide) (by decide)
   rw [l3OMr_red_sm5128 initSM hLogits.full_shape,

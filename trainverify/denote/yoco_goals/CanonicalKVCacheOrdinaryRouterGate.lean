@@ -150,6 +150,40 @@ theorem sigmoid {full shard0 shard1 : Tensor} (lDim d : Nat)
 
 end Gather2Rel
 
+/-- The exact pre-top-k router logits preserve ordinary dim-0 layout.
+Unlike the probabilities/map theorem below, this exposes the third
+gate-score ancestry input required by downstream generated goals. -/
+theorem canonical_kv_cache_ordinary_logits_from_norm_input (initSM initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
+    (hInit : InitGoalsHold pm_goal_1.numRanks initGoals initSM initPM)
+    (hNorm : Gather2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5564)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9636)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9637)
+      [4096, 1024] [2048, 1024]) :
+    Gather2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5567)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9644)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 9645)
+      [4096, 64] [2048, 64] := by
+  have hwEq := cKVCr_weight_eq initSM initPM hInit
+  have hwShape := cKVCr_weight_shape initPM hPM
+  have hLocal := Gather2Rel.norm_linear 2048 1024 64 hNorm hwShape
+    (by decide) (by decide) (by decide)
+  have hp0Shape := hLocal.shard0_shape
+  have hp1Shape := hLocal.shard1_shape
+  rw [cKVCr_red_sm5567 initSM, cKVCr_red_sm5565 initSM,
+    cKVCr_red_sm8348 initSM, hwEq,
+    cKVCr_red_pm9644 initPM, cKVCr_red_pm9645 initPM,
+    cKVCr_red_pm5567 initPM, cKVCr_red_pm5565 initPM,
+    cKVCr_red_pm12094 initPM, cKVCr_red_pm15384 initPM,
+    cKVCr_red_pm15386 initPM,
+    fw_norm_linear_allGather0_commute_2 _ _ _ 2048 1024 64
+      (by decide) (by decide) (by decide) hNorm.shard0_shape hNorm.shard1_shape hwShape,
+    cKVCr_chunk_gather0 _ _ hp0Shape hp1Shape,
+    cKVCr_chunk_gather1 _ _ hp0Shape hp1Shape]
+  exact hLocal
+
 /-- The real cache router probabilities and map preserve ordinary dim-0 layout.
 The gather/float/norm-linear/chunk/top-k graph path and replicated router weight
 are all discharged internally. -/
@@ -171,28 +205,7 @@ theorem canonical_kv_cache_ordinary_router_from_norm_input (initSM initPM : Stor
       (denoteGraphDistributedFaithful pm_goal_1 initPM 9648)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 9649)
       [4096, 64] [2048, 64] := by
-  have hwEq := cKVCr_weight_eq initSM initPM hInit
-  have hwShape := cKVCr_weight_shape initPM hPM
-  have hLocal := Gather2Rel.norm_linear 2048 1024 64 hNorm hwShape
-    (by decide) (by decide) (by decide)
-  have hp0Shape := hLocal.shard0_shape
-  have hp1Shape := hLocal.shard1_shape
-  have hLogits : Gather2Rel
-      (denoteGraphDistributedFaithful sm_goal_1 initSM 5567)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 9644)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 9645)
-      [4096, 64] [2048, 64] := by
-    rw [cKVCr_red_sm5567 initSM, cKVCr_red_sm5565 initSM,
-      cKVCr_red_sm8348 initSM, hwEq,
-      cKVCr_red_pm9644 initPM, cKVCr_red_pm9645 initPM,
-      cKVCr_red_pm5567 initPM, cKVCr_red_pm5565 initPM,
-      cKVCr_red_pm12094 initPM, cKVCr_red_pm15384 initPM,
-      cKVCr_red_pm15386 initPM,
-      fw_norm_linear_allGather0_commute_2 _ _ _ 2048 1024 64
-        (by decide) (by decide) (by decide) hNorm.shard0_shape hNorm.shard1_shape hwShape,
-      cKVCr_chunk_gather0 _ _ hp0Shape hp1Shape,
-      cKVCr_chunk_gather1 _ _ hp0Shape hp1Shape]
-    exact hLocal
+  have hLogits := canonical_kv_cache_ordinary_logits_from_norm_input initSM initPM hPM hInit hNorm
   have hProbs := Gather2Rel.topk_probs 2048 64 8 hLogits (by decide) (by decide)
   have hMap := Gather2Rel.topk_map 2048 64 8 hLogits (by decide) (by decide)
   rw [cKVCr_red_sm5568 initSM hLogits.full_shape,
