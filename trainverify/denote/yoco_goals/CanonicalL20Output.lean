@@ -2,6 +2,7 @@
 import denote.yoco_goals.Goal_1
 import denote.yoco_goals.ZigzagLinearRel
 import denote.yoco_goals.ZigzagPointwiseRel
+import denote.yoco_goals.ZigzagViewRel
 
 set_option linter.style.longLine false
 set_option linter.style.nativeDecide false
@@ -335,7 +336,7 @@ theorem canonical_l20_projection_from_attention (initSM initPM : Store)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11324)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11325)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
-      [4096, 1024] [2048, 1024])
+      [4096, 16, 64] [2048, 16, 64])
     (hWeight : denoteGraphDistributedFaithful sm_goal_1 initSM 6156 =
       denoteGraphDistributedFaithful pm_goal_1 initPM 6156)
     (hWeightShape :
@@ -353,7 +354,8 @@ theorem canonical_l20_projection_from_attention (initSM initPM : Store)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
       [4096, 1024] [2048, 1024] := by
     rw [cL20_red_sm6154 initSM, cL20_red_pm11326 initPM, cL20_red_pm11327 initPM]
-    exact Zigzag2Rel.view_id' hAttention
+    exact Zigzag2Rel.view_3d_to_2d 2048 16 64 hAttention
+      (by decide) (by decide) (by decide)
   have hReshape1 : Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 6155)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11332)
@@ -399,7 +401,7 @@ theorem canonical_l20_output_from_inputs (initSM initPM : Store)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11324)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11325)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
-      [4096, 1024] [2048, 1024])
+      [4096, 16, 64] [2048, 16, 64])
     (hWeight : denoteGraphDistributedFaithful sm_goal_1 initSM 6156 =
       denoteGraphDistributedFaithful pm_goal_1 initPM 6156)
     (hWeightShape :

@@ -65,34 +65,32 @@ private theorem cL20K_proj_weight_shape (initPM : Store)
   rw [hp]
   exact hPM 5598 [4, 64, 1024] (by native_decide)
 
-/-- The complete canonical L20 K graph relation `6148 ↔ 11312/11313`.
+/-- The complete ordinary canonical L20 K graph relation `6148 ↔ 11312/11313`.
 All projection-weight facts are derived from the generated init contracts. -/
-theorem canonical_l20_k_relation
+theorem canonical_l20_k_ordinary_relation
     (initSM initPM : Store)
     (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
     (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
-    (hCache : Zigzag2Rel
+    (hCache : Gather2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 5595)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 9722)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 9723)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
       [4096, 1024] [2048, 1024]) :
-    Zigzag2Rel
+    Gather2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 6148)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11312)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11313)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
       [4096, 4, 64] [2048, 4, 64] := by
   have hRmsW := cL20K_rms_weight_eq initSM initPM hInit
   have hKW := cL20K_proj_weight_eq initSM initPM hInit
   have hKShape := cL20K_proj_weight_shape initPM hPM
-  have hSemantic := canonical_l20_k_semantic hCache hRmsW hKW hKShape
+  have hSemantic := canonical_l20_k_ordinary_semantic hCache hRmsW hKW hKShape
   rw [canonical_l20_k_sm_reduce initSM]
   rw [canonical_l20_k_pm0_reduce initPM]
   rw [canonical_l20_k_pm1_reduce initPM]
   exact hSemantic
 
-#print axioms canonical_l20_k_relation
+#print axioms canonical_l20_k_ordinary_relation
 
 end
 end TrainVerify.Denote.GeneratedPatterns

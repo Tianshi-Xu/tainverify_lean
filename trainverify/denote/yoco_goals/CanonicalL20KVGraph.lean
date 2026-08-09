@@ -358,29 +358,27 @@ private theorem cL20V_proj_weight_shape (initPM : Store)
   rw [cL20V_weight_value pm_goal_1 initPM 5600 (by native_decide) (by native_decide)]
   exact hPM 5600 [4, 64, 1024] (by native_decide)
 
-/-- Full canonical L20 V SM/PM graph relation. -/
-theorem canonical_l20_v_relation
+/-- Full ordinary canonical L20 V SM/PM graph relation. -/
+theorem canonical_l20_v_ordinary_relation
     (initSM initPM : Store)
     (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
     (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
-    (hCache : Zigzag2Rel
+    (hCache : Gather2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 5595)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 9722)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 9723)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
       [4096, 1024] [2048, 1024]) :
-    Zigzag2Rel
+    Gather2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 6149)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11318)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11319)
-      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
       [4096, 4, 64] [2048, 4, 64] := by
   have hRmsW := cL20V_weight_eq initSM initPM hInit 5596 initGoal_5596
     (by native_decide) rfl rfl rfl rfl (by native_decide) (by native_decide)
   have hVW := cL20V_weight_eq initSM initPM hInit 5600 initGoal_5600
     (by native_decide) rfl rfl rfl rfl (by native_decide) (by native_decide)
   have hVShape := cL20V_proj_weight_shape initPM hPM
-  have hSemantic := canonical_l20_v_semantic hCache hRmsW hVW hVShape
+  have hSemantic := canonical_l20_v_ordinary_semantic hCache hRmsW hVW hVShape
   have hPMr := canonical_l20_v_pm_reduce initPM
   have hSMr := canonical_l20_v_sm_reduce initSM
   rw [hSMr, hPMr.1, hPMr.2]
@@ -391,7 +389,7 @@ theorem canonical_l20_v_relation
 #print axioms canonical_l20_k_pm1_reduce
 #print axioms canonical_l20_v_sm_reduce
 #print axioms canonical_l20_v_pm_reduce
-#print axioms canonical_l20_v_relation
+#print axioms canonical_l20_v_ordinary_relation
 
 end
 end TrainVerify.Denote.GeneratedPatterns

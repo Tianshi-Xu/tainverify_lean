@@ -2,6 +2,8 @@
 import denote.yoco_goals.Goal_1
 import denote.yoco_goals.ZigzagLinearRel
 import denote.yoco_goals.ZigzagPointwiseRel
+import denote.yoco_goals.ZigzagAttentionRel
+import denote.yoco_goals.GatherOpGears
 import denote.DenoteMoE
 
 set_option linter.style.longLine false
@@ -140,6 +142,66 @@ private theorem cL20C_proj_reduce (g : GraphDecl) (init : Store)
     hs hu ha]
   exact applyNode_fw_per_head_mix_precision_linear_out g s rank xTid wTid outTid []
 
+private def cL20C_gatherNode : NodeDecl :=
+  { rank := 0, op := "OpName.AllGatherPrim", ins := [11298, 11299],
+    outs := [6145], params := [0] }
+private def cL20C_pmProjNode : NodeDecl :=
+  { rank := 1, op := "OpName.FW_per_head_mix_precision_linear",
+    ins := [6145, 6146], outs := [6147] }
+private def cL20C_chunk0Node : NodeDecl :=
+  { rank := 0, op := "OpName.ChunkPrim", ins := [6147], outs := [11300], params := [0] }
+private def cL20C_chunk1Node : NodeDecl :=
+  { rank := 1, op := "OpName.ChunkPrim", ins := [6147], outs := [11301], params := [0] }
+
+private theorem cL20C_pm_gather_reduce (initPM : Store) :
+    denoteGraphDistributedFaithful pm_goal_1 initPM 6145 =
+      allGatherPrimDimN 0 2 0
+        [denoteGraphDistributedFaithful pm_goal_1 initPM 11298,
+         denoteGraphDistributedFaithful pm_goal_1 initPM 11299] := by
+  refine denoteGraphDistributedFaithful_reduce2 pm_goal_1 initPM 1868 cL20C_gatherNode
+    11298 11299 6145 (fun x0 x1 => allGatherPrimDimN 0 2 0 [x0, x1])
+    (by native_decide) (by native_decide) ?_
+    (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide)
+  intro s
+  unfold cL20C_gatherNode
+  rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+    (by decide) (by decide)]
+  exact applyNode_allGatherPrimDimN_out pm_goal_1 s 0 [11298, 11299] 6145 0
+
+private theorem cL20C_pm_proj_reduce (initPM : Store) :
+    denoteGraphDistributedFaithful pm_goal_1 initPM 6147 =
+      fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 6145)
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 6146) := by
+  exact cL20C_proj_reduce pm_goal_1 initPM 1870 1 6145 6146 6147
+    (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    (by native_decide) (by native_decide) (by native_decide)
+
+private theorem cL20C_pm_chunks_reduce (initPM : Store) :
+    denoteGraphDistributedFaithful pm_goal_1 initPM 11300 =
+        chunkPrimDimN 0 2 0 (denoteGraphDistributedFaithful pm_goal_1 initPM 6147) ∧
+      denoteGraphDistributedFaithful pm_goal_1 initPM 11301 =
+        chunkPrimDimN 0 2 1 (denoteGraphDistributedFaithful pm_goal_1 initPM 6147) := by
+  refine ⟨?_, ?_⟩
+  · refine denoteGraphDistributedFaithful_reduce1 pm_goal_1 initPM 1871 cL20C_chunk0Node
+      6147 11300 (fun x => chunkPrimDimN 0 2 0 x)
+      (by native_decide) (by native_decide) ?_
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    intro s
+    unfold cL20C_chunk0Node
+    rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+      (by decide) (by decide)]
+    exact applyNode_chunkPrimDimN_out pm_goal_1 s 0 6147 11300 0
+  · refine denoteGraphDistributedFaithful_reduce1 pm_goal_1 initPM 1872 cL20C_chunk1Node
+      6147 11301 (fun x => chunkPrimDimN 0 2 1 x)
+      (by native_decide) (by native_decide) ?_
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)
+    intro s
+    unfold cL20C_chunk1Node
+    rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective _ _ _
+      (by decide) (by decide)]
+    exact applyNode_chunkPrimDimN_out pm_goal_1 s 1 6147 11301 0
+
 private theorem cL20C_init_singleton_eq (initSM initPM : Store)
     (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
     (g : LineageGoal) (hg : g ∈ goal_1_full_initGoals) (tid : Tid)
@@ -167,10 +229,8 @@ theorem canonical_l20_q_relation_from_l19
       [4096, 1024] [2048, 1024]) :
     Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 6147)
-      (fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11298)
-        (denoteGraphDistributedFaithful pm_goal_1 initPM 6146))
-      (fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11299)
-        (denoteGraphDistributedFaithful pm_goal_1 initPM 6146))
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11300)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11301)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
       [4096, 16, 64] [2048, 16, 64] := by
   have hsmBase := cL20C_multiref_reduce sm_goal_1 initSM 852 0 2 6139 8890
@@ -232,9 +292,51 @@ theorem canonical_l20_q_relation_from_l19
   have hsmQ := cL20C_proj_reduce sm_goal_1 initSM 854 0 6145 6146 6147
     (by native_decide) (by native_decide) (by native_decide) (by native_decide)
     (by native_decide) (by native_decide) (by native_decide)
-  rw [hsmQ, hwEq]
-  exact Zigzag2Rel.per_head_linear 2048 1024 16 64 hRms hwShape
+  have hExpr := Zigzag2Rel.per_head_linear 2048 1024 16 64 hRms hwShape
     (by decide) (by decide) (by decide) (by decide)
+  have hPMRms : Gather2Rel
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6145)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11298)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 11299)
+      [4096, 1024] [2048, 1024] := by
+    refine ⟨cL20C_pm_gather_reduce initPM, ?_, hRms.rank0_shape,
+      hRms.rank1_shape, by decide⟩
+    rw [cL20C_pm_gather_reduce initPM,
+      allGatherPrimDimN_shape 0 2 _ [2048, 1024]]
+    · rfl
+    · simp only [List.head?_cons, Option.map_some, Option.getD_some,
+        hRms.rank0_shape]
+  have hPMProj := hPMRms.per_head_linear 2048 1024 16 64 hwShape
+    (by decide) (by decide) (by decide) (by decide)
+  have hChunks := cL20C_pm_chunks_reduce initPM
+  have hChunk0 : denoteGraphDistributedFaithful pm_goal_1 initPM 11300 =
+      fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11298)
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 6146) := by
+    rw [hChunks.1, cL20C_pm_proj_reduce initPM, hPMProj.value]
+    simpa only [List.getD_cons_zero] using
+      (chunk_allGather_cp2_dim0_3d
+      (x0 := fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11298)
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 6146))
+      (x1 := fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11299)
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 6146))
+      (lDim := 2048) (d1 := 16) (d2 := 64) (r := 0)
+      hPMProj.shard0_shape hPMProj.shard1_shape (by decide) (by decide)
+      (by decide) (by decide))
+  have hChunk1 : denoteGraphDistributedFaithful pm_goal_1 initPM 11301 =
+      fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11299)
+        (denoteGraphDistributedFaithful pm_goal_1 initPM 6146) := by
+    rw [hChunks.2, cL20C_pm_proj_reduce initPM, hPMProj.value]
+    simpa only [List.getD_cons_succ, List.getD_cons_zero] using
+      (chunk_allGather_cp2_dim0_3d
+        (x0 := fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11298)
+          (denoteGraphDistributedFaithful pm_goal_1 initPM 6146))
+        (x1 := fw_per_head_linear (denoteGraphDistributedFaithful pm_goal_1 initPM 11299)
+          (denoteGraphDistributedFaithful pm_goal_1 initPM 6146))
+        (lDim := 2048) (d1 := 16) (d2 := 64) (r := 1)
+        hPMProj.shard0_shape hPMProj.shard1_shape (by decide) (by decide)
+        (by decide) (by decide))
+  rw [hsmQ, hwEq, hChunk0, hChunk1]
+  exact hExpr
 
 #print axioms canonical_l20_q_relation_from_l19
 
