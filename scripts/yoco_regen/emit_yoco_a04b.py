@@ -467,6 +467,7 @@ PROOF_REGISTRY_KEYS = {
     "proof_targets",
 }
 PROOF_REGISTRY_GOALS = {f"Goal_{index}.lean" for index in range(1, 6)}
+REGISTERED_LEGACY_CUT_MODULES = {"Goal_1_Cut.lean", "Goal_4_Cut.lean"}
 PROOF_MODULE_KEYS = {"source", "sha256"}
 FORBIDDEN_PROOF_TOKEN = re.compile(rb"\b(?:sorry(?:Ax)?|axiom|unsafe)\b")
 PROOF_REGISTRY_PATH = "scripts/yoco_regen/yoco_proof_registry.json"
@@ -989,6 +990,12 @@ def validate_proof_registry(registry: dict, stage: Path) -> dict[str, dict[str, 
             "proof registry is missing generated goal overlays: "
             f"{sorted(missing_goal_overlays)}"
         )
+    missing_cut_overlays = REGISTERED_LEGACY_CUT_MODULES - set(modules)
+    if missing_cut_overlays:
+        raise RuntimeError(
+            "proof registry is missing legacy cut overlays: "
+            f"{sorted(missing_cut_overlays)}"
+        )
     missing_top_helpers = REGISTERED_TOP_LEVEL_MODULES - set(modules)
     if missing_top_helpers:
         raise RuntimeError(
@@ -1075,8 +1082,14 @@ def _refresh_snapshot_ledger(stage: Path) -> None:
     ledger = manifest.get("snapshot_sha256") if isinstance(manifest, dict) else None
     if not isinstance(ledger, dict):
         raise RuntimeError("snapshot manifest is missing snapshot_sha256")
+    goal_names = set(os.listdir(stage / "yoco_goals"))
+    final_paths = (
+        {"GeneratedYOCOMoE.lean"}
+        | {f"yoco_goals/{name}" for name in goal_names}
+        | REGISTERED_TOP_LEVEL_MODULES
+    )
     refreshed = {}
-    for relative_path in set(ledger) | REGISTERED_TOP_LEVEL_MODULES:
+    for relative_path in final_paths:
         candidate = PurePosixPath(relative_path)
         if candidate.is_absolute() or ".." in candidate.parts or "." in candidate.parts:
             raise RuntimeError("snapshot ledger path is invalid")
@@ -1109,6 +1122,8 @@ def materialize_registered_proofs(
     for destination, content in contents.items():
         if destination in REGISTERED_TOP_LEVEL_MODULES:
             _create_private_regular(stage / destination, content)
+        elif destination in REGISTERED_LEGACY_CUT_MODULES:
+            _create_private_regular(stage / "yoco_goals" / destination, content)
         else:
             _replace_private_regular(stage / "yoco_goals" / destination, content)
     _refresh_snapshot_ledger(stage)

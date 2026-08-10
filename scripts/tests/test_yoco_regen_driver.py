@@ -1336,7 +1336,9 @@ def test_emitter_proof_registry_binds_exact_generated_statements_and_blobs(
             "source": f"trainverify/denote/{helper_destination}",
             "sha256": emitter.digest_bytes(proof),
         }
-    for goal_destination in sorted(emitter.PROOF_REGISTRY_GOALS):
+    for goal_destination in sorted(
+        emitter.PROOF_REGISTRY_GOALS | emitter.REGISTERED_LEGACY_CUT_MODULES
+    ):
         registry["modules"][goal_destination] = {
             "source": f"trainverify/denote/yoco_goals/{goal_destination}",
             "sha256": emitter.digest_bytes(proof),
@@ -1352,6 +1354,11 @@ def test_emitter_proof_registry_binds_exact_generated_statements_and_blobs(
     del missing_goal_overlay["modules"]["Goal_1.lean"]
     with pytest.raises(RuntimeError, match="generated goal overlays"):
         emitter.validate_proof_registry(missing_goal_overlay, stage)
+
+    missing_cut_overlay = json.loads(json.dumps(registry))
+    del missing_cut_overlay["modules"]["Goal_1_Cut.lean"]
+    with pytest.raises(RuntimeError, match="legacy cut overlays"):
+        emitter.validate_proof_registry(missing_cut_overlay, stage)
 
     # A registry destination is a snapshot module name; its authenticated Git
     # source may be a differently named public theorem module.
@@ -1409,10 +1416,12 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
             "source": source,
             "sha256": emitter.digest_bytes(blobs[source]),
         }
-    for index in range(1, 6):
-        destination = f"Goal_{index}.lean"
+    for destination in sorted(
+        emitter.PROOF_REGISTRY_GOALS | emitter.REGISTERED_LEGACY_CUT_MODULES
+    ):
         source = f"trainverify/denote/yoco_goals/{destination}"
-        blobs[source] = f"theorem goal_overlay_{index} : True := by trivial\n".encode()
+        theorem_name = destination.removesuffix(".lean").lower()
+        blobs[source] = f"theorem {theorem_name}_overlay : True := by trivial\n".encode()
         modules[destination] = {
             "source": source,
             "sha256": emitter.digest_bytes(blobs[source]),
@@ -1433,6 +1442,7 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
             **{
                 f"yoco_goals/{name}": emitter.sha256(path)
                 for name, path in patterns.items()
+                if name == "Pattern_1.lean"
             },
         }
     }
@@ -1460,10 +1470,15 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
     refreshed = json.loads(manifest_path.read_text())
     for destination, path in patterns.items():
         assert refreshed["snapshot_sha256"][f"yoco_goals/{destination}"] == emitter.sha256(path)
+    for destination in emitter.REGISTERED_LEGACY_CUT_MODULES:
+        relative = f"yoco_goals/{destination}"
+        assert refreshed["snapshot_sha256"][relative] == emitter.sha256(goals / destination)
     for helper_destination, helper_path in helper_paths.items():
         assert refreshed["snapshot_sha256"][helper_destination] == emitter.sha256(helper_path)
 
     before = {name: path.read_bytes() for name, path in patterns.items()}
+    for destination in emitter.REGISTERED_LEGACY_CUT_MODULES:
+        (goals / destination).unlink()
     registry["goal_sha256"] = {
         name: emitter.sha256(goals / name) for name in emitter.PROOF_REGISTRY_GOALS
     }
