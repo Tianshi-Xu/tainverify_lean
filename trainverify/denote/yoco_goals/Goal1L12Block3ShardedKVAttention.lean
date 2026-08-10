@@ -391,7 +391,7 @@ theorem goal1_l12_block3_attention_residual_from_stream_cache
     (initSM initPM : Store)
     (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
     (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
-    (hContract : Goal1ExternalInputContract initSM initPM)
+    (hContract : Goal1AncestryInputContract initSM initPM)
     (hStream : Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 5707)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 10058)
@@ -420,7 +420,7 @@ theorem goal1_l12_block3_attention_residual_from_stream_cache
   have hDecoded : decodeCuSeqlens
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252) = [0, 4096] := by
     rw [b3A_external_input_pm_value initPM 6252 (by native_decide)]
-    exact hContract.2.2.1.decoded_single
+    exact hContract.2.2.decoded_single
   exact goal1_l12_block3_attention_residual_from_incoming_and_cache
     initSM initPM hPM hInit hStream hCache hCuAlias hDecoded
 

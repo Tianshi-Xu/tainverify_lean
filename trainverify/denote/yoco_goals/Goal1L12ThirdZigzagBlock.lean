@@ -23,7 +23,7 @@ theorem goal1_l12_third_zigzag_block
     (hSM : StoreShapesHold initSM sm_goal_1InitEnv)
     (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
     (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
-    (hContract : Goal1ExternalInputContract initSM initPM)
+    (hContract : Goal1AncestryInputContract initSM initPM)
     (hStream : Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 5707)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 10058)

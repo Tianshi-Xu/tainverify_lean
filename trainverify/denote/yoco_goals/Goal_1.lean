@@ -3749,6 +3749,14 @@ def pm_goal_1InitEnv : ShapeEnv := shapeEnvOfList pm_goal_1InitShapes
 
 def goal_1_full_initGoals : List LineageGoal := initGoals
 
+/-- External inputs needed by the model-body ancestry, before the loss head
+reads labels.  Keeping this separate prevents unrelated label bounds from becoming
+premises of routing and hidden-state certificates. -/
+def Goal1AncestryInputContract (initSM initPM : Store) : Prop :=
+  InputValueClassesHold smInputValueClasses initSM ∧
+  InputValueClassesHold pmInputValueClasses initPM ∧
+  PackedCuSeqlensWF (initPM 6252) 4096 2
+
 def Goal1ExternalInputContract (initSM initPM : Store) : Prop :=
   InputValueClassesHold smInputValueClasses initSM ∧
   InputValueClassesHold pmInputValueClasses initPM ∧

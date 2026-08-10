@@ -325,7 +325,7 @@ theorem canonical_l12b2_attention_from_incoming_and_cache
       (denoteGraphDistributedFaithful pm_goal_1 initPM 9722)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 9723)
       [4096, 1024] [2048, 1024])
-    (hContract : Goal1ExternalInputContract initSM initPM) :
+    (hContract : Goal1AncestryInputContract initSM initPM) :
     Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 5666)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 9938)
@@ -350,7 +350,7 @@ theorem canonical_l12b2_attention_from_incoming_and_cache
   have hDecoded : decodeCuSeqlens
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252) = [0, 4096] := by
     rw [cL12B2A_external_input_pm_value initPM 6252 (by native_decide)]
-    exact hContract.2.2.1.decoded_single
+    exact hContract.2.2.decoded_single
   exact canonical_l12b2_attention_from_qkv initSM initPM hQ hK hV hCuSM hCuKV
     hCuAlias hDecoded
 
@@ -373,7 +373,7 @@ theorem canonical_l12b2_attention_residual_from_incoming_and_cache
       (denoteGraphDistributedFaithful pm_goal_1 initPM 9722)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 9723)
       [4096, 1024] [2048, 1024])
-    (hContract : Goal1ExternalInputContract initSM initPM) :
+    (hContract : Goal1AncestryInputContract initSM initPM) :
     Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 5674)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 9968)

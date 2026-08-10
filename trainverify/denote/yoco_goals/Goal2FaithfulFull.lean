@@ -162,7 +162,9 @@ private theorem goal1_external_to_l23_zigzag
       (denoteGraphDistributedFaithful pm_goal_1 initPM 11599)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
       [4096, 1024] [2048, 1024] := by
-  have hL18 := goal1_external_to_l18_output initSM initPM hSM hPM hInit hContract
+  have hCore : Goal1AncestryInputContract initSM initPM :=
+    ⟨hContract.1, hContract.2.1, hContract.2.2.1⟩
+  have hL18 := goal1_external_to_l18_output initSM initPM hSM hPM hInit hCore
   have hCache := goal1_external_to_cache_faithful_composition initSM initPM hSM hPM hInit
   have hpm6096 : denoteGraphDistributedFaithful pm_goal_1 initPM 6096 = initPM 6096 := by
     exact goal2_leaf pm_goal_1 initPM 6096 (by native_decide) (by native_decide)

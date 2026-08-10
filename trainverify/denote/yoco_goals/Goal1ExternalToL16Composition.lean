@@ -25,7 +25,7 @@ theorem goal1_external_to_l16_output
     (hSM : StoreShapesHold initSM sm_goal_1InitEnv)
     (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
     (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
-    (hContract : Goal1ExternalInputContract initSM initPM) :
+    (hContract : Goal1AncestryInputContract initSM initPM) :
     Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 5977)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 10828)
@@ -55,7 +55,7 @@ theorem goal1_external_to_l16_output
   have hDecoded : decodeCuSeqlens
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252) = [0, 4096] := by
     rw [hpm6252]
-    exact hContract.2.2.1.decoded_single
+    exact hContract.2.2.decoded_single
 
   have hL16Attention := canonical_l16_attention_residual_from_incoming_and_cache
     initSM initPM hPM hInit hL15 hCache hCuAlias16 hDecoded

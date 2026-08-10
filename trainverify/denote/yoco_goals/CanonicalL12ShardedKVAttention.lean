@@ -385,7 +385,7 @@ theorem goal1_external_to_l12_attention_residual
     (hSM : StoreShapesHold initSM sm_goal_1InitEnv)
     (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
     (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
-    (hContract : Goal1ExternalInputContract initSM initPM) :
+    (hContract : Goal1AncestryInputContract initSM initPM) :
     Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 5620)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 9812)
@@ -412,7 +412,7 @@ theorem goal1_external_to_l12_attention_residual
   have hDecoded : decodeCuSeqlens
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252) = [0, 4096] := by
     rw [cL12A_external_input_pm_value initPM 6252 (by native_decide)]
-    exact hContract.2.2.1.decoded_single
+    exact hContract.2.2.decoded_single
   have hAttention := canonical_l12_attention_from_qkv initSM initPM hQ hK hV
     hCuSM hCuKV hCuAlias hDecoded
   have hResidual := canonical_l12_residual_from_entry initSM initPM hEntry

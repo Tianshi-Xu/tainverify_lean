@@ -358,6 +358,8 @@ STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/Goal3ToGoal1AncestryShapeBridge.lean",
     "trainverify/denote/yoco_goals/Goal3FaithfulRoutingLate.lean",
     "trainverify/denote/yoco_goals/Goal3FaithfulFullTheorem.lean",
+    "trainverify/denote/yoco_goals/Goal3SkipUnshuffleTransport.lean",
+    "trainverify/denote/yoco_goals/Goal3PublicFaithful.lean",
     *(f"trainverify/denote/yoco_goals/CanonicalGoal3L{layer}Routing.lean" for layer in range(12, 24)),
     "trainverify/denote/yoco_goals/Goal4EarlyScopedBridge.lean",
     "trainverify/denote/yoco_goals/Goal4L0L11GateScoreCertificate.lean",

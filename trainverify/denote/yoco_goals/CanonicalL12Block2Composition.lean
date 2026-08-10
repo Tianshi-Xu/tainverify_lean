@@ -34,7 +34,7 @@ theorem canonical_l12b2_from_incoming_and_cache (initSM initPM : Store)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 9722)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 9723)
       [4096, 1024] [2048, 1024])
-    (hContract : Goal1ExternalInputContract initSM initPM) :
+    (hContract : Goal1AncestryInputContract initSM initPM) :
     Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 5707)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 10058)

@@ -33,8 +33,10 @@ theorem goal1_external_to_canonical_goal_1
     InitGoalHolds pm_goal_1.numRanks Generated.goal_1
       (denoteGraphDistributedFaithful sm_goal_1 initSM)
       (denoteGraphDistributedFaithful pm_goal_1 initPM) := by
+  have hCore : Goal1AncestryInputContract initSM initPM :=
+    ⟨hContract.1, hContract.2.1, hContract.2.2.1⟩
   have hL18 := goal1_external_to_l18_output
-    initSM initPM hSM hPM hInit hContract
+    initSM initPM hSM hPM hInit hCore
   have hCache := goal1_external_to_cache_faithful_composition
     initSM initPM hSM hPM hInit
 

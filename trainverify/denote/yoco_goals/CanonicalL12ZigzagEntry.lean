@@ -308,7 +308,7 @@ theorem goal1_external_to_l12_zigzag_entry
     (hSM : StoreShapesHold initSM sm_goal_1InitEnv)
     (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
     (hInit : InitGoalsHold pm_goal_1.numRanks goal_1_full_initGoals initSM initPM)
-    (hContract : Goal1ExternalInputContract initSM initPM) :
+    (hContract : Goal1AncestryInputContract initSM initPM) :
     Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_1 initSM 5603)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 9750)
@@ -317,7 +317,7 @@ theorem goal1_external_to_l12_zigzag_entry
       [4096, 1024] [2048, 1024] := by
   have hCache := goal1_external_to_cache_faithful_composition initSM initPM hSM hPM hInit
   exact canonical_l12_zigzag_entry_from_cache initSM initPM
-    ⟨hContract.1, hContract.2.1⟩ hContract.2.2.1 hCache
+    ⟨hContract.1, hContract.2.1⟩ hContract.2.2 hCache
 
 #print axioms canonical_l12_zigzag_entry_from_cache
 #print axioms goal1_external_to_l12_zigzag_entry
