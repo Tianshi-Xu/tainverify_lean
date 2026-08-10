@@ -264,10 +264,10 @@ private theorem canonical_cu_input (initPM : Store) :
 
 set_option maxHeartbeats 4000000 in
 set_option maxRecDepth 100000 in
-/-- The concrete canonical final faithful unshuffle.  Its input is the zigzag
-relation produced by L23; the decoded packed-sequence fact turns the paired PM
-collective outputs back into ordinary rank-order shards. -/
-theorem canonical_final_unshuffle (initSM initPM : Store)
+/-- The concrete Goal-2 final faithful unshuffle.  The Goal-2 suffix is
+load-bearing: the Goal-1 tail exports a theorem with the unsuffixed legacy name,
+and both modules must be importable by the public aggregate. -/
+theorem canonical_final_unshuffle_goal_2 (initSM initPM : Store)
     (hpre : Zigzag2Rel
       (denoteGraphDistributedFaithful sm_goal_2 initSM 6247)
       (denoteGraphDistributedFaithful pm_goal_2 initPM 11598)
@@ -309,7 +309,7 @@ theorem canonical_loss_backbone_tail_goal_2 (initSM initPM : Store)
       (denoteGraphDistributedFaithful pm_goal_2 initPM 6252) = [0, 4096] := by
     exact (congrArg decodeCuSeqlens (canonical_cu_input initPM)).trans
       hPacked.decoded_single
-  have hu := canonical_final_unshuffle initSM initPM hpre hdecoded
+  have hu := canonical_final_unshuffle_goal_2 initSM initPM hpre hdecoded
   have hw := canonical_weight_eq initSM initPM hInit
   refine ⟨?_, ?_, ?_, ?_, by decide⟩
   · calc
