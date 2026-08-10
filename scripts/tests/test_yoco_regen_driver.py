@@ -1256,15 +1256,18 @@ def test_emitter_lean_gate_uses_private_revision_and_propagates_failure(
             build_commands.append(command)
             if fail_build["value"]:
                 raise subprocess.CalledProcessError(1, command)
-            if replace_cleanup["value"] and command[1:3] == ["env", "lean"]:
-                validation_root = Path(kwargs["cwd"]).parents[1]
-                preserved = validation_root.with_name(validation_root.name + "-preserved")
-                validation_root.rename(preserved)
-                validation_root.mkdir()
-                (validation_root / "unrelated").write_text("keep", encoding="utf-8")
-                replace_cleanup["replacement"] = validation_root
-                replace_cleanup["preserved"] = preserved
             if command[1:3] == ["env", "lean"]:
+                audit_text = (Path(kwargs["cwd"]) / "AxiomAudit.lean").read_text()
+                assert audit_text.startswith("import denote.yoco_goals.Instances\n")
+                assert "import denote.yoco_goals.Pattern_1\n" not in audit_text
+                if replace_cleanup["value"]:
+                    validation_root = Path(kwargs["cwd"]).parents[1]
+                    preserved = validation_root.with_name(validation_root.name + "-preserved")
+                    validation_root.rename(preserved)
+                    validation_root.mkdir()
+                    (validation_root / "unrelated").write_text("keep", encoding="utf-8")
+                    replace_cleanup["replacement"] = validation_root
+                    replace_cleanup["preserved"] = preserved
                 output = "".join(
                     f"'{target}' does not depend on any axioms\n"
                     for target in PROOF_TARGETS
@@ -1339,6 +1342,14 @@ def test_emitter_proof_registry_binds_exact_generated_statements_and_blobs(
     )
     loaded = emitter.validate_proof_registry(registry, stage)
     assert loaded == registry["modules"]
+
+    # A registry destination is a snapshot module name; its authenticated Git
+    # source may be a differently named public theorem module.
+    remapped = json.loads(json.dumps(registry))
+    remapped["modules"]["Pattern_2.lean"]["source"] = (
+        "trainverify/denote/yoco_goals/Goal2FaithfulFull.lean"
+    )
+    assert emitter.validate_proof_registry(remapped, stage) == remapped["modules"]
 
     bad = json.loads(json.dumps(registry))
     bad["goal_sha256"]["Goal_1.lean"] = "0" * 64

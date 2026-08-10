@@ -104,7 +104,7 @@ theorem denote_pm_goal_5_outputs (initPM : Store) :
       exact applyNode_allToAllPrimWithDims_out g S3 1 [7748, 7749] 7745 1 0]
     rw [hS3_7748, hS3_7749]
 
-/-- Final full-ancestry authority Goal 5, with no model-specific algebraic axiom. -/
+/-- Final full-ancestry authority Goal 5, with no model-specific algebraic assumption. -/
 theorem prove_goal_5 : goal_5_stmt_full := by
   intro initSM initPM hSM hPM hInit
   simp only [goal_5]

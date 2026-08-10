@@ -353,14 +353,12 @@ STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/L19ZigzagMoEOutput.lean",
     "trainverify/denote/yoco_goals/L19ZigzagMoEComposition.lean",
     "trainverify/denote/yoco_goals/Goal1ExternalFinalComposition.lean",
-    "trainverify/denote/yoco_goals/Goal1PublicFaithful.lean",
     "trainverify/denote/yoco_goals/Goal_3_FaithfulFull.lean",
     "trainverify/denote/yoco_goals/Goal3L0L11RoutingCertificate.lean",
     "trainverify/denote/yoco_goals/Goal3ToGoal1AncestryShapeBridge.lean",
     "trainverify/denote/yoco_goals/Goal3FaithfulRoutingLate.lean",
     "trainverify/denote/yoco_goals/Goal3FaithfulFullTheorem.lean",
     "trainverify/denote/yoco_goals/Goal3SkipUnshuffleTransport.lean",
-    "trainverify/denote/yoco_goals/Goal3PublicFaithful.lean",
     *(f"trainverify/denote/yoco_goals/CanonicalGoal3L{layer}Routing.lean" for layer in range(12, 24)),
     "trainverify/denote/yoco_goals/Goal4EarlyScopedBridge.lean",
     "trainverify/denote/yoco_goals/Goal4L0L11GateScoreCertificate.lean",
@@ -424,7 +422,6 @@ STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/Goal4PublicFaithfulL22Checkpoint.lean",
     "trainverify/denote/yoco_goals/Goal4PublicFaithfulL23Checkpoint.lean",
     "trainverify/denote/yoco_goals/Goal4PublicFaithfulLateAncestry.lean",
-    "trainverify/denote/yoco_goals/Goal4PublicFaithful.lean",
     *(f"trainverify/denote/yoco_goals/CanonicalGoal4L{layer}Routing.lean" for layer in range(3, 24)),
     "trainverify/denote/yoco_goals/FaithfulStackGather.lean",
     "trainverify/denote/yoco_goals/CanonicalGoal1EmbeddingEntry.lean",
@@ -841,7 +838,7 @@ def validate_lean_snapshot(
         audit_path = project / "AxiomAudit.lean"
         audit_path.write_text(
             "\n".join(
-                [*(f"import denote.yoco_goals.Pattern_{index}" for index in range(1, 6)),
+                ["import denote.yoco_goals.Instances",
                  *(f"#print axioms {target}" for target in proof_targets), ""]
             ),
             encoding="utf-8",
@@ -1015,7 +1012,7 @@ def validate_proof_registry(registry: dict, stage: Path) -> dict[str, dict[str, 
             or ".." in source_path.parts
             or "." in source_path.parts
             or source_path.parts[:-1] != expected_source_parent
-            or source_path.name != destination
+            or source_path.suffix != ".lean"
         ):
             raise RuntimeError(f"invalid proof registry source: {source}")
         if not _is_lower_hex(entry["sha256"], 64):
