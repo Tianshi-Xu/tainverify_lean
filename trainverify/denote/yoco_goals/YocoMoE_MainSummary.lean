@@ -3,9 +3,11 @@
   This file states and proves the "cut-graph tier" main theorem for
   YOCO-MoE (yoco_0.4B), summarising what TrainVerify has established so far:
 
-  1. All 5 pattern-level proofs (`prove_pattern_1..5`) are complete against
-     their honest cut statements. Pattern_3's statement explicitly carries its
-     12 cu_seqlens value pins. Patterns 1/4 obtain their 15 post-shuffle ordinary
+  1. Patterns 1/2/4/5 are complete against their honest cut statements; the
+     historical Pattern_3 ring-attention cut is retained separately as
+     `prove_pattern_3_ring_legacy`. It deliberately does not occupy the public
+     `prove_pattern_3` name. Pattern_3's legacy cut statement explicitly carries
+     its 12 cu_seqlens value pins. Patterns 1/4 obtain their 15 post-shuffle ordinary
      gather relations from goal-local, shuffle-free cut boundary contracts —
      not from false full-graph goals or external theorem parameters. See
      `trainverify/GOAL_3_4_LAYOUT_SPLIT.md`.
@@ -61,7 +63,8 @@ namespace TrainVerify.Denote.YocoMoE.Main
     distributed-faithful full theorem is `yoco_moe_corrected_main` in
     `MainTheorem.lean`. Its content here:
 
-    * Every pattern-level proof (`prove_pattern_N`) holds.
+    * Cut-pattern proofs hold, with Pattern 3 explicitly represented by the
+      legacy ring-attention cut theorem rather than the public full-proof name.
     * Every pattern's hypothesis set is jointly satisfiable (non-vacuous).
 
     Together, these establish that each cut-graph goal is genuinely
@@ -79,7 +82,7 @@ theorem yoco_moe_cut_tier_main :
     -- Pattern proofs complete
     pattern_1_stmt ∧
     pattern_2_stmt ∧
-    pattern_3_stmt ∧
+    pattern_3_ring_legacy_stmt ∧
     pattern_4_stmt ∧
     pattern_5_stmt ∧
     -- Joint witness for P1 (with labels hypothesis)
@@ -115,11 +118,12 @@ theorem yoco_moe_cut_tier_main :
       StoreShapesHold initSM sm_goal_4_cutInitEnv ∧
       StoreShapesHold initPM pm_goal_4_cutInitEnv ∧
       InitGoalsHold pm_goal_4_cut.numRanks goal_4_cut_initGoals initSM initPM) := by
-  refine ⟨prove_pattern_1_plain_legacy, prove_pattern_2, prove_pattern_3,
+  refine ⟨prove_pattern_1_plain_legacy, prove_pattern_2,
+          prove_pattern_3_ring_legacy,
           prove_pattern_4, prove_pattern_5,
           pattern_1_joint_hypothesis_witness,
           pattern_2_joint_hypothesis_witness,
-          pattern_3_joint_hypothesis_witness,
+          pattern_3_ring_legacy_joint_hypothesis_witness,
           pattern_4_joint_hypothesis_witness⟩
 
 end TrainVerify.Denote.YocoMoE.Main

@@ -23,8 +23,8 @@ def pattern_1_summary : List Nat := pattern_1_goalIds
 /-- pattern 2, hash f12bb08992f5e7eb, goals: 2 -/
 def pattern_2_summary : List Nat := pattern_2_goalIds
 
-/-- pattern 3, hash b3365746c5960899, goals: 3 -/
-def pattern_3_summary : List Nat := pattern_3_goalIds
+/-- Legacy ring-attention cut for pattern 3, hash b3365746c5960899, goals: 3 -/
+def pattern_3_summary : List Nat := pattern_3_ring_legacy_goalIds
 
 /-- pattern 4, hash df6f3477c1c7ce4e, goals: 4 -/
 def pattern_4_summary : List Nat := pattern_4_goalIds

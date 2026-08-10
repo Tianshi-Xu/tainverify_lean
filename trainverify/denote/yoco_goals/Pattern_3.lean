@@ -1,5 +1,5 @@
 /-
-  Pattern_3.lean — proof of `prove_pattern_3` for the YOCO MoE Pattern_3.
+  Pattern_3.lean — legacy ring-attention cut proof for YOCO MoE Pattern_3.
 
   This is the from-scratch proof built on top of Goal_3 (which carries
   FW_reshape target shape params, so Denote runs faithful `fw_view target x`
@@ -21,7 +21,7 @@
 
   Namespace: `TrainVerify.Denote.GeneratedPatterns` (aligns with Pattern_1/2/4/5).
 -/
-import denote.yoco_goals.Goal_3
+import denote.yoco_goals.Goal_3_Cut
 import denote.yoco_goals.Pattern_1  -- reuse fw_topk_routing_snd_fst_allGather0_commute_2_of
 import denote.SlidingWindowReconstruction
 
@@ -2961,25 +2961,25 @@ theorem router_commute_of_nl_eq (NL_SM NL_PM : Tensor)
     This is the layer-agnostic version of the 10-line boilerplate
       `have hII := fun g hg => hInit g (mem_append_left ...)`
       `have hb := ... obtain ⟨_, _, hval⟩ ... simpa [reconstructWithDim_singleton] using hval`
-      `have hXXXX := hb initGoal_XXXX (by decide) rfl`
+      `have hXXXX := hb goal3CutInitGoal_XXXX (by decide) rfl`
     that occurs 17+ times across L0/L1 proofs. Every layer-k weight init goal
     (rms/pos/cos/q/k/v projection weights, MoE experts, etc.) is a singleton
     (`tps = [{ rank := 0, tid := ts }]`), so a single call suffices:
 
       have h4682 : initSM 4682 = initPM 4682 :=
-        singleton_init_eq initSM initPM hInit initGoal_4682 (by decide) rfl
+        singleton_init_eq initSM initPM hInit goal3CutInitGoal_4682 (by decide) rfl
 
     Requirements for the caller:
-    - `g ∈ initGoals` (proved by `by decide` for concrete named `initGoal_XXXX`)
+    - `g ∈ goal3CutInitGoals` (proved by `by decide` for concrete named `goal3CutInitGoal_XXXX`)
     - `g.tps = [{ rank := 0, tid := g.ts }]` (proved by `rfl` for singletons).
 -/
 theorem singleton_init_eq (initSM initPM : Store)
     (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM)
-    (g : LineageGoal) (hmem : g ∈ initGoals)
+    (g : LineageGoal) (hmem : g ∈ goal3CutInitGoals)
     (hshape : g.tps = [{ rank := 0, tid := g.ts }])
     (hrep : g.replicated = false := by rfl) :
     initSM g.ts = initPM g.ts := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g' hg' => hInit g' (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg')
   have hgh := hII g hmem
   unfold InitGoalHolds at hgh
@@ -2989,9 +2989,9 @@ theorem singleton_init_eq (initSM initPM : Store)
   rw [hshape] at hval
   simpa [List.map, reconstructWithDim_singleton] using hval
 
-/-- Extract `initSM 4680 = initPM 4680` for the Pattern_3 prereq (goal_5 =
-    embedding output). This is the standard 5-line 'have hg := hInit goal_5'
-    boilerplate that appears 6+ times across L0/L1 qproj/kproj/vproj commutes.
+/-- Extract `initSM 4680 = initPM 4680` for the Pattern_3 frozen prerequisite
+    (`goal3CutPrereqGoal5` = embedding output). This is the standard 5-line
+    extraction boilerplate that appears 6+ times across L0/L1 qproj/kproj/vproj commutes.
 
     Usage:
       have h4680 : initSM 4680 = initPM 4680 := prereq_goal_5_init_eq initSM initPM hInit
@@ -2999,11 +2999,11 @@ theorem singleton_init_eq (initSM initPM : Store)
 theorem prereq_goal_5_init_eq (initSM initPM : Store)
     (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
     initSM 4680 = initPM 4680 := by
-  have hg := hInit goal_5
-    (by unfold goal_3_cut_initGoals goal_3_prereqs; exact List.mem_append_right _ (by simp))
+  have hg := hInit goal3CutPrereqGoal5
+    (by unfold goal_3_cut_initGoals; exact List.mem_append_right _ (by simp))
   unfold InitGoalHolds at hg
   obtain ⟨_, _, hval⟩ := hg
-  simpa [goal_5, List.map, reconstructWithDim_singleton] using hval
+  simpa [goal3CutPrereqGoal5, List.map, reconstructWithDim_singleton] using hval
 
 /-! ## Attention shape helpers — layer-generic
 
@@ -4008,11 +4008,12 @@ theorem denote_pm_goal_3_qproj_0_r1 (initPM : Store) :
 -- (over dim 0, the token dim) of the two PM rank shards.
 --
 -- This is the base case that the second upstream fidelity fix
--- (`initGoal_4691.tps -> source leaf 4691`) unblocks: the rotary cos/sin
+-- (`goal3CutInitGoal_4691.tps -> source leaf 4691`) unblocks: the rotary cos/sin
 -- table boundary equality `initSM 4691 = initPM 4691` is now extractable from
 -- `InitGoalsHold goal_3_cut_initGoals`, which was previously underivable when
--- `initGoal_4691.tps` pointed at the multiref copy 11853.  All the weight
--- boundary equalities (4680 via goal_5, 4682/4684/4686/4690/4691 via the
+-- `goal3CutInitGoal_4691.tps` pointed at the multiref copy 11853.  All the weight
+-- boundary equalities (4680 via the frozen Goal-5 prerequisite;
+-- 4682/4684/4686/4690/4691 via the
 -- identity init goals) come straight from `InitGoalsHold`; the reconstruction
 -- itself is `allGather0_reconstruct_chunks_3d`.  Kernel-only axioms.
 set_option maxHeartbeats 1600000 in
@@ -4027,10 +4028,10 @@ theorem sm_pm_qproj_L0_commute
       = allGatherPrimDimN 0 2 0
           [ denoteGraph_ringAttn pm_goal_3 initPM 7433,
             denoteGraph_ringAttn pm_goal_3 initPM 7434 ] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM := by
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM := by
     intro g hg
     exact hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -4043,17 +4044,17 @@ theorem sm_pm_qproj_L0_commute
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4682 : initSM 4682 = initPM 4682 := hb initGoal_4682 (by decide) rfl
-  have h4684 : initSM 4684 = initPM 4684 := hb initGoal_4684 (by decide) rfl
-  have h4686 : initSM 4686 = initPM 4686 := hb initGoal_4686 (by decide) rfl
-  have h4690 : initSM 4690 = initPM 4690 := hb initGoal_4690 (by decide) rfl
-  have h4691 : initSM 4691 = initPM 4691 := hb initGoal_4691 (by decide) rfl
+  have h4682 : initSM 4682 = initPM 4682 := hb goal3CutInitGoal_4682 (by decide) rfl
+  have h4684 : initSM 4684 = initPM 4684 := hb goal3CutInitGoal_4684 (by decide) rfl
+  have h4686 : initSM 4686 = initPM 4686 := hb goal3CutInitGoal_4686 (by decide) rfl
+  have h4690 : initSM 4690 = initPM 4690 := hb goal3CutInitGoal_4690 (by decide) rfl
+  have h4691 : initSM 4691 = initPM 4691 := hb goal3CutInitGoal_4691 (by decide) rfl
   have h4680 : initSM 4680 = initPM 4680 := by
-    have hg := hInit goal_5
-      (by unfold goal_3_cut_initGoals goal_3_prereqs; exact List.mem_append_right _ (by simp))
+    have hg := hInit goal3CutPrereqGoal5
+      (by unfold goal_3_cut_initGoals; exact List.mem_append_right _ (by simp))
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simpa [goal_5, List.map, reconstructWithDim_singleton] using hval
+    simpa [goal3CutPrereqGoal5, List.map, reconstructWithDim_singleton] using hval
   rw [denote_sm_goal_3_4692, denote_pm_goal_3_qproj_0_r0, denote_pm_goal_3_qproj_0_r1]
   rw [h4680, h4682, h4684, h4686, h4690, h4691]
   rw [show pm_goal_3.numRanks = 2 from rfl]
@@ -4242,10 +4243,10 @@ theorem sm_pm_kproj_L0_commute
       = allGatherPrimDimN 0 2 0
           [ denoteGraph_ringAttn pm_goal_3 initPM 7435,
             denoteGraph_ringAttn pm_goal_3 initPM 7436 ] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM := by
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM := by
     intro g hg
     exact hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -4258,17 +4259,17 @@ theorem sm_pm_kproj_L0_commute
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4682 : initSM 4682 = initPM 4682 := hb initGoal_4682 (by decide) rfl
-  have h4684 : initSM 4684 = initPM 4684 := hb initGoal_4684 (by decide) rfl
-  have h4686 : initSM 4686 = initPM 4686 := hb initGoal_4686 (by decide) rfl
-  have h4690 : initSM 4690 = initPM 4690 := hb initGoal_4690 (by decide) rfl
-  have h4691 : initSM 4691 = initPM 4691 := hb initGoal_4691 (by decide) rfl
+  have h4682 : initSM 4682 = initPM 4682 := hb goal3CutInitGoal_4682 (by decide) rfl
+  have h4684 : initSM 4684 = initPM 4684 := hb goal3CutInitGoal_4684 (by decide) rfl
+  have h4686 : initSM 4686 = initPM 4686 := hb goal3CutInitGoal_4686 (by decide) rfl
+  have h4690 : initSM 4690 = initPM 4690 := hb goal3CutInitGoal_4690 (by decide) rfl
+  have h4691 : initSM 4691 = initPM 4691 := hb goal3CutInitGoal_4691 (by decide) rfl
   have h4680 : initSM 4680 = initPM 4680 := by
-    have hg := hInit goal_5
-      (by unfold goal_3_cut_initGoals goal_3_prereqs; exact List.mem_append_right _ (by simp))
+    have hg := hInit goal3CutPrereqGoal5
+      (by unfold goal_3_cut_initGoals; exact List.mem_append_right _ (by simp))
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simpa [goal_5, List.map, reconstructWithDim_singleton] using hval
+    simpa [goal3CutPrereqGoal5, List.map, reconstructWithDim_singleton] using hval
   rw [denote_sm_goal_3_4693, denote_pm_goal_3_kproj_0_r0, denote_pm_goal_3_kproj_0_r1]
   rw [h4680, h4682, h4684, h4686, h4690, h4691]
   rw [show pm_goal_3.numRanks = 2 from rfl]
@@ -4287,10 +4288,10 @@ theorem sm_pm_vproj_L0_commute
       = allGatherPrimDimN 0 2 0
           [ denoteGraph_ringAttn pm_goal_3 initPM 7421,
             denoteGraph_ringAttn pm_goal_3 initPM 7422 ] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM := by
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM := by
     intro g hg
     exact hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -4303,14 +4304,14 @@ theorem sm_pm_vproj_L0_commute
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4682 : initSM 4682 = initPM 4682 := hb initGoal_4682 (by decide) rfl
-  have h4688 : initSM 4688 = initPM 4688 := hb initGoal_4688 (by decide) rfl
+  have h4682 : initSM 4682 = initPM 4682 := hb goal3CutInitGoal_4682 (by decide) rfl
+  have h4688 : initSM 4688 = initPM 4688 := hb goal3CutInitGoal_4688 (by decide) rfl
   have h4680 : initSM 4680 = initPM 4680 := by
-    have hg := hInit goal_5
-      (by unfold goal_3_cut_initGoals goal_3_prereqs; exact List.mem_append_right _ (by simp))
+    have hg := hInit goal3CutPrereqGoal5
+      (by unfold goal_3_cut_initGoals; exact List.mem_append_right _ (by simp))
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simpa [goal_5, List.map, reconstructWithDim_singleton] using hval
+    simpa [goal3CutPrereqGoal5, List.map, reconstructWithDim_singleton] using hval
   rw [denote_sm_goal_3_4689, denote_pm_goal_3_vproj_0_r0, denote_pm_goal_3_vproj_0_r1]
   rw [h4680, h4682, h4688]
   rw [show pm_goal_3.numRanks = 2 from rfl]
@@ -4357,10 +4358,10 @@ theorem sm_pm_attention_L0_commute
            applyNodeRingAttn_sliding_window pm_goal_3
              ((pm_goal_3.nodes.take 45).foldl (applyNodeRingAttn pm_goal_3) initPM) nR1]
   -- weight equalities
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM := by
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM := by
     intro g hg
     exact hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -4373,20 +4374,20 @@ theorem sm_pm_attention_L0_commute
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4682 : initSM 4682 = initPM 4682 := hb initGoal_4682 (by decide) rfl
-  have h4684 : initSM 4684 = initPM 4684 := hb initGoal_4684 (by decide) rfl
-  have h4686 : initSM 4686 = initPM 4686 := hb initGoal_4686 (by decide) rfl
-  have h4688 : initSM 4688 = initPM 4688 := hb initGoal_4688 (by decide) rfl
-  have h4690 : initSM 4690 = initPM 4690 := hb initGoal_4690 (by decide) rfl
-  have h4691 : initSM 4691 = initPM 4691 := hb initGoal_4691 (by decide) rfl
-  have h4694 : initSM 4694 = initPM 4694 := hb initGoal_4694 (by decide) rfl
-  have h4695 : initSM 4695 = initPM 4695 := hb initGoal_4695 (by decide) rfl
+  have h4682 : initSM 4682 = initPM 4682 := hb goal3CutInitGoal_4682 (by decide) rfl
+  have h4684 : initSM 4684 = initPM 4684 := hb goal3CutInitGoal_4684 (by decide) rfl
+  have h4686 : initSM 4686 = initPM 4686 := hb goal3CutInitGoal_4686 (by decide) rfl
+  have h4688 : initSM 4688 = initPM 4688 := hb goal3CutInitGoal_4688 (by decide) rfl
+  have h4690 : initSM 4690 = initPM 4690 := hb goal3CutInitGoal_4690 (by decide) rfl
+  have h4691 : initSM 4691 = initPM 4691 := hb goal3CutInitGoal_4691 (by decide) rfl
+  have h4694 : initSM 4694 = initPM 4694 := hb goal3CutInitGoal_4694 (by decide) rfl
+  have h4695 : initSM 4695 = initPM 4695 := hb goal3CutInitGoal_4695 (by decide) rfl
   have h4680 : initSM 4680 = initPM 4680 := by
-    have hg := hInit goal_5
-      (by unfold goal_3_cut_initGoals goal_3_prereqs; exact List.mem_append_right _ (by simp))
+    have hg := hInit goal3CutPrereqGoal5
+      (by unfold goal_3_cut_initGoals; exact List.mem_append_right _ (by simp))
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simpa [goal_5, List.map, reconstructWithDim_singleton] using hval
+    simpa [goal3CutPrereqGoal5, List.map, reconstructWithDim_singleton] using hval
   -- store <-> prefix-fold bridges
   have bSM4692 : (sm_goal_3.nodes.take 8).foldl (applyNodeRingAttn sm_goal_3) initSM 4692
       = denoteGraph_ringAttn sm_goal_3 initSM 4692 :=
@@ -4922,10 +4923,10 @@ theorem pm_attn_shard_shapes
        ((pm_goal_3.nodes.take 45).foldl (applyNodeRingAttn pm_goal_3) initPM) nR1).shape
       = [2048, 16, 64] := by
   -- weight equalities
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM := by
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM := by
     intro g hg
     exact hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -4938,20 +4939,20 @@ theorem pm_attn_shard_shapes
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4682 : initSM 4682 = initPM 4682 := hb initGoal_4682 (by decide) rfl
-  have h4684 : initSM 4684 = initPM 4684 := hb initGoal_4684 (by decide) rfl
-  have h4686 : initSM 4686 = initPM 4686 := hb initGoal_4686 (by decide) rfl
-  have h4688 : initSM 4688 = initPM 4688 := hb initGoal_4688 (by decide) rfl
-  have h4690 : initSM 4690 = initPM 4690 := hb initGoal_4690 (by decide) rfl
-  have h4691 : initSM 4691 = initPM 4691 := hb initGoal_4691 (by decide) rfl
-  have h4694 : initSM 4694 = initPM 4694 := hb initGoal_4694 (by decide) rfl
-  have h4695 : initSM 4695 = initPM 4695 := hb initGoal_4695 (by decide) rfl
+  have h4682 : initSM 4682 = initPM 4682 := hb goal3CutInitGoal_4682 (by decide) rfl
+  have h4684 : initSM 4684 = initPM 4684 := hb goal3CutInitGoal_4684 (by decide) rfl
+  have h4686 : initSM 4686 = initPM 4686 := hb goal3CutInitGoal_4686 (by decide) rfl
+  have h4688 : initSM 4688 = initPM 4688 := hb goal3CutInitGoal_4688 (by decide) rfl
+  have h4690 : initSM 4690 = initPM 4690 := hb goal3CutInitGoal_4690 (by decide) rfl
+  have h4691 : initSM 4691 = initPM 4691 := hb goal3CutInitGoal_4691 (by decide) rfl
+  have h4694 : initSM 4694 = initPM 4694 := hb goal3CutInitGoal_4694 (by decide) rfl
+  have h4695 : initSM 4695 = initPM 4695 := hb goal3CutInitGoal_4695 (by decide) rfl
   have h4680 : initSM 4680 = initPM 4680 := by
-    have hg := hInit goal_5
-      (by unfold goal_3_cut_initGoals goal_3_prereqs; exact List.mem_append_right _ (by simp))
+    have hg := hInit goal3CutPrereqGoal5
+      (by unfold goal_3_cut_initGoals; exact List.mem_append_right _ (by simp))
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simpa [goal_5, List.map, reconstructWithDim_singleton] using hval
+    simpa [goal3CutPrereqGoal5, List.map, reconstructWithDim_singleton] using hval
   -- store <-> prefix-fold bridges
   have bSM4692 : (sm_goal_3.nodes.take 8).foldl (applyNodeRingAttn sm_goal_3) initSM 4692
       = denoteGraph_ringAttn sm_goal_3 initSM 4692 :=
@@ -5139,9 +5140,9 @@ theorem sm_pm_carry_4703_commute (initSM initPM : Store)
       = denoteGraph_ringAttn pm_goal_3 initPM 4703 := by
   rw [denote_sm_goal_3_4703, denote_pm_goal_3_4703]
   have hattn := sm_pm_attention_L0_commute initSM initPM hSM hPM hInit
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -5154,13 +5155,13 @@ theorem sm_pm_carry_4703_commute (initSM initPM : Store)
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4699 : initSM 4699 = initPM 4699 := hb initGoal_4699 (by decide) rfl
+  have h4699 : initSM 4699 = initPM 4699 := hb goal3CutInitGoal_4699 (by decide) rfl
   have h4680 : initSM 4680 = initPM 4680 := by
-    have hg := hInit goal_5
-      (by unfold goal_3_cut_initGoals goal_3_prereqs; exact List.mem_append_right _ (by simp))
+    have hg := hInit goal3CutPrereqGoal5
+      (by unfold goal_3_cut_initGoals; exact List.mem_append_right _ (by simp))
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simpa [goal_5, List.map, reconstructWithDim_singleton] using hval
+    simpa [goal3CutPrereqGoal5, List.map, reconstructWithDim_singleton] using hval
   obtain ⟨hsh0, hsh1⟩ := pm_attn_shard_shapes initSM initPM hSM hPM hInit
   simp only [nR0, nR1] at hsh0 hsh1
   rw [show pm_goal_3.numRanks = 2 from rfl] at hattn ⊢
@@ -5177,9 +5178,9 @@ theorem sm_pm_nl_4708_commute (initSM initPM : Store)
       = denoteGraph_ringAttn pm_goal_3 initPM 4708 := by
   rw [denote_sm_goal_3_4708, denote_pm_goal_3_4708]
   rw [sm_pm_carry_4703_commute initSM initPM hSM hPM hInit]
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -5192,8 +5193,8 @@ theorem sm_pm_nl_4708_commute (initSM initPM : Store)
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4704 : initSM 4704 = initPM 4704 := hb initGoal_4704 (by decide) rfl
-  have h4707 : initSM 4707 = initPM 4707 := hb initGoal_4707 (by decide) rfl
+  have h4704 : initSM 4704 = initPM 4704 := hb goal3CutInitGoal_4704 (by decide) rfl
+  have h4707 : initSM 4707 = initPM 4707 := hb goal3CutInitGoal_4707 (by decide) rfl
   rw [h4704, h4707]
 
 -- Layer-0 router commute (kernel-clean L0 spike, template for L1..L23).
@@ -6902,10 +6903,10 @@ theorem sm_pm_carry_4736_commute
   rw [denote_sm_goal_3_4736, denote_pm_goal_3_4736]
   have hcarry3 := sm_pm_carry_4703_commute initSM initPM h_ss_sm h_ss_pm hInit
   -- weight equalities (single-tps)
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM := by
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM := by
     intro g hg
     exact hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -6918,27 +6919,27 @@ theorem sm_pm_carry_4736_commute
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4704 : initSM 4704 = initPM 4704 := hb initGoal_4704 (by decide) rfl
-  have h4707 : initSM 4707 = initPM 4707 := hb initGoal_4707 (by decide) rfl
-  have h4716 : initSM 4716 = initPM 4716 := hb initGoal_4716 (by decide) rfl
-  have h4721 : initSM 4721 = initPM 4721 := hb initGoal_4721 (by decide) rfl
-  have h4725 : initSM 4725 = initPM 4725 := hb initGoal_4725 (by decide) rfl
-  have h4730 : initSM 4730 = initPM 4730 := hb initGoal_4730 (by decide) rfl
+  have h4704 : initSM 4704 = initPM 4704 := hb goal3CutInitGoal_4704 (by decide) rfl
+  have h4707 : initSM 4707 = initPM 4707 := hb goal3CutInitGoal_4707 (by decide) rfl
+  have h4716 : initSM 4716 = initPM 4716 := hb goal3CutInitGoal_4716 (by decide) rfl
+  have h4721 : initSM 4721 = initPM 4721 := hb goal3CutInitGoal_4721 (by decide) rfl
+  have h4725 : initSM 4725 = initPM 4725 := hb goal3CutInitGoal_4725 (by decide) rfl
+  have h4730 : initSM 4730 = initPM 4730 := hb goal3CutInitGoal_4730 (by decide) rfl
   -- 2-shard weight reconstructions
   have h4712 : initSM 4712 = allGatherPrimDimN 0 2 0 [initPM 7487, initPM 7488] := by
-    have hg := hII initGoal_4712 (by decide)
+    have hg := hII goal3CutInitGoal_4712 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_4712, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_4712, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 7487) (initPM 7488) []
         (by rw [h_ss_pm 7487 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
     exact hval
   have h4713 : initSM 4713 = allGatherPrimDimN 0 2 0 [initPM 7489, initPM 7490] := by
-    have hg := hII initGoal_4713 (by decide)
+    have hg := hII goal3CutInitGoal_4713 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_4713, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_4713, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 7489) (initPM 7490) []
         (by rw [h_ss_pm 7489 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -7077,9 +7078,9 @@ theorem sm_pm_qproj_L1_commute (initSM initPM : Store)
       = allGatherPrimDimN 0 2 0
           [ denoteGraph_ringAttn pm_goal_3 initPM 7619,
             denoteGraph_ringAttn pm_goal_3 initPM 7620 ] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -7092,11 +7093,11 @@ theorem sm_pm_qproj_L1_commute (initSM initPM : Store)
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4737 : initSM 4737 = initPM 4737 := hb initGoal_4737 (by decide) rfl
-  have h4739 : initSM 4739 = initPM 4739 := hb initGoal_4739 (by decide) rfl
-  have h4741 : initSM 4741 = initPM 4741 := hb initGoal_4741 (by decide) rfl
-  have h4745 : initSM 4745 = initPM 4745 := hb initGoal_4745 (by decide) rfl
-  have h4691 : initSM 4691 = initPM 4691 := hb initGoal_4691 (by decide) rfl
+  have h4737 : initSM 4737 = initPM 4737 := hb goal3CutInitGoal_4737 (by decide) rfl
+  have h4739 : initSM 4739 = initPM 4739 := hb goal3CutInitGoal_4739 (by decide) rfl
+  have h4741 : initSM 4741 = initPM 4741 := hb goal3CutInitGoal_4741 (by decide) rfl
+  have h4745 : initSM 4745 = initPM 4745 := hb goal3CutInitGoal_4745 (by decide) rfl
+  have h4691 : initSM 4691 = initPM 4691 := hb goal3CutInitGoal_4691 (by decide) rfl
   rw [denote_sm_goal_3_4746, denote_pm_goal_3_7619, denote_pm_goal_3_7620]
   rw [hcarry, h4737, h4739, h4741, h4745, h4691]
   rw [show pm_goal_3.numRanks = 2 from rfl]
@@ -7114,9 +7115,9 @@ theorem sm_pm_kproj_L1_commute (initSM initPM : Store)
       = allGatherPrimDimN 0 2 0
           [ denoteGraph_ringAttn pm_goal_3 initPM 7621,
             denoteGraph_ringAttn pm_goal_3 initPM 7622 ] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -7129,11 +7130,11 @@ theorem sm_pm_kproj_L1_commute (initSM initPM : Store)
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4737 : initSM 4737 = initPM 4737 := hb initGoal_4737 (by decide) rfl
-  have h4739 : initSM 4739 = initPM 4739 := hb initGoal_4739 (by decide) rfl
-  have h4741 : initSM 4741 = initPM 4741 := hb initGoal_4741 (by decide) rfl
-  have h4745 : initSM 4745 = initPM 4745 := hb initGoal_4745 (by decide) rfl
-  have h4691 : initSM 4691 = initPM 4691 := hb initGoal_4691 (by decide) rfl
+  have h4737 : initSM 4737 = initPM 4737 := hb goal3CutInitGoal_4737 (by decide) rfl
+  have h4739 : initSM 4739 = initPM 4739 := hb goal3CutInitGoal_4739 (by decide) rfl
+  have h4741 : initSM 4741 = initPM 4741 := hb goal3CutInitGoal_4741 (by decide) rfl
+  have h4745 : initSM 4745 = initPM 4745 := hb goal3CutInitGoal_4745 (by decide) rfl
+  have h4691 : initSM 4691 = initPM 4691 := hb goal3CutInitGoal_4691 (by decide) rfl
   rw [denote_sm_goal_3_4747, denote_pm_goal_3_7621, denote_pm_goal_3_7622]
   rw [hcarry, h4737, h4739, h4741, h4745, h4691]
   rw [show pm_goal_3.numRanks = 2 from rfl]
@@ -7149,9 +7150,9 @@ theorem sm_pm_vproj_L1_commute (initSM initPM : Store)
       = allGatherPrimDimN 0 2 0
           [ denoteGraph_ringAttn pm_goal_3 initPM 7607,
             denoteGraph_ringAttn pm_goal_3 initPM 7608 ] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -7164,8 +7165,8 @@ theorem sm_pm_vproj_L1_commute (initSM initPM : Store)
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4737 : initSM 4737 = initPM 4737 := hb initGoal_4737 (by decide) rfl
-  have h4743 : initSM 4743 = initPM 4743 := hb initGoal_4743 (by decide) rfl
+  have h4737 : initSM 4737 = initPM 4737 := hb goal3CutInitGoal_4737 (by decide) rfl
+  have h4743 : initSM 4743 = initPM 4743 := hb goal3CutInitGoal_4743 (by decide) rfl
   rw [denote_sm_goal_3_4744, denote_pm_goal_3_7607, denote_pm_goal_3_7608]
   rw [hcarry, h4737, h4743]
   rw [show pm_goal_3.numRanks = 2 from rfl]
@@ -7195,10 +7196,10 @@ theorem sm_pm_attention_L1_commute
            applyNodeRingAttn_sliding_window pm_goal_3
              ((pm_goal_3.nodes.take 140).foldl (applyNodeRingAttn pm_goal_3) initPM) nR1_1]
   -- weight equalities
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM := by
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM := by
     intro g hg
     exact hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -7211,14 +7212,14 @@ theorem sm_pm_attention_L1_commute
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4682 : initSM 4737 = initPM 4737 := hb initGoal_4737 (by decide) rfl
-  have h4684 : initSM 4739 = initPM 4739 := hb initGoal_4739 (by decide) rfl
-  have h4686 : initSM 4741 = initPM 4741 := hb initGoal_4741 (by decide) rfl
-  have h4688 : initSM 4743 = initPM 4743 := hb initGoal_4743 (by decide) rfl
-  have h4690 : initSM 4745 = initPM 4745 := hb initGoal_4745 (by decide) rfl
-  have h4691 : initSM 4691 = initPM 4691 := hb initGoal_4691 (by decide) rfl
-  have h4694 : initSM 4748 = initPM 4748 := hb initGoal_4748 (by decide) rfl
-  have h4695 : initSM 4749 = initPM 4749 := hb initGoal_4749 (by decide) rfl
+  have h4682 : initSM 4737 = initPM 4737 := hb goal3CutInitGoal_4737 (by decide) rfl
+  have h4684 : initSM 4739 = initPM 4739 := hb goal3CutInitGoal_4739 (by decide) rfl
+  have h4686 : initSM 4741 = initPM 4741 := hb goal3CutInitGoal_4741 (by decide) rfl
+  have h4688 : initSM 4743 = initPM 4743 := hb goal3CutInitGoal_4743 (by decide) rfl
+  have h4690 : initSM 4745 = initPM 4745 := hb goal3CutInitGoal_4745 (by decide) rfl
+  have h4691 : initSM 4691 = initPM 4691 := hb goal3CutInitGoal_4691 (by decide) rfl
+  have h4694 : initSM 4748 = initPM 4748 := hb goal3CutInitGoal_4748 (by decide) rfl
+  have h4695 : initSM 4749 = initPM 4749 := hb goal3CutInitGoal_4749 (by decide) rfl
   have hcarry : denoteGraph_ringAttn sm_goal_3 initSM 4736
       = denoteGraph_ringAttn pm_goal_3 initPM 4736 :=
     sm_pm_carry_4736_commute initSM initPM h_ss_sm h_ss_pm hInit
@@ -7407,10 +7408,10 @@ theorem pm_attn_shard_shapes_L1
        ((pm_goal_3.nodes.take 140).foldl (applyNodeRingAttn pm_goal_3) initPM) nR1_1).shape
       = [2048, 16, 64] := by
   -- weight equalities
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM := by
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM := by
     intro g hg
     exact hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -7423,14 +7424,14 @@ theorem pm_attn_shard_shapes_L1
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4682 : initSM 4737 = initPM 4737 := hb initGoal_4737 (by decide) rfl
-  have h4684 : initSM 4739 = initPM 4739 := hb initGoal_4739 (by decide) rfl
-  have h4686 : initSM 4741 = initPM 4741 := hb initGoal_4741 (by decide) rfl
-  have h4688 : initSM 4743 = initPM 4743 := hb initGoal_4743 (by decide) rfl
-  have h4690 : initSM 4745 = initPM 4745 := hb initGoal_4745 (by decide) rfl
-  have h4691 : initSM 4691 = initPM 4691 := hb initGoal_4691 (by decide) rfl
-  have h4694 : initSM 4748 = initPM 4748 := hb initGoal_4748 (by decide) rfl
-  have h4695 : initSM 4749 = initPM 4749 := hb initGoal_4749 (by decide) rfl
+  have h4682 : initSM 4737 = initPM 4737 := hb goal3CutInitGoal_4737 (by decide) rfl
+  have h4684 : initSM 4739 = initPM 4739 := hb goal3CutInitGoal_4739 (by decide) rfl
+  have h4686 : initSM 4741 = initPM 4741 := hb goal3CutInitGoal_4741 (by decide) rfl
+  have h4688 : initSM 4743 = initPM 4743 := hb goal3CutInitGoal_4743 (by decide) rfl
+  have h4690 : initSM 4745 = initPM 4745 := hb goal3CutInitGoal_4745 (by decide) rfl
+  have h4691 : initSM 4691 = initPM 4691 := hb goal3CutInitGoal_4691 (by decide) rfl
+  have h4694 : initSM 4748 = initPM 4748 := hb goal3CutInitGoal_4748 (by decide) rfl
+  have h4695 : initSM 4749 = initPM 4749 := hb goal3CutInitGoal_4749 (by decide) rfl
   have hcarry : denoteGraph_ringAttn sm_goal_3 initSM 4736
       = denoteGraph_ringAttn pm_goal_3 initPM 4736 :=
     sm_pm_carry_4736_commute initSM initPM h_ss_sm h_ss_pm hInit
@@ -7616,9 +7617,9 @@ theorem sm_pm_carry_4757_commute (initSM initPM : Store)
   rw [denote_sm_goal_3_4757, denote_pm_goal_3_4757]
   have hattn := sm_pm_attention_L1_commute initSM initPM hSM hPM hInit
   have hcarry36 := sm_pm_carry_4736_commute initSM initPM hSM hPM hInit
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -7631,7 +7632,7 @@ theorem sm_pm_carry_4757_commute (initSM initPM : Store)
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4753 : initSM 4753 = initPM 4753 := hb initGoal_4753 (by decide) rfl
+  have h4753 : initSM 4753 = initPM 4753 := hb goal3CutInitGoal_4753 (by decide) rfl
   obtain ⟨hsh0, hsh1⟩ := pm_attn_shard_shapes_L1 initSM initPM hSM hPM hInit
   simp only [nR0_1, nR1_1] at hsh0 hsh1
   rw [show pm_goal_3.numRanks = 2 from rfl] at hattn ⊢
@@ -7648,9 +7649,9 @@ theorem sm_pm_nl_4762_commute (initSM initPM : Store)
       = denoteGraph_ringAttn pm_goal_3 initPM 4762 := by
   rw [denote_sm_goal_3_4762, denote_pm_goal_3_4762]
   rw [sm_pm_carry_4757_commute initSM initPM hSM hPM hInit]
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -7663,8 +7664,8 @@ theorem sm_pm_nl_4762_commute (initSM initPM : Store)
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4758 : initSM 4758 = initPM 4758 := hb initGoal_4758 (by decide) rfl
-  have h4761 : initSM 4761 = initPM 4761 := hb initGoal_4761 (by decide) rfl
+  have h4758 : initSM 4758 = initPM 4758 := hb goal3CutInitGoal_4758 (by decide) rfl
+  have h4761 : initSM 4761 = initPM 4761 := hb goal3CutInitGoal_4761 (by decide) rfl
   rw [h4758, h4761]
 
 set_option maxHeartbeats 4000000 in
@@ -7701,19 +7702,15 @@ theorem sm_pm_router_commute_L1
   exact router_commute_of_nl_eq _ _ hPM4762sh hnl
 
 
-def pattern_3_goalIds : List Nat := [3]
+def pattern_3_ring_legacy_goalIds : List Nat := [3]
 
-/-- Pattern 3 discharge target. Aligns with Pattern_1/2/4/5's inductive scheme
-    so that `Instances.lean` can uniformly project `prove_pattern_N pattern_N_target.goal_N`.
+/-- Legacy Pattern 3 ring-attention cut target.  This intentionally does not
+    claim the public distributed-faithful/full Pattern 3 name. -/
+inductive pattern_3_ring_legacy_target : Prop → Prop
+  | goal_3 : pattern_3_ring_legacy_target goal_3_stmt_with_pins
 
-    We bind to `goal_3_stmt_cut_ringAttn` (the ring-attention-aware variant)
-    because Pattern_3's cross-rank `FW_attn_zigzag` op needs ring-attn semantics
-    that non-ring `denoteGraph` cannot model faithfully. -/
-inductive pattern_3_target : Prop → Prop
-  | goal_3 : pattern_3_target goal_3_stmt_with_pins
-
-def pattern_3_stmt : Prop :=
-  ∀ {target : Prop}, pattern_3_target target → target
+def pattern_3_ring_legacy_stmt : Prop :=
+  ∀ {target : Prop}, pattern_3_ring_legacy_target target → target
 
 /-- Vacuity witness for `goal_3_stmt_with_pins`'s 12 cu_seqlens value pins.
 
@@ -8221,9 +8218,9 @@ theorem sm_pm_moe_gmm_L1_commute
   -- SM 4757 = PM 4757 via carry
   rw [sm_pm_carry_4757_commute initSM initPM h_ss_sm h_ss_pm hInit]
   -- initSM 4758 = initPM 4758, initSM 4761 = initPM 4761
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -8236,24 +8233,24 @@ theorem sm_pm_moe_gmm_L1_commute
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4758 : initSM 4758 = initPM 4758 := hb initGoal_4758 (by decide) rfl
-  have h4761 : initSM 4761 = initPM 4761 := hb initGoal_4761 (by decide) rfl
+  have h4758 : initSM 4758 = initPM 4758 := hb goal3CutInitGoal_4758 (by decide) rfl
+  have h4761 : initSM 4761 = initPM 4761 := hb goal3CutInitGoal_4761 (by decide) rfl
   rw [h4758, h4761]
   -- Weight reconstructions (2-shard MoE weights)
   have h4766 : initSM 4766 = allGatherPrimDimN 0 2 0 [initPM 7673, initPM 7674] := by
-    have hg := hII initGoal_4766 (by decide)
+    have hg := hII goal3CutInitGoal_4766 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_4766, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_4766, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 7673) (initPM 7674) []
         (by rw [h_ss_pm 7673 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
     exact hval
   have h4767 : initSM 4767 = allGatherPrimDimN 0 2 0 [initPM 7675, initPM 7676] := by
-    have hg := hII initGoal_4767 (by decide)
+    have hg := hII goal3CutInitGoal_4767 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_4767, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_4767, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 7675) (initPM 7676) []
         (by rw [h_ss_pm 7675 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -8885,9 +8882,9 @@ theorem sm_pm_gate_mul_L1_commute
   -- SM 4757 = PM 4757
   rw [sm_pm_carry_4757_commute initSM initPM h_ss_sm h_ss_pm hInit]
   -- initSM ↔ initPM for 4758/4770/4775/4779/4784
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -8900,11 +8897,11 @@ theorem sm_pm_gate_mul_L1_commute
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4758 : initSM 4758 = initPM 4758 := hb initGoal_4758 (by decide) rfl
-  have h4770 : initSM 4770 = initPM 4770 := hb initGoal_4770 (by decide) rfl
-  have h4775 : initSM 4775 = initPM 4775 := hb initGoal_4775 (by decide) rfl
-  have h4779 : initSM 4779 = initPM 4779 := hb initGoal_4779 (by decide) rfl
-  have h4784 : initSM 4784 = initPM 4784 := hb initGoal_4784 (by decide) rfl
+  have h4758 : initSM 4758 = initPM 4758 := hb goal3CutInitGoal_4758 (by decide) rfl
+  have h4770 : initSM 4770 = initPM 4770 := hb goal3CutInitGoal_4770 (by decide) rfl
+  have h4775 : initSM 4775 = initPM 4775 := hb goal3CutInitGoal_4775 (by decide) rfl
+  have h4779 : initSM 4779 = initPM 4779 := hb goal3CutInitGoal_4779 (by decide) rfl
+  have h4784 : initSM 4784 = initPM 4784 := hb goal3CutInitGoal_4784 (by decide) rfl
   rw [h4758, h4770, h4775, h4779, h4784]
   rw [show pm_goal_3.numRanks = 2 from rfl]
   -- Abstract RMS_PM and eliminate the identity view around it (faithful reshape)
@@ -9815,7 +9812,7 @@ elab "mk_rms " kStx:num : command => do
   let sPM1  : NumLit := Syntax.mkNumLit (toString (pmout+1))
   let hCB   : Ident  := mkIdent (Name.mkSimple s!"h{carrybase}")
   let sCB   : NumLit := Syntax.mkNumLit (toString carrybase)
-  let iIG   : Ident  := mkIdent (Name.mkSimple s!"initGoal_{carrybase}")
+  let iIG   : Ident  := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{carrybase}")
   let iCarry: Ident  := mkIdent (Name.mkSimple s!"sm_pm_carry_{carry}_commute")
   let sR    : NumLit := Syntax.mkNumLit (toString router)
   let iHsR  : Ident  := mkIdent (Name.str (Name.str .anonymous "RouterShapesHelpers") s!"hs_{router}")
@@ -9833,9 +9830,9 @@ theorem $n0 (initSM initPM : Store)
       = allGatherPrimDimN 0 2 0
           [denoteGraph_ringAttn pm_goal_3 initPM $sPM,
            denoteGraph_ringAttn pm_goal_3 initPM $sPM1] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -9876,7 +9873,7 @@ elab "mk_qlin " kStx:num : command => do
   let nPb : NumLit := Syntax.mkNumLit (toString (7772 + 186*(k-2)))
   let ns  : NumLit := Syntax.mkNumLit (toString (4793 + 54*(k-2)))
   let hsN : Ident  := mkIdent (Name.mkSimple s!"h{(4793 + 54*(k-2))}")
-  let ig  : Ident  := mkIdent (Name.mkSimple s!"initGoal_{(4793 + 54*(k-2))}")
+  let ig  : Ident  := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{(4793 + 54*(k-2))}")
   let rms : Ident  := mkIdent (Name.mkSimple s!"sm_pm_rms_L{k}_commute")
   let nP69 : NumLit := Syntax.mkNumLit (toString (7769 + 186*(k-2)))
   let nP70 : NumLit := Syntax.mkNumLit (toString (7770 + 186*(k-2)))
@@ -9896,9 +9893,9 @@ theorem $q0 (initSM initPM : Store)
       = allGatherPrimDimN 0 2 0
           [denoteGraph_ringAttn pm_goal_3 initPM $nPa,
            denoteGraph_ringAttn pm_goal_3 initPM $nPb] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -9948,7 +9945,7 @@ elab "mk_klin " kStx:num : command => do
   let sPM1  : NumLit := Syntax.mkNumLit (toString (pm0+1))
   let hCarry: Ident  := mkIdent (Name.mkSimple s!"h{carry}")
   let sCarry: NumLit := Syntax.mkNumLit (toString carry)
-  let iIG   : Ident  := mkIdent (Name.mkSimple s!"initGoal_{carry}")
+  let iIG   : Ident  := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{carry}")
   let iRms  : Ident  := mkIdent (Name.mkSimple s!"sm_pm_rms_L{k}_commute")
   let sRms0 : NumLit := Syntax.mkNumLit (toString rmsref0)
   let sRms1 : NumLit := Syntax.mkNumLit (toString rmsref1)
@@ -9968,9 +9965,9 @@ theorem $n0 (initSM initPM : Store)
       = allGatherPrimDimN 0 2 0
           [denoteGraph_ringAttn pm_goal_3 initPM $sPM0,
            denoteGraph_ringAttn pm_goal_3 initPM $sPM1] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -10019,7 +10016,7 @@ elab "mk_vproj " kStx:num : command => do
   let sPM1 : NumLit := Syntax.mkNumLit (toString (pmout+1))
   let hW   : Ident  := mkIdent (Name.mkSimple s!"h{w}")
   let sW   : NumLit := Syntax.mkNumLit (toString w)
-  let iIG  : Ident  := mkIdent (Name.mkSimple s!"initGoal_{w}")
+  let iIG  : Ident  := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{w}")
   let iRms : Ident  := mkIdent (Name.mkSimple s!"sm_pm_rms_L{k}_commute")
   let sRA  : NumLit := Syntax.mkNumLit (toString rA)
   let sRB  : NumLit := Syntax.mkNumLit (toString rB)
@@ -10039,9 +10036,9 @@ theorem $n0 (initSM initPM : Store)
       = allGatherPrimDimN 0 2 0
           [denoteGraph_ringAttn pm_goal_3 initPM $sPM,
            denoteGraph_ringAttn pm_goal_3 initPM $sPM1] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -10088,7 +10085,7 @@ elab "mk_qproj " kStx:num : command => do
   let nR1  : NumLit := Syntax.mkNumLit (toString (7806 + 186*d))
   let idR1 : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{7806 + 186*d}")
   let nPos  : NumLit := Syntax.mkNumLit (toString (4799 + 54*d))
-  let idPos : Ident  := mkIdent (Name.mkSimple s!"initGoal_{4799 + 54*d}")
+  let idPos : Ident  := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{4799 + 54*d}")
   let n69  : NumLit := Syntax.mkNumLit (toString (7769 + 186*d))
   let id69 : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{7769 + 186*d}")
   let idHs0 : Ident := mkIdent (Name.str (Name.str .anonymous "RouterShapesHelpers") s!"hs_{7765 + 186*d}")
@@ -10109,9 +10106,9 @@ theorem $nm (initSM initPM : Store)
       = allGatherPrimDimN 0 2 0
           [denoteGraph_ringAttn pm_goal_3 initPM $nR0,
            denoteGraph_ringAttn pm_goal_3 initPM $nR1] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -10124,7 +10121,7 @@ theorem $nm (initSM initPM : Store)
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have hcos : initSM 4691 = initPM 4691 := hb initGoal_4691 (by decide) rfl
+  have hcos : initSM 4691 = initPM 4691 := hb goal3CutInitGoal_4691 (by decide) rfl
   have hpos : initSM $nPos = initPM $nPos := hb $idPos (by decide) rfl
   have hqlin := $qlin initSM initPM h_ss_sm h_ss_pm hInit
   have h69 : (denoteGraph_ringAttn pm_goal_3 initPM $n69).shape = [2048, 1024] := by
@@ -10173,7 +10170,7 @@ elab "mk_kproj " kStx:num : command => do
   let sPM1  : NumLit := Syntax.mkNumLit (toString pmout)
   let sPM2  : NumLit := Syntax.mkNumLit (toString (pmout+1))
   let sHpos : NumLit := Syntax.mkNumLit (toString hpos)
-  let iHpos : Ident  := mkIdent (Name.mkSimple s!"initGoal_{hpos}")
+  let iHpos : Ident  := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{hpos}")
   let iKlin : Ident  := mkIdent (Name.mkSimple s!"sm_pm_klin_L{k}_commute")
   let sH69  : NumLit := Syntax.mkNumLit (toString h69t)
   let iDP69 : Ident  := mkIdent (Name.mkSimple s!"denote_pm_goal_3_{h69t}")
@@ -10198,9 +10195,9 @@ theorem $n0 (initSM initPM : Store)
       = allGatherPrimDimN 0 2 0
           [denoteGraph_ringAttn pm_goal_3 initPM $sPM1,
            denoteGraph_ringAttn pm_goal_3 initPM $sPM2] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -10213,7 +10210,7 @@ theorem $n0 (initSM initPM : Store)
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have hcos : initSM 4691 = initPM 4691 := hb initGoal_4691 (by decide) rfl
+  have hcos : initSM 4691 = initPM 4691 := hb goal3CutInitGoal_4691 (by decide) rfl
   have hpos : initSM $sHpos = initPM $sHpos := hb $iHpos (by decide) rfl
   have hklin := $iKlin initSM initPM h_ss_sm h_ss_pm hInit
   have h69 : (denoteGraph_ringAttn pm_goal_3 initPM $sH69).shape = [2048, 1024] := by
@@ -10281,9 +10278,9 @@ theorem sm_pm_attention_L2_commute
           [denoteGraph_ringAttn pm_goal_3 initPM 7809,
            denoteGraph_ringAttn pm_goal_3 initPM 7810] := by
   -- weight equalities (cu_seqlens 4802/4803)
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -10296,8 +10293,8 @@ theorem sm_pm_attention_L2_commute
     · -- replicated case: reconstructForGoal picks head; [x].headD default = x
       simp only [reconstructForGoal, hrep', if_true] at hval
       simpa [List.map, List.headD] using hval
-  have h4802 : initSM 4802 = initPM 4802 := hb initGoal_4802 (by decide) rfl
-  have h4803 : initSM 4803 = initPM 4803 := hb initGoal_4803 (by decide) rfl
+  have h4802 : initSM 4802 = initPM 4802 := hb goal3CutInitGoal_4802 (by decide) rfl
+  have h4803 : initSM 4803 = initPM 4803 := hb goal3CutInitGoal_4803 (by decide) rfl
   -- proj commutes (already proven)
   have qproj := sm_pm_qproj_L2_commute initSM initPM h_ss_sm h_ss_pm hInit
   have kproj := sm_pm_kproj_L2_commute initSM initPM h_ss_sm h_ss_pm hInit
@@ -10704,8 +10701,8 @@ elab "mk_pm_attn_shard_shapes " kStx:num : command => do
   let i_hs_4802 : Ident := mkIdent (Name.mkSimple s!"hSM{4802 + 0*(k-2)}")
   let i_hs_4803 : Ident := mkIdent (Name.mkSimple s!"hSM{4803 + 0*(k-2)}")
   let i_hss_4790 : Ident := mkIdent (Name.mkSimple s!"hSM{4790 + 0*(k-2)}sh")
-  let i_ig_4802 : Ident := mkIdent (Name.mkSimple s!"initGoal_{4802 + 54*(k-2)}")
-  let i_ig_4803 : Ident := mkIdent (Name.mkSimple s!"initGoal_{4803 + 54*(k-2)}")
+  let i_ig_4802 : Ident := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{4802 + 54*(k-2)}")
+  let i_ig_4803 : Ident := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{4803 + 54*(k-2)}")
   let i_kpl_2 : Ident := mkIdent (Name.mkSimple s!"sm_pm_kproj_L{2 + 1*(k-2)}_commute")
   let i_nr0_2 : Ident := mkIdent (Name.mkSimple s!"nR0_{2 + 1*(k-2)}")
   let i_nr1_2 : Ident := mkIdent (Name.mkSimple s!"nR1_{2 + 1*(k-2)}")
@@ -10721,9 +10718,9 @@ theorem $thm
     (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
     (denoteGraph_ringAttn pm_goal_3 initPM $n7809).shape = [2048, 16, 64]
   ∧ (denoteGraph_ringAttn pm_goal_3 initPM $n7810).shape = [2048, 16, 64] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -10998,7 +10995,7 @@ elab "mk_carry_a " kStx:num : command => do
   let i_dsm_4811 : Ident := mkIdent (Name.mkSimple s!"denote_sm_goal_3_{4811 + 54*(k-2)}")
   let i_hh_765 : Ident := mkIdent (Name.mkSimple s!"h{765 + 0*(k-2)}")
   let i_hh_766 : Ident := mkIdent (Name.mkSimple s!"h{766 + 0*(k-2)}")
-  let i_ig_4807 : Ident := mkIdent (Name.mkSimple s!"initGoal_{4807 + 54*(k-2)}")
+  let i_ig_4807 : Ident := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{4807 + 54*(k-2)}")
   let i_pas_2 : Ident := mkIdent (Name.mkSimple s!"pm_attn_shard_shapes_L{2 + 1*(k-2)}")
   let i_rsh_7765 : Ident := mkIdent (Name.mkStr (Name.mkSimple "RouterShapesHelpers") s!"hs_{7765 + 186*(k-2)}")
   let i_rsh_7766 : Ident := mkIdent (Name.mkStr (Name.mkSimple "RouterShapesHelpers") s!"hs_{7766 + 186*(k-2)}")
@@ -11012,9 +11009,9 @@ theorem $thm (initSM initPM : Store)
           [denoteGraph_ringAttn pm_goal_3 initPM $n7839,
            denoteGraph_ringAttn pm_goal_3 initPM $n7840] := by
   rw [$i_dsm_4811:term, $i_dpm_7839:term, $i_dpm_7840:term]
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -11151,9 +11148,9 @@ elab "mk_nl " kStx:num : command => do
   let n2 : NumLit := Syntax.mkNumLit (toString (4708 + 54*k))
   let n3 : NumLit := Syntax.mkNumLit (toString (7479 + 186*k))
   let n4 : NumLit := Syntax.mkNumLit (toString (7480 + 186*k))
-  let i5 : Ident := mkIdent (Name.mkSimple s!"initGoal_{4704 + 54*k}")
+  let i5 : Ident := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{4704 + 54*k}")
   let n6 : NumLit := Syntax.mkNumLit (toString (4704 + 54*k))
-  let i7 : Ident := mkIdent (Name.mkSimple s!"initGoal_{4707 + 54*k}")
+  let i7 : Ident := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{4707 + 54*k}")
   let n8 : NumLit := Syntax.mkNumLit (toString (4707 + 54*k))
   let i9 : Ident := mkIdent (Name.mkSimple s!"sm_pm_carry_{4703 + 54*k}_commute")
   let n10 : NumLit := Syntax.mkNumLit (toString (7467 + 186*k))
@@ -11180,9 +11177,9 @@ theorem $i1 (initSM initPM : Store)
       = allGatherPrimDimN 0 2 0
           [denoteGraph_ringAttn pm_goal_3 initPM $n3,
            denoteGraph_ringAttn pm_goal_3 initPM $n4] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -11470,17 +11467,17 @@ elab "mk_moe_gmm " kStx:num : command => do
   let a3 : NumLit := Syntax.mkNumLit (toString (7864 + 186*(k-2)))
   let a4 : Ident := mkIdent (Name.mkSimple s!"h{(4812 + 54*(k-2))}")
   let a5 : NumLit := Syntax.mkNumLit (toString (4812 + 54*(k-2)))
-  let a6 : Ident := mkIdent (Name.mkSimple s!"initGoal_{(4812 + 54*(k-2))}")
+  let a6 : Ident := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{(4812 + 54*(k-2))}")
   let a7 : Ident := mkIdent (Name.mkSimple s!"h{(4820 + 54*(k-2))}")
   let a8 : NumLit := Syntax.mkNumLit (toString (4820 + 54*(k-2)))
   let a9 : NumLit := Syntax.mkNumLit (toString (7859 + 186*(k-2)))
   let a10 : NumLit := Syntax.mkNumLit (toString (7860 + 186*(k-2)))
-  let a11 : Ident := mkIdent (Name.mkSimple s!"initGoal_{(4820 + 54*(k-2))}")
+  let a11 : Ident := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{(4820 + 54*(k-2))}")
   let a12 : Ident := mkIdent (Name.mkSimple s!"h{(4821 + 54*(k-2))}")
   let a13 : NumLit := Syntax.mkNumLit (toString (4821 + 54*(k-2)))
   let a14 : NumLit := Syntax.mkNumLit (toString (7861 + 186*(k-2)))
   let a15 : NumLit := Syntax.mkNumLit (toString (7862 + 186*(k-2)))
-  let a16 : Ident := mkIdent (Name.mkSimple s!"initGoal_{(4821 + 54*(k-2))}")
+  let a16 : Ident := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{(4821 + 54*(k-2))}")
   let a17 : Ident := mkIdent (Name.mkSimple s!"sm_pm_carry_{(4811 + 54*(k-2))}_commute")
   let a18 : Ident := mkIdent (Name.mkSimple s!"sm_pm_nl_L{(2 + 1*(k-2))}_commute")
   let a19 : NumLit := Syntax.mkNumLit (toString (7839 + 186*(k-2)))
@@ -11526,9 +11523,9 @@ theorem $a0 (initSM initPM : Store)
       = allGatherPrimDimN 0 2 0
           [denoteGraph_ringAttn pm_goal_3 initPM $a2,
            denoteGraph_ringAttn pm_goal_3 initPM $a3] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -12084,19 +12081,19 @@ elab "mk_gate_mul " kStx:num : command => do
   let thm : Ident := mkIdent (Name.mkSimple s!"sm_pm_gate_mul_L{k}_commute")
   let n4811 : NumLit := Syntax.mkNumLit (toString (4811 + 54*(k-2)))
   let cy4811 : Ident := mkIdent (Name.mkSimple s!"sm_pm_carry_{(4811 + 54*(k-2))}_commute")
-  let ig4812 : Ident := mkIdent (Name.mkSimple s!"initGoal_{(4812 + 54*(k-2))}")
+  let ig4812 : Ident := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{(4812 + 54*(k-2))}")
   let n4812 : NumLit := Syntax.mkNumLit (toString (4812 + 54*(k-2)))
   let hh4812 : Ident := mkIdent (Name.mkSimple s!"h{(4812 + 54*(k-2))}")
-  let ig4824 : Ident := mkIdent (Name.mkSimple s!"initGoal_{(4824 + 54*(k-2))}")
+  let ig4824 : Ident := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{(4824 + 54*(k-2))}")
   let n4824 : NumLit := Syntax.mkNumLit (toString (4824 + 54*(k-2)))
   let hh4824 : Ident := mkIdent (Name.mkSimple s!"h{(4824 + 54*(k-2))}")
-  let ig4829 : Ident := mkIdent (Name.mkSimple s!"initGoal_{(4829 + 54*(k-2))}")
+  let ig4829 : Ident := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{(4829 + 54*(k-2))}")
   let n4829 : NumLit := Syntax.mkNumLit (toString (4829 + 54*(k-2)))
   let hh4829 : Ident := mkIdent (Name.mkSimple s!"h{(4829 + 54*(k-2))}")
-  let ig4833 : Ident := mkIdent (Name.mkSimple s!"initGoal_{(4833 + 54*(k-2))}")
+  let ig4833 : Ident := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{(4833 + 54*(k-2))}")
   let n4833 : NumLit := Syntax.mkNumLit (toString (4833 + 54*(k-2)))
   let hh4833 : Ident := mkIdent (Name.mkSimple s!"h{(4833 + 54*(k-2))}")
-  let ig4838 : Ident := mkIdent (Name.mkSimple s!"initGoal_{(4838 + 54*(k-2))}")
+  let ig4838 : Ident := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{(4838 + 54*(k-2))}")
   let n4838 : NumLit := Syntax.mkNumLit (toString (4838 + 54*(k-2)))
   let hh4838 : Ident := mkIdent (Name.mkSimple s!"h{(4838 + 54*(k-2))}")
   let n4841 : NumLit := Syntax.mkNumLit (toString (4841 + 54*(k-2)))
@@ -12134,9 +12131,9 @@ theorem $thm
       = allGatherPrimDimN 0 2 0
           [denoteGraph_ringAttn pm_goal_3 initPM $n7937,
            denoteGraph_ringAttn pm_goal_3 initPM $n7938] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -13213,8 +13210,8 @@ elab "mk_attention " kStx:num : command => do
   let i_hs_4802 : Ident := mkIdent (Name.mkSimple s!"hSM{4802 + 54*(k-3)}")
   let i_hs_4803 : Ident := mkIdent (Name.mkSimple s!"hSM{4803 + 54*(k-3)}")
   let i_hss_4790 : Ident := mkIdent (Name.mkSimple s!"hSM{4790 + 54*(k-3)}sh")
-  let i_ig_4856 : Ident := mkIdent (Name.mkSimple s!"initGoal_{4856 + 54*(k-3)}")
-  let i_ig_4857 : Ident := mkIdent (Name.mkSimple s!"initGoal_{4857 + 54*(k-3)}")
+  let i_ig_4856 : Ident := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{4856 + 54*(k-3)}")
+  let i_ig_4857 : Ident := mkIdent (Name.mkSimple s!"goal3CutInitGoal_{4857 + 54*(k-3)}")
   let i_kpl_3 : Ident := mkIdent (Name.mkSimple s!"sm_pm_kproj_L{3 + 1*(k-3)}_commute")
   let i_nr0_3 : Ident := mkIdent (Name.mkSimple s!"nR0_{3 + 1*(k-3)}")
   let i_nr1_3 : Ident := mkIdent (Name.mkSimple s!"nR1_{3 + 1*(k-3)}")
@@ -13233,9 +13230,9 @@ theorem $thm
           [denoteGraph_ringAttn pm_goal_3 initPM $n7995,
            denoteGraph_ringAttn pm_goal_3 initPM $n7996] := by
   -- weight equalities (cu_seqlens $n4802/$n4803)
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-  have hb : ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+  have hb : ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
     intro g hg hshape
     have hgh := hII g hg
@@ -27116,9 +27113,9 @@ theorem denote_pm_goal_3_14599 (initPM : Store) :
 -- Weight-equality helper (SM = PM at replicated leaf weights) from the cut init goals.
 theorem L12_weight_eq (initSM initPM : Store)
     (hInit : InitGoalsHold pm_goal_3.numRanks goal_3_cut_initGoals initSM initPM) :
-    ∀ g : LineageGoal, g ∈ initGoals → g.tps = [{ rank := 0, tid := g.ts }] →
+    ∀ g : LineageGoal, g ∈ goal3CutInitGoals → g.tps = [{ rank := 0, tid := g.ts }] →
       initSM g.ts = initPM g.ts := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
   intro g hg hshape
   have hgh := hII g hg
@@ -27139,7 +27136,7 @@ theorem sm_pm_rms_L12_commute (initSM initPM : Store)
     denoteGraph_ringAttn sm_goal_3 initSM 5332 =
       denoteGraph_ringAttn pm_goal_3 initPM 5332 := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5331 : initSM 5331 = initPM 5331 := hb initGoal_5331 (by decide) rfl
+  have hw5331 : initSM 5331 = initPM 5331 := hb goal3CutInitGoal_5331 (by decide) rfl
   rw [denote_sm_goal_3_5332, denote_sm_goal_3_8007, hcarry5330, hw5331,
       denote_pm_goal_3_5332, denote_pm_goal_3_11917,
       denote_pm_goal_3_14597, denote_pm_goal_3_14599]
@@ -27156,7 +27153,7 @@ theorem sm_pm_krepl_L12_commute (initSM initPM : Store)
     denoteGraph_ringAttn sm_goal_3 initSM 5343 =
       denoteGraph_ringAttn pm_goal_3 initPM 5343 := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5333 : initSM 5333 = initPM 5333 := hb initGoal_5333 (by decide) rfl
+  have hw5333 : initSM 5333 = initPM 5333 := hb goal3CutInitGoal_5333 (by decide) rfl
   have hrms := sm_pm_rms_L12_commute initSM initPM hInit hcarry5330
   rw [denote_sm_goal_3_5343, denote_sm_goal_3_5334, hrms, hw5333,
       denote_pm_goal_3_5343, denote_pm_goal_3_5334]
@@ -27173,7 +27170,7 @@ theorem sm_pm_vrepl_L12_commute (initSM initPM : Store)
     denoteGraph_ringAttn sm_goal_3 initSM 5344 =
       denoteGraph_ringAttn pm_goal_3 initPM 5344 := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5335 : initSM 5335 = initPM 5335 := hb initGoal_5335 (by decide) rfl
+  have hw5335 : initSM 5335 = initPM 5335 := hb goal3CutInitGoal_5335 (by decide) rfl
   have hrms := sm_pm_rms_L12_commute initSM initPM hInit hcarry5330
   rw [denote_sm_goal_3_5344, denote_sm_goal_3_5336, hrms, hw5335,
       denote_pm_goal_3_5344, denote_pm_goal_3_5336]
@@ -27231,8 +27228,8 @@ theorem sm_pm_qfull_L12_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 9659,
          denoteGraph_ringAttn pm_goal_3 initPM 9660] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5339 : initSM 5339 = initPM 5339 := hb initGoal_5339 (by decide) rfl
-  have hw5341e : initSM 5341 = initPM 5341 := hb initGoal_5341 (by decide) rfl
+  have hw5339 : initSM 5339 = initPM 5339 := hb goal3CutInitGoal_5339 (by decide) rfl
+  have hw5341e : initSM 5341 = initPM 5341 := hb goal3CutInitGoal_5341 (by decide) rfl
   rw [denote_sm_goal_3_5342, denote_sm_goal_3_5340, denote_sm_goal_3_5338,
       denote_pm_goal_3_9659, denote_pm_goal_3_9657, denote_pm_goal_3_9655, denote_pm_goal_3_13257,
       denote_pm_goal_3_9660, denote_pm_goal_3_9658, denote_pm_goal_3_9656, denote_pm_goal_3_13258]
@@ -27337,8 +27334,8 @@ theorem sm_pm_attention_L12_commute (initSM initPM : Store)
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1067) initPM 5345 (by decide) (by decide)
   have hP5346 : (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5346 = initPM 5346 :=
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1067) initPM 5346 (by decide) (by decide)
-  have hw5345 : initSM 5345 = initPM 5345 := hb initGoal_5345 (by decide) rfl
-  have hw5346 : initSM 5346 = initPM 5346 := hb initGoal_5346 (by decide) rfl
+  have hw5345 : initSM 5345 = initPM 5345 := hb goal3CutInitGoal_5345 (by decide) rfl
+  have hw5346 : initSM 5346 = initPM 5346 := hb goal3CutInitGoal_5346 (by decide) rfl
   -- reconstruction inputs
   have hkfull : (sm_goal_3.nodes.take 504).foldl (applyNodeRingAttn sm_goal_3) initSM 5343
       = (pm_goal_3.nodes.take 1067).foldl (applyNodeRingAttn pm_goal_3) initPM 5343 := by
@@ -27810,7 +27807,7 @@ theorem sm_pm_reshape_float_5353_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 9713,
          denoteGraph_ringAttn pm_goal_3 initPM 9714] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw : initSM 5350 = initPM 5350 := hb initGoal_5350 (by decide) rfl
+  have hw : initSM 5350 = initPM 5350 := hb goal3CutInitGoal_5350 (by decide) rfl
   rw [denote_sm_goal_3_5353, denote_sm_goal_3_5352, denote_sm_goal_3_5351,
       denote_sm_goal_3_5349, denote_sm_goal_3_5348,
       denote_pm_goal_3_9713, denote_pm_goal_3_9709, denote_pm_goal_3_9699,
@@ -28110,15 +28107,15 @@ theorem sm_pm_nl_L12_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 9729,
          denoteGraph_ringAttn pm_goal_3 initPM 9730] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5355 : initSM 5355 = initPM 5355 := hb initGoal_5355 (by decide) rfl
-  have hw5358 : initSM 5358 = initPM 5358 := hb initGoal_5358 (by decide) rfl
+  have hw5355 : initSM 5355 = initPM 5355 := hb goal3CutInitGoal_5355 (by decide) rfl
+  have hw5358 : initSM 5358 = initPM 5358 := hb goal3CutInitGoal_5358 (by decide) rfl
   have hw5358sh : (initPM 5358).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5358 (by decide)
+    have hgh := hII goal3CutInitGoal_5358 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5358] using hsh
+    simpa [goal3CutInitGoal_5358] using hsh
   rw [denote_sm_goal_3_5359, denote_sm_goal_3_5357, denote_sm_goal_3_5356,
       denote_pm_goal_3_9729, denote_pm_goal_3_9723, denote_pm_goal_3_9721,
       denote_pm_goal_3_9730, denote_pm_goal_3_9724, denote_pm_goal_3_9722]
@@ -28146,14 +28143,14 @@ theorem sm_pm_router_commute_L12 (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 9733,
          denoteGraph_ringAttn pm_goal_3 initPM 9734] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5355 : initSM 5355 = initPM 5355 := hb initGoal_5355 (by decide) rfl
+  have hw5355 : initSM 5355 = initPM 5355 := hb goal3CutInitGoal_5355 (by decide) rfl
   have hw5358sh : (initPM 5358).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5358 (by decide)
+    have hgh := hII goal3CutInitGoal_5358 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5358] using hsh
+    simpa [goal3CutInitGoal_5358] using hsh
   have hnl := sm_pm_nl_L12_commute initSM initPM hInit hcarry5354 h9717 h9718
   -- PM nl-output shapes [2048, 64]
   have hs9729 : (denoteGraph_ringAttn pm_goal_3 initPM 9729).shape = [2048, 64] := by
@@ -29335,30 +29332,30 @@ theorem sm_pm_moe_gmm_L12_commute (initSM initPM : Store)
       allGatherPrimDimN 0 2 0
         [denoteGraph_ringAttn pm_goal_3 initPM 9741,
          denoteGraph_ringAttn pm_goal_3 initPM 9742] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5355 : initSM 5355 = initPM 5355 := hb initGoal_5355 (by decide) rfl
+  have hw5355 : initSM 5355 = initPM 5355 := hb goal3CutInitGoal_5355 (by decide) rfl
   have hw5358sh : (initPM 5358).shape = [64, 1024] := by
-    have hgh := hII initGoal_5358 (by decide)
+    have hgh := hII goal3CutInitGoal_5358 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5358] using hsh
+    simpa [goal3CutInitGoal_5358] using hsh
   -- dual-sharded MoE weights: initSM tid = allGather of the two PM shard tids
   have h5363 : initSM 5363 = allGatherPrimDimN 0 2 0 [initPM 9737, initPM 9738] := by
-    have hg := hII initGoal_5363 (by decide)
+    have hg := hII goal3CutInitGoal_5363 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5363, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5363, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 9737) (initPM 9738) []
         (by rw [h_ss_pm 9737 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
     exact hval
   have h5364 : initSM 5364 = allGatherPrimDimN 0 2 0 [initPM 9739, initPM 9740] := by
-    have hg := hII initGoal_5364 (by decide)
+    have hg := hII goal3CutInitGoal_5364 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5364, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5364, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 9739) (initPM 9740) []
         (by rw [h_ss_pm 9739 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -29457,11 +29454,11 @@ theorem sm_pm_gate_mul_L12_commute (initSM initPM : Store)
           [denoteGraph_ringAttn pm_goal_3 initPM 9815,
            denoteGraph_ringAttn pm_goal_3 initPM 9816] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5355 : initSM 5355 = initPM 5355 := hb initGoal_5355 (by decide) rfl
-  have hw5367 : initSM 5367 = initPM 5367 := hb initGoal_5367 (by decide) rfl
-  have hw5372 : initSM 5372 = initPM 5372 := hb initGoal_5372 (by decide) rfl
-  have hw5376 : initSM 5376 = initPM 5376 := hb initGoal_5376 (by decide) rfl
-  have hw5381 : initSM 5381 = initPM 5381 := hb initGoal_5381 (by decide) rfl
+  have hw5355 : initSM 5355 = initPM 5355 := hb goal3CutInitGoal_5355 (by decide) rfl
+  have hw5367 : initSM 5367 = initPM 5367 := hb goal3CutInitGoal_5367 (by decide) rfl
+  have hw5372 : initSM 5372 = initPM 5372 := hb goal3CutInitGoal_5372 (by decide) rfl
+  have hw5376 : initSM 5376 = initPM 5376 := hb goal3CutInitGoal_5376 (by decide) rfl
+  have hw5381 : initSM 5381 = initPM 5381 := hb goal3CutInitGoal_5381 (by decide) rfl
   -- rms of the layer input commutes to the two PM rms-shard denote forms
   have hRMS : fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5354) (initSM 5355)
       = allGatherPrimDimN 0 2 0
@@ -30027,7 +30024,7 @@ theorem sm_pm_krepl_L13_commute (initSM initPM : Store)
     denoteGraph_ringAttn sm_goal_3 initSM 5392 =
       denoteGraph_ringAttn pm_goal_3 initPM 5392 := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5333 : initSM 5333 = initPM 5333 := hb initGoal_5333 (by decide) rfl
+  have hw5333 : initSM 5333 = initPM 5333 := hb goal3CutInitGoal_5333 (by decide) rfl
   have hrms := sm_pm_rms_L12_commute initSM initPM hInit hcarry5330
   rw [denote_sm_goal_3_5392, denote_sm_goal_3_5334, hrms, hw5333,
       denote_pm_goal_3_5392, denote_pm_goal_3_5334]
@@ -30043,7 +30040,7 @@ theorem sm_pm_vrepl_L13_commute (initSM initPM : Store)
     denoteGraph_ringAttn sm_goal_3 initSM 5393 =
       denoteGraph_ringAttn pm_goal_3 initPM 5393 := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5335 : initSM 5335 = initPM 5335 := hb initGoal_5335 (by decide) rfl
+  have hw5335 : initSM 5335 = initPM 5335 := hb goal3CutInitGoal_5335 (by decide) rfl
   have hrms := sm_pm_rms_L12_commute initSM initPM hInit hcarry5330
   rw [denote_sm_goal_3_5393, denote_sm_goal_3_5336, hrms, hw5335,
       denote_pm_goal_3_5393, denote_pm_goal_3_5336]
@@ -30066,8 +30063,8 @@ theorem sm_pm_qfull_L13_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 9835,
          denoteGraph_ringAttn pm_goal_3 initPM 9836] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5388 : initSM 5388 = initPM 5388 := hb initGoal_5388 (by decide) rfl
-  have hw5390e : initSM 5390 = initPM 5390 := hb initGoal_5390 (by decide) rfl
+  have hw5388 : initSM 5388 = initPM 5388 := hb goal3CutInitGoal_5388 (by decide) rfl
+  have hw5390e : initSM 5390 = initPM 5390 := hb goal3CutInitGoal_5390 (by decide) rfl
   rw [denote_sm_goal_3_5391, denote_sm_goal_3_5389,
       denote_pm_goal_3_9835, denote_pm_goal_3_9833,
       denote_pm_goal_3_9836, denote_pm_goal_3_9834]
@@ -30203,8 +30200,8 @@ theorem sm_pm_attention_L13_commute (initSM initPM : Store)
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1137) initPM 5394 (by decide) (by decide)
   have hP5395 : (pm_goal_3.nodes.take 1137).foldl (applyNodeRingAttn pm_goal_3) initPM 5395 = initPM 5395 :=
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1137) initPM 5395 (by decide) (by decide)
-  have hw5394 : initSM 5394 = initPM 5394 := hb initGoal_5394 (by decide) rfl
-  have hw5395 : initSM 5395 = initPM 5395 := hb initGoal_5395 (by decide) rfl
+  have hw5394 : initSM 5394 = initPM 5394 := hb goal3CutInitGoal_5394 (by decide) rfl
+  have hw5395 : initSM 5395 = initPM 5395 := hb goal3CutInitGoal_5395 (by decide) rfl
   have hkfull : (sm_goal_3.nodes.take 539).foldl (applyNodeRingAttn sm_goal_3) initSM 5392
       = (pm_goal_3.nodes.take 1137).foldl (applyNodeRingAttn pm_goal_3) initPM 5392 := by
     rw [bSM5392, bPM5392, hkrepl]
@@ -30851,7 +30848,7 @@ theorem sm_pm_reshape_float_5402_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 9885,
          denoteGraph_ringAttn pm_goal_3 initPM 9886] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw : initSM 5399 = initPM 5399 := hb initGoal_5399 (by decide) rfl
+  have hw : initSM 5399 = initPM 5399 := hb goal3CutInitGoal_5399 (by decide) rfl
   rw [denote_sm_goal_3_5402, denote_sm_goal_3_5401, denote_sm_goal_3_5400,
       denote_sm_goal_3_5398, denote_sm_goal_3_5397,
       denote_pm_goal_3_9885, denote_pm_goal_3_9881, denote_pm_goal_3_9871,
@@ -30915,15 +30912,15 @@ theorem sm_pm_nl_L13_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 9901,
          denoteGraph_ringAttn pm_goal_3 initPM 9902] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5404 : initSM 5404 = initPM 5404 := hb initGoal_5404 (by decide) rfl
-  have hw5407 : initSM 5407 = initPM 5407 := hb initGoal_5407 (by decide) rfl
+  have hw5404 : initSM 5404 = initPM 5404 := hb goal3CutInitGoal_5404 (by decide) rfl
+  have hw5407 : initSM 5407 = initPM 5407 := hb goal3CutInitGoal_5407 (by decide) rfl
   have hw5407sh : (initPM 5407).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5407 (by decide)
+    have hgh := hII goal3CutInitGoal_5407 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5407] using hsh
+    simpa [goal3CutInitGoal_5407] using hsh
   rw [denote_sm_goal_3_5408, denote_sm_goal_3_5406, denote_sm_goal_3_5405,
       denote_pm_goal_3_9901, denote_pm_goal_3_9895, denote_pm_goal_3_9893,
       denote_pm_goal_3_9902, denote_pm_goal_3_9896, denote_pm_goal_3_9894]
@@ -30951,12 +30948,12 @@ theorem sm_pm_router_commute_L13 (initSM initPM : Store)
          denoteGraph_ringAttn pm_goal_3 initPM 9906] := by
   have hb := L12_weight_eq initSM initPM hInit
   have hw5407sh : (initPM 5407).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5407 (by decide)
+    have hgh := hII goal3CutInitGoal_5407 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5407] using hsh
+    simpa [goal3CutInitGoal_5407] using hsh
   have hnl := sm_pm_nl_L13_commute initSM initPM hInit hcarry5403 h9889 h9890
   have hs9901 : (denoteGraph_ringAttn pm_goal_3 initPM 9901).shape = [2048, 64] := by
     rw [denote_pm_goal_3_9901, denote_pm_goal_3_9895, denote_pm_goal_3_9893]
@@ -32156,30 +32153,30 @@ theorem sm_pm_moe_gmm_L13_commute (initSM initPM : Store)
       allGatherPrimDimN 0 2 0
         [denoteGraph_ringAttn pm_goal_3 initPM 9913,
          denoteGraph_ringAttn pm_goal_3 initPM 9914] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5404 : initSM 5404 = initPM 5404 := hb initGoal_5404 (by decide) rfl
+  have hw5404 : initSM 5404 = initPM 5404 := hb goal3CutInitGoal_5404 (by decide) rfl
   have hw5407sh : (initPM 5407).shape = [64, 1024] := by
-    have hgh := hII initGoal_5407 (by decide)
+    have hgh := hII goal3CutInitGoal_5407 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5407] using hsh
+    simpa [goal3CutInitGoal_5407] using hsh
   -- dual-sharded MoE weights: initSM tid = allGather of the two PM shard tids
   have h5412 : initSM 5412 = allGatherPrimDimN 0 2 0 [initPM 9909, initPM 9910] := by
-    have hg := hII initGoal_5412 (by decide)
+    have hg := hII goal3CutInitGoal_5412 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5412, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5412, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 9909) (initPM 9910) []
         (by rw [h_ss_pm 9909 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
     exact hval
   have h5413 : initSM 5413 = allGatherPrimDimN 0 2 0 [initPM 9911, initPM 9912] := by
-    have hg := hII initGoal_5413 (by decide)
+    have hg := hII goal3CutInitGoal_5413 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5413, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5413, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 9911) (initPM 9912) []
         (by rw [h_ss_pm 9911 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -32275,11 +32272,11 @@ theorem sm_pm_gate_mul_L13_commute (initSM initPM : Store)
           [denoteGraph_ringAttn pm_goal_3 initPM 9987,
            denoteGraph_ringAttn pm_goal_3 initPM 9988] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5404 : initSM 5404 = initPM 5404 := hb initGoal_5404 (by decide) rfl
-  have hw5416 : initSM 5416 = initPM 5416 := hb initGoal_5416 (by decide) rfl
-  have hw5421 : initSM 5421 = initPM 5421 := hb initGoal_5421 (by decide) rfl
-  have hw5425 : initSM 5425 = initPM 5425 := hb initGoal_5425 (by decide) rfl
-  have hw5430 : initSM 5430 = initPM 5430 := hb initGoal_5430 (by decide) rfl
+  have hw5404 : initSM 5404 = initPM 5404 := hb goal3CutInitGoal_5404 (by decide) rfl
+  have hw5416 : initSM 5416 = initPM 5416 := hb goal3CutInitGoal_5416 (by decide) rfl
+  have hw5421 : initSM 5421 = initPM 5421 := hb goal3CutInitGoal_5421 (by decide) rfl
+  have hw5425 : initSM 5425 = initPM 5425 := hb goal3CutInitGoal_5425 (by decide) rfl
+  have hw5430 : initSM 5430 = initPM 5430 := hb goal3CutInitGoal_5430 (by decide) rfl
   -- rms of the layer input commutes to the two PM rms-shard denote forms
   have hRMS : fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5403) (initSM 5404)
       = allGatherPrimDimN 0 2 0
@@ -33271,7 +33268,7 @@ theorem sm_pm_krepl_L14_commute (initSM initPM : Store)
     denoteGraph_ringAttn sm_goal_3 initSM 5441 =
       denoteGraph_ringAttn pm_goal_3 initPM 5441 := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5333 : initSM 5333 = initPM 5333 := hb initGoal_5333 (by decide) rfl
+  have hw5333 : initSM 5333 = initPM 5333 := hb goal3CutInitGoal_5333 (by decide) rfl
   have hrms := sm_pm_rms_L12_commute initSM initPM hInit hcarry5330
   rw [denote_sm_goal_3_5441, denote_sm_goal_3_5334, hrms, hw5333,
       denote_pm_goal_3_5441, denote_pm_goal_3_5334]
@@ -33287,7 +33284,7 @@ theorem sm_pm_vrepl_L14_commute (initSM initPM : Store)
     denoteGraph_ringAttn sm_goal_3 initSM 5442 =
       denoteGraph_ringAttn pm_goal_3 initPM 5442 := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5335 : initSM 5335 = initPM 5335 := hb initGoal_5335 (by decide) rfl
+  have hw5335 : initSM 5335 = initPM 5335 := hb goal3CutInitGoal_5335 (by decide) rfl
   have hrms := sm_pm_rms_L12_commute initSM initPM hInit hcarry5330
   rw [denote_sm_goal_3_5442, denote_sm_goal_3_5336, hrms, hw5335,
       denote_pm_goal_3_5442, denote_pm_goal_3_5336]
@@ -33309,8 +33306,8 @@ theorem sm_pm_qfull_L14_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10007,
          denoteGraph_ringAttn pm_goal_3 initPM 10008] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5437 : initSM 5437 = initPM 5437 := hb initGoal_5437 (by decide) rfl
-  have hw5439e : initSM 5439 = initPM 5439 := hb initGoal_5439 (by decide) rfl
+  have hw5437 : initSM 5437 = initPM 5437 := hb goal3CutInitGoal_5437 (by decide) rfl
+  have hw5439e : initSM 5439 = initPM 5439 := hb goal3CutInitGoal_5439 (by decide) rfl
   rw [denote_sm_goal_3_5440, denote_sm_goal_3_5438,
       denote_pm_goal_3_10007, denote_pm_goal_3_10005,
       denote_pm_goal_3_10008, denote_pm_goal_3_10006]
@@ -33413,8 +33410,8 @@ theorem sm_pm_attention_L14_commute (initSM initPM : Store)
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1207) initPM 5443 (by decide) (by decide)
   have hP5346 : (pm_goal_3.nodes.take 1207).foldl (applyNodeRingAttn pm_goal_3) initPM 5444 = initPM 5444 :=
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1207) initPM 5444 (by decide) (by decide)
-  have hw5345 : initSM 5443 = initPM 5443 := hb initGoal_5443 (by decide) rfl
-  have hw5346 : initSM 5444 = initPM 5444 := hb initGoal_5444 (by decide) rfl
+  have hw5345 : initSM 5443 = initPM 5443 := hb goal3CutInitGoal_5443 (by decide) rfl
+  have hw5346 : initSM 5444 = initPM 5444 := hb goal3CutInitGoal_5444 (by decide) rfl
   -- reconstruction inputs
   have hkfull : (sm_goal_3.nodes.take 574).foldl (applyNodeRingAttn sm_goal_3) initSM 5441
       = (pm_goal_3.nodes.take 1207).foldl (applyNodeRingAttn pm_goal_3) initPM 5441 := by
@@ -33622,7 +33619,7 @@ theorem sm_pm_reshape_float_5451_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10057,
          denoteGraph_ringAttn pm_goal_3 initPM 10058] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw : initSM 5448 = initPM 5448 := hb initGoal_5448 (by decide) rfl
+  have hw : initSM 5448 = initPM 5448 := hb goal3CutInitGoal_5448 (by decide) rfl
   rw [denote_sm_goal_3_5451, denote_sm_goal_3_5450, denote_sm_goal_3_5449,
       denote_sm_goal_3_5447, denote_sm_goal_3_5446,
       denote_pm_goal_3_10057, denote_pm_goal_3_10053, denote_pm_goal_3_10043,
@@ -33688,15 +33685,15 @@ theorem sm_pm_nl_L14_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10073,
          denoteGraph_ringAttn pm_goal_3 initPM 10074] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5355 : initSM 5453 = initPM 5453 := hb initGoal_5453 (by decide) rfl
-  have hw5358 : initSM 5456 = initPM 5456 := hb initGoal_5456 (by decide) rfl
+  have hw5355 : initSM 5453 = initPM 5453 := hb goal3CutInitGoal_5453 (by decide) rfl
+  have hw5358 : initSM 5456 = initPM 5456 := hb goal3CutInitGoal_5456 (by decide) rfl
   have hw5358sh : (initPM 5456).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5456 (by decide)
+    have hgh := hII goal3CutInitGoal_5456 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5456] using hsh
+    simpa [goal3CutInitGoal_5456] using hsh
   rw [denote_sm_goal_3_5457, denote_sm_goal_3_5455, denote_sm_goal_3_5454,
       denote_pm_goal_3_10073, denote_pm_goal_3_10067, denote_pm_goal_3_10065,
       denote_pm_goal_3_10074, denote_pm_goal_3_10068, denote_pm_goal_3_10066]
@@ -33723,14 +33720,14 @@ theorem sm_pm_router_commute_L14 (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10077,
          denoteGraph_ringAttn pm_goal_3 initPM 10078] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5355 : initSM 5453 = initPM 5453 := hb initGoal_5453 (by decide) rfl
+  have hw5355 : initSM 5453 = initPM 5453 := hb goal3CutInitGoal_5453 (by decide) rfl
   have hw5358sh : (initPM 5456).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5456 (by decide)
+    have hgh := hII goal3CutInitGoal_5456 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5456] using hsh
+    simpa [goal3CutInitGoal_5456] using hsh
   have hnl := sm_pm_nl_L14_commute initSM initPM hInit hcarry5354 h9717 h9718
   -- PM nl-output shapes [2048, 64]
   have hs9729 : (denoteGraph_ringAttn pm_goal_3 initPM 10073).shape = [2048, 64] := by
@@ -34997,30 +34994,30 @@ theorem sm_pm_moe_gmm_L14_commute (initSM initPM : Store)
       allGatherPrimDimN 0 2 0
         [denoteGraph_ringAttn pm_goal_3 initPM 10085,
          denoteGraph_ringAttn pm_goal_3 initPM 10086] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5453 : initSM 5453 = initPM 5453 := hb initGoal_5453 (by decide) rfl
+  have hw5453 : initSM 5453 = initPM 5453 := hb goal3CutInitGoal_5453 (by decide) rfl
   have hw5456sh : (initPM 5456).shape = [64, 1024] := by
-    have hgh := hII initGoal_5456 (by decide)
+    have hgh := hII goal3CutInitGoal_5456 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5456] using hsh
+    simpa [goal3CutInitGoal_5456] using hsh
   -- dual-sharded MoE weights: initSM tid = allGather of the two PM shard tids
   have h5461 : initSM 5461 = allGatherPrimDimN 0 2 0 [initPM 10081, initPM 10082] := by
-    have hg := hII initGoal_5461 (by decide)
+    have hg := hII goal3CutInitGoal_5461 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5461, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5461, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10081) (initPM 10082) []
         (by rw [h_ss_pm 10081 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
     exact hval
   have h5462 : initSM 5462 = allGatherPrimDimN 0 2 0 [initPM 10083, initPM 10084] := by
-    have hg := hII initGoal_5462 (by decide)
+    have hg := hII goal3CutInitGoal_5462 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5462, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5462, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10083) (initPM 10084) []
         (by rw [h_ss_pm 10083 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -35116,11 +35113,11 @@ theorem sm_pm_gate_mul_L14_commute (initSM initPM : Store)
           [denoteGraph_ringAttn pm_goal_3 initPM 10159,
            denoteGraph_ringAttn pm_goal_3 initPM 10160] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5453 : initSM 5453 = initPM 5453 := hb initGoal_5453 (by decide) rfl
-  have hw5465 : initSM 5465 = initPM 5465 := hb initGoal_5465 (by decide) rfl
-  have hw5470 : initSM 5470 = initPM 5470 := hb initGoal_5470 (by decide) rfl
-  have hw5474 : initSM 5474 = initPM 5474 := hb initGoal_5474 (by decide) rfl
-  have hw5479 : initSM 5479 = initPM 5479 := hb initGoal_5479 (by decide) rfl
+  have hw5453 : initSM 5453 = initPM 5453 := hb goal3CutInitGoal_5453 (by decide) rfl
+  have hw5465 : initSM 5465 = initPM 5465 := hb goal3CutInitGoal_5465 (by decide) rfl
+  have hw5470 : initSM 5470 = initPM 5470 := hb goal3CutInitGoal_5470 (by decide) rfl
+  have hw5474 : initSM 5474 = initPM 5474 := hb goal3CutInitGoal_5474 (by decide) rfl
+  have hw5479 : initSM 5479 = initPM 5479 := hb goal3CutInitGoal_5479 (by decide) rfl
   -- rms of the layer input commutes to the two PM rms-shard denote forms
   have hRMS : fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5452) (initSM 5453)
       = allGatherPrimDimN 0 2 0
@@ -36116,7 +36113,7 @@ theorem sm_pm_krepl_L15_commute (initSM initPM : Store)
     denoteGraph_ringAttn sm_goal_3 initSM 5490 =
       denoteGraph_ringAttn pm_goal_3 initPM 5490 := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5333 : initSM 5333 = initPM 5333 := hb initGoal_5333 (by decide) rfl
+  have hw5333 : initSM 5333 = initPM 5333 := hb goal3CutInitGoal_5333 (by decide) rfl
   have hrms := sm_pm_rms_L12_commute initSM initPM hInit hcarry5330
   rw [denote_sm_goal_3_5490, denote_sm_goal_3_5334, hrms, hw5333,
       denote_pm_goal_3_5490, denote_pm_goal_3_5334]
@@ -36132,7 +36129,7 @@ theorem sm_pm_vrepl_L15_commute (initSM initPM : Store)
     denoteGraph_ringAttn sm_goal_3 initSM 5491 =
       denoteGraph_ringAttn pm_goal_3 initPM 5491 := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5335 : initSM 5335 = initPM 5335 := hb initGoal_5335 (by decide) rfl
+  have hw5335 : initSM 5335 = initPM 5335 := hb goal3CutInitGoal_5335 (by decide) rfl
   have hrms := sm_pm_rms_L12_commute initSM initPM hInit hcarry5330
   rw [denote_sm_goal_3_5491, denote_sm_goal_3_5336, hrms, hw5335,
       denote_pm_goal_3_5491, denote_pm_goal_3_5336]
@@ -36154,8 +36151,8 @@ theorem sm_pm_qfull_L15_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10179,
          denoteGraph_ringAttn pm_goal_3 initPM 10180] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5486 : initSM 5486 = initPM 5486 := hb initGoal_5486 (by decide) rfl
-  have hw5488e : initSM 5488 = initPM 5488 := hb initGoal_5488 (by decide) rfl
+  have hw5486 : initSM 5486 = initPM 5486 := hb goal3CutInitGoal_5486 (by decide) rfl
+  have hw5488e : initSM 5488 = initPM 5488 := hb goal3CutInitGoal_5488 (by decide) rfl
   rw [denote_sm_goal_3_5489, denote_sm_goal_3_5487,
       denote_pm_goal_3_10179, denote_pm_goal_3_10177,
       denote_pm_goal_3_10180, denote_pm_goal_3_10178]
@@ -36258,8 +36255,8 @@ theorem sm_pm_attention_L15_commute (initSM initPM : Store)
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1277) initPM 5492 (by decide) (by decide)
   have hP5346 : (pm_goal_3.nodes.take 1277).foldl (applyNodeRingAttn pm_goal_3) initPM 5493 = initPM 5493 :=
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1277) initPM 5493 (by decide) (by decide)
-  have hw5345 : initSM 5492 = initPM 5492 := hb initGoal_5492 (by decide) rfl
-  have hw5346 : initSM 5493 = initPM 5493 := hb initGoal_5493 (by decide) rfl
+  have hw5345 : initSM 5492 = initPM 5492 := hb goal3CutInitGoal_5492 (by decide) rfl
+  have hw5346 : initSM 5493 = initPM 5493 := hb goal3CutInitGoal_5493 (by decide) rfl
   -- reconstruction inputs
   have hkfull : (sm_goal_3.nodes.take 609).foldl (applyNodeRingAttn sm_goal_3) initSM 5490
       = (pm_goal_3.nodes.take 1277).foldl (applyNodeRingAttn pm_goal_3) initPM 5490 := by
@@ -36467,7 +36464,7 @@ theorem sm_pm_reshape_float_5500_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10229,
          denoteGraph_ringAttn pm_goal_3 initPM 10230] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw : initSM 5497 = initPM 5497 := hb initGoal_5497 (by decide) rfl
+  have hw : initSM 5497 = initPM 5497 := hb goal3CutInitGoal_5497 (by decide) rfl
   rw [denote_sm_goal_3_5500, denote_sm_goal_3_5499, denote_sm_goal_3_5498,
       denote_sm_goal_3_5496, denote_sm_goal_3_5495,
       denote_pm_goal_3_10229, denote_pm_goal_3_10225, denote_pm_goal_3_10215,
@@ -36533,15 +36530,15 @@ theorem sm_pm_nl_L15_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10245,
          denoteGraph_ringAttn pm_goal_3 initPM 10246] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5355 : initSM 5502 = initPM 5502 := hb initGoal_5502 (by decide) rfl
-  have hw5358 : initSM 5505 = initPM 5505 := hb initGoal_5505 (by decide) rfl
+  have hw5355 : initSM 5502 = initPM 5502 := hb goal3CutInitGoal_5502 (by decide) rfl
+  have hw5358 : initSM 5505 = initPM 5505 := hb goal3CutInitGoal_5505 (by decide) rfl
   have hw5358sh : (initPM 5505).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5505 (by decide)
+    have hgh := hII goal3CutInitGoal_5505 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5505] using hsh
+    simpa [goal3CutInitGoal_5505] using hsh
   rw [denote_sm_goal_3_5506, denote_sm_goal_3_5504, denote_sm_goal_3_5503,
       denote_pm_goal_3_10245, denote_pm_goal_3_10239, denote_pm_goal_3_10237,
       denote_pm_goal_3_10246, denote_pm_goal_3_10240, denote_pm_goal_3_10238]
@@ -36568,14 +36565,14 @@ theorem sm_pm_router_commute_L15 (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10249,
          denoteGraph_ringAttn pm_goal_3 initPM 10250] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5355 : initSM 5502 = initPM 5502 := hb initGoal_5502 (by decide) rfl
+  have hw5355 : initSM 5502 = initPM 5502 := hb goal3CutInitGoal_5502 (by decide) rfl
   have hw5358sh : (initPM 5505).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5505 (by decide)
+    have hgh := hII goal3CutInitGoal_5505 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5505] using hsh
+    simpa [goal3CutInitGoal_5505] using hsh
   have hnl := sm_pm_nl_L15_commute initSM initPM hInit hcarry5354 h9717 h9718
   -- PM nl-output shapes [2048, 64]
   have hs9729 : (denoteGraph_ringAttn pm_goal_3 initPM 10245).shape = [2048, 64] := by
@@ -37844,30 +37841,30 @@ theorem sm_pm_moe_gmm_L15_commute (initSM initPM : Store)
       allGatherPrimDimN 0 2 0
         [denoteGraph_ringAttn pm_goal_3 initPM 10257,
          denoteGraph_ringAttn pm_goal_3 initPM 10258] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5502 : initSM 5502 = initPM 5502 := hb initGoal_5502 (by decide) rfl
+  have hw5502 : initSM 5502 = initPM 5502 := hb goal3CutInitGoal_5502 (by decide) rfl
   have hw5505sh : (initPM 5505).shape = [64, 1024] := by
-    have hgh := hII initGoal_5505 (by decide)
+    have hgh := hII goal3CutInitGoal_5505 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5505] using hsh
+    simpa [goal3CutInitGoal_5505] using hsh
   -- dual-sharded MoE weights: initSM tid = allGather of the two PM shard tids
   have h5510 : initSM 5510 = allGatherPrimDimN 0 2 0 [initPM 10253, initPM 10254] := by
-    have hg := hII initGoal_5510 (by decide)
+    have hg := hII goal3CutInitGoal_5510 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5510, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5510, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10253) (initPM 10254) []
         (by rw [h_ss_pm 10253 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
     exact hval
   have h5511 : initSM 5511 = allGatherPrimDimN 0 2 0 [initPM 10255, initPM 10256] := by
-    have hg := hII initGoal_5511 (by decide)
+    have hg := hII goal3CutInitGoal_5511 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5511, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5511, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10255) (initPM 10256) []
         (by rw [h_ss_pm 10255 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -37963,11 +37960,11 @@ theorem sm_pm_gate_mul_L15_commute (initSM initPM : Store)
           [denoteGraph_ringAttn pm_goal_3 initPM 10331,
            denoteGraph_ringAttn pm_goal_3 initPM 10332] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5502 : initSM 5502 = initPM 5502 := hb initGoal_5502 (by decide) rfl
-  have hw5514 : initSM 5514 = initPM 5514 := hb initGoal_5514 (by decide) rfl
-  have hw5519 : initSM 5519 = initPM 5519 := hb initGoal_5519 (by decide) rfl
-  have hw5523 : initSM 5523 = initPM 5523 := hb initGoal_5523 (by decide) rfl
-  have hw5528 : initSM 5528 = initPM 5528 := hb initGoal_5528 (by decide) rfl
+  have hw5502 : initSM 5502 = initPM 5502 := hb goal3CutInitGoal_5502 (by decide) rfl
+  have hw5514 : initSM 5514 = initPM 5514 := hb goal3CutInitGoal_5514 (by decide) rfl
+  have hw5519 : initSM 5519 = initPM 5519 := hb goal3CutInitGoal_5519 (by decide) rfl
+  have hw5523 : initSM 5523 = initPM 5523 := hb goal3CutInitGoal_5523 (by decide) rfl
+  have hw5528 : initSM 5528 = initPM 5528 := hb goal3CutInitGoal_5528 (by decide) rfl
   -- rms of the layer input commutes to the two PM rms-shard denote forms
   have hRMS : fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5501) (initSM 5502)
       = allGatherPrimDimN 0 2 0
@@ -38967,8 +38964,8 @@ theorem sm_pm_qfull_L16_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10351,
          denoteGraph_ringAttn pm_goal_3 initPM 10352] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5584 : initSM 5535 = initPM 5535 := hb initGoal_5535 (by decide) rfl
-  have hw5586e : initSM 5537 = initPM 5537 := hb initGoal_5537 (by decide) rfl
+  have hw5584 : initSM 5535 = initPM 5535 := hb goal3CutInitGoal_5535 (by decide) rfl
+  have hw5586e : initSM 5537 = initPM 5537 := hb goal3CutInitGoal_5537 (by decide) rfl
   rw [denote_sm_goal_3_5587, denote_sm_goal_3_5585,
       denote_pm_goal_3_10523, denote_pm_goal_3_10521,
       denote_pm_goal_3_10524, denote_pm_goal_3_10522]
@@ -39110,8 +39107,8 @@ theorem sm_pm_attention_L16_commute (initSM initPM : Store)
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1347) initPM 5541 (by decide) (by decide)
   have hP5591 : (pm_goal_3.nodes.take 1347).foldl (applyNodeRingAttn pm_goal_3) initPM 5542 = initPM 5542 :=
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1347) initPM 5542 (by decide) (by decide)
-  have hw5590 : initSM 5541 = initPM 5541 := hb initGoal_5541 (by decide) rfl
-  have hw5591 : initSM 5542 = initPM 5542 := hb initGoal_5542 (by decide) rfl
+  have hw5590 : initSM 5541 = initPM 5541 := hb goal3CutInitGoal_5541 (by decide) rfl
+  have hw5591 : initSM 5542 = initPM 5542 := hb goal3CutInitGoal_5542 (by decide) rfl
   -- reconstruction-input hypotheses (folded form)
   have hq_sm' : 0 < ((sm_goal_3.nodes.take 644).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_16.ins.getD 0 0)).shape.length := by
     show 0 < ((sm_goal_3.nodes.take 644).foldl (applyNodeRingAttn sm_goal_3) initSM 5538).shape.length
@@ -39249,7 +39246,7 @@ theorem sm_pm_reshape_float_L16_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10401,
          denoteGraph_ringAttn pm_goal_3 initPM 10402] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw : initSM 5546 = initPM 5546 := hb initGoal_5546 (by decide) rfl
+  have hw : initSM 5546 = initPM 5546 := hb goal3CutInitGoal_5546 (by decide) rfl
   rw [denote_sm_goal_3_5598, denote_sm_goal_3_5597, denote_sm_goal_3_5596,
       denote_sm_goal_3_5594, denote_sm_goal_3_5593,
       denote_pm_goal_3_10573, denote_pm_goal_3_10569, denote_pm_goal_3_10559,
@@ -39310,15 +39307,15 @@ theorem sm_pm_nl_L16_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10417,
          denoteGraph_ringAttn pm_goal_3 initPM 10418] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5551 = initPM 5551 := hb initGoal_5551 (by decide) rfl
-  have hw5603 : initSM 5554 = initPM 5554 := hb initGoal_5554 (by decide) rfl
+  have hw5600 : initSM 5551 = initPM 5551 := hb goal3CutInitGoal_5551 (by decide) rfl
+  have hw5603 : initSM 5554 = initPM 5554 := hb goal3CutInitGoal_5554 (by decide) rfl
   have hw5603sh : (initPM 5554).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5554 (by decide)
+    have hgh := hII goal3CutInitGoal_5554 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5554] using hsh
+    simpa [goal3CutInitGoal_5554] using hsh
   rw [denote_sm_goal_3_5604, denote_sm_goal_3_5602, denote_sm_goal_3_5601,
       denote_pm_goal_3_10589, denote_pm_goal_3_10583, denote_pm_goal_3_10581,
       denote_pm_goal_3_10590, denote_pm_goal_3_10584, denote_pm_goal_3_10582]
@@ -39346,12 +39343,12 @@ theorem sm_pm_router_commute_L16 (initSM initPM : Store)
          denoteGraph_ringAttn pm_goal_3 initPM 10422] := by
   have hb := L12_weight_eq initSM initPM hInit
   have hw5603sh : (initPM 5554).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5554 (by decide)
+    have hgh := hII goal3CutInitGoal_5554 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5554] using hsh
+    simpa [goal3CutInitGoal_5554] using hsh
   have hnl := sm_pm_nl_L16_commute initSM initPM hInit hcarry5599 h10577 h10578
   have hs10589 : (denoteGraph_ringAttn pm_goal_3 initPM 10417).shape = [2048, 64] := by
     rw [denote_pm_goal_3_10589, denote_pm_goal_3_10583, denote_pm_goal_3_10581]
@@ -40556,30 +40553,30 @@ theorem sm_pm_moe_gmm_L16_commute (initSM initPM : Store)
       allGatherPrimDimN 0 2 0
         [denoteGraph_ringAttn pm_goal_3 initPM 10429,
          denoteGraph_ringAttn pm_goal_3 initPM 10430] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5551 : initSM 5551 = initPM 5551 := hb initGoal_5551 (by decide) rfl
+  have hw5551 : initSM 5551 = initPM 5551 := hb goal3CutInitGoal_5551 (by decide) rfl
   have hw5554sh : (initPM 5554).shape = [64, 1024] := by
-    have hgh := hII initGoal_5554 (by decide)
+    have hgh := hII goal3CutInitGoal_5554 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5554] using hsh
+    simpa [goal3CutInitGoal_5554] using hsh
   -- dual-sharded MoE weights: initSM tid = allGather of the two PM shard tids
   have h5559 : initSM 5559 = allGatherPrimDimN 0 2 0 [initPM 10425, initPM 10426] := by
-    have hg := hII initGoal_5559 (by decide)
+    have hg := hII goal3CutInitGoal_5559 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5559, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5559, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10425) (initPM 10426) []
         (by rw [h_ss_pm 10425 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
     exact hval
   have h5560 : initSM 5560 = allGatherPrimDimN 0 2 0 [initPM 10427, initPM 10428] := by
-    have hg := hII initGoal_5560 (by decide)
+    have hg := hII goal3CutInitGoal_5560 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5560, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5560, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10427) (initPM 10428) []
         (by rw [h_ss_pm 10427 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -40677,11 +40674,11 @@ theorem sm_pm_gate_mul_L16_commute (initSM initPM : Store)
           [denoteGraph_ringAttn pm_goal_3 initPM 10503,
            denoteGraph_ringAttn pm_goal_3 initPM 10504] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5551 : initSM 5551 = initPM 5551 := hb initGoal_5551 (by decide) rfl
-  have hw5563 : initSM 5563 = initPM 5563 := hb initGoal_5563 (by decide) rfl
-  have hw5568 : initSM 5568 = initPM 5568 := hb initGoal_5568 (by decide) rfl
-  have hw5572 : initSM 5572 = initPM 5572 := hb initGoal_5572 (by decide) rfl
-  have hw5577 : initSM 5577 = initPM 5577 := hb initGoal_5577 (by decide) rfl
+  have hw5551 : initSM 5551 = initPM 5551 := hb goal3CutInitGoal_5551 (by decide) rfl
+  have hw5563 : initSM 5563 = initPM 5563 := hb goal3CutInitGoal_5563 (by decide) rfl
+  have hw5568 : initSM 5568 = initPM 5568 := hb goal3CutInitGoal_5568 (by decide) rfl
+  have hw5572 : initSM 5572 = initPM 5572 := hb goal3CutInitGoal_5572 (by decide) rfl
+  have hw5577 : initSM 5577 = initPM 5577 := hb goal3CutInitGoal_5577 (by decide) rfl
   -- rms of the layer input commutes to the two PM rms-shard denote forms
   have hRMS : fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5550) (initSM 5551)
       = allGatherPrimDimN 0 2 0
@@ -41675,8 +41672,8 @@ theorem sm_pm_qfull_L17_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10523,
          denoteGraph_ringAttn pm_goal_3 initPM 10524] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5584 : initSM 5584 = initPM 5584 := hb initGoal_5584 (by decide) rfl
-  have hw5586e : initSM 5586 = initPM 5586 := hb initGoal_5586 (by decide) rfl
+  have hw5584 : initSM 5584 = initPM 5584 := hb goal3CutInitGoal_5584 (by decide) rfl
+  have hw5586e : initSM 5586 = initPM 5586 := hb goal3CutInitGoal_5586 (by decide) rfl
   rw [denote_sm_goal_3_5587_L17, denote_sm_goal_3_5585_L17,
       denote_pm_goal_3_10523_L17, denote_pm_goal_3_10521_L17,
       denote_pm_goal_3_10524_L17, denote_pm_goal_3_10522_L17]
@@ -41818,8 +41815,8 @@ theorem sm_pm_attention_L17_commute (initSM initPM : Store)
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1417) initPM 5590 (by decide) (by decide)
   have hP5591 : (pm_goal_3.nodes.take 1417).foldl (applyNodeRingAttn pm_goal_3) initPM 5591 = initPM 5591 :=
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1417) initPM 5591 (by decide) (by decide)
-  have hw5590 : initSM 5590 = initPM 5590 := hb initGoal_5590 (by decide) rfl
-  have hw5591 : initSM 5591 = initPM 5591 := hb initGoal_5591 (by decide) rfl
+  have hw5590 : initSM 5590 = initPM 5590 := hb goal3CutInitGoal_5590 (by decide) rfl
+  have hw5591 : initSM 5591 = initPM 5591 := hb goal3CutInitGoal_5591 (by decide) rfl
   -- reconstruction-input hypotheses (folded form)
   have hq_sm' : 0 < ((sm_goal_3.nodes.take 679).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_17.ins.getD 0 0)).shape.length := by
     show 0 < ((sm_goal_3.nodes.take 679).foldl (applyNodeRingAttn sm_goal_3) initSM 5587).shape.length
@@ -41957,7 +41954,7 @@ theorem sm_pm_reshape_float_L17_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10573,
          denoteGraph_ringAttn pm_goal_3 initPM 10574] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw : initSM 5595 = initPM 5595 := hb initGoal_5595 (by decide) rfl
+  have hw : initSM 5595 = initPM 5595 := hb goal3CutInitGoal_5595 (by decide) rfl
   rw [denote_sm_goal_3_5598_L17, denote_sm_goal_3_5597_L17, denote_sm_goal_3_5596_L17,
       denote_sm_goal_3_5594_L17, denote_sm_goal_3_5593_L17,
       denote_pm_goal_3_10573_L17, denote_pm_goal_3_10569_L17, denote_pm_goal_3_10559_L17,
@@ -42018,15 +42015,15 @@ theorem sm_pm_nl_L17_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10589,
          denoteGraph_ringAttn pm_goal_3 initPM 10590] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5600 = initPM 5600 := hb initGoal_5600 (by decide) rfl
-  have hw5603 : initSM 5603 = initPM 5603 := hb initGoal_5603 (by decide) rfl
+  have hw5600 : initSM 5600 = initPM 5600 := hb goal3CutInitGoal_5600 (by decide) rfl
+  have hw5603 : initSM 5603 = initPM 5603 := hb goal3CutInitGoal_5603 (by decide) rfl
   have hw5603sh : (initPM 5603).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5603 (by decide)
+    have hgh := hII goal3CutInitGoal_5603 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5603] using hsh
+    simpa [goal3CutInitGoal_5603] using hsh
   rw [denote_sm_goal_3_5604_L17, denote_sm_goal_3_5602_L17, denote_sm_goal_3_5601_L17,
       denote_pm_goal_3_10589_L17, denote_pm_goal_3_10583_L17, denote_pm_goal_3_10581_L17,
       denote_pm_goal_3_10590_L17, denote_pm_goal_3_10584_L17, denote_pm_goal_3_10582_L17]
@@ -42054,12 +42051,12 @@ theorem sm_pm_router_commute_L17 (initSM initPM : Store)
          denoteGraph_ringAttn pm_goal_3 initPM 10594] := by
   have hb := L12_weight_eq initSM initPM hInit
   have hw5603sh : (initPM 5603).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5603 (by decide)
+    have hgh := hII goal3CutInitGoal_5603 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5603] using hsh
+    simpa [goal3CutInitGoal_5603] using hsh
   have hnl := sm_pm_nl_L17_commute initSM initPM hInit hcarry5599 h10577 h10578
   have hs10589 : (denoteGraph_ringAttn pm_goal_3 initPM 10589).shape = [2048, 64] := by
     rw [denote_pm_goal_3_10589_L17, denote_pm_goal_3_10583_L17, denote_pm_goal_3_10581_L17]
@@ -43264,30 +43261,30 @@ theorem sm_pm_moe_gmm_L17_commute (initSM initPM : Store)
       allGatherPrimDimN 0 2 0
         [denoteGraph_ringAttn pm_goal_3 initPM 10601,
          denoteGraph_ringAttn pm_goal_3 initPM 10602] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5600 = initPM 5600 := hb initGoal_5600 (by decide) rfl
+  have hw5600 : initSM 5600 = initPM 5600 := hb goal3CutInitGoal_5600 (by decide) rfl
   have hw5603sh : (initPM 5603).shape = [64, 1024] := by
-    have hgh := hII initGoal_5603 (by decide)
+    have hgh := hII goal3CutInitGoal_5603 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5603] using hsh
+    simpa [goal3CutInitGoal_5603] using hsh
   -- dual-sharded MoE weights: initSM tid = allGather of the two PM shard tids
   have h5608 : initSM 5608 = allGatherPrimDimN 0 2 0 [initPM 10597, initPM 10598] := by
-    have hg := hII initGoal_5608 (by decide)
+    have hg := hII goal3CutInitGoal_5608 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5608, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5608, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10597) (initPM 10598) []
         (by rw [h_ss_pm 10597 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
     exact hval
   have h5609 : initSM 5609 = allGatherPrimDimN 0 2 0 [initPM 10599, initPM 10600] := by
-    have hg := hII initGoal_5609 (by decide)
+    have hg := hII goal3CutInitGoal_5609 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5609, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5609, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10599) (initPM 10600) []
         (by rw [h_ss_pm 10599 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -43385,11 +43382,11 @@ theorem sm_pm_gate_mul_L17_commute (initSM initPM : Store)
           [denoteGraph_ringAttn pm_goal_3 initPM 10675,
            denoteGraph_ringAttn pm_goal_3 initPM 10676] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5600 = initPM 5600 := hb initGoal_5600 (by decide) rfl
-  have hw5612 : initSM 5612 = initPM 5612 := hb initGoal_5612 (by decide) rfl
-  have hw5617 : initSM 5617 = initPM 5617 := hb initGoal_5617 (by decide) rfl
-  have hw5621 : initSM 5621 = initPM 5621 := hb initGoal_5621 (by decide) rfl
-  have hw5626 : initSM 5626 = initPM 5626 := hb initGoal_5626 (by decide) rfl
+  have hw5600 : initSM 5600 = initPM 5600 := hb goal3CutInitGoal_5600 (by decide) rfl
+  have hw5612 : initSM 5612 = initPM 5612 := hb goal3CutInitGoal_5612 (by decide) rfl
+  have hw5617 : initSM 5617 = initPM 5617 := hb goal3CutInitGoal_5617 (by decide) rfl
+  have hw5621 : initSM 5621 = initPM 5621 := hb goal3CutInitGoal_5621 (by decide) rfl
+  have hw5626 : initSM 5626 = initPM 5626 := hb goal3CutInitGoal_5626 (by decide) rfl
   -- rms of the layer input commutes to the two PM rms-shard denote forms
   have hRMS : fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5599) (initSM 5600)
       = allGatherPrimDimN 0 2 0
@@ -44381,8 +44378,8 @@ theorem sm_pm_qfull_L18_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10695,
          denoteGraph_ringAttn pm_goal_3 initPM 10696] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5584 : initSM 5633 = initPM 5633 := hb initGoal_5633 (by decide) rfl
-  have hw5586e : initSM 5635 = initPM 5635 := hb initGoal_5635 (by decide) rfl
+  have hw5584 : initSM 5633 = initPM 5633 := hb goal3CutInitGoal_5633 (by decide) rfl
+  have hw5586e : initSM 5635 = initPM 5635 := hb goal3CutInitGoal_5635 (by decide) rfl
   rw [denote_sm_goal_3_5587_L18, denote_sm_goal_3_5585_L18,
       denote_pm_goal_3_10523_L18, denote_pm_goal_3_10521_L18,
       denote_pm_goal_3_10524_L18, denote_pm_goal_3_10522_L18]
@@ -44524,8 +44521,8 @@ theorem sm_pm_attention_L18_commute (initSM initPM : Store)
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1487) initPM 5639 (by decide) (by decide)
   have hP5591 : (pm_goal_3.nodes.take 1487).foldl (applyNodeRingAttn pm_goal_3) initPM 5640 = initPM 5640 :=
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1487) initPM 5640 (by decide) (by decide)
-  have hw5590 : initSM 5639 = initPM 5639 := hb initGoal_5639 (by decide) rfl
-  have hw5591 : initSM 5640 = initPM 5640 := hb initGoal_5640 (by decide) rfl
+  have hw5590 : initSM 5639 = initPM 5639 := hb goal3CutInitGoal_5639 (by decide) rfl
+  have hw5591 : initSM 5640 = initPM 5640 := hb goal3CutInitGoal_5640 (by decide) rfl
   -- reconstruction-input hypotheses (folded form)
   have hq_sm' : 0 < ((sm_goal_3.nodes.take 714).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_18.ins.getD 0 0)).shape.length := by
     show 0 < ((sm_goal_3.nodes.take 714).foldl (applyNodeRingAttn sm_goal_3) initSM 5636).shape.length
@@ -44663,7 +44660,7 @@ theorem sm_pm_reshape_float_L18_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10745,
          denoteGraph_ringAttn pm_goal_3 initPM 10746] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw : initSM 5644 = initPM 5644 := hb initGoal_5644 (by decide) rfl
+  have hw : initSM 5644 = initPM 5644 := hb goal3CutInitGoal_5644 (by decide) rfl
   rw [denote_sm_goal_3_5598_L18, denote_sm_goal_3_5597_L18, denote_sm_goal_3_5596_L18,
       denote_sm_goal_3_5594_L18, denote_sm_goal_3_5593_L18,
       denote_pm_goal_3_10573_L18, denote_pm_goal_3_10569_L18, denote_pm_goal_3_10559_L18,
@@ -44724,15 +44721,15 @@ theorem sm_pm_nl_L18_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10761,
          denoteGraph_ringAttn pm_goal_3 initPM 10762] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5649 = initPM 5649 := hb initGoal_5649 (by decide) rfl
-  have hw5603 : initSM 5652 = initPM 5652 := hb initGoal_5652 (by decide) rfl
+  have hw5600 : initSM 5649 = initPM 5649 := hb goal3CutInitGoal_5649 (by decide) rfl
+  have hw5603 : initSM 5652 = initPM 5652 := hb goal3CutInitGoal_5652 (by decide) rfl
   have hw5603sh : (initPM 5652).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5652 (by decide)
+    have hgh := hII goal3CutInitGoal_5652 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5652] using hsh
+    simpa [goal3CutInitGoal_5652] using hsh
   rw [denote_sm_goal_3_5604_L18, denote_sm_goal_3_5602_L18, denote_sm_goal_3_5601_L18,
       denote_pm_goal_3_10589_L18, denote_pm_goal_3_10583_L18, denote_pm_goal_3_10581_L18,
       denote_pm_goal_3_10590_L18, denote_pm_goal_3_10584_L18, denote_pm_goal_3_10582_L18]
@@ -44760,12 +44757,12 @@ theorem sm_pm_router_commute_L18 (initSM initPM : Store)
          denoteGraph_ringAttn pm_goal_3 initPM 10766] := by
   have hb := L12_weight_eq initSM initPM hInit
   have hw5603sh : (initPM 5652).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5652 (by decide)
+    have hgh := hII goal3CutInitGoal_5652 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5652] using hsh
+    simpa [goal3CutInitGoal_5652] using hsh
   have hnl := sm_pm_nl_L18_commute initSM initPM hInit hcarry5599 h10577 h10578
   have hs10589 : (denoteGraph_ringAttn pm_goal_3 initPM 10761).shape = [2048, 64] := by
     rw [denote_pm_goal_3_10589_L18, denote_pm_goal_3_10583_L18, denote_pm_goal_3_10581_L18]
@@ -45965,30 +45962,30 @@ theorem sm_pm_moe_gmm_L18_commute (initSM initPM : Store)
       allGatherPrimDimN 0 2 0
         [denoteGraph_ringAttn pm_goal_3 initPM 10773,
          denoteGraph_ringAttn pm_goal_3 initPM 10774] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5649 = initPM 5649 := hb initGoal_5649 (by decide) rfl
+  have hw5600 : initSM 5649 = initPM 5649 := hb goal3CutInitGoal_5649 (by decide) rfl
   have hw5603sh : (initPM 5652).shape = [64, 1024] := by
-    have hgh := hII initGoal_5652 (by decide)
+    have hgh := hII goal3CutInitGoal_5652 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5652] using hsh
+    simpa [goal3CutInitGoal_5652] using hsh
   -- dual-sharded MoE weights: initSM tid = allGather of the two PM shard tids
   have h5608 : initSM 5657 = allGatherPrimDimN 0 2 0 [initPM 10769, initPM 10770] := by
-    have hg := hII initGoal_5657 (by decide)
+    have hg := hII goal3CutInitGoal_5657 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5657, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5657, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10769) (initPM 10770) []
         (by rw [h_ss_pm 10769 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
     exact hval
   have h5609 : initSM 5658 = allGatherPrimDimN 0 2 0 [initPM 10771, initPM 10772] := by
-    have hg := hII initGoal_5658 (by decide)
+    have hg := hII goal3CutInitGoal_5658 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5658, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5658, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10771) (initPM 10772) []
         (by rw [h_ss_pm 10771 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -46086,11 +46083,11 @@ theorem sm_pm_gate_mul_L18_commute (initSM initPM : Store)
           [denoteGraph_ringAttn pm_goal_3 initPM 10847,
            denoteGraph_ringAttn pm_goal_3 initPM 10848] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5649 = initPM 5649 := hb initGoal_5649 (by decide) rfl
-  have hw5612 : initSM 5661 = initPM 5661 := hb initGoal_5661 (by decide) rfl
-  have hw5617 : initSM 5666 = initPM 5666 := hb initGoal_5666 (by decide) rfl
-  have hw5621 : initSM 5670 = initPM 5670 := hb initGoal_5670 (by decide) rfl
-  have hw5626 : initSM 5675 = initPM 5675 := hb initGoal_5675 (by decide) rfl
+  have hw5600 : initSM 5649 = initPM 5649 := hb goal3CutInitGoal_5649 (by decide) rfl
+  have hw5612 : initSM 5661 = initPM 5661 := hb goal3CutInitGoal_5661 (by decide) rfl
+  have hw5617 : initSM 5666 = initPM 5666 := hb goal3CutInitGoal_5666 (by decide) rfl
+  have hw5621 : initSM 5670 = initPM 5670 := hb goal3CutInitGoal_5670 (by decide) rfl
+  have hw5626 : initSM 5675 = initPM 5675 := hb goal3CutInitGoal_5675 (by decide) rfl
   -- rms of the layer input commutes to the two PM rms-shard denote forms
   have hRMS : fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5648) (initSM 5649)
       = allGatherPrimDimN 0 2 0
@@ -47084,8 +47081,8 @@ theorem sm_pm_qfull_L19_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10867,
          denoteGraph_ringAttn pm_goal_3 initPM 10868] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5584 : initSM 5682 = initPM 5682 := hb initGoal_5682 (by decide) rfl
-  have hw5586e : initSM 5684 = initPM 5684 := hb initGoal_5684 (by decide) rfl
+  have hw5584 : initSM 5682 = initPM 5682 := hb goal3CutInitGoal_5682 (by decide) rfl
+  have hw5586e : initSM 5684 = initPM 5684 := hb goal3CutInitGoal_5684 (by decide) rfl
   rw [denote_sm_goal_3_5587_L19, denote_sm_goal_3_5585_L19,
       denote_pm_goal_3_10523_L19, denote_pm_goal_3_10521_L19,
       denote_pm_goal_3_10524_L19, denote_pm_goal_3_10522_L19]
@@ -47227,8 +47224,8 @@ theorem sm_pm_attention_L19_commute (initSM initPM : Store)
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1557) initPM 5688 (by decide) (by decide)
   have hP5591 : (pm_goal_3.nodes.take 1557).foldl (applyNodeRingAttn pm_goal_3) initPM 5689 = initPM 5689 :=
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1557) initPM 5689 (by decide) (by decide)
-  have hw5590 : initSM 5688 = initPM 5688 := hb initGoal_5688 (by decide) rfl
-  have hw5591 : initSM 5689 = initPM 5689 := hb initGoal_5689 (by decide) rfl
+  have hw5590 : initSM 5688 = initPM 5688 := hb goal3CutInitGoal_5688 (by decide) rfl
+  have hw5591 : initSM 5689 = initPM 5689 := hb goal3CutInitGoal_5689 (by decide) rfl
   -- reconstruction-input hypotheses (folded form)
   have hq_sm' : 0 < ((sm_goal_3.nodes.take 749).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_19.ins.getD 0 0)).shape.length := by
     show 0 < ((sm_goal_3.nodes.take 749).foldl (applyNodeRingAttn sm_goal_3) initSM 5685).shape.length
@@ -47366,7 +47363,7 @@ theorem sm_pm_reshape_float_L19_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10917,
          denoteGraph_ringAttn pm_goal_3 initPM 10918] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw : initSM 5693 = initPM 5693 := hb initGoal_5693 (by decide) rfl
+  have hw : initSM 5693 = initPM 5693 := hb goal3CutInitGoal_5693 (by decide) rfl
   rw [denote_sm_goal_3_5598_L19, denote_sm_goal_3_5597_L19, denote_sm_goal_3_5596_L19,
       denote_sm_goal_3_5594_L19, denote_sm_goal_3_5593_L19,
       denote_pm_goal_3_10573_L19, denote_pm_goal_3_10569_L19, denote_pm_goal_3_10559_L19,
@@ -47427,15 +47424,15 @@ theorem sm_pm_nl_L19_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 10933,
          denoteGraph_ringAttn pm_goal_3 initPM 10934] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5698 = initPM 5698 := hb initGoal_5698 (by decide) rfl
-  have hw5603 : initSM 5701 = initPM 5701 := hb initGoal_5701 (by decide) rfl
+  have hw5600 : initSM 5698 = initPM 5698 := hb goal3CutInitGoal_5698 (by decide) rfl
+  have hw5603 : initSM 5701 = initPM 5701 := hb goal3CutInitGoal_5701 (by decide) rfl
   have hw5603sh : (initPM 5701).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5701 (by decide)
+    have hgh := hII goal3CutInitGoal_5701 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5701] using hsh
+    simpa [goal3CutInitGoal_5701] using hsh
   rw [denote_sm_goal_3_5604_L19, denote_sm_goal_3_5602_L19, denote_sm_goal_3_5601_L19,
       denote_pm_goal_3_10589_L19, denote_pm_goal_3_10583_L19, denote_pm_goal_3_10581_L19,
       denote_pm_goal_3_10590_L19, denote_pm_goal_3_10584_L19, denote_pm_goal_3_10582_L19]
@@ -47463,12 +47460,12 @@ theorem sm_pm_router_commute_L19 (initSM initPM : Store)
          denoteGraph_ringAttn pm_goal_3 initPM 10938] := by
   have hb := L12_weight_eq initSM initPM hInit
   have hw5603sh : (initPM 5701).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5701 (by decide)
+    have hgh := hII goal3CutInitGoal_5701 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5701] using hsh
+    simpa [goal3CutInitGoal_5701] using hsh
   have hnl := sm_pm_nl_L19_commute initSM initPM hInit hcarry5599 h10577 h10578
   have hs10589 : (denoteGraph_ringAttn pm_goal_3 initPM 10933).shape = [2048, 64] := by
     rw [denote_pm_goal_3_10589_L19, denote_pm_goal_3_10583_L19, denote_pm_goal_3_10581_L19]
@@ -48668,30 +48665,30 @@ theorem sm_pm_moe_gmm_L19_commute (initSM initPM : Store)
       allGatherPrimDimN 0 2 0
         [denoteGraph_ringAttn pm_goal_3 initPM 10945,
          denoteGraph_ringAttn pm_goal_3 initPM 10946] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5698 = initPM 5698 := hb initGoal_5698 (by decide) rfl
+  have hw5600 : initSM 5698 = initPM 5698 := hb goal3CutInitGoal_5698 (by decide) rfl
   have hw5603sh : (initPM 5701).shape = [64, 1024] := by
-    have hgh := hII initGoal_5701 (by decide)
+    have hgh := hII goal3CutInitGoal_5701 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5701] using hsh
+    simpa [goal3CutInitGoal_5701] using hsh
   -- dual-sharded MoE weights: initSM tid = allGather of the two PM shard tids
   have h5608 : initSM 5706 = allGatherPrimDimN 0 2 0 [initPM 10941, initPM 10942] := by
-    have hg := hII initGoal_5706 (by decide)
+    have hg := hII goal3CutInitGoal_5706 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5706, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5706, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10941) (initPM 10942) []
         (by rw [h_ss_pm 10941 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
     exact hval
   have h5609 : initSM 5707 = allGatherPrimDimN 0 2 0 [initPM 10943, initPM 10944] := by
-    have hg := hII initGoal_5707 (by decide)
+    have hg := hII goal3CutInitGoal_5707 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5707, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5707, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 10943) (initPM 10944) []
         (by rw [h_ss_pm 10943 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -48789,11 +48786,11 @@ theorem sm_pm_gate_mul_L19_commute (initSM initPM : Store)
           [denoteGraph_ringAttn pm_goal_3 initPM 11019,
            denoteGraph_ringAttn pm_goal_3 initPM 11020] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5698 = initPM 5698 := hb initGoal_5698 (by decide) rfl
-  have hw5612 : initSM 5710 = initPM 5710 := hb initGoal_5710 (by decide) rfl
-  have hw5617 : initSM 5715 = initPM 5715 := hb initGoal_5715 (by decide) rfl
-  have hw5621 : initSM 5719 = initPM 5719 := hb initGoal_5719 (by decide) rfl
-  have hw5626 : initSM 5724 = initPM 5724 := hb initGoal_5724 (by decide) rfl
+  have hw5600 : initSM 5698 = initPM 5698 := hb goal3CutInitGoal_5698 (by decide) rfl
+  have hw5612 : initSM 5710 = initPM 5710 := hb goal3CutInitGoal_5710 (by decide) rfl
+  have hw5617 : initSM 5715 = initPM 5715 := hb goal3CutInitGoal_5715 (by decide) rfl
+  have hw5621 : initSM 5719 = initPM 5719 := hb goal3CutInitGoal_5719 (by decide) rfl
+  have hw5626 : initSM 5724 = initPM 5724 := hb goal3CutInitGoal_5724 (by decide) rfl
   -- rms of the layer input commutes to the two PM rms-shard denote forms
   have hRMS : fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5697) (initSM 5698)
       = allGatherPrimDimN 0 2 0
@@ -49785,8 +49782,8 @@ theorem sm_pm_qfull_L20_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 11039,
          denoteGraph_ringAttn pm_goal_3 initPM 11040] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5584 : initSM 5731 = initPM 5731 := hb initGoal_5731 (by decide) rfl
-  have hw5586e : initSM 5733 = initPM 5733 := hb initGoal_5733 (by decide) rfl
+  have hw5584 : initSM 5731 = initPM 5731 := hb goal3CutInitGoal_5731 (by decide) rfl
+  have hw5586e : initSM 5733 = initPM 5733 := hb goal3CutInitGoal_5733 (by decide) rfl
   rw [denote_sm_goal_3_5587_L20, denote_sm_goal_3_5585_L20,
       denote_pm_goal_3_10523_L20, denote_pm_goal_3_10521_L20,
       denote_pm_goal_3_10524_L20, denote_pm_goal_3_10522_L20]
@@ -49928,8 +49925,8 @@ theorem sm_pm_attention_L20_commute (initSM initPM : Store)
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1627) initPM 5737 (by decide) (by decide)
   have hP5591 : (pm_goal_3.nodes.take 1627).foldl (applyNodeRingAttn pm_goal_3) initPM 5738 = initPM 5738 :=
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1627) initPM 5738 (by decide) (by decide)
-  have hw5590 : initSM 5737 = initPM 5737 := hb initGoal_5737 (by decide) rfl
-  have hw5591 : initSM 5738 = initPM 5738 := hb initGoal_5738 (by decide) rfl
+  have hw5590 : initSM 5737 = initPM 5737 := hb goal3CutInitGoal_5737 (by decide) rfl
+  have hw5591 : initSM 5738 = initPM 5738 := hb goal3CutInitGoal_5738 (by decide) rfl
   -- reconstruction-input hypotheses (folded form)
   have hq_sm' : 0 < ((sm_goal_3.nodes.take 784).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_20.ins.getD 0 0)).shape.length := by
     show 0 < ((sm_goal_3.nodes.take 784).foldl (applyNodeRingAttn sm_goal_3) initSM 5734).shape.length
@@ -50067,7 +50064,7 @@ theorem sm_pm_reshape_float_L20_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 11089,
          denoteGraph_ringAttn pm_goal_3 initPM 11090] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw : initSM 5742 = initPM 5742 := hb initGoal_5742 (by decide) rfl
+  have hw : initSM 5742 = initPM 5742 := hb goal3CutInitGoal_5742 (by decide) rfl
   rw [denote_sm_goal_3_5598_L20, denote_sm_goal_3_5597_L20, denote_sm_goal_3_5596_L20,
       denote_sm_goal_3_5594_L20, denote_sm_goal_3_5593_L20,
       denote_pm_goal_3_10573_L20, denote_pm_goal_3_10569_L20, denote_pm_goal_3_10559_L20,
@@ -50128,15 +50125,15 @@ theorem sm_pm_nl_L20_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 11105,
          denoteGraph_ringAttn pm_goal_3 initPM 11106] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5747 = initPM 5747 := hb initGoal_5747 (by decide) rfl
-  have hw5603 : initSM 5750 = initPM 5750 := hb initGoal_5750 (by decide) rfl
+  have hw5600 : initSM 5747 = initPM 5747 := hb goal3CutInitGoal_5747 (by decide) rfl
+  have hw5603 : initSM 5750 = initPM 5750 := hb goal3CutInitGoal_5750 (by decide) rfl
   have hw5603sh : (initPM 5750).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5750 (by decide)
+    have hgh := hII goal3CutInitGoal_5750 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5750] using hsh
+    simpa [goal3CutInitGoal_5750] using hsh
   rw [denote_sm_goal_3_5604_L20, denote_sm_goal_3_5602_L20, denote_sm_goal_3_5601_L20,
       denote_pm_goal_3_10589_L20, denote_pm_goal_3_10583_L20, denote_pm_goal_3_10581_L20,
       denote_pm_goal_3_10590_L20, denote_pm_goal_3_10584_L20, denote_pm_goal_3_10582_L20]
@@ -50164,12 +50161,12 @@ theorem sm_pm_router_commute_L20 (initSM initPM : Store)
          denoteGraph_ringAttn pm_goal_3 initPM 11110] := by
   have hb := L12_weight_eq initSM initPM hInit
   have hw5603sh : (initPM 5750).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5750 (by decide)
+    have hgh := hII goal3CutInitGoal_5750 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5750] using hsh
+    simpa [goal3CutInitGoal_5750] using hsh
   have hnl := sm_pm_nl_L20_commute initSM initPM hInit hcarry5599 h10577 h10578
   have hs10589 : (denoteGraph_ringAttn pm_goal_3 initPM 11105).shape = [2048, 64] := by
     rw [denote_pm_goal_3_10589_L20, denote_pm_goal_3_10583_L20, denote_pm_goal_3_10581_L20]
@@ -51370,30 +51367,30 @@ theorem sm_pm_moe_gmm_L20_commute (initSM initPM : Store)
       allGatherPrimDimN 0 2 0
         [denoteGraph_ringAttn pm_goal_3 initPM 11117,
          denoteGraph_ringAttn pm_goal_3 initPM 11118] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5747 = initPM 5747 := hb initGoal_5747 (by decide) rfl
+  have hw5600 : initSM 5747 = initPM 5747 := hb goal3CutInitGoal_5747 (by decide) rfl
   have hw5603sh : (initPM 5750).shape = [64, 1024] := by
-    have hgh := hII initGoal_5750 (by decide)
+    have hgh := hII goal3CutInitGoal_5750 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5750] using hsh
+    simpa [goal3CutInitGoal_5750] using hsh
   -- dual-sharded MoE weights: initSM tid = allGather of the two PM shard tids
   have h5608 : initSM 5755 = allGatherPrimDimN 0 2 0 [initPM 11113, initPM 11114] := by
-    have hg := hII initGoal_5755 (by decide)
+    have hg := hII goal3CutInitGoal_5755 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5755, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5755, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 11113) (initPM 11114) []
         (by rw [h_ss_pm 11113 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
     exact hval
   have h5609 : initSM 5756 = allGatherPrimDimN 0 2 0 [initPM 11115, initPM 11116] := by
-    have hg := hII initGoal_5756 (by decide)
+    have hg := hII goal3CutInitGoal_5756 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5756, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5756, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 11115) (initPM 11116) []
         (by rw [h_ss_pm 11115 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -51491,11 +51488,11 @@ theorem sm_pm_gate_mul_L20_commute (initSM initPM : Store)
           [denoteGraph_ringAttn pm_goal_3 initPM 11191,
            denoteGraph_ringAttn pm_goal_3 initPM 11192] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5747 = initPM 5747 := hb initGoal_5747 (by decide) rfl
-  have hw5612 : initSM 5759 = initPM 5759 := hb initGoal_5759 (by decide) rfl
-  have hw5617 : initSM 5764 = initPM 5764 := hb initGoal_5764 (by decide) rfl
-  have hw5621 : initSM 5768 = initPM 5768 := hb initGoal_5768 (by decide) rfl
-  have hw5626 : initSM 5773 = initPM 5773 := hb initGoal_5773 (by decide) rfl
+  have hw5600 : initSM 5747 = initPM 5747 := hb goal3CutInitGoal_5747 (by decide) rfl
+  have hw5612 : initSM 5759 = initPM 5759 := hb goal3CutInitGoal_5759 (by decide) rfl
+  have hw5617 : initSM 5764 = initPM 5764 := hb goal3CutInitGoal_5764 (by decide) rfl
+  have hw5621 : initSM 5768 = initPM 5768 := hb goal3CutInitGoal_5768 (by decide) rfl
+  have hw5626 : initSM 5773 = initPM 5773 := hb goal3CutInitGoal_5773 (by decide) rfl
   -- rms of the layer input commutes to the two PM rms-shard denote forms
   have hRMS : fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5746) (initSM 5747)
       = allGatherPrimDimN 0 2 0
@@ -52488,8 +52485,8 @@ theorem sm_pm_qfull_L21_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 11211,
          denoteGraph_ringAttn pm_goal_3 initPM 11212] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5584 : initSM 5780 = initPM 5780 := hb initGoal_5780 (by decide) rfl
-  have hw5586e : initSM 5782 = initPM 5782 := hb initGoal_5782 (by decide) rfl
+  have hw5584 : initSM 5780 = initPM 5780 := hb goal3CutInitGoal_5780 (by decide) rfl
+  have hw5586e : initSM 5782 = initPM 5782 := hb goal3CutInitGoal_5782 (by decide) rfl
   rw [denote_sm_goal_3_5587_L21, denote_sm_goal_3_5585_L21,
       denote_pm_goal_3_10523_L21, denote_pm_goal_3_10521_L21,
       denote_pm_goal_3_10524_L21, denote_pm_goal_3_10522_L21]
@@ -52631,8 +52628,8 @@ theorem sm_pm_attention_L21_commute (initSM initPM : Store)
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1697) initPM 5786 (by decide) (by decide)
   have hP5591 : (pm_goal_3.nodes.take 1697).foldl (applyNodeRingAttn pm_goal_3) initPM 5787 = initPM 5787 :=
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1697) initPM 5787 (by decide) (by decide)
-  have hw5590 : initSM 5786 = initPM 5786 := hb initGoal_5786 (by decide) rfl
-  have hw5591 : initSM 5787 = initPM 5787 := hb initGoal_5787 (by decide) rfl
+  have hw5590 : initSM 5786 = initPM 5786 := hb goal3CutInitGoal_5786 (by decide) rfl
+  have hw5591 : initSM 5787 = initPM 5787 := hb goal3CutInitGoal_5787 (by decide) rfl
   -- reconstruction-input hypotheses (folded form)
   have hq_sm' : 0 < ((sm_goal_3.nodes.take 819).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_21.ins.getD 0 0)).shape.length := by
     show 0 < ((sm_goal_3.nodes.take 819).foldl (applyNodeRingAttn sm_goal_3) initSM 5783).shape.length
@@ -52770,7 +52767,7 @@ theorem sm_pm_reshape_float_L21_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 11261,
          denoteGraph_ringAttn pm_goal_3 initPM 11262] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw : initSM 5791 = initPM 5791 := hb initGoal_5791 (by decide) rfl
+  have hw : initSM 5791 = initPM 5791 := hb goal3CutInitGoal_5791 (by decide) rfl
   rw [denote_sm_goal_3_5598_L21, denote_sm_goal_3_5597_L21, denote_sm_goal_3_5596_L21,
       denote_sm_goal_3_5594_L21, denote_sm_goal_3_5593_L21,
       denote_pm_goal_3_10573_L21, denote_pm_goal_3_10569_L21, denote_pm_goal_3_10559_L21,
@@ -52831,15 +52828,15 @@ theorem sm_pm_nl_L21_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 11277,
          denoteGraph_ringAttn pm_goal_3 initPM 11278] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5796 = initPM 5796 := hb initGoal_5796 (by decide) rfl
-  have hw5603 : initSM 5799 = initPM 5799 := hb initGoal_5799 (by decide) rfl
+  have hw5600 : initSM 5796 = initPM 5796 := hb goal3CutInitGoal_5796 (by decide) rfl
+  have hw5603 : initSM 5799 = initPM 5799 := hb goal3CutInitGoal_5799 (by decide) rfl
   have hw5603sh : (initPM 5799).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5799 (by decide)
+    have hgh := hII goal3CutInitGoal_5799 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5799] using hsh
+    simpa [goal3CutInitGoal_5799] using hsh
   rw [denote_sm_goal_3_5604_L21, denote_sm_goal_3_5602_L21, denote_sm_goal_3_5601_L21,
       denote_pm_goal_3_10589_L21, denote_pm_goal_3_10583_L21, denote_pm_goal_3_10581_L21,
       denote_pm_goal_3_10590_L21, denote_pm_goal_3_10584_L21, denote_pm_goal_3_10582_L21]
@@ -52867,12 +52864,12 @@ theorem sm_pm_router_commute_L21 (initSM initPM : Store)
          denoteGraph_ringAttn pm_goal_3 initPM 11282] := by
   have hb := L12_weight_eq initSM initPM hInit
   have hw5603sh : (initPM 5799).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5799 (by decide)
+    have hgh := hII goal3CutInitGoal_5799 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5799] using hsh
+    simpa [goal3CutInitGoal_5799] using hsh
   have hnl := sm_pm_nl_L21_commute initSM initPM hInit hcarry5599 h10577 h10578
   have hs10589 : (denoteGraph_ringAttn pm_goal_3 initPM 11277).shape = [2048, 64] := by
     rw [denote_pm_goal_3_10589_L21, denote_pm_goal_3_10583_L21, denote_pm_goal_3_10581_L21]
@@ -54072,30 +54069,30 @@ theorem sm_pm_moe_gmm_L21_commute (initSM initPM : Store)
       allGatherPrimDimN 0 2 0
         [denoteGraph_ringAttn pm_goal_3 initPM 11289,
          denoteGraph_ringAttn pm_goal_3 initPM 11290] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5796 = initPM 5796 := hb initGoal_5796 (by decide) rfl
+  have hw5600 : initSM 5796 = initPM 5796 := hb goal3CutInitGoal_5796 (by decide) rfl
   have hw5603sh : (initPM 5799).shape = [64, 1024] := by
-    have hgh := hII initGoal_5799 (by decide)
+    have hgh := hII goal3CutInitGoal_5799 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5799] using hsh
+    simpa [goal3CutInitGoal_5799] using hsh
   -- dual-sharded MoE weights: initSM tid = allGather of the two PM shard tids
   have h5608 : initSM 5804 = allGatherPrimDimN 0 2 0 [initPM 11285, initPM 11286] := by
-    have hg := hII initGoal_5804 (by decide)
+    have hg := hII goal3CutInitGoal_5804 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5804, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5804, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 11285) (initPM 11286) []
         (by rw [h_ss_pm 11285 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
     exact hval
   have h5609 : initSM 5805 = allGatherPrimDimN 0 2 0 [initPM 11287, initPM 11288] := by
-    have hg := hII initGoal_5805 (by decide)
+    have hg := hII goal3CutInitGoal_5805 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5805, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5805, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 11287) (initPM 11288) []
         (by rw [h_ss_pm 11287 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -54193,11 +54190,11 @@ theorem sm_pm_gate_mul_L21_commute (initSM initPM : Store)
           [denoteGraph_ringAttn pm_goal_3 initPM 11363,
            denoteGraph_ringAttn pm_goal_3 initPM 11364] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5796 = initPM 5796 := hb initGoal_5796 (by decide) rfl
-  have hw5612 : initSM 5808 = initPM 5808 := hb initGoal_5808 (by decide) rfl
-  have hw5617 : initSM 5813 = initPM 5813 := hb initGoal_5813 (by decide) rfl
-  have hw5621 : initSM 5817 = initPM 5817 := hb initGoal_5817 (by decide) rfl
-  have hw5626 : initSM 5822 = initPM 5822 := hb initGoal_5822 (by decide) rfl
+  have hw5600 : initSM 5796 = initPM 5796 := hb goal3CutInitGoal_5796 (by decide) rfl
+  have hw5612 : initSM 5808 = initPM 5808 := hb goal3CutInitGoal_5808 (by decide) rfl
+  have hw5617 : initSM 5813 = initPM 5813 := hb goal3CutInitGoal_5813 (by decide) rfl
+  have hw5621 : initSM 5817 = initPM 5817 := hb goal3CutInitGoal_5817 (by decide) rfl
+  have hw5626 : initSM 5822 = initPM 5822 := hb goal3CutInitGoal_5822 (by decide) rfl
   -- rms of the layer input commutes to the two PM rms-shard denote forms
   have hRMS : fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5795) (initSM 5796)
       = allGatherPrimDimN 0 2 0
@@ -55190,8 +55187,8 @@ theorem sm_pm_qfull_L22_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 11383,
          denoteGraph_ringAttn pm_goal_3 initPM 11384] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5584 : initSM 5829 = initPM 5829 := hb initGoal_5829 (by decide) rfl
-  have hw5586e : initSM 5831 = initPM 5831 := hb initGoal_5831 (by decide) rfl
+  have hw5584 : initSM 5829 = initPM 5829 := hb goal3CutInitGoal_5829 (by decide) rfl
+  have hw5586e : initSM 5831 = initPM 5831 := hb goal3CutInitGoal_5831 (by decide) rfl
   rw [denote_sm_goal_3_5587_L22, denote_sm_goal_3_5585_L22,
       denote_pm_goal_3_10523_L22, denote_pm_goal_3_10521_L22,
       denote_pm_goal_3_10524_L22, denote_pm_goal_3_10522_L22]
@@ -55333,8 +55330,8 @@ theorem sm_pm_attention_L22_commute (initSM initPM : Store)
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1767) initPM 5835 (by decide) (by decide)
   have hP5591 : (pm_goal_3.nodes.take 1767).foldl (applyNodeRingAttn pm_goal_3) initPM 5836 = initPM 5836 :=
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1767) initPM 5836 (by decide) (by decide)
-  have hw5590 : initSM 5835 = initPM 5835 := hb initGoal_5835 (by decide) rfl
-  have hw5591 : initSM 5836 = initPM 5836 := hb initGoal_5836 (by decide) rfl
+  have hw5590 : initSM 5835 = initPM 5835 := hb goal3CutInitGoal_5835 (by decide) rfl
+  have hw5591 : initSM 5836 = initPM 5836 := hb goal3CutInitGoal_5836 (by decide) rfl
   -- reconstruction-input hypotheses (folded form)
   have hq_sm' : 0 < ((sm_goal_3.nodes.take 854).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_22.ins.getD 0 0)).shape.length := by
     show 0 < ((sm_goal_3.nodes.take 854).foldl (applyNodeRingAttn sm_goal_3) initSM 5832).shape.length
@@ -55472,7 +55469,7 @@ theorem sm_pm_reshape_float_L22_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 11433,
          denoteGraph_ringAttn pm_goal_3 initPM 11434] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw : initSM 5840 = initPM 5840 := hb initGoal_5840 (by decide) rfl
+  have hw : initSM 5840 = initPM 5840 := hb goal3CutInitGoal_5840 (by decide) rfl
   rw [denote_sm_goal_3_5598_L22, denote_sm_goal_3_5597_L22, denote_sm_goal_3_5596_L22,
       denote_sm_goal_3_5594_L22, denote_sm_goal_3_5593_L22,
       denote_pm_goal_3_10573_L22, denote_pm_goal_3_10569_L22, denote_pm_goal_3_10559_L22,
@@ -55533,15 +55530,15 @@ theorem sm_pm_nl_L22_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 11449,
          denoteGraph_ringAttn pm_goal_3 initPM 11450] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5845 = initPM 5845 := hb initGoal_5845 (by decide) rfl
-  have hw5603 : initSM 5848 = initPM 5848 := hb initGoal_5848 (by decide) rfl
+  have hw5600 : initSM 5845 = initPM 5845 := hb goal3CutInitGoal_5845 (by decide) rfl
+  have hw5603 : initSM 5848 = initPM 5848 := hb goal3CutInitGoal_5848 (by decide) rfl
   have hw5603sh : (initPM 5848).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5848 (by decide)
+    have hgh := hII goal3CutInitGoal_5848 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5848] using hsh
+    simpa [goal3CutInitGoal_5848] using hsh
   rw [denote_sm_goal_3_5604_L22, denote_sm_goal_3_5602_L22, denote_sm_goal_3_5601_L22,
       denote_pm_goal_3_10589_L22, denote_pm_goal_3_10583_L22, denote_pm_goal_3_10581_L22,
       denote_pm_goal_3_10590_L22, denote_pm_goal_3_10584_L22, denote_pm_goal_3_10582_L22]
@@ -55569,12 +55566,12 @@ theorem sm_pm_router_commute_L22 (initSM initPM : Store)
          denoteGraph_ringAttn pm_goal_3 initPM 11454] := by
   have hb := L12_weight_eq initSM initPM hInit
   have hw5603sh : (initPM 5848).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5848 (by decide)
+    have hgh := hII goal3CutInitGoal_5848 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5848] using hsh
+    simpa [goal3CutInitGoal_5848] using hsh
   have hnl := sm_pm_nl_L22_commute initSM initPM hInit hcarry5599 h10577 h10578
   have hs10589 : (denoteGraph_ringAttn pm_goal_3 initPM 11449).shape = [2048, 64] := by
     rw [denote_pm_goal_3_10589_L22, denote_pm_goal_3_10583_L22, denote_pm_goal_3_10581_L22]
@@ -56774,30 +56771,30 @@ theorem sm_pm_moe_gmm_L22_commute (initSM initPM : Store)
       allGatherPrimDimN 0 2 0
         [denoteGraph_ringAttn pm_goal_3 initPM 11461,
          denoteGraph_ringAttn pm_goal_3 initPM 11462] := by
-  have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+  have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
     fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5845 = initPM 5845 := hb initGoal_5845 (by decide) rfl
+  have hw5600 : initSM 5845 = initPM 5845 := hb goal3CutInitGoal_5845 (by decide) rfl
   have hw5603sh : (initPM 5848).shape = [64, 1024] := by
-    have hgh := hII initGoal_5848 (by decide)
+    have hgh := hII goal3CutInitGoal_5848 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5848] using hsh
+    simpa [goal3CutInitGoal_5848] using hsh
   -- dual-sharded MoE weights: initSM tid = allGather of the two PM shard tids
   have h5608 : initSM 5853 = allGatherPrimDimN 0 2 0 [initPM 11457, initPM 11458] := by
-    have hg := hII initGoal_5853 (by decide)
+    have hg := hII goal3CutInitGoal_5853 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5853, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5853, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 11457) (initPM 11458) []
         (by rw [h_ss_pm 11457 [32,1024,1024] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
     exact hval
   have h5609 : initSM 5854 = allGatherPrimDimN 0 2 0 [initPM 11459, initPM 11460] := by
-    have hg := hII initGoal_5854 (by decide)
+    have hg := hII goal3CutInitGoal_5854 (by decide)
     unfold InitGoalHolds at hg
     obtain ⟨_, _, hval⟩ := hg
-    simp only [initGoal_5854, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
+    simp only [goal3CutInitGoal_5854, List.map, reconstructForGoal, Bool.false_eq_true, if_false] at hval
     rw [reconstructWithDim_cons_cons_nonscalar 0 pm_goal_3.numRanks 0 (initPM 11459) (initPM 11460) []
         (by rw [h_ss_pm 11459 [32,1024,512] (by decide)]; decide)] at hval
     rw [show pm_goal_3.numRanks = 2 from rfl] at hval
@@ -56895,11 +56892,11 @@ theorem sm_pm_gate_mul_L22_commute (initSM initPM : Store)
           [denoteGraph_ringAttn pm_goal_3 initPM 11535,
            denoteGraph_ringAttn pm_goal_3 initPM 11536] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5600 : initSM 5845 = initPM 5845 := hb initGoal_5845 (by decide) rfl
-  have hw5612 : initSM 5857 = initPM 5857 := hb initGoal_5857 (by decide) rfl
-  have hw5617 : initSM 5862 = initPM 5862 := hb initGoal_5862 (by decide) rfl
-  have hw5621 : initSM 5866 = initPM 5866 := hb initGoal_5866 (by decide) rfl
-  have hw5626 : initSM 5871 = initPM 5871 := hb initGoal_5871 (by decide) rfl
+  have hw5600 : initSM 5845 = initPM 5845 := hb goal3CutInitGoal_5845 (by decide) rfl
+  have hw5612 : initSM 5857 = initPM 5857 := hb goal3CutInitGoal_5857 (by decide) rfl
+  have hw5617 : initSM 5862 = initPM 5862 := hb goal3CutInitGoal_5862 (by decide) rfl
+  have hw5621 : initSM 5866 = initPM 5866 := hb goal3CutInitGoal_5866 (by decide) rfl
+  have hw5626 : initSM 5871 = initPM 5871 := hb goal3CutInitGoal_5871 (by decide) rfl
   -- rms of the layer input commutes to the two PM rms-shard denote forms
   have hRMS : fw_rms_norm (denoteGraph_ringAttn sm_goal_3 initSM 5844) (initSM 5845)
       = allGatherPrimDimN 0 2 0
@@ -57890,8 +57887,8 @@ theorem sm_pm_qfull_L23_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 11555,
          denoteGraph_ringAttn pm_goal_3 initPM 11556] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5878 : initSM 5878 = initPM 5878 := hb initGoal_5878 (by decide) rfl
-  have hw5880e : initSM 5880 = initPM 5880 := hb initGoal_5880 (by decide) rfl
+  have hw5878 : initSM 5878 = initPM 5878 := hb goal3CutInitGoal_5878 (by decide) rfl
+  have hw5880e : initSM 5880 = initPM 5880 := hb goal3CutInitGoal_5880 (by decide) rfl
   rw [denote_sm_goal_3_5881, denote_sm_goal_3_5879,
       denote_pm_goal_3_11555, denote_pm_goal_3_11553,
       denote_pm_goal_3_11556, denote_pm_goal_3_11554]
@@ -58033,8 +58030,8 @@ theorem sm_pm_attention_L23_commute (initSM initPM : Store)
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1837) initPM 5884 (by decide) (by decide)
   have hP5885 : (pm_goal_3.nodes.take 1837).foldl (applyNodeRingAttn pm_goal_3) initPM 5885 = initPM 5885 :=
     foldl_applyNodeRingAttn_at_not_written pm_goal_3 (pm_goal_3.nodes.take 1837) initPM 5885 (by decide) (by decide)
-  have hw5884 : initSM 5884 = initPM 5884 := hb initGoal_5884 (by decide) rfl
-  have hw5885 : initSM 5885 = initPM 5885 := hb initGoal_5885 (by decide) rfl
+  have hw5884 : initSM 5884 = initPM 5884 := hb goal3CutInitGoal_5884 (by decide) rfl
+  have hw5885 : initSM 5885 = initPM 5885 := hb goal3CutInitGoal_5885 (by decide) rfl
   -- reconstruction-input hypotheses (folded form)
   have hq_sm' : 0 < ((sm_goal_3.nodes.take 889).foldl (applyNodeRingAttn sm_goal_3) initSM (nSM_23.ins.getD 0 0)).shape.length := by
     show 0 < ((sm_goal_3.nodes.take 889).foldl (applyNodeRingAttn sm_goal_3) initSM 5881).shape.length
@@ -58172,7 +58169,7 @@ theorem sm_pm_reshape_float_L23_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 11605,
          denoteGraph_ringAttn pm_goal_3 initPM 11606] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw : initSM 5889 = initPM 5889 := hb initGoal_5889 (by decide) rfl
+  have hw : initSM 5889 = initPM 5889 := hb goal3CutInitGoal_5889 (by decide) rfl
   rw [denote_sm_goal_3_5892, denote_sm_goal_3_5891, denote_sm_goal_3_5890,
       denote_sm_goal_3_5888, denote_sm_goal_3_5887,
       denote_pm_goal_3_11605, denote_pm_goal_3_11601, denote_pm_goal_3_11591,
@@ -58233,15 +58230,15 @@ theorem sm_pm_nl_L23_commute (initSM initPM : Store)
         [denoteGraph_ringAttn pm_goal_3 initPM 11621,
          denoteGraph_ringAttn pm_goal_3 initPM 11622] := by
   have hb := L12_weight_eq initSM initPM hInit
-  have hw5894 : initSM 5894 = initPM 5894 := hb initGoal_5894 (by decide) rfl
-  have hw5897 : initSM 5897 = initPM 5897 := hb initGoal_5897 (by decide) rfl
+  have hw5894 : initSM 5894 = initPM 5894 := hb goal3CutInitGoal_5894 (by decide) rfl
+  have hw5897 : initSM 5897 = initPM 5897 := hb goal3CutInitGoal_5897 (by decide) rfl
   have hw5897sh : (initPM 5897).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5897 (by decide)
+    have hgh := hII goal3CutInitGoal_5897 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5897] using hsh
+    simpa [goal3CutInitGoal_5897] using hsh
   rw [denote_sm_goal_3_5898, denote_sm_goal_3_5896, denote_sm_goal_3_5895,
       denote_pm_goal_3_11621, denote_pm_goal_3_11615, denote_pm_goal_3_11613,
       denote_pm_goal_3_11622, denote_pm_goal_3_11616, denote_pm_goal_3_11614]
@@ -58269,12 +58266,12 @@ theorem sm_pm_router_commute_L23 (initSM initPM : Store)
          denoteGraph_ringAttn pm_goal_3 initPM 11626] := by
   have hb := L12_weight_eq initSM initPM hInit
   have hw5897sh : (initPM 5897).shape = [64, 1024] := by
-    have hII : InitGoalsHold pm_goal_3.numRanks initGoals initSM initPM :=
+    have hII : InitGoalsHold pm_goal_3.numRanks goal3CutInitGoals initSM initPM :=
       fun g hg => hInit g (by unfold goal_3_cut_initGoals; exact List.mem_append_left _ hg)
-    have hgh := hII initGoal_5897 (by decide)
+    have hgh := hII goal3CutInitGoal_5897 (by decide)
     unfold InitGoalHolds at hgh
     obtain ⟨_, hsh, _⟩ := hgh
-    simpa [initGoal_5897] using hsh
+    simpa [goal3CutInitGoal_5897] using hsh
   have hnl := sm_pm_nl_L23_commute initSM initPM hInit hcarry5893 h11609 h11610
   have hs11621 : (denoteGraph_ringAttn pm_goal_3 initPM 11621).shape = [2048, 64] := by
     rw [denote_pm_goal_3_11621, denote_pm_goal_3_11615, denote_pm_goal_3_11613]
@@ -58863,8 +58860,10 @@ theorem prove_goal_3 : goal_3_stmt_with_pins :=
       sm_pm_router_commute_all initSM initPM hSM hPM hInit
         hp5346 hp5395 hp5444 hp5493 hp5542 hp5591 hp5640 hp5689 hp5738 hp5787 hp5836 hp5885)
 
-/-- Kernel-clean Pattern_3 top-level. -/
-theorem prove_pattern_3 : pattern_3_stmt := by
+/-- Kernel-clean legacy ring-attention proof of the frozen Goal 3 cut.
+    The unqualified `prove_pattern_3` name is reserved for the public
+    distributed-faithful module. -/
+theorem prove_pattern_3_ring_legacy : pattern_3_ring_legacy_stmt := by
   intro _ h
   cases h
   exact prove_goal_3

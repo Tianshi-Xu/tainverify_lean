@@ -44,6 +44,7 @@ STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/BridgeKit.lean",
     "trainverify/denote/yoco_goals/JointWitnessCore.lean",
     "trainverify/denote/yoco_goals/Goal1ExternalContractWitness.lean",
+    "trainverify/denote/yoco_goals/Goal_3_Cut.lean",
     "trainverify/denote/yoco_goals/CanonicalGoal4L0Routing.lean",
     "trainverify/denote/yoco_goals/CanonicalGoal4L1Routing.lean",
     "trainverify/denote/yoco_goals/CanonicalGoal4L2Routing.lean",

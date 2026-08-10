@@ -847,7 +847,7 @@ theorem pinnedStore_shapes_hold_of_list (shapeOf : Tid → Shape)
       rw [hkey] at hval
       rw [hval, hpair2]
 
-theorem pattern_3_joint_hypothesis_witness :
+theorem pattern_3_ring_legacy_joint_hypothesis_witness :
     ∃ (initSM initPM : Store),
       StoreShapesHold initSM sm_goal_3InitEnv ∧
       StoreShapesHold initPM pm_goal_3InitEnv ∧
