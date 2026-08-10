@@ -375,7 +375,7 @@ private theorem l13ZMr_hdec (initPM : Store)
 
 /-- The canonical L13 routing probabilities and routing map are computed from the
 shared normalized input by the real norm-linear, chunk, and top-k graph nodes. -/
-theorem l13_zigzag_moe_router_from_norm_input (initSM initPM : Store)
+theorem l13_zigzag_moe_router_all_from_norm_input (initSM initPM : Store)
     (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
     (hInit : InitGoalsHold pm_goal_1.numRanks initGoals initSM initPM)
     (hNorm : Zigzag2Rel
@@ -394,6 +394,12 @@ theorem l13_zigzag_moe_router_from_norm_input (initSM initPM : Store)
       (denoteGraphDistributedFaithful sm_goal_1 initSM 5789)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 10292)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 10293)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 64] [2048, 64] ∧
+    Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5787)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 10288)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 10289)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
       [4096, 64] [2048, 64] := by
   have hdec := l13ZMr_hdec initPM hPM hNorm
@@ -451,6 +457,7 @@ theorem l13_zigzag_moe_router_from_norm_input (initSM initPM : Store)
     (by decide) (by decide) (by decide) hdec
   have hmap := Zigzag2Rel.topk_routing_map 2048 64 8 hlogits
     (by decide) (by decide) (by decide) hdec
+  have hlogitsKeep := hlogits
   obtain ⟨logitSource0, logitSource1, hls⟩ := hlogits
   rw [l13ZMr_red_topk_probs sm_goal_1 initSM 628 l13ZMrSmTopk 0 5787 5788 5789 5790
       (by native_decide) (by native_decide) rfl (Or.inr hls.full_shape)
@@ -470,7 +477,33 @@ theorem l13_zigzag_moe_router_from_norm_input (initSM initPM : Store)
     l13ZMr_red_topk_map pm_goal_1 initPM 1392 l13ZMrPmTopk1 1 10289 10291 10293 10295
       (by native_decide) (by native_decide) rfl (by decide) (Or.inl hls.rank1_shape)
       (by native_decide) (by native_decide) (by native_decide) (by native_decide)]
-  exact ⟨hprobs, hmap⟩
+  exact ⟨hprobs, hmap, hlogitsKeep⟩
+
+/-- Public router pair retained for downstream expert composition. -/
+theorem l13_zigzag_moe_router_from_norm_input (initSM initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
+    (hInit : InitGoalsHold pm_goal_1.numRanks initGoals initSM initPM)
+    (hNorm : Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5784)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 10280)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 10281)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 1024] [2048, 1024]) :
+    Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5788)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 10290)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 10291)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 64] [2048, 64] ∧
+    Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5789)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 10292)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 10293)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 64] [2048, 64] := by
+  have h := l13_zigzag_moe_router_all_from_norm_input
+    initSM initPM hPM hInit hNorm
+  exact ⟨h.1, h.2.1⟩
 
 /-- The canonical L13 routing outputs are closed directly from the exact L13 attention residual
 output relation.  The normalized input, router weight agreement and shape,

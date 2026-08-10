@@ -375,7 +375,7 @@ private theorem l17ZMr_hdec (initPM : Store)
 
 /-- The canonical L17 routing probabilities and routing map are computed from the
 shared normalized input by the real norm-linear, chunk, and top-k graph nodes. -/
-theorem l17_zigzag_moe_router_from_norm_input (initSM initPM : Store)
+theorem l17_zigzag_moe_router_all_from_norm_input (initSM initPM : Store)
     (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
     (hInit : InitGoalsHold pm_goal_1.numRanks initGoals initSM initPM)
     (hNorm : Zigzag2Rel
@@ -394,6 +394,12 @@ theorem l17_zigzag_moe_router_from_norm_input (initSM initPM : Store)
       (denoteGraphDistributedFaithful sm_goal_1 initSM 6005)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 10908)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 10909)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 64] [2048, 64] ∧
+    Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 6003)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 10904)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 10905)
       (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
       [4096, 64] [2048, 64] := by
   have hdec := l17ZMr_hdec initPM hPM hNorm
@@ -451,6 +457,7 @@ theorem l17_zigzag_moe_router_from_norm_input (initSM initPM : Store)
     (by decide) (by decide) (by decide) hdec
   have hmap := Zigzag2Rel.topk_routing_map 2048 64 8 hlogits
     (by decide) (by decide) (by decide) hdec
+  have hlogitsKeep := hlogits
   obtain ⟨logitSource0, logitSource1, hls⟩ := hlogits
   rw [l17ZMr_red_topk_probs sm_goal_1 initSM 768 l17ZMrSmTopk 0 6003 6004 6005 6006
       (by native_decide) (by native_decide) rfl (Or.inr hls.full_shape)
@@ -470,7 +477,33 @@ theorem l17_zigzag_moe_router_from_norm_input (initSM initPM : Store)
     l17ZMr_red_topk_map pm_goal_1 initPM 1696 l17ZMrPmTopk1 1 10905 10907 10909 10911
       (by native_decide) (by native_decide) rfl (by decide) (Or.inl hls.rank1_shape)
       (by native_decide) (by native_decide) (by native_decide) (by native_decide)]
-  exact ⟨hprobs, hmap⟩
+  exact ⟨hprobs, hmap, hlogitsKeep⟩
+
+/-- Public router pair retained for downstream expert composition. -/
+theorem l17_zigzag_moe_router_from_norm_input (initSM initPM : Store)
+    (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
+    (hInit : InitGoalsHold pm_goal_1.numRanks initGoals initSM initPM)
+    (hNorm : Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 6000)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 10896)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 10897)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 1024] [2048, 1024]) :
+    Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 6004)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 10906)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 10907)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 64] [2048, 64] ∧
+    Zigzag2Rel
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 6005)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 10908)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 10909)
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 6252)
+      [4096, 64] [2048, 64] := by
+  have h := l17_zigzag_moe_router_all_from_norm_input
+    initSM initPM hPM hInit hNorm
+  exact ⟨h.1, h.2.1⟩
 
 /-- The canonical L17 routing outputs are closed directly from the exact L17 attention residual
 output relation.  The normalized input, router weight agreement and shape,
