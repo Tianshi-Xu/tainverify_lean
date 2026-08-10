@@ -2,7 +2,7 @@
 
 > 一份以 YOCO-MoE-A0.4B 为主线的形式化工程全流程说明
 >
-> 文档状态：2026-08-10；对应最终证明候选提交 `7b019aceaf65af957d4af737c98c7057b884bf9c`。
+> 文档状态：2026-08-10；五个full theorem的核心证明基线为 `7b019aceaf65af957d4af737c98c7057b884bf9c`，release registry/emitter状态以本文所在exact tree为准。
 
 ## 0. 先说结论
 
@@ -41,7 +41,7 @@ theorem prove_goal_5_from_pattern_5 : goal_5_stmt_full
 
 它们由 `MainTheorem.FullPatternTier` 合取。五项均经过独立 exact-tree 审计和 `#print axioms` 审计，没有 `sorryAx`，没有项目手写 axiom；外部 caller contracts 也由汇总定理 `FivePublicContractsJointWitness` 分别给出具体可满足性见证。
 
-不过，**Lean 证明完成不等于这些 statements 已经绑定 canonical GPU authority，更不等于正式快照已经发布**。当前有两层 provenance 断点：canonical authority 绑定 TrainVerify 生成提交 `de30b89f…`，而最终证明/registry 位于 `7b019ace…`；同时，checked-in `GeneratedYOCOMoE.manifest.json` 仍记录旧 llm-train `30b80f…`、nnScaler `1102e6…` 和另一组 pickle hashes，并非 canonical authority 的 `9a1be1…`、`d3d468…`。下一步必须从最终 private materialization 对 canonical authority 做 fresh emission。只有 fresh Generated/Goal digests 与 registry 一致，现有证明才能直接发布；若不一致，还要重新生成 statements 并迁移证明。本文严格区分“对 checked-in statements 的证明完成”“canonical authority 绑定”和“sealed snapshot 发布”。
+不过，**Lean证明完成不等于正式快照已经发布**。真实双GPU live-profile重跑已经证明planner会因fresh computation profile选择不同PM图，并在raw digest gate fail closed；对authenticated canonical profile的只读重放则确认现有proof绑定canonical graph。当前registry已把raw fresh emission与五个Goal proof overlays分层，但修复本身改变了TrainVerify exact revision，因此仍需从最终owner-private commit重新生成authority并完成clean-room Lean/axiom/ledger/no-replace publication。本文严格区分“对checked-in statements的证明完成”“raw authority绑定”和“sealed snapshot发布”。
 
 ```mermaid
 flowchart LR
@@ -334,7 +334,7 @@ authority 原始图规模为 SM 2074 nodes、PM 4363 nodes。历史 authority �
 | raw pickle hashes | 对 `sm_mgener.pkl` / `pm_mgener.pkl` 实际字节计算 SHA-256，并与 provenance/receipts 比较 |
 | comm/comp profile hashes | `gen_args.json.comm_profile_sha256`、`gen_args.json.comp_profile_sha256`；对应 profile artifact 实际字节 |
 | native solver和patched sources | `gen_args.json`、rank receipts、authority 内 `nnscaler_dp_solver.so` 及 patched-source hash fields |
-| registry `444` modules 与五 targets | `scripts/yoco_regen/yoco_proof_registry.json`，以及第 17.1 节的 source-hash command |
+| registry `449` modules 与五 targets | `scripts/yoco_regen/yoco_proof_registry.json`，以及第 17.1 节的 source-hash command |
 | Goal 4 `58` files | registry 中 basename 匹配 `Goal4PublicFaithful*.lean` 的唯一集合，其中包含 public entry |
 | `50/107` tests | 第 17.1 节列出的两条实际 pytest 命令与本文编写时输出 |
 
@@ -983,7 +983,7 @@ Python emitter、certificate generator、coverage script 都是不可信 produce
 ```text
 scripts/yoco_regen/yoco_proof_registry.json
 SHA-256:
-e4111cf68bb2c7d95cfdec8a514b7f41e5850251409a9b8040c60ffd07847b20
+a30ac1a3cdc7642c7b366d17c014fe56517ffdc862f31b026af686e63f7fea18
 ```
 
 精确列出五个 target：
@@ -1008,9 +1008,9 @@ TrainVerify.Denote.GeneratedPatterns.prove_pattern_5
 
 任何 duplicate path、unknown field、digest mismatch、missing helper、extra module、forbidden token 均在 Lean validation 前 fail closed。
 
-这里有一个容易混淆的边界：registry 证明“这些 proof modules 对应这些 checked-in Generated/Goal bytes”，但不能单独证明“这些 Generated/Goal bytes 来自哪一个 GPU authority”。后者需要 provenance manifest、authority receipts 和 fresh emitter run。当前 registry 对 source tree 的 exactness 已通过，canonical authority 到这些 source bytes 的绑定尚未闭合。
+这里有两个必须分开的字节层。`generated_lean_sha256` 和 `goal_sha256` 绑定 `graph_to_lean` 对 canonical authority 的 **raw fresh emission**；`modules` 随后把五个 `Goal_N.lean` 连同其余 helper/proof modules作为 authenticated Git blobs 覆盖到 private stage。这样，raw digest 证明 GPU graph 到自动生成 statements 的来源，overlay digest 证明最终被 Lean elaboration 的外部 caller contract 和 proof source。emitter 强制五个 raw Goal 都存在对应 overlay，缺一个即 fail closed。registry 本身仍不能证明 raw bytes 来自哪一个 GPU authority；后者还需要 provenance manifest、authority receipts 和 fresh emitter run。
 
-当前最终 owner-only private materialization：
+历史 proof-only owner-private materialization：
 
 ```text
 $HOME/yoco-final-publication/five-public-candidates/
@@ -1018,7 +1018,9 @@ $HOME/yoco-final-publication/five-public-candidates/
 mode: 0700
 ```
 
-但它只是固定提交候选，不是正式 published snapshot。
+它只能复核五 theorem基线，不能作为最终publication input。registry/emitter修复提交确定后，必须从该最终exact commit重新创建owner-private materialization。
+
+正式published snapshot依然要由最终exact commit的fresh emitter run产生。
 
 ---
 
@@ -1043,47 +1045,36 @@ Proof 链：
 - Goal 4 的 58 个 `Goal4PublicFaithful*.lean` 文件 fresh replay，其中包含 public entry；
 - five-public per-goal non-vacuity witnesses；
 - exact-tree audit；
-- 444-module proof registry；
+- 449-module proof registry；
 - 50 项 emitter tests和107项完整 Python suite；
 - owner-only proof materialization。
 
 ### 16.2 尚未完成
 
-正式 sealed snapshot 尚未发布。当前至少有两个 provenance blocker。
+正式 sealed snapshot 尚未发布。2026-08-10 已在真实双 RTX PRO 6000、双 rank NCCL 环境完成一次绑定 `df3834e1…` 的 fresh live-profile authority：SM仍为 `333a1438…`（2074 nodes），但fresh computation profile选择了新的PM计划 `2624ef2d…`（4531 nodes）。该authority通过receipts/ledger检查，但fresh emission在registry digest gate按预期fail closed；它不能用于当前proof snapshot。
 
-第一，authority 和 proof toolchain 的 TrainVerify revision 不同：
+随后对历史canonical authority的authenticated computation profile做只读重放审计。当前 `graph_to_lean` 从canonical SM/PM `333a1438… / a47d033c…` 生成的raw graph与现有proof graph结构一致：`GeneratedYOCOMoE.lean`仅与checked-in版本相差6行非语义注释，Goal 1/2/4/5只差已登记的caller-contract/compatibility覆盖，Goal 3由已证明的faithful statement覆盖。这个审计同时暴露了旧registry分层错误：raw digest错误地绑定了overlay后的文件，使emitter即使拿到canonical graph也不可能通过fresh gate。
 
-```text
-canonical authority generator:
-  de30b89ffd9d67da37cd4e26bea1d534a46e198b
-
-proof / registry baseline:
-  7b019aceaf65af957d4af737c98c7057b884bf9c
-```
-
-第二，checked-in provenance manifest 尚未绑定 canonical authority：
+当前registry已修正为两层：
 
 ```text
-checked-in GeneratedYOCOMoE.manifest.json:
-  llm-train 30b80f546d46aacbf8316c983550c50a56bcd1ac
-  nnScaler  1102e629ee68ab6f8f4a7c2e721ea894e5962131
-  SM/PM     cc29dde6… / bdadb2b5…
+raw canonical emission:
+  GeneratedYOCOMoE.lean  8cc7500b06a8b4a1d0616e6bd5571953672daf8502c585aadc55757152adc383
+  Goal_1..5              40e4a14c… / e6f3d363… / b7a191e7… / ed95445c… / 7f3b0923…
 
-canonical GPU authority:
-  llm-train 9a1be1d5fd1c063d80be82797692cdc7d23cfbef
-  nnScaler  d3d468ed23edb2f28aa8566b2dfb6ed49c5955cf
-  SM/PM     333a1438… / a47d033c…
+proof overlays:
+  五个 checked-in Goal_N.lean + 其余444个helper/proof modules
+  total modules: 449
 ```
 
-因此，现有五个 theorem 的准确口径是：它们证明了 registry 绑定的 checked-in Generated/Goal sources；尚不能宣称这些 sources 已由 canonical GPU authority fresh materialize。另一个发布层事实是：审计时 `7b019ace…` 尚未出现在 remote branch 或 release tag 中。
+emitter现在强制五个raw Goal都存在authenticated Git overlay，缺一个即fail closed；canonical raw emission → 449 overlays的本地完整materialization dry-run已经通过。
 
-下一步不能只修改 metadata 或把旧 authority “重签”为新 commit。必须：
+剩余发布链不能靠修改metadata闭合。因为registry/emitter修复本身改变TrainVerify exact revision，必须：
 
-1. 从最终拟发布的 owner-private TrainVerify exact commit 重新运行双 GPU production authority generation；旧 authority 不能跨 revision 重新验证后发布；
-2. 用 canonical authority fresh emit Generated/Goal sources；
-3. 比较 fresh digests 与 registry；
-4. 若完全一致，继续五目标 build、axiom audit、ledger 验证和 no-replace publication；
-5. 若不一致，更新 statements、proof registry，并迁移受影响的证明后重新审计。
+1. 从修复后的最终owner-private exact commit重新运行双GPU production authority generation，并显式使用canonical authenticated computation profile；
+2. fresh emit raw Generated/Goal sources并通过修正后的registry gate；
+3. 运行五目标clean-room build、axiom audit、exact-path ledger和no-replace publication；
+4. 任何raw digest变化都必须再次fail closed，不能把旧authority跨revision“重签”。
 
 ---
 
@@ -1091,7 +1082,7 @@ canonical GPU authority:
 
 ### 17.1 checked-in proof 快速复核
 
-本节复核本文当前已经成立的 source-level 结论。它使用当前 exact tree 的既有 `.lake/packages` 和项目依赖缓存，直接重新 elaboration 顶层模块并核对 registry source hashes。它**不是** 444 个模块的 clean-room rebuild；完整 clean-room gate 仍属于 fresh authority emission 和正式发布流程。
+本节复核本文当前已经成立的 source-level 结论。它使用当前 exact tree 的既有 `.lake/packages` 和项目依赖缓存，直接重新 elaboration 顶层模块并核对 registry source hashes。它**不是** 449 个模块的 clean-room rebuild；完整 clean-room gate 仍属于 fresh authority emission 和正式发布流程。
 
 从 TrainVerify 仓库根目录开始，先确认工作树、proof baseline 仍在当前历史中，以及 registry：
 
@@ -1106,10 +1097,10 @@ sha256sum scripts/yoco_regen/yoco_proof_registry.json
 
 ```text
 7b019aceaf65af957d4af737c98c7057b884bf9c
-e4111cf68bb2c7d95cfdec8a514b7f41e5850251409a9b8040c60ffd07847b20
+a30ac1a3cdc7642c7b366d17c014fe56517ffdc862f31b026af686e63f7fea18
 ```
 
-核对 registry 中 444 个 source modules、五个 Goal files 和 generated graph 的 SHA-256：
+先核对registry中449个authenticated overlay/helper source modules。不要把raw digests对checked-in `GeneratedYOCOMoE.lean` / `Goal_N.lean` 比较：后者是proof overlays，字节本来就不同。
 
 ```bash
 python3 - <<'PY'
@@ -1123,17 +1114,31 @@ for destination, entry in r['modules'].items():
     got = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else None
     if got != entry['sha256']:
         bad.append((destination, got, entry['sha256']))
-for name, expected in r['goal_sha256'].items():
-    source = root / 'trainverify/denote/yoco_goals' / name
-    got = hashlib.sha256(source.read_bytes()).hexdigest()
-    if got != expected:
-        bad.append((name, got, expected))
-generated = root / 'trainverify/denote/GeneratedYOCOMoE.lean'
-if hashlib.sha256(generated.read_bytes()).hexdigest() != r['generated_lean_sha256']:
-    bad.append(('GeneratedYOCOMoE.lean', 'mismatch'))
 assert not bad, bad
-print(f"registry source hashes OK: {len(r['modules'])}/{len(r['modules'])}")
+print(f"registry overlay source hashes OK: {len(r['modules'])}/{len(r['modules'])}")
 print(f"proof targets: {len(r['proof_targets'])}")
+PY
+```
+
+`generated_lean_sha256`和`goal_sha256`必须对owner-private **raw fresh-emission stage** 单独复核。下面的 `RAW_STAGE` 是graph emitter在proof overlays物化前保留的审计目录；正式publisher在内部执行同一检查：
+
+```bash
+RAW_STAGE=/absolute/owner-private/raw-emission
+python3 - "$RAW_STAGE" <<'PY'
+from pathlib import Path
+import hashlib, json, sys
+root = Path('.')
+stage = Path(sys.argv[1])
+r = json.loads((root / 'scripts/yoco_regen/yoco_proof_registry.json').read_text())
+def sha(path): return hashlib.sha256(path.read_bytes()).hexdigest()
+bad = []
+if sha(stage / 'GeneratedYOCOMoE.lean') != r['generated_lean_sha256']:
+    bad.append('GeneratedYOCOMoE.lean')
+for name, expected in r['goal_sha256'].items():
+    if sha(stage / 'yoco_goals' / name) != expected:
+        bad.append(name)
+assert not bad, bad
+print('raw fresh-emission hashes OK: GeneratedYOCOMoE.lean + Goal_1..5')
 PY
 ```
 
@@ -1177,8 +1182,9 @@ rm -f AxiomAuditDoc.lean AxiomAuditDoc.log
 本文编写时实际重跑结果：
 
 ```text
-registry source hashes OK: 444/444
+registry overlay source hashes OK: 449/449
 proof targets: 5
+raw fresh-emission hashes OK: GeneratedYOCOMoE.lean + Goal_1..5
 Instances OK
 MainTheorem OK
 FivePublicContractsJointWitness OK
@@ -1402,12 +1408,12 @@ nnScaler RVD finding 与旧 graph node/TID 绑定。新 revision 可能修复、
 | Goal 4 faithful closure | 对 checked-in Goal 4 已完成 | 58 个 `Goal4PublicFaithful*.lean` 文件，含 public entry |
 | `sorryAx` audit | 5/5 PASS | registry audit / exact-tree review |
 | caller contract non-vacuity | PASS | `FivePublicContractsJointWitness` |
-| proof registry | 对当前 sources PASS | SHA-256 `e4111cf6…`，444 modules |
+| proof registry | 对当前 sources PASS | SHA-256 `a30ac1a3…`，449 modules |
 | emitter tests | 50 passed | proof pipeline tests |
 | full Python suite | 107 passed | proof pipeline tests |
-| owner-only proof materialization | 已完成 | `private-trainverify-7b019ace…` |
-| canonical authority → fresh Generated/Goal binding | **未完成** | checked-in manifest仍记录旧 revisions/hashes |
-| 绑定最终 emitter commit 的双 GPU authority | **未完成** | 必须重连 GPU，从最终 exact commit 重跑 |
+| historical owner-only proof materialization | 已完成，仅供基线复核 | `private-trainverify-7b019ace…`，不得作为最终publication input |
+| canonical authority → raw emission结构绑定 | 对历史canonical graph已审计 | raw canonical hashes已进入registry；仍需最终revision authority |
+| 绑定最终 emitter commit 的双 GPU authority | **未完成** | registry/emitter修复提交后必须从该exact commit重跑 |
 | sealed no-replace final snapshot | **BLOCKED** | 两条链尚未在同一release artifact闭合 |
 
-TrainVerify 已经证明当前 checked-in 的五个 full statements：Goals 1-4 在 faithful distributed evaluator 下闭合，Goal 5 在其完整 ancestry 的普通 evaluator 下闭合。下一步是更严格的发布闭环：从 canonical GPU authority fresh 生成 statements，比较 digest，必要时迁移证明，然后完成 axiom、ledger 与 no-replace 门禁。fresh graph 一致之前，不能把当前 theorem 自动升级为 canonical authority 的最终发布结论。
+TrainVerify已经证明当前checked-in的五个full statements：Goals 1-4在faithful distributed evaluator下闭合，Goal 5在其完整ancestry的普通evaluator下闭合。历史canonical graph的raw emission也已与这些proof overlays完成结构和字节层审计。下一步是从registry/emitter修复后的最终exact commit重跑canonical-profile GPU authority，再由fresh emitter完成clean-room Lean、axiom、ledger与no-replace门禁。最终revision authority发布之前，不能把当前theorem升级为sealed release结论。

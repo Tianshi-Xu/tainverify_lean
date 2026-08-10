@@ -1336,12 +1336,22 @@ def test_emitter_proof_registry_binds_exact_generated_statements_and_blobs(
             "source": f"trainverify/denote/{helper_destination}",
             "sha256": emitter.digest_bytes(proof),
         }
+    for goal_destination in sorted(emitter.PROOF_REGISTRY_GOALS):
+        registry["modules"][goal_destination] = {
+            "source": f"trainverify/denote/yoco_goals/{goal_destination}",
+            "sha256": emitter.digest_bytes(proof),
+        }
     monkeypatch.setattr(
         emitter, "git_blob", lambda _repo, _rev, path: proof
         if path.endswith("Pattern_2.lean") else b"",
     )
     loaded = emitter.validate_proof_registry(registry, stage)
     assert loaded == registry["modules"]
+
+    missing_goal_overlay = json.loads(json.dumps(registry))
+    del missing_goal_overlay["modules"]["Goal_1.lean"]
+    with pytest.raises(RuntimeError, match="generated goal overlays"):
+        emitter.validate_proof_registry(missing_goal_overlay, stage)
 
     # A registry destination is a snapshot module name; its authenticated Git
     # source may be a differently named public theorem module.
@@ -1399,6 +1409,14 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
             "source": source,
             "sha256": emitter.digest_bytes(blobs[source]),
         }
+    for index in range(1, 6):
+        destination = f"Goal_{index}.lean"
+        source = f"trainverify/denote/yoco_goals/{destination}"
+        blobs[source] = f"theorem goal_overlay_{index} : True := by trivial\n".encode()
+        modules[destination] = {
+            "source": source,
+            "sha256": emitter.digest_bytes(blobs[source]),
+        }
     for helper_destination in sorted(emitter.REGISTERED_TOP_LEVEL_MODULES):
         helper_source = f"trainverify/denote/{helper_destination}"
         blobs[helper_source] = (
@@ -1432,7 +1450,7 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
     for destination, entry in modules.items():
         if destination in emitter.REGISTERED_TOP_LEVEL_MODULES:
             continue
-        assert patterns[destination].read_bytes() == blobs[entry["source"]]
+        assert (goals / destination).read_bytes() == blobs[entry["source"]]
     helper_paths = {}
     for helper_destination in sorted(emitter.REGISTERED_TOP_LEVEL_MODULES):
         helper_source = modules[helper_destination]["source"]
@@ -1446,6 +1464,9 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
         assert refreshed["snapshot_sha256"][helper_destination] == emitter.sha256(helper_path)
 
     before = {name: path.read_bytes() for name, path in patterns.items()}
+    registry["goal_sha256"] = {
+        name: emitter.sha256(goals / name) for name in emitter.PROOF_REGISTRY_GOALS
+    }
     with pytest.raises(RuntimeError, match="top-level destination already exists"):
         emitter.materialize_registered_proofs(tmp_path, "a" * 40, stage, registry)
     assert {name: path.read_bytes() for name, path in patterns.items()} == before

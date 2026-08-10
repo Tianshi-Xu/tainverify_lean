@@ -983,6 +983,12 @@ def validate_proof_registry(registry: dict, stage: Path) -> dict[str, dict[str, 
     modules = registry["modules"]
     if not isinstance(modules, dict) or not modules:
         raise RuntimeError("proof registry modules must be a nonempty object")
+    missing_goal_overlays = PROOF_REGISTRY_GOALS - set(modules)
+    if missing_goal_overlays:
+        raise RuntimeError(
+            "proof registry is missing generated goal overlays: "
+            f"{sorted(missing_goal_overlays)}"
+        )
     missing_top_helpers = REGISTERED_TOP_LEVEL_MODULES - set(modules)
     if missing_top_helpers:
         raise RuntimeError(
