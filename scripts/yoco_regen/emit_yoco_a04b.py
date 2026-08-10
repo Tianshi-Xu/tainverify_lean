@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import hashlib
 import hmac
 import json
@@ -437,15 +438,16 @@ STATIC_GOAL_MODULES = (
     "trainverify/denote/yoco_goals/ZigzagPointwiseRel.lean",
     "trainverify/denote/yoco_goals/ZigzagRouterRel.lean",
     "trainverify/denote/yoco_goals/ZigzagGoalStatement.lean",
+    "trainverify/denote/yoco_goals/GatherOpGears.lean",
+    "trainverify/denote/yoco_goals/Goal4LateScopedBridge.lean",
+    "trainverify/denote/yoco_goals/RingAttnGears.lean",
+    "trainverify/denote/yoco_goals/ZigzagViewRel.lean",
 )
 GENERATED_GOAL_MODULES = (
     "Goal_1.lean", "Goal_1_Cut.lean", "Goal_2.lean", "Goal_3.lean",
     "Goal_4.lean", "Goal_4_Cut.lean", "Goal_5.lean",
-    "Goal_1_CutToFull.lean", "Goal_2_CutToFull.lean", "Goal_3_CutToFull.lean",
-    "Goal_4_CutToFull.lean", "Goal_5_CutToFull.lean",
     "Pattern_1.lean", "Pattern_2.lean", "Pattern_3.lean", "Pattern_4.lean",
-    "Pattern_5.lean", "Patterns.lean", "ProofObligations.lean", "Instances.lean",
-    "MainTheorem.lean",
+    "Pattern_5.lean", "Instances.lean", "MainTheorem.lean",
 )
 REGISTERED_TOP_LEVEL_MODULES = {
     "EmbeddingHiddenShard.lean",
@@ -468,6 +470,14 @@ PROOF_REGISTRY_KEYS = {
 }
 PROOF_REGISTRY_GOALS = {f"Goal_{index}.lean" for index in range(1, 6)}
 REGISTERED_LEGACY_CUT_MODULES = {"Goal_1_Cut.lean", "Goal_4_Cut.lean"}
+DEPRECATED_GENERATED_AUXILIARY_MODULES = {
+    *(f"Goal_{index}_CutToFull.lean" for index in range(1, 6)),
+    "Patterns.lean", "ProofObligations.lean",
+}
+REGISTERED_SEALED_DEPENDENCY_MODULES = {
+    "GatherOpGears.lean", "Goal4LateScopedBridge.lean",
+    "RingAttnGears.lean", "ZigzagViewRel.lean",
+}
 PROOF_MODULE_KEYS = {"source", "sha256"}
 FORBIDDEN_PROOF_TOKEN = re.compile(rb"\b(?:sorry(?:Ax)?|axiom|unsafe)\b")
 PROOF_REGISTRY_PATH = "scripts/yoco_regen/yoco_proof_registry.json"
@@ -475,9 +485,7 @@ LEAN_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_'.]*(?:\.[A-Za-z_][A-Za-z0-9_']*)+
 LEAN_TARGETS = (
     "denote.GeneratedYOCOMoE",
     *(f"denote.yoco_goals.Goal_{index}" for index in range(1, 6)),
-    *(f"denote.yoco_goals.Goal_{index}_CutToFull" for index in range(1, 6)),
     *(f"denote.yoco_goals.Pattern_{index}" for index in range(1, 6)),
-    "denote.yoco_goals.Patterns", "denote.yoco_goals.ProofObligations",
     "denote.yoco_goals.Instances", "denote.yoco_goals.MainTheorem",
 )
 RECEIPT_KEYS = {
@@ -785,6 +793,114 @@ def verify_snapshot_stage(stage: Path) -> None:
         os.close(stage_fd)
 
 
+def _lean_imports(source: Path) -> set[str]:
+    imports = set()
+    for line in source.read_text(encoding="utf-8").splitlines():
+        match = re.match(r"^\s*import\s+(.+?)(?:\s+--.*)?$", line)
+        if match:
+            imports.update(match.group(1).split())
+    return imports
+
+
+def direct_lean_build(
+    project: Path, lake: str, targets: tuple[str, ...], clean_env: dict[str, str],
+) -> None:
+    """Compile the project-local import closure with at most four Lean workers."""
+    sources = {}
+    for source in project.rglob("*.lean"):
+        if ".lake" in source.parts:
+            continue
+        relative = source.relative_to(project).with_suffix("")
+        module = ".".join(relative.parts)
+        if module in sources:
+            raise RuntimeError(f"duplicate Lean module source: {module}")
+        sources[module] = source
+    missing_targets = set(targets) - set(sources)
+    if missing_targets:
+        raise RuntimeError(f"missing Lean target sources: {sorted(missing_targets)}")
+    project_roots = {module.split(".", 1)[0] for module in sources}
+    raw_dependencies = {
+        module: _lean_imports(source) for module, source in sources.items()
+    }
+    dependencies = {
+        module: imports & set(sources)
+        for module, imports in raw_dependencies.items()
+    }
+    closure = set()
+
+    def visit(module: str) -> None:
+        if module in closure:
+            return
+        missing_local = {
+            name for name in raw_dependencies[module]
+            if name.split(".", 1)[0] in project_roots and name not in sources
+        }
+        if missing_local:
+            raise RuntimeError(
+                f"missing project-local Lean imports for {module}: "
+                f"{sorted(missing_local)}"
+            )
+        closure.add(module)
+        for dependency in dependencies[module]:
+            visit(dependency)
+
+    for target in targets:
+        visit(target)
+    build_root = project / ".lake" / "build" / "lib" / "lean"
+    build_root.mkdir(parents=True, mode=0o700, exist_ok=True)
+    compiled = set()
+    pending = set(closure)
+    worker_env = dict(clean_env)
+    worker_env["LEAN_NUM_THREADS"] = "1"
+
+    def compile_module(module: str) -> None:
+        output = build_root / Path(*module.split(".")).with_suffix(".olean")
+        output.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+        source = sources[module]
+        subprocess.run(
+            [
+                lake, "env", "lean", "--tstack=65536", "-o",
+                str(output.relative_to(project)), str(source.relative_to(project)),
+            ],
+            cwd=project, check=True, env=worker_env,
+        )
+        os.chmod(output, 0o400, follow_symlinks=False)
+        _regular_owned_digest(output, f"Lean object {module}")
+
+    while pending:
+        ready = sorted(
+            module for module in pending
+            if dependencies[module] & closure <= compiled
+        )
+        if not ready:
+            raise RuntimeError(f"cyclic Lean imports: {sorted(pending)}")
+        print(
+            f"direct Lean: compiling {len(ready)} modules "
+            f"({len(compiled)}/{len(closure)} complete)",
+            flush=True,
+        )
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(compile_module, module) for module in ready]
+            for future in futures:
+                future.result()
+        compiled.update(ready)
+        pending.difference_update(ready)
+
+
+def final_snapshot_lean_targets(stage: Path) -> tuple[str, ...]:
+    """Return direct elaboration roots covering every sealed Lean source."""
+    goal_modules = {
+        f"denote.yoco_goals.{path.stem}"
+        for path in (stage / "yoco_goals").glob("*.lean")
+    }
+    top_modules = {
+        f"denote.{Path(name).stem}" for name in REGISTERED_TOP_LEVEL_MODULES
+    }
+    return tuple(sorted(
+        set(LEAN_TARGETS) | {"denote.GeneratedYOCOMoE"} | goal_modules | top_modules
+    ))
+
+
 def validate_lean_snapshot(
     stage: Path, lean_cache_project: Path, emitter_revision: str,
     proof_targets: list[str],
@@ -830,11 +946,8 @@ def validate_lean_snapshot(
             "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         }
-        subprocess.run(
-            [lake, "build", *LEAN_TARGETS],
-            cwd=project,
-            check=True,
-            env=clean_env,
+        direct_lean_build(
+            project, lake, final_snapshot_lean_targets(stage), clean_env,
         )
         audit_path = project / "AxiomAudit.lean"
         audit_path.write_text(
@@ -996,6 +1109,12 @@ def validate_proof_registry(registry: dict, stage: Path) -> dict[str, dict[str, 
             "proof registry is missing legacy cut overlays: "
             f"{sorted(missing_cut_overlays)}"
         )
+    missing_sealed_dependencies = REGISTERED_SEALED_DEPENDENCY_MODULES - set(modules)
+    if missing_sealed_dependencies:
+        raise RuntimeError(
+            "proof registry is missing sealed dependency modules: "
+            f"{sorted(missing_sealed_dependencies)}"
+        )
     missing_top_helpers = REGISTERED_TOP_LEVEL_MODULES - set(modules)
     if missing_top_helpers:
         raise RuntimeError(
@@ -1104,10 +1223,29 @@ def _refresh_snapshot_ledger(stage: Path) -> None:
     _replace_private_regular(manifest_path, content)
 
 
+def _remove_deprecated_generated_auxiliaries(stage: Path) -> None:
+    """Remove generated auxiliaries invalidated by the full-proof overlays.
+
+    The five public production theorems are ancestry-closed full statements
+    aggregated by the registry-authenticated MainTheorem.  The raw CutToFull
+    naming aliases are not proofs after overlaying those statements.  The raw
+    Patterns/ProofObligations skeletons likewise reference cut-era declarations
+    that the public overlays intentionally do not export.  None is registry
+    authenticated or part of the public import graph.
+    """
+    goals = stage / "yoco_goals"
+    for name in sorted(DEPRECATED_GENERATED_AUXILIARY_MODULES):
+        path = goals / name
+        if os.path.lexists(path):
+            _regular_owned_digest(path, f"deprecated generated certificate {name}")
+            path.unlink()
+
+
 def materialize_registered_proofs(
     repo: Path, revision: str, stage: Path, registry: dict,
 ) -> None:
     modules = validate_proof_registry(registry, stage)
+    _remove_deprecated_generated_auxiliaries(stage)
     contents = {}
     for destination, entry in modules.items():
         content = git_blob(repo, revision, entry["source"])

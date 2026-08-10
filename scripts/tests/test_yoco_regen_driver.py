@@ -1243,6 +1243,7 @@ def test_emitter_lean_gate_uses_private_revision_and_propagates_failure(
     packages.chmod(0o700)
     revision = "a" * 40
     build_commands = []
+    direct_build_calls = []
     fail_build = {"value": False}
     replace_cleanup = {"value": False, "replacement": None, "preserved": None}
 
@@ -1254,8 +1255,6 @@ def test_emitter_lean_gate_uses_private_revision_and_propagates_failure(
             (goals / "old.lean").write_text("-- old\n")
         elif command[0] == "/trusted/lake":
             build_commands.append(command)
-            if fail_build["value"]:
-                raise subprocess.CalledProcessError(1, command)
             if command[1:3] == ["env", "lean"]:
                 audit_text = (Path(kwargs["cwd"]) / "AxiomAudit.lean").read_text()
                 assert audit_text.startswith("import denote.yoco_goals.Instances\n")
@@ -1275,15 +1274,41 @@ def test_emitter_lean_gate_uses_private_revision_and_propagates_failure(
                 return types.SimpleNamespace(returncode=0, stdout=output, stderr="")
         return types.SimpleNamespace(returncode=0, stdout="", stderr="")
 
+    def fake_direct_build(project, lake, targets, clean_env):
+        direct_build_calls.append((project, lake, targets, clean_env))
+        if fail_build["value"]:
+            raise subprocess.CalledProcessError(1, [lake, "env", "lean"])
+
     monkeypatch.setattr(emitter.subprocess, "run", fake_run)
+    monkeypatch.setattr(emitter, "direct_lean_build", fake_direct_build)
     monkeypatch.setattr(emitter, "git_head", lambda _repo: revision)
     monkeypatch.setattr(emitter, "git_clean", lambda _repo: True)
     monkeypatch.setattr(emitter.shutil, "which", lambda _name: "/trusted/lake")
     emitter.validate_lean_snapshot(stage, cache_project, revision, PROOF_TARGETS)
+    assert len(direct_build_calls) == 1
+    expected_direct_targets = tuple(sorted(
+        set(emitter.LEAN_TARGETS)
+        | {"denote.GeneratedYOCOMoE"}
+        | {
+            f"denote.yoco_goals.{path.stem}"
+            for path in (stage / "yoco_goals").glob("*.lean")
+        }
+        | {
+            f"denote.{Path(name).stem}"
+            for name in emitter.REGISTERED_TOP_LEVEL_MODULES
+        }
+    ))
+    assert direct_build_calls[0][1:] == (
+        "/trusted/lake", expected_direct_targets,
+        {
+            "HOME": os.environ["HOME"], "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        },
+    )
     assert build_commands == [
-        ["/trusted/lake", "build", *emitter.LEAN_TARGETS],
         ["/trusted/lake", "env", "lean", "AxiomAudit.lean"],
     ]
+    assert all("build" not in command for command in build_commands)
     assert not list(stage.parent.glob(".trainverify-lean-validation-*"))
 
     fail_build["value"] = True
@@ -1297,6 +1322,62 @@ def test_emitter_lean_gate_uses_private_revision_and_propagates_failure(
         emitter.validate_lean_snapshot(stage, cache_project, revision, PROOF_TARGETS)
     assert (replace_cleanup["replacement"] / "unrelated").read_text() == "keep"
     assert replace_cleanup["preserved"].is_dir()
+
+
+def test_direct_lean_build_respects_import_dag_and_four_worker_limit(
+    tmp_path, monkeypatch,
+):
+    import threading
+    import time
+
+    project = tmp_path / "project"
+    project.mkdir()
+    dependencies = [f"Dep{index}" for index in range(6)]
+    for module in dependencies:
+        (project / f"{module}.lean").write_text("import Mathlib\n", encoding="utf-8")
+    (project / "Target.lean").write_text(
+        "import " + " ".join(dependencies) + "\n", encoding="utf-8",
+    )
+    calls = []
+    lock = threading.Lock()
+    active = 0
+    peak = 0
+
+    def fake_run(command, **kwargs):
+        nonlocal active, peak
+        assert command[:3] == ["/trusted/lake", "env", "lean"]
+        assert "build" not in command
+        assert kwargs["env"]["LEAN_NUM_THREADS"] == "1"
+        with lock:
+            active += 1
+            peak = max(peak, active)
+            calls.append(command[-1])
+        time.sleep(0.02)
+        output = Path(kwargs["cwd"]) / command[command.index("-o") + 1]
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"olean")
+        output.chmod(0o600)
+        with lock:
+            active -= 1
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(emitter.subprocess, "run", fake_run)
+    emitter.direct_lean_build(
+        project, "/trusted/lake", ("Target",),
+        {"HOME": os.environ["HOME"], "PATH": os.environ.get("PATH", "")},
+    )
+    assert peak == 4
+    assert set(calls[:-1]) == {f"{module}.lean" for module in dependencies}
+    assert calls[-1] == "Target.lean"
+
+    local = project / "Local"
+    local.mkdir()
+    (local / "Broken.lean").write_text("import Local.Missing\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="missing project-local Lean imports"):
+        emitter.direct_lean_build(
+            project, "/trusted/lake", ("Local.Broken",),
+            {"HOME": os.environ["HOME"], "PATH": os.environ.get("PATH", "")},
+        )
 
 
 def test_emitter_proof_registry_binds_exact_generated_statements_and_blobs(
@@ -1337,7 +1418,9 @@ def test_emitter_proof_registry_binds_exact_generated_statements_and_blobs(
             "sha256": emitter.digest_bytes(proof),
         }
     for goal_destination in sorted(
-        emitter.PROOF_REGISTRY_GOALS | emitter.REGISTERED_LEGACY_CUT_MODULES
+        emitter.PROOF_REGISTRY_GOALS
+        | emitter.REGISTERED_LEGACY_CUT_MODULES
+        | emitter.REGISTERED_SEALED_DEPENDENCY_MODULES
     ):
         registry["modules"][goal_destination] = {
             "source": f"trainverify/denote/yoco_goals/{goal_destination}",
@@ -1359,6 +1442,11 @@ def test_emitter_proof_registry_binds_exact_generated_statements_and_blobs(
     del missing_cut_overlay["modules"]["Goal_1_Cut.lean"]
     with pytest.raises(RuntimeError, match="legacy cut overlays"):
         emitter.validate_proof_registry(missing_cut_overlay, stage)
+
+    missing_sealed_dependency = json.loads(json.dumps(registry))
+    del missing_sealed_dependency["modules"]["GatherOpGears.lean"]
+    with pytest.raises(RuntimeError, match="sealed dependency modules"):
+        emitter.validate_proof_registry(missing_sealed_dependency, stage)
 
     # A registry destination is a snapshot module name; its authenticated Git
     # source may be a differently named public theorem module.
@@ -1401,6 +1489,14 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
         path.write_bytes(f"goal-{index}".encode())
         path.chmod(0o600)
         goal_digests[path.name] = emitter.sha256(path)
+    deprecated_generated_auxiliaries = {
+        *(f"Goal_{index}_CutToFull.lean" for index in range(1, 6)),
+        "Patterns.lean", "ProofObligations.lean",
+    }
+    for name in deprecated_generated_auxiliaries:
+        path = goals / name
+        path.write_text("theorem bogus_cut_to_full : True := by trivial\n", encoding="utf-8")
+        path.chmod(0o600)
     patterns = {}
     blobs = {}
     modules = {}
@@ -1417,8 +1513,14 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
             "sha256": emitter.digest_bytes(blobs[source]),
         }
     for destination in sorted(
-        emitter.PROOF_REGISTRY_GOALS | emitter.REGISTERED_LEGACY_CUT_MODULES
+        emitter.PROOF_REGISTRY_GOALS
+        | emitter.REGISTERED_LEGACY_CUT_MODULES
+        | emitter.REGISTERED_SEALED_DEPENDENCY_MODULES
     ):
+        if destination in emitter.REGISTERED_SEALED_DEPENDENCY_MODULES:
+            static_path = goals / destination
+            static_path.write_bytes(b"old-static")
+            static_path.chmod(0o600)
         source = f"trainverify/denote/yoco_goals/{destination}"
         theorem_name = destination.removesuffix(".lean").lower()
         blobs[source] = f"theorem {theorem_name}_overlay : True := by trivial\n".encode()
@@ -1468,6 +1570,9 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
         helper_paths[helper_destination] = helper_path
         assert helper_path.read_bytes() == blobs[helper_source]
     refreshed = json.loads(manifest_path.read_text())
+    for name in deprecated_generated_auxiliaries:
+        assert not (goals / name).exists()
+        assert f"yoco_goals/{name}" not in refreshed["snapshot_sha256"]
     for destination, path in patterns.items():
         assert refreshed["snapshot_sha256"][f"yoco_goals/{destination}"] == emitter.sha256(path)
     for destination in emitter.REGISTERED_LEGACY_CUT_MODULES:

@@ -334,9 +334,9 @@ authority 原始图规模为 SM 2074 nodes、PM 4363 nodes。历史 authority �
 | raw pickle hashes | 对 `sm_mgener.pkl` / `pm_mgener.pkl` 实际字节计算 SHA-256，并与 provenance/receipts 比较 |
 | comm/comp profile hashes | `gen_args.json.comm_profile_sha256`、`gen_args.json.comp_profile_sha256`；对应 profile artifact 实际字节 |
 | native solver和patched sources | `gen_args.json`、rank receipts、authority 内 `nnscaler_dp_solver.so` 及 patched-source hash fields |
-| registry `451` modules 与五 targets | `scripts/yoco_regen/yoco_proof_registry.json`，以及第 17.1 节的 source-hash command |
+| registry `455` modules 与五 targets | `scripts/yoco_regen/yoco_proof_registry.json`，以及第 17.1 节的 source-hash command |
 | Goal 4 `58` files | registry 中 basename 匹配 `Goal4PublicFaithful*.lean` 的唯一集合，其中包含 public entry |
-| `50/107` tests | 第 17.1 节列出的两条实际 pytest 命令与本文编写时输出 |
+| `51/108` tests | 第 17.1 节列出的两条实际 pytest 命令与本文编写时输出 |
 
 历史两次重现的完整执行日志未全部作为当前 public tree 的文件发布，因此本文只把 canonical artifact 的现存 hashes 作为可独立复核事实，不据此声称保存了完整 run transcript。
 
@@ -873,7 +873,7 @@ env -u LEAN_PATH lake env lean -DmaxHeartbeats=4000000 \
   "$SOURCE" -o "$OLEAN" -i "$ILEAN"
 ```
 
-第 17.1 节给出当前 public aggregate 的实际模块名和完整复核命令。完整 clean-room gate 按 registry 依赖顺序逐文件编译。不能把聚合 `lake build +Target` 当 authority：Lake 5 的 job 参数曾在 96 核机器上仍拉起 96 个 Lean 进程，造成内存事故。
+第 17.1 节给出当前 public aggregate 的实际模块名和完整复核命令。正式clean-room gate解析project-local import DAG：既编译public targets，也动态把final stage/ledger中的每个sealed Lean source加入root集合，按拓扑层逐文件direct Lean编译，因此legacy/diagnostic source也不能以orphan形式绕过elaboration；只并行同层siblings，固定`max_workers=4`且每个worker设置`LEAN_NUM_THREADS=1`，因此最多同时存在4个Lake parent和4个Lean child。不能把聚合 `lake build +Target` 当 authority：Lake 5 的 job 参数曾在 96 核机器上仍拉起 96 个 Lean 进程，造成内存事故。
 
 资源规则：
 
@@ -983,7 +983,7 @@ Python emitter、certificate generator、coverage script 都是不可信 produce
 ```text
 scripts/yoco_regen/yoco_proof_registry.json
 SHA-256:
-ceb8da668bff5481769c9186d6b563647bacd1eb37394c773fff67053ca14304
+c42446064189a8c18154e7f73c8d29ce99cb1d604340fa3d6f3269bb22516e30
 ```
 
 精确列出五个 target：
@@ -1045,8 +1045,8 @@ Proof 链：
 - Goal 4 的 58 个 `Goal4PublicFaithful*.lean` 文件 fresh replay，其中包含 public entry；
 - five-public per-goal non-vacuity witnesses；
 - exact-tree audit；
-- 451-module proof registry；
-- 50 项 emitter tests和107项完整 Python suite；
+- 455-module proof registry；
+- 51 项 emitter tests和108项完整 Python suite；
 - owner-only proof materialization。
 
 ### 16.2 尚未完成
@@ -1065,11 +1065,14 @@ raw canonical emission:
 proof overlays:
   五个 checked-in Goal_N.lean
   两个 checked-in legacy cut modules: Goal_1_Cut.lean / Goal_4_Cut.lean
+  四个此前漏出sealed set的project-local依赖: GatherOpGears / Goal4LateScopedBridge / RingAttnGears / ZigzagViewRel
   其余444个helper/proof modules
-  total modules: 451
+  total modules: 455
 ```
 
-emitter现在强制五个raw Goal和两个generator不产出的legacy cut modules都存在authenticated Git overlay，缺一个即fail closed；canonical raw emission → 451 overlays的本地完整materialization dry-run已经通过（448个`yoco_goals`文件、459条exact ledger）。
+emitter现在强制五个raw Goal、两个generator不产出的legacy cut modules和四个sealed project-local依赖都存在authenticated Git overlay，缺一个即fail closed；canonical raw emission → 455 overlays的本地完整materialization dry-run已经通过（445个`yoco_goals`文件、456条exact ledger，project-local import closure无缺失）。
+
+raw generator还会产出五个`Goal_N_CutToFull.lean` naming certificates。它们把`goal_N_stmt_cut = goal_N_stmt_full`写成`rfl`，但final proof overlays中Goal 1/4的legacy cut与full statement并非定义相等，Goal 3也刻意不导出该legacy statement，因此这些文件不是证明。raw `Patterns.lean`和`ProofObligations.lean`也仍引用overlay刻意不导出的cut-era declarations，只是未认证旧skeleton。emitter在raw Goal hash gate通过后将这七个auxiliary从closed allowlist和ledger中剔除。最终公开闭包只使用registry认证的`MainTheorem.lean → Instances.lean → 五个goal_N_stmt_full` import图；不把statement别名或orphan skeleton冒充正式闭包。
 
 剩余发布链不能靠修改metadata闭合。因为registry/emitter修复本身改变TrainVerify exact revision，必须：
 
@@ -1084,7 +1087,7 @@ emitter现在强制五个raw Goal和两个generator不产出的legacy cut module
 
 ### 17.1 checked-in proof 快速复核
 
-本节复核本文当前已经成立的 source-level 结论。它使用当前 exact tree 的既有 `.lake/packages` 和项目依赖缓存，直接重新 elaboration 顶层模块并核对 registry source hashes。它**不是** 451 个模块的 clean-room rebuild；完整 clean-room gate 仍属于 fresh authority emission 和正式发布流程。
+本节复核本文当前已经成立的 source-level 结论。它使用当前 exact tree 的既有 `.lake/packages` 和项目依赖缓存，直接重新 elaboration 顶层模块并核对 registry source hashes。它**不是** 455 个模块的 clean-room rebuild；完整 clean-room gate 仍属于 fresh authority emission 和正式发布流程。
 
 从 TrainVerify 仓库根目录开始，先确认工作树、proof baseline 仍在当前历史中，以及 registry：
 
@@ -1099,10 +1102,10 @@ sha256sum scripts/yoco_regen/yoco_proof_registry.json
 
 ```text
 7b019aceaf65af957d4af737c98c7057b884bf9c
-ceb8da668bff5481769c9186d6b563647bacd1eb37394c773fff67053ca14304
+c42446064189a8c18154e7f73c8d29ce99cb1d604340fa3d6f3269bb22516e30
 ```
 
-先核对registry中451个authenticated overlay/helper source modules。不要把raw digests对checked-in `GeneratedYOCOMoE.lean` / `Goal_N.lean` 比较：后者是proof overlays，字节本来就不同。
+先核对registry中455个authenticated overlay/helper source modules。不要把raw digests对checked-in `GeneratedYOCOMoE.lean` / `Goal_N.lean` 比较：后者是proof overlays，字节本来就不同。
 
 ```bash
 python3 - <<'PY'
@@ -1184,7 +1187,7 @@ rm -f AxiomAuditDoc.lean AxiomAuditDoc.log
 本文编写时实际重跑结果：
 
 ```text
-registry overlay source hashes OK: 451/451
+registry overlay source hashes OK: 455/455
 proof targets: 5
 raw fresh-emission hashes OK: GeneratedYOCOMoE.lean + Goal_1..5
 Instances OK
@@ -1201,7 +1204,7 @@ uv run --with pytest --python 3.11 python -m pytest -q   scripts/tests/test_yoco
 uv run --with pytest --python 3.11 python -m pytest -q   Verdict/tests scripts/tests trainverify/tests
 ```
 
-对应结果为 `50 passed` 和 `107 passed`。这些测试验证 emitter/registry 和项目 Python 回归，不替代 Lean clean-room build。
+对应结果为 `51 passed` 和 `108 passed`。这些测试验证 emitter/registry 和项目 Python 回归，不替代 Lean clean-room build。
 
 ### 17.2 authority generation
 
@@ -1410,9 +1413,9 @@ nnScaler RVD finding 与旧 graph node/TID 绑定。新 revision 可能修复、
 | Goal 4 faithful closure | 对 checked-in Goal 4 已完成 | 58 个 `Goal4PublicFaithful*.lean` 文件，含 public entry |
 | `sorryAx` audit | 5/5 PASS | registry audit / exact-tree review |
 | caller contract non-vacuity | PASS | `FivePublicContractsJointWitness` |
-| proof registry | 对当前 sources PASS | SHA-256 `ceb8da66…`，451 modules |
-| emitter tests | 50 passed | proof pipeline tests |
-| full Python suite | 107 passed | proof pipeline tests |
+| proof registry | 对当前 sources PASS | SHA-256 `c4244606…`，455 modules |
+| emitter tests | 51 passed | proof pipeline tests |
+| full Python suite | 108 passed | proof pipeline tests |
 | historical owner-only proof materialization | 已完成，仅供基线复核 | `private-trainverify-7b019ace…`，不得作为最终publication input |
 | canonical authority → raw emission结构绑定 | 对历史canonical graph已审计 | raw canonical hashes已进入registry；仍需最终revision authority |
 | 绑定最终 emitter commit 的双 GPU authority | **未完成** | registry/emitter修复提交后必须从该exact commit重跑 |
