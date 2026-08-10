@@ -1753,6 +1753,10 @@ def test_authority_script_pins_reviewed_llm_revision():
     assert "validate_print_axioms_output" in emitter
     assert "verify_snapshot_stage(stage)" in emitter
     assert "TRAINVERIFY_PRIVATE_MATERIALIZATION" in emitter
+    assert "snapshot, expected_manifest_sha256" in emitter
+    assert "require_manifest_digest_fd(directory_fd, expected_manifest_sha256)" in emitter
+    assert "require_sealed_regular_modes_fd(directory_fd)" in emitter
+    assert "publish_validated_directory(stage, snapshot, publication_validator)" in emitter
     assert 'stage / "goals"' not in emitter
 
     generator = (
@@ -1766,6 +1770,63 @@ def test_authority_script_pins_reviewed_llm_revision():
     assert "Main full-goal composition omitted" in generator
     assert 'goal_{gid}_cut_to_full prove_goal_{gid}_from_pattern_{pid}' in generator
     assert '"mount"' not in builder
+
+
+def test_content_addressed_snapshot_path_and_seal_files(tmp_path):
+    stage = tmp_path / "stage"
+    goals = stage / "yoco_goals"
+    goals.mkdir(parents=True)
+    manifest = stage / "GeneratedYOCOMoE.manifest.json"
+    manifest.write_bytes(b'{"schema_version":1}\n')
+    generated = stage / "GeneratedYOCOMoE.lean"
+    generated.write_text("def x := 1\n")
+    goal = goals / "Goal_1.lean"
+    goal.write_text("def y := 1\n")
+    generated.chmod(0o600)
+    goal.chmod(0o600)
+
+    requested = tmp_path / "placeholder"
+    digest = emitter.sha256(manifest)
+    assert emitter.content_addressed_snapshot_path(requested, digest) == (
+        tmp_path / f"yoco-a04b-manifest-sha256-{digest}"
+    )
+    emitter.seal_snapshot_files(stage)
+    assert stat.S_IMODE(generated.stat().st_mode) == 0o400
+    assert stat.S_IMODE(goal.stat().st_mode) == 0o400
+    assert stat.S_IMODE(manifest.stat().st_mode) == 0o400
+
+
+def test_content_addressed_manifest_digest_is_descriptor_bound(tmp_path):
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    manifest = stage / "GeneratedYOCOMoE.manifest.json"
+    manifest.write_bytes(b'{"schema_version":1}\n')
+    expected = emitter.sha256(manifest)
+    directory_fd = os.open(stage, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        emitter.require_manifest_digest_fd(directory_fd, expected)
+        manifest.write_bytes(b'{"schema_version":2}\n')
+        with pytest.raises(RuntimeError, match="content-address manifest digest"):
+            emitter.require_manifest_digest_fd(directory_fd, expected)
+    finally:
+        os.close(directory_fd)
+
+
+def test_sealed_regular_modes_are_descriptor_bound(tmp_path):
+    stage = tmp_path / "stage"
+    goals = stage / "yoco_goals"
+    goals.mkdir(parents=True)
+    sealed = goals / "Goal_1.lean"
+    sealed.write_text("def x := 1\n")
+    sealed.chmod(0o600)
+    directory_fd = os.open(stage, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        with pytest.raises(RuntimeError, match="mode is not 0400"):
+            emitter.require_sealed_regular_modes_fd(directory_fd)
+        sealed.chmod(0o400)
+        emitter.require_sealed_regular_modes_fd(directory_fd)
+    finally:
+        os.close(directory_fd)
 
 
 def test_cpu_smoke_is_explicitly_non_authoritative():
@@ -1790,4 +1851,5 @@ def test_compatibility_entrypoint_imports_from_any_cwd(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert "--snapshot-dir" in result.stdout
+    assert "--content-addressed" in result.stdout
     assert "--trust-new-authority" in result.stdout

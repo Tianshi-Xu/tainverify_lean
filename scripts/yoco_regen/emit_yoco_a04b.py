@@ -1538,6 +1538,61 @@ def graph_to_lean_argv(llm_train, nnscaler, files, stage):
     return command
 
 
+def content_addressed_snapshot_path(requested: Path, manifest_sha256: str) -> Path:
+    return requested.parent / f"yoco-a04b-manifest-sha256-{manifest_sha256}"
+
+
+def require_manifest_digest_fd(directory_fd: int, expected: str) -> None:
+    manifest_fd = os.open(
+        "GeneratedYOCOMoE.manifest.json",
+        os.O_RDONLY | os.O_NOFOLLOW,
+        dir_fd=directory_fd,
+    )
+    try:
+        digest = hashlib.sha256()
+        while chunk := os.read(manifest_fd, 1024 * 1024):
+            digest.update(chunk)
+    finally:
+        os.close(manifest_fd)
+    if not hmac.compare_digest(digest.hexdigest(), expected):
+        raise RuntimeError("content-address manifest digest changed before publication")
+
+
+def require_sealed_regular_modes_fd(directory_fd: int, prefix: str = "") -> None:
+    for name in os.listdir(directory_fd):
+        relative = f"{prefix}/{name}" if prefix else name
+        info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        if info.st_uid != os.getuid():
+            raise RuntimeError(f"sealed path is not owner-controlled: {relative}")
+        if stat.S_ISREG(info.st_mode):
+            if stat.S_IMODE(info.st_mode) != 0o400:
+                raise RuntimeError(f"sealed regular file mode is not 0400: {relative}")
+        elif stat.S_ISDIR(info.st_mode):
+            child_fd = os.open(
+                name,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                dir_fd=directory_fd,
+            )
+            try:
+                require_sealed_regular_modes_fd(child_fd, relative)
+            finally:
+                os.close(child_fd)
+        else:
+            raise RuntimeError(f"sealed snapshot contains non-regular entry: {relative}")
+
+
+def seal_snapshot_files(stage: Path) -> None:
+    """Make every sealed regular file owner-read-only before publication."""
+    for path in [stage, *stage.rglob("*")]:
+        info = path.lstat()
+        if info.st_uid != os.getuid():
+            raise RuntimeError(f"snapshot path is not owner-controlled: {path}")
+        if stat.S_ISLNK(info.st_mode):
+            raise RuntimeError(f"snapshot contains symlink before sealing: {path}")
+        if stat.S_ISREG(info.st_mode):
+            os.chmod(path, 0o400, follow_symlinks=False)
+
+
 def main():
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1545,6 +1600,13 @@ def main():
     parser.add_argument("--llm-train", type=Path, required=True)
     parser.add_argument("--nnscaler", type=Path, required=True)
     parser.add_argument("--snapshot-dir", type=Path, required=True)
+    parser.add_argument(
+        "--content-addressed", action="store_true",
+        help=(
+            "derive the no-replace target name from the fresh final manifest SHA-256; "
+            "--snapshot-dir supplies only the parent and staging-name placeholder"
+        ),
+    )
     parser.add_argument(
         "--lean-project", type=Path, required=True,
         help="trusted Lean project providing the prebuilt .lake/packages cache",
@@ -1611,6 +1673,7 @@ def main():
         shutil.rmtree(authority)
         if git_head(ROOT) != emitter_revision or not git_clean(ROOT):
             raise RuntimeError("emitter TrainVerify revision changed during emission")
+        seal_snapshot_files(stage)
         verify_snapshot_stage(stage)
         validate_lean_snapshot(
             stage, args.lean_project, emitter_revision,
@@ -1618,9 +1681,25 @@ def main():
         )
         if git_head(ROOT) != emitter_revision or not git_clean(ROOT):
             raise RuntimeError("emitter TrainVerify revision changed during Lean validation")
+        publication_validator = verify_snapshot_fd
+        if args.content_addressed:
+            expected_manifest_sha256 = sha256(
+                stage / "GeneratedYOCOMoE.manifest.json"
+            )
+            snapshot = content_addressed_snapshot_path(
+                snapshot, expected_manifest_sha256
+            )
+
+            def validate_content_addressed_snapshot(directory_fd: int) -> None:
+                verify_snapshot_fd(directory_fd)
+                require_manifest_digest_fd(directory_fd, expected_manifest_sha256)
+                require_sealed_regular_modes_fd(directory_fd)
+
+            publication_validator = validate_content_addressed_snapshot
+
         from scripts.yoco_regen.atomic_publish import publish_validated_directory
 
-        publish_validated_directory(stage, snapshot, verify_snapshot_fd)
+        publish_validated_directory(stage, snapshot, publication_validator)
     except BaseException:
         cleanup_owned_stage(stage, stage_marker, stage_dev, stage_ino)
         raise

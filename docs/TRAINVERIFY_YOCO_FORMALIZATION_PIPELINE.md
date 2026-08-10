@@ -41,7 +41,7 @@ theorem prove_goal_5_from_pattern_5 : goal_5_stmt_full
 
 它们由 `MainTheorem.FullPatternTier` 合取。五项均经过独立 exact-tree 审计和 `#print axioms` 审计，没有 `sorryAx`，没有项目手写 axiom；外部 caller contracts 也由汇总定理 `FivePublicContractsJointWitness` 分别给出具体可满足性见证。
 
-不过，**Lean证明完成不等于正式快照已经发布**。真实双GPU live-profile重跑已经证明planner会因fresh computation profile选择不同PM图，并在raw digest gate fail closed；对authenticated canonical profile的只读重放则确认现有proof绑定canonical graph。当前registry已把raw fresh emission与五个Goal proof overlays分层，但修复本身改变了TrainVerify exact revision，因此仍需从最终owner-private commit重新生成authority并完成clean-room Lean/axiom/ledger/no-replace publication。本文严格区分“对checked-in statements的证明完成”“raw authority绑定”和“sealed snapshot发布”。
+不过，**Lean证明完成不等于正式快照已经发布**。真实双GPU live-profile重跑已经证明planner会因fresh computation profile选择不同PM图，并在raw digest gate fail closed；对authenticated canonical profile的重放则确认proof绑定canonical graph。registry把raw fresh emission、Goal proof overlays、legacy cuts与sealed dependencies分层。某个exact revision只有在对应双GPU authority、fresh emission、all-source direct Lean、五目标axiom audit、exact ledger和no-replace publication全部通过后才升级为sealed release。最终状态不在这份会随源码revision变化的文档中硬编码，而由`$HOME/yoco-final-publication/receipts/yoco-a04b-final-sealed.json`及其content-addressed snapshot给出。
 
 ```mermaid
 flowchart LR
@@ -1046,12 +1046,14 @@ Proof 链：
 - five-public per-goal non-vacuity witnesses；
 - exact-tree audit；
 - 455-module proof registry；
-- 51 项 emitter tests和108项完整 Python suite；
+- 54 项 emitter tests和111项完整 Python suite；
 - owner-only proof materialization。
 
-### 16.2 尚未完成
+### 16.2 publication状态与历史候选
 
-正式 sealed snapshot 尚未发布。2026-08-10 已在真实双 RTX PRO 6000、双 rank NCCL 环境完成一次绑定 `df3834e1…` 的 fresh live-profile authority：SM仍为 `333a1438…`（2074 nodes），但fresh computation profile选择了新的PM计划 `2624ef2d…`（4531 nodes）。该authority通过receipts/ledger检查，但fresh emission在registry digest gate按预期fail closed；它不能用于当前proof snapshot。
+`080e31da…`曾完成绑定同revision的双GPU、双rank NCCL canonical-profile authority，以及463-module all-source direct Lean、五目标axiom audit、456-entry exact ledger和no-replace publication。发布后post-audit发现旧CLI要求调用者在fresh manifest生成前猜测content address，且`GeneratedYOCOMoE.lean`未被统一降为mode `0400`；该工件只保留为已验证历史候选，不能替代含修复revision的最终authority。
+
+当前emitter提供`--content-addressed`：fresh final manifest完成后自动派生`yoco-a04b-manifest-sha256-<digest>`目标，并在publication前验证owner/symlink边界、将全部regular files设为`0400`。最终revision仍必须执行同revision双GPU authority、fresh emission、all-source direct Lean、axiom/ledger gate和`renameat2(RENAME_NOREPLACE)`；完成状态只由外部`yoco-a04b-final-sealed.json` receipt声明，文档不跨revision重签旧authority。
 
 随后对历史canonical authority的authenticated computation profile做只读重放审计。当前 `graph_to_lean` 从canonical SM/PM `333a1438… / a47d033c…` 生成的raw graph与现有proof graph结构一致：`GeneratedYOCOMoE.lean`仅与checked-in版本相差6行非语义注释，Goal 1/2/4/5只差已登记的caller-contract/compatibility覆盖，Goal 3由已证明的faithful statement覆盖。这个审计同时暴露了旧registry分层错误：raw digest错误地绑定了overlay后的文件，使emitter即使拿到canonical graph也不可能通过fresh gate。
 
@@ -1074,11 +1076,11 @@ emitter现在强制五个raw Goal、两个generator不产出的legacy cut module
 
 raw generator还会产出五个`Goal_N_CutToFull.lean` naming certificates。它们把`goal_N_stmt_cut = goal_N_stmt_full`写成`rfl`，但final proof overlays中Goal 1/4的legacy cut与full statement并非定义相等，Goal 3也刻意不导出该legacy statement，因此这些文件不是证明。raw `Patterns.lean`和`ProofObligations.lean`也仍引用overlay刻意不导出的cut-era declarations，只是未认证旧skeleton。emitter在raw Goal hash gate通过后将这七个auxiliary从closed allowlist和ledger中剔除。最终公开闭包只使用registry认证的`MainTheorem.lean → Instances.lean → 五个goal_N_stmt_full` import图；不把statement别名或orphan skeleton冒充正式闭包。
 
-剩余发布链不能靠修改metadata闭合。因为registry/emitter修复本身改变TrainVerify exact revision，必须：
+publication链不能靠修改metadata闭合。对每个候选exact revision都必须：
 
-1. 从修复后的最终owner-private exact commit重新运行双GPU production authority generation，并显式使用canonical authenticated computation profile；
-2. fresh emit raw Generated/Goal sources并通过修正后的registry gate；
-3. 运行五目标clean-room build、axiom audit、exact-path ledger和no-replace publication；
+1. 从owner-private exact commit运行双GPU production authority generation，并显式使用canonical authenticated computation profile；
+2. fresh emit raw Generated/Goal sources并通过registry gate；
+3. 运行all-source direct Lean、五目标axiom audit、exact-path ledger和content-addressed no-replace publication；
 4. 任何raw digest变化都必须再次fail closed，不能把旧authority跨revision“重签”。
 
 ---
@@ -1204,7 +1206,7 @@ uv run --with pytest --python 3.11 python -m pytest -q   scripts/tests/test_yoco
 uv run --with pytest --python 3.11 python -m pytest -q   Verdict/tests scripts/tests trainverify/tests
 ```
 
-对应结果为 `51 passed` 和 `108 passed`。这些测试验证 emitter/registry 和项目 Python 回归，不替代 Lean clean-room build。
+对应结果为 `54 passed` 和 `111 passed`。这些测试验证 emitter/registry 和项目 Python 回归，不替代 Lean clean-room build。
 
 ### 17.2 authority generation
 
@@ -1255,11 +1257,12 @@ python -m scripts.yoco_regen.emit_yoco_a04b \
   --nnscaler /clean/pinned/nnscaler \
   --expected-hardware-sha256 <out-of-band-digest> \
   --lean-project /trusted/lean-project-with-lake-packages \
-  --snapshot-dir /new/content-addressed-path \
+  --snapshot-dir /sealed-parent/staging-placeholder \
+  --content-addressed \
   --trust-new-authority
 ```
 
-只有 graph emission、manifest validation、proof registry materialization、Lean target validation、axiom audit、exact ledger 全部通过后，snapshot 才会 no-replace publish。
+`--content-addressed`是正式sealed publication的必需门禁。此模式下`--snapshot-dir`只提供目标父目录和不可复用的staging占位名；最终目标名由fresh final manifest的单一SHA-256自动派生，调用者不得预猜或手填content address。只有graph emission、manifest validation、proof registry materialization、all-source direct Lean、axiom audit、exact ledger，以及held-FD manifest/mode复核全部通过后，snapshot才会以`renameat2(RENAME_NOREPLACE)`发布。
 
 ---
 
@@ -1414,11 +1417,11 @@ nnScaler RVD finding 与旧 graph node/TID 绑定。新 revision 可能修复、
 | `sorryAx` audit | 5/5 PASS | registry audit / exact-tree review |
 | caller contract non-vacuity | PASS | `FivePublicContractsJointWitness` |
 | proof registry | 对当前 sources PASS | SHA-256 `c4244606…`，455 modules |
-| emitter tests | 51 passed | proof pipeline tests |
-| full Python suite | 108 passed | proof pipeline tests |
+| emitter tests | 54 passed | proof pipeline tests |
+| full Python suite | 111 passed | proof pipeline tests |
 | historical owner-only proof materialization | 已完成，仅供基线复核 | `private-trainverify-7b019ace…`，不得作为最终publication input |
-| canonical authority → raw emission结构绑定 | 对历史canonical graph已审计 | raw canonical hashes已进入registry；仍需最终revision authority |
-| 绑定最终 emitter commit 的双 GPU authority | **未完成** | registry/emitter修复提交后必须从该exact commit重跑 |
-| sealed no-replace final snapshot | **BLOCKED** | 两条链尚未在同一release artifact闭合 |
+| canonical authority → raw emission结构绑定 | 已审计 | raw canonical hashes进入registry；每个release仍须同revision authority |
+| 绑定exact emitter commit的双GPU authority | 由final receipt判定 | 不跨revision复用或重签 |
+| content-addressed sealed snapshot | 由final receipt判定 | `yoco-a04b-final-sealed.json`给出exact commit、manifest digest与路径 |
 
-TrainVerify已经证明当前checked-in的五个full statements：Goals 1-4在faithful distributed evaluator下闭合，Goal 5在其完整ancestry的普通evaluator下闭合。历史canonical graph的raw emission也已与这些proof overlays完成结构和字节层审计。下一步是从registry/emitter修复后的最终exact commit重跑canonical-profile GPU authority，再由fresh emitter完成clean-room Lean、axiom、ledger与no-replace门禁。最终revision authority发布之前，不能把当前theorem升级为sealed release结论。
+TrainVerify已经证明checked-in的五个full statements：Goals 1-4在faithful distributed evaluator下闭合，Goal 5在其完整ancestry的普通evaluator下闭合。某个revision是否进一步构成sealed release，不由本页静态 prose 升格，只由同revision authority、fresh all-source direct Lean、axiom/ledger gate和content-addressed no-replace publication共同生成的final receipt判定。
