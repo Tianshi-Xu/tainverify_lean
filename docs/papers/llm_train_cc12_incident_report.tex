@@ -1,0 +1,405 @@
+\documentclass[10.5pt,a4paper]{ctexart}
+\usepackage[margin=2.0cm]{geometry}
+\usepackage{booktabs,longtable,tabularx,array,enumitem,xcolor,hyperref,xurl,tikz,listings}
+\usetikzlibrary{arrows.meta,positioning,fit,calc}
+\hypersetup{colorlinks=true,linkcolor=blue!55!black,urlcolor=blue!55!black}
+\setlength{\emergencystretch}{2em}
+\setlist[itemize]{leftmargin=2em,itemsep=0.2em,topsep=0.3em}
+\setlist[enumerate]{leftmargin=2.2em,itemsep=0.2em,topsep=0.3em}
+\definecolor{bad}{RGB}{174,55,55}
+\definecolor{good}{RGB}{46,120,76}
+\definecolor{neutral}{RGB}{55,91,135}
+\definecolor{soft}{RGB}{247,247,244}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcommand{\boundary}[1]{\par\smallskip\noindent\colorbox{soft}{\parbox{0.95\linewidth}{\textbf{证据边界：}#1}}\par\smallskip}
+\newcommand{\todo}[1]{\par\smallskip\noindent\fcolorbox{orange!70!black}{orange!8}{\parbox{0.94\linewidth}{\textbf{待补证据：}#1}}\par\smallskip}
+\lstset{basicstyle=\ttfamily\small,breaklines=true,columns=fullflexible,frame=single}
+
+\title{形式化验证过程中发现的 llm-train CC12 Grouped-GEMM\\硬件选择器兼容性问题\\\large 事件、修复与归因边界，中文初稿 v0.2}
+\author{TrainVerify 项目}
+\date{2026 年 8 月 11 日}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+TrainVerify项目在为YOCO-MoE-A0.4B生成真实双GPU权威编译工件时，确认了固定llm-train版本上的一项运行时硬件选择器兼容性问题。在两张NVIDIA RTX PRO 6000 Blackwell、compute capability 12.0的生产编译路径上，grouped-GEMM的Triton实现选择器把CC12归入仅供B200使用的候选配置，双rank编译因而无法完成。项目内部的sealed evidence确认这一事件；但首次失败日志与修复后的完整运行日志尚未进入公开Git工件，外部读者目前不能独立复核全部运行过程。
+
+调查把问题收窄到\path{llm/kernel/gemm.py}中的两处硬件条件。最小补丁把\texttt{CC >= 10}收窄为\texttt{CC == 10}，让CC12改用通用的A100/H100 Triton自动调优候选。补丁不改变模型代码、图annotation或算子声明的数学语义。修订源码的digest写入SM和PM各自的rank-0 capture receipt，canonical patch ID写入authority provenance。修复后的真实双GPU路径生成了canonical authority，并用于后续Lean声明生成、证明检查和sealed publication。
+
+本文记录事件背景、源码与硬件范围、诊断顺序、根因、补丁、验证、影响和剩余证据缺口。报告还单列两次撤回：cache K/V曾被错误推断为zigzag布局；balance-loss曾因越过trace范围而被误判为llm-train语义bug。另一个nnScaler zigzag/RVD finding有独立的历史版本和CPU/Gloo双进程复现，不能合并进本事件。当前证据支持“CC12 grouped-GEMM选择器兼容性问题”，不支持“llm-train训练数学语义错误”或“已完成训练产生错误参数”。
+\end{abstract}
+
+\section{执行摘要}
+
+\begin{longtable}{L{0.21\linewidth}L{0.67\linewidth}}
+\toprule
+字段 & 结论 \\
+\midrule
+确认的问题 & llm-train的grouped-GEMM/Triton选择器在固定CC12生产路径上选择不兼容候选配置 \\
+触发环境 & 双RTX PRO 6000 Blackwell、CC12、双rank真实GPU编译 \\
+直接症状 & 生产authority编译无法完成 \\
+根因位置 & 固定源码版本的\path{llm/kernel/gemm.py}，两处\texttt{CC >= 10}条件 \\
+最小修复 & 条件收窄为\texttt{CC == 10}，CC12转入通用A100/H100候选 \\
+保持不变 & 模型代码、算子接口、图annotation和受审base revision \\
+验证 & 补丁文本测试、修订源码provenance、本地真实双rank authority成功、后续formal release闭合 \\
+没有证明 & grouped-GEMM数值错误、训练语义错误、所有Blackwell/CC12任务受影响、无性能损失 \\
+\bottomrule
+\end{longtable}
+
+本报告的标题、摘要和结论统一使用“运行时硬件选择器兼容性问题”。“TrainVerify发现llm-train bug”只能作为非正式简称，不能省略受影响源码版本、硬件路径和故障类型。
+
+\section{系统背景}
+
+\subsection{最小术语}
+
+一张GPU通常运行一个\textbf{rank}，也就是分布式作业中的工作进程。\textbf{SM}是同一BackBone子模块在单设备计划下得到的参考图，\textbf{PM}是两设备并行计划下得到的执行图。\textbf{authority}是把固定源码版本、硬件、profile、图文件和来源记录绑定在一起的权威编译工件。\textbf{profile}记录通信或算子成本，供nnScaler规划并行方案。每次SM或PM编译只有rank 0写一份\textbf{capture receipt}，记录被捕获对象及相关digest。\textbf{sealed publication}把通过检查的最终文件以内容地址发布，并拒绝覆盖旧结果。\textbf{RVD}是nnScaler描述复制和值/维度分片的布局表示；本报告后文讨论它为何不能表达zigzag permutation。
+
+\subsection{三层责任边界}
+
+llm-train、nnScaler与TrainVerify位于不同层。
+\begin{itemize}
+  \item llm-train定义YOCO模型、custom operators、训练调用和runtime kernel selector。
+  \item nnScaler负责trace、IR、并行规划、adapter/collective插入、code generation与runtime。
+  \item TrainVerify固定authority、翻译图、构造Denote和命题、检查proof并发布receipt。
+\end{itemize}
+
+CC12事件发生在llm-train runtime selector层。TrainVerify没有用Lean定理直接证明selector条件错误；严格authority policy强制系统执行真实GPU路径，从而暴露了普通CPU smoke没有覆盖的失败。
+
+\subsection{Grouped GEMM在MoE中的位置}
+
+YOCO MoE先由router为token选择experts，再把token发送到持有对应expert weights的rank。expert的up/gate/down projections可以批量表示为grouped GEMM。数学operator规定输入tensor、weights与输出值；kernel selector则根据hardware capability选择Triton launch/autotune candidates。selector失败可以阻断编译或运行，但不自动意味着operator数学定义错误。
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[>=Latex,node distance=8mm and 8mm,
+ b/.style={draw,rounded corners,minimum width=23mm,minimum height=8mm,align=center,font=\small},a/.style={->,thick}]
+\node[b,fill=neutral!10] (router) {router};
+\node[b,right=of router] (dispatch) {token dispatch};
+\node[b,right=of dispatch,fill=bad!10] (select) {CC selector};
+\node[b,right=of select] (gemm) {grouped GEMM};
+\node[b,right=of gemm] (merge) {AllToAll/merge};
+\draw[a] (router)--(dispatch);\draw[a] (dispatch)--(select);\draw[a] (select)--(gemm);\draw[a] (gemm)--(merge);
+\node[below=5mm of select,font=\footnotesize,text=bad] {本事件失败位置};
+\end{tikzpicture}
+\caption{CC12 selector位于MoE grouped-GEMM的实现选择层，不改变router与operator的数学接口。}
+\end{figure}
+
+\subsection{为什么CPU smoke看不到}
+
+CPU smoke可检查import、trace、code generation、pickle extraction和shuffle wiring。planner-only路径也可以产生候选并行计划。但二者不进入真实CC12 Triton selector、GPU computation profile和双rank NCCL process group。仅设置\texttt{plan\_ngpus=2}不等于启动两张GPU。TrainVerify因此明确把CPU smoke标为\texttt{authority: false}。
+
+\section{环境与revision范围}
+
+\subsection{CC12事件}
+
+本事件绑定：
+\begin{itemize}
+  \item llm-train：\path{9a1be1d5fd1c063d80be82797692cdc7d23cfbef}；
+  \item nnScaler：\path{d3d468ed23edb2f28aa8566b2dfb6ed49c5955cf}；
+  \item hardware：2 $\times$ NVIDIA RTX PRO 6000 Blackwell Workstation Edition；
+  \item compute capability：12.0；
+  \item CUDA runtime：12.8；NCCL：2.27.3；driver：595.71.05；
+  \item model：YOCO-MoE-A0.4B，24 layers，sequence length 4096；
+  \item production path：\texttt{run\_mode=compile}、\texttt{pas\_autodist}、双rank \texttt{torchrun}。
+\end{itemize}
+
+结论不能自动外推到所有llm-train版本、所有Blackwell设备或所有grouped-GEMM调用。上游后续版本是否包含等价修复，需要另行审计。硬件、driver和profile信息可由本地runF authority与receipt直接复核，但当前public Git tree只保留摘要性记录；正式artifact发布前必须补入可公开的receipts、hardware inventory与profile digests。
+
+\subsection{nnScaler RVD finding使用另一组revision}
+
+历史zigzag/RVD finding绑定nnScaler
+\path{1102e629ee68ab6f8f4a7c2e721ea894e5962131}
+和llm-train
+\path{30b80f546d46aacbf8316c983550c50a56bcd1ac}。
+它不能与CC12 authority revision混用。该finding的归因是RVD/annotation/adapter integration无法表达permuted ownership，不是llm-train \path{model.py}的API使用错误。
+
+\section{证据分级}
+
+本文把证据分为三层。E1是public artifact中可直接复核的源码、测试或保存日志；E2是绑定revision的审计记录、commit或hash摘要，但缺少对应原始run transcript；“缺失”表示报告需要而当前没有保存的直接证据。
+
+CC12 patch source、exact-two/idempotent/partial-state tests和provenance binding机制属于E1。固定hardware与environment、原selector在真实run中的行为、以及修复后runF成功目前在项目本地authority和final receipt中可直接复核，但在public Git tree中仍只有E2摘要。首次production failure transcript、性能数据和跨硬件回归属于缺失。正文每个claim按最弱公开证据措辞，不用本地存在但未发布的工件冒充公开可复现性。
+
+\section{事件检测}
+
+\subsection{预期行为}
+
+固定三个项目revision和profiles，在两张CC12 GPU上启动双rank production compile，分别生成SM与PM graph pickle、SM/PM各自的rank-0 capture receipt和hardware/provenance metadata。随后TrainVerify验证graph digests、emit Lean并运行proof gates。
+
+\subsection{观察到的失败}
+
+项目revision-scoped审计记录真实双GPU、双rank compile无法完成，而CPU smoke和planner-only路径不足以复现。本地authority metadata记录两张设备均为compute capability 12.0。调查因此优先检查hardware dispatch，而不是修改模型图或Lean theorem。由于首次失败日志未发布，这一段对public artifact属于E2事件摘要。
+
+当前公开tree没有保存首次失败的完整transcript。现存证据包括补丁源码与测试、authority generator记录、patched-source attestation、成功run的authority和后续release receipt。报告不能补写未经保存的Triton exception、首个failing candidate或kernel launch error。
+
+\todo{恢复首次production失败的原始命令、时间戳、stdout/stderr、rank、exception type和完整software inventory。若无法恢复，最终报告必须把该缺口保留在evidence ledger。}
+
+\section{诊断时间线}
+
+版本库能确认以下里程碑：
+\begin{longtable}{L{0.16\linewidth}L{0.53\linewidth}L{0.20\linewidth}}
+\toprule
+日期 & 事件 & 证据状态 \\
+\midrule
+2026-07-29 & 将另一条布局问题的根因修正为nnScaler RVD无法表达permuted sharding & commit \texttt{abe1c92f} \\
+2026-07-30 & 双进程CPU/Gloo执行真实nnScaler shuffle/all-gather源码并复现mismatch & commit \texttt{66b295d7} \\
+2026-08-06 & CC12 selector最小修复与authority attestation落地 & commit \texttt{dcd42b38} \\
+2026-08-08 & 回读\path{model.py}执行顺序，撤回cache K/V zigzag归因 & commit \texttt{56234713} \\
+2026-08-11 & 公开审计说明区分confirmed、withdrawn与historical findings & commit \texttt{eb960f0d} \\
+\bottomrule
+\end{longtable}
+
+2026-08-06是修复落地日期，不是有证据的首次故障发生日期。CC12事件内部诊断顺序可重构为图~\ref{fig:timeline}，但T0--T4仍需原始日志补全真实时间。
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[>=Latex,node distance=5mm,
+ e/.style={draw,rounded corners,minimum width=0.86\linewidth,minimum height=8mm,align=left,font=\small},a/.style={->,thick}]
+\node[e] (t0) {T0：真实双rank production compile失败；CPU smoke不能替代};
+\node[e,below=of t0] (t1) {T1：hardware metadata确认CC12，优先检查dispatch};
+\node[e,below=of t1] (t2) {T2：失败范围收敛至\path{llm/kernel/gemm.py} candidate selector};
+\node[e,below=of t2] (t3) {T3：两处\texttt{CC >= 10}收窄为\texttt{CC == 10}};
+\node[e,below=of t3,fill=good!10] (t4) {T4：双rank authority生成成功，patched source进入provenance};
+\draw[a] (t0)--(t1);\draw[a] (t1)--(t2);\draw[a] (t2)--(t3);\draw[a] (t3)--(t4);
+\end{tikzpicture}
+\caption{CC12事件的证据顺序。具体时间戳仍需原始日志补全。}
+\label{fig:timeline}
+\end{figure}
+
+\section{根因分析}
+
+\subsection{原selector}
+
+固定源码中存在两处相同硬件条件，分别用于M-GEMM与K-GEMM candidate selection：
+\begin{lstlisting}[language=Python]
+if (_cuda_compute_capability_major() or 0) >= 10:
+    return B200_*_configs
+return A100_H100_*_configs
+\end{lstlisting}
+
+CC12满足\texttt{>= 10}，因此进入标记为B200-only的候选集合。补丁脚本本身也用marker明确记录这一假设。现有production证据表明该路径在RTX PRO 6000 Blackwell CC12上不能完成compile，而generic fallback可以完成。
+
+\subsection{五个为什么}
+
+\begin{enumerate}
+  \item production authority为什么失败？grouped-GEMM候选选择或候选编译路径在该CC12环境中无法完成。
+  \item 为什么进入这组candidates？hardware major capability 12满足\texttt{CC >= 10}。
+  \item 为什么条件不合适？该分支实际承载B200-only candidates，而不是所有未来更高capability设备的通用集合。
+  \item 为什么已有测试没有提前发现？CPU smoke与planner-only test不执行真实CC12 GPU selector；现有单测只检查补丁文本机制。
+  \item 为什么TrainVerify工作触发了它？authority policy拒绝CPU或模拟graph替代真实双rank production compile。
+\end{enumerate}
+
+\boundary{没有原始失败transcript时，不能进一步声称具体PTX instruction、register pressure、Triton compiler exception或数值错误。修复后成功只支持selector compatibility归因，不足以恢复丢失的低层failure detail。}
+
+\section{最小修复}
+
+\subsection{补丁内容}
+
+\path{scripts/yoco_regen/patch_llm_cc12_gemm.py}定义：
+\begin{lstlisting}[language=Python]
+NEEDLE = "if (_cuda_compute_capability_major() or 0) >= 10:"
+REPLACEMENT = (
+    "if (_cuda_compute_capability_major() or 0) == 10:  "
+    "# [TRAINVERIFY_CC12_GEMM_FALLBACK] B200-only configs"
+)
+\end{lstlisting}
+
+脚本要求原source恰好出现两处needle。零处、一处或多于两处都fail closed。若marker已存在，脚本要求两处replacement完整存在且不再含needle，否则判定partial/malformed patch。正常重复执行幂等。
+
+canonical补丁身份为：
+\begin{quote}
+\path{cc12_generic_triton_fallback_v1}
+\end{quote}
+
+\subsection{为什么这是最小修复}
+
+补丁只改变launch/autotune candidate selection，不改变：
+\begin{itemize}
+  \item YOCO model code与forward data flow；
+  \item grouped-GEMM operator input/output contract；
+  \item nnScaler custom-op annotation；
+  \item SM/PM graph topology的目标语义；
+  \item reviewed llm-train base revision。
+\end{itemize}
+
+正式generator从fixed-commit private materialization产生patched source，不修改开发checkout。patched \path{gemm.py}字节被hash并写入SM/PM各自的rank-0 capture receipt；canonical patch ID写入authority provenance，防止运行时使用了另一份文件却仍声称应用该补丁。
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[>=Latex,node distance=8mm and 14mm,
+ b/.style={draw,rounded corners,minimum width=31mm,minimum height=9mm,align=center,font=\small},a/.style={->,thick}]
+\node[b] (cc) {hardware major CC};
+\node[b,below left=of cc,fill=neutral!10] (eq) {CC = 10\\B200-only set};
+\node[b,below right=of cc,fill=good!10] (gen) {其它CC\\generic set};
+\draw[a] (cc)--node[left,font=\footnotesize]{修复后} (eq);
+\draw[a] (cc)--node[right,font=\footnotesize]{含CC12} (gen);
+\node[above=3mm of cc,text=bad,font=\footnotesize] {原条件：CC $\ge 10$全部进入左侧};
+\end{tikzpicture}
+\caption{修复把B200专用分支收窄到CC10，使CC12走generic candidates。}
+\end{figure}
+
+\section{验证与回归}
+
+\subsection{补丁机制测试}
+
+仓库已有：
+\begin{itemize}
+  \item \path{test_cc12_gemm_patch_is_exact_and_idempotent}：检查两处\texttt{== 10}、无残留\texttt{>= 10}、marker与幂等性；
+  \item \path{test_cc12_gemm_patch_rejects_partial_source}：只出现一处needle时必须拒绝。
+\end{itemize}
+
+这些测试验证文本补丁机制，不验证GPU runtime failure。成稿前应补零命中、marker篡改、错误revision与额外source mutation的独立用例。
+
+\subsection{真实双GPU authority}
+
+本地final receipt记录，修复后的runF在双RTX PRO 6000 Blackwell、双rank NCCL环境中完成。canonical graph为：SM 2074 nodes，raw digest
+\path{333a14387e13cb265e74588f02133a0c47b02329d3d1811e6d7a736387494f64}；PM 4363 nodes，raw digest
+\path{a47d033c83a0cd6dff9111ba49071f3a80eb60869435fc2adeb4f725a71c3462}。authority、patched source、hardware metadata与profiles随后用于fresh Lean emission。
+
+该本地成功结果支持“最小selector修复足以恢复受审计production path”。但当前public Git tree没有SM/PM rank-0 capture receipts、authority \path{gen_args.json}或完整successful run transcript；正式对外artifact补齐这些工件前，只能把公开证据称为E2。若没有修复前可完成的同环境authority，也不能声称“修复前后graph byte-identical”；未修复路径本来就没有产生可比较的完整graph。
+
+\subsection{后续formal release}
+
+本地final receipt记录，从修复后的authority生成的最终工件通过all-source direct Lean、五目标axiom audit、proof registry、exact ledger和content-addressed publication。receipt SHA-256为 \path{91be8193e07183353c460854cf1e4746cee9f1185db438146cf72f50ba075a5e}。这里的formal release证明的是修复后authority图对应的五个值关系，并不反向证明原selector为什么失败。
+
+\subsection{性能证据}
+
+当前没有一组经过发布的、补丁前后可比的CC12 grouped-GEMM compile/autotune/runtime性能数据。因此不能声称generic fallback“无性能损失”或“性能相同”。即使数学operator不变，candidate set变化也可能改变编译时间与runtime performance。
+
+\todo{补充generic fallback的compile time、autotune time、selected config和grouped-GEMM runtime；在可用时与CC12 baseline、CC10专用路径和较低CC路径比较。}
+
+\section{影响评估}
+
+\subsection{已建立的影响}
+
+在固定llm-train revision和受审计CC12双GPUproduction compile路径上，未修复selector阻断authority generation。直接后果是无法取得真实SM/PM工件；没有合法authority时，后续Lean proof不能绑定该hardware/compiler path。
+
+\subsection{没有建立的影响}
+
+当前证据不支持以下结论：
+\begin{itemize}
+  \item grouped-GEMM曾成功运行但产生静默数值错误；
+  \item 已完成训练产生错误参数、loss或模型质量下降；
+  \item 所有CC12或所有Blackwell设备均受影响；
+  \item nnScaler planner或TrainVerify Denote导致本事件；
+  \item generic fallback没有性能代价。
+\end{itemize}
+
+\section{两个撤回}
+
+\subsection{撤回一：cache K/V ownership}
+
+早期分析看到decoder stream在\path{maybe_shuffle}后保持zigzag，一度猜测cache K/V也从zigzag-owned hidden state投影，并据此怀疑llm-train/nnScaler存在K/V ownership漏洞。重新审计
+\path{llm/arch/model.py}的执行顺序后发现：
+\begin{enumerate}
+  \item K/V projection发生在\path{wrap_maybe_shuffle(h)}之前；
+  \item cache K/V来自pre-shuffle ordinary contiguous hidden shards；
+  \item shuffle后的是Q与decoder residual stream；
+  \item 因此K/V不是replica，也不是zigzag shard，而是ordinary shard。
+\end{enumerate}
+
+建立在原假设上的候选commits没有进入production authority，不能作为上游bug证据。最终证明使用K/V的\texttt{Gather2Rel}和Q/stream的\texttt{Zigzag2Rel}。
+
+\subsection{撤回二：balance-loss语义bug}
+
+另一条早期调查曾认为\path{all_routing_map}与position-indexed \path{loss_mask}错位，因此llm-train balance loss有bug。该判断被撤回：目标TID是leaf output，balance-loss consumer位于trace scope之外；用scope外代码推断scope内goal为假属于方法错误。除非未来固定revision、源码位置和可复现实验重新建立证据，文档不得恢复该claim。
+
+\subsection{撤回为何属于正式报告}
+
+形式化工作仍然依赖人类选择目标、解释operator与推断provenance。错误假设可能产生看似合理的Lean lemma。保留撤回记录有三个作用：防止实验branch中的候选revision被未来误选；提醒reviewer theorem green不等于upstream interpretation正确；把方法如何纠错作为可审计过程，而不是只展示最终成功路径。
+
+\section{独立的nnScaler zigzag/RVD finding}
+
+在另一组固定revision上，\path{maybe_shuffle}真实重排sequence rows，但custom-op annotation只能表达elementwise identity。nnScaler RVD包含replicate、value split与dimension split，没有permutation-sharded layout。adapter可能把post-shuffle tensor当普通dim-0 shard并插入rank-order AllGather。
+
+对行号输入，两个rank的zigzag shards按rank concat得到
+\[
+[0,1,6,7,2,3,4,5],
+\]
+而不是原序列。双进程CPU/Gloo实验执行了真实nnScaler shuffle、unshuffle与runtime all-gather source，确认mismatch。该实验没有完成CUDA/NCCL专项复现，也没有建立end-to-end training quality影响。
+
+这项finding与CC12事件不同：它发生在layout representation与adapter contract层；CC12事件发生在llm-train grouped-GEMM hardware selector层。把二者合并为“llm-train bug”会破坏责任边界。
+
+\section{形式化验证在事件中起了什么作用}
+
+Lean theorem没有直接发现两处\texttt{CC >= 10}。TrainVerify方法的作用体现在authority policy：
+\begin{itemize}
+  \item production claim必须执行真实双GPU、双rank路径；
+  \item CPU smoke、单GPU或手写graph不能替代；
+  \item hardware、profiles、patched source和graph bytes进入provenance；
+  \item 失败不能通过弱化statement或修改metadata绕过；
+  \item publication semantics变化后必须重新生成authority和proof。
+\end{itemize}
+
+这种proof-oriented validation把“测试环境没有覆盖的编译路径”变成必须执行、固定和记录的前置条件。单一事件不足以证明该方法普遍优于传统CI，但它给出了一个具体机制：当下游proof只接受真实authority时，上游runtime兼容问题无法被模拟工件掩盖。
+
+\section{预防措施}
+
+\begin{longtable}{L{0.30\linewidth}L{0.19\linewidth}L{0.24\linewidth}L{0.16\linewidth}}
+\toprule
+行动 & 责任层 & 验收标准 & 状态 \\
+\midrule
+用显式capability table替代开放式\texttt{CC >= N} & llm-train & 未知新CC fail closed或走明确generic path & 待设计 \\
+增加CC12 selector tests & llm-train & M/K GEMM两条路径均选择预期set & 部分完成 \\
+增加真实CC12双rank CI & 基础设施 & production compile与最小runtime通过 & 待资源 \\
+记录candidate rejection原因 & runtime & failure包含candidate/backend/首个原因 & 待补 \\
+补性能回归 & llm-train & compile与runtime数据可复核 & 待测 \\
+绑定patch provenance & TrainVerify & patch ID在authority provenance中，source hash与capture receipts一致 & 已实现 \\
+登记撤回结论 & TrainVerify/docs & 错误候选revision不能进入allowlist & 已实现 \\
+\bottomrule
+\end{longtable}
+
+\section{对系统论文的意义}
+
+两行selector条件本身不足以构成OSDI/SOSP论文。更有研究价值的问题是：proof/authority pipeline如何暴露traditional smoke test未覆盖的跨层错误；如何把真实执行、provenance、fail-closed policy和撤回机制组合成可复核诊断；以及这种方法在多个模型、编译器与硬件上的检测率、定位成本和误报率。
+
+在没有更多案例和系统对照前，本报告最适合作为TrainVerify主论文的详细case study和独立技术事件报告。若未来形成通用diagnostic framework，则需要与普通CI、differential testing、compiler self-check和runtime telemetry做量化比较。
+
+\section{结论}
+
+对固定llm-train revision，在双RTX PRO 6000 Blackwell CC12 production authority路径上，grouped-GEMM/Triton selector存在已确认的runtime/hardware compatibility issue。两处\texttt{CC >= 10}把CC12送入B200-only candidates；最小条件补丁使CC12使用generic candidates，并恢复真实双rankauthority generation。补丁身份和source bytes进入provenance，后续formal release完成。
+
+该事件没有证明grouped-GEMM数学值错误或llm-train训练语义错误。cache K/V与balance-loss两项早期判断已撤回；nnScaler zigzag/RVD是不同revision上的独立finding。事件的核心教训不是“形式化工具永远正确”，而是严格的authority、证据分层和撤回机制能让错误归因被纠正、让真实runtime failure不能被模拟工件绕过。
+
+\appendix
+\section{Claim-to-evidence ledger}
+
+\begin{longtable}{L{0.22\linewidth}L{0.16\linewidth}L{0.34\linewidth}L{0.17\linewidth}}
+\toprule
+Claim & 状态 & 主要证据 & 可用措辞 \\
+\midrule
+CC12 selector compatibility & 项目确认；public E2 & patch source、tests、审计记录、本地receipt & 固定范围compatibility issue \\
+原始具体Triton异常 & 缺失 & 首次失败transcript未保存于artifact & 不写具体异常 \\
+generic fallback恢复authority & 本地E1；public E2 & runF authority、本地receipt、摘要记录 & 受审计路径恢复 \\
+operator contract不变 & E1，源码范围 & 补丁只改selector条件 & 不扩大成kernel refinement \\
+无性能损失 & 缺失 & 缺可比benchmark & 不得声称 \\
+cache K/V为zigzag & 已撤回；理由E2 & producer-order审计与删除记录 & 不得恢复 \\
+balance-loss语义bug & 已撤回，E1 & consumer在trace scope外 & 不得恢复 \\
+nnScaler RVD mismatch & 固定revision，E1 & CPU/Gloo双进程真实源码与日志 & 不声称NCCL复现 \\
+\bottomrule
+\end{longtable}
+
+\section{源码与工件映射}
+
+\begin{itemize}
+  \item CC12 patch：\path{scripts/yoco_regen/patch_llm_cc12_gemm.py}
+  \item Patch tests：\path{scripts/tests/test_yoco_regen_driver.py}
+  \item Production generator：\path{scripts/yoco_regen/generate_authority.sh}
+  \item Authority documentation：\path{scripts/yoco_regen/README.md}
+  \item Full audit：\path{docs/TRAINVERIFY_YOCO_FORMALIZATION_AUDIT.md}
+  \item Final authority：\path{$HOME/yoco-final-publication/authorities/authority-63cabbff-canonical-profile-runF}
+  \item Final receipt：\path{$HOME/yoco-final-publication/receipts/yoco-a04b-final-sealed.json}
+\end{itemize}
+
+\section{成稿前BLOCK}
+
+\begin{itemize}
+  \item 恢复或正式声明无法恢复首次production failure transcript。
+  \item 补原始与patched selector在相同CC12环境上的最小A/B复现。
+  \item 补compile、autotune和runtime性能数据。
+  \item 检查llm-train上游当前版本与等价修复状态。
+  \item 增加CC10、CC12和较低CC路径回归，区分真实硬件与静态测试。
+  \item 完成相关工作primary-source audit和正式bibliography。
+\end{itemize}
+
+\end{document}
