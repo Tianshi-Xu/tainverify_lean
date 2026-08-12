@@ -17,6 +17,10 @@ import sys
 from pathlib import Path, PurePosixPath
 
 from scripts.yoco_regen.safe_cleanup import create_owned_stage, cleanup_owned_stage
+from scripts.yoco_regen.cleanup_errors import CleanupFailureGroup
+from scripts.yoco_regen.strict_json import load_strict_json, loads_strict_json
+from scripts.yoco_regen.torch_compat import ensure_torch_recompile_limit
+
 
 ROOT = Path(__file__).resolve().parents[2]
 STUBS = Path(__file__).resolve().parent / "stubs"
@@ -695,25 +699,6 @@ def digest_bytes(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
-def _strict_json_bytes(content: bytes):
-    def reject_constant(value):
-        raise ValueError(f"non-finite JSON constant: {value}")
-
-    def unique_object(pairs):
-        result = {}
-        for key, value in pairs:
-            if key in result:
-                raise ValueError(f"duplicate JSON key: {key}")
-            result[key] = value
-        return result
-
-    return json.loads(
-        content.decode("utf-8"),
-        object_pairs_hook=unique_object,
-        parse_constant=reject_constant,
-    )
-
-
 def _read_regular_at(directory_fd: int, name: str) -> bytes:
     info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
     if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
@@ -750,8 +735,9 @@ def verify_snapshot_fd(stage_fd: int) -> None:
         or stat.S_IMODE(goals_info.st_mode) & 0o022
     ):
         raise RuntimeError("snapshot yoco_goals is not a trusted directory")
-    manifest = _strict_json_bytes(
-        _read_regular_at(stage_fd, "GeneratedYOCOMoE.manifest.json")
+    manifest = loads_strict_json(
+        _read_regular_at(stage_fd, "GeneratedYOCOMoE.manifest.json"),
+        "GeneratedYOCOMoE.manifest.json",
     )
     ledger = manifest.get("snapshot_sha256") if isinstance(manifest, dict) else None
     if not isinstance(ledger, dict):
@@ -901,6 +887,21 @@ def final_snapshot_lean_targets(stage: Path) -> tuple[str, ...]:
     ))
 
 
+def _reraise_after_cleanup(
+    primary: BaseException, stage: Path, marker: str, expected_dev: int, expected_ino: int,
+) -> None:
+    """Preserve the operation failure and report any independent cleanup failure."""
+    try:
+        if not cleanup_owned_stage(stage, marker, expected_dev, expected_ino):
+            raise RuntimeError("stage identity changed before failure cleanup")
+    except BaseException as cleanup_failure:
+        raise CleanupFailureGroup(
+            "operation and private-stage cleanup both failed",
+            [primary, cleanup_failure],
+        ) from None
+    raise primary.with_traceback(primary.__traceback__)
+
+
 def validate_lean_snapshot(
     stage: Path, lean_cache_project: Path, emitter_revision: str,
     proof_targets: list[str],
@@ -967,14 +968,10 @@ def validate_lean_snapshot(
             capture_output=True,
         )
         validate_print_axioms_output(audited.stdout + audited.stderr, proof_targets)
-    except BaseException:
-        try:
-            cleanup_owned_stage(
-                validation_root, validation_marker, validation_dev, validation_ino,
-            )
-        except BaseException:
-            pass
-        raise
+    except BaseException as primary:
+        _reraise_after_cleanup(
+            primary, validation_root, validation_marker, validation_dev, validation_ino,
+        )
     if not cleanup_owned_stage(
         validation_root, validation_marker, validation_dev, validation_ino,
     ):
@@ -1063,7 +1060,21 @@ def _read_owned_regular(path: Path, label: str) -> bytes:
 
 
 def _regular_owned_digest(path: Path, label: str) -> str:
-    return digest_bytes(_read_owned_regular(path, label))
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.getuid()
+            or stat.S_IMODE(info.st_mode) & 0o022
+        ):
+            raise RuntimeError(f"untrusted {label} inode")
+        digest = hashlib.sha256()
+        while chunk := os.read(descriptor, 1 << 20):
+            digest.update(chunk)
+        return digest.hexdigest()
+    finally:
+        os.close(descriptor)
 
 
 def validate_proof_registry(registry: dict, stage: Path) -> dict[str, dict[str, str]]:
@@ -1195,8 +1206,9 @@ def _create_private_regular(path: Path, content: bytes) -> None:
 
 def _refresh_snapshot_ledger(stage: Path) -> None:
     manifest_path = stage / "GeneratedYOCOMoE.manifest.json"
-    manifest = _strict_json_bytes(
-        _read_owned_regular(manifest_path, "snapshot manifest")
+    manifest = loads_strict_json(
+        _read_owned_regular(manifest_path, "snapshot manifest"),
+        "GeneratedYOCOMoE.manifest.json",
     )
     ledger = manifest.get("snapshot_sha256") if isinstance(manifest, dict) else None
     if not isinstance(ledger, dict):
@@ -1296,7 +1308,7 @@ def validate_print_axioms_output(output: str, targets: list[str]) -> None:
 
 def load_proof_registry(repo: Path, revision: str) -> dict:
     content = git_blob(repo, revision, PROOF_REGISTRY_PATH)
-    registry = _strict_json_bytes(content)
+    registry = loads_strict_json(content, PROOF_REGISTRY_PATH)
     canonical = (
         json.dumps(registry, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         + "\n"
@@ -1343,7 +1355,7 @@ def validate_authority(
     emitter_revision: str,
 ):
     files = {name: authority / name for name in AUTHORITY_NAMES}
-    meta = json.loads(files["gen_args.json"].read_text(encoding="utf-8"))
+    meta = load_strict_json(files["gen_args.json"])
     validate_meta_schema(meta)
     validate_expected_hardware(
         {key: meta[key] for key in HARDWARE_KEYS}, expected_hardware_sha256,
@@ -1431,7 +1443,7 @@ def validate_authority(
         receipt_path = files[f"{kind}_mgener.pkl.receipt.json"]
         if record.get("receipt_sha256") != sha256(receipt_path):
             raise RuntimeError(f"{kind} receipt hash mismatch")
-        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        receipt = load_strict_json(receipt_path)
         validate_receipt_schema(receipt, plan)
         if (
             receipt.get("pkl_sha256") != actual
@@ -1445,11 +1457,10 @@ def validate_authority(
             or receipt.get("canonicalized_code_count") != record.get("canonicalized_code_count")
         ):
             raise RuntimeError(f"{kind} receipt semantics mismatch")
-        provenance = json.loads(
-            files[f"{kind}_provenance.json"].read_text(encoding="utf-8"))
+        provenance = load_strict_json(files[f"{kind}_provenance.json"])
         if provenance != record:
             raise RuntimeError(f"{kind} provenance disagrees with gen_args")
-        world = json.loads(files[f"{kind}_mgener.json"].read_text(encoding="utf-8"))
+        world = load_strict_json(files[f"{kind}_mgener.json"])
         if set(world) != WORLD_KEYS:
             raise RuntimeError(f"{kind} world metadata has unexpected fields")
         expected_world = {
@@ -1495,11 +1506,7 @@ def configure_runtime(llm_train: Path, nnscaler_repo: Path):
         raise RuntimeError(f"runtime nnScaler is outside pinned checkout: {imported_nnscaler}")
     if not imported_llm.is_relative_to(llm_train / "llm"):
         raise RuntimeError(f"runtime llm-train model is outside pinned checkout: {imported_llm}")
-    config = torch._dynamo.config._config
-    if "recompile_limit" not in config:
-        from torch.utils._config_module import Config, _ConfigEntry
-
-        config["recompile_limit"] = _ConfigEntry(Config(default=32, value_type=int))
+    ensure_torch_recompile_limit(torch)
     multiprocessing.pool.Pool = SequentialPool
     import dill
     import nnscaler_backend.build_graph as build_graph
@@ -1700,9 +1707,8 @@ def main():
         from scripts.yoco_regen.atomic_publish import publish_validated_directory
 
         publish_validated_directory(stage, snapshot, publication_validator)
-    except BaseException:
-        cleanup_owned_stage(stage, stage_marker, stage_dev, stage_ino)
-        raise
+    except BaseException as primary:
+        _reraise_after_cleanup(primary, stage, stage_marker, stage_dev, stage_ino)
     print(f"wrote atomic refresh snapshot: {snapshot}")
 
 

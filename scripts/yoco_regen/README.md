@@ -186,10 +186,11 @@ artifact is not an independent trust anchor and must not be used here.
 Before unpickling, the emitter verifies ownership, non-writable permissions,
 fixed revisions, world/provenance schemas, production policy, topology, and
 pickle hashes. It writes every generated file into a sibling staging directory
-and atomically publishes one complete snapshot only after graph emission and
-manifest validation and the fixed 20-target `lake build` both succeed. The
-manifest contains an exact relative path-to-SHA-256 ledger for the main Lean
-module, every split goal module, and both static zigzag dependency modules.
+and atomically publishes one complete snapshot only after graph emission,
+manifest validation, and direct Lean elaboration of the complete sealed source
+closure all succeed. The manifest contains an exact relative path-to-SHA-256
+ledger for the generated graph, every goal/proof module, and every registered
+top-level release root.
 Before publication the emitter holds directory descriptors, rejects any extra,
 missing, symlink, or special entry, and rehashes every listed file. The Lean
 validator clones the declared TrainVerify commit privately; `--lean-project`

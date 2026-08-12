@@ -308,33 +308,6 @@ def backward_closure_tids(G: Any, root_tids: Iterable[int]) -> List[int]:
 	return sorted(seen)
 
 
-def backward_closure_tids_until(
-	G: Any, root_tids: Iterable[int], stop_tids: Iterable[int]
-) -> List[int]:
-	"""Backward closure, but do not expand past `stop_tids`.
-
-	The resulting set still includes the stop tids themselves, but excludes their producers.
-	"""
-	prod = _build_producer_index(G)
-	stop: set[int] = {int(t) for t in stop_tids}
-	seen: set[int] = {int(t) for t in root_tids}
-	frontier: set[int] = set(seen)
-	while frontier:
-		nxt: set[int] = set()
-		for tid in list(frontier):
-			if int(tid) in stop:
-				continue
-			for node_idx in prod.get(int(tid), []):
-				node = G.nodes()[node_idx]
-				for t_in in G.node_inputs(node):
-					t_id = int(t_in.tid)
-					if t_id not in seen:
-						seen.add(t_id)
-						nxt.add(t_id)
-		frontier = nxt
-	return sorted(seen)
-
-
 def _safe_str_op(op: Any) -> str:
 	# OpName types often have a friendly string repr.
 	try:
@@ -580,9 +553,8 @@ def build_zigzag_owner_predicate(
 	shuffle_outs = set(shuffle_cu)
 	unshuffle_outs = set(_collective_output_tids(G, UNSHUFFLE_OPS))
 	memo_cu: Dict[int, Optional[int]] = {}
-	# Build the producer index ONCE. `backward_closure_tids_until` rebuilds it on
-	# every call, which is quadratic when asked for ~1150 goals on a 2000-node
-	# graph, so the walk is inlined here against a shared index.
+	# Build the producer index once: rebuilding it for each of ~1150 goals would
+	# make ownership classification quadratic on a ~2000-node graph.
 	prod: Dict[int, List[int]] = _build_producer_index(G) if shuffle_outs else {}
 	nodes = list(G.nodes()) if shuffle_outs else []
 	ins_cache: Dict[int, List[int]] = {}
@@ -798,6 +770,52 @@ def _infer_gather_dim(shard_shape: List[int], full_shape: List[int], num_parts: 
 			else:
 				return None
 	return candidates[0] if len(candidates) == 1 else None
+
+
+def _stable_toposort_nodes(G: Any, nodes: List[Any]) -> List[Any]:
+	"""Stable topo-sort by tensor dependencies; reject cycles and ambiguous leftovers."""
+	if len(nodes) <= 1:
+		return nodes
+
+	producers: Dict[int, List[int]] = {}
+	for index, node in enumerate(nodes):
+		for tensor in G.node_outputs(node):
+			producers.setdefault(int(tensor.tid), []).append(index)
+
+	deps: List[set[int]] = [set() for _ in nodes]
+	users: List[List[int]] = [[] for _ in nodes]
+	for index, node in enumerate(nodes):
+		for tensor in G.node_inputs(node):
+			for producer in producers.get(int(tensor.tid), []):
+				if producer != index and producer not in deps[index]:
+					deps[index].add(producer)
+					users[producer].append(index)
+
+	indegree = [len(node_deps) for node_deps in deps]
+	queue = deque(index for index, degree in enumerate(indegree) if degree == 0)
+	ordered: List[int] = []
+	while queue:
+		index = queue.popleft()
+		ordered.append(index)
+		for user in users[index]:
+			indegree[user] -= 1
+			if indegree[user] == 0:
+				queue.append(user)
+
+	if len(ordered) != len(nodes):
+		unresolved = [
+			{
+				"index": index,
+				"inputs": [int(t.tid) for t in G.node_inputs(nodes[index])],
+				"outputs": [int(t.tid) for t in G.node_outputs(nodes[index])],
+			}
+			for index, degree in enumerate(indegree)
+			if degree > 0
+		]
+		raise RuntimeError(
+			f"topological sort failed for {len(unresolved)} nodes: {unresolved[:8]}"
+		)
+	return [nodes[index] for index in ordered]
 
 
 def _get_node_params(G: Any, n: Any, num_parts: int = 0) -> Optional[List[int]]:
@@ -1322,27 +1340,6 @@ This avoids constructing a meaningless "allGather of identical full tensors" for
 	return lineage
 
 
-def normalize_lineage_by_collectives(pm_graph: Any, lineage: SelectedLineage) -> SelectedLineage:
-	"""Normalize lineage by collapsing collective inputs to their collective output.
-
-	If the lineage tps match the inputs of an AllReducePrim/AllGatherPrim node and that
-	node has a single output tid, replace tps with that output tid (replicated result).
-	"""
-	if not lineage.tps:
-		return lineage
-
-	lineage_tids = sorted(int(t) for (_r, t) in lineage.tps)
-	for n in pm_graph.nodes():
-		op = _safe_str_op(pm_graph.node_opname(n))
-		if ("AllReducePrim" not in op) and ("AllGatherPrim" not in op) and ("CROSS_DP_WRED" not in op):
-			continue
-		ins = sorted(int(t.tid) for t in pm_graph.node_inputs(n))
-		outs = [int(t.tid) for t in pm_graph.node_outputs(n)]
-		if ins == lineage_tids and len(outs) == 1:
-			return SelectedLineage(ts=lineage.ts, tps=[(0, outs[0])])
-	return lineage
-
-
 def make_collective_lineage_normalizer(pm_graph: Any):
 	"""Build an indexed lineage normalizer for repeated lookups on the same PM graph."""
 	collective_outputs_by_inputs: Dict[Tuple[int, ...], int] = {}
@@ -1385,13 +1382,6 @@ def lean_list_nat(xs: Sequence[int]) -> str:
 	if not xs:
 		return "[]"
 	return "[" + ", ".join(str(int(x)) for x in xs) + "]"
-
-
-def lean_list_pairs(pairs: Sequence[Tuple[int, int]]) -> str:
-	# List (Rank × Tid)
-	if not pairs:
-		return "[]"
-	return "[" + ", ".join(f"({int(r)}, {int(t)})" for r, t in pairs) + "]"
 
 
 def _all_tensor_shapes_from_graph(G: Any) -> Dict[int, List[int]]:
@@ -2143,7 +2133,9 @@ def emit_lean_spec(
 	_emit_init_env(lines, name="sm", G=sm_graph, kept_nodes=sm_nodes, emit_all_shapes=True)
 	_emit_init_env(lines, name="pm", G=pm_graph, kept_nodes=pm_nodes, prefer_shapes=_sm_prefer, emit_all_shapes=True)
 
-	def _infer_gather_dim(ts_shape: List[int], tp_shape: List[int], num_pieces: int) -> int:
+	def _infer_goal_gather_dim(
+		ts_shape: List[int], tp_shape: List[int], num_pieces: int,
+	) -> int:
 		"""Infer which dimension was split by comparing SM and PM shard shapes.
 		
 		Returns the dimension index where ts_shape[dim] == tp_shape[dim] * num_pieces
@@ -2260,7 +2252,7 @@ def emit_lean_spec(
 			return False
 		if num_pieces > 1 and ts_shape and ts_shape != [1] and tp_shapes and tp_shapes[0] and not replicated:
 			actual_tp_shape = tp_shapes[0]
-			gather_dim = _infer_gather_dim(ts_shape, actual_tp_shape, num_pieces)
+			gather_dim = _infer_goal_gather_dim(ts_shape, actual_tp_shape, num_pieces)
 			# Validate: check that the inferred dimension is consistent
 			if len(ts_shape) == len(actual_tp_shape):
 				expected_tp = list(ts_shape)
@@ -2806,7 +2798,7 @@ def emit_lean_spec(
 						_cut_tp_shapes.append(_s or [])
 				_cut_dim = 0
 				if len(sl.goal.tps) > 1 and _cut_ts_shape and _cut_tp_shapes[0]:
-					_cut_dim = _infer_gather_dim(
+					_cut_dim = _infer_goal_gather_dim(
 						_cut_ts_shape, _cut_tp_shapes[0], len(sl.goal.tps)
 					)
 				goal_lines.append(
@@ -3751,44 +3743,6 @@ def main() -> None:
 				out.append(n)
 		return out
 
-	def _toposort_nodes(G: Any, nodes: List[Any]) -> List[Any]:
-		"""Stable topo-sort of nodes across ranks by tid dependencies."""
-		if len(nodes) <= 1:
-			return nodes
-
-		# Map tid -> producing node indices (can be >1 in imperfect graphs).
-		producers: Dict[int, List[int]] = {}
-		for i, n in enumerate(nodes):
-			for t in G.node_outputs(n):
-				producers.setdefault(int(t.tid), []).append(i)
-
-		deps: List[set[int]] = [set() for _ in nodes]
-		users: List[List[int]] = [[] for _ in nodes]
-		for i, n in enumerate(nodes):
-			for t in G.node_inputs(n):
-				for j in producers.get(int(t.tid), []):
-					if j != i:
-						if j not in deps[i]:
-							deps[i].add(j)
-							users[j].append(i)
-
-		indeg = [len(deps_i) for deps_i in deps]
-		# Stable queue: pick nodes with indeg=0 in original order.
-		queue = deque(i for i, d in enumerate(indeg) if d == 0)
-		out_idx: List[int] = []
-		while queue:
-			i = queue.popleft()
-			out_idx.append(i)
-			for k in users[i]:
-				indeg[k] -= 1
-				if indeg[k] == 0:
-					queue.append(k)
-
-		# If cycle/unknown deps remain, fall back to original order.
-		if len(out_idx) != len(nodes):
-			return nodes
-		return [nodes[i] for i in out_idx]
-
 	t0 = time.perf_counter()
 	sm_nodes = _filter_nodes(GsE, set(sm_needed_tids))
 	pm_nodes = _filter_nodes(GpE, set(pm_needed_tids))
@@ -3796,24 +3750,9 @@ def main() -> None:
 	pm_input_value_classes = derive_input_value_classes(GpE, pm_needed_tids)
 
 	# Ensure the denotational fold is a true topological fold across ranks.
-	sm_nodes = _toposort_nodes(GsE, sm_nodes)
-	pm_nodes = _toposort_nodes(GpE, _dedup_shared_collectives(GpE, pm_nodes))
+	sm_nodes = _stable_toposort_nodes(GsE, sm_nodes)
+	pm_nodes = _stable_toposort_nodes(GpE, _dedup_shared_collectives(GpE, pm_nodes))
 	print(f"[graph_to_lean] filtered/toposorted graph nodes in {time.perf_counter() - t0:.2f}s", flush=True)
-
-	def _filter_ordered_nodes(
-		G: Any, ordered_nodes: List[Any], needed_tids: set[int], stop_tids: Optional[set[int]] = None
-	) -> List[Any]:
-		"""Filter an already-toposorted node list; any subsequence remains topologically ordered."""
-		kept: List[Any] = []
-		for n in ordered_nodes:
-			outs = [int(t.tid) for t in G.node_outputs(n)]
-			if stop_tids is None:
-				if any(tid in needed_tids for tid in outs):
-					kept.append(n)
-				continue
-			if any((tid in needed_tids) and (tid not in stop_tids) for tid in outs):
-				kept.append(n)
-		return kept
 
 	def _make_ordered_node_filter(G: Any, ordered_nodes: List[Any]):
 		order = {n: i for i, n in enumerate(ordered_nodes)}
@@ -3975,10 +3914,10 @@ def main() -> None:
 			# Select semantics from the complete backward ancestry, not from an
 			# already-cut candidate: a prerequisite boundary can otherwise hide the
 			# very collective that requires faithful evaluation.
-			full_sm_nodes = _toposort_nodes(
+			full_sm_nodes = _stable_toposort_nodes(
 				GsE, close_nodes_to_external_inputs(GsE, [int(g.ts)])
 			)
-			full_pm_nodes = _toposort_nodes(
+			full_pm_nodes = _stable_toposort_nodes(
 				GpE,
 				_dedup_shared_collectives(
 					GpE, close_nodes_to_external_inputs(GpE, pm_roots_goal),

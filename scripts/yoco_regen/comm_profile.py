@@ -4,27 +4,18 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
 import math
 import os
 import stat
 from pathlib import Path
 
+if __package__:
+    from .strict_json import loads_strict_json
+else:
+    from strict_json import loads_strict_json
+
 PRIMITIVES = {"all gather", "all reduce", "reduce scatter", "all to all"}
 EXPECTED_SIZES_MB = [0.25 * (2**index) for index in range(12)]
-
-
-def _pairs(pairs):
-    value = {}
-    for key, item in pairs:
-        if key in value:
-            raise ValueError(f"duplicate JSON key: {key}")
-        value[key] = item
-    return value
-
-
-def _reject_constant(value: str):
-    raise ValueError(f"non-finite JSON number: {value}")
 
 
 def validate_profile(profile) -> None:
@@ -56,11 +47,7 @@ def validate_profile(profile) -> None:
 
 
 def parse_profile(content: bytes):
-    profile = json.loads(
-        content.decode("utf-8"),
-        object_pairs_hook=_pairs,
-        parse_constant=_reject_constant,
-    )
+    profile = loads_strict_json(content, "communication profile")
     validate_profile(profile)
     return profile
 

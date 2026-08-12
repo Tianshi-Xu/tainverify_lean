@@ -9,18 +9,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-
-def ensure_torch_recompile_limit(torch_module, entry_factory=None) -> bool:
-    """Install Torch 2.6's missing Dynamo key; return whether it was added."""
-    config = torch_module._dynamo.config._config
-    if "recompile_limit" in config:
-        return False
-    if entry_factory is None:
-        from torch.utils._config_module import Config, _ConfigEntry
-
-        entry_factory = lambda: _ConfigEntry(Config(default=32, value_type=int))
-    config["recompile_limit"] = entry_factory()
-    return True
+from scripts.yoco_regen.torch_compat import (
+    ensure_torch_recompile_limit as ensure_torch_recompile_limit,
+)
 
 
 def main() -> None:

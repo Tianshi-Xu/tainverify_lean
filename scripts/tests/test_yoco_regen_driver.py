@@ -1,5 +1,6 @@
 from pathlib import Path
 from functools import partial
+import base64
 import fcntl
 import hashlib
 import importlib
@@ -24,6 +25,7 @@ from scripts.yoco_regen.comp_profile import (
     copy_artifact as copy_comp_profile_artifact,
     create_artifact as create_comp_profile_artifact,
     extract_artifact as extract_comp_profile_artifact,
+    validate_artifact as validate_comp_profile_artifact,
 )
 from scripts.yoco_regen.check_publication_allowlist import (
     EXPECTED as PUBLICATION_FILES,
@@ -48,9 +50,13 @@ from scripts.yoco_regen.sealed_extension_exec import (
 )
 import scripts.yoco_regen.emit_yoco_a04b as emitter
 import scripts.yoco_regen.atomic_publish as atomic_publish
+import scripts.yoco_regen.comp_profile as comp_profile
 import scripts.yoco_regen.safe_cleanup as safe_cleanup
 from scripts.yoco_regen.safe_cleanup import create_owned_stage, cleanup_owned_stage
-from scripts.yoco_regen.write_authority_metadata import validate_graph
+from scripts.yoco_regen.write_authority_metadata import (
+    load_authenticated_pickle,
+    validate_graph,
+)
 
 
 PROOF_TARGETS = [
@@ -58,10 +64,37 @@ PROOF_TARGETS = [
     for index in range(1, 6)
 ]
 
+RETIRED_SOURCE_TREE_AUXILIARIES = {
+    "Goal_1_CutToFull.lean",
+    "Goal_2_CutToFull.lean",
+    "Patterns.lean",
+    "ProofObligations.lean",
+}
+
 
 def _clear_zip_import_caches(path: str) -> None:
     sys.path_importer_cache.pop(path, None)
     getattr(zipimport, "_zip_directory_cache").pop(path, None)
+
+
+def test_retired_yoco_auxiliaries_are_absent_from_source_tree():
+    goals = Path(__file__).resolve().parents[2] / "trainverify" / "denote" / "yoco_goals"
+    # Goal_5_CutToFull remains a source dependency of Goal_5_Intermediate;
+    # the publication retirement set is intentionally broader than this set.
+    assert not {
+        name for name in RETIRED_SOURCE_TREE_AUXILIARIES if (goals / name).exists()
+    }
+
+
+@pytest.mark.parametrize("script_name", ["comm_profile.py", "comp_profile.py"])
+def test_profile_direct_cli_help(script_name):
+    root = Path(__file__).resolve().parents[2]
+    subprocess.run(
+        [sys.executable, str(root / "scripts" / "yoco_regen" / script_name), "--help"],
+        cwd=root,
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
 
 
 def test_dump_patch_is_idempotent_and_atomic():
@@ -120,6 +153,9 @@ def test_comp_profile_artifact_round_trip_and_rejects_ambiguous_inputs(tmp_path)
     extracted = tmp_path / "extracted"
     extract_comp_profile_artifact(artifact, extracted)
     assert (extracted / "torch.add.json").read_bytes() == original
+    with pytest.raises(FileExistsError):
+        extract_comp_profile_artifact(artifact, extracted)
+    assert not list(tmp_path.glob(".extracted.extract-*"))
     assert create_comp_profile_artifact(extracted, tmp_path / "again.json") == artifact.read_bytes()
     copied = tmp_path / "copied.json"
     assert copy_comp_profile_artifact(artifact, copied) == hashlib.sha256(
@@ -130,6 +166,8 @@ def test_comp_profile_artifact_round_trip_and_rejects_ambiguous_inputs(tmp_path)
     alias.symlink_to(artifact)
     with pytest.raises(OSError):
         copy_comp_profile_artifact(alias, tmp_path / "copy-from-alias.json")
+    with pytest.raises(OSError):
+        extract_comp_profile_artifact(alias, tmp_path / "extract-from-alias")
 
     (source / "rogue").symlink_to("missing")
     with pytest.raises(RuntimeError, match="regular JSON files"):
@@ -179,6 +217,743 @@ def test_comp_profile_artifact_rejects_noncanonical_json_and_tampering(tmp_path)
     artifact.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(RuntimeError, match="content hash mismatch"):
         extract_comp_profile_artifact(artifact, tmp_path / "out")
+
+
+def test_comp_profile_validation_uses_one_artifact_read(tmp_path, monkeypatch):
+    source = tmp_path / "comp"
+    source.mkdir()
+    profile = source / "torch.add.json"
+    profile.write_text(json.dumps({"shape": {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }}), encoding="utf-8")
+    profile.chmod(0o400)
+    artifact = tmp_path / "comp_profile.json"
+    expected = create_comp_profile_artifact(source, artifact)
+    original_inode = artifact.stat().st_ino
+    displaced = tmp_path / "original_comp_profile.json"
+    real_read = os.read
+    swapped = False
+
+    def swap_path_after_open(descriptor, size):
+        nonlocal swapped
+        if os.fstat(descriptor).st_ino == original_inode and not swapped:
+            swapped = True
+            artifact.rename(displaced)
+            artifact.write_bytes(b"{}")
+            artifact.chmod(0o400)
+        return real_read(descriptor, size)
+
+    monkeypatch.setattr(os, "read", swap_path_after_open)
+    assert validate_comp_profile_artifact(artifact) == hashlib.sha256(expected).hexdigest()
+
+
+def test_comp_profile_rejects_boolean_schema_and_handles_large_integers(tmp_path):
+    source = tmp_path / "comp"
+    source.mkdir()
+    profile = source / "torch.add.json"
+    metrics = {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }
+    profile.write_text(json.dumps({"shape": metrics}), encoding="utf-8")
+    profile.chmod(0o400)
+    artifact = tmp_path / "comp_profile.json"
+    create_comp_profile_artifact(source, artifact)
+
+    payload = json.loads(artifact.read_text(encoding="utf-8"))
+    payload["schema_version"] = True
+    artifact.chmod(0o600)
+    artifact.write_text(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    artifact.chmod(0o400)
+    with pytest.raises(RuntimeError, match="version mismatch"):
+        validate_comp_profile_artifact(artifact)
+
+    profile.chmod(0o600)
+    profile.write_text(
+        json.dumps({"shape": {**metrics, "fw_span": 10**4000}}),
+        encoding="utf-8",
+    )
+    profile.chmod(0o400)
+    huge_artifact = tmp_path / "huge_integer.json"
+    create_comp_profile_artifact(source, huge_artifact)
+    assert validate_comp_profile_artifact(huge_artifact)
+
+
+def test_comp_profile_extract_rejects_stage_replaced_before_publication(
+    tmp_path, monkeypatch,
+):
+    source = tmp_path / "comp"
+    source.mkdir()
+    profile = source / "torch.add.json"
+    profile.write_text(json.dumps({"shape": {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }}), encoding="utf-8")
+    profile.chmod(0o400)
+    artifact = tmp_path / "comp_profile.json"
+    create_comp_profile_artifact(source, artifact)
+    target = tmp_path / "extracted"
+    displaced = tmp_path / "displaced"
+    real_rename = comp_profile._renameat2
+
+    def replace_stage_before_publish(source_fd, source_name, target_fd, target_name):
+        stage = tmp_path / source_name
+        stage.rename(displaced)
+        stage.mkdir(mode=0o700)
+        real_rename(source_fd, source_name, target_fd, target_name)
+
+    monkeypatch.setattr(comp_profile, "_renameat2", replace_stage_before_publish)
+    with pytest.raises(RuntimeError, match="published computation profile directory changed"):
+        extract_comp_profile_artifact(artifact, target)
+    assert (displaced / "torch.add.json").is_file()
+    assert target.is_dir()
+    assert not any(target.iterdir())
+
+
+def test_comp_profile_extract_rejects_same_uid_stage_with_rogue_entry(
+    tmp_path, monkeypatch,
+):
+    source = tmp_path / "comp"
+    source.mkdir()
+    profile = source / "torch.add.json"
+    profile.write_text(json.dumps({"shape": {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }}), encoding="utf-8")
+    profile.chmod(0o400)
+    artifact = tmp_path / "comp_profile.json"
+    create_comp_profile_artifact(source, artifact)
+    target = tmp_path / "extracted"
+    displaced = tmp_path / "displaced"
+    real_open = os.open
+    swapped = False
+
+    def racing_open(path, flags, mode=0o777, *, dir_fd=None):
+        nonlocal swapped
+        if (
+            dir_fd is not None
+            and isinstance(path, str)
+            and path.startswith(f".{target.name}.extract-")
+            and flags & os.O_DIRECTORY
+            and not swapped
+        ):
+            swapped = True
+            stage = tmp_path / path
+            stage.rename(displaced)
+            stage.mkdir(mode=0o700)
+            (stage / "same-uid-rogue").write_text("reject", encoding="utf-8")
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "open", racing_open)
+    with pytest.raises(BaseException) as raised:
+        extract_comp_profile_artifact(artifact, target)
+    failures = getattr(raised.value, "exceptions", ())
+    assert [str(failure) for failure in failures] == [
+        "computation profile extraction stage was replaced",
+        "stage identity changed before failure cleanup",
+    ]
+    assert displaced.is_dir()
+    assert not target.exists()
+    replacement = next(iter(tmp_path.glob(".extracted.extract-*")))
+    assert (replacement / "same-uid-rogue").read_text(encoding="utf-8") == "reject"
+
+
+def test_comp_profile_extract_cleans_private_stage_after_file_sync_failure(
+    tmp_path, monkeypatch,
+):
+    source = tmp_path / "comp"
+    source.mkdir()
+    profile = source / "torch.add.json"
+    profile.write_text(json.dumps({"shape": {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }}), encoding="utf-8")
+    profile.chmod(0o400)
+    artifact = tmp_path / "comp_profile.json"
+    create_comp_profile_artifact(source, artifact)
+    real_fsync = os.fsync
+
+    def fail_regular_file_sync(descriptor):
+        if stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise OSError("injected file sync failure")
+        return real_fsync(descriptor)
+
+    monkeypatch.setattr(os, "fsync", fail_regular_file_sync)
+    with pytest.raises(OSError, match="injected file sync failure"):
+        extract_comp_profile_artifact(artifact, tmp_path / "extracted")
+    assert not list(tmp_path.glob(".extracted.extract-*"))
+    assert not (tmp_path / "extracted").exists()
+
+
+def test_comp_profile_extract_cleans_private_stage_after_first_open_failure(
+    tmp_path, monkeypatch,
+):
+    source = tmp_path / "comp"
+    source.mkdir()
+    profile = source / "torch.add.json"
+    profile.write_text(json.dumps({"shape": {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }}), encoding="utf-8")
+    profile.chmod(0o400)
+    artifact = tmp_path / "comp_profile.json"
+    create_comp_profile_artifact(source, artifact)
+    real_open = os.open
+
+    def fail_first_stage_open(path, flags, mode=0o777, *, dir_fd=None):
+        if (
+            dir_fd is not None
+            and isinstance(path, str)
+            and path.startswith(".extracted.extract-")
+            and flags & os.O_DIRECTORY
+        ):
+            raise OSError("injected first stage open failure")
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "open", fail_first_stage_open)
+    with pytest.raises(OSError, match="injected first stage open failure"):
+        extract_comp_profile_artifact(artifact, tmp_path / "extracted")
+    assert not list(tmp_path.glob(".extracted.extract-*"))
+    assert not (tmp_path / "extracted").exists()
+
+
+def test_comp_profile_extract_cleans_private_stage_after_first_fstat_failure(
+    tmp_path, monkeypatch,
+):
+    source = tmp_path / "comp"
+    source.mkdir()
+    profile = source / "torch.add.json"
+    profile.write_text(json.dumps({"shape": {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }}), encoding="utf-8")
+    profile.chmod(0o400)
+    artifact = tmp_path / "comp_profile.json"
+    create_comp_profile_artifact(source, artifact)
+    real_fstat = os.fstat
+    failed = False
+
+    def fail_first_stage_fstat(fd):
+        nonlocal failed
+        descriptor_path = os.readlink(f"/proc/self/fd/{fd}")
+        if not failed and Path(descriptor_path).name.startswith(".extracted.extract-"):
+            failed = True
+            raise OSError("injected first stage fstat failure")
+        return real_fstat(fd)
+
+    monkeypatch.setattr(os, "fstat", fail_first_stage_fstat)
+    with pytest.raises(OSError, match="injected first stage fstat failure"):
+        extract_comp_profile_artifact(artifact, tmp_path / "extracted")
+    assert not list(tmp_path.glob(".extracted.extract-*"))
+    assert not (tmp_path / "extracted").exists()
+
+
+def test_comp_profile_extract_cleans_private_stage_after_initial_stat_failure(
+    tmp_path, monkeypatch,
+):
+    source = tmp_path / "comp"
+    source.mkdir()
+    profile = source / "torch.add.json"
+    profile.write_text(json.dumps({"shape": {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }}), encoding="utf-8")
+    profile.chmod(0o400)
+    artifact = tmp_path / "comp_profile.json"
+    create_comp_profile_artifact(source, artifact)
+    real_stat = os.stat
+    failed = False
+
+    def fail_initial_stage_stat(path, *, dir_fd=None, follow_symlinks=True):
+        nonlocal failed
+        if (
+            not failed
+            and dir_fd is not None
+            and isinstance(path, str)
+            and path.startswith(".extracted.extract-")
+        ):
+            failed = True
+            raise OSError("injected initial stage stat failure")
+        return real_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(os, "stat", fail_initial_stage_stat)
+    with pytest.raises(BaseException) as raised:
+        extract_comp_profile_artifact(artifact, tmp_path / "extracted")
+    assert [str(failure) for failure in raised.value.exceptions] == [
+        "injected initial stage stat failure",
+        "stage identity unavailable for failure cleanup",
+    ]
+    assert len(list(tmp_path.glob(".extracted.extract-*"))) == 1
+    assert not (tmp_path / "extracted").exists()
+
+
+def test_comp_profile_initial_stat_failure_does_not_move_replacement(
+    tmp_path, monkeypatch,
+):
+    source = tmp_path / "comp"
+    source.mkdir()
+    profile = source / "torch.add.json"
+    profile.write_text(json.dumps({"shape": {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }}), encoding="utf-8")
+    profile.chmod(0o400)
+    artifact = tmp_path / "comp_profile.json"
+    create_comp_profile_artifact(source, artifact)
+    displaced = tmp_path / "displaced-before-initial-stat"
+    real_stat = os.stat
+    replaced = False
+
+    def replace_and_fail_initial_stat(path, *, dir_fd=None, follow_symlinks=True):
+        nonlocal replaced
+        if (
+            not replaced
+            and dir_fd is not None
+            and isinstance(path, str)
+            and path.startswith(".extracted.extract-")
+        ):
+            replaced = True
+            stage = tmp_path / path
+            stage.rename(displaced)
+            stage.mkdir(mode=0o700)
+            (stage / "replacement-marker").write_text("keep", encoding="utf-8")
+            raise OSError("PRIMARY")
+        return real_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(os, "stat", replace_and_fail_initial_stat)
+    with pytest.raises(BaseException) as raised:
+        extract_comp_profile_artifact(artifact, tmp_path / "extracted")
+    assert [str(failure) for failure in raised.value.exceptions] == [
+        "PRIMARY", "stage identity unavailable for failure cleanup",
+    ]
+    replacement = next(iter(tmp_path.glob(".extracted.extract-*")))
+    assert (replacement / "replacement-marker").read_text() == "keep"
+    assert displaced.is_dir()
+    assert not list(tmp_path.glob(".*.cleanup-*"))
+
+
+def test_comp_profile_extract_preserves_primary_cleanup_failure_and_closes_fds(
+    tmp_path, monkeypatch,
+):
+    source = tmp_path / "comp"
+    source.mkdir()
+    profile = source / "torch.add.json"
+    profile.write_text(json.dumps({"shape": {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }}), encoding="utf-8")
+    profile.chmod(0o400)
+    artifact = tmp_path / "comp_profile.json"
+    create_comp_profile_artifact(source, artifact)
+    real_open = os.open
+    real_rmdir = os.rmdir
+
+    def fail_first_stage_open(path, flags, mode=0o777, *, dir_fd=None):
+        if (
+            dir_fd is not None
+            and isinstance(path, str)
+            and path.startswith(".extracted.extract-")
+            and flags & os.O_DIRECTORY
+        ):
+            raise OSError("PRIMARY")
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    def fail_quarantine_rmdir(path, *, dir_fd=None):
+        if isinstance(path, str) and ".cleanup-" in path:
+            raise OSError("CLEANUP")
+        return real_rmdir(path, dir_fd=dir_fd)
+
+    before_fds = len(os.listdir("/proc/self/fd"))
+    monkeypatch.setattr(os, "open", fail_first_stage_open)
+    monkeypatch.setattr(os, "rmdir", fail_quarantine_rmdir)
+    with pytest.raises(BaseException) as raised:
+        extract_comp_profile_artifact(artifact, tmp_path / "extracted")
+    assert [str(failure) for failure in raised.value.exceptions] == [
+        "PRIMARY", "CLEANUP",
+    ]
+    assert len(os.listdir("/proc/self/fd")) == before_fds
+
+
+def test_comp_profile_extract_preserves_file_operation_and_close_failures(
+    tmp_path, monkeypatch,
+):
+    source = tmp_path / "comp"
+    source.mkdir()
+    profile = source / "torch.add.json"
+    profile.write_text(json.dumps({"shape": {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }}), encoding="utf-8")
+    profile.chmod(0o400)
+    artifact = tmp_path / "comp_profile.json"
+    create_comp_profile_artifact(source, artifact)
+    real_fsync = os.fsync
+    real_close = os.close
+    close_failed = False
+
+    def fail_file_fsync(fd):
+        if Path(os.readlink(f"/proc/self/fd/{fd}")).name == "torch.add.json":
+            raise OSError("PRIMARY_FSYNC")
+        return real_fsync(fd)
+
+    def close_file_then_fail(fd):
+        nonlocal close_failed
+        name = Path(os.readlink(f"/proc/self/fd/{fd}")).name
+        real_close(fd)
+        if name == "torch.add.json" and not close_failed:
+            close_failed = True
+            raise OSError("FILE_CLOSE")
+
+    before_fds = len(os.listdir("/proc/self/fd"))
+    monkeypatch.setattr(os, "fsync", fail_file_fsync)
+    monkeypatch.setattr(os, "close", close_file_then_fail)
+    with pytest.raises(BaseException) as raised:
+        extract_comp_profile_artifact(artifact, tmp_path / "extracted")
+    assert [str(failure) for failure in raised.value.exceptions] == [
+        "PRIMARY_FSYNC", "FILE_CLOSE",
+    ]
+    assert len(os.listdir("/proc/self/fd")) == before_fds
+
+
+def test_comp_profile_preserves_quarantine_operation_and_close_failures(
+    tmp_path, monkeypatch,
+):
+    source = tmp_path / "comp"
+    source.mkdir()
+    profile = source / "torch.add.json"
+    profile.write_text(json.dumps({"shape": {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }}), encoding="utf-8")
+    profile.chmod(0o400)
+    artifact = tmp_path / "comp_profile.json"
+    create_comp_profile_artifact(source, artifact)
+    real_open = os.open
+    real_fstat = os.fstat
+    real_close = os.close
+    stage_open_failed = False
+    quarantine_close_failed = False
+
+    def fail_first_stage_open(path, flags, mode=0o777, *, dir_fd=None):
+        nonlocal stage_open_failed
+        if (
+            not stage_open_failed
+            and dir_fd is not None
+            and isinstance(path, str)
+            and path.startswith(".extracted.extract-")
+            and flags & os.O_DIRECTORY
+        ):
+            stage_open_failed = True
+            raise OSError("PRIMARY")
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    def fail_quarantine_fstat(fd):
+        if ".cleanup-" in os.readlink(f"/proc/self/fd/{fd}"):
+            raise OSError("QUARANTINE_FSTAT")
+        return real_fstat(fd)
+
+    def close_quarantine_then_fail(fd):
+        nonlocal quarantine_close_failed
+        is_quarantine = ".cleanup-" in os.readlink(f"/proc/self/fd/{fd}")
+        real_close(fd)
+        if is_quarantine and not quarantine_close_failed:
+            quarantine_close_failed = True
+            raise OSError("QUARANTINE_CLOSE")
+
+    before_fds = len(os.listdir("/proc/self/fd"))
+    monkeypatch.setattr(os, "open", fail_first_stage_open)
+    monkeypatch.setattr(os, "fstat", fail_quarantine_fstat)
+    monkeypatch.setattr(os, "close", close_quarantine_then_fail)
+    with pytest.raises(BaseException) as raised:
+        extract_comp_profile_artifact(artifact, tmp_path / "extracted")
+    assert str(raised.value.exceptions[0]) == "PRIMARY"
+    assert [str(failure) for failure in raised.value.exceptions[1].exceptions] == [
+        "QUARANTINE_FSTAT", "QUARANTINE_CLOSE",
+    ]
+    assert len(os.listdir("/proc/self/fd")) == before_fds
+
+
+def test_comp_profile_rolls_back_after_quarantine_open_failure(
+    tmp_path, monkeypatch,
+):
+    source = tmp_path / "comp"
+    source.mkdir()
+    profile = source / "torch.add.json"
+    profile.write_text(json.dumps({"shape": {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }}), encoding="utf-8")
+    profile.chmod(0o400)
+    artifact = tmp_path / "comp_profile.json"
+    create_comp_profile_artifact(source, artifact)
+    real_open = os.open
+    stage_open_failed = False
+
+    def fail_stage_then_quarantine_open(path, flags, mode=0o777, *, dir_fd=None):
+        nonlocal stage_open_failed
+        if dir_fd is not None and isinstance(path, str) and flags & os.O_DIRECTORY:
+            if not stage_open_failed and path.startswith(".extracted.extract-"):
+                stage_open_failed = True
+                raise OSError("PRIMARY")
+            if ".cleanup-" in path:
+                raise OSError("QUARANTINE_OPEN")
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    before_fds = len(os.listdir("/proc/self/fd"))
+    monkeypatch.setattr(os, "open", fail_stage_then_quarantine_open)
+    with pytest.raises(BaseException) as raised:
+        extract_comp_profile_artifact(artifact, tmp_path / "extracted")
+    assert [str(failure) for failure in raised.value.exceptions] == [
+        "PRIMARY", "QUARANTINE_OPEN",
+    ]
+    assert len(list(tmp_path.glob(".extracted.extract-*"))) == 1
+    assert not list(tmp_path.glob(".*.cleanup-*"))
+    assert len(os.listdir("/proc/self/fd")) == before_fds
+
+
+def test_comp_profile_cleanup_restores_replacement_to_original_path(
+    tmp_path, monkeypatch,
+):
+    source = tmp_path / "comp"
+    source.mkdir()
+    profile = source / "torch.add.json"
+    profile.write_text(json.dumps({"shape": {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }}), encoding="utf-8")
+    profile.chmod(0o400)
+    artifact = tmp_path / "comp_profile.json"
+    create_comp_profile_artifact(source, artifact)
+    target = tmp_path / "extracted"
+    displaced = tmp_path / "displaced-during-cleanup"
+    real_fsync = os.fsync
+    real_stat = os.stat
+    cleanup_started = False
+    swapped = False
+
+    def fail_file_fsync(fd):
+        nonlocal cleanup_started
+        if stat.S_ISREG(os.fstat(fd).st_mode):
+            cleanup_started = True
+            raise OSError("PRIMARY")
+        return real_fsync(fd)
+
+    def replace_after_cleanup_stat(path, *, dir_fd=None, follow_symlinks=True):
+        nonlocal swapped
+        result = real_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+        if (
+            cleanup_started
+            and not swapped
+            and dir_fd is not None
+            and isinstance(path, str)
+            and path.startswith(f".{target.name}.extract-")
+        ):
+            swapped = True
+            stage = tmp_path / path
+            stage.rename(displaced)
+            stage.mkdir(mode=0o700)
+            (stage / "replacement-marker").write_text("keep", encoding="utf-8")
+        return result
+
+    monkeypatch.setattr(os, "fsync", fail_file_fsync)
+    monkeypatch.setattr(os, "stat", replace_after_cleanup_stat)
+    with pytest.raises(BaseException) as raised:
+        extract_comp_profile_artifact(artifact, target)
+    assert [str(failure) for failure in raised.value.exceptions] == [
+        "PRIMARY", "stage identity changed during failure cleanup",
+    ]
+    assert not list(tmp_path.glob(".*.cleanup-*"))
+    replacement = next(iter(tmp_path.glob(".extracted.extract-*")))
+    assert (replacement / "replacement-marker").read_text() == "keep"
+    assert displaced.is_dir()
+
+
+@pytest.mark.parametrize("mutation", ["rogue", "content"])
+def test_comp_profile_extract_revalidates_exact_contents_after_publish(
+    tmp_path, monkeypatch, mutation,
+):
+    source = tmp_path / "comp"
+    source.mkdir()
+    profile = source / "torch.add.json"
+    profile.write_text(json.dumps({"shape": {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }}), encoding="utf-8")
+    profile.chmod(0o400)
+    artifact = tmp_path / "comp_profile.json"
+    create_comp_profile_artifact(source, artifact)
+    target = tmp_path / "extracted"
+    real_rename = comp_profile._renameat2
+
+    def mutate_after_publish(source_fd, source_name, target_fd, target_name):
+        real_rename(source_fd, source_name, target_fd, target_name)
+        published = tmp_path / target_name
+        if mutation == "rogue":
+            (published / "same-uid-rogue").write_text("reject", encoding="utf-8")
+        else:
+            extracted = published / "torch.add.json"
+            extracted.chmod(0o600)
+            extracted.write_bytes(b"{}")
+            extracted.chmod(0o400)
+
+    monkeypatch.setattr(comp_profile, "_renameat2", mutate_after_publish)
+    expected = (
+        "unexpected extracted profile entries"
+        if mutation == "rogue"
+        else "content changed"
+    )
+    with pytest.raises(RuntimeError, match=expected):
+        extract_comp_profile_artifact(artifact, target)
+
+
+def test_comp_profile_source_consumes_the_opened_regular_inode(tmp_path, monkeypatch):
+    source = tmp_path / "comp"
+    source.mkdir()
+    profile = source / "torch.add.json"
+    original = json.dumps({"shape": {
+        "in_mem_info": [], "param_mem_info": [], "buffer_mem_info": [],
+        "fw_span": 1.0, "bw_span": 2.0, "infer_memory": 0,
+        "train_mem_info": [], "train_mem2in_idx": [],
+    }}, separators=(",", ":")).encode()
+    profile.write_bytes(original)
+    profile.chmod(0o400)
+    attacker = tmp_path / "attacker.json"
+    attacker.write_bytes(original.replace(b'"fw_span":1.0', b'"fw_span":9.0'))
+    attacker.chmod(0o400)
+    original_inode = profile.stat().st_ino
+    real_read = os.read
+    swapped = False
+
+    def swap_path_after_open(descriptor, size):
+        nonlocal swapped
+        if os.fstat(descriptor).st_ino == original_inode and not swapped:
+            swapped = True
+            profile.rename(tmp_path / "original.json")
+            profile.symlink_to(attacker)
+        return real_read(descriptor, size)
+
+    monkeypatch.setattr(os, "read", swap_path_after_open)
+    artifact = tmp_path / "comp_profile.json"
+    create_comp_profile_artifact(source, artifact)
+    payload = json.loads(artifact.read_text(encoding="utf-8"))
+    encoded = payload["files"][0]["content_base64"]
+    assert base64.b64decode(encoded) == original
+
+
+def test_authority_pickle_executes_only_the_authenticated_bytes(tmp_path):
+    authority = tmp_path / "sm_mgener.pkl"
+    authenticated = b"authenticated-pickle-bytes"
+    replacement = b"replacement-pickle-bytes"
+    authority.write_bytes(authenticated)
+    authority.chmod(0o400)
+    expected = hashlib.sha256(authenticated).hexdigest()
+    displaced = tmp_path / "authenticated.pkl"
+
+    def load(handle):
+        authority.rename(displaced)
+        authority.write_bytes(replacement)
+        authority.chmod(0o400)
+        return handle.read()
+
+    loaded, actual = load_authenticated_pickle(
+        authority, expected, types.SimpleNamespace(load=load),
+    )
+    assert loaded == authenticated
+    assert actual == expected
+
+    alias = tmp_path / "alias.pkl"
+    alias.symlink_to(displaced)
+    with pytest.raises(OSError):
+        load_authenticated_pickle(
+            alias, expected, types.SimpleNamespace(load=lambda handle: handle.read()),
+        )
+
+
+def test_authority_json_rejects_duplicate_keys_before_schema_validation(tmp_path):
+    authority = tmp_path / "authority"
+    authority.mkdir()
+    meta = _full_meta()
+    raw = json.dumps(meta, separators=(",", ":"))
+    duplicate = raw[:-1] + ',"model":"forged"}'
+    (authority / "gen_args.json").write_text(duplicate, encoding="utf-8")
+    with pytest.raises(RuntimeError, match="duplicate JSON key: model"):
+        emitter.validate_authority(
+            authority,
+            tmp_path / "llm-train",
+            tmp_path / "nnscaler",
+            emitter.hardware_sha256(_hardware_meta()),
+            meta["trainverify_regen_commit"],
+        )
+
+
+def test_stable_toposort_rejects_cycles():
+    graph_to_lean = importlib.import_module("Verdict.graph_to_lean")
+
+    class Tensor:
+        def __init__(self, tid):
+            self.tid = tid
+
+    class Node:
+        def __init__(self, inputs, outputs):
+            self.inputs = [Tensor(tid) for tid in inputs]
+            self.outputs = [Tensor(tid) for tid in outputs]
+
+    first = Node([2], [1])
+    second = Node([1], [2])
+    graph = types.SimpleNamespace(
+        node_inputs=lambda node: node.inputs,
+        node_outputs=lambda node: node.outputs,
+    )
+    with pytest.raises(RuntimeError, match="topological sort failed"):
+        graph_to_lean._stable_toposort_nodes(graph, [first, second])
+
+
+def test_stable_toposort_preserves_input_order_and_duplicate_producers():
+    graph_to_lean = importlib.import_module("Verdict.graph_to_lean")
+
+    class Tensor:
+        def __init__(self, tid):
+            self.tid = tid
+
+    class Node:
+        def __init__(self, label, inputs, outputs):
+            self.label = label
+            self.inputs = [Tensor(tid) for tid in inputs]
+            self.outputs = [Tensor(tid) for tid in outputs]
+
+    consumer = Node("consumer", [1], [2])
+    second_producer = Node("second", [], [1])
+    first_producer = Node("first", [], [1])
+    independent = Node("independent", [], [3])
+    graph = types.SimpleNamespace(
+        node_inputs=lambda node: node.inputs,
+        node_outputs=lambda node: node.outputs,
+    )
+    ordered = graph_to_lean._stable_toposort_nodes(
+        graph, [consumer, second_producer, first_producer, independent],
+    )
+    assert [node.label for node in ordered] == [
+        "second", "first", "independent", "consumer",
+    ]
 
 
 def test_communication_profile_schema_is_closed_and_finite():
@@ -843,6 +1618,57 @@ def test_stage_cleanup_has_no_path_recursive_delete():
     ).read_text(encoding="utf-8")
     assert "shutil.rmtree" not in source
     assert "dir_fd=" in source
+
+
+def test_emitter_failure_cleanup_preserves_primary_exception(monkeypatch, tmp_path):
+    primary = RuntimeError("generation failed")
+    monkeypatch.setattr(emitter, "cleanup_owned_stage", lambda *_args: True)
+    with pytest.raises(RuntimeError) as caught:
+        emitter._reraise_after_cleanup(primary, tmp_path, "marker", 1, 2)
+    assert caught.value is primary
+
+
+@pytest.mark.parametrize("cleanup_result", [False, OSError("cleanup failed")])
+def test_emitter_failure_cleanup_reports_both_failures(
+    monkeypatch, tmp_path, cleanup_result,
+):
+    primary = RuntimeError("generation failed")
+
+    def cleanup(*_args):
+        if isinstance(cleanup_result, BaseException):
+            raise cleanup_result
+        return cleanup_result
+
+    monkeypatch.setattr(emitter, "cleanup_owned_stage", cleanup)
+    with pytest.raises(emitter.CleanupFailureGroup) as caught:
+        emitter._reraise_after_cleanup(primary, tmp_path, "marker", 1, 2)
+    assert caught.value.exceptions[0] is primary
+    assert "cleanup" in str(caught.value.exceptions[1]).lower()
+
+
+def test_emitter_cleanup_failure_group_is_python310_compatible(tmp_path):
+    probe = """
+from pathlib import Path
+from scripts.yoco_regen import emit_yoco_a04b as emitter
+primary = RuntimeError("generation failed")
+emitter.cleanup_owned_stage = lambda *_args: False
+try:
+    emitter._reraise_after_cleanup(primary, Path("."), "marker", 1, 2)
+except emitter.CleanupFailureGroup as caught:
+    assert caught.exceptions[0] is primary
+    assert "cleanup" in str(caught.exceptions[1]).lower()
+else:
+    raise AssertionError("cleanup failure group was not raised")
+"""
+    result = subprocess.run(
+        ["python3.10", "-c", probe],
+        cwd=Path(__file__).resolve().parents[2],
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_cpu_smoke_refuses_existing_output_before_import(tmp_path):

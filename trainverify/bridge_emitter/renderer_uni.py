@@ -1,23 +1,22 @@
 #!/usr/bin/env python3
-"""Bridge emitter — UNIVERSAL renderer (per-node, covers all topologies).
+"""Bridge emitter — broader per-node renderer for implemented topology families.
 
 Design (style-1, validated against Goal30/Goal44/Goal6/Goal9/Goal28/Goal3):
   * exactly ONE sm node.
   * PM mini-graph = linear node list. mid nodes (outs are intermediate) -> pm_full_<out>;
     final nodes (outs in lineage.tps) -> denote_pm + pm_frame.
-  * denote_pm_goal_N_<final> RHS = fully-nested expr, literal K=4, `s` accessor.
+  * denote_pm_goal_N_<final> RHS = fully-nested expr using configured K and `s` accessor.
   * pm_frame_<final>_self : denoteGraph pm initPM final = same nested expr with
     `denoteGraph pm initPM` accessor; proven by pm_val + applyNode + pm_prefix +
-    rw all pm_full (reverse-topo) + (if collective present) convert pm.numRanks=4.
+    rw all pm_full (reverse-topo) + (if collective present) convert pm.numRanks=K.
   * Assembly (cut_to_full / hInitCut / shapes) reused from renderer.py.
 """
-import os, sys
 import os
+import sys
 from dataclasses import dataclass
 
 sys.path.insert(0, os.path.dirname(__file__))
-import renderer as R   # reuse proven assembly blocks
-from renderer import InputSource
+import renderer as R  # reuse proven assembly blocks
 
 # ---------------- operator metadata ----------------
 # pointwise op -> (denote_fn, applyNode_lemma, arity, has_params, params_before_ins)

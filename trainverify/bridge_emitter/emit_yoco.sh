@@ -13,8 +13,8 @@
 #
 # Currently proven to work end-to-end on Goal_5 (base, single-tp,
 # 1-node SM + 3-node PM including AllReduce). Larger goals (1/2/3/4)
-# need additional POINTWISE dispatch entries and multi-out probe
-# handling for the yoco-specific ops (FW_inner_chunk_ce, FW_multiref,
+# still need additional POINTWISE dispatch and composition support for
+# yoco-specific ops (FW_inner_chunk_ce, FW_multiref,
 # FW_topk_routing, FW_all2all_moe_gmm, FW_maybe_unshuffle, etc).
 
 set -euo pipefail

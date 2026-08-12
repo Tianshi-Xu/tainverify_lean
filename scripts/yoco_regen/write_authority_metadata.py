@@ -5,17 +5,21 @@ from __future__ import annotations
 import argparse
 import collections
 import hashlib
+import hmac
+import io
 import json
 import os
 import platform
-import sys
+import stat
 import subprocess
+import sys
 from pathlib import Path
 
 from .comm_profile import profile_sha256
 from .comp_profile import validate_artifact as validate_comp_profile_artifact
 from .patch_llm_cc12_gemm import patch_source as patch_llm_gemm_source
 from .patch_mgener_dump import patch_source
+from .strict_json import load_strict_json
 
 EXPECTED_LLM = "9a1be1d5fd1c063d80be82797692cdc7d23cfbef"
 EXPECTED_NNS = "d3d468ed23edb2f28aa8566b2dfb6ed49c5955cf"
@@ -24,6 +28,31 @@ ALLOWED_POLICY_IDENTITIES = {
     "__mp_main__.main.<locals>.autodist_wrapper",
     "nnscaler_train.main.<locals>.autodist_wrapper",
 }
+
+
+def load_authenticated_pickle(path: Path, expected_sha256: str, dill_module):
+    """Load exactly the owned, non-writable pickle bytes whose digest was authenticated."""
+    descriptor = os.open(path.absolute(), os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.getuid()
+            or stat.S_IMODE(info.st_mode) & 0o022
+        ):
+            raise PermissionError("untrusted authority pickle inode")
+        chunks: list[bytes] = []
+        while chunk := os.read(descriptor, 1 << 20):
+            chunks.append(chunk)
+        content = b"".join(chunks)
+    finally:
+        os.close(descriptor)
+    actual_sha256 = hashlib.sha256(content).hexdigest()
+    if not isinstance(expected_sha256, str) or not hmac.compare_digest(
+        actual_sha256, expected_sha256,
+    ):
+        raise RuntimeError("authority receipt/pickle hash mismatch")
+    return dill_module.load(io.BytesIO(content)), actual_sha256
 
 
 def digest(path: Path) -> str:
@@ -271,9 +300,7 @@ def main() -> None:
         receipt_path = authority / f"{kind}_mgener.pkl.receipt.json"
         if not pkl.is_file() or not receipt_path.is_file():
             raise FileNotFoundError(pkl if not pkl.is_file() else receipt_path)
-        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-        if receipt.get("pkl_sha256") != digest(pkl):
-            raise RuntimeError(f"{kind} receipt/pickle hash mismatch")
+        receipt = load_strict_json(receipt_path)
         if receipt.get("patched_parallel_py_sha256") != patched_parallel_hash:
             raise RuntimeError(f"{kind} receipt/source hash mismatch")
         if receipt.get("patched_llm_gemm_py_sha256") != expected_llm_gemm_hash:
@@ -288,8 +315,9 @@ def main() -> None:
             raise RuntimeError(f"{kind} receipt topology mismatch")
         if receipt.get("policy") not in ALLOWED_POLICY_IDENTITIES:
             raise RuntimeError(f"{kind} receipt policy mismatch")
-        with pkl.open("rb") as handle:
-            mg = dill.load(handle)
+        mg, pkl_sha256 = load_authenticated_pickle(
+            pkl, receipt.get("pkl_sha256"), dill,
+        )
         counts = validate_graph(mg, kind, plan, receipt)
         records[kind] = {
             "authority": True,
@@ -300,7 +328,7 @@ def main() -> None:
             "cp_size_runtime": plan,
             "ep_size_runtime": plan,
             "cp_size_codegen_sentinel": 0,
-            "pkl_sha256": digest(pkl),
+            "pkl_sha256": pkl_sha256,
             "receipt_sha256": digest(receipt_path),
             "patched_parallel_py_sha256": patched_parallel_hash,
             "patched_llm_gemm_py_sha256": expected_llm_gemm_hash,
