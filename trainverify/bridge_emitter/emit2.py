@@ -5,10 +5,12 @@
 
 Like emit.py but drives renderer_uni.render_universal (any topology, no family-A gate).
 """
-import os, sys, re, subprocess, argparse
+import os, sys, re, subprocess, argparse, hashlib, fcntl, ctypes, secrets
+from pathlib import Path
+from typing import Callable, Optional
 sys.path.insert(0, os.path.dirname(__file__))
-from parser import load_goal_ir, analyze, GoalIR
-from probe import build_probe, DENOTE_DIR
+from parser import load_goal_ir, analyze
+from probe import DENOTE_DIR
 from emit import trace_input_sources, compute_imports
 from target_config import DENOTE_DIR as _RELDIR, MOD_PREFIX, GEN_FILE
 
@@ -16,6 +18,176 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TV   = os.path.dirname(HERE)
 REPO = os.path.dirname(TV)
 DENOTE = _RELDIR
+
+F_ADD_SEALS = getattr(fcntl, "F_ADD_SEALS", 1033)
+F_SEAL_SEAL = getattr(fcntl, "F_SEAL_SEAL", 0x0001)
+F_SEAL_SHRINK = getattr(fcntl, "F_SEAL_SHRINK", 0x0002)
+F_SEAL_GROW = getattr(fcntl, "F_SEAL_GROW", 0x0004)
+F_SEAL_WRITE = getattr(fcntl, "F_SEAL_WRITE", 0x0008)
+_LIBC = ctypes.CDLL(None, use_errno=True)
+_RENAMEAT2 = _LIBC.renameat2
+_RENAMEAT2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+_RENAMEAT2.restype = ctypes.c_int
+_LINKAT = _LIBC.linkat
+_LINKAT.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_int]
+_LINKAT.restype = ctypes.c_int
+AT_EMPTY_PATH = 0x1000
+AT_FDCWD = -100
+AT_SYMLINK_FOLLOW = 0x400
+
+
+def _renameat2(
+    source_dir_fd: int,
+    source_name: str,
+    target_dir_fd: int,
+    target_name: str,
+    expected_identity: tuple[int, int],
+) -> None:
+    source_bytes = os.fsencode(source_name)
+    target_bytes = os.fsencode(target_name)
+    source_stat = os.stat(source_name, dir_fd=source_dir_fd, follow_symlinks=False)
+    if (source_stat.st_dev, source_stat.st_ino) != expected_identity:
+        raise RuntimeError("publication anchor identity changed before renameat2")
+    result = _RENAMEAT2(
+        source_dir_fd,
+        source_bytes,
+        target_dir_fd,
+        target_bytes,
+        0,
+    )
+    if result != 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error), target_name)
+
+
+def _link_fd(source_fd: int, target_dir_fd: int, target_name: str) -> None:
+    result = _LINKAT(source_fd, b"", target_dir_fd, os.fsencode(target_name), AT_EMPTY_PATH)
+    if result == 0:
+        return
+    error = ctypes.get_errno()
+    if error == 2:
+        result = _LINKAT(
+            AT_FDCWD,
+            os.fsencode(f"/proc/self/fd/{source_fd}"),
+            target_dir_fd,
+            os.fsencode(target_name),
+            AT_SYMLINK_FOLLOW,
+        )
+        if result == 0:
+            return
+        error = ctypes.get_errno()
+    raise OSError(error, os.strerror(error), target_name)
+
+
+def _publish_composed_source(
+    text: str,
+    out_path: str | Path,
+    checker: Optional[Callable[[Path, int], None]],
+) -> None:
+    """Check a private candidate before atomically replacing the public path."""
+    destination = Path(os.path.abspath(os.fspath(out_path)))
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    expected_digest = hashlib.sha256(text.encode("utf-8")).digest()
+    candidate_fd: Optional[int] = None
+    publication_fd: Optional[int] = None
+    parent_fd: Optional[int] = None
+    anchor_name: Optional[str] = None
+    anchor_identity: Optional[tuple[int, int]] = None
+
+    def fd_digest(fd: int) -> bytes:
+        os.lseek(fd, 0, os.SEEK_SET)
+        digest = hashlib.sha256()
+        while True:
+            chunk = os.read(fd, 1024 * 1024)
+            if not chunk:
+                return digest.digest()
+            digest.update(chunk)
+
+    try:
+        parent_fd = os.open(destination.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        fcntl.flock(parent_fd, fcntl.LOCK_EX)
+        candidate_fd = os.memfd_create(
+            "proof-compiler-candidate",
+            os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING,
+        )
+        payload = text.encode("utf-8")
+        offset = 0
+        while offset < len(payload):
+            offset += os.write(candidate_fd, payload[offset:])
+        os.fsync(candidate_fd)
+        fcntl.fcntl(
+            candidate_fd,
+            F_ADD_SEALS,
+            F_SEAL_SEAL | F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_WRITE,
+        )
+        checked_path = Path(f"/proc/self/fd/{candidate_fd}")
+        if checker is not None:
+            checker(checked_path, candidate_fd)
+        if fd_digest(candidate_fd) != expected_digest:
+            raise RuntimeError("sealed candidate bytes differ from composed source")
+        publication_fd = os.open(
+            destination.parent,
+            os.O_RDWR | os.O_TMPFILE,
+            0o600,
+        )
+        os.lseek(candidate_fd, 0, os.SEEK_SET)
+        while True:
+            chunk = os.read(candidate_fd, 1024 * 1024)
+            if not chunk:
+                break
+            offset = 0
+            while offset < len(chunk):
+                offset += os.write(publication_fd, chunk[offset:])
+        os.fchmod(publication_fd, 0o400)
+        os.fsync(publication_fd)
+        anchor_stat = os.fstat(publication_fd)
+        anchor_identity = (anchor_stat.st_dev, anchor_stat.st_ino)
+        if fd_digest(publication_fd) != expected_digest:
+            raise RuntimeError("anonymous publication inode differs from sealed source")
+
+        anchor_name = f".proof-compiler-{secrets.token_hex(16)}.lean"
+        _link_fd(publication_fd, parent_fd, anchor_name)
+        anchor_path_stat = os.stat(anchor_name, dir_fd=parent_fd, follow_symlinks=False)
+        if (anchor_path_stat.st_dev, anchor_path_stat.st_ino) != (
+            anchor_stat.st_dev,
+            anchor_stat.st_ino,
+        ):
+            raise RuntimeError("publication anchor identity changed")
+        _renameat2(
+            parent_fd,
+            anchor_name,
+            parent_fd,
+            destination.name,
+            anchor_identity,
+        )
+        published_fd = os.open(destination.name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent_fd)
+        try:
+            published_stat = os.fstat(published_fd)
+            if (published_stat.st_dev, published_stat.st_ino) != (
+                anchor_stat.st_dev,
+                anchor_stat.st_ino,
+            ):
+                raise RuntimeError("published candidate identity differs from checked inode")
+            if fd_digest(published_fd) != expected_digest:
+                raise RuntimeError("published candidate bytes differ from checked source")
+            os.fsync(published_fd)
+        finally:
+            os.close(published_fd)
+        os.fsync(parent_fd)
+    finally:
+        if candidate_fd is not None:
+            os.close(candidate_fd)
+        if parent_fd is not None and anchor_name is not None and anchor_identity is not None:
+            try:
+                residue = os.stat(anchor_name, dir_fd=parent_fd, follow_symlinks=False)
+                if (residue.st_dev, residue.st_ino) == anchor_identity:
+                    os.unlink(anchor_name, dir_fd=parent_fd)
+            except FileNotFoundError:
+                pass
+        if publication_fd is not None:
+            os.close(publication_fd)
+        if parent_fd is not None:
+            os.close(parent_fd)
 
 # Auto-detect pm.numRanks from generated-data file and expose via BRIDGE_PM_NUMRANKS
 # env var BEFORE importing renderer_uni (which reads it at module load).
@@ -29,6 +201,12 @@ try:
 except Exception:
     pass
 import renderer_uni as RU
+from proof_compiler import (
+    ProofPlanningError,
+    build_default_registry,
+    require_supported_plan,
+)
+from composer import compose_full_topology
 
 # parse #eval probe output, capturing ALL writer indices per tid (take max = last writer)
 LINE_RE = re.compile(r'(SM|PM):(\d+)\s+\[(.*?)\]\s*$', re.M)
@@ -134,9 +312,52 @@ def main():
     log = (lambda *a: None) if args.quiet else print
 
     ir = load_goal_ir(n, REPO)
+    try:
+        proof_plan = require_supported_plan(ir, build_default_registry())
+    except ProofPlanningError as exc:
+        raise RU.UnsupportedTopology(str(exc)) from None
+    composition = compose_full_topology(ir, MOD_PREFIX)
+    if composition.supported:
+        text = composition.lean_source
+        out_path = args.out or os.path.join(TV, DENOTE, f"Goal{n}Compiled.lean")
+        if args.dry_run:
+            log(text)
+            return
+        def check_candidate(stage: Path, candidate_fd: int) -> None:
+            compiled = subprocess.run(
+                ["lake", "env", "lean", "--tstack=65536", str(stage)],
+                cwd=TV,
+                capture_output=True,
+                text=True,
+                timeout=900,
+                env={**os.environ, "LEAN_NUM_THREADS": "1"},
+                pass_fds=(candidate_fd,),
+            )
+            output = compiled.stdout + compiled.stderr
+            if compiled.returncode != 0 or "sorry" in output.lower():
+                raise RuntimeError(
+                    f"Lean rejected candidate (exit={compiled.returncode})\n{output[-2500:]}"
+                )
+
+        try:
+            _publish_composed_source(
+                text,
+                out_path,
+                None if args.no_compile else check_candidate,
+            )
+        except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
+            log(f"  FAIL {exc}")
+            sys.exit(1)
+        log(
+            f"[g{n}] composed rule={composition.rule_id} "
+            f"plan_steps={len(proof_plan.steps)} wrote={out_path}"
+        )
+        if not args.no_compile:
+            log("  OK exit=0")
+        return
     topo = analyze(ir)
     log(f"[g{n}] single_tp={topo.single_tp} mid={len(topo.mid_tids)} finals={len(topo.final_tps)} "
-        f"smop={ir.sm_nodes[0].op}")
+        f"smop={ir.sm_nodes[0].op} plan_steps={len(proof_plan.steps)}")
 
     input_sources, missing = trace_input_sources(ir)
     if missing:

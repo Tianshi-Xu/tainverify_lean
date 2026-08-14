@@ -11,11 +11,11 @@
 # Output goes to denote/yoco_goals/Goal${N}Bridge_Auto.lean by default;
 # pass --out PATH to override.
 #
-# Currently proven to work end-to-end on Goal_5 (base, single-tp,
-# 1-node SM + 3-node PM including AllReduce). Larger goals (1/2/3/4)
-# still need additional POINTWISE dispatch and composition support for
-# yoco-specific ops (FW_inner_chunk_ce, FW_multiref,
-# FW_topk_routing, FW_all2all_moe_gmm, FW_maybe_unshuffle, etc).
+# Goal 5's current graph is a full-topology hidden-sharded
+# embedding+AllToAll instance. emit2.py now closes it through the generic
+# `embedding-hidden-alltoall-two` composer without importing Pattern_5's proof.
+# Larger goals (1/2/3/4) fail closed at the first unregistered typed rule;
+# add reusable operator/relation/composition rules rather than Goal-specific Lean.
 
 set -euo pipefail
 

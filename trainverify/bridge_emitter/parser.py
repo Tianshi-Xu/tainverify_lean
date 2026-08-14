@@ -9,8 +9,8 @@ Usage:
     python3 parser.py <N> [--root <repo_root>]
 prints a JSON-ish dump of the parsed IR + topology for goal N.
 """
-import re, sys, json, os
-from dataclasses import dataclass, field, asdict
+import re, sys, os
+from dataclasses import dataclass, field
 from typing import Optional
 sys.path.insert(0, os.path.dirname(__file__))
 from target_config import DENOTE_DIR as _RELDIR, GEN_FILE
@@ -39,6 +39,7 @@ class LineageGoal:
     tps: list            # list[(rank, tid)]
     tpShapes: list
     gatherDim: Optional[int] = None
+    replicated: bool = False
 
 @dataclass
 class GoalIR:
@@ -49,12 +50,14 @@ class GoalIR:
     pm_shapes: list               # list[(tid, shape)]
     lineage: LineageGoal
     prereqs: list                 # list[int]
+    sm_num_ranks: int = 1
+    pm_num_ranks: int = 1
+    init_lineages: dict[int, LineageGoal] = field(default_factory=dict)
+    full_init_goal_ids: tuple[int, ...] = ()
 
 # ---------- low-level parsers ----------
-NODE_RE = re.compile(
-    r'\{\s*rank\s*:=\s*(\d+),\s*op\s*:=\s*"OpName\.([A-Za-z0-9_]+)",\s*'
-    r'ins\s*:=\s*\[([0-9,\s]*)\],\s*outs\s*:=\s*\[([0-9,\s]*)\]'
-    r'(?:,\s*params\s*:=\s*\[([0-9,\s]*)\])?\s*\}'
+NODE_FIELD_RE = re.compile(
+    r'\b(rank|op|ins|outs|params)\s*:=\s*("[^"]*"|\[[^\]]*\]|\d+)'
 )
 
 def _ints(s):
@@ -62,14 +65,80 @@ def _ints(s):
     return [int(x) for x in s.split(',') if x.strip()] if s else []
 
 def parse_nodes(block: str):
+    nodes_header = re.search(r"\bnodes\s*:=\s*\[", block)
+    if nodes_header is None:
+        placeholder = re.search(r"\bnodes\s*:=\s*\?_", block)
+        if placeholder is None:
+            raise ValueError("graph declaration has no nodes list")
+        nodes_header = re.search(r"\bexact\s*\[", block[placeholder.end():])
+        if nodes_header is None:
+            raise ValueError("graph nodes placeholder has no exact list")
+        list_start = placeholder.end() + nodes_header.end() - 1
+    else:
+        list_start = nodes_header.end() - 1
+    depth = 0
+    list_end = None
+    for index in range(list_start, len(block)):
+        if block[index] == "[":
+            depth += 1
+        elif block[index] == "]":
+            depth -= 1
+            if depth == 0:
+                list_end = index
+                break
+    if list_end is None:
+        raise ValueError("unterminated graph nodes list")
+    source = block[list_start + 1:list_end]
     nodes = []
-    for m in NODE_RE.finditer(block):
-        rank, op, ins, outs, params = m.groups()
+    position = 0
+    while position < len(source):
+        separator = re.match(r"[\s,]*", source[position:])
+        assert separator is not None
+        position += separator.end()
+        if position == len(source):
+            break
+        if source[position] != "{":
+            raise ValueError(f"unparsed graph node text at offset {position}")
+        record_end = source.find("}", position + 1)
+        if record_end < 0:
+            raise ValueError("unterminated graph node record")
+        record = source[position + 1:record_end]
+        fields = {}
+        consumed = []
+        for match in NODE_FIELD_RE.finditer(record):
+            name, value = match.groups()
+            if name in fields:
+                raise ValueError(f"duplicate graph node field {name}")
+            fields[name] = value
+            consumed.append(match.span())
+        residue_parts = []
+        cursor = 0
+        for start, end in consumed:
+            residue_parts.append(record[cursor:start])
+            cursor = end
+        residue_parts.append(record[cursor:])
+        if re.sub(r"[\s,]", "", "".join(residue_parts)):
+            raise ValueError("unparsed or unknown graph node field")
+        missing = {"rank", "op", "ins", "outs"} - fields.keys()
+        if missing:
+            raise ValueError(f"graph node is missing fields {sorted(missing)}")
+        op_match = re.fullmatch(r'"OpName\.([A-Za-z0-9_]+)"', fields["op"])
+        if op_match is None:
+            raise ValueError("graph node op is not an OpName literal")
+        list_values = {}
+        for name in ("ins", "outs", "params"):
+            if name not in fields:
+                continue
+            value_match = re.fullmatch(r"\[([0-9,\s]*)\]", fields[name])
+            if value_match is None:
+                raise ValueError(f"graph node {name} is not a Nat list literal")
+            list_values[name] = _ints(value_match.group(1))
         nodes.append(Node(
-            rank=int(rank), op=op,
-            ins=_ints(ins), outs=_ints(outs),
-            params=_ints(params) if params is not None else None,
+            rank=int(fields["rank"]), op=op_match.group(1),
+            ins=list_values["ins"], outs=list_values["outs"],
+            params=list_values.get("params"),
         ))
+        position = record_end + 1
     return nodes
 
 def extract_def_block(text: str, def_name: str) -> str:
@@ -88,23 +157,61 @@ def parse_shapes(block: str):
         out.append((tid, shape))
     return out
 
-def parse_lineage(gen_text: str, n: int) -> LineageGoal:
-    blk = extract_def_block(gen_text, f"goal_{n}")
+
+def parse_num_ranks(block: str, graph_name: str) -> int:
+    match = re.search(r"numRanks\s*:=\s*(\d+)", block)
+    if match is None:
+        raise ValueError(f"{graph_name} has no literal numRanks header")
+    return int(match.group(1))
+
+def parse_lineage_block(blk: str, name: str) -> LineageGoal:
+    if not blk:
+        raise ValueError(f"missing lineage definition {name}")
     # ts
-    ts = int(re.search(r'ts\s*:=\s*(\d+)', blk).group(1))
-    tsShape = _ints(re.search(r'tsShape\s*:=\s*\[([0-9,\s]*)\]', blk).group(1))
+    ts_match = re.search(r'ts\s*:=\s*(\d+)', blk)
+    shape_match = re.search(r'tsShape\s*:=\s*\[([0-9,\s]*)\]', blk)
+    if ts_match is None or shape_match is None:
+        raise ValueError(f"malformed lineage definition {name}")
+    ts = int(ts_match.group(1))
+    tsShape = _ints(shape_match.group(1))
     # tps: list of { rank := r, tid := t }
     tps = [(int(r), int(t)) for r, t in
            re.findall(r'\{\s*rank\s*:=\s*(\d+),\s*tid\s*:=\s*(\d+)\s*\}', blk)]
     # tpShapes: list of [..]
-    tpsh_m = re.search(r'tpShapes\s*:=\s*\[(.*?)\]\s*(?:,\s*gatherDim|\})', blk, re.S)
+    tpsh_m = re.search(
+        r'tpShapes\s*:=\s*\[(.*?)\]\s*(?:,\s*gatherDim|,\s*replicated|\})',
+        blk,
+        re.S,
+    )
     tpShapes = []
     if tpsh_m:
         for sm in re.finditer(r'\[([0-9,\s]*)\]', tpsh_m.group(1)):
             tpShapes.append(_ints(sm.group(1)))
     gd_m = re.search(r'gatherDim\s*:=\s*(\d+)', blk)
     gatherDim = int(gd_m.group(1)) if gd_m else None
-    return LineageGoal(ts=ts, tsShape=tsShape, tps=tps, tpShapes=tpShapes, gatherDim=gatherDim)
+    replicated_m = re.search(r'replicated\s*:=\s*(true|false)', blk)
+    replicated = replicated_m is not None and replicated_m.group(1) == "true"
+    return LineageGoal(
+        ts=ts,
+        tsShape=tsShape,
+        tps=tps,
+        tpShapes=tpShapes,
+        gatherDim=gatherDim,
+        replicated=replicated,
+    )
+
+
+def parse_lineage(gen_text: str, n: int) -> LineageGoal:
+    return parse_lineage_block(extract_def_block(gen_text, f"goal_{n}"), f"goal_{n}")
+
+
+def parse_full_init_goal_ids(goal_text: str, gen_text: str, n: int) -> tuple[int, ...]:
+    full_block = extract_def_block(goal_text, f"goal_{n}_full_initGoals")
+    if re.search(r":=\s*initGoals\b", full_block):
+        source = extract_def_block(gen_text, "initGoals")
+    else:
+        source = full_block
+    return tuple(int(value) for value in re.findall(r"initGoal_(\d+)", source))
 
 def parse_prereqs(goal_text: str, n: int):
     m = re.search(rf'def\s+goal_{n}_prereqs\s*:\s*List LineageGoal\s*:=\s*\[(.*?)\]', goal_text, re.S)
@@ -127,6 +234,16 @@ def load_goal_ir(n: int, root: str) -> GoalIR:
     sm_sh_block = extract_def_block(goal_text, f"sm_goal_{n}InitShapes")
     pm_sh_block = extract_def_block(goal_text, f"pm_goal_{n}InitShapes")
 
+    full_init_goal_ids = parse_full_init_goal_ids(goal_text, gen_text, n)
+    needed_init_tids = {
+        int(tid) for node in parse_nodes(sm_block) for tid in node.ins
+    }
+    init_lineages = {
+        tid: parse_lineage_block(
+            extract_def_block(gen_text, f"initGoal_{tid}"), f"initGoal_{tid}"
+        )
+        for tid in sorted(needed_init_tids & set(full_init_goal_ids))
+    }
     return GoalIR(
         n=n,
         sm_nodes=parse_nodes(sm_block),
@@ -135,6 +252,10 @@ def load_goal_ir(n: int, root: str) -> GoalIR:
         pm_shapes=parse_shapes(pm_sh_block),
         lineage=parse_lineage(gen_text, n),
         prereqs=parse_prereqs(goal_text, n),
+        sm_num_ranks=parse_num_ranks(sm_block, f"sm_goal_{n}"),
+        pm_num_ranks=parse_num_ranks(pm_block, f"pm_goal_{n}"),
+        init_lineages=init_lineages,
+        full_init_goal_ids=full_init_goal_ids,
     )
 
 # ---------- topology ----------
