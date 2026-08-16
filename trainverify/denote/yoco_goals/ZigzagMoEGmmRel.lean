@@ -687,6 +687,41 @@ theorem all2all_moe_gmm
       swigluLimit hhModel ht_even hw13_shape)
     hrelX hrelRP hrelRM hdec
 
+theorem all2all_moe_gmm_full_1x2
+    {fx frp frm zx0 zx1 zrp0 zrp1 zrm0 zrm1 cu : Tensor}
+    (w13 w2 w13a w13b w2a w2b : Tensor)
+    (lDim hModel numExp topK tDim dDim : Nat)
+    (swigluLimit : Scalar)
+    (hX : Zigzag2Rel fx zx0 zx1 cu [lDim * 2, hModel] [lDim, hModel])
+    (hRP : Zigzag2Rel frp zrp0 zrp1 cu [lDim * 2, numExp] [lDim, numExp])
+    (hRM : Zigzag2Rel frm zrm0 zrm1 cu [lDim * 2, numExp] [lDim, numExp])
+    (hl : 0 < lDim) (heven : lDim % 2 = 0)
+    (hhModel : 0 < hModel) (hnE : 0 < numExp)
+    (htEven : tDim = 2 * dDim)
+    (hw13Shape : w13.shape = [numExp, tDim, hModel])
+    (hw2Shape : w2.shape = [numExp, hModel, dDim])
+    (hw13Recon : w13 = allGatherPrimDimN 0 2 0 [w13a, w13b])
+    (hw2Recon : w2 = allGatherPrimDimN 0 2 0 [w2a, w2b])
+    (hdec : decodeCuSeqlens cu = [0, 2 * lDim]) :
+    Zigzag2Rel
+      (fw_all2all_moe_gmm_full fx frp frm [w13] [w2] numExp topK swigluLimit)
+      (fw_all2all_moe_gmm_full zx0 zrp0 zrm0 [w13a, w13b] [w2a, w2b]
+        numExp topK swigluLimit)
+      (fw_all2all_moe_gmm_full zx1 zrp1 zrm1 [w13a, w13b] [w2a, w2b]
+        numExp topK swigluLimit)
+      cu [lDim * 2, hModel] [lDim, hModel] := by
+  unfold fw_all2all_moe_gmm_full
+  simp only [List.length_cons, List.length_nil]
+  rw [allGatherPrimDimN_singleton_eq 0 w13 (by rw [hw13Shape]; simp)]
+  rw [allGatherPrimDimN_singleton_eq 0 w2 (by rw [hw2Shape]; simp)]
+  rw [hw13Recon, hw2Recon]
+  exact Zigzag2Rel.all2all_moe_gmm
+    (allGatherPrimDimN 0 2 0 [w13a, w13b])
+    (allGatherPrimDimN 0 2 0 [w2a, w2b])
+    lDim hModel numExp topK numExp tDim dDim swigluLimit
+    hX hRP hRM hl heven hhModel hnE htEven
+    (by rw [← hw13Recon]; exact hw13Shape) hdec
+
 end Zigzag2Rel
 end
 end TrainVerify.Denote.GeneratedPatterns

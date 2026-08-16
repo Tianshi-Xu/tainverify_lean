@@ -26,12 +26,22 @@ MINI_K = int(os.environ.get("BRIDGE_MINI_K", os.environ.get("BRIDGE_PM_NUMRANKS"
 POINTWISE = {
     "FW_layernorm": ("fw_layernorm", "applyNode_fw_layernorm_out", None, False, False),
     "FW_gelu":      ("fw_gelu",      "applyNode_fw_gelu_out",      None, False, False),
+    "FW_float":     ("id",           "applyNode_fw_float_out",     None, False, False),
+    "FW_to":        ("id",           "applyNode_fw_to_out",        None, False, False),
+    "FW_rms_norm":  ("fw_rms_norm",  "applyNode_fw_rms_norm_out_1p", None, False, False),
+    "FW_per_head_mix_precision_linear": ("fw_per_head_linear", "applyNode_fw_per_head_mix_precision_linear_out", None, False, False),
     "FW_linear":    ("fw_linear",    "applyNode_fw_linear_out",    None, False, False),
+    "FW_mix_precision_linear": ("fw_linear", "applyNode_fw_mix_precision_linear_out_1p", None, False, False),
+    "FW_norm_linear": ("fw_norm_linear", "applyNode_fw_norm_linear_out", None, False, False),
     "FW_matmul":    ("fw_matmul",    "applyNode_fw_matmul_out",    None, False, False),
     "FW_embedding": ("fw_embedding", "applyNode_fw_embedding_out", None, False, False),
     "FW_sum":       ("fw_sum",       "applyNode_fw_sum_out",       None, False, False),
+    "FW_sigmoid":   ("fw_sigmoid",   "applyNode_fw_sigmoid_out_1p", None, False, False),
+    "FW_swiglu":    ("fw_swiglu",    "applyNode_fw_swiglu_out_1p", None, False, False),
     "FW_add":       ("elemwiseAdd",  "applyNode_fw_add2_out",      None, False, False),
+    "FW_mul":       ("elemwiseMul",  "applyNode_fw_mul_out",       None, False, False),
     "FW_view":      ("fw_view",      "applyNode_fw_view_out",      None, True,  True),
+    "FW_reshape":   ("fw_view",      "applyNode_fw_reshape_out",   None, True,  True),
     "FW_transpose": ("transposeAxes","applyNode_fw_transposeAxes_out", None, True, True),
     # Family D pointwise ops. Only per-goal `_gNNN`-suffixed lemmas exist in the
     # INVIOLABLE Denote.lean; but those lemmas are fully goal-agnostic (universally

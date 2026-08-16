@@ -8206,6 +8206,45 @@ def InitGoalHolds (numParts : Nat) (goal : LineageGoal) (initSM initPM : Store) 
     (tps.map (fun t => t.shape)) = goal.tpShapes ∧
     ts = reconstructForGoal goal numParts tps
 
+namespace InitGoalHolds
+
+/-- A singleton lineage goal identifies the SM initial value with its unique PM value. -/
+theorem singleton_value_eq
+    (numParts : Nat) (goal : LineageGoal) (initSM initPM : Store)
+    (piece : Piece)
+    (h : InitGoalHolds numParts goal initSM initPM)
+    (htps : goal.tps = [piece]) :
+    initSM goal.ts = initPM piece.tid := by
+  unfold InitGoalHolds at h
+  rw [htps] at h
+  rcases h with ⟨_, _, hvalue⟩
+  cases hrep : goal.replicated <;>
+    simpa [reconstructForGoal, hrep, reconstructWithDim] using hvalue
+
+theorem gather2_dim0
+    (g : LineageGoal) (initSM initPM : Store)
+    (W A B : Tid) (shard : Shape)
+    (h : InitGoalHolds 2 g initSM initPM)
+    (htps : g.tps = [{rank := 0, tid := A}, {rank := 1, tid := B}])
+    (htpShapes : g.tpShapes = [shard, shard])
+    (hgd : g.gatherDim = 0)
+    (hrep : g.replicated = false)
+    (hts : g.ts = W)
+    (hshard : shard ≠ [1]) :
+    initSM W = allGatherPrimDimN 0 2 0 [initPM A, initPM B] := by
+  unfold InitGoalHolds at h
+  have hshapes := h.2.1
+  rw [htps, htpShapes] at hshapes
+  simp only [List.map, List.cons.injEq, and_true] at hshapes
+  have hval := h.2.2
+  rw [reconstructForGoal_of_not_replicated g 2 _ hrep, htps, hts, hgd] at hval
+  simp only [List.map] at hval
+  rw [reconstructWithDim_cons_cons_nonscalar 0 2 0 _ _ []
+        (by rw [hshapes.1]; exact hshard)] at hval
+  exact hval
+
+end InitGoalHolds
+
 def InitGoalsHold (numParts : Nat) (goals : List LineageGoal) (initSM initPM : Store) : Prop :=
   ∀ g ∈ goals, InitGoalHolds numParts g initSM initPM
 

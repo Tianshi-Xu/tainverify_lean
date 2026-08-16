@@ -128,4 +128,209 @@ theorem allGatherPrimDimN_chunkPrimDimN_id_dim0_2 (x : Tensor) (a b : Nat)
   rw [hgetD r hr]
   exact (chunkPrimDimN0_valAt 2 r a b x hsh (by omega) (by omega) hr i hi j hj).symm
 
+/-- 1D dim-0 all-gather：输出位置 `r * tokens + i`
+    对应 rank `r` 的局部位置 `i`。 -/
+private theorem allGatherPrimDimN0_valAt_1d
+    (tokens : Nat) (htokens : 0 < tokens)
+    (xs : List Tensor)
+    (hhead :
+      (xs.head?.map (fun t => t.shape)).getD [] = [tokens])
+    (hshapes :
+      ∀ r (_ : r < 2),
+        (xs.getD r (zeroTensor [tokens])).shape = [tokens])
+    (r : Nat) (hr : r < 2)
+    (i : Nat) (hi : i < tokens) :
+    valAt (allGatherPrimDimN 0 2 0 xs) (r * tokens + i) =
+      valAt (xs.getD r (zeroTensor [tokens])) i := by
+  unfold allGatherPrimDimN
+  rw [hhead]
+  simp only [List.getD, List.drop, List.foldl]
+
+  have hbound : r * tokens + i < tokens * 2 := by
+    calc
+      r * tokens + i < r * tokens + tokens := by omega
+      _ = (r + 1) * tokens := by ring
+      _ ≤ 2 * tokens := Nat.mul_le_mul_right _ (by omega)
+      _ = tokens * 2 := by ring
+
+  rw [valAt_of_lt _ _ (by
+    show
+      r * tokens + i <
+        prodShape ([tokens].set 0 (([tokens].getD 0 0) * 2))
+    simp [prodShape, List.set, List.getD]
+    exact hbound)]
+
+  simp [Tensor.mkShape, List.set, List.getD]
+
+  have htokens_ne : tokens ≠ 0 :=
+    Nat.pos_iff_ne_zero.mp htokens
+
+  have hfull_ne : tokens * 2 ≠ 0 :=
+    Nat.mul_ne_zero htokens_ne (by omega)
+
+  have hidx_div_full :
+      (r * tokens + i) / (tokens * 2) = 0 := by
+    exact Nat.div_eq_of_lt hbound
+
+  have hidx_mod_full :
+      (r * tokens + i) % (tokens * 2) = r * tokens + i := by
+    exact Nat.mod_eq_of_lt hbound
+
+  have hrank :
+      (r * tokens + i) / tokens = r := by
+    have h :
+        (r * tokens + i) / tokens = i / tokens + r := by
+      rw [Nat.add_comm, Nat.add_mul_div_right i r htokens]
+    rw [h, Nat.div_eq_of_lt hi]
+    ring
+
+  have hlocal :
+      (r * tokens + i) % tokens = i := by
+    have h :
+        (r * tokens + i) % tokens = i % tokens := by
+      rw [Nat.add_comm, Nat.add_mul_mod_self_right]
+    rw [h, Nat.mod_eq_of_lt hi]
+
+  have hmod_one :
+      (r * tokens + i) % 1 = 0 :=
+    Nat.mod_one _
+
+  simp [htokens_ne, hfull_ne, hidx_div_full, hidx_mod_full,
+    hrank, hlocal, hmod_one]
+
+
+/-- 对 shape `[tokens * 2]` 的 1D tensor 在 dim 0 做 chunk：
+    rank `r` 的局部位置 `i` 对应原 tensor 的 `r * tokens + i`。 -/
+private theorem chunkPrimDimN0_valAt_1d
+    (tokens : Nat) (htokens : 0 < tokens)
+    (x : Tensor)
+    (hshape : x.shape = [tokens * 2])
+    (r : Nat) (hr : r < 2)
+    (i : Nat) (hi : i < tokens) :
+    valAt (chunkPrimDimN 0 2 r x) i =
+      valAt x (r * tokens + i) := by
+  unfold chunkPrimDimN
+  rw [hshape]
+  simp only [List.set, List.drop, List.foldl, List.getD]
+
+  have hdiv : (tokens * 2) / 2 = tokens := by
+    omega
+
+  have hrmod : r % 2 = r :=
+    Nat.mod_eq_of_lt hr
+
+  rw [valAt_of_lt _ _ (by
+    show
+      i <
+        prodShape ([tokens * 2].set 0 ((tokens * 2) / 2))
+    simp [prodShape, List.set, hdiv]
+    exact hi)]
+
+  simp [Tensor.mkShape, List.set, hdiv, hrmod]
+
+  have himod : i % tokens = i :=
+    Nat.mod_eq_of_lt hi
+
+  have hidiv : i / tokens = 0 :=
+    Nat.div_eq_of_lt hi
+
+  have htokens_ne : tokens ≠ 0 :=
+    Nat.pos_iff_ne_zero.mp htokens
+
+  have himod_one : i % 1 = 0 :=
+    Nat.mod_one _
+
+  simp [himod, hidiv, htokens_ne, himod_one]
+
+
+/- 一个 shape 为 `[2 * tokens]` 的 1D tensor，在 dim 0 上分成两个 rank，
+   再按 dim 0 all-gather 后恢复原 tensor。 -/
+set_option maxRecDepth 1000000 in
+theorem allGatherPrimDimN_chunkPrimDimN_id_dim0_2_1d
+    (x : Tensor) (tokens : Nat)
+    (hshape : x.shape = [2 * tokens])
+    (htokens : 0 < tokens) :
+    allGatherPrimDimN 0 2 0
+      [chunkPrimDimN 0 2 0 x, chunkPrimDimN 0 2 1 x] = x := by
+  have hshape' : x.shape = [tokens * 2] := by
+    simpa [Nat.mul_comm] using hshape
+
+  have hchunk_shape :
+      ∀ r, (chunkPrimDimN 0 2 r x).shape = [tokens] := by
+    intro r
+    rw [chunkPrimDimN_shape 0 2 r x [tokens * 2] hshape' (by omega)]
+    simp [List.set, List.getD]
+
+  have hhead :
+      ([chunkPrimDimN 0 2 0 x,
+          chunkPrimDimN 0 2 1 x].head?.map (fun t => t.shape)).getD [] =
+        [tokens] := by
+    simp [List.head?, Option.map, hchunk_shape 0]
+
+  have hgetD :
+      ∀ r (_ : r < 2),
+        [chunkPrimDimN 0 2 0 x,
+          chunkPrimDimN 0 2 1 x].getD r (zeroTensor [tokens]) =
+            chunkPrimDimN 0 2 r x := by
+    intro r hr
+    have hr_cases : r = 0 ∨ r = 1 := by
+      omega
+    rcases hr_cases with rfl | rfl <;>
+      simp [List.getD, List.getElem?_cons_zero,
+        List.getElem?_cons_succ]
+
+  have hshapes :
+      ∀ r (_ : r < 2),
+        ([chunkPrimDimN 0 2 0 x,
+            chunkPrimDimN 0 2 1 x].getD r
+              (zeroTensor [tokens])).shape = [tokens] := by
+    intro r hr
+    rw [hgetD r hr]
+    exact hchunk_shape r
+
+  have hgather_shape :
+      (allGatherPrimDimN 0 2 0
+        [chunkPrimDimN 0 2 0 x,
+          chunkPrimDimN 0 2 1 x]).shape = [tokens * 2] := by
+    rw [allGatherPrimDimN_shape 0 2 _ [tokens] hhead]
+    simp [List.set, List.getD]
+
+  symm
+  apply Tensor.ext (by rw [hshape', hgather_shape])
+  intro idx hidx
+
+  rw [hshape'] at hidx
+
+  have hidxlt : idx < tokens * 2 := by
+    simpa [prodShape] using hidx
+
+  set r := idx / tokens with hrdef
+  set i := idx % tokens with hidef
+
+  have hr : r < 2 := by
+    rw [hrdef]
+    apply Nat.div_lt_of_lt_mul
+    exact hidxlt
+
+  have hi : i < tokens := by
+    rw [hidef]
+    exact Nat.mod_lt idx (by omega)
+
+  have hidx_eq : idx = r * tokens + i := by
+    rw [hrdef, hidef, Nat.mul_comm]
+    exact (Nat.div_add_mod idx tokens).symm
+
+  rw [hidx_eq]
+
+  rw [allGatherPrimDimN0_valAt_1d
+    tokens htokens
+    [chunkPrimDimN 0 2 0 x, chunkPrimDimN 0 2 1 x]
+    hhead hshapes r hr i hi]
+
+  rw [hgetD r hr]
+
+  exact
+    (chunkPrimDimN0_valAt_1d
+      tokens htokens x hshape' r hr i hi).symm
+
 end TrainVerify.Denote

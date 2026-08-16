@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: TrainVerify contributors
 -/
 import denote.yoco_goals.ZigzagLayoutRel
+import denote.ChunkGatherDim0
 
 /-!
 # The MoE router operators preserve the CP2 zigzag layout relation
@@ -307,6 +308,44 @@ theorem ZigzagCuWF.rowLocal_cp2
     simp only [List.getD_cons_zero, hs0] at h
     simpa only [List.getD_cons_zero, hF0] using h
 
+theorem chunk_allGather_cp2_dim0_2d
+    (x0 x1 : Tensor) (lDim d r : Nat)
+    (hx0 : x0.shape = [lDim, d]) (hx1 : x1.shape = [lDim, d])
+    (hl : 0 < lDim) (hd : 0 < d) (hr : r < 2) :
+    chunkPrimDimN 0 2 r (allGatherPrimDimN 0 2 0 [x0, x1]) =
+      [x0, x1].getD r (zeroTensor [lDim, d]) := by
+  have hhead : (([x0, x1] : List Tensor).head?.map (fun t => t.shape)).getD [] = [lDim, d] := by
+    simp only [List.head?_cons, Option.map_some, Option.getD_some, hx0]
+  have hgetShape : ∀ r' (_ : r' < 2),
+      ([x0, x1].getD r' (zeroTensor [lDim, d])).shape = [lDim, d] := by
+    intro r' hr'
+    interval_cases r' <;> simp only [List.getD_cons_zero, List.getD_cons_succ, hx0, hx1]
+  let full := allGatherPrimDimN 0 2 0 [x0, x1]
+  have hfull : full.shape = [2 * lDim, d] := by
+    dsimp [full]
+    rw [allGatherPrimDimN_shape 0 2 _ [lDim, d] hhead]
+    simp [List.set, List.getD, Nat.mul_comm]
+  have hchunk : (chunkPrimDimN 0 2 r full).shape = [lDim, d] := by
+    rw [chunkPrimDimN_shape 0 2 r full _ hfull (by omega)]
+    simp
+  apply Tensor.ext
+  · rw [hchunk, hgetShape r hr]
+  · intro idx hidx
+    rw [hchunk, prodShape_2d'] at hidx
+    let row := idx / d
+    let col := idx % d
+    have hrow : row < lDim := Nat.div_lt_iff_lt_mul hd |>.mpr hidx
+    have hcol : col < d := Nat.mod_lt _ hd
+    have hidxeq : idx = row * d + col := by
+      dsimp [row, col]
+      simpa [Nat.mul_comm] using (Nat.div_add_mod idx d).symm
+    rw [hidxeq]
+    rw [chunkPrimDimN0_valAt 2 r (2 * lDim) d _ hfull (by omega) hd hr row (by simpa using hrow) col hcol]
+    rw [show 2 * lDim / 2 = lDim by omega]
+    dsimp [full]
+    exact allGatherPrimDimN0_valAt 2 lDim d [x0, x1] (by omega) hl hd
+      hhead hgetShape r hr row hrow col hcol
+
 namespace Zigzag2Rel
 
 /-- **Master propagation lemma.** Any row-local operator `[a, d] → [a, e]`
@@ -417,6 +456,51 @@ theorem norm_linear
   Zigzag2Rel.rowLocal (fun x => fw_norm_linear x w) k n lDim hk hn hl heven
     (RowLocalShape_norm_linear k n w hn hw)
     (RowLocalCongr_norm_linear k n w hn hw) hrel hdec
+
+theorem norm_linear_fullProducer_chunks
+    {full z0 z1 cu wSM wPM smOut gathered producer out0 out1 : Tensor}
+    (lDim k n : Nat)
+    (hrel : Zigzag2Rel full z0 z1 cu [lDim * 2, k] [lDim, k])
+    (hw : wPM.shape = [n, k]) (hwEq : wSM = wPM)
+    (hsm : smOut = fw_norm_linear full wSM)
+    (hgather : gathered = allGatherPrimDimN 0 2 0 [z0, z1])
+    (hproducer : producer = fw_norm_linear gathered wPM)
+    (hchunk0 : out0 = chunkPrimDimN 0 2 0 producer)
+    (hchunk1 : out1 = chunkPrimDimN 0 2 1 producer)
+    (hl : 0 < lDim) (heven : lDim % 2 = 0) (hk : 0 < k) (hn : 0 < n)
+    (hdec : decodeCuSeqlens cu = [0, 2 * lDim]) :
+    Zigzag2Rel smOut out0 out1 cu [lDim * 2, n] [lDim, n] := by
+  have hProjected := Zigzag2Rel.norm_linear lDim k n hrel hw hl heven hk hn hdec
+  have hCommute := fw_norm_linear_allGather0_commute_2 z0 z1 wPM lDim k n
+      hl hk hn hrel.rank0_shape hrel.rank1_shape hw
+  have hProducerGather : producer = allGatherPrimDimN 0 2 0
+      [fw_norm_linear z0 wPM, fw_norm_linear z1 wPM] := by
+    rw [hproducer, hgather]
+    exact hCommute
+  have hout0 : out0 = fw_norm_linear z0 wPM := by
+    calc
+      out0 = chunkPrimDimN 0 2 0 producer := hchunk0
+      _ = chunkPrimDimN 0 2 0 (allGatherPrimDimN 0 2 0
+          [fw_norm_linear z0 wPM, fw_norm_linear z1 wPM]) :=
+        congrArg (chunkPrimDimN 0 2 0) hProducerGather
+      _ = fw_norm_linear z0 wPM := by
+        simpa only [List.getD_cons_zero] using
+          (chunk_allGather_cp2_dim0_2d (fw_norm_linear z0 wPM)
+            (fw_norm_linear z1 wPM) lDim n 0 hProjected.rank0_shape
+            hProjected.rank1_shape hl hn (by decide))
+  have hout1 : out1 = fw_norm_linear z1 wPM := by
+    calc
+      out1 = chunkPrimDimN 0 2 1 producer := hchunk1
+      _ = chunkPrimDimN 0 2 1 (allGatherPrimDimN 0 2 0
+          [fw_norm_linear z0 wPM, fw_norm_linear z1 wPM]) :=
+        congrArg (chunkPrimDimN 0 2 1) hProducerGather
+      _ = fw_norm_linear z1 wPM := by
+        simpa only [List.getD_cons_succ, List.getD_cons_zero] using
+          (chunk_allGather_cp2_dim0_2d (fw_norm_linear z0 wPM)
+            (fw_norm_linear z1 wPM) lDim n 1 hProjected.rank0_shape
+            hProjected.rank1_shape hl hn (by decide))
+  rw [hsm, hwEq, hout0, hout1]
+  exact hProjected
 
 end Zigzag2Rel
 

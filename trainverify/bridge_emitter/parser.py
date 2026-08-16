@@ -41,6 +41,34 @@ class LineageGoal:
     gatherDim: Optional[int] = None
     replicated: bool = False
 
+@dataclass(frozen=True)
+class ReplicaNodeRef:
+    rank: int
+    primary_out_tid: int
+
+
+@dataclass(frozen=True)
+class ReplicaGroup:
+    cid: int
+    mb: int
+    irname: str
+    members: tuple[ReplicaNodeRef, ...]
+
+
+@dataclass(frozen=True)
+class InputValueClass:
+    source: str
+    tids: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class PackedCuContract:
+    side: str
+    tid: int
+    total_tokens: int
+    num_ranks: int
+
+
 @dataclass
 class GoalIR:
     n: int
@@ -50,19 +78,113 @@ class GoalIR:
     pm_shapes: list               # list[(tid, shape)]
     lineage: LineageGoal
     prereqs: list                 # list[int]
+    sm_graph_ref: str = ""
+    pm_graph_ref: str = ""
+    public_statement_module: str = ""
     sm_num_ranks: int = 1
     pm_num_ranks: int = 1
+    sm_replica_groups: tuple[ReplicaGroup, ...] = ()
+    pm_replica_groups: tuple[ReplicaGroup, ...] = ()
+    packed_cu_contracts: tuple[PackedCuContract, ...] = ()
+    sm_input_value_classes: tuple[InputValueClass, ...] = ()
+    pm_input_value_classes: tuple[InputValueClass, ...] = ()
     init_lineages: dict[int, LineageGoal] = field(default_factory=dict)
     full_init_goal_ids: tuple[int, ...] = ()
 
 # ---------- low-level parsers ----------
+RANGE_MAP_VALUE_RE = (
+    r"\(\(List\.range\s+\d+\)\.map\s+"
+    r"\(fun\s+[A-Za-z_][A-Za-z0-9_]*\s*=>\s*\d+\s*\+\s*"
+    r"[A-Za-z_][A-Za-z0-9_]*\)\)"
+)
 NODE_FIELD_RE = re.compile(
-    r'\b(rank|op|ins|outs|params)\s*:=\s*("[^"]*"|\[[^\]]*\]|\d+)'
+    rf'\b(rank|op|ins|outs|params)\s*:=\s*("[^"]*"|\[[^\]]*\]|{RANGE_MAP_VALUE_RE}|\d+)'
 )
 
 def _ints(s):
     s = s.strip()
     return [int(x) for x in s.split(',') if x.strip()] if s else []
+
+def _balanced_region(source: str, start: int, opening: str, closing: str) -> tuple[str, int]:
+    if start >= len(source) or source[start] != opening:
+        raise ValueError(f"expected {opening!r} at offset {start}")
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(source)):
+        char = source[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == opening:
+            depth += 1
+        elif char == closing:
+            depth -= 1
+            if depth == 0:
+                return source[start + 1:index], index + 1
+    raise ValueError(f"unterminated {opening}{closing} region")
+
+
+def _record_list(source: str, context: str) -> tuple[str, ...]:
+    records = []
+    position = 0
+    while position < len(source):
+        separator = re.match(r"[\s,]*", source[position:])
+        assert separator is not None
+        position += separator.end()
+        if position == len(source):
+            break
+        if source[position] != "{":
+            raise ValueError(f"unparsed {context} text at offset {position}")
+        record, position = _balanced_region(source, position, "{", "}")
+        records.append(record)
+    return tuple(records)
+
+
+def parse_replica_groups(block: str) -> tuple[ReplicaGroup, ...]:
+    match = re.search(r"\breplicaGroups\s*:=\s*\[", block)
+    if match is None:
+        return ()
+    source, _end = _balanced_region(block, match.end() - 1, "[", "]")
+    groups = []
+    for record in _record_list(source, "replica group"):
+        logical = re.search(
+            r'\blogical\s*:=\s*\{\s*cid\s*:=\s*(\d+)\s*,\s*mb\s*:=\s*(\d+)\s*,\s*irname\s*:=\s*"([^"]*)"\s*\}',
+            record,
+        )
+        members_match = re.search(r"\bmembers\s*:=\s*\[", record)
+        if logical is None or members_match is None:
+            raise ValueError("replica group lacks logical identity or members")
+        member_source, member_end = _balanced_region(record, members_match.end() - 1, "[", "]")
+        trailing = record[member_end:].strip()
+        if trailing:
+            raise ValueError(f"unparsed replica group suffix: {trailing!r}")
+        members = []
+        for member in _record_list(member_source, "replica member"):
+            parsed = re.fullmatch(
+                r'\s*rank\s*:=\s*(\d+)\s*,\s*primaryOutTid\s*:=\s*(\d+)\s*',
+                member,
+            )
+            if parsed is None:
+                raise ValueError(f"malformed replica member: {member!r}")
+            members.append(ReplicaNodeRef(int(parsed.group(1)), int(parsed.group(2))))
+        if not members:
+            raise ValueError("replica group has no members")
+        groups.append(ReplicaGroup(
+            cid=int(logical.group(1)),
+            mb=int(logical.group(2)),
+            irname=logical.group(3),
+            members=tuple(members),
+        ))
+    return tuple(groups)
+
 
 def parse_nodes(block: str):
     nodes_header = re.search(r"\bnodes\s*:=\s*\[", block)
@@ -130,9 +252,20 @@ def parse_nodes(block: str):
             if name not in fields:
                 continue
             value_match = re.fullmatch(r"\[([0-9,\s]*)\]", fields[name])
-            if value_match is None:
-                raise ValueError(f"graph node {name} is not a Nat list literal")
-            list_values[name] = _ints(value_match.group(1))
+            if value_match is not None:
+                list_values[name] = _ints(value_match.group(1))
+                continue
+            range_match = re.fullmatch(
+                r"\(\(List\.range\s+(\d+)\)\.map\s+"
+                r"\(fun\s+([A-Za-z_][A-Za-z0-9_]*)\s*=>\s*(\d+)\s*\+\s*"
+                r"([A-Za-z_][A-Za-z0-9_]*)\)\)",
+                fields[name],
+            )
+            if name != "ins" or range_match is None or range_match.group(2) != range_match.group(4):
+                raise ValueError(f"graph node {name} is not a supported Nat list expression")
+            count = int(range_match.group(1))
+            base = int(range_match.group(3))
+            list_values[name] = [base + offset for offset in range(count)]
         nodes.append(Node(
             rank=int(fields["rank"]), op=op_match.group(1),
             ins=list_values["ins"], outs=list_values["outs"],
@@ -207,7 +340,11 @@ def parse_lineage(gen_text: str, n: int) -> LineageGoal:
 
 def parse_full_init_goal_ids(goal_text: str, gen_text: str, n: int) -> tuple[int, ...]:
     full_block = extract_def_block(goal_text, f"goal_{n}_full_initGoals")
-    if re.search(r":=\s*initGoals\b", full_block):
+    direct_generated = re.search(
+        r"CoarseLineageHoldsWithInitDistributedFaithfulWithContract(?:\s+\S+){5}\s+initGoals\b",
+        goal_text,
+    ) or re.search(r"InitGoalsHold\s+\S+\s+initGoals\b", goal_text)
+    if re.search(r":=\s*initGoals\b", full_block) or direct_generated:
         source = extract_def_block(gen_text, "initGoals")
     else:
         source = full_block
@@ -223,18 +360,187 @@ def parse_prereqs(goal_text: str, n: int):
     return [int(x) for x in re.findall(r'(?:^|[\s,\[])(?:intermediate)?[Gg]oal_(\d+)', m.group(1))]
 
 # ---------- top-level ----------
+def _public_full_scope(n: int, goal_path: str, goal_text: str, gen_text: str) -> tuple[str, str, str, str, str, str, str, str]:
+    """Resolve graph and shape-list symbols from the exported full proposition."""
+    statement_name = f"goal_{n}_stmt_full"
+    candidates: list[tuple[str, str]] = []
+    goal_dir = os.path.dirname(goal_path)
+    for filename in sorted(os.listdir(goal_dir)):
+        if not filename.endswith(".lean"):
+            continue
+        path = os.path.join(goal_dir, filename)
+        text = goal_text if path == goal_path else open(path).read()
+        if re.search(rf"\bdef\s+{re.escape(statement_name)}\s*:", text):
+            candidates.append((path, text))
+    if len(candidates) != 1:
+        raise ValueError(
+            f"expected exactly one exported {statement_name} definition, found {len(candidates)}"
+        )
+    _statement_path, statement_text = candidates[0]
+    statement_module = "denote.yoco_goals." + os.path.splitext(os.path.basename(_statement_path))[0]
+    statement_block = extract_def_block(statement_text, statement_name)
+
+    compact = re.search(
+        r"CoarseLineageHoldsWithInit(?:DistributedFaithfulWithContract)?\s+"
+        r"([A-Za-z0-9_.]+)\s+([A-Za-z0-9_.]+)\s+"
+        r"[A-Za-z0-9_.]+\s+([A-Za-z0-9_.]+)\s+([A-Za-z0-9_.]+)",
+        statement_block,
+    )
+    if compact is not None:
+        sm_name, pm_name, sm_env_name, pm_env_name = compact.groups()
+    else:
+        def one(pattern: str, label: str) -> str:
+            matches = re.findall(pattern, statement_block)
+            unique = list(dict.fromkeys(matches))
+            if len(unique) != 1:
+                raise ValueError(f"cannot uniquely resolve {label} from {statement_name}")
+            return unique[0]
+
+        sm_env_name = one(r"StoreShapesHold\s+initSM\s+([A-Za-z0-9_.]+)", "SM shape env")
+        pm_env_name = one(r"StoreShapesHold\s+initPM\s+([A-Za-z0-9_.]+)", "PM shape env")
+        sm_name = one(
+            r"denoteGraphDistributedFaithful\s+([A-Za-z0-9_.]+)\s+initSM",
+            "SM graph",
+        )
+        pm_name = one(
+            r"denoteGraphDistributedFaithful\s+([A-Za-z0-9_.]+)\s+initPM",
+            "PM graph",
+        )
+
+    def basename(name: str) -> str:
+        return name.rsplit(".", 1)[-1]
+
+    def shape_list_name(env_name: str) -> str:
+        base = basename(env_name)
+        if not base.endswith("Env"):
+            raise ValueError(f"shape environment {env_name} does not end in Env")
+        return base[:-3] + "Shapes"
+
+    return (
+        statement_text,
+        statement_module,
+        sm_name,
+        pm_name,
+        basename(sm_name),
+        basename(pm_name),
+        shape_list_name(sm_env_name),
+        shape_list_name(pm_env_name),
+    )
+
+
+def _qualified_definition_name(name: str, *sources: str) -> str:
+    """Resolve a referenced definition to the namespace that actually declares it."""
+    base = name.rsplit(".", 1)[-1]
+    matches = []
+    pattern = re.compile(rf"(?m)^\s*(?:private\s+)?def\s+{re.escape(base)}\b")
+    for source in sources:
+        for found in pattern.finditer(source):
+            namespaces = re.findall(r"(?m)^\s*namespace\s+([A-Za-z0-9_.]+)\s*$", source[:found.start()])
+            qualifier = namespaces[-1] if namespaces else ""
+            matches.append(f"{qualifier}.{base}" if qualifier else base)
+    unique = list(dict.fromkeys(matches))
+    if len(unique) != 1:
+        raise ValueError(f"cannot uniquely qualify definition {name}: {unique}")
+    return unique[0]
+
+
+def _definition_from_sources(name: str, *sources: str) -> str:
+    matches = []
+    seen_sources: set[str] = set()
+    header = re.compile(
+        rf"(?m)^(?:private\s+)?def\s+{re.escape(name)}(?=\s*[:(])"
+    )
+    next_def = re.compile(r"(?m)^(?:private\s+)?def\s+")
+    for source in sources:
+        if source in seen_sources:
+            continue
+        seen_sources.add(source)
+        starts = list(header.finditer(source))
+        for match in starts:
+            following = next_def.search(source, match.end())
+            end = following.start() if following is not None else len(source)
+            matches.append(source[match.start():end])
+    if len(matches) != 1:
+        raise ValueError(f"cannot uniquely resolve definition {name}: found {len(matches)}")
+    return matches[0]
+
+
+def parse_packed_cu_contracts(statement_text: str, *sources: str) -> tuple[PackedCuContract, ...]:
+    match = re.search(
+        r"CoarseLineageHoldsWithInitDistributedFaithfulWithContract"
+        r"\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+([A-Za-z_][A-Za-z0-9_'.]*)",
+        statement_text,
+    )
+    if match is None:
+        # Some public theorems spell out the contract as an explicit forall
+        # implication rather than using the WithContract wrapper.  In that
+        # form the exported statement file itself is the authority.
+        contract_block = statement_text
+    else:
+        contract_name = match.group(1).split(".")[-1]
+        contract_block = _definition_from_sources(contract_name, *sources)
+    facts = []
+    seen = set()
+    for fact in re.finditer(
+        r"PackedCuSeqlensWF\s+\(init(SM|PM)\s+(\d+)\)\s+(\d+)\s+(\d+)",
+        contract_block,
+    ):
+        item = PackedCuContract(
+            side=fact.group(1).lower(),
+            tid=int(fact.group(2)),
+            total_tokens=int(fact.group(3)),
+            num_ranks=int(fact.group(4)),
+        )
+        key = (item.side, item.tid, item.total_tokens, item.num_ranks)
+        if key not in seen:
+            facts.append(item)
+            seen.add(key)
+    return tuple(facts)
+
+
+def parse_input_value_classes(*sources: str, name: str) -> tuple[InputValueClass, ...]:
+    block = _definition_from_sources(name, *sources)
+    entry_re = re.compile(
+        r'\{\s*source\s*:=\s*"([^"\n]+)"\s*,\s*tids\s*:=\s*\[([0-9,\s]+)\]\s*\}',
+        re.S,
+    )
+    matches = list(entry_re.finditer(block))
+    declared_count = len(re.findall(r"\bsource\s*:=", block))
+    if declared_count != len(matches):
+        raise ValueError(f"{name}: malformed or unconsumed InputValueClass entry")
+    result = []
+    seen_sources = set()
+    for match in matches:
+        source = match.group(1)
+        tids = tuple(int(value) for value in re.findall(r"\d+", match.group(2)))
+        if source in seen_sources or not tids or len(set(tids)) != len(tids):
+            raise ValueError(f"{name}: duplicate source or malformed tid list")
+        seen_sources.add(source)
+        result.append(InputValueClass(source=source, tids=tids))
+    return tuple(result)
+
+
 def load_goal_ir(n: int, root: str) -> GoalIR:
     goal_path = os.path.join(root, DENOTE_DIR, f"Goal_{n}.lean")
-    gen_path  = os.path.join(root, GEN_DIR, GEN_FILE)
+    gen_path = os.path.join(root, GEN_DIR, GEN_FILE)
     goal_text = open(goal_path).read()
-    gen_text  = open(gen_path).read()
+    gen_text = open(gen_path).read()
 
-    sm_block = extract_def_block(goal_text, f"sm_goal_{n}")
-    pm_block = extract_def_block(goal_text, f"pm_goal_{n}")
-    sm_sh_block = extract_def_block(goal_text, f"sm_goal_{n}InitShapes")
-    pm_sh_block = extract_def_block(goal_text, f"pm_goal_{n}InitShapes")
+    (
+        statement_text, public_statement_module, sm_graph_ref, pm_graph_ref,
+        sm_name, pm_name, sm_shapes_name, pm_shapes_name,
+    ) = _public_full_scope(n, goal_path, goal_text, gen_text)
+    sources = (goal_text, statement_text, gen_text)
+    sm_block = _definition_from_sources(sm_name, *sources)
+    pm_block = _definition_from_sources(pm_name, *sources)
+    sm_sh_block = _definition_from_sources(sm_shapes_name, *sources)
+    pm_sh_block = _definition_from_sources(pm_shapes_name, *sources)
 
-    full_init_goal_ids = parse_full_init_goal_ids(goal_text, gen_text, n)
+    scope_text = goal_text + "\n" + statement_text
+    packed_cu_contracts = parse_packed_cu_contracts(statement_text, *sources)
+    sm_input_value_classes = parse_input_value_classes(*sources, name="smInputValueClasses")
+    pm_input_value_classes = parse_input_value_classes(*sources, name="pmInputValueClasses")
+    full_init_goal_ids = parse_full_init_goal_ids(scope_text, gen_text, n)
     needed_init_tids = {
         int(tid) for node in parse_nodes(sm_block) for tid in node.ins
     }
@@ -251,9 +557,17 @@ def load_goal_ir(n: int, root: str) -> GoalIR:
         sm_shapes=parse_shapes(sm_sh_block),
         pm_shapes=parse_shapes(pm_sh_block),
         lineage=parse_lineage(gen_text, n),
-        prereqs=parse_prereqs(goal_text, n),
-        sm_num_ranks=parse_num_ranks(sm_block, f"sm_goal_{n}"),
-        pm_num_ranks=parse_num_ranks(pm_block, f"pm_goal_{n}"),
+        prereqs=parse_prereqs(scope_text, n),
+        sm_graph_ref=_qualified_definition_name(sm_graph_ref, *sources),
+        pm_graph_ref=_qualified_definition_name(pm_graph_ref, *sources),
+        public_statement_module=public_statement_module,
+        sm_num_ranks=parse_num_ranks(sm_block, sm_name),
+        pm_num_ranks=parse_num_ranks(pm_block, pm_name),
+        sm_replica_groups=parse_replica_groups(sm_block),
+        pm_replica_groups=parse_replica_groups(pm_block),
+        packed_cu_contracts=packed_cu_contracts,
+        sm_input_value_classes=sm_input_value_classes,
+        pm_input_value_classes=pm_input_value_classes,
         init_lineages=init_lineages,
         full_init_goal_ids=full_init_goal_ids,
     )

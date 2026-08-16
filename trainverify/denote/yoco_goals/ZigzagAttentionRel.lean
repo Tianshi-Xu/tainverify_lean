@@ -419,6 +419,54 @@ theorem attn_zigzag_sharded_kv
     exact ZigzagCuWF.transport_cp2_3d [0, 2 * lDim] source0 source1 out0 out1
       lDim qHeads vDim hwf (by rw [hs0]; rfl) ho0 ho1
 
+theorem per_head_linear_fullProducer_chunks
+    {full z0 z1 cu wSM wPM smOut gathered producer out0 out1 : Tensor}
+    (lDim k hW dW : Nat)
+    (hrel : Zigzag2Rel full z0 z1 cu [lDim * 2, k] [lDim, k])
+    (hw : wPM.shape = [hW, dW, k])
+    (hwEq : wSM = wPM)
+    (hsm : smOut = fw_per_head_linear full wSM)
+    (hgather : gathered = allGatherPrimDimN 0 2 0 [z0, z1])
+    (hproducer : producer = fw_per_head_linear gathered wPM)
+    (hchunk0 : out0 = chunkPrimDimN 0 2 0 producer)
+    (hchunk1 : out1 = chunkPrimDimN 0 2 1 producer)
+    (hl : 0 < lDim) (hk : 0 < k) (hhW : 0 < hW) (hdW : 0 < dW) :
+    Zigzag2Rel smOut out0 out1 cu [lDim * 2, hW, dW] [lDim, hW, dW] := by
+  have hProjected := Zigzag2Rel.per_head_linear lDim k hW dW hrel hw hl hk hhW hdW
+  have hCommute := fw_per_head_mix_precision_linear_allGather0_commute_2
+      z0 z1 wPM lDim k hW dW hl hk hhW hdW
+      hrel.rank0_shape hrel.rank1_shape hw
+  have hProducerGather : producer = allGatherPrimDimN 0 2 0
+      [fw_per_head_linear z0 wPM, fw_per_head_linear z1 wPM] := by
+    rw [hproducer, hgather]
+    exact hCommute
+  have hout0 : out0 = fw_per_head_linear z0 wPM := by
+    calc
+      out0 = chunkPrimDimN 0 2 0 producer := hchunk0
+      _ = chunkPrimDimN 0 2 0 (allGatherPrimDimN 0 2 0
+          [fw_per_head_linear z0 wPM, fw_per_head_linear z1 wPM]) :=
+        congrArg (chunkPrimDimN 0 2 0) hProducerGather
+      _ = fw_per_head_linear z0 wPM := by
+        simpa only [List.getD_cons_zero] using
+          (chunk_allGather_cp2_dim0_3d
+            (fw_per_head_linear z0 wPM) (fw_per_head_linear z1 wPM)
+            lDim hW dW 0 hProjected.rank0_shape hProjected.rank1_shape
+            hl hhW hdW (by decide))
+  have hout1 : out1 = fw_per_head_linear z1 wPM := by
+    calc
+      out1 = chunkPrimDimN 0 2 1 producer := hchunk1
+      _ = chunkPrimDimN 0 2 1 (allGatherPrimDimN 0 2 0
+          [fw_per_head_linear z0 wPM, fw_per_head_linear z1 wPM]) :=
+        congrArg (chunkPrimDimN 0 2 1) hProducerGather
+      _ = fw_per_head_linear z1 wPM := by
+        simpa only [List.getD_cons_succ, List.getD_cons_zero] using
+          (chunk_allGather_cp2_dim0_3d
+            (fw_per_head_linear z0 wPM) (fw_per_head_linear z1 wPM)
+            lDim hW dW 1 hProjected.rank0_shape hProjected.rank1_shape
+            hl hhW hdW (by decide))
+  rw [hsm, hwEq, hout0, hout1]
+  exact hProjected
+
 end Zigzag2Rel
 end
 end TrainVerify.Denote.GeneratedPatterns

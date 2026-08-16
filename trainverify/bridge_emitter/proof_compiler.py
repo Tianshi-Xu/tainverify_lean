@@ -34,6 +34,11 @@ class RelationEffect(str, Enum):
     PRESERVE = "preserve"
     COLLECTIVE = "collective"
     PROJECT = "project"
+    ORDINARY_TO_ZIGZAG = "ordinary_to_zigzag"
+    ZIGZAG_PRESERVE = "zigzag_preserve"
+    ZIGZAG_TO_ORDINARY = "zigzag_to_ordinary"
+    STACK = "stack"
+    PARAMETRIC = "parametric"
     SPECIAL = "special"
 
 
@@ -52,6 +57,8 @@ class RuleSpec:
     op: str
     kind: RuleKind
     output_count: Optional[int]
+    allowed_output_counts: Optional[tuple[int, ...]] = None
+    produced_output_indices: Optional[tuple[int, ...]] = None
     input_count: Optional[int] = None
     min_inputs: int = 1
     parameter_count: Optional[int] = None
@@ -69,6 +76,12 @@ class RuleSpec:
             return "output tids must be unique within a node"
         if self.output_count is not None and len(node.outs) != self.output_count:
             return f"expected {self.output_count} outputs, got {len(node.outs)}"
+        if self.allowed_output_counts is not None and len(node.outs) not in self.allowed_output_counts:
+            return f"expected output count in {self.allowed_output_counts}, got {len(node.outs)}"
+        if self.produced_output_indices is not None and any(
+            index < 0 or index >= len(node.outs) for index in self.produced_output_indices
+        ):
+            return "semantic output index is outside declared outputs"
         if self.input_count is not None and len(node.ins) != self.input_count:
             return f"expected {self.input_count} inputs, got {len(node.ins)}"
         if self.input_count_is_num_ranks and len(node.ins) != num_ranks:
@@ -96,6 +109,11 @@ class RuleSpec:
                 f"expected at least {self.min_parameter_count} parameters, "
                 f"got {len(node.params or [])}"
             )
+        if self.op == "FW_all2all_moe_gmm_full":
+            if num_ranks != 2:
+                return "only the proved two-rank full-MoE rule is supported"
+            if len(node.ins) != 3 + 2 * num_ranks:
+                return f"expected 3 + 2*numRanks inputs, got {len(node.ins)}"
         if self.op == "FW_multiref" and (node.params or [0])[0] < len(node.outs):
             return (
                 "FW_multiref params[0] must cover every output: "
@@ -143,12 +161,22 @@ def build_default_registry() -> RuleRegistry:
     pointwise_inputs = {
         "FW_layernorm": 3,
         "FW_gelu": 1,
+        "FW_float": 1,
+        "FW_to": 1,
+        "FW_rms_norm": 2,
+        "FW_per_head_mix_precision_linear": 2,
         "FW_linear": 2,
+        "FW_mix_precision_linear": 2,
+        "FW_norm_linear": 2,
         "FW_matmul": 2,
         "FW_embedding": 2,
         "FW_sum": 1,
+        "FW_sigmoid": 1,
+        "FW_swiglu": 2,
         "FW_add": 2,
+        "FW_mul": 2,
         "FW_view": 1,
+        "FW_reshape": 1,
         "FW_transpose": 1,
         "FW_softmax": 1,
         "FW_contiguous": 1,
@@ -171,7 +199,7 @@ def build_default_registry() -> RuleRegistry:
         "BW_contiguous",
         "BW_div",
     }
-    nonempty_parameters = {"FW_view", "BW_view"}
+    nonempty_parameters = {"FW_view", "FW_reshape", "BW_view"}
     exact_two_parameters = {"FW_transpose", "BW_transpose"}
     # Offset embeddings have distinct Lean denotations/lemmas and must become
     # separate typed rules before the generic planner can certify them.
@@ -232,6 +260,135 @@ def build_default_registry() -> RuleRegistry:
                 relation_effect=RelationEffect.PROJECT,
             )
         )
+    rules.append(
+        RuleSpec(
+            op="FW_maybe_unshuffle",
+            kind=RuleKind.SPECIAL,
+            output_count=1,
+            input_count=2,
+            parameter_count=2,
+            rank_sensitive=True,
+            denote_fn="applyNodeFaithfulUnshuffleValue",
+            apply_lemmas=("applyNodeDistributedFaithful_unshuffle_out",),
+            relation_effect=RelationEffect.PARAMETRIC,
+        )
+    )
+    rules.append(
+        RuleSpec(
+            op="FW_maybe_shuffle",
+            kind=RuleKind.SPECIAL,
+            output_count=1,
+            input_count=2,
+            parameter_count=2,
+            rank_sensitive=True,
+            denote_fn="applyNodeFaithfulShuffleValue",
+            apply_lemmas=("applyNodeDistributedFaithful_shuffle_out",),
+            relation_effect=RelationEffect.PARAMETRIC,
+        )
+    )
+    rules.append(
+        RuleSpec(
+            op="FW_all2all_moe_gmm_full",
+            kind=RuleKind.SPECIAL,
+            output_count=1,
+            input_count=None,
+            min_inputs=5,
+            parameter_count=3,
+            rank_sensitive=True,
+            denote_fn="fw_all2all_moe_gmm_full",
+            apply_lemmas=("applyNode_fw_all2all_moe_gmm_full_out_1p_r2",),
+            relation_effect=RelationEffect.SPECIAL,
+        )
+    )
+    rules.append(
+        RuleSpec(
+            op="FW_all2all_moe_gmm",
+            kind=RuleKind.SPECIAL,
+            output_count=1,
+            input_count=5,
+            allowed_parameter_counts=(4, 5),
+            denote_fn="fw_all2all_moe_gmm",
+            apply_lemmas=("applyNode_fw_all2all_moe_gmm_out_1p",),
+            rank_sensitive=True,
+            relation_effect=RelationEffect.SPECIAL,
+        )
+    )
+    rules.append(
+        RuleSpec(
+            op="FW_topk_routing",
+            kind=RuleKind.MULTI_OUTPUT,
+            output_count=3,
+            input_count=1,
+            allowed_parameter_counts=(1, 2),
+            denote_fn="fw_topk_routing",
+            apply_lemmas=(
+                "applyNode_fw_topk_routing_fst_out",
+                "applyNode_fw_topk_routing_snd_out",
+                "applyNode_fw_topk_routing_thd_out",
+            ),
+            output_projections=(".1", ".2.1", ".2.2"),
+            relation_effect=RelationEffect.PROJECT,
+        )
+    )
+    rules.append(
+        RuleSpec(
+            op="FW_rotary_embedding",
+            kind=RuleKind.MULTI_OUTPUT,
+            output_count=2,
+            input_count=4,
+            parameter_count=2,
+            denote_fn="fw_rotary_embedding",
+            apply_lemmas=(
+                "applyNode_fw_rotary_embedding_fst_out",
+                "applyNode_fw_rotary_embedding_snd_out",
+            ),
+            output_projections=(".1", ".2"),
+            relation_effect=RelationEffect.PROJECT,
+        )
+    )
+    rules.append(
+        RuleSpec(
+            op="FW_attn_zigzag",
+            kind=RuleKind.SPECIAL,
+            output_count=None,
+            allowed_output_counts=(1, 2),
+            produced_output_indices=(0,),
+            input_count=5,
+            parameter_count=6,
+            denote_fn="applyNodeFaithfulZigzagAttnValue",
+            apply_lemmas=("applyNodeDistributedFaithful_zigzag_attn_out",),
+            rank_sensitive=True,
+            relation_effect=RelationEffect.ZIGZAG_PRESERVE,
+        )
+    )
+    rules.append(
+        RuleSpec(
+            op="FW_attn_sliding_window",
+            kind=RuleKind.SPECIAL,
+            output_count=None,
+            allowed_output_counts=(1, 2),
+            produced_output_indices=(0,),
+            input_count=5,
+            parameter_count=6,
+            denote_fn="applyNodeRingAttn_sliding_window",
+            apply_lemmas=("applyNodeRingAttn_sliding_window_out",),
+            rank_sensitive=True,
+            relation_effect=RelationEffect.SPECIAL,
+        )
+    )
+    rules.append(
+        RuleSpec(
+            op="FW_stack",
+            kind=RuleKind.SPECIAL,
+            output_count=1,
+            input_count=None,
+            min_inputs=1,
+            parameter_count=0,
+            denote_fn="fw_stack",
+            apply_lemmas=("applyNode_fw_stack_out",),
+            relation_effect=RelationEffect.STACK,
+        )
+    )
     # FW_multiref is rendered by dedicated topology families rather than the
     # universal pointwise path.  It is still a typed, rank-insensitive rule;
     # output cardinality is carried by params and therefore variable.
@@ -278,6 +435,14 @@ class CertificateStep:
     relation_effect: RelationEffect
     rank: int
     input_tids: tuple[int, ...]
+    input_shapes: tuple[tuple[int, ...], ...]
+    output_shape: tuple[int, ...]
+    input_bindings: tuple[str, ...]
+    declared_input_tids: tuple[int, ...]
+    semantic_input_tids: tuple[int, ...]
+    semantic_input_shapes: tuple[tuple[int, ...], ...]
+    semantic_input_bindings: tuple[str, ...]
+    declared_parameters: tuple[int, ...]
     parameters: tuple[int, ...]
     denote_fn: Optional[str]
     apply_lemmas: tuple[str, ...]
@@ -293,7 +458,7 @@ class ProofPlan:
     steps: tuple[CertificateStep, ...]
     target_steps: tuple[str, ...]
     diagnostics: tuple[Diagnostic, ...]
-    schema_version: int = 1
+    schema_version: int = 4
 
     @property
     def supported(self) -> bool:
@@ -432,10 +597,13 @@ def _relation_requirement(ir: GoalIR) -> tuple[RelationRequirement, Optional[Dia
     return relation, None
 
 
-def _collective_shape_issue(ir: GoalIR) -> Optional[Diagnostic]:
+def _collective_shape_issue(
+    ir: GoalIR,
+    inferred_out: Optional[dict[str, dict[int, list[int]]]] = None,
+) -> Optional[Diagnostic]:
     """Validate dimension-bearing collectives against ordered inferred shapes."""
     shape_preserving = {
-        "FW_layernorm", "FW_gelu", "FW_softmax",
+        "FW_layernorm", "FW_gelu", "FW_float", "FW_to", "FW_sigmoid", "FW_softmax",
         "FW_contiguous", "FW_div",
     }
 
@@ -485,16 +653,233 @@ def _collective_shape_issue(ir: GoalIR) -> Optional[Diagnostic]:
                         )
 
             output_shape: Optional[list[int]] = None
+            per_output_shapes: Optional[list[list[int]]] = None
             known_shapes = [shape for shape in input_shapes if shape is not None]
-            if node.op == "FW_embedding" and len(input_shapes) == 2:
+            if node.op == "FW_stack" and input_shapes:
+                if all(shape is not None for shape in input_shapes):
+                    stack_shapes = [shape for shape in input_shapes if shape is not None]
+                    if any(shape != stack_shapes[0] for shape in stack_shapes[1:]):
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: stack input shapes differ",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    output_shape = [len(input_shapes)] + list(stack_shapes[0])
+            elif node.op == "FW_inner_chunk_ce" and len(input_shapes) == 3:
+                x_shape, w_shape, y_shape = input_shapes
+                if x_shape is not None and w_shape is not None and y_shape is not None:
+                    if len(x_shape) != 2 or len(w_shape) != 2 or x_shape[1] != w_shape[1]:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: x/weight shapes are incompatible",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    if y_shape != [x_shape[0]]:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: label shape does not match token dimension",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    per_output_shapes = [[x_shape[0]], [x_shape[0]]]
+            elif node.op == "FW_multiref" and len(input_shapes) == 1:
+                input_shape = input_shapes[0]
+                if input_shape is not None:
+                    per_output_shapes = [list(input_shape) for _ in node.outs]
+            elif node.op in {"FW_maybe_shuffle", "FW_maybe_unshuffle"} and len(input_shapes) == 2:
+                cp_size, cp_rank = (int(value) for value in (node.params or []))
+                if cp_size not in {1, 2} or cp_rank < 0 or cp_rank >= cp_size:
+                    return Diagnostic(
+                        DiagnosticCode.INVALID_SIGNATURE,
+                        f"operator {node.op}: unsupported cpSize or invalid cpRank",
+                        side=side,
+                        node_index=node_index,
+                        op=node.op,
+                        output_tid=int(node.outs[0]) if node.outs else None,
+                    )
+                data_shape = input_shapes[0]
+                if data_shape is not None:
+                    output_shape = list(data_shape)
+            elif node.op == "FW_all2all_moe_gmm_full" and len(input_shapes) >= 5:
+                input_shape, rp_shape, rm_shape = input_shapes[:3]
+                weight_shapes = input_shapes[3:]
+                num_exp, top_k, _limit = (int(value) for value in (node.params or []))
+                num_parts = len(weight_shapes) // 2
+                w13_shapes = weight_shapes[:num_parts]
+                w2_shapes = weight_shapes[num_parts:]
+                if num_exp <= 0 or top_k <= 0 or top_k > num_exp:
+                    return Diagnostic(
+                        DiagnosticCode.INVALID_SIGNATURE,
+                        f"operator {node.op}: invalid numExperts or topK",
+                        side=side,
+                        node_index=node_index,
+                        op=node.op,
+                        output_tid=int(node.outs[0]) if node.outs else None,
+                    )
+                if all(shape is not None for shape in input_shapes):
+                    assert input_shape is not None and rp_shape is not None and rm_shape is not None
+                    typed_w13 = [shape for shape in w13_shapes if shape is not None]
+                    typed_w2 = [shape for shape in w2_shapes if shape is not None]
+                    local_exp = num_exp // num_parts if num_parts else 0
+                    routing_ok = len(input_shape) == 2 and rp_shape == [input_shape[0], num_exp] and rm_shape == rp_shape
+                    weights_ok = (
+                        num_parts > 0 and num_exp % num_parts == 0
+                        and all(len(shape) == 3 and shape[0] == local_exp and shape[2] == input_shape[1] for shape in typed_w13)
+                        and all(len(shape) == 3 and shape[0] == local_exp and shape[1] == input_shape[1] for shape in typed_w2)
+                        and all(w13[1] == 2 * w2[2] for w13, w2 in zip(typed_w13, typed_w2))
+                    )
+                    if not routing_ok or not weights_ok:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: routing or full expert weight shapes disagree",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    output_shape = list(input_shape)
+            elif node.op == "FW_all2all_moe_gmm" and len(input_shapes) == 5:
+                input_shape, rp_shape, rm_shape, w13_shape, w2_shape = input_shapes
+                num_exp, start, end, top_k = (int(value) for value in (node.params or [])[:4])
+                valid_params = 0 < num_exp and 0 <= start <= end <= num_exp and 0 < top_k <= num_exp
+                if not valid_params:
+                    return Diagnostic(
+                        DiagnosticCode.INVALID_SIGNATURE,
+                        f"operator {node.op}: invalid expert range or top_k",
+                        side=side,
+                        node_index=node_index,
+                        op=node.op,
+                        output_tid=int(node.outs[0]) if node.outs else None,
+                    )
+                if all(shape is not None for shape in input_shapes):
+                    assert input_shape is not None and rp_shape is not None and rm_shape is not None
+                    assert w13_shape is not None and w2_shape is not None
+                    local_count = end - start
+                    routing_ok = len(input_shape) == 2 and rp_shape == [input_shape[0], num_exp] and rm_shape == rp_shape
+                    weights_ok = (
+                        len(w13_shape) == 3 and len(w2_shape) == 3
+                        and w13_shape[0] == local_count and w2_shape[0] == local_count
+                        and w13_shape[2] == input_shape[1] and w2_shape[1] == input_shape[1]
+                        and w13_shape[1] == 2 * w2_shape[2]
+                    )
+                    if not routing_ok:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: routing shapes disagree with input/numExperts",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    if not weights_ok:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: local expert weight shapes disagree",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    output_shape = list(input_shape)
+            elif node.op == "FW_topk_routing" and len(input_shapes) == 1:
+                logits_shape = input_shapes[0]
+                top_k = int((node.params or [0])[0])
+                if logits_shape is not None:
+                    if not logits_shape or top_k <= 0 or top_k > logits_shape[-1]:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: top_k is outside logits expert dimension",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    per_output_shapes = [list(logits_shape) for _ in range(3)]
+            elif node.op in {"FW_attn_sliding_window", "FW_attn_zigzag"} and len(input_shapes) == 5:
+                q_shape, k_shape, v_shape = input_shapes[:3]
+                qh, kvh, d, vd, _causal, _window = (int(value) for value in (node.params or []))
+                if any(value <= 0 for value in (qh, kvh, d, vd)):
+                    return Diagnostic(
+                        DiagnosticCode.INVALID_SIGNATURE,
+                        f"operator {node.op}: attention dimensions must be positive",
+                        side=side,
+                        node_index=node_index,
+                        op=node.op,
+                        output_tid=int(node.outs[0]) if node.outs else None,
+                    )
+                if q_shape is not None and k_shape is not None and v_shape is not None:
+                    valid = (
+                        len(q_shape) >= 2 and len(k_shape) >= 2 and len(v_shape) >= 2
+                        and q_shape[-2:] == [qh, d]
+                        and k_shape[-2:] == [kvh, d]
+                        and v_shape[-2:] == [kvh, vd]
+                    )
+                    if not valid:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: attention tensor shapes disagree with parameters",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    per_output_shapes = [list(q_shape[:-1]) + [vd]]
+            elif node.op == "FW_rotary_embedding" and len(input_shapes) == 4:
+                q_shape, k_shape = input_shapes[2], input_shapes[3]
+                if any(int(value) <= 0 for value in (node.params or [])):
+                    return Diagnostic(
+                        DiagnosticCode.INVALID_SIGNATURE,
+                        f"operator {node.op}: rotary embedding requires positive head counts",
+                        side=side,
+                        node_index=node_index,
+                        op=node.op,
+                        output_tid=int(node.outs[0]) if node.outs else None,
+                    )
+                if q_shape is not None and k_shape is not None:
+                    per_output_shapes = [list(q_shape), list(k_shape)]
+            elif node.op == "FW_embedding" and len(input_shapes) == 2:
                 ids_shape, weight_shape = input_shapes
                 if ids_shape is not None and weight_shape is not None and len(weight_shape) == 2:
                     output_shape = list(ids_shape) + [weight_shape[1]]
             elif node.op in shape_preserving and input_shapes and input_shapes[0] is not None:
                 output_shape = list(input_shapes[0])
+            elif node.op == "FW_swiglu" and len(input_shapes) == 2:
+                gate_shape, up_shape = input_shapes
+                if gate_shape is not None and up_shape is not None:
+                    if gate_shape != up_shape:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: gate/up shapes differ",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    output_shape = list(up_shape)
+            elif node.op == "FW_rms_norm" and len(input_shapes) == 2:
+                value_shape, weight_shape = input_shapes
+                if value_shape is not None and weight_shape is not None:
+                    if value_shape and weight_shape != [value_shape[-1]]:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: RMSNorm weight shape does not match last input dimension",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    output_shape = list(value_shape)
             elif node.op == "FW_sum":
                 output_shape = [1]
-            elif node.op == "FW_add" and len(input_shapes) == 2:
+            elif node.op in {"FW_add", "FW_mul"} and len(input_shapes) == 2:
                 left_shape, right_shape = input_shapes
                 if left_shape is not None and right_shape is not None:
                     output_shape = broadcast_shape(left_shape, right_shape)
@@ -507,7 +892,7 @@ def _collective_shape_issue(ir: GoalIR) -> Optional[Diagnostic]:
                             op=node.op,
                             output_tid=int(node.outs[0]) if node.outs else None,
                         )
-            elif node.op == "FW_view" and node.params:
+            elif node.op in {"FW_view", "FW_reshape"} and node.params:
                 output_shape = [int(value) for value in node.params]
                 input_shape = input_shapes[0] if input_shapes else None
                 if input_shape is not None:
@@ -536,7 +921,29 @@ def _collective_shape_issue(ir: GoalIR) -> Optional[Diagnostic]:
                         output_tid=int(node.outs[0]) if node.outs else None,
                     )
                 output_shape[first], output_shape[second] = output_shape[second], output_shape[first]
-            elif node.op == "FW_linear" and len(input_shapes) == 2:
+            elif node.op == "FW_per_head_mix_precision_linear" and len(input_shapes) == 2:
+                value_shape, weight_shape = input_shapes
+                if value_shape is not None and weight_shape is not None:
+                    if not value_shape or len(weight_shape) != 3:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: unsupported input/weight rank",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    if value_shape[-1] != weight_shape[2]:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: per-head linear inner dimensions differ",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    output_shape = list(value_shape[:-1]) + list(weight_shape[:2])
+            elif node.op in {"FW_linear", "FW_mix_precision_linear", "FW_norm_linear"} and len(input_shapes) == 2:
                 value_shape, weight_shape = input_shapes
                 if value_shape is not None and weight_shape is not None:
                     if len(value_shape) not in {2, 3} or len(weight_shape) != 2:
@@ -619,7 +1026,10 @@ def _collective_shape_issue(ir: GoalIR) -> Optional[Diagnostic]:
                         output_tid=int(node.outs[0]) if node.outs else None,
                     )
                 output_shape[output_dim] //= num_ranks
-            if output_shape is not None:
+            if per_output_shapes is not None:
+                for tid, shape in zip(node.outs, per_output_shapes):
+                    shapes[int(tid)] = list(shape)
+            elif output_shape is not None:
                 for tid in node.outs:
                     shapes[int(tid)] = list(output_shape)
             elif node.outs:
@@ -632,6 +1042,12 @@ def _collective_shape_issue(ir: GoalIR) -> Optional[Diagnostic]:
                     output_tid=int(node.outs[0]),
                 )
         inferred_shapes[side] = shapes
+
+    if inferred_out is not None:
+        inferred_out.update(
+            {side: {tid: list(shape) for tid, shape in shapes.items()}
+             for side, shapes in inferred_shapes.items()}
+        )
 
     target_contracts = [
         ("sm", int(ir.lineage.ts), list(ir.lineage.tsShape)),
@@ -673,6 +1089,42 @@ def compile_proof_plan(ir: GoalIR, registry: RuleRegistry) -> ProofPlan:
         return ProofPlan(ir.n, relation, (), (), (relation_issue,))
 
     side_nodes = {"sm": list(ir.sm_nodes), "pm": list(ir.pm_nodes)}
+    side_replica_groups = {
+        "sm": tuple(ir.sm_replica_groups),
+        "pm": tuple(ir.pm_replica_groups),
+    }
+
+    def replica_buddies(side: str, node_index: int) -> tuple[tuple[int, Node], ...]:
+        nodes = side_nodes[side]
+        node = nodes[node_index]
+        if not node.outs:
+            return ((node_index, node),)
+        ref = (int(node.rank), int(node.outs[0]))
+        matching = [
+            group for group in side_replica_groups[side]
+            if ref in {(member.rank, member.primary_out_tid) for member in group.members}
+        ]
+        if len(matching) != 1:
+            return ((node_index, node),)
+        group = matching[0]
+        ranks = [member.rank for member in group.members]
+        if len(ranks) != len(set(ranks)):
+            return ((node_index, node),)
+        resolved = []
+        for member in group.members:
+            candidates = [
+                (index, candidate) for index, candidate in enumerate(nodes)
+                if int(candidate.rank) == member.rank
+                and candidate.outs
+                and int(candidate.outs[0]) == member.primary_out_tid
+            ]
+            if len(candidates) != 1:
+                return ((node_index, node),)
+            resolved.append(candidates[0])
+        if node_index not in {index for index, _candidate in resolved}:
+            return ((node_index, node),)
+        return tuple(resolved)
+
     side_inputs = {
         "sm": {int(tid) for tid, _shape in ir.sm_shapes},
         "pm": {int(tid) for tid, _shape in ir.pm_shapes},
@@ -709,27 +1161,46 @@ def compile_proof_plan(ir: GoalIR, registry: RuleRegistry) -> ProofPlan:
                 )
                 return ProofPlan(ir.n, relation, (), (), (issue,))
 
+    output_fingerprints: dict[tuple[str, int, int], tuple[object, ...]] = {}
     for side in ("sm", "pm"):
+        current_fingerprints: dict[int, tuple[object, ...]] = {
+            tid: ("external", tid) for tid in side_inputs[side]
+        }
         for node_index, node in enumerate(side_nodes[side]):
-            for output_index, tid in enumerate(node.outs):
-                prior = writers[side].setdefault(int(tid), [])
+            rule = registry.get(node.op)
+            output_indices = (
+                rule.produced_output_indices
+                if rule is not None and rule.produced_output_indices is not None
+                else tuple(range(len(node.outs)))
+            )
+            input_fingerprints = tuple(
+                current_fingerprints.get(int(tid), ("unresolved", int(tid)))
+                for tid in node.ins
+            )
+            rank_component: object = int(node.rank) if rule is not None and rule.rank_sensitive else None
+            for output_index in output_indices:
+                tid = int(node.outs[output_index])
+                fingerprint: tuple[object, ...] = (
+                    "node",
+                    node.op,
+                    tuple(int(value) for value in (node.params or [])),
+                    int(output_index),
+                    rank_component,
+                    input_fingerprints,
+                )
+                prior = writers[side].setdefault(tid, [])
                 if prior:
-                    rule = registry.get(node.op)
-                    previous = side_nodes[side][prior[-1][0]]
+                    previous_key = (side, prior[-1][0], prior[-1][1])
                     equivalent_rank_rewrite = (
                         rule is not None
                         and not rule.rank_sensitive
-                        and previous.op == node.op
-                        and previous.ins == node.ins
-                        and previous.outs == node.outs
-                        and (previous.params or []) == (node.params or [])
+                        and output_fingerprints.get(previous_key) == fingerprint
                         and set(node.outs).isdisjoint(node.ins)
-                        and set(previous.outs).isdisjoint(previous.ins)
                     )
                     valid_in_place = (
                         rule is not None
                         and rule.kind is RuleKind.COLLECTIVE
-                        and int(tid) in node.ins
+                        and tid in node.ins
                     )
                     if not (valid_in_place or equivalent_rank_rewrite):
                         issue = Diagnostic(
@@ -738,10 +1209,12 @@ def compile_proof_plan(ir: GoalIR, registry: RuleRegistry) -> ProofPlan:
                             side=side,
                             node_index=node_index,
                             op=node.op,
-                            output_tid=int(tid),
+                            output_tid=tid,
                         )
                         return ProofPlan(ir.n, relation, (), (), (issue,))
                 prior.append((node_index, output_index))
+                output_fingerprints[(side, node_index, output_index)] = fingerprint
+                current_fingerprints[tid] = fingerprint
 
     for rank, tid in relation.pm_pieces:
         choices = writers["pm"].get(int(tid), [])
@@ -807,6 +1280,9 @@ def compile_proof_plan(ir: GoalIR, registry: RuleRegistry) -> ProofPlan:
             if issue is not None:
                 return ProofPlan(ir.n, relation, (), (), (issue,))
 
+    inferred_shapes: dict[str, dict[int, list[int]]] = {}
+    shape_issue = _collective_shape_issue(ir, inferred_shapes)
+
     emitted: dict[tuple[str, int, int], CertificateStep] = {}
     visiting: set[tuple[str, int, int]] = set()
     ordered: list[CertificateStep] = []
@@ -861,11 +1337,13 @@ def compile_proof_plan(ir: GoalIR, registry: RuleRegistry) -> ProofPlan:
 
         dependencies: list[str] = []
         external_inputs: list[int] = []
+        input_bindings: list[str] = []
         for input_tid in node.ins:
             producer = producer_before(side, int(input_tid), node_index)
             if producer is None:
                 if int(input_tid) in side_inputs[side]:
                     external_inputs.append(int(input_tid))
+                    input_bindings.append(f"init:{int(input_tid)}")
                     continue
                 visiting.remove(key)
                 return Diagnostic(
@@ -880,7 +1358,83 @@ def compile_proof_plan(ir: GoalIR, registry: RuleRegistry) -> ProofPlan:
             if issue is not None:
                 visiting.remove(key)
                 return issue
-            dependencies.append(emitted[(side, producer[0], producer[1])].step_id)
+            producer_step_id = emitted[(side, producer[0], producer[1])].step_id
+            dependencies.append(producer_step_id)
+            input_bindings.append(producer_step_id)
+
+        declared_input_tids = tuple(int(tid) for tid in node.ins)
+        declared_parameters = tuple(int(value) for value in (node.params or []))
+        semantic_input_tids = declared_input_tids
+        semantic_input_bindings = tuple(input_bindings)
+        semantic_input_shapes = tuple(
+            tuple(inferred_shapes.get(side, {}).get(int(tid), ()))
+            for tid in semantic_input_tids
+        )
+        semantic_parameters = declared_parameters
+        semantic_denote_fn = rule.denote_fn
+        semantic_apply_lemmas = rule.apply_lemmas
+        if node.op == "FW_all2all_moe_gmm":
+            buddies = replica_buddies(side, node_index)
+            weight_tids = tuple(int(buddy.ins[3]) for _index, buddy in buddies)
+            weight_tids += tuple(int(buddy.ins[4]) for _index, buddy in buddies)
+            semantic_input_tids = declared_input_tids[:3] + weight_tids
+            semantic_bindings_list = list(input_bindings[:3])
+            for semantic_tid in weight_tids:
+                producer = producer_before(side, semantic_tid, node_index)
+                if producer is None:
+                    if semantic_tid not in side_inputs[side]:
+                        visiting.remove(key)
+                        return Diagnostic(
+                            DiagnosticCode.MISSING_PRODUCER,
+                            f"faithful MoE buddy weight tid {semantic_tid} has no prior producer or InitShapes entry",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=output_tid,
+                        )
+                    external_inputs.append(semantic_tid)
+                    semantic_bindings_list.append(f"init:{semantic_tid}")
+                else:
+                    issue = visit(side, producer[0], producer[1])
+                    if issue is not None:
+                        visiting.remove(key)
+                        return issue
+                    producer_step_id = emitted[(side, producer[0], producer[1])].step_id
+                    dependencies.append(producer_step_id)
+                    semantic_bindings_list.append(producer_step_id)
+            semantic_input_bindings = tuple(semantic_bindings_list)
+            semantic_input_shapes = tuple(
+                tuple(inferred_shapes.get(side, {}).get(tid, ()))
+                for tid in semantic_input_tids
+            )
+            semantic_parameters = (
+                declared_parameters[0],
+                declared_parameters[3],
+                declared_parameters[4] if len(declared_parameters) > 4 else 10,
+            )
+            semantic_denote_fn = "fw_all2all_moe_gmm_full"
+            semantic_apply_lemmas = ("applyNodeDistributed_moe_out",)
+
+        relation_effect = rule.relation_effect
+        if relation_effect is RelationEffect.PARAMETRIC:
+            if node.op in {"FW_maybe_shuffle", "FW_maybe_unshuffle"}:
+                cp_size = int((node.params or [0])[0])
+                if cp_size == 1:
+                    relation_effect = RelationEffect.PRESERVE
+                elif node.op == "FW_maybe_shuffle":
+                    relation_effect = RelationEffect.ORDINARY_TO_ZIGZAG
+                else:
+                    relation_effect = RelationEffect.ZIGZAG_TO_ORDINARY
+            else:
+                visiting.remove(key)
+                return Diagnostic(
+                    DiagnosticCode.INVALID_SIGNATURE,
+                    f"operator {node.op}: unresolved parametric relation effect",
+                    side=side,
+                    node_index=node_index,
+                    op=node.op,
+                    output_tid=output_tid,
+                )
 
         step = CertificateStep(
             step_id=f"{side}:{node_index}:{output_index}",
@@ -890,12 +1444,25 @@ def compile_proof_plan(ir: GoalIR, registry: RuleRegistry) -> ProofPlan:
             output_tid=output_tid,
             op=node.op,
             rule_kind=rule.kind,
-            relation_effect=rule.relation_effect,
+            relation_effect=relation_effect,
             rank=int(node.rank),
-            input_tids=tuple(int(tid) for tid in node.ins),
-            parameters=tuple(int(value) for value in (node.params or [])),
-            denote_fn=rule.denote_fn,
-            apply_lemmas=rule.apply_lemmas,
+            input_tids=declared_input_tids,
+            input_shapes=tuple(
+                tuple(inferred_shapes.get(side, {}).get(int(tid), ()))
+                for tid in node.ins
+            ),
+            output_shape=tuple(
+                inferred_shapes.get(side, {}).get(output_tid, ())
+            ),
+            input_bindings=tuple(input_bindings),
+            declared_input_tids=declared_input_tids,
+            semantic_input_tids=semantic_input_tids,
+            semantic_input_shapes=semantic_input_shapes,
+            semantic_input_bindings=semantic_input_bindings,
+            declared_parameters=declared_parameters,
+            parameters=semantic_parameters,
+            denote_fn=semantic_denote_fn,
+            apply_lemmas=semantic_apply_lemmas,
             output_projection=(
                 rule.output_projections[output_index]
                 if output_index < len(rule.output_projections)
@@ -927,7 +1494,6 @@ def compile_proof_plan(ir: GoalIR, registry: RuleRegistry) -> ProofPlan:
             return ProofPlan(ir.n, relation, tuple(ordered), tuple(target_steps), (issue,))
         target_steps.append(emitted[(side, producer[0], producer[1])].step_id)
 
-    shape_issue = _collective_shape_issue(ir)
     if shape_issue is not None:
         return ProofPlan(ir.n, relation, tuple(ordered), tuple(target_steps), (shape_issue,))
 
