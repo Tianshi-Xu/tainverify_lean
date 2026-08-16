@@ -3039,6 +3039,33 @@ def test_closed_rms_norm_segment_renderer_is_graph_derived(monkeypatch):
     assert "applyNode_fw_rms_norm_out_1p" in source
 
 
+@pytest.mark.parametrize("goal", [1, 3])
+def test_closed_rms_norm_renderer_covers_all_zigzag_singletons(monkeypatch, goal):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(goal, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    by_id = {item.transition_id: item for item in relation.transition_specs}
+    segments = [
+        item for item in relation.dependent_chain_plan.segments
+        if len(item.transition_ids) == 1
+        and by_id[item.transition_ids[0]].rule_id == "rms-norm-zigzag-two-rank"
+    ]
+    assert len(segments) == 23
+    facts = {fact.source: fact for fact in relation.dependent_chain_plan.relation_facts}
+    for segment in segments:
+        transition = by_id[segment.transition_ids[0]]
+        post = facts[transition.post_facts[0]]
+        source = render_closed_rms_norm_segment(ir, relation, segment.segment_id)
+        assert "GeneratedPatterns.Zigzag2Rel.rms_norm" in source
+        assert f"pmFinal {post.metadata_tid}" in source
+        assert f"pmStore {post.metadata_tid}" in source
+        assert source.count("let smFinal :=") == 1
+        assert source.count("let pmFinal :=") == 1
+
+
 def test_closed_multiref_renderer_handles_mixed_atomic_groups(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
@@ -3213,6 +3240,33 @@ def test_closed_binary_renderer_covers_add_both_layouts(monkeypatch):
         assert source.count("let pmFinal :=") == 1
 
 
+@pytest.mark.parametrize("goal", [1, 3])
+def test_closed_binary_renderer_covers_broadcast_mul_both_layouts(monkeypatch, goal):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(goal, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    by_id = {item.transition_id: item for item in relation.transition_specs}
+    segments = {}
+    for item in relation.dependent_chain_plan.segments:
+        if len(item.transition_ids) != 1:
+            continue
+        transition = by_id[item.transition_ids[0]]
+        if transition.rule_id.startswith("broadcast-mul-"):
+            kind = "zigzag" if "-zigzag-" in transition.rule_id else "ordinary"
+            segments.setdefault(kind, item)
+    ordinary = render_closed_binary_segment(ir, relation, segments["ordinary"].segment_id)
+    zigzag = render_closed_binary_segment(ir, relation, segments["zigzag"].segment_id)
+    assert "Ordinary2Rel.mul_broadcast_col1" in ordinary
+    assert "Zigzag2Rel.mul_broadcast_col1" in zigzag
+    assert "hmeta" in zigzag
+    for source in (ordinary, zigzag):
+        assert source.count("let smFinal :=") == 1
+        assert source.count("let pmFinal :=") == 1
+
+
 def test_routing_and_moe_transition_theorem_keys_are_real_closed_apis(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
@@ -3271,3 +3325,6 @@ def test_ordinary_pointwise_transitions_use_closed_relation_wrappers(monkeypatch
     by_rule = {transition.rule_id: transition.lean_theorem for transition in relation.transition_specs}
     assert by_rule["sigmoid-ordinary-two-rank"] == "TrainVerify.Denote.RelationCompiler.Ordinary2Rel.sigmoid"
     assert by_rule["swiglu-ordinary-two-rank"] == "TrainVerify.Denote.RelationCompiler.Ordinary2Rel.swiglu"
+    assert by_rule["broadcast-mul-ordinary-two-rank"] == (
+        "TrainVerify.Denote.RelationCompiler.Ordinary2Rel.mul_broadcast_col1"
+    )

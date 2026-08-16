@@ -2579,20 +2579,37 @@ def expand_mul_relation_frontiers(
         if any(len(step.input_shapes) != 2 or len(step.input_bindings) != 2 for step in steps):
             raise RelationCompositionError("FW_mul signature mismatch")
         full_a, full_b = steps[0].input_shapes
-        shard_a, shard_b = steps[1].input_shapes
-        if len(full_a) != 2 or len(full_b) != 2 or len(shard_a) != 2 or len(shard_b) != 2:
+        if len(full_a) != 2 or len(full_b) != 2:
             raise RelationCompositionError("broadcast FW_mul requires rank-2 tensors")
         if full_a != (full_b[0], 1) or steps[0].output_shape != full_b:
             raise RelationCompositionError("full FW_mul is not [rows,1] by [rows,width] broadcast")
+
+        # PM may present commutative FW_mul operands in the opposite order.  The
+        # relation roles are defined by the SM gate/payload order, so align each
+        # PM step to those roles before building binding triples.
+        expected_shards = ((full_a[0] // 2, full_a[1]), (full_b[0] // 2, full_b[1]))
+        role_indices = [(0, 1)]
+        for step in steps[1:]:
+            try:
+                indices = tuple(step.input_shapes.index(shape) for shape in expected_shards)
+            except ValueError as exc:
+                raise RelationCompositionError("FW_mul PM inputs do not match SM roles") from exc
+            if len(set(indices)) != 2:
+                raise RelationCompositionError("FW_mul PM input roles are ambiguous")
+            role_indices.append(indices)
+        shard_a, shard_b = (steps[1].input_shapes[index] for index in role_indices[1])
         if shard_a != (shard_b[0], 1) or steps[1].output_shape != shard_b:
             raise RelationCompositionError("shard FW_mul is not [rows,1] by [rows,width] broadcast")
-        if steps[2].input_shapes != steps[1].input_shapes or steps[2].output_shape != steps[1].output_shape:
+        if tuple(steps[2].input_shapes[index] for index in role_indices[2]) != (shard_a, shard_b) or steps[2].output_shape != steps[1].output_shape:
             raise RelationCompositionError("FW_mul shard shapes disagree")
         if full_b[0] != shard_b[0] * 2 or full_b[1] != shard_b[1]:
             raise RelationCompositionError("FW_mul shards do not reconstruct full rows")
-        inputs = (_produced_binding_triple(steps, 0), _produced_binding_triple(steps, 1))
+        inputs = tuple(
+            tuple(step.input_bindings[role_indices[rank][role]] for rank, step in enumerate(steps))
+            for role in range(2)
+        )
         theorem = (
-            "TrainVerify.Denote.GeneratedPatterns.fw_mul_allGather0_commute_2_of_broadcast"
+            "TrainVerify.Denote.RelationCompiler.Ordinary2Rel.mul_broadcast_col1"
             if layout == "ordinary"
             else "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.mul_broadcast_col1"
         )

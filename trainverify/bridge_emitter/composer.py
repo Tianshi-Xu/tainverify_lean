@@ -756,63 +756,112 @@ def render_closed_binary_segment(ir: GoalIR, relation, segment_id: str) -> str:
     if segment is None or len(segment.transition_ids) != 1:
         raise ValueError("binary renderer requires one atomic transition")
     transition = {x.transition_id: x for x in relation.transition_specs}[segment.transition_ids[0]]
-    allowed = {
-        "TrainVerify.Denote.GeneratedPatterns.elemwiseAdd_allGather0_commute_cp2",
-        "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.add",
+    specs = {
+        "TrainVerify.Denote.GeneratedPatterns.elemwiseAdd_allGather0_commute_cp2":
+            ("ordinary", "FW_add", "elemwiseAdd", "applyNode_fw_add2_out", "add"),
+        "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.add":
+            ("zigzag", "FW_add", "elemwiseAdd", "applyNode_fw_add2_out", "add"),
+        "TrainVerify.Denote.RelationCompiler.Ordinary2Rel.mul_broadcast_col1":
+            ("ordinary", "FW_mul", "elemwiseMul", "applyNode_fw_mul_out", "mul_broadcast"),
+        "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.mul_broadcast_col1":
+            ("zigzag", "FW_mul", "elemwiseMul", "applyNode_fw_mul_out", "mul_broadcast"),
     }
-    if transition.lean_theorem not in allowed or len(transition.pre_facts) != 2 or len(transition.post_facts) != 1:
+    spec = specs.get(transition.lean_theorem)
+    if spec is None or len(transition.pre_facts) != 2 or len(transition.post_facts) != 1:
         raise ValueError("binary renderer received unsupported transition")
+    expected_kind, expected_op, tensor_op, apply_lemma, family = spec
     records = {x.source: x for x in chain.relation_facts}
     pre_records = [records[x] for x in transition.pre_facts]
     post = records[transition.post_facts[0]]
-    sm_nodes=ir.sm_nodes[slice(*segment.sm_range)];pm_nodes=ir.pm_nodes[slice(*segment.pm_range)]
-    if len(sm_nodes)!=1 or len(pm_nodes)!=2: raise ValueError("binary footprint is not 1xSM+2xPM")
-    sm,p0,p1=sm_nodes[0],pm_nodes[0],pm_nodes[1]
+    sm_nodes = ir.sm_nodes[slice(*segment.sm_range)]
+    pm_nodes = ir.pm_nodes[slice(*segment.pm_range)]
+    if len(sm_nodes) != 1 or len(pm_nodes) != 2:
+        raise ValueError("binary footprint is not 1xSM+2xPM")
+    sm, p0, p1 = sm_nodes[0], pm_nodes[0], pm_nodes[1]
     by_sm_tid = {x.sm_tid: x for x in pre_records}
     if len(by_sm_tid) != 2 or any(tid not in by_sm_tid for tid in sm.ins):
         raise ValueError("binary inputs lack unique role-preserving SM facts")
+    # SM defines semantic operand roles.  Relation planning aligns each PM input
+    # to these roles, so graph operand order (including commutative swaps) cannot
+    # silently exchange the gate and payload facts.
     a, b = (by_sm_tid[tid] for tid in sm.ins)
-    if not (a.kind == b.kind == post.kind) or post.kind not in ("ordinary", "zigzag"):
+    if not (a.kind == b.kind == post.kind == expected_kind):
         raise ValueError("binary relation kinds disagree")
-    if (a.full_shape, a.shard_shape) != (b.full_shape, b.shard_shape) or (a.full_shape, a.shard_shape) != (post.full_shape, post.shard_shape):
-        raise ValueError("binary add shapes disagree")
+    if family == "add":
+        if (a.full_shape, a.shard_shape) != (b.full_shape, b.shard_shape) or (a.full_shape, a.shard_shape) != (post.full_shape, post.shard_shape):
+            raise ValueError("binary add shapes disagree")
+    else:
+        if len(a.full_shape) != 2 or len(b.full_shape) != 2:
+            raise ValueError("broadcast mul inputs are not rank-2")
+        if a.full_shape != (b.full_shape[0], 1) or a.shard_shape != (b.shard_shape[0], 1):
+            raise ValueError("broadcast mul gate is not col1")
+        if (b.full_shape, b.shard_shape) != (post.full_shape, post.shard_shape):
+            raise ValueError("broadcast mul payload/output shapes disagree")
     if len(post.full_shape) != 2 or post.full_shape[0] != 2 * post.shard_shape[0] or post.full_shape[1] != post.shard_shape[1]:
-        raise ValueError("binary add is not dim-0 CP2")
+        raise ValueError("binary result is not dim-0 CP2")
     if post.kind == "zigzag":
         metadata = {(x.metadata_tid, x.metadata_region_id) for x in (a, b, post)}
         if len(metadata) != 1 or post.metadata_tid is None:
             raise ValueError("binary zigzag inputs do not share metadata")
-    if any(n.op!="FW_add" or len(n.ins)!=2 or len(n.outs)!=1 or n.params for n in (sm,p0,p1)):
-        raise ValueError("binary add node signature mismatch")
-    if (sm.rank,p0.rank,p1.rank)!=(0,0,1): raise ValueError("binary ranks mismatch")
-    expected_inputs=((a.sm_tid,b.sm_tid),(a.pm_rank0_tid,b.pm_rank0_tid),(a.pm_rank1_tid,b.pm_rank1_tid))
-    if tuple(tuple(n.ins) for n in (sm,p0,p1))!=expected_inputs: raise ValueError("binary inputs mismatch")
-    if (sm.outs[0],p0.outs[0],p1.outs[0])!=(post.sm_tid,post.pm_rank0_tid,post.pm_rank1_tid): raise ValueError("binary outputs mismatch")
-    states={x.state_id:x for x in chain.states};before,after=states[segment.pre_state_id],states[segment.post_state_id]
-    if not {a.fact_id,b.fact_id}<=set(before.fact_ids) or post.fact_id not in after.fact_ids: raise ValueError("binary facts not live")
-    if not set(after.fact_ids)<=({post.fact_id}|set(before.fact_ids)): raise ValueError("binary post-state introduces facts")
-    smt=_node_text(sm);pmt=[_node_text(p0),_node_text(p1)];full=_shape_text(list(post.full_shape));shard=_shape_text(list(post.shard_shape));ldim,d=post.shard_shape
-    def output(name,graph,store,nodes,pos,node,final):
-        bef,aft=nodes[:pos],nodes[pos+1:]
-        return [f"    have {name} : {final} {node.outs[0]} = elemwiseAdd ({store} {node.ins[0]}) ({store} {node.ins[1]}) := by",
-          f"      simpa [{final}, {'smNodes' if final=='smFinal' else 'pmNodes'}] using",
+    if any(n.op != expected_op or len(n.ins) != 2 or len(n.outs) != 1 or n.params for n in (sm, p0, p1)):
+        raise ValueError("binary node signature mismatch")
+    if (sm.rank, p0.rank, p1.rank) != (0, 0, 1):
+        raise ValueError("binary ranks mismatch")
+    expected_inputs = ((a.sm_tid, b.sm_tid), (a.pm_rank0_tid, b.pm_rank0_tid), (a.pm_rank1_tid, b.pm_rank1_tid))
+    if tuple(tuple(n.ins) for n in (sm, p0, p1)) != expected_inputs:
+        raise ValueError("binary inputs mismatch")
+    if (sm.outs[0], p0.outs[0], p1.outs[0]) != (post.sm_tid, post.pm_rank0_tid, post.pm_rank1_tid):
+        raise ValueError("binary outputs mismatch")
+    states = {x.state_id: x for x in chain.states}
+    before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    if not {a.fact_id, b.fact_id} <= set(before.fact_ids) or post.fact_id not in after.fact_ids:
+        raise ValueError("binary facts not live")
+    if not set(after.fact_ids) <= ({post.fact_id} | set(before.fact_ids)):
+        raise ValueError("binary post-state introduces facts")
+    smt = _node_text(sm); pmt = [_node_text(p0), _node_text(p1)]
+    full = _shape_text(list(post.full_shape)); shard = _shape_text(list(post.shard_shape)); ldim, d = post.shard_shape
+    a_full = _shape_text(list(a.full_shape)); a_shard = _shape_text(list(a.shard_shape))
+    b_full = _shape_text(list(b.full_shape)); b_shard = _shape_text(list(b.shard_shape))
+
+    def output(name, graph, store, nodes, pos, node, final):
+        bef, aft = nodes[:pos], nodes[pos + 1:]
+        return [f"    have {name} : {final} {node.outs[0]} = {tensor_op} ({store} {node.ins[0]}) ({store} {node.ins[1]}) := by",
+          f"      simpa [{final}, {'smNodes' if final == 'smFinal' else 'pmNodes'}] using",
           f"        (foldl_faithful_binary_middle_writer {graph} {store} [{', '.join(_node_text(x) for x in bef)}] [{', '.join(_node_text(x) for x in aft)}] {_node_text(node)}",
-          f"          {node.ins[0]} {node.ins[1]} {node.outs[0]} elemwiseAdd (by",
-          "            intro t","            rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
-          "              (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]","            simp [applyNodeDistributed, applyNodeRingAttn]",
-          f"            exact applyNode_fw_add2_out {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.outs[0]})",
+          f"          {node.ins[0]} {node.ins[1]} {node.outs[0]} {tensor_op} (by",
+          "            intro t", "            rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+          "              (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]", "            simp [applyNodeDistributed, applyNodeRingAttn]",
+          f"            exact {apply_lemma} {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.outs[0]})",
           "          (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide))"]
-    lines=[f"private def {segment.segment_id} (smGraph pmGraph : GraphDecl) :",f"    ClosedDepSegmentCertificate smGraph pmGraph {before.state_id} {after.state_id} where",
-      f"  smNodes := [{smt}]",f"  pmNodes := [{', '.join(pmt)}]","  sound := by","    intro smStore pmStore hstate",f"    let smNodes : List NodeDecl := [{smt}]",f"    let pmNodes : List NodeDecl := [{', '.join(pmt)}]",
-      "    let smFinal := smNodes.foldl (applyNodeDistributedFaithful smGraph) smStore","    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful pmGraph) pmStore",
-      f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by","      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate","      · native_decide","      · native_decide","      · native_decide","      · native_decide",
-      f"    have ha : {a.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",f"    have hb : {b.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)"]
-    lines+=output('hsm','smGraph','smStore',sm_nodes,0,sm,'smFinal')+output('hp0','pmGraph','pmStore',pm_nodes,0,p0,'pmFinal')+output('hp1','pmGraph','pmStore',pm_nodes,1,p1,'pmFinal')
-    if post.kind=='ordinary':
-      lines += [f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by",f"      change GeneratedPatterns.Ordinary2Rel (smFinal {post.sm_tid}) (pmFinal {post.pm_rank0_tid}) (pmFinal {post.pm_rank1_tid}) {full} {shard}",f"      change GeneratedPatterns.Ordinary2Rel (smStore {a.sm_tid}) (pmStore {a.pm_rank0_tid}) (pmStore {a.pm_rank1_tid}) {full} {shard} at ha",f"      change GeneratedPatterns.Ordinary2Rel (smStore {b.sm_tid}) (pmStore {b.pm_rank0_tid}) (pmStore {b.pm_rank1_tid}) {full} {shard} at hb","      rw [hsm, hp0, hp1]",f"      exact Ordinary2Rel.add {ldim} {d} ha hb (by decide) (by decide)"]
+
+    lines = [f"private def {segment.segment_id} (smGraph pmGraph : GraphDecl) :", f"    ClosedDepSegmentCertificate smGraph pmGraph {before.state_id} {after.state_id} where",
+      f"  smNodes := [{smt}]", f"  pmNodes := [{', '.join(pmt)}]", "  sound := by", "    intro smStore pmStore hstate", f"    let smNodes : List NodeDecl := [{smt}]", f"    let pmNodes : List NodeDecl := [{', '.join(pmt)}]",
+      "    let smFinal := smNodes.foldl (applyNodeDistributedFaithful smGraph) smStore", "    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful pmGraph) pmStore",
+      f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by", "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate", "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
+      f"    have ha : {a.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)", f"    have hb : {b.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)"]
+    lines += output("hsm", "smGraph", "smStore", sm_nodes, 0, sm, "smFinal")
+    lines += output("hp0", "pmGraph", "pmStore", pm_nodes, 0, p0, "pmFinal")
+    lines += output("hp1", "pmGraph", "pmStore", pm_nodes, 1, p1, "pmFinal")
+    relation_name = "GeneratedPatterns.Ordinary2Rel" if post.kind == "ordinary" else "GeneratedPatterns.Zigzag2Rel"
+    meta_final = "" if post.kind == "ordinary" else f" (pmFinal {post.metadata_tid})"
+    meta_a = "" if post.kind == "ordinary" else f" (pmStore {a.metadata_tid})"
+    meta_b = "" if post.kind == "ordinary" else f" (pmStore {b.metadata_tid})"
+    theorem = (
+        "Ordinary2Rel.add" if family == "add" and post.kind == "ordinary" else
+        "GeneratedPatterns.Zigzag2Rel.add" if family == "add" else
+        "Ordinary2Rel.mul_broadcast_col1" if post.kind == "ordinary" else
+        "GeneratedPatterns.Zigzag2Rel.mul_broadcast_col1"
+    )
+    lines += [f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by",
+      f"      change {relation_name} (smFinal {post.sm_tid}) (pmFinal {post.pm_rank0_tid}) (pmFinal {post.pm_rank1_tid}){meta_final} {full} {shard}",
+      f"      change {relation_name} (smStore {a.sm_tid}) (pmStore {a.pm_rank0_tid}) (pmStore {a.pm_rank1_tid}){meta_a} {a_full} {a_shard} at ha",
+      f"      change {relation_name} (smStore {b.sm_tid}) (pmStore {b.pm_rank0_tid}) (pmStore {b.pm_rank1_tid}){meta_b} {b_full} {b_shard} at hb"]
+    if post.kind == "zigzag":
+        lines += [f"      have hmeta : pmFinal {post.metadata_tid} = pmStore {post.metadata_tid} := foldl_applyNodeDistributedFaithful_at_not_written pmGraph pmNodes pmStore {post.metadata_tid} (by native_decide) (by native_decide)", "      rw [hsm, hp0, hp1, hmeta]"]
     else:
-      lines += [f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by",f"      change GeneratedPatterns.Zigzag2Rel (smFinal {post.sm_tid}) (pmFinal {post.pm_rank0_tid}) (pmFinal {post.pm_rank1_tid}) (pmFinal {post.metadata_tid}) {full} {shard}",f"      change GeneratedPatterns.Zigzag2Rel (smStore {a.sm_tid}) (pmStore {a.pm_rank0_tid}) (pmStore {a.pm_rank1_tid}) (pmStore {a.metadata_tid}) {full} {shard} at ha",f"      change GeneratedPatterns.Zigzag2Rel (smStore {b.sm_tid}) (pmStore {b.pm_rank0_tid}) (pmStore {b.pm_rank1_tid}) (pmStore {b.metadata_tid}) {full} {shard} at hb",f"      have hmeta : pmFinal {post.metadata_tid} = pmStore {post.metadata_tid} := foldl_applyNodeDistributedFaithful_at_not_written pmGraph pmNodes pmStore {post.metadata_tid} (by native_decide) (by native_decide)","      rw [hsm, hp0, hp1, hmeta]",f"      exact GeneratedPatterns.Zigzag2Rel.add {ldim} {d} ha hb (by decide) (by decide)"]
-    lines += ["    exact RelationState.Holds.mono_insert hframe hout (by native_decide)",""]
+        lines += ["      rw [hsm, hp0, hp1]"]
+    lines += [f"      exact {theorem} {ldim} {d} ha hb (by decide) (by decide)",
+      "    exact RelationState.Holds.mono_insert hframe hout (by native_decide)", ""]
     return "\n".join(lines)
 
 
@@ -1348,75 +1397,54 @@ def render_closed_rms_norm_segment(ir: GoalIR, relation, segment_id: str) -> str
     if segment is None or len(segment.transition_ids) != 1:
         raise ValueError("RMSNorm segment must own one transition")
     transition = by_id[segment.transition_ids[0]]
-    if not transition.lean_theorem.endswith("fw_rms_norm_allGather0_commute_2_core"):
+    theorem_kind = {
+        "TrainVerify.Denote.ZigzagCollective.fw_rms_norm_allGather0_commute_2_core": "ordinary",
+        "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.rms_norm": "zigzag",
+    }.get(transition.lean_theorem)
+    if theorem_kind is None:
         raise ValueError("segment is not the registered RMSNorm family")
-    sms=ir.sm_nodes[slice(*segment.sm_range)];pms=ir.pm_nodes[slice(*segment.pm_range)]
-    if len(sms)!=1 or len(pms)!=2: raise ValueError("RMSNorm footprint mismatch")
-    sm,p0,p1=sms[0],pms[0],pms[1]
-    if any(
-        x.op != "FW_rms_norm" or len(x.ins) != 2 or len(x.outs) != 1
-        or x.params not in (None, [])
-        for x in (sm, p0, p1)
-    ):
+    sms = ir.sm_nodes[slice(*segment.sm_range)]; pms = ir.pm_nodes[slice(*segment.pm_range)]
+    if len(sms) != 1 or len(pms) != 2:
+        raise ValueError("RMSNorm footprint mismatch")
+    sm, p0, p1 = sms[0], pms[0], pms[1]
+    if any(x.op != "FW_rms_norm" or len(x.ins) != 2 or len(x.outs) != 1 or x.params not in (None, []) for x in (sm, p0, p1)):
         raise ValueError("RMSNorm signature/params mismatch")
-    if (sm.rank,p0.rank,p1.rank)!=(0,0,1) or len({sm.ins[1],p0.ins[1],p1.ins[1]})!=1:
+    if (sm.rank, p0.rank, p1.rank) != (0, 0, 1) or len({sm.ins[1], p0.ins[1], p1.ins[1]}) != 1:
         raise ValueError("RMSNorm replicated weight/rank mismatch")
-    weight=sm.ins[1];records={x.source:x for x in chain.relation_facts}
-    pre,post=records[transition.pre_facts[0]],records[transition.post_facts[0]]
-    if pre.kind!="ordinary" or post.kind!="ordinary" or pre.full_shape!=post.full_shape or pre.shard_shape!=post.shard_shape:
+    weight = sm.ins[1]; records = {x.source: x for x in chain.relation_facts}
+    pre, post = records[transition.pre_facts[0]], records[transition.post_facts[0]]
+    if pre.kind != theorem_kind or post.kind != theorem_kind or pre.full_shape != post.full_shape or pre.shard_shape != post.shard_shape:
         raise ValueError("RMSNorm relation payload mismatch")
-    if len(pre.shard_shape)!=2 or pre.full_shape!=(pre.shard_shape[0]*2,pre.shard_shape[1]):
+    if len(pre.shard_shape) != 2 or pre.full_shape != (pre.shard_shape[0] * 2, pre.shard_shape[1]):
         raise ValueError("RMSNorm shape is not two-rank 2D")
-    shard,hidden=pre.shard_shape;weight_eq=f"authority_replicated_eq_{weight}"
-    if weight_eq not in {x.fact_id for x in chain.authority_facts}: raise ValueError("missing weight authority")
-    states={x.state_id:x for x in chain.states};before=states[segment.pre_state_id];after=states[segment.post_state_id]
+    if theorem_kind == "zigzag" and (pre.metadata_tid is None or pre.metadata_tid != post.metadata_tid or pre.metadata_region_id != post.metadata_region_id):
+        raise ValueError("RMSNorm zigzag metadata provenance changed")
+    shard, hidden = pre.shard_shape; weight_eq = f"authority_replicated_eq_{weight}"
+    if weight_eq not in {x.fact_id for x in chain.authority_facts}:
+        raise ValueError("missing weight authority")
+    states = {x.state_id: x for x in chain.states}; before = states[segment.pre_state_id]; after = states[segment.post_state_id]
     if pre.fact_id not in before.fact_ids or post.fact_id not in after.fact_ids:
         raise ValueError("RMSNorm pre/post facts are absent from their states")
     if not set(after.fact_ids) <= ({post.fact_id} | set(before.fact_ids)):
         raise ValueError("RMSNorm state introduces an unproved extra fact")
     if weight_eq not in before.fact_ids:
         raise ValueError("RMSNorm weight authority is not live in the pre-state")
-    st,n0,n1=_node_text(sm),_node_text(p0),_node_text(p1);fs,ss=_shape_text(post.full_shape),_shape_text(post.shard_shape)
-    return f'''private def {segment.segment_id}
-    (smGraph pmGraph : GraphDecl) :
-    ClosedDepSegmentCertificate smGraph pmGraph {before.state_id} {after.state_id} where
-  smNodes := [{st}]
-  pmNodes := [{n0}, {n1}]
-  sound := by
-    intro smStore pmStore hstate
-    let smNodes : List NodeDecl := [{st}]
-    let pmNodes : List NodeDecl := [{n0}, {n1}]
-    let smFinal := smNodes.foldl (applyNodeDistributedFaithful smGraph) smStore
-    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful pmGraph) pmStore
-    have hframe : {before.state_id}.Holds smFinal pmFinal := by
-      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate
-      · native_decide
-      · native_decide
-      · native_decide
-      · native_decide
-    have hin : {pre.fact_id}.Holds smStore pmStore := hstate {pre.fact_id} (by native_decide)
-    have hweight : {weight_eq}.Holds smStore pmStore := hstate {weight_eq} (by native_decide)
-    change smStore {weight} = pmStore {weight} at hweight
-    have hsmOut : smFinal {sm.outs[0]} = fw_rms_norm (smStore {sm.ins[0]}) (smStore {weight}) := by
-      simp [smFinal, smNodes, applyNodeDistributedFaithful, applyNodeDistributed, applyNodeRingAttn]
-      exact applyNode_fw_rms_norm_out_1p smGraph smStore 0 {sm.ins[0]} {weight} {sm.outs[0]}
-    have hpm0Out : pmFinal {p0.outs[0]} = fw_rms_norm (pmStore {p0.ins[0]}) (pmStore {weight}) := by
-      simp [pmFinal, pmNodes, applyNodeDistributedFaithful, applyNodeDistributed, applyNodeRingAttn]
-      rw [applyNode_eq_of_not_mem_outs]
-      · exact applyNode_fw_rms_norm_out_1p pmGraph pmStore 0 {p0.ins[0]} {weight} {p0.outs[0]}
-      · decide
-    have hpm1Out : pmFinal {p1.outs[0]} = fw_rms_norm (pmStore {p1.ins[0]}) (pmStore {weight}) := by
-      simp [pmFinal, pmNodes, applyNodeDistributedFaithful, applyNodeDistributed, applyNodeRingAttn]
-      rw [applyNode_fw_rms_norm_out_1p]
-      rw [applyNode_eq_of_not_mem_outs, applyNode_eq_of_not_mem_outs] <;> decide
-    have hout : {post.fact_id}.Holds smFinal pmFinal := by
-      change GeneratedPatterns.Ordinary2Rel (smStore {sm.ins[0]}) (pmStore {p0.ins[0]}) (pmStore {p1.ins[0]}) {fs} {ss} at hin
-      have core := GeneratedPatterns.Ordinary2Rel.rms_norm_2d hin hweight (by decide : 0 < {shard}) (by decide : 0 < {hidden})
-      change GeneratedPatterns.Ordinary2Rel (smFinal {sm.outs[0]}) (pmFinal {p0.outs[0]}) (pmFinal {p1.outs[0]}) {fs} {ss}
-      rw [hsmOut, hpm0Out, hpm1Out]
-      exact core
-    exact RelationState.Holds.mono_insert hframe hout (by native_decide)
-'''
+    st, n0, n1 = _node_text(sm), _node_text(p0), _node_text(p1); fs, ss = _shape_text(post.full_shape), _shape_text(post.shard_shape)
+    lines = [f"private def {segment.segment_id}", "    (smGraph pmGraph : GraphDecl) :", f"    ClosedDepSegmentCertificate smGraph pmGraph {before.state_id} {after.state_id} where",
+      f"  smNodes := [{st}]", f"  pmNodes := [{n0}, {n1}]", "  sound := by", "    intro smStore pmStore hstate", f"    let smNodes : List NodeDecl := [{st}]", f"    let pmNodes : List NodeDecl := [{n0}, {n1}]",
+      "    let smFinal := smNodes.foldl (applyNodeDistributedFaithful smGraph) smStore", "    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful pmGraph) pmStore",
+      f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by", "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate", "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
+      f"    have hin : {pre.fact_id}.Holds smStore pmStore := hstate {pre.fact_id} (by native_decide)", f"    have hweight : {weight_eq}.Holds smStore pmStore := hstate {weight_eq} (by native_decide)", f"    change smStore {weight} = pmStore {weight} at hweight",
+      f"    have hsmOut : smFinal {sm.outs[0]} = fw_rms_norm (smStore {sm.ins[0]}) (smStore {weight}) := by", "      simp [smFinal, smNodes, applyNodeDistributedFaithful, applyNodeDistributed, applyNodeRingAttn]", f"      exact applyNode_fw_rms_norm_out_1p smGraph smStore 0 {sm.ins[0]} {weight} {sm.outs[0]}",
+      f"    have hpm0Out : pmFinal {p0.outs[0]} = fw_rms_norm (pmStore {p0.ins[0]}) (pmStore {weight}) := by", "      simp [pmFinal, pmNodes, applyNodeDistributedFaithful, applyNodeDistributed, applyNodeRingAttn]", "      rw [applyNode_eq_of_not_mem_outs]", f"      · exact applyNode_fw_rms_norm_out_1p pmGraph pmStore 0 {p0.ins[0]} {weight} {p0.outs[0]}", "      · decide",
+      f"    have hpm1Out : pmFinal {p1.outs[0]} = fw_rms_norm (pmStore {p1.ins[0]}) (pmStore {weight}) := by", "      simp [pmFinal, pmNodes, applyNodeDistributedFaithful, applyNodeDistributed, applyNodeRingAttn]", "      rw [applyNode_fw_rms_norm_out_1p]", "      rw [applyNode_eq_of_not_mem_outs, applyNode_eq_of_not_mem_outs] <;> decide"]
+    if theorem_kind == "ordinary":
+        lines += [f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by", f"      change GeneratedPatterns.Ordinary2Rel (smStore {sm.ins[0]}) (pmStore {p0.ins[0]}) (pmStore {p1.ins[0]}) {fs} {ss} at hin", f"      have core := GeneratedPatterns.Ordinary2Rel.rms_norm_2d hin hweight (by decide : 0 < {shard}) (by decide : 0 < {hidden})", f"      change GeneratedPatterns.Ordinary2Rel (smFinal {sm.outs[0]}) (pmFinal {p0.outs[0]}) (pmFinal {p1.outs[0]}) {fs} {ss}", "      rw [hsmOut, hpm0Out, hpm1Out]", "      exact core"]
+    else:
+        lines += [f"    have hmeta : pmFinal {post.metadata_tid} = pmStore {post.metadata_tid} := foldl_applyNodeDistributedFaithful_at_not_written pmGraph pmNodes pmStore {post.metadata_tid} (by native_decide) (by native_decide)",
+          f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by", f"      change GeneratedPatterns.Zigzag2Rel (smStore {sm.ins[0]}) (pmStore {p0.ins[0]}) (pmStore {p1.ins[0]}) (pmStore {pre.metadata_tid}) {fs} {ss} at hin", f"      change GeneratedPatterns.Zigzag2Rel (smFinal {sm.outs[0]}) (pmFinal {p0.outs[0]}) (pmFinal {p1.outs[0]}) (pmFinal {post.metadata_tid}) {fs} {ss}", "      rw [hsmOut, hpm0Out, hpm1Out, hmeta, hweight]", f"      exact GeneratedPatterns.Zigzag2Rel.rms_norm {shard} {hidden} hin (by decide) (by decide) rfl"]
+    lines += ["    exact RelationState.Holds.mono_insert hframe hout (by native_decide)", ""]
+    return "\n".join(lines)
 
 
 def compose_full_topology(ir: GoalIR, module_prefix: str) -> CompositionResult:

@@ -5,6 +5,7 @@ import denote.yoco_goals.ZigzagRouterRel
 import denote.yoco_goals.ZigzagAttentionRel
 import denote.yoco_goals.ZigzagLinearRel
 import denote.yoco_goals.ZigzagPointwiseRel
+import denote.yoco_goals.ZigzagBroadcastMul
 import denote.yoco_goals.FaithfulStackGather
 import denote.ZigzagCollective
 import denote.MultirefGeneral
@@ -66,6 +67,27 @@ theorem Ordinary2Rel.add
       hA.rank0_shape hB.rank0_shape
   · exact elemwiseAdd_shape_of_shapes a1 b1 [lDim, d]
       hA.rank1_shape hB.rank1_shape
+
+/-- Broadcast multiplication of a single-column gate by a wide payload
+preserves an ordinary dim-0 two-rank relation. -/
+theorem Ordinary2Rel.mul_broadcast_col1
+    {fullA a0 a1 fullB b0 b1 : Tensor} (lDim d : Nat)
+    (hA : GeneratedPatterns.Ordinary2Rel fullA a0 a1 [lDim * 2, 1] [lDim, 1])
+    (hB : GeneratedPatterns.Ordinary2Rel fullB b0 b1 [lDim * 2, d] [lDim, d])
+    (hl : 0 < lDim) (hd : 0 < d) :
+    GeneratedPatterns.Ordinary2Rel (elemwiseMul fullA fullB)
+      (elemwiseMul a0 b0) (elemwiseMul a1 b1) [lDim * 2, d] [lDim, d] := by
+  constructor
+  · rw [hA.full_value, hB.full_value]
+    exact GeneratedPatterns.ZigzagBroadcastMul.mulBC_allGather0_commute_cp2
+      a0 a1 b0 b1 lDim d hl hd hA.rank0_shape hA.rank1_shape
+      hB.rank0_shape hB.rank1_shape
+  · exact GeneratedPatterns.ZigzagBroadcastMul.elemwiseMul_shape_col1
+      fullA fullB (lDim * 2) d hA.full_shape hB.full_shape hd
+  · exact GeneratedPatterns.ZigzagBroadcastMul.elemwiseMul_shape_col1
+      a0 b0 lDim d hA.rank0_shape hB.rank0_shape hd
+  · exact GeneratedPatterns.ZigzagBroadcastMul.elemwiseMul_shape_col1
+      a1 b1 lDim d hA.rank1_shape hB.rank1_shape hd
 
 /-- Sigmoid preserves an ordinary dim-0 two-rank relation. -/
 theorem Ordinary2Rel.sigmoid
