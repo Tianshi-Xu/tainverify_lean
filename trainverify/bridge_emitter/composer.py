@@ -873,22 +873,37 @@ def render_closed_unary_segment(ir: GoalIR, relation, segment_id: str) -> str:
     if segment is None or len(segment.transition_ids) != 1:
         raise ValueError("unary renderer requires one atomic transition")
     transition = {x.transition_id: x for x in relation.transition_specs}[segment.transition_ids[0]]
-    identity_theorems = {
-        "TrainVerify.Denote.RelationCompiler.Ordinary2Rel.view_id",
-        "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.view_id",
-        "TrainVerify.Denote.fw_float_allGather0_commute_2",
-        "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.fw_float",
+    unary_adapters = {
+        "TrainVerify.Denote.RelationCompiler.Ordinary2Rel.view_id": ("identity", "ordinary"),
+        "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.view_id": ("identity", "zigzag"),
+        "TrainVerify.Denote.fw_float_allGather0_commute_2": ("float", "ordinary"),
+        "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.fw_float": ("float", "zigzag"),
+        "TrainVerify.Denote.GeneratedPatterns.fw_view_allGather0_commute_cp2": ("flatten_3d", "ordinary"),
+        "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.view_3d_to_2d": ("flatten_3d", "zigzag"),
     }
-    if transition.lean_theorem not in identity_theorems:
+    adapter = unary_adapters.get(transition.lean_theorem)
+    if adapter is None:
         raise ValueError("unary renderer received unsupported theorem")
+    family, expected_kind = adapter
     if len(transition.pre_facts) != 1 or len(transition.post_facts) != 1:
-        raise ValueError("unary identity requires one pre/post fact")
+        raise ValueError("unary renderer requires one pre/post fact")
     facts = {x.source: x for x in chain.relation_facts}
     pre, post = facts[transition.pre_facts[0]], facts[transition.post_facts[0]]
-    if pre.kind != post.kind or pre.kind not in ("ordinary", "zigzag"):
-        raise ValueError("unary identity relation kind mismatch")
-    if (pre.full_shape, pre.shard_shape) != (post.full_shape, post.shard_shape):
-        raise ValueError("identity unary changes relation shape")
+    if pre.kind != post.kind or pre.kind != expected_kind:
+        raise ValueError("unary relation kind does not match theorem adapter")
+    if family in ("identity", "float"):
+        if (pre.full_shape, pre.shard_shape) != (post.full_shape, post.shard_shape):
+            raise ValueError("identity unary changes relation shape")
+    else:
+        if len(pre.full_shape) != 3 or len(pre.shard_shape) != 3:
+            raise ValueError("flatten-3d requires rank-3 inputs")
+        l_dim, h_width, d_width = pre.shard_shape
+        if min(l_dim, h_width, d_width) <= 0:
+            raise ValueError("flatten-3d dimensions must be positive")
+        if pre.full_shape != (2 * l_dim, h_width, d_width):
+            raise ValueError("flatten-3d full input is not two ordered shards")
+        if post.full_shape != (2 * l_dim, h_width * d_width) or post.shard_shape != (l_dim, h_width * d_width):
+            raise ValueError("flatten-3d output does not merge the trailing axes")
     if pre.kind == "zigzag" and (
         pre.metadata_tid is None or pre.metadata_tid != post.metadata_tid or
         pre.metadata_region_id != post.metadata_region_id
@@ -899,8 +914,9 @@ def render_closed_unary_segment(ir: GoalIR, relation, segment_id: str) -> str:
     if len(sm_nodes) != 1 or len(pm_nodes) != 2:
         raise ValueError("unary identity footprint is not 1xSM+2xPM")
     sm, p0, p1 = sm_nodes[0], pm_nodes[0], pm_nodes[1]
-    if sm.op not in ("FW_view", "FW_reshape", "FW_float") or any(n.op != sm.op for n in (p0, p1)):
-        raise ValueError("identity unary operator mismatch")
+    allowed_ops = {"flatten_3d": {"FW_reshape"}, "identity": {"FW_view", "FW_reshape"}, "float": {"FW_float"}}[family]
+    if sm.op not in allowed_ops or any(n.op != sm.op for n in (p0, p1)):
+        raise ValueError("unary operator does not match theorem adapter")
     if (sm.rank, p0.rank, p1.rank) != (0, 0, 1):
         raise ValueError("identity unary ranks are not ordered")
     if any(len(n.ins) != 1 or len(n.outs) != 1 for n in (sm, p0, p1)):
@@ -908,8 +924,8 @@ def render_closed_unary_segment(ir: GoalIR, relation, segment_id: str) -> str:
     if sm.op == "FW_float":
         if any(n.params for n in (sm, p0, p1)):
             raise ValueError("FW_float must have empty params")
-    elif any(not n.params for n in (sm, p0, p1)) or tuple(sm.params) != pre.full_shape or tuple(p0.params) != pre.shard_shape or tuple(p1.params) != pre.shard_shape:
-        raise ValueError("identity unary target shapes mismatch")
+    elif any(not n.params for n in (sm, p0, p1)) or tuple(sm.params) != post.full_shape or tuple(p0.params) != post.shard_shape or tuple(p1.params) != post.shard_shape:
+        raise ValueError("unary target shapes mismatch")
     if (sm.ins[0], p0.ins[0], p1.ins[0]) != (pre.sm_tid, pre.pm_rank0_tid, pre.pm_rank1_tid):
         raise ValueError("identity unary inputs mismatch")
     if (sm.outs[0], p0.outs[0], p1.outs[0]) != (post.sm_tid, post.pm_rank0_tid, post.pm_rank1_tid):
@@ -921,7 +937,8 @@ def render_closed_unary_segment(ir: GoalIR, relation, segment_id: str) -> str:
     if not set(after.fact_ids) <= ({post.fact_id} | set(before.fact_ids)):
         raise ValueError("identity unary introduces unproved state")
     sm_text = _node_text(sm); pm_text = [_node_text(p0), _node_text(p1)]
-    full_shape = _shape_text(list(pre.full_shape)); shard_shape = _shape_text(list(pre.shard_shape))
+    pre_full_shape = _shape_text(list(pre.full_shape)); pre_shard_shape = _shape_text(list(pre.shard_shape))
+    post_full_shape = _shape_text(list(post.full_shape)); post_shard_shape = _shape_text(list(post.shard_shape))
 
     def app(node: Node, graph: str, indent: str):
         params = list(node.params or ())
@@ -961,25 +978,38 @@ def render_closed_unary_segment(ir: GoalIR, relation, segment_id: str) -> str:
         "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
         "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
         f"    have hin : {pre.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)"]
-    lines += out("hsm", "smGraph", "smStore", sm_nodes, 0, sm, "smFinal", pre.full_shape)
-    lines += out("hp0", "pmGraph", "pmStore", pm_nodes, 0, p0, "pmFinal", pre.shard_shape)
-    lines += out("hp1", "pmGraph", "pmStore", pm_nodes, 1, p1, "pmFinal", pre.shard_shape)
+    lines += out("hsm", "smGraph", "smStore", sm_nodes, 0, sm, "smFinal", post.full_shape)
+    lines += out("hp0", "pmGraph", "pmStore", pm_nodes, 0, p0, "pmFinal", post.shard_shape)
+    lines += out("hp1", "pmGraph", "pmStore", pm_nodes, 1, p1, "pmFinal", post.shard_shape)
     if pre.kind == "ordinary":
         lines += [f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by",
-            f"      change GeneratedPatterns.Ordinary2Rel (smFinal {post.sm_tid}) (pmFinal {post.pm_rank0_tid}) (pmFinal {post.pm_rank1_tid}) {full_shape} {shard_shape}",
-            f"      change GeneratedPatterns.Ordinary2Rel (smStore {pre.sm_tid}) (pmStore {pre.pm_rank0_tid}) (pmStore {pre.pm_rank1_tid}) {full_shape} {shard_shape} at hin",
-            "      rw [hsm, hp0, hp1]",
-            "      exact hin" if sm.op == "FW_float" else "      exact Ordinary2Rel.view_id hin"]
+            f"      change GeneratedPatterns.Ordinary2Rel (smFinal {post.sm_tid}) (pmFinal {post.pm_rank0_tid}) (pmFinal {post.pm_rank1_tid}) {post_full_shape} {post_shard_shape}",
+            f"      change GeneratedPatterns.Ordinary2Rel (smStore {pre.sm_tid}) (pmStore {pre.pm_rank0_tid}) (pmStore {pre.pm_rank1_tid}) {pre_full_shape} {pre_shard_shape} at hin",
+            "      rw [hsm, hp0, hp1]"]
+        if family == "float":
+            lines += ["      exact hin"]
+        elif family == "identity":
+            lines += ["      exact Ordinary2Rel.view_id hin"]
+        else:
+            lines += ["      refine ⟨?_, rfl, rfl, rfl⟩",
+                "      rw [hin.full_value]",
+                f"      exact GeneratedPatterns.fw_view_allGather0_commute_cp2 (pmStore {pre.pm_rank0_tid}) (pmStore {pre.pm_rank1_tid}) {l_dim} {h_width} {d_width}",
+                "        (by decide) (by decide) (by decide) hin.rank0_shape hin.rank1_shape"]
     else:
         lines += [f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by",
-            f"      change GeneratedPatterns.Zigzag2Rel (smFinal {post.sm_tid}) (pmFinal {post.pm_rank0_tid}) (pmFinal {post.pm_rank1_tid}) (pmFinal {post.metadata_tid}) {full_shape} {shard_shape}",
-            f"      change GeneratedPatterns.Zigzag2Rel (smStore {pre.sm_tid}) (pmStore {pre.pm_rank0_tid}) (pmStore {pre.pm_rank1_tid}) (pmStore {pre.metadata_tid}) {full_shape} {shard_shape} at hin",
+            f"      change GeneratedPatterns.Zigzag2Rel (smFinal {post.sm_tid}) (pmFinal {post.pm_rank0_tid}) (pmFinal {post.pm_rank1_tid}) (pmFinal {post.metadata_tid}) {post_full_shape} {post_shard_shape}",
+            f"      change GeneratedPatterns.Zigzag2Rel (smStore {pre.sm_tid}) (pmStore {pre.pm_rank0_tid}) (pmStore {pre.pm_rank1_tid}) (pmStore {pre.metadata_tid}) {pre_full_shape} {pre_shard_shape} at hin",
             f"      have hmeta : pmFinal {post.metadata_tid} = pmStore {pre.metadata_tid} := by",
             f"        exact foldl_applyNodeDistributedFaithful_at_not_written pmGraph pmNodes pmStore {pre.metadata_tid} (by native_decide) (by native_decide)",
-            "      rw [hsm, hp0, hp1, hmeta]",
-            "      have hcore := GeneratedPatterns.Zigzag2Rel.fw_float 2 0 0 1 [] hin" if sm.op == "FW_float" else "      exact GeneratedPatterns.Zigzag2Rel.view_id' hin"]
-        if pre.kind == "zigzag" and sm.op == "FW_float":
-            lines += ["      simpa only [evalOp_fw_float, List.headD_cons] using hcore"]
+            "      rw [hsm, hp0, hp1, hmeta]"]
+        if family == "float":
+            lines += ["      have hcore := GeneratedPatterns.Zigzag2Rel.fw_float 2 0 0 1 [] hin",
+                "      simpa only [evalOp_fw_float, List.headD_cons] using hcore"]
+        elif family == "identity":
+            lines += ["      exact GeneratedPatterns.Zigzag2Rel.view_id' hin"]
+        else:
+            lines += [f"      exact GeneratedPatterns.Zigzag2Rel.view_3d_to_2d {l_dim} {h_width} {d_width} hin",
+                "        (by decide) (by decide) (by decide)"]
     lines += ["    exact RelationState.Holds.mono_insert hframe hout (by native_decide)", ""]
     return "\n".join(lines)
 

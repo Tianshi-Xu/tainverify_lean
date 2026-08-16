@@ -3211,6 +3211,53 @@ def test_closed_unary_renderer_covers_identity_view_and_reshape(monkeypatch):
         assert "RelationState.Holds.mono_insert" in source
 
 
+@pytest.mark.parametrize("goal_n", [1, 2, 3, 4])
+def test_closed_unary_renderer_covers_all_flatten_3d_segments(monkeypatch, goal_n):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(goal_n, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    transitions = {item.transition_id: item for item in relation.transition_specs}
+    flatten_segments = [
+        segment for segment in relation.dependent_chain_plan.segments
+        if len(segment.transition_ids) == 1
+        and transitions[segment.transition_ids[0]].rule_id.startswith("flatten-3d-")
+    ]
+    ordinary = [
+        segment for segment in flatten_segments
+        if transitions[segment.transition_ids[0]].rule_id == "flatten-3d-ordinary-two-rank"
+    ]
+    zigzag = [
+        segment for segment in flatten_segments
+        if transitions[segment.transition_ids[0]].rule_id == "flatten-3d-zigzag-two-rank"
+    ]
+    assert len(ordinary) == len(zigzag) == 12
+    facts = {fact.source: fact for fact in relation.dependent_chain_plan.relation_facts}
+    for segment in flatten_segments:
+        transition = transitions[segment.transition_ids[0]]
+        pre = facts[transition.pre_facts[0]]
+        post = facts[transition.post_facts[0]]
+        assert pre.full_shape == (pre.shard_shape[0] * 2, *pre.shard_shape[1:])
+        assert post.full_shape == (pre.full_shape[0], pre.full_shape[1] * pre.full_shape[2])
+        assert post.shard_shape == (pre.shard_shape[0], pre.shard_shape[1] * pre.shard_shape[2])
+        if pre.kind == "zigzag":
+            assert (post.metadata_tid, post.metadata_region_id) == (
+                pre.metadata_tid, pre.metadata_region_id
+            )
+        source = render_closed_unary_segment(ir, relation, segment.segment_id)
+        assert source.count("let smFinal :=") == 1
+        assert source.count("let pmFinal :=") == 1
+        assert "Ordinary2Rel.view_id" not in source
+        assert "Zigzag2Rel.view_id" not in source
+        if pre.kind == "ordinary":
+            assert "fw_view_allGather0_commute_cp2" in source
+        else:
+            assert "Zigzag2Rel.view_3d_to_2d" in source
+            assert str(pre.metadata_tid) in source
+
+
 def test_closed_unary_renderer_covers_float_both_layouts(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")

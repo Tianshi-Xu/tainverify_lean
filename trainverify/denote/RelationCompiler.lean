@@ -6,6 +6,7 @@ import denote.yoco_goals.ZigzagAttentionRel
 import denote.yoco_goals.ZigzagLinearRel
 import denote.yoco_goals.ZigzagPointwiseRel
 import denote.yoco_goals.ZigzagBroadcastMul
+import denote.yoco_goals.ZigzagViewRel
 import denote.yoco_goals.FaithfulStackGather
 import denote.ZigzagCollective
 import denote.MultirefGeneral
