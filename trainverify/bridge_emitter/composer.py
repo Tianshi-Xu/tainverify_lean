@@ -2035,6 +2035,7 @@ def render_closed_unary_segment(ir: GoalIR, relation, segment_id: str) -> str:
 def render_closed_linear_segment(ir: GoalIR, relation, segment_id: str) -> str:
     from .relation_compiler import (
         FrontierLinearCertificate,
+        FrontierRMSNormCertificate,
         FullProducerChunkCertificate,
         PerHeadLinearRelationCertificate,
     )
@@ -2051,6 +2052,7 @@ def render_closed_linear_segment(ir: GoalIR, relation, segment_id: str) -> str:
         "TrainVerify.Denote.fw_per_head_mix_precision_linear_allGather0_commute_2",
         "TrainVerify.Denote.fw_mix_precision_linear_allGather0_commute_2",
         "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.mix_precision_linear",
+        "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.rms_norm",
     }
     if not transitions or any(x.lean_theorem not in allowed for x in transitions):
         raise ValueError("linear renderer received an unsupported linear component")
@@ -2081,6 +2083,8 @@ def render_closed_linear_segment(ir: GoalIR, relation, segment_id: str) -> str:
             conclusion = f"exact applyNode_fw_per_head_mix_precision_linear_out {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.outs[0]} []"
         elif op == "FW_mix_precision_linear":
             conclusion = f"exact applyNode_fw_mix_precision_linear_out_1p {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.outs[0]}"
+        elif op == "FW_rms_norm":
+            conclusion = f"exact applyNode_fw_rms_norm_out_1p {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.outs[0]}"
         else:
             raise ValueError(f"unsupported linear operator: {op}")
         return [
@@ -2122,8 +2126,8 @@ def render_closed_linear_segment(ir: GoalIR, relation, segment_id: str) -> str:
     ]
     fresh = []
     certs = [x for x in relation.certificates if type(x) in (
-        FrontierLinearCertificate, FullProducerChunkCertificate,
-        PerHeadLinearRelationCertificate,
+        FrontierLinearCertificate, FrontierRMSNormCertificate,
+        FullProducerChunkCertificate, PerHeadLinearRelationCertificate,
     )]
     for number, transition in enumerate(transitions):
         if len(transition.pre_facts) != 1 or len(transition.post_facts) != 1:
@@ -2142,11 +2146,72 @@ def render_closed_linear_segment(ir: GoalIR, relation, segment_id: str) -> str:
         if len(cert_matches) != 1:
             raise ValueError("linear transition lacks unique exact certificate")
         cert = cert_matches[0]
+        if len(transition.sm_node_indices) != 1:
+            raise ValueError("atomic linear/RMS transition must own one SM node")
         sm_idx = transition.sm_node_indices[0]
         sm = ir.sm_nodes[sm_idx]
         if len(sm.ins) != 2 or len(sm.outs) != 1 or sm.params:
-            raise ValueError("SM linear signature mismatch")
+            raise ValueError("SM linear/RMS signature mismatch")
         weight_tid = sm.ins[1]
+        if type(cert) is FrontierRMSNormCertificate:
+            if transition.rule_id != "rms-norm-zigzag-two-rank" or sm.op != "FW_rms_norm":
+                raise ValueError("zigzag RMSNorm certificate/operator mismatch")
+            if cert.replicated_weight_tid != weight_tid:
+                raise ValueError("zigzag RMSNorm certificate weight binding mismatch")
+            if len(transition.pm_node_indices) != 2:
+                raise ValueError("zigzag RMSNorm footprint is not 1x2")
+            p0i, p1i = transition.pm_node_indices
+            p0, p1 = ir.pm_nodes[p0i], ir.pm_nodes[p1i]
+            nodes = (sm, p0, p1)
+            if any(n.op != "FW_rms_norm" or n.params or len(n.ins) != 2 or len(n.outs) != 1 for n in nodes):
+                raise ValueError("zigzag RMSNorm node signature mismatch")
+            if (sm.rank, p0.rank, p1.rank) != (0, 0, 1):
+                raise ValueError("zigzag RMSNorm ranks are not ordered")
+            if {n.ins[1] for n in nodes} != {weight_tid}:
+                raise ValueError("zigzag RMSNorm weight is not exactly replicated")
+            if (pre.kind, post.kind) != ("zigzag", "zigzag"):
+                raise ValueError("zigzag RMSNorm relation kind mismatch")
+            if (pre.metadata_tid is None or pre.metadata_tid != post.metadata_tid or
+                    pre.metadata_region_id != post.metadata_region_id):
+                raise ValueError("zigzag RMSNorm metadata provenance mismatch")
+            if (pre.full_shape, pre.shard_shape) != (post.full_shape, post.shard_shape):
+                raise ValueError("zigzag RMSNorm changes relation shapes")
+            if len(pre.shard_shape) != 2 or pre.full_shape != (pre.shard_shape[0] * 2, pre.shard_shape[1]):
+                raise ValueError("zigzag RMSNorm requires exact two-rank 2D shapes")
+            if any(dim <= 0 for dim in pre.shard_shape):
+                raise ValueError("zigzag RMSNorm dimensions must be positive")
+            expected_inputs = (pre.sm_tid, pre.pm_rank0_tid, pre.pm_rank1_tid)
+            expected_outputs = (post.sm_tid, post.pm_rank0_tid, post.pm_rank1_tid)
+            if tuple(n.ins[0] for n in nodes) != expected_inputs or tuple(n.outs[0] for n in nodes) != expected_outputs:
+                raise ValueError("zigzag RMSNorm fact roles do not match actual node TIDs")
+            eqs = [x for x in live_authority if x.kind == "tensor_eq" and
+                   (x.left_side, x.left_tid, x.right_side, x.right_tid) ==
+                   ("sm", weight_tid, "pm", weight_tid)]
+            if len(eqs) != 1:
+                raise ValueError("zigzag RMSNorm lacks unique live replicated weight authority")
+            eq = eqs[0]
+            lines += [
+                f"    have hin{number} : {pre.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+                f"    have hwEq{number} : {eq.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+            ]
+            lines += binary_middle(f"hSm{number}", ir.sm_graph_ref, "smStore", sm_slice,
+                                   sm_idx - sm_start, sm, "smFinal", "fw_rms_norm {x} {w}")
+            lines += binary_middle(f"hPm{number}_0", ir.pm_graph_ref, "pmStore", pm_slice,
+                                   p0i - pm_start, p0, "pmFinal", "fw_rms_norm {x} {w}")
+            lines += binary_middle(f"hPm{number}_1", ir.pm_graph_ref, "pmStore", pm_slice,
+                                   p1i - pm_start, p1, "pmFinal", "fw_rms_norm {x} {w}")
+            shard, hidden = pre.shard_shape
+            lines += [
+                f"    have hmeta{number} : pmFinal {post.metadata_tid} = pmStore {pre.metadata_tid} := by",
+                f"      exact foldl_applyNodeDistributedFaithful_at_not_written {ir.pm_graph_ref} pmNodes pmStore {pre.metadata_tid} (by native_decide) (by native_decide)",
+                f"    have hout{number} : {post.fact_id}.Holds smFinal pmFinal := by",
+                f"      change GeneratedPatterns.Zigzag2Rel (smStore {pre.sm_tid}) (pmStore {pre.pm_rank0_tid}) (pmStore {pre.pm_rank1_tid}) (pmStore {pre.metadata_tid}) {_shape_text(list(pre.full_shape))} {_shape_text(list(pre.shard_shape))} at hin{number}",
+                f"      change smStore {weight_tid} = pmStore {weight_tid} at hwEq{number}",
+                f"      change GeneratedPatterns.Zigzag2Rel (smFinal {post.sm_tid}) (pmFinal {post.pm_rank0_tid}) (pmFinal {post.pm_rank1_tid}) (pmFinal {post.metadata_tid}) {_shape_text(list(post.full_shape))} {_shape_text(list(post.shard_shape))}",
+                f"      rw [hSm{number}, hPm{number}_0, hPm{number}_1, hmeta{number}, hwEq{number}]",
+                f"      exact GeneratedPatterns.Zigzag2Rel.rms_norm {shard} {hidden} hin{number} (by decide) (by decide) rfl",
+            ]
+            continue
         if type(cert) is FrontierLinearCertificate:
             if sm.op != "FW_mix_precision_linear" or len(transition.pm_node_indices) != 2:
                 raise ValueError("ordinary mix linear footprint mismatch")
@@ -2197,6 +2262,10 @@ def render_closed_linear_segment(ir: GoalIR, relation, segment_id: str) -> str:
             continue
         if sm.op != "FW_per_head_mix_precision_linear":
             raise ValueError("SM per-head linear operator mismatch")
+        if not isinstance(cert, (FullProducerChunkCertificate, PerHeadLinearRelationCertificate)):
+            raise TypeError("unsupported exact per-head linear certificate class")
+        if getattr(cert, "replicated_weight_tid", weight_tid) != weight_tid:
+            raise ValueError("per-head linear certificate weight binding mismatch")
         if tuple(post.full_shape[:1]) != (pre.full_shape[0],) or len(pre.full_shape) != 2 or len(post.full_shape) != 3:
             raise ValueError("per-head linear shape rank mismatch")
         ldim, k = pre.shard_shape
@@ -2221,6 +2290,10 @@ def render_closed_linear_segment(ir: GoalIR, relation, segment_id: str) -> str:
             p0, p1 = ir.pm_nodes[p0i], ir.pm_nodes[p1i]
             if (p0.rank, p1.rank) != (0, 1) or any(n.ins[1] != weight_tid for n in (p0, p1)):
                 raise ValueError("local PM per-head linear weight/ranks mismatch")
+            if (sm.ins[0], p0.ins[0], p1.ins[0]) != (pre.sm_tid, pre.pm_rank0_tid, pre.pm_rank1_tid):
+                raise ValueError("local per-head linear input roles do not match actual node TIDs")
+            if (sm.outs[0], p0.outs[0], p1.outs[0]) != (post.sm_tid, post.pm_rank0_tid, post.pm_rank1_tid):
+                raise ValueError("local per-head linear output roles do not match actual node TIDs")
             lines += binary_middle(f"hPm{number}_0", ir.pm_graph_ref, "pmStore", pm_slice,
                                    p0i - pm_start, p0, "pmFinal", "fw_per_head_linear {x} {w}")
             lines += binary_middle(f"hPm{number}_1", ir.pm_graph_ref, "pmStore", pm_slice,
@@ -2798,6 +2871,10 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         len(family) == 3
         and family[0] == "FW_per_head_mix_precision_linear-full-producer-chunks-ordinary-two-rank"
         and family[1:] == ("per-head-linear-ordinary-two-rank",) * 2
+    ) or family == (
+        "per-head-linear-ordinary-two-rank",
+        "per-head-linear-ordinary-two-rank",
+        "rms-norm-zigzag-two-rank",
     ):
         return render_closed_linear_segment(ir, relation, segment_id)
     if (

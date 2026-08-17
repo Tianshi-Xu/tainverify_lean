@@ -3503,15 +3503,40 @@ def test_closed_segment_dispatch_is_explicit_and_fail_closed(monkeypatch):
     with pytest.raises(ValueError, match="unsupported closed segment family.*attention-ordinary-qkv-two-rank"):
         render_closed_segment(ir, relation, "segment_000007")
 
-def test_closed_chain_composer_stops_at_first_unsupported_family(monkeypatch):
+def test_closed_atomic_per_head_zigzag_rms_renderer_is_exact_single_fold(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
     monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
     root = Path(__file__).resolve().parents[2]
     ir = load_goal_ir(1, str(root))
     relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
-    with pytest.raises(ValueError, match="segment_000257.*rms-norm-zigzag-two-rank"):
+
+    source = render_closed_segment(ir, relation, "segment_000257")
+
+    assert source.count("let smFinal :=") == 1
+    assert source.count("let pmFinal :=") == 1
+    assert source.count("ClosedDepSegmentCertificate ") == 1
+    assert source.count("Ordinary2Rel.per_head_linear ") == 2
+    assert source.count("GeneratedPatterns.Zigzag2Rel.rms_norm") == 1
+    assert "smNodes := [{ rank := 0, op := \"OpName.FW_per_head_mix_precision_linear\", ins := [8376, 5598]" in source
+    assert "pmNodes := [{ rank := 0, op := \"OpName.FW_per_head_mix_precision_linear\", ins := [15838, 5598]" in source
+    assert "authority_replicated_eq_5598.Holds" in source
+    assert "authority_replicated_eq_5600.Holds" in source
+    assert "authority_replicated_eq_5604.Holds" in source
+    assert "pmFinal 5602 = pmStore 5602" in source
+    assert "metadata_region_id" not in source
+
+
+def test_closed_chain_composer_advances_past_atomic_per_head_zigzag_rms(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    with pytest.raises(ValueError) as exc:
         compose_closed_dependent_chain(ir, relation, "ClosedGoal1")
+    assert "segment_000257" not in str(exc.value)
 
 def test_closed_chain_composer_assembles_complete_path_independently_of_renderers(monkeypatch):
     anchor = SimpleNamespace(
