@@ -4208,6 +4208,26 @@ def test_closed_chain_composer_advances_past_atomic_per_head_zigzag_rms(monkeypa
     assert "segment_000278" not in str(exc.value)
     assert "segment_000479" in str(exc.value)
 
+def test_goal3_closed_norm_full_producer_segment_is_generic_exact_single_fold(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(3, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+
+    source = render_closed_segment(ir, relation, "segment_000479")
+
+    assert source.count("let smFinal :=") == 1
+    assert source.count("let pmFinal :=") == 1
+    assert source.count("segment_000479_sm_nodes.foldl") == 1
+    assert source.count("segment_000479_pm_nodes.foldl") == 1
+    assert "GeneratedPatterns.Zigzag2Rel.norm_linear_fullProducer_chunks" in source
+    assert "hProducer1.trans hProducer0.symm" in source
+    assert "hDecodedCu" in source
+    assert "Goal_3" not in source
+    assert "6218" in source and "[64, 1024]" in source
+
 def test_closed_chain_composer_assembles_complete_path_independently_of_renderers(monkeypatch):
     anchor = SimpleNamespace(
         fact_id="anchor_fact", kind="tensor_shape", side="sm", tid=7, shape=(1,)
