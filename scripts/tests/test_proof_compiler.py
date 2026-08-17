@@ -4393,54 +4393,73 @@ def test_external_initial_state_renderer_fails_closed_on_unsupported_orientation
         render_closed_external_initial_state(ir, _synthetic_external_chain((unknown,)), "SyntheticClosed")
 
 
-def test_public_theorem_renderer_requires_explicit_joined_equality_and_handles_two_public_shards():
-    anchor = SimpleNamespace(fact_id="shape_sm", kind="tensor_shape", side="sm", tid=10, shape=(4,))
-    source = render_closed_public_theorem(
-        _synthetic_external_ir(), _synthetic_external_chain((anchor,)),
-        "SyntheticClosed", "final_joined_output_eq",
-    )
-    assert "theorem prove_goal_17_closed : Synthetic.Graphs.goal_17_stmt_full" in source
-    assert "final_joined_output_eq initSM initPM htarget" in source
-    assert "reconstructWithDim_cons_cons_nonscalar" in source
-    assert "reconstructWithDim_singleton" not in source
-    assert "Pattern_17" not in source and "Goal_17" not in source
-
-
-def test_public_theorem_renderer_uses_singleton_reconstruction_only_for_singleton_public_lineage():
+def test_public_theorem_renderer_consumes_kernel_joined_target_for_singleton_public_lineage():
     ir = _synthetic_external_ir(tps=((0, 901),))
     ir.lineage.tsShape = [4, 4]
     ir.lineage.tpShapes = [[4, 4]]
     target = SimpleNamespace(
-        fact_id="terminal_relation", kind="ordinary", sm_tid=900,
-        pm_rank0_tid=901, pm_rank1_tid=999,
-        full_shape=(4, 4), shard_shape=(4, 4),
+        fact_id="terminal_relation", kind="joined_ordinary", sm_tid=900,
+        pm_rank0_tid=910, pm_rank1_tid=911, joined_pm_tid=901,
+        full_shape=(4, 4), shard_shape=(2, 4),
     )
-    anchor = SimpleNamespace(fact_id="shape_sm", kind="tensor_shape", side="sm", tid=10, shape=(4,))
+    anchor = SimpleNamespace(
+        fact_id="shape_sm", kind="tensor_shape", side="sm", tid=10, shape=(4,)
+    )
     source = render_closed_public_theorem(
-        ir, _synthetic_external_chain((anchor,), target),
-        "SyntheticClosed", "final_singleton_eq",
+        ir, _synthetic_external_chain((anchor,), target), "SyntheticClosed"
     )
+    assert "theorem prove_goal_17_closed : Synthetic.Graphs.goal_17_stmt_full" in source
+    assert "exact htarget.public_value" in source
     assert "reconstructWithDim_singleton" in source
     assert "reconstructWithDim_cons_cons_nonscalar" not in source
-    assert "final_singleton_eq initSM initPM htarget" in source
+    assert "[(4, 4)]" not in source
+    assert "= [[4, 4]]" in source
+    assert "Pattern_17" not in source and "Goal_17" not in source
 
 
-def test_public_theorem_renderer_rejects_non_public_two_shard_target_and_missing_equality():
-    ir = _synthetic_external_ir()
-    anchor = SimpleNamespace(fact_id="shape_sm", kind="tensor_shape", side="sm", tid=10, shape=(4,))
-    wrong = SimpleNamespace(
+def test_public_theorem_renderer_accepts_joined_indexed_stack_target():
+    ir = _synthetic_external_ir(tps=((0, 901),))
+    ir.lineage.tsShape = [24, 4, 4]
+    ir.lineage.tpShapes = [[24, 4, 4]]
+    target = SimpleNamespace(
+        fact_id="terminal_relation", kind="joined_indexed_stack_dim1", sm_tid=900,
+        pm_rank0_tid=910, pm_rank1_tid=911, joined_pm_tid=901,
+        full_shape=(24, 4, 4), shard_shape=(24, 2, 4),
+    )
+    anchor = SimpleNamespace(
+        fact_id="shape_sm", kind="tensor_shape", side="sm", tid=10, shape=(4,)
+    )
+    source = render_closed_public_theorem(
+        ir, _synthetic_external_chain((anchor,), target), "SyntheticClosed"
+    )
+    assert "exact htarget.public_value" in source
+    assert "= [[24, 4, 4]]" in source
+
+
+def test_public_theorem_renderer_rejects_unjoined_or_nonpublic_target():
+    ir = _synthetic_external_ir(tps=((0, 901),))
+    ir.lineage.tsShape = [4, 4]
+    ir.lineage.tpShapes = [[4, 4]]
+    anchor = SimpleNamespace(
+        fact_id="shape_sm", kind="tensor_shape", side="sm", tid=10, shape=(4,)
+    )
+    unjoined = SimpleNamespace(
         fact_id="terminal_relation", kind="ordinary", sm_tid=900,
         pm_rank0_tid=901, pm_rank1_tid=999,
-        full_shape=(8, 4), shard_shape=(4, 4),
+        full_shape=(4, 4), shard_shape=(2, 4),
     )
-    with pytest.raises(ValueError, match="does not match public lineage"):
+    with pytest.raises(ValueError, match="joined terminal fact"):
         render_closed_public_theorem(
-            ir, _synthetic_external_chain((anchor,), wrong),
-            "SyntheticClosed", "final_joined_output_eq",
+            ir, _synthetic_external_chain((anchor,), unjoined), "SyntheticClosed"
         )
-    with pytest.raises(ValueError, match="explicit final joined equality"):
+    wrong = SimpleNamespace(
+        fact_id="terminal_relation", kind="joined_ordinary", sm_tid=900,
+        pm_rank0_tid=910, pm_rank1_tid=911, joined_pm_tid=999,
+        full_shape=(4, 4), shard_shape=(2, 4),
+    )
+    with pytest.raises(ValueError, match="singleton public lineage"):
         render_closed_public_theorem(
-            ir, _synthetic_external_chain((anchor,)), "SyntheticClosed", ""
+            ir, _synthetic_external_chain((anchor,), wrong), "SyntheticClosed"
         )
 
 

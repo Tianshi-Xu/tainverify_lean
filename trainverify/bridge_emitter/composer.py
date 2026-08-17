@@ -4853,15 +4853,9 @@ def render_closed_public_theorem(
     ir: GoalIR,
     relation,
     namespace: str,
-    final_joined_equality: str,
 ) -> str:
-    """Render the public theorem around an explicit, separately proved final join."""
+    """Render the exact public theorem from one kernel-proved joined target."""
     _validate_closed_namespace(namespace)
-    if not re.fullmatch(
-        r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)*",
-        final_joined_equality,
-    ):
-        raise ValueError("public theorem requires an explicit final joined equality")
     chain = relation.dependent_chain_plan
     if chain is None or not chain.complete:
         raise ValueError("public theorem requires a complete closed chain")
@@ -4869,68 +4863,58 @@ def render_closed_public_theorem(
         fact for fact in chain.relation_facts
         if fact.fact_id == chain.terminal_target_fact_id
     ]
-    if len(targets) != 1 or targets[0].kind != "ordinary":
-        raise ValueError("public theorem requires one terminal ordinary shape fact")
+    if len(targets) != 1 or targets[0].kind not in {
+        "joined_ordinary", "joined_indexed_stack_dim1",
+    }:
+        raise ValueError("public theorem requires one joined terminal fact")
     target = targets[0]
     lineage_tids = [int(piece[1]) for piece in ir.lineage.tps]
-    if ir.lineage.replicated or len(lineage_tids) not in {1, 2}:
-        raise ValueError("public theorem supports non-replicated singleton or two-piece lineage")
-    expected_target_tids = [target.pm_rank0_tid]
-    if len(lineage_tids) == 2:
-        expected_target_tids.append(target.pm_rank1_tid)
+    if ir.lineage.replicated or lineage_tids != [target.joined_pm_tid]:
+        raise ValueError("joined terminal output does not match singleton public lineage")
     if (
         target.sm_tid != int(ir.lineage.ts)
-        or expected_target_tids != lineage_tids
         or tuple(target.full_shape) != tuple(ir.lineage.tsShape)
-        or any(tuple(shape) != tuple(target.shard_shape) for shape in ir.lineage.tpShapes)
-        or (len(lineage_tids) == 2 and ir.pm_num_ranks != 2)
+        or [list(target.full_shape)] != ir.lineage.tpShapes
     ):
-        raise ValueError("terminal ordinary shape fact does not match public lineage")
+        raise ValueError("joined terminal shape does not match public lineage")
 
     external = render_closed_external_initial_state(ir, relation, namespace)
-    common_args, call_args, contract_names = _external_contract_arguments(ir)
-    del common_args
+    _, call_args, contract_names = _external_contract_arguments(ir)
     graph_ns = ir.sm_graph_ref.rsplit(".", 1)[0]
     goal = f"{graph_ns}.goal_{ir.n}"
     chain_name = f"{namespace}_chain"
-    lines = [external.rstrip(), "", f"theorem prove_goal_{ir.n}_closed : {graph_ns}.goal_{ir.n}_stmt_full := by",
-             f"  unfold {graph_ns}.goal_{ir.n}_stmt_full",
-             "  unfold CoarseLineageHoldsWithInitDistributedFaithfulWithContract",
-             "  intro initSM initPM hSM hPM hInit hContract",
-             f"  rcases hContract with ⟨{', '.join(contract_names)}⟩",
-             f"  have hpre := {namespace}_initial_state {call_args}",
-             "  have htarget := faithful_closed_dep_chain_extract",
-             f"    {ir.sm_graph_ref} {ir.pm_graph_ref} {chain_name}",
-             "    initSM initPM hpre",
-             f"    {chain_name}_sm_nodes {chain_name}_pm_nodes",
-             f"    {target.fact_id} (by native_decide)",
-             f"  unfold {target.fact_id} RelationFact.Holds at htarget",
-             "  refine ⟨htarget.full_shape, ?_, ?_⟩"]
     pm_store = f"denoteGraphDistributedFaithful {ir.pm_graph_ref} initPM"
-    if len(lineage_tids) == 1:
-        lines.extend([
-            f"  · change [({pm_store} {lineage_tids[0]}).shape] = [{_lean_shape_tuple(target.shard_shape)}]",
-            "    rw [htarget.rank0_shape]",
-            f"  · rw [reconstructForGoal_of_not_replicated {goal} {ir.pm_graph_ref}.numRanks _ rfl]",
-            "    rw [reconstructWithDim_singleton]",
-            f"    exact {final_joined_equality} initSM initPM htarget",
-        ])
-    else:
-        lines.extend([
-            (
-                f"  · change [({pm_store} {lineage_tids[0]}).shape, "
-                f"({pm_store} {lineage_tids[1]}).shape] = "
-                f"[{_lean_shape_tuple(target.shard_shape)}, "
-                f"{_lean_shape_tuple(target.shard_shape)}]"
-            ),
-            "    rw [htarget.rank0_shape, htarget.rank1_shape]",
-            f"  · rw [reconstructForGoal_of_not_replicated {goal} {ir.pm_graph_ref}.numRanks _ rfl]",
-            (f"    rw [reconstructWithDim_cons_cons_nonscalar {ir.lineage.gatherDim} "
-             f"{ir.pm_graph_ref}.numRanks 0 _ _ []"),
-            "      (by rw [htarget.rank0_shape]; native_decide)]",
-            f"    exact {final_joined_equality} initSM initPM htarget",
-        ])
+    joined_tid = target.joined_pm_tid
+    lines = [
+        external.rstrip(),
+        "",
+        f"theorem prove_goal_{ir.n}_closed : {graph_ns}.goal_{ir.n}_stmt_full := by",
+        f"  unfold {graph_ns}.goal_{ir.n}_stmt_full",
+        "  unfold CoarseLineageHoldsWithInitDistributedFaithfulWithContract",
+        "  intro initSM initPM hSM hPM hInit hContract",
+        f"  rcases hContract with ⟨{', '.join(contract_names)}⟩",
+        f"  have hpre := {namespace}_initial_state {call_args}",
+        "  have htarget := faithful_closed_dep_chain_extract",
+        f"    {ir.sm_graph_ref} {ir.pm_graph_ref} {chain_name}",
+        "    initSM initPM hpre",
+        f"    {chain_name}_sm_nodes {chain_name}_pm_nodes",
+        f"    {target.fact_id} (by native_decide)",
+        f"  unfold {target.fact_id} RelationFact.Holds at htarget",
+        "  refine ⟨htarget.full_shape, ?_, ?_⟩",
+        (
+            f"  · change [({pm_store} {joined_tid}).shape] = "
+            f"[{_lean_shape_tuple(target.full_shape)}]"
+        ),
+        "    rw [← htarget.public_value, htarget.full_shape]",
+        (
+            f"  · rw [reconstructForGoal_of_not_replicated {goal} "
+            f"{ir.pm_graph_ref}.numRanks _ rfl]"
+        ),
+        "    rw [reconstructWithDim_singleton]",
+        "    exact htarget.public_value",
+    ]
     return "\n".join(lines) + "\n"
+
 
 def compose_closed_dependent_chain(
     ir: GoalIR, relation, namespace: str
