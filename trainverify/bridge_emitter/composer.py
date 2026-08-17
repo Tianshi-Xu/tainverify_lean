@@ -2032,6 +2032,327 @@ def render_closed_unary_segment(ir: GoalIR, relation, segment_id: str) -> str:
     return "\n".join(lines)
 
 
+def render_closed_full_producer_to_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Render one atomic zigzag full-producer plus ordinary FW_to component."""
+    from .relation_compiler import FrontierToCertificate, FullProducerChunkCertificate
+
+    chain = relation.dependent_chain_plan
+    if chain is None or not chain.complete:
+        raise ValueError("full-producer/to renderer requires a complete closed chain")
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if segment is None:
+        raise ValueError(f"unknown full-producer/to segment: {segment_id}")
+    transition_by_id = {item.transition_id: item for item in relation.transition_specs}
+    transitions = [transition_by_id[item] for item in segment.transition_ids]
+    full_transitions = [item for item in transitions if item.rule_id ==
+        "FW_per_head_mix_precision_linear-full-producer-chunks-zigzag-two-rank"]
+    to_transitions = [item for item in transitions if item.rule_id == "to-ordinary-two-rank"]
+    if len(full_transitions) != 1 or not to_transitions or len(transitions) != 1 + len(to_transitions):
+        raise ValueError("component is not one zigzag full-producer plus ordinary FW_to transitions")
+    if full_transitions[0].lean_theorem != (
+        "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.per_head_linear_fullProducer_chunks"
+    ) or any(item.lean_theorem != "TrainVerify.Denote.fw_to_allGather0_commute_2"
+             for item in to_transitions):
+        raise ValueError("full-producer/to theorem family mismatch")
+
+    records = {item.source: item for item in chain.relation_facts}
+    states = {item.state_id: item for item in chain.states}
+    before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    authority = {item.fact_id: item for item in chain.authority_facts}
+    live_authority = [authority[item] for item in before.fact_ids if item in authority]
+    sm_nodes = ir.sm_nodes[slice(*segment.sm_range)]
+    pm_nodes = ir.pm_nodes[slice(*segment.pm_range)]
+    sm_start, pm_start = segment.sm_range[0], segment.pm_range[0]
+    if len(sm_nodes) != segment.sm_range[1] - segment.sm_range[0] or \
+            len(pm_nodes) != segment.pm_range[1] - segment.pm_range[0]:
+        raise ValueError("full-producer/to node slice is incomplete")
+    sm_name = f"{segment.segment_id}_sm_nodes"
+    pm_name = f"{segment.segment_id}_pm_nodes"
+    sm_text = ", ".join(_node_text(item) for item in sm_nodes)
+    pm_text = ", ".join(_node_text(item) for item in pm_nodes)
+
+    def unique_authority(kind: str, predicate, label: str):
+        matches = [item for item in live_authority if item.kind == kind and predicate(item)]
+        if len(matches) != 1:
+            raise ValueError(f"full-producer/to lacks unique live {label}")
+        return matches[0]
+
+    def exact_certificate(transition, cls):
+        if len(transition.post_facts) != 1:
+            raise ValueError("full-producer/to transition must have one post fact")
+        post = records[transition.post_facts[0]]
+        matches = [item for item in relation.certificates
+                   if type(item) is cls and item.output_step_triple == post.source.step_triple]
+        if len(matches) != 1:
+            raise ValueError("full-producer/to transition lacks one exact certificate")
+        return matches[0]
+
+    writer_helpers: list[str] = []
+
+    def unary_writer(name: str, side: str, absolute: int, node: Node, input_tid: int,
+                     output_tid: int) -> list[str]:
+        if side == "sm":
+            graph, store, final, nodes_name, local = (
+                ir.sm_graph_ref, "smStore", "smFinal", "smNodes", absolute - sm_start)
+        elif side == "pm":
+            graph, store, final, nodes_name, local = (
+                ir.pm_graph_ref, "pmStore", "pmFinal", "pmNodes", absolute - pm_start)
+        else:
+            raise ValueError(f"unknown FW_to side: {side}")
+        expr = f'(evalOp 2 0 "OpName.FW_to" [] [{store} {input_tid}]).headD (zeroTensor [])'
+        helper_name = f"{segment.segment_id}_{name}"
+        exact_nodes_name = sm_name if side == "sm" else pm_name
+        writer_helpers.extend([
+            f"private theorem {helper_name} ({store} : Store) :",
+            f"    (({exact_nodes_name}.foldl (applyNodeDistributedFaithful {graph}) {store}) {output_tid}) = {expr} := by",
+            f"  let {nodes_name} : List NodeDecl := {exact_nodes_name}",
+            f"  change ({nodes_name}.foldl (applyNodeDistributedFaithful {graph}) {store}) {output_tid} = _",
+            f"  rw [show {nodes_name} = {nodes_name}.take {local} ++ [{_node_text(node)}] ++ {nodes_name}.drop {local + 1} by native_decide]",
+            f"  exact foldl_faithful_unary_middle_writer {graph} {store}",
+            f"    ({nodes_name}.take {local}) ({nodes_name}.drop {local + 1}) {_node_text(node)}",
+            f"    {input_tid} {output_tid} (fun x => (evalOp 2 0 \"OpName.FW_to\" [] [x]).headD (zeroTensor [])) (by",
+            "      intro t",
+            "      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "        (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]",
+            "      simp [applyNodeDistributed, applyNodeRingAttn]",
+            f"      rw [applyNode_fw_to_out {graph} t {node.rank} {input_tid} {output_tid} [], evalOp_fw_to]",
+            "      rfl) (by native_decide) (by native_decide) (by native_decide) (by native_decide)",
+            "",
+        ])
+        return [
+            f"    have {name} : {final} {output_tid} = {expr} := by",
+            f"      simpa [{final}, {nodes_name}] using ({helper_name} {store})",
+        ]
+
+    full_transition = full_transitions[0]
+    if len(full_transition.pre_facts) != 1 or len(full_transition.post_facts) != 1:
+        raise ValueError("full-producer transition must have one pre/post fact")
+    full_pre = records[full_transition.pre_facts[0]]
+    full_post = records[full_transition.post_facts[0]]
+    if full_pre.kind != "zigzag" or full_post.kind != "zigzag" or full_pre.metadata_tid is None or \
+            (full_pre.metadata_tid, full_pre.metadata_region_id) != \
+            (full_post.metadata_tid, full_post.metadata_region_id):
+        raise ValueError("full-producer zigzag metadata provenance mismatch")
+    full_cert = exact_certificate(full_transition, FullProducerChunkCertificate)
+    if full_cert.relation_kind != "zigzag" or full_cert.pre_layout != "zigzag" or \
+            full_cert.post_layout != "zigzag":
+        raise ValueError("full-producer certificate is not zigzag")
+    if len(full_transition.sm_node_indices) != 1 or len(full_transition.pm_node_indices) != 4:
+        raise ValueError("full-producer footprint is not one SM plus gather/producer/chunks")
+    sm_index = full_transition.sm_node_indices[0]
+    sm_node = ir.sm_nodes[sm_index]
+    gather_node, producer_node, chunk0_node, chunk1_node = (
+        ir.pm_nodes[item] for item in full_transition.pm_node_indices)
+    if sm_node.op != "FW_per_head_mix_precision_linear" or len(sm_node.ins) != 2 or \
+            len(sm_node.outs) != 1 or sm_node.params:
+        raise ValueError("full-producer SM signature mismatch")
+    weight_tid = sm_node.ins[1]
+    if full_cert.replicated_weight_binding != f"init:{weight_tid}" or \
+            full_cert.weight_init_lineage_rank_tids != ((0, weight_tid),):
+        raise ValueError("full-producer exact weight lineage mismatch")
+    if (sm_node.ins[0], sm_node.outs[0]) != (full_pre.sm_tid, full_post.sm_tid):
+        raise ValueError("full-producer SM roles do not match exact relation TIDs")
+    if gather_node.op != "AllGatherPrim" or gather_node.params != [0] or \
+            gather_node.rank != 0 or gather_node.ins != [full_pre.pm_rank0_tid, full_pre.pm_rank1_tid]:
+        raise ValueError("full-producer gather roles/signature mismatch")
+    if producer_node.op != sm_node.op or producer_node.ins != [gather_node.outs[0], weight_tid] or \
+            producer_node.outs != sm_node.outs or producer_node.params:
+        raise ValueError("full-producer PM producer mismatch")
+    if (chunk0_node.op, chunk1_node.op, chunk0_node.rank, chunk1_node.rank,
+            chunk0_node.params, chunk1_node.params) != (
+            "ChunkPrim", "ChunkPrim", 0, 1, [0], [0]):
+        raise ValueError("full-producer chunks are not ordered dim-0 rank chunks")
+    if chunk0_node.ins != producer_node.outs or chunk1_node.ins != producer_node.outs or \
+            (chunk0_node.outs[0], chunk1_node.outs[0]) != \
+            (full_post.pm_rank0_tid, full_post.pm_rank1_tid):
+        raise ValueError("full-producer chunk roles do not match exact post TIDs")
+    if len(full_pre.full_shape) != 2 or len(full_pre.shard_shape) != 2 or \
+            len(full_post.full_shape) != 3 or len(full_post.shard_shape) != 3:
+        raise ValueError("full-producer shape ranks mismatch")
+    ldim, k = full_pre.shard_shape
+    hdim, ddim = full_post.shard_shape[1:]
+    if full_pre.full_shape != (2 * ldim, k) or full_post.full_shape != (2 * ldim, hdim, ddim) or \
+            full_post.shard_shape != (ldim, hdim, ddim):
+        raise ValueError("full-producer exact shapes mismatch")
+    weight_shape = (hdim, ddim, k)
+    weight_eq = unique_authority(
+        "tensor_eq", lambda item: (item.left_side, item.left_tid, item.right_side, item.right_tid)
+        == ("sm", weight_tid, "pm", weight_tid), f"weight equality {weight_tid}")
+    weight_shape_fact = unique_authority(
+        "tensor_shape", lambda item: (item.side, item.tid, item.shape)
+        == ("pm", weight_tid, weight_shape), f"weight shape {weight_tid}")
+    metadata_eq = unique_authority(
+        "tensor_eq", lambda item: item.left_side == "pm" and item.left_tid == full_pre.metadata_tid
+        and item.right_side == "pm", f"metadata equality {full_pre.metadata_tid}")
+    packed = unique_authority(
+        "packed_cu", lambda item: item.side == "pm" and item.tid == metadata_eq.right_tid
+        and item.total_tokens == full_pre.full_shape[0] and item.num_ranks == 2,
+        f"packed metadata {full_pre.metadata_tid}")
+    required = {full_pre.fact_id, weight_eq.fact_id, weight_shape_fact.fact_id,
+                metadata_eq.fact_id, packed.fact_id}
+    if not required <= set(before.fact_ids):
+        raise ValueError("full-producer exact relation/weight/packed authority is not live")
+
+    to_rows = []
+    for number, transition in enumerate(to_transitions, 1):
+        if len(transition.pre_facts) != 1 or len(transition.post_facts) != 1 or \
+                len(transition.sm_node_indices) != 1 or len(transition.pm_node_indices) != 2:
+            raise ValueError("FW_to transition footprint/facts mismatch")
+        cert = exact_certificate(transition, FrontierToCertificate)
+        pre = records[transition.pre_facts[0]]
+        post = records[transition.post_facts[0]]
+        if cert.relation_kind != "ordinary" or pre.kind != "ordinary" or post.kind != "ordinary" or \
+                (pre.full_shape, pre.shard_shape) != (post.full_shape, post.shard_shape) or \
+                cert.input_shape != pre.full_shape or cert.output_shape != post.full_shape:
+            raise ValueError("FW_to exact relation/shape mismatch")
+        smi = transition.sm_node_indices[0]
+        pmi0, pmi1 = transition.pm_node_indices
+        sm, pm0, pm1 = ir.sm_nodes[smi], ir.pm_nodes[pmi0], ir.pm_nodes[pmi1]
+        if any(item.op != "FW_to" or len(item.ins) != 1 or len(item.outs) != 1 or item.params
+               for item in (sm, pm0, pm1)) or (sm.rank, pm0.rank, pm1.rank) != (0, 0, 1):
+            raise ValueError("FW_to exact node signatures/ranks mismatch")
+        if (sm.ins[0], pm0.ins[0], pm1.ins[0]) != \
+                (pre.sm_tid, pre.pm_rank0_tid, pre.pm_rank1_tid):
+            raise ValueError("FW_to input roles do not match exact node TIDs")
+        if (sm.outs[0], pm0.outs[0], pm1.outs[0]) != \
+                (post.sm_tid, post.pm_rank0_tid, post.pm_rank1_tid):
+            raise ValueError("FW_to output roles do not match exact node TIDs")
+        if pre.fact_id not in before.fact_ids:
+            raise ValueError("FW_to exact input fact is not live")
+        to_rows.append((number, transition, pre, post, smi, pmi0, pmi1, sm, pm0, pm1))
+
+    fresh = [full_post] + [row[3] for row in to_rows]
+    if len({item.fact_id for item in fresh}) != len(fresh):
+        raise ValueError("full-producer/to has duplicate post facts")
+    if not set(after.fact_ids) <= (set(before.fact_ids) | {item.fact_id for item in fresh}):
+        raise ValueError("full-producer/to post-state introduces unproved facts")
+
+    lines = [
+        f"private def {sm_name} : List NodeDecl := [{sm_text}]",
+        f"private def {pm_name} : List NodeDecl := [{pm_text}]", "",
+        f"private def {segment.segment_id} :",
+        f"    ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
+        f"  smNodes := {sm_name}", f"  pmNodes := {pm_name}", "  sound := by",
+        "    intro smStore pmStore hstate", f"    let smNodes : List NodeDecl := {sm_name}",
+        f"    let pmNodes : List NodeDecl := {pm_name}",
+        f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore",
+        f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
+        f"    have hFullIn : {full_pre.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    have hWeightEq : {weight_eq.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    have hWeightShape : {weight_shape_fact.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    have hMetadataEq : pmFinal {full_pre.metadata_tid} = pmFinal {metadata_eq.right_tid} := by",
+        f"      simpa [{metadata_eq.fact_id}, RelationFact.Holds, StoreSide.read] using (hframe _ (by native_decide : {metadata_eq.fact_id} ∈ {before.state_id}.facts))",
+        f"    have hPacked : ZigzagCollective.PackedCuSeqlensWF (pmFinal {metadata_eq.right_tid}) {packed.total_tokens} 2 := by",
+        f"      simpa [{packed.fact_id}, RelationFact.Holds, StoreSide.read] using (hframe _ (by native_decide : {packed.fact_id} ∈ {before.state_id}.facts))",
+        f"    have hDecoded : decodeCuSeqlens (pmFinal {full_pre.metadata_tid}) = [0, {packed.total_tokens}] := by",
+        "      rw [hMetadataEq]", "      exact hPacked.decoded_single",
+    ]
+
+    sm_pos = sm_index - sm_start
+    lines += [
+        f"    have hFullSm : smFinal {sm_node.outs[0]} = fw_per_head_linear (smStore {sm_node.ins[0]}) (smStore {weight_tid}) := by",
+        f"      change (smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore) {sm_node.outs[0]} = _",
+        f"      rw [show smNodes = smNodes.take {sm_pos} ++ [{_node_text(sm_node)}] ++ smNodes.drop {sm_pos + 1} by native_decide]",
+        f"      exact foldl_faithful_binary_middle_writer {ir.sm_graph_ref} smStore",
+        f"        (smNodes.take {sm_pos}) (smNodes.drop {sm_pos + 1}) {_node_text(sm_node)}",
+        f"        {sm_node.ins[0]} {weight_tid} {sm_node.outs[0]} (fun x w => fw_per_head_linear x w) (by",
+        "          intro t", "          rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+        "            (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]",
+        "          simp [applyNodeDistributed, applyNodeRingAttn]",
+        f"          exact applyNode_fw_per_head_mix_precision_linear_out {ir.sm_graph_ref} t {sm_node.rank} {sm_node.ins[0]} {weight_tid} {sm_node.outs[0]} [])",
+        "        (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)",
+    ]
+    gather_pos, producer_pos, chunk0_pos, chunk1_pos = (
+        item - pm_start for item in full_transition.pm_node_indices)
+    lines += [
+        f"    let pmBeforeProducer := (pmNodes.take {producer_pos}).foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
+        f"    have hGather : pmBeforeProducer {gather_node.outs[0]} = allGatherPrimDimN 0 2 0 [pmStore {gather_node.ins[0]}, pmStore {gather_node.ins[1]}] := by",
+        "      change ((pmNodes.take " + str(producer_pos) + f").foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) {gather_node.outs[0]} = _",
+        f"      rw [show pmNodes.take {producer_pos} = (pmNodes.take {producer_pos}).take {gather_pos} ++ [{_node_text(gather_node)}] ++ (pmNodes.take {producer_pos}).drop {gather_pos + 1} by native_decide]",
+        f"      exact foldl_faithful_binary_middle_writer {ir.pm_graph_ref} pmStore",
+        f"        ((pmNodes.take {producer_pos}).take {gather_pos}) ((pmNodes.take {producer_pos}).drop {gather_pos + 1}) {_node_text(gather_node)}",
+        f"        {gather_node.ins[0]} {gather_node.ins[1]} {gather_node.outs[0]} (fun x y => allGatherPrimDimN 0 2 0 [x, y]) (by",
+        "          intro t", "          rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+        "            (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]",
+        "          simp [applyNodeDistributed, applyNodeRingAttn]",
+        f"          rw [applyNode_allGatherPrimDimN_out {ir.pm_graph_ref} t 0 [{gather_node.ins[0]}, {gather_node.ins[1]}] {gather_node.outs[0]} 0]",
+        f"          rw [show {ir.pm_graph_ref}.numRanks = 2 by rfl]", "          rfl)",
+        "        (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by native_decide)",
+        f"    have hWeightBefore : pmBeforeProducer {weight_tid} = pmStore {weight_tid} := by",
+        f"      exact foldl_applyNodeDistributedFaithful_at_not_written {ir.pm_graph_ref} (pmNodes.take {producer_pos}) pmStore {weight_tid} (by native_decide) (by native_decide)",
+    ]
+    for rank, (chunk_node, chunk_pos) in enumerate(((chunk0_node, chunk0_pos), (chunk1_node, chunk1_pos))):
+        lines += [
+            f"    let pmBeforeChunk{rank} := (pmNodes.take {chunk_pos}).foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
+            f"    have hProducer{rank} : pmBeforeChunk{rank} {producer_node.outs[0]} = fw_per_head_linear (allGatherPrimDimN 0 2 0 [pmStore {gather_node.ins[0]}, pmStore {gather_node.ins[1]}]) (pmStore {weight_tid}) := by",
+            f"      rw [show pmBeforeChunk{rank} {producer_node.outs[0]} = fw_per_head_linear (pmBeforeProducer {producer_node.ins[0]}) (pmBeforeProducer {producer_node.ins[1]}) by",
+            f"        change ((pmNodes.take {chunk_pos}).foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) {producer_node.outs[0]} = _",
+            f"        rw [show pmNodes.take {chunk_pos} = pmNodes.take {producer_pos} ++ [{_node_text(producer_node)}] ++ (pmNodes.take {chunk_pos}).drop {producer_pos + 1} by native_decide]",
+            f"        exact foldl_faithful_binary_writer {ir.pm_graph_ref} pmStore (pmNodes.take {producer_pos}) ((pmNodes.take {chunk_pos}).drop {producer_pos + 1}) {_node_text(producer_node)}",
+            f"          {producer_node.ins[0]} {producer_node.ins[1]} {producer_node.outs[0]} (fun x w => fw_per_head_linear x w) (by",
+            "            intro t", "            rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "              (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]",
+            "            simp [applyNodeDistributed, applyNodeRingAttn]",
+            f"            exact applyNode_fw_per_head_mix_precision_linear_out {ir.pm_graph_ref} t {producer_node.rank} {producer_node.ins[0]} {weight_tid} {producer_node.outs[0]} [])",
+            "          (by native_decide) (by native_decide)]", "      rw [hGather, hWeightBefore]",
+            f"    have hChunk{rank} : pmFinal {chunk_node.outs[0]} = chunkPrimDimN 0 2 {rank} (pmBeforeChunk{rank} {producer_node.outs[0]}) := by",
+            f"      change (pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) {chunk_node.outs[0]} = _",
+            f"      rw [show pmNodes = pmNodes.take {chunk_pos} ++ [{_node_text(chunk_node)}] ++ pmNodes.drop {chunk_pos + 1} by native_decide]",
+            f"      exact foldl_faithful_chunk_writer {ir.pm_graph_ref} pmStore (pmNodes.take {chunk_pos}) (pmNodes.drop {chunk_pos + 1}) {rank}",
+            f"        {producer_node.outs[0]} {chunk_node.outs[0]} 0 rfl (by native_decide) (by native_decide)",
+        ]
+    lines += [
+        f"    have hMetadataFinal : pmFinal {full_pre.metadata_tid} = pmStore {full_pre.metadata_tid} := by",
+        f"      exact foldl_applyNodeDistributedFaithful_at_not_written {ir.pm_graph_ref} pmNodes pmStore {full_pre.metadata_tid} (by native_decide) (by native_decide)",
+        f"    have hout0 : {full_post.fact_id}.Holds smFinal pmFinal := by",
+        f"      change GeneratedPatterns.Zigzag2Rel (smFinal {full_post.sm_tid}) (pmFinal {full_post.pm_rank0_tid}) (pmFinal {full_post.pm_rank1_tid}) (pmFinal {full_post.metadata_tid}) {_shape_text(list(full_post.full_shape))} {_shape_text(list(full_post.shard_shape))}",
+        f"      change GeneratedPatterns.Zigzag2Rel (smStore {full_pre.sm_tid}) (pmStore {full_pre.pm_rank0_tid}) (pmStore {full_pre.pm_rank1_tid}) (pmStore {full_pre.metadata_tid}) {_shape_text(list(full_pre.full_shape))} {_shape_text(list(full_pre.shard_shape))} at hFullIn",
+        f"      change smStore {weight_tid} = pmStore {weight_tid} at hWeightEq",
+        f"      change (pmStore {weight_tid}).shape = {_shape_text(list(weight_shape))} at hWeightShape",
+        "      rw [hMetadataFinal]",
+        f"      exact GeneratedPatterns.Zigzag2Rel.per_head_linear_fullProducer_chunks {ldim} {k} {hdim} {ddim}",
+        "        hFullIn hWeightShape hWeightEq hFullSm hGather hProducer0 hChunk0",
+        f"        (calc pmFinal {chunk1_node.outs[0]} = chunkPrimDimN 0 2 1 (pmBeforeChunk1 {producer_node.outs[0]}) := hChunk1",
+        f"          _ = chunkPrimDimN 0 2 1 (pmBeforeChunk0 {producer_node.outs[0]}) := congrArg (chunkPrimDimN 0 2 1) (hProducer1.trans hProducer0.symm))",
+        "        (by decide) (by decide) (by decide) (by decide)",
+    ]
+
+    for number, transition, pre, post, smi, pmi0, pmi1, sm, pm0, pm1 in to_rows:
+        lines += [f"    have hToIn{number} : {pre.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)"]
+        lines += unary_writer(f"hToSm{number}", "sm", smi, sm, sm.ins[0], sm.outs[0])
+        lines += unary_writer(f"hToPm{number}_0", "pm", pmi0, pm0, pm0.ins[0], pm0.outs[0])
+        lines += unary_writer(f"hToPm{number}_1", "pm", pmi1, pm1, pm1.ins[0], pm1.outs[0])
+        full_shape, shard_shape = _shape_text(list(post.full_shape)), _shape_text(list(post.shard_shape))
+        lines += [
+            f"    have hout{number} : {post.fact_id}.Holds smFinal pmFinal := by",
+            f"      change GeneratedPatterns.Ordinary2Rel (smFinal {post.sm_tid}) (pmFinal {post.pm_rank0_tid}) (pmFinal {post.pm_rank1_tid}) {full_shape} {shard_shape}",
+            f"      change GeneratedPatterns.Ordinary2Rel (smStore {pre.sm_tid}) (pmStore {pre.pm_rank0_tid}) (pmStore {pre.pm_rank1_tid}) {full_shape} {shard_shape} at hToIn{number}",
+            f"      rw [hToSm{number}, hToPm{number}_0, hToPm{number}_1]",
+            "      refine ⟨?_, ?_, ?_, ?_⟩",
+            f"      · rw [hToIn{number}.full_value]",
+            f"        exact fw_to_allGather0_commute_2 2 0 [] (pmStore {pre.pm_rank0_tid}) (pmStore {pre.pm_rank1_tid})",
+            f"      · simpa only [evalOp_fw_to, List.headD_cons] using hToIn{number}.full_shape",
+            f"      · simpa only [evalOp_fw_to, List.headD_cons] using hToIn{number}.rank0_shape",
+            f"      · simpa only [evalOp_fw_to, List.headD_cons] using hToIn{number}.rank1_shape",
+        ]
+    fresh_ids = [item.fact_id for item in fresh]
+    lines += [
+        "    intro fact hfact",
+        f"    have covered : fact ∈ [{', '.join(fresh_ids)}] ++ {before.state_id}.facts := by",
+        f"      exact (show {after.state_id}.facts ⊆ [{', '.join(fresh_ids)}] ++ {before.state_id}.facts by native_decide) hfact",
+        "    simp only [List.mem_append] at covered", "    rcases covered with fresh | old",
+        "    · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh",
+        "      rcases fresh with " + " | ".join("rfl" for _ in fresh),
+    ]
+    lines += [f"      · exact hout{index}" for index in range(len(fresh))]
+    lines += ["    · exact hframe fact old", ""]
+    lines = lines[:3] + writer_helpers + lines[3:]
+    return "\n".join(lines)
+
+
 def render_closed_linear_segment(ir: GoalIR, relation, segment_id: str) -> str:
     from .relation_compiler import (
         FrontierLinearCertificate,
@@ -2877,6 +3198,12 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         "rms-norm-zigzag-two-rank",
     ):
         return render_closed_linear_segment(ir, relation, segment_id)
+    if (
+        len(family) > 1
+        and family[0] == "FW_per_head_mix_precision_linear-full-producer-chunks-zigzag-two-rank"
+        and all(item == "to-ordinary-two-rank" for item in family[1:])
+    ):
+        return render_closed_full_producer_to_segment(ir, relation, segment_id)
     if (
         len(family) == 16
         and family[0] in (

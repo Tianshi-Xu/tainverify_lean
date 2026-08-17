@@ -18,6 +18,7 @@ from trainverify.bridge_emitter.composer import (
     render_closed_attention_segment,
     render_closed_binary_segment,
     render_closed_float_segment,
+    render_closed_full_producer_to_segment,
     render_closed_initial_component,
     render_closed_linear_segment,
     render_closed_mixed_moe_segment,
@@ -3226,6 +3227,50 @@ def test_closed_linear_renderer_preserves_zigzag_metadata(monkeypatch):
     assert "Zigzag2Rel.mix_precision_linear" in source
     assert "5602" in source
     assert "Ordinary2Rel.mix_precision_linear" not in source
+
+
+def test_closed_full_producer_to_renderer_is_atomic_generic_and_single_fold(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    segment = relation.dependent_chain_plan.segments[259]
+
+    source = render_closed_full_producer_to_segment(ir, relation, segment.segment_id)
+
+    assert segment.sm_range == (480, 505) and segment.pm_range == (1060, 1113)
+    assert len(segment.transition_ids) == 25
+    assert "GeneratedPatterns.Zigzag2Rel.per_head_linear_fullProducer_chunks" in source
+    assert source.count("fw_to_allGather0_commute_2") == 24
+    assert source.count("let smFinal :=") == 1
+    assert source.count("let pmFinal :=") == 1
+    assert f"private def {segment.segment_id}_sm_nodes" in source
+    assert f"private def {segment.segment_id}_pm_nodes" in source
+    assert "smNodes.take" in source and "pmNodes.take" in source
+    assert render_closed_segment(ir, relation, segment.segment_id) == source
+
+
+def test_closed_full_producer_to_renderer_recovers_to_roles_from_node_tids(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    segment = relation.dependent_chain_plan.segments[259]
+    transition_id = segment.transition_ids[1]
+    reordered = tuple(
+        replace(item, pre_facts=tuple(reversed(item.pre_facts)))
+        if item.transition_id == transition_id else item
+        for item in relation.transition_specs
+    )
+
+    baseline = render_closed_full_producer_to_segment(ir, relation, segment.segment_id)
+    assert render_closed_full_producer_to_segment(
+        ir, replace(relation, transition_specs=reordered), segment.segment_id
+    ) == baseline
 
 
 def test_identity_view_rules_use_identity_relation_theorem(monkeypatch):
