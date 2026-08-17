@@ -37,6 +37,16 @@ def _step_map(plan: ProofPlan) -> dict[str, CertificateStep]:
 
 
 @dataclass(frozen=True)
+class TransitionAuthorityRequirement:
+    kind: str
+    sides: tuple[str, ...]
+    tids: tuple[int, ...]
+    shape: tuple[int, ...] = ()
+    length: int | None = None
+    upper_bound: int | None = None
+
+
+@dataclass(frozen=True)
 class InnerChunkCEGatherCertificate:
     rule_id: str
     lean_theorem: str
@@ -44,6 +54,12 @@ class InnerChunkCEGatherCertificate:
     output_projection: str
     full_rows: int
     shard_rows: int
+    input_step_triple: tuple[str, str, str]
+    weight_binding: str
+    label_binding: str
+    weight_shape: tuple[int, ...]
+    label_shape: tuple[int, ...]
+    label_bound: int | None
     sm_ce_step: str
     pm_ce_steps: tuple[str, str]
     pm_gather_step: str
@@ -95,18 +111,43 @@ def match_inner_chunk_ce_projection_gather_two_rank(
         raise RelationCompositionError("CE signature is not ternary")
     if any(step.input_tids[1] != sm_ce.input_tids[1] for step in pm_ce):
         raise RelationCompositionError("CE weight is not shared across SM and PM")
-    input_step_triple = (
-        sm_ce.input_bindings[0], pm_ce[0].input_bindings[0], pm_ce[1].input_bindings[0]
+    weight_binding = sm_ce.input_bindings[1]
+    label_binding = sm_ce.input_bindings[2]
+    if not weight_binding.startswith("init:") or any(
+        step.input_bindings[1] != weight_binding for step in pm_ce
+    ):
+        raise RelationCompositionError("CE weight lacks one shared external InitGoal binding")
+    if not label_binding.startswith("init:"):
+        raise RelationCompositionError("CE full labels lack an external InitGoal binding")
+    weight_tid = int(weight_binding.split(":", 1)[1])
+    label_tid = int(label_binding.split(":", 1)[1])
+    weight_lineage = ir.init_lineages.get(weight_tid)
+    label_lineage = ir.init_lineages.get(label_tid)
+    if weight_lineage is None or tuple(weight_lineage.tps) != ((0, weight_tid),):
+        raise RelationCompositionError("CE weight lacks singleton InitGoal authority")
+    if label_lineage is None or tuple(label_lineage.tps) != ((0, label_tid),):
+        raise RelationCompositionError("CE labels lack singleton InitGoal authority")
+    weight_shape = tuple(weight_lineage.tsShape)
+    label_shape = tuple(label_lineage.tsShape)
+    if tuple(sm_ce.input_shapes[1]) != weight_shape or tuple(sm_ce.input_shapes[2]) != label_shape:
+        raise RelationCompositionError("CE weight/label shapes disagree with InitGoal authority")
+    input_step_triple = tuple(
+        _dependency_for_input(step, step.input_tids[0], by_id)
+        for step in (sm_ce, *pm_ce)
     )
     if any(binding.startswith("init:") for binding in input_step_triple):
         raise RelationCompositionError("CE activation input relation is not produced")
+
     if len(ir.lineage.tsShape) != 1:
         raise RelationCompositionError("CE output lineage is not rank-1")
     full_rows = int(ir.lineage.tsShape[0])
     if full_rows <= 0 or full_rows % 2:
         raise RelationCompositionError("CE output rows do not split equally across two ranks")
     if projection == ".fst":
-        theorem = "TrainVerify.Denote.fw_inner_chunk_ce_fst_allGather0_commute_2_of"
+        theorem = (
+            "TrainVerify.Denote.GeneratedPatterns."
+            "fw_inner_chunk_ce_fst_allGather0_commute_2_of"
+        )
         label_theorem = None
     else:
         theorem = "TrainVerify.Denote.fw_inner_chunk_ce_snd_allGatherDim0_shards"
@@ -114,6 +155,18 @@ def match_inner_chunk_ce_projection_gather_two_rank(
             "TrainVerify.Denote.RelationCompiler."
             "inner_chunk_ce_snd_labels_independent"
         )
+    bound_contracts = [
+        fact for fact in ir.tensor_value_bound_contracts
+        if (fact.side, fact.tid, fact.length) == ("pm", label_tid, full_rows)
+    ]
+    if projection == ".fst":
+        if len(bound_contracts) != 1 or bound_contracts[0].upper_bound != weight_shape[0]:
+            raise RelationCompositionError(
+                "CE .fst labels lack the exact public value-bound contract"
+            )
+        label_bound = bound_contracts[0].upper_bound
+    else:
+        label_bound = None
     return InnerChunkCEGatherCertificate(
         rule_id="inner-chunk-ce-projection-gather-two-rank",
         lean_theorem=theorem,
@@ -121,10 +174,15 @@ def match_inner_chunk_ce_projection_gather_two_rank(
         output_projection=projection,
         full_rows=full_rows,
         shard_rows=full_rows // 2,
+        input_step_triple=input_step_triple,
+        weight_binding=weight_binding,
+        label_binding=label_binding,
+        weight_shape=weight_shape,
+        label_shape=label_shape,
+        label_bound=label_bound,
         sm_ce_step=sm_ce.step_id,
         pm_ce_steps=(pm_ce[0].step_id, pm_ce[1].step_id),
         pm_gather_step=pm_gather.step_id,
-        input_step_triple=input_step_triple,
     )
 
 
@@ -2984,6 +3042,7 @@ class RelationPlan:
     schema_version: int = 6
     graph_coverage_complete: bool = False
     composer_registered: bool = False
+    publication_diagnostics: tuple[str, ...] = ()
 
     @property
     def complete(self) -> bool:
@@ -2992,6 +3051,7 @@ class RelationPlan:
             and not self.unresolved_side_conditions
             and self.graph_coverage_complete
             and self.composer_registered
+            and not self.publication_diagnostics
         )
 
 
@@ -3206,6 +3266,16 @@ class ClosedPackedCuFactRecord:
 
 
 @dataclass(frozen=True)
+class ClosedLabelBoundFactRecord:
+    fact_id: str
+    side: str
+    tid: int
+    length: int
+    upper_bound: int
+    kind: str = "label_bound"
+
+
+@dataclass(frozen=True)
 class ClosedRelationStateRecord:
     state_id: str
     fact_ids: tuple[str, ...]
@@ -3227,7 +3297,8 @@ class ClosedDependentChainPlan:
     relation_facts: tuple[ClosedRelationFactRecord, ...]
     authority_facts: tuple[
         ClosedTensorEqFactRecord | ClosedTensorShapeFactRecord |
-        ClosedGatherFactRecord | ClosedPackedCuFactRecord, ...
+        ClosedGatherFactRecord | ClosedPackedCuFactRecord |
+        ClosedLabelBoundFactRecord, ...
     ]
     anchor_fact: ClosedTensorShapeFactRecord
     states: tuple[ClosedRelationStateRecord, ...]
@@ -3315,6 +3386,49 @@ def build_closed_dependent_chain_plan(
                 )
         authority_keys.add(key)
         authority_facts.append(item)
+
+    for transition in relation.transition_specs:
+        for requirement in transition.authority_requirements:
+            if requirement.kind == "tensor_eq":
+                if len(requirement.sides) != 2 or len(requirement.tids) != 2:
+                    raise RelationCompositionError("tensor_eq authority requirement is malformed")
+                left_side, right_side = requirement.sides
+                left_tid, right_tid = requirement.tids
+                item = ClosedTensorEqFactRecord(
+                    fact_id=(f"authority_transition_eq_{left_side}_{left_tid}_"
+                             f"{right_side}_{right_tid}"),
+                    left_side=left_side, left_tid=left_tid,
+                    right_side=right_side, right_tid=right_tid,
+                )
+                key = ("tensor_eq", left_side, left_tid, right_side, right_tid)
+                side_tids = ((left_side, left_tid), (right_side, right_tid))
+            elif requirement.kind == "tensor_shape":
+                if len(requirement.sides) != 1 or len(requirement.tids) != 1 or not requirement.shape:
+                    raise RelationCompositionError("tensor_shape authority requirement is malformed")
+                side, tid = requirement.sides[0], requirement.tids[0]
+                item = ClosedTensorShapeFactRecord(
+                    fact_id=f"authority_transition_shape_{side}_{tid}",
+                    side=side, tid=tid, shape=requirement.shape, init_goal_id=tid,
+                )
+                key = ("tensor_shape", side, tid, requirement.shape)
+                side_tids = ((side, tid),)
+            elif requirement.kind == "label_bound":
+                if (len(requirement.sides) != 1 or len(requirement.tids) != 1
+                        or requirement.length is None or requirement.upper_bound is None):
+                    raise RelationCompositionError("label_bound authority requirement is malformed")
+                side, tid = requirement.sides[0], requirement.tids[0]
+                item = ClosedLabelBoundFactRecord(
+                    fact_id=f"authority_label_bound_{side}_{tid}",
+                    side=side, tid=tid, length=requirement.length,
+                    upper_bound=requirement.upper_bound,
+                )
+                key = ("label_bound", side, tid, requirement.length, requirement.upper_bound)
+                side_tids = ((side, tid),)
+            else:
+                raise RelationCompositionError(
+                    f"unknown transition authority requirement {requirement.kind!r}"
+                )
+            add_authority(item, key, side_tids)
 
     facts_by_region = {}
     for fact in facts:
@@ -3581,6 +3695,8 @@ def build_closed_dependent_chain_plan(
         elif fact.kind == "gather":
             side_tids = (("sm", fact.sm_tid), ("pm", fact.pm_rank0_tid),
                          ("pm", fact.pm_rank1_tid))
+        elif fact.kind == "label_bound":
+            side_tids = ((fact.side, fact.tid),)
         else:
             side_tids = ()
         uses = []
@@ -3687,6 +3803,7 @@ class CertificateTransitionSpec:
     sm_node_indices: tuple[int, ...]
     pm_node_indices: tuple[int, ...]
     lean_theorem: str
+    authority_requirements: tuple[TransitionAuthorityRequirement, ...] = ()
 
 
 def _fact(layout: str, refs: tuple[str, ...]) -> RelationFactSpec:
@@ -3766,6 +3883,7 @@ def build_certificate_transition_specs(
         pre: tuple[RelationFactSpec, ...]
         post: tuple[RelationFactSpec, ...]
         footprint_groups: tuple[tuple[str, ...], ...]
+        authority_requirements: tuple[TransitionAuthorityRequirement, ...] = ()
         if type(cert) in (MultirefAliasCertificate, FrontierIdentityViewCertificate,
                 FrontierLinearCertificate, FrontierRMSNormCertificate,
                 FrontierFloatCertificate, FrontierFlatten3DCertificate,
@@ -3829,8 +3947,28 @@ def build_certificate_transition_specs(
             post_refs = (cert.sm_ce_step, *tuple(cert.pm_ce_steps))
             pre = (_fact("ordinary", cert.input_step_triple),)
             post = (_fact("ordinary", post_refs),)
+            weight_tid = int(cert.weight_binding.split(":", 1)[1])
+            label_tid = int(cert.label_binding.split(":", 1)[1])
+            authority_requirements = (
+                TransitionAuthorityRequirement("tensor_eq", ("sm", "pm"), (weight_tid, weight_tid)),
+                TransitionAuthorityRequirement("tensor_shape", ("pm",), (weight_tid,), cert.weight_shape),
+            )
+            if cert.output_projection == ".fst":
+                authority_requirements += (
+                    TransitionAuthorityRequirement("tensor_eq", ("sm", "pm"), (label_tid, label_tid)),
+                    TransitionAuthorityRequirement("tensor_shape", ("pm",), (label_tid,), cert.label_shape),
+                    TransitionAuthorityRequirement(
+                        "label_bound", ("pm",), (label_tid,),
+                        length=cert.full_rows, upper_bound=cert.label_bound,
+                    ),
+                )
+            elif cert.label_independence_theorem is None:
+                raise RelationCompositionError("CE .snd transition lacks its label-independence adapter")
             footprint_groups = ((cert.sm_ce_step,), tuple(cert.pm_ce_steps), (cert.pm_gather_step,))
         elif type(cert) is IndexedStackGatherCertificate:
+            # This internal fact supports dependency/coverage analysis only.  The
+            # RelationPlan carries a mandatory publication diagnostic below: the
+            # dim-1 stack theorem is not an Ordinary2Rel constructor.
             pre = tuple(_fact("ordinary", refs) for refs in cert.layer_step_triples)
             post_refs = (cert.sm_stack_step, *tuple(cert.pm_stack_steps))
             post = (_fact("ordinary", post_refs),)
@@ -3862,6 +4000,7 @@ def build_certificate_transition_specs(
             sm_node_indices=sm_nodes,
             pm_node_indices=pm_nodes,
             lean_theorem=lean_theorem,
+            authority_requirements=authority_requirements,
         ))
     return tuple(transitions)
 
@@ -3909,6 +4048,8 @@ class TransitionDependencyPlan:
 
 def build_transition_dependency_plan(
     transitions: tuple[CertificateTransitionSpec, ...],
+    *,
+    external_pre_facts: frozenset[RelationFactSpec] = frozenset(),
 ) -> TransitionDependencyPlan:
     """Reverse the backward frontier certificates into a deterministic DAG."""
 
@@ -3933,6 +4074,8 @@ def build_transition_dependency_plan(
         for fact in item.pre_facts:
             producer = producers.get(fact)
             if producer is None:
+                if fact in external_pre_facts:
+                    continue
                 raise RelationCompositionError(
                     f"relation pre-fact has no producer: {item.transition_id} {fact}"
                 )
@@ -4573,6 +4716,11 @@ def compile_relation_plan(
             coverage_plan=coverage_plan,
             dependency_plan=dependency_plan,
             atomic_schedule=atomic_schedule,
+            publication_diagnostics=(
+                ("indexed-stack-dim1 cannot publish Ordinary2Rel: a distinct closed relation "
+                "kind must record full/shard shapes plus gather dimension 1 and an indexed "
+                "per-layer reconstruction witness"),
+            ),
         )
         if unresolved_frontiers or unresolved_layouts or unresolved_side_conditions:
             return base_plan
@@ -4633,7 +4781,12 @@ def compile_relation_plan(
     certificate_tuple = tuple(compiled_certificates)
     transition_specs = build_certificate_transition_specs(proof, certificate_tuple)
     coverage_plan = build_exact_node_coverage_plan(ir, transition_specs)
-    dependency_plan = build_transition_dependency_plan(transition_specs)
+    external_pre_facts = frozenset({
+        _fact("ordinary", terminal_ce.input_step_triple),
+    })
+    dependency_plan = build_transition_dependency_plan(
+        transition_specs, external_pre_facts=external_pre_facts
+    )
     atomic_schedule = build_atomic_schedule(ir, transition_specs)
     base_plan = RelationPlan(
         family="ce-projection-gather",

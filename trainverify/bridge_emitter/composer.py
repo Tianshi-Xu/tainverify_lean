@@ -535,6 +535,11 @@ def render_closed_relation_declarations(chain, namespace: str) -> str:
                 f".packedCu .{fact.side} {fact.tid} "
                 f"{fact.total_tokens} {fact.num_ranks}"
             )
+        elif fact.kind == "label_bound":
+            constructor = (
+                f".labelBound .{fact.side} {fact.tid} "
+                f"{fact.length} {fact.upper_bound}"
+            )
         else:
             raise ValueError(f"unsupported closed authority fact: {fact.kind}")
         lines.extend([

@@ -745,6 +745,7 @@ inductive RelationFact where
   | tensorEq (leftSide : StoreSide) (leftTid : Tid) (rightSide : StoreSide) (rightTid : Tid)
   | tensorShape (side : StoreSide) (tid : Tid) (shape : Shape)
   | packedCu (side : StoreSide) (tid : Tid) (totalTokens numRanks : Nat)
+  | labelBound (side : StoreSide) (tid : Tid) (length upperBound : Nat)
   deriving Repr, DecidableEq
 
 def RelationFact.Holds (fact : RelationFact) (sm pm : Store) : Prop :=
@@ -765,6 +766,8 @@ def RelationFact.Holds (fact : RelationFact) (sm pm : Store) : Prop :=
       (side.read sm pm tid).shape = shape
   | .packedCu side tid totalTokens numRanks =>
       ZigzagCollective.PackedCuSeqlensWF (side.read sm pm tid) totalTokens numRanks
+  | .labelBound side tid length upperBound =>
+      ∀ index < length, scalarToNat (valAt (side.read sm pm tid) index) < upperBound
 
 structure RelationState where
   facts : List RelationFact
@@ -973,6 +976,7 @@ def smTids : RelationFact → List Tid
       (if rightSide = .sm then [rightTid] else [])
   | .tensorShape side tid _ => if side = .sm then [tid] else []
   | .packedCu side tid _ _ => if side = .sm then [tid] else []
+  | .labelBound side tid _ _ => if side = .sm then [tid] else []
 
 def pmTids : RelationFact → List Tid
   | .ordinary _ pm0 pm1 _ _ => [pm0, pm1]
@@ -983,6 +987,7 @@ def pmTids : RelationFact → List Tid
       (if rightSide = .pm then [rightTid] else [])
   | .tensorShape side tid _ => if side = .pm then [tid] else []
   | .packedCu side tid _ _ => if side = .pm then [tid] else []
+  | .labelBound side tid _ _ => if side = .pm then [tid] else []
 
 theorem Holds.frame {fact : RelationFact} {sm pm sm' pm' : Store}
     (h : fact.Holds sm pm)
@@ -997,6 +1002,7 @@ theorem Holds.frame {fact : RelationFact} {sm pm sm' pm' : Store}
   · rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
     exact h
   · split <;> split <;> simp_all
+  · split <;> simp_all
   · split <;> simp_all
   · split <;> simp_all
 

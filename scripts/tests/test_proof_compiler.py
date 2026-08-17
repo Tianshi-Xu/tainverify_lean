@@ -868,9 +868,41 @@ def test_real_loss_goals_share_generic_ce_projection_gather_terminal(monkeypatch
     assert [item.output_projection for item in certificates] == [".fst", ".snd"]
     assert all(item.rule_id == "inner-chunk-ce-projection-gather-two-rank" for item in certificates)
     assert all((item.full_rows, item.shard_rows) == (4096, 2048) for item in certificates)
-    assert "fst_allGather0" in certificates[0].lean_theorem
+    assert certificates[0].lean_theorem == (
+        "TrainVerify.Denote.GeneratedPatterns."
+        "fw_inner_chunk_ce_fst_allGather0_commute_2_of"
+    )
     assert "snd_allGatherDim0" in certificates[1].lean_theorem
-    assert certificates[1].label_independence_theorem is not None
+    assert certificates[1].label_independence_theorem == (
+        "TrainVerify.Denote.RelationCompiler."
+        "inner_chunk_ce_snd_labels_independent"
+    )
+    assert all(item.input_step_triple for item in certificates)
+    assert all(item.weight_binding == "init:6256" for item in certificates)
+    assert all(item.label_binding == "init:4931" for item in certificates)
+
+
+def test_ce_terminal_transition_requires_input_and_public_authority(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    registry = build_default_registry()
+
+    requirements = []
+    for goal_id in (1, 2):
+        ir = load_goal_ir(goal_id, str(root))
+        proof = compile_proof_plan(ir, registry)
+        certificate = match_inner_chunk_ce_projection_gather_two_rank(ir, proof)
+        transition = build_certificate_transition_specs(proof, (certificate,))[0]
+        assert transition.pre_facts == (
+            RelationFactSpec("ordinary", certificate.input_step_triple),
+        )
+        assert transition.post_facts
+        requirements.append({item.kind for item in transition.authority_requirements})
+
+    assert requirements[0] == {"tensor_eq", "tensor_shape", "label_bound"}
+    assert requirements[1] == {"tensor_eq", "tensor_shape"}
 
 
 def test_ce_projection_gather_terminal_rejects_mixed_projection(monkeypatch):
@@ -2814,6 +2846,25 @@ def test_indexed_terminal_chunks_use_layout_typed_full_producer_certificates(mon
         cert = mixed[layer.input_step_triple]
         assert cert.result_relation_theorem.endswith("Zigzag2Rel.norm_linear_fullProducer_chunks")
         assert cert.pre_layout == cert.post_layout == "zigzag"
+
+
+
+def test_indexed_stack_terminal_refuses_false_ordinary_dim0_publication(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(3, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+
+    assert relation.complete is False
+    assert relation.composer_registered is False
+    assert relation.publication_diagnostics == (
+        ("indexed-stack-dim1 cannot publish Ordinary2Rel: a distinct closed relation "
+        "kind must record full/shard shapes plus gather dimension 1 and an indexed "
+        "per-layer reconstruction witness"),
+    )
 
 
 def test_transition_dependency_plan_is_forward_unique_and_cycle_free(monkeypatch):

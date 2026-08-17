@@ -9,11 +9,14 @@ Usage:
     python3 parser.py <N> [--root <repo_root>]
 prints a JSON-ish dump of the parsed IR + topology for goal N.
 """
-import re, sys, os
+import os
+import re
+import sys
 from dataclasses import dataclass, field
-from typing import Optional
+
 sys.path.insert(0, os.path.dirname(__file__))
-from target_config import DENOTE_DIR as _RELDIR, GEN_FILE
+from target_config import DENOTE_DIR as _RELDIR
+from target_config import GEN_FILE
 
 DENOTE_DIR = "trainverify/" + _RELDIR  # keep backward-compat absolute form
 
@@ -21,6 +24,7 @@ DENOTE_DIR = "trainverify/" + _RELDIR  # keep backward-compat absolute form
 # while gpt_ly4 keeps it in denote/gpt_ly4_regen/). BRIDGE_GEN_DIR (optional env var)
 # overrides the directory; default is DENOTE_DIR.
 import os as _os
+
 GEN_DIR = _os.environ.get("BRIDGE_GEN_DIR", "trainverify/" + _RELDIR)
 
 # ---------- data classes ----------
@@ -30,7 +34,7 @@ class Node:
     op: str                       # e.g. "FW_gelu", "AllToAllPrim"
     ins: list                     # list[int]
     outs: list                    # list[int]
-    params: Optional[list] = None # list[int] or None
+    params: list | None = None # list[int] or None
 
 @dataclass
 class LineageGoal:
@@ -38,7 +42,7 @@ class LineageGoal:
     tsShape: list
     tps: list            # list[(rank, tid)]
     tpShapes: list
-    gatherDim: Optional[int] = None
+    gatherDim: int | None = None
     replicated: bool = False
 
 @dataclass(frozen=True)
@@ -69,6 +73,14 @@ class PackedCuContract:
     num_ranks: int
 
 
+@dataclass(frozen=True)
+class TensorValueBoundContract:
+    side: str
+    tid: int
+    length: int
+    upper_bound: int
+
+
 @dataclass
 class GoalIR:
     n: int
@@ -86,6 +98,7 @@ class GoalIR:
     sm_replica_groups: tuple[ReplicaGroup, ...] = ()
     pm_replica_groups: tuple[ReplicaGroup, ...] = ()
     packed_cu_contracts: tuple[PackedCuContract, ...] = ()
+    tensor_value_bound_contracts: tuple[TensorValueBoundContract, ...] = ()
     sm_input_value_classes: tuple[InputValueClass, ...] = ()
     pm_input_value_classes: tuple[InputValueClass, ...] = ()
     init_lineages: dict[int, LineageGoal] = field(default_factory=dict)
@@ -277,9 +290,9 @@ def parse_nodes(block: str):
 def extract_def_block(text: str, def_name: str) -> str:
     """Grab the body of `def <def_name> ... := by exact [ ... ]` or `:= [...]`."""
     # find "def <name>" then capture until the next top-level "def " or EOF
-    m = re.search(rf'def\s+{re.escape(def_name)}\b.*?(?=\ndef\s)', text, re.S)
+    m = re.search(rf'def\s+{re.escape(def_name)}\b.*?(?=\ndef\s)', text, re.DOTALL)
     if not m:
-        m = re.search(rf'def\s+{re.escape(def_name)}\b.*\Z', text, re.S)
+        m = re.search(rf'def\s+{re.escape(def_name)}\b.*\Z', text, re.DOTALL)
     return m.group(0) if m else ""
 
 def parse_shapes(block: str):
@@ -314,7 +327,7 @@ def parse_lineage_block(blk: str, name: str) -> LineageGoal:
     tpsh_m = re.search(
         r'tpShapes\s*:=\s*\[(.*?)\]\s*(?:,\s*gatherDim|,\s*replicated|\})',
         blk,
-        re.S,
+        re.DOTALL,
     )
     tpShapes = []
     if tpsh_m:
@@ -351,7 +364,7 @@ def parse_full_init_goal_ids(goal_text: str, gen_text: str, n: int) -> tuple[int
     return tuple(int(value) for value in re.findall(r"initGoal_(\d+)", source))
 
 def parse_prereqs(goal_text: str, n: int):
-    m = re.search(rf'def\s+goal_{n}_prereqs\s*:\s*List LineageGoal\s*:=\s*\[(.*?)\]', goal_text, re.S)
+    m = re.search(rf'def\s+goal_{n}_prereqs\s*:\s*List LineageGoal\s*:=\s*\[(.*?)\]', goal_text, re.DOTALL)
     if not m:
         return []
     # Match both `goal_5` (gpt_ly4 convention) and `intermediateGoal_5930` (yoco
@@ -369,7 +382,11 @@ def _public_full_scope(n: int, goal_path: str, goal_text: str, gen_text: str) ->
         if not filename.endswith(".lean"):
             continue
         path = os.path.join(goal_dir, filename)
-        text = goal_text if path == goal_path else open(path).read()
+        if path == goal_path:
+            text = goal_text
+        else:
+            with open(path) as handle:
+                text = handle.read()
         if re.search(rf"\bdef\s+{re.escape(statement_name)}\s*:", text):
             candidates.append((path, text))
     if len(candidates) != 1:
@@ -498,11 +515,41 @@ def parse_packed_cu_contracts(statement_text: str, *sources: str) -> tuple[Packe
     return tuple(facts)
 
 
+def parse_tensor_value_bound_contracts(
+    statement_text: str, *sources: str
+) -> tuple[TensorValueBoundContract, ...]:
+    """Extract public `scalarToNat (valAt ...) < upper` contracts."""
+    match = re.search(
+        r"CoarseLineageHoldsWithInitDistributedFaithfulWithContract"
+        r"\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+([A-Za-z_][A-Za-z0-9_'.]*)",
+        statement_text,
+    )
+    contract_block = statement_text if match is None else _definition_from_sources(
+        match.group(1).split(".")[-1], *sources
+    )
+    facts = []
+    seen = set()
+    pattern = re.compile(
+        r"∀\s+([A-Za-z_][A-Za-z0-9_]*)\s*<\s*(\d+)\s*,\s*"
+        r"scalarToNat\s*\(valAt\s+\(init(SM|PM)\s+(\d+)\)\s+\1\)\s*<\s*(\d+)"
+    )
+    for fact in pattern.finditer(contract_block):
+        item = TensorValueBoundContract(
+            side=fact.group(3).lower(), tid=int(fact.group(4)),
+            length=int(fact.group(2)), upper_bound=int(fact.group(5)),
+        )
+        key = (item.side, item.tid, item.length, item.upper_bound)
+        if key not in seen:
+            facts.append(item)
+            seen.add(key)
+    return tuple(facts)
+
+
 def parse_input_value_classes(*sources: str, name: str) -> tuple[InputValueClass, ...]:
     block = _definition_from_sources(name, *sources)
     entry_re = re.compile(
         r'\{\s*source\s*:=\s*"([^"\n]+)"\s*,\s*tids\s*:=\s*\[([0-9,\s]+)\]\s*\}',
-        re.S,
+        re.DOTALL,
     )
     matches = list(entry_re.finditer(block))
     declared_count = len(re.findall(r"\bsource\s*:=", block))
@@ -523,8 +570,10 @@ def parse_input_value_classes(*sources: str, name: str) -> tuple[InputValueClass
 def load_goal_ir(n: int, root: str) -> GoalIR:
     goal_path = os.path.join(root, DENOTE_DIR, f"Goal_{n}.lean")
     gen_path = os.path.join(root, GEN_DIR, GEN_FILE)
-    goal_text = open(goal_path).read()
-    gen_text = open(gen_path).read()
+    with open(goal_path) as handle:
+        goal_text = handle.read()
+    with open(gen_path) as handle:
+        gen_text = handle.read()
 
     (
         statement_text, public_statement_module, sm_graph_ref, pm_graph_ref,
@@ -538,6 +587,7 @@ def load_goal_ir(n: int, root: str) -> GoalIR:
 
     scope_text = goal_text + "\n" + statement_text
     packed_cu_contracts = parse_packed_cu_contracts(statement_text, *sources)
+    tensor_value_bound_contracts = parse_tensor_value_bound_contracts(statement_text, *sources)
     sm_input_value_classes = parse_input_value_classes(*sources, name="smInputValueClasses")
     pm_input_value_classes = parse_input_value_classes(*sources, name="pmInputValueClasses")
     full_init_goal_ids = parse_full_init_goal_ids(scope_text, gen_text, n)
@@ -566,6 +616,7 @@ def load_goal_ir(n: int, root: str) -> GoalIR:
         sm_replica_groups=parse_replica_groups(sm_block),
         pm_replica_groups=parse_replica_groups(pm_block),
         packed_cu_contracts=packed_cu_contracts,
+        tensor_value_bound_contracts=tensor_value_bound_contracts,
         sm_input_value_classes=sm_input_value_classes,
         pm_input_value_classes=pm_input_value_classes,
         init_lineages=init_lineages,
