@@ -13,6 +13,7 @@ from trainverify.bridge_emitter.composer import (
     CompositionCode,
     compose_closed_dependent_chain,
     compose_full_topology,
+    render_closed_attention_segment,
     render_closed_binary_segment,
     render_closed_float_segment,
     render_closed_initial_component,
@@ -3376,6 +3377,9 @@ def test_ordinary_pointwise_transitions_use_closed_relation_wrappers(monkeypatch
     by_rule = {transition.rule_id: transition.lean_theorem for transition in relation.transition_specs}
     assert by_rule["sigmoid-ordinary-two-rank"] == "TrainVerify.Denote.RelationCompiler.Ordinary2Rel.sigmoid"
     assert by_rule["swiglu-ordinary-two-rank"] == "TrainVerify.Denote.RelationCompiler.Ordinary2Rel.swiglu"
+    assert by_rule["attention-ordinary-qkv-two-rank"] == (
+        "TrainVerify.Denote.GeneratedPatterns.applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair"
+    )
     assert by_rule["broadcast-mul-ordinary-two-rank"] == (
         "TrainVerify.Denote.RelationCompiler.Ordinary2Rel.mul_broadcast_col1"
     )
@@ -3404,8 +3408,12 @@ def test_closed_mixed_moe_renderer_materializes_each_exact_node_list_once(monkey
     assert "let smFold :=" not in source
     assert "let pmFold :=" not in source
     assert "at hval_" not in source
-    sm_helper = source.split("private theorem segment_000017_transition_00_sm_writer_values", 1)[1].split("private theorem", 1)[0]
-    pm_helper = source.split("private theorem segment_000017_transition_00_pm_writer_values", 1)[1].split("private theorem", 1)[0]
+    assert source.count("private theorem segment_000017_sm_writer_values") == 1
+    assert source.count("private theorem segment_000017_pm_writer_values") == 1
+    assert source.count("segment_000017_sm_nodes.foldl") == 2
+    assert source.count("segment_000017_pm_nodes.foldl") == 2
+    sm_helper = source.split("private theorem segment_000017_sm_writer_values", 1)[1].split("private theorem", 1)[0]
+    pm_helper = source.split("private theorem segment_000017_pm_writer_values", 1)[1].split("private theorem", 1)[0]
     assert "pmStore" not in sm_helper and "pmFinal" not in sm_helper
     assert "smStore" not in pm_helper and "smFinal" not in pm_helper
 
@@ -3457,7 +3465,7 @@ def test_closed_chain_composer_stops_at_first_unsupported_family(monkeypatch):
     root = Path(__file__).resolve().parents[2]
     ir = load_goal_ir(1, str(root))
     relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
-    with pytest.raises(ValueError, match="segment_000007.*attention-ordinary-qkv-two-rank"):
+    with pytest.raises(ValueError, match="segment_000255.*faithful-maybe-shuffle-ordinary-to-zigzag-two-rank"):
         compose_closed_dependent_chain(ir, relation, "ClosedGoal1")
 
 def test_closed_rotary_renderer_is_two_output_and_uses_1d_generic_theorem(monkeypatch):
@@ -3474,3 +3482,82 @@ def test_closed_rotary_renderer_is_two_output_and_uses_1d_generic_theorem(monkey
     assert "fact_000629.Holds" in source
     assert source.count("let smFinal := smNodes.foldl (applyNodeDistributedFaithful smGraph)") == 1
     assert source.count("let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful pmGraph)") == 1
+
+
+def test_closed_ordinary_attention_renderer_uses_exact_buddy_reconstruction(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    source = render_closed_attention_segment(ir, relation, "segment_000007")
+    assert "Ordinary2Rel.sliding_attention" in source
+    assert "applyNodeDistributedFaithful_sliding_attn_out" in source
+    assert "applyNode_FW_attn" not in source
+    assert source.count("let smFinal := smNodes.foldl (applyNodeDistributedFaithful") == 1
+    assert source.count("let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful") == 1
+    assert ir.sm_graph_ref in source and ir.pm_graph_ref in source
+    authority_ids = {item.fact_id for item in relation.dependent_chain_plan.authority_facts}
+    assert {"authority_replicated_eq_4947", "authority_replicated_eq_4948"} <= authority_ids
+
+
+def test_mixed_moe_roles_are_tid_driven_and_params_are_not_model_literals(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    baseline = render_closed_mixed_moe_segment(ir, relation, "segment_000017")
+    segment = next(item for item in relation.dependent_chain_plan.segments
+                   if item.segment_id == "segment_000017")
+    moe_tid = segment.transition_ids[11]
+    reordered = tuple(
+        replace(item, pre_facts=tuple(reversed(item.pre_facts))) if item.transition_id == moe_tid else item
+        for item in relation.transition_specs
+    )
+    assert render_closed_mixed_moe_segment(
+        ir, replace(relation, transition_specs=reordered), "segment_000017") == baseline
+
+    transition = next(item for item in relation.transition_specs if item.transition_id == moe_tid)
+    sm_nodes, pm_nodes = list(ir.sm_nodes), list(ir.pm_nodes)
+    for side, indices, nodes in (("sm", transition.sm_node_indices, sm_nodes),
+                                 ("pm", transition.pm_node_indices, pm_nodes)):
+        for index in indices:
+            node = nodes[index]
+            if node.op != "FW_all2all_moe_gmm":
+                continue
+            params = list(node.params)
+            params[0], params[3] = 96, 4
+            nodes[index] = replace(node, params=params)
+    perturbed = render_closed_mixed_moe_segment(
+        replace(ir, sm_nodes=sm_nodes, pm_nodes=pm_nodes), relation, "segment_000017")
+    assert "] 96 4 (((10 : Nat) : Scalar))" in perturbed
+
+
+def test_mixed_zigzag_rejects_metadata_region_alias(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    chain = relation.dependent_chain_plan
+    segment = next(item for item in chain.segments if item.segment_id == "segment_000270")
+    transitions = {item.transition_id: item for item in relation.transition_specs}
+    live_sources = {source for tid in segment.transition_ids
+                    for source in (*transitions[tid].pre_facts, *transitions[tid].post_facts)}
+    changed = False
+    records = []
+    for record in chain.relation_facts:
+        if (not changed and record.source in live_sources
+                and record.kind == "zigzag" and record.metadata_tid == 5602):
+            records.append(replace(record, metadata_region_id=record.metadata_region_id + 1))
+            changed = True
+        else:
+            records.append(record)
+    assert changed
+    bad = replace(relation, dependent_chain_plan=replace(chain, relation_facts=tuple(records)))
+    with pytest.raises(ValueError, match="one exact metadata region"):
+        render_closed_mixed_moe_segment(ir, bad, "segment_000270")

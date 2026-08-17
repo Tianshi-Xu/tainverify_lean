@@ -1,6 +1,7 @@
 """Generic relation-composition certificates derived from typed proof plans."""
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass, replace
 
 try:
@@ -579,9 +580,11 @@ def build_attention_output_unary_relations(
             if rule_id in {"float-identity", "view-2d-identity", "reshape-2d-identity"}:
                 if full_in != full_out or p0_in != p0_out or len(full_in) != 2:
                     raise RelationCompositionError(f"{rule_id} is not shape identity")
-                if expected_op != "FW_float":
-                    if tuple(steps[0].parameters) != full_out or tuple(steps[1].parameters) != p0_out or tuple(steps[2].parameters) != p1_out:
-                        raise RelationCompositionError(f"{rule_id} target shapes do not match outputs")
+                if (expected_op != "FW_float" and
+                        (tuple(steps[0].parameters) != full_out or
+                         tuple(steps[1].parameters) != p0_out or
+                         tuple(steps[2].parameters) != p1_out)):
+                    raise RelationCompositionError(f"{rule_id} target shapes do not match outputs")
             elif rule_id == "mix-precision-linear-2d":
                 if any(len(step.input_tids) != 2 for step in steps):
                     raise RelationCompositionError("mix-precision linear is not binary")
@@ -1014,7 +1017,7 @@ def expand_attention_relation_frontiers(
             else ("zigzag", "ordinary", "ordinary")
         )
         theorem = (
-            "TrainVerify.Denote.GeneratedPatterns.applyNode_FW_attn_sliding_window_reconstruction_2_of_buddy_pair"
+            "TrainVerify.Denote.GeneratedPatterns.applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair"
             if layout == "ordinary"
             else "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.attn_zigzag_sharded_kv"
         )
@@ -2437,12 +2440,12 @@ def expand_ordinary_moe_relation_frontiers(
             raise RelationCompositionError("full MoE has non-positive dimensions")
         if layout == "zigzag" and rows % 2 != 0:
             raise RelationCompositionError("zigzag full MoE local token rows are not even")
-        certificate_common = dict(
-            relation_kind=layout, output_step_triple=frontier,
-            input_step_triples=tuple(inputs), full_weight_bindings=full_weight_bindings,
-            shard_weight_bindings=((rank0_weights[0], rank0_weights[1]), (rank0_weights[2], rank0_weights[3])),
-            num_experts=num_exp, expert_split=expert_split, top_k=top_k,
-        )
+        certificate_common = {
+            "relation_kind": layout, "output_step_triple": frontier,
+            "input_step_triples": tuple(inputs), "full_weight_bindings": full_weight_bindings,
+            "shard_weight_bindings": ((rank0_weights[0], rank0_weights[1]), (rank0_weights[2], rank0_weights[3])),
+            "num_experts": num_exp, "expert_split": expert_split, "top_k": top_k,
+        }
         if layout == "zigzag":
             certificates.append(FrontierZigzagFullMoECertificate(
                 rule_id="zigzag-full-moe-expert-split-two-rank",
@@ -3475,6 +3478,17 @@ def build_closed_dependent_chain_plan(
             replicated_tids.add(weight_tid)
         elif type(certificate) is RotaryRelationCertificate:
             replicated_tids.add(certificate.replicated_cos_sin_tid)
+        elif type(certificate) is FrontierAttentionCertificate:
+            for binding in certificate.metadata_bindings:
+                if not binding.startswith("init:"):
+                    raise RelationCompositionError("attention metadata is not an external InitGoal binding")
+                tid = int(binding.split(":", 1)[1])
+                lineage = ir.init_lineages.get(tid)
+                if lineage is None or tuple(lineage.tps) != ((0, tid),):
+                    raise RelationCompositionError(
+                        f"attention metadata lacks singleton InitGoal lineage: {tid}"
+                    )
+                replicated_tids.add(tid)
     for tid in sorted(replicated_tids):
         lineage = ir.init_lineages.get(tid)
         if lineage is None or tuple(lineage.tsShape) == ():
@@ -3770,11 +3784,7 @@ def build_certificate_transition_specs(
             pre = tuple(_fact(cert.relation_kind, refs) for refs in cert.input_relation_step_triples)
             post = tuple(_fact(cert.relation_kind, refs) for refs in cert.output_step_triples)
             footprint_groups = tuple(cert.output_step_triples)
-        elif type(cert) is FrontierUnshuffleCertificate:
-            pre = (_fact(cert.pre_layout, cert.input_step_triple),)
-            post = (_fact(cert.post_layout, cert.output_step_triple),)
-            footprint_groups = (cert.output_step_triple,)
-        elif type(cert) is FaithfulShuffleCertificate:
+        elif type(cert) is FrontierUnshuffleCertificate or type(cert) is FaithfulShuffleCertificate:
             pre = (_fact(cert.pre_layout, cert.input_step_triple),)
             post = (_fact(cert.post_layout, cert.output_step_triple),)
             footprint_groups = (cert.output_step_triple,)
@@ -4079,7 +4089,7 @@ def build_atomic_schedule(
         for item in node_items[side]:
             if not stream or stream[-1] != item:
                 stream.append(item)
-        edges.update((left, right) for left, right in zip(stream, stream[1:]) if left != right)
+        edges.update((left, right) for left, right in itertools.pairwise(stream) if left != right)
         for index, item in enumerate(stream):
             if not item.startswith("frame:"):
                 continue

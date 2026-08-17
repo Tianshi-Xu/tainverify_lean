@@ -1,6 +1,7 @@
 /- Generic relation-composition lemmas used by generated proof certificates. -/
 import denote.InnerChunkCELossShard
 import denote.InnerChunkCEShard
+import denote.SlidingWindowReconstruction
 import denote.yoco_goals.ZigzagRouterRel
 import denote.yoco_goals.ZigzagMoEGmmRel
 import denote.yoco_goals.ZigzagAttentionRel
@@ -23,6 +24,26 @@ set_option maxRecDepth 100000
 open TrainVerify.Denote
 
 namespace TrainVerify.Denote.RelationCompiler
+
+/-- A faithful sliding-window attention node writes its ring-attention value at
+its first output. -/
+theorem applyNodeDistributedFaithful_sliding_attn_out
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (qTid kTid vTid cuQTid cuKVTid outTid auxTid : Tid) (params : List Nat) :
+    applyNodeDistributedFaithful g s
+      { rank := rank, op := "OpName.FW_attn_sliding_window",
+        ins := [qTid, kTid, vTid, cuQTid, cuKVTid],
+        outs := [outTid, auxTid], params := params } outTid =
+      applyNodeRingAttn_sliding_window g s
+        { rank := rank, op := "OpName.FW_attn_sliding_window",
+          ins := [qTid, kTid, vTid, cuQTid, cuKVTid],
+          outs := [outTid, auxTid], params := params } := by
+  rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
+    (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]
+  unfold applyNodeDistributed applyNodeRingAttn
+  rw [if_neg (by simp), if_neg (by simp), if_pos (by simp)]
+  unfold storeSet
+  simp [List.find?]
 
 /-- Batch the initial-store preservation proof for several reads through one
 ordered faithful prefix. Generated mixed-SCC writers instantiate the two finite
@@ -81,6 +102,83 @@ theorem Ordinary2Rel.toGather2Rel
     shard1_shape := h.rank1_shape
     nonscalar := hnonscalar
   }
+
+/-- Sliding-window buddy reconstruction packaged as an ordinary relation. -/
+theorem Ordinary2Rel.sliding_attention
+    (gSM gPM : GraphDecl) (sSM sPM : Store)
+    (nSM n0 n1 : NodeDecl)
+    (L qh kvh qDim vDim causalNat window : Nat)
+    (hq : GeneratedPatterns.Ordinary2Rel
+      (sSM (nSM.ins.getD 0 0)) (sPM (n0.ins.getD 0 0)) (sPM (n1.ins.getD 0 0))
+      [2 * L, qh, qDim] [L, qh, qDim])
+    (hk : GeneratedPatterns.Ordinary2Rel
+      (sSM (nSM.ins.getD 1 0)) (sPM (n0.ins.getD 1 0)) (sPM (n1.ins.getD 1 0))
+      [2 * L, kvh, qDim] [L, kvh, qDim])
+    (hv : GeneratedPatterns.Ordinary2Rel
+      (sSM (nSM.ins.getD 2 0)) (sPM (n0.ins.getD 2 0)) (sPM (n1.ins.getD 2 0))
+      [2 * L, kvh, vDim] [L, kvh, vDim])
+    (hcuQ : sSM (nSM.ins.getD 3 0) = sPM (n0.ins.getD 3 0))
+    (hcuK : sSM (nSM.ins.getD 4 0) = sPM (n0.ins.getD 4 0))
+    (hcuQsame : sPM (n0.ins.getD 3 0) = sPM (n1.ins.getD 3 0))
+    (hcuKsame : sPM (n0.ins.getD 4 0) = sPM (n1.ins.getD 4 0))
+    (hparamsSM : nSM.params = n0.params) (hparamsSame : n0.params = n1.params)
+    (hparams : n0.params = [qh, kvh, qDim, vDim, causalNat, window])
+    (hbuddySM : ringAttnBuddies gSM nSM = [nSM])
+    (hbuddy0 : ringAttnBuddies gPM n0 = [n0, n1])
+    (hbuddy1 : ringAttnBuddies gPM n1 = [n0, n1])
+    (hidx0 : (([n0, n1].findIdx? (fun m => m.rank = n0.rank)).getD 0) = 0)
+    (hidx1 : (([n0, n1].findIdx? (fun m => m.rank = n1.rank)).getD 0) = 1)
+    (hL : 0 < L) (hqh : 0 < qh) (hvDim : 0 < vDim) :
+    GeneratedPatterns.Ordinary2Rel
+      (applyNodeRingAttn_sliding_window gSM sSM nSM)
+      (applyNodeRingAttn_sliding_window gPM sPM n0)
+      (applyNodeRingAttn_sliding_window gPM sPM n1)
+      [2 * L, qh, vDim] [L, qh, vDim] := by
+  have hqSM : 0 < (sSM (nSM.ins.getD 0 0)).shape.length := by
+    rw [hq.full_shape]
+    simp
+  have hkSM : 0 < (sSM (nSM.ins.getD 1 0)).shape.length := by
+    rw [hk.full_shape]
+    simp
+  have hvSM : 0 < (sSM (nSM.ins.getD 2 0)).shape.length := by
+    rw [hv.full_shape]
+    simp
+  have hfull :
+      (fw_attn_varlen
+        (allGatherPrimDimN 0 2 0 [sPM (n0.ins.getD 0 0), sPM (n1.ins.getD 0 0)])
+        (allGatherPrimDimN 0 2 0 [sPM (n0.ins.getD 1 0), sPM (n1.ins.getD 1 0)])
+        (allGatherPrimDimN 0 2 0 [sPM (n0.ins.getD 2 0), sPM (n1.ins.getD 2 0)])
+        (sPM (n0.ins.getD 3 0)) (sPM (n0.ins.getD 4 0))
+        (n0.params.getD 0 1) (n0.params.getD 1 1)
+        (n0.params.getD 2 1) (n0.params.getD 3 1)
+        (decide (n0.params.getD 4 0 ≠ 0)) (n0.params.getD 5 0)).shape =
+        [2 * L, qh, vDim] := by
+    rw [fw_attn_varlen_shape _ _ _ _ _ _ _ _ _ _ _ (2 * L)]
+    · rw [hparams]
+      rfl
+    · rw [← hq.full_value, hq.full_shape]
+      rfl
+  have hrec := GeneratedPatterns.applyNodeRingAttn_sliding_window_reconstruction_2_of_buddy_pair
+    gSM gPM sSM sPM nSM n0 n1 L qh vDim hL hqh hvDim
+    hbuddySM hbuddy0 hbuddy1 hidx0 hidx1 hqSM hkSM hvSM
+    hq.full_value hk.full_value hv.full_value hcuQ hcuK hcuQsame hcuKsame
+    hparamsSM hparamsSame hfull
+  refine ⟨hrec, ?_, ?_, ?_⟩
+  · rw [applyNodeRingAttn_sliding_window_singleton
+      gSM sSM nSM hbuddySM hqSM hkSM hvSM]
+    · rw [hcuQ, hcuK, hparamsSM, hq.full_value, hk.full_value, hv.full_value]
+      exact hfull
+    · rw [hcuQ, hcuK, hparamsSM, hq.full_value, hk.full_value, hv.full_value, hfull]
+      simp
+  · rw [GeneratedPatterns.applyNodeRingAttn_sliding_window_pair_eq_chunk
+      gPM sPM n0 n0 n1 0 hbuddy0 hidx0]
+    rw [chunkPrimDimN_shape 0 2 0 _ [2 * L, qh, vDim] hfull (by omega)]
+    simp [List.set, List.getD]
+  · rw [GeneratedPatterns.applyNodeRingAttn_sliding_window_pair_eq_chunk
+      gPM sPM n1 n0 n1 1 hbuddy1 hidx1]
+    rw [← hcuQsame, ← hcuKsame, ← hparamsSame]
+    rw [chunkPrimDimN_shape 0 2 1 _ [2 * L, qh, vDim] hfull (by omega)]
+    simp [List.set, List.getD]
 
 /-- Two-output RoPE preserves ordinary dim-0 sharding with one-dimensional
 position shards. -/
