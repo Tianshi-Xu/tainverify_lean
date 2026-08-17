@@ -3510,7 +3510,7 @@ def test_closed_chain_composer_stops_at_first_unsupported_family(monkeypatch):
     root = Path(__file__).resolve().parents[2]
     ir = load_goal_ir(1, str(root))
     relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
-    with pytest.raises(ValueError, match="segment_000255.*faithful-maybe-shuffle-ordinary-to-zigzag-two-rank"):
+    with pytest.raises(ValueError, match="segment_000257.*rms-norm-zigzag-two-rank"):
         compose_closed_dependent_chain(ir, relation, "ClosedGoal1")
 
 def test_closed_chain_composer_assembles_complete_path_independently_of_renderers(monkeypatch):
