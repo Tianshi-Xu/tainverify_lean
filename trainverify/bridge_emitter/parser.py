@@ -93,6 +93,7 @@ class GoalIR:
     sm_graph_ref: str = ""
     pm_graph_ref: str = ""
     public_statement_module: str = ""
+    lineage_ref: str = ""
     sm_num_ranks: int = 1
     pm_num_ranks: int = 1
     sm_replica_groups: tuple[ReplicaGroup, ...] = ()
@@ -611,6 +612,7 @@ def load_goal_ir(n: int, root: str) -> GoalIR:
         sm_graph_ref=_qualified_definition_name(sm_graph_ref, *sources),
         pm_graph_ref=_qualified_definition_name(pm_graph_ref, *sources),
         public_statement_module=public_statement_module,
+        lineage_ref=_qualified_definition_name(f"goal_{n}", *sources),
         sm_num_ranks=parse_num_ranks(sm_block, sm_name),
         pm_num_ranks=parse_num_ranks(pm_block, pm_name),
         sm_replica_groups=parse_replica_groups(sm_block),

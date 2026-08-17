@@ -11,8 +11,10 @@ import pytest
 import trainverify.bridge_emitter.composer as composer_module
 import trainverify.bridge_emitter.emit2 as emit2_module
 import trainverify.bridge_emitter.parser as parser_module
+import trainverify.bridge_emitter.plan as plan_module
 from trainverify.bridge_emitter.composer import (
     CompositionCode,
+    compose_closed_dependent_bundle,
     compose_closed_dependent_chain,
     compose_full_topology,
     render_closed_attention_segment,
@@ -36,7 +38,10 @@ from trainverify.bridge_emitter.composer import (
     render_closed_unary_segment,
     render_closed_unshuffle_segment,
 )
-from trainverify.bridge_emitter.emit2 import _publish_composed_source
+from trainverify.bridge_emitter.emit2 import (
+    _publish_closed_bundle,
+    _publish_composed_source,
+)
 from trainverify.bridge_emitter.parser import (
     GoalIR,
     LineageGoal,
@@ -2770,6 +2775,29 @@ def test_emit2_goal5_uses_generic_composer_without_pattern_proof(tmp_path):
     assert not (root / "trainverify/denote/yoco_goals/ProbeAuto.lean").exists()
 
 
+def test_plan_closed_bundle_unsupported_is_json_and_exit1(monkeypatch, capsys):
+    fake_plan = SimpleNamespace(
+        supported=True,
+        to_dict=lambda: {"status": "complete", "diagnostics": []},
+    )
+    monkeypatch.setattr(plan_module, "load_goal_ir", lambda *_: SimpleNamespace())
+    monkeypatch.setattr(plan_module, "compile_proof_plan", lambda *_: fake_plan)
+    monkeypatch.setattr(plan_module, "build_default_registry", lambda: object())
+    monkeypatch.setattr(plan_module, "compile_relation_plan", lambda *_: object())
+    monkeypatch.setattr(
+        plan_module,
+        "compose_closed_dependent_bundle",
+        lambda *_: (_ for _ in ()).throw(ValueError("unsupported exact segment")),
+    )
+    assert plan_module.main(["1", "--closed-bundle", "--json"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "unsupported"
+    assert payload["certificate_source_complete"] is False
+    assert payload["kernel_checked"] is False
+    assert payload["proof_complete"] is False
+    assert payload["composition"]["diagnostics"][0]["code"] == "composition.unsupported"
+
+
 def test_plan_cli_runtime_failure_is_json_and_exit2():
     root = Path(__file__).resolve().parents[2]
     result = subprocess.run(
@@ -4176,6 +4204,119 @@ def test_closed_chain_composer_assembles_complete_path_independently_of_renderer
     assert "theorem SyntheticClosedChain_chain_pm_nodes : SyntheticClosedChain_chain.pmNodes = Synthetic.Graphs.pmGraph.nodes := by\n  native_decide" in source
 
 
+def test_closed_bundle_is_deterministic_bounded_public_and_acyclic(monkeypatch):
+    anchor = SimpleNamespace(
+        fact_id="anchor_fact", kind="tensor_shape", side="sm", tid=7, shape=(1,)
+    )
+    states = tuple(
+        SimpleNamespace(state_id=f"state_{index:06d}", fact_ids=("anchor_fact",))
+        for index in range(3)
+    )
+    segments = (
+        SimpleNamespace(
+            segment_id="segment_000000", pre_state_id=states[0].state_id,
+            post_state_id=states[1].state_id, transition_ids=("transition_0",),
+        ),
+        SimpleNamespace(
+            segment_id="segment_000001", pre_state_id=states[1].state_id,
+            post_state_id=states[2].state_id, transition_ids=("transition_1",),
+        ),
+    )
+    chain = SimpleNamespace(
+        complete=True, relation_facts=(), authority_facts=(), anchor_fact=anchor,
+        states=states, segments=segments, terminal_target_fact_id="terminal_fact",
+    )
+    relation = SimpleNamespace(
+        dependent_chain_plan=chain,
+        transition_specs=tuple(
+            SimpleNamespace(transition_id=f"transition_{index}", rule_id=f"synthetic-{index}")
+            for index in range(2)
+        ),
+    )
+    ir = SimpleNamespace(
+        n=17, sm_graph_ref="Synthetic.Graphs.smGraph",
+        pm_graph_ref="Synthetic.Graphs.pmGraph",
+        public_statement_module="Synthetic.Graphs",
+    )
+    rendered = {
+        "segment_000000": (
+            "private def segment_000000 :\n"
+            "    ClosedDepSegmentCertificate Synthetic.Graphs.smGraph Synthetic.Graphs.pmGraph "
+            "state_000000 state_000001 := by\n  exact syntheticCertificate\n"
+        ),
+        "segment_000001": (
+            "private noncomputable def segment_000001\n"
+            "    (smGraph pmGraph : GraphDecl) :\n"
+            "    ClosedDepSegmentCertificate smGraph pmGraph state_000001 state_000002 := by\n"
+            "  exact syntheticParameterizedCertificate smGraph pmGraph\n"
+        ),
+    }
+    monkeypatch.setattr(
+        composer_module, "render_closed_segment",
+        lambda _ir, _relation, segment_id: rendered[segment_id],
+    )
+    public_text = (
+        "theorem prove_goal_17_closed : Synthetic.Graphs.goal_17_stmt_full := by\n"
+        "  exact syntheticPublicProof\n"
+    )
+    monkeypatch.setattr(
+        composer_module, "render_closed_public_theorem",
+        lambda _ir, _relation, _namespace: public_text,
+    )
+
+    first = compose_closed_dependent_bundle(
+        ir, relation, "SyntheticClosed", "Synthetic.Bundle", max_source_bytes=2500
+    )
+    second = compose_closed_dependent_bundle(
+        ir, relation, "SyntheticClosed", "Synthetic.Bundle", max_source_bytes=2500
+    )
+
+    assert first == second
+    assert list(first) == [
+        "Facts000.lean", "States000.lean", "Segment000000.lean",
+        "Segment000001.lean", "Chain.lean", "Public.lean",
+    ]
+    assert all(len(payload) < 2500 for payload in first.values())
+    decoded = {path: payload.decode() for path, payload in first.items()}
+    assert public_text.strip() in decoded["Public.lean"]
+    assert "import Synthetic.Bundle.Chain\n" in decoded["Public.lean"]
+    assert (
+        "theorem SyntheticClosed_chain_sm_nodes : SyntheticClosed_chain.smNodes = "
+        "Synthetic.Graphs.smGraph.nodes := by\n  rfl"
+        in decoded["Chain.lean"]
+    )
+    assert (
+        "theorem SyntheticClosed_chain_pm_nodes : SyntheticClosed_chain.pmNodes = "
+        "Synthetic.Graphs.pmGraph.nodes := by\n  rfl"
+        in decoded["Chain.lean"]
+    )
+    assert "native_decide" not in decoded["Chain.lean"]
+    assert (
+        ".cons (segment_000001 Synthetic.Graphs.smGraph Synthetic.Graphs.pmGraph)"
+        in decoded["Chain.lean"]
+    )
+    assert "private def segment_000000" not in decoded["Segment000000.lean"]
+    assert "noncomputable def segment_000000" in decoded["Segment000000.lean"]
+    order = {f"Synthetic.Bundle.{Path(path).stem}": index for index, path in enumerate(first)}
+    for index, source in enumerate(decoded.values()):
+        for imported in (line[7:] for line in source.splitlines() if line.startswith("import Synthetic.Bundle.")):
+            assert order[imported] < index
+
+
+def test_closed_bundle_publisher_replaces_tree_without_stale_files(tmp_path):
+    destination = tmp_path / "Goal17Closed"
+    destination.mkdir()
+    (destination / "stale.lean").write_text("stale")
+    bundle = {"Facts000.lean": b"facts\n", "Public.lean": b"public\n"}
+
+    _publish_closed_bundle(bundle, destination)
+
+    assert sorted(path.name for path in destination.iterdir()) == ["Facts000.lean", "Public.lean"]
+    assert (destination / "Facts000.lean").read_bytes() == b"facts\n"
+    assert not list(tmp_path.glob(".Goal17Closed.staged-*"))
+    assert not list(tmp_path.glob(".Goal17Closed.previous-*"))
+
+
 def test_closed_rotary_renderer_is_two_output_and_uses_1d_generic_theorem(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
@@ -4186,10 +4327,29 @@ def test_closed_rotary_renderer_is_two_output_and_uses_1d_generic_theorem(monkey
     source = render_closed_rotary_segment(ir, relation, "segment_000006")
     assert "Ordinary2Rel.rotary_embedding_1d" in source
     assert "fw_rotary_embedding_allGather0_commute_2" not in source
-    assert "fact_000628.Holds" in source
-    assert "fact_000629.Holds" in source
-    assert source.count("let smFinal := smNodes.foldl (applyNodeDistributedFaithful smGraph)") == 1
-    assert source.count("let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful pmGraph)") == 1
+    segment = next(
+        item for item in relation.dependent_chain_plan.segments
+        if item.segment_id == "segment_000006"
+    )
+    transition_by_id = {item.transition_id: item for item in relation.transition_specs}
+    fact_by_source = {
+        item.source: item.fact_id for item in relation.dependent_chain_plan.relation_facts
+    }
+    post_fact_ids = {
+        fact_by_source[source]
+        for transition_id in segment.transition_ids
+        for source in transition_by_id[transition_id].post_facts
+    }
+    assert len(post_fact_ids) == 2
+    assert all(f"{fact_id}.Holds" in source for fact_id in post_fact_ids)
+    assert source.count(
+        f"let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref})"
+    ) == 1
+    assert source.count(
+        f"let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref})"
+    ) == 1
+    assert "applyNodeDistributedFaithful smGraph" not in source
+    assert "applyNodeDistributedFaithful pmGraph" not in source
 
 
 def test_closed_ordinary_attention_renderer_uses_exact_buddy_reconstruction(monkeypatch):
@@ -4376,6 +4536,7 @@ def _synthetic_external_ir(*, tps=((0, 901), (1, 902))):
         sm_graph_ref="Synthetic.Graphs.sm_goal_17",
         pm_graph_ref="Synthetic.Graphs.pm_goal_17",
         public_statement_module="Synthetic.Graphs",
+        lineage_ref="Synthetic.Generated.goal_17",
         sm_num_ranks=1, pm_num_ranks=2,
         sm_input_value_classes=(SimpleNamespace(source="sm-alias", tids=(10, 11)),),
         pm_input_value_classes=(SimpleNamespace(source="pm-alias", tids=(20, 21)),),
@@ -4453,7 +4614,7 @@ def test_public_theorem_renderer_consumes_kernel_joined_target_for_singleton_pub
         ir, _synthetic_external_chain((anchor,), target), "SyntheticClosed"
     )
     assert "theorem prove_goal_17_closed : Synthetic.Graphs.goal_17_stmt_full" in source
-    assert "exact htarget.public_value" in source
+    assert "using htarget.public_value" in source
     assert "reconstructWithDim_singleton" in source
     assert "reconstructWithDim_cons_cons_nonscalar" not in source
     assert "[(4, 4)]" not in source
@@ -4476,7 +4637,7 @@ def test_public_theorem_renderer_accepts_joined_indexed_stack_target():
     source = render_closed_public_theorem(
         ir, _synthetic_external_chain((anchor,), target), "SyntheticClosed"
     )
-    assert "exact htarget.public_value" in source
+    assert "using htarget.public_value" in source
     assert "= [[24, 4, 4]]" in source
 
 

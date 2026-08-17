@@ -15,7 +15,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from parser import load_goal_ir
 from proof_compiler import build_default_registry, compile_proof_plan
-from composer import compose_full_topology
+from composer import compose_closed_dependent_bundle, compose_full_topology
+from relation_compiler import compile_relation_plan
 from target_config import MOD_PREFIX
 
 
@@ -73,14 +74,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("goal", type=int)
     parser.add_argument("--root", default=os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
     parser.add_argument("--json", action="store_true", dest="as_json")
+    parser.add_argument("--closed-bundle", action="store_true")
+    parser.add_argument("--module-prefix", default=None)
     args = parser.parse_args(raw_argv)
 
     try:
         ir = load_goal_ir(args.goal, os.path.abspath(args.root))
         plan = compile_proof_plan(ir, build_default_registry())
-        composition = (
-            compose_full_topology(ir, MOD_PREFIX) if plan.supported else None
-        )
     except Exception as exc:
         payload = _error_payload("cli.runtime", f"{type(exc).__name__}: {exc}")
         if args.as_json:
@@ -89,14 +89,64 @@ def main(argv: list[str] | None = None) -> int:
             sys.stderr.write(f"ERROR cli.runtime: {payload['diagnostics'][0]['message']}\n")
         return 2
 
-    certificate_source_complete = composition is not None and composition.supported
+    bundle = None
+    bundle_diagnostic = None
+    bundle_prefix = args.module_prefix or f"{MOD_PREFIX}.Goal{args.goal}Closed"
+    if args.closed_bundle and plan.supported:
+        try:
+            relation = compile_relation_plan(ir, plan)
+            bundle = compose_closed_dependent_bundle(
+                ir, relation, f"ClosedGoal{args.goal}", bundle_prefix
+            )
+        except ValueError as exc:
+            bundle_diagnostic = f"{type(exc).__name__}: {exc}"
+        composition = None
+    else:
+        try:
+            composition = (
+                compose_full_topology(ir, MOD_PREFIX) if plan.supported else None
+            )
+        except Exception as exc:  # noqa: BLE001 - CLI runtime boundary
+            payload = _error_payload("cli.runtime", f"{type(exc).__name__}: {exc}")
+            if args.as_json:
+                sys.stdout.write(
+                    json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
+                )
+            else:
+                sys.stderr.write(
+                    f"ERROR cli.runtime: {payload['diagnostics'][0]['message']}\n"
+                )
+            return 2
+
+    certificate_source_complete = (
+        bundle is not None or (composition is not None and composition.supported)
+    )
     if args.as_json:
         payload = plan.to_dict()
         payload["planning_status"] = payload["status"]
         payload["certificate_source_complete"] = certificate_source_complete
         payload["kernel_checked"] = False
         payload["proof_complete"] = False
-        if composition is not None:
+        if bundle is not None:
+            payload["composition"] = {
+                "status": "supported",
+                "rule_id": "closed-dependent-bundle",
+                "diagnostics": [],
+                "module_prefix": bundle_prefix,
+                "paths": list(bundle),
+                "bytes": {path: len(data) for path, data in bundle.items()},
+                "render_complete": True,
+            }
+        elif bundle_diagnostic is not None:
+            payload["composition"] = {
+                "status": "unsupported",
+                "rule_id": "closed-dependent-bundle",
+                "diagnostics": [
+                    {"code": "composition.unsupported", "message": bundle_diagnostic}
+                ],
+                "render_complete": False,
+            }
+        elif composition is not None:
             payload["composition"] = {
                 "status": "supported" if composition.supported else "unsupported",
                 "rule_id": composition.rule_id,
@@ -117,7 +167,13 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
     else:
         sys.stdout.write(_human(plan))
-        if composition is not None:
+        if bundle is not None:
+            sys.stdout.write(
+                f"composition: closed-dependent-bundle ({len(bundle)} modules, render complete)\n"
+            )
+        elif bundle_diagnostic is not None:
+            sys.stdout.write(f"ERROR composition.unsupported: {bundle_diagnostic}\n")
+        elif composition is not None:
             if composition.supported:
                 sys.stdout.write(f"composition: {composition.rule_id}\n")
             else:

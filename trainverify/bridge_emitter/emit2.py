@@ -5,7 +5,7 @@
 
 Like emit.py but drives renderer_uni.render_universal (any topology, no family-A gate).
 """
-import os, sys, re, subprocess, argparse, hashlib, fcntl, ctypes, secrets
+import os, sys, re, subprocess, argparse, hashlib, fcntl, ctypes, secrets, shutil, json
 from pathlib import Path
 from typing import Callable, Optional
 sys.path.insert(0, os.path.dirname(__file__))
@@ -189,6 +189,62 @@ def _publish_composed_source(
         if parent_fd is not None:
             os.close(parent_fd)
 
+
+def _publish_closed_bundle(bundle: dict[str, bytes], out_dir: str | Path) -> None:
+    """Publish one validated bundle as a clean same-filesystem directory snapshot."""
+    destination = Path(os.path.abspath(os.fspath(out_dir)))
+    parent = destination.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    if destination.is_symlink():
+        raise ValueError(f"closed bundle destination may not be a symlink: {destination}")
+    for relative, payload in bundle.items():
+        path = Path(relative)
+        if path.is_absolute() or len(path.parts) != 1 or path.name in {"", ".", ".."}:
+            raise ValueError(f"invalid closed bundle path: {relative!r}")
+        if not isinstance(payload, bytes):
+            raise TypeError(f"closed bundle payload must be bytes: {relative}")
+    token = secrets.token_hex(16)
+    staged = parent / f".{destination.name}.staged-{token}"
+    exchanged = False
+    try:
+        staged.mkdir(mode=0o700)
+        for relative, payload in bundle.items():
+            target = staged / relative
+            fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o400)
+            try:
+                offset = 0
+                while offset < len(payload):
+                    offset += os.write(fd, payload[offset:])
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        staged_fd = os.open(staged, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(staged_fd)
+        finally:
+            os.close(staged_fd)
+        parent_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            if destination.exists():
+                result = _RENAMEAT2(
+                    parent_fd, os.fsencode(staged.name),
+                    parent_fd, os.fsencode(destination.name), 2,
+                )
+                if result != 0:
+                    error = ctypes.get_errno()
+                    raise OSError(error, os.strerror(error), destination.name)
+                exchanged = True
+            else:
+                os.rename(staged.name, destination.name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+            os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
+        if exchanged:
+            shutil.rmtree(staged)
+    finally:
+        if staged.exists():
+            shutil.rmtree(staged)
+
 # Auto-detect pm.numRanks from generated-data file and expose via BRIDGE_PM_NUMRANKS
 # env var BEFORE importing renderer_uni (which reads it at module load).
 from parser import GEN_DIR as _GD_INIT
@@ -206,7 +262,8 @@ from proof_compiler import (
     build_default_registry,
     require_supported_plan,
 )
-from composer import compose_full_topology
+from composer import compose_closed_dependent_bundle, compose_full_topology
+from relation_compiler import compile_relation_plan
 
 # parse #eval probe output, capturing ALL writer indices per tid (take max = last writer)
 LINE_RE = re.compile(r'(SM|PM):(\d+)\s+\[(.*?)\]\s*$', re.M)
@@ -307,6 +364,8 @@ def main():
     ap.add_argument("--no-compile", action="store_true")
     ap.add_argument("--out", default=None)
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--closed-bundle", action="store_true")
+    ap.add_argument("--module-prefix", default=None)
     args = ap.parse_args()
     n = args.n
     log = (lambda *a: None) if args.quiet else print
@@ -316,6 +375,64 @@ def main():
         proof_plan = require_supported_plan(ir, build_default_registry())
     except ProofPlanningError as exc:
         raise RU.UnsupportedTopology(str(exc)) from None
+    if args.closed_bundle:
+        relation = compile_relation_plan(ir, proof_plan)
+        namespace = os.environ.get("BRIDGE_NAMESPACE", f"ClosedGoal{n}")
+        module_prefix = args.module_prefix or f"{MOD_PREFIX}.Goal{n}Closed"
+        try:
+            bundle = compose_closed_dependent_bundle(
+                ir, relation, namespace, module_prefix
+            )
+        except ValueError as exc:
+            log(f"[g{n}] render_complete=false kernel_checked=false proof_complete=false")
+            log(f"  FAIL {exc}")
+            sys.exit(1)
+        out_dir = args.out or os.path.join(TV, DENOTE, f"Goal{n}Closed")
+        if args.dry_run:
+            log(json.dumps({
+                "goal_id": n,
+                "module_prefix": module_prefix,
+                "paths": list(bundle),
+                "bytes": {path: len(payload) for path, payload in bundle.items()},
+                "render_complete": True,
+                "kernel_checked": False,
+                "proof_complete": False,
+            }, sort_keys=True))
+            return
+        try:
+            _publish_closed_bundle(bundle, out_dir)
+        except (OSError, TypeError, ValueError) as exc:
+            log(f"[g{n}] render_complete=true published=false kernel_checked=false proof_complete=false")
+            log(f"  FAIL {exc}")
+            sys.exit(1)
+        if args.no_compile:
+            log(
+                f"[g{n}] render_complete=true published=true kernel_checked=false "
+                f"proof_complete=false modules={len(bundle)} wrote={out_dir}"
+            )
+            return
+        for relative in bundle:
+            source_path = os.path.join(out_dir, relative)
+            compiled = subprocess.run(
+                ["lake", "env", "lean", "--tstack=65536", source_path],
+                cwd=TV, capture_output=True, text=True, timeout=900,
+                env={**os.environ, "LEAN_NUM_THREADS": "1"},
+                check=False,
+            )
+            output = compiled.stdout + compiled.stderr
+            if compiled.returncode != 0 or "sorry" in output.lower():
+                log(
+                    f"[g{n}] render_complete=true published=true kernel_checked=false "
+                    f"proof_complete=false first_blocker={relative} exit={compiled.returncode}"
+                )
+                log(output[-2500:])
+                sys.exit(1)
+        log(
+            f"[g{n}] render_complete=true published=true kernel_checked=true "
+            f"proof_complete=true modules={len(bundle)} wrote={out_dir}"
+        )
+        return
+
     composition = compose_full_topology(ir, MOD_PREFIX)
     if composition.supported:
         text = composition.lean_source

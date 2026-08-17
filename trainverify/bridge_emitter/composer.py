@@ -489,6 +489,7 @@ def render_closed_relation_declarations(chain, namespace: str) -> str:
         f"namespace TrainVerify.Denote.{namespace}",
         "",
         "set_option maxRecDepth 100000",
+        "set_option maxHeartbeats 500000",
         "noncomputable section",
         "",
     ]
@@ -1660,8 +1661,8 @@ def render_closed_rotary_segment(ir: GoalIR, relation, segment_id: str) -> str:
         "    intro smStore pmStore hstate",
         f"    let smNodes : List NodeDecl := [{sm_text}]",
         f"    let pmNodes : List NodeDecl := [{', '.join(pm_text)}]",
-        "    let smFinal := smNodes.foldl (applyNodeDistributedFaithful smGraph) smStore",
-        "    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful pmGraph) pmStore",
+        f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {sm_graph}) smStore",
+        f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {pm_graph}) pmStore",
         f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
         "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
         "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
@@ -1671,9 +1672,9 @@ def render_closed_rotary_segment(ir: GoalIR, relation, segment_id: str) -> str:
         f"    have hcache : {cache_fact.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
     ]
     for prefix, graph, store, nodes, pos, node, final in (
-        ("sm", "smGraph", "smStore", sm_nodes, 0, sm, "smFinal"),
-        ("p0", "pmGraph", "pmStore", pm_nodes, 0, p0, "pmFinal"),
-        ("p1", "pmGraph", "pmStore", pm_nodes, 1, p1, "pmFinal"),
+        ("sm", sm_graph, "smStore", sm_nodes, 0, sm, "smFinal"),
+        ("p0", pm_graph, "pmStore", pm_nodes, 0, p0, "pmFinal"),
+        ("p1", pm_graph, "pmStore", pm_nodes, 1, p1, "pmFinal"),
     ):
         lines += output_value(f"h{prefix}q", graph, store, nodes, pos, node, final, 0)
         lines += output_value(f"h{prefix}k", graph, store, nodes, pos, node, final, 1)
@@ -2361,7 +2362,16 @@ def render_closed_unary_segment(ir: GoalIR, relation, segment_id: str) -> str:
 
 def render_closed_full_producer_to_segment(ir: GoalIR, relation, segment_id: str) -> str:
     """Render one atomic zigzag full producer with optional ordinary FW_to fanout."""
-    from .relation_compiler import FrontierToCertificate, FullProducerChunkCertificate
+    try:
+        from .relation_compiler import (
+            FrontierToCertificate,
+            FullProducerChunkCertificate,
+        )
+    except ImportError:
+        from relation_compiler import (
+            FrontierToCertificate,
+            FullProducerChunkCertificate,
+        )
 
     chain = relation.dependent_chain_plan
     if chain is None or not chain.complete:
@@ -2681,12 +2691,20 @@ def render_closed_full_producer_to_segment(ir: GoalIR, relation, segment_id: str
 
 
 def render_closed_linear_segment(ir: GoalIR, relation, segment_id: str) -> str:
-    from .relation_compiler import (
-        FrontierLinearCertificate,
-        FrontierRMSNormCertificate,
-        FullProducerChunkCertificate,
-        PerHeadLinearRelationCertificate,
-    )
+    try:
+        from .relation_compiler import (
+            FrontierLinearCertificate,
+            FrontierRMSNormCertificate,
+            FullProducerChunkCertificate,
+            PerHeadLinearRelationCertificate,
+        )
+    except ImportError:
+        from relation_compiler import (
+            FrontierLinearCertificate,
+            FrontierRMSNormCertificate,
+            FullProducerChunkCertificate,
+            PerHeadLinearRelationCertificate,
+        )
     chain = relation.dependent_chain_plan
     if chain is None or not chain.complete:
         raise ValueError("linear renderer requires complete closed chain")
@@ -4894,30 +4912,22 @@ def render_closed_external_initial_state(ir: GoalIR, relation, namespace: str) -
 
     state_helper = f"{namespace}_initial_state"
     blocks.extend([
-        "private theorem closed_fact_of_external_helpers",
-        "    {facts : List RelationFact} {sm pm : Store}",
-        "    (hall : List.Forall (fun fact => fact.Holds sm pm) facts) :",
-        "    ∀ fact ∈ facts, fact.Holds sm pm := by",
-        "  intro fact hfact",
-        "  induction hall with",
-        "  | nil => simp at hfact",
-        "  | cons head tail ih =>",
-        "      simp only [List.mem_cons] at hfact",
-        "      rcases hfact with rfl | hfact",
-        "      · assumption",
-        "      · exact ih hfact",
-        "",
         f"private theorem {state_helper}",
         common_args,
         f"    : {initial.state_id}.Holds initSM initPM := by",
-        "  apply closed_fact_of_external_helpers",
+        "  intro fact hfact",
+        f"  unfold {initial.state_id} at hfact",
+        "  simp only [List.mem_cons, List.not_mem_nil, or_false] at hfact",
     ])
-    forall_proof = ".nil"
-    for fact_id in reversed(initial.fact_ids):
-        forall_proof = (
-            f".cons ({helpers[fact_id]} {call_args}) ({forall_proof})"
-        )
-    blocks.append(f"  exact {forall_proof}")
+    for fact_id in initial.fact_ids[:-1]:
+        blocks.extend([
+            "  rcases hfact with rfl | hfact",
+            f"  · exact {helpers[fact_id]} {call_args}",
+        ])
+    blocks.extend([
+        "  subst fact",
+        f"  exact {helpers[initial.fact_ids[-1]]} {call_args}",
+    ])
     return "\n".join(blocks) + "\n"
 
 
@@ -4953,7 +4963,9 @@ def render_closed_public_theorem(
     external = render_closed_external_initial_state(ir, relation, namespace)
     _, call_args, contract_names = _external_contract_arguments(ir)
     graph_ns = ir.sm_graph_ref.rsplit(".", 1)[0]
-    goal = f"{graph_ns}.goal_{ir.n}"
+    goal = getattr(ir, "lineage_ref", "")
+    if not goal:
+        raise ValueError("public theorem requires an exact parsed lineage reference")
     chain_name = f"{namespace}_chain"
     pm_store = f"denoteGraphDistributedFaithful {ir.pm_graph_ref} initPM"
     joined_tid = target.joined_pm_tid
@@ -4982,11 +4994,261 @@ def render_closed_public_theorem(
             f"  · rw [reconstructForGoal_of_not_replicated {goal} "
             f"{ir.pm_graph_ref}.numRanks _ rfl]"
         ),
-        "    rw [reconstructWithDim_singleton]",
-        "    exact htarget.public_value",
+        (
+            f"    simpa only [{goal}, List.map, reconstructWithDim_singleton] "
+            "using htarget.public_value"
+        ),
     ]
     return "\n".join(lines) + "\n"
 
+
+
+def _closed_bundle_module_header(
+    comment: str, imports: list[str], namespace: str
+) -> str:
+    return "\n".join([
+        f"/- AUTO-GENERATED {comment}. -/",
+        *(f"import {module}" for module in imports),
+        "",
+        "open TrainVerify.Denote",
+        "open TrainVerify.Denote.RelationCompiler",
+        "",
+        f"namespace TrainVerify.Denote.{namespace}",
+        "",
+        "set_option maxRecDepth 100000",
+        "set_option maxHeartbeats 500000",
+        "noncomputable section",
+        "",
+    ])
+
+
+def _closed_bundle_module_footer(namespace: str) -> str:
+    return f"\nend\nend TrainVerify.Denote.{namespace}\n"
+
+
+def _pack_closed_declaration_blocks(
+    blocks: list[str], *, comment: str, imports: list[str], namespace: str,
+    stem: str, max_source_bytes: int,
+) -> list[tuple[str, bytes]]:
+    """Greedily pack declarations without changing declaration bytes."""
+    if not blocks:
+        raise ValueError(f"closed bundle {stem} declarations are empty")
+    footer = _closed_bundle_module_footer(namespace)
+    packed: list[tuple[str, bytes]] = []
+    current: list[str] = []
+    for block in blocks:
+        index = len(packed)
+        header = _closed_bundle_module_header(comment, imports, namespace)
+        candidate = header + "\n\n".join([*current, block]) + footer
+        if len(candidate.encode("utf-8")) >= max_source_bytes and current:
+            source = header + "\n\n".join(current) + footer
+            packed.append((f"{stem}{index:03d}.lean", source.encode("utf-8")))
+            current = [block]
+        else:
+            current.append(block)
+        source = header + "\n\n".join(current) + footer
+        if len(source.encode("utf-8")) >= max_source_bytes:
+            raise ValueError(
+                f"closed bundle declaration block exceeds source cap in {stem}: "
+                f"{len(source.encode('utf-8'))} >= {max_source_bytes}"
+            )
+    index = len(packed)
+    header = _closed_bundle_module_header(comment, imports, namespace)
+    source = header + "\n\n".join(current) + footer
+    packed.append((f"{stem}{index:03d}.lean", source.encode("utf-8")))
+    return packed
+
+
+def _closed_bundle_relation_blocks(chain, namespace: str) -> tuple[list[str], list[str]]:
+    declarations = render_closed_relation_declarations(chain, namespace)
+    body_start = declarations.index("noncomputable section\n") + len("noncomputable section\n")
+    footer = _closed_bundle_module_footer(namespace)
+    if not declarations.endswith(footer):
+        raise ValueError("closed bundle relation declarations have an unexpected boundary")
+    body = declarations[body_start:-len(footer)].strip()
+    blocks = [block.strip() for block in body.split("\n\n") if block.strip()]
+    fact_blocks: list[str] = []
+    state_blocks: list[str] = []
+    saw_state = False
+    for block in blocks:
+        is_state = bool(re.match(r"private def state_[A-Za-z0-9_]+\s*:", block))
+        saw_state = saw_state or is_state
+        if saw_state and not is_state:
+            raise ValueError("closed bundle declarations interleave facts and states")
+        public_block = re.sub(r"^private def ", "def ", block, count=1)
+        (state_blocks if is_state else fact_blocks).append(public_block)
+    return fact_blocks, state_blocks
+
+
+def _promote_closed_segment(segment_id: str, source: str) -> str:
+    pattern = (
+        rf"(?m)^private(?: noncomputable)? def {re.escape(segment_id)}"
+        r"(?=\s*(?::|\(smGraph pmGraph : GraphDecl\)))"
+    )
+    promoted, count = re.subn(pattern, f"noncomputable def {segment_id}", source, count=1)
+    if count != 1:
+        raise ValueError(f"closed segment {segment_id} has no promotable certificate")
+    return promoted
+
+
+def _validate_closed_bundle(
+    bundle: dict[str, bytes], module_prefix: str, max_source_bytes: int,
+    expected_segments: int,
+) -> None:
+    if not bundle or list(bundle)[-2:] != ["Chain.lean", "Public.lean"]:
+        raise ValueError("closed bundle lacks terminal chain/public modules")
+    module_order = {
+        f"{module_prefix}.{path[:-5]}": index for index, path in enumerate(bundle)
+    }
+    segment_count = 0
+    for index, (path, payload) in enumerate(bundle.items()):
+        if len(payload) >= max_source_bytes:
+            raise ValueError(
+                f"closed bundle source cap exceeded: {path} "
+                f"{len(payload)} >= {max_source_bytes}"
+            )
+        try:
+            source = payload.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError(f"closed bundle source is not UTF-8: {path}") from exc
+        if path.startswith("Segment"):
+            segment_count += 1
+        for imported in re.findall(r"(?m)^import (\S+)$", source):
+            if imported in module_order and module_order[imported] >= index:
+                raise ValueError(f"closed bundle import DAG is cyclic: {path} -> {imported}")
+    if segment_count != expected_segments:
+        raise ValueError(
+            f"closed bundle omitted segments: emitted {segment_count}, expected {expected_segments}"
+        )
+
+
+def compose_closed_dependent_bundle(
+    ir: GoalIR, relation, namespace: str, module_prefix: str, *,
+    max_source_bytes: int = 2_500_000,
+) -> dict[str, bytes]:
+    """Render a deterministic bounded multi-module closed public proof bundle."""
+    _validate_closed_namespace(namespace)
+    if not re.fullmatch(
+        r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)*", module_prefix
+    ):
+        raise ValueError(f"invalid closed bundle module prefix: {module_prefix!r}")
+    if max_source_bytes <= 0:
+        raise ValueError("closed bundle source cap must be positive")
+    chain = relation.dependent_chain_plan
+    if chain is None or not chain.complete or not chain.segments:
+        raise ValueError("closed bundle requires a complete nonempty chain")
+
+    fact_blocks, state_blocks = _closed_bundle_relation_blocks(chain, namespace)
+    facts = _pack_closed_declaration_blocks(
+        fact_blocks, comment="closed relation facts", imports=["denote.RelationCompiler"],
+        namespace=namespace, stem="Facts", max_source_bytes=max_source_bytes,
+    )
+    fact_modules = [f"{module_prefix}.{path[:-5]}" for path, _ in facts]
+    states = _pack_closed_declaration_blocks(
+        state_blocks, comment="closed relation states", imports=fact_modules,
+        namespace=namespace, stem="States", max_source_bytes=max_source_bytes,
+    )
+    state_modules = [f"{module_prefix}.{path[:-5]}" for path, _ in states]
+
+    bundle: dict[str, bytes] = {}
+    bundle.update(facts)
+    bundle.update(states)
+    rendered_segments: list[tuple[object, str, bool, str]] = []
+    transitions = {item.transition_id: item for item in relation.transition_specs}
+    for index, segment in enumerate(chain.segments):
+        family = tuple(transitions[item].rule_id for item in segment.transition_ids)
+        try:
+            raw_source = render_closed_segment(ir, relation, segment.segment_id)
+        except ValueError as exc:
+            raise ValueError(
+                f"closed bundle stopped at {segment.segment_id} family {family!r}: {exc}"
+            ) from exc
+        escaped_segment_id = re.escape(segment.segment_id)
+        parameterized = re.search(
+            rf"private(?: noncomputable)? def {escaped_segment_id}\s+"
+            r"\(smGraph pmGraph : GraphDecl\)\s*:", raw_source,
+        )
+        concrete = re.search(
+            rf"private(?: noncomputable)? def {escaped_segment_id}\s*:", raw_source,
+        )
+        if bool(parameterized) == bool(concrete):
+            raise ValueError(
+                f"closed segment {segment.segment_id} must declare exactly one concrete "
+                "or graph-parameterized certificate"
+            )
+        promoted = _promote_closed_segment(segment.segment_id, raw_source)
+        path = f"Segment{index:06d}.lean"
+        header = _closed_bundle_module_header(
+            f"closed segment {index:06d}",
+            [ir.public_statement_module, *state_modules], namespace,
+        )
+        source = header + promoted.strip() + _closed_bundle_module_footer(namespace)
+        payload = source.encode("utf-8")
+        if len(payload) >= max_source_bytes:
+            raise ValueError(
+                f"closed segment source cap exceeded: {path} "
+                f"{len(payload)} >= {max_source_bytes}"
+            )
+        bundle[path] = payload
+        rendered_segments.append((segment, promoted, bool(concrete), path))
+
+    segment_modules = [f"{module_prefix}.{path[:-5]}" for *_, path in rendered_segments]
+    states_by_id = {item.state_id: item for item in chain.states}
+    final_state = states_by_id[chain.segments[-1].post_state_id]
+    suffix_name = f"{namespace}_suffix_{len(rendered_segments):06d}"
+    chain_lines = [
+        f"private noncomputable def {suffix_name} :",
+        (
+            f"    ClosedDepCertificateChain {ir.sm_graph_ref} {ir.pm_graph_ref} "
+            f"{final_state.state_id} {final_state.state_id} :="
+        ),
+        f"  .nil {final_state.state_id}", "",
+    ]
+    for index in range(len(rendered_segments) - 1, -1, -1):
+        segment, _, concrete_graphs, _ = rendered_segments[index]
+        next_name = suffix_name
+        suffix_name = f"{namespace}_suffix_{index:06d}"
+        head = segment.segment_id if concrete_graphs else (
+            f"({segment.segment_id} {ir.sm_graph_ref} {ir.pm_graph_ref})"
+        )
+        chain_lines.extend([
+            f"private noncomputable def {suffix_name} :",
+            (
+                f"    ClosedDepCertificateChain {ir.sm_graph_ref} {ir.pm_graph_ref} "
+                f"{segment.pre_state_id} {final_state.state_id} :="
+            ),
+            f"  .cons {head} {next_name}", "",
+        ])
+    first_state = states_by_id[chain.segments[0].pre_state_id]
+    chain_name = f"{namespace}_chain"
+    chain_lines.extend([
+        f"noncomputable def {chain_name} :",
+        (
+            f"    ClosedDepCertificateChain {ir.sm_graph_ref} {ir.pm_graph_ref} "
+            f"{first_state.state_id} {final_state.state_id} :="
+        ),
+        f"  {suffix_name}", "",
+        (
+            f"theorem {chain_name}_sm_nodes : {chain_name}.smNodes = "
+            f"{ir.sm_graph_ref}.nodes := by"
+        ), "  rfl", "",
+        (
+            f"theorem {chain_name}_pm_nodes : {chain_name}.pmNodes = "
+            f"{ir.pm_graph_ref}.nodes := by"
+        ), "  rfl", "",
+    ])
+    chain_source = _closed_bundle_module_header(
+        "exact closed chain", segment_modules, namespace
+    ) + "\n".join(chain_lines) + _closed_bundle_module_footer(namespace)
+    bundle["Chain.lean"] = chain_source.encode("utf-8")
+
+    public_body = render_closed_public_theorem(ir, relation, namespace)
+    public_source = _closed_bundle_module_header(
+        "external initial state and public theorem", [f"{module_prefix}.Chain"], namespace
+    ) + public_body.strip() + _closed_bundle_module_footer(namespace)
+    bundle["Public.lean"] = public_source.encode("utf-8")
+    _validate_closed_bundle(bundle, module_prefix, max_source_bytes, len(chain.segments))
+    return bundle
 
 def compose_closed_dependent_chain(
     ir: GoalIR, relation, namespace: str
@@ -5061,7 +5323,7 @@ def compose_closed_dependent_chain(
         next_name = suffix_name
         suffix_name = f"{namespace}_suffix_{index:06d}"
         head = segment.segment_id if concrete_graphs else (
-            f"{segment.segment_id} {ir.sm_graph_ref} {ir.pm_graph_ref}"
+            f"({segment.segment_id} {ir.sm_graph_ref} {ir.pm_graph_ref})"
         )
         lines.extend([
             f"private noncomputable def {suffix_name} :",
@@ -5077,10 +5339,10 @@ def compose_closed_dependent_chain(
         f"  {suffix_name}",
         "",
         f"theorem {chain_name}_sm_nodes : {chain_name}.smNodes = {ir.sm_graph_ref}.nodes := by",
-        "  native_decide",
+        "  rfl",
         "",
         f"theorem {chain_name}_pm_nodes : {chain_name}.pmNodes = {ir.pm_graph_ref}.nodes := by",
-        "  native_decide",
+        "  rfl",
         marker.lstrip("\n"),
     ])
     return "\n".join(lines)
