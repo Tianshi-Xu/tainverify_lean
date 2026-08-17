@@ -4067,6 +4067,334 @@ def render_closed_ce_fst_segment(ir: GoalIR, relation, segment_id: str) -> str:
     ]
     return "\n".join(lines)
 
+def render_closed_indexed_stack_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Render an ordered dim-1 indexed stack with one fold per authority axis."""
+    chain = relation.dependent_chain_plan
+    if chain is None or not chain.complete:
+        raise ValueError("indexed-stack segment requires a complete closed chain")
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if segment is None or len(segment.transition_ids) != 1:
+        raise ValueError("indexed-stack segment must own one transition")
+    transitions = {item.transition_id: item for item in relation.transition_specs}
+    transition = transitions[segment.transition_ids[0]]
+    if transition.rule_id != "indexed-stack-gather-two-rank" or transition.lean_theorem != (
+        "TrainVerify.Denote.RelationCompiler.fw_stack_allGather0_dim1_commute_2d_element"
+    ):
+        raise ValueError("segment is not the registered indexed-stack family")
+    if ir.sm_num_ranks != 1 or ir.pm_num_ranks != 2:
+        raise ValueError("indexed stack requires exact SM=1/PM=2 graph ranks")
+    if len(transition.sm_node_indices) != 1 or len(transition.pm_node_indices) != 3:
+        raise ValueError("indexed-stack transition footprint mismatch")
+    sm_index = transition.sm_node_indices[0]
+    pm0_index, pm1_index, gather_index = transition.pm_node_indices
+    if not (segment.sm_range[0] <= sm_index < segment.sm_range[1]) or any(
+        not segment.pm_range[0] <= index < segment.pm_range[1]
+        for index in transition.pm_node_indices
+    ):
+        raise ValueError("indexed-stack writers escape their atomic segment")
+    sm, p0, p1, gather = (
+        ir.sm_nodes[sm_index], ir.pm_nodes[pm0_index],
+        ir.pm_nodes[pm1_index], ir.pm_nodes[gather_index],
+    )
+    stacks = (sm, p0, p1)
+    if any(node.op != "FW_stack" or len(node.outs) != 1 or node.params for node in stacks):
+        raise ValueError("indexed-stack writer signature mismatch")
+    if tuple(node.rank for node in stacks) != (0, 0, 1):
+        raise ValueError("indexed-stack writer rank order mismatch")
+    if (gather.op, gather.rank, gather.ins, gather.outs, gather.params) != (
+        "AllGatherPrim", 0, [p0.outs[0], p1.outs[0]], [sm.outs[0]], [1]
+    ):
+        raise ValueError("indexed-stack gather signature mismatch")
+
+    records = {item.source: item for item in chain.relation_facts}
+    if len(transition.pre_facts) == 0 or any(source not in records for source in transition.pre_facts):
+        raise ValueError("indexed stack lacks closed source relations")
+    unordered_sources = [records[source] for source in transition.pre_facts]
+    if any(item.kind != "ordinary" for item in unordered_sources):
+        raise ValueError("indexed stack consumes non-ordinary source relations")
+    if len(transition.post_facts) != 1 or transition.post_facts[0] not in records:
+        raise ValueError("indexed stack lacks one closed post fact")
+    post = records[transition.post_facts[0]]
+    if post.kind != "indexed_stack_dim1" or post.gather_dim != 1:
+        raise ValueError("indexed stack post relation is not truthful dim-1")
+    ordered_specs = tuple(
+        type(transition.pre_facts[0])("ordinary", refs)
+        for refs in post.source.source_step_triples
+    )
+    if set(ordered_specs) != set(transition.pre_facts):
+        raise ValueError("indexed stack post witnesses disagree with transition inputs")
+    sources = [records[source] for source in ordered_specs]
+    if len(sources) != len(post.source_tid_triples) or not sources:
+        raise ValueError("indexed stack source witness count mismatch")
+    expected_sources = tuple(
+        (item.sm_tid, item.pm_rank0_tid, item.pm_rank1_tid) for item in sources
+    )
+    if post.source_tid_triples != expected_sources:
+        raise ValueError("indexed stack materialized witnesses lost source order")
+    if tuple(sm.ins) != tuple(item.sm_tid for item in sources) or tuple(p0.ins) != tuple(
+        item.pm_rank0_tid for item in sources
+    ) or tuple(p1.ins) != tuple(item.pm_rank1_tid for item in sources):
+        raise ValueError("indexed stack writer inputs do not match ordered source facts")
+    if (post.sm_tid, post.pm_rank0_tid, post.pm_rank1_tid) != (
+        sm.outs[0], p0.outs[0], p1.outs[0]
+    ):
+        raise ValueError("indexed stack output fact does not match stack writers")
+    if len(post.full_shape) != 3 or len(post.shard_shape) != 3:
+        raise ValueError("indexed stack output shapes must be rank three")
+    n, full_rows, width = post.full_shape
+    shard_n, shard_rows, shard_width = post.shard_shape
+    if (n, shard_n, width, shard_width, full_rows) != (
+        len(sources), len(sources), width, width, 2 * shard_rows
+    ) or shard_rows <= 0 or width <= 0:
+        raise ValueError("indexed stack output shapes are not a positive dim-1 gather")
+    if any(item.full_shape != (full_rows, width) or item.shard_shape != (shard_rows, width)
+           for item in sources):
+        raise ValueError("indexed stack source shapes do not match output tails")
+
+    states = {item.state_id: item for item in chain.states}
+    before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    source_ids = {item.fact_id for item in sources}
+    if not source_ids <= set(before.fact_ids):
+        raise ValueError("indexed stack source relations are not live")
+    if post.fact_id not in after.fact_ids or not set(after.fact_ids) <= ({post.fact_id} | set(before.fact_ids)):
+        raise ValueError("indexed stack state delta mismatch")
+
+    sm_graph, pm_graph = ir.sm_graph_ref, ir.pm_graph_ref
+    sm_nodes = ir.sm_nodes[slice(*segment.sm_range)]
+    pm_nodes = ir.pm_nodes[slice(*segment.pm_range)]
+    sm_nodes_text = "[" + ", ".join(_node_text(node) for node in sm_nodes) + "]"
+    pm_nodes_text = "[" + ", ".join(_node_text(node) for node in pm_nodes) + "]"
+    prefix = segment.segment_id
+    sm_nodes_name, pm_nodes_name = f"{prefix}_smNodes", f"{prefix}_pmNodes"
+    sm_final_name, pm_final_name = f"{prefix}_smFinal", f"{prefix}_pmFinal"
+    frame_name = f"{prefix}_frame"
+    writer_bundle_name = f"{prefix}_writer_values_source_preservation"
+    semantic_name = f"{prefix}_indexed_stack_semantic"
+    sm_final = f"({sm_final_name} smStore)"
+    pm_final = f"({pm_final_name} pmStore)"
+    lines = [
+        f"private def {sm_nodes_name} : List NodeDecl := {sm_nodes_text}",
+        f"private def {pm_nodes_name} : List NodeDecl := {pm_nodes_text}",
+        f"@[irreducible] private def {sm_final_name} (smStore : Store) : Store :=",
+        f"  {sm_nodes_name}.foldl (applyNodeDistributedFaithful {sm_graph}) smStore",
+        f"@[irreducible] private def {pm_final_name} (pmStore : Store) : Store :=",
+        f"  {pm_nodes_name}.foldl (applyNodeDistributedFaithful {pm_graph}) pmStore", "",
+        f"private theorem {frame_name} (smStore pmStore : Store)",
+        f"    (hstate : {before.state_id}.Holds smStore pmStore) :",
+        f"    {before.state_id}.Holds {sm_final} {pm_final} := by",
+        f"  unfold {sm_final_name} {pm_final_name}",
+        f"  apply RelationState.Holds.fold_frame {sm_nodes_name} {pm_nodes_name} smStore pmStore hstate",
+        "  · native_decide", "  · native_decide", "  · native_decide", "  · native_decide", "",
+    ]
+
+    def writer(name, graph, store, final, final_name, nodes_name, all_nodes, absolute_index, node):
+        position = absolute_index - (segment.sm_range[0] if graph == sm_graph else segment.pm_range[0])
+        prefix_nodes, suffix_nodes = all_nodes[:position], all_nodes[position + 1:]
+        prefix_nodes_text = "[" + ", ".join(_node_text(item) for item in prefix_nodes) + "]"
+        suffix_nodes_text = "[" + ", ".join(_node_text(item) for item in suffix_nodes) + "]"
+        target = _node_text(node)
+        ins_text = "[" + ", ".join(str(tid) for tid in node.ins) + "]"
+        prefix_store = store if not prefix_nodes else f"({prefix_nodes_text}.foldl (applyNodeDistributedFaithful {graph}) {store})"
+        prefix_expr = f"fw_stack ({ins_text}.map {prefix_store})"
+        base_expr = f"fw_stack ({ins_text}.map {store})"
+        out = [
+            f"  have {name} : {final} {node.outs[0]} = {base_expr} := by", "    calc",
+            f"      {final} {node.outs[0]} = {prefix_expr} := by",
+            f"        simpa [{final_name}, {nodes_name}] using",
+            f"          (foldl_faithful_middle_writer {graph} {store} {prefix_nodes_text} {suffix_nodes_text} {target} {node.outs[0]}",
+            f"            (fun t => fw_stack ({ins_text}.map t)) (by",
+            "              intro t",
+            "              rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "                (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]",
+            "              simp [applyNodeDistributed, applyNodeRingAttn]",
+            f"              exact applyNode_fw_stack_out {graph} t {node.rank} {ins_text} {node.outs[0]} [])",
+            "            (by native_decide) (by native_decide))",
+        ]
+        if prefix_nodes:
+            out.append(f"      _ = {base_expr} := by")
+            out.append("        simp only [List.map]")
+            for tid in node.ins:
+                out.append(
+                    f"        rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} {prefix_nodes_text} {store} {tid} (by native_decide) (by native_decide)]"
+                )
+        else:
+            out.append("      _ = _ := rfl")
+        out += [
+            f"  have {name}Sources : {ins_text}.map {final} = {ins_text}.map {store} := by",
+            "    apply List.map_congr_left", "    intro tid htid",
+            f"    have hread := foldl_applyNodeDistributedFaithful_at_not_written {graph} {nodes_name} {store} tid (by native_decide) (by",
+            "      simp only [List.mem_cons, List.not_mem_nil, or_false] at htid",
+            f"      rcases htid with {' | '.join(f'h{index}' for index in range(len(node.ins)))}",
+            "      all_goals subst tid",
+            "      all_goals native_decide)",
+            f"    simpa [{final_name}] using hread",
+            f"  rw [← {name}Sources] at {name}",
+        ]
+        return out, ins_text
+
+    sm_writer, sm_ins_text = writer("hSmWriter", sm_graph, "smStore", sm_final,
+                                    sm_final_name, sm_nodes_name, sm_nodes, sm_index, sm)
+    pm0_writer, pm0_ins_text = writer("hPm0Writer", pm_graph, "pmStore", pm_final,
+                                      pm_final_name, pm_nodes_name, pm_nodes, pm0_index, p0)
+    pm1_writer, pm1_ins_text = writer("hPm1Writer", pm_graph, "pmStore", pm_final,
+                                      pm_final_name, pm_nodes_name, pm_nodes, pm1_index, p1)
+    lines += [
+        f"private theorem {writer_bundle_name} (smStore pmStore : Store) :",
+        f"    {sm_final} {sm.outs[0]} = fw_stack ({sm_ins_text}.map {sm_final}) ∧",
+        f"    {pm_final} {p0.outs[0]} = fw_stack ({pm0_ins_text}.map {pm_final}) ∧",
+        f"    {pm_final} {p1.outs[0]} = fw_stack ({pm1_ins_text}.map {pm_final}) ∧",
+        f"    {sm_ins_text}.map {sm_final} = {sm_ins_text}.map smStore ∧",
+        f"    {pm0_ins_text}.map {pm_final} = {pm0_ins_text}.map pmStore ∧",
+        f"    {pm1_ins_text}.map {pm_final} = {pm1_ins_text}.map pmStore := by",
+    ]
+    lines += sm_writer + pm0_writer + pm1_writer
+    lines += [
+        "  exact ⟨hSmWriter, hPm0Writer, hPm1Writer, hSmWriterSources,",
+        "    hPm0WriterSources, hPm1WriterSources⟩", "",
+    ]
+
+    for index, fact in enumerate(sources):
+        source_name = f"{prefix}_source_{index:02d}"
+        lines += [
+            f"private theorem {source_name} (smStore pmStore : Store)",
+            f"    (hstate : {before.state_id}.Holds smStore pmStore) :",
+            f"    GeneratedPatterns.Ordinary2Rel ({sm_final} {fact.sm_tid})",
+            f"      ({pm_final} {fact.pm_rank0_tid}) ({pm_final} {fact.pm_rank1_tid})",
+            f"      {_shape_text(fact.full_shape)} {_shape_text(fact.shard_shape)} := by",
+            f"  have hframe := {frame_name} smStore pmStore hstate",
+            f"  have hSource : {fact.fact_id}.Holds {sm_final} {pm_final} :=",
+            "    hframe _ (by native_decide)",
+            f"  change GeneratedPatterns.Ordinary2Rel ({sm_final} {fact.sm_tid})",
+            f"    ({pm_final} {fact.pm_rank0_tid}) ({pm_final} {fact.pm_rank1_tid})",
+            f"    {_shape_text(fact.full_shape)} {_shape_text(fact.shard_shape)} at hSource",
+            "  exact hSource", "",
+        ]
+
+    triples = "[" + ", ".join(
+        f"({sm_final} {fact.sm_tid}, {pm_final} {fact.pm_rank0_tid}, {pm_final} {fact.pm_rank1_tid})"
+        for fact in sources
+    ) + "]"
+    rank0_values = "[" + ", ".join(f"{pm_final} {fact.pm_rank0_tid}" for fact in sources) + "]"
+    rank1_values = "[" + ", ".join(f"{pm_final} {fact.pm_rank1_tid}" for fact in sources) + "]"
+    full_values = "[" + ", ".join(f"{sm_final} {fact.sm_tid}" for fact in sources) + "]"
+    alternatives = " | ".join(f"h{index:02d}" for index in range(len(sources)))
+    exacts = " | ".join(f"exact hSource{index:02d}" for index in range(len(sources)))
+    source_relations_name = f"{prefix}_ordered_source_relations"
+    rank0_shapes_name = f"{prefix}_rank0_shapes"
+    rank1_shapes_name = f"{prefix}_rank1_shapes"
+    commute_name = f"{prefix}_source_commute"
+    reconstruction_name = f"{prefix}_ordered_reconstruction"
+    state_name = f"{prefix}_publish_state"
+
+    lines += [
+        f"private theorem {source_relations_name} (smStore pmStore : Store)",
+        f"    (hstate : {before.state_id}.Holds smStore pmStore) :",
+        f"    ∀ source ∈ {triples},",
+        f"      GeneratedPatterns.Ordinary2Rel source.1 source.2.1 source.2.2 [{full_rows}, {width}] [{shard_rows}, {width}] := by",
+    ]
+    for index in range(len(sources)):
+        lines.append(f"  have hSource{index:02d} := {prefix}_source_{index:02d} smStore pmStore hstate")
+    lines += [
+        "  intro source hsource",
+        "  simp only [List.mem_cons, List.not_mem_nil, or_false] at hsource",
+        f"  rcases hsource with {alternatives}",
+        "  all_goals subst source",
+        f"  all_goals first | {exacts}", "",
+    ]
+    helper_specs = (
+        (rank0_shapes_name, rank0_values, f"zeroTensor [{shard_rows}, {width}]", f"[{shard_rows}, {width}]", "rank0_shape"),
+        (rank1_shapes_name, rank1_values, f"zeroTensor [{shard_rows}, {width}]", f"[{shard_rows}, {width}]", "rank1_shape"),
+    )
+    for helper_name, values, fallback, shape, projection in helper_specs:
+        lines += [
+            f"private theorem {helper_name} (smStore pmStore : Store)",
+            f"    (hstate : {before.state_id}.Holds smStore pmStore) :",
+            f"    ∀ i (_ : i < {n}), ({values}.getD i ({fallback})).shape = {shape} := by",
+        ]
+        for index in range(len(sources)):
+            lines.append(f"  have hSource{index:02d} := {prefix}_source_{index:02d} smStore pmStore hstate")
+        lines += [
+            "  intro i hi",
+            "  interval_cases i <;> simp only [List.getD_cons_zero, List.getD_cons_succ]",
+            f"  all_goals first | {' | '.join(f'exact hSource{index:02d}.{projection}' for index in range(len(sources)))}",
+            "",
+        ]
+    lines += [
+        f"private theorem {commute_name} (smStore pmStore : Store)",
+        f"    (hstate : {before.state_id}.Holds smStore pmStore) :",
+        f"    ∀ i (_ : i < {n}),",
+        f"      {full_values}.getD i (zeroTensor [{full_rows}, {width}]) =",
+        f"      allGatherPrimDimN 0 2 0 [{rank0_values}.getD i (zeroTensor [{shard_rows}, {width}]),",
+        f"        {rank1_values}.getD i (zeroTensor [{shard_rows}, {width}])] := by",
+    ]
+    for index in range(len(sources)):
+        lines.append(f"  have hSource{index:02d} := {prefix}_source_{index:02d} smStore pmStore hstate")
+    lines += [
+        "  intro i hi",
+        "  interval_cases i <;> simp only [List.getD_cons_zero, List.getD_cons_succ]",
+        f"  all_goals first | {' | '.join(f'exact hSource{index:02d}.full_value' for index in range(len(sources)))}",
+        "",
+        f"private theorem {reconstruction_name} (smStore pmStore : Store)",
+        f"    (hstate : {before.state_id}.Holds smStore pmStore) :",
+        f"    fw_stack {full_values} =",
+        f"      allGatherPrimDimN 1 2 0 [fw_stack {rank0_values}, fw_stack {rank1_values}] := by",
+    ]
+    for index in range(len(sources)):
+        lines.append(f"  have hSource{index:02d} := {prefix}_source_{index:02d} smStore pmStore hstate")
+    lines += [
+        f"  exact fw_stack_allGather0_dim1_commute_2d_element {n} {shard_rows} {width}",
+        "    (by decide) (by decide)",
+        f"    {rank0_values}", f"    {rank1_values}", f"    {full_values}",
+        "    (by rfl) (by rfl) (by rfl)",
+        "    (by", f"      change ({pm_final} {sources[0].pm_rank0_tid}).shape = [{shard_rows}, {width}]",
+        "      exact hSource00.rank0_shape)",
+        "    (by", f"      change ({pm_final} {sources[0].pm_rank1_tid}).shape = [{shard_rows}, {width}]",
+        "      exact hSource00.rank1_shape)",
+        "    (by", f"      change ({sm_final} {sources[0].sm_tid}).shape = [{full_rows}, {width}]",
+        "      exact hSource00.full_shape)",
+    ]
+    lines += [
+        f"    ({rank0_shapes_name} smStore pmStore hstate)",
+        f"    ({rank1_shapes_name} smStore pmStore hstate)",
+        f"    ({commute_name} smStore pmStore hstate)",
+        "",
+    ]
+
+    lines += [
+        f"private theorem {semantic_name} (smStore pmStore : Store)",
+        f"    (hstate : {before.state_id}.Holds smStore pmStore) :",
+        f"    IndexedStack2Rel ({sm_final} {sm.outs[0]}) ({pm_final} {p0.outs[0]})",
+        f"      ({pm_final} {p1.outs[0]}) {triples} 1 {_shape_text(post.full_shape)} {_shape_text(post.shard_shape)} := by",
+        f"  rcases {writer_bundle_name} smStore pmStore with",
+        "    ⟨hSmWriter, hPm0Writer, hPm1Writer, hSmSources, hPm0Sources, hPm1Sources⟩",
+        f"  have hSource00 := {prefix}_source_00 smStore pmStore hstate",
+        "  refine {", "    gather_dim := rfl", "    full_value := ?_",
+        "    full_shape := ?_", "    rank0_shape := ?_", "    rank1_shape := ?_",
+        "    full_stack := hSmWriter", "    rank0_stack := hPm0Writer",
+        "    rank1_stack := hPm1Writer",
+        f"    source_relations := {source_relations_name} smStore pmStore hstate", "  }",
+        "  · rw [hSmWriter, hPm0Writer, hPm1Writer]",
+        f"    exact {reconstruction_name} smStore pmStore hstate",
+        "  · rw [hSmWriter]", f"    apply fw_stack_shape _ [{full_rows}, {width}]", f"    change ({sm_final} {sources[0].sm_tid}).shape = [{full_rows}, {width}]", "    exact hSource00.full_shape",
+        "  · rw [hPm0Writer]", f"    apply fw_stack_shape _ [{shard_rows}, {width}]", f"    change ({pm_final} {sources[0].pm_rank0_tid}).shape = [{shard_rows}, {width}]", "    exact hSource00.rank0_shape",
+        "  · rw [hPm1Writer]", f"    apply fw_stack_shape _ [{shard_rows}, {width}]", f"    change ({pm_final} {sources[0].pm_rank1_tid}).shape = [{shard_rows}, {width}]", "    exact hSource00.rank1_shape", "",
+        f"private theorem {state_name} (smStore pmStore : Store)",
+        f"    (hstate : {before.state_id}.Holds smStore pmStore) :",
+        f"    {after.state_id}.Holds {sm_final} {pm_final} := by",
+        f"  have hframe := {frame_name} smStore pmStore hstate",
+        f"  have hOut : {post.fact_id}.Holds {sm_final} {pm_final} := by",
+        f"    change IndexedStack2Rel ({sm_final} {sm.outs[0]}) ({pm_final} {p0.outs[0]}) ({pm_final} {p1.outs[0]}) {triples} 1 {_shape_text(post.full_shape)} {_shape_text(post.shard_shape)}",
+        f"    exact {semantic_name} smStore pmStore hstate",
+        "  exact RelationState.Holds.mono_insert hframe hOut (by native_decide)", "",
+        f"private def {segment.segment_id} :",
+        f"    ClosedDepSegmentCertificate {sm_graph} {pm_graph} {before.state_id} {after.state_id} where",
+        f"  smNodes := {sm_nodes_name}", f"  pmNodes := {pm_nodes_name}",
+        "  sound := by", "    intro smStore pmStore hstate",
+        f"    simpa [{sm_final_name}, {pm_final_name}] using ({state_name} smStore pmStore hstate)", "",
+    ]
+    return "\n".join(lines)
+
+
 def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     """Render one closed segment through an explicit registered family adapter."""
     chain = relation.dependent_chain_plan
@@ -4106,6 +4434,8 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         if projection == ".snd":
             return render_closed_ce_snd_segment(ir, relation, segment_id)
         raise ValueError(f"unsupported closed CE projection: {projection!r}")
+    if family == ("indexed-stack-gather-two-rank",):
+        return render_closed_indexed_stack_segment(ir, relation, segment_id)
     if family == (
         "rms-norm-ordinary-two-rank",
         "faithful-maybe-shuffle-ordinary-to-zigzag-two-rank",

@@ -21,6 +21,7 @@ from trainverify.bridge_emitter.composer import (
     render_closed_ce_snd_segment,
     render_closed_float_segment,
     render_closed_full_producer_to_segment,
+    render_closed_indexed_stack_segment,
     render_closed_initial_component,
     render_closed_linear_segment,
     render_closed_mixed_moe_segment,
@@ -3859,6 +3860,58 @@ def test_closed_exit_unshuffle_renderer_is_generic_exact_single_fold(monkeypatch
     assert "authority_pm_metadata_eq_000000_5602.Holds" in source
     assert "PackedCuSeqlensWF.decoded_single" in source
     assert "Goal_1" not in source
+
+
+def test_goals34_closed_indexed_stack_renderer_is_truthful_generic_and_one_fold(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    for goal_id in (3, 4):
+        ir = load_goal_ir(goal_id, str(root))
+        relation = compile_relation_plan(
+            ir, compile_proof_plan(ir, build_default_registry())
+        )
+        segment = relation.dependent_chain_plan.segments[-1]
+        source = render_closed_indexed_stack_segment(
+            ir, relation, segment.segment_id
+        )
+        assert source == render_closed_segment(ir, relation, segment.segment_id)
+        assert source.count(f"private def {segment.segment_id}_smFinal") == 1
+        assert source.count(f"private def {segment.segment_id}_pmFinal") == 1
+        assert source.count(
+            f"{segment.segment_id}_smNodes.foldl (applyNodeDistributedFaithful"
+        ) == 1
+        assert source.count(
+            f"{segment.segment_id}_pmNodes.foldl (applyNodeDistributedFaithful"
+        ) == 1
+        assert source.count("ClosedDepSegmentCertificate ") == 1
+        assert source.count(
+            f"private theorem {segment.segment_id}_writer_values_source_preservation"
+        ) == 1
+        assert sum(
+            f"private theorem {segment.segment_id}_source_{index:02d}" in source
+            for index in range(24)
+        ) == 24
+        assert source.count(
+            f"private theorem {segment.segment_id}_indexed_stack_semantic"
+        ) == 1
+        assert (
+            "sound := by\n    intro smStore pmStore hstate\n"
+            f"    simpa [{segment.segment_id}_smFinal, {segment.segment_id}_pmFinal] using "
+            f"({segment.segment_id}_publish_state smStore pmStore hstate)"
+        ) in source
+        assert "fw_stack_allGather0_dim1_commute_2d_element" in source
+        assert source.count("applyNode_fw_stack_out") == 3
+        assert "IndexedStack2Rel" in source
+        assert source.count("change GeneratedPatterns.Ordinary2Rel") == 24
+        assert "have hSource00" in source and "have hSource23" in source
+        assert (
+            f"source_relations := {segment.segment_id}_ordered_source_relations "
+            "smStore pmStore hstate"
+        ) in source
+        assert f"Goal_{goal_id}" not in source
+
 
 
 def test_goal1_closed_ce_fst_renderer_uses_exact_live_authority_and_one_fold(monkeypatch):
