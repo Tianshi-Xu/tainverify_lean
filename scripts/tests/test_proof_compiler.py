@@ -3252,6 +3252,31 @@ def test_closed_full_producer_to_renderer_is_atomic_generic_and_single_fold(monk
     assert render_closed_segment(ir, relation, segment.segment_id) == source
 
 
+def test_closed_full_producer_renderer_supports_single_transition_generic_component(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    segment = relation.dependent_chain_plan.segments[278]
+
+    source = render_closed_full_producer_to_segment(ir, relation, segment.segment_id)
+
+    assert segment.sm_range == (539, 540) and segment.pm_range == (1184, 1189)
+    assert len(segment.transition_ids) == 1
+    assert source.count("let smFinal :=") == 1
+    assert source.count("let pmFinal :=") == 1
+    assert "GeneratedPatterns.Zigzag2Rel.per_head_linear_fullProducer_chunks" in source
+    assert "authority_replicated_eq_5660.Holds" in source
+    assert "authority_replicated_shape_pm_5660.Holds" in source
+    assert "authority_pm_metadata_eq_000000_5602" in source
+    assert "authority_packed_cu_000000" in source
+    assert "decodeCuSeqlens (pmFinal 5602) = [0, 4096]" in source
+    assert "smFinal 5661" in source and "pmFinal 9914" in source and "pmFinal 9915" in source
+    assert render_closed_segment(ir, relation, segment.segment_id) == source
+
+
 def test_closed_full_producer_to_renderer_recovers_to_roles_from_node_tids(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
@@ -3583,7 +3608,8 @@ def test_closed_chain_composer_advances_past_atomic_per_head_zigzag_rms(monkeypa
         compose_closed_dependent_chain(ir, relation, "ClosedGoal1")
     assert "segment_000257" not in str(exc.value)
     assert "segment_000265" not in str(exc.value)
-    assert "segment_000278" in str(exc.value)
+    assert "segment_000278" not in str(exc.value)
+    assert "segment_000479" in str(exc.value)
 
 def test_closed_chain_composer_assembles_complete_path_independently_of_renderers(monkeypatch):
     anchor = SimpleNamespace(

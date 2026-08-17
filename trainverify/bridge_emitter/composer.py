@@ -2261,7 +2261,7 @@ def render_closed_unary_segment(ir: GoalIR, relation, segment_id: str) -> str:
 
 
 def render_closed_full_producer_to_segment(ir: GoalIR, relation, segment_id: str) -> str:
-    """Render one atomic zigzag full-producer plus ordinary FW_to component."""
+    """Render one atomic zigzag full producer with optional ordinary FW_to fanout."""
     from .relation_compiler import FrontierToCertificate, FullProducerChunkCertificate
 
     chain = relation.dependent_chain_plan
@@ -2275,8 +2275,8 @@ def render_closed_full_producer_to_segment(ir: GoalIR, relation, segment_id: str
     full_transitions = [item for item in transitions if item.rule_id ==
         "FW_per_head_mix_precision_linear-full-producer-chunks-zigzag-two-rank"]
     to_transitions = [item for item in transitions if item.rule_id == "to-ordinary-two-rank"]
-    if len(full_transitions) != 1 or not to_transitions or len(transitions) != 1 + len(to_transitions):
-        raise ValueError("component is not one zigzag full-producer plus ordinary FW_to transitions")
+    if len(full_transitions) != 1 or len(transitions) != 1 + len(to_transitions):
+        raise ValueError("component is not one zigzag full producer with optional ordinary FW_to transitions")
     if full_transitions[0].lean_theorem != (
         "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.per_head_linear_fullProducer_chunks"
     ) or any(item.lean_theorem != "TrainVerify.Denote.fw_to_allGather0_commute_2"
@@ -3429,7 +3429,7 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     ):
         return render_closed_linear_segment(ir, relation, segment_id)
     if (
-        len(family) > 1
+        family
         and family[0] == "FW_per_head_mix_precision_linear-full-producer-chunks-zigzag-two-rank"
         and all(item == "to-ordinary-two-rank" for item in family[1:])
     ):
