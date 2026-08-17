@@ -29,6 +29,7 @@ from trainverify.bridge_emitter.composer import (
     render_closed_rotary_segment,
     render_closed_segment,
     render_closed_unary_segment,
+    render_closed_unshuffle_segment,
 )
 from trainverify.bridge_emitter.emit2 import _publish_composed_source
 from trainverify.bridge_emitter.parser import (
@@ -3716,6 +3717,54 @@ def test_closed_atomic_per_head_zigzag_rms_renderer_is_exact_single_fold(monkeyp
     assert "authority_replicated_eq_5604.Holds" in source
     assert "pmFinal 5602 = pmStore 5602" in source
     assert "metadata_region_id" not in source
+
+
+def test_closed_exit_unshuffle_renderer_is_generic_exact_single_fold(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+
+    source = render_closed_unshuffle_segment(ir, relation, "segment_000485")
+
+    assert source == render_closed_segment(ir, relation, "segment_000485")
+    assert source.count("let smFinal :=") == 1
+    assert source.count("let pmFinal :=") == 1
+    assert source.count("ClosedDepSegmentCertificate ") == 1
+    assert "GeneratedPatterns.Zigzag2Rel.unshuffle_gather_single" in source
+    assert source.count("applyNodeDistributedFaithful_unshuffle_out") == 3
+    assert "ins := [6247, 6252]" in source
+    assert "ins := [11598, 6252]" in source
+    assert "ins := [11599, 6252]" in source
+    assert "authority_packed_cu_000000.Holds" in source
+    assert "authority_pm_metadata_eq_000000_5602.Holds" in source
+    assert "PackedCuSeqlensWF.decoded_single" in source
+    assert "Goal_1" not in source
+
+
+def test_closed_exit_unshuffle_renderer_rejects_non_authoritative_metadata(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    chain = relation.dependent_chain_plan
+    assert chain is not None
+    aliases = tuple(
+        replace(fact, right_tid=6254)
+        if fact.fact_id == "authority_pm_metadata_eq_000000_5602"
+        else fact
+        for fact in chain.authority_facts
+    )
+    broken_chain = replace(chain, authority_facts=aliases)
+
+    with pytest.raises(ValueError, match="metadata equality authority mismatch"):
+        render_closed_unshuffle_segment(
+            ir, replace(relation, dependent_chain_plan=broken_chain), "segment_000485"
+        )
 
 
 def test_closed_chain_composer_advances_past_atomic_per_head_zigzag_rms(monkeypatch):
