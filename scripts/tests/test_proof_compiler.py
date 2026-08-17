@@ -24,6 +24,7 @@ from trainverify.bridge_emitter.composer import (
     render_closed_multiref_segment,
     render_closed_relation_declarations,
     render_closed_rms_norm_segment,
+    render_closed_rms_shuffle_segment,
     render_closed_rotary_segment,
     render_closed_segment,
     render_closed_unary_segment,
@@ -3071,6 +3072,48 @@ def test_closed_rms_norm_renderer_covers_all_zigzag_singletons(monkeypatch, goal
         assert f"pmStore {post.metadata_tid}" in source
         assert source.count("let smFinal :=") == 1
         assert source.count("let pmFinal :=") == 1
+
+
+def test_closed_atomic_rms_shuffle_renderer_is_single_fold_and_dispatched(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(
+        ir, compile_proof_plan(ir, build_default_registry())
+    )
+
+    segment = relation.dependent_chain_plan.segments[255]
+    source = render_closed_rms_shuffle_segment(ir, relation, segment.segment_id)
+
+    assert segment.sm_range == (471, 473)
+    assert segment.pm_range == (1042, 1046)
+    assert "RelationCompiler.Ordinary2Rel.to_zigzag_shuffle" in source
+    assert "GeneratedPatterns.Ordinary2Rel.rms_norm_2d" in source
+    assert "ZigzagCollective.PackedCuSeqlensWF" in source
+    assert "authority_replicated_eq_5596" in source
+    assert "authority_packed_cu_000000" in source
+    assert "authority_pm_metadata_eq_000000_5602" in source
+    assert source.count("let smFinal := smNodes.foldl") == 1
+    assert source.count("let pmFinal := pmNodes.foldl") == 1
+    assert render_closed_segment(ir, relation, segment.segment_id) == source
+
+
+def test_closed_atomic_rms_shuffle_renderer_rejects_bad_shuffle_params(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(
+        ir, compile_proof_plan(ir, build_default_registry())
+    )
+    segment = relation.dependent_chain_plan.segments[255]
+    ir.sm_nodes[segment.sm_range[0] + 1].params = [2, 0]
+
+    with pytest.raises(ValueError, match="shuffle signature/params"):
+        render_closed_rms_shuffle_segment(ir, relation, segment.segment_id)
 
 
 def test_closed_multiref_renderer_handles_mixed_atomic_groups(monkeypatch):
