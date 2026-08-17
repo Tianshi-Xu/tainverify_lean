@@ -1611,6 +1611,232 @@ def render_closed_rotary_segment(ir: GoalIR, relation, segment_id: str) -> str:
     return "\n".join(lines)
 
 
+def _render_closed_zigzag_attention_segment(ir: GoalIR, relation,
+                                                segment_id: str) -> str:
+    """Render faithful zigzag attention with ordinary sharded K/V."""
+    chain = relation.dependent_chain_plan
+    segment = next(item for item in chain.segments if item.segment_id == segment_id)
+    transitions = {item.transition_id: item for item in relation.transition_specs}
+    transition = transitions[segment.transition_ids[0]]
+    sm_nodes = ir.sm_nodes[segment.sm_range[0]:segment.sm_range[1]]
+    pm_nodes = ir.pm_nodes[segment.pm_range[0]:segment.pm_range[1]]
+    if len(sm_nodes) != 1 or len(pm_nodes) != 2:
+        raise ValueError(f"{segment_id} zigzag attention requires one SM and two PM nodes")
+    sm, p0, p1 = sm_nodes[0], pm_nodes[0], pm_nodes[1]
+    if [sm.rank, p0.rank, p1.rank] != [0, 0, 1]:
+        raise ValueError(f"{segment_id} zigzag attention rank order mismatch")
+    if any(node.op != "FW_attn_zigzag" for node in (sm, p0, p1)):
+        raise ValueError(f"{segment_id} zigzag attention node family mismatch")
+    if any(len(node.ins) != 5 or len(node.outs) != 2 for node in (sm, p0, p1)):
+        raise ValueError(f"{segment_id} malformed zigzag attention signature")
+    if sm.params != p0.params or p0.params != p1.params or len(sm.params) != 6:
+        raise ValueError(f"{segment_id} zigzag attention params disagree")
+    if p0.ins[3:] != p1.ins[3:] or p0.ins[1] == p1.ins[1] or p0.ins[2] == p1.ins[2]:
+        raise ValueError(f"{segment_id} requires exact sharded-K/V buddy inputs")
+
+    facts = {fact.source: fact for fact in chain.relation_facts}
+    pre = [facts[item] for item in transition.pre_facts]
+    by_sm_tid = {fact.sm_tid: fact for fact in pre}
+    if len(by_sm_tid) != len(pre):
+        raise ValueError(f"{segment_id} attention facts do not bind unique SM tids")
+    try:
+        q_rel, k_rel, v_rel = (by_sm_tid[sm.ins[index]] for index in range(3))
+    except KeyError as exc:
+        raise ValueError(f"{segment_id} missing attention input role {exc.args[0]}") from exc
+    if (q_rel.kind, k_rel.kind, v_rel.kind) != ("zigzag", "ordinary", "ordinary"):
+        raise ValueError(f"{segment_id} requires zigzag Q and ordinary K/V")
+    if len(transition.post_facts) != 1:
+        raise ValueError(f"{segment_id} attention requires one output fact")
+    out_rel = facts[transition.post_facts[0]]
+    expected = [
+        (q_rel.pm_rank0_tid, q_rel.pm_rank1_tid, p0.ins[0], p1.ins[0], "Q"),
+        (k_rel.pm_rank0_tid, k_rel.pm_rank1_tid, p0.ins[1], p1.ins[1], "K"),
+        (v_rel.pm_rank0_tid, v_rel.pm_rank1_tid, p0.ins[2], p1.ins[2], "V"),
+        (out_rel.pm_rank0_tid, out_rel.pm_rank1_tid, p0.outs[0], p1.outs[0], "output"),
+    ]
+    for left0, left1, right0, right1, role in expected:
+        if (left0, left1) != (right0, right1):
+            raise ValueError(f"{segment_id} {role} role mismatch")
+    if q_rel.sm_tid != sm.ins[0] or out_rel.sm_tid != sm.outs[0] or out_rel.kind != "zigzag":
+        raise ValueError(f"{segment_id} malformed zigzag attention relation facts")
+    if (q_rel.metadata_tid is None or q_rel.metadata_region_id is None or
+            out_rel.metadata_tid != q_rel.metadata_tid or
+            out_rel.metadata_region_id != q_rel.metadata_region_id):
+        raise ValueError(f"{segment_id} zigzag metadata fact/region mismatch")
+
+    q_full, q_shard = tuple(q_rel.full_shape), tuple(q_rel.shard_shape)
+    k_full, k_shard = tuple(k_rel.full_shape), tuple(k_rel.shard_shape)
+    v_full, v_shard = tuple(v_rel.full_shape), tuple(v_rel.shard_shape)
+    out_full, out_shard = tuple(out_rel.full_shape), tuple(out_rel.shard_shape)
+    if not (len(q_shard) == len(k_shard) == len(v_shard) == 3):
+        raise ValueError(f"{segment_id} malformed attention shapes")
+    l_dim, q_heads, q_dim = q_shard
+    lk, kv_heads, k_dim = k_shard
+    lv, v_heads, v_dim = v_shard
+    if (l_dim <= 0 or lk != l_dim or lv != l_dim or k_dim != q_dim or v_heads != kv_heads or
+            q_full != (2 * l_dim, q_heads, q_dim) or
+            k_full != (2 * l_dim, kv_heads, q_dim) or
+            v_full != (2 * l_dim, kv_heads, v_dim) or
+            out_full != (2 * l_dim, q_heads, v_dim) or
+            out_shard != (l_dim, q_heads, v_dim) or
+            list(sm.params[:4]) != [q_heads, kv_heads, q_dim, v_dim]):
+        raise ValueError(f"{segment_id} attention shape/param mismatch")
+
+    states = {item.state_id: item for item in chain.states}
+    before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    if not set(after.fact_ids).issubset(set(before.fact_ids) | {out_rel.fact_id}):
+        raise ValueError(f"{segment_id} attention post-state contains unproved facts")
+    live = set(before.fact_ids)
+    authority = list(chain.authority_facts)
+
+    def exact_eq(left_side: str, left_tid: int, right_side: str, right_tid: int,
+                 diagnostic: str):
+        endpoints = {(left_side, left_tid), (right_side, right_tid)}
+        matches = [fact for fact in authority if fact.kind == "tensor_eq" and
+                   {(fact.left_side, fact.left_tid), (fact.right_side, fact.right_tid)} == endpoints and
+                   fact.fact_id in live]
+        if len(matches) != 1:
+            raise ValueError(f"{segment_id} expected one {diagnostic}")
+        return matches[0]
+
+    cuq_cross = exact_eq("sm", sm.ins[3], "pm", p0.ins[3], "cuQ cross-store equality")
+    cukv_cross = exact_eq("sm", sm.ins[4], "pm", p0.ins[4], "cuKV cross-store equality")
+    regions = [item for item in relation.zigzag_regions
+               if item.region_id == q_rel.metadata_region_id]
+    if len(regions) != 1:
+        raise ValueError(f"{segment_id} expected one zigzag metadata region")
+    region = regions[0]
+    packed = [fact for fact in authority if fact.kind == "packed_cu" and
+              fact.side == "pm" and fact.tid == region.contract_metadata_tid and
+              fact.total_tokens == 2 * l_dim and fact.num_ranks == 2 and
+              fact.fact_id in live]
+    if len(packed) != 1:
+        raise ValueError(f"{segment_id} expected one PackedCu authority")
+    packed = packed[0]
+    meta_alias = exact_eq("pm", q_rel.metadata_tid, "pm", packed.tid, "exact metadata alias")
+    cuq_alias = exact_eq("pm", p0.ins[3], "pm", packed.tid, "exact metadata alias")
+
+    params_text = _shape_text(list(sm.params))
+    sm_text, p0_text, p1_text = _node_text(sm), _node_text(p0), _node_text(p1)
+
+    def writer(name: str, graph: str, store: str, final: str,
+               nodes: list[Node], pos: int) -> list[str]:
+        node = nodes[pos]
+        prior, tail = nodes[:pos], nodes[pos + 1:]
+        prior_text = f"[{', '.join(_node_text(item) for item in prior)}]"
+        tail_text = f"[{', '.join(_node_text(item) for item in tail)}]"
+        node_text = _node_text(node)
+        fn = f"(fun t => applyNodeFaithfulZigzagAttnValue {graph} t {node_text})"
+        lines: list[str] = []
+        reads: list[str] = []
+        semantic_reads = tuple(dict.fromkeys(tid for buddy in nodes for tid in buddy.ins)) if prior else ()
+        for tid in semantic_reads:
+            read = f"{name}_read_{tid}"
+            reads.append(read)
+            lines += [
+                f"    have {read} : {prior_text}.foldl (applyNodeDistributedFaithful {graph}) {store} {tid} = {store} {tid} := by",
+                f"      exact foldl_applyNodeDistributedFaithful_at_not_written {graph} {prior_text} {store} {tid} (by native_decide) (by native_decide)",
+            ]
+        lines += [
+            f"    have {name} : {final} {node.outs[0]} = {fn} {store} := by",
+            "      calc",
+            f"        {final} {node.outs[0]} = {fn} ({prior_text}.foldl (applyNodeDistributedFaithful {graph}) {store}) := by",
+            f"          apply foldl_faithful_middle_writer {graph} {store} {prior_text} {tail_text} {node_text} {node.outs[0]} {fn}",
+            "          · intro t",
+            f"            exact applyNodeDistributedFaithful_zigzag_attn_out_two {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.ins[2]} {node.ins[3]} {node.ins[4]} {node.outs[0]} {node.outs[1]} {params_text}",
+            "          · native_decide",
+            "          · native_decide",
+        ]
+        if prior:
+            buddy_text = f"[{', '.join(_node_text(item) for item in nodes)}]"
+            lines += [
+                f"        _ = {fn} {store} := by",
+                "          dsimp only",
+                "          unfold applyNodeFaithfulZigzagAttnValue zigzagAttnUsesReplicatedKV",
+                f"          rw [show {graph}.replicaBuddies {node_text} = {buddy_text} by native_decide]",
+                "          simp only [List.map, List.all_cons, List.all_nil, Bool.and_true,",
+                "            List.getD, List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some]",
+                f"          rw [{', '.join(reads)}]",
+            ]
+        else:
+            lines += ["        _ = _ := rfl"]
+        return lines
+
+    sm_graph, pm_graph = ir.sm_graph_ref, ir.pm_graph_ref
+    causal = "true" if sm.params[4] != 0 else "false"
+    lines = [
+        f"private def {segment.segment_id} :",
+        f"    ClosedDepSegmentCertificate {sm_graph} {pm_graph} {before.state_id} {after.state_id} where",
+        f"  smNodes := [{sm_text}]", f"  pmNodes := [{p0_text}, {p1_text}]", "  sound := by",
+        "    intro smStore pmStore hstate", f"    let smNodes : List NodeDecl := [{sm_text}]",
+        f"    let pmNodes : List NodeDecl := [{p0_text}, {p1_text}]",
+        f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {sm_graph}) smStore",
+        f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {pm_graph}) pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
+        f"    have hq := hstate {q_rel.fact_id} (by native_decide)",
+        f"    have hk := hstate {k_rel.fact_id} (by native_decide)",
+        f"    have hv := hstate {v_rel.fact_id} (by native_decide)",
+        f"    have hcuQ := hstate {cuq_cross.fact_id} (by native_decide)",
+        f"    have hcuKV := hstate {cukv_cross.fact_id} (by native_decide)",
+        f"    have hmetaAlias := hstate {meta_alias.fact_id} (by native_decide)",
+        f"    have hcuQAlias := hstate {cuq_alias.fact_id} (by native_decide)",
+        f"    have hpacked := hstate {packed.fact_id} (by native_decide)",
+    ]
+    lines += writer("hsm", sm_graph, "smStore", "smFinal", sm_nodes, 0)
+    lines += writer("hp0", pm_graph, "pmStore", "pmFinal", pm_nodes, 0)
+    lines += writer("hp1", pm_graph, "pmStore", "pmFinal", pm_nodes, 1)
+    lines += [
+        f"    change GeneratedPatterns.Zigzag2Rel (smStore {q_rel.sm_tid}) (pmStore {q_rel.pm_rank0_tid}) (pmStore {q_rel.pm_rank1_tid}) (pmStore {q_rel.metadata_tid}) {_shape_text(list(q_full))} {_shape_text(list(q_shard))} at hq",
+        f"    change GeneratedPatterns.Ordinary2Rel (smStore {k_rel.sm_tid}) (pmStore {k_rel.pm_rank0_tid}) (pmStore {k_rel.pm_rank1_tid}) {_shape_text(list(k_full))} {_shape_text(list(k_shard))} at hk",
+        f"    change GeneratedPatterns.Ordinary2Rel (smStore {v_rel.sm_tid}) (pmStore {v_rel.pm_rank0_tid}) (pmStore {v_rel.pm_rank1_tid}) {_shape_text(list(v_full))} {_shape_text(list(v_shard))} at hv",
+        f"    change smStore {sm.ins[3]} = pmStore {p0.ins[3]} at hcuQ",
+        f"    change smStore {sm.ins[4]} = pmStore {p0.ins[4]} at hcuKV",
+        f"    change pmStore {q_rel.metadata_tid} = pmStore {packed.tid} at hmetaAlias",
+        f"    change pmStore {p0.ins[3]} = pmStore {packed.tid} at hcuQAlias",
+        f"    change ZigzagCollective.PackedCuSeqlensWF (pmStore {packed.tid}) {2 * l_dim} 2 at hpacked",
+        "    have hcuAttn : pmStore " + str(p0.ins[3]) + " = pmStore " + str(q_rel.metadata_tid) + " := hcuQAlias.trans hmetaAlias.symm",
+        "    have hdecoded : decodeCuSeqlens (pmStore " + str(q_rel.metadata_tid) + f") = [0, {2 * l_dim}] := by",
+        "      rw [hmetaAlias]", "      exact hpacked.decoded_single",
+        "    have hkGather := Ordinary2Rel.toGather2Rel hk (by native_decide)",
+        "    have hvGather := Ordinary2Rel.toGather2Rel hv (by native_decide)",
+        "    have hrel := GeneratedPatterns.Zigzag2Rel.attn_zigzag_sharded_kv",
+        f"      (smStore {q_rel.sm_tid}) (pmStore {q_rel.pm_rank0_tid}) (pmStore {q_rel.pm_rank1_tid}) (pmStore {q_rel.metadata_tid})",
+        f"      (smStore {k_rel.sm_tid}) (pmStore {k_rel.pm_rank0_tid}) (pmStore {k_rel.pm_rank1_tid})",
+        f"      (smStore {v_rel.sm_tid}) (pmStore {v_rel.pm_rank0_tid}) (pmStore {v_rel.pm_rank1_tid})",
+        f"      (pmStore {p0.ins[3]}) (pmStore {p0.ins[4]}) {l_dim} {q_heads} {kv_heads} {q_dim} {v_dim} {causal} {sm.params[5]}",
+        "      hq hkGather hvGather hcuAttn hdecoded (by native_decide) (by native_decide)",
+        "      (by native_decide) (by native_decide) (by native_decide)",
+        f"    have hsmLower : applyNodeFaithfulZigzagAttnValue {sm_graph} smStore {sm_text} =",
+        f"        fw_attn_varlen (smStore {sm.ins[0]}) (smStore {sm.ins[1]}) (smStore {sm.ins[2]}) (smStore {sm.ins[3]}) (smStore {sm.ins[4]}) {q_heads} {kv_heads} {q_dim} {v_dim} {causal} {sm.params[5]} := by",
+        "      unfold applyNodeFaithfulZigzagAttnValue zigzagAttnUsesReplicatedKV",
+        f"      rw [show {sm_graph}.replicaBuddies {sm_text} = [{sm_text}] by native_decide]",
+        "      rfl",
+        f"    have hp0Lower : applyNodeFaithfulZigzagAttnValue {pm_graph} pmStore {p0_text} =",
+        f"        ZigzagCollective.fw_attn_zigzag_collective_sharded_kv [pmStore {p0.ins[0]}, pmStore {p1.ins[0]}] [pmStore {p0.ins[1]}, pmStore {p1.ins[1]}] [pmStore {p0.ins[2]}, pmStore {p1.ins[2]}] (pmStore {p0.ins[3]}) (pmStore {p0.ins[4]}) {q_heads} {kv_heads} {q_dim} {v_dim} {causal} {sm.params[5]} 2 0 := by",
+        "      unfold applyNodeFaithfulZigzagAttnValue zigzagAttnUsesReplicatedKV",
+        f"      rw [show {pm_graph}.replicaBuddies {p0_text} = [{p0_text}, {p1_text}] by native_decide]",
+        "      rfl",
+        f"    have hp1Lower : applyNodeFaithfulZigzagAttnValue {pm_graph} pmStore {p1_text} =",
+        f"        ZigzagCollective.fw_attn_zigzag_collective_sharded_kv [pmStore {p0.ins[0]}, pmStore {p1.ins[0]}] [pmStore {p0.ins[1]}, pmStore {p1.ins[1]}] [pmStore {p0.ins[2]}, pmStore {p1.ins[2]}] (pmStore {p1.ins[3]}) (pmStore {p1.ins[4]}) {q_heads} {kv_heads} {q_dim} {v_dim} {causal} {sm.params[5]} 2 1 := by",
+        "      unfold applyNodeFaithfulZigzagAttnValue zigzagAttnUsesReplicatedKV",
+        f"      rw [show {pm_graph}.replicaBuddies {p1_text} = [{p0_text}, {p1_text}] by native_decide]",
+        "      rfl",
+        f"    have hout : {out_rel.fact_id}.Holds smFinal pmFinal := by",
+        f"      change GeneratedPatterns.Zigzag2Rel (smFinal {out_rel.sm_tid}) (pmFinal {out_rel.pm_rank0_tid}) (pmFinal {out_rel.pm_rank1_tid}) (pmFinal {out_rel.metadata_tid}) {_shape_text(list(out_full))} {_shape_text(list(out_shard))}",
+        "      have hmetadataFinal : pmFinal " + str(out_rel.metadata_tid) + " = pmStore " + str(out_rel.metadata_tid) + " := by",
+        "        exact foldl_applyNodeDistributedFaithful_at_not_written " + pm_graph + " pmNodes pmStore " + str(out_rel.metadata_tid) + " (by native_decide) (by native_decide)",
+        "      rw [hsm, hp0, hp1, hmetadataFinal]",
+        "      dsimp only",
+        "      rw [hsmLower, hp0Lower, hp1Lower, hcuQ, hcuKV]",
+        "      rw [← hcuAttn]",
+        "      exact hrel",
+        "    exact RelationState.Holds.mono_insert hframe hout (by native_decide)",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def render_closed_attention_segment(ir: GoalIR, relation,
                                     segment_id: str) -> str:
     """Render a closed ordinary sliding-window attention buddy segment."""
@@ -1625,6 +1851,8 @@ def render_closed_attention_segment(ir: GoalIR, relation,
     if len(segment.transition_ids) != 1:
         raise ValueError(f"{segment_id} attention renderer requires one transition")
     transition = transitions[segment.transition_ids[0]]
+    if transition.rule_id == "attention-zigzag-qkv-two-rank":
+        return _render_closed_zigzag_attention_segment(ir, relation, segment_id)
     if transition.rule_id != "attention-ordinary-qkv-two-rank":
         raise ValueError(f"{segment_id} unsupported attention rule {transition.rule_id!r}")
     sm_nodes = ir.sm_nodes[segment.sm_range[0]:segment.sm_range[1]]
@@ -3174,7 +3402,8 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         return render_closed_binary_segment(ir, relation, segment_id)
     if family == ("rotary-embedding-two-output-ordinary-two-rank",):
         return render_closed_rotary_segment(ir, relation, segment_id)
-    if family == ("attention-ordinary-qkv-two-rank",):
+    if family in (("attention-ordinary-qkv-two-rank",),
+                   ("attention-zigzag-qkv-two-rank",)):
         return render_closed_attention_segment(ir, relation, segment_id)
     if family in (
         ("identity-view-ordinary-two-rank",),

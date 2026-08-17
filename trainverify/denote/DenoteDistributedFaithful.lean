@@ -174,6 +174,22 @@ theorem applyNodeDistributedFaithful_zigzag_attn_out
   unfold applyNodeDistributedFaithful storeCollectiveOutputs
   simp [storeSet]
 
+/-- A generated two-output zigzag-attention node writes its faithful value at
+its primary output while retaining the exact auxiliary output. -/
+theorem applyNodeDistributedFaithful_zigzag_attn_out_two
+    (g : GraphDecl) (s : Store) (rank : Nat)
+    (qTid kTid vTid cuQTid cuKVTid outTid auxTid : Tid) (params : List Nat) :
+    applyNodeDistributedFaithful g s
+      { rank := rank, op := "OpName.FW_attn_zigzag",
+        ins := [qTid, kTid, vTid, cuQTid, cuKVTid], outs := [outTid, auxTid],
+        params := params } outTid =
+      applyNodeFaithfulZigzagAttnValue g s
+        { rank := rank, op := "OpName.FW_attn_zigzag",
+          ins := [qTid, kTid, vTid, cuQTid, cuKVTid], outs := [outTid, auxTid],
+          params := params } := by
+  unfold applyNodeDistributedFaithful storeCollectiveOutputs
+  simp [storeSet]
+
 /-- The extension is conservative away from its three forward collectives. -/
 theorem applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
     (g : GraphDecl) (s : Store) (n : NodeDecl)

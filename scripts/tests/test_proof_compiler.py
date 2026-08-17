@@ -3704,6 +3704,71 @@ def test_closed_ordinary_attention_renderer_uses_exact_buddy_reconstruction(monk
     assert {"authority_replicated_eq_4947", "authority_replicated_eq_4948"} <= authority_ids
 
 
+def test_closed_zigzag_attention_renderer_is_faithful_and_generic(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    for goal in (1, 2):
+        ir = load_goal_ir(goal, str(root))
+        relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+        transitions = {item.transition_id: item for item in relation.transition_specs}
+        segment_ids = [
+            item.segment_id for item in relation.dependent_chain_plan.segments
+            if tuple(transitions[tid].rule_id for tid in item.transition_ids)
+            == ("attention-zigzag-qkv-two-rank",)
+        ]
+        assert len(segment_ids) == 12
+        for segment_id in segment_ids:
+            source = render_closed_attention_segment(ir, relation, segment_id)
+            assert "GeneratedPatterns.Zigzag2Rel.attn_zigzag_sharded_kv" in source
+            assert source.count("Ordinary2Rel.toGather2Rel") == 2
+            assert source.count("applyNodeDistributedFaithful_zigzag_attn_out") == 3
+            assert ".decoded_single" in source
+            assert source.count("let smFinal := smNodes.foldl (applyNodeDistributedFaithful") == 1
+            assert source.count("let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful") == 1
+            assert ir.sm_graph_ref in source and ir.pm_graph_ref in source
+
+
+def test_closed_zigzag_attention_roles_and_metadata_fail_closed(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    baseline = render_closed_attention_segment(ir, relation, "segment_000260")
+    segment = next(item for item in relation.dependent_chain_plan.segments
+                   if item.segment_id == "segment_000260")
+    transition_id = segment.transition_ids[0]
+    reordered = tuple(
+        replace(item, pre_facts=tuple(reversed(item.pre_facts)))
+        if item.transition_id == transition_id else item
+        for item in relation.transition_specs
+    )
+    assert render_closed_attention_segment(
+        ir, replace(relation, transition_specs=reordered), "segment_000260") == baseline
+
+    chain = relation.dependent_chain_plan
+    aliasless = tuple(
+        item for item in chain.authority_facts
+        if item.fact_id != "authority_pm_metadata_eq_000000_5610"
+    )
+    with pytest.raises(ValueError, match="exact metadata alias"):
+        render_closed_attention_segment(
+            ir,
+            replace(relation, dependent_chain_plan=replace(chain, authority_facts=aliasless)),
+            "segment_000260",
+        )
+    packedless = tuple(item for item in chain.authority_facts if item.kind != "packed_cu")
+    with pytest.raises(ValueError, match="PackedCu authority"):
+        render_closed_attention_segment(
+            ir,
+            replace(relation, dependent_chain_plan=replace(chain, authority_facts=packedless)),
+            "segment_000260",
+        )
+
+
 def test_mixed_moe_roles_are_tid_driven_and_params_are_not_model_literals(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")

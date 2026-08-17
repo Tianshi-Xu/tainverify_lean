@@ -3323,7 +3323,8 @@ def build_closed_dependent_chain_plan(
             ("packed_cu", region.contract_metadata_tid, region.total_tokens, region.num_ranks),
             (("pm", region.contract_metadata_tid),),
         )
-        actual_tids = facts_by_region.get(region.region_id, set())
+        actual_tids = set(facts_by_region.get(region.region_id, set()))
+        actual_tids.update(region.alias_tids)
         if not actual_tids:
             raise RelationCompositionError(
                 f"metadata region has no materialized zigzag facts: {region.region_id}"
