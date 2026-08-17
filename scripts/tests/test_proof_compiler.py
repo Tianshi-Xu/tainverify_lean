@@ -4041,11 +4041,11 @@ def test_goals34_zigzag_mixed_moe_renderer_preserves_layout_through_exact_unshuf
         )
         assert f"Goal_{goal_id}" not in source
 
-        with pytest.raises(ValueError) as exc:
-            compose_closed_dependent_chain(
-                ir, relation, f"ClosedGoal{goal_id}AfterZigzagMixedMoe"
-            )
-        assert "segment_000270" not in str(exc.value)
+        closed = compose_closed_dependent_chain(
+            ir, relation, f"ClosedGoal{goal_id}AfterZigzagMixedMoe"
+        )
+        assert "segment_000480" in closed
+        assert "smNodes =" in closed and "pmNodes =" in closed
 
 
 def test_closed_exit_unshuffle_renderer_is_generic_exact_single_fold(monkeypatch):
@@ -4227,6 +4227,41 @@ def test_goal3_closed_norm_full_producer_segment_is_generic_exact_single_fold(mo
     assert "hDecodedCu" in source
     assert "Goal_3" not in source
     assert "6218" in source and "[64, 1024]" in source
+
+
+def test_goals34_standalone_topk_unshuffle_is_generic_exact_and_one_fold(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    expected = {
+        3: ("topk_routing_map", 6248, (6221, 11524, 11525), (6249, 11602, 11603)),
+        4: ("topk_routing_gate_scores", 6250, (6222, 11526, 11527), (6251, 11604, 11605)),
+    }
+
+    for goal_id, (theorem, metadata_tid, projected, outputs) in expected.items():
+        ir = load_goal_ir(goal_id, str(root))
+        relation = compile_relation_plan(
+            ir, compile_proof_plan(ir, build_default_registry())
+        )
+        source = render_closed_segment(ir, relation, "segment_000480")
+
+        assert len(source.encode()) < 2_500_000
+        assert source.count("let smFinal :=") == 1
+        assert source.count("let pmFinal :=") == 1
+        assert source.count("ClosedDepSegmentCertificate ") == 1
+        assert f"GeneratedPatterns.Zigzag2Rel.{theorem}" in source
+        assert "GeneratedPatterns.Zigzag2Rel.unshuffle_gather_single" in source
+        assert "change GeneratedPatterns.Zigzag2Rel" in source
+        assert "change GeneratedPatterns.Ordinary2Rel" in source
+        assert f"(pmFinal {metadata_tid})" in source
+        assert "authority_packed_cu_000000.Holds" in source
+        assert f"authority_pm_metadata_eq_000000_{metadata_tid}.Holds" in source
+        assert all(str(tid) in source for tid in (*projected, *outputs))
+        assert source.count("applyNodeDistributedFaithful_unshuffle_out") == 3
+        assert "fun x => x" not in source
+        assert f"Goal_{goal_id}" not in source
+
 
 def test_closed_chain_composer_assembles_complete_path_independently_of_renderers(monkeypatch):
     anchor = SimpleNamespace(

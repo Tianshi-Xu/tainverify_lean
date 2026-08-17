@@ -4824,6 +4824,425 @@ def render_closed_indexed_stack_segment(ir: GoalIR, relation, segment_id: str) -
     return "\n".join(lines)
 
 
+
+def render_closed_topk_unshuffle_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Render a synchronized top-k projection followed by faithful unshuffle."""
+    chain = relation.dependent_chain_plan
+    if chain is None or not chain.complete:
+        raise ValueError("top-k unshuffle renderer requires a complete closed chain")
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if segment is None or len(segment.transition_ids) != 1:
+        raise ValueError("top-k unshuffle segment must own one transition")
+    transition = {item.transition_id: item for item in relation.transition_specs}[
+        segment.transition_ids[0]
+    ]
+    if (
+        transition.rule_id != "zigzag-topk-unshuffle-two-rank"
+        or transition.lean_theorem
+        != "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.unshuffle_gather_single"
+        or len(transition.pre_facts) != 1
+        or len(transition.post_facts) != 1
+    ):
+        raise ValueError("segment is not the registered top-k unshuffle family")
+    synchronized = [
+        item
+        for item in relation.synchronized_steps
+        if item.rule_id == transition.rule_id
+        and item.input_step_triple == transition.pre_facts[0].step_triple
+        and item.output_step_triple == transition.post_facts[0].step_triple
+    ]
+    if len(synchronized) != 1:
+        raise ValueError("top-k unshuffle lacks one exact synchronized step")
+    synchronized = synchronized[0]
+    projection_specs = {
+        ".2.1": (1, "topk_routing_map", "map", " (by decide)"),
+        ".2.2": (2, "topk_routing_gate_scores", "scores", " (by decide) (by decide)"),
+    }
+    if synchronized.output_projection not in projection_specs:
+        raise ValueError("top-k unshuffle projection role is unsupported")
+    projection, theorem_name, lemma_name, lemma_extra = projection_specs[
+        synchronized.output_projection
+    ]
+    expected_topk_theorem = (
+        "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel." + theorem_name
+    )
+    if synchronized.lean_theorems != (expected_topk_theorem, transition.lean_theorem):
+        raise ValueError("top-k unshuffle theorem registration mismatch")
+    if ir.sm_num_ranks != 1 or ir.pm_num_ranks != 2:
+        raise ValueError("top-k unshuffle requires exact SM=1/PM=2 graph ranks")
+
+    records = {item.source: item for item in chain.relation_facts}
+    pre, post = records[transition.pre_facts[0]], records[transition.post_facts[0]]
+    if (
+        pre.kind != "zigzag"
+        or post.kind != "ordinary"
+        or pre.metadata_tid is None
+        or pre.metadata_region_id is None
+        or post.metadata_tid is not None
+        or pre.full_shape != post.full_shape
+        or pre.shard_shape != post.shard_shape
+        or len(pre.shard_shape) != 2
+        or pre.full_shape != (2 * pre.shard_shape[0], pre.shard_shape[1])
+    ):
+        raise ValueError("top-k unshuffle relation payload mismatch")
+    rows, num_experts = pre.shard_shape
+    if rows <= 0 or rows % 2 != 0 or num_experts <= 0:
+        raise ValueError("top-k unshuffle shape is not admissible")
+
+    sm_nodes = ir.sm_nodes[slice(*segment.sm_range)]
+    pm_nodes = ir.pm_nodes[slice(*segment.pm_range)]
+    sm_start, pm_start = segment.sm_range[0], segment.pm_range[0]
+    if len(transition.sm_node_indices) != 1 or len(transition.pm_node_indices) != 2:
+        raise ValueError("top-k unshuffle semantic ownership mismatch")
+    unshuffle_indices = (*transition.sm_node_indices, *transition.pm_node_indices)
+    usm = ir.sm_nodes[transition.sm_node_indices[0]]
+    up0, up1 = (ir.pm_nodes[index] for index in transition.pm_node_indices)
+    unodes = (usm, up0, up1)
+    if (
+        tuple(node.rank for node in unodes) != (0, 0, 1)
+        or any(
+            node.op != "FW_maybe_unshuffle"
+            or len(node.ins) != 2
+            or len(node.outs) != 1
+            for node in unodes
+        )
+        or tuple(node.params for node in unodes) != ([1, 0], [2, 0], [2, 1])
+        or len(set(unshuffle_indices)) != 3
+    ):
+        raise ValueError("top-k unshuffle node roles mismatch")
+    actual_metadata = {node.ins[1] for node in unodes}
+    if len(actual_metadata) != 1 or synchronized.metadata_tid not in actual_metadata:
+        raise ValueError("top-k unshuffle metadata binding mismatch")
+    actual_metadata_tid = next(iter(actual_metadata))
+    if (post.sm_tid, post.pm_rank0_tid, post.pm_rank1_tid) != tuple(
+        node.outs[0] for node in unodes
+    ):
+        raise ValueError("top-k unshuffle output fact roles mismatch")
+
+    def unique_route(nodes, unode, expected_input, expected_rank):
+        matches = [
+            (index, node)
+            for index, node in enumerate(nodes)
+            if unode.ins[0] in node.outs
+        ]
+        if len(matches) != 1:
+            raise ValueError("top-k unshuffle projection lacks one actual writer")
+        index, node = matches[0]
+        if (
+            node.op != "FW_topk_routing"
+            or node.rank != expected_rank
+            or len(node.ins) != 1
+            or node.ins[0] != expected_input
+            or len(node.outs) != 3
+            or node.outs[projection] != unode.ins[0]
+            or not node.params
+            or len(node.params) != 2
+            or node.params[1] != 1
+        ):
+            raise ValueError("top-k unshuffle projection writer role mismatch")
+        return index, node
+
+    sm_route_pos, rsm = unique_route(sm_nodes, usm, pre.sm_tid, 0)
+    pm0_route_pos, rp0 = unique_route(pm_nodes, up0, pre.pm_rank0_tid, 0)
+    pm1_route_pos, rp1 = unique_route(pm_nodes, up1, pre.pm_rank1_tid, 1)
+    if not (
+        sm_route_pos < transition.sm_node_indices[0] - sm_start
+        and pm0_route_pos < transition.pm_node_indices[0] - pm_start
+        and pm1_route_pos < transition.pm_node_indices[1] - pm_start
+        and rsm.params == rp0.params == rp1.params
+    ):
+        raise ValueError("top-k/unshuffle writers are not exactly source ordered")
+    top_k = rsm.params[0]
+
+    states = {item.state_id: item for item in chain.states}
+    before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    if pre.fact_id not in before.fact_ids or post.fact_id not in after.fact_ids:
+        raise ValueError("top-k unshuffle relation is not live")
+    if not set(after.fact_ids) <= ({post.fact_id} | set(before.fact_ids)):
+        raise ValueError("top-k unshuffle state delta mismatch")
+    authority = {item.fact_id: item for item in chain.authority_facts}
+    live_authority = [authority[item] for item in before.fact_ids if item in authority]
+
+    def authority_one(kind, predicate, label):
+        matches = [item for item in live_authority if item.kind == kind and predicate(item)]
+        if len(matches) != 1:
+            raise ValueError(f"top-k unshuffle lacks unique live {label}: {len(matches)}")
+        return matches[0]
+
+    pre_alias = authority_one(
+        "tensor_eq",
+        lambda item: item.left_side == "pm" and item.left_tid == pre.metadata_tid
+        and item.right_side == "pm",
+        "input metadata equality",
+    )
+    node_alias = authority_one(
+        "tensor_eq",
+        lambda item: (
+            item.left_side,
+            item.left_tid,
+            item.right_side,
+            item.right_tid,
+        ) == ("pm", actual_metadata_tid, "pm", pre_alias.right_tid),
+        "unshuffle metadata equality",
+    )
+    packed = authority_one(
+        "packed_cu",
+        lambda item: (
+            item.side,
+            item.tid,
+            item.total_tokens,
+            item.num_ranks,
+        ) == ("pm", pre_alias.right_tid, pre.full_shape[0], 2),
+        "metadata-region PackedCu authority",
+    )
+
+    sm_name = f"{segment.segment_id}_sm_nodes"
+    pm_name = f"{segment.segment_id}_pm_nodes"
+    sm_text = ", ".join(_node_text(item) for item in sm_nodes)
+    pm_text = ", ".join(_node_text(item) for item in pm_nodes)
+    writer_lines = []
+    writer_results = []
+    lines = [
+        f"private def {sm_name} : List NodeDecl := [{sm_text}]",
+        f"private def {pm_name} : List NodeDecl := [{pm_text}]",
+        "",
+        f"private def {segment.segment_id} :",
+        (f"    ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} "
+         f"{before.state_id} {after.state_id} where"),
+        f"  smNodes := {sm_name}",
+        f"  pmNodes := {pm_name}",
+        "  sound := by",
+        "    intro smStore pmStore hstate",
+        (f"    let smFinal := {sm_name}.foldl "
+         f"(applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore"),
+        (f"    let pmFinal := {pm_name}.foldl "
+         f"(applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore"),
+        (f"    have hframe : {before.state_id}.Holds smFinal pmFinal := "
+         f"{segment.segment_id}_frame smStore pmStore hstate"),
+        f"    have hIn : {pre.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
+        (f"    change GeneratedPatterns.Zigzag2Rel (smFinal {pre.sm_tid}) "
+        f"(pmFinal {pre.pm_rank0_tid}) (pmFinal {pre.pm_rank1_tid}) "
+        f"(pmFinal {pre.metadata_tid}) {_shape_text(pre.full_shape)} "
+        f"{_shape_text(pre.shard_shape)} at hIn"),
+        f"    have hPreAlias : {pre_alias.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
+        f"    have hNodeAlias : {node_alias.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
+        f"    have hPacked : {packed.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
+        f"    change pmFinal {pre.metadata_tid} = pmFinal {pre_alias.right_tid} at hPreAlias",
+        f"    change pmFinal {actual_metadata_tid} = pmFinal {pre_alias.right_tid} at hNodeAlias",
+        (f"    change ZigzagCollective.PackedCuSeqlensWF (pmFinal {pre_alias.right_tid}) "
+         f"{packed.total_tokens} 2 at hPacked"),
+        f"    have hSharedMetadata : pmFinal {pre.metadata_tid} = pmFinal {actual_metadata_tid} :=",
+        "      hPreAlias.trans hNodeAlias.symm",
+        f"    have hDecodedPre : decodeCuSeqlens (pmFinal {pre.metadata_tid}) = [0, {packed.total_tokens}] := by",
+        "      rw [hPreAlias]", "      exact hPacked.decoded_single",
+        f"    have hDecodedNode : decodeCuSeqlens (pmFinal {actual_metadata_tid}) = [0, {packed.total_tokens}] := by",
+        "      rw [hNodeAlias]", "      exact hPacked.decoded_single",
+    ]
+
+    def topk_value(side, absolute_index, node, output_tid, label):
+        graph = ir.sm_graph_ref if side == "sm" else ir.pm_graph_ref
+        store, final = ("smStore", "smFinal") if side == "sm" else ("pmStore", "pmFinal")
+        nodes, nodes_name, base = (
+            (sm_nodes, sm_name, sm_start) if side == "sm" else (pm_nodes, pm_name, pm_start)
+        )
+        params = _shape_text(node.params)
+        selector = (".fst", ".snd.fst", ".snd.snd")[projection]
+        expression = (
+            f"(fw_topk_routing ({{store}} {node.ins[0]}) ({params}.getD 0 1) "
+            f"((({{store}} {node.ins[0]}).shape.reverse.head?).getD ({params}.getD 1 1))){selector}"
+        )
+        apply_lines = [
+            "rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "  (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]",
+            "simp [applyNodeDistributed, applyNodeRingAttn]",
+            (f"simpa using (applyNode_fw_topk_routing_{lemma_name}_out {graph} t "
+             f"{node.rank} {node.ins[0]} {node.outs[0]} {node.outs[1]} "
+             f"{node.outs[2]} {params}{lemma_extra})"),
+        ]
+        writer_results.append((
+            label, f"{final} {output_tid} = {expression.format(store=final)}",
+        ))
+        writer_lines.extend(_render_mixed_final_value(
+            name=label, graph=graph, initial_store=store, final_store=final,
+            final_equality=("hsm" if side == "sm" else "hpm"),
+            nodes_name=nodes_name, nodes=nodes,
+            position=absolute_index - base, output_tid=output_tid,
+            input_tids=tuple(node.ins), written_tids=set(),
+            expression=expression, apply_lines=apply_lines,
+        ))
+
+    topk_value("sm", sm_start + sm_route_pos, rsm, usm.ins[0], "hRouteSmValue")
+    topk_value("pm", pm_start + pm0_route_pos, rp0, up0.ins[0], "hRoutePm0Value")
+    topk_value("pm", pm_start + pm1_route_pos, rp1, up1.ins[0], "hRoutePm1Value")
+    semantic_insert = len(lines)
+    lines.extend([
+        "    have hRouteSm := hRouteSmValue",
+        "    rw [hIn.full_shape] at hRouteSm",
+        "    simp at hRouteSm",
+        "    have hRoutePm0 := hRoutePm0Value",
+        "    rw [hIn.rank0_shape] at hRoutePm0",
+        "    simp at hRoutePm0",
+        "    have hRoutePm1 := hRoutePm1Value",
+        "    rw [hIn.rank1_shape] at hRoutePm1",
+        "    simp at hRoutePm1",
+        (f"    have hProjected := GeneratedPatterns.Zigzag2Rel.{theorem_name} "
+         f"{rows} {num_experts} {top_k} hIn (by decide) (by decide) "
+         "(by decide) hDecodedPre"),
+        (f"    have hUnshuffleInput : GeneratedPatterns.Zigzag2Rel "
+         f"(smFinal {usm.ins[0]}) (pmFinal {up0.ins[0]}) (pmFinal {up1.ins[0]}) "
+         f"(pmFinal {pre.metadata_tid}) {_shape_text(post.full_shape)} "
+         f"{_shape_text(post.shard_shape)} := by"),
+        "      rw [hRouteSm, hRoutePm0, hRoutePm1]",
+        "      exact hProjected",
+        "    rw [hSharedMetadata] at hUnshuffleInput",
+    ])
+
+    def unshuffle_value(side, absolute_index, node, peers, label):
+        graph = ir.sm_graph_ref if side == "sm" else ir.pm_graph_ref
+        store, final = ("smStore", "smFinal") if side == "sm" else ("pmStore", "pmFinal")
+        nodes, nodes_name, base = (
+            (sm_nodes, sm_name, sm_start) if side == "sm" else (pm_nodes, pm_name, pm_start)
+        )
+        values = ", ".join(f"{{store}} {peer.ins[0]}" for peer in peers)
+        expression = (
+            f"ZigzagCollective.fw_maybe_unshuffle_collective [{values}] "
+            f"(decodeCuSeqlens ({{store}} {actual_metadata_tid})) "
+            f"{node.params[0]} {node.params[1]}"
+        )
+        apply_lines = [
+            "rw [applyNodeDistributedFaithful_unshuffle_out]",
+            "unfold applyNodeFaithfulUnshuffleValue",
+            (f"rw [show {graph}.replicaBuddies {_node_text(node)} = "
+             f"[{', '.join(_node_text(peer) for peer in peers)}] by native_decide]"),
+            "rfl",
+        ]
+        semantic_inputs = tuple(peer.ins[0] for peer in peers) + (actual_metadata_tid,)
+        writer_results.append((
+            label, f"{final} {node.outs[0]} = {expression.format(store=final)}",
+        ))
+        writer_lines.extend(_render_mixed_final_value(
+            name=label, graph=graph, initial_store=store, final_store=final,
+            final_equality=("hsm" if side == "sm" else "hpm"),
+            nodes_name=nodes_name, nodes=nodes,
+            position=absolute_index - base, output_tid=node.outs[0],
+            input_tids=semantic_inputs, written_tids=set(),
+            expression=expression, apply_lines=apply_lines,
+        ))
+
+    unshuffle_value("sm", transition.sm_node_indices[0], usm, (usm,), "hUnshuffleSm")
+    unshuffle_value("pm", transition.pm_node_indices[0], up0, (up0, up1), "hUnshufflePm0")
+    unshuffle_value("pm", transition.pm_node_indices[1], up1, (up0, up1), "hUnshufflePm1")
+    writer_theorem = f"{segment.segment_id}_writer_values"
+    helper = [
+        f"private theorem {writer_theorem} (smStore pmStore smFinal pmFinal : Store)",
+        (f"    (hsm : smFinal = {sm_name}.foldl "
+         f"(applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore)"),
+        (f"    (hpm : pmFinal = {pm_name}.foldl "
+         f"(applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) :"),
+        "    " + " ∧\n    ".join(result for _name, result in writer_results) + " := by",
+        f"    let smNodes : List NodeDecl := {sm_name}",
+        f"    let pmNodes : List NodeDecl := {pm_name}",
+        *writer_lines,
+        "    exact ⟨" + ", ".join(name for name, _result in writer_results) + "⟩",
+        "",
+    ]
+    frame_theorem = f"{segment.segment_id}_frame"
+    frame_helper = [
+        f"private theorem {frame_theorem} (smStore pmStore : Store)",
+        f"    (hstate : {before.state_id}.Holds smStore pmStore) :",
+        (f"    {before.state_id}.Holds "
+         f"({sm_name}.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore) "
+         f"({pm_name}.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) := by"),
+        f"    let smNodes : List NodeDecl := {sm_name}",
+        f"    let pmNodes : List NodeDecl := {pm_name}",
+        "    apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "    · native_decide", "    · native_decide",
+        "    · simp only [smNodes]", "      native_decide",
+        "    · simp only [pmNodes]", "      native_decide",
+        "",
+    ]
+    writer_call = [
+        (f"    have hWriterValues := {writer_theorem} smStore pmStore smFinal pmFinal "
+         "(by rfl) (by rfl)"),
+    ]
+    for index, (name, _result) in enumerate(writer_results):
+        projection_text = ".2" * index + (
+            ".1" if index < len(writer_results) - 1 else ""
+        )
+        writer_call.append(f"    have {name} := hWriterValues{projection_text}")
+    lines[semantic_insert:semantic_insert] = writer_call
+    tail = _shape_text(post.shard_shape[1:])
+    lines.extend([
+        f"    have hUnshuffleCore : smFinal {usm.ins[0]} = allGatherPrimDimN 0 2 0",
+        (f"        [ZigzagCollective.fw_maybe_unshuffle_collective "
+         f"[pmFinal {up0.ins[0]}, pmFinal {up1.ins[0]}] "
+         f"(decodeCuSeqlens (pmFinal {actual_metadata_tid})) 2 0,"),
+        (f"         ZigzagCollective.fw_maybe_unshuffle_collective "
+         f"[pmFinal {up0.ins[0]}, pmFinal {up1.ins[0]}] "
+         f"(decodeCuSeqlens (pmFinal {actual_metadata_tid})) 2 1] := by"),
+        (f"      exact GeneratedPatterns.Zigzag2Rel.unshuffle_gather_single "
+         f"{rows} {tail} hUnshuffleInput"),
+        "        (by decide) (by decide) rfl hDecodedNode",
+        f"    have hOut : {post.fact_id}.Holds smFinal pmFinal := by",
+        (f"      change GeneratedPatterns.Ordinary2Rel (smFinal {post.sm_tid}) "
+         f"(pmFinal {post.pm_rank0_tid}) (pmFinal {post.pm_rank1_tid}) "
+         f"{_shape_text(post.full_shape)} {_shape_text(post.shard_shape)}"),
+        "      refine { full_value := ?_, full_shape := ?_, rank0_shape := ?_, rank1_shape := ?_ }",
+        "      · rw [hUnshuffleSm, hUnshufflePm0, hUnshufflePm1]",
+        "        simp only [ZigzagCollective.fw_maybe_unshuffle_collective_cpSize_one, List.getD_cons_zero]",
+        "        exact hUnshuffleCore",
+        "      · rw [hUnshuffleSm]",
+        "        simp only [ZigzagCollective.fw_maybe_unshuffle_collective_cpSize_one, List.getD_cons_zero]",
+        "        exact hUnshuffleInput.full_shape",
+        "      · rw [hUnshufflePm0, ZigzagCollective.fw_maybe_unshuffle_collective_shape]",
+        "        simp only [List.getD_cons_zero]",
+        "        exact hUnshuffleInput.rank0_shape",
+        "      · rw [hUnshufflePm1, ZigzagCollective.fw_maybe_unshuffle_collective_shape]",
+        "        simp only [List.getD_cons_succ, List.getD_cons_zero]",
+        "        exact hUnshuffleInput.rank1_shape",
+        "    exact RelationState.Holds.mono_insert hframe hOut (by native_decide)",
+        "",
+    ])
+    semantic_start = next(
+        index for index, line in enumerate(lines)
+        if line.startswith("    have hIn :")
+    )
+    semantic_end = next(
+        index for index, line in enumerate(lines)
+        if line.startswith("    exact RelationState.Holds.mono_insert")
+    )
+    semantic_body = lines[semantic_start:semantic_end]
+    for call_line in writer_call:
+        if call_line not in semantic_body:
+            raise ValueError("top-k unshuffle writer call escaped semantic block")
+        semantic_body.remove(call_line)
+    relation_theorem = f"{segment.segment_id}_relation"
+    semantic_helper = [
+        f"private theorem {relation_theorem} (smFinal pmFinal : Store)",
+        f"    (hframe : {before.state_id}.Holds smFinal pmFinal)",
+    ]
+    semantic_helper.extend(
+        f"    ({name} : {result})" for name, result in writer_results
+    )
+    semantic_helper.extend([
+        f"    : {post.fact_id}.Holds smFinal pmFinal := by",
+        *semantic_body,
+        "    exact hOut",
+        "",
+    ])
+    relation_call = (
+        f"    have hOut := {relation_theorem} smFinal pmFinal hframe "
+        + " ".join(name for name, _result in writer_results)
+    )
+    lines[semantic_start:semantic_end + 1] = [
+        *writer_call,
+        relation_call,
+        "    exact RelationState.Holds.mono_insert hframe hOut (by native_decide)",
+    ]
+    return "\n".join(
+        lines[:3] + helper + frame_helper + semantic_helper + lines[3:]
+    )
+
 def render_closed_norm_full_producer_segment(ir: GoalIR, relation, segment_id: str) -> str:
     """Render one standalone two-rank norm-linear full-producer component."""
     chain = relation.dependent_chain_plan
@@ -5202,6 +5621,8 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         return render_closed_rms_norm_segment(ir, relation, segment_id)
     if family == ("zigzag-to-ordinary-unshuffle-two-rank",):
         return render_closed_unshuffle_segment(ir, relation, segment_id)
+    if family == ("zigzag-topk-unshuffle-two-rank",):
+        return render_closed_topk_unshuffle_segment(ir, relation, segment_id)
     if family == ("FW_norm_linear-full-producer-chunks-zigzag-two-rank",):
         return render_closed_norm_full_producer_segment(ir, relation, segment_id)
     if family == ("inner-chunk-ce-projection-gather-two-rank",):
