@@ -3088,6 +3088,7 @@ class RelationFactSpec:
     step_triple: tuple[str, ...]
     gather_dim: int | None = None
     source_step_triples: tuple[tuple[str, str, str], ...] = ()
+    joined_pm_step: str | None = None
 
 
 @dataclass(frozen=True)
@@ -3104,6 +3105,7 @@ class ClosedRelationFactRecord:
     shard_shape: tuple[int, ...]
     gather_dim: int | None = None
     source_tid_triples: tuple[tuple[int, int, int], ...] = ()
+    joined_pm_tid: int | None = None
 
 
 def materialize_closed_relation_facts(
@@ -3215,6 +3217,7 @@ def materialize_closed_relation_facts(
         metadata_tid = None
         metadata_region_id = None
         source_tid_triples = ()
+        joined_pm_tid = None
         if fact.layout == "zigzag":
             region = region_by_frontier.get(fact.step_triple)
             if region is None:
@@ -3231,8 +3234,8 @@ def materialize_closed_relation_facts(
                     f"zigzag metadata tid is outside its public alias region: {metadata_tid}"
                 )
             metadata_region_id = region.region_id
-        elif fact.layout == "indexed_stack_dim1":
-            if fact.gather_dim != 1 or not fact.source_step_triples:
+        elif fact.layout == "joined_indexed_stack_dim1":
+            if fact.gather_dim != 1 or not fact.source_step_triples or fact.joined_pm_step is None:
                 raise RelationCompositionError(
                     "indexed-stack fact must carry gather dimension 1 and nonempty ordered sources"
                 )
@@ -3255,6 +3258,15 @@ def materialize_closed_relation_facts(
                     )
                 source_tid_triples.append((source_sm_tid, source_pm0_tid, source_pm1_tid))
             source_tid_triples = tuple(source_tid_triples)
+            joined_pm_tid, joined_shape = resolve(fact.joined_pm_step, "pm")
+            if joined_shape != full_shape or joined_pm_tid in {pm0_tid, pm1_tid}:
+                raise RelationCompositionError("indexed-stack joined output is not a distinct full-shape PM tensor")
+        elif fact.layout == "joined_ordinary":
+            if fact.joined_pm_step is None:
+                raise RelationCompositionError("joined ordinary fact lacks its PM collective output")
+            joined_pm_tid, joined_shape = resolve(fact.joined_pm_step, "pm")
+            if joined_shape != full_shape or joined_pm_tid in {pm0_tid, pm1_tid}:
+                raise RelationCompositionError("joined ordinary output is not a distinct full-shape PM tensor")
         elif fact.layout not in {"ordinary", "label_chunks"}:
             raise RelationCompositionError(f"unsupported closed relation layout: {fact.layout}")
         else:
@@ -3273,6 +3285,7 @@ def materialize_closed_relation_facts(
             shard_shape=shard0_shape,
             gather_dim=fact.gather_dim,
             source_tid_triples=source_tid_triples,
+            joined_pm_tid=joined_pm_tid,
         ))
     return tuple(result)
 
@@ -4022,7 +4035,9 @@ def build_certificate_transition_specs(
                     raise RelationCompositionError("CE .fst transition lacks exact label chunks")
                 pre_items.append(_fact("label_chunks", cert.label_chunk_step_triple))
             pre = tuple(pre_items)
-            post = (_fact("ordinary", post_refs),)
+            post = (RelationFactSpec(
+                "joined_ordinary", post_refs, joined_pm_step=cert.pm_gather_step
+            ),)
             weight_tid = int(cert.weight_binding.split(":", 1)[1])
             label_tid = int(cert.label_binding.split(":", 1)[1])
             authority_requirements = (
@@ -4045,10 +4060,11 @@ def build_certificate_transition_specs(
             pre = tuple(_fact("ordinary", refs) for refs in cert.layer_step_triples)
             post_refs = (cert.sm_stack_step, *tuple(cert.pm_stack_steps))
             post = (RelationFactSpec(
-                "indexed_stack_dim1",
+                "joined_indexed_stack_dim1",
                 post_refs,
                 gather_dim=1,
                 source_step_triples=cert.layer_step_triples,
+                joined_pm_step=cert.pm_gather_step,
             ),)
             footprint_groups = (
                 (cert.sm_stack_step,), tuple(cert.pm_stack_steps), (cert.pm_gather_step,)

@@ -740,6 +740,12 @@ def StoreSide.read (side : StoreSide) (sm pm : Store) : Store :=
 
 /-- Truthful closed relation for a stack of ordered dim-0 source relations
 whose rank-local stacks reconstruct the full stack along dimension 1. -/
+structure JoinedOrdinary2Rel (full rank0 rank1 joined : Tensor)
+    (fullShape shardShape : Shape) : Prop extends
+    GeneratedPatterns.Ordinary2Rel full rank0 rank1 fullShape shardShape where
+  joined_value : joined = allGatherPrimDimN 0 2 0 [rank0, rank1]
+  public_value : full = joined
+
 structure IndexedStack2Rel (full rank0 rank1 : Tensor)
     (sources : List (Tensor × Tensor × Tensor))
     (gatherDim : Nat) (fullShape shardShape : Shape) : Prop where
@@ -755,11 +761,23 @@ structure IndexedStack2Rel (full rank0 rank1 : Tensor)
     GeneratedPatterns.Ordinary2Rel source.1 source.2.1 source.2.2
       fullShape.tail shardShape.tail
 
+structure JoinedIndexedStack2Rel (full rank0 rank1 joined : Tensor)
+    (sources : List (Tensor × Tensor × Tensor))
+    (gatherDim : Nat) (fullShape shardShape : Shape) : Prop extends
+    IndexedStack2Rel full rank0 rank1 sources gatherDim fullShape shardShape where
+  joined_value : joined = allGatherPrimDimN gatherDim 2 0 [rank0, rank1]
+  public_value : full = joined
+
 inductive RelationFact where
   | ordinary (smTid pmRank0Tid pmRank1Tid : Tid) (fullShape shardShape : Shape)
   | zigzag (smTid pmRank0Tid pmRank1Tid metadataTid : Tid) (fullShape shardShape : Shape)
   | gather (smTid pmRank0Tid pmRank1Tid dim : Tid) (fullShape shardShape : Shape)
+  | joinedOrdinary (smTid pmRank0Tid pmRank1Tid joinedPmTid : Tid)
+      (fullShape shardShape : Shape)
   | indexedStack (smTid pmRank0Tid pmRank1Tid : Tid)
+      (sourceTids : List (Tid × Tid × Tid)) (gatherDim : Nat)
+      (fullShape shardShape : Shape)
+  | joinedIndexedStack (smTid pmRank0Tid pmRank1Tid joinedPmTid : Tid)
       (sourceTids : List (Tid × Tid × Tid)) (gatherDim : Nat)
       (fullShape shardShape : Shape)
   | tensorEq (leftSide : StoreSide) (leftTid : Tid) (rightSide : StoreSide) (rightTid : Tid)
@@ -782,8 +800,16 @@ def RelationFact.Holds (fact : RelationFact) (sm pm : Store) : Prop :=
       sm smTid = allGatherPrimDimN dim 2 0 [pm pmRank0Tid, pm pmRank1Tid] ∧
       (sm smTid).shape = fullShape ∧
       (pm pmRank0Tid).shape = shardShape ∧ (pm pmRank1Tid).shape = shardShape
+  | .joinedOrdinary smTid pmRank0Tid pmRank1Tid joinedPmTid fullShape shardShape =>
+      JoinedOrdinary2Rel (sm smTid) (pm pmRank0Tid) (pm pmRank1Tid)
+        (pm joinedPmTid) fullShape shardShape
   | .indexedStack smTid pmRank0Tid pmRank1Tid sourceTids gatherDim fullShape shardShape =>
       IndexedStack2Rel (sm smTid) (pm pmRank0Tid) (pm pmRank1Tid)
+        (sourceTids.map fun tids => (sm tids.1, pm tids.2.1, pm tids.2.2))
+        gatherDim fullShape shardShape
+  | .joinedIndexedStack smTid pmRank0Tid pmRank1Tid joinedPmTid sourceTids gatherDim fullShape shardShape =>
+      JoinedIndexedStack2Rel (sm smTid) (pm pmRank0Tid) (pm pmRank1Tid)
+        (pm joinedPmTid)
         (sourceTids.map fun tids => (sm tids.1, pm tids.2.1, pm tids.2.2))
         gatherDim fullShape shardShape
   | .tensorEq leftSide leftTid rightSide rightTid =>
@@ -1002,7 +1028,10 @@ def smTids : RelationFact → List Tid
   | .ordinary smTid _ _ _ _ => [smTid]
   | .zigzag smTid _ _ _ _ _ => [smTid]
   | .gather smTid _ _ _ _ _ => [smTid]
+  | .joinedOrdinary smTid _ _ _ _ _ => [smTid]
   | .indexedStack smTid _ _ sourceTids _ _ _ =>
+      smTid :: sourceTids.map (fun tids => tids.1)
+  | .joinedIndexedStack smTid _ _ _ sourceTids _ _ _ =>
       smTid :: sourceTids.map (fun tids => tids.1)
   | .tensorEq leftSide leftTid rightSide rightTid =>
       (if leftSide = .sm then [leftTid] else []) ++
@@ -1016,8 +1045,11 @@ def pmTids : RelationFact → List Tid
   | .ordinary _ pm0 pm1 _ _ => [pm0, pm1]
   | .zigzag _ pm0 pm1 metadataTid _ _ => [pm0, pm1, metadataTid]
   | .gather _ pm0 pm1 _ _ _ => [pm0, pm1]
+  | .joinedOrdinary _ pm0 pm1 joined _ _ => [pm0, pm1, joined]
   | .indexedStack _ pm0 pm1 sourceTids _ _ _ =>
       pm0 :: pm1 :: sourceTids.flatMap (fun tids => [tids.2.1, tids.2.2])
+  | .joinedIndexedStack _ pm0 pm1 joined sourceTids _ _ _ =>
+      pm0 :: pm1 :: joined :: sourceTids.flatMap (fun tids => [tids.2.1, tids.2.2])
   | .tensorEq leftSide leftTid rightSide rightTid =>
       (if leftSide = .pm then [leftTid] else []) ++
       (if rightSide = .pm then [rightTid] else [])
@@ -1045,6 +1077,10 @@ theorem Holds.frame {fact : RelationFact} {sm pm sm' pm' : Store}
       simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
       rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
       exact h
+  | joinedOrdinary smTid pm0 pm1 joined fullShape shardShape =>
+      simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
+      rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
+      exact h
   | indexedStack smTid pm0 pm1 sourceTids gatherDim fullShape shardShape =>
       simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
       have hsources :
@@ -1065,6 +1101,30 @@ theorem Holds.frame {fact : RelationFact} {sm pm sm' pm' : Store}
           exact Or.inr (Or.inr ⟨tids, htids, by simp⟩)
         rw [hsm _ hsmMem, hpm _ hpm0Mem, hpm _ hpm1Mem]
       rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp), hsources]
+      exact h
+  | joinedIndexedStack smTid pm0 pm1 joined sourceTids gatherDim fullShape shardShape =>
+      simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
+      have hsources :
+          sourceTids.map (fun tids => (sm' tids.1, pm' tids.2.1, pm' tids.2.2)) =
+            sourceTids.map (fun tids => (sm tids.1, pm tids.2.1, pm tids.2.2)) := by
+        apply List.map_congr_left
+        intro tids htids
+        have hsmMem : tids.1 ∈ smTid :: sourceTids.map (fun item => item.1) := by
+          right
+          exact List.mem_map.mpr ⟨tids, htids, rfl⟩
+        have hpm0Mem : tids.2.1 ∈
+            pm0 :: pm1 :: joined ::
+              sourceTids.flatMap (fun item => [item.2.1, item.2.2]) := by
+          simp only [List.mem_cons, List.mem_flatMap]
+          exact Or.inr (Or.inr (Or.inr ⟨tids, htids, by simp⟩))
+        have hpm1Mem : tids.2.2 ∈
+            pm0 :: pm1 :: joined ::
+              sourceTids.flatMap (fun item => [item.2.1, item.2.2]) := by
+          simp only [List.mem_cons, List.mem_flatMap]
+          exact Or.inr (Or.inr (Or.inr ⟨tids, htids, by simp⟩))
+        rw [hsm _ hsmMem, hpm _ hpm0Mem, hpm _ hpm1Mem]
+      rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp),
+        hpm _ (by simp), hsources]
       exact h
   | tensorEq leftSide leftTid rightSide rightTid =>
       simp only [Holds, smTids, pmTids, StoreSide.read] at h hsm hpm ⊢

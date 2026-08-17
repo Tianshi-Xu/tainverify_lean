@@ -511,17 +511,25 @@ def render_closed_relation_declarations(chain, namespace: str) -> str:
                 f"{fact.metadata_tid} {shape_text(fact.full_shape)} "
                 f"{shape_text(fact.shard_shape)}"
             )
-        elif fact.kind == "indexed_stack_dim1":
-            if fact.gather_dim != 1 or not fact.source_tid_triples:
+        elif fact.kind == "joined_ordinary":
+            if fact.joined_pm_tid is None:
+                raise ValueError(f"joined ordinary fact is not closed: {fact.fact_id}")
+            constructor = (
+                f".joinedOrdinary {fact.sm_tid} {fact.pm_rank0_tid} {fact.pm_rank1_tid} "
+                f"{fact.joined_pm_tid} {shape_text(fact.full_shape)} "
+                f"{shape_text(fact.shard_shape)}"
+            )
+        elif fact.kind == "joined_indexed_stack_dim1":
+            if fact.gather_dim != 1 or not fact.source_tid_triples or fact.joined_pm_tid is None:
                 raise ValueError(f"indexed-stack fact is not closed: {fact.fact_id}")
             sources = "[" + ", ".join(
                 f"({sm_tid}, {pm0_tid}, {pm1_tid})"
                 for sm_tid, pm0_tid, pm1_tid in fact.source_tid_triples
             ) + "]"
             constructor = (
-                f".indexedStack {fact.sm_tid} {fact.pm_rank0_tid} {fact.pm_rank1_tid} "
-                f"{sources} {fact.gather_dim} {shape_text(fact.full_shape)} "
-                f"{shape_text(fact.shard_shape)}"
+                f".joinedIndexedStack {fact.sm_tid} {fact.pm_rank0_tid} {fact.pm_rank1_tid} "
+                f"{fact.joined_pm_tid} {sources} {fact.gather_dim} "
+                f"{shape_text(fact.full_shape)} {shape_text(fact.shard_shape)}"
             )
         else:
             raise ValueError(f"unsupported closed relation fact: {fact.kind}")
@@ -3157,7 +3165,8 @@ def render_closed_ce_snd_segment(ir: GoalIR, relation, segment_id: str) -> str:
     post = records[transition.post_facts[0]]
     if (
         pre.kind != "ordinary"
-        or post.kind != "ordinary"
+        or post.kind != "joined_ordinary"
+        or post.joined_pm_tid != gather.outs[0]
         or (pre.sm_tid, pre.pm_rank0_tid, pre.pm_rank1_tid)
         != (sm.ins[0], p0.ins[0], p1.ins[0])
         or (post.sm_tid, post.pm_rank0_tid, post.pm_rank1_tid)
@@ -3266,6 +3275,7 @@ def render_closed_ce_snd_segment(ir: GoalIR, relation, segment_id: str) -> str:
     sm_writer_name = f"{segment.segment_id}_sm_writer_value"
     pm0_writer_name = f"{segment.segment_id}_pm0_writer_value"
     pm1_writer_name = f"{segment.segment_id}_pm1_writer_value"
+    gather_writer_name = f"{segment.segment_id}_gather_writer_value"
     core_name = f"{segment.segment_id}_semantic_core"
     shapes_name = f"{segment.segment_id}_output_shapes"
     output_name = f"{segment.segment_id}_output_relation"
@@ -3282,6 +3292,35 @@ def render_closed_ce_snd_segment(ir: GoalIR, relation, segment_id: str) -> str:
     lines += writer(sm_writer_name, sm_graph, "smStore", sm_final_name, sm_nodes_name, [sm], 0)
     lines += writer(pm0_writer_name, pm_graph, "pmStore", pm_final_name, pm_nodes_name, pms, 0)
     lines += writer(pm1_writer_name, pm_graph, "pmStore", pm_final_name, pm_nodes_name, pms, 1)
+    gather_prefix = pms[:2]
+    gather_prefix_text = "[" + ", ".join(_node_text(item) for item in gather_prefix) + "]"
+    gather_text = _node_text(gather)
+    lines += [
+        f"private theorem {gather_writer_name} (pmStore : Store) :",
+        f"    {pm_final_name} pmStore {gather.outs[0]} =",
+        f"      allGatherPrimDimN 0 2 0 [{pm_final_name} pmStore {gather.ins[0]}, {pm_final_name} pmStore {gather.ins[1]}] := by",
+        f"  have hWriter : {pm_final_name} pmStore {gather.outs[0]} =",
+        f"      allGatherPrimDimN 0 2 0 [({gather_prefix_text}.foldl (applyNodeDistributedFaithful {pm_graph}) pmStore) {gather.ins[0]},",
+        f"        ({gather_prefix_text}.foldl (applyNodeDistributedFaithful {pm_graph}) pmStore) {gather.ins[1]}] := by",
+        f"    unfold {pm_final_name}",
+        f"    rw [show {pm_nodes_name} = {gather_prefix_text} ++ [{gather_text}] ++ [] by native_decide]",
+        f"    exact foldl_faithful_middle_writer {pm_graph} pmStore {gather_prefix_text} [] {gather_text} {gather.outs[0]}",
+        f"      (fun t => allGatherPrimDimN 0 2 0 [t {gather.ins[0]}, t {gather.ins[1]}]) (by",
+        "        intro t",
+        "        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+        "          (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]",
+        "        unfold applyNodeDistributed",
+        "        rw [if_neg (by decide)]",
+        "        rw [applyNodeRingAttn_eq_applyNode_of_not_ring]",
+        f"        · exact applyNode_allGatherPrimDimN_out {pm_graph} t {gather.rank} [{gather.ins[0]}, {gather.ins[1]}] {gather.outs[0]} 0",
+        "        · decide", "        · decide",
+        "      ) (by native_decide) (by native_decide)",
+        f"  have h0 := foldl_faithful_prefix_read_eq_final {pm_graph} pmStore {gather_prefix_text} [{gather_text}] {gather.ins[0]} (by native_decide) (by native_decide)",
+        f"  have h1 := foldl_faithful_prefix_read_eq_final {pm_graph} pmStore {gather_prefix_text} [{gather_text}] {gather.ins[1]} (by native_decide) (by native_decide)",
+        f"  change ({gather_prefix_text}.foldl (applyNodeDistributedFaithful {pm_graph}) pmStore) {gather.ins[0]} = {pm_final_name} pmStore {gather.ins[0]} at h0",
+        f"  change ({gather_prefix_text}.foldl (applyNodeDistributedFaithful {pm_graph}) pmStore) {gather.ins[1]} = {pm_final_name} pmStore {gather.ins[1]} at h1",
+        "  rw [h0, h1] at hWriter", "  exact hWriter", "",
+    ]
     lines += [
         f"private theorem {core_name} (smStore pmStore : Store)",
         f"    (hIn : GeneratedPatterns.Ordinary2Rel (smStore {sm.ins[0]}) (pmStore {p0.ins[0]}) (pmStore {p1.ins[0]}) {pre_fs} {pre_ss})",
@@ -3334,25 +3373,30 @@ def render_closed_ce_snd_segment(ir: GoalIR, relation, segment_id: str) -> str:
         f"  have hSmWriter := {sm_writer_name} smStore",
         f"  have hPm0Writer := {pm0_writer_name} pmStore",
         f"  have hPm1Writer := {pm1_writer_name} pmStore",
+        f"  have hGatherWriter := {gather_writer_name} pmStore",
         f"  have hCore := {core_name} smStore pmStore hIn hWeightEq hWeightShape",
         f"  obtain ⟨hSmShape, hPm0Shape, hPm1Shape⟩ := {shapes_name} smStore pmStore hIn",
-        f"  change GeneratedPatterns.Ordinary2Rel ({sm_final_name} smStore {sm.outs[1]}) ({pm_final_name} pmStore {p0.outs[1]}) ({pm_final_name} pmStore {p1.outs[1]}) {fs} {ss}",
-        "  refine {",
-        "    full_value := ?_",
-        "    full_shape := ?_",
-        "    rank0_shape := ?_",
-        "    rank1_shape := ?_",
-        "  }",
-        "  · rw [hSmWriter, hPm0Writer, hPm1Writer]",
-        f"    rw [show (((smStore {weight}).shape.head?).getD 0) = {vocab} by rw [hWeightEq, hWeightShape]; rfl]",
-        f"    rw [show (((pmStore {weight}).shape.head?).getD 0) = {vocab} by rw [hWeightShape]; rfl]",
-        "    exact hCore",
-        "  · rw [hSmWriter]",
-        "    exact hSmShape",
-        "  · rw [hPm0Writer]",
-        "    exact hPm0Shape",
-        "  · rw [hPm1Writer]",
-        "    exact hPm1Shape",
+        f"  change JoinedOrdinary2Rel ({sm_final_name} smStore {sm.outs[1]}) ({pm_final_name} pmStore {p0.outs[1]}) ({pm_final_name} pmStore {p1.outs[1]}) ({pm_final_name} pmStore {gather.outs[0]}) {fs} {ss}",
+        "  have hOrdinary : GeneratedPatterns.Ordinary2Rel",
+        f"      ({sm_final_name} smStore {sm.outs[1]}) ({pm_final_name} pmStore {p0.outs[1]}) ({pm_final_name} pmStore {p1.outs[1]}) {fs} {ss} := by",
+        "    refine {",
+        "      full_value := ?_",
+        "      full_shape := ?_",
+        "      rank0_shape := ?_",
+        "      rank1_shape := ?_",
+        "    }",
+        "    · rw [hSmWriter, hPm0Writer, hPm1Writer]",
+        f"      rw [show (((smStore {weight}).shape.head?).getD 0) = {vocab} by rw [hWeightEq, hWeightShape]; rfl]",
+        f"      rw [show (((pmStore {weight}).shape.head?).getD 0) = {vocab} by rw [hWeightShape]; rfl]",
+        "      exact hCore",
+        "    · rw [hSmWriter]",
+        "      exact hSmShape",
+        "    · rw [hPm0Writer]",
+        "      exact hPm0Shape",
+        "    · rw [hPm1Writer]",
+        "      exact hPm1Shape",
+        "  refine { toOrdinary2Rel := hOrdinary, joined_value := hGatherWriter, public_value := ?_ }",
+        "  exact hOrdinary.full_value.trans hGatherWriter.symm",
         "",
         f"private def {segment.segment_id} :",
         f"    ClosedDepSegmentCertificate {sm_graph} {pm_graph} {before.state_id} {after.state_id} where",
@@ -3931,8 +3975,8 @@ def render_closed_ce_fst_segment(ir: GoalIR, relation, segment_id: str) -> str:
     if len(transition.post_facts) != 1 or transition.post_facts[0] not in records:
         raise ValueError("CE .fst output fact mismatch")
     post = records[transition.post_facts[0]]
-    if post.kind != "ordinary":
-        raise ValueError("CE .fst output is not ordinary")
+    if post.kind != "joined_ordinary" or post.joined_pm_tid != gather.outs[0]:
+        raise ValueError("CE .fst output is not joined ordinary")
     if ((activation.sm_tid, activation.pm_rank0_tid, activation.pm_rank1_tid)
             != (sm.ins[0], p0.ins[0], p1.ins[0])):
         raise ValueError("CE .fst activation roles do not match node TIDs")
@@ -4052,6 +4096,23 @@ def render_closed_ce_fst_segment(ir: GoalIR, relation, segment_id: str) -> str:
     lines += writer("hPm0Writer", pm_graph, "pmStore", "pmFinal", p0, [], [p1, gather])
     lines += writer("hPm1Writer", pm_graph, "pmStore", "pmFinal", p1, [p0], [gather])
     lines += [
+        f"    have hGatherWriter : pmFinal {gather.outs[0]} = allGatherPrimDimN 0 2 0 [pmFinal {gather.ins[0]}, pmFinal {gather.ins[1]}] := by",
+        f"      have hWriter : pmFinal {gather.outs[0]} = allGatherPrimDimN 0 2 0 [([{p0_text}, {p1_text}].foldl (applyNodeDistributedFaithful {pm_graph}) pmStore) {gather.ins[0]}, ([{p0_text}, {p1_text}].foldl (applyNodeDistributedFaithful {pm_graph}) pmStore) {gather.ins[1]}] := by",
+        "        unfold pmFinal pmNodes",
+        f"        exact foldl_faithful_middle_writer {pm_graph} pmStore [{p0_text}, {p1_text}] [] {gather_text} {gather.outs[0]}",
+        f"          (fun t => allGatherPrimDimN 0 2 0 [t {gather.ins[0]}, t {gather.ins[1]}]) (by",
+        "            intro t",
+        "            rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+        "              (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]",
+        "            simp [applyNodeDistributed, applyNodeRingAttn]",
+        f"            exact applyNode_allGatherPrimDimN_out {pm_graph} t 0 [{gather.ins[0]}, {gather.ins[1]}] {gather.outs[0]} 0)",
+        "          (by native_decide) (by native_decide)",
+        f"      have h0 := foldl_faithful_prefix_read_eq_final {pm_graph} pmStore [{p0_text}, {p1_text}] [{gather_text}] {gather.ins[0]} (by native_decide) (by native_decide)",
+        f"      have h1 := foldl_faithful_prefix_read_eq_final {pm_graph} pmStore [{p0_text}, {p1_text}] [{gather_text}] {gather.ins[1]} (by native_decide) (by native_decide)",
+        "      change _ = pmFinal _ at h0 h1",
+        "      rw [h0, h1] at hWriter", "      exact hWriter",
+    ]
+    lines += [
         f"    have hVocab : (((pmStore {weight}).shape.head?).getD 0) = {vocab} := by",
         "      rw [hWeightShape]", "      rfl",
         "    have hCore := GeneratedPatterns.fw_inner_chunk_ce_fst_allGather0_commute_2_of",
@@ -4060,18 +4121,22 @@ def render_closed_ce_fst_segment(ir: GoalIR, relation, segment_id: str) -> str:
         "      hActivation.rank0_shape hActivation.rank1_shape hWeightShape",
         "      (by simpa only [Nat.reduceMul] using hLabelShape) hLabelBound " + zscale,
         f"    have hOut : {post.fact_id}.Holds smFinal pmFinal := by",
-        f"      change GeneratedPatterns.Ordinary2Rel (smFinal {sm.outs[0]}) (pmFinal {p0.outs[0]}) (pmFinal {p1.outs[0]}) {_shape_text(post.full_shape)} {_shape_text(post.shard_shape)}",
-        "      refine {", "        full_value := ?_", "        full_shape := ?_",
-        "        rank0_shape := ?_", "        rank1_shape := ?_", "      }",
-        "      · rw [hSmWriter, hPm0Writer, hPm1Writer, hWeightEq, hLabelEq, hChunks.1, hChunks.2.1, hVocab]",
-        "        rw [hActivation.full_value]",
-        "        exact hCore",
-        "      · rw [hSmWriter]",
-        f"        exact fw_inner_chunk_ce_fst_shape _ _ _ _ _ {rows * 2} (by rw [hActivation.full_shape]; rfl)",
-        "      · rw [hPm0Writer]",
-        f"        exact fw_inner_chunk_ce_fst_shape _ _ _ _ _ {rows} (by rw [hActivation.rank0_shape]; rfl)",
-        "      · rw [hPm1Writer]",
-        f"        exact fw_inner_chunk_ce_fst_shape _ _ _ _ _ {rows} (by rw [hActivation.rank1_shape]; rfl)",
+        f"      change JoinedOrdinary2Rel (smFinal {sm.outs[0]}) (pmFinal {p0.outs[0]}) (pmFinal {p1.outs[0]}) (pmFinal {gather.outs[0]}) {_shape_text(post.full_shape)} {_shape_text(post.shard_shape)}",
+        "      have hOrdinary : GeneratedPatterns.Ordinary2Rel",
+        f"          (smFinal {sm.outs[0]}) (pmFinal {p0.outs[0]}) (pmFinal {p1.outs[0]}) {_shape_text(post.full_shape)} {_shape_text(post.shard_shape)} := by",
+        "        refine {", "          full_value := ?_", "          full_shape := ?_",
+        "          rank0_shape := ?_", "          rank1_shape := ?_", "        }",
+        "        · rw [hSmWriter, hPm0Writer, hPm1Writer, hWeightEq, hLabelEq, hChunks.1, hChunks.2.1, hVocab]",
+        "          rw [hActivation.full_value]",
+        "          exact hCore",
+        "        · rw [hSmWriter]",
+        f"          exact fw_inner_chunk_ce_fst_shape _ _ _ _ _ {rows * 2} (by rw [hActivation.full_shape]; rfl)",
+        "        · rw [hPm0Writer]",
+        f"          exact fw_inner_chunk_ce_fst_shape _ _ _ _ _ {rows} (by rw [hActivation.rank0_shape]; rfl)",
+        "        · rw [hPm1Writer]",
+        f"          exact fw_inner_chunk_ce_fst_shape _ _ _ _ _ {rows} (by rw [hActivation.rank1_shape]; rfl)",
+        "      refine { toOrdinary2Rel := hOrdinary, joined_value := hGatherWriter, public_value := ?_ }",
+        "      exact hOrdinary.full_value.trans hGatherWriter.symm",
         "    exact RelationState.Holds.mono_insert hframe hOut (by native_decide)", "",
     ]
     return "\n".join(lines)
@@ -4124,8 +4189,9 @@ def render_closed_indexed_stack_segment(ir: GoalIR, relation, segment_id: str) -
     if len(transition.post_facts) != 1 or transition.post_facts[0] not in records:
         raise ValueError("indexed stack lacks one closed post fact")
     post = records[transition.post_facts[0]]
-    if post.kind != "indexed_stack_dim1" or post.gather_dim != 1:
-        raise ValueError("indexed stack post relation is not truthful dim-1")
+    if (post.kind != "joined_indexed_stack_dim1" or post.gather_dim != 1
+            or post.joined_pm_tid != gather.outs[0]):
+        raise ValueError("indexed stack post relation is not truthful joined dim-1")
     ordered_specs = tuple(
         type(transition.pre_facts[0])("ordinary", refs)
         for refs in post.source.source_step_triples
@@ -4179,6 +4245,7 @@ def render_closed_indexed_stack_segment(ir: GoalIR, relation, segment_id: str) -
     frame_name = f"{prefix}_frame"
     writer_bundle_name = f"{prefix}_writer_values_source_preservation"
     semantic_name = f"{prefix}_indexed_stack_semantic"
+    gather_writer_name = f"{prefix}_gather_writer_value"
     sm_final = f"({sm_final_name} smStore)"
     pm_final = f"({pm_final_name} pmStore)"
     lines = [
@@ -4295,7 +4362,41 @@ def render_closed_indexed_stack_segment(ir: GoalIR, relation, segment_id: str) -
     reconstruction_name = f"{prefix}_ordered_reconstruction"
     state_name = f"{prefix}_publish_state"
 
+    gather_position = gather_index - segment.pm_range[0]
+    gather_before = pm_nodes[:gather_position]
+    gather_after = pm_nodes[gather_position + 1:]
+    gather_before_text = "[" + ", ".join(_node_text(item) for item in gather_before) + "]"
+    gather_after_text = "[" + ", ".join(_node_text(item) for item in gather_after) + "]"
+    gather_suffix_text = "[" + ", ".join(_node_text(item) for item in (gather, *gather_after)) + "]"
+    gather_text = _node_text(gather)
     lines += [
+        f"private theorem {gather_writer_name} (pmStore : Store) :",
+        f"    {pm_final} {gather.outs[0]} = allGatherPrimDimN 1 2 0",
+        f"      [{pm_final} {gather.ins[0]}, {pm_final} {gather.ins[1]}] := by",
+        f"  have hWriter : {pm_final} {gather.outs[0]} = allGatherPrimDimN 1 2 0",
+        f"      [({gather_before_text}.foldl (applyNodeDistributedFaithful {pm_graph}) pmStore) {gather.ins[0]},",
+        f"       ({gather_before_text}.foldl (applyNodeDistributedFaithful {pm_graph}) pmStore) {gather.ins[1]}] := by",
+        f"    unfold {pm_final_name}",
+        f"    rw [show {pm_nodes_name} = {gather_before_text} ++ [{gather_text}] ++ {gather_after_text} by native_decide]",
+        f"    exact foldl_faithful_middle_writer {pm_graph} pmStore {gather_before_text} {gather_after_text} {gather_text} {gather.outs[0]}",
+        f"      (fun t => allGatherPrimDimN 1 2 0 [t {gather.ins[0]}, t {gather.ins[1]}]) (by",
+        "        intro t",
+        "        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+        "          (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]",
+        "        unfold applyNodeDistributed", "        rw [if_neg (by decide)]",
+        "        rw [applyNodeRingAttn_eq_applyNode_of_not_ring]",
+        f"        · exact applyNode_allGatherPrimDimN_out {pm_graph} t {gather.rank} [{gather.ins[0]}, {gather.ins[1]}] {gather.outs[0]} 1",
+        "        · decide", "        · decide",
+        "      ) (by native_decide) (by native_decide)",
+        f"  have h0Raw := foldl_faithful_prefix_read_eq_final {pm_graph} pmStore {gather_before_text} {gather_suffix_text} {gather.ins[0]} (by native_decide) (by native_decide)",
+        f"  have h1Raw := foldl_faithful_prefix_read_eq_final {pm_graph} pmStore {gather_before_text} {gather_suffix_text} {gather.ins[1]} (by native_decide) (by native_decide)",
+        f"  have h0 : ({gather_before_text}.foldl (applyNodeDistributedFaithful {pm_graph}) pmStore) {gather.ins[0]} = {pm_final} {gather.ins[0]} := by",
+        f"    rw [{pm_final_name}]",
+        "    exact h0Raw",
+        f"  have h1 : ({gather_before_text}.foldl (applyNodeDistributedFaithful {pm_graph}) pmStore) {gather.ins[1]} = {pm_final} {gather.ins[1]} := by",
+        f"    rw [{pm_final_name}]",
+        "    exact h1Raw",
+        "  rw [h0, h1] at hWriter", "  exact hWriter", "",
         f"private theorem {source_relations_name} (smStore pmStore : Store)",
         f"    (hstate : {before.state_id}.Holds smStore pmStore) :",
         f"    ∀ source ∈ {triples},",
@@ -4372,27 +4473,32 @@ def render_closed_indexed_stack_segment(ir: GoalIR, relation, segment_id: str) -
     lines += [
         f"private theorem {semantic_name} (smStore pmStore : Store)",
         f"    (hstate : {before.state_id}.Holds smStore pmStore) :",
-        f"    IndexedStack2Rel ({sm_final} {sm.outs[0]}) ({pm_final} {p0.outs[0]})",
-        f"      ({pm_final} {p1.outs[0]}) {triples} 1 {_shape_text(post.full_shape)} {_shape_text(post.shard_shape)} := by",
+        f"    JoinedIndexedStack2Rel ({sm_final} {sm.outs[0]}) ({pm_final} {p0.outs[0]})",
+        f"      ({pm_final} {p1.outs[0]}) ({pm_final} {gather.outs[0]}) {triples} 1 {_shape_text(post.full_shape)} {_shape_text(post.shard_shape)} := by",
         f"  rcases {writer_bundle_name} smStore pmStore with",
         "    ⟨hSmWriter, hPm0Writer, hPm1Writer, hSmSources, hPm0Sources, hPm1Sources⟩",
         f"  have hSource00 := {prefix}_source_00 smStore pmStore hstate",
-        "  refine {", "    gather_dim := rfl", "    full_value := ?_",
-        "    full_shape := ?_", "    rank0_shape := ?_", "    rank1_shape := ?_",
-        "    full_stack := hSmWriter", "    rank0_stack := hPm0Writer",
-        "    rank1_stack := hPm1Writer",
-        f"    source_relations := {source_relations_name} smStore pmStore hstate", "  }",
-        "  · rw [hSmWriter, hPm0Writer, hPm1Writer]",
-        f"    exact {reconstruction_name} smStore pmStore hstate",
-        "  · rw [hSmWriter]", f"    apply fw_stack_shape _ [{full_rows}, {width}]", f"    change ({sm_final} {sources[0].sm_tid}).shape = [{full_rows}, {width}]", "    exact hSource00.full_shape",
-        "  · rw [hPm0Writer]", f"    apply fw_stack_shape _ [{shard_rows}, {width}]", f"    change ({pm_final} {sources[0].pm_rank0_tid}).shape = [{shard_rows}, {width}]", "    exact hSource00.rank0_shape",
-        "  · rw [hPm1Writer]", f"    apply fw_stack_shape _ [{shard_rows}, {width}]", f"    change ({pm_final} {sources[0].pm_rank1_tid}).shape = [{shard_rows}, {width}]", "    exact hSource00.rank1_shape", "",
+        f"  have hGatherWriter := {gather_writer_name} pmStore",
+        "  have hIndexed : IndexedStack2Rel",
+        f"      ({sm_final} {sm.outs[0]}) ({pm_final} {p0.outs[0]}) ({pm_final} {p1.outs[0]}) {triples} 1 {_shape_text(post.full_shape)} {_shape_text(post.shard_shape)} := by",
+        "    refine {", "      gather_dim := rfl", "      full_value := ?_",
+        "      full_shape := ?_", "      rank0_shape := ?_", "      rank1_shape := ?_",
+        "      full_stack := hSmWriter", "      rank0_stack := hPm0Writer",
+        "      rank1_stack := hPm1Writer",
+        f"      source_relations := {source_relations_name} smStore pmStore hstate", "    }",
+        "    · rw [hSmWriter, hPm0Writer, hPm1Writer]",
+        f"      exact {reconstruction_name} smStore pmStore hstate",
+        "    · rw [hSmWriter]", f"      apply fw_stack_shape _ [{full_rows}, {width}]", f"      change ({sm_final} {sources[0].sm_tid}).shape = [{full_rows}, {width}]", "      exact hSource00.full_shape",
+        "    · rw [hPm0Writer]", f"      apply fw_stack_shape _ [{shard_rows}, {width}]", f"      change ({pm_final} {sources[0].pm_rank0_tid}).shape = [{shard_rows}, {width}]", "      exact hSource00.rank0_shape",
+        "    · rw [hPm1Writer]", f"      apply fw_stack_shape _ [{shard_rows}, {width}]", f"      change ({pm_final} {sources[0].pm_rank1_tid}).shape = [{shard_rows}, {width}]", "      exact hSource00.rank1_shape",
+        "  refine { toIndexedStack2Rel := hIndexed, joined_value := hGatherWriter, public_value := ?_ }",
+        "  exact hIndexed.full_value.trans hGatherWriter.symm", "",
         f"private theorem {state_name} (smStore pmStore : Store)",
         f"    (hstate : {before.state_id}.Holds smStore pmStore) :",
         f"    {after.state_id}.Holds {sm_final} {pm_final} := by",
         f"  have hframe := {frame_name} smStore pmStore hstate",
         f"  have hOut : {post.fact_id}.Holds {sm_final} {pm_final} := by",
-        f"    change IndexedStack2Rel ({sm_final} {sm.outs[0]}) ({pm_final} {p0.outs[0]}) ({pm_final} {p1.outs[0]}) {triples} 1 {_shape_text(post.full_shape)} {_shape_text(post.shard_shape)}",
+        f"    change JoinedIndexedStack2Rel ({sm_final} {sm.outs[0]}) ({pm_final} {p0.outs[0]}) ({pm_final} {p1.outs[0]}) ({pm_final} {gather.outs[0]}) {triples} 1 {_shape_text(post.full_shape)} {_shape_text(post.shard_shape)}",
         f"    exact {semantic_name} smStore pmStore hstate",
         "  exact RelationState.Holds.mono_insert hframe hOut (by native_decide)", "",
         f"private def {segment.segment_id} :",

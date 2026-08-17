@@ -2898,7 +2898,8 @@ def test_indexed_stack_terminal_refuses_false_ordinary_dim0_publication(monkeypa
     )
     assert len(terminal.post_facts) == 1
     target = terminal.post_facts[0]
-    assert target.layout == "indexed_stack_dim1"
+    assert target.layout == "joined_indexed_stack_dim1"
+    assert target.joined_pm_step is not None
     assert target.gather_dim == 1
     assert len(target.source_step_triples) == 24
     assert all(len(triple) == 3 for triple in target.source_step_triples)
@@ -2911,7 +2912,8 @@ def test_indexed_stack_terminal_refuses_false_ordinary_dim0_publication(monkeypa
     materialized = {
         fact.source: fact for fact in relation.dependent_chain_plan.relation_facts
     }[target]
-    assert materialized.kind == "indexed_stack_dim1"
+    assert materialized.kind == "joined_indexed_stack_dim1"
+    assert materialized.joined_pm_tid == ir.lineage.tps[0][1]
     assert materialized.gather_dim == 1
     assert len(materialized.source_tid_triples) == 24
     assert materialized.full_shape == (24, 4096, 64)
@@ -2922,7 +2924,7 @@ def test_indexed_stack_terminal_refuses_false_ordinary_dim0_publication(monkeypa
     declaration = source.split(
         f"private def {materialized.fact_id} : RelationFact :=", 1
     )[1].split("\n\n", 1)[0]
-    assert ".indexedStack" in declaration
+    assert ".joinedIndexedStack" in declaration
     assert ".ordinary" not in declaration
     assert declaration.count("(") >= 24
 
@@ -3670,6 +3672,17 @@ def test_closed_goal2_ce_snd_terminal_renderer_is_generic_exact_single_fold(monk
     root = Path(__file__).resolve().parents[2]
     ir = load_goal_ir(2, str(root))
     relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    terminal = next(
+        transition for transition in relation.transition_specs
+        if transition.rule_id == "inner-chunk-ce-projection-gather-two-rank"
+    )
+    assert terminal.post_facts[0].layout == "joined_ordinary"
+    assert terminal.post_facts[0].joined_pm_step is not None
+    terminal_fact = next(
+        fact for fact in relation.dependent_chain_plan.relation_facts
+        if fact.source == terminal.post_facts[0]
+    )
+    assert terminal_fact.joined_pm_tid == 4927
     source = render_closed_ce_snd_segment(ir, relation, "segment_000487")
     assert source == render_closed_segment(ir, relation, "segment_000487")
     assert source.count("let smFinal :=") == 1
@@ -3691,6 +3704,9 @@ def test_closed_goal2_ce_snd_terminal_renderer_is_generic_exact_single_fold(monk
     assert source.count("RelationCompiler.inner_chunk_ce_snd_labels_independent") == 2
     assert "applyNode_fw_inner_chunk_ce_snd_out_1p" in source
     assert "op := \"OpName.AllGatherPrim\"" in source
+    assert "segment_000487_pm_final pmStore 4927" in source
+    assert "public_value := ?_" in source
+    assert "applyNode_allGatherPrimDimN_out" in source
     assert "authority_transition_eq_sm_6256_pm_6256.Holds" in source
     assert "authority_transition_shape_pm_6256.Holds" in source
     assert "ins := [6255, 6256, 4931]" in source
@@ -3933,7 +3949,19 @@ def test_goals34_closed_indexed_stack_renderer_is_truthful_generic_and_one_fold(
         ) in source
         assert "fw_stack_allGather0_dim1_commute_2d_element" in source
         assert source.count("applyNode_fw_stack_out") == 3
-        assert "IndexedStack2Rel" in source
+        assert "JoinedIndexedStack2Rel" in source
+        target = next(
+            transition.post_facts[0] for transition in relation.transition_specs
+            if transition.rule_id == "indexed-stack-gather-two-rank"
+        )
+        terminal_fact = next(
+            fact for fact in relation.dependent_chain_plan.relation_facts
+            if fact.source == target
+        )
+        assert terminal_fact.joined_pm_tid == ir.lineage.tps[0][1]
+        assert f"({segment.segment_id}_pmFinal pmStore) {terminal_fact.joined_pm_tid}" in source
+        assert "public_value := ?_" in source
+        assert "applyNode_allGatherPrimDimN_out" in source
         assert source.count("change GeneratedPatterns.Ordinary2Rel") == 24
         assert "have hSource00" in source and "have hSource23" in source
         assert (
