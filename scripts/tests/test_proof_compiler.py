@@ -11,6 +11,7 @@ import trainverify.bridge_emitter.emit2 as emit2_module
 import trainverify.bridge_emitter.parser as parser_module
 from trainverify.bridge_emitter.composer import (
     CompositionCode,
+    compose_closed_dependent_chain,
     compose_full_topology,
     render_closed_binary_segment,
     render_closed_float_segment,
@@ -20,6 +21,8 @@ from trainverify.bridge_emitter.composer import (
     render_closed_multiref_segment,
     render_closed_relation_declarations,
     render_closed_rms_norm_segment,
+    render_closed_rotary_segment,
+    render_closed_segment,
     render_closed_unary_segment,
 )
 from trainverify.bridge_emitter.emit2 import _publish_composed_source
@@ -3431,3 +3434,43 @@ def test_closed_mixed_moe_renderer_is_one_exact_fold_for_both_layouts(monkeypatc
         if layout == "ordinary":
             assert "Ordinary2Rel.toGather2Rel" in source
         assert layout in source
+
+def test_closed_segment_dispatch_is_explicit_and_fail_closed(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    for segment_id in ("segment_000000", "segment_000001", "segment_000002", "segment_000003", "segment_000004", "segment_000005"):
+        source = render_closed_segment(ir, relation, segment_id)
+        assert segment_id in source
+    source = render_closed_segment(ir, relation, "segment_000006")
+    assert "Ordinary2Rel.rotary_embedding_1d" in source
+    with pytest.raises(ValueError, match="unsupported closed segment family.*attention-ordinary-qkv-two-rank"):
+        render_closed_segment(ir, relation, "segment_000007")
+
+def test_closed_chain_composer_stops_at_first_unsupported_family(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    with pytest.raises(ValueError, match="segment_000007.*attention-ordinary-qkv-two-rank"):
+        compose_closed_dependent_chain(ir, relation, "ClosedGoal1")
+
+def test_closed_rotary_renderer_is_two_output_and_uses_1d_generic_theorem(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    source = render_closed_rotary_segment(ir, relation, "segment_000006")
+    assert "Ordinary2Rel.rotary_embedding_1d" in source
+    assert "fw_rotary_embedding_allGather0_commute_2" not in source
+    assert "fact_000628.Holds" in source
+    assert "fact_000629.Holds" in source
+    assert source.count("let smFinal := smNodes.foldl (applyNodeDistributedFaithful smGraph)") == 1
+    assert source.count("let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful pmGraph)") == 1

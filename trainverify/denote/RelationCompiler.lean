@@ -15,6 +15,7 @@ import denote.MultirefGeneral
 import denote.ChunkGatherDim0
 import denote.PointwiseGather
 import denote.MoEFullSplitCommute
+import denote.RotaryGather1D
 import denote.EmbeddingHiddenShard
 
 set_option maxRecDepth 100000
@@ -80,6 +81,44 @@ theorem Ordinary2Rel.toGather2Rel
     shard1_shape := h.rank1_shape
     nonscalar := hnonscalar
   }
+
+/-- Two-output RoPE preserves ordinary dim-0 sharding with one-dimensional
+position shards. -/
+theorem Ordinary2Rel.rotary_embedding_1d
+    {positions pos0 pos1 q q0 q1 k k0 k1 csSM csPM : Tensor}
+    {L qh kh d : Nat}
+    (hpositions : GeneratedPatterns.Ordinary2Rel positions pos0 pos1 [2 * L] [L])
+    (hq : GeneratedPatterns.Ordinary2Rel q q0 q1 [2 * L, qh, d] [L, qh, d])
+    (hk : GeneratedPatterns.Ordinary2Rel k k0 k1 [2 * L, kh, d] [L, kh, d])
+    (hcs : csSM = csPM)
+    (hL : 0 < L) (hqh : 0 < qh) (hkh : 0 < kh) (hd : 0 < d) :
+    GeneratedPatterns.Ordinary2Rel
+        (fw_rotary_embedding csSM positions q k qh kh).1
+        (fw_rotary_embedding csPM pos0 q0 k0 qh kh).1
+        (fw_rotary_embedding csPM pos1 q1 k1 qh kh).1
+        [2 * L, qh, d] [L, qh, d] ∧
+      GeneratedPatterns.Ordinary2Rel
+        (fw_rotary_embedding csSM positions q k qh kh).2
+        (fw_rotary_embedding csPM pos0 q0 k0 qh kh).2
+        (fw_rotary_embedding csPM pos1 q1 k1 qh kh).2
+        [2 * L, kh, d] [L, kh, d] := by
+  have hcomm := fw_rotary_embedding_allGather0_commute_2_1d_shards
+    csPM pos0 pos1 q0 q1 k0 k1 L qh kh d hL hqh hkh hd
+    hpositions.rank0_shape hpositions.rank1_shape
+    hq.rank0_shape hq.rank1_shape hk.rank0_shape hk.rank1_shape
+  constructor
+  · refine ⟨?_, ?_, ?_, ?_⟩
+    · rw [hcs, hpositions.full_value, hq.full_value, hk.full_value]
+      simpa [fw_rotary_embedding] using congrArg Prod.fst hcomm
+    · rw [fw_rotary_embedding_fst_shape, hq.full_shape]
+    · rw [fw_rotary_embedding_fst_shape, hq.rank0_shape]
+    · rw [fw_rotary_embedding_fst_shape, hq.rank1_shape]
+  · refine ⟨?_, ?_, ?_, ?_⟩
+    · rw [hcs, hpositions.full_value, hq.full_value, hk.full_value]
+      simpa [fw_rotary_embedding] using congrArg Prod.snd hcomm
+    · rw [fw_rotary_embedding_snd_shape, hk.full_shape]
+    · rw [fw_rotary_embedding_snd_shape, hk.rank0_shape]
+    · rw [fw_rotary_embedding_snd_shape, hk.rank1_shape]
 
 /-- Elementwise addition of two ordinary two-rank relations. -/
 theorem Ordinary2Rel.add

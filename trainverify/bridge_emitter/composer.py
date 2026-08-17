@@ -1405,6 +1405,205 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
     return "\n".join(node_defs + helper + prefix_lines + lines)
 
 
+def render_closed_rotary_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    chain = relation.dependent_chain_plan
+    if chain is None or not chain.complete:
+        raise ValueError("rotary renderer requires a complete closed chain")
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if segment is None or len(segment.transition_ids) != 1:
+        raise ValueError("rotary renderer requires one atomic transition")
+    transition = {item.transition_id: item for item in relation.transition_specs}[segment.transition_ids[0]]
+    if transition.rule_id != "rotary-embedding-two-output-ordinary-two-rank":
+        raise ValueError("rotary renderer received an unsupported relation family")
+    if len(transition.pre_facts) != 3 or len(transition.post_facts) != 2:
+        raise ValueError("rotary renderer requires three inputs and two outputs")
+    facts = {item.source: item for item in chain.relation_facts}
+    pre_facts = [facts[item] for item in transition.pre_facts]
+    post_facts = [facts[item] for item in transition.post_facts]
+    if any(item.kind != "ordinary" for item in pre_facts + post_facts):
+        raise ValueError("rotary renderer requires ordinary relations")
+    sm_nodes = ir.sm_nodes[slice(*segment.sm_range)]
+    pm_nodes = ir.pm_nodes[slice(*segment.pm_range)]
+    if len(sm_nodes) != 1 or len(pm_nodes) != 2:
+        raise ValueError("rotary footprint is not 1xSM+2xPM")
+    sm, p0, p1 = sm_nodes[0], pm_nodes[0], pm_nodes[1]
+    if any(node.op != "FW_rotary_embedding" for node in (sm, p0, p1)):
+        raise ValueError("rotary footprint has the wrong operator")
+    if (sm.rank, p0.rank, p1.rank) != (0, 0, 1):
+        raise ValueError("rotary ranks are not ordered")
+    if any(len(node.ins) != 4 or len(node.outs) != 2 or len(node.params) != 2 for node in (sm, p0, p1)):
+        raise ValueError("rotary node arity mismatch")
+    if tuple(sm.params) != tuple(p0.params) or tuple(sm.params) != tuple(p1.params):
+        raise ValueError("rotary head parameters disagree")
+    if p0.ins[0] != p1.ins[0] or sm.ins[0] != p0.ins[0]:
+        raise ValueError("rotary cache is not a shared replicated TID")
+
+    def relation_for_inputs(index: int):
+        matches = [item for item in pre_facts if
+            (item.sm_tid, item.pm_rank0_tid, item.pm_rank1_tid) ==
+            (sm.ins[index], p0.ins[index], p1.ins[index])]
+        if len(matches) != 1:
+            raise ValueError(f"rotary input role {index} is ambiguous")
+        return matches[0]
+
+    positions, q_rel, k_rel = (relation_for_inputs(index) for index in (1, 2, 3))
+    if len(positions.shard_shape) != 1 or positions.full_shape != (2 * positions.shard_shape[0],):
+        raise ValueError("rotary positions are not exact one-dimensional shards")
+    l_dim = positions.shard_shape[0]
+    qh, kh = sm.params
+    if qh <= 0 or kh <= 0 or l_dim <= 0:
+        raise ValueError("rotary dimensions must be positive")
+    if q_rel.shard_shape[:2] != (l_dim, qh) or k_rel.shard_shape[:2] != (l_dim, kh):
+        raise ValueError("rotary input head shapes disagree with params")
+    if len(q_rel.shard_shape) != 3 or len(k_rel.shard_shape) != 3 or q_rel.shard_shape[2] != k_rel.shard_shape[2]:
+        raise ValueError("rotary q/k head widths disagree")
+    d_width = q_rel.shard_shape[2]
+    if d_width <= 0 or q_rel.full_shape != (2 * l_dim, qh, d_width) or k_rel.full_shape != (2 * l_dim, kh, d_width):
+        raise ValueError("rotary q/k full shapes are not exact ordered shards")
+
+    def relation_for_outputs(index: int):
+        matches = [item for item in post_facts if
+            (item.sm_tid, item.pm_rank0_tid, item.pm_rank1_tid) ==
+            (sm.outs[index], p0.outs[index], p1.outs[index])]
+        if len(matches) != 1:
+            raise ValueError(f"rotary output role {index} is ambiguous")
+        return matches[0]
+
+    q_out, k_out = (relation_for_outputs(index) for index in (0, 1))
+    if (q_out.full_shape, q_out.shard_shape) != (q_rel.full_shape, q_rel.shard_shape):
+        raise ValueError("rotary q output changes shape")
+    if (k_out.full_shape, k_out.shard_shape) != (k_rel.full_shape, k_rel.shard_shape):
+        raise ValueError("rotary k output changes shape")
+    cache_facts = [item for item in chain.authority_facts
+        if getattr(item, "kind", None) == "tensor_eq"
+        and getattr(item, "left_side", None) == "sm"
+        and getattr(item, "right_side", None) == "pm"
+        and getattr(item, "left_tid", None) == sm.ins[0]
+        and getattr(item, "right_tid", None) == p0.ins[0]]
+    if len(cache_facts) != 1:
+        raise ValueError("rotary replicated cache authority is missing or ambiguous")
+    cache_fact = cache_facts[0]
+    states = {item.state_id: item for item in chain.states}
+    before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    required_pre = {positions.fact_id, q_rel.fact_id, k_rel.fact_id, cache_fact.fact_id}
+    if not required_pre <= set(before.fact_ids):
+        raise ValueError("rotary prerequisites are not live")
+    if not set(after.fact_ids) <= (set(before.fact_ids) | {q_out.fact_id, k_out.fact_id}):
+        raise ValueError("rotary introduces an unproved state fact")
+    sm_text = _node_text(sm)
+    pm_text = [_node_text(p0), _node_text(p1)]
+
+    def app(node: Node, graph: str, output_index: int, indent: str) -> list[str]:
+        lemma = "applyNode_fw_rotary_embedding_fst_out" if output_index == 0 else "applyNode_fw_rotary_embedding_snd_out"
+        lines = [
+            indent + "intro t",
+            indent + "rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            indent + "  (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]",
+            indent + "simp [applyNodeDistributed, applyNodeRingAttn]",
+            indent + f"exact {lemma} {graph} t {node.rank} {qh} {kh} "
+                + " ".join(str(item) for item in (*node.ins, *node.outs))
+                + (" (by native_decide)" if output_index == 1 else ""),
+        ]
+        return lines
+
+    def output_value(name: str, graph: str, store: str, nodes: list[Node], pos: int,
+                     node: Node, final: str, output_index: int) -> list[str]:
+        prior, later = nodes[:pos], nodes[pos + 1:]
+        projection = ".1" if output_index == 0 else ".2"
+        fn = (f"(fun t => (fw_rotary_embedding (t {node.ins[0]}) (t {node.ins[1]}) "
+              f"(t {node.ins[2]}) (t {node.ins[3]}) {qh} {kh}){projection})")
+        lines = []
+        read_names: list[str] = []
+        if prior:
+            prior_text = f"[{', '.join(_node_text(item) for item in prior)}]"
+            for tid in node.ins:
+                read_name = f"{name}_read_{tid}"
+                read_names.append(read_name)
+                lines += [
+                    f"    have {read_name} : {prior_text}.foldl (applyNodeDistributedFaithful {graph}) {store} {tid} = {store} {tid} := by",
+                    f"      exact foldl_applyNodeDistributedFaithful_at_not_written {graph} {prior_text} {store} {tid} (by native_decide) (by native_decide)",
+                ]
+        lines += [
+            (f"    have {name} : {final} {node.outs[output_index]} = "
+                f"(fw_rotary_embedding ({store} {node.ins[0]}) ({store} {node.ins[1]}) "
+                f"({store} {node.ins[2]}) ({store} {node.ins[3]}) {qh} {kh}){projection} := by"),
+            "      calc",
+            (f"        {final} {node.outs[output_index]} = {fn} "
+                f"([{', '.join(_node_text(item) for item in prior)}].foldl "
+                f"(applyNodeDistributedFaithful {graph}) {store}) := by"),
+            f"          simpa [{final}, {'smNodes' if final == 'smFinal' else 'pmNodes'}] using",
+            f"            (foldl_faithful_middle_writer {graph} {store}",
+            (f"              [{', '.join(_node_text(item) for item in prior)}] "
+                f"[{', '.join(_node_text(item) for item in later)}] {_node_text(node)}"),
+            f"              {node.outs[output_index]} ({fn}) (by",
+        ]
+        lines += app(node, graph, output_index, "                ")
+        lines += ["              ) (by native_decide) (by native_decide))"]
+        if prior:
+            lines += [f"        _ = {fn} {store} := by", "          dsimp only", f"          rw [{', '.join(read_names)}]"]
+        else:
+            lines += [f"        _ = {fn} {store} := rfl"]
+        return lines
+
+    lines = [
+        f"private def {segment.segment_id} (smGraph pmGraph : GraphDecl) :",
+        f"    ClosedDepSegmentCertificate smGraph pmGraph {before.state_id} {after.state_id} where",
+        f"  smNodes := [{sm_text}]",
+        f"  pmNodes := [{', '.join(pm_text)}]",
+        "  sound := by",
+        "    intro smStore pmStore hstate",
+        f"    let smNodes : List NodeDecl := [{sm_text}]",
+        f"    let pmNodes : List NodeDecl := [{', '.join(pm_text)}]",
+        "    let smFinal := smNodes.foldl (applyNodeDistributedFaithful smGraph) smStore",
+        "    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful pmGraph) pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
+        f"    have hpos : {positions.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    have hq : {q_rel.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    have hk : {k_rel.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    have hcache : {cache_fact.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+    ]
+    for prefix, graph, store, nodes, pos, node, final in (
+        ("sm", "smGraph", "smStore", sm_nodes, 0, sm, "smFinal"),
+        ("p0", "pmGraph", "pmStore", pm_nodes, 0, p0, "pmFinal"),
+        ("p1", "pmGraph", "pmStore", pm_nodes, 1, p1, "pmFinal"),
+    ):
+        lines += output_value(f"h{prefix}q", graph, store, nodes, pos, node, final, 0)
+        lines += output_value(f"h{prefix}k", graph, store, nodes, pos, node, final, 1)
+    q_full = _shape_text(list(q_out.full_shape)); q_shard = _shape_text(list(q_out.shard_shape))
+    k_full = _shape_text(list(k_out.full_shape)); k_shard = _shape_text(list(k_out.shard_shape))
+    pos_full = _shape_text(list(positions.full_shape)); pos_shard = _shape_text(list(positions.shard_shape))
+    lines += [
+        (f"    change GeneratedPatterns.Ordinary2Rel (smStore {positions.sm_tid}) "
+            f"(pmStore {positions.pm_rank0_tid}) (pmStore {positions.pm_rank1_tid}) {pos_full} {pos_shard} at hpos"),
+        (f"    change GeneratedPatterns.Ordinary2Rel (smStore {q_rel.sm_tid}) "
+            f"(pmStore {q_rel.pm_rank0_tid}) (pmStore {q_rel.pm_rank1_tid}) {q_full} {q_shard} at hq"),
+        (f"    change GeneratedPatterns.Ordinary2Rel (smStore {k_rel.sm_tid}) "
+            f"(pmStore {k_rel.pm_rank0_tid}) (pmStore {k_rel.pm_rank1_tid}) {k_full} {k_shard} at hk"),
+        f"    change smStore {sm.ins[0]} = pmStore {p0.ins[0]} at hcache",
+        f"    have houts := Ordinary2Rel.rotary_embedding_1d (L := {l_dim}) (qh := {qh}) (kh := {kh}) (d := {d_width})",
+        "      hpos hq hk hcache (by native_decide) (by native_decide) (by native_decide) (by native_decide)",
+        f"    have houtq : {q_out.fact_id}.Holds smFinal pmFinal := by",
+        (f"      change GeneratedPatterns.Ordinary2Rel (smFinal {q_out.sm_tid}) "
+            f"(pmFinal {q_out.pm_rank0_tid}) (pmFinal {q_out.pm_rank1_tid}) {q_full} {q_shard}"),
+        "      rw [hsmq, hp0q, hp1q]",
+        "      exact houts.1",
+        f"    have houtk : {k_out.fact_id}.Holds smFinal pmFinal := by",
+        (f"      change GeneratedPatterns.Ordinary2Rel (smFinal {k_out.sm_tid}) "
+            f"(pmFinal {k_out.pm_rank0_tid}) (pmFinal {k_out.pm_rank1_tid}) {k_full} {k_shard}"),
+        "      rw [hsmk, hp0k, hp1k]",
+        "      exact houts.2",
+        f"    have hqstate : ({{ facts := {q_out.fact_id} :: {before.state_id}.facts, nonempty := by decide }} : RelationState).Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.mono_insert hframe houtq",
+        "      intro fact hmem",
+        "      exact hmem",
+        "    exact RelationState.Holds.mono_insert hqstate houtk (by native_decide)",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def render_closed_binary_segment(ir: GoalIR, relation, segment_id: str) -> str:
     chain = relation.dependent_chain_plan
     if chain is None or not chain.complete:
@@ -2132,6 +2331,140 @@ def render_closed_rms_norm_segment(ir: GoalIR, relation, segment_id: str) -> str
         lines += [f"    have hmeta : pmFinal {post.metadata_tid} = pmStore {post.metadata_tid} := foldl_applyNodeDistributedFaithful_at_not_written pmGraph pmNodes pmStore {post.metadata_tid} (by native_decide) (by native_decide)",
           f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by", f"      change GeneratedPatterns.Zigzag2Rel (smStore {sm.ins[0]}) (pmStore {p0.ins[0]}) (pmStore {p1.ins[0]}) (pmStore {pre.metadata_tid}) {fs} {ss} at hin", f"      change GeneratedPatterns.Zigzag2Rel (smFinal {sm.outs[0]}) (pmFinal {p0.outs[0]}) (pmFinal {p1.outs[0]}) (pmFinal {post.metadata_tid}) {fs} {ss}", "      rw [hsmOut, hpm0Out, hpm1Out, hmeta, hweight]", f"      exact GeneratedPatterns.Zigzag2Rel.rms_norm {shard} {hidden} hin (by decide) (by decide) rfl"]
     lines += ["    exact RelationState.Holds.mono_insert hframe hout (by native_decide)", ""]
+    return "\n".join(lines)
+
+
+def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Render one closed segment through an explicit registered family adapter."""
+    chain = relation.dependent_chain_plan
+    if chain is None or not chain.complete:
+        raise ValueError("closed segment dispatch requires a complete closed chain")
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if segment is None:
+        raise ValueError(f"unknown closed segment: {segment_id}")
+    transitions = {item.transition_id: item for item in relation.transition_specs}
+    family = tuple(transitions[item].rule_id for item in segment.transition_ids)
+
+    if family and all(item == "multiref-projection-alias" for item in family):
+        return render_closed_multiref_segment(ir, relation, segment_id)
+    if (
+        family
+        and family[0] == "hidden-sharded-embedding-alltoall-ordinary-two-rank"
+        and all(item == "init-lineage-full-to-two-chunks" for item in family[1:])
+    ):
+        return render_closed_initial_component(ir, relation, segment_id)
+    if family == ("float-ordinary-two-rank",):
+        return render_closed_float_segment(ir, relation, segment_id)
+    if family in (("rms-norm-ordinary-two-rank",), ("rms-norm-zigzag-two-rank",)):
+        return render_closed_rms_norm_segment(ir, relation, segment_id)
+    if family in (
+        ("elementwise-add-ordinary-two-rank",),
+        ("elementwise-add-zigzag-two-rank",),
+        ("broadcast-mul-ordinary-two-rank",),
+        ("broadcast-mul-zigzag-two-rank",),
+    ):
+        return render_closed_binary_segment(ir, relation, segment_id)
+    if family == ("rotary-embedding-two-output-ordinary-two-rank",):
+        return render_closed_rotary_segment(ir, relation, segment_id)
+    if family in (
+        ("identity-view-ordinary-two-rank",),
+        ("identity-view-zigzag-two-rank",),
+        ("identity-reshape-ordinary-two-rank",),
+        ("identity-reshape-zigzag-two-rank",),
+        ("flatten-3d-ordinary-two-rank",),
+        ("flatten-3d-zigzag-two-rank",),
+    ):
+        return render_closed_unary_segment(ir, relation, segment_id)
+    if family in (
+        ("mix-precision-linear-ordinary-two-rank",),
+        ("mix-precision-linear-zigzag-two-rank",),
+    ) or (
+        len(family) == 3
+        and family[0] == "FW_per_head_mix_precision_linear-full-producer-chunks-ordinary-two-rank"
+        and family[1:] == ("per-head-linear-ordinary-two-rank",) * 2
+    ):
+        return render_closed_linear_segment(ir, relation, segment_id)
+    if (
+        len(family) == 16
+        and family[0] in (
+            "FW_norm_linear-full-producer-chunks-ordinary-two-rank",
+            "FW_norm_linear-full-producer-chunks-zigzag-two-rank",
+        )
+    ):
+        return render_closed_mixed_moe_segment(ir, relation, segment_id)
+    raise ValueError(f"unsupported closed segment family {family!r} at {segment_id}")
+
+
+def compose_closed_dependent_chain(
+    ir: GoalIR, relation, namespace: str
+) -> str:
+    """Render a complete closed chain or stop at its first unsupported family."""
+    chain = relation.dependent_chain_plan
+    if chain is None or not chain.complete:
+        raise ValueError("closed chain composition requires a complete closed chain")
+    if not namespace or not namespace.replace("_", "").isalnum():
+        raise ValueError(f"invalid closed chain namespace: {namespace!r}")
+    transitions = {item.transition_id: item for item in relation.transition_specs}
+    rendered: list[tuple[object, str, bool]] = []
+    for segment in chain.segments:
+        family = tuple(transitions[item].rule_id for item in segment.transition_ids)
+        try:
+            source = render_closed_segment(ir, relation, segment.segment_id)
+        except ValueError as exc:
+            raise ValueError(
+                f"closed chain stopped at {segment.segment_id} family {family!r}: {exc}"
+            ) from exc
+        concrete_graphs = (
+            family
+            and (
+                family[0] == "hidden-sharded-embedding-alltoall-ordinary-two-rank"
+                or len(family) == 16
+            )
+        )
+        rendered.append((segment, source, bool(concrete_graphs)))
+
+    declarations = render_closed_relation_declarations(chain, namespace)
+    marker = f"\nend\nend TrainVerify.Denote.{namespace}\n"
+    if not declarations.endswith(marker):
+        raise ValueError("closed relation declarations have an unexpected namespace boundary")
+    states = {item.state_id: item for item in chain.states}
+    final_state = states[chain.segments[-1].post_state_id]
+    lines = [declarations[: -len(marker)]]
+    lines.extend(source for _, source, _ in rendered)
+    suffix_name = f"{namespace}_suffix_{len(rendered):06d}"
+    lines.extend([
+        f"private noncomputable def {suffix_name} :",
+        f"    ClosedDepCertificateChain {ir.sm_graph_ref} {ir.pm_graph_ref} {final_state.state_id} {final_state.state_id} :=",
+        f"  .nil {final_state.state_id}",
+        "",
+    ])
+    for index in range(len(rendered) - 1, -1, -1):
+        segment, _, concrete_graphs = rendered[index]
+        next_name = suffix_name
+        suffix_name = f"{namespace}_suffix_{index:06d}"
+        head = segment.segment_id if concrete_graphs else (
+            f"{segment.segment_id} {ir.sm_graph_ref} {ir.pm_graph_ref}"
+        )
+        lines.extend([
+            f"private noncomputable def {suffix_name} :",
+            f"    ClosedDepCertificateChain {ir.sm_graph_ref} {ir.pm_graph_ref} {segment.pre_state_id} {final_state.state_id} :=",
+            f"  .cons {head} {next_name}",
+            "",
+        ])
+    first_state = states[chain.segments[0].pre_state_id]
+    chain_name = f"{namespace}_chain"
+    lines.extend([
+        f"noncomputable def {chain_name} :",
+        f"    ClosedDepCertificateChain {ir.sm_graph_ref} {ir.pm_graph_ref} {first_state.state_id} {final_state.state_id} :=",
+        f"  {suffix_name}",
+        "",
+        f"theorem {chain_name}_sm_nodes : {chain_name}.smNodes = {ir.sm_graph_ref}.nodes := by",
+        "  native_decide",
+        "",
+        f"theorem {chain_name}_pm_nodes : {chain_name}.pmNodes = {ir.pm_graph_ref}.nodes := by",
+        "  native_decide",
+        marker.lstrip("\n"),
+    ])
     return "\n".join(lines)
 
 
