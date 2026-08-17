@@ -3752,11 +3752,14 @@ def build_closed_dependent_chain_plan(
     components = {item.component_id: item for item in schedule.components}
     transition_order = {item: index for index, item in enumerate(dependency.order)}
     ordered_components = [components[item] for item in schedule.order]
-    packed_region_tids = {
-        region.contract_metadata_tid: {
-            region.contract_metadata_tid, *region.alias_tids,
-        }
+    metadata_region_by_contract = {
+        region.contract_metadata_tid: region.region_id
         for region in relation.zigzag_regions
+    }
+    metadata_authority_regions = {
+        (actual_tid, region.contract_metadata_tid): region.region_id
+        for region in relation.zigzag_regions
+        for actual_tid in {region.contract_metadata_tid, *region.alias_tids}
     }
     authority_last_use = {}
     for fact in authority_facts:
@@ -3791,12 +3794,23 @@ def build_closed_dependent_chain_plan(
                         and requirement.upper_bound == fact.upper_bound
                     ):
                         uses.append(index)
+        metadata_region_id = None
+        metadata_tid = None
         if fact.kind == "packed_cu":
-            aliases = packed_region_tids.get(fact.tid)
-            if aliases is None:
+            metadata_region_id = metadata_region_by_contract.get(fact.tid)
+            if metadata_region_id is None:
                 raise RelationCompositionError(
-                    f"packed-cu authority lacks one metadata region: {fact.tid}"
+                    f"packed-cu authority lacks one exact region: {fact.tid}"
                 )
+        elif fact.kind == "tensor_eq" and (
+            fact.left_side, fact.right_side
+        ) == ("pm", "pm"):
+            metadata_region_id = metadata_authority_regions.get(
+                (fact.left_tid, fact.right_tid)
+            )
+            if metadata_region_id is not None:
+                metadata_tid = fact.left_tid
+        if metadata_region_id is not None:
             for index, component in enumerate(ordered_components):
                 sources = [
                     source
@@ -3807,8 +3821,11 @@ def build_closed_dependent_chain_plan(
                     )
                 ]
                 if any(
-                    record_by_source[source].kind == "zigzag"
-                    and record_by_source[source].metadata_tid in aliases
+                    record_by_source[source].metadata_region_id == metadata_region_id
+                    and (
+                        metadata_tid is None
+                        or record_by_source[source].metadata_tid == metadata_tid
+                    )
                     for source in sources
                 ):
                     uses.append(index)

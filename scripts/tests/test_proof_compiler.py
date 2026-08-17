@@ -3913,6 +3913,34 @@ def test_goals34_atomic_full_producer_two_local_linear_renderer_is_exact_single_
         assert "segment_000017" in str(exc.value)
 
 
+def test_goal4_zigzag_full_producer_retains_exact_metadata_region_authority(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(4, str(root))
+    relation = compile_relation_plan(
+        ir, compile_proof_plan(ir, build_default_registry())
+    )
+    chain = relation.dependent_chain_plan
+    segment = next(
+        item for item in chain.segments if item.segment_id == "segment_000278"
+    )
+    states = {item.state_id: item for item in chain.states}
+    records = {item.source: item for item in chain.relation_facts}
+    transitions = {item.transition_id: item for item in relation.transition_specs}
+    transition = transitions[segment.transition_ids[0]]
+    pre = records[transition.pre_facts[0]]
+    assert (pre.metadata_tid, pre.metadata_region_id) == (5602, 0)
+    assert "authority_pm_metadata_eq_000000_5602" in states[segment.pre_state_id].fact_ids
+
+    source = render_closed_segment(ir, relation, segment.segment_id)
+
+    assert "[authority_pm_metadata_eq_000000_5602" in source
+    assert "decodeCuSeqlens (pmFinal 5602) = [0, 4096]" in source
+    assert len(source.encode()) < 2_500_000
+
+
 def test_goals34_mixed_moe_renderer_accepts_actual_atomic_topologies(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
