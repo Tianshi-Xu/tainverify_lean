@@ -19,6 +19,7 @@ from trainverify.bridge_emitter.composer import (
     render_closed_binary_segment,
     render_closed_ce_fst_segment,
     render_closed_ce_snd_segment,
+    render_closed_external_initial_state,
     render_closed_float_segment,
     render_closed_full_producer_to_segment,
     render_closed_indexed_stack_segment,
@@ -26,6 +27,7 @@ from trainverify.bridge_emitter.composer import (
     render_closed_linear_segment,
     render_closed_mixed_moe_segment,
     render_closed_multiref_segment,
+    render_closed_public_theorem,
     render_closed_relation_declarations,
     render_closed_rms_norm_segment,
     render_closed_rms_shuffle_segment,
@@ -4288,3 +4290,169 @@ def test_mixed_zigzag_rejects_metadata_region_alias(monkeypatch):
     bad = replace(relation, dependent_chain_plan=replace(chain, relation_facts=tuple(records)))
     with pytest.raises(ValueError, match="one exact metadata region"):
         render_closed_mixed_moe_segment(ir, bad, "segment_000270")
+
+
+def _synthetic_external_chain(initial_facts, target=None):
+    target = target or SimpleNamespace(
+        fact_id="terminal_relation", kind="ordinary", sm_tid=900,
+        pm_rank0_tid=901, pm_rank1_tid=902,
+        full_shape=(8, 4), shard_shape=(4, 4),
+    )
+    initial = SimpleNamespace(
+        state_id="state_000000",
+        fact_ids=tuple(fact.fact_id for fact in initial_facts),
+    )
+    terminal = SimpleNamespace(
+        state_id="state_000001", fact_ids=(target.fact_id,)
+    )
+    chain = SimpleNamespace(
+        complete=True,
+        authority_facts=tuple(initial_facts),
+        anchor_fact=initial_facts[0],
+        relation_facts=(target,),
+        states=(initial, terminal),
+        segments=(SimpleNamespace(
+            segment_id="segment_000000",
+            pre_state_id=initial.state_id,
+            post_state_id=terminal.state_id,
+        ),),
+        terminal_target_fact_id=target.fact_id,
+    )
+    return SimpleNamespace(dependent_chain_plan=chain)
+
+
+def _synthetic_external_ir(*, tps=((0, 901), (1, 902))):
+    return GoalIR(
+        n=17, sm_nodes=[], pm_nodes=[], sm_shapes=[], pm_shapes=[],
+        lineage=LineageGoal(
+            ts=900, tsShape=[8, 4], tps=list(tps),
+            tpShapes=[[4, 4] for _ in tps], gatherDim=0, replicated=False,
+        ),
+        prereqs=[],
+        sm_graph_ref="Synthetic.Graphs.sm_goal_17",
+        pm_graph_ref="Synthetic.Graphs.pm_goal_17",
+        public_statement_module="Synthetic.Graphs",
+        sm_num_ranks=1, pm_num_ranks=2,
+        sm_input_value_classes=(SimpleNamespace(source="sm-alias", tids=(10, 11)),),
+        pm_input_value_classes=(SimpleNamespace(source="pm-alias", tids=(20, 21)),),
+        packed_cu_contracts=(SimpleNamespace(
+            side="pm", tid=30, total_tokens=8, num_ranks=2
+        ),),
+        tensor_value_bound_contracts=(SimpleNamespace(
+            side="pm", tid=40, length=8, upper_bound=16
+        ),),
+        init_lineages={
+            50: LineageGoal(
+                ts=50, tsShape=[4], tps=[(0, 51)], tpShapes=[[4]],
+                gatherDim=0, replicated=False,
+            ),
+            60: LineageGoal(
+                ts=60, tsShape=[8, 4], tps=[(0, 61), (1, 62)],
+                tpShapes=[[4, 4], [4, 4]], gatherDim=1, replicated=False,
+            ),
+        },
+        full_init_goal_ids=(50, 60),
+    )
+
+
+def test_external_initial_state_renderer_derives_every_authority_contract_exactly():
+    facts = (
+        SimpleNamespace(fact_id="shape_sm", kind="tensor_shape", side="sm", tid=10, shape=(4,)),
+        SimpleNamespace(fact_id="eq_sm", kind="tensor_eq", left_side="sm", left_tid=10, right_side="sm", right_tid=11),
+        SimpleNamespace(fact_id="eq_singleton", kind="tensor_eq", left_side="sm", left_tid=50, right_side="pm", right_tid=51),
+        SimpleNamespace(fact_id="gather_dim1", kind="gather", sm_tid=60, pm_rank0_tid=61, pm_rank1_tid=62, dim=1, full_shape=(8, 4), shard_shape=(4, 4)),
+        SimpleNamespace(fact_id="packed_pm", kind="packed_cu", side="pm", tid=30, total_tokens=8, num_ranks=2),
+        SimpleNamespace(fact_id="bound_pm", kind="label_bound", side="pm", tid=40, length=8, upper_bound=16),
+    )
+    source = render_closed_external_initial_state(
+        _synthetic_external_ir(), _synthetic_external_chain(facts), "SyntheticClosed"
+    )
+    assert "StoreShapesHold initSM Synthetic.Graphs.sm_goal_17InitEnv" in source
+    assert "InitGoalsHold Synthetic.Graphs.pm_goal_17.numRanks" in source
+    assert "InputValueClassesHold TrainVerify.Denote.Generated.smInputValueClasses" in source
+    assert "InputValueClassesHold TrainVerify.Denote.Generated.pmInputValueClasses" in source
+    assert "InputValueClassesHold.eq_of_mem" in source
+    assert "InitGoalHolds.singleton_value_eq" in source
+    assert "InitGoalHolds.gather2_dim" in source
+    assert "hPacked_0" in source and "exact hPacked_0" in source
+    assert "hBound_0" in source and "exact hBound_0" in source
+    assert ": state_000000.Holds initSM initPM" in source
+    assert "Goal_17" not in source and "Tid" not in source
+
+
+def test_external_initial_state_renderer_fails_closed_on_unsupported_orientation_and_kind():
+    ir = _synthetic_external_ir()
+    reverse = SimpleNamespace(
+        fact_id="reverse", kind="tensor_eq",
+        left_side="pm", left_tid=51, right_side="sm", right_tid=50,
+    )
+    with pytest.raises(ValueError, match="unsupported tensor equality orientation"):
+        render_closed_external_initial_state(ir, _synthetic_external_chain((reverse,)), "SyntheticClosed")
+    unknown = SimpleNamespace(fact_id="mystery", kind="oracle")
+    with pytest.raises(ValueError, match="unsupported initial authority kind"):
+        render_closed_external_initial_state(ir, _synthetic_external_chain((unknown,)), "SyntheticClosed")
+
+
+def test_public_theorem_renderer_requires_explicit_joined_equality_and_handles_two_public_shards():
+    anchor = SimpleNamespace(fact_id="shape_sm", kind="tensor_shape", side="sm", tid=10, shape=(4,))
+    source = render_closed_public_theorem(
+        _synthetic_external_ir(), _synthetic_external_chain((anchor,)),
+        "SyntheticClosed", "final_joined_output_eq",
+    )
+    assert "theorem prove_goal_17_closed : Synthetic.Graphs.goal_17_stmt_full" in source
+    assert "final_joined_output_eq initSM initPM htarget" in source
+    assert "reconstructWithDim_cons_cons_nonscalar" in source
+    assert "reconstructWithDim_singleton" not in source
+    assert "Pattern_17" not in source and "Goal_17" not in source
+
+
+def test_public_theorem_renderer_uses_singleton_reconstruction_only_for_singleton_public_lineage():
+    ir = _synthetic_external_ir(tps=((0, 901),))
+    ir.lineage.tsShape = [4, 4]
+    ir.lineage.tpShapes = [[4, 4]]
+    target = SimpleNamespace(
+        fact_id="terminal_relation", kind="ordinary", sm_tid=900,
+        pm_rank0_tid=901, pm_rank1_tid=999,
+        full_shape=(4, 4), shard_shape=(4, 4),
+    )
+    anchor = SimpleNamespace(fact_id="shape_sm", kind="tensor_shape", side="sm", tid=10, shape=(4,))
+    source = render_closed_public_theorem(
+        ir, _synthetic_external_chain((anchor,), target),
+        "SyntheticClosed", "final_singleton_eq",
+    )
+    assert "reconstructWithDim_singleton" in source
+    assert "reconstructWithDim_cons_cons_nonscalar" not in source
+    assert "final_singleton_eq initSM initPM htarget" in source
+
+
+def test_public_theorem_renderer_rejects_non_public_two_shard_target_and_missing_equality():
+    ir = _synthetic_external_ir()
+    anchor = SimpleNamespace(fact_id="shape_sm", kind="tensor_shape", side="sm", tid=10, shape=(4,))
+    wrong = SimpleNamespace(
+        fact_id="terminal_relation", kind="ordinary", sm_tid=900,
+        pm_rank0_tid=901, pm_rank1_tid=999,
+        full_shape=(8, 4), shard_shape=(4, 4),
+    )
+    with pytest.raises(ValueError, match="does not match public lineage"):
+        render_closed_public_theorem(
+            ir, _synthetic_external_chain((anchor,), wrong),
+            "SyntheticClosed", "final_joined_output_eq",
+        )
+    with pytest.raises(ValueError, match="explicit final joined equality"):
+        render_closed_public_theorem(
+            ir, _synthetic_external_chain((anchor,)), "SyntheticClosed", ""
+        )
+
+
+def test_external_initial_state_renderer_treats_omitted_init_gather_dim_as_zero():
+    ir = _synthetic_external_ir()
+    ir.init_lineages[60].gatherDim = None
+    gather = SimpleNamespace(
+        fact_id="gather_dim0", kind="gather", sm_tid=60,
+        pm_rank0_tid=61, pm_rank1_tid=62, dim=0,
+        full_shape=(8, 4), shard_shape=(4, 4),
+    )
+    source = render_closed_external_initial_state(
+        ir, _synthetic_external_chain((gather,)), "SyntheticClosed"
+    )
+    assert "InitGoalHolds.gather2_dim" in source

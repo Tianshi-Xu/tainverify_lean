@@ -8221,6 +8221,29 @@ theorem singleton_value_eq
   cases hrep : goal.replicated <;>
     simpa [reconstructForGoal, hrep, reconstructWithDim] using hvalue
 
+theorem gather2_dim
+    (g : LineageGoal) (initSM initPM : Store)
+    (W A B : Tid) (dim : Nat) (shard : Shape)
+    (h : InitGoalHolds 2 g initSM initPM)
+    (htps : g.tps = [{rank := 0, tid := A}, {rank := 1, tid := B}])
+    (htpShapes : g.tpShapes = [shard, shard])
+    (hgd : g.gatherDim = dim)
+    (hrep : g.replicated = false)
+    (hts : g.ts = W)
+    (hshard : shard ≠ [1]) :
+    initSM W = allGatherPrimDimN dim 2 0 [initPM A, initPM B] := by
+  unfold InitGoalHolds at h
+  have hshapes := h.2.1
+  rw [htps, htpShapes] at hshapes
+  simp only [List.map, List.cons.injEq, and_true] at hshapes
+  have hval := h.2.2
+  rw [reconstructForGoal, hrep, htps, hts, hgd] at hval
+  simp only [List.map] at hval
+  rw [reconstructWithDim_cons_cons_nonscalar dim 2 0 _ _ []
+        (by rw [hshapes.1]; exact hshard)] at hval
+  exact hval
+
+/-- Compatibility specialization of `gather2_dim` at the historical dim-0 API. -/
 theorem gather2_dim0
     (g : LineageGoal) (initSM initPM : Store)
     (W A B : Tid) (shard : Shape)
@@ -8231,17 +8254,8 @@ theorem gather2_dim0
     (hrep : g.replicated = false)
     (hts : g.ts = W)
     (hshard : shard ≠ [1]) :
-    initSM W = allGatherPrimDimN 0 2 0 [initPM A, initPM B] := by
-  unfold InitGoalHolds at h
-  have hshapes := h.2.1
-  rw [htps, htpShapes] at hshapes
-  simp only [List.map, List.cons.injEq, and_true] at hshapes
-  have hval := h.2.2
-  rw [reconstructForGoal_of_not_replicated g 2 _ hrep, htps, hts, hgd] at hval
-  simp only [List.map] at hval
-  rw [reconstructWithDim_cons_cons_nonscalar 0 2 0 _ _ []
-        (by rw [hshapes.1]; exact hshard)] at hval
-  exact hval
+    initSM W = allGatherPrimDimN 0 2 0 [initPM A, initPM B] :=
+  gather2_dim g initSM initPM W A B 0 shard h htps htpShapes hgd hrep hts hshard
 
 end InitGoalHolds
 

@@ -4608,6 +4608,330 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     raise ValueError(f"unsupported closed segment family {family!r} at {segment_id}")
 
 
+
+def _lean_shape_tuple(shape) -> str:
+    return "[" + ", ".join(str(int(value)) for value in shape) + "]"
+
+
+def _validate_closed_namespace(namespace: str) -> None:
+    if not namespace or not namespace.replace("_", "").isalnum():
+        raise ValueError(f"invalid closed chain namespace: {namespace!r}")
+
+
+def _closed_input_class_index(classes, left_tid: int, right_tid: int) -> int | None:
+    for index, value_class in enumerate(classes):
+        tids = {int(tid) for tid in value_class.tids}
+        if left_tid in tids and right_tid in tids:
+            return index
+    return None
+
+
+def _external_contract_arguments(ir: GoalIR) -> tuple[str, str, tuple[str, ...]]:
+    graph_ns = ir.sm_graph_ref.rsplit(".", 1)[0]
+    generated_ns = "TrainVerify.Denote.Generated"
+    arguments = [
+        "    (initSM initPM : Store)",
+        f"    (hSM : StoreShapesHold initSM {ir.sm_graph_ref}InitEnv)",
+        f"    (hPM : StoreShapesHold initPM {ir.pm_graph_ref}InitEnv)",
+        (f"    (hInit : InitGoalsHold {ir.pm_graph_ref}.numRanks "
+         f"{graph_ns}.goal_{ir.n}_full_initGoals initSM initPM)"),
+        (f"    (hSMValues : InputValueClassesHold "
+         f"{generated_ns}.smInputValueClasses initSM)"),
+        (f"    (hPMValues : InputValueClassesHold "
+         f"{generated_ns}.pmInputValueClasses initPM)"),
+    ]
+    names = ["initSM", "initPM", "hSM", "hPM", "hInit", "hSMValues", "hPMValues"]
+    contract_names = ["hSMValues", "hPMValues"]
+    for index, contract in enumerate(ir.packed_cu_contracts):
+        if contract.side not in {"sm", "pm"}:
+            raise ValueError(f"unsupported packed-CU contract side: {contract.side!r}")
+        store = "initSM" if contract.side == "sm" else "initPM"
+        name = f"hPacked_{index}"
+        arguments.append(
+            f"    ({name} : ZigzagCollective.PackedCuSeqlensWF "
+            f"({store} {contract.tid}) {contract.total_tokens} {contract.num_ranks})"
+        )
+        names.append(name)
+        contract_names.append(name)
+    for index, contract in enumerate(ir.tensor_value_bound_contracts):
+        if contract.side not in {"sm", "pm"}:
+            raise ValueError(f"unsupported tensor-bound contract side: {contract.side!r}")
+        store = "initSM" if contract.side == "sm" else "initPM"
+        name = f"hBound_{index}"
+        arguments.append(
+            f"    ({name} : ∀ l < {contract.length}, "
+            f"scalarToNat (valAt ({store} {contract.tid}) l) < {contract.upper_bound})"
+        )
+        names.append(name)
+        contract_names.append(name)
+    return "\n".join(arguments), " ".join(names), tuple(contract_names)
+
+
+def render_closed_external_initial_state(ir: GoalIR, relation, namespace: str) -> str:
+    """Derive the exact closed initial state from public external contracts."""
+    _validate_closed_namespace(namespace)
+    chain = relation.dependent_chain_plan
+    if chain is None or not chain.complete or not chain.states or not chain.segments:
+        raise ValueError("external initial state requires a complete closed chain")
+    states = {state.state_id: state for state in chain.states}
+    initial = states.get(chain.segments[0].pre_state_id)
+    if initial is None:
+        raise ValueError("closed chain initial state is missing")
+    authority = {fact.fact_id: fact for fact in chain.authority_facts}
+    authority[chain.anchor_fact.fact_id] = chain.anchor_fact
+    missing = [fact_id for fact_id in initial.fact_ids if fact_id not in authority]
+    if missing:
+        raise ValueError(f"closed public initial state contains non-authority facts: {missing!r}")
+
+    common_args, call_args, _ = _external_contract_arguments(ir)
+    generated_ns = "TrainVerify.Denote.Generated"
+    helpers: dict[str, str] = {}
+    blocks: list[str] = []
+    for fact_id in initial.fact_ids:
+        fact = authority[fact_id]
+        helper = f"{namespace}_{fact_id}_from_external_inputs"
+        helpers[fact_id] = helper
+        body = [
+            f"private theorem {helper}",
+            common_args,
+            f"    : {fact_id}.Holds initSM initPM := by",
+            f"  unfold {fact_id} RelationFact.Holds StoreSide.read",
+        ]
+        if fact.kind == "tensor_shape":
+            if fact.side not in {"sm", "pm"}:
+                raise ValueError(f"unsupported tensor shape side in {fact_id}: {fact.side!r}")
+            hypothesis = "hSM" if fact.side == "sm" else "hPM"
+            body.append(
+                f"  exact {hypothesis} {fact.tid} {_lean_shape_tuple(fact.shape)} "
+                "(by native_decide)"
+            )
+        elif fact.kind == "tensor_eq":
+            if fact.left_side == fact.right_side and fact.left_tid == fact.right_tid:
+                body.append("  rfl")
+            elif fact.left_side == fact.right_side and fact.left_side in {"sm", "pm"}:
+                classes = (
+                    ir.sm_input_value_classes if fact.left_side == "sm"
+                    else ir.pm_input_value_classes
+                )
+                class_index = _closed_input_class_index(
+                    classes, fact.left_tid, fact.right_tid
+                )
+                if class_index is None:
+                    raise ValueError(
+                        f"tensor equality {fact_id} lacks an exact input-value class"
+                    )
+                hypothesis = "hSMValues" if fact.left_side == "sm" else "hPMValues"
+                class_name = (
+                    "smInputValueClasses" if fact.left_side == "sm"
+                    else "pmInputValueClasses"
+                )
+                body.extend([
+                    f"  exact InputValueClassesHold.eq_of_mem {hypothesis}",
+                    f"    (c := {generated_ns}.{class_name}[{class_index}]'(by native_decide))",
+                    "    (by native_decide) (by native_decide) (by native_decide)",
+                ])
+            elif fact.left_side == "sm" and fact.right_side == "pm":
+                lineage = ir.init_lineages.get(int(fact.left_tid))
+                expected_piece = [(0, int(fact.right_tid))]
+                if (
+                    lineage is None
+                    or int(lineage.ts) != int(fact.left_tid)
+                    or lineage.tps != expected_piece
+                    or int(fact.left_tid) not in ir.full_init_goal_ids
+                ):
+                    raise ValueError(
+                        f"cross-store equality {fact_id} is not an exact singleton init lineage"
+                    )
+                goal = f"{generated_ns}.initGoal_{fact.left_tid}"
+                body.extend([
+                    f"  have hi := hInit {goal} (by native_decide)",
+                    f"  exact InitGoalHolds.singleton_value_eq {ir.pm_graph_ref}.numRanks {goal} initSM initPM",
+                    f"    {{ rank := 0, tid := {fact.right_tid} }} hi rfl",
+                ])
+            else:
+                raise ValueError(
+                    f"unsupported tensor equality orientation in {fact_id}"
+                )
+        elif fact.kind == "gather":
+            lineage = ir.init_lineages.get(int(fact.sm_tid))
+            expected_pieces = [
+                (0, int(fact.pm_rank0_tid)), (1, int(fact.pm_rank1_tid))
+            ]
+            expected_shapes = [
+                list(fact.shard_shape), list(fact.shard_shape)
+            ]
+            if (
+                lineage is None
+                or int(lineage.ts) != int(fact.sm_tid)
+                or lineage.tps != expected_pieces
+                or lineage.tpShapes != expected_shapes
+                or tuple(lineage.tsShape) != tuple(fact.full_shape)
+                or int(lineage.gatherDim or 0) != int(fact.dim)
+                or lineage.replicated
+                or int(fact.sm_tid) not in ir.full_init_goal_ids
+                or ir.pm_num_ranks != 2
+            ):
+                raise ValueError(
+                    f"gather authority {fact_id} is not an exact two-rank init lineage"
+                )
+            goal = f"{generated_ns}.initGoal_{fact.sm_tid}"
+            body.extend([
+                f"  have hi := hInit {goal} (by native_decide)",
+                "  refine ⟨?_, ?_, ?_, ?_⟩",
+                f"  · exact InitGoalHolds.gather2_dim {goal} initSM initPM",
+                (f"      {fact.sm_tid} {fact.pm_rank0_tid} {fact.pm_rank1_tid} "
+                 f"{fact.dim} {_lean_shape_tuple(fact.shard_shape)}"),
+                "      hi rfl rfl rfl rfl rfl (by native_decide)",
+                f"  · exact hSM {fact.sm_tid} {_lean_shape_tuple(fact.full_shape)} (by native_decide)",
+                f"  · exact hPM {fact.pm_rank0_tid} {_lean_shape_tuple(fact.shard_shape)} (by native_decide)",
+                f"  · exact hPM {fact.pm_rank1_tid} {_lean_shape_tuple(fact.shard_shape)} (by native_decide)",
+            ])
+        elif fact.kind == "packed_cu":
+            matches = [
+                index for index, contract in enumerate(ir.packed_cu_contracts)
+                if (
+                    contract.side == fact.side
+                    and contract.tid == fact.tid
+                    and contract.total_tokens == fact.total_tokens
+                    and contract.num_ranks == fact.num_ranks
+                )
+            ]
+            if len(matches) != 1:
+                raise ValueError(
+                    f"packed authority {fact_id} lacks one exact external contract"
+                )
+            body.append(f"  exact hPacked_{matches[0]}")
+        elif fact.kind == "label_bound":
+            matches = [
+                index for index, contract in enumerate(ir.tensor_value_bound_contracts)
+                if (
+                    contract.side == fact.side
+                    and contract.tid == fact.tid
+                    and contract.length == fact.length
+                    and contract.upper_bound == fact.upper_bound
+                )
+            ]
+            if len(matches) != 1:
+                raise ValueError(
+                    f"label-bound authority {fact_id} lacks one exact external contract"
+                )
+            body.append(f"  exact hBound_{matches[0]}")
+        else:
+            raise ValueError(f"unsupported initial authority kind {fact.kind!r}")
+        blocks.append("\n".join(body))
+
+    state_helper = f"{namespace}_initial_state"
+    blocks.extend([
+        "private theorem closed_fact_of_external_helpers",
+        "    {facts : List RelationFact} {sm pm : Store}",
+        "    (hall : List.Forall (fun fact => fact.Holds sm pm) facts) :",
+        "    ∀ fact ∈ facts, fact.Holds sm pm := by",
+        "  intro fact hfact",
+        "  induction hall with",
+        "  | nil => simp at hfact",
+        "  | cons head tail ih =>",
+        "      simp only [List.mem_cons] at hfact",
+        "      rcases hfact with rfl | hfact",
+        "      · assumption",
+        "      · exact ih hfact",
+        "",
+        f"private theorem {state_helper}",
+        common_args,
+        f"    : {initial.state_id}.Holds initSM initPM := by",
+        "  apply closed_fact_of_external_helpers",
+    ])
+    forall_proof = ".nil"
+    for fact_id in reversed(initial.fact_ids):
+        forall_proof = (
+            f".cons ({helpers[fact_id]} {call_args}) ({forall_proof})"
+        )
+    blocks.append(f"  exact {forall_proof}")
+    return "\n".join(blocks) + "\n"
+
+
+def render_closed_public_theorem(
+    ir: GoalIR,
+    relation,
+    namespace: str,
+    final_joined_equality: str,
+) -> str:
+    """Render the public theorem around an explicit, separately proved final join."""
+    _validate_closed_namespace(namespace)
+    if not re.fullmatch(
+        r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)*",
+        final_joined_equality,
+    ):
+        raise ValueError("public theorem requires an explicit final joined equality")
+    chain = relation.dependent_chain_plan
+    if chain is None or not chain.complete:
+        raise ValueError("public theorem requires a complete closed chain")
+    targets = [
+        fact for fact in chain.relation_facts
+        if fact.fact_id == chain.terminal_target_fact_id
+    ]
+    if len(targets) != 1 or targets[0].kind != "ordinary":
+        raise ValueError("public theorem requires one terminal ordinary shape fact")
+    target = targets[0]
+    lineage_tids = [int(piece[1]) for piece in ir.lineage.tps]
+    if ir.lineage.replicated or len(lineage_tids) not in {1, 2}:
+        raise ValueError("public theorem supports non-replicated singleton or two-piece lineage")
+    expected_target_tids = [target.pm_rank0_tid]
+    if len(lineage_tids) == 2:
+        expected_target_tids.append(target.pm_rank1_tid)
+    if (
+        target.sm_tid != int(ir.lineage.ts)
+        or expected_target_tids != lineage_tids
+        or tuple(target.full_shape) != tuple(ir.lineage.tsShape)
+        or any(tuple(shape) != tuple(target.shard_shape) for shape in ir.lineage.tpShapes)
+        or (len(lineage_tids) == 2 and ir.pm_num_ranks != 2)
+    ):
+        raise ValueError("terminal ordinary shape fact does not match public lineage")
+
+    external = render_closed_external_initial_state(ir, relation, namespace)
+    common_args, call_args, contract_names = _external_contract_arguments(ir)
+    del common_args
+    graph_ns = ir.sm_graph_ref.rsplit(".", 1)[0]
+    goal = f"{graph_ns}.goal_{ir.n}"
+    chain_name = f"{namespace}_chain"
+    lines = [external.rstrip(), "", f"theorem prove_goal_{ir.n}_closed : {graph_ns}.goal_{ir.n}_stmt_full := by",
+             f"  unfold {graph_ns}.goal_{ir.n}_stmt_full",
+             "  unfold CoarseLineageHoldsWithInitDistributedFaithfulWithContract",
+             "  intro initSM initPM hSM hPM hInit hContract",
+             f"  rcases hContract with ⟨{', '.join(contract_names)}⟩",
+             f"  have hpre := {namespace}_initial_state {call_args}",
+             "  have htarget := faithful_closed_dep_chain_extract",
+             f"    {ir.sm_graph_ref} {ir.pm_graph_ref} {chain_name}",
+             "    initSM initPM hpre",
+             f"    {chain_name}_sm_nodes {chain_name}_pm_nodes",
+             f"    {target.fact_id} (by native_decide)",
+             f"  unfold {target.fact_id} RelationFact.Holds at htarget",
+             "  refine ⟨htarget.full_shape, ?_, ?_⟩"]
+    pm_store = f"denoteGraphDistributedFaithful {ir.pm_graph_ref} initPM"
+    if len(lineage_tids) == 1:
+        lines.extend([
+            f"  · change [({pm_store} {lineage_tids[0]}).shape] = [{_lean_shape_tuple(target.shard_shape)}]",
+            "    rw [htarget.rank0_shape]",
+            f"  · rw [reconstructForGoal_of_not_replicated {goal} {ir.pm_graph_ref}.numRanks _ rfl]",
+            "    rw [reconstructWithDim_singleton]",
+            f"    exact {final_joined_equality} initSM initPM htarget",
+        ])
+    else:
+        lines.extend([
+            (
+                f"  · change [({pm_store} {lineage_tids[0]}).shape, "
+                f"({pm_store} {lineage_tids[1]}).shape] = "
+                f"[{_lean_shape_tuple(target.shard_shape)}, "
+                f"{_lean_shape_tuple(target.shard_shape)}]"
+            ),
+            "    rw [htarget.rank0_shape, htarget.rank1_shape]",
+            f"  · rw [reconstructForGoal_of_not_replicated {goal} {ir.pm_graph_ref}.numRanks _ rfl]",
+            (f"    rw [reconstructWithDim_cons_cons_nonscalar {ir.lineage.gatherDim} "
+             f"{ir.pm_graph_ref}.numRanks 0 _ _ []"),
+            "      (by rw [htarget.rank0_shape]; native_decide)]",
+            f"    exact {final_joined_equality} initSM initPM htarget",
+        ])
+    return "\n".join(lines) + "\n"
+
 def compose_closed_dependent_chain(
     ir: GoalIR, relation, namespace: str
 ) -> str:
