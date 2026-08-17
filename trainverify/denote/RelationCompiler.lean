@@ -1745,6 +1745,26 @@ theorem Ordinary2Rel.topk_routing_all
     · exact fw_topk_routing_snd_shape rank1 topK numExperts rows
         (by simp [hrel.rank1_shape])
 
+/-- Gate scores from ordinary top-k routing preserve the same two-rank row
+partition as the logits. -/
+theorem Ordinary2Rel.topk_routing_gate_scores
+    {full rank0 rank1 : Tensor} (rows numExperts topK : Nat)
+    (hrel : GeneratedPatterns.Ordinary2Rel full rank0 rank1
+      [rows * 2, numExperts] [rows, numExperts])
+    (hrows : 0 < rows) (hexperts : 0 < numExperts) :
+    GeneratedPatterns.Ordinary2Rel
+      (fw_topk_routing full topK numExperts).2.2
+      (fw_topk_routing rank0 topK numExperts).2.2
+      (fw_topk_routing rank1 topK numExperts).2.2
+      [rows * 2, numExperts] [rows, numExperts] := by
+  constructor
+  · rw [hrel.full_value]
+    exact topk_routing_gate_scores_allGather0_commute_two rank0 rank1 rows
+      numExperts topK hrows hexperts hrel.rank0_shape hrel.rank1_shape
+  · rw [fw_topk_routing_thd_shape, hrel.full_shape]
+  · rw [fw_topk_routing_thd_shape, hrel.rank0_shape]
+  · rw [fw_topk_routing_thd_shape, hrel.rank1_shape]
+
 /-- The z-loss projection of inner-chunk CE is independent of labels. -/
 theorem inner_chunk_ce_snd_labels_independent
     (x w y y' : Tensor) (vocab : Nat) (zScale : Scalar) :

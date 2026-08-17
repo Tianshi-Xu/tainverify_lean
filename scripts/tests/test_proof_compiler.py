@@ -3885,6 +3885,50 @@ def test_goals34_atomic_full_producer_two_local_linear_renderer_is_exact_single_
         assert "segment_000017" in str(exc.value)
 
 
+def test_goals34_mixed_moe_renderer_accepts_actual_atomic_topologies(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    expected_transition_counts = {3: 16, 4: 17}
+
+    for goal_id in (3, 4):
+        ir = load_goal_ir(goal_id, str(root))
+        relation = compile_relation_plan(
+            ir, compile_proof_plan(ir, build_default_registry())
+        )
+        chain = relation.dependent_chain_plan
+        segment = next(
+            item for item in chain.segments if item.segment_id == "segment_000017"
+        )
+        states = {item.state_id: item for item in chain.states}
+        before = states[segment.pre_state_id]
+        after = states[segment.post_state_id]
+        fresh = [item for item in after.fact_ids if item not in before.fact_ids]
+
+        source = render_closed_mixed_moe_segment(
+            ir, relation, segment.segment_id
+        )
+
+        assert len(segment.transition_ids) == expected_transition_counts[goal_id]
+        assert source == render_closed_segment(ir, relation, segment.segment_id)
+        assert len(source.encode()) < 2_500_000
+        assert source.count("let smFinal :=") == 1
+        assert source.count("let pmFinal :=") == 1
+        assert source.count("segment_000017_sm_nodes.foldl") == 2
+        assert source.count("segment_000017_pm_nodes.foldl") == 2
+        assert all(fact_id in source for fact_id in fresh)
+        assert f"Goal_{goal_id}" not in source
+        if goal_id == 4:
+            assert "Ordinary2Rel.topk_routing_gate_scores" in source
+
+        with pytest.raises(ValueError) as exc:
+            compose_closed_dependent_chain(
+                ir, relation, f"ClosedGoal{goal_id}AfterMixedMoe"
+            )
+        assert "segment_000017" not in str(exc.value)
+
+
 def test_closed_exit_unshuffle_renderer_is_generic_exact_single_fold(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")

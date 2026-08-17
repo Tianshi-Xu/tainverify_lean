@@ -784,50 +784,49 @@ def _render_mixed_final_value(
     input_tids: tuple[int, ...], written_tids: set[int],
     expression: str, apply_lines: list[str],
 ) -> list[str]:
-    """Extract one target value from a shared fold with hybrid input stores.
+    """Extract one target value from one shared, named authority fold.
 
-    Inputs written by the atomic slice are rewritten from the target prefix to
-    the complete final store. Inputs never written by the slice are rewritten
-    directly to the initial store. This avoids the expensive and redundant
-    prefix→final→initial round trip.
+    Prefix and suffix stores are expressed with ``take``/``drop`` of the named
+    node list.  This avoids repeating the full literal slice in every writer
+    obligation while preserving the original authority order exactly.
     """
     target = nodes[position]
     if output_tid not in target.outs:
         raise ValueError(f"mixed target {name} does not write {output_tid}")
-    before = nodes[:position]
-    after = nodes[position + 1:]
+    prefix_nodes = f"({nodes_name}.take {position})"
+    suffix_nodes = f"({nodes_name}.drop {position + 1})"
     prefix = (
-        f"([{', '.join(_node_text(node) for node in before)}] : List NodeDecl).foldl "
+        f"({prefix_nodes}).foldl "
         f"(applyNodeDistributedFaithful {graph}) {initial_store}"
     )
     expression_prefix = expression.format(store=prefix)
     expression_hybrid = expression.format(store=final_store)
     expression_at_t = expression.format(store="t")
     semantic_inputs = tuple(dict.fromkeys(input_tids))
+    split_name = f"{name}_nodes"
     lines = [
+        f"    have {split_name} : {nodes_name} = {prefix_nodes} ++ [{_node_text(target)}] ++ {suffix_nodes} := by",
+        "      native_decide",
         f"    have {name}_prefix : {final_store} {output_tid} = {expression_prefix} := by",
-        f"      simpa [{final_equality}, {nodes_name}] using",
-        f"        (foldl_faithful_middle_writer {graph} {initial_store}",
-        f"          [{', '.join(_node_text(node) for node in before)}]",
-        f"          [{', '.join(_node_text(node) for node in after)}]",
-        f"          {_node_text(target)} {output_tid}",
-        f"          (fun t => {expression_at_t}) (by",
-        "            intro t",
+        f"      rw [{final_equality}, {split_name}]",
+        f"      exact foldl_faithful_middle_writer {graph} {initial_store}",
+        f"        {prefix_nodes} {suffix_nodes}",
+        f"        {_node_text(target)} {output_tid}",
+        f"        (fun t => {expression_at_t}) (by",
+        "          intro t",
     ]
-    lines.extend(f"            {line}" for line in apply_lines)
-    lines.append("          ) (by native_decide) (by native_decide))")
+    lines.extend(f"          {line}" for line in apply_lines)
+    lines.append("        ) (by native_decide) (by native_decide)")
     read_names = []
-    suffix = [target, *after]
     for ordinal, tid in enumerate(semantic_inputs):
         read_name = f"{name}_read_{ordinal}"
         read_names.append(read_name)
         lines.extend([
             f"    have {read_name} : {prefix} {tid} = {final_store} {tid} := by",
-            f"      simpa [{final_equality}, {nodes_name}] using",
-            f"        (foldl_faithful_prefix_read_eq_final {graph} {initial_store}",
-            f"          [{', '.join(_node_text(node) for node in before)}]",
-            f"          [{', '.join(_node_text(node) for node in suffix)}] {tid}",
-            "          (by native_decide) (by native_decide))",
+            f"      rw [{final_equality}, {split_name}]",
+            f"      exact foldl_faithful_prefix_read_eq_final {graph} {initial_store}",
+            f"        {prefix_nodes} ({_node_text(target)} :: {suffix_nodes}) {tid}",
+            "        (by native_decide) (by native_decide)",
         ])
     lines.append(f"    have {name} : {final_store} {output_tid} = {expression_hybrid} := by")
     if read_names:
@@ -845,10 +844,23 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
     if chain is None or not chain.complete:
         raise ValueError("mixed MoE renderer requires a complete closed chain")
     segment = next((x for x in chain.segments if x.segment_id == segment_id), None)
-    if segment is None or len(segment.transition_ids) != 16:
-        raise ValueError("mixed MoE renderer requires one 16-transition atomic component")
+    if segment is None:
+        raise ValueError("mixed MoE renderer requires one atomic component")
     by_id = {x.transition_id: x for x in relation.transition_specs}
-    transitions = [by_id[x] for x in segment.transition_ids]
+    component_transitions = [by_id[x] for x in segment.transition_ids]
+    projection_transitions = [
+        transition for transition in component_transitions
+        if transition.rule_id == "ordinary-topk-projection-two-rank"
+    ]
+    if len(projection_transitions) > 1:
+        raise ValueError("mixed MoE renderer received multiple top-k projections")
+    projection_transition = projection_transitions[0] if projection_transitions else None
+    transitions = [
+        transition for transition in component_transitions
+        if transition.rule_id != "ordinary-topk-projection-two-rank"
+    ]
+    if len(transitions) != 16:
+        raise ValueError("mixed MoE renderer requires one 16-transition semantic core")
     ordinary_rules = (
         "FW_norm_linear-full-producer-chunks-ordinary-two-rank",
         "identity-reshape-ordinary-two-rank", "identity-reshape-ordinary-two-rank",
@@ -869,7 +881,7 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
     if rules == ordinary_rules:
         layout = "ordinary"
         relation_ns = "Ordinary2Rel"
-    elif rules == zigzag_rules:
+    elif rules == zigzag_rules and projection_transition is None:
         layout = "zigzag"
         relation_ns = "GeneratedPatterns.Zigzag2Rel"
     else:
@@ -877,6 +889,23 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
     records = {x.source: x for x in chain.relation_facts}
     states = {x.state_id: x for x in chain.states}
     before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    if projection_transition is not None:
+        routing = transitions[7]
+        route_sm = ir.sm_nodes[routing.sm_node_indices[0]]
+        route_pm0 = ir.pm_nodes[routing.pm_node_indices[0]]
+        route_pm1 = ir.pm_nodes[routing.pm_node_indices[1]]
+        projection_post = records[projection_transition.post_facts[0]]
+        if (
+            projection_transition.pre_facts != routing.pre_facts
+            or projection_transition.sm_node_indices != routing.sm_node_indices
+            or projection_transition.pm_node_indices != routing.pm_node_indices
+            or len(projection_transition.post_facts) != 1
+            or projection_transition.lean_theorem
+                != "TrainVerify.Denote.RelationCompiler.topk_routing_gate_scores_allGather0_commute_two"
+            or (projection_post.sm_tid, projection_post.pm_rank0_tid, projection_post.pm_rank1_tid)
+                != (route_sm.outs[2], route_pm0.outs[2], route_pm1.outs[2])
+        ):
+            raise ValueError("mixed MoE top-k projection does not share the exact routing owner")
     sms = ir.sm_nodes[slice(*segment.sm_range)]
     pms = ir.pm_nodes[slice(*segment.pm_range)]
     if len(sms) != 17 or len(pms) != 37:
@@ -1203,6 +1232,40 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
                 f"      change {rel_text(posts[1])}", f"      rw [{route_rewrites_b}]", f"      exact {route_second}",
             ]
             proved[posts[0].fact_id], proved[posts[1].fact_id] = f"hFact{number}a", f"hFact{number}b"
+            if projection_transition is not None:
+                projection_post = records[projection_transition.post_facts[0]]
+                score_names = []
+                for label, node, side, idx in (
+                    ("Sm", sm, "sm", routing.sm_node_indices[0]),
+                    ("P0", p0, "pm", routing.pm_node_indices[0]),
+                    ("P1", p1, "pm", routing.pm_node_indices[1]),
+                ):
+                    src = writer_with_initial_inputs(
+                        ensure_value(side, idx, node.outs[2]), side, node
+                    )
+                    name = f"hRoute{label}2"
+                    shape_field = (
+                        "full_shape" if side == "sm"
+                        else ("rank0_shape" if label == "P0" else "rank1_shape")
+                    )
+                    lines += [
+                        f"    have {name} := {src}",
+                        f"    rw [{hin}.{shape_field}] at {name}",
+                        f"    simp at {name}",
+                    ]
+                    score_names.append(name)
+                lines += [
+                    (
+                        f"    have hRouteScoresCore := Ordinary2Rel.topk_routing_gate_scores "
+                        f"{pres[0].shard_shape[0]} {pres[0].shard_shape[1]} {sm.params[0]} "
+                        f"{hin} (by decide) (by decide)"
+                    ),
+                    f"    have hFactProjection : {projection_post.fact_id}.Holds smFinal pmFinal := by",
+                    f"      change {rel_text(projection_post)}",
+                    f"      rw [{', '.join(score_names)}]",
+                    "      exact hRouteScoresCore",
+                ]
+                proved[projection_post.fact_id] = "hFactProjection"
             continue
         in_names = [get_fact(x, f"hPre{number}_{i}") for i, x in enumerate(pres)]
         sm, p0, p1 = ir.sm_nodes[t.sm_node_indices[0]], ir.pm_nodes[t.pm_node_indices[0]], ir.pm_nodes[t.pm_node_indices[1]]
@@ -1328,17 +1391,19 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
 
     fact_by_id = {x.fact_id: x for x in chain.relation_facts}
     fresh = [fact_by_id[x] for x in after.fact_ids if x not in before.fact_ids]
-    expected_fresh = [records[transitions[i].post_facts[0]] for i in (11, 12, 15)]
-    if [x.fact_id for x in fresh] != [x.fact_id for x in expected_fresh]:
-        raise ValueError("mixed MoE post-state fresh fact set/order mismatch")
+    missing_fresh = [fact.fact_id for fact in fresh if fact.fact_id not in proved]
+    if missing_fresh:
+        raise ValueError(f"mixed MoE lacks proofs for fresh post facts: {missing_fresh}")
+    fresh_cases = " | ".join("rfl" for _ in fresh)
+    fresh_proofs = [f"      · exact {proved[fact.fact_id]}" for fact in fresh]
     lines += [
         "    intro fact hfact",
         f"    have covered : fact ∈ [{', '.join(x.fact_id for x in fresh)}] ++ {before.state_id}.facts := by",
         f"      exact (show {after.state_id}.facts ⊆ [{', '.join(x.fact_id for x in fresh)}] ++ {before.state_id}.facts by native_decide) hfact",
         "    simp only [List.mem_append] at covered", "    rcases covered with fresh | old",
         "    · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh",
-        "      rcases fresh with rfl | rfl | rfl",
-        f"      · exact {proved[fresh[0].fact_id]}", f"      · exact {proved[fresh[1].fact_id]}", f"      · exact {proved[fresh[2].fact_id]}",
+        f"      rcases fresh with {fresh_cases}",
+        *fresh_proofs,
         "    · exact hframe fact old", "",
         f"private def {segment.segment_id}_eq :",
         f"    ClosedDepSegmentCertificateEq {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
@@ -1401,13 +1466,16 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
     # the one-fold frame and opaque writer equalities produced by main sound.
     semantic_start = next(i for i, line in enumerate(lines) if line.startswith("    have hNormIn :"))
     semantic_split = next(i for i, line in enumerate(lines) if line.startswith("    have hFact8 "))
-    prefix_outputs = [
-        (records[fact_spec], proved[records[fact_spec].fact_id])
-        for transition in transitions[:8]
-        for fact_spec in transition.post_facts
-    ]
     prefix_name = f"{segment.segment_id}_sound_prefix"
     prefix_semantic_source = "\n".join(lines[semantic_start:semantic_split])
+    record_by_id = {fact.fact_id: fact for fact in chain.relation_facts}
+    prefix_outputs = [
+        (record_by_id[fact_id], proof_name)
+        for fact_id, proof_name in proved.items()
+        if f"have {proof_name} :" in prefix_semantic_source
+    ]
+    if not prefix_outputs:
+        raise ValueError("mixed MoE semantic prefix proves no relation facts")
     prefix_writer_results = [
         (name, result) for name, result in writer_results
         if name in prefix_semantic_source
@@ -4597,9 +4665,13 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         and all(item == "to-ordinary-two-rank" for item in family[1:])
     ):
         return render_closed_full_producer_to_segment(ir, relation, segment_id)
+    semantic_family = tuple(
+        item for item in family if item != "ordinary-topk-projection-two-rank"
+    )
     if (
-        len(family) == 16
-        and family[0] in (
+        len(semantic_family) == 16
+        and len(family) - len(semantic_family) <= 1
+        and semantic_family[0] in (
             "FW_norm_linear-full-producer-chunks-ordinary-two-rank",
             "FW_norm_linear-full-producer-chunks-zigzag-two-rank",
         )
