@@ -3406,6 +3406,7 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
                    ("attention-zigzag-qkv-two-rank",)):
         return render_closed_attention_segment(ir, relation, segment_id)
     if family in (
+        ("float-zigzag-two-rank",),
         ("identity-view-ordinary-two-rank",),
         ("identity-view-zigzag-two-rank",),
         ("identity-reshape-ordinary-two-rank",),

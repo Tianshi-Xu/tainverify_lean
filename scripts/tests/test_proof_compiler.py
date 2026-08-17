@@ -3582,6 +3582,8 @@ def test_closed_chain_composer_advances_past_atomic_per_head_zigzag_rms(monkeypa
     with pytest.raises(ValueError) as exc:
         compose_closed_dependent_chain(ir, relation, "ClosedGoal1")
     assert "segment_000257" not in str(exc.value)
+    assert "segment_000265" not in str(exc.value)
+    assert "segment_000278" in str(exc.value)
 
 def test_closed_chain_composer_assembles_complete_path_independently_of_renderers(monkeypatch):
     anchor = SimpleNamespace(
