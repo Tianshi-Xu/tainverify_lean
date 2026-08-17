@@ -18,6 +18,7 @@ from trainverify.bridge_emitter.composer import (
     render_closed_attention_segment,
     render_closed_binary_segment,
     render_closed_ce_fst_segment,
+    render_closed_ce_snd_segment,
     render_closed_float_segment,
     render_closed_full_producer_to_segment,
     render_closed_initial_component,
@@ -3659,6 +3660,65 @@ def test_terminal_ce_consumer_keeps_ordinary_rms_relation_live(monkeypatch):
     rms_segment = chain.segments[chain.segments.index(ce_segment) - 1]
     assert input_record.fact_id in states[rms_segment.post_state_id]
     assert render_closed_rms_norm_segment(ir, relation, rms_segment.segment_id)
+
+
+def test_closed_goal2_ce_snd_terminal_renderer_is_generic_exact_single_fold(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(2, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    source = render_closed_ce_snd_segment(ir, relation, "segment_000487")
+    assert source == render_closed_segment(ir, relation, "segment_000487")
+    assert source.count("let smFinal :=") == 1
+    assert source.count("let pmFinal :=") == 1
+    assert source.count("segment_000487_sm_nodes.foldl") == 1
+    assert source.count("segment_000487_pm_nodes.foldl") == 1
+    assert source.count("ClosedDepSegmentCertificate ") == 1
+    assert source.count("private theorem segment_000487_sm_writer_value") == 1
+    assert source.count("private theorem segment_000487_pm0_writer_value") == 1
+    assert source.count("private theorem segment_000487_pm1_writer_value") == 1
+    assert source.count("private theorem segment_000487_semantic_core") == 1
+    assert source.count("private theorem segment_000487_output_shapes") == 1
+    assert source.count("private theorem segment_000487_output_relation") == 1
+    certificate = source[source.index("private def segment_000487 :"):]
+    assert "foldl_faithful_middle_writer" not in certificate
+    assert "fw_inner_chunk_ce_snd_allGatherDim0_shards" not in certificate
+    assert "fw_inner_chunk_ce_snd_shape" not in certificate
+    assert "fw_inner_chunk_ce_snd_allGatherDim0_shards" in source
+    assert source.count("RelationCompiler.inner_chunk_ce_snd_labels_independent") == 2
+    assert "applyNode_fw_inner_chunk_ce_snd_out_1p" in source
+    assert "op := \"OpName.AllGatherPrim\"" in source
+    assert "authority_transition_eq_sm_6256_pm_6256.Holds" in source
+    assert "authority_transition_shape_pm_6256.Holds" in source
+    assert "ins := [6255, 6256, 4931]" in source
+    assert "ins := [11712, 6256, 11714]" in source
+    assert "ins := [11713, 6256, 11715]" in source
+    assert "chunkPrimDimN" not in source
+    assert "Goal_2" not in source
+
+
+def test_closed_ce_snd_terminal_renderer_rejects_wrong_theorem_and_node_roles(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(2, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    segment = next(item for item in relation.dependent_chain_plan.segments if item.segment_id == "segment_000487")
+    transition_id = segment.transition_ids[0]
+    transitions = tuple(
+        replace(item, lean_theorem="TrainVerify.Denote.wrong")
+        if item.transition_id == transition_id else item
+        for item in relation.transition_specs
+    )
+    with pytest.raises(ValueError, match="CE .snd renderer theorem mismatch"):
+        render_closed_ce_snd_segment(ir, replace(relation, transition_specs=transitions), segment.segment_id)
+    nodes = list(ir.pm_nodes)
+    nodes[segment.pm_range[0]] = replace(nodes[segment.pm_range[0]], rank=1)
+    with pytest.raises(ValueError, match="CE .snd node roles"):
+        render_closed_ce_snd_segment(replace(ir, pm_nodes=nodes), relation, segment.segment_id)
 
 
 def test_ordinary_pointwise_transitions_use_closed_relation_wrappers(monkeypatch):

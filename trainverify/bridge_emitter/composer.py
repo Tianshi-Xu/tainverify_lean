@@ -1574,9 +1574,10 @@ def render_closed_rotary_segment(ir: GoalIR, relation, segment_id: str) -> str:
             lines += [f"        _ = {fn} {store} := rfl"]
         return lines
 
+    sm_graph, pm_graph = ir.sm_graph_ref, ir.pm_graph_ref
     lines = [
-        f"private def {segment.segment_id} (smGraph pmGraph : GraphDecl) :",
-        f"    ClosedDepSegmentCertificate smGraph pmGraph {before.state_id} {after.state_id} where",
+        f"private def {segment.segment_id} :",
+        f"    ClosedDepSegmentCertificate {sm_graph} {pm_graph} {before.state_id} {after.state_id} where",
         f"  smNodes := [{sm_text}]",
         f"  pmNodes := [{', '.join(pm_text)}]",
         "  sound := by",
@@ -3093,6 +3094,286 @@ def render_closed_initial_component(ir: GoalIR, relation, segment_id: str) -> st
     return "\n".join(lines)
 
 
+
+def render_closed_ce_snd_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Render a two-rank InnerChunk CE z-loss terminal without label authority."""
+    chain = relation.dependent_chain_plan
+    if chain is None or not chain.complete:
+        raise ValueError("CE .snd renderer requires a complete closed chain")
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if segment is None or len(segment.transition_ids) != 1:
+        raise ValueError("CE .snd segment must own one transition")
+    transition = {item.transition_id: item for item in relation.transition_specs}[
+        segment.transition_ids[0]
+    ]
+    expected_theorem = "TrainVerify.Denote.fw_inner_chunk_ce_snd_allGatherDim0_shards"
+    if transition.rule_id != "inner-chunk-ce-projection-gather-two-rank":
+        raise ValueError("segment is not the registered CE terminal family")
+    if transition.lean_theorem != expected_theorem:
+        raise ValueError(f"CE .snd renderer theorem mismatch: {transition.lean_theorem}")
+    if len(transition.pre_facts) != 1 or len(transition.post_facts) != 1:
+        raise ValueError("CE .snd transition must have one pre/post fact")
+
+    sms = ir.sm_nodes[slice(*segment.sm_range)]
+    pms = ir.pm_nodes[slice(*segment.pm_range)]
+    if len(sms) != 1 or len(pms) != 3:
+        raise ValueError("CE .snd node roles require one SM CE and two PM CE plus gather")
+    sm, p0, p1 = sms[0], pms[0], pms[1]
+    gather = pms[2]
+    ce_nodes = (sm, p0, p1)
+    valid_ce = all(
+        node.op == "FW_inner_chunk_ce"
+        and len(node.ins) == 3
+        and len(node.outs) == 2
+        and len(node.params or ()) == 1
+        for node in ce_nodes
+    )
+    if (
+        not valid_ce
+        or (sm.rank, p0.rank, p1.rank) != (0, 0, 1)
+        or any(tuple(node.params or ()) != tuple(sm.params or ()) for node in (p0, p1))
+        or gather.op != "AllGatherPrim"
+        or gather.rank != 0
+        or gather.params != [0]
+        or gather.ins != [p0.outs[1], p1.outs[1]]
+        or gather.outs != [sm.outs[1]]
+    ):
+        raise ValueError("CE .snd node roles do not match projection/gather")
+    weight = sm.ins[1]
+    if p0.ins[1] != weight or p1.ins[1] != weight:
+        raise ValueError("CE .snd node roles require one shared weight")
+
+    records = {item.source: item for item in chain.relation_facts}
+    pre = records[transition.pre_facts[0]]
+    post = records[transition.post_facts[0]]
+    if (
+        pre.kind != "ordinary"
+        or post.kind != "ordinary"
+        or (pre.sm_tid, pre.pm_rank0_tid, pre.pm_rank1_tid)
+        != (sm.ins[0], p0.ins[0], p1.ins[0])
+        or (post.sm_tid, post.pm_rank0_tid, post.pm_rank1_tid)
+        != (sm.outs[1], p0.outs[1], p1.outs[1])
+        or len(pre.shard_shape) != 2
+        or pre.full_shape != (pre.shard_shape[0] * 2, pre.shard_shape[1])
+        or post.full_shape != (pre.full_shape[0],)
+        or post.shard_shape != (pre.shard_shape[0],)
+    ):
+        raise ValueError("CE .snd relation payload does not match exact node roles")
+    shard_rows, hidden = pre.shard_shape
+
+    eq_facts = [
+        item for item in chain.authority_facts
+        if item.kind == "tensor_eq"
+        and (item.left_side, item.left_tid, item.right_side, item.right_tid)
+        == ("sm", weight, "pm", weight)
+    ]
+    shape_facts = [
+        item for item in chain.authority_facts
+        if item.kind == "tensor_shape" and (item.side, item.tid) == ("pm", weight)
+    ]
+    if len(eq_facts) != 1 or len(shape_facts) != 1:
+        raise ValueError("CE .snd weight authority is missing or ambiguous")
+    weight_eq, weight_shape = eq_facts[0], shape_facts[0]
+    if len(weight_shape.shape) != 2 or weight_shape.shape[1] != hidden:
+        raise ValueError("CE .snd weight shape authority disagrees with activation")
+    vocab = weight_shape.shape[0]
+
+    states = {item.state_id: item for item in chain.states}
+    before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    required = {pre.fact_id, weight_eq.fact_id, weight_shape.fact_id}
+    if not required <= set(before.fact_ids) or post.fact_id not in after.fact_ids:
+        raise ValueError("CE .snd activation/weight authority is not live")
+    if not set(after.fact_ids) <= ({post.fact_id} | set(before.fact_ids)):
+        raise ValueError("CE .snd state introduces an unproved fact")
+
+    sm_nodes = [_node_text(sm)]
+    pm_nodes = [_node_text(item) for item in pms]
+    sm_text = "[" + ", ".join(sm_nodes) + "]"
+    pm_text = "[" + ", ".join(pm_nodes) + "]"
+    params_text = _shape_text(sm.params or [])
+    zscale = "(((0 : Nat) : Scalar))"
+    fs, ss = _shape_text(post.full_shape), _shape_text(post.shard_shape)
+    pre_fs, pre_ss = _shape_text(pre.full_shape), _shape_text(pre.shard_shape)
+    weight_shape_text = _shape_text(weight_shape.shape)
+
+    sm_graph, pm_graph = ir.sm_graph_ref, ir.pm_graph_ref
+    sm_nodes_name = f"{segment.segment_id}_sm_nodes"
+    pm_nodes_name = f"{segment.segment_id}_pm_nodes"
+    sm_final_name = f"{segment.segment_id}_sm_final"
+    pm_final_name = f"{segment.segment_id}_pm_final"
+
+    def writer(helper_name, graph, store, final_name, nodes_name, nodes, position):
+        node = nodes[position]
+        before_nodes, after_nodes = nodes[:position], nodes[position + 1:]
+        prefix_text = f"[{', '.join(_node_text(item) for item in before_nodes)}]"
+        after_text = f"[{', '.join(_node_text(item) for item in after_nodes)}]"
+        prefix = f"{prefix_text}.foldl (applyNodeDistributedFaithful {graph}) {store}"
+
+        def expr(st):
+            return (
+                f"(fw_inner_chunk_ce ({st} {node.ins[0]}) ({st} {node.ins[1]}) "
+                f"({st} {node.ins[2]}) (((({st} {node.ins[1]}).shape.head?).getD 0)) "
+                f"{zscale}).snd"
+            )
+
+        lines = [
+            f"private theorem {helper_name} ({store} : Store) :",
+            f"    {final_name} {store} {node.outs[1]} = {expr(store)} := by",
+        ]
+        reads = []
+        for ordinal, tid in enumerate(dict.fromkeys(node.ins)):
+            read = f"hread_{ordinal}"
+            reads.append(read)
+            lines.extend([
+                f"  have {read} : {prefix} {tid} = {store} {tid} := by",
+                f"    exact foldl_applyNodeDistributedFaithful_at_not_written {graph} {prefix_text} {store} {tid}",
+                "      (by native_decide) (by native_decide)",
+            ])
+        lines.extend([
+            "  calc",
+            f"    {final_name} {store} {node.outs[1]} = {expr(prefix)} := by",
+            f"      unfold {final_name}",
+            f"      rw [show {nodes_name} = {prefix_text} ++ [{_node_text(node)}] ++ {after_text} by native_decide]",
+            f"      exact foldl_faithful_middle_writer {graph} {store} {prefix_text}",
+            f"        {after_text} {_node_text(node)}",
+            f"        {node.outs[1]} (fun t => {expr('t')}) (by",
+            "          intro t",
+            "          rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "            (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]",
+            "          unfold applyNodeDistributed",
+            "          rw [if_neg (by decide)]",
+            "          rw [applyNodeRingAttn_eq_applyNode_of_not_ring]",
+            (f"          · exact applyNode_fw_inner_chunk_ce_snd_out_1p {graph} t {node.rank} "
+            f"{node.ins[0]} {node.ins[1]} {node.ins[2]} {node.outs[0]} {node.outs[1]} (by decide) (params := {params_text})"),
+            "          · decide",
+            "          · decide",
+            "        ) (by native_decide) (by native_decide)",
+            f"    _ = {expr(store)} := by",
+            f"      rw [{', '.join(reads)}]" if reads else "      rfl",
+            "",
+        ])
+        return lines
+
+    sm_writer_name = f"{segment.segment_id}_sm_writer_value"
+    pm0_writer_name = f"{segment.segment_id}_pm0_writer_value"
+    pm1_writer_name = f"{segment.segment_id}_pm1_writer_value"
+    core_name = f"{segment.segment_id}_semantic_core"
+    shapes_name = f"{segment.segment_id}_output_shapes"
+    output_name = f"{segment.segment_id}_output_relation"
+
+    lines = [
+        f"private def {sm_nodes_name} : List NodeDecl := {sm_text}",
+        f"private def {pm_nodes_name} : List NodeDecl := {pm_text}",
+        f"private def {sm_final_name} (smStore : Store) : Store :=",
+        f"  {sm_nodes_name}.foldl (applyNodeDistributedFaithful {sm_graph}) smStore",
+        f"private def {pm_final_name} (pmStore : Store) : Store :=",
+        f"  {pm_nodes_name}.foldl (applyNodeDistributedFaithful {pm_graph}) pmStore",
+        "",
+    ]
+    lines += writer(sm_writer_name, sm_graph, "smStore", sm_final_name, sm_nodes_name, [sm], 0)
+    lines += writer(pm0_writer_name, pm_graph, "pmStore", pm_final_name, pm_nodes_name, pms, 0)
+    lines += writer(pm1_writer_name, pm_graph, "pmStore", pm_final_name, pm_nodes_name, pms, 1)
+    lines += [
+        f"private theorem {core_name} (smStore pmStore : Store)",
+        f"    (hIn : GeneratedPatterns.Ordinary2Rel (smStore {sm.ins[0]}) (pmStore {p0.ins[0]}) (pmStore {p1.ins[0]}) {pre_fs} {pre_ss})",
+        f"    (hWeightEq : smStore {weight} = pmStore {weight})",
+        f"    (hWeightShape : (pmStore {weight}).shape = {weight_shape_text}) :",
+        f"    (fw_inner_chunk_ce (smStore {sm.ins[0]}) (smStore {weight}) (smStore {sm.ins[2]}) {vocab} {zscale}).snd =",
+        f"      allGatherPrimDimN 0 2 0 [(fw_inner_chunk_ce (pmStore {p0.ins[0]}) (pmStore {weight}) (pmStore {p0.ins[2]}) {vocab} {zscale}).snd,",
+        f"        (fw_inner_chunk_ce (pmStore {p1.ins[0]}) (pmStore {weight}) (pmStore {p1.ins[2]}) {vocab} {zscale}).snd] := by",
+        f"  have hPm0Labels : (fw_inner_chunk_ce (pmStore {p0.ins[0]}) (pmStore {weight}) (pmStore {p0.ins[2]}) {vocab} {zscale}).snd =",
+        f"      (fw_inner_chunk_ce (pmStore {p0.ins[0]}) (pmStore {weight}) (smStore {sm.ins[2]}) {vocab} {zscale}).snd := by",
+        "    exact RelationCompiler.inner_chunk_ce_snd_labels_independent _ _ _ _ _ _",
+        f"  have hPm1Labels : (fw_inner_chunk_ce (pmStore {p1.ins[0]}) (pmStore {weight}) (pmStore {p1.ins[2]}) {vocab} {zscale}).snd =",
+        f"      (fw_inner_chunk_ce (pmStore {p1.ins[0]}) (pmStore {weight}) (smStore {sm.ins[2]}) {vocab} {zscale}).snd := by",
+        "    exact RelationCompiler.inner_chunk_ce_snd_labels_independent _ _ _ _ _ _",
+        "  rw [hPm0Labels, hPm1Labels]",
+        "  rw [hWeightEq, hIn.full_value]",
+        f"  simpa using (fw_inner_chunk_ce_snd_allGatherDim0_shards 2 {shard_rows} {hidden} {vocab} {zscale}",
+        f"    [pmStore {p0.ins[0]}, pmStore {p1.ins[0]}] (pmStore {weight}) (smStore {sm.ins[2]})",
+        "    (by decide) (by decide) (by decide) (by decide)",
+        "    (by exact hIn.rank0_shape)",
+        "    (by",
+        "      intro r hr",
+        "      have hr' : r = 0 ∨ r = 1 := by omega",
+        "      rcases hr' with rfl | rfl",
+        "      · exact hIn.rank0_shape",
+        "      · exact hIn.rank1_shape)",
+        "    hWeightShape)",
+        "",
+        f"private theorem {shapes_name} (smStore pmStore : Store)",
+        f"    (hIn : GeneratedPatterns.Ordinary2Rel (smStore {sm.ins[0]}) (pmStore {p0.ins[0]}) (pmStore {p1.ins[0]}) {pre_fs} {pre_ss}) :",
+        f"    (fw_inner_chunk_ce (smStore {sm.ins[0]}) (smStore {weight}) (smStore {sm.ins[2]}) (((smStore {weight}).shape.head?).getD 0) {zscale}).snd.shape = {fs} ∧",
+        f"    (fw_inner_chunk_ce (pmStore {p0.ins[0]}) (pmStore {weight}) (pmStore {p0.ins[2]}) (((pmStore {weight}).shape.head?).getD 0) {zscale}).snd.shape = {ss} ∧",
+        f"    (fw_inner_chunk_ce (pmStore {p1.ins[0]}) (pmStore {weight}) (pmStore {p1.ins[2]}) (((pmStore {weight}).shape.head?).getD 0) {zscale}).snd.shape = {ss} := by",
+        "  refine ⟨?_, ?_, ?_⟩",
+        f"  · apply fw_inner_chunk_ce_snd_shape _ _ _ _ {zscale} {pre.full_shape[0]}",
+        "    rw [hIn.full_shape]",
+        "    rfl",
+        f"  · apply fw_inner_chunk_ce_snd_shape _ _ _ _ {zscale} {shard_rows}",
+        "    rw [hIn.rank0_shape]",
+        "    rfl",
+        f"  · apply fw_inner_chunk_ce_snd_shape _ _ _ _ {zscale} {shard_rows}",
+        "    rw [hIn.rank1_shape]",
+        "    rfl",
+        "",
+        f"private theorem {output_name} (smStore pmStore : Store)",
+        f"    (hIn : GeneratedPatterns.Ordinary2Rel (smStore {sm.ins[0]}) (pmStore {p0.ins[0]}) (pmStore {p1.ins[0]}) {pre_fs} {pre_ss})",
+        f"    (hWeightEq : smStore {weight} = pmStore {weight})",
+        f"    (hWeightShape : (pmStore {weight}).shape = {weight_shape_text}) :",
+        f"    {post.fact_id}.Holds ({sm_final_name} smStore) ({pm_final_name} pmStore) := by",
+        f"  have hSmWriter := {sm_writer_name} smStore",
+        f"  have hPm0Writer := {pm0_writer_name} pmStore",
+        f"  have hPm1Writer := {pm1_writer_name} pmStore",
+        f"  have hCore := {core_name} smStore pmStore hIn hWeightEq hWeightShape",
+        f"  obtain ⟨hSmShape, hPm0Shape, hPm1Shape⟩ := {shapes_name} smStore pmStore hIn",
+        f"  change GeneratedPatterns.Ordinary2Rel ({sm_final_name} smStore {sm.outs[1]}) ({pm_final_name} pmStore {p0.outs[1]}) ({pm_final_name} pmStore {p1.outs[1]}) {fs} {ss}",
+        "  refine {",
+        "    full_value := ?_",
+        "    full_shape := ?_",
+        "    rank0_shape := ?_",
+        "    rank1_shape := ?_",
+        "  }",
+        "  · rw [hSmWriter, hPm0Writer, hPm1Writer]",
+        f"    rw [show (((smStore {weight}).shape.head?).getD 0) = {vocab} by rw [hWeightEq, hWeightShape]; rfl]",
+        f"    rw [show (((pmStore {weight}).shape.head?).getD 0) = {vocab} by rw [hWeightShape]; rfl]",
+        "    exact hCore",
+        "  · rw [hSmWriter]",
+        "    exact hSmShape",
+        "  · rw [hPm0Writer]",
+        "    exact hPm0Shape",
+        "  · rw [hPm1Writer]",
+        "    exact hPm1Shape",
+        "",
+        f"private def {segment.segment_id} :",
+        f"    ClosedDepSegmentCertificate {sm_graph} {pm_graph} {before.state_id} {after.state_id} where",
+        f"  smNodes := {sm_nodes_name}",
+        f"  pmNodes := {pm_nodes_name}",
+        "  sound := by",
+        "    intro smStore pmStore hstate",
+        f"    let smFinal := {sm_final_name} smStore",
+        f"    let pmFinal := {pm_final_name} pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        f"      apply RelationState.Holds.fold_frame {sm_nodes_name} {pm_nodes_name} smStore pmStore hstate",
+        "      · native_decide",
+        "      · native_decide",
+        "      · native_decide",
+        "      · native_decide",
+        f"    have hIn : {pre.fact_id}.Holds smStore pmStore := hstate {pre.fact_id} (by native_decide)",
+        f"    change GeneratedPatterns.Ordinary2Rel (smStore {sm.ins[0]}) (pmStore {p0.ins[0]}) (pmStore {p1.ins[0]}) {pre_fs} {pre_ss} at hIn",
+        f"    have hWeightEq : {weight_eq.fact_id}.Holds smStore pmStore := hstate {weight_eq.fact_id} (by native_decide)",
+        f"    change smStore {weight} = pmStore {weight} at hWeightEq",
+        f"    have hWeightShape : {weight_shape.fact_id}.Holds smStore pmStore := hstate {weight_shape.fact_id} (by native_decide)",
+        f"    change (pmStore {weight}).shape = {weight_shape_text} at hWeightShape",
+        f"    have hOut := {output_name} smStore pmStore hIn hWeightEq hWeightShape",
+        "    change " + f"{post.fact_id}.Holds smFinal pmFinal at hOut",
+        "    change " + f"{after.state_id}.Holds smFinal pmFinal",
+        "    exact RelationState.Holds.mono_insert hframe hOut (by native_decide)",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def render_closed_rms_norm_segment(ir: GoalIR, relation, segment_id: str) -> str:
     chain = relation.dependent_chain_plan
     if chain is None or not chain.complete:
@@ -3812,7 +4093,19 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     if family == ("zigzag-to-ordinary-unshuffle-two-rank",):
         return render_closed_unshuffle_segment(ir, relation, segment_id)
     if family == ("inner-chunk-ce-projection-gather-two-rank",):
-        return render_closed_ce_fst_segment(ir, relation, segment_id)
+        ce_certificates = [
+            certificate for certificate in relation.certificates
+            if getattr(certificate, "rule_id", None)
+            == "inner-chunk-ce-projection-gather-two-rank"
+        ]
+        if len(ce_certificates) != 1:
+            raise ValueError("closed CE segment lacks one exact certificate")
+        projection = ce_certificates[0].output_projection
+        if projection == ".fst":
+            return render_closed_ce_fst_segment(ir, relation, segment_id)
+        if projection == ".snd":
+            return render_closed_ce_snd_segment(ir, relation, segment_id)
+        raise ValueError(f"unsupported closed CE projection: {projection!r}")
     if family == (
         "rms-norm-ordinary-two-rank",
         "faithful-maybe-shuffle-ordinary-to-zigzag-two-rank",
