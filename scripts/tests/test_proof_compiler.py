@@ -3837,6 +3837,36 @@ def test_closed_atomic_per_head_zigzag_rms_renderer_is_exact_single_fold(monkeyp
     assert "metadata_region_id" not in source
 
 
+def test_goals34_atomic_full_producer_two_local_linear_renderer_is_exact_single_fold(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    expected_ranges = {3: ((5, 8), (38, 47)), 4: ((5, 8), (36, 45))}
+    for goal_id in (3, 4):
+        ir = load_goal_ir(goal_id, str(root))
+        relation = compile_relation_plan(
+            ir, compile_proof_plan(ir, build_default_registry())
+        )
+        segment = relation.dependent_chain_plan.segments[5]
+
+        source = render_closed_linear_segment(ir, relation, segment.segment_id)
+
+        assert (segment.sm_range, segment.pm_range) == expected_ranges[goal_id]
+        assert source == render_closed_segment(ir, relation, segment.segment_id)
+        assert source.count("let smFinal :=") == 1
+        assert source.count("let pmFinal :=") == 1
+        assert source.count("Ordinary2Rel.per_head_linear_fullProducer_chunks") == 1
+        assert source.count("Ordinary2Rel.per_head_linear ") == 2
+        assert source.count("foldl_faithful_chunk_writer") == 2
+        assert f"Goal_{goal_id}" not in source
+
+        with pytest.raises(ValueError) as exc:
+            compose_closed_dependent_chain(ir, relation, f"ClosedGoal{goal_id}")
+        assert "segment_000005" not in str(exc.value)
+        assert "segment_000017" in str(exc.value)
+
+
 def test_closed_exit_unshuffle_renderer_is_generic_exact_single_fold(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")

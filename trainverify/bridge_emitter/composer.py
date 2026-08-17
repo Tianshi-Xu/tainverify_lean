@@ -2714,7 +2714,16 @@ def render_closed_linear_segment(ir: GoalIR, relation, segment_id: str) -> str:
         ):
             raise ValueError("zigzag linear metadata provenance mismatch")
         fresh.append(post)
-        cert_matches = [c for c in certs if getattr(c, "output_step_triple", None) == post.source.step_triple]
+        transition_parts = transition.transition_id.split(":", 2)
+        if len(transition_parts) != 3 or transition_parts[2] != transition.rule_id:
+            raise ValueError("linear transition has malformed certificate identity")
+        certificate_class = transition_parts[1]
+        cert_matches = [
+            c for c in certs
+            if type(c).__name__ == certificate_class
+            and getattr(c, "rule_id", None) == transition.rule_id
+            and getattr(c, "output_step_triple", None) == post.source.step_triple
+        ]
         if len(cert_matches) != 1:
             raise ValueError("linear transition lacks unique exact certificate")
         cert = cert_matches[0]
