@@ -498,6 +498,11 @@ def render_closed_relation_declarations(chain, namespace: str) -> str:
                 f".ordinary {fact.sm_tid} {fact.pm_rank0_tid} {fact.pm_rank1_tid} "
                 f"{shape_text(fact.full_shape)} {shape_text(fact.shard_shape)}"
             )
+        elif fact.kind == "label_chunks":
+            constructor = (
+                f".labelChunks {fact.sm_tid} {fact.pm_rank0_tid} {fact.pm_rank1_tid} "
+                f"0 {shape_text(fact.full_shape)} {shape_text(fact.shard_shape)}"
+            )
         elif fact.kind == "zigzag":
             if fact.metadata_tid is None:
                 raise ValueError(f"zigzag fact lacks metadata: {fact.fact_id}")
@@ -3043,7 +3048,13 @@ def render_closed_initial_component(ir: GoalIR, relation, segment_id: str) -> st
     fresh=[post_emb];
     # InitChunk outputs.
     for k,t in enumerate(init):
-        post=records[t.post_facts[0]];p0i,p1i=t.pm_node_indices;p0,p1=ir.pm_nodes[p0i],ir.pm_nodes[p1i];full=int(t.post_facts[0].step_triple[0].split(':')[1]);eq=eq_fact("sm",full,"pm",p0.ins[0]);shape=shape_fact("pm",p0.ins[0])
+        posts = [records[source] for source in t.post_facts]
+        ordinary = [item for item in posts if item.kind == "ordinary"]
+        label_chunks = [item for item in posts if item.kind == "label_chunks"]
+        if len(ordinary) != 1 or len(label_chunks) != 1:
+            raise ValueError("InitChunk transition lacks ordinary/label-chunk facts")
+        post, label_post = ordinary[0], label_chunks[0]
+        p0i,p1i=t.pm_node_indices;p0,p1=ir.pm_nodes[p0i],ir.pm_nodes[p1i];full=int(post.source.step_triple[0].split(':')[1]);eq=eq_fact("sm",full,"pm",p0.ins[0]);shape=shape_fact("pm",p0.ins[0])
         if post.full_shape!=(shape.shape) or len(post.full_shape)!=1 or post.full_shape[0]!=2*post.shard_shape[0]: raise ValueError("InitChunk 1D shape mismatch")
         lines += [f"    have hEq{k} : {eq.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",f"    have hShape{k} : {shape.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
           f"    have hSmInit{k} : smFinal {full} = smStore {full} := by exact foldl_applyNodeDistributedFaithful_at_not_written {ir.sm_graph_ref} smNodes smStore {full} (by native_decide) (by native_decide)"]
@@ -3055,10 +3066,16 @@ def render_closed_initial_component(ir: GoalIR, relation, segment_id: str) -> st
         lines += [f"    have hout_init{k} : {post.fact_id}.Holds smFinal pmFinal := by",
           f"      change GeneratedPatterns.Ordinary2Rel (smFinal {full}) (pmFinal {p0.outs[0]}) (pmFinal {p1.outs[0]}) {_shape_text(post.full_shape)} {_shape_text(post.shard_shape)}",
           f"      rw [hSmInit{k}, hChunk{k}_0, hChunk{k}_1]",f"      change smStore {full} = pmStore {p0.ins[0]} at hEq{k}",f"      change (pmStore {p0.ins[0]}).shape = {_shape_text(shape.shape)} at hShape{k}",
-          f"      exact TrainVerify.Denote.RelationCompiler.Ordinary2Rel.of_eq_chunk2_dim0_1d _ _ {post.shard_shape[0]} hEq{k} (by simpa using hShape{k}) (by decide)"]
-        fresh.append(post)
+          f"      exact TrainVerify.Denote.RelationCompiler.Ordinary2Rel.of_eq_chunk2_dim0_1d _ _ {post.shard_shape[0]} hEq{k} (by simpa using hShape{k}) (by decide)",
+          f"    have hout_label_chunks{k} : {label_post.fact_id}.Holds smFinal pmFinal := by",
+          f"      change pmFinal {label_post.pm_rank0_tid} = chunkPrimDimN 0 2 0 (pmFinal {label_post.sm_tid}) ∧ _",
+          f"      have hFullFinal{k} : pmFinal {label_post.sm_tid} = pmStore {label_post.sm_tid} := foldl_applyNodeDistributedFaithful_at_not_written {ir.pm_graph_ref} pmNodes pmStore {label_post.sm_tid} (by native_decide) (by native_decide)",
+          f"      rw [hChunk{k}_0, hChunk{k}_1, hFullFinal{k}]",
+          f"      exact ⟨rfl, rfl, hShape{k}, hout_init{k}.rank0_shape, hout_init{k}.rank1_shape⟩"]
+        fresh.extend((post, label_post))
     if not set(after.fact_ids)<=({x.fact_id for x in fresh}|set(before.fact_ids)): raise ValueError("initial component introduces unproved fact")
-    names=["hout_embedding"]+[f"hout_init{k}" for k in range(len(init))];defs=[x.fact_id for x in fresh]
+    names=["hout_embedding"]+[name for k in range(len(init))
+        for name in (f"hout_init{k}", f"hout_label_chunks{k}")];defs=[x.fact_id for x in fresh]
     lines += ["    intro fact hfact",f"    have covered : fact ∈ [{', '.join(defs)}] ++ {before.state_id}.facts := by",f"      exact (show {after.state_id}.facts ⊆ [{', '.join(defs)}] ++ {before.state_id}.facts by native_decide) hfact","    simp only [List.mem_append] at covered","    rcases covered with fresh | hold","    · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh","      rcases fresh with "+" | ".join(["rfl"]*len(names))]
     lines += [f"      · exact {x}" for x in names]+["    · exact hframe fact hold",""]
     return "\n".join(lines)
@@ -3562,6 +3579,201 @@ def render_closed_unshuffle_segment(ir: GoalIR, relation, segment_id: str) -> st
     ]
     return "\n".join(lines)
 
+
+def render_closed_ce_fst_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Render a closed two-rank InnerChunk CE loss projection terminal."""
+    chain = relation.dependent_chain_plan
+    if chain is None or not chain.complete:
+        raise ValueError("CE .fst segment requires a complete closed chain")
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if segment is None or len(segment.transition_ids) != 1:
+        raise ValueError("CE .fst segment must own one transition")
+    transitions = {item.transition_id: item for item in relation.transition_specs}
+    transition = transitions[segment.transition_ids[0]]
+    if transition.rule_id != "inner-chunk-ce-projection-gather-two-rank" or transition.lean_theorem != (
+        "TrainVerify.Denote.GeneratedPatterns.fw_inner_chunk_ce_fst_allGather0_commute_2_of"
+    ):
+        raise ValueError("segment is not the registered CE .fst family")
+    if ir.sm_num_ranks != 1 or ir.pm_num_ranks != 2:
+        raise ValueError("CE .fst requires exact SM=1/PM=2 graph ranks")
+    if transition.sm_node_indices != tuple(range(*segment.sm_range)) or transition.pm_node_indices != tuple(
+        range(*segment.pm_range)
+    ):
+        raise ValueError("CE .fst transition/segment footprint mismatch")
+    sms = ir.sm_nodes[slice(*segment.sm_range)]
+    pms = ir.pm_nodes[slice(*segment.pm_range)]
+    if len(sms) != 1 or len(pms) != 3:
+        raise ValueError("CE .fst footprint must contain one SM and three PM nodes")
+    sm, p0, p1, gather = sms[0], pms[0], pms[1], pms[2]
+    ce_nodes = (sm, p0, p1)
+    if any(node.op != "FW_inner_chunk_ce" or len(node.ins) != 3
+           or len(node.outs) != 2 or not node.params for node in ce_nodes):
+        raise ValueError("CE .fst node signature mismatch")
+    if tuple(node.rank for node in ce_nodes) != (0, 0, 1) or any(
+        node.params != sm.params for node in (p0, p1)
+    ):
+        raise ValueError("CE .fst ranks/parameters disagree")
+    if (gather.op != "AllGatherPrim" or gather.rank != 0 or gather.params != [0]
+            or gather.ins != [p0.outs[0], p1.outs[0]] or len(gather.outs) != 1):
+        raise ValueError("CE .fst terminal gather mismatch")
+
+    records = {item.source: item for item in chain.relation_facts}
+    pre_records = [records.get(source) for source in transition.pre_facts]
+    ordinary = [item for item in pre_records if item is not None and item.kind == "ordinary"]
+    label_chunks = [item for item in pre_records if item is not None and item.kind == "label_chunks"]
+    if len(ordinary) != 1:
+        raise ValueError("CE .fst activation authority mismatch")
+    if len(label_chunks) != 1:
+        raise ValueError("CE .fst label-chunk authority mismatch")
+    activation, chunks = ordinary[0], label_chunks[0]
+    if len(transition.post_facts) != 1 or transition.post_facts[0] not in records:
+        raise ValueError("CE .fst output fact mismatch")
+    post = records[transition.post_facts[0]]
+    if post.kind != "ordinary":
+        raise ValueError("CE .fst output is not ordinary")
+    if ((activation.sm_tid, activation.pm_rank0_tid, activation.pm_rank1_tid)
+            != (sm.ins[0], p0.ins[0], p1.ins[0])):
+        raise ValueError("CE .fst activation roles do not match node TIDs")
+    if ((post.sm_tid, post.pm_rank0_tid, post.pm_rank1_tid)
+            != (sm.outs[0], p0.outs[0], p1.outs[0])):
+        raise ValueError("CE .fst output roles do not match node TIDs")
+    full_label, local0, local1 = sm.ins[2], p0.ins[2], p1.ins[2]
+    if (chunks.sm_tid, chunks.pm_rank0_tid, chunks.pm_rank1_tid) != (
+        full_label, local0, local1
+    ):
+        raise ValueError("CE .fst label-chunk TIDs do not match node roles")
+    if len(activation.shard_shape) != 2 or len(chunks.full_shape) != 1:
+        raise ValueError("CE .fst activation/label rank mismatch")
+    rows, hidden = activation.shard_shape
+    if (rows <= 0 or hidden <= 0 or activation.full_shape != (rows * 2, hidden)
+            or chunks.full_shape != (rows * 2,) or chunks.shard_shape != (rows,)
+            or post.full_shape != (rows * 2,) or post.shard_shape != (rows,)):
+        raise ValueError("CE .fst closed shapes disagree")
+    weight = sm.ins[1]
+    if (p0.ins[1], p1.ins[1]) != (weight, weight):
+        raise ValueError("CE .fst weight is not replicated")
+
+    authorities = list(chain.authority_facts)
+    def authority_one(kind, predicate, label):
+        matches = [item for item in authorities if item.kind == kind and predicate(item)]
+        if len(matches) != 1:
+            raise ValueError(f"CE .fst {label} authority mismatch")
+        return matches[0]
+    weight_eq = authority_one("tensor_eq", lambda x:
+        (x.left_side, x.left_tid, x.right_side, x.right_tid) == ("sm", weight, "pm", weight), "weight equality")
+    weight_shape = authority_one("tensor_shape", lambda x:
+        (x.side, x.tid) == ("pm", weight), "weight shape")
+    if len(weight_shape.shape) != 2 or weight_shape.shape[1] != hidden:
+        raise ValueError("CE .fst weight dimensions disagree")
+    vocab = weight_shape.shape[0]
+    label_eq = authority_one("tensor_eq", lambda x:
+        (x.left_side, x.left_tid, x.right_side, x.right_tid) == ("sm", full_label, "pm", full_label), "label equality")
+    label_shape = authority_one("tensor_shape", lambda x:
+        (x.side, x.tid) == ("pm", full_label), "label shape")
+    label_bound = authority_one("label_bound", lambda x:
+        (x.side, x.tid, x.length, x.upper_bound) == ("pm", full_label, rows * 2, vocab), "label bound")
+    if tuple(label_shape.shape) != chunks.full_shape:
+        raise ValueError("CE .fst label shape authority disagrees")
+    states = {item.state_id: item for item in chain.states}
+    before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    required = {activation.fact_id, chunks.fact_id, weight_eq.fact_id, weight_shape.fact_id,
+                label_eq.fact_id, label_shape.fact_id, label_bound.fact_id}
+    if not required <= set(before.fact_ids):
+        raise ValueError("CE .fst required authority is not live")
+    if post.fact_id not in after.fact_ids or not set(after.fact_ids) <= ({post.fact_id} | set(before.fact_ids)):
+        raise ValueError("CE .fst state delta mismatch")
+
+    sm_graph, pm_graph = ir.sm_graph_ref, ir.pm_graph_ref
+    sm_text, p0_text, p1_text, gather_text = (_node_text(node) for node in (sm, p0, p1, gather))
+    params_text = "[" + ", ".join(str(value) for value in sm.params) + "]"
+    zscale = f"((({params_text}.getD 1 0 : Nat) : Scalar))"
+    def ce_expr(store, node):
+        return (f"(fw_inner_chunk_ce ({store} {node.ins[0]}) ({store} {node.ins[1]}) "
+                f"({store} {node.ins[2]}) ((({store} {node.ins[1]}).shape.head?).getD 0) {zscale}).fst")
+    sm_nodes_text = f"[{sm_text}]"
+    pm_nodes_text = f"[{p0_text}, {p1_text}, {gather_text}]"
+    lines = [
+        f"private def {segment.segment_id} :",
+        f"    ClosedDepSegmentCertificate {sm_graph} {pm_graph} {before.state_id} {after.state_id} where",
+        f"  smNodes := {sm_nodes_text}", f"  pmNodes := {pm_nodes_text}",
+        "  sound := by", "    intro smStore pmStore hstate",
+        f"    let smNodes : List NodeDecl := {sm_nodes_text}",
+        f"    let pmNodes : List NodeDecl := {pm_nodes_text}",
+        f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {sm_graph}) smStore",
+        f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {pm_graph}) pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
+        f"    have hActivation : {activation.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    have hChunks : {chunks.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    have hWeightEq : {weight_eq.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    have hWeightShape : {weight_shape.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    have hLabelEq : {label_eq.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    have hLabelShape : {label_shape.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    have hLabelBound : {label_bound.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    change GeneratedPatterns.Ordinary2Rel (smStore {sm.ins[0]}) (pmStore {p0.ins[0]}) (pmStore {p1.ins[0]}) {_shape_text(activation.full_shape)} {_shape_text(activation.shard_shape)} at hActivation",
+        f"    change pmStore {local0} = chunkPrimDimN 0 2 0 (pmStore {full_label}) ∧ pmStore {local1} = chunkPrimDimN 0 2 1 (pmStore {full_label}) ∧ _ at hChunks",
+        f"    change smStore {weight} = pmStore {weight} at hWeightEq",
+        f"    change (pmStore {weight}).shape = {_shape_text(weight_shape.shape)} at hWeightShape",
+        f"    change smStore {full_label} = pmStore {full_label} at hLabelEq",
+        f"    change (pmStore {full_label}).shape = {_shape_text(label_shape.shape)} at hLabelShape",
+        f"    change (∀ index < {rows * 2}, scalarToNat (valAt (pmStore {full_label}) index) < {vocab}) at hLabelBound",
+    ]
+
+    def writer(name, graph, store, final, node, before_nodes, after_nodes):
+        prefix = f"[{', '.join(_node_text(item) for item in before_nodes)}]"
+        prefix_store = store if not before_nodes else f"{prefix}.foldl (applyNodeDistributedFaithful {graph}) {store}"
+        prefix_expr = ce_expr(prefix_store, node)
+        base_expr = ce_expr(store, node)
+        out = [
+            f"    have {name} : {final} {node.outs[0]} = {base_expr} := by", "      calc",
+            f"        {final} {node.outs[0]} = {prefix_expr} := by",
+            f"          simpa [{final}, {'smNodes' if final == 'smFinal' else 'pmNodes'}] using",
+            f"            (foldl_faithful_middle_writer {graph} {store} {prefix} [{', '.join(_node_text(item) for item in after_nodes)}] {_node_text(node)} {node.outs[0]}",
+            f"              (fun t => {ce_expr('t', node)}) (by",
+            "                intro t",
+            "                rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "                  (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]",
+            "                simp [applyNodeDistributed, applyNodeRingAttn]",
+            f"                exact applyNode_fw_inner_chunk_ce_fst_out_1p {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.ins[2]} {node.outs[0]} {node.outs[1]} {params_text})",
+            "              (by native_decide) (by native_decide))",
+        ]
+        if before_nodes:
+            out.append(f"        _ = {base_expr} := by")
+            for tid in dict.fromkeys(node.ins):
+                out.append(f"          rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} {prefix} {store} {tid} (by native_decide) (by native_decide)]")
+        else:
+            out.append("        _ = _ := rfl")
+        return out
+
+    lines += writer("hSmWriter", sm_graph, "smStore", "smFinal", sm, [], [])
+    lines += writer("hPm0Writer", pm_graph, "pmStore", "pmFinal", p0, [], [p1, gather])
+    lines += writer("hPm1Writer", pm_graph, "pmStore", "pmFinal", p1, [p0], [gather])
+    lines += [
+        f"    have hVocab : (((pmStore {weight}).shape.head?).getD 0) = {vocab} := by",
+        "      rw [hWeightShape]", "      rfl",
+        "    have hCore := GeneratedPatterns.fw_inner_chunk_ce_fst_allGather0_commute_2_of",
+        f"      (pmStore {p0.ins[0]}) (pmStore {p1.ins[0]}) (pmStore {weight}) (pmStore {full_label})",
+        f"      {rows} {hidden} {vocab} (by decide) (by decide) (by decide)",
+        "      hActivation.rank0_shape hActivation.rank1_shape hWeightShape",
+        "      (by simpa only [Nat.reduceMul] using hLabelShape) hLabelBound " + zscale,
+        f"    have hOut : {post.fact_id}.Holds smFinal pmFinal := by",
+        f"      change GeneratedPatterns.Ordinary2Rel (smFinal {sm.outs[0]}) (pmFinal {p0.outs[0]}) (pmFinal {p1.outs[0]}) {_shape_text(post.full_shape)} {_shape_text(post.shard_shape)}",
+        "      refine {", "        full_value := ?_", "        full_shape := ?_",
+        "        rank0_shape := ?_", "        rank1_shape := ?_", "      }",
+        "      · rw [hSmWriter, hPm0Writer, hPm1Writer, hWeightEq, hLabelEq, hChunks.1, hChunks.2.1, hVocab]",
+        "        rw [hActivation.full_value]",
+        "        exact hCore",
+        "      · rw [hSmWriter]",
+        f"        exact fw_inner_chunk_ce_fst_shape _ _ _ _ _ {rows * 2} (by rw [hActivation.full_shape]; rfl)",
+        "      · rw [hPm0Writer]",
+        f"        exact fw_inner_chunk_ce_fst_shape _ _ _ _ _ {rows} (by rw [hActivation.rank0_shape]; rfl)",
+        "      · rw [hPm1Writer]",
+        f"        exact fw_inner_chunk_ce_fst_shape _ _ _ _ _ {rows} (by rw [hActivation.rank1_shape]; rfl)",
+        "    exact RelationState.Holds.mono_insert hframe hOut (by native_decide)", "",
+    ]
+    return "\n".join(lines)
+
 def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     """Render one closed segment through an explicit registered family adapter."""
     chain = relation.dependent_chain_plan
@@ -3587,6 +3799,8 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         return render_closed_rms_norm_segment(ir, relation, segment_id)
     if family == ("zigzag-to-ordinary-unshuffle-two-rank",):
         return render_closed_unshuffle_segment(ir, relation, segment_id)
+    if family == ("inner-chunk-ce-projection-gather-two-rank",):
+        return render_closed_ce_fst_segment(ir, relation, segment_id)
     if family == (
         "rms-norm-ordinary-two-rank",
         "faithful-maybe-shuffle-ordinary-to-zigzag-two-rank",

@@ -746,6 +746,8 @@ inductive RelationFact where
   | tensorShape (side : StoreSide) (tid : Tid) (shape : Shape)
   | packedCu (side : StoreSide) (tid : Tid) (totalTokens numRanks : Nat)
   | labelBound (side : StoreSide) (tid : Tid) (length upperBound : Nat)
+  | labelChunks (fullTid rank0Tid rank1Tid : Tid) (dim : Nat)
+      (fullShape shardShape : Shape)
   deriving Repr, DecidableEq
 
 def RelationFact.Holds (fact : RelationFact) (sm pm : Store) : Prop :=
@@ -768,6 +770,11 @@ def RelationFact.Holds (fact : RelationFact) (sm pm : Store) : Prop :=
       ZigzagCollective.PackedCuSeqlensWF (side.read sm pm tid) totalTokens numRanks
   | .labelBound side tid length upperBound =>
       ∀ index < length, scalarToNat (valAt (side.read sm pm tid) index) < upperBound
+  | .labelChunks fullTid rank0Tid rank1Tid dim fullShape shardShape =>
+      pm rank0Tid = chunkPrimDimN dim 2 0 (pm fullTid) ∧
+      pm rank1Tid = chunkPrimDimN dim 2 1 (pm fullTid) ∧
+      (pm fullTid).shape = fullShape ∧
+      (pm rank0Tid).shape = shardShape ∧ (pm rank1Tid).shape = shardShape
 
 structure RelationState where
   facts : List RelationFact
@@ -977,6 +984,7 @@ def smTids : RelationFact → List Tid
   | .tensorShape side tid _ => if side = .sm then [tid] else []
   | .packedCu side tid _ _ => if side = .sm then [tid] else []
   | .labelBound side tid _ _ => if side = .sm then [tid] else []
+  | .labelChunks _ _ _ _ _ _ => []
 
 def pmTids : RelationFact → List Tid
   | .ordinary _ pm0 pm1 _ _ => [pm0, pm1]
@@ -988,6 +996,8 @@ def pmTids : RelationFact → List Tid
   | .tensorShape side tid _ => if side = .pm then [tid] else []
   | .packedCu side tid _ _ => if side = .pm then [tid] else []
   | .labelBound side tid _ _ => if side = .pm then [tid] else []
+  | .labelChunks fullTid rank0Tid rank1Tid _ _ _ =>
+      [fullTid, rank0Tid, rank1Tid]
 
 theorem Holds.frame {fact : RelationFact} {sm pm sm' pm' : Store}
     (h : fact.Holds sm pm)
@@ -1005,6 +1015,8 @@ theorem Holds.frame {fact : RelationFact} {sm pm sm' pm' : Store}
   · split <;> simp_all
   · split <;> simp_all
   · split <;> simp_all
+  · rw [hpm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
+    exact h
 
 end RelationFact
 

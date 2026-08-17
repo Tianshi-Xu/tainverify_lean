@@ -17,6 +17,7 @@ from trainverify.bridge_emitter.composer import (
     compose_full_topology,
     render_closed_attention_segment,
     render_closed_binary_segment,
+    render_closed_ce_fst_segment,
     render_closed_float_segment,
     render_closed_full_producer_to_segment,
     render_closed_initial_component,
@@ -896,14 +897,44 @@ def test_ce_terminal_transition_requires_input_and_public_authority(monkeypatch)
         proof = compile_proof_plan(ir, registry)
         certificate = match_inner_chunk_ce_projection_gather_two_rank(ir, proof)
         transition = build_certificate_transition_specs(proof, (certificate,))[0]
-        assert transition.pre_facts == (
-            RelationFactSpec("ordinary", certificate.input_step_triple),
-        )
+        expected_pre = [RelationFactSpec("ordinary", certificate.input_step_triple)]
+        if goal_id == 1:
+            expected_pre.append(
+                RelationFactSpec("label_chunks", certificate.label_chunk_step_triple)
+            )
+        assert transition.pre_facts == tuple(sorted(expected_pre))
         assert transition.post_facts
         requirements.append({item.kind for item in transition.authority_requirements})
 
     assert requirements[0] == {"tensor_eq", "tensor_shape", "label_bound"}
     assert requirements[1] == {"tensor_eq", "tensor_shape"}
+
+
+def test_goal1_ce_fst_retains_truthful_label_chunks_through_terminal(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    proof = compile_proof_plan(ir, build_default_registry())
+    relation = compile_relation_plan(ir, proof)
+    terminal = next(item for item in relation.transition_specs
+                    if item.rule_id == "inner-chunk-ce-projection-gather-two-rank")
+    chunk_source = RelationFactSpec(
+        "label_chunks", ("init:4931", "pm:13:0", "pm:27:0")
+    )
+    assert chunk_source in terminal.pre_facts
+    chunk_fact = next(item for item in relation.dependent_chain_plan.relation_facts
+                      if item.source == chunk_source)
+    assert (chunk_fact.kind, chunk_fact.sm_tid, chunk_fact.pm_rank0_tid,
+            chunk_fact.pm_rank1_tid, chunk_fact.full_shape,
+            chunk_fact.shard_shape) == (
+        "label_chunks", 4931, 11714, 11715, (4096,), (2048,)
+    )
+    terminal_segment = relation.dependent_chain_plan.segments[-1]
+    terminal_state = next(item for item in relation.dependent_chain_plan.states
+                          if item.state_id == terminal_segment.pre_state_id)
+    assert chunk_fact.fact_id in terminal_state.fact_ids
 
 
 def test_ce_projection_gather_terminal_rejects_mixed_projection(monkeypatch):
@@ -3742,6 +3773,40 @@ def test_closed_exit_unshuffle_renderer_is_generic_exact_single_fold(monkeypatch
     assert "authority_pm_metadata_eq_000000_5602.Holds" in source
     assert "PackedCuSeqlensWF.decoded_single" in source
     assert "Goal_1" not in source
+
+
+def test_goal1_closed_ce_fst_renderer_uses_exact_live_authority_and_one_fold(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(
+        ir, compile_proof_plan(ir, build_default_registry())
+    )
+    source = render_closed_ce_fst_segment(ir, relation, "segment_000487")
+    assert source == render_closed_segment(ir, relation, "segment_000487")
+    assert source.count("let smFinal :=") == 1
+    assert source.count("let pmFinal :=") == 1
+    assert source.count("ClosedDepSegmentCertificate ") == 1
+    assert "GeneratedPatterns.fw_inner_chunk_ce_fst_allGather0_commute_2_of" in source
+    assert "hChunks" in source and ".Holds smStore pmStore" in source
+    declarations = render_closed_relation_declarations(
+        relation.dependent_chain_plan, "ClosedGoal1CE"
+    )
+    assert ".labelChunks 4931 11714 11715 0 [4096] [2048]" in declarations
+    assert "applyNode_fw_inner_chunk_ce_fst_out_1p" in source
+    assert "Goal_1" not in source
+
+    chain = relation.dependent_chain_plan
+    label_less = tuple(item for item in chain.relation_facts
+                       if item.kind != "label_chunks")
+    with pytest.raises(ValueError, match="label-chunk authority"):
+        render_closed_ce_fst_segment(
+            ir, replace(relation, dependent_chain_plan=replace(
+                chain, relation_facts=label_less
+            )), "segment_000487"
+        )
 
 
 def test_closed_exit_unshuffle_renderer_rejects_non_authoritative_metadata(monkeypatch):

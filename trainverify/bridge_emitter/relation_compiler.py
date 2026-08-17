@@ -63,7 +63,7 @@ class InnerChunkCEGatherCertificate:
     sm_ce_step: str
     pm_ce_steps: tuple[str, str]
     pm_gather_step: str
-    input_step_triple: tuple[str, str, str]
+    label_chunk_step_triple: tuple[str, str, str] | None
 
 
 def match_inner_chunk_ce_projection_gather_two_rank(
@@ -143,7 +143,26 @@ def match_inner_chunk_ce_projection_gather_two_rank(
     full_rows = int(ir.lineage.tsShape[0])
     if full_rows <= 0 or full_rows % 2:
         raise RelationCompositionError("CE output rows do not split equally across two ranks")
+    label_chunk_step_triple = None
     if projection == ".fst":
+        label_steps = tuple(step.input_bindings[2] for step in pm_ce)
+        if any(binding.startswith("init:") for binding in label_steps):
+            raise RelationCompositionError("CE .fst local labels are not graph-produced chunks")
+        try:
+            chunks = tuple(by_id[binding] for binding in label_steps)
+        except KeyError as exc:
+            raise RelationCompositionError("CE .fst label chunk producer is absent") from exc
+        if (tuple(step.op for step in chunks) != ("ChunkPrim", "ChunkPrim")
+                or tuple(step.side for step in chunks) != ("pm", "pm")
+                or tuple(step.rank for step in chunks) != (0, 1)
+                or any(step.parameters != (0,) for step in chunks)
+                or any(step.input_tids != (label_tid,) for step in chunks)
+                or any(step.input_bindings != (label_binding,) for step in chunks)
+                or any(step.output_shape != (full_rows // 2,) for step in chunks)):
+            raise RelationCompositionError(
+                "CE .fst local labels lack exact dim-0 ChunkPrim producer authority"
+            )
+        label_chunk_step_triple = (label_binding, *label_steps)
         theorem = (
             "TrainVerify.Denote.GeneratedPatterns."
             "fw_inner_chunk_ce_fst_allGather0_commute_2_of"
@@ -175,6 +194,7 @@ def match_inner_chunk_ce_projection_gather_two_rank(
         full_rows=full_rows,
         shard_rows=full_rows // 2,
         input_step_triple=input_step_triple,
+        label_chunk_step_triple=label_chunk_step_triple,
         weight_binding=weight_binding,
         label_binding=label_binding,
         weight_shape=weight_shape,
@@ -3206,7 +3226,7 @@ def materialize_closed_relation_facts(
                     f"zigzag metadata tid is outside its public alias region: {metadata_tid}"
                 )
             metadata_region_id = region.region_id
-        elif fact.layout != "ordinary":
+        elif fact.layout not in {"ordinary", "label_chunks"}:
             raise RelationCompositionError(f"unsupported closed relation layout: {fact.layout}")
         result.append(ClosedRelationFactRecord(
             fact_id=f"fact_{ordinal:06d}",
@@ -3705,6 +3725,20 @@ def build_closed_dependent_chain_plan(
             pm_inputs = {tid for node in ir.pm_nodes[slice(*component.pm_range)] for tid in node.ins}
             if any(tid in (sm_inputs if side == "sm" else pm_inputs) for side, tid in side_tids):
                 uses.append(index)
+            for transition_id in component.transition_ids:
+                for requirement in transition_by_id[transition_id].authority_requirements:
+                    if fact.kind == "tensor_eq" and requirement.kind == "tensor_eq" and (
+                        requirement.sides == (fact.left_side, fact.right_side)
+                        and requirement.tids == (fact.left_tid, fact.right_tid)
+                    ) or fact.kind == "tensor_shape" and requirement.kind == "tensor_shape" and (
+                        requirement.sides == (fact.side,) and requirement.tids == (fact.tid,)
+                        and requirement.shape == fact.shape
+                    ) or fact.kind == "label_bound" and requirement.kind == "label_bound" and (
+                        requirement.sides == (fact.side,) and requirement.tids == (fact.tid,)
+                        and requirement.length == fact.length
+                        and requirement.upper_bound == fact.upper_bound
+                    ):
+                        uses.append(index)
         if fact.kind == "packed_cu":
             aliases = packed_region_tids.get(fact.tid)
             if aliases is None:
@@ -3807,7 +3841,7 @@ class CertificateTransitionSpec:
 
 
 def _fact(layout: str, refs: tuple[str, ...]) -> RelationFactSpec:
-    if layout not in {"ordinary", "zigzag"}:
+    if layout not in {"ordinary", "zigzag", "label_chunks"}:
         raise RelationCompositionError(f"closed relation fact has unknown layout {layout!r}")
     if len(refs) != 3:
         raise RelationCompositionError("closed relation fact must contain one SM and two ordered PM refs")
@@ -3934,7 +3968,10 @@ def build_certificate_transition_specs(
         elif type(cert) is InitChunkBoundaryCertificate:
             post_refs = (f"init:{cert.sm_tid}", *tuple(cert.chunk_step_pair))
             pre = ()
-            post = (_fact(cert.relation_kind, post_refs),)
+            post = (
+                _fact(cert.relation_kind, post_refs),
+                _fact("label_chunks", post_refs),
+            )
             footprint_groups = (tuple(cert.chunk_step_pair),)
         elif type(cert) is HiddenShardedEmbeddingAllToAllCertificate:
             post_refs = (cert.sm_embedding_step, *tuple(cert.alltoall_steps))
@@ -3945,7 +3982,12 @@ def build_certificate_transition_specs(
             )
         elif type(cert) is InnerChunkCEGatherCertificate:
             post_refs = (cert.sm_ce_step, *tuple(cert.pm_ce_steps))
-            pre = (_fact("ordinary", cert.input_step_triple),)
+            pre_items = [_fact("ordinary", cert.input_step_triple)]
+            if cert.output_projection == ".fst":
+                if cert.label_chunk_step_triple is None:
+                    raise RelationCompositionError("CE .fst transition lacks exact label chunks")
+                pre_items.append(_fact("label_chunks", cert.label_chunk_step_triple))
+            pre = tuple(pre_items)
             post = (_fact("ordinary", post_refs),)
             weight_tid = int(cert.weight_binding.split(":", 1)[1])
             label_tid = int(cert.label_binding.split(":", 1)[1])
@@ -4764,6 +4806,17 @@ def compile_relation_plan(
         ir, proof, frontiers, layouts
     )
     _extend_unique_certificates(compiled_certificates, init_chunk_certificates)
+    if terminal_ce.label_chunk_step_triple is not None:
+        label_chunk_certificates, missing_label_frontiers, missing_label_layouts = (
+            close_init_chunk_boundaries(
+                ir, proof, (terminal_ce.label_chunk_step_triple,), ("ordinary",)
+            )
+        )
+        if missing_label_frontiers or missing_label_layouts or len(label_chunk_certificates) != 1:
+            raise RelationCompositionError(
+                "CE .fst exact label ChunkPrim producers did not close"
+            )
+        _extend_unique_certificates(compiled_certificates, label_chunk_certificates)
     contract_certificates, remaining_conditions = discharge_public_contract_conditions(
         ir, unresolved_side_conditions
     )
