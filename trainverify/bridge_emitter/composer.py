@@ -856,9 +856,19 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
     if len(projection_transitions) > 1:
         raise ValueError("mixed MoE renderer received multiple top-k projections")
     projection_transition = projection_transitions[0] if projection_transitions else None
+    unshuffle_transitions = [
+        transition for transition in component_transitions
+        if transition.rule_id == "zigzag-topk-unshuffle-two-rank"
+    ]
+    if len(unshuffle_transitions) > 1:
+        raise ValueError("mixed MoE renderer received multiple top-k unshuffles")
+    unshuffle_transition = unshuffle_transitions[0] if unshuffle_transitions else None
     transitions = [
         transition for transition in component_transitions
-        if transition.rule_id != "ordinary-topk-projection-two-rank"
+        if transition.rule_id not in (
+            "ordinary-topk-projection-two-rank",
+            "zigzag-topk-unshuffle-two-rank",
+        )
     ]
     if len(transitions) != 16:
         raise ValueError("mixed MoE renderer requires one 16-transition semantic core")
@@ -909,8 +919,22 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
             raise ValueError("mixed MoE top-k projection does not share the exact routing owner")
     sms = ir.sm_nodes[slice(*segment.sm_range)]
     pms = ir.pm_nodes[slice(*segment.pm_range)]
-    if len(sms) != 17 or len(pms) != 37:
-        raise ValueError("mixed MoE footprint is not 17x37")
+    ownership_transitions = [*transitions]
+    if unshuffle_transition is not None:
+        ownership_transitions.append(unshuffle_transition)
+    sm_owners = [index for transition in ownership_transitions for index in transition.sm_node_indices]
+    pm_owners = [index for transition in ownership_transitions for index in transition.pm_node_indices]
+    if (
+        len(sm_owners) != len(set(sm_owners))
+        or len(pm_owners) != len(set(pm_owners))
+        or not sm_owners
+        or not pm_owners
+        or min(sm_owners) != segment.sm_range[0]
+        or max(sm_owners) != segment.sm_range[1] - 1
+        or min(pm_owners) != segment.pm_range[0]
+        or max(pm_owners) != segment.pm_range[1] - 1
+    ):
+        raise ValueError("mixed MoE transition ownership does not span the exact ordered slice")
     sm_start, pm_start = segment.sm_range[0], segment.pm_range[0]
     sm_text, pm_text = [_node_text(x) for x in sms], [_node_text(x) for x in pms]
     authority = {x.fact_id: x for x in chain.authority_facts}
@@ -953,6 +977,44 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
         if node.op == "FW_swiglu":
             return f"fw_swiglu ({{store}} {ins[0]}) ({{store}} {ins[1]})", common(
                 f"exact applyNode_fw_swiglu_out_1p {graph} t {node.rank} {ins[0]} {ins[1]} {out}")
+        if node.op == "FW_maybe_unshuffle":
+            if (
+                unshuffle_transition is None
+                or out != node.outs[0]
+                or len(ins) != 2
+                or len(node.params or []) != 2
+            ):
+                raise ValueError("malformed mixed top-k unshuffle writer")
+            if graph == ir.sm_graph_ref:
+                peers = [node]
+            elif graph == ir.pm_graph_ref:
+                peers = [
+                    ir.pm_nodes[index]
+                    for index in unshuffle_transition.pm_node_indices
+                ]
+                peers.sort(key=lambda candidate: candidate.rank)
+            else:
+                raise ValueError("mixed unshuffle writer uses unknown graph")
+            if (
+                [peer.rank for peer in peers] != list(range(len(peers)))
+                or any(peer.op != node.op or peer.ins[1] != ins[1] for peer in peers)
+            ):
+                raise ValueError("mixed unshuffle writer lacks exact rank-ordered peers")
+            values = ", ".join(f"{{store}} {peer.ins[0]}" for peer in peers)
+            expr = (
+                f"ZigzagCollective.fw_maybe_unshuffle_collective [{values}] "
+                f"(decodeCuSeqlens ({{store}} {ins[1]})) {node.params[0]} {node.params[1]}"
+            )
+            apply = [
+                "rw [applyNodeDistributedFaithful_unshuffle_out]",
+                "unfold applyNodeFaithfulUnshuffleValue",
+                (
+                    f"rw [show {graph}.replicaBuddies {_node_text(node)} = "
+                    f"[{', '.join(_node_text(peer) for peer in peers)}] by native_decide]"
+                ),
+                "rfl",
+            ]
+            return expr, apply
         if node.op == "AllGatherPrim":
             return f"allGatherPrimDimN 0 2 0 [{{store}} {ins[0]}, {{store}} {ins[1]}]", common(
                 f"rw [applyNode_allGatherPrimDimN_out {graph} t 0 [{ins[0]}, {ins[1]}] {out} 0, show {graph}.numRanks = 2 by rfl]") + ["simp"]
@@ -1065,6 +1127,12 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
             if len(peers) != 2 or [candidate.rank for candidate in peers] != [0, 1]:
                 raise ValueError("mixed PM MoE writer lacks rank-ordered semantic reads")
             semantic_inputs.extend([peers[0].ins[3], peers[1].ins[3], peers[0].ins[4], peers[1].ins[4]])
+        if node.op == "FW_maybe_unshuffle" and side == "pm":
+            if unshuffle_transition is None:
+                raise ValueError("mixed unshuffle writer has no transition owner")
+            peers = [ir.pm_nodes[index] for index in unshuffle_transition.pm_node_indices]
+            peers.sort(key=lambda candidate: candidate.rank)
+            semantic_inputs.extend(peer.ins[0] for peer in peers)
         semantic_inputs = tuple(dict.fromkeys(semantic_inputs))
         written = sm_written if side == "sm" else pm_written
         hybrid_expression = expression.format(store=final)
@@ -1077,7 +1145,7 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
             nodes_name=node_name, nodes=nodes, position=pos, output_tid=out,
             input_tids=semantic_inputs, written_tids=written,
             expression=expression, apply_lines=apply_lines)
-        membership = [i for i, transition in enumerate(transitions)
+        membership = [i for i, transition in enumerate(ownership_transitions)
                       if absolute_index in (transition.sm_node_indices if side == "sm" else transition.pm_node_indices)]
         if len(membership) != 1:
             raise ValueError(f"mixed writer has non-unique transition owner: {side}:{absolute_index}:{membership}")
@@ -1163,6 +1231,86 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
             "      exact hPackedCu.decoded_single",
         ])
         decoded_cu = "hDecodedCu"
+
+    unshuffle_details = None
+    if unshuffle_transition is not None:
+        if layout != "zigzag":
+            raise ValueError("mixed top-k unshuffle requires a zigzag semantic core")
+        if (
+            unshuffle_transition.lean_theorem
+            != "TrainVerify.Denote.GeneratedPatterns.Zigzag2Rel.unshuffle_gather_single"
+            or len(unshuffle_transition.pre_facts) != 1
+            or len(unshuffle_transition.post_facts) != 1
+        ):
+            raise ValueError("mixed top-k unshuffle certificate mismatch")
+        unshuffle_pre = records[unshuffle_transition.pre_facts[0]]
+        unshuffle_post = records[unshuffle_transition.post_facts[0]]
+        routing = transitions[7]
+        if unshuffle_transition.pre_facts != routing.pre_facts:
+            raise ValueError("mixed top-k unshuffle does not share the routing input")
+        usm = ir.sm_nodes[unshuffle_transition.sm_node_indices[0]]
+        up0 = ir.pm_nodes[unshuffle_transition.pm_node_indices[0]]
+        up1 = ir.pm_nodes[unshuffle_transition.pm_node_indices[1]]
+        unodes = (usm, up0, up1)
+        if (
+            tuple(node.rank for node in unodes) != (0, 0, 1)
+            or any(
+                node.op != "FW_maybe_unshuffle"
+                or len(node.ins) != 2
+                or len(node.outs) != 1
+                for node in unodes
+            )
+            or tuple(node.params for node in unodes) != ([1, 0], [2, 0], [2, 1])
+        ):
+            raise ValueError("mixed top-k unshuffle node roles mismatch")
+        actual_metadata_tids = {node.ins[1] for node in unodes}
+        if len(actual_metadata_tids) != 1:
+            raise ValueError("mixed top-k unshuffle metadata bindings disagree")
+        actual_metadata_tid = actual_metadata_tids.pop()
+        route_sm = ir.sm_nodes[routing.sm_node_indices[0]]
+        route_pm0 = ir.pm_nodes[routing.pm_node_indices[0]]
+        route_pm1 = ir.pm_nodes[routing.pm_node_indices[1]]
+        projections = []
+        for route_node, unode in zip((route_sm, route_pm0, route_pm1), unodes):
+            if unode.ins[0] not in route_node.outs:
+                raise ValueError("mixed top-k unshuffle input lacks exact routing owner")
+            projections.append(route_node.outs.index(unode.ins[0]))
+        if len(set(projections)) != 1 or projections[0] not in (0, 1, 2):
+            raise ValueError("mixed top-k unshuffle projection roles disagree")
+        projection = projections[0]
+        if (
+            unshuffle_pre.kind != "zigzag"
+            or unshuffle_post.kind != "ordinary"
+            or unshuffle_post.metadata_tid is not None
+            or unshuffle_pre.metadata_tid != metadata_tid
+            or unshuffle_pre.full_shape != unshuffle_post.full_shape
+            or unshuffle_pre.shard_shape != unshuffle_post.shard_shape
+            or (unshuffle_post.sm_tid, unshuffle_post.pm_rank0_tid, unshuffle_post.pm_rank1_tid)
+            != (usm.outs[0], up0.outs[0], up1.outs[0])
+        ):
+            raise ValueError("mixed top-k unshuffle relation payload mismatch")
+        unshuffle_alias = authority_one(
+            "tensor_eq",
+            lambda fact: (
+                fact.left_side, fact.left_tid, fact.right_side, fact.right_tid
+            ) == (
+                "pm", actual_metadata_tid, "pm", metadata_eq.right_tid
+            ),
+            f"top-k unshuffle metadata equality {actual_metadata_tid}",
+        )
+        lines.extend([
+            f"    have hUnshuffleMetadataEq : pmFinal {actual_metadata_tid} = pmFinal {metadata_eq.right_tid} := by",
+            f"      simpa [{unshuffle_alias.fact_id}, RelationFact.Holds, StoreSide.read] using (hframe _ (by native_decide : {unshuffle_alias.fact_id} ∈ {before.state_id}.facts))",
+            f"    have hSharedMetadata : pmFinal {metadata_tid} = pmFinal {actual_metadata_tid} :=",
+            "      hMetadataEq.trans hUnshuffleMetadataEq.symm",
+            f"    have hUnshuffleDecoded : decodeCuSeqlens (pmFinal {actual_metadata_tid}) = [0, {packed_cu.total_tokens}] := by",
+            "      rw [hUnshuffleMetadataEq]",
+            "      exact hPackedCu.decoded_single",
+        ])
+        unshuffle_details = (
+            unshuffle_pre, unshuffle_post, usm, up0, up1, projection,
+            actual_metadata_tid,
+        )
 
     def get_fact(rec, name):
         if rec.fact_id in proved:
@@ -1267,6 +1415,80 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
                     "      exact hRouteScoresCore",
                 ]
                 proved[projection_post.fact_id] = "hFactProjection"
+            if unshuffle_details is not None:
+                (
+                    unshuffle_pre, unshuffle_post, usm, up0, up1, projection,
+                    actual_metadata_tid,
+                ) = unshuffle_details
+                selected_names = []
+                for label, node, side, idx in (
+                    ("Sm", sm, "sm", routing.sm_node_indices[0]),
+                    ("P0", p0, "pm", routing.pm_node_indices[0]),
+                    ("P1", p1, "pm", routing.pm_node_indices[1]),
+                ):
+                    source = writer_with_initial_inputs(
+                        ensure_value(side, idx, node.outs[projection]), side, node
+                    )
+                    name = f"hUnshuffleRoute{label}"
+                    shape_field = (
+                        "full_shape" if side == "sm"
+                        else ("rank0_shape" if label == "P0" else "rank1_shape")
+                    )
+                    lines += [
+                        f"    have {name} := {source}",
+                        f"    rw [{hin}.{shape_field}] at {name}",
+                        f"    simp at {name}",
+                    ]
+                    selected_names.append(name)
+                core_projection = ("hRouteCore.1", "hRouteCore.2.1", "hRouteCore.2.2")[projection]
+                husm = writer_with_initial_inputs(
+                    ensure_value("sm", unshuffle_transition.sm_node_indices[0], usm.outs[0]),
+                    "sm", usm,
+                )
+                hup0 = writer_with_initial_inputs(
+                    ensure_value("pm", unshuffle_transition.pm_node_indices[0], up0.outs[0]),
+                    "pm", up0,
+                )
+                hup1 = writer_with_initial_inputs(
+                    ensure_value("pm", unshuffle_transition.pm_node_indices[1], up1.outs[0]),
+                    "pm", up1,
+                )
+                shard_rows = unshuffle_post.shard_shape[0]
+                tail = list(unshuffle_post.shard_shape[1:])
+                fs = _shape_text(list(unshuffle_post.full_shape))
+                ss = _shape_text(list(unshuffle_post.shard_shape))
+                lines += [
+                    f"    have hUnshuffleInput : GeneratedPatterns.Zigzag2Rel (smFinal {usm.ins[0]}) (pmFinal {up0.ins[0]}) (pmFinal {up1.ins[0]}) (pmFinal {metadata_tid}) {fs} {ss} := by",
+                    f"      rw [{', '.join(selected_names)}]",
+                    f"      exact {core_projection}",
+                    "    rw [hSharedMetadata] at hUnshuffleInput",
+                    f"    have hUnshuffleCore : smFinal {usm.ins[0]} = allGatherPrimDimN 0 2 0",
+                    f"        [ZigzagCollective.fw_maybe_unshuffle_collective [pmFinal {up0.ins[0]}, pmFinal {up1.ins[0]}] (decodeCuSeqlens (pmFinal {actual_metadata_tid})) 2 0,",
+                    f"         ZigzagCollective.fw_maybe_unshuffle_collective [pmFinal {up0.ins[0]}, pmFinal {up1.ins[0]}] (decodeCuSeqlens (pmFinal {actual_metadata_tid})) 2 1] := by",
+                    f"      exact GeneratedPatterns.Zigzag2Rel.unshuffle_gather_single {shard_rows} {_shape_text(tail)} hUnshuffleInput",
+                    "        (by decide) (by decide) rfl hUnshuffleDecoded",
+                    f"    have hFactUnshuffle : {unshuffle_post.fact_id}.Holds smFinal pmFinal := by",
+                    f"      change GeneratedPatterns.Ordinary2Rel (smFinal {usm.outs[0]}) (pmFinal {up0.outs[0]}) (pmFinal {up1.outs[0]}) {fs} {ss}",
+                    "      refine {",
+                    "        full_value := ?_",
+                    "        full_shape := ?_",
+                    "        rank0_shape := ?_",
+                    "        rank1_shape := ?_",
+                    "      }",
+                    f"      · rw [{husm}, {hup0}, {hup1}]",
+                    "        simp only [ZigzagCollective.fw_maybe_unshuffle_collective_cpSize_one, List.getD_cons_zero]",
+                    "        exact hUnshuffleCore",
+                    f"      · rw [{husm}]",
+                    "        simp only [ZigzagCollective.fw_maybe_unshuffle_collective_cpSize_one, List.getD_cons_zero]",
+                    "        exact hUnshuffleInput.full_shape",
+                    f"      · rw [{hup0}, ZigzagCollective.fw_maybe_unshuffle_collective_shape]",
+                    "        simp only [List.getD_cons_zero]",
+                    "        exact hUnshuffleInput.rank0_shape",
+                    f"      · rw [{hup1}, ZigzagCollective.fw_maybe_unshuffle_collective_shape]",
+                    "        simp only [List.getD_cons_succ, List.getD_cons_zero]",
+                    "        exact hUnshuffleInput.rank1_shape",
+                ]
+                proved[unshuffle_post.fact_id] = "hFactUnshuffle"
             continue
         in_names = [get_fact(x, f"hPre{number}_{i}") for i, x in enumerate(pres)]
         sm, p0, p1 = ir.sm_nodes[t.sm_node_indices[0]], ir.pm_nodes[t.pm_node_indices[0]], ir.pm_nodes[t.pm_node_indices[1]]
@@ -1488,6 +1710,11 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
     if layout == "zigzag":
         prefix_lines.append(
             f"    (hDecodedCu : decodeCuSeqlens (pmFinal {metadata_tid}) = [0, {packed_cu.total_tokens}])")
+    if unshuffle_transition is not None:
+        prefix_lines.extend([
+            f"    (hSharedMetadata : pmFinal {metadata_tid} = pmFinal {actual_metadata_tid})",
+            f"    (hUnshuffleDecoded : decodeCuSeqlens (pmFinal {actual_metadata_tid}) = [0, {packed_cu.total_tokens}])",
+        ])
     for name, result in prefix_writer_results:
         prefix_lines.append(f"    ({name} : {result})")
     prefix_lines.extend([
@@ -1500,7 +1727,8 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
     ])
     prefix_call = [
         f"    have hPrefixFacts := {prefix_name} smFinal pmFinal hframe" +
-        (" hDecodedCu" if layout == "zigzag" else ""),
+        (" hDecodedCu" if layout == "zigzag" else "") +
+        (" hSharedMetadata hUnshuffleDecoded" if unshuffle_transition is not None else ""),
     ]
     for name, _ in prefix_writer_results:
         prefix_call.append(f"      {name}")
@@ -4684,7 +4912,11 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     ):
         return render_closed_full_producer_to_segment(ir, relation, segment_id)
     semantic_family = tuple(
-        item for item in family if item != "ordinary-topk-projection-two-rank"
+        item for item in family
+        if item not in (
+            "ordinary-topk-projection-two-rank",
+            "zigzag-topk-unshuffle-two-rank",
+        )
     )
     if (
         len(semantic_family) == 16

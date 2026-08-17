@@ -2049,6 +2049,7 @@ def resolve_zigzag_metadata_regions(
     certificates: tuple[object, ...],
     unresolved_frontiers: tuple[tuple[str, str, str], ...],
     unresolved_layouts: tuple[str, ...],
+    synchronized_steps: tuple[SynchronizedRelationStep, ...] = (),
 ) -> tuple[tuple[ZigzagMetadataRegionCertificate, ...], dict[tuple[str, str, str], ZigzagMetadataRegionCertificate]]:
     if len(unresolved_frontiers) != len(unresolved_layouts):
         raise RelationCompositionError("relation frontier/layout lengths disagree")
@@ -2082,6 +2083,10 @@ def resolve_zigzag_metadata_regions(
         tid = int(binding.split(":", 1)[1])
         add(node)
         seeds.setdefault(node, []).append((source_for_tid(tid), tid))
+
+    for step in synchronized_steps:
+        if step.rule_id == "zigzag-topk-unshuffle-two-rank":
+            add_seed(step.input_step_triple, f"init:{step.metadata_tid}")
 
     for cert in certificates:
         output = getattr(cert, "output_step_triple", None)
@@ -4782,7 +4787,8 @@ def compile_relation_plan(
             unresolved_layouts = list(deduplicated_layouts)
         if peel_aliases and deduplicate_frontiers:
             zigzag_regions, _authority_by_frontier = resolve_zigzag_metadata_regions(
-                ir, tuple(compiled_certificates), unresolved_frontiers, tuple(unresolved_layouts)
+                ir, tuple(compiled_certificates), unresolved_frontiers,
+                tuple(unresolved_layouts), tuple(layers)
             )
             _extend_unique_certificates(compiled_certificates, zigzag_regions)
         else:
