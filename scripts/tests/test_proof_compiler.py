@@ -1,13 +1,28 @@
-from dataclasses import replace
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
+from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
+import trainverify.bridge_emitter.emit2 as emit2_module
 import trainverify.bridge_emitter.parser as parser_module
+from trainverify.bridge_emitter.composer import (
+    CompositionCode,
+    compose_full_topology,
+    render_closed_binary_segment,
+    render_closed_float_segment,
+    render_closed_initial_component,
+    render_closed_linear_segment,
+    render_closed_mixed_moe_segment,
+    render_closed_multiref_segment,
+    render_closed_relation_declarations,
+    render_closed_rms_norm_segment,
+    render_closed_unary_segment,
+)
+from trainverify.bridge_emitter.emit2 import _publish_composed_source
 from trainverify.bridge_emitter.parser import (
     GoalIR,
     LineageGoal,
@@ -20,77 +35,59 @@ from trainverify.bridge_emitter.parser import (
 )
 from trainverify.bridge_emitter.proof_compiler import (
     DiagnosticCode,
-    RelationKind,
-    RelationEffect,
-    RuleKind,
     ProofPlanningError,
+    RelationEffect,
+    RelationKind,
+    RuleKind,
     build_default_registry,
     compile_proof_plan,
     require_supported_plan,
 )
-from trainverify.bridge_emitter.composer import (
-    CompositionCode,
-    compose_full_topology,
-    render_closed_relation_declarations,
-    render_closed_float_segment,
-    render_closed_multiref_segment,
-    render_closed_rms_norm_segment,
-    render_closed_initial_component,
-    render_closed_linear_segment,
-    render_closed_unary_segment,
-    render_closed_binary_segment,
-)
 from trainverify.bridge_emitter.relation_compiler import (
-    RelationCompositionError,
-    RelationFactSpec,
     FrontierOrdinaryMoECertificate,
     FrontierZigzagFullMoECertificate,
-    RelationSideCondition,
-    match_indexed_stack_gather_two_rank,
-    match_inner_chunk_ce_projection_gather_two_rank,
-    build_indexed_stack_layer_relations,
-    build_chunk_reconstruction_relations,
-    build_router_input_checkpoints,
-    compile_relation_plan,
-    build_rms_norm_relations,
-    build_add_relations,
-    build_attention_output_unary_relations,
-    build_attention_relations,
-    build_ordinary_rotary_relations,
-    build_ordinary_attention_v_relations,
-    build_zigzag_attention_kv_relations,
-    build_zigzag_attention_q_relations,
-    peel_multiref_relation_frontiers,
-    advance_rms_norm_relation_frontiers,
-    expand_add_relation_frontiers,
+    RelationCompositionError,
+    RelationFactSpec,
+    advance_flatten_3d_relation_frontiers,
     advance_float_relation_frontiers,
     advance_identity_view_relation_frontiers,
     advance_linear_relation_frontiers,
-    advance_flatten_3d_relation_frontiers,
-    expand_attention_relation_frontiers,
+    advance_per_head_linear_relation_frontiers,
+    advance_rms_norm_relation_frontiers,
+    advance_to_relation_frontiers,
+    build_add_relations,
+    build_atomic_schedule,
+    build_attention_output_unary_relations,
+    build_attention_relations,
+    build_certificate_transition_specs,
+    build_chunk_reconstruction_relations,
+    build_closed_dependent_chain_plan,
+    build_exact_node_coverage_plan,
+    build_indexed_stack_layer_relations,
+    build_ordinary_attention_v_relations,
+    build_ordinary_rotary_relations,
+    build_rms_norm_relations,
+    build_router_input_checkpoints,
+    build_synchronized_transition_specs,
+    build_transition_dependency_plan,
+    build_zigzag_attention_kv_relations,
+    build_zigzag_attention_q_relations,
+    compile_relation_plan,
     deduplicate_relation_frontiers,
+    expand_add_relation_frontiers,
+    expand_attention_relation_frontiers,
+    expand_mul_relation_frontiers,
+    expand_ordinary_moe_relation_frontiers,
+    expand_pointwise_relation_frontiers,
     expand_rotary_relation_frontiers,
     expand_topk_routing_relation_frontiers,
-    advance_full_producer_chunk_relation_frontiers,
-    advance_faithful_shuffle_relation_frontiers,
-    close_hidden_sharded_embedding_alltoall_boundaries,
-    resolve_zigzag_metadata_regions,
-    advance_to_relation_frontiers,
-    advance_per_head_linear_relation_frontiers,
-    expand_mul_relation_frontiers,
-    expand_pointwise_relation_frontiers,
-    expand_ordinary_moe_relation_frontiers,
-    normalize_relation_frontiers,
-    build_certificate_transition_specs,
-    build_exact_node_coverage_plan,
-    build_transition_dependency_plan,
-    build_synchronized_transition_specs,
-    build_atomic_schedule,
+    match_indexed_stack_gather_two_rank,
+    match_inner_chunk_ce_projection_gather_two_rank,
     materialize_closed_relation_facts,
-    build_closed_dependent_chain_plan,
+    normalize_relation_frontiers,
+    peel_multiref_relation_frontiers,
+    resolve_zigzag_metadata_regions,
 )
-import trainverify.bridge_emitter.emit2 as emit2_module
-from trainverify.bridge_emitter.emit2 import _publish_composed_source
 
 
 def _goal_ir(*, sm_nodes, pm_nodes, ts=30, tps=None, replicated=False, gather_dim=0):
@@ -2642,6 +2639,7 @@ def test_plan_cli_emits_supported_goal5_json_without_writes():
         env=_yoco_plan_env(),
         text=True,
         capture_output=True,
+        check=False,
     )
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
@@ -2686,6 +2684,7 @@ def test_emit2_goal5_uses_generic_composer_without_pattern_proof(tmp_path):
         env=env,
         text=True,
         capture_output=True,
+        check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     source = output.read_text()
@@ -2710,6 +2709,7 @@ def test_plan_cli_runtime_failure_is_json_and_exit2():
         env=_yoco_plan_env(),
         text=True,
         capture_output=True,
+        check=False,
     )
     assert result.returncode == 2
     payload = json.loads(result.stdout)
@@ -2731,6 +2731,7 @@ def test_plan_cli_usage_failure_is_json_and_exit2():
         env=_yoco_plan_env(),
         text=True,
         capture_output=True,
+        check=False,
     )
     assert result.returncode == 2
     assert result.stderr == ""
@@ -3375,3 +3376,58 @@ def test_ordinary_pointwise_transitions_use_closed_relation_wrappers(monkeypatch
     assert by_rule["broadcast-mul-ordinary-two-rank"] == (
         "TrainVerify.Denote.RelationCompiler.Ordinary2Rel.mul_broadcast_col1"
     )
+
+
+def test_closed_mixed_moe_renderer_materializes_each_exact_node_list_once(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    source = render_closed_mixed_moe_segment(ir, relation, "segment_000017")
+    assert source.count("private def segment_000017_sm_nodes") == 1
+    assert source.count("private def segment_000017_pm_nodes") == 1
+    assert "smNodes := segment_000017_sm_nodes" in source
+    assert "pmNodes := segment_000017_pm_nodes" in source
+    assert "let smNodes : List NodeDecl := segment_000017_sm_nodes" in source
+    assert "let pmNodes : List NodeDecl := segment_000017_pm_nodes" in source
+    assert len(source.encode()) < 2_500_000
+    assert "[pmFinal 7848, pmFinal 7849]" in source
+    assert "[pmFinal 7850, pmFinal 7851]" in source
+    assert "[pmStore 7848, pmFinal 7849]" not in source
+    assert "[pmFinal 7848, pmStore 7849]" not in source
+    assert "_inputs" not in source
+    assert "let smFold :=" not in source
+    assert "let pmFold :=" not in source
+    assert "at hval_" not in source
+    sm_helper = source.split("private theorem segment_000017_transition_00_sm_writer_values", 1)[1].split("private theorem", 1)[0]
+    pm_helper = source.split("private theorem segment_000017_transition_00_pm_writer_values", 1)[1].split("private theorem", 1)[0]
+    assert "pmStore" not in sm_helper and "pmFinal" not in sm_helper
+    assert "smStore" not in pm_helper and "smFinal" not in pm_helper
+
+
+def test_closed_mixed_moe_renderer_is_one_exact_fold_for_both_layouts(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    for segment_id, layout in (("segment_000017", "ordinary"), ("segment_000270", "zigzag")):
+        source = render_closed_mixed_moe_segment(ir, relation, segment_id)
+        assert source.count("let smFinal :=") == 1
+        assert source.count("let pmFinal :=") == 1
+        assert source.count("ClosedDepSegmentCertificate ") == 1
+        assert "ClosedDepSegmentCertificateEq" in source
+        assert ".toCertificate" in source
+        assert "Holds smFinal pmFinal" in source
+        assert "change smFinal =" not in source
+        assert "change pmFinal =" not in source
+        assert "foldl_faithful_middle_writer" in source
+        assert "topk_routing_all" in source
+        assert "all2all_moe_gmm" in source
+        assert "sigmoid" in source and "swiglu" in source
+        if layout == "ordinary":
+            assert "Ordinary2Rel.toGather2Rel" in source
+        assert layout in source

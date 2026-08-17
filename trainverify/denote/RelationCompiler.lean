@@ -2,16 +2,19 @@
 import denote.InnerChunkCELossShard
 import denote.InnerChunkCEShard
 import denote.yoco_goals.ZigzagRouterRel
+import denote.yoco_goals.ZigzagMoEGmmRel
 import denote.yoco_goals.ZigzagAttentionRel
 import denote.yoco_goals.ZigzagLinearRel
 import denote.yoco_goals.ZigzagPointwiseRel
 import denote.yoco_goals.ZigzagBroadcastMul
 import denote.yoco_goals.ZigzagViewRel
+import denote.yoco_goals.ZigzagElemwiseRel
 import denote.yoco_goals.FaithfulStackGather
 import denote.ZigzagCollective
 import denote.MultirefGeneral
 import denote.ChunkGatherDim0
 import denote.PointwiseGather
+import denote.MoEFullSplitCommute
 import denote.EmbeddingHiddenShard
 
 set_option maxRecDepth 100000
@@ -19,6 +22,19 @@ set_option maxRecDepth 100000
 open TrainVerify.Denote
 
 namespace TrainVerify.Denote.RelationCompiler
+
+/-- Batch the initial-store preservation proof for several reads through one
+ordered faithful prefix. Generated mixed-SCC writers instantiate the two finite
+side conditions once, then project individual TIDs by membership. -/
+theorem foldl_faithful_prefix_reads_eq_initial
+    (g : GraphDecl) (s : Store) (before : List NodeDecl) (tids : List Tid)
+    (hnil : ∀ n ∈ before, n.outs ≠ [])
+    (hwrite : ∀ n ∈ before, ∀ tid ∈ tids, tid ∉ n.outs) :
+    ∀ tid ∈ tids,
+      (before.foldl (applyNodeDistributedFaithful g) s) tid = s tid := by
+  intro tid htid
+  exact foldl_applyNodeDistributedFaithful_at_not_written g before s tid hnil
+    (fun n hn => hwrite n hn tid htid)
 
 /-- A cross-store equal full tensor and its two exact dim-0 chunks form the
 ordinary two-rank relation. -/
@@ -48,6 +64,22 @@ private theorem fw_view_id_of_shape (x : Tensor) (target : Shape)
     unfold fw_view
     rw [valAt_of_lt _ _ (by simpa only [Tensor.mkShape] using hidx)]
     rfl
+
+/-- Recover the generic gather package from an ordinary relation when the
+shard shape is known to be nonscalar.  This is a structural projection only:
+no model- or graph-specific semantics are introduced. -/
+theorem Ordinary2Rel.toGather2Rel
+    {full rank0 rank1 : Tensor} {fullShape shardShape : Shape}
+    (h : GeneratedPatterns.Ordinary2Rel full rank0 rank1 fullShape shardShape)
+    (hnonscalar : shardShape ≠ [1]) :
+    GeneratedPatterns.Gather2Rel full rank0 rank1 fullShape shardShape := by
+  exact {
+    value := h.full_value
+    full_shape := h.full_shape
+    shard0_shape := h.rank0_shape
+    shard1_shape := h.rank1_shape
+    nonscalar := hnonscalar
+  }
 
 /-- Elementwise addition of two ordinary two-rank relations. -/
 theorem Ordinary2Rel.add
@@ -797,6 +829,32 @@ structure ClosedDepSegmentCertificate
   sound : ∀ sm pm, pre.Holds sm pm → post.Holds
     (smNodes.foldl (applyNodeDistributedFaithful smGraph) sm)
     (pmNodes.foldl (applyNodeDistributedFaithful pmGraph) pm)
+
+/-- Equality-indexed presentation of a closed dependent segment.  Keeping the
+final stores explicit prevents elaboration from repeatedly normalizing a large
+literal ordered fold inside a dependent structure field. -/
+structure ClosedDepSegmentCertificateEq
+    (smGraph pmGraph : GraphDecl) (pre post : RelationState) where
+  smNodes : List NodeDecl
+  pmNodes : List NodeDecl
+  sound : ∀ sm pm smFinal pmFinal,
+    smFinal = smNodes.foldl (applyNodeDistributedFaithful smGraph) sm →
+    pmFinal = pmNodes.foldl (applyNodeDistributedFaithful pmGraph) pm →
+    pre.Holds sm pm → post.Holds smFinal pmFinal
+
+namespace ClosedDepSegmentCertificateEq
+
+noncomputable def toCertificate
+    {smGraph pmGraph : GraphDecl} {pre post : RelationState}
+    (certificate : ClosedDepSegmentCertificateEq smGraph pmGraph pre post) :
+    ClosedDepSegmentCertificate smGraph pmGraph pre post where
+  smNodes := certificate.smNodes
+  pmNodes := certificate.pmNodes
+  sound := by
+    intro sm pm hpre
+    exact certificate.sound sm pm _ _ rfl rfl hpre
+
+end ClosedDepSegmentCertificateEq
 
 inductive ClosedDepCertificateChain (smGraph pmGraph : GraphDecl) :
     RelationState → RelationState → Type

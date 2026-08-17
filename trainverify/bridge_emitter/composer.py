@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 try:
     from .parser import GoalIR, Node
@@ -26,12 +25,12 @@ class CompositionCode(str, Enum):
 class CompositionDiagnostic:
     code: CompositionCode
     message: str
-    node_index: Optional[int] = None
+    node_index: int | None = None
 
 
 @dataclass(frozen=True)
 class CompositionResult:
-    rule_id: Optional[str]
+    rule_id: str | None
     lean_source: str
     diagnostics: tuple[CompositionDiagnostic, ...]
 
@@ -41,7 +40,7 @@ class CompositionResult:
 
 
 def _failure(
-    code: CompositionCode, message: str, node_index: Optional[int] = None
+    code: CompositionCode, message: str, node_index: int | None = None
 ) -> CompositionResult:
     return CompositionResult(None, "", (CompositionDiagnostic(code, message, node_index),))
 
@@ -748,6 +747,664 @@ def render_closed_multiref_segment(ir: GoalIR, relation, segment_id: str) -> str
     lines += ["    · exact hframe fact hold",""]
     return "\n".join(lines)
 
+def _render_mixed_final_value(
+    *, name: str, graph: str, initial_store: str, final_store: str,
+    nodes_name: str, nodes: list[Node], position: int, output_tid: int,
+    input_tids: tuple[int, ...], written_tids: set[int],
+    expression: str, apply_lines: list[str],
+) -> list[str]:
+    """Extract one target value from a shared fold with hybrid input stores.
+
+    Inputs written by the atomic slice are rewritten from the target prefix to
+    the complete final store. Inputs never written by the slice are rewritten
+    directly to the initial store. This avoids the expensive and redundant
+    prefix→final→initial round trip.
+    """
+    target = nodes[position]
+    if output_tid not in target.outs:
+        raise ValueError(f"mixed target {name} does not write {output_tid}")
+    before = nodes[:position]
+    after = nodes[position + 1:]
+    prefix = (
+        f"([{', '.join(_node_text(node) for node in before)}] : List NodeDecl).foldl "
+        f"(applyNodeDistributedFaithful {graph}) {initial_store}"
+    )
+    expression_prefix = expression.format(store=prefix)
+    expression_hybrid = expression.format(store=final_store)
+    expression_at_t = expression.format(store="t")
+    semantic_inputs = tuple(dict.fromkeys(input_tids))
+    lines = [
+        f"    have {name}_prefix : {final_store} {output_tid} = {expression_prefix} := by",
+        "      simpa using",
+        f"        (foldl_faithful_middle_writer {graph} {initial_store}",
+        f"          [{', '.join(_node_text(node) for node in before)}]",
+        f"          [{', '.join(_node_text(node) for node in after)}]",
+        f"          {_node_text(target)} {output_tid}",
+        f"          (fun t => {expression_at_t}) (by",
+        "            intro t",
+    ]
+    lines.extend(f"            {line}" for line in apply_lines)
+    lines.append("          ) (by native_decide) (by native_decide))")
+    read_names = []
+    suffix = [target, *after]
+    for ordinal, tid in enumerate(semantic_inputs):
+        read_name = f"{name}_read_{ordinal}"
+        read_names.append(read_name)
+        lines.extend([
+            f"    have {read_name} : {prefix} {tid} = {final_store} {tid} := by",
+            "      simpa using",
+            f"        (foldl_faithful_prefix_read_eq_final {graph} {initial_store}",
+            f"          [{', '.join(_node_text(node) for node in before)}]",
+            f"          [{', '.join(_node_text(node) for node in suffix)}] {tid}",
+            "          (by native_decide) (by native_decide))",
+        ])
+    lines.append(f"    have {name} : {final_store} {output_tid} = {expression_hybrid} := by")
+    if read_names:
+        lines.extend([
+            "      calc",
+            f"        _ = {expression_prefix} := {name}_prefix",
+            f"        _ = {expression_hybrid} := by rw [{', '.join(read_names)}]",
+        ])
+    else:
+        lines.append(f"      exact {name}_prefix")
+    return lines
+
+def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    chain = relation.dependent_chain_plan
+    if chain is None or not chain.complete:
+        raise ValueError("mixed MoE renderer requires a complete closed chain")
+    segment = next((x for x in chain.segments if x.segment_id == segment_id), None)
+    if segment is None or len(segment.transition_ids) != 16:
+        raise ValueError("mixed MoE renderer requires one 16-transition atomic component")
+    by_id = {x.transition_id: x for x in relation.transition_specs}
+    transitions = [by_id[x] for x in segment.transition_ids]
+    ordinary_rules = (
+        "FW_norm_linear-full-producer-chunks-ordinary-two-rank",
+        "identity-reshape-ordinary-two-rank", "identity-reshape-ordinary-two-rank",
+        "identity-reshape-ordinary-two-rank", "mix-precision-linear-ordinary-two-rank",
+        "mix-precision-linear-ordinary-two-rank", "mix-precision-linear-ordinary-two-rank",
+        "topk-routing-two-output-ordinary-two-rank",
+        "identity-view-ordinary-two-rank", "identity-view-ordinary-two-rank",
+        "identity-view-ordinary-two-rank", "ordinary-full-moe-expert-split-two-rank",
+        "sigmoid-ordinary-two-rank", "swiglu-ordinary-two-rank",
+        "identity-reshape-ordinary-two-rank", "mix-precision-linear-ordinary-two-rank",
+    )
+    zigzag_rules = tuple(
+        "zigzag-full-moe-expert-split-two-rank" if rule == "ordinary-full-moe-expert-split-two-rank"
+        else rule.replace("-ordinary-two-rank", "-zigzag-two-rank")
+        for rule in ordinary_rules
+    )
+    rules = tuple(x.rule_id for x in transitions)
+    if rules == ordinary_rules:
+        layout = "ordinary"
+        relation_ns = "Ordinary2Rel"
+    elif rules == zigzag_rules:
+        layout = "zigzag"
+        relation_ns = "GeneratedPatterns.Zigzag2Rel"
+    else:
+        raise ValueError("mixed MoE renderer received a malformed ordinary/zigzag component")
+    records = {x.source: x for x in chain.relation_facts}
+    states = {x.state_id: x for x in chain.states}
+    before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    sms = ir.sm_nodes[slice(*segment.sm_range)]
+    pms = ir.pm_nodes[slice(*segment.pm_range)]
+    if len(sms) != 17 or len(pms) != 37:
+        raise ValueError("mixed MoE footprint is not 17x37")
+    sm_start, pm_start = segment.sm_range[0], segment.pm_range[0]
+    sm_text, pm_text = [_node_text(x) for x in sms], [_node_text(x) for x in pms]
+    authority = {x.fact_id: x for x in chain.authority_facts}
+    live_authority = [authority[x] for x in before.fact_ids if x in authority]
+
+    def authority_one(kind: str, predicate, label: str):
+        found = [x for x in live_authority if x.kind == kind and predicate(x)]
+        if len(found) != 1:
+            raise ValueError(f"mixed MoE lacks unique live {label}: {len(found)}")
+        return found[0]
+
+    def common(exact: str):
+        return [
+            "rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "  (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]",
+            "simp [applyNodeDistributed, applyNodeRingAttn]", exact,
+        ]
+
+    def value_spec(graph: str, node: Node, out: int):
+        ins, params = node.ins, node.params or []
+        if node.op == "FW_float":
+            return f"{{store}} {ins[0]}", common(
+                f"exact applyNode_fw_float_out {graph} t {node.rank} {ins[0]} {out} []")
+        if node.op == "FW_reshape":
+            expr = f"{{store}} {ins[0]}" if not params else f"fw_view {_shape_text(params)} ({{store}} {ins[0]})"
+            return expr, common(
+                f"exact applyNode_fw_reshape_out {graph} t {node.rank} {ins[0]} {out} {_shape_text(params)}")
+        if node.op == "FW_view":
+            return f"fw_view {_shape_text(params)} ({{store}} {ins[0]})", common(
+                f"exact applyNode_fw_view_out {graph} t {node.rank} {params[0]} {_shape_text(params[1:])} {ins[0]} {out}")
+        if node.op == "FW_norm_linear":
+            return f"fw_norm_linear ({{store}} {ins[0]}) ({{store}} {ins[1]})", common(
+                f"exact applyNode_fw_norm_linear_out {graph} t {node.rank} {ins[0]} {ins[1]} {out} []")
+        if node.op == "FW_mix_precision_linear":
+            return f"fw_linear ({{store}} {ins[0]}) ({{store}} {ins[1]})", common(
+                f"exact applyNode_fw_mix_precision_linear_out_1p {graph} t {node.rank} {ins[0]} {ins[1]} {out}")
+        if node.op == "FW_sigmoid":
+            return f"fw_sigmoid ({{store}} {ins[0]})", common(
+                f"exact applyNode_fw_sigmoid_out_1p {graph} t {node.rank} {ins[0]} {out}")
+        if node.op == "FW_swiglu":
+            return f"fw_swiglu ({{store}} {ins[0]}) ({{store}} {ins[1]})", common(
+                f"exact applyNode_fw_swiglu_out_1p {graph} t {node.rank} {ins[0]} {ins[1]} {out}")
+        if node.op == "AllGatherPrim":
+            return f"allGatherPrimDimN 0 2 0 [{{store}} {ins[0]}, {{store}} {ins[1]}]", common(
+                f"rw [applyNode_allGatherPrimDimN_out {graph} t 0 [{ins[0]}, {ins[1]}] {out} 0, show {graph}.numRanks = 2 by rfl]") + ["simp"]
+        if node.op == "ChunkPrim":
+            return f"chunkPrimDimN 0 2 {node.rank} ({{store}} {ins[0]})", common(
+                f"rw [applyNode_chunkPrimDimN_out {graph} t {node.rank} {ins[0]} {out} 0, show {graph}.numRanks = 2 by rfl]")
+        if node.op == "FW_topk_routing":
+            idx = node.outs.index(out)
+            selector = (".fst", ".snd.fst", ".snd.snd")[idx]
+            expr = (f"(fw_topk_routing ({{store}} {ins[0]}) ({_shape_text(params)}.getD 0 1) "
+                    f"((({{store}} {ins[0]}).shape.reverse.head?).getD ({_shape_text(params)}.getD 1 1))){selector}")
+            lemma = ("probs", "map", "scores")[idx]
+            extra = "" if idx == 0 else (" (by decide)" if idx == 1 else " (by decide) (by decide)")
+            return expr, common(
+                f"simpa using (applyNode_fw_topk_routing_{lemma}_out {graph} t {node.rank} {ins[0]} "
+                f"{node.outs[0]} {node.outs[1]} {node.outs[2]} {_shape_text(params)}{extra})")
+        if node.op == "FW_all2all_moe_gmm":
+            if out != node.outs[0] or len(ins) != 5 or len(params) != 4:
+                raise ValueError("malformed mixed full-expert MoE writer")
+            if graph == ir.sm_graph_ref:
+                buddies = [node]
+                weights13 = f"[{{store}} {ins[3]}]"
+                weights2 = f"[{{store}} {ins[4]}]"
+            elif graph == ir.pm_graph_ref:
+                absolute = pm_start + pms.index(node)
+                owners = [transition for transition in transitions if absolute in transition.pm_node_indices]
+                if len(owners) != 1:
+                    raise ValueError("mixed PM MoE writer lacks a unique atomic owner")
+                peers = [ir.pm_nodes[index] for index in owners[0].pm_node_indices
+                         if ir.pm_nodes[index].op == node.op]
+                peers.sort(key=lambda candidate: candidate.rank)
+                if len(peers) != 2 or [candidate.rank for candidate in peers] != [0, 1]:
+                    raise ValueError("mixed PM MoE writer lacks exact rank-ordered pair")
+                buddies = peers
+                weights13 = f"[{{store}} {peers[0].ins[3]}, {{store}} {peers[1].ins[3]}]"
+                weights2 = f"[{{store}} {peers[0].ins[4]}, {{store}} {peers[1].ins[4]}]"
+            else:
+                raise ValueError("mixed MoE writer uses unknown graph")
+            expr = (f"fw_all2all_moe_gmm_full ({{store}} {ins[0]}) ({{store}} {ins[1]}) "
+                    f"({{store}} {ins[2]}) {weights13} {weights2} {params[0]} {params[3]} "
+                    "(((10 : Nat) : Scalar))")
+            apply = [
+                "rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+                "  (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]",
+                f"rw [applyNodeDistributed_moe_out {graph} t {node.rank} {' '.join(str(x) for x in ins)} {out} {_shape_text(params)}]",
+                "unfold applyNodeFullExpertMoE_value",
+                f"rw [show {graph}.replicaBuddies {_node_text(node)} = [{', '.join(_node_text(peer) for peer in buddies)}] by native_decide]",
+                "rfl",
+            ]
+            return expr, apply
+        raise ValueError(f"unsupported mixed writer operator: {node.op}")
+
+    sm_nodes_name = f"{segment.segment_id}_sm_nodes"
+    pm_nodes_name = f"{segment.segment_id}_pm_nodes"
+    node_defs = [
+        f"private def {sm_nodes_name} : List NodeDecl := [{', '.join(sm_text)}]",
+        f"private def {pm_nodes_name} : List NodeDecl := [{', '.join(pm_text)}]",
+        "",
+    ]
+    sound_name = f"{segment.segment_id}_sound"
+    lines = [
+        f"-- layout: {layout}",
+        f"private theorem {sound_name} : ∀ smStore pmStore smResult pmResult,",
+        f"    smResult = {sm_nodes_name}.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore →",
+        f"    pmResult = {pm_nodes_name}.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore →",
+        f"    (∀ fact ∈ {before.state_id}.facts, fact.Holds smStore pmStore) →",
+        f"    ∀ fact ∈ {after.state_id}.facts, fact.Holds smResult pmResult := by",
+        "    intro smStore pmStore smResult pmResult hsmResult hpmResult hstate",
+        "    subst smResult",
+        "    subst pmResult",
+        f"    let smNodes : List NodeDecl := {sm_nodes_name}",
+        f"    let pmNodes : List NodeDecl := {pm_nodes_name}",
+        f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore",
+        f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "      · native_decide", "      · native_decide",
+        "      · simp only [smNodes]", "        native_decide",
+        "      · simp only [pmNodes]", "        native_decide",
+    ]
+    value_names = {}
+    writer_entries = []
+    writer_results = []
+    def ensure_value(side: str, absolute_index: int, out: int) -> str:
+        key = (side, absolute_index, out)
+        if key in value_names:
+            return value_names[key]
+        if side == "sm":
+            nodes, graph, store, final, node_name, base = sms, ir.sm_graph_ref, "smStore", "smFinal", "smNodes", sm_start
+        elif side == "pm":
+            nodes, graph, store, final, node_name, base = pms, ir.pm_graph_ref, "pmStore", "pmFinal", "pmNodes", pm_start
+        else:
+            raise ValueError(f"unknown mixed side: {side}")
+        pos = absolute_index - base
+        if pos < 0 or pos >= len(nodes):
+            raise ValueError(f"mixed writer index outside slice: {side}:{absolute_index}")
+        node = nodes[pos]
+        if out not in node.outs or any(out in later.outs for later in nodes[pos + 1:]):
+            raise ValueError(f"mixed writer is not final for TID: {side}:{absolute_index}:{out}")
+        ordinal = node.outs.index(out)
+        expression, apply_lines = value_spec(graph, node, out)
+        semantic_inputs = list(node.ins)
+        if node.op == "FW_all2all_moe_gmm" and side == "pm":
+            owners = [transition for transition in transitions if absolute_index in transition.pm_node_indices]
+            if len(owners) != 1:
+                raise ValueError("mixed PM MoE writer lacks one semantic-read owner")
+            peers = [ir.pm_nodes[index] for index in owners[0].pm_node_indices
+                     if ir.pm_nodes[index].op == node.op]
+            peers.sort(key=lambda candidate: candidate.rank)
+            if len(peers) != 2 or [candidate.rank for candidate in peers] != [0, 1]:
+                raise ValueError("mixed PM MoE writer lacks rank-ordered semantic reads")
+            semantic_inputs.extend([peers[0].ins[3], peers[1].ins[3], peers[0].ins[4], peers[1].ins[4]])
+        semantic_inputs = tuple(dict.fromkeys(semantic_inputs))
+        written = sm_written if side == "sm" else pm_written
+        hybrid_expression = expression.format(store=final)
+        name = f"hval_{side}_{absolute_index}_{ordinal}"
+        value_names[key] = name
+        result = f"{final} {out} = {hybrid_expression}"
+        helper_final = (
+            f"([{', '.join(_node_text(candidate) for candidate in nodes)}] : List NodeDecl).foldl "
+            f"(applyNodeDistributedFaithful {graph}) {store}"
+        )
+        proof_lines = _render_mixed_final_value(
+            name=name, graph=graph, initial_store=store, final_store=helper_final,
+            nodes_name=node_name, nodes=nodes, position=pos, output_tid=out,
+            input_tids=semantic_inputs, written_tids=written,
+            expression=expression, apply_lines=apply_lines)
+        membership = [i for i, transition in enumerate(transitions)
+                      if absolute_index in (transition.sm_node_indices if side == "sm" else transition.pm_node_indices)]
+        if len(membership) != 1:
+            raise ValueError(f"mixed writer has non-unique transition owner: {side}:{absolute_index}:{membership}")
+        writer_results.append((name, result))
+        writer_entries.append((membership[0], side, node.op, name, result, proof_lines))
+        return name
+
+    def rel_text(rec, sm_store="smFinal", pm_store="pmFinal"):
+        if rec.kind == "ordinary":
+            return (f"GeneratedPatterns.Ordinary2Rel ({sm_store} {rec.sm_tid}) "
+                    f"({pm_store} {rec.pm_rank0_tid}) ({pm_store} {rec.pm_rank1_tid}) "
+                    f"{_shape_text(list(rec.full_shape))} {_shape_text(list(rec.shard_shape))}")
+        if rec.kind == "zigzag":
+            return (f"GeneratedPatterns.Zigzag2Rel ({sm_store} {rec.sm_tid}) "
+                    f"({pm_store} {rec.pm_rank0_tid}) ({pm_store} {rec.pm_rank1_tid}) "
+                    f"({pm_store} {rec.metadata_tid}) {_shape_text(list(rec.full_shape))} "
+                    f"{_shape_text(list(rec.shard_shape))}")
+        raise ValueError(f"mixed semantic result is not an ordinary/zigzag fact: {rec.fact_id}")
+
+    proved = {}
+    initial_fact_ids = set(before.fact_ids)
+    sm_written = {tid for node in sms for tid in node.outs}
+    pm_written = {tid for node in pms for tid in node.outs}
+    preserved = {}
+
+    def preserve_initial(side: str, tid: int) -> str:
+        key = (side, tid)
+        if key in preserved:
+            return preserved[key]
+        if side == "sm":
+            graph, store, final, nodes_name, written = ir.sm_graph_ref, "smStore", "smFinal", "smNodes", sm_written
+        elif side == "pm":
+            graph, store, final, nodes_name, written = ir.pm_graph_ref, "pmStore", "pmFinal", "pmNodes", pm_written
+        else:
+            raise ValueError(f"unknown mixed preservation side: {side}")
+        if tid in written:
+            raise ValueError(f"mixed input {side}:{tid} is written inside the atomic component")
+        name = f"hpres_{side}_{tid}"
+        preserved[key] = name
+        lines.extend([
+            f"    have {name} : {final} {tid} = {store} {tid} := by",
+            "      symm",
+            f"      simpa [{final}] using",
+            f"        (foldl_faithful_prefix_read_eq_final {graph} {store}",
+            f"          [] {nodes_name} {tid} (by native_decide) (by native_decide))",
+        ])
+        return name
+
+    def writer_with_initial_inputs(name: str, side: str, node: Node) -> str:
+        # _render_mixed_final_value already selects initial/final per semantic read.
+        return name
+
+    decoded_cu = None
+    if layout == "zigzag":
+        zigzag_records = [records[source] for transition in transitions
+                           for source in (*transition.pre_facts, *transition.post_facts)
+                           if records[source].kind == "zigzag"]
+        metadata_tids = {record.metadata_tid for record in zigzag_records}
+        if len(metadata_tids) != 1:
+            raise ValueError(f"mixed zigzag component lacks one metadata TID: {sorted(metadata_tids)}")
+        metadata_tid = metadata_tids.pop()
+        metadata_eq = authority_one(
+            "tensor_eq",
+            lambda fact: fact.left_side == "pm" and fact.left_tid == metadata_tid
+            and fact.right_side == "pm",
+            f"zigzag metadata equality {metadata_tid}")
+        packed_cu = authority_one(
+            "packed_cu",
+            lambda fact: fact.side == "pm" and fact.tid == metadata_eq.right_tid
+            and fact.total_tokens == zigzag_records[0].full_shape[0]
+            and fact.num_ranks == 2,
+            f"packed cu-seqlens for metadata {metadata_tid}")
+        lines.extend([
+            f"    have hMetadataEq : pmFinal {metadata_tid} = pmFinal {metadata_eq.right_tid} := by",
+            f"      simpa [{metadata_eq.fact_id}, RelationFact.Holds, StoreSide.read] using (hframe _ (by native_decide : {metadata_eq.fact_id} ∈ {before.state_id}.facts))",
+            f"    have hPackedCu : ZigzagCollective.PackedCuSeqlensWF (pmFinal {metadata_eq.right_tid}) {packed_cu.total_tokens} 2 := by",
+            f"      simpa [{packed_cu.fact_id}, RelationFact.Holds, StoreSide.read] using (hframe _ (by native_decide : {packed_cu.fact_id} ∈ {before.state_id}.facts))",
+            f"    have hDecodedCu : decodeCuSeqlens (pmFinal {metadata_tid}) = [0, {packed_cu.total_tokens}] := by",
+            "      rw [hMetadataEq]",
+            "      exact hPackedCu.decoded_single",
+        ])
+        decoded_cu = "hDecodedCu"
+
+    def get_fact(rec, name):
+        if rec.fact_id in proved:
+            return proved[rec.fact_id]
+        if rec.fact_id not in initial_fact_ids:
+            raise ValueError(f"mixed prerequisite has no prior proof: {rec.fact_id}")
+        lines.append(f"    have {name} : {rec.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)")
+        proved[rec.fact_id] = name
+        return name
+
+    # Norm-linear full producer/chunks.
+    t = transitions[0]; pre, post = records[t.pre_facts[0]], records[t.post_facts[0]]
+    hin = get_fact(pre, "hNormIn")
+    sm_float, sm_norm = (ir.sm_nodes[i] for i in t.sm_node_indices)
+    gather, pm_float0, producer0, chunk0, chunk1 = (ir.pm_nodes[i] for i in t.pm_node_indices)
+    pm_float = next(n for n in pms if n.op == "FW_float" and n.rank == 1 and n.outs == pm_float0.outs)
+    producer = next(n for n in pms if n.op == "FW_norm_linear" and n.rank == 1 and n.outs == producer0.outs)
+    weight = sm_norm.ins[1]
+    weq = authority_one("tensor_eq", lambda x: (x.left_side, x.left_tid, x.right_side, x.right_tid) == ("sm", weight, "pm", weight), f"norm weight equality {weight}")
+    wshape = authority_one("tensor_shape", lambda x: (x.side, x.tid, x.shape) == ("pm", weight, (post.shard_shape[1], pre.shard_shape[1])), f"norm weight shape {weight}")
+    lines += [
+        f"    have hNormWEq : smFinal {weight} = pmFinal {weight} := by",
+        f"      simpa [{weq.fact_id}, RelationFact.Holds, StoreSide.read] using (hframe _ (by native_decide : {weq.fact_id} ∈ {before.state_id}.facts))",
+        f"    have hNormWShape : (pmFinal {weight}).shape = {_shape_text(list(wshape.shape))} := by",
+        f"      simpa [{wshape.fact_id}, RelationFact.Holds, StoreSide.read] using (hframe _ (by native_decide : {wshape.fact_id} ∈ {before.state_id}.facts))",
+        f"    have hSmNorm := {writer_with_initial_inputs(ensure_value('sm', t.sm_node_indices[-1], sm_norm.outs[0]), 'sm', sm_norm)}",
+        f"    rw [{writer_with_initial_inputs(ensure_value('sm', t.sm_node_indices[0], sm_float.outs[0]), 'sm', sm_float)}] at hSmNorm",
+        f"    have hPmProducer := {writer_with_initial_inputs(ensure_value('pm', pm_start + pms.index(producer), producer.outs[0]), 'pm', producer)}",
+        f"    rw [{writer_with_initial_inputs(ensure_value('pm', pm_start + pms.index(pm_float), pm_float.outs[0]), 'pm', pm_float)}] at hPmProducer",
+        f"    have hFact0 : {post.fact_id}.Holds smFinal pmFinal := by",
+        f"      change {rel_text(post)}",
+        f"      exact {relation_ns}.norm_linear_fullProducer_chunks {pre.shard_shape[0]} {pre.shard_shape[1]} {post.shard_shape[1]}",
+        f"        {hin} hNormWShape hNormWEq hSmNorm {writer_with_initial_inputs(ensure_value('pm', t.pm_node_indices[0], gather.outs[0]), 'pm', gather)} hPmProducer",
+        f"        {writer_with_initial_inputs(ensure_value('pm', t.pm_node_indices[-2], chunk0.outs[0]), 'pm', chunk0)} {writer_with_initial_inputs(ensure_value('pm', t.pm_node_indices[-1], chunk1.outs[0]), 'pm', chunk1)} "
+        + (("(by decide) (by decide) (by decide) (by decide) " + decoded_cu) if layout == "zigzag"
+           else "(by decide) (by decide) (by decide)"),
+    ]
+    proved[post.fact_id] = "hFact0"
+
+    # Remaining ordinary non-MoE transitions up to routing, then views.
+    for number in list(range(1, 11)) + list(range(12, 16)):
+        t = transitions[number]
+        pres, posts = [records[x] for x in t.pre_facts], [records[x] for x in t.post_facts]
+        if number == 7:
+            hin = get_fact(pres[0], "hRouteIn")
+            sm, p0, p1 = ir.sm_nodes[t.sm_node_indices[0]], ir.pm_nodes[t.pm_node_indices[0]], ir.pm_nodes[t.pm_node_indices[1]]
+            names = []
+            for label, node, side, idx in (("Sm", sm, "sm", t.sm_node_indices[0]), ("P0", p0, "pm", t.pm_node_indices[0]), ("P1", p1, "pm", t.pm_node_indices[1])):
+                for oi in (0, 1):
+                    src = writer_with_initial_inputs(ensure_value(side, idx, node.outs[oi]), side, node)
+                    nm = f"hRoute{label}{oi}"
+                    shape_field = "full_shape" if side == "sm" else ("rank0_shape" if label == "P0" else "rank1_shape")
+                    lines += [f"    have {nm} := {src}", f"    rw [{hin}.{shape_field}] at {nm}", f"    simp at {nm}"]
+                    names.append(nm)
+            route_rewrites_a = f"{names[0]}, {names[2]}, {names[4]}"
+            route_rewrites_b = f"{names[1]}, {names[3]}, {names[5]}"
+            route_args = ("(by decide) (by decide) (by decide) " + decoded_cu
+                          if layout == "zigzag" else "(by decide) (by decide)")
+            route_second = "hRouteCore.2.1" if layout == "zigzag" else "hRouteCore.2"
+            lines += [
+                (
+                    f"    have hRouteCore := {relation_ns}.topk_routing_all "
+                    f"{pres[0].shard_shape[0]} {pres[0].shard_shape[1]} {sm.params[0]} {hin} {route_args}"
+                ),
+                f"    have hFact{number}a : {posts[0].fact_id}.Holds smFinal pmFinal := by",
+                f"      change {rel_text(posts[0])}", f"      rw [{route_rewrites_a}]", "      exact hRouteCore.1",
+                f"    have hFact{number}b : {posts[1].fact_id}.Holds smFinal pmFinal := by",
+                f"      change {rel_text(posts[1])}", f"      rw [{route_rewrites_b}]", f"      exact {route_second}",
+            ]
+            proved[posts[0].fact_id], proved[posts[1].fact_id] = f"hFact{number}a", f"hFact{number}b"
+            continue
+        in_names = [get_fact(x, f"hPre{number}_{i}") for i, x in enumerate(pres)]
+        sm, p0, p1 = ir.sm_nodes[t.sm_node_indices[0]], ir.pm_nodes[t.pm_node_indices[0]], ir.pm_nodes[t.pm_node_indices[1]]
+        hsm = writer_with_initial_inputs(ensure_value("sm", t.sm_node_indices[0], sm.outs[0]), "sm", sm)
+        hp0 = writer_with_initial_inputs(ensure_value("pm", t.pm_node_indices[0], p0.outs[0]), "pm", p0)
+        hp1 = writer_with_initial_inputs(ensure_value("pm", t.pm_node_indices[1], p1.outs[0]), "pm", p1)
+        post = posts[0]
+        relation_rewrites = f"{hsm}, {hp0}, {hp1}"
+        lines += [f"    have hFact{number} : {post.fact_id}.Holds smFinal pmFinal := by", f"      change {rel_text(post)}", f"      rw [{relation_rewrites}]"]
+        if t.rule_id.startswith("identity-"):
+            if layout == "zigzag":
+                lines += [f"      exact GeneratedPatterns.Zigzag2Rel.view_id {post.shard_shape[0]} {post.shard_shape[1]} {in_names[0]}"]
+            else:
+                lines += [f"      exact Ordinary2Rel.view_id {in_names[0]}"]
+        elif t.rule_id == f"mix-precision-linear-{layout}-two-rank":
+            weight = sm.ins[1]; in_dim = pres[0].shard_shape[1]; out_dim = post.shard_shape[1]; rows = pres[0].shard_shape[0]
+            weq = authority_one("tensor_eq", lambda x, w=weight: (x.left_side, x.left_tid, x.right_side, x.right_tid) == ("sm", w, "pm", w), f"linear equality {weight}")
+            wshape = authority_one("tensor_shape", lambda x, w=weight, sh=(out_dim, in_dim): (x.side, x.tid, x.shape) == ("pm", w, sh), f"linear shape {weight}")
+            lines[-1:-1] = [
+                f"      have hwEq : smFinal {weight} = pmFinal {weight} := by",
+                f"        simpa [{weq.fact_id}, RelationFact.Holds, StoreSide.read] using (hframe _ (by native_decide : {weq.fact_id} ∈ {before.state_id}.facts))",
+                f"      have hwShape : (pmFinal {weight}).shape = {_shape_text([out_dim, in_dim])} := by",
+                f"        simpa [{wshape.fact_id}, RelationFact.Holds, StoreSide.read] using (hframe _ (by native_decide : {wshape.fact_id} ∈ {before.state_id}.facts))",
+            ]
+            if layout == "zigzag":
+                lines += ["      rw [hwEq]", f"      exact GeneratedPatterns.Zigzag2Rel.mix_precision_linear {rows} {in_dim} {out_dim} {in_names[0]} hwShape (by decide) (by decide) (by decide)"]
+            else:
+                lines += [f"      exact Ordinary2Rel.mix_precision_linear {rows} {in_dim} {out_dim} {in_names[0]} hwShape hwEq (by decide) (by decide) (by decide)"]
+        elif t.rule_id == f"sigmoid-{layout}-two-rank":
+            rows, hidden = post.shard_shape
+            lines += [f"      exact {relation_ns}.sigmoid {rows} {hidden} {in_names[0]} (by decide) (by decide)"]
+        elif t.rule_id == f"swiglu-{layout}-two-rank":
+            rows, hidden = post.shard_shape
+            lines += [f"      exact {relation_ns}.swiglu {rows} {hidden} {in_names[0]} {in_names[1]} (by decide) (by decide)"]
+        else:
+            raise ValueError(f"unsupported {layout} mixed relation: {t.rule_id}")
+        proved[post.fact_id] = f"hFact{number}"
+
+    # MoE transition is emitted after routing and before state publication.
+    t = transitions[11]; pres, post = [records[x] for x in t.pre_facts], records[t.post_facts[0]]
+    hX, hRP, hRM = [get_fact(x, f"hMoePre{i}") for i, x in enumerate(pres)]
+    sm, p0, p1 = ir.sm_nodes[t.sm_node_indices[0]], ir.pm_nodes[t.pm_node_indices[0]], ir.pm_nodes[t.pm_node_indices[1]]
+    gathers = []
+    for weight, a, b in ((sm.ins[3], p0.ins[3], p1.ins[3]), (sm.ins[4], p0.ins[4], p1.ins[4])):
+        gathers.append(authority_one("gather", lambda x, W=weight, A=a, B=b: (x.sm_tid, x.pm_rank0_tid, x.pm_rank1_tid, x.dim) == (W, A, B, 0), f"MoE gather {weight}"))
+    lines += [
+        f"    have hW13 : {gathers[0].fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
+        f"    have hW2 : {gathers[1].fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
+        "    have hW13Value := hW13.1",
+        "    have hW13FullShape := hW13.2.1",
+        "    have hW13Rank0Shape := hW13.2.2.1",
+        "    have hW13Rank1Shape := hW13.2.2.2",
+        "    have hW2Value := hW2.1",
+        "    have hW2FullShape := hW2.2.1",
+        "    have hW2Rank0Shape := hW2.2.2.1",
+        "    have hW2Rank1Shape := hW2.2.2.2",
+    ]
+    # Exact MoE writers are emitted through the same transition-owned helper bundle.
+    moe_locals = {
+        "Sm": writer_with_initial_inputs(
+            ensure_value("sm", t.sm_node_indices[0], sm.outs[0]), "sm", sm),
+        "P0": writer_with_initial_inputs(
+            ensure_value("pm", t.pm_node_indices[0], p0.outs[0]), "pm", p0),
+        "P1": writer_with_initial_inputs(
+            ensure_value("pm", t.pm_node_indices[1], p1.outs[0]), "pm", p1),
+    }
+    if layout == "ordinary":
+        lines += [
+        "    have hMoeSm : smFinal " + str(sm.outs[0]) + " = fw_all2all_moe_gmm_full "
+        + f"(smFinal {sm.ins[0]}) (smFinal {sm.ins[1]}) (smFinal {sm.ins[2]}) [pmFinal {p0.ins[3]}, pmFinal {p1.ins[3]}] [pmFinal {p0.ins[4]}, pmFinal {p1.ins[4]}] 64 8 (((10 : Nat) : Scalar)) := by",
+        f"      rw [{moe_locals['Sm']}]", "      unfold fw_all2all_moe_gmm_full", "      simp only [List.length_cons, List.length_nil]",
+        "      rw [allGatherPrimDimN_singleton_eq 0 _ (by rw [hW13FullShape]; decide),",
+        "        allGatherPrimDimN_singleton_eq 0 _ (by rw [hW2FullShape]; decide), hW13Value, hW2Value]",
+        f"    have hMoeSmShape : (smFinal {sm.outs[0]}).shape = {_shape_text(list(post.full_shape))} := by",
+        f"      rw [{moe_locals['Sm']}]", f"      exact fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ {post.full_shape[0]} {post.full_shape[1]} (by rw [{hX}.full_shape]; rfl) (by rw [{hX}.full_shape]; rfl)",
+        f"    have hMoeP0Shape : (pmFinal {p0.outs[0]}).shape = {_shape_text(list(post.shard_shape))} := by",
+        f"      rw [{moe_locals['P0']}]", f"      exact fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ {post.shard_shape[0]} {post.shard_shape[1]} (by rw [{hX}.rank0_shape]; rfl) (by rw [{hX}.rank0_shape]; rfl)",
+        f"    have hMoeP1Shape : (pmFinal {p1.outs[0]}).shape = {_shape_text(list(post.shard_shape))} := by",
+        f"      rw [{moe_locals['P1']}]", f"      exact fw_all2all_moe_gmm_full_shape _ _ _ _ _ _ _ _ {post.shard_shape[0]} {post.shard_shape[1]} (by rw [{hX}.rank1_shape]; rfl) (by rw [{hX}.rank1_shape]; rfl)",
+        f"    have hMoeInputGather := Ordinary2Rel.toGather2Rel {hX} (by decide)",
+        f"    have hMoeProbsGather := Ordinary2Rel.toGather2Rel {hRP} (by decide)",
+        f"    have hMoeRoutingGather := Ordinary2Rel.toGather2Rel {hRM} (by decide)",
+        f"    have hMoeGather := GeneratedPatterns.gather2Rel_fullExpertMoE_boundary (input := smFinal {sm.ins[0]}) (input0 := pmFinal {p0.ins[0]}) (input1 := pmFinal {p1.ins[0]})",
+        f"      (rp := smFinal {sm.ins[1]}) (rp0 := pmFinal {p0.ins[1]}) (rp1 := pmFinal {p1.ins[1]})",
+        f"      (rm := smFinal {sm.ins[2]}) (rm0 := pmFinal {p0.ins[2]}) (rm1 := pmFinal {p1.ins[2]})",
+        f"      (w130 := pmFinal {p0.ins[3]}) (w131 := pmFinal {p1.ins[3]}) (w20 := pmFinal {p0.ins[4]}) (w21 := pmFinal {p1.ins[4]})",
+        f"      (out := smFinal {sm.outs[0]}) (out0 := pmFinal {p0.outs[0]}) (out1 := pmFinal {p1.outs[0]})",
+        f"      (L := {post.shard_shape[0]}) (hM := {post.shard_shape[1]}) (E := {gathers[0].shard_shape[0]}) (topK := {sm.params[3]})",
+        f"      (tDim := {gathers[0].shard_shape[1]}) (dDim := {gathers[1].shard_shape[2]}) (swigluLimit := (((10 : Nat) : Scalar)))",
+        "      (by decide) (by decide) (by decide) (by decide) (by decide) rfl hMoeInputGather hMoeProbsGather hMoeRoutingGather",
+        f"      hW13Rank0Shape hW13Rank1Shape hW2Rank0Shape hW2Rank1Shape hMoeSm {moe_locals['P0']} {moe_locals['P1']} hMoeSmShape hMoeP0Shape hMoeP1Shape",
+        f"    have hFact11 : {post.fact_id}.Holds smFinal pmFinal := ⟨hMoeGather.value, hMoeGather.full_shape, hMoeGather.shard0_shape, hMoeGather.shard1_shape⟩",
+    ]
+    else:
+        lines += [
+            f"    have hFact11 : {post.fact_id}.Holds smFinal pmFinal := by",
+            f"      change {rel_text(post)}",
+            f"      rw [{moe_locals['Sm']}, {moe_locals['P0']}, {moe_locals['P1']}]",
+            "      exact GeneratedPatterns.Zigzag2Rel.all2all_moe_gmm_full_1x2",
+            f"        (w13 := smFinal {sm.ins[3]}) (w2 := smFinal {sm.ins[4]})",
+            f"        (w13a := pmFinal {p0.ins[3]}) (w13b := pmFinal {p1.ins[3]})",
+            f"        (w2a := pmFinal {p0.ins[4]}) (w2b := pmFinal {p1.ins[4]})",
+            f"        (lDim := {post.shard_shape[0]}) (hModel := {post.shard_shape[1]})",
+            f"        (numExp := {sm.params[0]}) (topK := {sm.params[3]})",
+            f"        (tDim := {gathers[0].full_shape[1]}) (dDim := {gathers[1].full_shape[2]})",
+            "        (swigluLimit := (((10 : Nat) : Scalar)))",
+            f"        {hX} {hRP} {hRM} (by decide) (by decide) (by decide) (by decide) rfl",
+            f"        hW13FullShape hW2FullShape hW13Value hW2Value {decoded_cu}",
+        ]
+    proved[post.fact_id] = "hFact11"
+
+    fact_by_id = {x.fact_id: x for x in chain.relation_facts}
+    fresh = [fact_by_id[x] for x in after.fact_ids if x not in before.fact_ids]
+    expected_fresh = [records[transitions[i].post_facts[0]] for i in (11, 12, 15)]
+    if [x.fact_id for x in fresh] != [x.fact_id for x in expected_fresh]:
+        raise ValueError("mixed MoE post-state fresh fact set/order mismatch")
+    lines += [
+        "    intro fact hfact",
+        f"    have covered : fact ∈ [{', '.join(x.fact_id for x in fresh)}] ++ {before.state_id}.facts := by",
+        f"      exact (show {after.state_id}.facts ⊆ [{', '.join(x.fact_id for x in fresh)}] ++ {before.state_id}.facts by native_decide) hfact",
+        "    simp only [List.mem_append] at covered", "    rcases covered with fresh | old",
+        "    · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh",
+        "      rcases fresh with rfl | rfl | rfl",
+        f"      · exact {proved[fresh[0].fact_id]}", f"      · exact {proved[fresh[1].fact_id]}", f"      · exact {proved[fresh[2].fact_id]}",
+        "    · exact hframe fact old", "",
+        f"private def {segment.segment_id}_eq :",
+        f"    ClosedDepSegmentCertificateEq {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
+        f"  smNodes := {sm_nodes_name}",
+        f"  pmNodes := {pm_nodes_name}",
+        "  sound := by",
+        "    intro smStore pmStore smResult pmResult hsm hpm hpre",
+        f"    exact {sound_name} smStore pmStore smResult pmResult hsm hpm hpre",
+        "",
+        f"private noncomputable def {segment.segment_id} :",
+        f"    ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} :=",
+        f"  {segment.segment_id}_eq.toCertificate",
+        "",
+    ]
+    if not writer_entries:
+        raise ValueError("mixed MoE segment produced no writer obligations")
+    helper = []
+    unpack = []
+    def writer_group_key(entry):
+        transition_index, side, op, name, _, _ = entry
+        return (transition_index, side, name if op == "FW_all2all_moe_gmm" else "")
+
+    group_keys = sorted({writer_group_key(entry) for entry in writer_entries})
+    for group_index, group_side, group_name in group_keys:
+        entries = [entry for entry in writer_entries
+                   if writer_group_key(entry) == (group_index, group_side, group_name)]
+        suffix = f"_{group_name}" if group_name else ""
+        writer_theorem = f"{segment.segment_id}_transition_{group_index:02d}_{group_side}{suffix}_writer_values"
+        if group_side == "sm":
+            helper.extend([
+                f"private theorem {writer_theorem} (smStore smFinal : Store)",
+                f"    (hsm : smFinal = ([{', '.join(sm_text)}] : List NodeDecl).foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore) :",
+                "    " + " ∧\n    ".join(result for _, _, _, _, result, _ in entries) + " := by",
+                "  subst smFinal",
+            ])
+        else:
+            helper.extend([
+                f"private theorem {writer_theorem} (pmStore pmFinal : Store)",
+                f"    (hpm : pmFinal = ([{', '.join(pm_text)}] : List NodeDecl).foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) :",
+                "    " + " ∧\n    ".join(result for _, _, _, _, result, _ in entries) + " := by",
+                "  subst pmFinal",
+            ])
+        for _, _, _, _, _, proof_lines in entries:
+            helper.extend((line.removeprefix("  ")).replace("smFinal", "smFold").replace("pmFinal", "pmFold") for line in proof_lines)
+        names = [name for _, _, _, name, _, _ in entries]
+        helper.extend([
+            (f"  exact {names[0]}" if len(names) == 1 else "  exact ⟨" + ", ".join(names) + "⟩"),
+            "",
+        ])
+        bundle = f"hWriterValues_{group_index:02d}_{group_side}{suffix}"
+        if group_side == "sm":
+            unpack.append(f"    have {bundle} := {writer_theorem} smStore smFinal (by rfl)")
+        else:
+            unpack.append(f"    have {bundle} := {writer_theorem} pmStore pmFinal (by rfl)")
+        for index, name in enumerate(names):
+            if len(names) == 1:
+                unpack.append(f"    have {name} := {bundle}")
+            else:
+                projection = ".2" * index + (".1" if index < len(names) - 1 else "")
+                unpack.append(f"    have {name} := {bundle}{projection}")
+    unpack_index = next(i for i, line in enumerate(lines) if line.startswith("    have hNormIn :"))
+    lines[unpack_index:unpack_index] = unpack
+
+    # Reset Lean's per-declaration heartbeat budget at the semantic midpoint
+    # without repeating either authority fold.  The prefix theorem consumes
+    # the one-fold frame and opaque writer equalities produced by main sound.
+    semantic_start = next(i for i, line in enumerate(lines) if line.startswith("    have hNormIn :"))
+    semantic_split = next(i for i, line in enumerate(lines) if line.startswith("    have hFact8 "))
+    prefix_outputs = [
+        (records[fact_spec], proved[records[fact_spec].fact_id])
+        for transition in transitions[:8]
+        for fact_spec in transition.post_facts
+    ]
+    prefix_name = f"{segment.segment_id}_sound_prefix"
+    prefix_semantic_source = "\n".join(lines[semantic_start:semantic_split])
+    prefix_writer_results = [
+        (name, result) for name, result in writer_results
+        if name in prefix_semantic_source
+    ]
+    prefix_lines = [
+        f"private theorem {prefix_name} (smFinal pmFinal : Store)",
+        f"    (hframe : {before.state_id}.Holds smFinal pmFinal)",
+    ]
+    if layout == "zigzag":
+        prefix_lines.append(
+            f"    (hDecodedCu : decodeCuSeqlens (pmFinal {metadata_tid}) = [0, {packed_cu.total_tokens}])")
+    for name, result in prefix_writer_results:
+        prefix_lines.append(f"    ({name} : {result})")
+    prefix_lines.extend([
+        "    : " + " ∧\n    ".join(
+            f"{fact.fact_id}.Holds smFinal pmFinal" for fact, _ in prefix_outputs
+        ) + " := by",
+        *lines[semantic_start:semantic_split],
+        "    exact ⟨" + ", ".join(name for _, name in prefix_outputs) + "⟩",
+        "",
+    ])
+    prefix_call = [
+        f"    have hPrefixFacts := {prefix_name} smFinal pmFinal hframe" +
+        (" hDecodedCu" if layout == "zigzag" else ""),
+    ]
+    for name, _ in prefix_writer_results:
+        prefix_call.append(f"      {name}")
+    for i, (_, name) in enumerate(prefix_outputs):
+        projection = ".2" * i + (".1" if i < len(prefix_outputs) - 1 else "")
+        prefix_call.append(f"    have {name} := hPrefixFacts{projection}")
+    lines[semantic_start:semantic_split] = prefix_call
+    return "\n".join(node_defs + helper + prefix_lines + lines)
+
+
 def render_closed_binary_segment(ir: GoalIR, relation, segment_id: str) -> str:
     chain = relation.dependent_chain_plan
     if chain is None or not chain.complete:
@@ -1016,7 +1673,8 @@ def render_closed_unary_segment(ir: GoalIR, relation, segment_id: str) -> str:
 
 def render_closed_linear_segment(ir: GoalIR, relation, segment_id: str) -> str:
     from .relation_compiler import (
-        FrontierLinearCertificate, FullProducerChunkCertificate,
+        FrontierLinearCertificate,
+        FullProducerChunkCertificate,
         PerHeadLinearRelationCertificate,
     )
     chain = relation.dependent_chain_plan
