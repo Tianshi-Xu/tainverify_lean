@@ -4,9 +4,11 @@ import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+import trainverify.bridge_emitter.composer as composer_module
 import trainverify.bridge_emitter.emit2 as emit2_module
 import trainverify.bridge_emitter.parser as parser_module
 from trainverify.bridge_emitter.composer import (
@@ -3467,6 +3469,93 @@ def test_closed_chain_composer_stops_at_first_unsupported_family(monkeypatch):
     relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
     with pytest.raises(ValueError, match="segment_000255.*faithful-maybe-shuffle-ordinary-to-zigzag-two-rank"):
         compose_closed_dependent_chain(ir, relation, "ClosedGoal1")
+
+def test_closed_chain_composer_assembles_complete_path_independently_of_renderers(monkeypatch):
+    anchor = SimpleNamespace(
+        fact_id="anchor_fact", kind="tensor_shape", side="sm", tid=7, shape=(1,)
+    )
+    states = tuple(
+        SimpleNamespace(state_id=f"state_{index:06d}", fact_ids=("anchor_fact",))
+        for index in range(3)
+    )
+    segments = (
+        SimpleNamespace(
+            segment_id="segment_concrete",
+            pre_state_id=states[0].state_id,
+            post_state_id=states[1].state_id,
+            transition_ids=("transition_concrete",),
+        ),
+        SimpleNamespace(
+            segment_id="segment_parameterized",
+            pre_state_id=states[1].state_id,
+            post_state_id=states[2].state_id,
+            transition_ids=("transition_parameterized",),
+        ),
+    )
+    chain = SimpleNamespace(
+        complete=True,
+        relation_facts=(),
+        authority_facts=(),
+        anchor_fact=anchor,
+        states=states,
+        segments=segments,
+    )
+    relation = SimpleNamespace(
+        dependent_chain_plan=chain,
+        transition_specs=(
+            SimpleNamespace(transition_id="transition_concrete", rule_id="synthetic-concrete"),
+            SimpleNamespace(transition_id="transition_parameterized", rule_id="synthetic-parameterized"),
+        ),
+    )
+    ir = SimpleNamespace(
+        sm_graph_ref="Synthetic.Graphs.smGraph",
+        pm_graph_ref="Synthetic.Graphs.pmGraph",
+        public_statement_module="Synthetic.Graphs",
+    )
+
+    rendered = {
+        "segment_concrete": (
+            "private def segment_concrete :\n"
+            "    ClosedDepSegmentCertificate Synthetic.Graphs.smGraph Synthetic.Graphs.pmGraph "
+            "state_000000 state_000001 := by\n"
+            "  exact syntheticConcreteCertificate\n"
+        ),
+        "segment_parameterized": (
+            "private def segment_parameterized\n"
+            "    (smGraph pmGraph : GraphDecl) :\n"
+            "    ClosedDepSegmentCertificate smGraph pmGraph state_000001 state_000002 := by\n"
+            "  exact syntheticParameterizedCertificate smGraph pmGraph\n"
+        ),
+    }
+    monkeypatch.setattr(
+        composer_module,
+        "render_closed_segment",
+        lambda _ir, _relation, segment_id: rendered[segment_id],
+    )
+
+    source = compose_closed_dependent_chain(ir, relation, "SyntheticClosedChain")
+
+    assert source.startswith(
+        "/- AUTO-GENERATED closed relation state universe. -/\n"
+        "import denote.RelationCompiler\n"
+        "import Synthetic.Graphs\n"
+    )
+    assert source.count("namespace TrainVerify.Denote.SyntheticClosedChain") == 1
+    assert source.rstrip().endswith("end\nend TrainVerify.Denote.SyntheticClosedChain")
+    assert source.index("private def segment_concrete") < source.index(
+        "end TrainVerify.Denote.SyntheticClosedChain"
+    )
+    assert "ClosedDepCertificateChain Synthetic.Graphs.smGraph Synthetic.Graphs.pmGraph state_000002 state_000002" in source
+    assert "ClosedDepCertificateChain Synthetic.Graphs.smGraph Synthetic.Graphs.pmGraph state_000001 state_000002" in source
+    assert "ClosedDepCertificateChain Synthetic.Graphs.smGraph Synthetic.Graphs.pmGraph state_000000 state_000002" in source
+    assert "  .cons segment_concrete SyntheticClosedChain_suffix_000001" in source
+    assert (
+        "  .cons segment_parameterized Synthetic.Graphs.smGraph Synthetic.Graphs.pmGraph "
+        "SyntheticClosedChain_suffix_000002"
+    ) in source
+    assert "theorem SyntheticClosedChain_chain_sm_nodes : SyntheticClosedChain_chain.smNodes = Synthetic.Graphs.smGraph.nodes := by\n  native_decide" in source
+    assert "theorem SyntheticClosedChain_chain_pm_nodes : SyntheticClosedChain_chain.pmNodes = Synthetic.Graphs.pmGraph.nodes := by\n  native_decide" in source
+
 
 def test_closed_rotary_renderer_is_two_output_and_uses_1d_generic_theorem(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")

@@ -6,6 +6,7 @@ is derived from GoalIR; no model or layer identifiers are embedded here.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 
@@ -2577,17 +2578,41 @@ def compose_closed_dependent_chain(
             raise ValueError(
                 f"closed chain stopped at {segment.segment_id} family {family!r}: {exc}"
             ) from exc
-        concrete_graphs = (
-            family
-            and (
-                family[0] == "hidden-sharded-embedding-alltoall-ordinary-two-rank"
-                or len(family) == 16
-                or family == ("attention-ordinary-qkv-two-rank",)
-            )
+        escaped_segment_id = re.escape(segment.segment_id)
+        parameterized = re.search(
+            rf"private(?: noncomputable)? def {escaped_segment_id}\s+"
+            r"\(smGraph pmGraph : GraphDecl\)\s*:",
+            source,
         )
-        rendered.append((segment, source, bool(concrete_graphs)))
+        concrete = re.search(
+            rf"private(?: noncomputable)? def {escaped_segment_id}\s*:",
+            source,
+        )
+        if bool(parameterized) == bool(concrete):
+            raise ValueError(
+                f"closed segment {segment.segment_id} must declare exactly one concrete "
+                "or graph-parameterized certificate"
+            )
+        rendered.append((segment, source, bool(concrete)))
 
+    if not re.fullmatch(
+        r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)*",
+        ir.public_statement_module,
+    ):
+        raise ValueError(
+            f"invalid closed chain graph module: {ir.public_statement_module!r}"
+        )
     declarations = render_closed_relation_declarations(chain, namespace)
+    relation_import = "import denote.RelationCompiler\n"
+    if not declarations.startswith(
+        "/- AUTO-GENERATED closed relation state universe. -/\n" + relation_import
+    ):
+        raise ValueError("closed relation declarations have an unexpected import boundary")
+    declarations = declarations.replace(
+        relation_import,
+        relation_import + f"import {ir.public_statement_module}\n",
+        1,
+    )
     marker = f"\nend\nend TrainVerify.Denote.{namespace}\n"
     if not declarations.endswith(marker):
         raise ValueError("closed relation declarations have an unexpected namespace boundary")
