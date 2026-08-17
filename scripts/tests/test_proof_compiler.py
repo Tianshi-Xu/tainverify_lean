@@ -3482,6 +3482,76 @@ def test_moe_weight_gather_authority_is_live_at_atomic_consumer(monkeypatch):
         assert all(fact.dim == 0 for fact in expected)
 
 
+def test_final_zigzag_certificate_consumers_keep_exact_metadata_authority_live(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    chain = relation.dependent_chain_plan
+    assert chain is not None
+    states = {state.state_id: set(state.fact_ids) for state in chain.states}
+    transitions = {transition.transition_id: transition for transition in relation.transition_specs}
+    authority = {fact.fact_id: fact for fact in chain.authority_facts}
+
+    mixed = next(segment for segment in chain.segments if any(
+        transitions[tid].rule_id == "zigzag-full-moe-expert-split-two-rank"
+        for tid in segment.transition_ids
+    ) and segment.segment_id == "segment_000479")
+    unshuffle = next(segment for segment in chain.segments if any(
+        transitions[tid].rule_id == "zigzag-to-ordinary-unshuffle-two-rank"
+        for tid in segment.transition_ids
+    ) and segment.segment_id == "segment_000485")
+
+    for segment in (mixed, unshuffle):
+        live = [authority[fact_id] for fact_id in states[segment.pre_state_id] if fact_id in authority]
+        packed = [fact for fact in live if fact.kind == "packed_cu"]
+        assert len(packed) == 1
+        assert any(
+            fact.kind == "tensor_eq"
+            and fact.left_side == "pm"
+            and fact.right_side == "pm"
+            and fact.right_tid == packed[0].tid
+            for fact in live
+        )
+
+    assert not any(
+        authority[fact_id].kind == "packed_cu"
+        for fact_id in states[unshuffle.post_state_id]
+        if fact_id in authority
+    )
+
+
+def test_terminal_ce_consumer_keeps_ordinary_rms_relation_live(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+    ir = load_goal_ir(1, str(root))
+    relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
+    chain = relation.dependent_chain_plan
+    assert chain is not None
+    transitions = {transition.transition_id: transition for transition in relation.transition_specs}
+    states = {state.state_id: set(state.fact_ids) for state in chain.states}
+    records = {record.source: record for record in chain.relation_facts}
+    ce_segment = next(segment for segment in chain.segments if any(
+        transitions[tid].rule_id == "inner-chunk-ce-projection-gather-two-rank"
+        for tid in segment.transition_ids
+    ))
+    ce_transition = next(
+        transitions[tid] for tid in ce_segment.transition_ids
+        if transitions[tid].rule_id == "inner-chunk-ce-projection-gather-two-rank"
+    )
+    assert len(ce_transition.pre_facts) == 1
+    input_record = records[ce_transition.pre_facts[0]]
+    assert input_record.kind == "ordinary"
+    assert input_record.fact_id in states[ce_segment.pre_state_id]
+    rms_segment = chain.segments[chain.segments.index(ce_segment) - 1]
+    assert input_record.fact_id in states[rms_segment.post_state_id]
+    assert render_closed_rms_norm_segment(ir, relation, rms_segment.segment_id)
+
+
 def test_ordinary_pointwise_transitions_use_closed_relation_wrappers(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
     monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")

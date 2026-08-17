@@ -47,6 +47,7 @@ class InnerChunkCEGatherCertificate:
     sm_ce_step: str
     pm_ce_steps: tuple[str, str]
     pm_gather_step: str
+    input_step_triple: tuple[str, str, str]
 
 
 def match_inner_chunk_ce_projection_gather_two_rank(
@@ -94,6 +95,11 @@ def match_inner_chunk_ce_projection_gather_two_rank(
         raise RelationCompositionError("CE signature is not ternary")
     if any(step.input_tids[1] != sm_ce.input_tids[1] for step in pm_ce):
         raise RelationCompositionError("CE weight is not shared across SM and PM")
+    input_step_triple = (
+        sm_ce.input_bindings[0], pm_ce[0].input_bindings[0], pm_ce[1].input_bindings[0]
+    )
+    if any(binding.startswith("init:") for binding in input_step_triple):
+        raise RelationCompositionError("CE activation input relation is not produced")
     if len(ir.lineage.tsShape) != 1:
         raise RelationCompositionError("CE output lineage is not rank-1")
     full_rows = int(ir.lineage.tsShape[0])
@@ -118,6 +124,7 @@ def match_inner_chunk_ce_projection_gather_two_rank(
         sm_ce_step=sm_ce.step_id,
         pm_ce_steps=(pm_ce[0].step_id, pm_ce[1].step_id),
         pm_gather_step=pm_gather.step_id,
+        input_step_triple=input_step_triple,
     )
 
 
@@ -3559,14 +3566,12 @@ def build_closed_dependent_chain_plan(
     components = {item.component_id: item for item in schedule.components}
     transition_order = {item: index for index, item in enumerate(dependency.order)}
     ordered_components = [components[item] for item in schedule.order]
-    shuffle_indices = [
-        index for index, component in enumerate(ordered_components)
-        if any(
-            any(fact.layout == "ordinary" for fact in transition_by_id[tid].pre_facts)
-            and any(fact.layout == "zigzag" for fact in transition_by_id[tid].post_facts)
-            for tid in component.transition_ids
-        )
-    ]
+    packed_region_tids = {
+        region.contract_metadata_tid: {
+            region.contract_metadata_tid, *region.alias_tids,
+        }
+        for region in relation.zigzag_regions
+    }
     authority_last_use = {}
     for fact in authority_facts:
         if fact.kind == "tensor_eq":
@@ -3585,7 +3590,26 @@ def build_closed_dependent_chain_plan(
             if any(tid in (sm_inputs if side == "sm" else pm_inputs) for side, tid in side_tids):
                 uses.append(index)
         if fact.kind == "packed_cu":
-            uses.extend(shuffle_indices)
+            aliases = packed_region_tids.get(fact.tid)
+            if aliases is None:
+                raise RelationCompositionError(
+                    f"packed-cu authority lacks one metadata region: {fact.tid}"
+                )
+            for index, component in enumerate(ordered_components):
+                sources = [
+                    source
+                    for transition_id in component.transition_ids
+                    for source in (
+                        *transition_by_id[transition_id].pre_facts,
+                        *transition_by_id[transition_id].post_facts,
+                    )
+                ]
+                if any(
+                    record_by_source[source].kind == "zigzag"
+                    and record_by_source[source].metadata_tid in aliases
+                    for source in sources
+                ):
+                    uses.append(index)
         authority_last_use[fact.fact_id] = max(uses, default=0)
     live = {anchor.fact_id, *(item.fact_id for item in authority_facts)}
     available_sources = set()
@@ -3803,7 +3827,7 @@ def build_certificate_transition_specs(
             )
         elif type(cert) is InnerChunkCEGatherCertificate:
             post_refs = (cert.sm_ce_step, *tuple(cert.pm_ce_steps))
-            pre = ()
+            pre = (_fact("ordinary", cert.input_step_triple),)
             post = (_fact("ordinary", post_refs),)
             footprint_groups = ((cert.sm_ce_step,), tuple(cert.pm_ce_steps), (cert.pm_gather_step,))
         elif type(cert) is IndexedStackGatherCertificate:
