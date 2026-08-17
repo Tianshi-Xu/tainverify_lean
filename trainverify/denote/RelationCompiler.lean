@@ -738,10 +738,30 @@ def StoreSide.read (side : StoreSide) (sm pm : Store) : Store :=
   | .sm => sm
   | .pm => pm
 
+/-- Truthful closed relation for a stack of ordered dim-0 source relations
+whose rank-local stacks reconstruct the full stack along dimension 1. -/
+structure IndexedStack2Rel (full rank0 rank1 : Tensor)
+    (sources : List (Tensor × Tensor × Tensor))
+    (gatherDim : Nat) (fullShape shardShape : Shape) : Prop where
+  gather_dim : gatherDim = 1
+  full_value : full = allGatherPrimDimN gatherDim 2 0 [rank0, rank1]
+  full_shape : full.shape = fullShape
+  rank0_shape : rank0.shape = shardShape
+  rank1_shape : rank1.shape = shardShape
+  full_stack : full = fw_stack (sources.map fun source => source.1)
+  rank0_stack : rank0 = fw_stack (sources.map fun source => source.2.1)
+  rank1_stack : rank1 = fw_stack (sources.map fun source => source.2.2)
+  source_relations : ∀ source ∈ sources,
+    GeneratedPatterns.Ordinary2Rel source.1 source.2.1 source.2.2
+      fullShape.tail shardShape.tail
+
 inductive RelationFact where
   | ordinary (smTid pmRank0Tid pmRank1Tid : Tid) (fullShape shardShape : Shape)
   | zigzag (smTid pmRank0Tid pmRank1Tid metadataTid : Tid) (fullShape shardShape : Shape)
   | gather (smTid pmRank0Tid pmRank1Tid dim : Tid) (fullShape shardShape : Shape)
+  | indexedStack (smTid pmRank0Tid pmRank1Tid : Tid)
+      (sourceTids : List (Tid × Tid × Tid)) (gatherDim : Nat)
+      (fullShape shardShape : Shape)
   | tensorEq (leftSide : StoreSide) (leftTid : Tid) (rightSide : StoreSide) (rightTid : Tid)
   | tensorShape (side : StoreSide) (tid : Tid) (shape : Shape)
   | packedCu (side : StoreSide) (tid : Tid) (totalTokens numRanks : Nat)
@@ -762,6 +782,10 @@ def RelationFact.Holds (fact : RelationFact) (sm pm : Store) : Prop :=
       sm smTid = allGatherPrimDimN dim 2 0 [pm pmRank0Tid, pm pmRank1Tid] ∧
       (sm smTid).shape = fullShape ∧
       (pm pmRank0Tid).shape = shardShape ∧ (pm pmRank1Tid).shape = shardShape
+  | .indexedStack smTid pmRank0Tid pmRank1Tid sourceTids gatherDim fullShape shardShape =>
+      IndexedStack2Rel (sm smTid) (pm pmRank0Tid) (pm pmRank1Tid)
+        (sourceTids.map fun tids => (sm tids.1, pm tids.2.1, pm tids.2.2))
+        gatherDim fullShape shardShape
   | .tensorEq leftSide leftTid rightSide rightTid =>
       leftSide.read sm pm leftTid = rightSide.read sm pm rightTid
   | .tensorShape side tid shape =>
@@ -978,6 +1002,8 @@ def smTids : RelationFact → List Tid
   | .ordinary smTid _ _ _ _ => [smTid]
   | .zigzag smTid _ _ _ _ _ => [smTid]
   | .gather smTid _ _ _ _ _ => [smTid]
+  | .indexedStack smTid _ _ sourceTids _ _ _ =>
+      smTid :: sourceTids.map (fun tids => tids.1)
   | .tensorEq leftSide leftTid rightSide rightTid =>
       (if leftSide = .sm then [leftTid] else []) ++
       (if rightSide = .sm then [rightTid] else [])
@@ -990,6 +1016,8 @@ def pmTids : RelationFact → List Tid
   | .ordinary _ pm0 pm1 _ _ => [pm0, pm1]
   | .zigzag _ pm0 pm1 metadataTid _ _ => [pm0, pm1, metadataTid]
   | .gather _ pm0 pm1 _ _ _ => [pm0, pm1]
+  | .indexedStack _ pm0 pm1 sourceTids _ _ _ =>
+      pm0 :: pm1 :: sourceTids.flatMap (fun tids => [tids.2.1, tids.2.2])
   | .tensorEq leftSide leftTid rightSide rightTid =>
       (if leftSide = .pm then [leftTid] else []) ++
       (if rightSide = .pm then [rightTid] else [])
@@ -1004,19 +1032,56 @@ theorem Holds.frame {fact : RelationFact} {sm pm sm' pm' : Store}
     (hsm : ∀ tid ∈ fact.smTids, sm' tid = sm tid)
     (hpm : ∀ tid ∈ fact.pmTids, pm' tid = pm tid) :
     fact.Holds sm' pm' := by
-  cases fact <;> simp only [Holds, smTids, pmTids, StoreSide.read] at h hsm hpm ⊢
-  · rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
-    exact h
-  · rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
-    exact h
-  · rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
-    exact h
-  · split <;> split <;> simp_all
-  · split <;> simp_all
-  · split <;> simp_all
-  · split <;> simp_all
-  · rw [hpm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
-    exact h
+  cases fact with
+  | ordinary smTid pm0 pm1 fullShape shardShape =>
+      simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
+      rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
+      exact h
+  | zigzag smTid pm0 pm1 metadataTid fullShape shardShape =>
+      simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
+      rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
+      exact h
+  | gather smTid pm0 pm1 dim fullShape shardShape =>
+      simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
+      rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
+      exact h
+  | indexedStack smTid pm0 pm1 sourceTids gatherDim fullShape shardShape =>
+      simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
+      have hsources :
+          sourceTids.map (fun tids => (sm' tids.1, pm' tids.2.1, pm' tids.2.2)) =
+            sourceTids.map (fun tids => (sm tids.1, pm tids.2.1, pm tids.2.2)) := by
+        apply List.map_congr_left
+        intro tids htids
+        have hsmMem : tids.1 ∈ smTid :: sourceTids.map (fun item => item.1) := by
+          right
+          exact List.mem_map.mpr ⟨tids, htids, rfl⟩
+        have hpm0Mem : tids.2.1 ∈
+            pm0 :: pm1 :: sourceTids.flatMap (fun item => [item.2.1, item.2.2]) := by
+          simp only [List.mem_cons, List.mem_flatMap]
+          exact Or.inr (Or.inr ⟨tids, htids, by simp⟩)
+        have hpm1Mem : tids.2.2 ∈
+            pm0 :: pm1 :: sourceTids.flatMap (fun item => [item.2.1, item.2.2]) := by
+          simp only [List.mem_cons, List.mem_flatMap]
+          exact Or.inr (Or.inr ⟨tids, htids, by simp⟩)
+        rw [hsm _ hsmMem, hpm _ hpm0Mem, hpm _ hpm1Mem]
+      rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp), hsources]
+      exact h
+  | tensorEq leftSide leftTid rightSide rightTid =>
+      simp only [Holds, smTids, pmTids, StoreSide.read] at h hsm hpm ⊢
+      split <;> split <;> simp_all
+  | tensorShape side tid shape =>
+      simp only [Holds, smTids, pmTids, StoreSide.read] at h hsm hpm ⊢
+      split <;> simp_all
+  | packedCu side tid totalTokens numRanks =>
+      simp only [Holds, smTids, pmTids, StoreSide.read] at h hsm hpm ⊢
+      split <;> simp_all
+  | labelBound side tid length upperBound =>
+      simp only [Holds, smTids, pmTids, StoreSide.read] at h hsm hpm ⊢
+      split <;> simp_all
+  | labelChunks fullTid rank0Tid rank1Tid dim fullShape shardShape =>
+      simp only [Holds, smTids, pmTids, StoreSide.read] at h hsm hpm ⊢
+      rw [hpm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
+      exact h
 
 end RelationFact
 

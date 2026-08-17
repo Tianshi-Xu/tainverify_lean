@@ -3086,6 +3086,8 @@ class RelationFactSpec:
 
     layout: str
     step_triple: tuple[str, ...]
+    gather_dim: int | None = None
+    source_step_triples: tuple[tuple[str, str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -3100,6 +3102,8 @@ class ClosedRelationFactRecord:
     metadata_region_id: int | None
     full_shape: tuple[int, ...]
     shard_shape: tuple[int, ...]
+    gather_dim: int | None = None
+    source_tid_triples: tuple[tuple[int, int, int], ...] = ()
 
 
 def materialize_closed_relation_facts(
@@ -3210,6 +3214,7 @@ def materialize_closed_relation_facts(
             )
         metadata_tid = None
         metadata_region_id = None
+        source_tid_triples = ()
         if fact.layout == "zigzag":
             region = region_by_frontier.get(fact.step_triple)
             if region is None:
@@ -3226,8 +3231,35 @@ def materialize_closed_relation_facts(
                     f"zigzag metadata tid is outside its public alias region: {metadata_tid}"
                 )
             metadata_region_id = region.region_id
+        elif fact.layout == "indexed_stack_dim1":
+            if fact.gather_dim != 1 or not fact.source_step_triples:
+                raise RelationCompositionError(
+                    "indexed-stack fact must carry gather dimension 1 and nonempty ordered sources"
+                )
+            if len(full_shape) != 3 or len(shard0_shape) != 3:
+                raise RelationCompositionError("indexed-stack outputs must have rank-3 shapes")
+            if full_shape[0] != len(fact.source_step_triples) or shard0_shape[0] != len(fact.source_step_triples):
+                raise RelationCompositionError("indexed-stack source count disagrees with output shapes")
+            if full_shape[1] != 2 * shard0_shape[1] or full_shape[2] != shard0_shape[2]:
+                raise RelationCompositionError("indexed-stack output shapes are not a truthful dim-1 gather")
+            source_tid_triples = []
+            for source_triple in fact.source_step_triples:
+                source_sm_tid, source_full_shape = resolve(source_triple[0], "sm")
+                source_pm0_tid, source_shard0_shape = resolve(source_triple[1], "pm")
+                source_pm1_tid, source_shard1_shape = resolve(source_triple[2], "pm")
+                if source_shard0_shape != source_shard1_shape:
+                    raise RelationCompositionError("indexed-stack source shard shapes disagree")
+                if source_full_shape != full_shape[1:] or source_shard0_shape != shard0_shape[1:]:
+                    raise RelationCompositionError(
+                        "indexed-stack source shapes do not reconstruct the declared output tails"
+                    )
+                source_tid_triples.append((source_sm_tid, source_pm0_tid, source_pm1_tid))
+            source_tid_triples = tuple(source_tid_triples)
         elif fact.layout not in {"ordinary", "label_chunks"}:
             raise RelationCompositionError(f"unsupported closed relation layout: {fact.layout}")
+        else:
+            source_tid_triples = ()
+
         result.append(ClosedRelationFactRecord(
             fact_id=f"fact_{ordinal:06d}",
             source=fact,
@@ -3239,6 +3271,8 @@ def materialize_closed_relation_facts(
             metadata_region_id=metadata_region_id,
             full_shape=full_shape,
             shard_shape=shard0_shape,
+            gather_dim=fact.gather_dim,
+            source_tid_triples=source_tid_triples,
         ))
     return tuple(result)
 
@@ -4008,12 +4042,14 @@ def build_certificate_transition_specs(
                 raise RelationCompositionError("CE .snd transition lacks its label-independence adapter")
             footprint_groups = ((cert.sm_ce_step,), tuple(cert.pm_ce_steps), (cert.pm_gather_step,))
         elif type(cert) is IndexedStackGatherCertificate:
-            # This internal fact supports dependency/coverage analysis only.  The
-            # RelationPlan carries a mandatory publication diagnostic below: the
-            # dim-1 stack theorem is not an Ordinary2Rel constructor.
             pre = tuple(_fact("ordinary", refs) for refs in cert.layer_step_triples)
             post_refs = (cert.sm_stack_step, *tuple(cert.pm_stack_steps))
-            post = (_fact("ordinary", post_refs),)
+            post = (RelationFactSpec(
+                "indexed_stack_dim1",
+                post_refs,
+                gather_dim=1,
+                source_step_triples=cert.layer_step_triples,
+            ),)
             footprint_groups = (
                 (cert.sm_stack_step,), tuple(cert.pm_stack_steps), (cert.pm_gather_step,)
             )
@@ -4758,11 +4794,6 @@ def compile_relation_plan(
             coverage_plan=coverage_plan,
             dependency_plan=dependency_plan,
             atomic_schedule=atomic_schedule,
-            publication_diagnostics=(
-                ("indexed-stack-dim1 cannot publish Ordinary2Rel: a distinct closed relation "
-                "kind must record full/shard shapes plus gather dimension 1 and an indexed "
-                "per-layer reconstruction witness"),
-            ),
         )
         if unresolved_frontiers or unresolved_layouts or unresolved_side_conditions:
             return base_plan

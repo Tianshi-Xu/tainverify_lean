@@ -2890,13 +2890,39 @@ def test_indexed_stack_terminal_refuses_false_ordinary_dim0_publication(monkeypa
     proof = compile_proof_plan(ir, build_default_registry())
     relation = compile_relation_plan(ir, proof)
 
-    assert relation.complete is False
-    assert relation.composer_registered is False
-    assert relation.publication_diagnostics == (
-        ("indexed-stack-dim1 cannot publish Ordinary2Rel: a distinct closed relation "
-        "kind must record full/shard shapes plus gather dimension 1 and an indexed "
-        "per-layer reconstruction witness"),
+    terminal = next(
+        transition for transition in relation.transition_specs
+        if transition.rule_id == "indexed-stack-gather-two-rank"
     )
+    assert len(terminal.post_facts) == 1
+    target = terminal.post_facts[0]
+    assert target.layout == "indexed_stack_dim1"
+    assert target.gather_dim == 1
+    assert len(target.source_step_triples) == 24
+    assert all(len(triple) == 3 for triple in target.source_step_triples)
+    assert target not in {
+        RelationFactSpec("ordinary", target.step_triple),
+        RelationFactSpec("gather", target.step_triple),
+    }
+    assert relation.publication_diagnostics == ()
+    assert relation.dependent_chain_plan is not None
+    materialized = {
+        fact.source: fact for fact in relation.dependent_chain_plan.relation_facts
+    }[target]
+    assert materialized.kind == "indexed_stack_dim1"
+    assert materialized.gather_dim == 1
+    assert len(materialized.source_tid_triples) == 24
+    assert materialized.full_shape == (24, 4096, 64)
+    assert materialized.shard_shape == (24, 2048, 64)
+    source = render_closed_relation_declarations(
+        relation.dependent_chain_plan, "GeneratedIndexedStackFixture"
+    )
+    declaration = source.split(
+        f"private def {materialized.fact_id} : RelationFact :=", 1
+    )[1].split("\n\n", 1)[0]
+    assert ".indexedStack" in declaration
+    assert ".ordinary" not in declaration
+    assert declaration.count("(") >= 24
 
 
 def test_transition_dependency_plan_is_forward_unique_and_cycle_free(monkeypatch):

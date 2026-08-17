@@ -511,6 +511,18 @@ def render_closed_relation_declarations(chain, namespace: str) -> str:
                 f"{fact.metadata_tid} {shape_text(fact.full_shape)} "
                 f"{shape_text(fact.shard_shape)}"
             )
+        elif fact.kind == "indexed_stack_dim1":
+            if fact.gather_dim != 1 or not fact.source_tid_triples:
+                raise ValueError(f"indexed-stack fact is not closed: {fact.fact_id}")
+            sources = "[" + ", ".join(
+                f"({sm_tid}, {pm0_tid}, {pm1_tid})"
+                for sm_tid, pm0_tid, pm1_tid in fact.source_tid_triples
+            ) + "]"
+            constructor = (
+                f".indexedStack {fact.sm_tid} {fact.pm_rank0_tid} {fact.pm_rank1_tid} "
+                f"{sources} {fact.gather_dim} {shape_text(fact.full_shape)} "
+                f"{shape_text(fact.shard_shape)}"
+            )
         else:
             raise ValueError(f"unsupported closed relation fact: {fact.kind}")
         lines.extend([
