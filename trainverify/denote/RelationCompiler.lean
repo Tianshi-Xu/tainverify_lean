@@ -103,6 +103,84 @@ theorem Ordinary2Rel.toGather2Rel
     nonscalar := hnonscalar
   }
 
+/-- Faithful maybe-shuffle converts ordinary source shards to a zigzag relation. -/
+theorem Ordinary2Rel.to_zigzag_shuffle
+    (gSM gPM : GraphDecl) (sSM sPM : Store)
+    (nSM n0 n1 : NodeDecl) (cu : Tensor)
+    {full source0 source1 : Tensor} {fullShape shardShape : Shape}
+    (h : GeneratedPatterns.Ordinary2Rel full source0 source1 fullShape shardShape)
+    (hcu : ZigzagCollective.PackedCuSeqlensWF cu (shardShape.getD 0 0 * 2) 2)
+    (hbuddySM : gSM.replicaBuddies nSM = [nSM])
+    (hbuddy0 : gPM.replicaBuddies n0 = [n0, n1])
+    (hbuddy1 : gPM.replicaBuddies n1 = [n0, n1])
+    (hsmData : sSM (nSM.ins.getD 0 0) = full)
+    (hp0Data : sPM (n0.ins.getD 0 0) = source0)
+    (hp1Data : sPM (n1.ins.getD 0 0) = source1)
+    (hp0Cu : sPM (n0.ins.getD 1 0) = cu)
+    (hp1Cu : sPM (n1.ins.getD 1 0) = cu)
+    (hshard : shardShape ≠ [])
+    (hsmParams : nSM.params = [1, 0])
+    (hp0Params : n0.params = [2, 0])
+    (hp1Params : n1.params = [2, 1]) :
+    GeneratedPatterns.Zigzag2Rel
+      (applyNodeFaithfulShuffleValue gSM sSM nSM)
+      (applyNodeFaithfulShuffleValue gPM sPM n0)
+      (applyNodeFaithfulShuffleValue gPM sPM n1)
+      cu fullShape shardShape := by
+  apply GeneratedPatterns.Zigzag2Rel.of_sources source0 source1
+  · rw [applyNodeFaithfulShuffleValue_cpSize_one gSM sSM nSM hbuddySM]
+    · rw [hsmData]
+      exact h.full_value
+    · rw [hsmParams]
+      decide
+    · rw [hsmParams]
+      decide
+  · have hp0Data' := hp0Data
+    have hp1Data' := hp1Data
+    have hp0Cu' := hp0Cu
+    simp only [List.getD] at hp0Data' hp1Data' hp0Cu'
+    unfold applyNodeFaithfulShuffleValue
+    rw [hbuddy0, hp0Params]
+    simp only [List.map, List.getD, List.getElem?_cons_zero,
+      List.getElem?_cons_succ, Option.getD_some]
+    rw [hp0Data', hp1Data', hp0Cu']
+  · have hp0Data' := hp0Data
+    have hp1Data' := hp1Data
+    have hp1Cu' := hp1Cu
+    simp only [List.getD] at hp0Data' hp1Data' hp1Cu'
+    unfold applyNodeFaithfulShuffleValue
+    rw [hbuddy1, hp1Params]
+    simp only [List.map, List.getD, List.getElem?_cons_zero,
+      List.getElem?_cons_succ, Option.getD_some]
+    rw [hp0Data', hp1Data', hp1Cu']
+  · rw [applyNodeFaithfulShuffleValue_cpSize_one gSM sSM nSM hbuddySM]
+    · rw [hsmData]
+      exact h.full_shape
+    · rw [hsmParams]
+      decide
+    · rw [hsmParams]
+      decide
+  · exact h.rank0_shape
+  · exact h.rank1_shape
+  · apply hcu.toZigzagCuWF
+    · rfl
+    · intro x hx
+      simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+      rcases hx with hx | hx
+      · rw [hx, h.rank0_shape]
+        exact hshard
+      · rw [hx, h.rank1_shape]
+        exact hshard
+    · intro x hx
+      have hhead : ([source0, source1].getD 0 (zeroTensor [])) = source0 := rfl
+      simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+      rcases hx with hx | hx
+      · rw [hx, hhead]
+      · rw [hx, hhead]
+        rw [h.rank1_shape, h.rank0_shape]
+    · change source0.shape.getD 0 0 * 2 = shardShape.getD 0 0 * 2
+      rw [h.rank0_shape]
+
 /-- Sliding-window buddy reconstruction packaged as an ordinary relation. -/
 theorem Ordinary2Rel.sliding_attention
     (gSM gPM : GraphDecl) (sSM sPM : Store)
