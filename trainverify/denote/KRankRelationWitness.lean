@@ -9,6 +9,8 @@ open TrainVerify.Denote.RelationCompiler
 #check ReplicatedRel.replica_values
 #check ShardedRel.full_value
 #check ShardedRel.shards_nonempty
+#check ShardedRel.gather_dim_lt
+#check ShardedRel.shape_contract
 #check ShardedRel.shard_shapes
 
 example (sm pm : Store) (smTid : Tid) (pmTids : List Tid)

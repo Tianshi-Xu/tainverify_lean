@@ -776,7 +776,11 @@ structure ShardedRel (full : Tensor) (shards : List Tensor)
   full_value : full = allGatherPrimDimN gatherDim shards.length 0 shards
   full_shape : full.shape = fullShape
   shards_nonempty : shards ≠ []
+  gather_dim_lt : gatherDim < shardShape.length
   shard_shapes : ∀ shard ∈ shards, shard.shape = shardShape
+  shape_contract :
+    fullShape = shardShape.set gatherDim
+      (shardShape.getD gatherDim 0 * shards.length)
 
 /-- Rank-count-polymorphic replication relation. The ordered replica list is
     authority: every PM value equals the SM value and has the same shape. -/
