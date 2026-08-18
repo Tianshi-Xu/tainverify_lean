@@ -4095,6 +4095,121 @@ def advance_k_rank_matmul_head_axis_frontiers(
 
 
 @dataclass(frozen=True)
+class KRankMatmulQueryAxisCertificate:
+    rule_id: str
+    rank_count: int
+    output_gather_dim: int
+    first_operand_fact: RelationFactSpec
+    second_operand_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    sm_step_id: str
+    pm_step_ids: tuple[str, ...]
+    first_operand_full_shape: tuple[int, ...]
+    first_operand_shard_shape: tuple[int, ...]
+    second_operand_shape: tuple[int, ...]
+    output_full_shape: tuple[int, ...]
+    output_shard_shape: tuple[int, ...]
+    lean_theorem: str
+
+
+def advance_k_rank_matmul_query_axis_frontiers(
+    plan: ProofPlan,
+    frontiers: tuple[tuple[str, ...], ...],
+    layouts: tuple[str, ...],
+) -> tuple[tuple[KRankMatmulQueryAxisCertificate, ...], tuple[tuple[str, ...], ...], tuple[str, ...]]:
+    """Pull dim-2 rank-4 matmul outputs to dim-2-sharded X and joined/shared Y."""
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("K-rank query-axis matmul frontier/layout arity mismatch")
+    by_id = {step.step_id: step for step in plan.steps}
+    certificates, rewritten, rewritten_layouts = [], [], []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "sharded" or len(frontier) < 3:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        try:
+            sm_step = by_id[frontier[0]]
+            pm_steps = tuple(by_id[ref] for ref in frontier[1:])
+        except KeyError:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        if sm_step.op != "FW_matmul" or any(step.op != "FW_matmul" for step in pm_steps):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        rank_count = len(pm_steps)
+        if sm_step.side != "sm" or int(sm_step.rank) != 0 or any(step.side != "pm" for step in pm_steps):
+            raise RelationCompositionError("K-rank query-axis matmul writers have incompatible side/rank authority")
+        if tuple(int(step.rank) for step in pm_steps) != tuple(range(rank_count)):
+            raise RelationCompositionError("K-rank query-axis matmul PM writers are not exact ordered ranks")
+        writers = (sm_step, *pm_steps)
+        if any(tuple(step.parameters) for step in writers):
+            raise RelationCompositionError("K-rank query-axis FW_matmul writers must declare no parameters")
+        if any(len(step.input_bindings) != 2 for step in writers):
+            raise RelationCompositionError("K-rank query-axis FW_matmul writer input arity mismatch")
+        if any(len(step.input_shapes) != 2 for step in writers):
+            raise RelationCompositionError("K-rank query-axis FW_matmul declared input shapes are missing")
+        sm_x_ref, sm_y_ref = sm_step.input_bindings
+        pm_x_refs = tuple(step.input_bindings[0] for step in pm_steps)
+        pm_y_refs = tuple(step.input_bindings[1] for step in pm_steps)
+        if len(set(pm_y_refs)) != 1:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        out_full_shape = tuple(sm_step.output_shape)
+        out_shard_shapes = tuple(tuple(step.output_shape) for step in pm_steps)
+        if (len(out_full_shape) != 4 or not out_shard_shapes
+                or any(len(shape) != 4 or shape != out_shard_shapes[0] for shape in out_shard_shapes)):
+            raise RelationCompositionError("K-rank query-axis matmul outputs must have exact equal rank-4 shard shapes")
+        out_shard_shape = out_shard_shapes[0]
+        expected_out = list(out_shard_shape); expected_out[2] *= rank_count
+        if tuple(expected_out) != out_full_shape:
+            raise RelationCompositionError("K-rank query-axis matmul output is not an exact dim2 sharding")
+        try:
+            sm_x = by_id[sm_x_ref]
+            pm_xs = tuple(by_id[ref] for ref in pm_x_refs)
+            sm_y, pm_y = by_id[sm_y_ref], by_id[pm_y_refs[0]]
+        except KeyError as exc:
+            raise RelationCompositionError("K-rank query-axis matmul input authority is unresolved") from exc
+        if sm_x.side != "sm" or any(step.side != "pm" for step in pm_xs):
+            raise RelationCompositionError("K-rank query-axis matmul first operand has wrong-side authority")
+        if tuple(int(step.rank) for step in pm_xs) != tuple(range(rank_count)):
+            raise RelationCompositionError("K-rank query-axis matmul first-operand shards are not exact ordered ranks")
+        if sm_y.side != "sm" or pm_y.side != "pm":
+            raise RelationCompositionError("K-rank query-axis matmul second operand lacks joined SM/PM authority")
+        x_full_shape = tuple(sm_x.output_shape)
+        x_shard_shapes = tuple(tuple(step.output_shape) for step in pm_xs)
+        y_shape, pm_y_shape = tuple(sm_y.output_shape), tuple(pm_y.output_shape)
+        if (len(x_full_shape) != 4 or not x_shard_shapes
+                or any(len(shape) != 4 or shape != x_shard_shapes[0] for shape in x_shard_shapes)):
+            raise RelationCompositionError("K-rank query-axis matmul first operand requires exact rank-4 shards")
+        x_shard_shape = x_shard_shapes[0]
+        expected_x = list(x_shard_shape); expected_x[2] *= rank_count
+        if tuple(expected_x) != x_full_shape:
+            raise RelationCompositionError("K-rank query-axis matmul first operand is not an exact dim2 sharding")
+        if len(y_shape) != 4 or pm_y_shape != y_shape:
+            raise RelationCompositionError("K-rank query-axis matmul second operand requires exact joined rank-4 shape")
+        b, h, local_q, inner = x_shard_shape
+        m = y_shape[3]
+        if (x_full_shape != (b, h, local_q * rank_count, inner)
+                or y_shape != (b, h, inner, m)
+                or out_full_shape != (b, h, local_q * rank_count, m)
+                or out_shard_shape != (b, h, local_q, m)):
+            raise RelationCompositionError("K-rank query-axis matmul rank-4 dimensions do not compose")
+        declared_sm = tuple(tuple(shape) for shape in sm_step.input_shapes)
+        declared_pm = tuple(tuple(tuple(shape) for shape in step.input_shapes) for step in pm_steps)
+        if (declared_sm != (x_full_shape, y_shape)
+                or declared_pm != tuple((x_shard_shape, y_shape) for _ in range(rank_count))):
+            raise RelationCompositionError("K-rank query-axis matmul declared input shapes disagree with authority")
+        first_fact = RelationFactSpec("sharded", (sm_x_ref, *pm_x_refs), gather_dim=2)
+        second_fact = RelationFactSpec("joined", (sm_y_ref, pm_y_refs[0]))
+        output_fact = RelationFactSpec("sharded", frontier, gather_dim=2)
+        certificates.append(KRankMatmulQueryAxisCertificate(
+            "matmul-query-axis-sharded-k-rank-dim2", rank_count, 2,
+            first_fact, second_fact, output_fact, sm_step.step_id,
+            tuple(step.step_id for step in pm_steps), x_full_shape, x_shard_shape,
+            y_shape, out_full_shape, out_shard_shape,
+            "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_matmul_query_axis_rank4",
+        ))
+        rewritten.extend((first_fact.step_triple, second_fact.step_triple))
+        rewritten_layouts.extend(("sharded", "joined"))
+    return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
+
+
+@dataclass(frozen=True)
 class KRankLocalRelationCertificate:
     rule_id: str
     op: str
@@ -5000,14 +5115,14 @@ def normalize_relation_frontiers(
     frontiers: tuple[tuple[str, ...], ...],
     layouts: tuple[str, ...],
     *,
-    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "transpose_k", "contiguous_k", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
+    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "transpose_k", "contiguous_k", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
     goal_ir: GoalIR | None = None,
     deduplicate_each_round: bool = False,
     certificate_sink: list[object] | None = None,
     side_condition_sink: list[RelationSideCondition] | None = None,
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
-    known = {"allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
+    known = {"allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
     unknown = set(rules) - known
     if unknown:
         raise RelationCompositionError(f"unknown relation normalization rules: {sorted(unknown)}")
@@ -5091,6 +5206,13 @@ def normalize_relation_frontiers(
         if "matmul_head_axis_k" in rules:
             _certs, current_frontiers, current_layouts = (
                 advance_k_rank_matmul_head_axis_frontiers(
+                    plan, current_frontiers, current_layouts
+                )
+            )
+            _extend_unique_certificates(certificate_sink, _certs)
+        if "matmul_query_axis_k" in rules:
+            _certs, current_frontiers, current_layouts = (
+                advance_k_rank_matmul_query_axis_frontiers(
                     plan, current_frontiers, current_layouts
                 )
             )
@@ -6495,7 +6617,7 @@ def build_certificate_transition_specs(
             pre = (cert.activation_fact, cert.weight_fact)
             post = (cert.output_fact,)
             footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
-        elif type(cert) is KRankMatmulOutputAxisCertificate:
+        elif type(cert) in (KRankMatmulOutputAxisCertificate, KRankMatmulQueryAxisCertificate):
             pre = (cert.first_operand_fact, cert.second_operand_fact)
             post = (cert.output_fact,)
             footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
@@ -7179,7 +7301,7 @@ def compile_relation_plan(
                 proof,
                 frontiers,
                 layouts,
-                rules=("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k"),
+                rules=("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k"),
                 goal_ir=ir,
                 certificate_sink=compiled_certificates,
                 deduplicate_each_round=True,
