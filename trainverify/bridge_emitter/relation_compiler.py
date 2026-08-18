@@ -3897,6 +3897,26 @@ class KRankContiguousRelationCertificate:
     lean_theorem: str
 
 
+@dataclass(frozen=True)
+class KRankTransposeRelationCertificate:
+    """Exact authority for one SM and K ordered PM last-two-axis transposes."""
+
+    rule_id: str
+    rank_count: int
+    parameters: tuple[int, int]
+    input_gather_dim: int
+    output_gather_dim: int
+    input_full_shape: tuple[int, ...]
+    input_shard_shape: tuple[int, ...]
+    output_full_shape: tuple[int, ...]
+    output_shard_shape: tuple[int, ...]
+    input_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    sm_step_id: str
+    pm_step_ids: tuple[str, ...]
+    lean_theorem: str
+
+
 def _advance_k_rank_local_relation_frontiers(
     plan: ProofPlan,
     frontiers: tuple[tuple[str, ...], ...],
@@ -4125,6 +4145,140 @@ def advance_k_rank_contiguous_relation_frontiers(plan, frontiers, layouts):
             sm_step_id=sm_step.step_id,
             pm_step_ids=tuple(step.step_id for step in pm_steps),
             lean_theorem="TrainVerify.Denote.RelationCompiler.ShardedRel.fw_contiguous"))
+        rewritten.append(input_refs); rewritten_layouts.append("sharded")
+    return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
+
+
+def advance_k_rank_transpose_relation_frontiers(plan, frontiers, layouts):
+    """Transport an exact ordered K-rank ShardedRel backward through parameterized transposeAxes."""
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("K-rank FW_transpose frontier/layout arity mismatch")
+
+    def swap_axes(shape, dim0, dim1):
+        shape = tuple(shape)
+        if dim0 == dim1 or dim0 >= len(shape) or dim1 >= len(shape):
+            raise RelationCompositionError("K-rank FW_transpose parameters are not two distinct legal axes")
+        values = list(shape)
+        values[dim0], values[dim1] = values[dim1], values[dim0]
+        return tuple(values)
+
+    def unique_gather_dim(full_shape, shard_shape, k, label):
+        if len(full_shape) != len(shard_shape):
+            raise RelationCompositionError(f"K-rank FW_transpose {label} full/shard ranks disagree")
+        candidates = [
+            dim for dim in range(len(full_shape))
+            if full_shape[dim] == shard_shape[dim] * k
+            and all(full_shape[index] == shard_shape[index]
+                    for index in range(len(full_shape)) if index != dim)
+        ]
+        if len(candidates) != 1:
+            raise RelationCompositionError(
+                f"K-rank FW_transpose does not determine one {label} gather dimension: {candidates}")
+        return candidates[0]
+
+    by_id = {step.step_id: step for step in plan.steps}
+    certificates, rewritten, rewritten_layouts = [], [], []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "sharded" or len(frontier) < 3:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        k = len(frontier) - 1
+        try:
+            sm_step = by_id[frontier[0]]
+            pm_steps = tuple(by_id[ref] for ref in frontier[1:])
+        except KeyError:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        if sm_step.side != "sm" or sm_step.op != "FW_transpose":
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        if any(step.side != "pm" or step.op != "FW_transpose" for step in pm_steps):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        if int(sm_step.rank) != 0:
+            raise RelationCompositionError("K-rank FW_transpose SM writer must have rank 0")
+        if tuple(int(step.rank) for step in pm_steps) != tuple(range(k)):
+            raise RelationCompositionError("K-rank FW_transpose PM writers are not ordered ranks 0..K-1")
+        writers = (sm_step, *pm_steps)
+        writer_params = tuple(tuple(getattr(step, "parameters", ())) for step in writers)
+        if any(len(params) != 2 for params in writer_params):
+            raise RelationCompositionError("K-rank FW_transpose writers require exactly two parameters")
+        if any(params != writer_params[0] for params in writer_params[1:]):
+            raise RelationCompositionError("K-rank FW_transpose writers require matching parameters")
+        if any(len(step.input_bindings) != 1 or len(getattr(step, "input_shapes", ())) != 1
+               for step in writers):
+            raise RelationCompositionError("K-rank FW_transpose writers must be unary")
+        try:
+            inputs = tuple(by_id[step.input_bindings[0]] for step in writers)
+        except KeyError as exc:
+            raise RelationCompositionError(f"K-rank FW_transpose source is unresolved: {exc}") from exc
+        if inputs[0].side != "sm" or any(step.side != "pm" for step in inputs[1:]):
+            raise RelationCompositionError("K-rank FW_transpose source frontier has the wrong side")
+        if tuple(int(step.rank) for step in inputs[1:]) != tuple(range(k)):
+            raise RelationCompositionError("K-rank FW_transpose source shards are not ordered ranks 0..K-1")
+        if any(tuple(writer.input_shapes[0]) != tuple(source.output_shape)
+               for writer, source in zip(writers, inputs)):
+            raise RelationCompositionError("K-rank FW_transpose declared input shape disagrees with its source")
+
+        output_full_shape = tuple(sm_step.output_shape)
+        output_shard_shapes = tuple(tuple(step.output_shape) for step in pm_steps)
+        dim0, dim1 = writer_params[0]
+        if (dim0, dim1) != (1, 2):
+            raise RelationCompositionError(
+                "K-rank FW_transpose is outside the checked axis pair (1, 2)")
+        expected_outputs = tuple(
+            swap_axes(tuple(step.input_shapes[0]), dim0, dim1) for step in writers
+        )
+        if tuple(sm_step.output_shape) != expected_outputs[0] or any(
+            tuple(step.output_shape) != expected
+            for step, expected in zip(pm_steps, expected_outputs[1:])
+        ):
+            raise RelationCompositionError("K-rank FW_transpose writer has incompatible transpose output shape")
+        if not output_shard_shapes or any(shape != output_shard_shapes[0]
+                                          for shape in output_shard_shapes[1:]):
+            raise RelationCompositionError("K-rank FW_transpose output shard shapes disagree")
+        output_shard_shape = output_shard_shapes[0]
+        output_gather_dim = unique_gather_dim(
+            output_full_shape, output_shard_shape, k, "output")
+
+        input_full_shape = swap_axes(output_full_shape, dim0, dim1)
+        input_shard_shape = swap_axes(output_shard_shape, dim0, dim1)
+        if tuple(sm_step.input_shapes[0]) != input_full_shape or any(
+            tuple(step.input_shapes[0]) != input_shard_shape for step in pm_steps
+        ):
+            raise RelationCompositionError("K-rank FW_transpose writer has incompatible transpose output shape")
+        input_gather_dim = unique_gather_dim(
+            input_full_shape, input_shard_shape, k, "input")
+        expected_input_dim = (
+            dim1 if output_gather_dim == dim0 else
+            dim0 if output_gather_dim == dim1 else
+            output_gather_dim
+        )
+        if input_gather_dim != expected_input_dim:
+            raise RelationCompositionError("K-rank FW_transpose gather-axis transport is incompatible")
+
+        input_refs = tuple(step.step_id for step in inputs)
+        if len(input_full_shape) != 4 or len(input_shard_shape) != 4:
+            raise RelationCompositionError("K-rank FW_transpose is outside the checked rank-4 family")
+        theorem_by_axis_transport = {
+            (3, 3): "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim3_rank4",
+            (2, 1): "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim2_to_dim1_rank4",
+            (1, 2): "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim1_to_dim2_rank4",
+        }
+        try:
+            lean_theorem = theorem_by_axis_transport[(input_gather_dim, output_gather_dim)]
+        except KeyError as exc:
+            raise RelationCompositionError(
+                "K-rank FW_transpose is outside the checked gather-axis pairs") from exc
+
+        input_fact = RelationFactSpec("sharded", input_refs, gather_dim=input_gather_dim)
+        output_fact = RelationFactSpec("sharded", tuple(frontier), gather_dim=output_gather_dim)
+        certificates.append(KRankTransposeRelationCertificate(
+            rule_id="transpose-sharded-k-rank", rank_count=k,
+            parameters=writer_params[0],
+            input_gather_dim=input_gather_dim, output_gather_dim=output_gather_dim,
+            input_full_shape=input_full_shape, input_shard_shape=input_shard_shape,
+            output_full_shape=output_full_shape, output_shard_shape=output_shard_shape,
+            input_fact=input_fact, output_fact=output_fact,
+            sm_step_id=sm_step.step_id,
+            pm_step_ids=tuple(step.step_id for step in pm_steps),
+            lean_theorem=lean_theorem))
         rewritten.append(input_refs); rewritten_layouts.append("sharded")
     return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
 
@@ -4606,14 +4760,14 @@ def normalize_relation_frontiers(
     frontiers: tuple[tuple[str, ...], ...],
     layouts: tuple[str, ...],
     *,
-    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "contiguous_k", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
+    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "transpose_k", "contiguous_k", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
     goal_ir: GoalIR | None = None,
     deduplicate_each_round: bool = False,
     certificate_sink: list[object] | None = None,
     side_condition_sink: list[RelationSideCondition] | None = None,
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
-    known = {"allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "contiguous_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
+    known = {"allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
     unknown = set(rules) - known
     if unknown:
         raise RelationCompositionError(f"unknown relation normalization rules: {sorted(unknown)}")
@@ -4720,6 +4874,13 @@ def normalize_relation_frontiers(
         if "gelu_k" in rules:
             _certs, current_frontiers, current_layouts = (
                 advance_k_rank_gelu_relation_frontiers(
+                    plan, current_frontiers, current_layouts
+                )
+            )
+            _extend_unique_certificates(certificate_sink, _certs)
+        if "transpose_k" in rules:
+            _certs, current_frontiers, current_layouts = (
+                advance_k_rank_transpose_relation_frontiers(
                     plan, current_frontiers, current_layouts
                 )
             )
@@ -6084,6 +6245,10 @@ def build_certificate_transition_specs(
             pre = (cert.input_fact,)
             post = (cert.output_fact,)
             footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
+        elif type(cert) is KRankTransposeRelationCertificate:
+            pre = (cert.input_fact,)
+            post = (cert.output_fact,)
+            footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
         elif type(cert) is KRankLocalRelationCertificate:
             pre = (cert.input_fact,)
             post = (cert.output_fact,)
@@ -6752,7 +6917,7 @@ def compile_relation_plan(
                 proof,
                 frontiers,
                 layouts,
-                rules=("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "contiguous_k", "add_k", "multiref_k"),
+                rules=("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k"),
                 goal_ir=ir,
                 certificate_sink=compiled_certificates,
                 deduplicate_each_round=True,
