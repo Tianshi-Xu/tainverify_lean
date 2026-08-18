@@ -2,8 +2,12 @@
 
 
 def render_closed_k_rank_reduction_linear_segment(ir, relation, segment_id: str) -> str:
-    from .composer import _node_text, _shape_text
-    from .relation_compiler import KRankReductionLinearProducerCertificate
+    try:
+        from .composer import _node_text, _shape_text
+        from .relation_compiler import KRankReductionLinearProducerCertificate
+    except ImportError:
+        from composer import _node_text, _shape_text
+        from relation_compiler import KRankReductionLinearProducerCertificate
 
     rule_id = "linear-reduction-producer-k-rank"
     chain = relation.dependent_chain_plan

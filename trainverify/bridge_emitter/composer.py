@@ -8695,7 +8695,10 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     if family == ("sum-producer-sharded-k-rank-dim1",):
         return render_closed_k_rank_sum_producer_segment(ir, relation, segment_id)
     if family == ("linear-reduction-producer-k-rank",):
-        from .reduction_linear_renderer import render_closed_k_rank_reduction_linear_segment
+        try:
+            from .reduction_linear_renderer import render_closed_k_rank_reduction_linear_segment
+        except ImportError:
+            from reduction_linear_renderer import render_closed_k_rank_reduction_linear_segment
         return render_closed_k_rank_reduction_linear_segment(ir, relation, segment_id)
     if family == ("allreduce-reconstruction-k-rank",):
         return render_closed_k_rank_allreduce_segment(ir, relation, segment_id)
