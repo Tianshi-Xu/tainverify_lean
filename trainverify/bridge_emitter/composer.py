@@ -6063,6 +6063,124 @@ def _membership_cases(
     return lines
 
 
+def render_closed_k_rank_contiguous_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Replay the exact one-SM plus ordered-K-PM FW_contiguous writers."""
+    try:
+        from .relation_compiler import KRankContiguousRelationCertificate
+    except ImportError:
+        from relation_compiler import KRankContiguousRelationCertificate
+    theorem = "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_contiguous"
+    (segment, transition, certificate, pre, post, before, after) = _k_rank_segment_context(
+        ir, relation, segment_id, "contiguous-sharded-k-rank", theorem,
+        KRankContiguousRelationCertificate,
+    )
+    if certificate.input_fact != transition.pre_facts[0] or certificate.output_fact != transition.post_facts[0]:
+        raise ValueError("K-rank contiguous certificate facts disagree with transition")
+    if pre.kind != "sharded" or post.kind != "sharded":
+        raise ValueError("K-rank contiguous requires exact ShardedRel facts")
+    k = len(post.pm_tids)
+    if (k < 2 or certificate.rank_count != k or len(pre.pm_tids) != k
+            or certificate.gather_dim != pre.gather_dim or pre.gather_dim != post.gather_dim
+            or tuple(certificate.full_shape) != tuple(pre.full_shape)
+            or tuple(certificate.full_shape) != tuple(post.full_shape)
+            or tuple(certificate.shard_shape) != tuple(pre.shard_shape)
+            or tuple(certificate.shard_shape) != tuple(post.shard_shape)):
+        raise ValueError("K-rank contiguous relation metadata is not exact")
+    if len(transition.sm_node_indices) != 1 or len(transition.pm_node_indices) != k:
+        raise ValueError("K-rank contiguous transition footprint is not exact 1xK")
+    sm_start, sm_end = segment.sm_range
+    pm_start, pm_end = segment.pm_range
+    if (tuple(transition.sm_node_indices) != tuple(range(sm_start, sm_end))
+            or sm_end - sm_start != 1
+            or tuple(transition.pm_node_indices) != tuple(range(pm_start, pm_end))
+            or pm_end - pm_start != k):
+        raise ValueError("K-rank contiguous segment ranges do not equal its writer footprint")
+    sm_node = ir.sm_nodes[sm_start]
+    pm_nodes = tuple(ir.pm_nodes[index] for index in range(pm_start, pm_end))
+    if sm_node.rank != 0 or sm_node.op != "FW_contiguous":
+        raise ValueError("K-rank contiguous SM writer is not exact")
+    if tuple(node.rank for node in pm_nodes) != tuple(range(k)):
+        raise ValueError("K-rank contiguous PM writers are not ordered ranks 0..K-1")
+    writers = (sm_node, *pm_nodes)
+    if any(node.params for node in writers):
+        raise ValueError("K-rank contiguous writers require no parameters")
+    if any(len(node.ins) != 1 or len(node.outs) != 1 for node in writers):
+        raise ValueError("K-rank contiguous writers must be unary singleton-output nodes")
+    if (sm_node.ins[0] != pre.sm_tid or sm_node.outs[0] != post.sm_tid
+            or tuple(node.ins[0] for node in pm_nodes) != tuple(pre.pm_tids)
+            or tuple(node.outs[0] for node in pm_nodes) != tuple(post.pm_tids)):
+        raise ValueError("K-rank contiguous live writers disagree with ordered relation TIDs")
+
+    sm_name = f"{segment_id}_sm_nodes"
+    pm_name = f"{segment_id}_pm_nodes"
+    sm_node_name = f"{segment_id}_sm_node"
+    pm_node_names = [f"{segment_id}_pm_node_{rank}" for rank in range(k)]
+    sm_text = _node_text(sm_node)
+    pm_texts = [_node_text(node) for node in pm_nodes]
+    in_list = "[" + ", ".join(f"pmStore {tid}" for tid in pre.pm_tids) + "]"
+    out_list = "[" + ", ".join(f"pmFinal {tid}" for tid in post.pm_tids) + "]"
+
+    def writer_lines(name, side, pos, node, target_name):
+        graph = ir.sm_graph_ref if side == "sm" else ir.pm_graph_ref
+        store = "smStore" if side == "sm" else "pmStore"
+        nodes = "smNodes" if side == "sm" else "pmNodes"
+        final = "smFinal" if side == "sm" else "pmFinal"
+        return [
+            f"    have {name} : {final} {node.outs[0]} = fw_contiguous ({store} {node.ins[0]}) := by",
+            f"      change ({nodes}.foldl (applyNodeDistributedFaithful {graph}) {store}) {node.outs[0]} = _",
+            f"      rw [show {nodes} = {nodes}.take {pos} ++ [{target_name}] ++ {nodes}.drop {pos + 1} by native_decide]",
+            f"      rw [foldl_faithful_middle_writer {graph} {store} ({nodes}.take {pos}) ({nodes}.drop {pos + 1})",
+            f"        {target_name} {node.outs[0]} (fun t => fw_contiguous (t {node.ins[0]})) (by",
+            "          intro t",
+            "          rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "            (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]",
+            "          simp [applyNodeDistributed, applyNodeRingAttn]",
+            f"          exact applyNode_fw_contiguous_out {graph} t {node.rank} {node.ins[0]} {node.outs[0]}",
+            "        ) (by native_decide) (by native_decide)]",
+            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[0]} (by native_decide) (by native_decide)]",
+        ]
+
+    lines = [f"private def {sm_node_name} : NodeDecl := {sm_text}"]
+    lines += [f"private def {name} : NodeDecl := {text}"
+              for name, text in zip(pm_node_names, pm_texts)]
+    lines += [
+        f"private def {sm_name} : List NodeDecl := [{sm_node_name}]",
+        f"private def {pm_name} : List NodeDecl := [{', '.join(pm_node_names)}]", "",
+        f"private def {segment_id} :",
+        f"    ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
+        f"  smNodes := {sm_name}", f"  pmNodes := {pm_name}", "  sound := by",
+        "    intro smStore pmStore hstate",
+        f"    let smNodes : List NodeDecl := {sm_name}",
+        f"    let pmNodes : List NodeDecl := {pm_name}",
+        f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore",
+        f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
+        f"    have hin : {pre.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    change ShardedRel (smStore {pre.sm_tid}) {in_list} {pre.gather_dim} {_shape_text(list(pre.full_shape))} {_shape_text(list(pre.shard_shape))} at hin",
+    ]
+    lines += writer_lines("hSmWriter", "sm", 0, sm_node, sm_node_name)
+    for rank, node in enumerate(pm_nodes):
+        lines += writer_lines(f"hPmWriter{rank}", "pm", rank, node, pm_node_names[rank])
+    lines += [
+        "    have htransport := ShardedRel.fw_contiguous hin",
+        f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by",
+        f"      change ShardedRel (smFinal {post.sm_tid}) {out_list} {post.gather_dim} {_shape_text(list(post.full_shape))} {_shape_text(list(post.shard_shape))}",
+        "      rw [hSmWriter, " + ", ".join(f"hPmWriter{rank}" for rank in range(k)) + "]",
+        "      simpa only [List.map] using htransport",
+        "    intro fact hfact",
+        f"    have covered : fact ∈ [{post.fact_id}] ++ {before.state_id}.facts := by",
+        f"      exact (show {after.state_id}.facts ⊆ [{post.fact_id}] ++ {before.state_id}.facts by native_decide) hfact",
+        "    simp only [List.mem_append] at covered",
+        "    rcases covered with fresh | old",
+        "    · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh",
+        "      rcases fresh with rfl", "      exact hout",
+        "    · exact hframe fact old", "",
+    ]
+    return "\n".join(lines)
+
+
 def render_closed_k_rank_full_producer_chunks_segment(
     ir: GoalIR, relation, segment_id: str
 ) -> str:
@@ -6996,6 +7114,8 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     transitions = {item.transition_id: item for item in relation.transition_specs}
     family = tuple(transitions[item].rule_id for item in segment.transition_ids)
 
+    if family == ("contiguous-sharded-k-rank",):
+        return render_closed_k_rank_contiguous_segment(ir, relation, segment_id)
     if family in (
         ("linear-sharded-k-rank-dim1",),
         ("layernorm-sharded-k-rank-dim1",),

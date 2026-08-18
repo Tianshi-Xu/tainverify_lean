@@ -788,6 +788,36 @@ structure ShardedRel (full : Tensor) (shards : List Tensor)
     fullShape = shardShape.set gatherDim
       (shardShape.getD gatherDim 0 * shards.length)
 
+/-- `FW_contiguous` is definitionally identity, so it transports an exact
+ordered sharding relation without changing its shape contract. -/
+theorem ShardedRel.fw_contiguous
+    {full : Tensor} {shards : List Tensor} {gatherDim : Nat}
+    {fullShape shardShape : Shape}
+    (h : ShardedRel full shards gatherDim fullShape shardShape) :
+    ShardedRel (fw_contiguous full) (shards.map fw_contiguous)
+      gatherDim fullShape shardShape := by
+  have hmap : shards.map TrainVerify.Denote.fw_contiguous = shards := by
+    clear h
+    induction shards with
+    | nil => rfl
+    | cons shard rest ih =>
+        change TrainVerify.Denote.tensorId shard ::
+          List.map TrainVerify.Denote.tensorId rest = shard :: rest
+        rw [show TrainVerify.Denote.tensorId shard = shard by rfl, ih]
+  rw [hmap]
+  exact h
+
+/-- Exact singleton-output writer equation for the identity contiguous op. -/
+theorem applyNode_fw_contiguous_out
+    (g : GraphDecl) (s : Store) (rank : Nat) (inTid outTid : Tid) :
+    applyNode g s
+      { rank := rank, op := "OpName.FW_contiguous", ins := [inTid], outs := [outTid] }
+      outTid = fw_contiguous (s inTid) := by
+  unfold applyNode
+  change storeSet s [(outTid, fw_contiguous (s inTid))] outTid = _
+  unfold storeSet
+  simp [List.find?]
+
 /-- The value-level bridge from an ordered sharding relation to the exact
 AllGather expression consumed by a joined writer.  No shape or operator
 semantics are hidden here: this is precisely `ShardedRel.full_value`. -/

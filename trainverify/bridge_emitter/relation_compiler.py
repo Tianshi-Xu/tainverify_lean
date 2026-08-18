@@ -3881,6 +3881,22 @@ class KRankLocalRelationCertificate:
         return self.external_shapes[0]
 
 
+@dataclass(frozen=True)
+class KRankContiguousRelationCertificate:
+    """Exact authority for one SM and K ordered PM contiguous writers."""
+
+    rule_id: str
+    rank_count: int
+    gather_dim: int
+    full_shape: tuple[int, ...]
+    shard_shape: tuple[int, ...]
+    input_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    sm_step_id: str
+    pm_step_ids: tuple[str, ...]
+    lean_theorem: str
+
+
 def _advance_k_rank_local_relation_frontiers(
     plan: ProofPlan,
     frontiers: tuple[tuple[str, ...], ...],
@@ -4042,6 +4058,75 @@ def advance_k_rank_gelu_relation_frontiers(plan, frontiers, layouts):
         lean_theorem="TrainVerify.Denote.fw_gelu_allGatherPrimDimN_eq",
         allowed_gather_dims=None,
     )
+
+
+def advance_k_rank_contiguous_relation_frontiers(plan, frontiers, layouts):
+    """Transport an exact ordered K-rank ShardedRel through FW_contiguous."""
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("K-rank FW_contiguous frontier/layout arity mismatch")
+    by_id = {step.step_id: step for step in plan.steps}
+    certificates, rewritten, rewritten_layouts = [], [], []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "sharded" or len(frontier) < 3:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        k = len(frontier) - 1
+        try:
+            sm_step = by_id[frontier[0]]
+            pm_steps = tuple(by_id[ref] for ref in frontier[1:])
+        except KeyError:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        if sm_step.side != "sm" or sm_step.op != "FW_contiguous":
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        if any(step.side != "pm" or step.op != "FW_contiguous" for step in pm_steps):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        if tuple(int(step.rank) for step in pm_steps) != tuple(range(k)):
+            raise RelationCompositionError("K-rank FW_contiguous PM writers are not ordered ranks 0..K-1")
+        writers = (sm_step, *pm_steps)
+        if any(tuple(getattr(step, "parameters", ())) for step in writers):
+            raise RelationCompositionError("K-rank FW_contiguous writers require no parameters")
+        if any(len(step.input_bindings) != 1 or len(getattr(step, "input_shapes", ())) != 1
+               for step in writers):
+            raise RelationCompositionError("K-rank FW_contiguous writers must be unary")
+        try:
+            inputs = tuple(by_id[step.input_bindings[0]] for step in writers)
+        except KeyError as exc:
+            raise RelationCompositionError(f"K-rank FW_contiguous source is unresolved: {exc}") from exc
+        if inputs[0].side != "sm" or any(step.side != "pm" for step in inputs[1:]):
+            raise RelationCompositionError("K-rank FW_contiguous source frontier has the wrong side")
+        if tuple(int(step.rank) for step in inputs[1:]) != tuple(range(k)):
+            raise RelationCompositionError("K-rank FW_contiguous source shards are not ordered ranks 0..K-1")
+        if any(tuple(writer.input_shapes[0]) != tuple(source.output_shape)
+               for writer, source in zip(writers, inputs)):
+            raise RelationCompositionError("K-rank FW_contiguous declared input shape disagrees with its source")
+        if any(tuple(writer.output_shape) != tuple(writer.input_shapes[0]) for writer in writers):
+            raise RelationCompositionError("K-rank FW_contiguous must be shape preserving")
+        full_shape = tuple(sm_step.output_shape)
+        shard_shapes = tuple(tuple(step.output_shape) for step in pm_steps)
+        if not shard_shapes or any(shape != shard_shapes[0] for shape in shard_shapes[1:]):
+            raise RelationCompositionError("K-rank FW_contiguous shard shapes disagree")
+        shard_shape = shard_shapes[0]
+        if len(full_shape) != len(shard_shape):
+            raise RelationCompositionError("K-rank FW_contiguous full/shard ranks disagree")
+        candidates = [dim for dim in range(len(full_shape))
+                      if full_shape[dim] == shard_shape[dim] * k
+                      and all(full_shape[index] == shard_shape[index]
+                              for index in range(len(full_shape)) if index != dim)]
+        if len(candidates) != 1:
+            raise RelationCompositionError(
+                f"K-rank FW_contiguous does not determine one gather dimension: {candidates}")
+        gather_dim = candidates[0]
+        input_refs = tuple(step.step_id for step in inputs)
+        input_fact = RelationFactSpec("sharded", input_refs, gather_dim=gather_dim)
+        output_fact = RelationFactSpec("sharded", tuple(frontier), gather_dim=gather_dim)
+        certificates.append(KRankContiguousRelationCertificate(
+            rule_id="contiguous-sharded-k-rank", rank_count=k, gather_dim=gather_dim,
+            full_shape=full_shape, shard_shape=shard_shape,
+            input_fact=input_fact, output_fact=output_fact,
+            sm_step_id=sm_step.step_id,
+            pm_step_ids=tuple(step.step_id for step in pm_steps),
+            lean_theorem="TrainVerify.Denote.RelationCompiler.ShardedRel.fw_contiguous"))
+        rewritten.append(input_refs); rewritten_layouts.append("sharded")
+    return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
 
 
 @dataclass(frozen=True)
@@ -4521,14 +4606,14 @@ def normalize_relation_frontiers(
     frontiers: tuple[tuple[str, ...], ...],
     layouts: tuple[str, ...],
     *,
-    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
+    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "contiguous_k", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
     goal_ir: GoalIR | None = None,
     deduplicate_each_round: bool = False,
     certificate_sink: list[object] | None = None,
     side_condition_sink: list[RelationSideCondition] | None = None,
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
-    known = {"allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
+    known = {"allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "contiguous_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
     unknown = set(rules) - known
     if unknown:
         raise RelationCompositionError(f"unknown relation normalization rules: {sorted(unknown)}")
@@ -4635,6 +4720,13 @@ def normalize_relation_frontiers(
         if "gelu_k" in rules:
             _certs, current_frontiers, current_layouts = (
                 advance_k_rank_gelu_relation_frontiers(
+                    plan, current_frontiers, current_layouts
+                )
+            )
+            _extend_unique_certificates(certificate_sink, _certs)
+        if "contiguous_k" in rules:
+            _certs, current_frontiers, current_layouts = (
+                advance_k_rank_contiguous_relation_frontiers(
                     plan, current_frontiers, current_layouts
                 )
             )
@@ -5988,6 +6080,10 @@ def build_certificate_transition_specs(
             pre = (cert.activation_fact, cert.weight_fact)
             post = (cert.output_fact,)
             footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
+        elif type(cert) is KRankContiguousRelationCertificate:
+            pre = (cert.input_fact,)
+            post = (cert.output_fact,)
+            footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
         elif type(cert) is KRankLocalRelationCertificate:
             pre = (cert.input_fact,)
             post = (cert.output_fact,)
@@ -6656,7 +6752,7 @@ def compile_relation_plan(
                 proof,
                 frontiers,
                 layouts,
-                rules=("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k"),
+                rules=("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "contiguous_k", "add_k", "multiref_k"),
                 goal_ir=ir,
                 certificate_sink=compiled_certificates,
                 deduplicate_each_round=True,
