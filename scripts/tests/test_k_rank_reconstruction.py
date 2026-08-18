@@ -232,6 +232,38 @@ def test_closed_k_rank_allgather_renderer_uses_exact_dynamic_authority():
     assert "smNodes : List NodeDecl := []" in source
 
 
+def test_closed_k_rank_allgather_selects_exact_typed_certificate():
+    ir, relation, segment, *_ = _closed_k_rank_segment_fixture()
+    exact = relation.certificates[0]
+    expected = render_closed_segment(ir, relation, segment.segment_id)
+    unrelated = replace(
+        exact,
+        input_fact=relation_compiler.RelationFactSpec(
+            "sharded", ("sm:99:0", "pm:99:0"), gather_dim=exact.gather_dim
+        ),
+    )
+    foreign = SimpleNamespace(
+        rule_id=exact.rule_id,
+        lean_theorem=exact.lean_theorem,
+        input_fact=exact.input_fact,
+        output_fact=exact.output_fact,
+    )
+    candidate = SimpleNamespace(
+        **{**relation.__dict__, "certificates": (unrelated, foreign, exact)}
+    )
+    assert render_closed_segment(ir, candidate, segment.segment_id) == expected
+
+
+def test_closed_k_rank_allgather_rejects_duplicate_exact_certificate():
+    ir, relation, segment, *_ = _closed_k_rank_segment_fixture()
+    exact = relation.certificates[0]
+    duplicate = SimpleNamespace(
+        **{**relation.__dict__, "certificates": (exact, exact)}
+    )
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        render_closed_segment(ir, duplicate, segment.segment_id)
+
+
 def test_closed_k_rank_allgather_renderer_rejects_nonexact_writer_footprint():
     ir, relation, segment, *_ = _closed_k_rank_segment_fixture()
     transition = relation.transition_specs[0]

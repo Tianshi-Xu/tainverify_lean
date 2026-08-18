@@ -7778,17 +7778,24 @@ def render_closed_k_rank_allgather_segment(ir: GoalIR, relation, segment_id: str
     chain = relation.dependent_chain_plan
     if chain is None or not chain.complete:
         raise ValueError("K-rank AllGather segment requires a complete closed chain")
-    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
-    if segment is None or len(segment.transition_ids) != 1:
-        raise ValueError("K-rank AllGather segment must own one transition")
-    transitions = {item.transition_id: item for item in relation.transition_specs}
-    transition = transitions[segment.transition_ids[0]]
+    try:
+        from .relation_compiler import KRankAllGatherReconstructionCertificate
+    except ImportError:
+        from relation_compiler import KRankAllGatherReconstructionCertificate
     expected_theorem = (
         "TrainVerify.Denote.RelationCompiler.ShardedRel.to_joined_allGather"
     )
-    if (transition.rule_id != "allgather-reconstruction-k-rank"
-            or transition.lean_theorem != expected_theorem):
-        raise ValueError("segment is not the registered K-rank AllGather family")
+    (segment, transition, certificate, before, after, pre_state, post_state) = (
+        _k_rank_segment_context(
+            ir,
+            relation,
+            segment_id,
+            "allgather-reconstruction-k-rank",
+            expected_theorem,
+            KRankAllGatherReconstructionCertificate,
+            lambda cert: ((cert.input_fact,), (cert.output_fact,)),
+        )
+    )
     if (transition.sm_node_indices != () or len(transition.pm_node_indices) != 1
             or transition.pm_node_indices != tuple(range(*segment.pm_range))
             or tuple(range(*segment.sm_range)) != ()):
@@ -7797,16 +7804,6 @@ def render_closed_k_rank_allgather_segment(ir: GoalIR, relation, segment_id: str
     if not 0 <= writer_index < len(ir.pm_nodes):
         raise ValueError("K-rank AllGather writer is outside PM authority")
     writer = ir.pm_nodes[writer_index]
-    certificates = [
-        item for item in relation.certificates
-        if getattr(item, "rule_id", None) == transition.rule_id
-    ]
-    if len(certificates) != 1:
-        raise ValueError("K-rank AllGather segment lacks one exact certificate")
-    certificate = certificates[0]
-    if (certificate.input_fact,) != transition.pre_facts or (
-            certificate.output_fact,) != transition.post_facts:
-        raise ValueError("K-rank AllGather certificate facts disagree with transition")
     rank_count = int(certificate.rank_count)
     gather_dim = int(certificate.gather_dim)
     if rank_count < 2 or ir.sm_num_ranks != 1 or ir.pm_num_ranks != rank_count:
@@ -7816,13 +7813,6 @@ def render_closed_k_rank_allgather_segment(ir: GoalIR, relation, segment_id: str
             or len(writer.ins) != rank_count):
         raise ValueError("K-rank AllGather actual writer signature mismatch")
 
-    records = {item.source: item for item in chain.relation_facts}
-    if len(transition.pre_facts) != 1 or transition.pre_facts[0] not in records:
-        raise ValueError("K-rank AllGather lacks one closed sharded pre fact")
-    if len(transition.post_facts) != 1 or transition.post_facts[0] not in records:
-        raise ValueError("K-rank AllGather lacks one closed joined post fact")
-    before = records[transition.pre_facts[0]]
-    after = records[transition.post_facts[0]]
     if (before.kind != "sharded" or before.gather_dim != gather_dim
             or len(before.pm_tids) != rank_count
             or tuple(writer.ins) != before.pm_tids):
