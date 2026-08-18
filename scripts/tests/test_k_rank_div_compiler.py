@@ -35,7 +35,7 @@ def _matcher_fixture(axis, k=3, c=8):
     return plan, frontier, (sm_x, pm_xs, sm_div, pm_divs)
 
 
-@pytest.mark.parametrize("axis", [1, 2])
+@pytest.mark.parametrize("axis", [1, 2, 3])
 def test_div_matcher_derives_axis_specific_ordered_sharded_input(axis):
     plan, frontier, parts = _matcher_fixture(axis, 3)
     sm_x, pm_xs, sm_div, pm_divs = parts
@@ -82,7 +82,13 @@ def test_div_matcher_leaves_mixed_frontier_unresolved():
     assert certs == () and roots == (frontier,) and layouts == ("sharded",)
 
 
-@pytest.mark.parametrize("axis", [1, 2])
+def test_div_matcher_rejects_non_theorem_axis_even_when_shape_reconstructs():
+    plan, frontier, _ = _matcher_fixture(0, 4)
+    with pytest.raises(rc.RelationCompositionError, match="dim1, dim2, or dim3"):
+        rc.advance_k_rank_div_frontiers(plan, (frontier,), ("sharded",))
+
+
+@pytest.mark.parametrize("axis", [1, 2, 3])
 def test_div_fixed_point_and_transition_own_exact_one_plus_k_writers(axis):
     plan, frontier, _ = _matcher_fixture(axis, 4)
     sink = []
@@ -126,7 +132,11 @@ def _closed_fixture(axis, k=3, c=8):
     return ir, relation, segment, inp, out
 
 
-@pytest.mark.parametrize(("axis", "apply_lemma"), [(1, "applyNode_fw_div_out_g67"), (2, "applyNode_fw_div_out_g92")])
+@pytest.mark.parametrize(("axis", "apply_lemma"), [
+    (1, "applyNode_fw_div_out_g67"),
+    (2, "applyNode_fw_div_out_g92"),
+    (3, "applyNode_fw_div_out_g92"),
+])
 def test_div_renderer_replays_exact_writers_scalar_and_axis_wrapper(axis, apply_lemma):
     ir, relation, segment, inp, out = _closed_fixture(axis)
     source = composer.render_closed_segment(ir, relation, segment.segment_id)
@@ -155,14 +165,24 @@ def test_div_renderer_rejects_tampered_live_writers(mutation, message):
 
 
 def test_div_closed_module_import_mapping():
-    for axis in (1, 2):
+    for axis in (1, 2, 3):
         assert composer._closed_segment_family_imports(
             (f"div-sharded-k-rank-dim{axis}",)) == ("denote.KRankDivGather",)
 
 
-def _witness_source(rendered, axis):
-    full = "[1, 12, 768, 64]" if axis == 2 else "[1, 36, 256, 64]"
-    shard = "[1, 12, 256, 64]"
+def _witness_source(rendered, axis, k):
+    if axis == 3:
+        full, shard = "[1, 12, 1024, 1024]", "[1, 12, 1024, 256]"
+    else:
+        full = "[1, 12, 768, 64]" if axis == 2 else "[1, 36, 256, 64]"
+        shard = "[1, 12, 256, 64]"
+    pm_nodes = ", ".join(
+        f'{{ rank := {rank}, op := "OpName.FW_div", ins := [{201 + rank}], '
+        f'outs := [{301 + rank}], params := [8] }}'
+        for rank in range(k)
+    )
+    pm_inputs = ", ".join(str(201 + rank) for rank in range(k))
+    pm_outputs = ", ".join(str(301 + rank) for rank in range(k))
     return f'''import denote.KRankDivGather
 
 namespace TrainVerify.Denote
@@ -172,10 +192,10 @@ noncomputable section
 set_option maxHeartbeats 500000
 
 def gSM : GraphDecl := {{ numRanks := 1, nodes := [{{ rank := 0, op := "OpName.FW_div", ins := [100], outs := [110], params := [8] }}] }}
-def gPM : GraphDecl := {{ numRanks := 3, nodes := [{{ rank := 0, op := "OpName.FW_div", ins := [201], outs := [301], params := [8] }}, {{ rank := 1, op := "OpName.FW_div", ins := [202], outs := [302], params := [8] }}, {{ rank := 2, op := "OpName.FW_div", ins := [203], outs := [303], params := [8] }}] }}
+def gPM : GraphDecl := {{ numRanks := {k}, nodes := [{pm_nodes}] }}
 
-def fact_in : RelationFact := .sharded 100 [201, 202, 203] {axis} {full} {shard}
-def fact_out : RelationFact := .sharded 110 [301, 302, 303] {axis} {full} {shard}
+def fact_in : RelationFact := .sharded 100 [{pm_inputs}] {axis} {full} {shard}
+def fact_out : RelationFact := .sharded 110 [{pm_outputs}] {axis} {full} {shard}
 def state_pre : RelationState where facts := [fact_in]; nonempty := by decide
 def state_post : RelationState where facts := [fact_out]; nonempty := by decide
 
@@ -187,18 +207,23 @@ end TrainVerify.Denote
 '''
 
 
-@pytest.mark.parametrize("axis", [1, 2])
+@pytest.mark.parametrize("axis", [1, 2, 3])
 def test_generated_div_witness_is_direct_renderer_output(axis):
-    ir, relation, segment, *_ = _closed_fixture(axis)
-    full = (1, 12, 768, 64) if axis == 2 else (1, 36, 256, 64)
-    shard = (1, 12, 256, 64)
+    k = 4 if axis == 3 else 3
+    ir, relation, segment, *_ = _closed_fixture(axis, k=k)
+    if axis == 3:
+        full, shard = (1, 12, 1024, 1024), (1, 12, 1024, 256)
+    else:
+        full = (1, 12, 768, 64) if axis == 2 else (1, 36, 256, 64)
+        shard = (1, 12, 256, 64)
     cert = relation.certificates[0]
     relation.certificates = (replace(cert, full_shape=full, shard_shape=shard),)
     records = list(relation.dependent_chain_plan.relation_facts)
     records[0] = replace(records[0], full_shape=full, shard_shape=shard)
     records[1] = replace(records[1], full_shape=full, shard_shape=shard)
     relation.dependent_chain_plan.relation_facts = tuple(records)
-    source = _witness_source(composer.render_closed_segment(ir, relation, segment.segment_id), axis)
+    source = _witness_source(
+        composer.render_closed_segment(ir, relation, segment.segment_id), axis, k)
     witness = Path(__file__).parents[2] / f"trainverify/denote/GeneratedKRankDivDim{axis}CompilerWitness.lean"
     witness.unlink(missing_ok=True)
     witness.write_text(source, encoding="utf-8")

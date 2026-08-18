@@ -4434,7 +4434,7 @@ def advance_k_rank_div_frontiers(
     frontiers: tuple[tuple[str, ...], ...],
     layouts: tuple[str, ...],
 ) -> tuple[tuple[KRankDivCertificate, ...], tuple[tuple[str, ...], ...], tuple[str, ...]]:
-    """Pull exact dim-1/dim-2 rank-4 FW_div through identical scalar division."""
+    """Pull exact dim-1/dim-2/dim-3 rank-4 FW_div through identical scalar division."""
     if len(frontiers) != len(layouts):
         raise RelationCompositionError("K-rank div frontier/layout arity mismatch")
     by_id = {step.step_id: step for step in plan.steps}
@@ -4487,12 +4487,12 @@ def advance_k_rank_div_frontiers(
             raise RelationCompositionError("K-rank div input sharding requires exact equal rank-4 shapes")
         shard_shape = shard_shapes[0]
         candidates = []
-        for axis in (1, 2):
+        for axis in (1, 2, 3):
             expected = list(shard_shape); expected[axis] *= rank_count
             if tuple(expected) == full_shape:
                 candidates.append(axis)
         if len(candidates) != 1:
-            raise RelationCompositionError("K-rank div input sharding is not exact dim1 or dim2")
+            raise RelationCompositionError("K-rank div input sharding is not exact dim1, dim2, or dim3")
         axis = candidates[0]
         if output_full != full_shape or any(shape != shard_shape for shape in output_shards):
             raise RelationCompositionError("K-rank div output shapes/order do not preserve exact sharding")

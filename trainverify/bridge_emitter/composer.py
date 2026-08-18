@@ -7033,7 +7033,7 @@ def render_closed_k_rank_div_segment(ir: GoalIR, relation, segment_id: str) -> s
     except ImportError:
         from relation_compiler import KRankDivCertificate
     typed = [item for item in relation.certificates if type(item) is KRankDivCertificate]
-    if len(typed) != 1 or typed[0].gather_dim not in (1, 2):
+    if len(typed) != 1 or typed[0].gather_dim not in (1, 2, 3):
         raise ValueError("K-rank div requires one exact axis-specific certificate")
     axis = typed[0].gather_dim
     rule_id = f"div-sharded-k-rank-dim{axis}"
@@ -7094,8 +7094,11 @@ def render_closed_k_rank_div_segment(ir: GoalIR, relation, segment_id: str) -> s
     in_list = "[" + ", ".join(f"pmStore {tid}" for tid in pre.pm_tids) + "]"
     out_list = "[" + ", ".join(f"pmFinal {tid}" for tid in post.pm_tids) + "]"
     d0, d1, d2, d3 = shard_shape
-    symbolic_full = (f"[{d0}, {d1} * {in_list}.length, {d2}, {d3}]" if axis == 1
-                     else f"[{d0}, {d1}, {d2} * {in_list}.length, {d3}]")
+    symbolic_full = (
+        f"[{d0}, {d1} * {in_list}.length, {d2}, {d3}]" if axis == 1 else
+        f"[{d0}, {d1}, {d2} * {in_list}.length, {d3}]" if axis == 2 else
+        f"[{d0}, {d1}, {d2}, {d3} * {in_list}.length]"
+    )
 
     def writer_lines(name, side, pos, node, target_name):
         graph = ir.sm_graph_ref if side == "sm" else ir.pm_graph_ref
@@ -8224,7 +8227,8 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     if family in (("softmax-sharded-k-rank-dim1",),
                    ("softmax-sharded-k-rank-dim2",)):
         return render_closed_k_rank_softmax_segment(ir, relation, segment_id)
-    if family in (("div-sharded-k-rank-dim1",), ("div-sharded-k-rank-dim2",)):
+    if family in (("div-sharded-k-rank-dim1",), ("div-sharded-k-rank-dim2",),
+                   ("div-sharded-k-rank-dim3",)):
         return render_closed_k_rank_div_segment(ir, relation, segment_id)
     if family == ("contiguous-sharded-k-rank",):
         return render_closed_k_rank_contiguous_segment(ir, relation, segment_id)
@@ -8869,6 +8873,7 @@ def _closed_segment_family_imports(family: tuple[str, ...]) -> tuple[str, ...]:
         ("matmul-query-axis-sharded-k-rank-dim2",): ("denote.KRankMatmulQueryAxis",),
         ("div-sharded-k-rank-dim1",): ("denote.KRankDivGather",),
         ("div-sharded-k-rank-dim2",): ("denote.KRankDivGather",),
+        ("div-sharded-k-rank-dim3",): ("denote.KRankDivGather",),
         ("matmul-contraction-reduction-k-rank",): (
             "denote.KRankMatmulContractionReduction",
         ),
