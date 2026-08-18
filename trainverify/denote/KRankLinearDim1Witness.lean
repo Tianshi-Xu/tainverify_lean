@@ -1,6 +1,6 @@
 import denote.Denote
 
-open TrainVerify.Denote
+namespace TrainVerify.Denote
 
 /-- Generic pointwise semantics of a dimension-1 all-gather on 3D shards. -/
 theorem allGatherPrimDimN1_3d_valAt
@@ -248,3 +248,5 @@ theorem fw_linear_3d_allGatherPrimDimN_dim1_comm
 
 #check fw_linear_3d_allGatherPrimDimN_dim1_comm
 #print axioms fw_linear_3d_allGatherPrimDimN_dim1_comm
+
+end TrainVerify.Denote
