@@ -6082,6 +6082,23 @@ def render_closed_k_rank_local_segment(ir: GoalIR, relation, segment_id: str) ->
     ]
     return "\n".join(lines)
 
+def _select_exact_typed_certificate(relation, transition, rule_id: str, theorem: str,
+                                    certificate_type, certificate_facts):
+    """Select the unique concrete certificate proving this exact transition."""
+    if transition.rule_id != rule_id or transition.lean_theorem != theorem:
+        raise ValueError(f"{rule_id} theorem identity mismatch: {transition.lean_theorem}")
+    certificates = [
+        item for item in relation.certificates
+        if type(item) is certificate_type
+        and item.rule_id == transition.rule_id
+        and item.lean_theorem == transition.lean_theorem
+        and certificate_facts(item) == (transition.pre_facts, transition.post_facts)
+    ]
+    if len(certificates) != 1:
+        raise ValueError(f"{rule_id} requires one exact typed certificate")
+    return certificates[0]
+
+
 def _k_rank_segment_context(ir, relation, segment_id: str, rule_id: str,
                             theorem: str, certificate_type,
                             certificate_facts):
@@ -6092,20 +6109,11 @@ def _k_rank_segment_context(ir, relation, segment_id: str, rule_id: str,
     transition = {item.transition_id: item for item in relation.transition_specs}[
         segment.transition_ids[0]
     ]
-    if transition.rule_id != rule_id or transition.lean_theorem != theorem:
-        raise ValueError(f"{rule_id} theorem identity mismatch: {transition.lean_theorem}")
     if len(transition.pre_facts) != 1 or len(transition.post_facts) != 1:
         raise ValueError(f"{rule_id} requires one pre/post fact")
-    certificates = [
-        item for item in relation.certificates
-        if type(item) is certificate_type
-        and item.rule_id == transition.rule_id
-        and item.lean_theorem == transition.lean_theorem
-        and certificate_facts(item) == (transition.pre_facts, transition.post_facts)
-    ]
-    if len(certificates) != 1:
-        raise ValueError(f"{rule_id} requires one exact typed certificate")
-    certificate = certificates[0]
+    certificate = _select_exact_typed_certificate(
+        relation, transition, rule_id, theorem, certificate_type, certificate_facts
+    )
     records = {item.source: item for item in chain.relation_facts}
     try:
         pre = records[transition.pre_facts[0]]
@@ -6275,6 +6283,209 @@ def render_closed_k_rank_transpose_segment(ir: GoalIR, relation, segment_id: str
         "    · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh",
         "      rcases fresh with rfl", "      exact hout",
         "    · exact hframe fact old", "",
+    ]
+    return "\n".join(lines)
+
+
+def render_closed_k_rank_output_sharded_linear_segment(
+    ir: GoalIR, relation, segment_id: str
+) -> str:
+    """Replay one SM and ordered K PM output-sharded 3D linear writers."""
+    try:
+        from .relation_compiler import KRankOutputShardedLinearCertificate
+    except ImportError:
+        from relation_compiler import KRankOutputShardedLinearCertificate
+    rule_id = "linear-output-sharded-k-rank"
+    theorem = "TrainVerify.Denote.fw_linear_3d_weight_allGatherPrimDimN_dim0_comm"
+    chain = relation.dependent_chain_plan
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if segment is None or len(segment.transition_ids) != 1:
+        raise ValueError(f"{rule_id} requires one atomic transition")
+    transition = {item.transition_id: item for item in relation.transition_specs}[
+        segment.transition_ids[0]
+    ]
+    certificate = _select_exact_typed_certificate(
+        relation, transition, rule_id, theorem, KRankOutputShardedLinearCertificate,
+        lambda cert: (
+            tuple(sorted((cert.activation_fact, cert.weight_fact))),
+            (cert.output_fact,),
+        ),
+    )
+    records = {item.source: item for item in chain.relation_facts}
+    try:
+        activation = records[certificate.activation_fact]
+        weight = records[certificate.weight_fact]
+        output = records[certificate.output_fact]
+    except KeyError as exc:
+        raise ValueError("output-sharded linear relation fact is not materialized") from exc
+    states = {item.state_id: item for item in chain.states}
+    before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    if not {activation.fact_id, weight.fact_id} <= set(before.fact_ids):
+        raise ValueError("output-sharded linear input facts are not live")
+    if output.fact_id not in after.fact_ids:
+        raise ValueError("output-sharded linear output fact is not live")
+    if not set(after.fact_ids) <= ({output.fact_id} | set(before.fact_ids)):
+        raise ValueError("output-sharded linear post-state introduces an unproved fact")
+    if activation.kind != "joined" or len(activation.pm_tids) != 1:
+        raise ValueError("output-sharded linear activation requires joined authority")
+    if (weight.kind != "sharded" or weight.gather_dim != 0
+            or output.kind != "sharded" or output.gather_dim != 2):
+        raise ValueError("output-sharded linear requires dim0 weight and dim2 output facts")
+    k = len(weight.pm_tids)
+    if (k <= 0 or len(output.pm_tids) != k or certificate.rank_count != k
+            or certificate.output_gather_dim != 2):
+        raise ValueError("output-sharded linear rank count is not ordered PM authority")
+    if (tuple(activation.full_shape) != tuple(certificate.activation_shape)
+            or tuple(activation.shard_shape) != tuple(certificate.activation_shape)
+            or tuple(weight.full_shape) != tuple(certificate.weight_full_shape)
+            or tuple(weight.shard_shape) != tuple(certificate.weight_shard_shape)
+            or tuple(output.full_shape) != tuple(certificate.output_full_shape)
+            or tuple(output.shard_shape) != tuple(certificate.output_shard_shape)):
+        raise ValueError("output-sharded linear closed shapes disagree with its certificate")
+    activation_shape = tuple(activation.full_shape)
+    weight_full, weight_shard = tuple(weight.full_shape), tuple(weight.shard_shape)
+    output_full, output_shard = tuple(output.full_shape), tuple(output.shard_shape)
+    if (len(activation_shape) != 3 or len(weight_full) != 2
+            or len(weight_shard) != 2 or len(output_full) != 3
+            or len(output_shard) != 3):
+        raise ValueError("output-sharded linear requires exact rank-3/rank-2 shapes")
+    b, seq, inner = activation_shape
+    local_out = weight_shard[0]
+    if (min(b, seq, inner, local_out) <= 0
+            or weight_shard != (local_out, inner)
+            or weight_full != (local_out * k, inner)
+            or output_shard != (b, seq, local_out)
+            or output_full != (b, seq, local_out * k)):
+        raise ValueError("output-sharded linear exact dimensions do not compose")
+    exact_sm = tuple(range(*segment.sm_range))
+    exact_pm = tuple(range(*segment.pm_range))
+    if (transition.sm_node_indices != exact_sm or len(exact_sm) != 1
+            or transition.pm_node_indices != exact_pm or len(exact_pm) != k):
+        raise ValueError("output-sharded linear segment footprint is not exact 1+K")
+    if (certificate.sm_step_id != f"sm:{exact_sm[0]}:0"
+            or certificate.pm_step_ids != tuple(f"pm:{index}:0" for index in exact_pm)):
+        raise ValueError("output-sharded linear certificate footprint is not exact 1+K")
+    sm_node = ir.sm_nodes[exact_sm[0]]
+    pm_nodes = tuple(ir.pm_nodes[index] for index in exact_pm)
+    if sm_node.rank != 0 or sm_node.op != "FW_linear":
+        raise ValueError("output-sharded linear SM writer is not exact")
+    if tuple(node.rank for node in pm_nodes) != tuple(range(k)):
+        raise ValueError("output-sharded linear PM writers are not ordered ranks")
+    writers = (sm_node, *pm_nodes)
+    if any(node.params for node in writers):
+        raise ValueError("output-sharded linear FW_linear writers require no parameters")
+    if any(len(node.ins) != 2 or len(node.outs) != 1 for node in writers):
+        raise ValueError("output-sharded linear writers must be binary singleton-output nodes")
+    if sm_node.ins[0] != activation.sm_tid:
+        raise ValueError("output-sharded linear SM activation TID disagrees with its fact")
+    if sm_node.ins[1] != weight.sm_tid:
+        raise ValueError("output-sharded linear SM weight TID disagrees with its fact")
+    if sm_node.outs[0] != output.sm_tid:
+        raise ValueError("output-sharded linear SM output TID disagrees with its fact")
+    shared_activation = activation.pm_tids[0]
+    if any(node.ins[0] != shared_activation for node in pm_nodes):
+        raise ValueError("output-sharded linear PM activation TIDs are not joined authority")
+    if tuple(node.ins[1] for node in pm_nodes) != tuple(weight.pm_tids):
+        raise ValueError("output-sharded linear PM weight TIDs do not preserve ordered authority")
+    if tuple(node.outs[0] for node in pm_nodes) != tuple(output.pm_tids):
+        raise ValueError("output-sharded linear PM output TIDs do not preserve ordered authority")
+
+    sm_name = f"{segment_id}_sm_node"
+    pm_names = [f"{segment_id}_pm_node_{rank}" for rank in range(k)]
+    sm_nodes_name, pm_nodes_name = f"{segment_id}_sm_nodes", f"{segment_id}_pm_nodes"
+    lines = [f"private def {sm_name} : NodeDecl := {_node_text(sm_node)}"]
+    lines += [f"private def {name} : NodeDecl := {_node_text(node)}"
+              for name, node in zip(pm_names, pm_nodes)]
+    lines += [
+        f"private def {sm_nodes_name} : List NodeDecl := [{sm_name}]",
+        f"private def {pm_nodes_name} : List NodeDecl := [{', '.join(pm_names)}]", "",
+        f"private def {segment_id} :",
+        f"    ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
+        f"  smNodes := {sm_nodes_name}", f"  pmNodes := {pm_nodes_name}", "  sound := by",
+        "    intro smStore pmStore hstate",
+        f"    let smNodes : List NodeDecl := {sm_nodes_name}",
+        f"    let pmNodes : List NodeDecl := {pm_nodes_name}",
+        f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore",
+        f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
+        f"    have hActivation : {activation.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    change smStore {activation.sm_tid} = pmStore {shared_activation} ∧ (smStore {activation.sm_tid}).shape = {_shape_text(list(activation_shape))} ∧ (pmStore {shared_activation}).shape = {_shape_text(list(activation_shape))} at hActivation",
+        f"    have hWeight : {weight.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    change ShardedRel (smStore {weight.sm_tid}) [{', '.join(f'pmStore {tid}' for tid in weight.pm_tids)}] 0 {_shape_text(list(weight_full))} {_shape_text(list(weight_shard))} at hWeight",
+    ]
+
+    def writer(name, side, pos, node, node_name):
+        graph = ir.sm_graph_ref if side == "sm" else ir.pm_graph_ref
+        store = "smStore" if side == "sm" else "pmStore"
+        nodes = "smNodes" if side == "sm" else "pmNodes"
+        final = "smFinal" if side == "sm" else "pmFinal"
+        return [
+            f"    have {name} : {final} {node.outs[0]} = fw_linear ({store} {node.ins[0]}) ({store} {node.ins[1]}) := by",
+            f"      change ({nodes}.foldl (applyNodeDistributedFaithful {graph}) {store}) {node.outs[0]} = _",
+            f"      rw [show {nodes} = {nodes}.take {pos} ++ [{node_name}] ++ {nodes}.drop {pos + 1} by native_decide]",
+            f"      rw [foldl_faithful_middle_writer {graph} {store} ({nodes}.take {pos}) ({nodes}.drop {pos + 1})",
+            f"        {node_name} {node.outs[0]} (fun t => fw_linear (t {node.ins[0]}) (t {node.ins[1]})) (by",
+            "          intro t",
+            "          rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "            (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]",
+            "          simp [applyNodeDistributed, applyNodeRingAttn]",
+            f"          exact applyNode_fw_linear_out {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.outs[0]}",
+            "        ) (by native_decide) (by native_decide)]",
+            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[0]} (by native_decide) (by native_decide)]",
+            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[1]} (by native_decide) (by native_decide)]",
+        ]
+
+    lines += writer("hSmWriter", "sm", 0, sm_node, sm_name)
+    for rank, node in enumerate(pm_nodes):
+        lines += writer(f"hPmWriter{rank}", "pm", rank, node, pm_names[rank])
+    pm_weights = "[" + ", ".join(f"pmStore {tid}" for tid in weight.pm_tids) + "]"
+    pm_outputs = "[" + ", ".join(f"pmFinal {tid}" for tid in output.pm_tids) + "]"
+    lines += [
+        f"    have hComm := ({theorem}",
+        f"      (K := {pm_weights}.length) (b := {b}) (s := {seq}) (i := {inner}) (o := {local_out})",
+        f"      (x := pmStore {shared_activation}) (ws := {pm_weights})",
+        "      (by simp) (by native_decide) (by native_decide) (by native_decide) (by native_decide)",
+        "      (by simp) hActivation.2.2 (fun w hw => hWeight.shard_shapes w hw))",
+        f"    have hOutValue : smFinal {output.sm_tid} = allGatherPrimDimN 2 {pm_outputs}.length 0 {pm_outputs} := by",
+        "      rw [hSmWriter, hActivation.1, hWeight.full_value, hComm]",
+        "      simp only [List.map, List.length_cons, List.length_nil]",
+        "      rw [" + ", ".join(f"← hPmWriter{rank}" for rank in range(k)) + "]",
+    ]
+    shape_names = []
+    for rank, node in enumerate(pm_nodes):
+        name = f"hOutShape{rank}"; shape_names.append(name)
+        lines += [
+            f"    have {name} : (pmFinal {node.outs[0]}).shape = {_shape_text(list(output_shard))} := by",
+            f"      rw [hPmWriter{rank}]",
+            f"      exact fw_linear_3d_shape {b} {seq} {inner} {local_out} _ _ hActivation.2.2",
+            f"        (hWeight.shard_shapes (pmStore {weight.pm_tids[rank]}) (by simp))",
+        ]
+    lines += [
+        f"    have hout : {output.fact_id}.Holds smFinal pmFinal := by",
+        f"      change ShardedRel (smFinal {output.sm_tid}) {pm_outputs} 2 {_shape_text(list(output_full))} {_shape_text(list(output_shard))}",
+        "      refine {", "        full_value := hOutValue", "        full_shape := ?_",
+        "        shards_nonempty := by simp", "        gather_dim_lt := by native_decide",
+        "        shard_shapes := ?_",
+        "        shape_contract := by simp only [List.length_cons, List.length_nil]; native_decide", "      }",
+        "      · rw [hOutValue]",
+        f"        rw [allGatherPrimDimN_shape 2 {pm_outputs}.length {pm_outputs} {_shape_text(list(output_shard))}]",
+        "        · simp only [List.length_cons, List.length_nil]", "          native_decide",
+        "        · simp only [List.head?, Option.map, Option.getD]",
+        f"          exact {shape_names[0]}",
+        "      · intro shard hmem",
+        "        simp only [List.mem_cons, List.not_mem_nil, or_false] at hmem",
+        "        rcases hmem with " + " | ".join("rfl" for _ in range(k)),
+    ]
+    lines += [f"        · exact {name}" for name in shape_names]
+    lines += [
+        "    intro fact hfact",
+        f"    have covered : fact ∈ [{output.fact_id}] ++ {before.state_id}.facts := by",
+        f"      exact (show {after.state_id}.facts ⊆ [{output.fact_id}] ++ {before.state_id}.facts by native_decide) hfact",
+        "    simp only [List.mem_append] at covered", "    rcases covered with fresh | old",
+        "    · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh",
+        "      rcases fresh with rfl", "      exact hout", "    · exact hframe fact old", "",
     ]
     return "\n".join(lines)
 
@@ -8712,6 +8923,8 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
 
     if family == ("transpose-sharded-k-rank",):
         return render_closed_k_rank_transpose_segment(ir, relation, segment_id)
+    if family == ("linear-output-sharded-k-rank",):
+        return render_closed_k_rank_output_sharded_linear_segment(ir, relation, segment_id)
     if family == ("matmul-output-axis-sharded-k-rank-dim3",):
         return render_closed_k_rank_matmul_output_axis_segment(ir, relation, segment_id)
     if family == ("matmul-head-axis-sharded-k-rank-dim1",):
@@ -9388,6 +9601,7 @@ def _closed_segment_family_imports(
             return ("denote.KRankTranspose23Extra",)
         raise ValueError("transpose segment theorem has no closed renderer import")
     mapping = {
+        ("linear-output-sharded-k-rank",): ("denote.KRankLinearGather",),
         ("matmul-output-axis-sharded-k-rank-dim3",): ("denote.KRankMatmul",),
         ("matmul-head-axis-sharded-k-rank-dim1",): ("denote.KRankMatmulHeadAxis",),
         ("matmul-query-axis-sharded-k-rank-dim2",): ("denote.KRankMatmulQueryAxis",),

@@ -3789,6 +3789,11 @@ class KRankOutputShardedLinearCertificate:
     output_fact: RelationFactSpec
     sm_step_id: str
     pm_step_ids: tuple[str, ...]
+    activation_shape: tuple[int, ...]
+    weight_full_shape: tuple[int, ...]
+    weight_shard_shape: tuple[int, ...]
+    output_full_shape: tuple[int, ...]
+    output_shard_shape: tuple[int, ...]
     lean_theorem: str
 
 
@@ -3879,6 +3884,11 @@ def advance_k_rank_output_sharded_linear_frontiers(
             output_fact=output_fact,
             sm_step_id=sm_step.step_id,
             pm_step_ids=tuple(step.step_id for step in pm_steps),
+            activation_shape=tuple(sm_activation.output_shape),
+            weight_full_shape=tuple(lineage.tsShape),
+            weight_shard_shape=tuple(lineage.tpShapes[0]),
+            output_full_shape=full,
+            output_shard_shape=shards[0],
             lean_theorem=(
                 "TrainVerify.Denote."
                 "fw_linear_3d_weight_allGatherPrimDimN_dim0_comm"

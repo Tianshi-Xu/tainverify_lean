@@ -3631,15 +3631,20 @@ def test_k_rank_output_sharded_linear_uses_joined_activation_and_init_weight_aut
     cert = certs[0]
     assert cert.rank_count == 4
     assert cert.activation_fact == RelationFactSpec(
-        "joined", (sm_activation.step_id, pm_activation.step_id)
+        "joined", (sm_activation.step_id,), joined_pm_step=pm_activation.step_id
     )
     assert cert.weight_fact == RelationFactSpec(
         "sharded", ("init:50", "init:60", "init:61", "init:62", "init:63"),
         gather_dim=0,
     )
     assert cert.output_fact == RelationFactSpec("sharded", frontier, gather_dim=2)
+    assert cert.activation_shape == (1, 8, 12)
+    assert cert.weight_full_shape == (16, 12)
+    assert cert.weight_shard_shape == (4, 12)
+    assert cert.output_full_shape == (1, 8, 16)
+    assert cert.output_shard_shape == (1, 8, 4)
     assert frontiers == (
-        cert.activation_fact.step_triple, cert.weight_fact.step_triple,
+        (sm_activation.step_id, pm_activation.step_id), cert.weight_fact.step_triple,
     )
     assert layouts == ("joined", "sharded")
     assert cert.lean_theorem.endswith("fw_linear_3d_weight_allGatherPrimDimN_dim0_comm")
@@ -3655,7 +3660,7 @@ def test_k_rank_output_sharded_linear_uses_joined_activation_and_init_weight_aut
         goal_ir=SimpleNamespace(init_lineages={50: lineage}), certificate_sink=sink,
     )
     assert (normalized, normalized_layouts, sink) == (
-        (cert.activation_fact.step_triple, cert.weight_fact.step_triple),
+        ((sm_activation.step_id, pm_activation.step_id), cert.weight_fact.step_triple),
         ("joined", "sharded"), [cert]
     )
 
