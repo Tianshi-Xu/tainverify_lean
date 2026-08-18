@@ -6073,6 +6073,9 @@ def render_closed_k_rank_transpose_segment(ir: GoalIR, relation, segment_id: str
         "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim3_rank4",
         "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim2_to_dim1_rank4",
         "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim1_to_dim2_rank4",
+        "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_2_3_dim2_to_dim3_rank4",
+        "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_2_3_dim3_to_dim2_rank4",
+        "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_2_3_dim1_rank4",
     }
     typed = [item for item in relation.certificates
              if type(item) is KRankTransposeRelationCertificate
@@ -8865,8 +8868,19 @@ def _validate_closed_bundle(
         )
 
 
-def _closed_segment_family_imports(family: tuple[str, ...]) -> tuple[str, ...]:
-    """Return theorem modules required by one closed segment family."""
+def _closed_segment_family_imports(
+    family: tuple[str, ...], lean_theorems: tuple[str, ...] = ()
+) -> tuple[str, ...]:
+    """Return exact theorem modules required by one closed segment family."""
+    if family == ("transpose-sharded-k-rank",):
+        if len(lean_theorems) != 1:
+            raise ValueError("transpose segment requires exactly one theorem identity")
+        theorem = lean_theorems[0]
+        if ".fw_transposeAxes_1_2_" in theorem:
+            return ("denote.KRankTranspose",)
+        if ".fw_transposeAxes_2_3_" in theorem:
+            return ("denote.KRankTranspose23Extra",)
+        raise ValueError("transpose segment theorem has no closed renderer import")
     mapping = {
         ("matmul-output-axis-sharded-k-rank-dim3",): ("denote.KRankMatmul",),
         ("matmul-head-axis-sharded-k-rank-dim1",): ("denote.KRankMatmulHeadAxis",),
@@ -8942,7 +8956,10 @@ def compose_closed_dependent_bundle(
         header = _closed_bundle_module_header(
             f"closed segment {index:06d}",
             [ir.public_statement_module, *state_modules,
-             *_closed_segment_family_imports(family)], namespace,
+             *_closed_segment_family_imports(
+                 family,
+                 tuple(transitions[item].lean_theorem for item in segment.transition_ids),
+             )], namespace,
         )
         source = header + promoted.strip() + _closed_bundle_module_footer(namespace)
         payload = source.encode("utf-8")

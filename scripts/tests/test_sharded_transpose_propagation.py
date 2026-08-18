@@ -68,6 +68,9 @@ def _transpose_fixture(k=3, *, output_full_shape=None, output_shard_shape=None, 
         (4, (1, 1024, 12, 64), (1, 1024, 12, 16), (1, 2), 3, 3, "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim3_rank4"),
         (4, (1, 1024, 12, 64), (1, 256, 12, 64), (1, 2), 1, 2, "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim2_to_dim1_rank4"),
         (4, (1, 1024, 12, 64), (1, 1024, 3, 64), (1, 2), 2, 1, "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim1_to_dim2_rank4"),
+        (3, (2, 4, 5, 9), (2, 4, 5, 3), (2, 3), 3, 2, "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_2_3_dim2_to_dim3_rank4"),
+        (3, (2, 4, 15, 3), (2, 4, 5, 3), (2, 3), 2, 3, "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_2_3_dim3_to_dim2_rank4"),
+        (3, (2, 12, 5, 7), (2, 4, 5, 7), (2, 3), 1, 1, "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_2_3_dim1_rank4"),
     ],
 )
 def test_sharded_transpose_matcher_is_dynamic_and_derives_inverse_relation(
@@ -186,6 +189,17 @@ def test_sharded_transpose_matcher_fails_closed_on_unchecked_axis_pair():
         )
 
 
+def test_sharded_transpose_matcher_rejects_reverse_3_2_axis_order():
+    plan, frontier, *_ = _transpose_fixture(
+        3,
+        output_full_shape=(2, 4, 15, 3),
+        output_shard_shape=(2, 4, 5, 3),
+        params=(3, 2),
+    )
+    with pytest.raises(rc.RelationCompositionError, match="checked axis pair"):
+        rc.advance_k_rank_transpose_relation_frontiers(plan, (frontier,), ("sharded",))
+
+
 @pytest.mark.parametrize(
     ("full", "shard", "message"),
     [
@@ -201,9 +215,11 @@ def test_sharded_transpose_matcher_rejects_ambiguous_or_incompatible_shapes(full
 
 
 
-def _closed_fixture(k=3, *, output_full=(2, 9, 4, 5), output_shard=(2, 3, 4, 5)):
+def _closed_fixture(
+    k=3, *, output_full=(2, 9, 4, 5), output_shard=(2, 3, 4, 5), params=(1, 2)
+):
     plan, frontier, _, _ = _transpose_fixture(
-        k, output_full_shape=output_full, output_shard_shape=output_shard
+        k, output_full_shape=output_full, output_shard_shape=output_shard, params=params
     )
     cert = rc.advance_k_rank_transpose_relation_frontiers(
         plan, (frontier,), ("sharded",)
@@ -275,6 +291,38 @@ def test_closed_sharded_transpose_renderer_replays_exact_ordered_writers():
     assert "rankCount = 3" not in source
 
 
+@pytest.mark.parametrize(
+    ("output_full", "output_shard", "theorem"),
+    [
+        ((2, 4, 5, 9), (2, 4, 5, 3), "fw_transposeAxes_2_3_dim2_to_dim3_rank4"),
+        ((2, 4, 15, 3), (2, 4, 5, 3), "fw_transposeAxes_2_3_dim3_to_dim2_rank4"),
+        ((2, 12, 5, 7), (2, 4, 5, 7), "fw_transposeAxes_2_3_dim1_rank4"),
+    ],
+)
+def test_closed_sharded_transpose_renderer_supports_all_2_3_families(
+    output_full, output_shard, theorem
+):
+    ir, relation, segment, *_ = _closed_fixture(
+        output_full=output_full, output_shard=output_shard, params=(2, 3)
+    )
+    source = composer.render_closed_segment(ir, relation, segment.segment_id)
+    assert f"TrainVerify.Denote.RelationCompiler.ShardedRel.{theorem} hin" in source
+    assert "transposeAxes 2 3" in source
+    assert source.count("applyNode_fw_transposeAxes_out") == 4
+
+
+def test_closed_transpose_bundle_imports_exact_theorem_module():
+    family = ("transpose-sharded-k-rank",)
+    assert composer._closed_segment_family_imports(
+        family,
+        ("TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim3_rank4",),
+    ) == ("denote.KRankTranspose",)
+    assert composer._closed_segment_family_imports(
+        family,
+        ("TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_2_3_dim1_rank4",),
+    ) == ("denote.KRankTranspose23Extra",)
+
+
 def test_closed_sharded_transpose_renderer_rejects_tampered_live_writer():
     ir, relation, segment, *_ = _closed_fixture(k=3)
     ir.pm_nodes[1].params = [2, 3]
@@ -282,20 +330,22 @@ def test_closed_sharded_transpose_renderer_rejects_tampered_live_writer():
         composer.render_closed_segment(ir, relation, segment.segment_id)
 
 
-def _witness_source(rendered):
-    return f'''import denote.RelationCompiler
-
-namespace TrainVerify.Denote
-open RelationCompiler
-namespace SyntheticTranspose
+def _witness_namespace(namespace, output_full, output_shard):
+    ir, relation, segment, pre, post = _closed_fixture(
+        k=3, output_full=output_full, output_shard=output_shard, params=(2, 3)
+    )
+    ir.sm_graph_ref = f"{namespace}.gSM"
+    ir.pm_graph_ref = f"{namespace}.gPM"
+    rendered = composer.render_closed_segment(ir, relation, segment.segment_id)
+    return f'''namespace {namespace}
 noncomputable section
 set_option maxHeartbeats 500000
 
-def gSM : GraphDecl := {{ numRanks := 1, nodes := [{{ rank := 0, op := "OpName.FW_transpose", ins := [100], outs := [110], params := [1, 2] }}] }}
-def gPM : GraphDecl := {{ numRanks := 3, nodes := [{{ rank := 0, op := "OpName.FW_transpose", ins := [200], outs := [300], params := [1, 2] }}, {{ rank := 1, op := "OpName.FW_transpose", ins := [201], outs := [301], params := [1, 2] }}, {{ rank := 2, op := "OpName.FW_transpose", ins := [202], outs := [302], params := [1, 2] }}] }}
+def gSM : GraphDecl := {{ numRanks := 1, nodes := [{{ rank := 0, op := "OpName.FW_transpose", ins := [100], outs := [110], params := [2, 3] }}] }}
+def gPM : GraphDecl := {{ numRanks := 3, nodes := [{{ rank := 0, op := "OpName.FW_transpose", ins := [200], outs := [300], params := [2, 3] }}, {{ rank := 1, op := "OpName.FW_transpose", ins := [201], outs := [301], params := [2, 3] }}, {{ rank := 2, op := "OpName.FW_transpose", ins := [202], outs := [302], params := [2, 3] }}] }}
 
-def fact_in : RelationFact := .sharded 100 [200, 201, 202] 2 [2, 4, 9, 5] [2, 4, 3, 5]
-def fact_out : RelationFact := .sharded 110 [300, 301, 302] 1 [2, 9, 4, 5] [2, 3, 4, 5]
+def fact_in : RelationFact := .sharded 100 [200, 201, 202] {pre.gather_dim} {list(pre.full_shape)} {list(pre.shard_shape)}
+def fact_out : RelationFact := .sharded 110 [300, 301, 302] {post.gather_dim} {list(post.full_shape)} {list(post.shard_shape)}
 def state_pre : RelationState where
   facts := [fact_in]
   nonempty := by decide
@@ -306,18 +356,40 @@ def state_post : RelationState where
 {rendered}
 #print axioms segment_000000
 end
-end SyntheticTranspose
+end {namespace}
+'''
+
+
+def _witness_source():
+    families = (
+        ("SyntheticTranspose23Dim2To3", (2, 4, 5, 9), (2, 4, 5, 3)),
+        ("SyntheticTranspose23Dim3To2", (2, 4, 15, 3), (2, 4, 5, 3)),
+        ("SyntheticTranspose23Dim1", (2, 12, 5, 7), (2, 4, 5, 7)),
+    )
+    bodies = "\n".join(_witness_namespace(*family) for family in families)
+    return f'''import denote.KRankTranspose23Extra
+
+namespace TrainVerify.Denote
+open RelationCompiler
+
+{bodies}
 end TrainVerify.Denote
 '''
 
 
 def test_generated_sharded_transpose_witness_is_exact_renderer_output():
-    ir, relation, segment, *_ = _closed_fixture(k=3)
-    source = _witness_source(composer.render_closed_segment(ir, relation, segment.segment_id))
+    source = _witness_source()
     witness = Path(__file__).parents[2] / "trainverify/denote/GeneratedShardedTransposeWitness.lean"
     witness.unlink(missing_ok=True)
     witness.write_text(source, encoding="utf-8")
     assert witness.read_text(encoding="utf-8") == source
+    assert source.count("import denote.KRankTranspose23Extra") == 1
+    assert source.count('op := "OpName.FW_transpose"') == 24
+    assert source.count("applyNode_fw_transposeAxes_out") == 12
+    assert source.count("#print axioms segment_000000") == 3
+    assert "fw_transposeAxes_2_3_dim2_to_dim3_rank4 hin" in source
+    assert "fw_transposeAxes_2_3_dim3_to_dim2_rank4 hin" in source
+    assert "fw_transposeAxes_2_3_dim1_rank4 hin" in source
+    assert "SyntheticTranspose.gSM" not in source
+    assert "SyntheticTranspose.gPM" not in source
     assert "sorry" not in source
-    assert "set_option maxHeartbeats 500000" in source
-    assert "#print axioms segment_000000" in source

@@ -4558,7 +4558,7 @@ class KRankContiguousRelationCertificate:
 
 @dataclass(frozen=True)
 class KRankTransposeRelationCertificate:
-    """Exact authority for one SM and K ordered PM last-two-axis transposes."""
+    """Exact authority for one SM and K ordered PM checked rank-4 transposes."""
 
     rule_id: str
     rank_count: int
@@ -4878,9 +4878,9 @@ def advance_k_rank_transpose_relation_frontiers(plan, frontiers, layouts):
         output_full_shape = tuple(sm_step.output_shape)
         output_shard_shapes = tuple(tuple(step.output_shape) for step in pm_steps)
         dim0, dim1 = writer_params[0]
-        if (dim0, dim1) != (1, 2):
+        if (dim0, dim1) not in ((1, 2), (2, 3)):
             raise RelationCompositionError(
-                "K-rank FW_transpose is outside the checked axis pair (1, 2)")
+                "K-rank FW_transpose is outside the checked axis pairs (1, 2) and (2, 3)")
         expected_outputs = tuple(
             swap_axes(tuple(step.input_shapes[0]), dim0, dim1) for step in writers
         )
@@ -4916,12 +4916,17 @@ def advance_k_rank_transpose_relation_frontiers(plan, frontiers, layouts):
         if len(input_full_shape) != 4 or len(input_shard_shape) != 4:
             raise RelationCompositionError("K-rank FW_transpose is outside the checked rank-4 family")
         theorem_by_axis_transport = {
-            (3, 3): "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim3_rank4",
-            (2, 1): "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim2_to_dim1_rank4",
-            (1, 2): "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim1_to_dim2_rank4",
+            ((1, 2), 3, 3): "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim3_rank4",
+            ((1, 2), 2, 1): "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim2_to_dim1_rank4",
+            ((1, 2), 1, 2): "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim1_to_dim2_rank4",
+            ((2, 3), 2, 3): "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_2_3_dim2_to_dim3_rank4",
+            ((2, 3), 3, 2): "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_2_3_dim3_to_dim2_rank4",
+            ((2, 3), 1, 1): "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_2_3_dim1_rank4",
         }
         try:
-            lean_theorem = theorem_by_axis_transport[(input_gather_dim, output_gather_dim)]
+            lean_theorem = theorem_by_axis_transport[
+                (writer_params[0], input_gather_dim, output_gather_dim)
+            ]
         except KeyError as exc:
             raise RelationCompositionError(
                 "K-rank FW_transpose is outside the checked gather-axis pairs") from exc
