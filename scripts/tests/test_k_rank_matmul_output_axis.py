@@ -178,8 +178,10 @@ def _closed_fixture(k=3):
     )
     transition = rc.build_certificate_transition_specs(SimpleNamespace(), (cert,))[0]
     first = rc.ClosedRelationFactRecord(
-        "fact_x", first_fact, "joined", x_sm_tid, (x_pm_tid,), None, None,
-        cert.first_operand_shape, cert.first_operand_shape, None,
+        fact_id="fact_x", source=first_fact, kind="joined", sm_tid=x_sm_tid,
+        pm_tids=(), metadata_tid=None, metadata_region_id=None,
+        full_shape=cert.first_operand_shape, shard_shape=cert.first_operand_shape,
+        gather_dim=None, joined_pm_tid=x_pm_tid,
     )
     second = rc.ClosedRelationFactRecord(
         "fact_y", second_fact, "sharded", y_sm_tid, y_pm_tids, None, None,
@@ -222,10 +224,57 @@ def test_closed_output_axis_matmul_renderer_replays_exact_ordered_writers_and_th
     assert source.count("foldl_faithful_middle_writer") == 4
     assert source.count("applyNode_fw_matmul_out") == 4
     assert "ShardedRel.fw_matmul_output_axis_rank4" in source
-    assert f"pmStore {first.pm_tids[0]}" in source
+    assert f"pmStore {first.joined_pm_tid}" in source
     assert ", ".join(f"pmStore {tid}" for tid in second.pm_tids) in source
     assert ", ".join(f"pmFinal {tid}" for tid in output.pm_tids) in source
     assert "rankCount = 3" not in source
+
+
+def test_closed_output_axis_matmul_renderer_ignores_unrelated_same_family_certificate():
+    ir, relation, segment, *_ = _closed_fixture(k=3)
+    expected = composer.render_closed_segment(ir, relation, segment.segment_id)
+    exact = relation.certificates[0]
+    unrelated = replace(
+        exact,
+        first_operand_fact=rc.RelationFactSpec(
+            "joined", ("init:999",), joined_pm_step="init:998"
+        ),
+    )
+    relation.certificates = (unrelated, exact)
+
+    assert composer.render_closed_segment(ir, relation, segment.segment_id) == expected
+
+
+@pytest.mark.parametrize("mutation", ["malformed", "duplicate"])
+def test_closed_output_axis_matmul_renderer_rejects_nonunique_exact_certificate(mutation):
+    ir, relation, segment, *_ = _closed_fixture(k=3)
+    exact = relation.certificates[0]
+    if mutation == "malformed":
+        relation.certificates = (replace(
+            exact,
+            output_fact=rc.RelationFactSpec(
+                "sharded", ("sm:999:0", "pm:999:0", "pm:1000:0", "pm:1001:0"),
+                gather_dim=3,
+            ),
+        ),)
+    else:
+        relation.certificates = (exact, exact)
+
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
+
+
+def test_closed_output_axis_matmul_renderer_rejects_swapped_certificate_operand_roles():
+    ir, relation, segment, *_ = _closed_fixture(k=3)
+    exact = relation.certificates[0]
+    relation.certificates = (replace(
+        exact,
+        first_operand_fact=exact.second_operand_fact,
+        second_operand_fact=exact.first_operand_fact,
+    ),)
+
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
 
 
 @pytest.mark.parametrize(

@@ -6677,15 +6677,25 @@ def render_closed_k_rank_matmul_output_axis_segment(ir: GoalIR, relation, segmen
     if (transition.rule_id != "matmul-output-axis-sharded-k-rank-dim3"
             or transition.lean_theorem != theorem):
         raise ValueError("K-rank matmul theorem identity mismatch")
-    certs = [item for item in relation.certificates
-             if type(item) is KRankMatmulOutputAxisCertificate
-             and item.rule_id == transition.rule_id]
-    if len(certs) != 1 or certs[0].lean_theorem != theorem:
+    joined_pre = tuple(fact for fact in transition.pre_facts if fact.layout == "joined")
+    sharded_pre = tuple(
+        fact for fact in transition.pre_facts
+        if fact.layout == "sharded" and fact.gather_dim == 3
+    )
+    if len(joined_pre) != 1 or len(sharded_pre) != 1 or len(transition.post_facts) != 1:
+        raise ValueError("K-rank matmul requires one exact typed certificate")
+    ordered_pre = (joined_pre[0], sharded_pre[0])
+    certs = [
+        item for item in relation.certificates
+        if type(item) is KRankMatmulOutputAxisCertificate
+        and item.rule_id == transition.rule_id
+        and item.lean_theorem == transition.lean_theorem
+        and (item.first_operand_fact, item.second_operand_fact) == ordered_pre
+        and (item.output_fact,) == transition.post_facts
+    ]
+    if len(certs) != 1:
         raise ValueError("K-rank matmul requires one exact typed certificate")
     cert = certs[0]
-    expected_pre = tuple(sorted((cert.first_operand_fact, cert.second_operand_fact)))
-    if transition.pre_facts != expected_pre or transition.post_facts != (cert.output_fact,):
-        raise ValueError("K-rank matmul transition facts disagree with its certificate")
     records = {item.source: item for item in chain.relation_facts}
     try:
         first = records[cert.first_operand_fact]
@@ -6699,7 +6709,8 @@ def render_closed_k_rank_matmul_output_axis_segment(ir: GoalIR, relation, segmen
         raise ValueError("K-rank matmul input facts are not live")
     if output.fact_id not in after.fact_ids:
         raise ValueError("K-rank matmul output fact is not live")
-    if first.kind != "joined" or len(first.pm_tids) != 1:
+    if (first.kind != "joined" or first.pm_tids
+            or first.joined_pm_tid is None):
         raise ValueError("K-rank matmul first operand requires exact joined/shared authority")
     if (second.kind != "sharded" or output.kind != "sharded"
             or second.gather_dim != 3 or output.gather_dim != 3):
@@ -6752,7 +6763,7 @@ def render_closed_k_rank_matmul_output_axis_segment(ir: GoalIR, relation, segmen
     if (sm_node.ins != [first.sm_tid, second.sm_tid]
             or sm_node.outs[0] != output.sm_tid):
         raise ValueError("K-rank matmul SM writer disagrees with operand/output facts")
-    shared_x = first.pm_tids[0]
+    shared_x = first.joined_pm_tid
     if any(node.ins[0] != shared_x for node in pm_nodes):
         raise ValueError("K-rank matmul PM first operand is not exact shared authority")
     if tuple(node.ins[1] for node in pm_nodes) != tuple(second.pm_tids):
