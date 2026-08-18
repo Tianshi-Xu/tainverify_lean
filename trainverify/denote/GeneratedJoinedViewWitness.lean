@@ -50,8 +50,8 @@ private def segment_000000 (smGraph pmGraph : GraphDecl) :
       · native_decide
       · native_decide
       · native_decide
-    have hin : fact_joined_input.Holds smStore pmStore := hstate _ (by native_decide)
-    have hsm : smFinal 50 = fw_view [1, 8, 12] (smStore 49) := by
+    have hin_0 : fact_joined_input.Holds smStore pmStore := hstate _ (by native_decide)
+    have hsm_0 : smFinal 50 = fw_view [1, 8, 12] (smStore 49) := by
       simpa [smFinal, smNodes] using
         (foldl_faithful_unary_middle_writer smGraph smStore
           [] [] { rank := 0, op := "OpName.FW_view", ins := [49], outs := [50], params := [1, 8, 12] }
@@ -62,7 +62,7 @@ private def segment_000000 (smGraph pmGraph : GraphDecl) :
             simp [applyNodeDistributed, applyNodeRingAttn]
             exact applyNode_fw_view_out smGraph t 0 1 [8, 12] 49 50)
           (by native_decide) (by native_decide) (by native_decide) (by native_decide))
-    have hpm : pmFinal 321 = fw_view [1, 8, 12] (pmStore 317) := by
+    have hpm_0 : pmFinal 321 = fw_view [1, 8, 12] (pmStore 317) := by
       simpa [pmFinal, pmNodes] using
         (foldl_faithful_unary_middle_writer pmGraph pmStore
           [{ rank := 0, op := "OpName.FW_view", ins := [317], outs := [321], params := [1, 8, 12] }, { rank := 1, op := "OpName.FW_view", ins := [317], outs := [321], params := [1, 8, 12] }] [] { rank := 2, op := "OpName.FW_view", ins := [317], outs := [321], params := [1, 8, 12] }
@@ -73,16 +73,20 @@ private def segment_000000 (smGraph pmGraph : GraphDecl) :
             simp [applyNodeDistributed, applyNodeRingAttn]
             exact applyNode_fw_view_out pmGraph t 2 1 [8, 12] 317 321)
           (by native_decide) (by native_decide) (by native_decide) (by native_decide))
-    have hout : fact_joined_output.Holds smFinal pmFinal := by
+    have hout_0 : fact_joined_output.Holds smFinal pmFinal := by
       change smFinal 50 = pmFinal 321 ∧
         (smFinal 50).shape = [1, 8, 12] ∧
         (pmFinal 321).shape = [1, 8, 12]
       change smStore 49 = pmStore 317 ∧
         (smStore 49).shape = [1, 8, 3, 4] ∧
-        (pmStore 317).shape = [1, 8, 3, 4] at hin
-      rw [hsm, hpm]
-      exact JoinedRel.fw_view [1, 8, 12] [1, 8, 3, 4] hin
-    exact RelationState.Holds.mono_insert hframe hout (by native_decide)
+        (pmStore 317).shape = [1, 8, 3, 4] at hin_0
+      rw [hsm_0, hpm_0]
+      exact JoinedRel.fw_view [1, 8, 12] [1, 8, 3, 4] hin_0
+    have hpublish_0 : state_post.Holds smFinal pmFinal := by
+      exact RelationState.Holds.mono_insert (before := state_pre)
+        (after := state_post) (fresh := fact_joined_output)
+        hframe hout_0 (by native_decide)
+    exact hpublish_0
 
 #print axioms segment_000000
 end

@@ -207,6 +207,134 @@ def _closed_joined_view_fixture(rank_count=3):
     return ir, relation, segment, pre, post
 
 
+def _closed_joined_view_multi_fixture(transition_count, rank_count):
+    sm_start = 50
+    pm_start = 321
+    steps = []
+    pairs = []
+    sm_nodes = []
+    pm_nodes = []
+    for offset in range(transition_count):
+        params = (1, 8, 12 + offset)
+        input_shape = (1, 8, 3, 4 + offset)
+        sm_index = sm_start + offset
+        pm_terminal = pm_start + (offset + 1) * rank_count - 1
+        sm_step = _view_step(
+            f"sm:{sm_index}:0", side="sm", node_index=sm_index, rank=0,
+            source=f"sm:{40 + offset}:0", input_shape=input_shape,
+            output_shape=params, parameters=params,
+        )
+        pm_step = _view_step(
+            f"pm:{pm_terminal}:0", side="pm", node_index=pm_terminal,
+            rank=rank_count - 1, source=f"pm:{300 + offset}:0",
+            input_shape=input_shape, output_shape=params, parameters=params,
+        )
+        steps.extend((sm_step, pm_step))
+        pairs.append((sm_step.step_id, pm_step.step_id))
+        sm_nodes.append(SimpleNamespace(
+            rank=0, op="FW_view", ins=[40 + offset], outs=[60 + offset],
+            params=list(params),
+        ))
+        pm_nodes.extend(SimpleNamespace(
+            rank=rank, op="FW_view", ins=[300 + offset], outs=[400 + offset],
+            params=list(params),
+        ) for rank in range(rank_count))
+
+    plan = SimpleNamespace(steps=tuple(steps))
+    certificates, _, _ = rc.advance_joined_view_relation_frontiers(
+        plan, tuple(pairs), ("joined",) * transition_count
+    )
+    transitions = rc.build_certificate_transition_specs(plan, certificates)
+    pre = tuple(SimpleNamespace(
+        fact_id=f"fact_joined_input_{i}", source=certificate.input_fact,
+        kind="joined", sm_tid=40 + i, joined_pm_tid=300 + i,
+        full_shape=certificate.input_shape, shard_shape=certificate.input_shape,
+        pm_tids=(), gather_dim=None,
+    ) for i, certificate in enumerate(certificates))
+    post = tuple(SimpleNamespace(
+        fact_id=f"fact_joined_output_{i}", source=certificate.output_fact,
+        kind="joined", sm_tid=60 + i, joined_pm_tid=400 + i,
+        full_shape=certificate.output_shape, shard_shape=certificate.output_shape,
+        pm_tids=(), gather_dim=None,
+    ) for i, certificate in enumerate(certificates))
+    before = SimpleNamespace(
+        state_id="state_pre", fact_ids=("anchor", *(fact.fact_id for fact in pre))
+    )
+    after = SimpleNamespace(
+        state_id="state_post", fact_ids=("anchor", *(fact.fact_id for fact in post))
+    )
+    segment = SimpleNamespace(
+        segment_id="segment_multi",
+        transition_ids=tuple(item.transition_id for item in transitions),
+        sm_range=(sm_start, sm_start + transition_count),
+        pm_range=(pm_start, pm_start + transition_count * rank_count),
+        pre_state_id=before.state_id, post_state_id=after.state_id,
+    )
+    chain = SimpleNamespace(
+        complete=True, relation_facts=(*pre, *post), authority_facts=(),
+        anchor_fact=SimpleNamespace(fact_id="anchor", side="sm", tid=77, shape=(1,)),
+        states=(before, after), segments=(segment,),
+    )
+    filler = lambda rank=0: SimpleNamespace(
+        rank=rank, op="FW_identity", ins=[], outs=[], params=[]
+    )
+    ir = SimpleNamespace(
+        sm_graph_ref="sm_graph", pm_graph_ref="pm_graph",
+        sm_nodes=[filler() for _ in range(sm_start)] + sm_nodes,
+        pm_nodes=[filler() for _ in range(pm_start)] + pm_nodes,
+    )
+    relation = SimpleNamespace(
+        certificates=certificates, transition_specs=transitions,
+        dependent_chain_plan=chain,
+    )
+    return ir, relation, segment, pre, post
+
+
+@pytest.mark.parametrize("transition_count", (2, 3))
+@pytest.mark.parametrize("rank_count", (2, 4))
+def test_closed_joined_view_renderer_handles_arbitrary_positive_atomic_tuple(
+        transition_count, rank_count):
+    ir, relation, segment, pre, post = _closed_joined_view_multi_fixture(
+        transition_count, rank_count
+    )
+
+    source = composer.render_closed_segment(ir, relation, segment.segment_id)
+
+    assert source.count("let smFinal :=") == 1
+    assert source.count("let pmFinal :=") == 1
+    assert source.count("have hsm_") == transition_count
+    assert source.count("have hpm_") == transition_count
+    assert source.count("JoinedRel.fw_view") == transition_count
+    for offset in range(transition_count):
+        assert f"have hin_{offset} : {pre[offset].fact_id}.Holds" in source
+        assert f"have hout_{offset} : {post[offset].fact_id}.Holds" in source
+        assert f"fw_view [1, 8, {12 + offset}]" in source
+    assert "Goal_" not in source and "Tid" not in source
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda ir, relation, segment: setattr(
+            segment, "transition_ids", (segment.transition_ids[0],) * 2), "duplicate"),
+        (lambda ir, relation, segment: setattr(
+            segment, "transition_ids", tuple(reversed(segment.transition_ids))), "order"),
+        (lambda ir, relation, segment: setattr(
+            relation, "transition_specs", (
+                relation.transition_specs[0],
+                replace(relation.transition_specs[1], sm_node_indices=(50,)),
+            )), "footprint"),
+        (lambda ir, relation, segment: setattr(
+            ir.pm_nodes[324], "params", [1, 8, 99]), "literal parameters"),
+    ],
+)
+def test_closed_joined_view_multi_renderer_rejects_authority_tampering(mutation, message):
+    ir, relation, segment, *_ = _closed_joined_view_multi_fixture(2, 2)
+    mutation(ir, relation, segment)
+    with pytest.raises(ValueError, match=message):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
+
+
 @pytest.mark.parametrize("rank_count", (2, 3, 5))
 def test_closed_joined_view_renderer_reduces_one_sm_and_ordered_dynamic_k_pm_writers(rank_count):
     ir, relation, segment, pre, post = _closed_joined_view_fixture(rank_count)
@@ -275,6 +403,50 @@ def test_closed_joined_view_renderer_rejects_tampered_certificate_authority(fiel
     with pytest.raises(ValueError, match="one exact typed certificate"):
         composer.render_closed_joined_view_segment(ir, bad, segment.segment_id)
 
+
+
+def _render_joined_view_multi_witness(transition_count, rank_count, namespace):
+    ir, relation, segment, *_ = _closed_joined_view_multi_fixture(
+        transition_count, rank_count
+    )
+    sm_nodes = ir.sm_nodes[segment.sm_range[0]:segment.sm_range[1]]
+    pm_nodes = ir.pm_nodes[segment.pm_range[0]:segment.pm_range[1]]
+    return "\n".join((
+        composer.render_closed_relation_declarations(
+            relation.dependent_chain_plan, namespace
+        ),
+        f"namespace TrainVerify.Denote.{namespace}",
+        "noncomputable section",
+        (f"private def sm_graph : GraphDecl := {{ numRanks := 1, nodes := "
+         f"[{', '.join(composer._node_text(node) for node in sm_nodes)}] }}"),
+        (f"private def pm_graph : GraphDecl := {{ numRanks := {rank_count}, nodes := "
+         f"[{', '.join(composer._node_text(node) for node in pm_nodes)}] }}"),
+        composer.render_closed_segment(ir, relation, segment.segment_id),
+        f"#print axioms {segment.segment_id}",
+        "end",
+        f"end TrainVerify.Denote.{namespace}",
+        "",
+    ))
+
+
+def test_generated_joined_view_multi_witnesses_are_exact_renderer_output():
+    pair = _render_joined_view_multi_witness(
+        2, 2, "GeneratedJoinedViewPairWitness"
+    )
+    triple = _render_joined_view_multi_witness(
+        3, 4, "GeneratedJoinedViewTripleWitness"
+    )
+    triple = triple[triple.index(
+        "namespace TrainVerify.Denote.GeneratedJoinedViewTripleWitness"
+    ):]
+    source = "\n".join((pair, triple))
+    witness = (Path(__file__).resolve().parents[2]
+               / "trainverify/denote/GeneratedJoinedViewMultiWitness.lean")
+
+    assert witness.read_text(encoding="utf-8") == source
+    assert source.count("let smFinal :=") == 2
+    assert source.count("let pmFinal :=") == 2
+    assert "sorry" not in source
 
 def test_generated_joined_view_witness_is_exact_renderer_output():
     ir, relation, segment, *_ = _closed_joined_view_fixture()

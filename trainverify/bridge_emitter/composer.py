@@ -1769,7 +1769,7 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
 
 
 def render_closed_joined_view_segment(ir: GoalIR, relation, segment_id: str) -> str:
-    """Replay one SM plus ordered dynamic-K PM FW_view replicas."""
+    """Replay a positive atomic tuple of SM/dynamic-K PM FW_view writers."""
     try:
         from .relation_compiler import JoinedUnaryViewCertificate
     except ImportError:
@@ -1779,85 +1779,128 @@ def render_closed_joined_view_segment(ir: GoalIR, relation, segment_id: str) -> 
     if chain is None or not chain.complete:
         raise ValueError("joined view renderer requires a complete closed chain")
     segments = [item for item in chain.segments if item.segment_id == segment_id]
-    if len(segments) != 1 or len(segments[0].transition_ids) != 1:
-        raise ValueError("joined view renderer requires one exact segment and atomic transition")
+    if len(segments) != 1 or not segments[0].transition_ids:
+        raise ValueError("joined view renderer requires one exact nonempty segment")
     segment = segments[0]
-    transition_matches = [
-        item for item in relation.transition_specs
-        if item.transition_id == segment.transition_ids[0]
-    ]
-    if len(transition_matches) != 1:
-        raise ValueError("joined view renderer requires one exact transition authority")
-    transition = transition_matches[0]
+    transition_ids = tuple(segment.transition_ids)
+    if len(transition_ids) != len(set(transition_ids)):
+        raise ValueError("joined view segment contains duplicate transition authority")
+
+    all_transition_ids = [item.transition_id for item in relation.transition_specs]
+    if len(all_transition_ids) != len(set(all_transition_ids)):
+        raise ValueError("joined view relation contains duplicate transition authority")
+    transition_by_id = {item.transition_id: item for item in relation.transition_specs}
+    try:
+        transitions = tuple(transition_by_id[item] for item in transition_ids)
+    except KeyError as exc:
+        raise ValueError("joined view transition authority is not materialized") from exc
+
     theorem = "TrainVerify.Denote.RelationCompiler.JoinedRel.fw_view"
-    if (transition.rule_id != "joined-view-unary" or transition.lean_theorem != theorem
-            or len(transition.pre_facts) != 1 or len(transition.post_facts) != 1):
+    if any(item.rule_id != "joined-view-unary" or item.lean_theorem != theorem
+           or len(item.pre_facts) != 1 or len(item.post_facts) != 1
+           for item in transitions):
         raise ValueError("joined view renderer received an unsupported transition")
-    certificates = [
-        item for item in relation.certificates
-        if type(item) is JoinedUnaryViewCertificate
-        and item.rule_id == transition.rule_id
-        and item.lean_theorem == transition.lean_theorem
-        and (item.input_fact,) == transition.pre_facts
-        and (item.output_fact,) == transition.post_facts
+
+    certificates = []
+    for transition in transitions:
+        matches = [
+            item for item in relation.certificates
+            if type(item) is JoinedUnaryViewCertificate
+            and item.rule_id == transition.rule_id
+            and item.lean_theorem == transition.lean_theorem
+            and (item.input_fact,) == transition.pre_facts
+            and (item.output_fact,) == transition.post_facts
+        ]
+        if len(matches) != 1:
+            raise ValueError("joined-view-unary requires one exact typed certificate per transition")
+        certificates.append(matches[0])
+    certificate_keys = [
+        (item.input_fact, item.output_fact, item.sm_step_id, item.pm_step_id)
+        for item in certificates
     ]
-    if len(certificates) != 1:
-        raise ValueError("joined-view-unary requires one exact typed certificate")
-    certificate = certificates[0]
+    if len(certificate_keys) != len(set(certificate_keys)):
+        raise ValueError("joined view certificates contain duplicate authority")
 
     sources = [item.source for item in chain.relation_facts]
-    if len(sources) != len(set(sources)):
+    fact_ids = [item.fact_id for item in chain.relation_facts]
+    if len(sources) != len(set(sources)) or len(fact_ids) != len(set(fact_ids)):
         raise ValueError("joined view relation facts contain duplicate authority")
     records = {item.source: item for item in chain.relation_facts}
     try:
-        pre = records[transition.pre_facts[0]]
-        post = records[transition.post_facts[0]]
+        pres = tuple(records[item.pre_facts[0]] for item in transitions)
+        posts = tuple(records[item.post_facts[0]] for item in transitions)
     except KeyError as exc:
         raise ValueError("joined view pre/post authority is not materialized") from exc
-    if (pre.kind != "joined" or post.kind != "joined"
-            or pre.joined_pm_tid is None or post.joined_pm_tid is None
-            or tuple(pre.pm_tids) != () or tuple(post.pm_tids) != ()
-            or pre.gather_dim is not None or post.gather_dim is not None):
+    if any(fact.kind != "joined" or fact.joined_pm_tid is None
+           or tuple(fact.pm_tids) != () or fact.gather_dim is not None
+           for fact in (*pres, *posts)):
         raise ValueError("joined view renderer requires exact joined pre/post roles")
+    role_ids = [(pre.fact_id, post.fact_id) for pre, post in zip(pres, posts)]
+    if (len({item[0] for item in role_ids}) != len(role_ids)
+            or len({item[1] for item in role_ids}) != len(role_ids)):
+        raise ValueError("joined view transitions contain duplicate pre/post roles")
 
     sm_start, sm_end = segment.sm_range
     pm_start, pm_end = segment.pm_range
-    k = pm_end - pm_start
-    if (sm_end - sm_start != 1 or k < 1
-            or tuple(transition.sm_node_indices) != (sm_start,)
-            or tuple(transition.pm_node_indices) != (pm_end - 1,)):
-        raise ValueError("joined view transition does not name the exact writer footprint")
-    if not (0 <= sm_start < len(ir.sm_nodes) and 0 <= pm_start < pm_end <= len(ir.pm_nodes)):
+    transition_count = len(transitions)
+    pm_count = pm_end - pm_start
+    if (sm_end - sm_start != transition_count or pm_count < transition_count
+            or pm_count % transition_count != 0):
+        raise ValueError("joined view transition tuple does not cover the exact writer footprint")
+    k = pm_count // transition_count
+    expected_sm = tuple(sm_start + offset for offset in range(transition_count))
+    expected_pm = tuple(
+        pm_start + (offset + 1) * k - 1 for offset in range(transition_count)
+    )
+    actual_sm = tuple(tuple(item.sm_node_indices) for item in transitions)
+    actual_pm = tuple(tuple(item.pm_node_indices) for item in transitions)
+    if actual_sm != tuple((item,) for item in expected_sm):
+        if set(actual_sm) == set((item,) for item in expected_sm):
+            raise ValueError("joined view transition order disagrees with SM writer order")
+        raise ValueError("joined view transition does not name the exact SM writer footprint")
+    if actual_pm != tuple((item,) for item in expected_pm):
+        if set(actual_pm) == set((item,) for item in expected_pm):
+            raise ValueError("joined view transition order disagrees with PM writer order")
+        raise ValueError("joined view transition does not name the exact PM writer footprint")
+    if not (0 <= sm_start < sm_end <= len(ir.sm_nodes)
+            and 0 <= pm_start < pm_end <= len(ir.pm_nodes)):
         raise ValueError("joined view writer footprint is outside graph authority")
-    sm = ir.sm_nodes[sm_start]
+
+    sm_nodes = tuple(ir.sm_nodes[index] for index in range(sm_start, sm_end))
     pm_nodes = tuple(ir.pm_nodes[index] for index in range(pm_start, pm_end))
-    writers = (sm, *pm_nodes)
-    if (sm.rank != 0 or tuple(node.rank for node in pm_nodes) != tuple(range(k))
-            or certificate.pm_rank != k - 1):
+    pm_blocks = tuple(
+        pm_nodes[offset * k:(offset + 1) * k] for offset in range(transition_count)
+    )
+    if any(sm.rank != 0 for sm in sm_nodes) or any(
+        tuple(node.rank for node in block) != tuple(range(k)) for block in pm_blocks
+    ) or any(certificate.pm_rank != k - 1 for certificate in certificates):
         raise ValueError("joined view writers require SM rank zero and ordered ranks 0..K-1")
     if any(node.op != "FW_view" or len(node.ins) != 1 or len(node.outs) != 1
-           for node in writers):
+           for node in (*sm_nodes, *pm_nodes)):
         raise ValueError("joined view writers violate literal FW_view unary arity")
-    params = tuple(sm.params or ())
-    if (not params or params != tuple(certificate.parameters)
-            or any(tuple(node.params or ()) != params for node in pm_nodes)):
-        raise ValueError("joined view literal parameters disagree")
-    if (sm.ins[0] != pre.sm_tid
-            or tuple(node.ins[0] for node in pm_nodes) != (pre.joined_pm_tid,) * k):
-        raise ValueError("joined view inputs do not match the joined pre-fact")
-    if (sm.outs[0] != post.sm_tid
-            or tuple(node.outs[0] for node in pm_nodes) != (post.joined_pm_tid,) * k):
-        raise ValueError("joined view outputs do not match the joined post-fact")
-    if (certificate.sm_step_id != f"sm:{sm_start}:0"
-            or certificate.pm_step_id != f"pm:{pm_end - 1}:0"):
-        raise ValueError("joined view certificate does not name the terminal replica writers")
-    if (tuple(pre.full_shape) != tuple(pre.shard_shape)
-            or tuple(pre.full_shape) != tuple(certificate.input_shape)):
-        raise ValueError("joined view declared input shapes disagree")
-    if (tuple(post.full_shape) != tuple(post.shard_shape)
-            or tuple(post.full_shape) != tuple(certificate.output_shape)
-            or tuple(post.full_shape) != params):
-        raise ValueError("joined view declared output shapes disagree with literal parameters")
+
+    for offset, (transition, certificate, pre, post, sm, block) in enumerate(
+            zip(transitions, certificates, pres, posts, sm_nodes, pm_blocks)):
+        params = tuple(sm.params or ())
+        if (not params or params != tuple(certificate.parameters)
+                or any(tuple(node.params or ()) != params for node in block)):
+            raise ValueError("joined view literal parameters disagree")
+        if sm.ins[0] != pre.sm_tid or any(
+                node.ins[0] != pre.joined_pm_tid for node in block):
+            raise ValueError("joined view inputs do not match the exact joined pre-fact roles")
+        if sm.outs[0] != post.sm_tid or any(
+                node.outs[0] != post.joined_pm_tid for node in block):
+            raise ValueError("joined view outputs do not match the exact joined post-fact roles")
+        if (certificate.sm_step_id != f"sm:{expected_sm[offset]}:0"
+                or certificate.pm_step_id != f"pm:{expected_pm[offset]}:0"):
+            raise ValueError("joined view certificate does not name the terminal replica writers")
+        if (tuple(pre.full_shape) != tuple(pre.shard_shape)
+                or tuple(pre.full_shape) != tuple(certificate.input_shape)):
+            raise ValueError("joined view declared input shapes disagree")
+        if (tuple(post.full_shape) != tuple(post.shard_shape)
+                or tuple(post.full_shape) != tuple(certificate.output_shape)
+                or tuple(post.full_shape) != params):
+            raise ValueError("joined view declared output shapes disagree with literal parameters")
 
     state_ids = [item.state_id for item in chain.states]
     if len(state_ids) != len(set(state_ids)):
@@ -1870,18 +1913,19 @@ def render_closed_joined_view_segment(ir: GoalIR, relation, segment_id: str) -> 
     if (len(before.fact_ids) != len(set(before.fact_ids))
             or len(after.fact_ids) != len(set(after.fact_ids))):
         raise ValueError("joined view state framing contains duplicate facts")
-    if pre.fact_id not in before.fact_ids or post.fact_id not in after.fact_ids:
+    pre_ids = {item.fact_id for item in pres}
+    post_ids = {item.fact_id for item in posts}
+    if not pre_ids <= set(before.fact_ids) or not post_ids <= set(after.fact_ids):
         raise ValueError("joined view input/output fact is not live")
-    if not set(after.fact_ids) <= ({post.fact_id} | set(before.fact_ids)):
-        raise ValueError("joined view post-state introduces an unproved fact")
+    expected_after = (set(before.fact_ids) - pre_ids) | post_ids
+    if set(after.fact_ids) != expected_after:
+        raise ValueError("joined view post-state is not an exhaustive publication")
 
-    sm_text = _node_text(sm)
+    sm_texts = [_node_text(node) for node in sm_nodes]
     pm_texts = [_node_text(node) for node in pm_nodes]
-    target_shape = _shape_text(list(params))
-    input_shape = _shape_text(list(pre.full_shape))
 
     def writer(name: str, graph: str, store: str, final: str, nodes_name: str,
-               nodes: tuple, position: int) -> list[str]:
+               nodes: tuple, position: int, target_shape: str) -> list[str]:
         node = nodes[position]
         before_nodes = ", ".join(_node_text(item) for item in nodes[:position])
         after_nodes = ", ".join(_node_text(item) for item in nodes[position + 1:])
@@ -1903,34 +1947,68 @@ def render_closed_joined_view_segment(ir: GoalIR, relation, segment_id: str) -> 
     lines = [
         f"private def {segment.segment_id} (smGraph pmGraph : GraphDecl) :",
         f"    ClosedDepSegmentCertificate smGraph pmGraph {before.state_id} {after.state_id} where",
-        f"  smNodes := [{sm_text}]",
+        f"  smNodes := [{', '.join(sm_texts)}]",
         f"  pmNodes := [{', '.join(pm_texts)}]",
         "  sound := by",
         "    intro smStore pmStore hstate",
-        f"    let smNodes : List NodeDecl := [{sm_text}]",
+        f"    let smNodes : List NodeDecl := [{', '.join(sm_texts)}]",
         f"    let pmNodes : List NodeDecl := [{', '.join(pm_texts)}]",
         "    let smFinal := smNodes.foldl (applyNodeDistributedFaithful smGraph) smStore",
         "    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful pmGraph) pmStore",
         f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
         "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
         "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
-        f"    have hin : {pre.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
     ]
-    lines += writer("hsm", "smGraph", "smStore", "smFinal", "smNodes", (sm,), 0)
-    lines += writer("hpm", "pmGraph", "pmStore", "pmFinal", "pmNodes", pm_nodes, k - 1)
-    lines += [
-        f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by",
-        f"      change smFinal {post.sm_tid} = pmFinal {post.joined_pm_tid} ∧",
-        f"        (smFinal {post.sm_tid}).shape = {target_shape} ∧",
-        f"        (pmFinal {post.joined_pm_tid}).shape = {target_shape}",
-        f"      change smStore {pre.sm_tid} = pmStore {pre.joined_pm_tid} ∧",
-        f"        (smStore {pre.sm_tid}).shape = {input_shape} ∧",
-        f"        (pmStore {pre.joined_pm_tid}).shape = {input_shape} at hin",
-        "      rw [hsm, hpm]",
-        f"      exact JoinedRel.fw_view {target_shape} {input_shape} hin",
-        "    exact RelationState.Holds.mono_insert hframe hout (by native_decide)", "",
-    ]
+    for offset, (pre, post, sm, block) in enumerate(
+            zip(pres, posts, sm_nodes, pm_blocks)):
+        target_shape = _shape_text(list(post.full_shape))
+        input_shape = _shape_text(list(pre.full_shape))
+        lines.append(
+            f"    have hin_{offset} : {pre.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)"
+        )
+        lines += writer(
+            f"hsm_{offset}", "smGraph", "smStore", "smFinal", "smNodes",
+            sm_nodes, offset, target_shape,
+        )
+        lines += writer(
+            f"hpm_{offset}", "pmGraph", "pmStore", "pmFinal", "pmNodes",
+            pm_nodes, offset * k + k - 1, target_shape,
+        )
+        lines += [
+            f"    have hout_{offset} : {post.fact_id}.Holds smFinal pmFinal := by",
+            f"      change smFinal {post.sm_tid} = pmFinal {post.joined_pm_tid} ∧",
+            f"        (smFinal {post.sm_tid}).shape = {target_shape} ∧",
+            f"        (pmFinal {post.joined_pm_tid}).shape = {target_shape}",
+            f"      change smStore {pre.sm_tid} = pmStore {pre.joined_pm_tid} ∧",
+            f"        (smStore {pre.sm_tid}).shape = {input_shape} ∧",
+            f"        (pmStore {pre.joined_pm_tid}).shape = {input_shape} at hin_{offset}",
+            f"      rw [hsm_{offset}, hpm_{offset}]",
+            f"      exact JoinedRel.fw_view {target_shape} {input_shape} hin_{offset}",
+        ]
+
+    retained_ids = [item for item in after.fact_ids if item not in post_ids]
+    previous_state = before.state_id
+    for offset, post in enumerate(posts):
+        final = offset == transition_count - 1
+        next_state = after.state_id if final else f"publish_{offset}"
+        if not final:
+            published = {item.fact_id for item in posts[:offset + 1]}
+            facts = [item for item in after.fact_ids if item in published or item in retained_ids]
+            lines += [
+                f"    let {next_state} : RelationState := {{",
+                f"      facts := [{', '.join(facts)}]",
+                "      nonempty := by native_decide }",
+            ]
+        lines += [
+            f"    have hpublish_{offset} : {next_state}.Holds smFinal pmFinal := by",
+            f"      exact RelationState.Holds.mono_insert (before := {previous_state})",
+            f"        (after := {next_state}) (fresh := {post.fact_id})",
+            f"        {'hframe' if offset == 0 else f'hpublish_{offset - 1}'} hout_{offset} (by native_decide)",
+        ]
+        previous_state = next_state
+    lines += [f"    exact hpublish_{transition_count - 1}", ""]
     return "\n".join(lines)
+
 
 def render_closed_rotary_segment(ir: GoalIR, relation, segment_id: str) -> str:
     chain = relation.dependent_chain_plan
@@ -9081,7 +9159,7 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     if family in (("attention-ordinary-qkv-two-rank",),
                    ("attention-zigzag-qkv-two-rank",)):
         return render_closed_attention_segment(ir, relation, segment_id)
-    if family == ("joined-view-unary",):
+    if family and all(item == "joined-view-unary" for item in family):
         return render_closed_joined_view_segment(ir, relation, segment_id)
     if family in (
         ("float-zigzag-two-rank",),
