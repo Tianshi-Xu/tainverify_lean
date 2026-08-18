@@ -845,6 +845,27 @@ def _collective_shape_issue(
                     )
                 if q_shape is not None and k_shape is not None:
                     per_output_shapes = [list(q_shape), list(k_shape)]
+            elif node.op == "BW_linear" and len(input_shapes) == 3:
+                grad_shape, input_shape, weight_shape = input_shapes
+                if all(shape is not None for shape in input_shapes):
+                    if (
+                        not grad_shape or not input_shape or len(weight_shape) != 2
+                        or grad_shape[:-1] != input_shape[:-1]
+                        or grad_shape[-1] != weight_shape[0]
+                        or input_shape[-1] != weight_shape[1]
+                    ):
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: gradient, input, and weight dimensions disagree",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    per_output_shapes = [list(input_shape), list(weight_shape)]
+            elif node.op == "BW_sum" and len(input_shapes) == 2:
+                if input_shapes[1] is not None:
+                    output_shape = list(input_shapes[1])
             elif node.op == "FW_embedding" and len(input_shapes) == 2:
                 ids_shape, weight_shape = input_shapes
                 if ids_shape is not None and weight_shape is not None and len(weight_shape) == 2:
@@ -921,6 +942,37 @@ def _collective_shape_issue(
                         output_tid=int(node.outs[0]) if node.outs else None,
                     )
                 output_shape[first], output_shape[second] = output_shape[second], output_shape[first]
+            elif node.op == "FW_matmul" and len(input_shapes) == 2:
+                left_shape, right_shape = input_shapes
+                if left_shape is not None and right_shape is not None:
+                    if len(left_shape) < 2 or len(right_shape) < 2:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: matrix inputs must have rank at least 2",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    if left_shape[:-2] != right_shape[:-2]:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: batch dimensions differ",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    if left_shape[-1] != right_shape[-2]:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: contraction dimensions differ",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    output_shape = list(left_shape[:-1]) + [right_shape[-1]]
             elif node.op == "FW_per_head_mix_precision_linear" and len(input_shapes) == 2:
                 value_shape, weight_shape = input_shapes
                 if value_shape is not None and weight_shape is not None:

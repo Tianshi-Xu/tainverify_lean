@@ -568,8 +568,15 @@ def parse_tensor_value_bound_contracts(
     return tuple(facts)
 
 
-def parse_input_value_classes(*sources: str, name: str) -> tuple[InputValueClass, ...]:
-    block = _definition_from_sources(name, *sources)
+def parse_input_value_classes(
+    *sources: str, name: str, required: bool = True
+) -> tuple[InputValueClass, ...]:
+    try:
+        block = _definition_from_sources(name, *sources)
+    except ValueError as exc:
+        if not required and str(exc).endswith("found 0"):
+            return ()
+        raise
     entry_re = re.compile(
         r'\{\s*source\s*:=\s*"([^"\n]+)"\s*,\s*tids\s*:=\s*\[([0-9,\s]+)\]\s*\}',
         re.DOTALL,
@@ -611,8 +618,16 @@ def load_goal_ir(n: int, root: str) -> GoalIR:
     scope_text = goal_text + "\n" + statement_text
     packed_cu_contracts = parse_packed_cu_contracts(statement_text, *sources)
     tensor_value_bound_contracts = parse_tensor_value_bound_contracts(statement_text, *sources)
-    sm_input_value_classes = parse_input_value_classes(*sources, name="smInputValueClasses")
-    pm_input_value_classes = parse_input_value_classes(*sources, name="pmInputValueClasses")
+    sm_input_value_classes = parse_input_value_classes(
+        *sources,
+        name="smInputValueClasses",
+        required="smInputValueClasses" in statement_text,
+    )
+    pm_input_value_classes = parse_input_value_classes(
+        *sources,
+        name="pmInputValueClasses",
+        required="pmInputValueClasses" in statement_text,
+    )
     full_init_goal_ids = parse_full_init_goal_ids(scope_text, gen_text, n)
     needed_init_tids = {
         int(tid) for node in parse_nodes(sm_block) for tid in node.ins

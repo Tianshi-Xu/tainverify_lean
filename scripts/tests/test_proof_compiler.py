@@ -2321,22 +2321,69 @@ def test_compile_proof_plan_rejects_unsound_operator_shape_contracts(
     assert expected in plan.diagnostics[0].message
 
 
-def test_compile_proof_plan_rejects_unmodelled_shape_and_offset_embedding():
-    unknown = _goal_ir(
-        sm_nodes=[Node(0, "FW_sum", [1], [30])],
-        pm_nodes=[
-            Node(0, "BW_sum", [10, 11], [20]),
-            Node(0, "FW_sum", [20], [40]),
-        ],
+def test_compile_proof_plan_infers_batched_matmul_shape_and_rejects_bad_batch():
+    ir = _goal_ir(
+        sm_nodes=[Node(0, "FW_matmul", [1, 2], [30])],
+        pm_nodes=[Node(0, "FW_matmul", [10, 11], [40])],
         tps=[(0, 40)],
         replicated=True,
     )
-    unknown.lineage.tsShape = [1]
-    unknown.lineage.tpShapes = [[1]]
-    plan = compile_proof_plan(unknown, build_default_registry())
-    assert plan.supported is False
-    assert plan.diagnostics[0].op == "BW_sum"
-    assert "no registered shape inference" in plan.diagnostics[0].message
+    ir.sm_shapes = [(1, [1, 4, 8, 8]), (2, [1, 4, 8, 8])]
+    ir.pm_shapes = [(10, [1, 4, 8, 8]), (11, [1, 4, 8, 8])]
+    ir.lineage.tsShape = [1, 4, 8, 8]
+    ir.lineage.tpShapes = [[1, 4, 8, 8]]
+    plan = compile_proof_plan(ir, build_default_registry())
+    assert plan.supported
+    assert all(step.output_shape == (1, 4, 8, 8) for step in plan.steps)
+
+    ir.pm_shapes = [(10, [1, 4, 8, 8]), (11, [2, 4, 8, 8])]
+    plan = compile_proof_plan(ir, build_default_registry())
+    assert not plan.supported
+    assert "batch dimensions differ" in plan.diagnostics[0].message
+
+
+def test_compile_proof_plan_infers_bw_linear_multi_output_shapes():
+    ir = _goal_ir(
+        sm_nodes=[Node(0, "BW_linear", [1, 2, 3], [30, 31])],
+        pm_nodes=[Node(0, "BW_linear", [10, 11, 12], [40, 41])],
+        tps=[(0, 40)],
+        replicated=True,
+    )
+    ir.sm_shapes = [(1, [1, 8, 128]), (2, [1, 8, 32]), (3, [128, 32])]
+    ir.pm_shapes = [(10, [1, 8, 128]), (11, [1, 8, 32]), (12, [128, 32])]
+    ir.lineage.tsShape = [1, 8, 32]
+    ir.lineage.tpShapes = [[1, 8, 32]]
+    plan = compile_proof_plan(ir, build_default_registry())
+    assert plan.supported
+    assert {(step.side, step.output_index, step.output_shape) for step in plan.steps} == {
+        ("sm", 0, (1, 8, 32)), ("pm", 0, (1, 8, 32))
+    }
+
+    ir.lineage.ts = 31
+    ir.lineage.tsShape = [128, 32]
+    ir.lineage.tps = [(0, 41)]
+    ir.lineage.tpShapes = [[128, 32]]
+    plan = compile_proof_plan(ir, build_default_registry())
+    assert plan.supported
+    assert {(step.side, step.output_index, step.output_shape) for step in plan.steps} == {
+        ("sm", 1, (128, 32)), ("pm", 1, (128, 32))
+    }
+
+
+def test_compile_proof_plan_infers_bw_sum_and_rejects_offset_embedding():
+    backward_sum = _goal_ir(
+        sm_nodes=[Node(0, "BW_sum", [1, 2], [30])],
+        pm_nodes=[Node(0, "BW_sum", [10, 11], [40])],
+        tps=[(0, 40)],
+        replicated=True,
+    )
+    backward_sum.sm_shapes = [(1, [1]), (2, [1, 8, 128])]
+    backward_sum.pm_shapes = [(10, [1]), (11, [1, 8, 128])]
+    backward_sum.lineage.tsShape = [1, 8, 128]
+    backward_sum.lineage.tpShapes = [[1, 8, 128]]
+    plan = compile_proof_plan(backward_sum, build_default_registry())
+    assert plan.supported
+    assert all(step.output_shape == (1, 8, 128) for step in plan.steps)
 
     offset = _goal_ir(
         sm_nodes=[Node(0, "FW_embedding", [1, 2], [30], [7])],
@@ -4851,3 +4898,13 @@ def test_external_initial_state_renderer_treats_omitted_init_gather_dim_as_zero(
         ir, _synthetic_external_chain((gather,)), "SyntheticClosed"
     )
     assert "InitGoalHolds.gather2_dim" in source
+
+
+def test_input_value_classes_are_optional_only_when_public_statement_does_not_require_them():
+    assert parser_module.parse_input_value_classes(
+        "def unrelated := 1", name="smInputValueClasses", required=False
+    ) == ()
+    with pytest.raises(ValueError, match="smInputValueClasses"):
+        parser_module.parse_input_value_classes(
+            "def unrelated := 1", name="smInputValueClasses", required=True
+        )
