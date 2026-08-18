@@ -357,10 +357,11 @@ def parse_lineage(gen_text: str, n: int) -> LineageGoal:
 
 def parse_full_init_goal_ids(goal_text: str, gen_text: str, n: int) -> tuple[int, ...]:
     full_block = extract_def_block(goal_text, f"goal_{n}_full_initGoals")
+    statement_block = extract_def_block(goal_text, f"goal_{n}_stmt_full")
     direct_generated = re.search(
-        r"CoarseLineageHoldsWithInitDistributedFaithfulWithContract(?:\s+\S+){5}\s+initGoals\b",
-        goal_text,
-    ) or re.search(r"InitGoalsHold\s+\S+\s+initGoals\b", goal_text)
+        r"CoarseLineageHoldsWithInit(?:DistributedFaithfulWithContract)?[^\n]*\binitGoals\b",
+        statement_block,
+    ) or re.search(r"InitGoalsHold[^\n]*\binitGoals\b", statement_block)
     if re.search(r":=\s*initGoals\b", full_block) or direct_generated:
         source = extract_def_block(gen_text, "initGoals")
     else:

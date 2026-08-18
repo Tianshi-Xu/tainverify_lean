@@ -2398,6 +2398,19 @@ def test_compile_proof_plan_infers_bw_linear_multi_output_shapes():
     }
 
 
+def test_parse_full_init_goal_ids_accepts_compact_coarse_lineage_statement():
+    statement = """
+    def goal_1_stmt_full : Prop :=
+      CoarseLineageHoldsWithInit sm pm goal_1 smInitEnv pmInitEnv initGoals
+    """
+    generated = """
+    def initGoal_10 : LineageGoal := { ts := 10, tsShape := [2], tps := [{ rank := 0, tid := 20 }], tpShapes := [[2]] }
+    def initGoal_11 : LineageGoal := { ts := 11, tsShape := [4], tps := [{ rank := 0, tid := 21 }], tpShapes := [[4]] }
+    def initGoals : List LineageGoal := [initGoal_10, initGoal_11]
+    """
+    assert parser_module.parse_full_init_goal_ids(statement, generated, 1) == (10, 11)
+
+
 def test_rule_registry_resolves_offset_embedding_as_distinct_semantic_identity():
     registry = build_default_registry()
     ordinary = Node(rank=0, op="FW_embedding", ins=[1, 2], outs=[3], params=[])
@@ -3578,6 +3591,31 @@ def test_closed_relation_facts_materialize_list_indexed_k_rank_shards():
     assert facts[0].gather_dim == 1
     assert facts[0].full_shape == (2, 8)
     assert facts[0].shard_shape == (2, 2)
+
+
+def test_closed_sharded_fact_resolves_pm_init_tids_from_lineage_authority():
+    lineage = SimpleNamespace(
+        ts=10, tsShape=[8, 6],
+        tps=[(0, 20), (1, 21), (2, 22), (3, 23)],
+        tpShapes=[[2, 6], [2, 6], [2, 6], [2, 6]],
+    )
+    spec = RelationFactSpec(
+        "sharded", ("init:10", "init:20", "init:21", "init:22", "init:23"),
+        gather_dim=0,
+    )
+    transition = SimpleNamespace(transition_id="init-weight", pre_facts=(spec,), post_facts=())
+    relation = SimpleNamespace(
+        transition_specs=(transition,), dependency_plan=SimpleNamespace(order=("init-weight",)),
+        zigzag_regions=(), certificates=(),
+    )
+    facts = materialize_closed_relation_facts(
+        SimpleNamespace(init_lineages={10: lineage}), SimpleNamespace(steps=()), relation
+    )
+    assert len(facts) == 1
+    assert facts[0].sm_tid == 10
+    assert facts[0].pm_tids == (20, 21, 22, 23)
+    assert facts[0].full_shape == (8, 6)
+    assert facts[0].shard_shape == (2, 6)
 
 
 def test_closed_relation_facts_materialize_and_render_k_rank_replicated():

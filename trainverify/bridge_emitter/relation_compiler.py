@@ -3800,20 +3800,36 @@ def materialize_closed_relation_facts(
                 )
             actual_metadata[fact] = next(iter(inherited))
 
+    pm_init_shapes: dict[int, tuple[int, ...]] = {}
+    for lineage in ir.init_lineages.values():
+        if len(lineage.tps) != len(lineage.tpShapes):
+            raise RelationCompositionError(
+                f"init lineage {lineage.ts} has mismatched PM tids/shapes"
+            )
+        for (_rank, tid), shape in zip(lineage.tps, lineage.tpShapes):
+            candidate = tuple(shape)
+            previous = pm_init_shapes.get(int(tid))
+            if previous is not None and previous != candidate:
+                raise RelationCompositionError(f"PM init tid has conflicting shapes: {tid}")
+            pm_init_shapes[int(tid)] = candidate
+
     def resolve(ref: str, expected_side: str) -> tuple[int, tuple[int, ...]]:
         if ref.startswith("init:"):
-            if expected_side != "sm":
-                raise RelationCompositionError(
-                    f"unexpected init reference on {expected_side} relation side: {ref}"
-                )
             try:
                 tid = int(ref.split(":", 1)[1])
             except ValueError as exc:
                 raise RelationCompositionError(f"invalid init relation reference: {ref}") from exc
-            lineage = ir.init_lineages.get(tid)
-            if lineage is None:
-                raise RelationCompositionError(f"missing init lineage for relation fact: {tid}")
-            return tid, tuple(lineage.tsShape)
+            if expected_side == "sm":
+                lineage = ir.init_lineages.get(tid)
+                if lineage is None:
+                    raise RelationCompositionError(f"missing SM init lineage for relation fact: {tid}")
+                return tid, tuple(lineage.tsShape)
+            if expected_side == "pm":
+                shape = pm_init_shapes.get(tid)
+                if shape is None:
+                    raise RelationCompositionError(f"missing PM init lineage for relation fact: {tid}")
+                return tid, shape
+            raise RelationCompositionError(f"unsupported init relation side: {expected_side}")
         step = by_step.get(ref)
         if step is None:
             raise RelationCompositionError(f"unknown relation fact step reference: {ref}")
