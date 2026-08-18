@@ -3086,6 +3086,91 @@ class KRankFullProducerChunksCertificate:
 
 
 @dataclass(frozen=True)
+class KRankAllReduceReconstructionCertificate:
+    rule_id: str
+    rank_count: int
+    full_shape: tuple[int, ...]
+    input_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    pm_allreduce_step: str
+    lean_theorem: str
+
+
+def advance_k_rank_allreduce_reconstruction_frontiers(
+    plan: ProofPlan,
+    frontiers: tuple[tuple[str, ...], ...],
+    layouts: tuple[str, ...],
+) -> tuple[
+    tuple[KRankAllReduceReconstructionCertificate, ...],
+    tuple[tuple[str, ...], ...],
+    tuple[str, ...],
+]:
+    """Replace a joined rank-0 AllReduce writer by its ordered full-shape inputs."""
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("K-rank AllReduce frontier/layout arity mismatch")
+    by_id = {step.step_id: step for step in plan.steps}
+    certificates = []
+    rewritten = []
+    rewritten_layouts = []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "joined":
+            rewritten.append(frontier)
+            rewritten_layouts.append(layout)
+            continue
+        if len(frontier) != 2:
+            raise RelationCompositionError("joined K-rank root must contain one SM and one PM ref")
+        sm_ref, pm_ref = frontier
+        sm_step = by_id.get(sm_ref)
+        reduce = by_id.get(pm_ref)
+        if sm_step is None or reduce is None:
+            raise RelationCompositionError("joined K-rank root contains an unresolved writer")
+        if sm_step.side != "sm" or reduce.side != "pm":
+            raise RelationCompositionError("joined K-rank root has wrong-side writers")
+        if reduce.op != "AllReducePrim":
+            rewritten.append(frontier)
+            rewritten_layouts.append(layout)
+            continue
+        if int(reduce.rank) != 0:
+            raise RelationCompositionError("K-rank AllReduce writer must have rank zero")
+        if tuple(reduce.parameters) != ():
+            raise RelationCompositionError("K-rank AllReduce writer must declare no parameters")
+        input_refs = tuple(reduce.input_bindings)
+        rank_count = len(input_refs)
+        if rank_count == 0:
+            raise RelationCompositionError("K-rank AllReduce must have a nonempty ordered input list")
+        input_steps = tuple(by_id.get(ref) for ref in input_refs)
+        if any(step is None or step.side != "pm" for step in input_steps):
+            raise RelationCompositionError("K-rank AllReduce input writer is unresolved or wrong-side")
+        if tuple(int(step.rank) for step in input_steps) != tuple(range(rank_count)):
+            raise RelationCompositionError("K-rank AllReduce inputs are not in exact rank order")
+        contribution_shapes = tuple(tuple(step.output_shape) for step in input_steps)
+        full_shape = tuple(sm_step.output_shape)
+        if any(shape != full_shape for shape in contribution_shapes):
+            raise RelationCompositionError("K-rank AllReduce contributions do not have exact equal full shapes")
+        declared_inputs = tuple(tuple(shape) for shape in getattr(reduce, "input_shapes", ()))
+        if declared_inputs != contribution_shapes:
+            raise RelationCompositionError("K-rank AllReduce declared input shapes disagree with writers")
+        if tuple(reduce.output_shape) != full_shape:
+            raise RelationCompositionError("K-rank AllReduce output shape disagrees with SM full shape")
+        input_fact = RelationFactSpec("reduction", (sm_ref, *input_refs))
+        output_fact = RelationFactSpec(
+            "joined", (sm_ref,), joined_pm_step=pm_ref
+        )
+        certificates.append(KRankAllReduceReconstructionCertificate(
+            rule_id="allreduce-reconstruction-k-rank",
+            rank_count=rank_count,
+            full_shape=full_shape,
+            input_fact=input_fact,
+            output_fact=output_fact,
+            pm_allreduce_step=pm_ref,
+            lean_theorem="TrainVerify.Denote.RelationCompiler.ReductionRel.to_joined_allReduce",
+        ))
+        rewritten.append(input_fact.step_triple)
+        rewritten_layouts.append("reduction")
+    return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
+
+
+@dataclass(frozen=True)
 class KRankAllGatherReconstructionCertificate:
     rule_id: str
     rank_count: int
@@ -3901,14 +3986,14 @@ def normalize_relation_frontiers(
     frontiers: tuple[tuple[str, ...], ...],
     layouts: tuple[str, ...],
     *,
-    rules: tuple[str, ...] = ("allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
+    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
     goal_ir: GoalIR | None = None,
     deduplicate_each_round: bool = False,
     certificate_sink: list[object] | None = None,
     side_condition_sink: list[RelationSideCondition] | None = None,
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
-    known = {"allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
+    known = {"allreduce_reconstruction_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
     unknown = set(rules) - known
     if unknown:
         raise RelationCompositionError(f"unknown relation normalization rules: {sorted(unknown)}")
@@ -3920,6 +4005,13 @@ def normalize_relation_frontiers(
                 current_frontiers, current_layouts
             )
         prior_state = (current_frontiers, current_layouts)
+        if "allreduce_reconstruction_k" in rules:
+            _certs, current_frontiers, current_layouts = (
+                advance_k_rank_allreduce_reconstruction_frontiers(
+                    plan, current_frontiers, current_layouts
+                )
+            )
+            _extend_unique_certificates(certificate_sink, _certs)
         if "allgather_reconstruction_k" in rules:
             _certs, current_frontiers, current_layouts = (
                 advance_k_rank_allgather_reconstruction_frontiers(
@@ -4357,7 +4449,7 @@ def materialize_closed_relation_facts(
     ordered = sorted(specs, key=lambda fact: (fact.layout, fact.step_triple))
     result = []
     for ordinal, fact in enumerate(ordered):
-        if fact.layout in {"sharded", "replicated"}:
+        if fact.layout in {"sharded", "reduction", "replicated"}:
             if len(fact.step_triple) < 2:
                 raise RelationCompositionError(
                     f"K-rank {fact.layout} relation fact requires one SM and at least one PM reference"
@@ -4450,6 +4542,13 @@ def materialize_closed_relation_facts(
             if shard0_shape != full_shape:
                 raise RelationCompositionError(
                     "K-rank replicated relation requires every PM shape to equal the SM shape"
+                )
+        elif fact.layout == "reduction":
+            if not pm_tids:
+                raise RelationCompositionError("K-rank reduction relation requires nonempty contributions")
+            if shard0_shape != full_shape:
+                raise RelationCompositionError(
+                    "K-rank reduction contributions must have the exact SM full shape"
                 )
         elif fact.layout == "sharded":
             dim = fact.gather_dim
@@ -5279,6 +5378,10 @@ def build_certificate_transition_specs(
                     "tensor_eq", ("sm", "pm"), (cert.ids_tid, cert.ids_tid),
                 ),
             )
+        elif type(cert) is KRankAllReduceReconstructionCertificate:
+            pre = (cert.input_fact,)
+            post = (cert.output_fact,)
+            footprint_groups = ((cert.pm_allreduce_step,),)
         elif type(cert) is KRankAllGatherReconstructionCertificate:
             pre = (cert.input_fact,)
             post = (cert.output_fact,)
@@ -5945,19 +6048,24 @@ def compile_relation_plan(
     """Compile registered terminal relation families without hiding backbone gaps."""
     k_terminal_error = None
     try:
-        terminal_k = match_sum_allreduce_k_rank(ir, proof)
+        terminal_certificates, frontiers, layouts = (
+            advance_k_rank_allreduce_reconstruction_frontiers(
+                proof, (tuple(proof.target_steps),), ("joined",)
+            )
+        )
+        if len(terminal_certificates) != 1:
+            raise RelationCompositionError("target is not one rank-0 AllReduce writer")
+        terminal_k = terminal_certificates[0]
     except RelationCompositionError as exc:
         k_terminal_error = exc
     else:
         compiled_certificates: list[object] = [terminal_k]
-        frontiers = (terminal_k.input_fact.step_triple,)
-        layouts = ("sharded",)
         if peel_aliases:
             frontiers, layouts = normalize_relation_frontiers(
                 proof,
                 frontiers,
                 layouts,
-                rules=("allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k"),
+                rules=("allreduce_reconstruction_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k"),
                 goal_ir=ir,
                 certificate_sink=compiled_certificates,
                 deduplicate_each_round=True,
@@ -5986,7 +6094,7 @@ def compile_relation_plan(
             external_pre_facts=external_pre_facts,
         )
         return RelationPlan(
-            family="sum-allreduce-k-rank",
+            family="ordered-allreduce-writer-k-rank",
             terminal_rule_id=terminal_k.rule_id,
             synchronized_steps=(),
             certificates=certificate_tuple,

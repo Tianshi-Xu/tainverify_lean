@@ -831,6 +831,26 @@ theorem ShardedRel.of_init_goal
   | nil => simp [htps] at hmulti
   | cons first rest => simp
 
+/-- Producer-agnostic ordered reduction relation.  The contribution list is
+the exact AllReduce writer input order; its length is the dynamic rank count.
+Every contribution and both public/reduced values obey the same full shape. -/
+structure ReductionRel (full : Tensor) (contributions : List Tensor)
+    (fullShape : Shape) : Prop where
+  full_value : full = allReducePrim contributions.length 0 contributions
+  full_shape : full.shape = fullShape
+  contributions_nonempty : contributions ≠ []
+  contribution_shapes : ∀ contribution ∈ contributions, contribution.shape = fullShape
+  reduced_shape :
+    (allReducePrim contributions.length 0 contributions).shape = fullShape
+
+/-- Publish the exact value consumed by the rank-0 AllReduce writer.  Producer
+semantics remain outside this writer-only reconstruction theorem. -/
+theorem ReductionRel.to_joined_allReduce
+    {full : Tensor} {contributions : List Tensor} {fullShape : Shape}
+    (h : ReductionRel full contributions fullShape) :
+    full = allReducePrim contributions.length 0 contributions :=
+  h.full_value
+
 /-- Rank-count-polymorphic replication relation. The ordered replica list is
     authority: every PM value equals the SM value and has the same shape. -/
 structure ReplicatedRel (full : Tensor) (replicas : List Tensor)
@@ -843,6 +863,7 @@ structure ReplicatedRel (full : Tensor) (replicas : List Tensor)
 inductive RelationFact where
   | sharded (smTid : Tid) (pmTids : List Tid) (gatherDim : Nat)
       (fullShape shardShape : Shape)
+  | reduction (smTid : Tid) (pmTids : List Tid) (fullShape : Shape)
   | replicated (smTid : Tid) (pmTids : List Tid) (shape : Shape)
   | joined (smTid pmTid : Tid) (shape : Shape)
   | ordinary (smTid pmRank0Tid pmRank1Tid : Tid) (fullShape shardShape : Shape)
@@ -868,6 +889,8 @@ def RelationFact.Holds (fact : RelationFact) (sm pm : Store) : Prop :=
   match fact with
   | .sharded smTid pmTids gatherDim fullShape shardShape =>
       ShardedRel (sm smTid) (pmTids.map pm) gatherDim fullShape shardShape
+  | .reduction smTid pmTids fullShape =>
+      ReductionRel (sm smTid) (pmTids.map pm) fullShape
   | .replicated smTid pmTids shape =>
       ReplicatedRel (sm smTid) (pmTids.map pm) shape
   | .joined smTid pmTid shape =>
@@ -1110,6 +1133,7 @@ namespace RelationFact
 
 def smTids : RelationFact → List Tid
   | .sharded smTid _ _ _ _ => [smTid]
+  | .reduction smTid _ _ => [smTid]
   | .replicated smTid _ _ => [smTid]
   | .joined smTid _ _ => [smTid]
   | .ordinary smTid _ _ _ _ => [smTid]
@@ -1130,6 +1154,7 @@ def smTids : RelationFact → List Tid
 
 def pmTids : RelationFact → List Tid
   | .sharded _ pmTids _ _ _ => pmTids
+  | .reduction _ pmTids _ => pmTids
   | .replicated _ pmTids _ => pmTids
   | .joined _ pmTid _ => [pmTid]
   | .ordinary _ pm0 pm1 _ _ => [pm0, pm1]
@@ -1159,6 +1184,14 @@ theorem Holds.frame {fact : RelationFact} {sm pm sm' pm' : Store}
       simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
       rw [hsm _ (by simp)]
       have hmap : rankTids.map pm' = rankTids.map pm := by
+        apply List.map_congr_left
+        exact hpm
+      rw [hmap]
+      exact h
+  | reduction smTid contributionTids fullShape =>
+      simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
+      rw [hsm _ (by simp)]
+      have hmap : contributionTids.map pm' = contributionTids.map pm := by
         apply List.map_congr_left
         exact hpm
       rw [hmap]
