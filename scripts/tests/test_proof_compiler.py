@@ -3593,6 +3593,45 @@ def test_closed_relation_facts_materialize_list_indexed_k_rank_shards():
     assert facts[0].shard_shape == (2, 2)
 
 
+def test_init_lineage_relation_fact_preserves_ordered_k_rank_authority():
+    sharded = SimpleNamespace(
+        ts=10, tsShape=[8, 6],
+        tps=[(0, 20), (1, 21), (2, 22), (3, 23)],
+        tpShapes=[[2, 6], [2, 6], [2, 6], [2, 6]],
+        gatherDim=None, replicated=False,
+    )
+    fact = relation_compiler_module.init_lineage_relation_fact(sharded)
+    assert fact == RelationFactSpec(
+        "sharded", ("init:10", "init:20", "init:21", "init:22", "init:23"),
+        gather_dim=0,
+    )
+
+    replicated = SimpleNamespace(
+        ts=11, tsShape=[3, 5],
+        tps=[(0, 30), (1, 31), (2, 32)],
+        tpShapes=[[3, 5], [3, 5], [3, 5]],
+        gatherDim=None, replicated=True,
+    )
+    assert relation_compiler_module.init_lineage_relation_fact(replicated) == RelationFactSpec(
+        "replicated", ("init:11", "init:30", "init:31", "init:32")
+    )
+
+
+def test_init_lineage_relation_fact_rejects_reordered_or_malformed_authority():
+    reordered = SimpleNamespace(
+        ts=10, tsShape=[8, 6], tps=[(1, 21), (0, 20)],
+        tpShapes=[[4, 6], [4, 6]], gatherDim=0, replicated=False,
+    )
+    with pytest.raises(RelationCompositionError, match="ordered ranks"):
+        relation_compiler_module.init_lineage_relation_fact(reordered)
+    malformed = SimpleNamespace(
+        ts=10, tsShape=[8, 6], tps=[(0, 20), (1, 21)],
+        tpShapes=[[3, 6], [3, 6]], gatherDim=0, replicated=False,
+    )
+    with pytest.raises(RelationCompositionError, match="shape contract"):
+        relation_compiler_module.init_lineage_relation_fact(malformed)
+
+
 def test_closed_sharded_fact_resolves_pm_init_tids_from_lineage_authority():
     lineage = SimpleNamespace(
         ts=10, tsShape=[8, 6],

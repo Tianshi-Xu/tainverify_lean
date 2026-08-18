@@ -3701,6 +3701,38 @@ class RelationFactSpec:
     joined_pm_step: str | None = None
 
 
+def init_lineage_relation_fact(lineage) -> RelationFactSpec:
+    """Translate one public InitGoal into an exact ordered K-rank fact."""
+    pieces = tuple((int(rank), int(tid)) for rank, tid in lineage.tps)
+    shapes = tuple(tuple(int(value) for value in shape) for shape in lineage.tpShapes)
+    if not pieces or len(pieces) != len(shapes):
+        raise RelationCompositionError("init lineage has empty or mismatched PM authority")
+    if tuple(rank for rank, _tid in pieces) != tuple(range(len(pieces))):
+        raise RelationCompositionError("init lineage does not preserve ordered ranks")
+    refs = (f"init:{int(lineage.ts)}",) + tuple(
+        f"init:{tid}" for _rank, tid in pieces
+    )
+    full_shape = tuple(int(value) for value in lineage.tsShape)
+    if bool(lineage.replicated):
+        if any(shape != full_shape for shape in shapes):
+            raise RelationCompositionError("replicated init lineage violates shape contract")
+        return RelationFactSpec("replicated", refs)
+
+    gather_dim = 0 if lineage.gatherDim is None else int(lineage.gatherDim)
+    shard_shape = shapes[0]
+    if any(shape != shard_shape for shape in shapes):
+        raise RelationCompositionError("sharded init lineage has unequal shard shapes")
+    if shard_shape == (1,):
+        raise RelationCompositionError("scalar reduction lineage is not a sharded gather fact")
+    if gather_dim < 0 or gather_dim >= len(shard_shape):
+        raise RelationCompositionError("sharded init lineage gather dimension is invalid")
+    reconstructed = list(shard_shape)
+    reconstructed[gather_dim] *= len(pieces)
+    if tuple(reconstructed) != full_shape:
+        raise RelationCompositionError("sharded init lineage violates shape contract")
+    return RelationFactSpec("sharded", refs, gather_dim=gather_dim)
+
+
 @dataclass(frozen=True)
 class ClosedRelationFactRecord:
     fact_id: str
