@@ -7337,12 +7337,26 @@ def render_closed_k_rank_div_segment(ir: GoalIR, relation, segment_id: str) -> s
         from .relation_compiler import KRankDivCertificate
     except ImportError:
         from relation_compiler import KRankDivCertificate
-    typed = [item for item in relation.certificates if type(item) is KRankDivCertificate]
-    if len(typed) != 1 or typed[0].gather_dim not in (1, 2, 3):
-        raise ValueError("K-rank div requires one exact axis-specific certificate")
-    axis = typed[0].gather_dim
-    rule_id = f"div-sharded-k-rank-dim{axis}"
-    theorem = f"TrainVerify.Denote.RelationCompiler.ShardedRel.fw_div_dim{axis}_rank4"
+    chain = relation.dependent_chain_plan
+    requested = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if requested is None or len(requested.transition_ids) != 1:
+        raise ValueError("K-rank div requires one atomic transition")
+    transition_by_id = {item.transition_id: item for item in relation.transition_specs}
+    requested_transition = transition_by_id.get(requested.transition_ids[0])
+    if requested_transition is None:
+        raise ValueError("K-rank div transition is not materialized")
+    allowed_identities = {
+        f"div-sharded-k-rank-dim{axis}": (
+            axis,
+            f"TrainVerify.Denote.RelationCompiler.ShardedRel.fw_div_dim{axis}_rank4",
+        )
+        for axis in (1, 2, 3)
+    }
+    identity = allowed_identities.get(requested_transition.rule_id)
+    if identity is None or requested_transition.lean_theorem != identity[1]:
+        raise ValueError("K-rank div requires an exact axis-specific rule/theorem identity")
+    axis, theorem = identity
+    rule_id = requested_transition.rule_id
     (segment, transition, certificate, pre, post, before, after) = _k_rank_segment_context(
         ir, relation, segment_id, rule_id, theorem, KRankDivCertificate,
         lambda cert: ((cert.input_fact,), (cert.output_fact,)),

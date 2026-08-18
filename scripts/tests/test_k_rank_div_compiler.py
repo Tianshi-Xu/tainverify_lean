@@ -150,6 +150,68 @@ def test_div_renderer_replays_exact_writers_scalar_and_axis_wrapper(axis, apply_
     assert "rankCount = 3" not in source
 
 
+@pytest.mark.parametrize("k", [2, 5])
+def test_div_renderer_preserves_dynamic_ordered_k_and_scalar_identity(k):
+    ir, relation, segment, inp, out = _closed_fixture(2, k=k, c=13)
+    source = composer.render_closed_segment(ir, relation, segment.segment_id)
+    assert source.count('op := "OpName.FW_div"') == 1 + k
+    assert source.count("foldl_faithful_middle_writer") == 1 + k
+    assert source.count("(13 : Scalar)") == 2 * (1 + k) + 1
+    assert ", ".join(f"pmStore {tid}" for tid in inp.pm_tids) in source
+    assert ", ".join(f"pmFinal {tid}" for tid in out.pm_tids) in source
+
+
+def test_div_renderer_ignores_unrelated_axis_and_same_family_certificates():
+    ir, relation, segment, *_ = _closed_fixture(1, k=3)
+    expected = composer.render_closed_segment(ir, relation, segment.segment_id)
+    exact = relation.certificates[0]
+    _other_ir, other_relation, *_ = _closed_fixture(2, k=3)
+    unrelated_axis = other_relation.certificates[0]
+    unrelated_same_axis = replace(
+        exact,
+        input_fact=rc.RelationFactSpec(
+            "sharded", ("init:999", "init:998", "init:997", "init:996"),
+            gather_dim=1,
+        ),
+    )
+    structurally_matching_foreign_class = SimpleNamespace(**exact.__dict__)
+    relation.certificates = (
+        unrelated_axis, unrelated_same_axis, structurally_matching_foreign_class, exact,
+    )
+
+    assert composer.render_closed_segment(ir, relation, segment.segment_id) == expected
+
+
+@pytest.mark.parametrize("mutation", ["malformed", "duplicate"])
+def test_div_renderer_rejects_nonunique_exact_certificate(mutation):
+    ir, relation, segment, *_ = _closed_fixture(3, k=3)
+    exact = relation.certificates[0]
+    if mutation == "malformed":
+        relation.certificates = (replace(
+            exact,
+            output_fact=rc.RelationFactSpec(
+                "sharded", ("sm:999:0", "pm:999:0", "pm:1000:0", "pm:1001:0"),
+                gather_dim=3,
+            ),
+        ),)
+    else:
+        relation.certificates = (exact, exact)
+
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("rule_id", "div-sharded-k-rank-dim2"),
+    ("lean_theorem", "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_div_dim2_rank4"),
+])
+def test_div_renderer_rejects_tampered_transition_identity(field, value):
+    ir, relation, segment, *_ = _closed_fixture(1, k=3)
+    relation.transition_specs = (replace(relation.transition_specs[0], **{field: value}),)
+    with pytest.raises(ValueError, match="axis-specific|identity mismatch"):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
+
+
 @pytest.mark.parametrize(("mutation", "message"), [
     ({"rank": 7}, "ordered ranks"),
     ({"params": []}, "one scalar parameter"),
