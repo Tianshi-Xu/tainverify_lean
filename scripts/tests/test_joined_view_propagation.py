@@ -154,8 +154,11 @@ def test_certificate_dedup_uses_authority_facts_not_coarse_object_equality():
     assert sink == [first, second]
 
 
-def _closed_joined_view_fixture():
+def _closed_joined_view_fixture(rank_count=3):
     plan, sm_step, pm_step = _single_pair()
+    pm_step.rank = rank_count - 1
+    pm_step.node_index = 321 + rank_count - 1
+    pm_step.step_id = f"pm:{pm_step.node_index}:0"
     certificates, _, _ = rc.advance_joined_view_relation_frontiers(
         plan, ((sm_step.step_id, pm_step.step_id),), ("joined",)
     )
@@ -175,7 +178,7 @@ def _closed_joined_view_fixture():
     after = SimpleNamespace(state_id="state_post", fact_ids=("anchor", post.fact_id))
     segment = SimpleNamespace(
         segment_id="segment_000000", transition_ids=(transition.transition_id,),
-        sm_range=(50, 51), pm_range=(321, 322),
+        sm_range=(50, 51), pm_range=(321, 321 + rank_count),
         pre_state_id=before.state_id, post_state_id=after.state_id,
     )
     chain = SimpleNamespace(
@@ -189,13 +192,13 @@ def _closed_joined_view_fixture():
     sm_node = SimpleNamespace(
         rank=0, op="FW_view", ins=[49], outs=[50], params=[1, 8, 12]
     )
-    pm_node = SimpleNamespace(
-        rank=3, op="FW_view", ins=[317], outs=[321], params=[1, 8, 12]
-    )
+    pm_nodes = [SimpleNamespace(
+        rank=rank, op="FW_view", ins=[317], outs=[321], params=[1, 8, 12]
+    ) for rank in range(rank_count)]
     ir = SimpleNamespace(
         sm_graph_ref="sm_graph", pm_graph_ref="pm_graph",
         sm_nodes=[filler() for _ in range(50)] + [sm_node],
-        pm_nodes=[filler() for _ in range(321)] + [pm_node],
+        pm_nodes=[filler() for _ in range(321)] + pm_nodes,
     )
     relation = SimpleNamespace(
         certificates=certificates, transition_specs=(transition,),
@@ -204,8 +207,9 @@ def _closed_joined_view_fixture():
     return ir, relation, segment, pre, post
 
 
-def test_closed_joined_view_renderer_reduces_exact_literal_writers():
-    ir, relation, segment, pre, post = _closed_joined_view_fixture()
+@pytest.mark.parametrize("rank_count", (2, 3, 5))
+def test_closed_joined_view_renderer_reduces_one_sm_and_ordered_dynamic_k_pm_writers(rank_count):
+    ir, relation, segment, pre, post = _closed_joined_view_fixture(rank_count)
 
     source = composer.render_closed_joined_view_segment(
         ir, relation, segment.segment_id
@@ -213,22 +217,66 @@ def test_closed_joined_view_renderer_reduces_exact_literal_writers():
 
     assert source == composer.render_closed_segment(ir, relation, segment.segment_id)
     assert 'op := "OpName.FW_view", ins := [49], outs := [50], params := [1, 8, 12]' in source
-    assert 'rank := 3, op := "OpName.FW_view", ins := [317], outs := [321]' in source
+    for rank in range(rank_count):
+        assert f'rank := {rank}, op := "OpName.FW_view", ins := [317], outs := [321]' in source
+    assert source.count('op := "OpName.FW_view"') >= rank_count + 1
     assert "applyNode_fw_view_out smGraph" in source
     assert "applyNode_fw_view_out pmGraph" in source
     assert "JoinedRel.fw_view" in source
     assert pre.fact_id in source and post.fact_id in source
+    assert "Goal_" not in source and "Tid" not in source
 
 
 def test_closed_joined_view_renderer_rejects_parameter_mismatch():
     ir, relation, segment, *_ = _closed_joined_view_fixture()
-    ir.pm_nodes[321].params = [1, 8, 13]
+    ir.pm_nodes[322].params = [1, 8, 13]
 
     with pytest.raises(ValueError, match="literal parameters"):
         composer.render_closed_joined_view_segment(ir, relation, segment.segment_id)
 
 
-def test_fresh_complete_joined_view_witness_is_exact_renderer_output(tmp_path):
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda ir, relation, segment: setattr(ir.pm_nodes[322], "rank", 0), "ordered ranks"),
+        (lambda ir, relation, segment: setattr(ir.pm_nodes[322], "op", "FW_reshape"), "literal FW_view"),
+        (lambda ir, relation, segment: setattr(ir.pm_nodes[322], "ins", [316]), "joined pre-fact"),
+        (lambda ir, relation, segment: setattr(ir.pm_nodes[322], "outs", [320]), "joined post-fact"),
+    ],
+)
+def test_closed_joined_view_renderer_rejects_malformed_writer_authority(mutation, message):
+    ir, relation, segment, *_ = _closed_joined_view_fixture()
+    mutation(ir, relation, segment)
+    with pytest.raises(ValueError, match=message):
+        composer.render_closed_joined_view_segment(ir, relation, segment.segment_id)
+
+
+def test_closed_joined_view_renderer_requires_one_exact_typed_certificate():
+    ir, relation, segment, *_ = _closed_joined_view_fixture()
+    exact = relation.certificates[0]
+
+    class Spoof:
+        pass
+
+    spoof = Spoof()
+    spoof.__dict__.update(exact.__dict__)
+    for certificates in ((exact, exact), (spoof,)):
+        bad = SimpleNamespace(**{**relation.__dict__, "certificates": certificates})
+        with pytest.raises(ValueError, match="one exact typed certificate"):
+            composer.render_closed_joined_view_segment(ir, bad, segment.segment_id)
+
+
+@pytest.mark.parametrize("field", ("rule_id", "lean_theorem", "input_fact", "output_fact"))
+def test_closed_joined_view_renderer_rejects_tampered_certificate_authority(field):
+    ir, relation, segment, *_ = _closed_joined_view_fixture()
+    cert = relation.certificates[0]
+    bad_cert = replace(cert, **{field: "tampered"})
+    bad = SimpleNamespace(**{**relation.__dict__, "certificates": (bad_cert,)})
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        composer.render_closed_joined_view_segment(ir, bad, segment.segment_id)
+
+
+def test_generated_joined_view_witness_is_exact_renderer_output():
     ir, relation, segment, *_ = _closed_joined_view_fixture()
     namespace = "GeneratedJoinedViewWitness"
     rendered = composer.render_closed_segment(ir, relation, segment.segment_id)
@@ -238,14 +286,21 @@ def test_fresh_complete_joined_view_witness_is_exact_renderer_output(tmp_path):
         ),
         f"namespace TrainVerify.Denote.{namespace}",
         "noncomputable section",
+        ('private def sm_graph : GraphDecl := { numRanks := 1, nodes := '
+         '[{ rank := 0, op := "OpName.FW_view", ins := [49], outs := [50], '
+         'params := [1, 8, 12] }] }'),
+        ('private def pm_graph : GraphDecl := { numRanks := 3, nodes := '
+         '[{ rank := 0, op := "OpName.FW_view", ins := [317], outs := [321], params := [1, 8, 12] }, '
+         '{ rank := 1, op := "OpName.FW_view", ins := [317], outs := [321], params := [1, 8, 12] }, '
+         '{ rank := 2, op := "OpName.FW_view", ins := [317], outs := [321], params := [1, 8, 12] }] }'),
         rendered,
         f"#print axioms {segment.segment_id}",
         "end",
         f"end TrainVerify.Denote.{namespace}",
         "",
     ))
-    witness = tmp_path / "GeneratedJoinedViewWitness.lean"
-    witness.write_text(source, encoding="utf-8")
+    witness = (Path(__file__).resolve().parents[2]
+               / "trainverify/denote/GeneratedJoinedViewWitness.lean")
 
     assert witness.read_text(encoding="utf-8") == source
     assert "sorry" not in source
