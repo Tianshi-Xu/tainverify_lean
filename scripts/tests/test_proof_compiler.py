@@ -4509,7 +4509,9 @@ def test_closed_k_rank_full_producer_chunks_segment_is_generic_and_exact():
     assert "let rankCount := pmTids.length" in source
     assert "pmTids : List Tid := [30, 31, 32, 33]" in source
     assert source.count('op := "OpName.ChunkPrim"') >= 8
+    assert "smNodes := []" in source
     assert "FW_identity" not in source
+    assert "hSmWriter" not in source
     assert "rankCount = 4" not in source
 
 
@@ -4627,6 +4629,95 @@ def test_closed_k_rank_alltoall_rejects_malformed_or_ambiguous_exact_certificate
             ir, SimpleNamespace(**{**relation.__dict__, "certificates": (malformed,)}),
             "segment_000000",
         )
+
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        render_closed_segment(
+            ir,
+            SimpleNamespace(
+                **{**relation.__dict__, "certificates": (certificate, certificate)}
+            ),
+            "segment_000000",
+        )
+
+
+def test_generated_k_rank_full_producer_chunks_witness_is_exact_renderer_output():
+    ir, relation = _synthetic_k_rank_segment_relation(family="chunks")
+    namespace = "SyntheticKRank"
+    declarations = render_closed_relation_declarations(
+        relation.dependent_chain_plan, namespace
+    )
+    rendered = render_closed_segment(ir, relation, "segment_000000")
+    sm_nodes = "[" + ", ".join(
+        composer_module._node_text(node) for node in ir.sm_nodes
+    ) + "]"
+    pm_nodes = "[" + ", ".join(
+        composer_module._node_text(node) for node in ir.pm_nodes
+    ) + "]"
+    source = "\n".join((
+        declarations,
+        f"namespace TrainVerify.Denote.{namespace}",
+        "noncomputable section",
+        f"private def smGraph : GraphDecl := {{ numRanks := 1, nodes := {sm_nodes} }}",
+        f"private def pmGraph : GraphDecl := {{ numRanks := 4, nodes := {pm_nodes} }}",
+        rendered,
+        "#print axioms segment_000000",
+        "end",
+        f"end TrainVerify.Denote.{namespace}",
+        "",
+    ))
+    witness = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/denote/GeneratedKRankFullProducerChunksCompilerWitness.lean"
+    )
+    assert witness.read_text() == source
+    assert "sorry" not in source and "False.elim" not in source
+
+
+def test_closed_k_rank_full_producer_chunks_selects_one_exact_typed_certificate():
+    ir, relation = _synthetic_k_rank_segment_relation(family="chunks")
+    certificate = relation.certificates[0]
+    expected = render_closed_segment(ir, relation, "segment_000000")
+    unrelated = replace(
+        certificate,
+        input_fact=RelationFactSpec(
+            "joined", ("sm:99:0",), joined_pm_step="pm:99:0"
+        ),
+    )
+    with_unrelated = SimpleNamespace(
+        **{**relation.__dict__, "certificates": (unrelated, certificate)}
+    )
+
+    assert render_closed_segment(ir, with_unrelated, "segment_000000") == expected
+
+    _, alltoall_relation = _synthetic_k_rank_segment_relation(family="alltoall")
+    wrong_class = replace(
+        alltoall_relation.certificates[0],
+        rule_id=certificate.rule_id,
+        lean_theorem=certificate.lean_theorem,
+        input_fact=certificate.input_fact,
+        output_fact=certificate.output_fact,
+    )
+    malformed_certificates = (
+        wrong_class,
+        replace(certificate, rule_id="unrelated-rule"),
+        replace(certificate, lean_theorem="TrainVerify.Denote.unrelated"),
+        replace(certificate, input_fact=unrelated.input_fact),
+        replace(
+            certificate,
+            output_fact=RelationFactSpec(
+                "sharded",
+                ("sm:99:0", *(f"pm:{rank + 1}:0" for rank in range(4))),
+                gather_dim=1,
+            ),
+        ),
+    )
+    for malformed in malformed_certificates:
+        with pytest.raises(ValueError, match="one exact typed certificate"):
+            render_closed_segment(
+                ir,
+                SimpleNamespace(**{**relation.__dict__, "certificates": (malformed,)}),
+                "segment_000000",
+            )
 
     with pytest.raises(ValueError, match="one exact typed certificate"):
         render_closed_segment(
