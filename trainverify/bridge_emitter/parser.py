@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 sys.path.insert(0, os.path.dirname(__file__))
 from target_config import DENOTE_DIR as _RELDIR
-from target_config import GEN_FILE
+from target_config import GEN_FILE, MOD_PREFIX
 
 DENOTE_DIR = "trainverify/" + _RELDIR  # keep backward-compat absolute form
 
@@ -418,7 +418,7 @@ def _public_full_scope(n: int, goal_path: str, goal_text: str, gen_text: str) ->
             f"expected exactly one exported {statement_name} definition, found {len(candidates)}"
         )
     _statement_path, statement_text = candidates[0]
-    statement_module = "denote.yoco_goals." + os.path.splitext(os.path.basename(_statement_path))[0]
+    statement_module = MOD_PREFIX + "." + os.path.splitext(os.path.basename(_statement_path))[0]
     statement_block = extract_def_block(statement_text, statement_name)
 
     compact = re.search(
