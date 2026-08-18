@@ -3643,10 +3643,6 @@ def advance_k_rank_add_relation_frontiers(
             raise RelationCompositionError(
                 f"K-rank FW_add changes sharding dimension: inputs={input_dims}, output={output_dim}"
             )
-        if output_dim != 1:
-            rewritten.append(frontier)
-            rewritten_layouts.append(layout)
-            continue
         output_refs = (sm_step.step_id, *(step.step_id for step in pm_steps))
         input_facts = tuple(
             RelationFactSpec("sharded", refs, gather_dim=output_dim)
@@ -3661,7 +3657,7 @@ def advance_k_rank_add_relation_frontiers(
             output_fact=RelationFactSpec("sharded", output_refs, gather_dim=output_dim),
             sm_step_id=sm_step.step_id,
             pm_step_ids=tuple(step.step_id for step in pm_steps),
-            lean_theorem="TrainVerify.Denote.fw_add_allGather_dim1_K",
+            lean_theorem="TrainVerify.Denote.fw_add_allGather_dim_K",
         ))
         rewritten.extend(input_frontiers)
         rewritten_layouts.extend(("sharded", "sharded"))
@@ -3709,6 +3705,10 @@ def advance_k_rank_alltoall_relation_frontiers(
             continue
         if len(frontier) < 2:
             raise RelationCompositionError("K-rank AllToAll frontier has no PM ranks")
+        if all(ref.startswith("init:") for ref in frontier):
+            rewritten.append(frontier)
+            rewritten_layouts.append(layout)
+            continue
         sm_ref, *pm_output_refs = frontier
         rank_count = len(pm_output_refs)
         sm_step = by_id.get(sm_ref)
@@ -3804,14 +3804,14 @@ def normalize_relation_frontiers(
     frontiers: tuple[tuple[str, ...], ...],
     layouts: tuple[str, ...],
     *,
-    rules: tuple[str, ...] = ("alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
+    rules: tuple[str, ...] = ("full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
     goal_ir: GoalIR | None = None,
     deduplicate_each_round: bool = False,
     certificate_sink: list[object] | None = None,
     side_condition_sink: list[RelationSideCondition] | None = None,
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
-    known = {"alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
+    known = {"full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
     unknown = set(rules) - known
     if unknown:
         raise RelationCompositionError(f"unknown relation normalization rules: {sorted(unknown)}")
@@ -3823,6 +3823,31 @@ def normalize_relation_frontiers(
                 current_frontiers, current_layouts
             )
         prior_state = (current_frontiers, current_layouts)
+        if "full_producer_k" in rules:
+            _certs, current_frontiers, current_layouts = (
+                advance_k_rank_full_producer_chunks(
+                    plan, current_frontiers, current_layouts
+                )
+            )
+            _extend_unique_certificates(certificate_sink, _certs)
+        if "output_linear_k" in rules:
+            if goal_ir is None:
+                raise RelationCompositionError("output_linear_k requires GoalIR authority")
+            _certs, current_frontiers, current_layouts = (
+                advance_k_rank_output_sharded_linear_frontiers(
+                    plan, goal_ir, current_frontiers, current_layouts
+                )
+            )
+            _extend_unique_certificates(certificate_sink, _certs)
+        if "embedding_k" in rules:
+            if goal_ir is None:
+                raise RelationCompositionError("embedding_k requires GoalIR authority")
+            _certs, current_frontiers, current_layouts = (
+                advance_k_rank_hidden_sharded_embedding(
+                    plan, goal_ir, current_frontiers, current_layouts
+                )
+            )
+            _extend_unique_certificates(certificate_sink, _certs)
         if "alltoall_k" in rules:
             _certs, current_frontiers, current_layouts = (
                 advance_k_rank_alltoall_relation_frontiers(
@@ -5787,7 +5812,7 @@ def compile_relation_plan(
                 proof,
                 frontiers,
                 layouts,
-                rules=("alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k"),
+                rules=("full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k"),
                 goal_ir=ir,
                 certificate_sink=compiled_certificates,
                 deduplicate_each_round=True,

@@ -3350,6 +3350,16 @@ def test_k_rank_hidden_sharded_embedding_uses_ordered_init_weight_authority():
             "tensor_eq", ("sm", "pm"), (40, 40)
         ),
     )
+    sink = []
+    normalized, normalized_layouts = normalize_relation_frontiers(
+        SimpleNamespace(steps=(sm, *pm)), (frontier,), ("sharded",),
+        rules=("embedding_k",),
+        goal_ir=SimpleNamespace(init_lineages={50: lineage}),
+        certificate_sink=sink,
+    )
+    assert (normalized, normalized_layouts, sink) == (
+        (cert.weight_fact.step_triple,), ("sharded",), [cert]
+    )
 
 
 def test_k_rank_hidden_sharded_embedding_rejects_distinct_ids_authority():
@@ -3403,6 +3413,14 @@ def test_k_rank_full_producer_chunks_reconstruct_arbitrary_ordered_k():
     assert transition.post_facts == (cert.output_fact,)
     assert transition.sm_node_indices == (1,)
     assert transition.pm_node_indices == (0, 1, 2, 3, 4)
+    sink = []
+    normalized, normalized_layouts = normalize_relation_frontiers(
+        SimpleNamespace(steps=(sm, producer, *chunks)), (frontier,), ("sharded",),
+        rules=("full_producer_k",), certificate_sink=sink,
+    )
+    assert (normalized, normalized_layouts, sink) == (
+        (cert.input_fact.step_triple,), ("joined",), [cert]
+    )
 
 
 def test_k_rank_full_producer_chunks_rejects_duplicate_or_reordered_ranks():
@@ -3468,6 +3486,16 @@ def test_k_rank_output_sharded_linear_uses_joined_activation_and_init_weight_aut
     )[0]
     assert transition.pre_facts == (cert.activation_fact, cert.weight_fact)
     assert transition.post_facts == (cert.output_fact,)
+    sink = []
+    normalized, normalized_layouts = normalize_relation_frontiers(
+        SimpleNamespace(steps=(sm_activation, pm_activation, sm_out, *pm_out)),
+        (frontier,), ("sharded",), rules=("output_linear_k",),
+        goal_ir=SimpleNamespace(init_lineages={50: lineage}), certificate_sink=sink,
+    )
+    assert (normalized, normalized_layouts, sink) == (
+        (cert.activation_fact.step_triple, cert.weight_fact.step_triple),
+        ("joined", "sharded"), [cert]
+    )
 
 
 def test_k_rank_output_sharded_linear_rejects_weight_authority_order_mismatch():
@@ -3650,10 +3678,10 @@ def test_k_rank_multiref_projection_preserves_ordered_sharded_frontier():
 
 
 @pytest.mark.parametrize(
-    ("shard_shape", "supported"),
-    [((1, 2, 12), True), ((1, 8, 3), False)],
+    ("shard_shape", "expected_dim"),
+    [((1, 2, 12), 1), ((1, 8, 3), 2)],
 )
-def test_k_rank_add_frontier_expands_two_dynamic_sharded_inputs(shard_shape, supported):
+def test_k_rank_add_frontier_expands_two_dynamic_sharded_inputs(shard_shape, expected_dim):
     sm_inputs = ("sm:0:0", "sm:1:0")
     pm_inputs = tuple(
         tuple(f"pm:{arg * 4 + rank}:0" for rank in range(4))
@@ -3688,28 +3716,18 @@ def test_k_rank_add_frontier_expands_two_dynamic_sharded_inputs(shard_shape, sup
         rules=("add_k",),
         certificate_sink=sink,
     )
-    if supported:
-        expected = (
-            (sm_inputs[0], *pm_inputs[0]),
-            (sm_inputs[1], *pm_inputs[1]),
-        )
-        assert len(certs) == 1
-        assert certs[0].gather_dim == 1
-        assert certs[0].lean_theorem == "TrainVerify.Denote.fw_add_allGather_dim1_K"
-        assert frontiers == expected
-        assert layouts == ("sharded", "sharded")
-        assert normalized == expected
-        assert normalized_layouts == ("sharded", "sharded")
-        assert sink == list(certs)
-    else:
-        # A dim2 relation must remain unsupported rather than being mislabeled
-        # with the currently integrated dim1 theorem.
-        assert certs == ()
-        assert frontiers == ((sm_output, *pm_outputs),)
-        assert layouts == ("sharded",)
-        assert normalized == ((sm_output, *pm_outputs),)
-        assert normalized_layouts == ("sharded",)
-        assert sink == []
+    expected = (
+        (sm_inputs[0], *pm_inputs[0]),
+        (sm_inputs[1], *pm_inputs[1]),
+    )
+    assert len(certs) == 1
+    assert certs[0].gather_dim == expected_dim
+    assert certs[0].lean_theorem == "TrainVerify.Denote.fw_add_allGather_dim_K"
+    assert frontiers == expected
+    assert layouts == ("sharded", "sharded")
+    assert normalized == expected
+    assert normalized_layouts == ("sharded", "sharded")
+    assert sink == list(certs)
 
 
 def test_k_rank_alltoall_frontier_transports_gather_dimension():
