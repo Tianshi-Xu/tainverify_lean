@@ -6712,7 +6712,6 @@ def render_closed_k_rank_matmul_query_axis_segment(ir: GoalIR, relation, segment
     return "\n".join(lines)
 
 
-
 def render_closed_k_rank_matmul_contraction_segment(ir: GoalIR, relation, segment_id: str) -> str:
     """Replay exact one-SM plus ordered-K-PM contraction-axis matmuls."""
     try:
@@ -6877,6 +6876,155 @@ def render_closed_k_rank_matmul_contraction_segment(ir: GoalIR, relation, segmen
         "    · exact hframe fact old", "",
     ]
     return "\n".join(lines)
+
+
+def render_closed_k_rank_softmax_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Replay exact one-SM plus ordered-K-PM rank-4 softmax writers."""
+    try:
+        from .relation_compiler import KRankSoftmaxCertificate
+    except ImportError:
+        from relation_compiler import KRankSoftmaxCertificate
+    chain = relation.dependent_chain_plan
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if segment is None or len(segment.transition_ids) != 1:
+        raise ValueError("K-rank softmax renderer requires one exact transition")
+    transition = next(item for item in relation.transition_specs
+                      if item.transition_id == segment.transition_ids[0])
+    expected_rule = f"softmax-sharded-k-rank-dim{transition.pre_facts[0].gather_dim}"
+    expected_theorem = (
+        "TrainVerify.Denote.RelationCompiler.ShardedRel."
+        f"fw_softmax_dim{transition.pre_facts[0].gather_dim}_rank4"
+    )
+    if transition.rule_id != expected_rule or transition.lean_theorem != expected_theorem:
+        raise ValueError("K-rank softmax axis-specific theorem identity mismatch")
+    certs = [item for item in relation.certificates
+             if type(item) is KRankSoftmaxCertificate and item.rule_id == transition.rule_id]
+    if len(certs) != 1 or certs[0].lean_theorem != expected_theorem:
+        raise ValueError("K-rank softmax requires one exact typed certificate")
+    cert = certs[0]
+    if transition.pre_facts != (cert.input_fact,) or transition.post_facts != (cert.output_fact,):
+        raise ValueError("K-rank softmax transition facts disagree with its certificate")
+    records = {item.source: item for item in chain.relation_facts}
+    try:
+        pre = records[cert.input_fact]
+        post = records[cert.output_fact]
+    except KeyError as exc:
+        raise ValueError("K-rank softmax relation fact is not materialized") from exc
+    states = {item.state_id: item for item in chain.states}
+    before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    if pre.fact_id not in before.fact_ids or post.fact_id not in after.fact_ids:
+        raise ValueError("K-rank softmax relation facts are not live")
+    dim = cert.gather_dim
+    if (dim not in (1, 2) or pre.kind != "sharded" or post.kind != "sharded"
+            or pre.gather_dim != dim or post.gather_dim != dim):
+        raise ValueError("K-rank softmax requires exact dim1/dim2 ShardedRel facts")
+    k = len(post.pm_tids)
+    if (k < 2 or cert.rank_count != k or len(pre.pm_tids) != k
+            or tuple(pre.full_shape) != tuple(cert.full_shape)
+            or tuple(post.full_shape) != tuple(cert.full_shape)
+            or tuple(pre.shard_shape) != tuple(cert.shard_shape)
+            or tuple(post.shard_shape) != tuple(cert.shard_shape)):
+        raise ValueError("K-rank softmax relation metadata is not exact")
+    full, shard = tuple(cert.full_shape), tuple(cert.shard_shape)
+    if len(full) != 4 or len(shard) != 4 or shard[3] <= 0:
+        raise ValueError("K-rank softmax requires rank-4 shapes with positive last axis")
+    expected_full = tuple(value * k if index == dim else value
+                          for index, value in enumerate(shard))
+    if full != expected_full:
+        raise ValueError("K-rank softmax full/shard shapes do not encode its exact axis")
+    sm_start, sm_end = segment.sm_range
+    pm_start, pm_end = segment.pm_range
+    if (tuple(transition.sm_node_indices) != tuple(range(sm_start, sm_end))
+            or sm_end - sm_start != 1
+            or tuple(transition.pm_node_indices) != tuple(range(pm_start, pm_end))
+            or pm_end - pm_start != k):
+        raise ValueError("K-rank softmax segment ranges do not equal exact 1xK writer footprint")
+    sm_node = ir.sm_nodes[sm_start]
+    pm_nodes = tuple(ir.pm_nodes[index] for index in range(pm_start, pm_end))
+    if sm_node.rank != 0 or sm_node.op != "FW_softmax":
+        raise ValueError("K-rank softmax SM writer is not exact")
+    if tuple(node.rank for node in pm_nodes) != tuple(range(k)):
+        raise ValueError("K-rank softmax PM writers are not exact ordered ranks")
+    writers = (sm_node, *pm_nodes)
+    if any(node.params for node in writers):
+        raise ValueError("K-rank FW_softmax writers require no parameters")
+    if any(len(node.ins) != 1 or len(node.outs) != 1 for node in writers):
+        raise ValueError("K-rank FW_softmax writers must be unary singleton-output nodes")
+    if sm_node.ins != [pre.sm_tid] or sm_node.outs != [post.sm_tid]:
+        raise ValueError("K-rank softmax SM writer disagrees with relation facts")
+    if tuple(node.ins[0] for node in pm_nodes) != tuple(pre.pm_tids):
+        raise ValueError("K-rank softmax PM writers do not preserve ordered input TIDs")
+    if tuple(node.outs[0] for node in pm_nodes) != tuple(post.pm_tids):
+        raise ValueError("K-rank softmax PM writers do not preserve ordered output TIDs")
+
+    sm_node_name = f"{segment_id}_sm_node"
+    pm_node_names = [f"{segment_id}_pm_node_{rank}" for rank in range(k)]
+    sm_nodes_name, pm_nodes_name = f"{segment_id}_sm_nodes", f"{segment_id}_pm_nodes"
+    lines = [f"private def {sm_node_name} : NodeDecl := {_node_text(sm_node)}"]
+    lines += [f"private def {name} : NodeDecl := {_node_text(node)}"
+              for name, node in zip(pm_node_names, pm_nodes)]
+    lines += [
+        f"private def {sm_nodes_name} : List NodeDecl := [{sm_node_name}]",
+        f"private def {pm_nodes_name} : List NodeDecl := [{', '.join(pm_node_names)}]", "",
+        f"private def {segment_id} :",
+        f"    ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
+        f"  smNodes := {sm_nodes_name}", f"  pmNodes := {pm_nodes_name}", "  sound := by",
+        "    intro smStore pmStore hstate",
+        f"    let smNodes : List NodeDecl := {sm_nodes_name}",
+        f"    let pmNodes : List NodeDecl := {pm_nodes_name}",
+        f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore",
+        f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
+        f"    have hInput : {pre.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    change ShardedRel (smStore {pre.sm_tid}) [{', '.join(f'pmStore {tid}' for tid in pre.pm_tids)}] {dim} {_shape_text(list(full))} {_shape_text(list(shard))} at hInput",
+    ]
+
+    def writer(name, side, pos, node, node_name):
+        graph = ir.sm_graph_ref if side == "sm" else ir.pm_graph_ref
+        store = "smStore" if side == "sm" else "pmStore"
+        nodes = "smNodes" if side == "sm" else "pmNodes"
+        final = "smFinal" if side == "sm" else "pmFinal"
+        return [
+            f"    have {name} : {final} {node.outs[0]} = fw_softmax ({store} {node.ins[0]}) := by",
+            f"      change ({nodes}.foldl (applyNodeDistributedFaithful {graph}) {store}) {node.outs[0]} = _",
+            f"      rw [show {nodes} = {nodes}.take {pos} ++ [{node_name}] ++ {nodes}.drop {pos + 1} by native_decide]",
+            f"      rw [foldl_faithful_middle_writer {graph} {store} ({nodes}.take {pos}) ({nodes}.drop {pos + 1})",
+            f"        {node_name} {node.outs[0]} (fun t => fw_softmax (t {node.ins[0]})) (by",
+            "          intro t",
+            "          rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "            (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]",
+            "          simp [applyNodeDistributed, applyNodeRingAttn]",
+            f"          exact applyNode_fw_softmax_out_g43 {graph} t {node.rank} {node.ins[0]} {node.outs[0]} []",
+            "        ) (by native_decide) (by native_decide)]",
+            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[0]} (by native_decide) (by native_decide)]",
+        ]
+
+    lines += writer("hSmWriter", "sm", 0, sm_node, sm_node_name)
+    for rank, node in enumerate(pm_nodes):
+        lines += writer(f"hPmWriter{rank}", "pm", rank, node, pm_node_names[rank])
+    pm_outputs = "[" + ", ".join(f"pmFinal {tid}" for tid in post.pm_tids) + "]"
+    theorem = f"ShardedRel.fw_softmax_dim{dim}_rank4"
+    lines += [
+        f"    have htransport := {theorem}",
+        f"      (d0 := {shard[0]}) (d1 := {shard[1]}) (d2 := {shard[2]}) (d3 := {shard[3]})",
+        "      hInput (by native_decide)",
+        f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by",
+        f"      change ShardedRel (smFinal {post.sm_tid}) {pm_outputs} {dim} {_shape_text(list(full))} {_shape_text(list(shard))}",
+        "      rw [hSmWriter, " + ", ".join(f"hPmWriter{rank}" for rank in range(k)) + "]",
+        "      simpa only [List.map, List.length_cons, List.length_nil] using htransport",
+        "    intro fact hfact",
+        f"    have covered : fact ∈ [{post.fact_id}] ++ {before.state_id}.facts := by",
+        f"      exact (show {after.state_id}.facts ⊆ [{post.fact_id}] ++ {before.state_id}.facts by native_decide) hfact",
+        "    simp only [List.mem_append] at covered",
+        "    rcases covered with fresh | old",
+        "    · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh",
+        "      rcases fresh with rfl", "      exact hout",
+        "    · exact hframe fact old", "",
+    ]
+    return "\n".join(lines)
+
 
 def render_closed_k_rank_contiguous_segment(ir: GoalIR, relation, segment_id: str) -> str:
     """Replay the exact one-SM plus ordered-K-PM FW_contiguous writers."""
@@ -7939,6 +8087,9 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         return render_closed_k_rank_matmul_query_axis_segment(ir, relation, segment_id)
     if family == ("matmul-contraction-reduction-k-rank",):
         return render_closed_k_rank_matmul_contraction_segment(ir, relation, segment_id)
+    if family in (("softmax-sharded-k-rank-dim1",),
+                   ("softmax-sharded-k-rank-dim2",)):
+        return render_closed_k_rank_softmax_segment(ir, relation, segment_id)
     if family == ("contiguous-sharded-k-rank",):
         return render_closed_k_rank_contiguous_segment(ir, relation, segment_id)
     if family in (

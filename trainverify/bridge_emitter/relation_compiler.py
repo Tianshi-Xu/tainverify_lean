@@ -4314,6 +4314,107 @@ def advance_k_rank_matmul_contraction_frontiers(
 
 
 @dataclass(frozen=True)
+class KRankSoftmaxCertificate:
+    """Exact dynamic-K rank-4 non-last-axis softmax transport authority."""
+
+    rule_id: str
+    rank_count: int
+    gather_dim: int
+    input_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    sm_step_id: str
+    pm_step_ids: tuple[str, ...]
+    full_shape: tuple[int, ...]
+    shard_shape: tuple[int, ...]
+    lean_theorem: str
+
+
+def advance_k_rank_softmax_frontiers(
+    plan: ProofPlan,
+    frontiers: tuple[tuple[str, ...], ...],
+    layouts: tuple[str, ...],
+) -> tuple[tuple[KRankSoftmaxCertificate, ...], tuple[tuple[str, ...], ...], tuple[str, ...]]:
+    """Pull dim-1/dim-2 rank-4 softmax outputs to the same ordered shard fact."""
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("K-rank softmax frontier/layout arity mismatch")
+    by_id = {step.step_id: step for step in plan.steps}
+    certificates, rewritten, rewritten_layouts = [], [], []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "sharded" or len(frontier) < 3:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        try:
+            sm_step = by_id[frontier[0]]
+            pm_steps = tuple(by_id[ref] for ref in frontier[1:])
+        except KeyError:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        if sm_step.op != "FW_softmax" or any(step.op != "FW_softmax" for step in pm_steps):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        rank_count = len(pm_steps)
+        if sm_step.side != "sm" or int(sm_step.rank) != 0 or any(step.side != "pm" for step in pm_steps):
+            raise RelationCompositionError("K-rank softmax writers have incompatible side/rank authority")
+        if tuple(int(step.rank) for step in pm_steps) != tuple(range(rank_count)):
+            raise RelationCompositionError("K-rank softmax PM writers are not exact ordered ranks")
+        writers = (sm_step, *pm_steps)
+        if any(tuple(step.parameters) for step in writers):
+            raise RelationCompositionError("K-rank FW_softmax writers must declare no parameters")
+        if any(len(step.input_bindings) != 1 for step in writers):
+            raise RelationCompositionError("K-rank FW_softmax writers must be unary")
+        if any(len(step.input_shapes) != 1 for step in writers):
+            raise RelationCompositionError("K-rank FW_softmax declared input shape is missing")
+        sm_input_ref = sm_step.input_bindings[0]
+        pm_input_refs = tuple(step.input_bindings[0] for step in pm_steps)
+        try:
+            sm_input = by_id[sm_input_ref]
+            pm_inputs = tuple(by_id[ref] for ref in pm_input_refs)
+        except KeyError as exc:
+            raise RelationCompositionError("K-rank softmax input authority is unresolved") from exc
+        if sm_input.side != "sm" or any(step.side != "pm" for step in pm_inputs):
+            raise RelationCompositionError("K-rank softmax input authority has wrong sides")
+        if tuple(int(step.rank) for step in pm_inputs) != tuple(range(rank_count)):
+            raise RelationCompositionError("K-rank softmax shards do not preserve ordered input authority")
+        full_shape = tuple(sm_step.output_shape)
+        shard_shapes = tuple(tuple(step.output_shape) for step in pm_steps)
+        input_full_shape = tuple(sm_input.output_shape)
+        input_shard_shapes = tuple(tuple(step.output_shape) for step in pm_inputs)
+        if (len(full_shape) != 4 or not shard_shapes
+                or any(len(shape) != 4 or shape != shard_shapes[0] for shape in shard_shapes)):
+            raise RelationCompositionError("K-rank softmax outputs require exact equal rank-4 shard shapes")
+        shard_shape = shard_shapes[0]
+        if input_full_shape != full_shape or input_shard_shapes != shard_shapes:
+            raise RelationCompositionError("K-rank softmax input authority shapes must exactly equal output shapes")
+        declared_sm = tuple(tuple(shape) for shape in sm_step.input_shapes)
+        declared_pm = tuple(tuple(tuple(shape) for shape in step.input_shapes) for step in pm_steps)
+        if declared_sm != (full_shape,) or declared_pm != tuple((shard_shape,) for _ in range(rank_count)):
+            raise RelationCompositionError("K-rank softmax declared input shapes disagree with authority")
+        candidate_dims = tuple(
+            dim for dim in (1, 2)
+            if full_shape == tuple(
+                value * rank_count if index == dim else value
+                for index, value in enumerate(shard_shape)
+            )
+        )
+        if len(candidate_dims) != 1:
+            # Dim 3 is the normalization axis and is deliberately unsupported.
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        gather_dim = candidate_dims[0]
+        input_fact = RelationFactSpec(
+            "sharded", (sm_input_ref, *pm_input_refs), gather_dim=gather_dim)
+        output_fact = RelationFactSpec("sharded", frontier, gather_dim=gather_dim)
+        theorem = (
+            "TrainVerify.Denote.RelationCompiler.ShardedRel."
+            f"fw_softmax_dim{gather_dim}_rank4"
+        )
+        certificates.append(KRankSoftmaxCertificate(
+            f"softmax-sharded-k-rank-dim{gather_dim}", rank_count, gather_dim,
+            input_fact, output_fact, sm_step.step_id,
+            tuple(step.step_id for step in pm_steps), full_shape, shard_shape, theorem,
+        ))
+        rewritten.append(input_fact.step_triple)
+        rewritten_layouts.append("sharded")
+    return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
+
+
+@dataclass(frozen=True)
 class KRankLocalRelationCertificate:
     rule_id: str
     op: str
@@ -5219,14 +5320,14 @@ def normalize_relation_frontiers(
     frontiers: tuple[tuple[str, ...], ...],
     layouts: tuple[str, ...],
     *,
-    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "transpose_k", "contiguous_k", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
+    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "transpose_k", "contiguous_k", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
     goal_ir: GoalIR | None = None,
     deduplicate_each_round: bool = False,
     certificate_sink: list[object] | None = None,
     side_condition_sink: list[RelationSideCondition] | None = None,
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
-    known = {"allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
+    known = {"allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
     unknown = set(rules) - known
     if unknown:
         raise RelationCompositionError(f"unknown relation normalization rules: {sorted(unknown)}")
@@ -5324,6 +5425,13 @@ def normalize_relation_frontiers(
         if "matmul_contraction_k" in rules:
             _certs, current_frontiers, current_layouts = (
                 advance_k_rank_matmul_contraction_frontiers(
+                    plan, current_frontiers, current_layouts
+                )
+            )
+            _extend_unique_certificates(certificate_sink, _certs)
+        if "softmax_k" in rules:
+            _certs, current_frontiers, current_layouts = (
+                advance_k_rank_softmax_frontiers(
                     plan, current_frontiers, current_layouts
                 )
             )
@@ -6732,6 +6840,10 @@ def build_certificate_transition_specs(
             pre = (cert.first_operand_fact, cert.second_operand_fact)
             post = (cert.output_fact,)
             footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
+        elif type(cert) is KRankSoftmaxCertificate:
+            pre = (cert.input_fact,)
+            post = (cert.output_fact,)
+            footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
         elif type(cert) is KRankMatmulHeadAxisCertificate:
             pre = (cert.first_operand_fact, cert.second_operand_fact)
             post = (cert.output_fact,)
@@ -7416,7 +7528,7 @@ def compile_relation_plan(
                 proof,
                 frontiers,
                 layouts,
-                rules=("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k"),
+                rules=("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k"),
                 goal_ir=ir,
                 certificate_sink=compiled_certificates,
                 deduplicate_each_round=True,
