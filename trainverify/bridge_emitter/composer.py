@@ -6016,7 +6016,8 @@ def render_closed_k_rank_local_segment(ir: GoalIR, relation, segment_id: str) ->
     return "\n".join(lines)
 
 def _k_rank_segment_context(ir, relation, segment_id: str, rule_id: str,
-                            theorem: str, certificate_type):
+                            theorem: str, certificate_type,
+                            certificate_facts):
     chain = relation.dependent_chain_plan
     segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
     if segment is None or len(segment.transition_ids) != 1:
@@ -6026,16 +6027,19 @@ def _k_rank_segment_context(ir, relation, segment_id: str, rule_id: str,
     ]
     if transition.rule_id != rule_id or transition.lean_theorem != theorem:
         raise ValueError(f"{rule_id} theorem identity mismatch: {transition.lean_theorem}")
-    certificates = [item for item in relation.certificates if type(item) is certificate_type]
-    certificates = [item for item in certificates if item.rule_id == rule_id]
+    if len(transition.pre_facts) != 1 or len(transition.post_facts) != 1:
+        raise ValueError(f"{rule_id} requires one pre/post fact")
+    certificates = [
+        item for item in relation.certificates
+        if type(item) is certificate_type
+        and item.rule_id == transition.rule_id
+        and item.lean_theorem == transition.lean_theorem
+        and certificate_facts(item) == (transition.pre_facts, transition.post_facts)
+    ]
     if len(certificates) != 1:
         raise ValueError(f"{rule_id} requires one exact typed certificate")
     certificate = certificates[0]
-    if certificate.lean_theorem != theorem:
-        raise ValueError(f"{rule_id} certificate theorem identity mismatch")
     records = {item.source: item for item in chain.relation_facts}
-    if len(transition.pre_facts) != 1 or len(transition.post_facts) != 1:
-        raise ValueError(f"{rule_id} requires one pre/post fact")
     try:
         pre = records[transition.pre_facts[0]]
         post = records[transition.post_facts[0]]
@@ -6086,6 +6090,7 @@ def render_closed_k_rank_transpose_segment(ir: GoalIR, relation, segment_id: str
     (segment, transition, certificate, pre, post, before, after) = _k_rank_segment_context(
         ir, relation, segment_id, "transpose-sharded-k-rank", theorem,
         KRankTransposeRelationCertificate,
+        lambda cert: ((cert.input_fact,), (cert.output_fact,)),
     )
     if certificate.input_fact != transition.pre_facts[0] or certificate.output_fact != transition.post_facts[0]:
         raise ValueError("K-rank transpose certificate facts disagree with transition")
@@ -7043,6 +7048,7 @@ def render_closed_k_rank_div_segment(ir: GoalIR, relation, segment_id: str) -> s
     theorem = f"TrainVerify.Denote.RelationCompiler.ShardedRel.fw_div_dim{axis}_rank4"
     (segment, transition, certificate, pre, post, before, after) = _k_rank_segment_context(
         ir, relation, segment_id, rule_id, theorem, KRankDivCertificate,
+        lambda cert: ((cert.input_fact,), (cert.output_fact,)),
     )
     if certificate.input_fact != transition.pre_facts[0] or certificate.output_fact != transition.post_facts[0]:
         raise ValueError("K-rank div certificate facts disagree with transition")
@@ -7386,6 +7392,7 @@ def render_closed_k_rank_contiguous_segment(ir: GoalIR, relation, segment_id: st
     (segment, transition, certificate, pre, post, before, after) = _k_rank_segment_context(
         ir, relation, segment_id, "contiguous-sharded-k-rank", theorem,
         KRankContiguousRelationCertificate,
+        lambda cert: ((cert.input_fact,), (cert.output_fact,)),
     )
     if certificate.input_fact != transition.pre_facts[0] or certificate.output_fact != transition.post_facts[0]:
         raise ValueError("K-rank contiguous certificate facts disagree with transition")
@@ -7505,6 +7512,7 @@ def render_closed_k_rank_full_producer_chunks_segment(
     (segment, transition, certificate, pre, post, before, after) = _k_rank_segment_context(
         ir, relation, segment_id, "full-producer-chunks-k-rank", theorem,
         KRankFullProducerChunksCertificate,
+        lambda cert: ((cert.input_fact,), (cert.output_fact,)),
     )
     if pre.kind != "joined" or post.kind != "sharded" or pre.joined_pm_tid is None:
         raise ValueError("K-rank chunks require joined input and sharded output")
@@ -7634,6 +7642,7 @@ def render_closed_k_rank_alltoall_segment(ir: GoalIR, relation, segment_id: str)
     (segment, transition, certificate, pre, post, before, after) = _k_rank_segment_context(
         ir, relation, segment_id, "alltoall-k-rank-layout-transport", theorem,
         KRankAllToAllRelationCertificate,
+        lambda cert: ((cert.input_fact,), (cert.output_fact,)),
     )
     if pre.kind != "sharded" or post.kind != "sharded":
         raise ValueError("K-rank AllToAll requires sharded pre/post facts")
@@ -7924,6 +7933,7 @@ def render_closed_k_rank_vocab_embedding_segment(ir: GoalIR, relation, segment_i
     (segment, transition, certificate, pre, post, before, after) = _k_rank_segment_context(
         ir, relation, segment_id, "embedding-vocab-sharded-reduction-k-rank", theorem,
         KRankVocabShardedEmbeddingProducerCertificate,
+        lambda cert: ((cert.weight_fact,), (cert.output_fact,)),
     )
     if pre.kind != "sharded" or pre.gather_dim != 0 or post.kind != "reduction":
         raise ValueError("K-rank vocab embedding requires dim-0 sharded weight and reduction output")
@@ -8118,6 +8128,7 @@ def render_closed_k_rank_sum_producer_segment(ir: GoalIR, relation, segment_id: 
     (segment, transition, certificate, pre, post, before, after) = _k_rank_segment_context(
         ir, relation, segment_id, "sum-producer-sharded-k-rank-dim1", theorem,
         KRankSumProducerCertificate,
+        lambda cert: ((cert.input_fact,), (cert.output_fact,)),
     )
     if pre.kind != "sharded" or post.kind != "reduction":
         raise ValueError("K-rank FW_sum producer requires sharded pre and reduction post")

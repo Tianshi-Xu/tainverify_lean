@@ -4566,6 +4566,78 @@ def test_closed_k_rank_alltoall_segment_is_generic_and_exact():
     assert "rankCount = 4" not in source
 
 
+def test_generated_k_rank_alltoall_witness_is_exact_renderer_output():
+    ir, relation = _synthetic_k_rank_segment_relation(family="alltoall")
+    namespace = "SyntheticKRank"
+    declarations = render_closed_relation_declarations(
+        relation.dependent_chain_plan, namespace
+    )
+    rendered = render_closed_segment(ir, relation, "segment_000000")
+    sm_nodes = "[" + ", ".join(
+        composer_module._node_text(node) for node in ir.sm_nodes
+    ) + "]"
+    pm_nodes = "[" + ", ".join(
+        composer_module._node_text(node) for node in ir.pm_nodes
+    ) + "]"
+    source = "\n".join((
+        declarations,
+        f"namespace TrainVerify.Denote.{namespace}",
+        "noncomputable section",
+        f"private def smGraph : GraphDecl := {{ numRanks := 1, nodes := {sm_nodes} }}",
+        f"private def pmGraph : GraphDecl := {{ numRanks := 4, nodes := {pm_nodes} }}",
+        rendered,
+        "#print axioms segment_000000",
+        "end",
+        f"end TrainVerify.Denote.{namespace}",
+        "",
+    ))
+    witness = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/denote/GeneratedKRankAllToAllCompilerWitness.lean"
+    )
+    assert witness.read_text() == source
+    assert "sorry" not in source and "False.elim" not in source
+
+
+def test_closed_k_rank_alltoall_selects_certificate_by_exact_transition_facts():
+    ir, relation = _synthetic_k_rank_segment_relation(family="alltoall")
+    expected = render_closed_segment(ir, relation, "segment_000000")
+    unrelated_input = RelationFactSpec(
+        "sharded", ("sm:99:0", "pm:99:0", "pm:100:0"), gather_dim=0,
+    )
+    unrelated = replace(relation.certificates[0], input_fact=unrelated_input)
+    with_unrelated = SimpleNamespace(
+        **{**relation.__dict__, "certificates": (unrelated, relation.certificates[0])}
+    )
+
+    assert render_closed_segment(ir, with_unrelated, "segment_000000") == expected
+
+
+def test_closed_k_rank_alltoall_rejects_malformed_or_ambiguous_exact_certificate():
+    ir, relation = _synthetic_k_rank_segment_relation(family="alltoall")
+    certificate = relation.certificates[0]
+    malformed = replace(
+        certificate,
+        input_fact=RelationFactSpec(
+            "sharded", ("sm:99:0", "pm:99:0", "pm:100:0"), gather_dim=0,
+        ),
+    )
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        render_closed_segment(
+            ir, SimpleNamespace(**{**relation.__dict__, "certificates": (malformed,)}),
+            "segment_000000",
+        )
+
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        render_closed_segment(
+            ir,
+            SimpleNamespace(
+                **{**relation.__dict__, "certificates": (certificate, certificate)}
+            ),
+            "segment_000000",
+        )
+
+
 def test_closed_k_rank_segment_rejects_wrong_writer_footprint_and_embedding_exactly():
     ir, relation = _synthetic_k_rank_segment_relation(family="chunks")
     bad_transition = replace(relation.transition_specs[0], pm_node_indices=(0, 1, 2, 3, 4))
