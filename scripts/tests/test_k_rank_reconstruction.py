@@ -1,3 +1,5 @@
+from dataclasses import replace
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -443,7 +445,58 @@ def test_closed_k_rank_allreduce_renderer_rejects_extra_ownership():
 
 
 
-def test_fresh_allreduce_segment_witness_is_renderer_output(tmp_path):
+
+def test_closed_k_rank_allreduce_selects_exact_typed_transition_certificate():
+    ir, relation, segment, *_ = _closed_k_rank_allreduce_fixture()
+    expected = render_closed_segment(ir, relation, segment.segment_id)
+    exact = relation.certificates[0]
+    unrelated = replace(
+        exact,
+        input_fact=relation_compiler.RelationFactSpec(
+            "reduction", ("sm:99:0", "pm:99:0", "pm:100:0")
+        ),
+    )
+    foreign = SimpleNamespace(
+        rule_id=exact.rule_id,
+        lean_theorem=exact.lean_theorem,
+        input_fact=exact.input_fact,
+        output_fact=exact.output_fact,
+    )
+    with_unrelated = SimpleNamespace(
+        **{
+            **relation.__dict__,
+            "certificates": (unrelated, foreign, exact),
+        }
+    )
+
+    assert render_closed_segment(ir, with_unrelated, segment.segment_id) == expected
+
+
+def test_closed_k_rank_allreduce_rejects_malformed_or_duplicate_exact_certificate():
+    ir, relation, segment, *_ = _closed_k_rank_allreduce_fixture()
+    exact = relation.certificates[0]
+    malformed = replace(
+        exact,
+        output_fact=relation_compiler.RelationFactSpec(
+            "joined", ("sm:99:0",), joined_pm_step="pm:99:0"
+        ),
+    )
+
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        render_closed_segment(
+            ir,
+            SimpleNamespace(**{**relation.__dict__, "certificates": (malformed,)}),
+            segment.segment_id,
+        )
+
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        render_closed_segment(
+            ir,
+            SimpleNamespace(**{**relation.__dict__, "certificates": (exact, exact)}),
+            segment.segment_id,
+        )
+
+def test_generated_allreduce_segment_witness_is_exact_renderer_output():
     ir, relation, segment, *_ = _closed_k_rank_allreduce_fixture(rank_count=3)
     namespace = "GeneratedKRankAllReduceSegmentWitness"
     declarations = render_closed_relation_declarations(
@@ -469,8 +522,10 @@ def test_fresh_allreduce_segment_witness_is_renderer_output(tmp_path):
         f"end TrainVerify.Denote.{namespace}",
         "",
     ))
-    witness = tmp_path / "GeneratedKRankAllReduceSegmentWitness.lean"
-    witness.write_text(source)
+    witness = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/denote/GeneratedKRankAllReduceSegmentWitness.lean"
+    )
     assert witness.read_text() == source
     assert rendered == render_closed_k_rank_allreduce_segment(
         ir, relation, segment.segment_id
