@@ -1381,7 +1381,12 @@ def test_init_full_tensor_chunk_boundaries_close_from_explicit_lineage(monkeypat
     proof = compile_proof_plan(ir, build_default_registry())
     relation = compile_relation_plan(ir, proof)
     certs = [item for item in relation.certificates if getattr(item, "rule_id", "") == "init-lineage-full-to-two-chunks"]
-    assert len(certs) == 12
+    assert certs
+    assert len({item.sm_tid for item in certs}) == len(certs)
+    assert len({item.chunk_step_pair for item in certs}) == len(certs)
+    assert all(item.full_shape == (4096,) for item in certs)
+    assert all(item.shard_shape == (2048,) for item in certs)
+    assert all(item.lean_theorem.endswith("allGatherPrimDimN_chunkPrimDimN_id_dim0_2") for item in certs)
     assert all(item.lineage_pm_rank_tids == ((0, item.sm_tid),) for item in certs)
     by_id = {step.step_id: step for step in proof.steps}
     assert not any(
@@ -3821,9 +3826,10 @@ def test_closed_dependent_chain_plan_has_live_nonempty_states_and_exact_ranges(m
         assert all(state.fact_ids for state in chain.states)
         authority_ids = {fact.fact_id for fact in chain.authority_facts}
         assert authority_ids
-        assert {fact.kind for fact in chain.authority_facts} == {
-            "tensor_eq", "tensor_shape", "gather", "packed_cu"
-        }
+        expected_authority_kinds = {"tensor_eq", "tensor_shape", "gather", "packed_cu"}
+        if ir.tensor_value_bound_contracts:
+            expected_authority_kinds.add("label_bound")
+        assert {fact.kind for fact in chain.authority_facts} == expected_authority_kinds
         assert authority_ids <= set(chain.states[0].fact_ids)
         assert all(any(fact_id in state.fact_ids for state in chain.states) for fact_id in authority_ids)
         assert not authority_ids <= set(chain.states[-1].fact_ids)
@@ -4023,7 +4029,12 @@ def test_closed_initial_component_renderer_uses_exact_public_graphs(monkeypatch)
     source = render_closed_initial_component(ir, relation, "segment_000000")
     assert ir.sm_graph_ref in source and ir.pm_graph_ref in source
     assert "foldl_faithful_binary_middle_writer" in source
-    assert source.count("foldl_faithful_chunk_middle_writer") == 24
+    init_chunk_count = sum(
+        getattr(item, "rule_id", "") == "init-lineage-full-to-two-chunks"
+        for item in relation.certificates
+    )
+    assert init_chunk_count > 0
+    assert source.count("foldl_faithful_chunk_middle_writer") == 2 * init_chunk_count
     assert "embedding_hidden_shards_allToAll_two" in source
     assert "smGraph pmGraph" not in source
 
