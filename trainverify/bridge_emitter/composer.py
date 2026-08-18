@@ -6093,12 +6093,16 @@ def render_closed_k_rank_transpose_segment(ir: GoalIR, relation, segment_id: str
         "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_2_3_dim3_to_dim2_rank4",
         "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_2_3_dim1_rank4",
     }
-    typed = [item for item in relation.certificates
-             if type(item) is KRankTransposeRelationCertificate
-             and item.rule_id == "transpose-sharded-k-rank"]
-    if len(typed) != 1 or typed[0].lean_theorem not in allowed_theorems:
+    chain = relation.dependent_chain_plan
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if segment is None or len(segment.transition_ids) != 1:
+        raise ValueError("transpose-sharded-k-rank requires one atomic transition")
+    transition = {item.transition_id: item for item in relation.transition_specs}[
+        segment.transition_ids[0]
+    ]
+    theorem = transition.lean_theorem
+    if theorem not in allowed_theorems:
         raise ValueError("transpose-sharded-k-rank has no checked axis-specific theorem")
-    theorem = typed[0].lean_theorem
     (segment, transition, certificate, pre, post, before, after) = _k_rank_segment_context(
         ir, relation, segment_id, "transpose-sharded-k-rank", theorem,
         KRankTransposeRelationCertificate,

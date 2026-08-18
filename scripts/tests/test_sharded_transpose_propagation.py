@@ -291,6 +291,52 @@ def test_closed_sharded_transpose_renderer_replays_exact_ordered_writers():
     assert "rankCount = 3" not in source
 
 
+def test_closed_sharded_transpose_selector_ignores_unrelated_same_family_certificate():
+    ir, relation, segment, *_ = _closed_fixture(k=3)
+    expected = composer.render_closed_segment(ir, relation, segment.segment_id)
+    exact = relation.certificates[0]
+    unrelated = tuple(
+        replace(
+            exact,
+            input_fact=replace(
+                exact.input_fact,
+                step_triple=(f"init:{900 + index}", *exact.input_fact.step_triple[1:]),
+            ),
+        )
+        for index in range(60)
+    )
+    relation.certificates = (*unrelated, exact)
+
+    assert composer.render_closed_segment(ir, relation, segment.segment_id) == expected
+
+
+@pytest.mark.parametrize("mutation", ["malformed", "duplicate"])
+def test_closed_sharded_transpose_selector_rejects_nonunique_exact_certificate(mutation):
+    ir, relation, segment, *_ = _closed_fixture(k=3)
+    exact = relation.certificates[0]
+    if mutation == "malformed":
+        malformed = replace(
+            exact,
+            output_fact=replace(exact.output_fact, step_triple=("sm:999:0", *exact.output_fact.step_triple[1:])),
+        )
+        relation.certificates = (malformed,)
+    else:
+        relation.certificates = (exact, exact)
+
+    with pytest.raises(ValueError, match="requires one exact typed certificate"):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
+
+
+def test_closed_sharded_transpose_selector_rejects_unknown_transition_theorem():
+    ir, relation, segment, *_ = _closed_fixture(k=3)
+    unknown = "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_unknown"
+    relation.transition_specs = (replace(relation.transition_specs[0], lean_theorem=unknown),)
+    relation.certificates = (replace(relation.certificates[0], lean_theorem=unknown),)
+
+    with pytest.raises(ValueError, match="no checked axis-specific theorem"):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
+
+
 @pytest.mark.parametrize(
     ("output_full", "output_shard", "theorem"),
     [
