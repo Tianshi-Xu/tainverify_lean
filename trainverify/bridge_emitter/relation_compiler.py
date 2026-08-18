@@ -4003,6 +4003,10 @@ def init_lineage_relation_fact(lineage) -> RelationFactSpec:
     if bool(lineage.replicated):
         if any(shape != full_shape for shape in shapes):
             raise RelationCompositionError("replicated init lineage violates shape contract")
+        if len({tid for _rank, tid in pieces}) != 1:
+            raise RelationCompositionError(
+                "replicated init lineage lacks cross-rank value authority"
+            )
         return RelationFactSpec("replicated", refs)
 
     gather_dim = 0 if lineage.gatherDim is None else int(lineage.gatherDim)

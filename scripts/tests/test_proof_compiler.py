@@ -3775,13 +3775,21 @@ def test_init_lineage_relation_fact_preserves_ordered_k_rank_authority():
 
     replicated = SimpleNamespace(
         ts=11, tsShape=[3, 5],
-        tps=[(0, 30), (1, 31), (2, 32)],
+        tps=[(0, 30), (1, 30), (2, 30)],
         tpShapes=[[3, 5], [3, 5], [3, 5]],
         gatherDim=None, replicated=True,
     )
     assert relation_compiler_module.init_lineage_relation_fact(replicated) == RelationFactSpec(
-        "replicated", ("init:11", "init:30", "init:31", "init:32")
+        "replicated", ("init:11", "init:30", "init:30", "init:30")
     )
+    distinct_replicas = SimpleNamespace(
+        ts=12, tsShape=[3, 5],
+        tps=[(0, 31), (1, 32), (2, 33)],
+        tpShapes=[[3, 5], [3, 5], [3, 5]],
+        gatherDim=None, replicated=True,
+    )
+    with pytest.raises(RelationCompositionError, match="value authority"):
+        relation_compiler_module.init_lineage_relation_fact(distinct_replicas)
 
 
 def test_init_lineage_relation_fact_rejects_reordered_or_malformed_authority():
