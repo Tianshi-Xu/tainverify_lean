@@ -3,12 +3,20 @@ from __future__ import annotations
 
 
 def render_closed_mixed_k_rank_linear_segment(ir, relation, segment_id: str) -> str:
-    from .composer import _node_text, _shape_text, _select_exact_typed_certificate
-    from .relation_compiler import (
-        KRankAllGatherReconstructionCertificate,
-        KRankLocalRelationCertificate,
-        KRankOutputShardedLinearCertificate,
-    )
+    try:
+        from .composer import _node_text, _shape_text, _select_exact_typed_certificate
+        from .relation_compiler import (
+            KRankAllGatherReconstructionCertificate,
+            KRankLocalRelationCertificate,
+            KRankOutputShardedLinearCertificate,
+        )
+    except ImportError:
+        from composer import _node_text, _shape_text, _select_exact_typed_certificate
+        from relation_compiler import (
+            KRankAllGatherReconstructionCertificate,
+            KRankLocalRelationCertificate,
+            KRankOutputShardedLinearCertificate,
+        )
 
     local_rule = "linear-sharded-k-rank-dim1"
     gather_rule = "allgather-reconstruction-k-rank"
