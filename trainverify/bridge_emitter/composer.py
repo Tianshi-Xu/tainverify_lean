@@ -7166,6 +7166,216 @@ def render_closed_k_rank_div_segment(ir: GoalIR, relation, segment_id: str) -> s
     return "\n".join(lines)
 
 
+def render_closed_k_rank_multiref_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Replay one atomic multiref writer set for every certified projection.
+
+    The component owns one exact SM writer and the authority-ordered K PM
+    writers once.  Each projection is read from those same whole-axis folds.
+    """
+    try:
+        from .relation_compiler import KRankMultirefRelationCertificate
+    except ImportError:
+        from relation_compiler import KRankMultirefRelationCertificate
+
+    rule_id = "multiref-sharded-k-rank"
+    theorem = "TrainVerify.Denote.applyNode_fw_multiref_at"
+    chain = relation.dependent_chain_plan
+    if chain is None or not chain.complete:
+        raise ValueError("K-rank multiref requires a complete closed chain")
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if segment is None or not segment.transition_ids:
+        raise ValueError("K-rank multiref requires a nonempty atomic component")
+    transition_map = {item.transition_id: item for item in relation.transition_specs}
+    if len(transition_map) != len(relation.transition_specs):
+        raise ValueError("K-rank multiref transition authority is ambiguous")
+    try:
+        transitions = tuple(transition_map[item] for item in segment.transition_ids)
+    except KeyError as exc:
+        raise ValueError("K-rank multiref segment names an unknown transition") from exc
+    if any(item.rule_id != rule_id or item.lean_theorem != theorem
+           for item in transitions):
+        raise ValueError("K-rank multiref theorem identity mismatch")
+    if any(len(item.pre_facts) != 1 or len(item.post_facts) != 1
+           for item in transitions):
+        raise ValueError("K-rank multiref requires one pre/post fact per projection")
+
+    typed = tuple(item for item in relation.certificates
+                  if type(item) is KRankMultirefRelationCertificate
+                  and item.rule_id == rule_id)
+    certificates = []
+    for transition in transitions:
+        candidates = [
+            item for item in typed
+            if item.lean_theorem == theorem
+            and item.input_fact == transition.pre_facts[0]
+            and item.output_fact == transition.post_facts[0]
+        ]
+        if len(candidates) != 1:
+            raise ValueError("K-rank multiref transition lacks one exact typed certificate")
+        certificates.append(candidates[0])
+    if len({certificate.output_fact for certificate in certificates}) != len(certificates):
+        raise ValueError("K-rank multiref certificates duplicate output authority")
+    if len({certificate.projection for certificate in certificates}) != len(certificates):
+        raise ValueError("K-rank multiref certificates duplicate a projection")
+    if len({certificate.input_fact for certificate in certificates}) != 1:
+        raise ValueError("K-rank multiref projections do not share one input relation")
+
+    records = {item.source: item for item in chain.relation_facts}
+    if len(records) != len(chain.relation_facts):
+        raise ValueError("K-rank multiref relation fact authority is ambiguous")
+    try:
+        pre = records[transitions[0].pre_facts[0]]
+        posts = tuple(records[item.post_facts[0]] for item in transitions)
+    except KeyError as exc:
+        raise ValueError("K-rank multiref relation fact is not materialized") from exc
+    if pre.kind != "sharded" or any(post.kind != "sharded" for post in posts):
+        raise ValueError("K-rank multiref requires exact ShardedRel facts")
+
+    states = {item.state_id: item for item in chain.states}
+    before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    if pre.fact_id not in before.fact_ids or any(post.fact_id not in after.fact_ids for post in posts):
+        raise ValueError("K-rank multiref pre/post fact is not live")
+    fresh_ids = {post.fact_id for post in posts}
+    if len(fresh_ids) != len(posts) or not set(after.fact_ids) <= (fresh_ids | set(before.fact_ids)):
+        raise ValueError("K-rank multiref post-state introduces an unproved fact")
+
+    sm_start, sm_end = segment.sm_range
+    pm_start, pm_end = segment.pm_range
+    k = pm_end - pm_start
+    if sm_end - sm_start != 1 or k < 2:
+        raise ValueError("K-rank multiref segment ranges are not exact 1xK")
+    sm_indices = tuple(range(sm_start, sm_end))
+    pm_indices = tuple(range(pm_start, pm_end))
+    if any(tuple(item.sm_node_indices) != sm_indices
+           or tuple(item.pm_node_indices) != pm_indices for item in transitions):
+        raise ValueError("K-rank multiref segment ranges do not equal every writer footprint")
+    if ir.sm_num_ranks != 1 or ir.pm_num_ranks != k:
+        raise ValueError("K-rank multiref graph rank headers disagree with ordered writers")
+    sm_node = ir.sm_nodes[sm_start]
+    pm_nodes = tuple(ir.pm_nodes[index] for index in pm_indices)
+    if sm_node.rank != 0 or sm_node.op != "FW_multiref":
+        raise ValueError("K-rank multiref SM writer is not exact")
+    if tuple(node.rank for node in pm_nodes) != tuple(range(k)):
+        raise ValueError("K-rank multiref PM writers are not ordered ranks 0..K-1")
+    writers = (sm_node, *pm_nodes)
+    if any(node.op != "FW_multiref" or len(node.ins) != 1 for node in writers):
+        raise ValueError("K-rank multiref writers are not exact unary nodes")
+    arity = len(sm_node.outs)
+    if arity <= 0 or any(len(node.outs) != arity or node.params != [arity]
+                         for node in writers):
+        raise ValueError("K-rank multiref writer arity authority disagrees")
+    if sm_node.ins[0] != pre.sm_tid or tuple(node.ins[0] for node in pm_nodes) != tuple(pre.pm_tids):
+        raise ValueError("K-rank multiref input authority disagrees with the pre fact")
+    if len(pre.pm_tids) != k:
+        raise ValueError("K-rank multiref ordered input K is not exact")
+
+    rows = []
+    for transition, certificate, post in zip(transitions, certificates, posts):
+        projection = certificate.projection
+        if (certificate.rank_count != k or certificate.gather_dim != pre.gather_dim
+                or certificate.arity != arity or not 0 <= projection < arity):
+            raise ValueError("K-rank multiref certificate rank/projection metadata is not exact")
+        if (certificate.sm_step_id != f"sm:{sm_start}:{projection}"
+                or tuple(certificate.pm_step_ids) !=
+                   tuple(f"pm:{index}:{projection}" for index in pm_indices)):
+            raise ValueError("K-rank multiref certificate writer authority is not exact")
+        if (certificate.input_fact != transition.pre_facts[0]
+                or certificate.output_fact != transition.post_facts[0]):
+            raise ValueError("K-rank multiref certificate facts disagree with transition")
+        expected_outputs = (sm_node.outs[projection],
+                            *(node.outs[projection] for node in pm_nodes))
+        if (post.sm_tid, *post.pm_tids) != expected_outputs:
+            raise ValueError("K-rank multiref output authority disagrees with exact nodes")
+        if len(post.pm_tids) != k:
+            raise ValueError("K-rank multiref ordered output K is not exact")
+        if (post.gather_dim != pre.gather_dim or post.full_shape != pre.full_shape
+                or post.shard_shape != pre.shard_shape):
+            raise ValueError("K-rank multiref unexpectedly changes relation metadata")
+        rows.append((projection, post))
+    rows.sort(key=lambda item: item[0])
+
+    sm_node_name = f"{segment_id}_sm_node"
+    pm_node_names = [f"{segment_id}_pm_node_{rank}" for rank in range(k)]
+    sm_nodes_name = f"{segment_id}_sm_nodes"
+    pm_nodes_name = f"{segment_id}_pm_nodes"
+    sm_text = _node_text(sm_node)
+    pm_texts = [_node_text(node) for node in pm_nodes]
+    pm_tids_text = "[" + ", ".join(str(tid) for tid in pre.pm_tids) + "]"
+    full_shape = _shape_text(list(pre.full_shape))
+    shard_shape = _shape_text(list(pre.shard_shape))
+
+    lines = [f"private def {sm_node_name} : NodeDecl := {sm_text}"]
+    lines += [f"private def {name} : NodeDecl := {text}"
+              for name, text in zip(pm_node_names, pm_texts)]
+    lines += [
+        f"private def {sm_nodes_name} : List NodeDecl := [{sm_node_name}]",
+        f"private def {pm_nodes_name} : List NodeDecl := [{', '.join(pm_node_names)}]", "",
+        f"private def {segment_id} :",
+        f"    ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
+        f"  smNodes := {sm_nodes_name}", f"  pmNodes := {pm_nodes_name}", "  sound := by",
+        "    intro smStore pmStore hstate",
+        f"    let smNodes : List NodeDecl := {sm_nodes_name}",
+        f"    let pmNodes : List NodeDecl := {pm_nodes_name}",
+        f"    let pmTids : List Tid := {pm_tids_text}",
+        "    let rankCount := pmTids.length",
+        f"    have hRankCount : rankCount = {ir.pm_graph_ref}.numRanks := by native_decide",
+        f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore",
+        f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
+        f"    have hin : {pre.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    change ShardedRel (smStore {pre.sm_tid}) (pmTids.map pmStore) {pre.gather_dim} {full_shape} {shard_shape} at hin",
+    ]
+    fresh_names = []
+    for projection, post in rows:
+        sm_eq = f"hSm_o{projection}"
+        pm_eqs = [f"hPm{rank}_o{projection}" for rank in range(k)]
+        lines += [
+            f"    have {sm_eq} : smFinal {sm_node.outs[projection]} = smStore {sm_node.ins[0]} := by",
+            "      simpa [smFinal, smNodes, " + sm_nodes_name + ", " + sm_node_name + "] using",
+            f"        (foldl_faithful_multiref_middle_writer {ir.sm_graph_ref} smStore [] []",
+            f"          {sm_node.rank} {sm_node.ins[0]} {_shape_text(sm_node.outs)} {arity} {sm_node.outs[projection]}",
+            "          rfl (by native_decide) (by native_decide) (by native_decide)",
+            "          (by native_decide) (by native_decide))",
+        ]
+        for rank, node in enumerate(pm_nodes):
+            before_nodes = pm_nodes[:rank]
+            after_nodes = pm_nodes[rank + 1:]
+            lines += [
+                f"    have {pm_eqs[rank]} : pmFinal {node.outs[projection]} = pmStore {node.ins[0]} := by",
+                "      simpa [pmFinal, pmNodes, " + pm_nodes_name + ", " +
+                    ", ".join(pm_node_names) + "] using",
+                f"        (foldl_faithful_multiref_middle_writer {ir.pm_graph_ref} pmStore",
+                f"          [{', '.join(_node_text(item) for item in before_nodes)}]",
+                f"          [{', '.join(_node_text(item) for item in after_nodes)}]",
+                f"          {node.rank} {node.ins[0]} {_shape_text(node.outs)} {arity} {node.outs[projection]}",
+                "          rfl (by native_decide) (by native_decide) (by native_decide)",
+                "          (by native_decide) (by native_decide))",
+            ]
+        output_tids = "[" + ", ".join(str(tid) for tid in post.pm_tids) + "]"
+        fresh_name = f"hout_o{projection}"
+        fresh_names.append(fresh_name)
+        lines += [
+            f"    have {fresh_name} : {post.fact_id}.Holds smFinal pmFinal := by",
+            f"      change ShardedRel (smFinal {post.sm_tid}) ({output_tids}.map pmFinal) {post.gather_dim} {full_shape} {shard_shape}",
+            f"      simpa only [pmTids, List.map, {sm_eq}, {', '.join(pm_eqs)}] using hin",
+        ]
+    ordered_facts = [post.fact_id for _, post in rows]
+    lines += [
+        "    intro fact hfact",
+        f"    have covered : fact ∈ [{', '.join(ordered_facts)}] ++ {before.state_id}.facts := by",
+        f"      exact (show {after.state_id}.facts ⊆ [{', '.join(ordered_facts)}] ++ {before.state_id}.facts by native_decide) hfact",
+        "    simp only [List.mem_append] at covered",
+        "    rcases covered with fresh | old",
+        "    · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh",
+        "      rcases fresh with " + " | ".join(["rfl"] * len(fresh_names)),
+    ]
+    lines += [f"      · exact {name}" for name in fresh_names]
+    lines += ["    · exact hframe fact old", ""]
+    return "\n".join(lines)
+
+
 def render_closed_k_rank_contiguous_segment(ir: GoalIR, relation, segment_id: str) -> str:
     """Replay the exact one-SM plus ordered-K-PM FW_contiguous writers."""
     try:
@@ -8233,6 +8443,8 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     if family in (("div-sharded-k-rank-dim1",), ("div-sharded-k-rank-dim2",),
                    ("div-sharded-k-rank-dim3",)):
         return render_closed_k_rank_div_segment(ir, relation, segment_id)
+    if family and all(item == "multiref-sharded-k-rank" for item in family):
+        return render_closed_k_rank_multiref_segment(ir, relation, segment_id)
     if family == ("contiguous-sharded-k-rank",):
         return render_closed_k_rank_contiguous_segment(ir, relation, segment_id)
     if family in (

@@ -4106,6 +4106,107 @@ def _synthetic_k_rank_segment_relation(*, family: str, rank_count: int = 4):
     return ir, relation
 
 
+def _synthetic_k_rank_multiref_relation(component_count, rank_count=4):
+    """Closed list-indexed multiref component with shared exact writers."""
+    assert component_count in (2, 3)
+    sm_index, pm_start = 3, 21
+    sm_input = 100
+    pm_inputs = tuple(200 + rank for rank in range(rank_count))
+    sm_outputs = tuple(110 + projection for projection in range(component_count))
+    pm_outputs = tuple(
+        tuple(300 + rank * 10 + projection for projection in range(component_count))
+        for rank in range(rank_count)
+    )
+    input_spec = RelationFactSpec(
+        "sharded",
+        ("sm:2:0", *(f"pm:{17 + rank}:0" for rank in range(rank_count))),
+        gather_dim=1,
+    )
+    input_record = relation_compiler_module.ClosedRelationFactRecord(
+        "fact_input", input_spec, "sharded", sm_input, pm_inputs, None, None,
+        (1, 2 * rank_count, 3), (1, 2, 3), gather_dim=1,
+    )
+    output_specs = tuple(
+        RelationFactSpec(
+            "sharded",
+            (f"sm:{sm_index}:{projection}",
+             *(f"pm:{pm_start + rank}:{projection}" for rank in range(rank_count))),
+            gather_dim=1,
+        )
+        for projection in range(component_count)
+    )
+    output_records = tuple(
+        relation_compiler_module.ClosedRelationFactRecord(
+            f"fact_output_{projection}", spec, "sharded", sm_outputs[projection],
+            tuple(outputs[projection] for outputs in pm_outputs), None, None,
+            (1, 2 * rank_count, 3), (1, 2, 3), gather_dim=1,
+        )
+        for projection, spec in enumerate(output_specs)
+    )
+    certificates = tuple(
+        relation_compiler_module.KRankMultirefRelationCertificate(
+            rule_id="multiref-sharded-k-rank", rank_count=rank_count, gather_dim=1,
+            projection=projection, arity=component_count,
+            input_fact=input_spec, output_fact=output_specs[projection],
+            sm_step_id=f"sm:{sm_index}:{projection}",
+            pm_step_ids=tuple(
+                f"pm:{pm_start + rank}:{projection}" for rank in range(rank_count)
+            ),
+            lean_theorem="TrainVerify.Denote.applyNode_fw_multiref_at",
+        )
+        for projection in range(component_count)
+    )
+    transitions = tuple(
+        relation_compiler_module.CertificateTransitionSpec(
+            f"transition_{projection}", certificate.rule_id,
+            (input_spec,), (output_specs[projection],), (sm_index,),
+            tuple(range(pm_start, pm_start + rank_count)), certificate.lean_theorem,
+        )
+        for projection, certificate in enumerate(certificates)
+    )
+    anchor = relation_compiler_module.ClosedTensorShapeFactRecord(
+        "anchor", "sm", 999, (1,), 999,
+    )
+    states = (
+        relation_compiler_module.ClosedRelationStateRecord(
+            "state_pre", ("anchor", "fact_input")
+        ),
+        relation_compiler_module.ClosedRelationStateRecord(
+            "state_post", ("anchor", *(record.fact_id for record in output_records))
+        ),
+    )
+    segment = relation_compiler_module.ClosedDependentSegmentRecord(
+        "segment_000005" if component_count == 2 else "segment_000007",
+        "component", "state_pre", "state_post",
+        tuple(transition.transition_id for transition in transitions),
+        (sm_index, sm_index + 1), (pm_start, pm_start + rank_count),
+    )
+    filler_sm = [Node(0, "FW_identity", [400 + i], [500 + i], []) for i in range(sm_index)]
+    filler_pm = [Node(i % rank_count, "FW_identity", [600 + i], [700 + i], [])
+                 for i in range(pm_start)]
+    sm_node = Node(0, "FW_multiref", [sm_input], list(sm_outputs), [component_count])
+    pm_nodes = [
+        Node(rank, "FW_multiref", [pm_inputs[rank]], list(pm_outputs[rank]),
+             [component_count])
+        for rank in range(rank_count)
+    ]
+    chain = SimpleNamespace(
+        complete=True, relation_facts=(input_record, *output_records),
+        authority_facts=(), anchor_fact=anchor, states=states, segments=(segment,),
+    )
+    relation = SimpleNamespace(
+        dependent_chain_plan=chain, transition_specs=transitions,
+        certificates=certificates,
+    )
+    ir = SimpleNamespace(
+        sm_nodes=[*filler_sm, sm_node], pm_nodes=[*filler_pm, *pm_nodes],
+        sm_num_ranks=1, pm_num_ranks=rank_count,
+        sm_graph_ref=f"SyntheticMultiref{component_count}.smGraph",
+        pm_graph_ref=f"SyntheticMultiref{component_count}.pmGraph",
+    )
+    return ir, relation
+
+
 def _synthetic_vocab_embedding_reduction_relation(rank_count=3):
     shard_rows, hidden = 7, 12
     weight_spec = RelationFactSpec(
@@ -4176,6 +4277,111 @@ def _synthetic_vocab_embedding_reduction_relation(rank_count=3):
         sm_graph_ref="SyntheticEmbedding.smGraph", pm_graph_ref="SyntheticEmbedding.pmGraph",
     )
     return ir, relation
+
+
+@pytest.mark.parametrize("component_count", [2, 3])
+def test_closed_k_rank_multiref_component_is_generic_atomic_and_exact(component_count):
+    ir, relation = _synthetic_k_rank_multiref_relation(component_count)
+    segment_id = "segment_000005" if component_count == 2 else "segment_000007"
+
+    source = render_closed_segment(ir, relation, segment_id)
+
+    assert f"private def {segment_id}" in source
+    assert source.count("let smFinal :=") == 1
+    assert source.count("let pmFinal :=") == 1
+    assert source.count("foldl_faithful_multiref_middle_writer") == component_count * 5
+    assert "smNodes := segment_" in source and "pmNodes := segment_" in source
+    assert "pmTids : List Tid := [200, 201, 202, 203]" in source
+    assert "rankCount = 4" not in source
+    assert source.count("have hout_") == component_count
+    assert "RelationState.Holds.fold_frame" in source
+    assert "sorry" not in source and "False.elim" not in source
+
+
+def test_closed_k_rank_multiref_component_fails_closed_on_theorem_output_and_rank_tampering():
+    ir, relation = _synthetic_k_rank_multiref_relation(3)
+    segment_id = "segment_000007"
+
+    bad_transition = replace(
+        relation.transition_specs[0], lean_theorem="TrainVerify.Denote.bad_multiref"
+    )
+    bad = SimpleNamespace(
+        **{**relation.__dict__,
+           "transition_specs": (bad_transition, *relation.transition_specs[1:])}
+    )
+    with pytest.raises(ValueError, match="theorem identity"):
+        render_closed_segment(ir, bad, segment_id)
+
+    bad_certificate = replace(
+        relation.certificates[1], output_fact=relation.certificates[0].output_fact
+    )
+    bad = SimpleNamespace(
+        **{**relation.__dict__,
+           "certificates": (relation.certificates[0], bad_certificate,
+                            relation.certificates[2])}
+    )
+    with pytest.raises(ValueError, match="exact typed certificate"):
+        render_closed_segment(ir, bad, segment_id)
+
+    rank_ir = SimpleNamespace(**ir.__dict__)
+    rank_ir.pm_nodes = list(ir.pm_nodes)
+    target = rank_ir.pm_nodes[22]
+    rank_ir.pm_nodes[22] = Node(0, target.op, list(target.ins), list(target.outs),
+                                list(target.params))
+    with pytest.raises(ValueError, match="ordered ranks"):
+        render_closed_segment(rank_ir, relation, segment_id)
+
+    output_ir = SimpleNamespace(**ir.__dict__)
+    output_ir.sm_nodes = list(ir.sm_nodes)
+    target = output_ir.sm_nodes[3]
+    output_ir.sm_nodes[3] = Node(
+        target.rank, target.op, list(target.ins), [*target.outs[:-1], 9999],
+        list(target.params),
+    )
+    with pytest.raises(ValueError, match="output authority"):
+        render_closed_segment(output_ir, relation, segment_id)
+
+
+def test_fresh_k_rank_multiref_pair_and_triple_witness_is_renderer_output(tmp_path):
+    modules = []
+    for component_count in (2, 3):
+        ir, relation = _synthetic_k_rank_multiref_relation(component_count)
+        namespace = f"SyntheticMultiref{component_count}"
+        segment_id = "segment_000005" if component_count == 2 else "segment_000007"
+        declarations = render_closed_relation_declarations(
+            relation.dependent_chain_plan, namespace
+        )
+        if modules:
+            namespace_line = f"namespace TrainVerify.Denote.{namespace}"
+            declaration_lines = declarations.splitlines()
+            declarations = "\n".join(
+                declaration_lines[declaration_lines.index(namespace_line):]
+            )
+        rendered = render_closed_segment(ir, relation, segment_id)
+        sm_nodes = "[" + ", ".join(
+            composer_module._node_text(node) for node in ir.sm_nodes
+        ) + "]"
+        pm_nodes = "[" + ", ".join(
+            composer_module._node_text(node) for node in ir.pm_nodes
+        ) + "]"
+        modules.append("\n".join((
+            declarations,
+            f"namespace TrainVerify.Denote.{namespace}",
+            "noncomputable section",
+            f"private def smGraph : GraphDecl := {{ numRanks := 1, nodes := {sm_nodes} }}",
+            f"private def pmGraph : GraphDecl := {{ numRanks := 4, nodes := {pm_nodes} }}",
+            rendered,
+            f"#print axioms {segment_id}",
+            "end",
+            f"end TrainVerify.Denote.{namespace}",
+        )))
+    source = "\n\n".join(modules) + "\n"
+    witness = tmp_path / "GeneratedKRankMultirefCompilerWitness.lean"
+    witness.write_text(source)
+    assert witness.read_text() == source
+    assert source == "\n\n".join(modules) + "\n"
+    assert source.count("import denote.RelationCompiler") == 1
+    assert source.count("#print axioms segment_") == 2
 
 
 def test_closed_vocab_embedding_reduction_segment_is_dynamic_exact_and_offset_aware(tmp_path):
