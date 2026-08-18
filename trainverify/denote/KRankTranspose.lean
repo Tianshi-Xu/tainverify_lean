@@ -709,4 +709,208 @@ theorem transposeAxes_1_2_allGather_dim1_to_dim2_rank4
     d0 d2 (d1*xs.length) d3 hgshape
 
 
+set_option maxHeartbeats 3200000 in
+-- Symbolic rank-4 div/mod normalization needs a larger elaboration budget.
+theorem transposeAxes_2_3_allGather_dim2_to_dim3_rank4
+    (xs : List Tensor) (d0 d1 d2 d3 : Nat)
+    (hne : xs ≠ [])
+    (hshapes : ∀ x ∈ xs, x.shape = [d0,d1,d2,d3]) :
+    transposeAxes 2 3 (allGatherPrimDimN 2 xs.length 0 xs) =
+      allGatherPrimDimN 3 xs.length 0 (xs.map (transposeAxes 2 3)) := by
+  have hhead : (xs.head?.map (fun t => t.shape)).getD [] = [d0,d1,d2,d3] := by
+    cases xs with
+    | nil => simp at hne
+    | cons x rest => simpa using hshapes x (by simp)
+  have hmaphead : (((xs.map (transposeAxes 2 3)).head?.map (fun t => t.shape)).getD []) =
+      [d0,d1,d3,d2] := by
+    cases xs with
+    | nil => simp at hne
+    | cons x rest =>
+      have hx := hshapes x (by simp)
+      simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
+  have hK : xs.length ≠ 0 := by
+    intro hz
+    apply hne
+    exact List.length_eq_zero_iff.mp hz
+  have hgshape : (allGatherPrimDimN 2 xs.length 0 xs).shape =
+      [d0,d1,d2*xs.length,d3] := by
+    rw [allGatherPrimDimN_shape 2 xs.length xs [d0,d1,d2,d3] hhead]
+    simp [List.set, List.getD]
+  have hlshape : (transposeAxes 2 3 (allGatherPrimDimN 2 xs.length 0 xs)).shape =
+      [d0,d1,d3,d2*xs.length] := by
+    simp [transposeAxes, Tensor.mkShape, hgshape, listSwapAt, List.getD, List.set]
+  have hrshape : (allGatherPrimDimN 3 xs.length 0 (xs.map (transposeAxes 2 3))).shape =
+      [d0,d1,d3,d2*xs.length] := by
+    rw [allGatherPrimDimN_shape 3 xs.length _ [d0,d1,d3,d2] hmaphead]
+    simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hlshape, hrshape])
+  intro idx hidx
+  have hbound : idx < d0*d1*d3*(d2*xs.length) := by
+    simpa [hlshape, prodShape, Nat.mul_assoc] using hidx
+  by_cases hd1 : d1 = 0
+  · subst d1; simp at hbound
+  by_cases hd2 : d2 = 0
+  · subst d2; simp at hbound
+  by_cases hd3 : d3 = 0
+  · subst d3; simp at hbound
+  let D := d2 * xs.length
+  have hD : 0 < D := Nat.mul_pos (Nat.pos_of_ne_zero hd2) (Nat.pos_of_ne_zero hK)
+  let g := idx % D
+  let q0 := idx / D
+  let c := q0 % d3
+  let u := q0 / d3
+  have hg : g < D := Nat.mod_lt _ hD
+  have hc : c < d3 := Nat.mod_lt _ (Nat.pos_of_ne_zero hd3)
+  have hcoords : idx = (u*d3+c)*D+g := by
+    have h0 : q0*D+g=idx := by
+      simpa [q0, g, Nat.mul_comm] using Nat.div_add_mod idx D
+    have h1 : u*d3+c=q0 := by
+      simpa [u, c, Nat.mul_comm] using Nat.div_add_mod q0 d3
+    rw [← h0, ← h1]
+  let r := g / d2
+  let p := g % d2
+  have hp : p < d2 := Nat.mod_lt _ (Nat.pos_of_ne_zero hd2)
+  have hgp : r*d2+p=g := by
+    simpa [r, p, Nat.mul_comm] using Nat.div_add_mod g d2
+  have hr : r < xs.length := by
+    apply Nat.div_lt_of_lt_mul
+    simpa [D, Nat.mul_comm] using hg
+  have append_div (v N w d : Nat) (hd : 0 < d) (hw : w < d) :
+      (v*d+w)/(N*d)=v/N := by
+    rw [show N*d=d*N by ring, ← Nat.div_div_eq_div_mul,
+      show v*d=d*v by ring, Nat.mul_add_div hd, Nat.div_eq_of_lt hw, Nat.add_zero]
+  have append_mod (v N w d : Nat) (hN : 0 < N) (hd : 0 < d) (hw : w < d) :
+      (v*d+w)%(N*d)=(v%N)*d+w := by
+    have hrem : (v%N)*d+w < N*d := by
+      have := Nat.mod_lt v hN
+      nlinarith
+    have hv : N*(v/N)+v%N=v := Nat.div_add_mod v N
+    calc
+      (v*d+w)%(N*d)=((N*(v/N)+v%N)*d+w)%(N*d) := by rw [hv]
+      _=((N*d)*(v/N)+((v%N)*d+w))%(N*d) := by congr 1 <;> ring
+      _=((v%N)*d+w)%(N*d) := Nat.mul_add_mod_self_left _ _ _
+      _=(v%N)*d+w := Nat.mod_eq_of_lt hrem
+  have append_div_self (v w d : Nat) (hd : 0 < d) (hw : w < d) :
+      (v*d+w)/d=v := by
+    rw [show v*d=d*v by ring, Nat.mul_add_div hd, Nat.div_eq_of_lt hw, Nat.add_zero]
+  have append_mod_self (v w d : Nat) (hw : w < d) :
+      (v*d+w)%d=w := by
+    rw [show v*d=d*v by ring, Nat.mul_add_mod_self_left, Nat.mod_eq_of_lt hw]
+  have transpose_source_canonical (v C E c' e : Nat)
+      (hC : 0 < C) (hE : 0 < E) (hc' : c' < C) (he : e < E) :
+      let out := (v*C+c')*E+e
+      out / (d1*C*E) * (d1*C*E)
+          + out % (d1*C*E) / (C*E) * (C*E)
+          + out % (d1*C*E) % (C*E) % E * C
+          + out % (d1*C*E) % (C*E) / E =
+        (v*E+e)*C+c' := by
+    dsimp
+    have hout_div : ((v*C+c')*E+e)/(d1*C*E)=v/d1 := by
+      rw [show d1*C*E=(d1*C)*E by ring,
+        append_div _ (d1*C) e E hE he, append_div _ d1 c' C hC hc']
+    have hout_mod_outer : ((v*C+c')*E+e)%(d1*C*E)/(C*E)=v%d1 := by
+      rw [show d1*C*E=(d1*C)*E by ring,
+        append_mod _ (d1*C) e E (Nat.mul_pos (Nat.pos_of_ne_zero hd1) hC) hE he,
+        append_div _ C e E hE he,
+        append_mod _ d1 c' C (Nat.pos_of_ne_zero hd1) hC hc',
+        append_div_self (v%d1) c' C hC hc']
+    have hout_inner : ((v*C+c')*E+e)%(d1*C*E)%(C*E)=c'*E+e := by
+      rw [show d1*C*E=(d1*C)*E by ring,
+        append_mod _ (d1*C) e E (Nat.mul_pos (Nat.pos_of_ne_zero hd1) hC) hE he,
+        append_mod _ C e E hC hE he,
+        append_mod _ d1 c' C (Nat.pos_of_ne_zero hd1) hC hc',
+        append_mod_self (v%d1) c' C hc']
+    have hv : d1*(v/d1)+v%d1=v := Nat.div_add_mod v d1
+    rw [hout_div, hout_mod_outer, hout_inner,
+      append_mod_self c' e E he, append_div_self c' e E hE he]
+    calc
+      v / d1 * (d1 * C * E) + v % d1 * (C * E) + e * C + c' =
+          (d1 * (v / d1) + v % d1) * C * E + e * C + c' := by ring
+      _ = (v * E + e) * C + c' := by rw [hv]; ring
+  rw [hcoords, ← hgp]
+  have hbound_coords : (u*d3+c)*D+(r*d2+p) < d0*d1*d3*D := by
+    calc
+      (u*d3+c)*D+(r*d2+p) = idx := by rw [hgp]; exact hcoords.symm
+      _ < d0*d1*d3*(d2*xs.length) := hbound
+      _ = d0*d1*d3*D := by rfl
+  have hglobal : r*d2+p < D := by simpa [hgp] using hg
+  have hcanonical := transpose_source_canonical u d3 D c (r*d2+p)
+      (Nat.pos_of_ne_zero hd3) hD hc hglobal
+  rw [transposeAxes_2_3_valAt_gen _ d0 d1 D d3 _ hgshape hd1
+    (Nat.ne_of_gt hD) hd3 (by simpa [Nat.mul_assoc] using hbound_coords)]
+  rw [hcanonical]
+  have hu : u < d0*d1 := by
+    have hprefixD : (u*d3+c)*D < (d0*d1*d3)*D := by omega
+    have hprefix : u*d3+c < d0*d1*d3 :=
+      (Nat.mul_lt_mul_right hD).mp hprefixD
+    have huD3 : u*d3 < (d0*d1)*d3 := by
+      apply lt_of_le_of_lt (Nat.le_add_right (u*d3) c)
+      simpa [Nat.mul_assoc] using hprefix
+    exact (Nat.mul_lt_mul_right (Nat.pos_of_ne_zero hd3)).mp huD3
+  have hprefixD : u*D+(r*d2+p) < d0*d1*D := by
+    calc
+      u*D+(r*d2+p) < u*D+D := Nat.add_lt_add_left hglobal _
+      _ = (u+1)*D := by ring
+      _ ≤ (d0*d1)*D := Nat.mul_le_mul_right D (Nat.succ_le_iff.mpr hu)
+  have hsource_bound : (u*D+(r*d2+p))*d3+c < d0*d1*D*d3 := by
+    calc
+      (u*D+(r*d2+p))*d3+c < (u*D+(r*d2+p))*d3+d3 :=
+        Nat.add_lt_add_left hc _
+      _ = (u*D+(r*d2+p)+1)*d3 := by ring
+      _ ≤ (d0*d1*D)*d3 := Nat.mul_le_mul_right d3 (Nat.succ_le_iff.mpr hprefixD)
+  rw [allGatherPrimDimN_2_valAt_rank4 xs xs.length d0 d1 d2 d3
+    ((u*D+(r*d2+p))*d3+c) hhead hK hd2 hd3 (by
+      simpa [D, Nat.mul_assoc] using hsource_bound)]
+  rw [allGatherPrimDimN_3_valAt_rank4 (xs.map (transposeAxes 2 3)) xs.length
+    d0 d1 d3 d2 ((u*d3+c)*D+(r*d2+p)) hmaphead hK hd2
+    (by simpa [D, Nat.mul_assoc] using hbound_coords)]
+  have hselect : (xs.map (transposeAxes 2 3)).getD r (zeroTensor [d0,d1,d3,d2]) =
+      transposeAxes 2 3 (xs.getD r (zeroTensor [d0,d1,d2,d3])) := by
+    unfold List.getD
+    rw [List.getElem?_map, List.getElem?_eq_getElem hr]
+    simp
+  have hpiece : (xs.getD r (zeroTensor [d0,d1,d2,d3])).shape = [d0,d1,d2,d3] := by
+    unfold List.getD
+    rw [List.getElem?_eq_getElem hr]
+    simpa using hshapes xs[r] (List.getElem_mem ..)
+  rw [show d2*xs.length=D by rfl]
+  have hleft_select : ((((u*D+(r*d2+p))*d3+c)%(D*d3)/d3)/d2)=r := by
+    rw [append_mod _ D c d3 hD (Nat.pos_of_ne_zero hd3) hc,
+      append_mod_self u (r*d2+p) D hglobal,
+      append_div_self (r*d2+p) c d3 (Nat.pos_of_ne_zero hd3) hc,
+      append_div_self r p d2 (Nat.pos_of_ne_zero hd2) hp]
+  have hleft_loc :
+      ((u*D+(r*d2+p))*d3+c)/(D*d3)*(d2*d3) +
+          ((((u*D+(r*d2+p))*d3+c)%(D*d3)/d3)%d2)*d3 +
+          ((u*D+(r*d2+p))*d3+c)%(D*d3)%d3 = (u*d2+p)*d3+c := by
+    rw [append_div _ D c d3 (Nat.pos_of_ne_zero hd3) hc,
+      append_div_self u (r*d2+p) D hD hglobal,
+      append_mod _ D c d3 hD (Nat.pos_of_ne_zero hd3) hc,
+      append_mod_self u (r*d2+p) D hglobal,
+      append_div_self (r*d2+p) c d3 (Nat.pos_of_ne_zero hd3) hc,
+      append_mod_self r p d2 hp, append_mod_self (r*d2+p) c d3 hc]
+    ring
+  have hright_select : (((u*d3+c)*D+(r*d2+p))%D/d2)=r := by
+    rw [append_mod_self (u*d3+c) (r*d2+p) D hglobal,
+      append_div_self r p d2 (Nat.pos_of_ne_zero hd2) hp]
+  have hright_loc :
+      ((u*d3+c)*D+(r*d2+p))/D*d2 + ((u*d3+c)*D+(r*d2+p))%D%d2 =
+        (u*d3+c)*d2+p := by
+    rw [append_div_self (u*d3+c) (r*d2+p) D hD hglobal,
+      append_mod_self (u*d3+c) (r*d2+p) D hglobal, append_mod_self r p d2 hp]
+  rw [hleft_select, hleft_loc, hright_select, hright_loc, hselect]
+  have hprefix : u*d3+c < d0*d1*d3 := by
+    have hprefixD : (u*d3+c)*D < (d0*d1*d3)*D := by omega
+    exact (Nat.mul_lt_mul_right hD).mp hprefixD
+  have hlocal_bound : (u*d3+c)*d2+p < d0*d1*d3*d2 := by
+    calc
+      (u*d3+c)*d2+p < (u*d3+c)*d2+d2 := Nat.add_lt_add_left hp _
+      _ = (u*d3+c+1)*d2 := by ring
+      _ ≤ (d0*d1*d3)*d2 := Nat.mul_le_mul_right d2 (Nat.succ_le_iff.mpr hprefix)
+  rw [transposeAxes_2_3_valAt_gen _ d0 d1 d2 d3 ((u*d3+c)*d2+p)
+    hpiece hd1 hd2 hd3 hlocal_bound]
+  rw [transpose_source_canonical u d3 d2 c p
+    (Nat.pos_of_ne_zero hd3) (Nat.pos_of_ne_zero hd2) hc hp]
+
+
 end TrainVerify.Denote
