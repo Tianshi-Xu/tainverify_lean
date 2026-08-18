@@ -8939,6 +8939,15 @@ def render_closed_mixed_k_rank_embedding_segment(ir: GoalIR, relation, segment_i
     return "\n".join(lines)
 
 
+def render_closed_k_rank_gelu_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Render exact one-SM plus ordered-K-PM FW_gelu writers."""
+    try:
+        from .gelu_renderer import render_closed_k_rank_gelu_segment as render
+    except ImportError:
+        from gelu_renderer import render_closed_k_rank_gelu_segment as render
+    return render(ir, relation, segment_id)
+
+
 def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     """Render one closed segment through an explicit registered family adapter."""
     chain = relation.dependent_chain_plan
@@ -8978,6 +8987,8 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         return render_closed_k_rank_add_segment(ir, relation, segment_id)
     if family == ("contiguous-sharded-k-rank",):
         return render_closed_k_rank_contiguous_segment(ir, relation, segment_id)
+    if family == ("gelu-sharded-k-rank",):
+        return render_closed_k_rank_gelu_segment(ir, relation, segment_id)
     if family in (
         ("linear-sharded-k-rank-dim1",),
         ("layernorm-sharded-k-rank-dim1",),
