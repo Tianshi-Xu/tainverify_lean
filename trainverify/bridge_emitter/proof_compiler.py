@@ -619,7 +619,8 @@ def _collective_shape_issue(
         ("sm", ir.sm_nodes, ir.sm_shapes, ir.sm_num_ranks),
         ("pm", ir.pm_nodes, ir.pm_shapes, ir.pm_num_ranks),
     ):
-        shapes = {int(tid): list(shape) for tid, shape in initial_shapes}
+        declared_shapes = {int(tid): list(shape) for tid, shape in initial_shapes}
+        shapes = dict(declared_shapes)
         for node_index, node in enumerate(nodes):
             input_shapes = [shapes.get(int(tid)) for tid in node.ins]
             dimensions: list[int] = []
@@ -845,6 +846,77 @@ def _collective_shape_issue(
                     )
                 if q_shape is not None and k_shape is not None:
                     per_output_shapes = [list(q_shape), list(k_shape)]
+            elif node.op == "BW_layernorm" and len(input_shapes) == 4:
+                grad_shape, input_shape, weight_shape, bias_shape = input_shapes
+                if all(shape is not None for shape in input_shapes):
+                    if grad_shape != input_shape or weight_shape != bias_shape:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: gradient/input or weight/bias shapes disagree",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    per_output_shapes = [
+                        list(input_shape), list(weight_shape), list(bias_shape)
+                    ]
+            elif node.op == "BW_add" and len(input_shapes) == 3:
+                grad_shape, left_shape, right_shape = input_shapes
+                if all(shape is not None for shape in input_shapes):
+                    combined = broadcast_shape(left_shape, right_shape)
+                    if combined is None or grad_shape != combined:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: gradient does not match broadcast output",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    per_output_shapes = [list(left_shape), list(right_shape)]
+            elif node.op == "BW_matmul" and len(input_shapes) == 3:
+                grad_shape, left_shape, right_shape = input_shapes
+                if all(shape is not None for shape in input_shapes):
+                    valid = (
+                        len(left_shape) >= 2 and len(right_shape) >= 2
+                        and left_shape[:-2] == right_shape[:-2]
+                        and left_shape[-1] == right_shape[-2]
+                    )
+                    expected = (
+                        list(left_shape[:-1]) + [right_shape[-1]] if valid else None
+                    )
+                    if expected is None or grad_shape != expected:
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: gradient does not match batched matmul output",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    per_output_shapes = [list(left_shape), list(right_shape)]
+            elif node.op == "BW_multiref" and input_shapes:
+                if all(shape is not None for shape in input_shapes):
+                    if any(shape != input_shapes[0] for shape in input_shapes[1:]):
+                        return Diagnostic(
+                            DiagnosticCode.INVALID_SIGNATURE,
+                            f"operator {node.op}: incoming gradient shapes differ",
+                            side=side,
+                            node_index=node_index,
+                            op=node.op,
+                            output_tid=int(node.outs[0]) if node.outs else None,
+                        )
+                    output_shape = list(input_shapes[0])
+            elif node.op in {
+                "BW_gelu", "BW_view", "BW_transpose", "BW_contiguous",
+                "BW_softmax", "BW_div",
+            } and len(input_shapes) == 2:
+                if input_shapes[1] is not None:
+                    output_shape = list(input_shapes[1])
+            elif node.op == "BW_embedding" and len(input_shapes) == 3:
+                if input_shapes[2] is not None:
+                    output_shape = list(input_shapes[2])
             elif node.op == "BW_linear" and len(input_shapes) == 3:
                 grad_shape, input_shape, weight_shape = input_shapes
                 if all(shape is not None for shape in input_shapes):
@@ -1018,6 +1090,19 @@ def _collective_shape_issue(
                         )
                     else:
                         output_shape = list(value_shape[:-1]) + [weight_shape[0]]
+            elif node.op == "CROSS_DP_WRED" and known_shapes:
+                if len(known_shapes) != len(input_shapes) or any(
+                    shape != known_shapes[0] for shape in known_shapes[1:]
+                ):
+                    return Diagnostic(
+                        DiagnosticCode.INVALID_SIGNATURE,
+                        f"operator {node.op}: input shapes differ",
+                        side=side,
+                        node_index=node_index,
+                        op=node.op,
+                        output_tid=int(node.outs[0]) if node.outs else None,
+                    )
+                output_shape = list(known_shapes[0])
             elif node.op == "AllReducePrim" and known_shapes:
                 if any(shape != known_shapes[0] for shape in known_shapes[1:]):
                     return Diagnostic(
@@ -1079,12 +1164,30 @@ def _collective_shape_issue(
                     )
                 output_shape[output_dim] //= num_ranks
             if per_output_shapes is not None:
-                for tid, shape in zip(node.outs, per_output_shapes):
-                    shapes[int(tid)] = list(shape)
+                inferred_outputs = [
+                    (int(tid), list(shape))
+                    for tid, shape in zip(node.outs, per_output_shapes)
+                ]
             elif output_shape is not None:
-                for tid in node.outs:
-                    shapes[int(tid)] = list(output_shape)
-            elif node.outs:
+                inferred_outputs = [
+                    (int(tid), list(output_shape)) for tid in node.outs
+                ]
+            else:
+                inferred_outputs = []
+            for tid, shape in inferred_outputs:
+                declared_shape = declared_shapes.get(tid)
+                if declared_shape is not None and list(declared_shape) != shape:
+                    return Diagnostic(
+                        DiagnosticCode.INVALID_SIGNATURE,
+                        f"operator {node.op}: inferred output shape {shape} conflicts "
+                        f"with declared shape {list(declared_shape)}",
+                        side=side,
+                        node_index=node_index,
+                        op=node.op,
+                        output_tid=tid,
+                    )
+                shapes[tid] = shape
+            if not inferred_outputs and node.outs:
                 return Diagnostic(
                     DiagnosticCode.INVALID_SIGNATURE,
                     f"operator {node.op}: no registered shape inference for all inputs",

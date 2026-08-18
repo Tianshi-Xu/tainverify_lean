@@ -2321,6 +2321,33 @@ def test_compile_proof_plan_rejects_unsound_operator_shape_contracts(
     assert expected in plan.diagnostics[0].message
 
 
+def test_compile_proof_plan_alltoall_matches_denote_dims_and_declared_shape():
+    ir = _goal_ir(
+        sm_nodes=[Node(0, "FW_gelu", [1], [30])],
+        pm_nodes=[Node(0, "AllToAllPrim", [10, 11, 12, 13], [40], [1, 2])],
+        tps=[(0, 40)],
+        replicated=True,
+    )
+    ir.sm_shapes = [(1, [1, 32, 2])]
+    ir.pm_shapes = [
+        (10, [1, 8, 8]), (11, [1, 8, 8]),
+        (12, [1, 8, 8]), (13, [1, 8, 8]),
+    ]
+    ir.pm_num_ranks = 4
+    ir.lineage.tsShape = [1, 32, 2]
+    ir.lineage.tpShapes = [[1, 32, 2]]
+    plan = compile_proof_plan(ir, build_default_registry())
+    assert plan.supported
+    pm = next(step for step in plan.steps if step.side == "pm")
+    assert pm.output_shape == (1, 32, 2)
+
+    ir.pm_shapes.append((40, [1, 2, 32]))
+    plan = compile_proof_plan(ir, build_default_registry())
+    assert not plan.supported
+    assert plan.diagnostics[0].op == "AllToAllPrim"
+    assert "conflicts with declared shape [1, 2, 32]" in plan.diagnostics[0].message
+
+
 def test_compile_proof_plan_infers_batched_matmul_shape_and_rejects_bad_batch():
     ir = _goal_ir(
         sm_nodes=[Node(0, "FW_matmul", [1, 2], [30])],
@@ -4898,6 +4925,18 @@ def test_external_initial_state_renderer_treats_omitted_init_gather_dim_as_zero(
         ir, _synthetic_external_chain((gather,)), "SyntheticClosed"
     )
     assert "InitGoalHolds.gather2_dim" in source
+
+
+def test_definition_resolution_accepts_noncomputable_graph_authority():
+    source = """namespace Example.Authority
+noncomputable def sm : GraphDecl := by
+  refine { numRanks := 4, nodes := ?_ }
+  exact []
+end Example.Authority
+"""
+    block = parser_module._definition_from_sources("sm", source)
+    assert block.startswith("noncomputable def sm")
+    assert parser_module._qualified_definition_name("sm", source) == "Example.Authority.sm"
 
 
 def test_input_value_classes_are_optional_only_when_public_statement_does_not_require_them():

@@ -472,7 +472,9 @@ def _qualified_definition_name(name: str, *sources: str) -> str:
     """Resolve a referenced definition to the namespace that actually declares it."""
     base = name.rsplit(".", 1)[-1]
     matches = []
-    pattern = re.compile(rf"(?m)^\s*(?:private\s+)?def\s+{re.escape(base)}\b")
+    pattern = re.compile(
+        rf"(?m)^\s*(?:(?:private|noncomputable)\s+)*def\s+{re.escape(base)}\b"
+    )
     for source in sources:
         for found in pattern.finditer(source):
             namespaces = re.findall(r"(?m)^\s*namespace\s+([A-Za-z0-9_.]+)\s*$", source[:found.start()])
@@ -488,9 +490,10 @@ def _definition_from_sources(name: str, *sources: str) -> str:
     matches = []
     seen_sources: set[str] = set()
     header = re.compile(
-        rf"(?m)^(?:private\s+)?def\s+{re.escape(name)}(?=\s*[:(])"
+        rf"(?m)^(?:(?:private|noncomputable)\s+)*def\s+"
+        rf"{re.escape(name)}(?=\s*[:(])"
     )
-    next_def = re.compile(r"(?m)^(?:private\s+)?def\s+")
+    next_def = re.compile(r"(?m)^(?:(?:private|noncomputable)\s+)*def\s+")
     for source in sources:
         if source in seen_sources:
             continue
