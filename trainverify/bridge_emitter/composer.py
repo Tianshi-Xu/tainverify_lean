@@ -7192,20 +7192,23 @@ def render_closed_k_rank_softmax_segment(ir: GoalIR, relation, segment_id: str) 
         raise ValueError("K-rank softmax renderer requires one exact transition")
     transition = next(item for item in relation.transition_specs
                       if item.transition_id == segment.transition_ids[0])
-    expected_rule = f"softmax-sharded-k-rank-dim{transition.pre_facts[0].gather_dim}"
+    if len(transition.pre_facts) != 1 or len(transition.post_facts) != 1:
+        raise ValueError("K-rank softmax requires one exact typed certificate")
+    axis = transition.pre_facts[0].gather_dim
+    if axis not in (1, 2):
+        raise ValueError("K-rank softmax axis-specific theorem identity mismatch")
+    expected_rule = f"softmax-sharded-k-rank-dim{axis}"
     expected_theorem = (
         "TrainVerify.Denote.RelationCompiler.ShardedRel."
-        f"fw_softmax_dim{transition.pre_facts[0].gather_dim}_rank4"
+        f"fw_softmax_dim{axis}_rank4"
     )
     if transition.rule_id != expected_rule or transition.lean_theorem != expected_theorem:
         raise ValueError("K-rank softmax axis-specific theorem identity mismatch")
-    certs = [item for item in relation.certificates
-             if type(item) is KRankSoftmaxCertificate and item.rule_id == transition.rule_id]
-    if len(certs) != 1 or certs[0].lean_theorem != expected_theorem:
-        raise ValueError("K-rank softmax requires one exact typed certificate")
-    cert = certs[0]
-    if transition.pre_facts != (cert.input_fact,) or transition.post_facts != (cert.output_fact,):
-        raise ValueError("K-rank softmax transition facts disagree with its certificate")
+    cert = _select_exact_typed_certificate(
+        relation, transition, expected_rule, expected_theorem,
+        KRankSoftmaxCertificate,
+        lambda item: ((item.input_fact,), (item.output_fact,)),
+    )
     records = {item.source: item for item in chain.relation_facts}
     try:
         pre = records[cert.input_fact]

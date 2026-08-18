@@ -171,6 +171,62 @@ def test_softmax_renderer_replays_exact_writers_and_axis_theorem(dim):
     assert "rankCount = 3" not in source
 
 
+def test_softmax_renderer_ignores_unrelated_same_family_certificate():
+    ir, relation, segment, *_ = _closed_fixture(2, 3)
+    expected = composer.render_closed_segment(ir, relation, segment.segment_id)
+    exact = relation.certificates[0]
+    unrelated = replace(
+        exact,
+        input_fact=rc.RelationFactSpec(
+            "sharded", ("init:999", "init:998", "init:997", "init:996"),
+            gather_dim=2,
+        ),
+    )
+    relation.certificates = (unrelated, exact)
+
+    assert composer.render_closed_segment(ir, relation, segment.segment_id) == expected
+
+
+@pytest.mark.parametrize("mutation", ["malformed_pre", "malformed_post", "duplicate"])
+def test_softmax_renderer_rejects_nonunique_exact_certificate(mutation):
+    ir, relation, segment, *_ = _closed_fixture(2, 3)
+    exact = relation.certificates[0]
+    if mutation == "malformed_pre":
+        relation.certificates = (replace(
+            exact,
+            input_fact=rc.RelationFactSpec(
+                "sharded", ("init:999", "init:998", "init:997", "init:996"),
+                gather_dim=2,
+            ),
+        ),)
+    elif mutation == "malformed_post":
+        relation.certificates = (replace(
+            exact,
+            output_fact=rc.RelationFactSpec(
+                "sharded", ("sm:999:0", "pm:999:0", "pm:1000:0", "pm:1001:0"),
+                gather_dim=2,
+            ),
+        ),)
+    else:
+        relation.certificates = (exact, exact)
+
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("rule_id", "softmax-sharded-k-rank-dim1"),
+    ("lean_theorem", "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_softmax_dim1_rank4"),
+])
+def test_softmax_renderer_rejects_tampered_axis_specific_transition_identity(field, value):
+    ir, relation, segment, *_ = _closed_fixture(2, 3)
+    transition = relation.transition_specs[0]
+    relation.transition_specs = (replace(transition, **{field: value}),)
+
+    with pytest.raises(ValueError, match="axis-specific theorem identity mismatch"):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
+
+
 @pytest.mark.parametrize(("mutation", "message"), [
     ({"rank": 7}, "ordered ranks"),
     ({"params": [9]}, "no parameters"),
