@@ -4736,6 +4736,30 @@ def build_closed_dependent_chain_plan(
         for fact in transition.pre_facts:
             consumers.setdefault(fact, set()).add(component)
 
+    external_sources = {
+        fact for transition in relation.transition_specs for fact in transition.pre_facts
+        if fact not in producer
+    }
+    for source in external_sources:
+        record = record_by_source[source]
+        if record.kind not in {"sharded", "replicated"}:
+            raise RelationCompositionError(
+                f"closed chain external relation is not immutable InitGoal authority: {source}"
+            )
+        if any(not ref.startswith("init:") for ref in source.step_triple):
+            raise RelationCompositionError(
+                f"closed chain external relation references graph writers: {source}"
+            )
+        lineage = ir.init_lineages.get(record.sm_tid)
+        if lineage is None or init_lineage_relation_fact(lineage) != source:
+            raise RelationCompositionError(
+                f"closed chain external relation does not match exact InitGoal authority: {source}"
+            )
+        if record.sm_tid not in ir.full_init_goal_ids:
+            raise RelationCompositionError(
+                f"closed chain external relation lacks full InitGoal authority: {record.sm_tid}"
+            )
+
     consumed = {fact for transition in relation.transition_specs for fact in transition.pre_facts}
     sinks = [
         fact for transition in relation.transition_specs for fact in transition.post_facts
@@ -4830,8 +4854,12 @@ def build_closed_dependent_chain_plan(
                 ):
                     uses.append(index)
         authority_last_use[fact.fact_id] = max(uses, default=0)
-    live = {anchor.fact_id, *(item.fact_id for item in authority_facts)}
-    available_sources = set()
+    live = {
+        anchor.fact_id,
+        *(item.fact_id for item in authority_facts),
+        *(record_by_source[source].fact_id for source in external_sources),
+    }
+    available_sources = set(external_sources)
     completed_components = set()
     states = [ClosedRelationStateRecord(state_id="state_000000", fact_ids=tuple(sorted(live)))]
     segments = []

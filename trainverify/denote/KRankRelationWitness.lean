@@ -11,6 +11,8 @@ open TrainVerify.Denote.RelationCompiler
 #check ShardedRel.shards_nonempty
 #check ShardedRel.gather_dim_lt
 #check ShardedRel.shape_contract
+#check ShardedRel.of_init_goal
+#print axioms ShardedRel.of_init_goal
 #check ShardedRel.shard_shapes
 
 example (sm pm : Store) (smTid : Tid) (pmTids : List Tid)

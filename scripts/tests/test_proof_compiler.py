@@ -3255,6 +3255,49 @@ def test_k_rank_linear_frontier_preserves_ordered_shards_and_external_weight():
     assert sink == list(certificates)
 
 
+def test_external_initial_state_renders_k_rank_init_sharded_fact():
+    lineage = SimpleNamespace(
+        ts=1603, tsShape=[100, 16],
+        tps=[(0, 3057), (1, 3058), (2, 3059), (3, 3060)],
+        tpShapes=[[100, 4], [100, 4], [100, 4], [100, 4]],
+        gatherDim=1, replicated=False,
+    )
+    ir = SimpleNamespace(
+        init_goals_ref="TrainVerify.Denote.Generated.initGoals",
+        sm_graph_ref="TrainVerify.Denote.Generated.gSM",
+        pm_graph_ref="TrainVerify.Denote.Generated.gPM",
+        packed_cu_contracts=(), tensor_value_bound_contracts=(),
+        sm_input_value_classes=(), pm_input_value_classes=(),
+        init_lineages={1603: lineage}, full_init_goal_ids=frozenset({1603}),
+    )
+    spec = relation_compiler_module.init_lineage_relation_fact(lineage)
+    record = relation_compiler_module.ClosedRelationFactRecord(
+        fact_id="fact_000001", source=spec, kind="sharded", sm_tid=1603,
+        pm_tids=(3057, 3058, 3059, 3060), metadata_tid=None,
+        metadata_region_id=None, full_shape=tuple(lineage.tsShape),
+        shard_shape=tuple(lineage.tpShapes[0]), gather_dim=1,
+    )
+    anchor = relation_compiler_module.ClosedTensorShapeFactRecord(
+        fact_id="anchor_sm_shape_1603", side="sm", tid=1603,
+        shape=tuple(lineage.tsShape), init_goal_id=1603,
+    )
+    chain = SimpleNamespace(
+        complete=True, relation_facts=(record,), authority_facts=(), anchor_fact=anchor,
+        states=(
+            SimpleNamespace(state_id="state_000000", fact_ids=(anchor.fact_id, record.fact_id)),
+            SimpleNamespace(state_id="state_000001", fact_ids=(anchor.fact_id,)),
+        ),
+        segments=(SimpleNamespace(pre_state_id="state_000000"),),
+    )
+    source = composer_module.render_closed_external_initial_state(
+        ir, SimpleNamespace(dependent_chain_plan=chain), "GPTKInit"
+    )
+    assert "ShardedRel.of_init_goal" in source
+    assert "Generated.initGoal_1603" in source
+    assert "[3057, 3058, 3059, 3060]" in source
+    assert "hPM 3057" in source and "hPM 3060" in source
+
+
 def test_k_rank_hidden_sharded_embedding_uses_ordered_init_weight_authority():
     sm = SimpleNamespace(step_id="sm:1:0", side="sm", op="FW_embedding", rank=0,
                          input_bindings=("init:40", "init:50"), output_shape=(1, 8, 16))

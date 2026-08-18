@@ -1,5 +1,6 @@
 /- Generic relation-composition lemmas used by generated proof certificates. -/
 import denote.KRankLinearGather
+import denote.KRankInitValue
 import denote.InnerChunkCELossShard
 import denote.InnerChunkCEShard
 import denote.SlidingWindowReconstruction
@@ -782,6 +783,40 @@ structure ShardedRel (full : Tensor) (shards : List Tensor)
   shape_contract :
     fullShape = shardShape.set gatherDim
       (shardShape.getD gatherDim 0 * shards.length)
+
+/-- Construct the full K-rank relation directly from immutable InitGoal
+value authority plus explicit public shape contracts. -/
+theorem ShardedRel.of_init_goal
+    (numRanks : Nat) (g : LineageGoal) (sm pm : Store)
+    (gatherDim : Nat) (fullShape shardShape : Shape)
+    (hinit : InitGoalHolds numRanks g sm pm)
+    (hrep : g.replicated = false)
+    (hdim : g.gatherDim = gatherDim)
+    (hlen : numRanks = g.tps.length)
+    (hmulti : 2 ≤ g.tps.length)
+    (hnonscalar :
+      ((g.tps.map fun tp => pm tp.tid).head?.map fun t => t.shape).getD [] ≠ [1])
+    (hfull : (sm g.ts).shape = fullShape)
+    (hshards : ∀ shard ∈ (g.tps.map fun tp => pm tp.tid), shard.shape = shardShape)
+    (hdimlt : gatherDim < shardShape.length)
+    (hcontract :
+      fullShape = shardShape.set gatherDim
+        (shardShape.getD gatherDim 0 * g.tps.length)) :
+    ShardedRel (sm g.ts) (g.tps.map fun tp => pm tp.tid)
+      gatherDim fullShape shardShape := by
+  refine {
+    full_value := by
+      simpa using InitGoalHolds.sharded_value numRanks g sm pm gatherDim
+        hinit hrep hdim hlen hmulti hnonscalar
+    full_shape := hfull
+    shards_nonempty := ?_
+    gather_dim_lt := hdimlt
+    shard_shapes := hshards
+    shape_contract := by simpa using hcontract
+  }
+  cases htps : g.tps with
+  | nil => simp [htps] at hmulti
+  | cons first rest => simp
 
 /-- Rank-count-polymorphic replication relation. The ordered replica list is
     authority: every PM value equals the SM value and has the same shape. -/

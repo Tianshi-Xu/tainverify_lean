@@ -5798,6 +5798,20 @@ def render_closed_external_initial_state(ir: GoalIR, relation, namespace: str) -
         raise ValueError("closed chain initial state is missing")
     authority = {fact.fact_id: fact for fact in chain.authority_facts}
     authority[chain.anchor_fact.fact_id] = chain.anchor_fact
+    relation_by_id = {fact.fact_id: fact for fact in chain.relation_facts}
+    for fact_id in initial.fact_ids:
+        relation_fact = relation_by_id.get(fact_id)
+        if relation_fact is None:
+            continue
+        if relation_fact.kind not in {"sharded", "replicated"}:
+            raise ValueError(
+                f"unsupported external relation authority kind {relation_fact.kind!r}"
+            )
+        if any(not ref.startswith("init:") for ref in relation_fact.source.step_triple):
+            raise ValueError(
+                f"external relation authority references graph writers: {fact_id}"
+            )
+        authority[fact_id] = relation_fact
     missing = [fact_id for fact_id in initial.fact_ids if fact_id not in authority]
     if missing:
         raise ValueError(f"closed public initial state contains non-authority facts: {missing!r}")
@@ -5816,7 +5830,70 @@ def render_closed_external_initial_state(ir: GoalIR, relation, namespace: str) -
             f"    : {fact_id}.Holds initSM initPM := by",
             f"  unfold {fact_id} RelationFact.Holds StoreSide.read",
         ]
-        if fact.kind == "tensor_shape":
+        if fact.kind == "sharded":
+            from .relation_compiler import init_lineage_relation_fact
+            lineage = ir.init_lineages.get(int(fact.sm_tid))
+            if (
+                lineage is None
+                or int(fact.sm_tid) not in ir.full_init_goal_ids
+                or init_lineage_relation_fact(lineage) != fact.source
+                or fact.gather_dim is None
+                or len(fact.pm_tids) < 2
+            ):
+                raise ValueError(
+                    f"K-rank sharded authority {fact_id} is not one exact InitGoal"
+                )
+            goal = f"{generated_ns}.initGoal_{fact.sm_tid}"
+            pieces = "[" + ", ".join(
+                f"{{ rank := {rank}, tid := {tid} }}"
+                for rank, tid in enumerate(fact.pm_tids)
+            ) + "]"
+            full_shape = _lean_shape_tuple(fact.full_shape)
+            shard_shape = _lean_shape_tuple(fact.shard_shape)
+            body.extend([
+                f"  -- ordered PM TIDs: [{', '.join(str(tid) for tid in fact.pm_tids)}]",
+                f"  have hi := hInit {goal} (by native_decide)",
+                f"  have htps : {goal}.tps = {pieces} := by native_decide",
+                f"  have hfull := hSM {fact.sm_tid} {full_shape} (by native_decide)",
+            ])
+            for rank, tid in enumerate(fact.pm_tids):
+                body.append(
+                    f"  have hp{rank} := hPM {tid} {shard_shape} (by native_decide)"
+                )
+            body.extend([
+                (f"  have hrel := ShardedRel.of_init_goal {ir.pm_graph_ref}.numRanks "
+                 f"{goal} initSM initPM {fact.gather_dim} {full_shape} {shard_shape}"),
+                "    hi (by native_decide) (by native_decide) (by native_decide)",
+                "    (by native_decide)",
+                "    (by",
+                "      rw [htps]",
+                "      simp only [List.map_cons, List.map_nil, List.head?_cons,",
+                "        Option.map_some, Option.getD_some]",
+                "      rw [hp0]",
+                "      native_decide)",
+                "    hfull",
+                "    (by",
+                "      intro shard hshard",
+                "      rw [htps] at hshard",
+                "      simp only [List.map_cons, List.map_nil, List.mem_cons,",
+                "        List.not_mem_nil, or_false] at hshard",
+            ])
+            for rank in range(len(fact.pm_tids) - 1):
+                body.extend([
+                    "      rcases hshard with rfl | hshard",
+                    f"      · exact hp{rank}",
+                ])
+            body.extend([
+                "      subst shard",
+                f"      exact hp{len(fact.pm_tids) - 1})",
+                "    (by native_decide) (by native_decide)",
+                f"  simpa [{goal}] using hrel",
+            ])
+        elif fact.kind == "replicated":
+            raise ValueError(
+                "K-rank replicated external authority renderer is not yet registered"
+            )
+        elif fact.kind == "tensor_shape":
             if fact.side not in {"sm", "pm"}:
                 raise ValueError(f"unsupported tensor shape side in {fact_id}: {fact.side!r}")
             hypothesis = "hSM" if fact.side == "sm" else "hPM"
