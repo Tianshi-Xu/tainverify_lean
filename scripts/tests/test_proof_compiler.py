@@ -3198,6 +3198,67 @@ def test_k_rank_sum_allreduce_terminal_is_topology_and_shape_derived():
     )
 
 
+def test_k_rank_sum_producer_decomposes_reduction_to_exact_dim1_shards():
+    rank_count = 4
+    sm_input = "sm:340:0"
+    sm_sum = "sm:341:0"
+    pm_inputs = tuple(f"pm:{2224 + rank}:0" for rank in range(rank_count))
+    pm_sums = tuple(f"pm:{2228 + 2 * rank}:0" for rank in range(rank_count))
+    full_shape = (1, 1024, 50257)
+    shard_shape = (1, 256, 50257)
+    steps = [
+        SimpleNamespace(step_id=sm_input, side="sm", op="FW_identity", rank=0,
+                        input_bindings=(), input_shapes=(), parameters=(),
+                        output_shape=full_shape),
+        *(SimpleNamespace(step_id=ref, side="pm", op="FW_identity", rank=rank,
+                          input_bindings=(), input_shapes=(), parameters=(),
+                          output_shape=shard_shape)
+          for rank, ref in enumerate(pm_inputs)),
+        SimpleNamespace(step_id=sm_sum, side="sm", op="FW_sum", rank=0,
+                        input_bindings=(sm_input,), input_shapes=(full_shape,),
+                        parameters=(), output_shape=(1,)),
+        *(SimpleNamespace(step_id=ref, side="pm", op="FW_sum", rank=rank,
+                          input_bindings=(pm_inputs[rank],), input_shapes=(shard_shape,),
+                          parameters=(), output_shape=(1,))
+          for rank, ref in enumerate(pm_sums)),
+    ]
+    reduction = RelationFactSpec("reduction", (sm_sum, *pm_sums))
+    certificates, frontiers, layouts = (
+        relation_compiler_module.advance_k_rank_sum_producer_frontiers(
+            SimpleNamespace(steps=tuple(steps)),
+            (reduction.step_triple,),
+            ("reduction",),
+        )
+    )
+
+    assert frontiers == ((sm_input, *pm_inputs),)
+    assert layouts == ("sharded",)
+    assert len(certificates) == 1
+    certificate = certificates[0]
+    assert certificate.rank_count == rank_count
+    assert certificate.gather_dim == 1
+    assert certificate.full_shape == full_shape
+    assert certificate.shard_shape == shard_shape
+    assert certificate.input_fact == RelationFactSpec(
+        "sharded", (sm_input, *pm_inputs), gather_dim=1
+    )
+    assert certificate.output_fact == reduction
+    assert certificate.sm_sum_step == sm_sum
+    assert certificate.pm_sum_steps == pm_sums
+    assert certificate.lean_theorem == (
+        "TrainVerify.Denote.fw_sum_allGatherPrimDimN_eq_allReducePrim_fw_sum"
+    )
+
+    transitions = build_certificate_transition_specs(
+        SimpleNamespace(steps=tuple(steps)), certificates
+    )
+    assert len(transitions) == 1
+    assert transitions[0].pre_facts == (certificate.input_fact,)
+    assert transitions[0].post_facts == (certificate.output_fact,)
+    assert transitions[0].sm_node_indices == (341,)
+    assert transitions[0].pm_node_indices == (2228, 2230, 2232, 2234)
+
+
 def test_k_rank_linear_frontier_preserves_ordered_shards_and_external_weight():
     sm_input = "sm:0:0"
     pm_inputs = tuple(f"pm:{rank}:0" for rank in range(4))
@@ -3855,6 +3916,47 @@ def _synthetic_k_rank_segment_relation(*, family: str, rank_count: int = 4):
               for rank in range(rank_count)),
         ]
         sm_range, pm_range = (1, 1), (1, rank_count + 1)
+    elif family == "sum":
+        pre_spec = RelationFactSpec(
+            "sharded", ("sm:0:0", *(f"pm:{rank}:0" for rank in range(rank_count))),
+            gather_dim=1,
+        )
+        post_spec = RelationFactSpec(
+            "reduction", ("sm:1:0", *(f"pm:{rank + rank_count}:0" for rank in range(rank_count))),
+        )
+        pre = relation_compiler_module.ClosedRelationFactRecord(
+            "fact_pre", pre_spec, "sharded", 10,
+            tuple(20 + rank for rank in range(rank_count)), None, None,
+            (1, 2 * rank_count, 3), (1, 2, 3), gather_dim=1,
+        )
+        post = relation_compiler_module.ClosedRelationFactRecord(
+            "fact_post", post_spec, "reduction", 11,
+            tuple(30 + rank for rank in range(rank_count)), None, None,
+            (1,), (1,),
+        )
+        certificate = relation_compiler_module.KRankSumProducerCertificate(
+            rule_id="sum-producer-sharded-k-rank-dim1", rank_count=rank_count,
+            gather_dim=1, full_shape=(1, 2 * rank_count, 3), shard_shape=(1, 2, 3),
+            input_fact=pre_spec, output_fact=post_spec,
+            sm_sum_step="sm:1:0",
+            pm_sum_steps=tuple(f"pm:{rank + rank_count}:0" for rank in range(rank_count)),
+            lean_theorem="TrainVerify.Denote.fw_sum_allGatherPrimDimN_eq_allReducePrim_fw_sum",
+        )
+        transition = relation_compiler_module.CertificateTransitionSpec(
+            "transition", certificate.rule_id, (pre_spec,), (post_spec,), (1,),
+            tuple(range(rank_count, 2 * rank_count)), certificate.lean_theorem,
+        )
+        sm_nodes = [
+            Node(0, "FW_identity", [1], [10], []),
+            Node(0, "FW_sum", [10], [11], []),
+        ]
+        pm_nodes = [
+            *(Node(rank, "FW_identity", [2 + rank], [20 + rank], [])
+              for rank in range(rank_count)),
+            *(Node(rank, "FW_sum", [20 + rank], [30 + rank], [])
+              for rank in range(rank_count)),
+        ]
+        sm_range, pm_range = (1, 2), (rank_count, 2 * rank_count)
     elif family == "alltoall":
         pre_spec = RelationFactSpec(
             "sharded", ("sm:0:0", *(f"init:{20 + rank}" for rank in range(rank_count))),
@@ -3909,7 +4011,7 @@ def _synthetic_k_rank_segment_relation(*, family: str, rank_count: int = 4):
         certificates=(certificate,),
     )
     ir = SimpleNamespace(
-        sm_nodes=sm_nodes, pm_nodes=pm_nodes,
+        sm_nodes=sm_nodes, pm_nodes=pm_nodes, sm_num_ranks=1, pm_num_ranks=rank_count,
         sm_graph_ref="SyntheticKRank.smGraph", pm_graph_ref="SyntheticKRank.pmGraph",
     )
     return ir, relation
@@ -3924,6 +4026,49 @@ def test_closed_k_rank_full_producer_chunks_segment_is_generic_and_exact():
     assert source.count('op := "OpName.ChunkPrim"') >= 8
     assert "FW_identity" not in source
     assert "rankCount = 4" not in source
+
+
+def test_closed_k_rank_sum_producer_segment_is_generic_and_exact():
+    ir, relation = _synthetic_k_rank_segment_relation(family="sum")
+    source = render_closed_segment(ir, relation, "segment_000000")
+    assert "fw_sum_allGatherPrimDimN_eq_allReducePrim_fw_sum" in source
+    assert "let rankCount := pmInputTids.length" in source
+    assert "pmInputTids : List Tid := [20, 21, 22, 23]" in source
+    assert source.count('op := "OpName.FW_sum"') >= 10
+    assert "rankCount = 4" not in source
+    assert "AllReducePrim" not in source
+
+
+def test_fresh_k_rank_sum_segment_witness_is_renderer_output(tmp_path):
+    ir, relation = _synthetic_k_rank_segment_relation(family="sum")
+    namespace = "SyntheticKRank"
+    declarations = render_closed_relation_declarations(
+        relation.dependent_chain_plan, namespace
+    )
+    rendered = render_closed_segment(ir, relation, "segment_000000")
+    sm_nodes = "[" + ", ".join(
+        composer_module._node_text(node) for node in ir.sm_nodes
+    ) + "]"
+    pm_nodes = "[" + ", ".join(
+        composer_module._node_text(node) for node in ir.pm_nodes
+    ) + "]"
+    source = "\n".join((
+        declarations,
+        f"namespace TrainVerify.Denote.{namespace}",
+        "noncomputable section",
+        f"private def smGraph : GraphDecl := {{ numRanks := 1, nodes := {sm_nodes} }}",
+        f"private def pmGraph : GraphDecl := {{ numRanks := 4, nodes := {pm_nodes} }}",
+        rendered,
+        "#print axioms segment_000000",
+        "end",
+        f"end TrainVerify.Denote.{namespace}",
+        "",
+    ))
+    witness = tmp_path / "GeneratedKRankSumProducerWitness.lean"
+    witness.write_text(source)
+    assert witness.read_text() == source
+    assert rendered == render_closed_segment(ir, relation, "segment_000000")
+    assert "sorry" not in source
 
 
 def test_closed_k_rank_alltoall_segment_is_generic_and_exact():

@@ -2984,6 +2984,130 @@ def match_sum_allreduce_k_rank(
 
 
 @dataclass(frozen=True)
+class KRankSumProducerCertificate:
+    rule_id: str
+    rank_count: int
+    gather_dim: int
+    full_shape: tuple[int, ...]
+    shard_shape: tuple[int, ...]
+    input_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    sm_sum_step: str
+    pm_sum_steps: tuple[str, ...]
+    lean_theorem: str
+
+
+def advance_k_rank_sum_producer_frontiers(
+    plan: ProofPlan,
+    frontiers: tuple[tuple[str, ...], ...],
+    layouts: tuple[str, ...],
+) -> tuple[
+    tuple[KRankSumProducerCertificate, ...],
+    tuple[tuple[str, ...], ...],
+    tuple[str, ...],
+]:
+    """Decompose an exact FW_sum ReductionRel into its dim-1 ShardedRel input."""
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("K-rank sum producer frontier/layout arity mismatch")
+    by_id = {step.step_id: step for step in plan.steps}
+    certificates: list[KRankSumProducerCertificate] = []
+    rewritten: list[tuple[str, ...]] = []
+    rewritten_layouts: list[str] = []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "reduction" or len(frontier) < 2:
+            rewritten.append(frontier)
+            rewritten_layouts.append(layout)
+            continue
+        try:
+            sm_sum = by_id[frontier[0]]
+            pm_sums = tuple(by_id[ref] for ref in frontier[1:])
+        except KeyError:
+            rewritten.append(frontier)
+            rewritten_layouts.append(layout)
+            continue
+        if sm_sum.side != "sm" or sm_sum.op != "FW_sum":
+            rewritten.append(frontier)
+            rewritten_layouts.append(layout)
+            continue
+        if any(step.side != "pm" or step.op != "FW_sum" for step in pm_sums):
+            rewritten.append(frontier)
+            rewritten_layouts.append(layout)
+            continue
+        rank_count = len(pm_sums)
+        if int(sm_sum.rank) != 0:
+            raise RelationCompositionError("K-rank sum producer SM writer must have rank zero")
+        if tuple(int(step.rank) for step in pm_sums) != tuple(range(rank_count)):
+            raise RelationCompositionError("K-rank sum producer PM writers are not exact ordered ranks")
+        if tuple(getattr(sm_sum, "parameters", ())) != () or any(
+            tuple(getattr(step, "parameters", ())) != () for step in pm_sums
+        ):
+            raise RelationCompositionError("K-rank FW_sum producer writers must declare no parameters")
+        if len(sm_sum.input_bindings) != 1 or any(
+            len(step.input_bindings) != 1 for step in pm_sums
+        ):
+            raise RelationCompositionError("K-rank FW_sum producer writer input arity mismatch")
+        if tuple(sm_sum.output_shape) != (1,) or any(
+            tuple(step.output_shape) != (1,) for step in pm_sums
+        ):
+            raise RelationCompositionError("K-rank FW_sum producer outputs must have exact shape [1]")
+        try:
+            sm_input = by_id[sm_sum.input_bindings[0]]
+            pm_inputs = tuple(by_id[step.input_bindings[0]] for step in pm_sums)
+        except KeyError as exc:
+            raise RelationCompositionError("K-rank FW_sum producer input writer is unresolved") from exc
+        if sm_input.side != "sm" or any(step.side != "pm" for step in pm_inputs):
+            raise RelationCompositionError("K-rank FW_sum producer inputs have wrong-side writers")
+        if tuple(int(step.rank) for step in pm_inputs) != tuple(range(rank_count)):
+            raise RelationCompositionError("K-rank FW_sum producer input shards are not exact ordered ranks")
+        full_shape = tuple(sm_input.output_shape)
+        shard_shapes = tuple(tuple(step.output_shape) for step in pm_inputs)
+        if not shard_shapes or any(shape != shard_shapes[0] for shape in shard_shapes[1:]):
+            raise RelationCompositionError("K-rank FW_sum producer input shard shapes disagree")
+        shard_shape = shard_shapes[0]
+        gather_dim = 1
+        if len(full_shape) != len(shard_shape) or gather_dim >= len(shard_shape):
+            raise RelationCompositionError("K-rank FW_sum producer requires rank >= 2 dim-1 inputs")
+        reconstructed = list(shard_shape)
+        reconstructed[gather_dim] *= rank_count
+        if tuple(reconstructed) != full_shape:
+            raise RelationCompositionError("K-rank FW_sum producer input is not an exact dim-1 sharding")
+        declared_sm = tuple(tuple(shape) for shape in getattr(sm_sum, "input_shapes", ()))
+        declared_pm = tuple(
+            tuple(tuple(shape) for shape in getattr(step, "input_shapes", ()))
+            for step in pm_sums
+        )
+        if declared_sm != (full_shape,) or declared_pm != tuple((shape,) for shape in shard_shapes):
+            raise RelationCompositionError("K-rank FW_sum producer declared input shapes disagree with writers")
+        if shard_shape[gather_dim] <= 0:
+            raise RelationCompositionError("K-rank FW_sum producer gather extent must be positive")
+        post_stride = 1
+        for extent in shard_shape[gather_dim + 1:]:
+            post_stride *= extent
+        if post_stride <= 0:
+            raise RelationCompositionError("K-rank FW_sum producer post-stride must be positive")
+        input_fact = RelationFactSpec(
+            "sharded", (sm_input.step_id, *(step.step_id for step in pm_inputs)),
+            gather_dim=gather_dim,
+        )
+        output_fact = RelationFactSpec("reduction", tuple(frontier))
+        certificates.append(KRankSumProducerCertificate(
+            rule_id="sum-producer-sharded-k-rank-dim1",
+            rank_count=rank_count,
+            gather_dim=gather_dim,
+            full_shape=full_shape,
+            shard_shape=shard_shape,
+            input_fact=input_fact,
+            output_fact=output_fact,
+            sm_sum_step=sm_sum.step_id,
+            pm_sum_steps=tuple(step.step_id for step in pm_sums),
+            lean_theorem="TrainVerify.Denote.fw_sum_allGatherPrimDimN_eq_allReducePrim_fw_sum",
+        ))
+        rewritten.append(input_fact.step_triple)
+        rewritten_layouts.append("sharded")
+    return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
+
+
+@dataclass(frozen=True)
 class KRankHiddenShardedEmbeddingCertificate:
     rule_id: str
     rank_count: int
@@ -3986,14 +4110,14 @@ def normalize_relation_frontiers(
     frontiers: tuple[tuple[str, ...], ...],
     layouts: tuple[str, ...],
     *,
-    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
+    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "sum_producer_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
     goal_ir: GoalIR | None = None,
     deduplicate_each_round: bool = False,
     certificate_sink: list[object] | None = None,
     side_condition_sink: list[RelationSideCondition] | None = None,
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
-    known = {"allreduce_reconstruction_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
+    known = {"allreduce_reconstruction_k", "sum_producer_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
     unknown = set(rules) - known
     if unknown:
         raise RelationCompositionError(f"unknown relation normalization rules: {sorted(unknown)}")
@@ -4008,6 +4132,13 @@ def normalize_relation_frontiers(
         if "allreduce_reconstruction_k" in rules:
             _certs, current_frontiers, current_layouts = (
                 advance_k_rank_allreduce_reconstruction_frontiers(
+                    plan, current_frontiers, current_layouts
+                )
+            )
+            _extend_unique_certificates(certificate_sink, _certs)
+        if "sum_producer_k" in rules:
+            _certs, current_frontiers, current_layouts = (
+                advance_k_rank_sum_producer_frontiers(
                     plan, current_frontiers, current_layouts
                 )
             )
@@ -5369,6 +5500,10 @@ def build_certificate_transition_specs(
             footprint_groups = (
                 (cert.sm_sum_step,), cert.pm_sum_steps, (cert.pm_allreduce_step,)
             )
+        elif type(cert) is KRankSumProducerCertificate:
+            pre = (cert.input_fact,)
+            post = (cert.output_fact,)
+            footprint_groups = ((cert.sm_sum_step,), cert.pm_sum_steps)
         elif type(cert) is KRankHiddenShardedEmbeddingCertificate:
             pre = (cert.weight_fact,)
             post = (cert.output_fact,)
@@ -6065,7 +6200,7 @@ def compile_relation_plan(
                 proof,
                 frontiers,
                 layouts,
-                rules=("allreduce_reconstruction_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k"),
+                rules=("allreduce_reconstruction_k", "sum_producer_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k"),
                 goal_ir=ir,
                 certificate_sink=compiled_certificates,
                 deduplicate_each_round=True,

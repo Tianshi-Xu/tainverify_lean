@@ -6371,6 +6371,160 @@ def render_closed_k_rank_allgather_segment(ir: GoalIR, relation, segment_id: str
     return "\n".join(lines)
 
 
+def render_closed_k_rank_sum_producer_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Render exact SM+ordered-PM FW_sum writers from dim-1 sharding to reduction."""
+    try:
+        from .relation_compiler import KRankSumProducerCertificate
+    except ImportError:
+        from relation_compiler import KRankSumProducerCertificate
+    theorem = "TrainVerify.Denote.fw_sum_allGatherPrimDimN_eq_allReducePrim_fw_sum"
+    (segment, transition, certificate, pre, post, before, after) = _k_rank_segment_context(
+        ir, relation, segment_id, "sum-producer-sharded-k-rank-dim1", theorem,
+        KRankSumProducerCertificate,
+    )
+    if pre.kind != "sharded" or post.kind != "reduction":
+        raise ValueError("K-rank FW_sum producer requires sharded pre and reduction post")
+    k = len(pre.pm_tids)
+    if (k <= 0 or certificate.rank_count != k or len(post.pm_tids) != k
+            or pre.gather_dim != 1 or certificate.gather_dim != 1):
+        raise ValueError("K-rank FW_sum producer rank/dimension contract disagrees with facts")
+    if (certificate.input_fact != transition.pre_facts[0]
+            or certificate.output_fact != transition.post_facts[0]):
+        raise ValueError("K-rank FW_sum producer certificate facts disagree with transition")
+    if (tuple(pre.full_shape) != tuple(certificate.full_shape)
+            or tuple(pre.shard_shape) != tuple(certificate.shard_shape)
+            or tuple(post.full_shape) != (1,) or tuple(post.shard_shape) != (1,)):
+        raise ValueError("K-rank FW_sum producer materialized shapes disagree with certificate")
+    if len(pre.shard_shape) <= 1 or pre.shard_shape[1] <= 0:
+        raise ValueError("K-rank FW_sum producer gather extent is not positive")
+    post_stride = 1
+    for extent in pre.shard_shape[2:]:
+        post_stride *= extent
+    if post_stride <= 0:
+        raise ValueError("K-rank FW_sum producer post-stride is not positive")
+    reconstructed = list(pre.shard_shape)
+    reconstructed[1] *= k
+    if tuple(reconstructed) != tuple(pre.full_shape):
+        raise ValueError("K-rank FW_sum producer dim-1 shape contract fails")
+
+    sm_nodes = ir.sm_nodes[slice(*segment.sm_range)]
+    pm_nodes = ir.pm_nodes[slice(*segment.pm_range)]
+    sm_indices = tuple(range(*segment.sm_range))
+    pm_indices = tuple(range(*segment.pm_range))
+    if (len(sm_nodes) != 1 or len(pm_nodes) != k
+            or transition.sm_node_indices != sm_indices
+            or transition.pm_node_indices != pm_indices):
+        raise ValueError("K-rank FW_sum producer must own exact SM+K PM writers")
+    sm_node = sm_nodes[0]
+    if (certificate.sm_sum_step != f"sm:{sm_indices[0]}:0"
+            or tuple(certificate.pm_sum_steps) != tuple(f"pm:{index}:0" for index in pm_indices)):
+        raise ValueError("K-rank FW_sum producer certificate footprint is not exact")
+    if (sm_node.rank != 0 or sm_node.op != "FW_sum" or sm_node.ins != [pre.sm_tid]
+            or sm_node.outs != [post.sm_tid] or sm_node.params):
+        raise ValueError("K-rank FW_sum producer SM writer binding mismatch")
+    if tuple(node.rank for node in pm_nodes) != tuple(range(k)) or any(
+        node.op != "FW_sum" or node.ins != [pre.pm_tids[rank]]
+        or node.outs != [post.pm_tids[rank]] or node.params
+        for rank, node in enumerate(pm_nodes)
+    ):
+        raise ValueError("K-rank FW_sum producer PM writer binding/rank/order mismatch")
+
+    sm_text = "[" + _node_text(sm_node) + "]"
+    pm_text = "[" + ", ".join(_node_text(node) for node in pm_nodes) + "]"
+    input_tids = "[" + ", ".join(str(tid) for tid in pre.pm_tids) + "]"
+    output_tids = "[" + ", ".join(str(tid) for tid in post.pm_tids) + "]"
+    full_shape = _shape_text(list(pre.full_shape))
+    shard_shape = _shape_text(list(pre.shard_shape))
+    lines = [
+        f"private def {segment.segment_id} :",
+        f"    ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
+        f"  smNodes := {sm_text}", f"  pmNodes := {pm_text}", "  sound := by",
+        "    intro smStore pmStore hstate",
+        f"    let smNodes : List NodeDecl := {sm_text}",
+        f"    let pmNodes : List NodeDecl := {pm_text}",
+        f"    let pmInputTids : List Tid := {input_tids}",
+        f"    let pmOutputTids : List Tid := {output_tids}",
+        "    let rankCount := pmInputTids.length",
+        f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore",
+        f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
+        f"    have hin : {pre.fact_id}.Holds smStore pmStore := hstate {pre.fact_id} (by native_decide)",
+        f"    change ShardedRel (smStore {pre.sm_tid}) (pmInputTids.map pmStore) 1 {full_shape} {shard_shape} at hin",
+        f"    have hSmWriter : smFinal {post.sm_tid} = fw_sum (smStore {pre.sm_tid}) := by",
+        "      unfold smFinal smNodes",
+        "      simp only [List.foldl]",
+        "      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+        "        (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]",
+        "      unfold applyNodeDistributed",
+        "      rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]",
+        f"      · exact applyNode_fw_sum_out {ir.sm_graph_ref} smStore 0 {pre.sm_tid} {post.sm_tid}",
+        "      · decide", "      · decide",
+    ]
+    writer_names = []
+    shape_names = []
+    for rank, node in enumerate(pm_nodes):
+        writer_name = f"hPmWriter{rank}"
+        shape_name = f"hPmShape{rank}"
+        writer_names.append(writer_name)
+        shape_names.append(shape_name)
+        before_nodes = f"(pmNodes.take {rank})"
+        after_nodes = f"(pmNodes.drop {rank + 1})"
+        lines += [
+            f"    have {writer_name} : pmFinal {node.outs[0]} = fw_sum (pmStore {node.ins[0]}) := by",
+            "      calc",
+            f"        pmFinal {node.outs[0]} = fw_sum (({before_nodes}).foldl",
+            f"            (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore {node.ins[0]}) := by",
+            f"          change (pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) {node.outs[0]} = _",
+            f"          rw [show pmNodes = {before_nodes} ++ [{_node_text(node)}] ++ {after_nodes} by native_decide]",
+            f"          apply foldl_faithful_middle_writer {ir.pm_graph_ref} pmStore {before_nodes} {after_nodes}",
+            f"            {_node_text(node)} {node.outs[0]} (fun t => fw_sum (t {node.ins[0]}))",
+            "          · intro t",
+            "            rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "              (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]",
+            "            unfold applyNodeDistributed",
+            "            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]",
+            f"            · exact applyNode_fw_sum_out {ir.pm_graph_ref} t {rank} {node.ins[0]} {node.outs[0]}",
+            "            · decide", "            · decide",
+            "          · native_decide", "          · native_decide",
+            f"        _ = fw_sum (pmStore {node.ins[0]}) := by",
+            f"          rw [foldl_applyNodeDistributedFaithful_at_not_written {ir.pm_graph_ref}",
+            f"            {before_nodes} pmStore {node.ins[0]} (by native_decide) (by native_decide)]",
+            f"    have {shape_name} : (pmFinal {node.outs[0]}).shape = [1] := by",
+            f"      rw [{writer_name}]", "      exact fw_sum_shape _",
+        ]
+    lines += [
+        f"    have hFullShape : (smFinal {post.sm_tid}).shape = [1] := by",
+        "      rw [hSmWriter]", "      exact fw_sum_shape _",
+        f"    have hOutValue : smFinal {post.sm_tid} =",
+        "        allReducePrim (pmOutputTids.map pmFinal).length 0 (pmOutputTids.map pmFinal) := by",
+        "      rw [hSmWriter, hin.full_value]",
+        f"      have hComm := {theorem} 1 rankCount (pmInputTids.map pmStore) rfl",
+        "        (by simp [rankCount, pmInputTids])",
+        f"        {shard_shape}",
+        "        (by simp only [pmInputTids, List.map, List.head?, Option.map, Option.getD];",
+        "            exact hin.shard_shapes _ (by simp [pmInputTids]))",
+        "        hin.shard_shapes hin.gather_dim_lt (by native_decide) (by native_decide)",
+        "      simp only [pmInputTids, pmOutputTids, rankCount, List.map, List.length_cons, List.length_nil] at hComm ⊢",
+        "      rw [hComm]",
+        f"      rw [{', '.join('← ' + name for name in writer_names)}]",
+        f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by",
+        f"      change ReductionRel (smFinal {post.sm_tid}) (pmOutputTids.map pmFinal) [1]",
+        "      refine {", "        full_value := hOutValue", "        full_shape := hFullShape",
+        "        contributions_nonempty := by simp [pmOutputTids]", "        contribution_shapes := ?_",
+        "        reduced_shape := ?_", "      }",
+        "      · intro shard hmem",
+        "        simp only [pmOutputTids, List.map, List.mem_cons, List.not_mem_nil, or_false] at hmem",
+    ]
+    lines += _membership_cases(shape_names, indent="        ")
+    lines += [
+        "      · rw [← hOutValue]", "        exact hFullShape",
+        "    exact RelationState.Holds.mono_insert hframe hout (by native_decide)", "",
+    ]
+    return "\n".join(lines)
+
+
 def render_closed_k_rank_allreduce_segment(ir: GoalIR, relation, segment_id: str) -> str:
     """Render one exact ordered K-rank PM AllReduce reconstruction writer."""
     chain = relation.dependent_chain_plan
@@ -6547,6 +6701,8 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         return render_closed_k_rank_alltoall_segment(ir, relation, segment_id)
     if family == ("allgather-reconstruction-k-rank",):
         return render_closed_k_rank_allgather_segment(ir, relation, segment_id)
+    if family == ("sum-producer-sharded-k-rank-dim1",):
+        return render_closed_k_rank_sum_producer_segment(ir, relation, segment_id)
     if family == ("allreduce-reconstruction-k-rank",):
         return render_closed_k_rank_allreduce_segment(ir, relation, segment_id)
     if family == ("embedding-hidden-sharded-k-rank",):
