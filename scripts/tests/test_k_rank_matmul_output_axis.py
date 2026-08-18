@@ -117,10 +117,12 @@ def test_output_axis_matmul_matcher_rejects_nonshared_first_operand_and_reordere
         **pm_matmuls[1].__dict__,
         "input_bindings": (other_x.step_id, pm_matmuls[1].input_bindings[1]),
     })
-    with pytest.raises(rc.RelationCompositionError, match="shared PM authority"):
-        rc.advance_k_rank_matmul_output_axis_frontiers(
-            SimpleNamespace(steps=(*plan.steps, other_x, bad_writer)), (frontier,), ("sharded",)
-        )
+    certs, unchanged, layouts = rc.advance_k_rank_matmul_output_axis_frontiers(
+        SimpleNamespace(steps=(*plan.steps, other_x, bad_writer)), (frontier,), ("sharded",)
+    )
+    assert certs == ()
+    assert unchanged == (frontier,)
+    assert layouts == ("sharded",)
 
     swapped = (frontier[0], frontier[2], frontier[1], frontier[3])
     with pytest.raises(rc.RelationCompositionError, match="ordered ranks"):

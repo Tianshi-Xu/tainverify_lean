@@ -3907,8 +3907,23 @@ def advance_k_rank_matmul_output_axis_frontiers(
         sm_x_ref, sm_y_ref = sm_step.input_bindings
         pm_x_refs = tuple(step.input_bindings[0] for step in pm_steps)
         pm_y_refs = tuple(step.input_bindings[1] for step in pm_steps)
-        if len(set(pm_x_refs)) != 1:
-            raise RelationCompositionError("K-rank matmul first operand is not one shared PM authority")
+        shared_first_operand = len(set(pm_x_refs)) == 1
+        # Classify family A by shared-X authority plus dim-3 output layout.
+        # Rank-local X belongs to the distinct head/query-sharded families and
+        # remains unresolved here. Once X is shared, malformed dim-3 output
+        # authority is a genuine family-A error and fails closed.
+        if not shared_first_operand:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        out_full_shape = tuple(sm_step.output_shape)
+        out_shard_shapes = tuple(tuple(step.output_shape) for step in pm_steps)
+        if (len(out_full_shape) != 4 or not out_shard_shapes
+                or any(shape != out_shard_shapes[0] for shape in out_shard_shapes)):
+            raise RelationCompositionError("K-rank matmul outputs must have exact equal rank-4 shard shapes")
+        out_shard_shape = out_shard_shapes[0]
+        expected_output_full = list(out_shard_shape)
+        expected_output_full[3] *= rank_count
+        if tuple(expected_output_full) != out_full_shape:
+            raise RelationCompositionError("K-rank matmul output is not an exact dim3 sharding")
         try:
             sm_x, pm_x, sm_y = by_id[sm_x_ref], by_id[pm_x_refs[0]], by_id[sm_y_ref]
             pm_ys = tuple(by_id[ref] for ref in pm_y_refs)
