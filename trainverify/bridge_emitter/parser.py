@@ -93,7 +93,10 @@ class GoalIR:
     sm_graph_ref: str = ""
     pm_graph_ref: str = ""
     public_statement_module: str = ""
+    public_statement_ref: str = ""
+    public_statement_uses_contract_wrapper: bool = True
     lineage_ref: str = ""
+    init_goals_ref: str = ""
     sm_num_ranks: int = 1
     pm_num_ranks: int = 1
     sm_replica_groups: tuple[ReplicaGroup, ...] = ()
@@ -364,6 +367,25 @@ def parse_full_init_goal_ids(goal_text: str, gen_text: str, n: int) -> tuple[int
         source = full_block
     return tuple(int(value) for value in re.findall(r"initGoal_(\d+)", source))
 
+def parse_full_init_goals_name(statement_text: str, n: int) -> str:
+    """Recover the exact init-goal list consumed by the exported full statement."""
+    block = extract_def_block(statement_text, f"goal_{n}_stmt_full")
+    direct = re.search(
+        r"InitGoalsHold\s+\S+\s+([A-Za-z_][A-Za-z0-9_.]*)\b", block
+    )
+    compact = re.search(
+        r"CoarseLineageHoldsWithInit(?:DistributedFaithfulWithContract)?"
+        r"(?:\s+\S+){5}\s+([A-Za-z_][A-Za-z0-9_.]*)\b",
+        block,
+    )
+    matches = [match.group(1) for match in (direct, compact) if match is not None]
+    if len(matches) != 1:
+        raise ValueError(
+            f"goal_{n}_stmt_full must expose exactly one init-goal list, found {matches}"
+        )
+    return matches[0]
+
+
 def parse_prereqs(goal_text: str, n: int):
     m = re.search(rf'def\s+goal_{n}_prereqs\s*:\s*List LineageGoal\s*:=\s*\[(.*?)\]', goal_text, re.DOTALL)
     if not m:
@@ -612,7 +634,17 @@ def load_goal_ir(n: int, root: str) -> GoalIR:
         sm_graph_ref=_qualified_definition_name(sm_graph_ref, *sources),
         pm_graph_ref=_qualified_definition_name(pm_graph_ref, *sources),
         public_statement_module=public_statement_module,
+        public_statement_ref=_qualified_definition_name(
+            f"goal_{n}_stmt_full", statement_text
+        ),
+        public_statement_uses_contract_wrapper=(
+            "CoarseLineageHoldsWithInitDistributedFaithfulWithContract"
+            in extract_def_block(statement_text, f"goal_{n}_stmt_full")
+        ),
         lineage_ref=_qualified_definition_name(f"goal_{n}", *sources),
+        init_goals_ref=_qualified_definition_name(
+            parse_full_init_goals_name(statement_text, n), *sources
+        ),
         sm_num_ranks=parse_num_ranks(sm_block, sm_name),
         pm_num_ranks=parse_num_ranks(pm_block, pm_name),
         sm_replica_groups=parse_replica_groups(sm_block),

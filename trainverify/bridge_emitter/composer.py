@@ -5725,14 +5725,15 @@ def _closed_input_class_index(classes, left_tid: int, right_tid: int) -> int | N
 
 
 def _external_contract_arguments(ir: GoalIR) -> tuple[str, str, tuple[str, ...]]:
-    graph_ns = ir.sm_graph_ref.rsplit(".", 1)[0]
+    if not ir.init_goals_ref:
+        raise ValueError("external initial-state renderer lacks exact init-goals reference")
     generated_ns = "TrainVerify.Denote.Generated"
     arguments = [
         "    (initSM initPM : Store)",
         f"    (hSM : StoreShapesHold initSM {ir.sm_graph_ref}InitEnv)",
         f"    (hPM : StoreShapesHold initPM {ir.pm_graph_ref}InitEnv)",
         (f"    (hInit : InitGoalsHold {ir.pm_graph_ref}.numRanks "
-         f"{graph_ns}.goal_{ir.n}_full_initGoals initSM initPM)"),
+         f"{ir.init_goals_ref} initSM initPM)"),
         (f"    (hSMValues : InputValueClassesHold "
          f"{generated_ns}.smInputValueClasses initSM)"),
         (f"    (hPMValues : InputValueClassesHold "
@@ -5970,7 +5971,9 @@ def render_closed_public_theorem(
 
     external = render_closed_external_initial_state(ir, relation, namespace)
     _, call_args, contract_names = _external_contract_arguments(ir)
-    graph_ns = ir.sm_graph_ref.rsplit(".", 1)[0]
+    statement = getattr(ir, "public_statement_ref", "")
+    if not statement:
+        raise ValueError("public theorem requires an exact parsed statement reference")
     goal = getattr(ir, "lineage_ref", "")
     if not goal:
         raise ValueError("public theorem requires an exact parsed lineage reference")
@@ -5980,9 +5983,12 @@ def render_closed_public_theorem(
     lines = [
         external.rstrip(),
         "",
-        f"theorem prove_goal_{ir.n}_closed : {graph_ns}.goal_{ir.n}_stmt_full := by",
-        f"  unfold {graph_ns}.goal_{ir.n}_stmt_full",
-        "  unfold CoarseLineageHoldsWithInitDistributedFaithfulWithContract",
+        f"theorem prove_goal_{ir.n}_closed : {statement} := by",
+        f"  unfold {statement}",
+        *(
+            ["  unfold CoarseLineageHoldsWithInitDistributedFaithfulWithContract"]
+            if ir.public_statement_uses_contract_wrapper else []
+        ),
         "  intro initSM initPM hSM hPM hInit hContract",
         f"  rcases hContract with ⟨{', '.join(contract_names)}⟩",
         f"  have hpre := {namespace}_initial_state {call_args}",

@@ -4682,7 +4682,9 @@ def _synthetic_external_ir(*, tps=((0, 901), (1, 902))):
         sm_graph_ref="Synthetic.Graphs.sm_goal_17",
         pm_graph_ref="Synthetic.Graphs.pm_goal_17",
         public_statement_module="Synthetic.Graphs",
+        public_statement_ref="Synthetic.Generated.goal_17_stmt_full",
         lineage_ref="Synthetic.Generated.goal_17",
+        init_goals_ref="Synthetic.Generated.initGoals",
         sm_num_ranks=1, pm_num_ranks=2,
         sm_input_value_classes=(SimpleNamespace(source="sm-alias", tids=(10, 11)),),
         pm_input_value_classes=(SimpleNamespace(source="pm-alias", tids=(20, 21)),),
@@ -4703,6 +4705,29 @@ def _synthetic_external_ir(*, tps=((0, 901), (1, 902))):
             ),
         },
         full_init_goal_ids=(50, 60),
+    )
+
+
+def test_parser_recovers_exact_public_init_goals_reference(monkeypatch):
+    monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
+    monkeypatch.setattr(parser_module, "GEN_DIR", "trainverify/denote")
+    monkeypatch.setattr(parser_module, "GEN_FILE", "GeneratedYOCOMoE.lean")
+    root = Path(__file__).resolve().parents[2]
+
+    goal3 = load_goal_ir(3, str(root))
+    goal4 = load_goal_ir(4, str(root))
+
+    assert goal3.public_statement_ref == (
+        "TrainVerify.Denote.GeneratedGoals.goal_3_stmt_full"
+    )
+    assert not goal3.public_statement_uses_contract_wrapper
+    assert goal4.public_statement_uses_contract_wrapper
+    assert goal4.public_statement_ref == (
+        "TrainVerify.Denote.GeneratedGoals.goal_4_stmt_full"
+    )
+    assert goal3.init_goals_ref == "TrainVerify.Denote.Generated.initGoals"
+    assert goal4.init_goals_ref == (
+        "TrainVerify.Denote.GeneratedGoals.goal_4_full_initGoals"
     )
 
 
@@ -4759,7 +4784,7 @@ def test_public_theorem_renderer_consumes_kernel_joined_target_for_singleton_pub
     source = render_closed_public_theorem(
         ir, _synthetic_external_chain((anchor,), target), "SyntheticClosed"
     )
-    assert "theorem prove_goal_17_closed : Synthetic.Graphs.goal_17_stmt_full" in source
+    assert "theorem prove_goal_17_closed : Synthetic.Generated.goal_17_stmt_full" in source
     assert "using htarget.public_value" in source
     assert "reconstructWithDim_singleton" in source
     assert "reconstructWithDim_cons_cons_nonscalar" not in source
