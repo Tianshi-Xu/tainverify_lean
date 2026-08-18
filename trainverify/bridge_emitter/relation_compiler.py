@@ -2984,6 +2984,95 @@ def match_sum_allreduce_k_rank(
 
 
 @dataclass(frozen=True)
+class KRankHiddenShardedEmbeddingCertificate:
+    rule_id: str
+    rank_count: int
+    ids_tid: int
+    weight_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    sm_step_id: str
+    pm_step_ids: tuple[str, ...]
+    lean_theorem: str
+
+
+def advance_k_rank_hidden_sharded_embedding(
+    plan: ProofPlan,
+    ir: GoalIR,
+    frontiers: tuple[tuple[str, ...], ...],
+    layouts: tuple[str, ...],
+) -> tuple[
+    tuple[KRankHiddenShardedEmbeddingCertificate, ...],
+    tuple[tuple[str, ...], ...],
+    tuple[str, ...],
+]:
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("K-rank embedding frontier/layout arity mismatch")
+    by_id = {step.step_id: step for step in plan.steps}
+    certificates: list[KRankHiddenShardedEmbeddingCertificate] = []
+    rewritten: list[tuple[str, ...]] = []
+    rewritten_layouts: list[str] = []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "sharded" or len(frontier) < 3:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        try:
+            sm_step = by_id[frontier[0]]
+            pm_steps = tuple(by_id[ref] for ref in frontier[1:])
+        except KeyError:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        if sm_step.op != "FW_embedding" or any(step.op != "FW_embedding" for step in pm_steps):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        k = len(pm_steps)
+        if tuple(int(step.rank) for step in pm_steps) != tuple(range(k)):
+            raise RelationCompositionError("K-rank embedding PM writers are not ordered ranks")
+        if len(sm_step.input_bindings) != 2 or any(len(step.input_bindings) != 2 for step in pm_steps):
+            raise RelationCompositionError("K-rank embedding input arity mismatch")
+        ids_refs = (sm_step.input_bindings[0], *(step.input_bindings[0] for step in pm_steps))
+        if any(not ref.startswith("init:") for ref in ids_refs) or len(set(ids_refs)) != 1:
+            raise RelationCompositionError("K-rank embedding ids authority mismatch")
+        try:
+            ids_tid = int(ids_refs[0].split(":", 1)[1])
+            sm_weight_tid = int(sm_step.input_bindings[1].split(":", 1)[1])
+        except (IndexError, ValueError) as exc:
+            raise RelationCompositionError("K-rank embedding init authority is malformed") from exc
+        lineage = ir.init_lineages.get(sm_weight_tid)
+        if lineage is None:
+            raise RelationCompositionError("K-rank embedding weight authority is missing")
+        weight_fact = init_lineage_relation_fact(lineage)
+        expected_weight_refs = (
+            sm_step.input_bindings[1], *(step.input_bindings[1] for step in pm_steps)
+        )
+        if weight_fact.step_triple != expected_weight_refs or weight_fact.layout != "sharded":
+            raise RelationCompositionError("K-rank embedding weight authority order mismatch")
+        if weight_fact.gather_dim != 1:
+            raise RelationCompositionError("K-rank embedding weight must be hidden-sharded on dimension 1")
+        full = tuple(sm_step.output_shape)
+        shards = tuple(tuple(step.output_shape) for step in pm_steps)
+        if not shards or any(shape != shards[0] for shape in shards[1:]) or len(full) != 3:
+            raise RelationCompositionError("K-rank embedding output shard shapes disagree")
+        candidates = [dim for dim in range(3) if full[dim] == shards[0][dim] * k and all(
+            full[index] == shards[0][index] for index in range(3) if index != dim
+        )]
+        if candidates != [2]:
+            raise RelationCompositionError(
+                f"K-rank embedding output is not uniquely hidden-sharded: {candidates}"
+            )
+        output_fact = RelationFactSpec("sharded", frontier, gather_dim=2)
+        certificates.append(KRankHiddenShardedEmbeddingCertificate(
+            rule_id="embedding-hidden-sharded-k-rank",
+            rank_count=k,
+            ids_tid=ids_tid,
+            weight_fact=weight_fact,
+            output_fact=output_fact,
+            sm_step_id=sm_step.step_id,
+            pm_step_ids=tuple(step.step_id for step in pm_steps),
+            lean_theorem="TrainVerify.Denote.fw_embedding_hidden_shards_k_rank",
+        ))
+        rewritten.append(weight_fact.step_triple)
+        rewritten_layouts.append("sharded")
+    return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
+
+
+@dataclass(frozen=True)
 class KRankFullProducerChunksCertificate:
     rule_id: str
     rank_count: int

@@ -3255,6 +3255,57 @@ def test_k_rank_linear_frontier_preserves_ordered_shards_and_external_weight():
     assert sink == list(certificates)
 
 
+def test_k_rank_hidden_sharded_embedding_uses_ordered_init_weight_authority():
+    sm = SimpleNamespace(step_id="sm:1:0", side="sm", op="FW_embedding", rank=0,
+                         input_bindings=("init:40", "init:50"), output_shape=(1, 8, 16))
+    pm = tuple(
+        SimpleNamespace(step_id=f"pm:{rank}:0", side="pm", op="FW_embedding", rank=rank,
+                        input_bindings=("init:40", f"init:{60 + rank}"), output_shape=(1, 8, 4))
+        for rank in range(4)
+    )
+    lineage = SimpleNamespace(
+        ts=50, tsShape=[100, 16], tps=[(rank, 60 + rank) for rank in range(4)],
+        tpShapes=[[100, 4] for _ in range(4)], gatherDim=1, replicated=False,
+    )
+    frontier = (sm.step_id, *(step.step_id for step in pm))
+    certs, frontiers, layouts = relation_compiler_module.advance_k_rank_hidden_sharded_embedding(
+        SimpleNamespace(steps=(sm, *pm)), SimpleNamespace(init_lineages={50: lineage}),
+        (frontier,), ("sharded",),
+    )
+    assert len(certs) == 1
+    cert = certs[0]
+    assert cert.rank_count == 4
+    assert cert.ids_tid == 40
+    assert cert.weight_fact == RelationFactSpec(
+        "sharded", ("init:50", "init:60", "init:61", "init:62", "init:63"),
+        gather_dim=1,
+    )
+    assert cert.output_fact == RelationFactSpec("sharded", frontier, gather_dim=2)
+    assert frontiers == (cert.weight_fact.step_triple,)
+    assert layouts == ("sharded",)
+    assert cert.lean_theorem.endswith("fw_embedding_hidden_shards_k_rank")
+
+
+def test_k_rank_hidden_sharded_embedding_rejects_distinct_ids_authority():
+    sm = SimpleNamespace(step_id="sm:1:0", side="sm", op="FW_embedding", rank=0,
+                         input_bindings=("init:40", "init:50"), output_shape=(1, 8, 16))
+    pm = tuple(
+        SimpleNamespace(step_id=f"pm:{rank}:0", side="pm", op="FW_embedding", rank=rank,
+                        input_bindings=(f"init:{41 + rank}", f"init:{60 + rank}"),
+                        output_shape=(1, 8, 4)) for rank in range(4)
+    )
+    lineage = SimpleNamespace(
+        ts=50, tsShape=[100, 16], tps=[(rank, 60 + rank) for rank in range(4)],
+        tpShapes=[[100, 4] for _ in range(4)], gatherDim=1, replicated=False,
+    )
+    frontier = (sm.step_id, *(step.step_id for step in pm))
+    with pytest.raises(RelationCompositionError, match="ids authority"):
+        relation_compiler_module.advance_k_rank_hidden_sharded_embedding(
+            SimpleNamespace(steps=(sm, *pm)), SimpleNamespace(init_lineages={50: lineage}),
+            (frontier,), ("sharded",),
+        )
+
+
 def test_k_rank_full_producer_chunks_reconstruct_arbitrary_ordered_k():
     sm = SimpleNamespace(step_id="sm:1:0", side="sm", op="FW_view", rank=0,
                          input_bindings=(), parameters=(1, 8, 12), output_shape=(1, 8, 12))
