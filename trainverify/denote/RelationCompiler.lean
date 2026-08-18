@@ -933,6 +933,22 @@ def RelationFact.Holds (fact : RelationFact) (sm pm : Store) : Prop :=
       (pm fullTid).shape = fullShape ∧
       (pm rank0Tid).shape = shardShape ∧ (pm rank1Tid).shape = shardShape
 
+namespace JoinedRel
+
+/-- Applying the same literal view to both sides of a joined equality preserves
+its equality and changes both declared shapes to that literal target. -/
+theorem fw_view (targetShape inputShape : Shape) {smValue pmValue : Tensor}
+    (h : smValue = pmValue ∧ smValue.shape = inputShape ∧
+      pmValue.shape = inputShape) :
+    Denote.fw_view targetShape smValue = Denote.fw_view targetShape pmValue ∧
+      (Denote.fw_view targetShape smValue).shape = targetShape ∧
+      (Denote.fw_view targetShape pmValue).shape = targetShape := by
+  rcases h with ⟨hValue, _, _⟩
+  rw [hValue]
+  exact ⟨rfl, rfl, rfl⟩
+
+end JoinedRel
+
 structure RelationState where
   facts : List RelationFact
   nonempty : facts ≠ []

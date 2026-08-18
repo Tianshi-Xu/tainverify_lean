@@ -1767,6 +1767,116 @@ def render_closed_mixed_moe_segment(ir: GoalIR, relation, segment_id: str) -> st
     return "\n".join(node_defs + helper + prefix_lines + lines)
 
 
+
+def render_closed_joined_view_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Render one exact SM/PM FW_view pair preserving a joined equality."""
+    chain = relation.dependent_chain_plan
+    if chain is None or not chain.complete:
+        raise ValueError("joined view renderer requires a complete closed chain")
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if segment is None or len(segment.transition_ids) != 1:
+        raise ValueError("joined view renderer requires one atomic transition")
+    transition = {item.transition_id: item for item in relation.transition_specs}[
+        segment.transition_ids[0]
+    ]
+    theorem = "TrainVerify.Denote.RelationCompiler.JoinedRel.fw_view"
+    if (transition.rule_id != "joined-view-unary" or transition.lean_theorem != theorem
+            or len(transition.pre_facts) != 1 or len(transition.post_facts) != 1):
+        raise ValueError("joined view renderer received an unsupported transition")
+    certificates = [
+        item for item in relation.certificates
+        if getattr(item, "rule_id", None) == "joined-view-unary"
+        and int(item.sm_step_id.split(":")[1]) in transition.sm_node_indices
+        and int(item.pm_step_id.split(":")[1]) in transition.pm_node_indices
+    ]
+    if len(certificates) != 1 or certificates[0].lean_theorem != theorem:
+        raise ValueError("joined view renderer lacks one exact authority certificate")
+    certificate = certificates[0]
+    records = {item.source: item for item in chain.relation_facts}
+    pre = records[transition.pre_facts[0]]
+    post = records[transition.post_facts[0]]
+    if pre.kind != "joined" or post.kind != "joined":
+        raise ValueError("joined view renderer requires joined pre/post facts")
+    sm_nodes = ir.sm_nodes[slice(*segment.sm_range)]
+    pm_nodes = ir.pm_nodes[slice(*segment.pm_range)]
+    if len(sm_nodes) != 1 or len(pm_nodes) != 1:
+        raise ValueError("joined view footprint is not exactly one SM and one PM writer")
+    sm, pm = sm_nodes[0], pm_nodes[0]
+    if (transition.sm_node_indices != (segment.sm_range[0],)
+            or transition.pm_node_indices != (segment.pm_range[0],)):
+        raise ValueError("joined view transition does not name the exact writer footprint")
+    if any(node.op != "FW_view" or len(node.ins) != 1 or len(node.outs) != 1
+           for node in (sm, pm)):
+        raise ValueError("joined view writers violate literal FW_view unary arity")
+    if sm.rank != 0 or pm.rank != certificate.pm_rank:
+        raise ValueError("joined view writers disagree with side/rank authority")
+    params = tuple(sm.params or ())
+    if not params or tuple(pm.params or ()) != params or params != certificate.parameters:
+        raise ValueError("joined view literal parameters disagree")
+    if tuple(sm.ins + pm.ins) != (pre.sm_tid, pre.joined_pm_tid):
+        raise ValueError("joined view inputs do not match the joined pre-fact")
+    if tuple(sm.outs + pm.outs) != (post.sm_tid, post.joined_pm_tid):
+        raise ValueError("joined view outputs do not match the joined post-fact")
+    if tuple(pre.full_shape) != certificate.input_shape:
+        raise ValueError("joined view declared input shapes disagree")
+    if tuple(post.full_shape) != certificate.output_shape or tuple(post.full_shape) != params:
+        raise ValueError("joined view declared output shapes disagree with literal parameters")
+    states = {item.state_id: item for item in chain.states}
+    before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    if pre.fact_id not in before.fact_ids or post.fact_id not in after.fact_ids:
+        raise ValueError("joined view input/output fact is not live")
+    if not set(after.fact_ids) <= ({post.fact_id} | set(before.fact_ids)):
+        raise ValueError("joined view post-state introduces an unproved fact")
+
+    sm_text, pm_text = _node_text(sm), _node_text(pm)
+    target_shape = _shape_text(list(params))
+    input_shape = _shape_text(list(pre.full_shape))
+
+    def writer(name: str, graph: str, store: str, final: str, nodes_name: str, node) -> list[str]:
+        node_params = list(node.params)
+        return [
+            f"    have {name} : {final} {node.outs[0]} = fw_view {target_shape} ({store} {node.ins[0]}) := by",
+            f"      simpa [{final}, {nodes_name}] using",
+            f"        (foldl_faithful_unary_middle_writer {graph} {store} [] [] {_node_text(node)}",
+            f"          {node.ins[0]} {node.outs[0]} (fun x => fw_view {target_shape} x) (by",
+            "            intro t",
+            "            rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "              (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]",
+            "            simp [applyNodeDistributed, applyNodeRingAttn]",
+            f"            exact applyNode_fw_view_out {graph} t {node.rank} {node_params[0]} {_shape_text(node_params[1:])} {node.ins[0]} {node.outs[0]})",
+            "          (by decide) (by decide) (by decide) (by decide))",
+        ]
+
+    lines = [
+        f"private def {segment.segment_id} (smGraph pmGraph : GraphDecl) :",
+        f"    ClosedDepSegmentCertificate smGraph pmGraph {before.state_id} {after.state_id} where",
+        f"  smNodes := [{sm_text}]", f"  pmNodes := [{pm_text}]", "  sound := by",
+        "    intro smStore pmStore hstate",
+        f"    let smNodes : List NodeDecl := [{sm_text}]",
+        f"    let pmNodes : List NodeDecl := [{pm_text}]",
+        "    let smFinal := smNodes.foldl (applyNodeDistributedFaithful smGraph) smStore",
+        "    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful pmGraph) pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "      · decide", "      · decide", "      · decide", "      · decide",
+        f"    have hin : {pre.fact_id}.Holds smStore pmStore := hstate _ (by decide)",
+    ]
+    lines += writer("hsm", "smGraph", "smStore", "smFinal", "smNodes", sm)
+    lines += writer("hpm", "pmGraph", "pmStore", "pmFinal", "pmNodes", pm)
+    lines += [
+        f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by",
+        f"      change smFinal {post.sm_tid} = pmFinal {post.joined_pm_tid} ∧",
+        f"        (smFinal {post.sm_tid}).shape = {target_shape} ∧",
+        f"        (pmFinal {post.joined_pm_tid}).shape = {target_shape}",
+        f"      change smStore {pre.sm_tid} = pmStore {pre.joined_pm_tid} ∧",
+        f"        (smStore {pre.sm_tid}).shape = {input_shape} ∧",
+        f"        (pmStore {pre.joined_pm_tid}).shape = {input_shape} at hin",
+        "      rw [hsm, hpm]",
+        f"      exact JoinedRel.fw_view {target_shape} {input_shape} hin",
+        "    exact RelationState.Holds.mono_insert hframe hout (by decide)", "",
+    ]
+    return "\n".join(lines)
+
 def render_closed_rotary_segment(ir: GoalIR, relation, segment_id: str) -> str:
     chain = relation.dependent_chain_plan
     if chain is None or not chain.complete:
@@ -6761,6 +6871,8 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     if family in (("attention-ordinary-qkv-two-rank",),
                    ("attention-zigzag-qkv-two-rank",)):
         return render_closed_attention_segment(ir, relation, segment_id)
+    if family == ("joined-view-unary",):
+        return render_closed_joined_view_segment(ir, relation, segment_id)
     if family in (
         ("float-zigzag-two-rank",),
         ("identity-view-ordinary-two-rank",),

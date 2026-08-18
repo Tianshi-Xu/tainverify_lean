@@ -4076,6 +4076,94 @@ def advance_k_rank_alltoall_relation_frontiers(
     return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
 
 
+@dataclass(frozen=True)
+class JoinedUnaryViewCertificate:
+    rule_id: str
+    input_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    sm_step_id: str
+    pm_step_id: str
+    pm_rank: int
+    parameters: tuple[int, ...]
+    input_shape: tuple[int, ...]
+    output_shape: tuple[int, ...]
+    lean_theorem: str
+
+
+def advance_joined_view_relation_frontiers(
+    plan: ProofPlan,
+    frontiers: tuple[tuple[str, ...], ...],
+    layouts: tuple[str, ...],
+) -> tuple[
+    tuple[JoinedUnaryViewCertificate, ...],
+    tuple[tuple[str, ...], ...],
+    tuple[str, ...],
+]:
+    """Pull joined equality through two literal, authority-bound FW_view writers."""
+
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("joined view frontier/layout arity mismatch")
+    by_id = {step.step_id: step for step in plan.steps}
+    certificates = []
+    rewritten = []
+    rewritten_layouts = []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "joined" or len(frontier) != 2:
+            rewritten.append(frontier)
+            rewritten_layouts.append(layout)
+            continue
+        try:
+            sm_step, pm_step = (by_id[ref] for ref in frontier)
+        except KeyError:
+            rewritten.append(frontier)
+            rewritten_layouts.append(layout)
+            continue
+        if (sm_step.op, pm_step.op) != ("FW_view", "FW_view"):
+            rewritten.append(frontier)
+            rewritten_layouts.append(layout)
+            continue
+        if sm_step.side != "sm" or pm_step.side != "pm" or int(sm_step.rank) != 0:
+            raise RelationCompositionError("joined view writers have incompatible side/rank authority")
+        if len(sm_step.input_bindings) != 1 or len(pm_step.input_bindings) != 1:
+            raise RelationCompositionError("joined view writers violate unary arity")
+        sm_input, pm_input = sm_step.input_bindings[0], pm_step.input_bindings[0]
+        if not sm_input.startswith("sm:") or not pm_input.startswith("pm:"):
+            raise RelationCompositionError("joined view inputs have incompatible side authority")
+        sm_params = tuple(sm_step.parameters)
+        pm_params = tuple(pm_step.parameters)
+        if not sm_params or sm_params != pm_params:
+            raise RelationCompositionError("joined view literal parameters disagree")
+        if len(sm_step.input_shapes) != 1 or len(pm_step.input_shapes) != 1:
+            raise RelationCompositionError("joined view declared input shapes are missing")
+        sm_input_shape = tuple(sm_step.input_shapes[0])
+        pm_input_shape = tuple(pm_step.input_shapes[0])
+        if sm_input_shape != pm_input_shape:
+            raise RelationCompositionError("joined view declared input shapes disagree")
+        sm_output_shape = tuple(sm_step.output_shape)
+        pm_output_shape = tuple(pm_step.output_shape)
+        if sm_output_shape != pm_output_shape or sm_output_shape != sm_params:
+            raise RelationCompositionError("joined view declared output shapes disagree with literal parameters")
+        input_fact = RelationFactSpec("joined", (sm_input,), joined_pm_step=pm_input)
+        output_fact = RelationFactSpec(
+            "joined", (sm_step.step_id,), joined_pm_step=pm_step.step_id
+        )
+        certificates.append(JoinedUnaryViewCertificate(
+            rule_id="joined-view-unary",
+            input_fact=input_fact,
+            output_fact=output_fact,
+            sm_step_id=sm_step.step_id,
+            pm_step_id=pm_step.step_id,
+            pm_rank=int(pm_step.rank),
+            parameters=sm_params,
+            input_shape=sm_input_shape,
+            output_shape=sm_output_shape,
+            lean_theorem="TrainVerify.Denote.RelationCompiler.JoinedRel.fw_view",
+        ))
+        rewritten.append((sm_input, pm_input))
+        rewritten_layouts.append("joined")
+    return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
+
+
 def deduplicate_relation_frontiers(
     frontiers: tuple[tuple[str, str, str], ...],
     layouts: tuple[str, ...],
@@ -4095,13 +4183,58 @@ def deduplicate_relation_frontiers(
     return tuple(unique_frontiers), tuple(unique_layouts)
 
 
+def _certificate_identity(item: object) -> tuple[object, ...]:
+    """Return an exact, hashable identity including fact/step authority.
+
+    Certificate classes may intentionally define coarse semantic equality.  That
+    is not sufficient for proof planning: two applications of the same theorem
+    at different graph writers are distinct certificates.  Conversely, an exact
+    replay of the same certificate in a later fixed-point round remains a
+    legitimate duplicate.
+    """
+
+    from dataclasses import fields, is_dataclass
+
+    def freeze(value):
+        if is_dataclass(value) and not isinstance(value, type):
+            return (
+                type(value),
+                tuple((field.name, freeze(getattr(value, field.name)))
+                      for field in fields(value)),
+            )
+        if isinstance(value, dict):
+            return tuple(sorted((freeze(key), freeze(item)) for key, item in value.items()))
+        if isinstance(value, (list, tuple)):
+            return tuple(freeze(item) for item in value)
+        if isinstance(value, (set, frozenset)):
+            return tuple(sorted((freeze(item) for item in value), key=repr))
+        try:
+            hash(value)
+        except TypeError:
+            return repr(value)
+        return value
+
+    if is_dataclass(item) and not isinstance(item, type):
+        payload = tuple(
+            (field.name, freeze(getattr(item, field.name))) for field in fields(item)
+        )
+    elif hasattr(item, "__dict__"):
+        payload = tuple(
+            sorted((name, freeze(value)) for name, value in vars(item).items())
+        )
+    else:
+        payload = (("value", freeze(item)),)
+    return (type(item), payload)
+
+
 def _extend_unique_certificates(sink: list[object] | None, items: tuple[object, ...]) -> None:
     if sink is None:
         return
-    seen = set(sink)
+    seen = {_certificate_identity(item) for item in sink}
     for item in items:
-        if item not in seen:
-            seen.add(item)
+        identity = _certificate_identity(item)
+        if identity not in seen:
+            seen.add(identity)
             sink.append(item)
 
 
@@ -4110,14 +4243,14 @@ def normalize_relation_frontiers(
     frontiers: tuple[tuple[str, ...], ...],
     layouts: tuple[str, ...],
     *,
-    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "sum_producer_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
+    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "sum_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
     goal_ir: GoalIR | None = None,
     deduplicate_each_round: bool = False,
     certificate_sink: list[object] | None = None,
     side_condition_sink: list[RelationSideCondition] | None = None,
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
-    known = {"allreduce_reconstruction_k", "sum_producer_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
+    known = {"allreduce_reconstruction_k", "sum_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
     unknown = set(rules) - known
     if unknown:
         raise RelationCompositionError(f"unknown relation normalization rules: {sorted(unknown)}")
@@ -4139,6 +4272,13 @@ def normalize_relation_frontiers(
         if "sum_producer_k" in rules:
             _certs, current_frontiers, current_layouts = (
                 advance_k_rank_sum_producer_frontiers(
+                    plan, current_frontiers, current_layouts
+                )
+            )
+            _extend_unique_certificates(certificate_sink, _certs)
+        if "joined_view" in rules:
+            _certs, current_frontiers, current_layouts = (
+                advance_joined_view_relation_frontiers(
                     plan, current_frontiers, current_layouts
                 )
             )
@@ -5521,6 +5661,10 @@ def build_certificate_transition_specs(
             pre = (cert.input_fact,)
             post = (cert.output_fact,)
             footprint_groups = ((cert.pm_allgather_step,),)
+        elif type(cert) is JoinedUnaryViewCertificate:
+            pre = (cert.input_fact,)
+            post = (cert.output_fact,)
+            footprint_groups = ((cert.sm_step_id,), (cert.pm_step_id,))
         elif type(cert) is KRankFullProducerChunksCertificate:
             pre = (cert.input_fact,)
             post = (cert.output_fact,)
@@ -6200,7 +6344,7 @@ def compile_relation_plan(
                 proof,
                 frontiers,
                 layouts,
-                rules=("allreduce_reconstruction_k", "sum_producer_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k"),
+                rules=("allreduce_reconstruction_k", "sum_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k"),
                 goal_ir=ir,
                 certificate_sink=compiled_certificates,
                 deduplicate_each_round=True,
