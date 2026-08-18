@@ -5676,7 +5676,9 @@ def compile_relation_plan(
     dependency_plan = build_transition_dependency_plan(
         transition_specs, external_pre_facts=external_pre_facts
     )
-    atomic_schedule = build_atomic_schedule(ir, transition_specs)
+    atomic_schedule = build_atomic_schedule(
+        ir, transition_specs, external_pre_facts=external_pre_facts
+    )
     base_plan = RelationPlan(
         family="ce-projection-gather",
         terminal_rule_id=terminal_ce.rule_id,
