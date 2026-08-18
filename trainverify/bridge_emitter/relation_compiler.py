@@ -3228,6 +3228,164 @@ def advance_k_rank_vocab_sharded_embedding_producer(
 
 
 @dataclass(frozen=True)
+class KRankReductionLinearProducerCertificate:
+    rule_id: str
+    rank_count: int
+    activation_chunk_dim: int
+    weight_gather_dim: int
+    activation_full_shape: tuple[int, ...]
+    activation_shard_shape: tuple[int, ...]
+    weight_full_shape: tuple[int, ...]
+    weight_shard_shape: tuple[int, ...]
+    output_shape: tuple[int, ...]
+    activation_fact: RelationFactSpec
+    weight_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    sm_linear_step: str
+    pm_linear_steps: tuple[str, ...]
+    lean_theorem: str
+
+
+def advance_k_rank_reduction_linear_producer_frontiers(
+    plan: ProofPlan,
+    ir: GoalIR,
+    frontiers: tuple[tuple[str, ...], ...],
+    layouts: tuple[str, ...],
+) -> tuple[
+    tuple[KRankReductionLinearProducerCertificate, ...],
+    tuple[tuple[str, ...], ...],
+    tuple[str, ...],
+]:
+    """Decompose row-parallel FW_linear reductions from exact chunks and InitGoal weights."""
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("K-rank reduction-linear frontier/layout arity mismatch")
+    by_id = {step.step_id: step for step in plan.steps}
+    certificates: list[KRankReductionLinearProducerCertificate] = []
+    rewritten: list[tuple[str, ...]] = []
+    rewritten_layouts: list[str] = []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "reduction" or len(frontier) < 2:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        sm_linear = by_id.get(frontier[0])
+        pm_linears = tuple(by_id.get(ref) for ref in frontier[1:])
+        if sm_linear is None or any(step is None for step in pm_linears):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        if sm_linear.side != "sm" or sm_linear.op != "FW_linear" or any(
+            step.side != "pm" or step.op != "FW_linear" for step in pm_linears
+        ):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        rank_count = len(pm_linears)
+        if int(sm_linear.rank) != 0 or tuple(int(step.rank) for step in pm_linears) != tuple(range(rank_count)):
+            raise RelationCompositionError("K-rank reduction-linear writers are not exact ordered ranks")
+        if tuple(getattr(sm_linear, "parameters", ())) != () or any(
+            tuple(getattr(step, "parameters", ())) != () for step in pm_linears
+        ):
+            raise RelationCompositionError("K-rank reduction-linear writers must declare no parameters")
+        if len(sm_linear.input_bindings) != 2 or any(len(step.input_bindings) != 2 for step in pm_linears):
+            raise RelationCompositionError("K-rank reduction-linear input arity mismatch")
+
+        sm_activation = by_id.get(sm_linear.input_bindings[0])
+        chunks = tuple(by_id.get(step.input_bindings[0]) for step in pm_linears)
+        if sm_activation is None or any(chunk is None for chunk in chunks):
+            raise RelationCompositionError("K-rank reduction-linear activation lineage is unresolved")
+        if sm_activation.side != "sm" or any(chunk.side != "pm" for chunk in chunks):
+            raise RelationCompositionError("K-rank reduction-linear activation inputs have incompatible side authority")
+        if tuple(int(chunk.rank) for chunk in chunks) != tuple(range(rank_count)):
+            raise RelationCompositionError("K-rank reduction-linear activation inputs are not ordered ranks")
+
+        activation_full_shape = tuple(sm_activation.output_shape)
+        if len(activation_full_shape) not in (2, 3):
+            raise RelationCompositionError("K-rank reduction-linear supports exact rank-2/rank-3 activations")
+        activation_chunk_dim = len(activation_full_shape) - 1
+        if any(
+            chunk.op == "ChunkPrim"
+            and tuple(getattr(chunk, "parameters", ())) != (activation_chunk_dim,)
+            for chunk in chunks
+        ):
+            raise RelationCompositionError("K-rank reduction-linear activation chunk dimension/orientation mismatch")
+        activation_shard_shapes = tuple(tuple(chunk.output_shape) for chunk in chunks)
+        if not activation_shard_shapes or any(shape != activation_shard_shapes[0] for shape in activation_shard_shapes[1:]):
+            raise RelationCompositionError("K-rank reduction-linear activation shard shapes disagree")
+        activation_shard_shape = activation_shard_shapes[0]
+        reconstructed_activation = list(activation_shard_shape)
+        if activation_chunk_dim >= len(reconstructed_activation):
+            raise RelationCompositionError("K-rank reduction-linear activation chunk dimension is invalid")
+        reconstructed_activation[activation_chunk_dim] *= rank_count
+        if tuple(reconstructed_activation) != activation_full_shape:
+            raise RelationCompositionError("K-rank reduction-linear activation chunks do not reconstruct full shape")
+        sm_weight_ref = sm_linear.input_bindings[1]
+        pm_weight_refs = tuple(step.input_bindings[1] for step in pm_linears)
+        if not sm_weight_ref.startswith("init:") or any(not ref.startswith("init:") for ref in pm_weight_refs):
+            raise RelationCompositionError("K-rank reduction-linear weights lack InitGoal lineage")
+        try:
+            sm_weight_tid = int(sm_weight_ref.split(":", 1)[1])
+        except ValueError as exc:
+            raise RelationCompositionError("K-rank reduction-linear SM weight TID is invalid") from exc
+        lineage = ir.init_lineages.get(sm_weight_tid)
+        if lineage is None:
+            raise RelationCompositionError("K-rank reduction-linear weight InitGoal is missing")
+        weight_fact = init_lineage_relation_fact(lineage)
+        if weight_fact.layout != "sharded" or weight_fact.step_triple != (sm_weight_ref, *pm_weight_refs):
+            raise RelationCompositionError("K-rank reduction-linear weight lineage/order mismatch")
+        weight_gather_dim = weight_fact.gather_dim
+        if weight_gather_dim != 1:
+            raise RelationCompositionError("K-rank reduction-linear weight gather orientation must be dimension 1")
+        weight_full_shape = tuple(int(value) for value in lineage.tsShape)
+        weight_shard_shapes = tuple(tuple(int(value) for value in shape) for shape in lineage.tpShapes)
+        if len(weight_full_shape) != 2 or not weight_shard_shapes or any(
+            shape != weight_shard_shapes[0] for shape in weight_shard_shapes[1:]
+        ):
+            raise RelationCompositionError("K-rank reduction-linear weight shapes are not uniform matrices")
+        weight_shard_shape = weight_shard_shapes[0]
+
+        declared_sm = tuple(tuple(shape) for shape in sm_linear.input_shapes)
+        declared_pm = tuple(tuple(tuple(shape) for shape in step.input_shapes) for step in pm_linears)
+        if declared_sm != (activation_full_shape, weight_full_shape):
+            raise RelationCompositionError("K-rank reduction-linear SM declared inputs disagree with lineage")
+        if declared_pm != tuple((activation_shard_shape, weight_shard_shape) for _ in pm_linears):
+            raise RelationCompositionError("K-rank reduction-linear PM declared inputs disagree with lineage")
+        inner = activation_full_shape[-1]
+        shard = activation_shard_shape[-1]
+        if weight_full_shape[1] != inner or weight_shard_shape != (weight_full_shape[0], shard):
+            raise RelationCompositionError("K-rank reduction-linear activation/weight contraction orientation mismatch")
+        output_shape = tuple(sm_linear.output_shape)
+        expected_output = (*activation_full_shape[:-1], weight_full_shape[0])
+        if output_shape != expected_output or any(tuple(step.output_shape) != output_shape for step in pm_linears):
+            raise RelationCompositionError("K-rank reduction-linear outputs do not have one exact full shape")
+        if rank_count <= 0 or shard <= 0 or any(extent <= 0 for extent in activation_full_shape[:-1]) or weight_full_shape[0] <= 0:
+            raise RelationCompositionError("K-rank reduction-linear theorem positivity contract fails")
+
+        activation_fact = RelationFactSpec(
+            "sharded", (sm_activation.step_id, *(chunk.step_id for chunk in chunks)),
+            gather_dim=activation_chunk_dim,
+        )
+        output_fact = RelationFactSpec("reduction", tuple(frontier))
+        theorem = "TrainVerify.Denote.fw_linear_allGather_eq_allReduce_fw_linear_chunk"
+        if len(activation_full_shape) == 3:
+            theorem += "_3d"
+        certificates.append(KRankReductionLinearProducerCertificate(
+            rule_id="linear-reduction-producer-k-rank",
+            rank_count=rank_count,
+            activation_chunk_dim=activation_chunk_dim,
+            weight_gather_dim=weight_gather_dim,
+            activation_full_shape=activation_full_shape,
+            activation_shard_shape=activation_shard_shape,
+            weight_full_shape=weight_full_shape,
+            weight_shard_shape=weight_shard_shape,
+            output_shape=output_shape,
+            activation_fact=activation_fact,
+            weight_fact=weight_fact,
+            output_fact=output_fact,
+            sm_linear_step=sm_linear.step_id,
+            pm_linear_steps=tuple(step.step_id for step in pm_linears),
+            lean_theorem=theorem,
+        ))
+        rewritten.extend((activation_fact.step_triple, weight_fact.step_triple))
+        rewritten_layouts.extend(("sharded", "sharded"))
+    return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
+
+
+@dataclass(frozen=True)
 class KRankHiddenShardedEmbeddingCertificate:
     rule_id: str
     rank_count: int
@@ -4363,14 +4521,14 @@ def normalize_relation_frontiers(
     frontiers: tuple[tuple[str, ...], ...],
     layouts: tuple[str, ...],
     *,
-    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
+    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
     goal_ir: GoalIR | None = None,
     deduplicate_each_round: bool = False,
     certificate_sink: list[object] | None = None,
     side_condition_sink: list[RelationSideCondition] | None = None,
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
-    known = {"allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
+    known = {"allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
     unknown = set(rules) - known
     if unknown:
         raise RelationCompositionError(f"unknown relation normalization rules: {sorted(unknown)}")
@@ -4402,6 +4560,15 @@ def normalize_relation_frontiers(
             _certs, current_frontiers, current_layouts = (
                 advance_k_rank_sum_producer_frontiers(
                     plan, current_frontiers, current_layouts
+                )
+            )
+            _extend_unique_certificates(certificate_sink, _certs)
+        if "reduction_linear_producer_k" in rules:
+            if goal_ir is None:
+                raise RelationCompositionError("reduction_linear_producer_k requires GoalIR authority")
+            _certs, current_frontiers, current_layouts = (
+                advance_k_rank_reduction_linear_producer_frontiers(
+                    plan, goal_ir, current_frontiers, current_layouts
                 )
             )
             _extend_unique_certificates(certificate_sink, _certs)
@@ -5785,6 +5952,10 @@ def build_certificate_transition_specs(
             pre = (cert.input_fact,)
             post = (cert.output_fact,)
             footprint_groups = ((cert.sm_sum_step,), cert.pm_sum_steps)
+        elif type(cert) is KRankReductionLinearProducerCertificate:
+            pre = (cert.activation_fact, cert.weight_fact)
+            post = (cert.output_fact,)
+            footprint_groups = ((cert.sm_linear_step,), cert.pm_linear_steps)
         elif type(cert) is KRankHiddenShardedEmbeddingCertificate:
             pre = (cert.weight_fact,)
             post = (cert.output_fact,)
@@ -6485,7 +6656,7 @@ def compile_relation_plan(
                 proof,
                 frontiers,
                 layouts,
-                rules=("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k"),
+                rules=("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k"),
                 goal_ir=ir,
                 certificate_sink=compiled_certificates,
                 deduplicate_each_round=True,

@@ -1,5 +1,6 @@
 /- Generic relation-composition lemmas used by generated proof certificates. -/
 import denote.KRankLinearGather
+import denote.KRankLinearReduction
 import denote.KRankInitValue
 import denote.KRankAddGather
 import denote.KRankLayernormGather
