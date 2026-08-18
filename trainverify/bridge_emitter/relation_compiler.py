@@ -3141,7 +3141,7 @@ def advance_k_rank_full_producer_chunks(
         if tuple(reconstructed) != full_shape:
             raise RelationCompositionError("K-rank chunk reconstruction shape contract fails")
         input_fact = RelationFactSpec(
-            "joined", (sm_step.step_id, producer.step_id)
+            "joined", (sm_step.step_id,), joined_pm_step=producer.step_id
         )
         output_fact = RelationFactSpec("sharded", frontier, gather_dim=chunk_dim)
         certificates.append(KRankFullProducerChunksCertificate(
@@ -5178,9 +5178,10 @@ def build_certificate_transition_specs(
         elif type(cert) is KRankFullProducerChunksCertificate:
             pre = (cert.input_fact,)
             post = (cert.output_fact,)
-            footprint_groups = (
-                (cert.sm_step_id,), (cert.pm_producer_step,), cert.pm_chunk_steps,
-            )
+            # The joined pre-fact is produced by the preceding semantic writer
+            # transition.  This reconstruction transition owns only the K chunks;
+            # replaying either full producer would invalidate that closed authority.
+            footprint_groups = (cert.pm_chunk_steps,)
         elif type(cert) is KRankOutputShardedLinearCertificate:
             pre = (cert.activation_fact, cert.weight_fact)
             post = (cert.output_fact,)

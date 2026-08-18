@@ -3400,7 +3400,9 @@ def test_k_rank_full_producer_chunks_reconstruct_arbitrary_ordered_k():
     cert = certs[0]
     assert cert.rank_count == 4
     assert cert.chunk_dim == 1
-    assert cert.input_fact == RelationFactSpec("joined", (sm.step_id, producer.step_id))
+    assert cert.input_fact == RelationFactSpec(
+        "joined", (sm.step_id,), joined_pm_step=producer.step_id
+    )
     assert cert.output_fact == RelationFactSpec("sharded", frontier, gather_dim=1)
     assert cert.pm_chunk_steps == tuple(step.step_id for step in chunks)
     assert cert.lean_theorem.endswith("allGatherPrimDimN_chunks_ofFn")
@@ -3411,8 +3413,9 @@ def test_k_rank_full_producer_chunks_reconstruct_arbitrary_ordered_k():
     )[0]
     assert transition.pre_facts == (cert.input_fact,)
     assert transition.post_facts == (cert.output_fact,)
-    assert transition.sm_node_indices == (1,)
-    assert transition.pm_node_indices == (0, 1, 2, 3, 4)
+    # The joined pre-fact owns the producer equality; this transition owns only chunks.
+    assert transition.sm_node_indices == ()
+    assert transition.pm_node_indices == (1, 2, 3, 4)
     sink = []
     normalized, normalized_layouts = normalize_relation_frontiers(
         SimpleNamespace(steps=(sm, producer, *chunks)), (frontier,), ("sharded",),
@@ -3812,6 +3815,146 @@ def test_k_rank_alltoall_frontier_transports_gather_dimension():
     assert normalized == ((sm_ref, *input_refs),)
     assert normalized_layouts == ("sharded",)
     assert sink == list(certificates)
+
+
+def _synthetic_k_rank_segment_relation(*, family: str, rank_count: int = 4):
+    assert rank_count > 0
+    anchor = relation_compiler_module.ClosedTensorShapeFactRecord(
+        fact_id="anchor", side="sm", tid=999, shape=(1,), init_goal_id=999,
+    )
+    if family == "chunks":
+        pre_spec = RelationFactSpec("joined", ("sm:0:0",), joined_pm_step="pm:0:0")
+        post_spec = RelationFactSpec(
+            "sharded", ("sm:0:0", *(f"pm:{rank + 1}:0" for rank in range(rank_count))),
+            gather_dim=1,
+        )
+        pre = relation_compiler_module.ClosedRelationFactRecord(
+            "fact_pre", pre_spec, "joined", 10, (), None, None,
+            (2, 2 * rank_count), (2, 2 * rank_count), joined_pm_tid=20,
+        )
+        post = relation_compiler_module.ClosedRelationFactRecord(
+            "fact_post", post_spec, "sharded", 10,
+            tuple(30 + rank for rank in range(rank_count)), None, None,
+            (2, 2 * rank_count), (2, 2), gather_dim=1,
+        )
+        certificate = relation_compiler_module.KRankFullProducerChunksCertificate(
+            rule_id="full-producer-chunks-k-rank", rank_count=rank_count, chunk_dim=1,
+            input_fact=pre_spec, output_fact=post_spec, sm_step_id="sm:0:0",
+            pm_producer_step="pm:0:0",
+            pm_chunk_steps=tuple(f"pm:{rank + 1}:0" for rank in range(rank_count)),
+            lean_theorem="TrainVerify.Denote.allGatherPrimDimN_chunks_ofFn",
+        )
+        transition = relation_compiler_module.CertificateTransitionSpec(
+            "transition", certificate.rule_id, (pre_spec,), (post_spec,), (),
+            tuple(range(1, rank_count + 1)), certificate.lean_theorem,
+        )
+        sm_nodes = [Node(0, "FW_identity", [1], [10], [])]
+        pm_nodes = [
+            Node(0, "FW_identity", [2], [20], []),
+            *(Node(rank, "ChunkPrim", [20], [30 + rank], [1])
+              for rank in range(rank_count)),
+        ]
+        sm_range, pm_range = (1, 1), (1, rank_count + 1)
+    elif family == "alltoall":
+        pre_spec = RelationFactSpec(
+            "sharded", ("sm:0:0", *(f"init:{20 + rank}" for rank in range(rank_count))),
+            gather_dim=0,
+        )
+        post_spec = RelationFactSpec(
+            "sharded", ("sm:0:0", *(f"pm:{rank}:0" for rank in range(rank_count))),
+            gather_dim=1,
+        )
+        pre = relation_compiler_module.ClosedRelationFactRecord(
+            "fact_pre", pre_spec, "sharded", 10,
+            tuple(20 + rank for rank in range(rank_count)), None, None,
+            (2 * rank_count, rank_count), (2, rank_count), gather_dim=0,
+        )
+        post = relation_compiler_module.ClosedRelationFactRecord(
+            "fact_post", post_spec, "sharded", 10,
+            tuple(30 + rank for rank in range(rank_count)), None, None,
+            (2 * rank_count, rank_count), (2 * rank_count, 1), gather_dim=1,
+        )
+        certificate = relation_compiler_module.KRankAllToAllRelationCertificate(
+            rule_id="alltoall-k-rank-layout-transport", rank_count=rank_count,
+            input_gather_dim=0, output_gather_dim=1,
+            input_fact=pre_spec, output_fact=post_spec,
+            pm_step_ids=tuple(f"pm:{rank}:0" for rank in range(rank_count)),
+            lean_theorem="TrainVerify.Denote.allGatherPrimDimN_allToAllPrimWithDims_ofFn",
+        )
+        transition = relation_compiler_module.CertificateTransitionSpec(
+            "transition", certificate.rule_id, (pre_spec,), (post_spec,), (),
+            tuple(range(rank_count)), certificate.lean_theorem,
+        )
+        inputs = [20 + rank for rank in range(rank_count)]
+        sm_nodes = []
+        pm_nodes = [Node(rank, "AllToAllPrim", inputs, [30 + rank], [0, 1])
+                    for rank in range(rank_count)]
+        sm_range, pm_range = (0, 0), (0, rank_count)
+    else:
+        raise AssertionError(family)
+    states = (
+        relation_compiler_module.ClosedRelationStateRecord("state_pre", ("anchor", "fact_pre")),
+        relation_compiler_module.ClosedRelationStateRecord("state_post", ("anchor", "fact_post")),
+    )
+    segment = relation_compiler_module.ClosedDependentSegmentRecord(
+        "segment_000000", "component", "state_pre", "state_post", ("transition",),
+        sm_range, pm_range,
+    )
+    chain = SimpleNamespace(
+        complete=True, relation_facts=(pre, post), authority_facts=(), anchor_fact=anchor,
+        states=states, segments=(segment,),
+    )
+    relation = SimpleNamespace(
+        dependent_chain_plan=chain, transition_specs=(transition,),
+        certificates=(certificate,),
+    )
+    ir = SimpleNamespace(
+        sm_nodes=sm_nodes, pm_nodes=pm_nodes,
+        sm_graph_ref="SyntheticKRank.smGraph", pm_graph_ref="SyntheticKRank.pmGraph",
+    )
+    return ir, relation
+
+
+def test_closed_k_rank_full_producer_chunks_segment_is_generic_and_exact():
+    ir, relation = _synthetic_k_rank_segment_relation(family="chunks")
+    source = render_closed_segment(ir, relation, "segment_000000")
+    assert "allGatherPrimDimN_chunks_ofFn" in source
+    assert "let rankCount := pmTids.length" in source
+    assert "pmTids : List Tid := [30, 31, 32, 33]" in source
+    assert source.count('op := "OpName.ChunkPrim"') >= 8
+    assert "FW_identity" not in source
+    assert "rankCount = 4" not in source
+
+
+def test_closed_k_rank_alltoall_segment_is_generic_and_exact():
+    ir, relation = _synthetic_k_rank_segment_relation(family="alltoall")
+    source = render_closed_segment(ir, relation, "segment_000000")
+    assert "allGatherPrimDimN_allToAllPrimWithDims_ofFn" in source
+    assert "let rankCount := pmTids.length" in source
+    assert "pmTids : List Tid := [30, 31, 32, 33]" in source
+    assert source.count('op := "OpName.AllToAllPrim"') >= 8
+    assert "rankCount = 4" not in source
+
+
+def test_closed_k_rank_segment_rejects_wrong_writer_footprint_and_embedding_exactly():
+    ir, relation = _synthetic_k_rank_segment_relation(family="chunks")
+    bad_transition = replace(relation.transition_specs[0], pm_node_indices=(0, 1, 2, 3, 4))
+    bad = SimpleNamespace(**{**relation.__dict__, "transition_specs": (bad_transition,)})
+    with pytest.raises(ValueError, match="exactly the ordered ChunkPrim writers"):
+        render_closed_segment(ir, bad, "segment_000000")
+
+    embedding = replace(
+        relation.transition_specs[0],
+        rule_id="embedding-hidden-sharded-k-rank",
+        lean_theorem="TrainVerify.Denote.fw_embedding_hidden_shards_k_rank",
+    )
+    unsupported = SimpleNamespace(**{**relation.__dict__, "transition_specs": (embedding,)})
+    with pytest.raises(
+        ValueError,
+        match=("K-rank hidden-sharded embedding remains unsupported: checked semantic "
+               "declaration TrainVerify.Denote.fw_embedding_hidden_shards_k_rank does not exist"),
+    ):
+        render_closed_segment(ir, unsupported, "segment_000000")
 
 
 def test_relation_plan_schema_versions_list_indexed_k_rank_facts():

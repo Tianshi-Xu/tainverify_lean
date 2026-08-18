@@ -5897,6 +5897,310 @@ def render_closed_k_rank_local_segment(ir: GoalIR, relation, segment_id: str) ->
     ]
     return "\n".join(lines)
 
+def _k_rank_segment_context(ir, relation, segment_id: str, rule_id: str,
+                            theorem: str, certificate_type):
+    chain = relation.dependent_chain_plan
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if segment is None or len(segment.transition_ids) != 1:
+        raise ValueError(f"{rule_id} requires one atomic transition")
+    transition = {item.transition_id: item for item in relation.transition_specs}[
+        segment.transition_ids[0]
+    ]
+    if transition.rule_id != rule_id or transition.lean_theorem != theorem:
+        raise ValueError(f"{rule_id} theorem identity mismatch: {transition.lean_theorem}")
+    certificates = [item for item in relation.certificates if type(item) is certificate_type]
+    certificates = [item for item in certificates if item.rule_id == rule_id]
+    if len(certificates) != 1:
+        raise ValueError(f"{rule_id} requires one exact typed certificate")
+    certificate = certificates[0]
+    if certificate.lean_theorem != theorem:
+        raise ValueError(f"{rule_id} certificate theorem identity mismatch")
+    records = {item.source: item for item in chain.relation_facts}
+    if len(transition.pre_facts) != 1 or len(transition.post_facts) != 1:
+        raise ValueError(f"{rule_id} requires one pre/post fact")
+    try:
+        pre = records[transition.pre_facts[0]]
+        post = records[transition.post_facts[0]]
+    except KeyError as exc:
+        raise ValueError(f"{rule_id} relation fact is not materialized") from exc
+    states = {item.state_id: item for item in chain.states}
+    before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    if pre.fact_id not in before.fact_ids or post.fact_id not in after.fact_ids:
+        raise ValueError(f"{rule_id} pre/post fact is not live")
+    if not set(after.fact_ids) <= ({post.fact_id} | set(before.fact_ids)):
+        raise ValueError(f"{rule_id} post-state introduces an unproved fact")
+    return segment, transition, certificate, pre, post, before, after
+
+
+def _membership_cases(names: list[str], indent: str = "      ") -> list[str]:
+    """Render an ordered literal-list membership elimination without fixed K."""
+    if not names:
+        raise ValueError("K-rank writer list must be nonempty")
+    pattern = " | ".join(f"h{index}" for index in range(len(names)))
+    lines = [f"{indent}rcases hmem with {pattern}"]
+    for index, name in enumerate(names):
+        lines += [f"{indent}· subst shard", f"{indent}  exact {name}"]
+    return lines
+
+
+def render_closed_k_rank_full_producer_chunks_segment(
+    ir: GoalIR, relation, segment_id: str
+) -> str:
+    try:
+        from .relation_compiler import KRankFullProducerChunksCertificate
+    except ImportError:
+        from relation_compiler import KRankFullProducerChunksCertificate
+    theorem = "TrainVerify.Denote.allGatherPrimDimN_chunks_ofFn"
+    (segment, transition, certificate, pre, post, before, after) = _k_rank_segment_context(
+        ir, relation, segment_id, "full-producer-chunks-k-rank", theorem,
+        KRankFullProducerChunksCertificate,
+    )
+    if pre.kind != "joined" or post.kind != "sharded" or pre.joined_pm_tid is None:
+        raise ValueError("K-rank chunks require joined input and sharded output")
+    if certificate.input_fact != transition.pre_facts[0] or certificate.output_fact != transition.post_facts[0]:
+        raise ValueError("K-rank chunk certificate facts disagree with transition")
+    k = len(post.pm_tids)
+    dim = post.gather_dim
+    if k <= 0 or certificate.rank_count != k or dim != certificate.chunk_dim:
+        raise ValueError("K-rank chunk count/dimension disagrees with closed fact")
+    if pre.sm_tid != post.sm_tid or pre.full_shape != post.full_shape:
+        raise ValueError("K-rank chunks do not preserve the joined full tensor")
+    if dim is None or dim < 0 or dim >= len(pre.full_shape):
+        raise ValueError("K-rank chunk dimension is invalid")
+    expected = list(post.shard_shape)
+    expected[dim] *= k
+    if tuple(expected) != pre.full_shape or pre.full_shape[dim] % k != 0:
+        raise ValueError("K-rank chunk shape/divisibility contract fails")
+    sm_nodes = ir.sm_nodes[slice(*segment.sm_range)]
+    pm_nodes = ir.pm_nodes[slice(*segment.pm_range)]
+    exact_indices = tuple(range(*segment.pm_range))
+    if (sm_nodes or transition.sm_node_indices or transition.pm_node_indices != exact_indices
+            or len(pm_nodes) != k):
+        raise ValueError("K-rank chunk segment must own exactly the ordered ChunkPrim writers")
+    if tuple(certificate.pm_chunk_steps) != tuple(f"pm:{index}:0" for index in exact_indices):
+        raise ValueError("K-rank chunk certificate footprint is not the exact ordered writer slice")
+    if certificate.input_fact.step_triple != (certificate.sm_step_id,) or (
+        certificate.input_fact.joined_pm_step != certificate.pm_producer_step
+    ):
+        raise ValueError("K-rank chunk joined authority does not name both producers")
+    producer_tid = pre.joined_pm_tid
+    if tuple(node.rank for node in pm_nodes) != tuple(range(k)) or any(
+        node.op != "ChunkPrim" or node.ins != [producer_tid]
+        or len(node.outs) != 1 or node.params != [dim]
+        for node in pm_nodes
+    ):
+        raise ValueError("K-rank chunk writers do not preserve ordered rank/input/dimension authority")
+    if tuple(node.outs[0] for node in pm_nodes) != post.pm_tids:
+        raise ValueError("K-rank chunk writer outputs do not exactly cover the post fact")
+
+    pm_text = "[" + ", ".join(_node_text(node) for node in pm_nodes) + "]"
+    tids_text = "[" + ", ".join(str(tid) for tid in post.pm_tids) + "]"
+    full_shape = _shape_text(list(post.full_shape))
+    shard_shape = _shape_text(list(post.shard_shape))
+    lines = [
+        f"private def {segment.segment_id} :",
+        f"    ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
+        "  smNodes := []", f"  pmNodes := {pm_text}", "  sound := by",
+        "    intro smStore pmStore hstate", "    let smNodes : List NodeDecl := []",
+        f"    let pmNodes : List NodeDecl := {pm_text}",
+        f"    let pmTids : List Tid := {tids_text}",
+        "    let rankCount := pmTids.length",
+        f"    have hRankCount : rankCount = {ir.pm_graph_ref}.numRanks := by native_decide",
+        f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore",
+        f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
+        f"    have hin : {pre.fact_id}.Holds smStore pmStore := hstate {pre.fact_id} (by native_decide)",
+        f"    change smStore {pre.sm_tid} = pmStore {producer_tid} ∧",
+        f"      (smStore {pre.sm_tid}).shape = {full_shape} ∧",
+        f"      (pmStore {producer_tid}).shape = {full_shape} at hin",
+    ]
+    output_names = []
+    shape_names = []
+    for rank, node in enumerate(pm_nodes):
+        before_nodes = "(pmNodes.take " + str(rank) + ")"
+        after_nodes = "(pmNodes.drop " + str(rank + 1) + ")"
+        out_name = f"hChunk{rank}"
+        shape_name = f"hChunkShape{rank}"
+        output_names.append(out_name)
+        shape_names.append(shape_name)
+        lines += [
+            f"    have {out_name} : pmFinal {node.outs[0]} =",
+            f"        chunkPrimDimN {dim} rankCount {rank} (pmStore {producer_tid}) := by",
+            "      calc",
+            f"        pmFinal {node.outs[0]} = chunkPrimDimN {dim} rankCount {rank}",
+            f"            (({before_nodes}).foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore {producer_tid}) := by",
+            f"          change (pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) {node.outs[0]} = _",
+            f"          rw [show pmNodes = {before_nodes} ++ [{_node_text(node)}] ++ {after_nodes} by native_decide]",
+            f"          apply foldl_faithful_middle_writer {ir.pm_graph_ref} pmStore {before_nodes} {after_nodes}",
+            f"            {_node_text(node)} {node.outs[0]}",
+            f"            (fun t => chunkPrimDimN {dim} rankCount {rank} (t {producer_tid}))",
+            "          · intro t",
+            "            rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "              (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]",
+            "            simp only [applyNodeDistributedFaithful, applyNodeDistributed, applyNodeRingAttn]",
+            "            rw [hRankCount]",
+            f"            simpa using applyNode_chunkPrimDimN_out {ir.pm_graph_ref} t {rank} {producer_tid} {node.outs[0]} {dim}",
+            "          · native_decide", "          · native_decide",
+            f"        _ = chunkPrimDimN {dim} rankCount {rank} (pmStore {producer_tid}) := by",
+            f"          rw [foldl_applyNodeDistributedFaithful_at_not_written {ir.pm_graph_ref}",
+            f"            {before_nodes} pmStore {producer_tid} (by native_decide) (by native_decide)]",
+            f"    have {shape_name} : (pmFinal {node.outs[0]}).shape = {shard_shape} := by",
+            f"      rw [{out_name}, chunkPrimDimN_shape {dim} rankCount {rank} (pmStore {producer_tid})",
+            f"        {full_shape} hin.2.2 (by native_decide)]",
+            "      native_decide",
+        ]
+    lines += [
+        "    have hOrderedChunks : pmTids.map pmFinal =",
+        f"        List.ofFn (fun r : Fin rankCount => chunkPrimDimN {dim} rankCount r.1 (pmStore {producer_tid})) := by",
+        "      simp only [pmTids, rankCount, List.map]",
+        f"      rw [{', '.join(output_names)}]",
+        "      rfl",
+        f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by",
+        f"      change ShardedRel (smFinal {post.sm_tid}) (pmTids.map pmFinal) {dim} {full_shape} {shard_shape}",
+        "      refine {", "        full_value := ?_", "        full_shape := ?_",
+        "        shards_nonempty := by simp [pmTids]", "        gather_dim_lt := by native_decide",
+        "        shard_shapes := ?_", "        shape_contract := by simp [pmTids]", "      }",
+        "      · change smStore _ = _", "        rw [hOrderedChunks, List.length_ofFn]",
+        f"        rw [{theorem} {dim} rankCount (pmStore {producer_tid})",
+        "          (by native_decide) (by rw [hin.2.2]; native_decide)",
+        "          (by simp only [rankCount, pmTids, List.length_cons, List.length_nil]; rw [hin.2.2]; native_decide)]",
+        "        exact hin.1", "      · exact hin.2.1", "      · intro shard hmem",
+        "        simp only [pmTids, List.map, List.mem_cons, List.not_mem_nil, or_false] at hmem",
+    ]
+    lines += _membership_cases(shape_names, indent="        ")
+    lines += ["    exact RelationState.Holds.mono_insert hframe hout (by native_decide)", ""]
+    return "\n".join(lines)
+
+
+def render_closed_k_rank_alltoall_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    try:
+        from .relation_compiler import KRankAllToAllRelationCertificate
+    except ImportError:
+        from relation_compiler import KRankAllToAllRelationCertificate
+    theorem = "TrainVerify.Denote.allGatherPrimDimN_allToAllPrimWithDims_ofFn"
+    (segment, transition, certificate, pre, post, before, after) = _k_rank_segment_context(
+        ir, relation, segment_id, "alltoall-k-rank-layout-transport", theorem,
+        KRankAllToAllRelationCertificate,
+    )
+    if pre.kind != "sharded" or post.kind != "sharded":
+        raise ValueError("K-rank AllToAll requires sharded pre/post facts")
+    k = len(pre.pm_tids)
+    idim, odim = pre.gather_dim, post.gather_dim
+    if (k <= 0 or len(post.pm_tids) != k or certificate.rank_count != k
+            or (idim, odim) != (certificate.input_gather_dim, certificate.output_gather_dim)):
+        raise ValueError("K-rank AllToAll rank/dimension contract disagrees with closed facts")
+    if pre.sm_tid != post.sm_tid or pre.full_shape != post.full_shape:
+        raise ValueError("K-rank AllToAll does not preserve the full tensor authority")
+    for fact, dim in ((pre, idim), (post, odim)):
+        if dim is None or dim < 0 or dim >= len(fact.shard_shape):
+            raise ValueError("K-rank AllToAll gather dimension is invalid")
+        expected = list(fact.shard_shape); expected[dim] *= k
+        if tuple(expected) != fact.full_shape or fact.full_shape[dim] % k != 0:
+            raise ValueError("K-rank AllToAll shape/divisibility contract fails")
+    sm_nodes = ir.sm_nodes[slice(*segment.sm_range)]
+    pm_nodes = ir.pm_nodes[slice(*segment.pm_range)]
+    exact_indices = tuple(range(*segment.pm_range))
+    if (sm_nodes or transition.sm_node_indices or transition.pm_node_indices != exact_indices
+            or len(pm_nodes) != k):
+        raise ValueError("K-rank AllToAll segment must own exactly the ordered collective writers")
+    if tuple(certificate.pm_step_ids) != tuple(f"pm:{index}:0" for index in exact_indices):
+        raise ValueError("K-rank AllToAll certificate footprint is not the exact writer slice")
+    inputs = list(pre.pm_tids)
+    if tuple(node.rank for node in pm_nodes) != tuple(range(k)) or any(
+        node.op != "AllToAllPrim" or node.ins != inputs or len(node.outs) != 1
+        or node.params != [idim, odim] for node in pm_nodes
+    ):
+        raise ValueError("K-rank AllToAll writers violate ordered rank/input/dimension authority")
+    if tuple(node.outs[0] for node in pm_nodes) != post.pm_tids:
+        raise ValueError("K-rank AllToAll writer outputs do not exactly cover the post fact")
+
+    pm_text = "[" + ", ".join(_node_text(node) for node in pm_nodes) + "]"
+    input_text = "[" + ", ".join(str(tid) for tid in pre.pm_tids) + "]"
+    output_text = "[" + ", ".join(str(tid) for tid in post.pm_tids) + "]"
+    full_shape = _shape_text(list(post.full_shape)); input_shape = _shape_text(list(pre.shard_shape))
+    output_shape = _shape_text(list(post.shard_shape))
+    lines = [
+        f"private def {segment.segment_id} :",
+        f"    ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
+        "  smNodes := []", f"  pmNodes := {pm_text}", "  sound := by",
+        "    intro smStore pmStore hstate", "    let smNodes : List NodeDecl := []",
+        f"    let pmNodes : List NodeDecl := {pm_text}", f"    let inputTids : List Tid := {input_text}",
+        f"    let pmTids : List Tid := {output_text}", "    let rankCount := pmTids.length",
+        f"    have hRankCount : rankCount = {ir.pm_graph_ref}.numRanks := by native_decide",
+        "    let xs := inputTids.map pmStore",
+        "    have hRankCountXs : rankCount = xs.length := by simp [rankCount, pmTids, xs, inputTids]",
+        f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore",
+        f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
+        f"    have hin : {pre.fact_id}.Holds smStore pmStore := hstate {pre.fact_id} (by native_decide)",
+        f"    change ShardedRel (smStore {pre.sm_tid}) xs {idim} {full_shape} {input_shape} at hin",
+        f"    have hHead : ((xs.head?.map (fun t => t.shape)).getD []) = {input_shape} := by",
+        "      simp only [xs, inputTids, List.map, List.head?, Option.map, Option.getD]",
+        "      exact hin.shard_shapes _ (by simp [xs, inputTids])",
+    ]
+    output_names=[];shape_names=[]
+    for rank,node in enumerate(pm_nodes):
+        before_nodes=f"(pmNodes.take {rank})";after_nodes=f"(pmNodes.drop {rank+1})"
+        out_name=f"hAllToAll{rank}";shape_name=f"hAllToAllShape{rank}"
+        output_names.append(out_name);shape_names.append(shape_name)
+        lines += [
+            f"    have hInputs{rank} : inputTids.map (({before_nodes}).foldl",
+            f"        (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) = xs := by",
+            "      apply List.map_congr_left", "      intro tid htid",
+            "      simp only [inputTids, List.mem_cons, List.not_mem_nil, or_false] at htid",
+            f"      rcases htid with {' | '.join(f'hInput{i}' for i in range(k))}",
+            *sum(([f"      · subst tid", f"        exact foldl_applyNodeDistributedFaithful_at_not_written {ir.pm_graph_ref}",
+                    f"          {before_nodes} pmStore {tid} (by native_decide) (by native_decide)"]
+                   for i, tid in enumerate(inputs)), []),
+            f"    have {out_name} : pmFinal {node.outs[0]} =",
+            f"        allToAllPrimWithDims rankCount {rank} xs {idim} {odim} := by",
+            f"      change (pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore) {node.outs[0]} = _",
+            f"      rw [show pmNodes = {before_nodes} ++ [{_node_text(node)}] ++ {after_nodes} by native_decide]",
+            f"      rw [foldl_faithful_middle_writer {ir.pm_graph_ref} pmStore {before_nodes} {after_nodes}",
+            f"        {_node_text(node)} {node.outs[0]}",
+            f"        (fun t => allToAllPrimWithDims rankCount {rank} (inputTids.map t) {idim} {odim})]",
+            f"      · rw [hInputs{rank}]", "      · intro t",
+            "        rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "          (hshuffle := by simp) (hunshuffle := by simp) (hattn := by simp)]",
+            "        simp only [applyNodeDistributedFaithful, applyNodeDistributed, applyNodeRingAttn]",
+            "        rw [hRankCount]",
+            f"        simpa [inputTids] using applyNode_allToAllPrimWithDims_out {ir.pm_graph_ref} t {rank} inputTids {node.outs[0]} {idim} {odim}",
+            "      · native_decide", "      · native_decide",
+            f"    have {shape_name} : (pmFinal {node.outs[0]}).shape = {output_shape} := by",
+            f"      rw [{out_name}, allToAllPrimWithDims_shape rankCount {rank} xs {idim} {odim}",
+            f"        {input_shape} hHead (by native_decide)]",
+            "      native_decide",
+        ]
+    lines += [
+        "    have hOrderedOutputs : pmTids.map pmFinal =",
+        f"        List.ofFn (fun r : Fin rankCount => allToAllPrimWithDims rankCount r.1 xs {idim} {odim}) := by",
+        "      simp only [pmTids, rankCount, List.map]", f"      rw [{', '.join(output_names)}]", "      rfl",
+        f"    have hGatherShape : (allGatherPrimDimN {idim} rankCount 0 xs).shape = {full_shape} := by",
+        "      rw [hRankCountXs, ← hin.full_value]", "      exact hin.full_shape",
+        f"    have hOdim : {odim} < (allGatherPrimDimN {idim} rankCount 0 xs).shape.length := by",
+        "      rw [hGatherShape]", "      native_decide",
+        f"    have hDiv : (allGatherPrimDimN {idim} rankCount 0 xs).shape.getD {odim} 0 % rankCount = 0 := by",
+        "      rw [hGatherShape]", "      native_decide",
+        f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by",
+        f"      change ShardedRel (smFinal {post.sm_tid}) (pmTids.map pmFinal) {odim} {full_shape} {output_shape}",
+        "      refine {", "        full_value := ?_", "        full_shape := ?_",
+        "        shards_nonempty := by simp [pmTids]", "        gather_dim_lt := by native_decide",
+        "        shard_shapes := ?_", "        shape_contract := by simp [pmTids]", "      }",
+        "      · change smStore _ = _", "        rw [hOrderedOutputs, List.length_ofFn, hRankCountXs]",
+        f"        rw [{theorem} {idim} {odim} xs (by simp [xs, inputTids]) hOdim hDiv]",
+        "        exact hin.full_value", "      · exact hin.full_shape", "      · intro shard hmem",
+        "        simp only [pmTids, List.map, List.mem_cons, List.not_mem_nil, or_false] at hmem",
+    ]
+    lines += _membership_cases(shape_names, indent="        ")
+    lines += ["    exact RelationState.Holds.mono_insert hframe hout (by native_decide)", ""]
+    return "\n".join(lines)
+
+
+
 def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     """Render one closed segment through an explicit registered family adapter."""
     chain = relation.dependent_chain_plan
@@ -5913,6 +6217,15 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         ("layernorm-sharded-k-rank-dim1",),
     ):
         return render_closed_k_rank_local_segment(ir, relation, segment_id)
+    if family == ("full-producer-chunks-k-rank",):
+        return render_closed_k_rank_full_producer_chunks_segment(ir, relation, segment_id)
+    if family == ("alltoall-k-rank-layout-transport",):
+        return render_closed_k_rank_alltoall_segment(ir, relation, segment_id)
+    if family == ("embedding-hidden-sharded-k-rank",):
+        raise ValueError(
+            "K-rank hidden-sharded embedding remains unsupported: checked semantic "
+            "declaration TrainVerify.Denote.fw_embedding_hidden_shards_k_rank does not exist"
+        )
     if family and all(item == "multiref-projection-alias" for item in family):
         return render_closed_multiref_segment(ir, relation, segment_id)
     if (
