@@ -29,13 +29,13 @@ theorem allGatherPrimDimN1_two_valAt
   have hidx : row * (cols * 2) + (r * cols + col) <
       prodShape (allGatherPrimDimN 1 2 0 xs).shape := by
     rw [hshape]
-    simp only [prodShape, List.foldl, Nat.mul_one]
+    simp only [prodShape, List.foldl, Nat.one_mul, Nat.mul_one]
     nlinarith [Nat.mul_le_mul_right (cols * 2) hrow]
   have hpieceShape := hxs r hr
   have hpieceIdx : row * cols + col <
       prodShape (xs.getD r (zeroTensor [rows, cols])).shape := by
     rw [hpieceShape]
-    simp only [prodShape, List.foldl, Nat.mul_one]
+    simp only [prodShape, List.foldl, Nat.one_mul, Nat.mul_one]
     nlinarith [Nat.mul_le_mul_right cols hrow]
   have hcolsne : cols ≠ 0 := hcols.ne'
   have htwocolsne : cols * 2 ≠ 0 := by omega
@@ -69,6 +69,268 @@ theorem allGatherPrimDimN1_two_valAt
     if_neg (show (1 : Nat) ≠ 0 by decide)]
   rw [hdivFull, hmodFull, Nat.div_one, Nat.mod_one, hdivCols, hmodCols]
   simp only [Nat.mul_one, Nat.add_zero, valAt, hpieceIdx, dif_pos]
+
+/-- Read one element from a rank-count-polymorphic dimension-1 matrix gather. -/
+theorem allGatherPrimDimN1_k_valAt
+    (K rows cols : Nat) (xs : List Tensor)
+    (hK : 0 < K) (hrows : 0 < rows) (hcols : 0 < cols)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [rows, cols])
+    (row : Nat) (hrow : row < rows) (r : Nat) (hr : r < K)
+    (col : Nat) (hcol : col < cols) :
+    valAt (allGatherPrimDimN 1 K 0 xs)
+        (row * (cols * K) + (r * cols + col)) =
+      valAt (xs.getD r (zeroTensor [rows, cols])) (row * cols + col) := by
+  have hcolsK : 0 < cols * K := Nat.mul_pos hcols hK
+  have hrc : r * cols + col < cols * K := by
+    calc
+      r * cols + col < (r + 1) * cols := by nlinarith
+      _ ≤ K * cols := Nat.mul_le_mul_right cols hr
+      _ = cols * K := by ring
+  have hshape : (allGatherPrimDimN 1 K 0 xs).shape = [rows, cols * K] := by
+    rw [allGatherPrimDimN_shape 1 K xs [rows, cols] hhead]
+    simp [List.set, List.getD]
+  have hidx : row * (cols * K) + (r * cols + col) <
+      prodShape (allGatherPrimDimN 1 K 0 xs).shape := by
+    rw [hshape]
+    simp only [prodShape, List.foldl, Nat.one_mul, Nat.mul_one]
+    calc
+      row * (cols * K) + (r * cols + col) < row * (cols * K) + cols * K :=
+        Nat.add_lt_add_left hrc _
+      _ = (row + 1) * (cols * K) := by ring
+      _ ≤ rows * (cols * K) :=
+        Nat.mul_le_mul_right (cols * K) (Nat.succ_le_iff.mpr hrow)
+  rw [valAt_of_lt _ _ hidx]
+  unfold allGatherPrimDimN
+  simp only [hhead, Tensor.mkShape, List.getD_cons_succ, List.getD_cons_zero,
+    List.drop, List.foldl, Nat.mul_one,
+    show cols ≠ 0 from Nat.ne_of_gt hcols,
+    show cols * K ≠ 0 from Nat.ne_of_gt hcolsK,
+    show (1 : Nat) ≠ 0 by decide, ite_false]
+  have hdiv : (row * (cols * K) + (r * cols + col)) / (cols * K) = row := by
+    rw [show row * (cols * K) + (r * cols + col) =
+        (r * cols + col) + (cols * K) * row by ring,
+      Nat.add_mul_div_left _ _ hcolsK, Nat.div_eq_of_lt hrc, Nat.zero_add]
+  have hmod : (row * (cols * K) + (r * cols + col)) % (cols * K) =
+      r * cols + col := by
+    rw [show row * (cols * K) + (r * cols + col) =
+        (r * cols + col) + (cols * K) * row by ring,
+      Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hrc]
+  have hdivCols : (r * cols + col) / cols = r := by
+    rw [show r * cols + col = col + cols * r by ring,
+      Nat.add_mul_div_left _ _ hcols, Nat.div_eq_of_lt hcol, Nat.zero_add]
+  have hmodCols : (r * cols + col) % cols = col := by
+    rw [show r * cols + col = col + cols * r by ring,
+      Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hcol]
+  rw [hdiv, hmod, Nat.div_one, Nat.mod_one, hdivCols, hmodCols]
+  congr 1
+
+/-- Read one element from a rank-count-polymorphic last-axis 3D gather. -/
+theorem allGatherPrimDimN2_k_valAt
+    (K b tokens cols : Nat) (xs : List Tensor)
+    (hK : 0 < K) (hb : 0 < b) (htokens : 0 < tokens) (hcols : 0 < cols)
+    (hhead : (xs.head?.map (fun t => t.shape)).getD [] = [b, tokens, cols])
+    (row : Nat) (hrow : row < b * tokens) (r : Nat) (hr : r < K)
+    (col : Nat) (hcol : col < cols) :
+    valAt (allGatherPrimDimN 2 K 0 xs)
+        (row * (cols * K) + (r * cols + col)) =
+      valAt (xs.getD r (zeroTensor [b, tokens, cols])) (row * cols + col) := by
+  have hcolsK : 0 < cols * K := Nat.mul_pos hcols hK
+  have hrc : r * cols + col < cols * K := by
+    calc
+      r * cols + col < (r + 1) * cols := by nlinarith
+      _ ≤ K * cols := Nat.mul_le_mul_right cols hr
+      _ = cols * K := by ring
+  have hshape : (allGatherPrimDimN 2 K 0 xs).shape = [b, tokens, cols * K] := by
+    rw [allGatherPrimDimN_shape 2 K xs [b, tokens, cols] hhead]
+    simp [List.set, List.getD]
+  have hidx : row * (cols * K) + (r * cols + col) <
+      prodShape (allGatherPrimDimN 2 K 0 xs).shape := by
+    rw [hshape]
+    simp only [prodShape, List.foldl, Nat.one_mul, Nat.mul_one]
+    calc
+      row * (cols * K) + (r * cols + col) < row * (cols * K) + cols * K :=
+        Nat.add_lt_add_left hrc _
+      _ = (row + 1) * (cols * K) := by ring
+      _ ≤ (b * tokens) * (cols * K) :=
+        Nat.mul_le_mul_right (cols * K) (Nat.succ_le_iff.mpr hrow)
+  rw [valAt_of_lt _ _ hidx]
+  unfold allGatherPrimDimN
+  simp only [hhead, Tensor.mkShape, List.getD_cons_succ, List.getD_cons_zero,
+    List.drop, List.foldl, Nat.mul_one,
+    show cols ≠ 0 from Nat.ne_of_gt hcols,
+    show cols * K ≠ 0 from Nat.ne_of_gt hcolsK,
+    show (1 : Nat) ≠ 0 by decide, ite_false]
+  have hdiv : (row * (cols * K) + (r * cols + col)) / (cols * K) = row := by
+    rw [show row * (cols * K) + (r * cols + col) =
+        (r * cols + col) + (cols * K) * row by ring,
+      Nat.add_mul_div_left _ _ hcolsK, Nat.div_eq_of_lt hrc, Nat.zero_add]
+  have hmod : (row * (cols * K) + (r * cols + col)) % (cols * K) =
+      r * cols + col := by
+    rw [show row * (cols * K) + (r * cols + col) =
+        (r * cols + col) + (cols * K) * row by ring,
+      Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hrc]
+  have hdivCols : (r * cols + col) / cols = r := by
+    rw [show r * cols + col = col + cols * r by ring,
+      Nat.add_mul_div_left _ _ hcols, Nat.div_eq_of_lt hcol, Nat.zero_add]
+  have hmodCols : (r * cols + col) % cols = col := by
+    rw [show r * cols + col = col + cols * r by ring,
+      Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hcol]
+  rw [hdiv, hmod, Nat.div_one, Nat.mod_one, hdivCols, hmodCols]
+  congr 1
+
+/-- Embedding commutes with an arbitrary nonempty ordered hidden-axis shard list.
+The rank count is authority from `Ws.length`; no concrete rank count is encoded. -/
+theorem fw_embedding_hidden_shards_k_rank
+    (K b tokens vocab hidden : Nat) (ids : Tensor) (Ws : List Tensor)
+    (hK : 0 < K) (hb : 0 < b) (htokens : 0 < tokens)
+    (hvocab : 0 < vocab) (hhidden : 0 < hidden)
+    (hlen : Ws.length = K) (hids : ids.shape = [b, tokens])
+    (hWs : ∀ W ∈ Ws, W.shape = [vocab, hidden]) :
+    fw_embedding ids (allGatherPrimDimN 1 K 0 Ws) =
+      allGatherPrimDimN 2 K 0 (Ws.map (fun W => fw_embedding ids W)) := by
+  have hhead : (Ws.head?.map (fun t => t.shape)).getD [] = [vocab, hidden] := by
+    cases hlist : Ws with
+    | nil => simp [hlist] at hlen; omega
+    | cons W rest =>
+      simp only [hlist, List.head?, Option.map, Option.getD]
+      exact hWs W (hlist ▸ List.mem_cons_self ..)
+  have hfullW : (allGatherPrimDimN 1 K 0 Ws).shape = [vocab, hidden * K] := by
+    rw [allGatherPrimDimN_shape 1 K Ws [vocab, hidden] hhead]
+    simp [List.set, List.getD]
+  have hmapHead : ((Ws.map (fun W => fw_embedding ids W)).head?.map
+      (fun t => t.shape)).getD [] = [b, tokens, hidden] := by
+    cases hlist : Ws with
+    | nil => simp [hlist] at hlen; omega
+    | cons W rest =>
+      simp only [hlist, List.map, List.head?, Option.map, Option.getD]
+      rw [fw_embedding_shape, hids, hWs W (hlist ▸ List.mem_cons_self ..)]
+      rfl
+  have hlhs : (fw_embedding ids (allGatherPrimDimN 1 K 0 Ws)).shape =
+      [b, tokens, hidden * K] := by
+    rw [fw_embedding_shape, hids, hfullW]
+    rfl
+  have hrhs : (allGatherPrimDimN 2 K 0
+      (Ws.map (fun W => fw_embedding ids W))).shape = [b, tokens, hidden * K] := by
+    rw [allGatherPrimDimN_shape 2 K _ [b, tokens, hidden] hmapHead]
+    simp [List.set, List.getD]
+  apply Tensor.ext (by rw [hlhs, hrhs])
+  intro idx hidx
+  rw [hlhs] at hidx
+  simp only [prodShape, List.foldl, Nat.one_mul] at hidx
+  let row := idx / (hidden * K)
+  let fullCol := idx % (hidden * K)
+  let r := fullCol / hidden
+  let col := fullCol % hidden
+  have hhiddenK : 0 < hidden * K := Nat.mul_pos hhidden hK
+  have hrow : row < b * tokens := by
+    dsimp [row]
+    apply Nat.div_lt_of_lt_mul
+    calc
+      idx < b * tokens * (hidden * K) := hidx
+      _ = (hidden * K) * (b * tokens) := by ring
+  have hfullCol : fullCol < hidden * K := Nat.mod_lt _ hhiddenK
+  have hr : r < K := by
+    dsimp [r]
+    exact Nat.div_lt_of_lt_mul (by simpa [Nat.mul_comm] using hfullCol)
+  have hcol : col < hidden := by
+    dsimp [col]
+    exact Nat.mod_lt _ hhidden
+  have hfullColDecomp : fullCol = r * hidden + col := by
+    dsimp [r, col]
+    rw [Nat.mul_comm]
+    exact (Nat.div_add_mod fullCol hidden).symm
+  have hidxDecomp : idx = row * (hidden * K) + (r * hidden + col) := by
+    calc
+      idx = row * (hidden * K) + fullCol := by
+        dsimp [row, fullCol]
+        rw [Nat.mul_comm]
+        exact (Nat.div_add_mod idx (hidden * K)).symm
+      _ = row * (hidden * K) + (r * hidden + col) := by rw [hfullColDecomp]
+  rw [hidxDecomp]
+  rw [fw_embedding_valAt]
+  have hlastFullW : lastD (allGatherPrimDimN 1 K 0 Ws).shape = hidden * K := by
+    rw [hfullW]
+    rfl
+  have hlhsBound : row * (hidden * K) + (r * hidden + col) <
+      prodShape (ids.shape ++ [lastD (allGatherPrimDimN 1 K 0 Ws).shape]) := by
+    rw [hids, hlastFullW]
+    simpa [prodShape, ← hidxDecomp] using hidx
+  rw [dif_pos hlhsBound, hlastFullW]
+  rw [allGatherPrimDimN2_k_valAt K b tokens hidden
+    (Ws.map (fun W => fw_embedding ids W)) hK hb htokens hhidden hmapHead
+    row hrow r hr col hcol]
+  have hrlen : r < Ws.length := by omega
+  have hmapGet : (Ws.map (fun W => fw_embedding ids W)).getD r
+      (zeroTensor [b, tokens, hidden]) = fw_embedding ids Ws[r] := by
+    simp [List.getD, List.getElem?_eq_getElem hrlen, List.getElem_map]
+  rw [hmapGet, fw_embedding_valAt]
+  have hWr : Ws[r].shape = [vocab, hidden] := hWs _ (List.getElem_mem hrlen)
+  have hrhsBound : row * hidden + col < prodShape (ids.shape ++ [lastD Ws[r].shape]) := by
+    rw [hids, hWr]
+    rw [show lastD [vocab, hidden] = hidden by rfl]
+    rw [show prodShape ([b, tokens] ++ [hidden]) = b * tokens * hidden by simp [prodShape]]
+    calc
+      row * hidden + col < row * hidden + hidden := Nat.add_lt_add_left hcol _
+      _ = (row + 1) * hidden := by ring
+      _ ≤ (b * tokens) * hidden :=
+        Nat.mul_le_mul_right hidden (Nat.succ_le_iff.mpr hrow)
+  rw [dif_pos hrhsBound, hWr]
+  have hdivFull :
+      (row * (hidden * K) + (r * hidden + col)) / (hidden * K) = row := by
+    rw [show row * (hidden * K) + (r * hidden + col) =
+        (r * hidden + col) + (hidden * K) * row by ring,
+      Nat.add_mul_div_left _ _ hhiddenK,
+      Nat.div_eq_of_lt (by simpa [hfullColDecomp] using hfullCol), Nat.zero_add]
+  have hmodFull :
+      (row * (hidden * K) + (r * hidden + col)) % (hidden * K) =
+        r * hidden + col := by
+    rw [show row * (hidden * K) + (r * hidden + col) =
+        (r * hidden + col) + (hidden * K) * row by ring,
+      Nat.add_mul_mod_self_left,
+      Nat.mod_eq_of_lt (by simpa [hfullColDecomp] using hfullCol)]
+  rw [hdivFull, hmodFull]
+  simp only [lastD, List.getLast?_cons, Option.getD_some]
+  change valAt (allGatherPrimDimN 1 K 0 Ws)
+      (scalarToNat (valAt ids row) * (hidden * K) + (r * hidden + col)) =
+    valAt Ws[r] (scalarToNat (valAt ids ((row * hidden + col) / hidden)) * hidden +
+      (row * hidden + col) % hidden)
+  have hdiv : (row * hidden + col) / hidden = row := by
+    rw [show row * hidden + col = col + hidden * row by ring,
+      Nat.add_mul_div_left _ _ hhidden, Nat.div_eq_of_lt hcol, Nat.zero_add]
+  have hmod : (row * hidden + col) % hidden = col := by
+    rw [show row * hidden + col = col + hidden * row by ring,
+      Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hcol]
+  rw [hdiv, hmod]
+  let label := scalarToNat (valAt ids row)
+  by_cases hlabel : label < vocab
+  · have hpiece : Ws.getD r (zeroTensor [vocab, hidden]) = Ws[r] := by
+      simp [List.getD, List.getElem?_eq_getElem hrlen]
+    rw [← hpiece]
+    exact allGatherPrimDimN1_k_valAt K vocab hidden Ws hK hvocab hhidden hhead
+      label hlabel r hr col hcol
+  · have hfullZero : valAt (allGatherPrimDimN 1 K 0 Ws)
+        (label * (hidden * K) + (r * hidden + col)) = 0 := by
+      have hnot : ¬ label * (hidden * K) + (r * hidden + col) <
+          prodShape (allGatherPrimDimN 1 K 0 Ws).shape := by
+        apply Nat.not_lt.mpr
+        rw [hfullW]
+        simp only [prodShape, List.foldl, Nat.one_mul, Nat.mul_one]
+        calc
+          vocab * (hidden * K) ≤ label * (hidden * K) :=
+            Nat.mul_le_mul_right (hidden * K) (Nat.le_of_not_gt hlabel)
+          _ ≤ label * (hidden * K) + (r * hidden + col) := Nat.le_add_right _ _
+      simp [valAt, hnot]
+    have hpieceZero : valAt Ws[r] (label * hidden + col) = 0 := by
+      have hnot : ¬ label * hidden + col < prodShape Ws[r].shape := by
+        apply Nat.not_lt.mpr
+        rw [hWr]
+        simp only [prodShape, List.foldl, Nat.one_mul, Nat.mul_one]
+        calc
+          vocab * hidden ≤ label * hidden :=
+            Nat.mul_le_mul_right hidden (Nat.le_of_not_gt hlabel)
+          _ ≤ label * hidden + col := Nat.le_add_right _ _
+      simp [valAt, hnot]
+    rw [hfullZero, hpieceZero]
 
 /-- Embedding commutes with gathering two weight shards on the hidden axis.
 The out-of-vocabulary branch is handled explicitly: both weight reads are
@@ -120,7 +382,7 @@ theorem fw_embedding_hidden_shards_two
   apply Tensor.ext (by rw [hlhs, hrhs])
   intro idx hidx
   rw [hlhs] at hidx
-  simp only [prodShape, List.foldl, Nat.mul_one] at hidx
+  simp only [prodShape, List.foldl, Nat.one_mul, Nat.mul_one] at hidx
   let token := idx / (hidden * 2)
   let fullCol := idx % (hidden * 2)
   let r := fullCol / hidden

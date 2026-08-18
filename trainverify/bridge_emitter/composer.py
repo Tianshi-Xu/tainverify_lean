@@ -8416,6 +8416,235 @@ def render_closed_k_rank_allreduce_segment(ir: GoalIR, relation, segment_id: str
 
 
 
+def render_closed_mixed_k_rank_embedding_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Render the exact hidden/vocab embedding SCC in one ordered fold per axis."""
+    try:
+        from .relation_compiler import (
+            KRankHiddenShardedEmbeddingCertificate,
+            KRankVocabShardedEmbeddingProducerCertificate,
+        )
+    except ImportError:
+        from relation_compiler import (
+            KRankHiddenShardedEmbeddingCertificate,
+            KRankVocabShardedEmbeddingProducerCertificate,
+        )
+    chain = relation.dependent_chain_plan
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if segment is None:
+        raise ValueError("mixed K-rank embedding segment is missing")
+    by_transition = {item.transition_id: item for item in relation.transition_specs}
+    try:
+        transitions = tuple(by_transition[item] for item in segment.transition_ids)
+    except KeyError as exc:
+        raise ValueError("mixed K-rank embedding transition ownership is incomplete") from exc
+    family = tuple(item.rule_id for item in transitions)
+    expected_family = ("embedding-hidden-sharded-k-rank", "embedding-vocab-sharded-reduction-k-rank")
+    if family != expected_family:
+        raise ValueError("mixed K-rank embedding family/order mismatch")
+    hidden_t, vocab_t = transitions
+    hidden_certs = [item for item in relation.certificates if type(item) is KRankHiddenShardedEmbeddingCertificate and item.rule_id == hidden_t.rule_id]
+    vocab_certs = [item for item in relation.certificates if type(item) is KRankVocabShardedEmbeddingProducerCertificate and item.rule_id == vocab_t.rule_id]
+    if len(hidden_certs) != 1 or len(vocab_certs) != 1:
+        raise ValueError("mixed K-rank embedding lacks one exact certificate per role")
+    hidden, vocab = hidden_certs[0], vocab_certs[0]
+    records = {item.source: item for item in chain.relation_facts}
+    try:
+        hidden_pre, hidden_post = records[hidden_t.pre_facts[0]], records[hidden_t.post_facts[0]]
+        vocab_pre, vocab_post = records[vocab_t.pre_facts[0]], records[vocab_t.post_facts[0]]
+    except (KeyError, IndexError) as exc:
+        raise ValueError("mixed K-rank embedding relation facts are incomplete") from exc
+    k = len(hidden_pre.pm_tids)
+    if (k < 2 or any(item.rank_count != k for item in (hidden, vocab))
+            or len(hidden_post.pm_tids) != k or len(vocab_pre.pm_tids) != k
+            or len(vocab_post.pm_tids) != k or ir.sm_num_ranks != 1 or ir.pm_num_ranks != k):
+        raise ValueError("mixed K-rank embedding dynamic rank authority disagrees")
+    if (hidden.weight_fact != hidden_t.pre_facts[0] or hidden.output_fact != hidden_t.post_facts[0]
+            or vocab.weight_fact != vocab_t.pre_facts[0] or vocab.output_fact != vocab_t.post_facts[0]):
+        raise ValueError("mixed K-rank embedding certificate facts disagree")
+    if (hidden_pre.kind, hidden_pre.gather_dim, hidden_post.kind, hidden_post.gather_dim,
+            vocab_pre.kind, vocab_pre.gather_dim, vocab_post.kind) != (
+            "sharded", 1, "sharded", 2, "sharded", 0, "reduction"):
+        raise ValueError("mixed K-rank embedding relation roles disagree")
+    if (tuple(hidden_pre.full_shape) != tuple(hidden.full_weight_shape)
+            or tuple(hidden_pre.shard_shape) != tuple(hidden.shard_weight_shape)
+            or tuple(hidden_post.full_shape) != tuple(hidden.full_output_shape)
+            or tuple(hidden_post.shard_shape) != tuple(hidden.shard_output_shape)
+            or tuple(vocab_pre.full_shape) != tuple(vocab.full_weight_shape)
+            or tuple(vocab_pre.shard_shape) != tuple(vocab.shard_weight_shape)
+            or tuple(vocab_post.full_shape) != tuple(vocab.ids_shape) + (vocab.hidden_size,)):
+        raise ValueError("mixed K-rank embedding materialized shapes disagree with certificates")
+    if len(hidden.ids_shape) != 2 or hidden.full_output_shape != hidden.ids_shape + (hidden.full_weight_shape[1],):
+        raise ValueError("mixed K-rank embedding hidden theorem requires rank-2 IDs authority")
+    sm_indices, pm_indices = tuple(range(*segment.sm_range)), tuple(range(*segment.pm_range))
+    if (len(sm_indices) != 2 or len(pm_indices) != 2 * k
+            or set(hidden_t.sm_node_indices + vocab_t.sm_node_indices) != set(sm_indices)
+            or set(hidden_t.pm_node_indices + vocab_t.pm_node_indices) != set(pm_indices)
+            or set(hidden_t.sm_node_indices) & set(vocab_t.sm_node_indices)
+            or set(hidden_t.pm_node_indices) & set(vocab_t.pm_node_indices)):
+        raise ValueError("mixed K-rank embedding transition footprints do not exactly partition the SCC")
+    if (hidden_t.sm_node_indices != (sm_indices[0],) or vocab_t.sm_node_indices != (sm_indices[1],)
+            or hidden.sm_step_id != f"sm:{sm_indices[0]}:0" or vocab.sm_step_id != f"sm:{sm_indices[1]}:0"
+            or hidden.pm_step_ids != tuple(f"pm:{i}:0" for i in hidden_t.pm_node_indices)
+            or vocab.pm_step_ids != tuple(f"pm:{i}:0" for i in vocab_t.pm_node_indices)):
+        raise ValueError("mixed K-rank embedding certificate footprint/order is not exact")
+    sm_nodes = ir.sm_nodes[slice(*segment.sm_range)]
+    pm_nodes = ir.pm_nodes[slice(*segment.pm_range)]
+    hidden_sm, vocab_sm = ir.sm_nodes[hidden_t.sm_node_indices[0]], ir.sm_nodes[vocab_t.sm_node_indices[0]]
+    hidden_pm = tuple(ir.pm_nodes[i] for i in hidden_t.pm_node_indices)
+    vocab_pm = tuple(ir.pm_nodes[i] for i in vocab_t.pm_node_indices)
+    def plain(node, rank, ids, weight, output):
+        return node.rank == rank and node.op == "FW_embedding" and node.ins == [ids, weight] and node.outs == [output] and not node.params
+    if not plain(hidden_sm, 0, hidden.ids_tid, hidden_pre.sm_tid, hidden_post.sm_tid):
+        raise ValueError("mixed K-rank embedding hidden SM role/binding mismatch")
+    if not plain(vocab_sm, 0, vocab.ids_tid, vocab_pre.sm_tid, vocab_post.sm_tid):
+        raise ValueError("mixed K-rank embedding vocab SM role/binding mismatch")
+    if any(not plain(node, rank, hidden.ids_tid, hidden_pre.pm_tids[rank], hidden_post.pm_tids[rank]) for rank, node in enumerate(hidden_pm)):
+        raise ValueError("mixed K-rank embedding hidden PM role/rank/order mismatch")
+    if any(node.rank != rank or node.op != "FW_embedding" or node.ins != [vocab.ids_tid, vocab_pre.pm_tids[rank]]
+            or node.outs != [vocab_post.pm_tids[rank]] or node.params != [rank * vocab.shard_rows]
+            for rank, node in enumerate(vocab_pm)):
+        raise ValueError("mixed K-rank embedding vocab PM role/rank/order mismatch")
+    authorities = chain.authority_facts
+    def authority(ids, shape):
+        eq = [f for f in authorities if getattr(f, "kind", None) == "tensor_eq" and (f.left_side, f.left_tid, f.right_side, f.right_tid) == ("sm", ids, "pm", ids)]
+        sh = [f for f in authorities if getattr(f, "kind", None) == "tensor_shape" and (f.side, f.tid, tuple(f.shape)) == ("pm", ids, tuple(shape))]
+        if len(eq) != 1 or len(sh) != 1:
+            raise ValueError("mixed K-rank embedding lacks exact IDs value/shape authority")
+        return eq[0], sh[0]
+    hidden_eq, hidden_shape = authority(hidden.ids_tid, hidden.ids_shape)
+    vocab_eq, vocab_shape = authority(vocab.ids_tid, vocab.ids_shape)
+    states = {item.state_id: item for item in chain.states}
+    before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    sm_text = "[" + ", ".join(_node_text(n) for n in sm_nodes) + "]"
+    pm_text = "[" + ", ".join(_node_text(n) for n in pm_nodes) + "]"
+    list_text = lambda xs: "[" + ", ".join(str(x) for x in xs) + "]"
+    hs_w, hs_o = list_text(hidden_pre.pm_tids), list_text(hidden_post.pm_tids)
+    vs_w, vs_o = list_text(vocab_pre.pm_tids), list_text(vocab_post.pm_tids)
+    shape = lambda xs: _shape_text(list(xs))
+    lines = [
+        "set_option maxHeartbeats 800000 in", f"private def {segment_id} :",
+        f"    ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
+        f"  smNodes := {sm_text}", f"  pmNodes := {pm_text}", "  sound := by",
+        "    intro smStore pmStore hstate", f"    let smNodes : List NodeDecl := {sm_text}",
+        f"    let pmNodes : List NodeDecl := {pm_text}",
+        f"    let hiddenPmWeightTids : List Tid := {hs_w}", f"    let hiddenPmOutputTids : List Tid := {hs_o}",
+        f"    let vocabPmWeightTids : List Tid := {vs_w}", f"    let vocabPmOutputTids : List Tid := {vs_o}",
+        "    let rankCount := hiddenPmWeightTids.length",
+        f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore",
+        f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
+    ]
+    # Immutable authorities are read from the one final fold, never from replayed nodes.
+    immutable = [("HiddenIds", hidden.ids_tid), ("HiddenWeight", hidden_pre.sm_tid),
+                 ("VocabIds", vocab.ids_tid), ("VocabWeight", vocab_pre.sm_tid)]
+    for name, tid in immutable:
+        lines += [f"    have hSm{name} : smFinal {tid} = smStore {tid} := by", "      unfold smFinal",
+                  f"      exact foldl_applyNodeDistributedFaithful_at_not_written {ir.sm_graph_ref} smNodes smStore {tid} (by native_decide) (by native_decide)"]
+    for name, tid in (("HiddenIds", hidden.ids_tid), ("VocabIds", vocab.ids_tid)):
+        lines += [f"    have hPm{name} : pmFinal {tid} = pmStore {tid} := by", "      unfold pmFinal",
+                  f"      exact foldl_applyNodeDistributedFaithful_at_not_written {ir.pm_graph_ref} pmNodes pmStore {tid} (by native_decide) (by native_decide)"]
+    for prefix, ids, eq, sh, ids_shape in (("Hidden", hidden.ids_tid, hidden_eq, hidden_shape, hidden.ids_shape), ("Vocab", vocab.ids_tid, vocab_eq, vocab_shape, vocab.ids_shape)):
+        lines += [
+            f"    have h{prefix}IdsEqStore : smStore {ids} = pmStore {ids} := by",
+            f"      have h := hstate {eq.fact_id} (by native_decide)", f"      change smStore {ids} = pmStore {ids} at h", "      exact h",
+            f"    have h{prefix}IdsShapeStore : (pmStore {ids}).shape = {shape(ids_shape)} := by",
+            f"      have h := hstate {sh.fact_id} (by native_decide)", f"      change (pmStore {ids}).shape = {shape(ids_shape)} at h", "      exact h",
+            f"    have h{prefix}IdsEq : smFinal {ids} = pmFinal {ids} := by",
+            f"      rw [hSm{prefix}Ids, hPm{prefix}Ids]", f"      exact h{prefix}IdsEqStore",
+            f"    have h{prefix}IdsShape : (pmFinal {ids}).shape = {shape(ids_shape)} := by",
+            f"      rw [hPm{prefix}Ids]", f"      exact h{prefix}IdsShapeStore",
+        ]
+    def emit_writer(name, side, node, local_pos, ids_tid, offset=None):
+        graph = ir.sm_graph_ref if side == "sm" else ir.pm_graph_ref
+        store, final, nodes = ("smStore", "smFinal", "smNodes") if side == "sm" else ("pmStore", "pmFinal", "pmNodes")
+        before_nodes, after_nodes = f"({nodes}.take {local_pos})", f"({nodes}.drop {local_pos+1})"
+        fn = f"fw_embedding ({final} {ids_tid}) ({final} {node.ins[1]})" if offset is None else f"fw_embedding_offset {offset} ({final} {ids_tid}) ({final} {node.ins[1]})"
+        fn_store = f"fw_embedding ({store} {ids_tid}) ({store} {node.ins[1]})" if offset is None else f"fw_embedding_offset {offset} ({store} {ids_tid}) ({store} {node.ins[1]})"
+        lemma = f"applyNode_fw_embedding_out {graph} t {node.rank} {ids_tid} {node.ins[1]} {node.outs[0]}" if offset is None else f"applyNode_fw_embedding_offset_out {graph} t {node.rank} {offset} {ids_tid} {node.ins[1]} {node.outs[0]}"
+        return [
+            f"    have h{name}Input : {final} {node.ins[1]} = {store} {node.ins[1]} := by", f"      unfold {final}",
+            f"      exact foldl_applyNodeDistributedFaithful_at_not_written {graph} {nodes} {store} {node.ins[1]} (by native_decide) (by native_decide)",
+            f"    have h{name} : {final} {node.outs[0]} = {fn} := by", "      calc",
+            f"        {final} {node.outs[0]} = " + (f"fw_embedding (({before_nodes}).foldl (applyNodeDistributedFaithful {graph}) {store} {ids_tid}) (({before_nodes}).foldl (applyNodeDistributedFaithful {graph}) {store} {node.ins[1]}) := by" if offset is None else f"fw_embedding_offset {offset} (({before_nodes}).foldl (applyNodeDistributedFaithful {graph}) {store} {ids_tid}) (({before_nodes}).foldl (applyNodeDistributedFaithful {graph}) {store} {node.ins[1]}) := by"),
+            f"          change ({nodes}.foldl (applyNodeDistributedFaithful {graph}) {store}) {node.outs[0]} = _",
+            f"          rw [show {nodes} = {before_nodes} ++ [{_node_text(node)}] ++ {after_nodes} by native_decide]",
+            f"          apply foldl_faithful_middle_writer {graph} {store} {before_nodes} {after_nodes} {_node_text(node)} {node.outs[0]} (fun t => " + (f"fw_embedding (t {ids_tid}) (t {node.ins[1]}))" if offset is None else f"fw_embedding_offset {offset} (t {ids_tid}) (t {node.ins[1]}))"),
+            "          · intro t", "            rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]",
+            "            unfold applyNodeDistributed", "            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]", f"            · exact {lemma}", "            · decide", "            · decide", "          · native_decide", "          · native_decide",
+            f"        _ = {fn_store} := by",
+            f"          rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} {before_nodes} {store} {ids_tid} (by native_decide) (by native_decide)]",
+            f"          rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} {before_nodes} {store} {node.ins[1]} (by native_decide) (by native_decide)]",
+            f"        _ = {fn} := by rw [h{name}Input, h{'Sm' if side == 'sm' else 'Pm'}{'HiddenIds' if ids_tid == hidden.ids_tid else 'VocabIds'}]",
+        ]
+    lines += emit_writer("HiddenSmWriter", "sm", hidden_sm, hidden_t.sm_node_indices[0]-segment.sm_range[0], hidden.ids_tid)
+    lines += emit_writer("VocabSmWriter", "sm", vocab_sm, vocab_t.sm_node_indices[0]-segment.sm_range[0], vocab.ids_tid)
+    hidden_writer_names=[]; vocab_writer_names=[]; hidden_shape_names=[]; vocab_shape_names=[]
+    for rank, node in enumerate(hidden_pm):
+        name=f"HiddenPmWriter{rank}"; hidden_writer_names.append(name); lines += emit_writer(name, "pm", node, hidden_t.pm_node_indices[rank]-segment.pm_range[0], hidden.ids_tid)
+        sn=f"hHiddenWeightShape{rank}"; hidden_shape_names.append(sn); lines += [f"    have {sn} : (pmFinal {node.ins[1]}).shape = {shape(hidden_pre.shard_shape)} :=", f"      (hframe {hidden_pre.fact_id} (by native_decide)).shard_shapes _ (by simp [hiddenPmWeightTids])"]
+    for rank, node in enumerate(vocab_pm):
+        name=f"VocabPmWriter{rank}"; vocab_writer_names.append(name); lines += emit_writer(name, "pm", node, vocab_t.pm_node_indices[rank]-segment.pm_range[0], vocab.ids_tid, node.params[0])
+        sn=f"hVocabWeightShape{rank}"; vocab_shape_names.append(sn); lines += [f"    have {sn} : (pmFinal {node.ins[1]}).shape = {shape(vocab_pre.shard_shape)} :=", f"      (hframe {vocab_pre.fact_id} (by native_decide)).shard_shapes _ (by simp [vocabPmWeightTids])"]
+    lines += [
+        f"    have hHiddenWeight : {hidden_pre.fact_id}.Holds smFinal pmFinal := hframe {hidden_pre.fact_id} (by native_decide)",
+        f"    change ShardedRel (smFinal {hidden_pre.sm_tid}) (hiddenPmWeightTids.map pmFinal) 1 {shape(hidden_pre.full_shape)} {shape(hidden_pre.shard_shape)} at hHiddenWeight",
+        f"    have hHiddenFullShape : (smFinal {hidden_post.sm_tid}).shape = {shape(hidden_post.full_shape)} := by",
+        f"      rw [hHiddenSmWriter, fw_embedding_shape, hHiddenIdsEq, hHiddenIdsShape, hHiddenWeight.full_shape]", "      rfl",
+        f"    have hHiddenValue : smFinal {hidden_post.sm_tid} = allGatherPrimDimN 2 (hiddenPmOutputTids.map pmFinal).length 0 (hiddenPmOutputTids.map pmFinal) := by",
+        "      rw [hHiddenSmWriter, hHiddenIdsEq, hHiddenWeight.full_value]",
+        f"      have hBase := {hidden.lean_theorem} (K := rankCount) (b := {hidden.ids_shape[0]}) (tokens := {hidden.ids_shape[1]}) (vocab := {hidden.shard_weight_shape[0]}) (hidden := {hidden.shard_weight_shape[1]})",
+        f"        (ids := pmFinal {hidden.ids_tid}) (Ws := hiddenPmWeightTids.map pmFinal)",
+        "        (hK := by simp [rankCount, hiddenPmWeightTids]) (hb := by omega) (htokens := by omega) (hvocab := by omega) (hhidden := by omega)",
+        "        (hlen := by simp [rankCount]) (hids := hHiddenIdsShape)",
+        "        (hWs := by intro W hW; simpa [hiddenPmWeightTids] using hHiddenWeight.shard_shapes W (by simpa [hiddenPmWeightTids] using hW))",
+        "      simp only [hiddenPmWeightTids, hiddenPmOutputTids, rankCount, List.map, List.length_cons, List.length_nil] at hBase ⊢", "      rw [hBase]",
+        f"      rw [{', '.join('← h'+n for n in hidden_writer_names)}]",
+        f"    have hHiddenOut : {hidden_post.fact_id}.Holds smFinal pmFinal := by",
+        f"      change ShardedRel (smFinal {hidden_post.sm_tid}) (hiddenPmOutputTids.map pmFinal) 2 {shape(hidden_post.full_shape)} {shape(hidden_post.shard_shape)}",
+        "      refine { full_value := hHiddenValue, full_shape := hHiddenFullShape, shards_nonempty := by simp [hiddenPmOutputTids], gather_dim_lt := by decide, shard_shapes := ?_, shape_contract := by simp [hiddenPmOutputTids, List.set, List.getD] }",
+        "      intro shard hmem", "      simp only [hiddenPmOutputTids, List.map, List.mem_cons, List.not_mem_nil, or_false] at hmem",
+    ]
+    hidden_out_shape_names=[]
+    for rank,n in enumerate(hidden_pm):
+        q=f"hHiddenOutputShape{rank}"; hidden_out_shape_names.append(q); lines += [f"      have {q} : (pmFinal {n.outs[0]}).shape = {shape(hidden_post.shard_shape)} := by", f"        rw [h{hidden_writer_names[rank]}, fw_embedding_shape, hHiddenIdsShape, {hidden_shape_names[rank]}]", "        rfl"]
+    lines += _membership_cases(hidden_out_shape_names, indent="      ", binder="shard")
+    lines += [
+        f"    have hVocabWeight : {vocab_pre.fact_id}.Holds smFinal pmFinal := hframe {vocab_pre.fact_id} (by native_decide)",
+        f"    change ShardedRel (smFinal {vocab_pre.sm_tid}) (vocabPmWeightTids.map pmFinal) 0 {shape(vocab_pre.full_shape)} {shape(vocab_pre.shard_shape)} at hVocabWeight",
+        f"    have hVocabFullShape : (smFinal {vocab_post.sm_tid}).shape = {shape(vocab_post.full_shape)} := by",
+        f"      rw [hVocabSmWriter, fw_embedding_shape, hVocabIdsEq, hVocabIdsShape, hVocabWeight.full_shape]", "      rfl",
+        f"    have hVocabValue : smFinal {vocab_post.sm_tid} = allReducePrim (vocabPmOutputTids.map pmFinal).length 0 (vocabPmOutputTids.map pmFinal) := by",
+        "      rw [hVocabSmWriter, hVocabIdsEq, hVocabWeight.full_value]",
+        f"      have hBase := {vocab.lean_theorem} (numParts := rankCount) (shard := {vocab.shard_rows}) (hidden := {vocab.hidden_size})",
+        "        (hparts := by simp [rankCount, hiddenPmWeightTids]) (hshard := by omega) (hhid := by omega)",
+        f"        (ids := pmFinal {vocab.ids_tid}) (Ws := vocabPmWeightTids.map pmFinal) (hlen := by simp [rankCount, hiddenPmWeightTids, vocabPmWeightTids])",
+        "        (hWs_head := by simp only [vocabPmWeightTids, List.map, List.head?, Option.map, Option.getD]; exact hVocabWeight.shard_shapes _ (by simp [vocabPmWeightTids]))",
+        "        (hWs_shape := by intro r hr; simp only [rankCount, hiddenPmWeightTids, List.length_cons, List.length_nil] at hr; match r with",
+    ]
+    for rank,name in enumerate(vocab_shape_names): lines.append(f"          | {rank} => simpa [vocabPmWeightTids, List.getD] using {name}")
+    lines += [f"          | n + {k} => omega)",
+        "      simp only [hiddenPmWeightTids, vocabPmWeightTids, vocabPmOutputTids, rankCount, List.map, List.length_cons, List.length_nil, List.ofFn_succ, List.ofFn_zero, List.getD] at hBase ⊢", "      simp at hBase ⊢", "      rw [hBase]", f"      rw [{', '.join('← h'+n for n in vocab_writer_names)}]",
+        f"    have hVocabOut : {vocab_post.fact_id}.Holds smFinal pmFinal := by",
+        f"      change ReductionRel (smFinal {vocab_post.sm_tid}) (vocabPmOutputTids.map pmFinal) {shape(vocab_post.full_shape)}",
+        "      refine { full_value := hVocabValue, full_shape := hVocabFullShape, contributions_nonempty := by simp [vocabPmOutputTids], contribution_shapes := ?_, reduced_shape := by rw [← hVocabValue]; exact hVocabFullShape }",
+        "      intro contribution hmem", "      simp only [vocabPmOutputTids, List.map, List.mem_cons, List.not_mem_nil, or_false] at hmem",
+    ]
+    vocab_out_shape_names=[]
+    for rank,n in enumerate(vocab_pm):
+        q=f"hVocabOutputShape{rank}"; vocab_out_shape_names.append(q); lines += [f"      have {q} : (pmFinal {n.outs[0]}).shape = {shape(vocab_post.full_shape)} := by", f"        rw [h{vocab_writer_names[rank]}, fw_embedding_offset_shape, hVocabIdsShape, {vocab_shape_names[rank]}]", "        rfl"]
+    lines += _membership_cases(vocab_out_shape_names, indent="      ", binder="contribution")
+    lines += [
+        "    let mid : RelationState := { facts := " + hidden_post.fact_id + " :: " + before.state_id + ".facts, nonempty := by simp }",
+        "    have hmid : mid.Holds smFinal pmFinal := by",
+        "      exact RelationState.Holds.mono_insert (before := " + before.state_id + ") (after := mid) (fresh := " + hidden_post.fact_id + ") hframe hHiddenOut (by native_decide)",
+        "    exact RelationState.Holds.mono_insert (before := mid) (after := " + after.state_id + ") (fresh := " + vocab_post.fact_id + ") hmid hVocabOut (by native_decide)",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     """Render one closed segment through an explicit registered family adapter."""
     chain = relation.dependent_chain_plan
@@ -8461,6 +8690,8 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         return render_closed_k_rank_alltoall_segment(ir, relation, segment_id)
     if family == ("allgather-reconstruction-k-rank",):
         return render_closed_k_rank_allgather_segment(ir, relation, segment_id)
+    if family == ("embedding-hidden-sharded-k-rank", "embedding-vocab-sharded-reduction-k-rank"):
+        return render_closed_mixed_k_rank_embedding_segment(ir, relation, segment_id)
     if family == ("embedding-vocab-sharded-reduction-k-rank",):
         return render_closed_k_rank_vocab_embedding_segment(ir, relation, segment_id)
     if family == ("sum-producer-sharded-k-rank-dim1",):

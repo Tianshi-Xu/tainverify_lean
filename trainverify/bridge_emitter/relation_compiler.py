@@ -3390,6 +3390,11 @@ class KRankHiddenShardedEmbeddingCertificate:
     rule_id: str
     rank_count: int
     ids_tid: int
+    ids_shape: tuple[int, ...]
+    full_weight_shape: tuple[int, ...]
+    shard_weight_shape: tuple[int, ...]
+    full_output_shape: tuple[int, ...]
+    shard_output_shape: tuple[int, ...]
     weight_fact: RelationFactSpec
     output_fact: RelationFactSpec
     sm_step_id: str
@@ -3424,8 +3429,14 @@ def advance_k_rank_hidden_sharded_embedding(
         if sm_step.op != "FW_embedding" or any(step.op != "FW_embedding" for step in pm_steps):
             rewritten.append(frontier); rewritten_layouts.append(layout); continue
         k = len(pm_steps)
+        if sm_step.side != "sm" or int(sm_step.rank) != 0 or any(step.side != "pm" for step in pm_steps):
+            raise RelationCompositionError("K-rank embedding writers have incompatible side/rank authority")
         if tuple(int(step.rank) for step in pm_steps) != tuple(range(k)):
             raise RelationCompositionError("K-rank embedding PM writers are not ordered ranks")
+        if tuple(getattr(sm_step, "parameters", ())) != () or any(
+            tuple(getattr(step, "parameters", ())) != () for step in pm_steps
+        ):
+            raise RelationCompositionError("K-rank hidden embedding must use exact plain embedding semantics")
         if len(sm_step.input_bindings) != 2 or any(len(step.input_bindings) != 2 for step in pm_steps):
             raise RelationCompositionError("K-rank embedding input arity mismatch")
         ids_refs = (sm_step.input_bindings[0], *(step.input_bindings[0] for step in pm_steps))
@@ -3447,10 +3458,27 @@ def advance_k_rank_hidden_sharded_embedding(
             raise RelationCompositionError("K-rank embedding weight authority order mismatch")
         if weight_fact.gather_dim != 1:
             raise RelationCompositionError("K-rank embedding weight must be hidden-sharded on dimension 1")
+        full_weight_shape = tuple(int(value) for value in lineage.tsShape)
+        shard_weight_shapes = tuple(tuple(int(value) for value in shape) for shape in lineage.tpShapes)
+        declared_sm = tuple(tuple(shape) for shape in sm_step.input_shapes)
+        declared_pm = tuple(tuple(tuple(shape) for shape in step.input_shapes) for step in pm_steps)
+        if (len(full_weight_shape) != 2 or len(shard_weight_shapes) != k or not shard_weight_shapes
+                or any(shape != shard_weight_shapes[0] for shape in shard_weight_shapes[1:])):
+            raise RelationCompositionError("K-rank hidden embedding weight shapes are not uniform matrices")
+        shard_weight_shape = shard_weight_shapes[0]
+        ids_shape = declared_sm[0] if len(declared_sm) == 2 else ()
+        if (not ids_shape or declared_sm != (ids_shape, full_weight_shape)
+                or declared_pm != tuple((ids_shape, shard_weight_shape) for _ in pm_steps)):
+            raise RelationCompositionError("K-rank hidden embedding declared inputs disagree with authority")
+        if (full_weight_shape[0] <= 0 or shard_weight_shape[1] <= 0
+                or full_weight_shape != (shard_weight_shape[0], k * shard_weight_shape[1])):
+            raise RelationCompositionError("K-rank hidden embedding weight reconstruction fails")
         full = tuple(sm_step.output_shape)
         shards = tuple(tuple(step.output_shape) for step in pm_steps)
-        if not shards or any(shape != shards[0] for shape in shards[1:]) or len(full) != 3:
+        if not shards or any(shape != shards[0] for shape in shards[1:]) or len(full) != len(ids_shape) + 1:
             raise RelationCompositionError("K-rank embedding output shard shapes disagree")
+        if full != ids_shape + (full_weight_shape[1],) or shards[0] != ids_shape + (shard_weight_shape[1],):
+            raise RelationCompositionError("K-rank hidden embedding output shapes disagree with inputs")
         candidates = [dim for dim in range(3) if full[dim] == shards[0][dim] * k and all(
             full[index] == shards[0][index] for index in range(3) if index != dim
         )]
@@ -3463,6 +3491,11 @@ def advance_k_rank_hidden_sharded_embedding(
             rule_id="embedding-hidden-sharded-k-rank",
             rank_count=k,
             ids_tid=ids_tid,
+            ids_shape=ids_shape,
+            full_weight_shape=full_weight_shape,
+            shard_weight_shape=shard_weight_shape,
+            full_output_shape=full,
+            shard_output_shape=shards[0],
             weight_fact=weight_fact,
             output_fact=output_fact,
             sm_step_id=sm_step.step_id,
@@ -6926,6 +6959,9 @@ def build_certificate_transition_specs(
             authority_requirements = (
                 TransitionAuthorityRequirement(
                     "tensor_eq", ("sm", "pm"), (cert.ids_tid, cert.ids_tid),
+                ),
+                TransitionAuthorityRequirement(
+                    "tensor_shape", ("pm",), (cert.ids_tid,), cert.ids_shape,
                 ),
             )
         elif type(cert) is KRankAllReduceReconstructionCertificate:
