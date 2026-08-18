@@ -768,7 +768,19 @@ structure JoinedIndexedStack2Rel (full rank0 rank1 joined : Tensor)
   joined_value : joined = allGatherPrimDimN gatherDim 2 0 [rank0, rank1]
   public_value : full = joined
 
+/-- Rank-count-polymorphic ordinary sharding relation.  The ordered shard
+list is authority: its length is the collective rank count and every shard is
+shape-checked. -/
+structure ShardedRel (full : Tensor) (shards : List Tensor)
+    (gatherDim : Nat) (fullShape shardShape : Shape) : Prop where
+  full_value : full = allGatherPrimDimN gatherDim shards.length 0 shards
+  full_shape : full.shape = fullShape
+  shards_nonempty : shards ≠ []
+  shard_shapes : ∀ shard ∈ shards, shard.shape = shardShape
+
 inductive RelationFact where
+  | sharded (smTid : Tid) (pmTids : List Tid) (gatherDim : Nat)
+      (fullShape shardShape : Shape)
   | ordinary (smTid pmRank0Tid pmRank1Tid : Tid) (fullShape shardShape : Shape)
   | zigzag (smTid pmRank0Tid pmRank1Tid metadataTid : Tid) (fullShape shardShape : Shape)
   | gather (smTid pmRank0Tid pmRank1Tid dim : Tid) (fullShape shardShape : Shape)
@@ -790,6 +802,8 @@ inductive RelationFact where
 
 def RelationFact.Holds (fact : RelationFact) (sm pm : Store) : Prop :=
   match fact with
+  | .sharded smTid pmTids gatherDim fullShape shardShape =>
+      ShardedRel (sm smTid) (pmTids.map pm) gatherDim fullShape shardShape
   | .ordinary smTid pmRank0Tid pmRank1Tid fullShape shardShape =>
       GeneratedPatterns.Ordinary2Rel (sm smTid) (pm pmRank0Tid) (pm pmRank1Tid) fullShape shardShape
   | .zigzag smTid pmRank0Tid pmRank1Tid metadataTid fullShape shardShape =>
@@ -1025,6 +1039,7 @@ theorem RelationState.Holds.mono_insert
 namespace RelationFact
 
 def smTids : RelationFact → List Tid
+  | .sharded smTid _ _ _ _ => [smTid]
   | .ordinary smTid _ _ _ _ => [smTid]
   | .zigzag smTid _ _ _ _ _ => [smTid]
   | .gather smTid _ _ _ _ _ => [smTid]
@@ -1042,6 +1057,7 @@ def smTids : RelationFact → List Tid
   | .labelChunks _ _ _ _ _ _ => []
 
 def pmTids : RelationFact → List Tid
+  | .sharded _ pmTids _ _ _ => pmTids
   | .ordinary _ pm0 pm1 _ _ => [pm0, pm1]
   | .zigzag _ pm0 pm1 metadataTid _ _ => [pm0, pm1, metadataTid]
   | .gather _ pm0 pm1 _ _ _ => [pm0, pm1]
@@ -1065,6 +1081,14 @@ theorem Holds.frame {fact : RelationFact} {sm pm sm' pm' : Store}
     (hpm : ∀ tid ∈ fact.pmTids, pm' tid = pm tid) :
     fact.Holds sm' pm' := by
   cases fact with
+  | sharded smTid rankTids gatherDim fullShape shardShape =>
+      simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
+      rw [hsm _ (by simp)]
+      have hmap : rankTids.map pm' = rankTids.map pm := by
+        apply List.map_congr_left
+        exact hpm
+      rw [hmap]
+      exact h
   | ordinary smTid pm0 pm1 fullShape shardShape =>
       simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
       rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp)]

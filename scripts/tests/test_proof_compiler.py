@@ -11,6 +11,7 @@ import pytest
 import trainverify.bridge_emitter.composer as composer_module
 import trainverify.bridge_emitter.emit2 as emit2_module
 import trainverify.bridge_emitter.parser as parser_module
+import trainverify.bridge_emitter.relation_compiler as relation_compiler_module
 import trainverify.bridge_emitter.plan as plan_module
 from trainverify.bridge_emitter.composer import (
     CompositionCode,
@@ -813,7 +814,7 @@ def test_real_goals_compile_fail_closed_relation_plans(monkeypatch):
         relation = compile_relation_plan(ir, proof)
         assert relation.family == ("ce-projection-gather" if goal_id in (1, 2) else "indexed-stack-gather")
         assert relation.complete is False
-        assert relation.schema_version == 6
+        assert relation.schema_version == 7
         assert relation.coverage_plan is not None
         assert relation.coverage_plan.complete is True
         assert relation.dependency_plan is not None
@@ -2397,7 +2398,36 @@ def test_compile_proof_plan_infers_bw_linear_multi_output_shapes():
     }
 
 
-def test_compile_proof_plan_infers_bw_sum_and_rejects_offset_embedding():
+def test_rule_registry_resolves_offset_embedding_as_distinct_semantic_identity():
+    registry = build_default_registry()
+    ordinary = Node(rank=0, op="FW_embedding", ins=[1, 2], outs=[3], params=[])
+    offset = Node(rank=1, op="FW_embedding", ins=[1, 2], outs=[3], params=[256])
+    malformed = Node(rank=1, op="FW_embedding", ins=[1, 2], outs=[3], params=[1, 2])
+
+    ordinary_rule, ordinary_error = registry.resolve(ordinary, 4)
+    offset_rule, offset_error = registry.resolve(offset, 4)
+    malformed_rule, malformed_error = registry.resolve(malformed, 4)
+
+    assert ordinary_error is None
+    assert ordinary_rule.rule_id == "fw-embedding"
+    assert ordinary_rule.denote_fn == "fw_embedding"
+    assert ordinary_rule.apply_lemmas == ("applyNode_fw_embedding_out",)
+    assert offset_error is None
+    assert offset_rule.rule_id == "fw-embedding-offset"
+    assert offset_rule.denote_fn == "fw_embedding_offset"
+    assert offset_rule.apply_lemmas == ("applyNode_fw_embedding_offset_out",)
+    assert malformed_rule is None
+    assert "no signature variant" in malformed_error
+
+    backward = Node(rank=2, op="BW_embedding", ins=[1, 2, 3], outs=[4], params=[512])
+    backward_rule, backward_error = registry.resolve(backward, 4)
+    assert backward_error is None
+    assert backward_rule.rule_id == "bw-embedding-offset"
+    assert backward_rule.denote_fn == "bw_embedding_offset"
+    assert backward_rule.apply_lemmas == ("applyNode_bw_embedding_offset_out",)
+
+
+def test_compile_proof_plan_infers_bw_sum_and_preserves_offset_embedding_identity():
     backward_sum = _goal_ir(
         sm_nodes=[Node(0, "BW_sum", [1, 2], [30])],
         pm_nodes=[Node(0, "BW_sum", [10, 11], [40])],
@@ -2423,9 +2453,12 @@ def test_compile_proof_plan_infers_bw_sum_and_rejects_offset_embedding():
     offset.lineage.tsShape = [2, 3]
     offset.lineage.tpShapes = [[2, 3]]
     plan = compile_proof_plan(offset, build_default_registry())
-    assert plan.supported is False
-    assert plan.diagnostics[0].code is DiagnosticCode.INVALID_SIGNATURE
-    assert "expected 0 parameters" in plan.diagnostics[0].message
+    assert plan.supported is True
+    assert {step.rule_id for step in plan.steps} == {"fw-embedding-offset"}
+    assert {step.denote_fn for step in plan.steps} == {"fw_embedding_offset"}
+    assert {step.apply_lemmas for step in plan.steps} == {
+        ("applyNode_fw_embedding_offset_out",)
+    }
 
     rank4 = _goal_ir(
         sm_nodes=[Node(0, "FW_linear", [1, 2], [30])],
@@ -2517,7 +2550,8 @@ def test_proof_plan_json_is_byte_deterministic():
     second = compile_proof_plan(ir, build_default_registry()).to_json()
     assert first == second
     decoded = json.loads(first)
-    assert decoded["schema_version"] == 4
+    assert decoded["schema_version"] == 5
+    assert decoded["steps"][0]["rule_id"] == "fw-gelu"
     assert decoded["steps"][0]["declared_input_tids"] == decoded["steps"][0]["semantic_input_tids"]
     assert decoded["steps"][0]["input_bindings"] == decoded["steps"][0]["semantic_input_bindings"]
     assert decoded["status"] == "supported"
@@ -3099,6 +3133,216 @@ def test_atomic_schedule_freezes_shared_owners_and_is_deterministic(monkeypatch)
     broken = replace(transitions[-1], pm_node_indices=(len(ir.pm_nodes),))
     with pytest.raises(RelationCompositionError, match="out of bounds"):
         build_atomic_schedule(ir, (*transitions[:-1], broken))
+
+
+def test_k_rank_sum_allreduce_terminal_is_topology_and_shape_derived():
+    sm_input = "sm:0:0"
+    pm_inputs = tuple(f"pm:{rank}:0" for rank in range(4))
+    sm_sum = "sm:1:0"
+    pm_sums = tuple(f"pm:{rank + 4}:0" for rank in range(4))
+    pm_reduce = "pm:8:0"
+    steps = [
+        SimpleNamespace(step_id=sm_input, side="sm", op="FW_linear", rank=0,
+                        input_bindings=(), output_shape=(8, 4)),
+        *(
+            SimpleNamespace(step_id=ref, side="pm", op="FW_linear", rank=rank,
+                            input_bindings=(), output_shape=(2, 4))
+            for rank, ref in enumerate(pm_inputs)
+        ),
+        SimpleNamespace(step_id=sm_sum, side="sm", op="FW_sum", rank=0,
+                        input_bindings=(sm_input,), output_shape=(1,)),
+        *(
+            SimpleNamespace(step_id=ref, side="pm", op="FW_sum", rank=rank,
+                            input_bindings=(pm_inputs[rank],), output_shape=(1,))
+            for rank, ref in enumerate(pm_sums)
+        ),
+        SimpleNamespace(step_id=pm_reduce, side="pm", op="AllReducePrim", rank=0,
+                        input_bindings=pm_sums, output_shape=(1,)),
+    ]
+    proof = SimpleNamespace(
+        steps=tuple(steps),
+        target_steps=(sm_sum, pm_reduce),
+    )
+    ir = SimpleNamespace(sm_num_ranks=1, pm_num_ranks=4)
+
+    terminal = relation_compiler_module.match_sum_allreduce_k_rank(ir, proof)
+
+    assert terminal.rank_count == 4
+    assert terminal.gather_dim == 0
+    assert terminal.input_fact == RelationFactSpec(
+        "sharded", (sm_input, *pm_inputs), gather_dim=0
+    )
+    assert terminal.sm_sum_step == sm_sum
+    assert terminal.pm_sum_steps == pm_sums
+    assert terminal.pm_allreduce_step == pm_reduce
+    assert terminal.lean_theorem == (
+        "TrainVerify.Denote.fw_sum_allGatherPrimDimN_eq_allReducePrim_fw_sum"
+    )
+
+
+def test_k_rank_alltoall_frontier_transports_gather_dimension():
+    sm_ref = "sm:0:0"
+    input_refs = tuple(f"pm:{rank}:0" for rank in range(4))
+    output_refs = tuple(f"pm:{rank + 4}:0" for rank in range(4))
+    steps = [
+        SimpleNamespace(
+            step_id=sm_ref,
+            side="sm",
+            op="FW_identity",
+            rank=0,
+            input_bindings=(),
+            parameters=(),
+            output_shape=(8, 4),
+        )
+    ]
+    steps.extend(
+        SimpleNamespace(
+            step_id=ref,
+            side="pm",
+            op="FW_identity",
+            rank=rank,
+            input_bindings=(),
+            parameters=(),
+            output_shape=(2, 4),
+        )
+        for rank, ref in enumerate(input_refs)
+    )
+    steps.extend(
+        SimpleNamespace(
+            step_id=ref,
+            side="pm",
+            op="AllToAllPrim",
+            rank=rank,
+            input_bindings=input_refs,
+            parameters=(0, 1),
+            output_shape=(8, 1),
+        )
+        for rank, ref in enumerate(output_refs)
+    )
+
+    certificates, frontiers, layouts = (
+        relation_compiler_module.advance_k_rank_alltoall_relation_frontiers(
+            SimpleNamespace(steps=tuple(steps)),
+            ((sm_ref, *output_refs),),
+            ("sharded",),
+        )
+    )
+
+    assert len(certificates) == 1
+    assert certificates[0].rank_count == 4
+    assert certificates[0].input_gather_dim == 0
+    assert certificates[0].output_gather_dim == 1
+    assert certificates[0].input_fact == RelationFactSpec(
+        "sharded", (sm_ref, *input_refs), gather_dim=0
+    )
+    assert certificates[0].output_fact == RelationFactSpec(
+        "sharded", (sm_ref, *output_refs), gather_dim=1
+    )
+    assert frontiers == ((sm_ref, *input_refs),)
+    assert layouts == ("sharded",)
+
+    transitions = build_certificate_transition_specs(
+        SimpleNamespace(steps=tuple(steps)), certificates
+    )
+    assert len(transitions) == 1
+    assert transitions[0].pre_facts == (certificates[0].input_fact,)
+    assert transitions[0].post_facts == (certificates[0].output_fact,)
+    assert transitions[0].sm_node_indices == ()
+    assert transitions[0].pm_node_indices == (4, 5, 6, 7)
+
+    sink = []
+    normalized, normalized_layouts = normalize_relation_frontiers(
+        SimpleNamespace(steps=tuple(steps)),
+        ((sm_ref, *output_refs),),
+        ("sharded",),
+        rules=("alltoall_k",),
+        certificate_sink=sink,
+    )
+    assert normalized == ((sm_ref, *input_refs),)
+    assert normalized_layouts == ("sharded",)
+    assert sink == list(certificates)
+
+
+def test_relation_plan_schema_versions_list_indexed_k_rank_facts():
+    from trainverify.bridge_emitter.relation_compiler import RelationPlan
+
+    plan = RelationPlan(
+        family="fixture",
+        terminal_rule_id="fixture",
+        synchronized_steps=(),
+        certificates=(),
+        unresolved_frontiers=(),
+        unresolved_layouts=(),
+        unresolved_side_conditions=(),
+    )
+
+    assert plan.schema_version == 7
+
+
+def test_closed_relation_facts_materialize_list_indexed_k_rank_shards():
+    refs = ("sm:0:0", "pm:0:0", "pm:1:0", "pm:2:0", "pm:3:0")
+    spec = RelationFactSpec("sharded", refs, gather_dim=1)
+    steps = (
+        SimpleNamespace(step_id=refs[0], side="sm", output_tid=10, output_shape=[2, 8]),
+        *(
+            SimpleNamespace(
+                step_id=ref,
+                side="pm",
+                output_tid=20 + rank,
+                output_shape=[2, 2],
+            )
+            for rank, ref in enumerate(refs[1:])
+        ),
+    )
+    transition = SimpleNamespace(
+        transition_id="k-rank",
+        pre_facts=(),
+        post_facts=(spec,),
+    )
+    relation = SimpleNamespace(
+        transition_specs=(transition,),
+        dependency_plan=SimpleNamespace(order=("k-rank",)),
+        zigzag_regions=(),
+        certificates=(),
+    )
+
+    facts = materialize_closed_relation_facts(
+        SimpleNamespace(init_lineages={}), SimpleNamespace(steps=steps), relation
+    )
+
+    assert len(facts) == 1
+    assert facts[0].kind == "sharded"
+    assert facts[0].sm_tid == 10
+    assert facts[0].pm_tids == (20, 21, 22, 23)
+    assert facts[0].gather_dim == 1
+    assert facts[0].full_shape == (2, 8)
+    assert facts[0].shard_shape == (2, 2)
+
+
+def test_closed_relation_declarations_render_list_indexed_k_rank_fact():
+    fact = SimpleNamespace(
+        fact_id="fact_000000",
+        kind="sharded",
+        sm_tid=10,
+        pm_tids=(20, 21, 22, 23),
+        gather_dim=1,
+        full_shape=(2, 8),
+        shard_shape=(2, 2),
+    )
+    chain = SimpleNamespace(
+        complete=True,
+        relation_facts=(fact,),
+        authority_facts=(),
+        anchor_fact=SimpleNamespace(
+            fact_id="anchor", side="sm", tid=99, shape=(1,)
+        ),
+        states=(SimpleNamespace(state_id="state_000000", fact_ids=("fact_000000",)),),
+    )
+
+    source = render_closed_relation_declarations(chain, "KRankFixture")
+
+    assert ".sharded 10 [20, 21, 22, 23] 1 [2, 8] [2, 2]" in source
+    assert ".ordinary 10 20 21" not in source
 
 
 def test_closed_relation_facts_materialize_exact_tids_shapes_and_metadata(monkeypatch):

@@ -70,6 +70,7 @@ class RuleSpec:
     apply_lemmas: tuple[str, ...] = ()
     output_projections: tuple[str, ...] = ()
     relation_effect: RelationEffect = RelationEffect.PRESERVE
+    rule_id: Optional[str] = None
 
     def signature_error(self, node: Node, num_ranks: int) -> Optional[str]:
         if len(set(node.outs)) != len(node.outs):
@@ -125,6 +126,7 @@ class RuleSpec:
 class RuleRegistry:
     def __init__(self, rules: Iterable[RuleSpec] = ()) -> None:
         self._rules: dict[str, RuleSpec] = {}
+        self._variants: dict[str, list[RuleSpec]] = {}
         for rule in rules:
             self.register(rule)
 
@@ -132,9 +134,32 @@ class RuleRegistry:
         if rule.op in self._rules:
             raise ValueError(f"duplicate proof rule for {rule.op}")
         self._rules[rule.op] = rule
+        self._variants[rule.op] = [rule]
+
+    def register_variant(self, rule: RuleSpec) -> None:
+        if rule.op not in self._rules:
+            raise ValueError(f"cannot register a variant without a base rule for {rule.op}")
+        variants = self._variants[rule.op]
+        identity = rule.rule_id or rule.op
+        if any((candidate.rule_id or candidate.op) == identity for candidate in variants):
+            raise ValueError(f"duplicate proof rule identity {identity!r} for {rule.op}")
+        variants.append(rule)
 
     def get(self, op: str) -> Optional[RuleSpec]:
         return self._rules.get(op)
+
+    def resolve(self, node: Node, num_ranks: int) -> tuple[Optional[RuleSpec], Optional[str]]:
+        variants = self._variants.get(node.op, ())
+        if not variants:
+            return None, f"operator {node.op} has no registered proof rule"
+        accepted = [rule for rule in variants if rule.signature_error(node, num_ranks) is None]
+        if len(accepted) == 1:
+            return accepted[0], None
+        if len(accepted) > 1:
+            identities = sorted(rule.rule_id or rule.op for rule in accepted)
+            return None, f"operator {node.op} has ambiguous signature variants: {identities}"
+        errors = sorted({rule.signature_error(node, num_ranks) for rule in variants})
+        return None, f"operator {node.op} has no signature variant: {'; '.join(errors)}"
 
     def require(self, op: str) -> RuleSpec:
         rule = self.get(op)
@@ -227,6 +252,7 @@ def build_default_registry() -> RuleRegistry:
                 min_parameter_count=1 if op in nonempty_parameters else None,
                 denote_fn=meta[0],
                 apply_lemmas=(meta[1],),
+                rule_id=op.lower().replace("_", "-"),
             )
         )
     for op, meta in sorted(renderer.COLLECTIVE.items()):
@@ -402,7 +428,30 @@ def build_default_registry() -> RuleRegistry:
             relation_effect=RelationEffect.SPECIAL,
         )
     )
-    return RuleRegistry(rules)
+    registry = RuleRegistry(rules)
+    registry.register_variant(RuleSpec(
+        op="FW_embedding",
+        kind=RuleKind.POINTWISE,
+        output_count=1,
+        input_count=2,
+        min_inputs=2,
+        parameter_count=1,
+        denote_fn="fw_embedding_offset",
+        apply_lemmas=("applyNode_fw_embedding_offset_out",),
+        rule_id="fw-embedding-offset",
+    ))
+    registry.register_variant(RuleSpec(
+        op="BW_embedding",
+        kind=RuleKind.POINTWISE,
+        output_count=1,
+        input_count=3,
+        min_inputs=3,
+        parameter_count=1,
+        denote_fn="bw_embedding_offset",
+        apply_lemmas=("applyNode_bw_embedding_offset_out",),
+        rule_id="bw-embedding-offset",
+    ))
+    return registry
 
 
 @dataclass(frozen=True)
@@ -431,6 +480,7 @@ class CertificateStep:
     output_index: int
     output_tid: int
     op: str
+    rule_id: str
     rule_kind: RuleKind
     relation_effect: RelationEffect
     rank: int
@@ -458,7 +508,7 @@ class ProofPlan:
     steps: tuple[CertificateStep, ...]
     target_steps: tuple[str, ...]
     diagnostics: tuple[Diagnostic, ...]
-    schema_version: int = 4
+    schema_version: int = 5
 
     @property
     def supported(self) -> bool:
@@ -1291,19 +1341,21 @@ def compile_proof_plan(ir: GoalIR, registry: RuleRegistry) -> ProofPlan:
     # obscure it.
     for side in ("sm", "pm"):
         for node_index, node in enumerate(side_nodes[side]):
-            rule = registry.get(node.op)
             output_tid = int(node.outs[0]) if node.outs else None
+            num_ranks = ir.sm_num_ranks if side == "sm" else ir.pm_num_ranks
+            rule, resolution_error = registry.resolve(node, num_ranks)
             if rule is None:
                 issue = Diagnostic(
-                    DiagnosticCode.UNSUPPORTED_OPERATOR,
-                    f"operator {node.op} has no registered proof rule",
+                    DiagnosticCode.UNSUPPORTED_OPERATOR
+                    if registry.get(node.op) is None
+                    else DiagnosticCode.INVALID_SIGNATURE,
+                    resolution_error or f"operator {node.op} has no registered proof rule",
                     side=side,
                     node_index=node_index,
                     op=node.op,
                     output_tid=output_tid,
                 )
                 return ProofPlan(ir.n, relation, (), (), (issue,))
-            num_ranks = ir.sm_num_ranks if side == "sm" else ir.pm_num_ranks
             signature_error = rule.signature_error(node, num_ranks)
             if signature_error is not None:
                 issue = Diagnostic(
@@ -1322,7 +1374,8 @@ def compile_proof_plan(ir: GoalIR, registry: RuleRegistry) -> ProofPlan:
             tid: ("external", tid) for tid in side_inputs[side]
         }
         for node_index, node in enumerate(side_nodes[side]):
-            rule = registry.get(node.op)
+            num_ranks = ir.sm_num_ranks if side == "sm" else ir.pm_num_ranks
+            rule, _resolution_error = registry.resolve(node, num_ranks)
             output_indices = (
                 rule.produced_output_indices
                 if rule is not None and rule.produced_output_indices is not None
@@ -1466,18 +1519,20 @@ def compile_proof_plan(ir: GoalIR, registry: RuleRegistry) -> ProofPlan:
             )
         visiting.add(key)
 
-        rule = registry.get(node.op)
+        num_ranks = ir.sm_num_ranks if side == "sm" else ir.pm_num_ranks
+        rule, resolution_error = registry.resolve(node, num_ranks)
         if rule is None:
             visiting.remove(key)
             return Diagnostic(
-                DiagnosticCode.UNSUPPORTED_OPERATOR,
-                f"operator {node.op} has no registered proof rule",
+                DiagnosticCode.UNSUPPORTED_OPERATOR
+                if registry.get(node.op) is None
+                else DiagnosticCode.INVALID_SIGNATURE,
+                resolution_error or f"operator {node.op} has no registered proof rule",
                 side=side,
                 node_index=node_index,
                 op=node.op,
                 output_tid=output_tid,
             )
-        num_ranks = ir.sm_num_ranks if side == "sm" else ir.pm_num_ranks
         signature_error = rule.signature_error(node, num_ranks)
         if signature_error is not None:
             visiting.remove(key)
@@ -1598,6 +1653,7 @@ def compile_proof_plan(ir: GoalIR, registry: RuleRegistry) -> ProofPlan:
             output_index=output_index,
             output_tid=output_tid,
             op=node.op,
+            rule_id=rule.rule_id or rule.op,
             rule_kind=rule.kind,
             relation_effect=relation_effect,
             rank=int(node.rank),

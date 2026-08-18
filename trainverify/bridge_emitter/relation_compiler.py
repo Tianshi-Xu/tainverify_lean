@@ -2895,6 +2895,196 @@ def expand_rotary_relation_frontiers(
     return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
 
 
+@dataclass(frozen=True)
+class KRankSumAllReduceTerminalCertificate:
+    rule_id: str
+    rank_count: int
+    gather_dim: int
+    input_fact: RelationFactSpec
+    sm_sum_step: str
+    pm_sum_steps: tuple[str, ...]
+    pm_allreduce_step: str
+    lean_theorem: str
+
+
+def match_sum_allreduce_k_rank(
+    ir: GoalIR,
+    plan: ProofPlan,
+) -> KRankSumAllReduceTerminalCertificate:
+    if int(ir.sm_num_ranks) != 1 or int(ir.pm_num_ranks) < 2:
+        raise RelationCompositionError("K-rank sum/AllReduce terminal requires SM=1 and PM>=2")
+    if len(plan.target_steps) != 2:
+        raise RelationCompositionError("K-rank sum/AllReduce terminal requires exactly two target steps")
+    by_id = {step.step_id: step for step in plan.steps}
+    try:
+        targets = [by_id[ref] for ref in plan.target_steps]
+    except KeyError as exc:
+        raise RelationCompositionError(f"terminal target step is unresolved: {exc.args[0]}") from exc
+    sm_targets = [step for step in targets if step.side == "sm"]
+    pm_targets = [step for step in targets if step.side == "pm"]
+    if len(sm_targets) != 1 or len(pm_targets) != 1:
+        raise RelationCompositionError("K-rank sum/AllReduce terminal requires one SM and one PM target")
+    sm_sum, pm_reduce = sm_targets[0], pm_targets[0]
+    if sm_sum.op != "FW_sum" or pm_reduce.op != "AllReducePrim" or int(pm_reduce.rank) != 0:
+        raise RelationCompositionError("terminal is not SM FW_sum against rank-0 PM AllReducePrim")
+    k = int(ir.pm_num_ranks)
+    if len(sm_sum.input_bindings) != 1 or len(pm_reduce.input_bindings) != k:
+        raise RelationCompositionError("sum/AllReduce terminal input arity does not match rank count")
+    try:
+        pm_sums = tuple(by_id[ref] for ref in pm_reduce.input_bindings)
+        sm_input = by_id[sm_sum.input_bindings[0]]
+    except KeyError as exc:
+        raise RelationCompositionError(f"sum/AllReduce dependency is unresolved: {exc.args[0]}") from exc
+    if any(step.side != "pm" or step.op != "FW_sum" for step in pm_sums):
+        raise RelationCompositionError("AllReduce inputs are not PM FW_sum writers")
+    if tuple(int(step.rank) for step in pm_sums) != tuple(range(k)):
+        raise RelationCompositionError("PM FW_sum writers are not ordered ranks 0..K-1")
+    if any(len(step.input_bindings) != 1 for step in pm_sums):
+        raise RelationCompositionError("PM FW_sum writer must have exactly one input")
+    if any(tuple(step.output_shape) != tuple(sm_sum.output_shape) for step in pm_sums):
+        raise RelationCompositionError("local and full FW_sum output shapes disagree")
+    if tuple(pm_reduce.output_shape) != tuple(sm_sum.output_shape):
+        raise RelationCompositionError("AllReduce and SM FW_sum output shapes disagree")
+    try:
+        pm_inputs = tuple(by_id[step.input_bindings[0]] for step in pm_sums)
+    except KeyError as exc:
+        raise RelationCompositionError(f"local FW_sum input is unresolved: {exc.args[0]}") from exc
+    if any(step.side != "pm" for step in pm_inputs) or sm_input.side != "sm":
+        raise RelationCompositionError("sum/AllReduce source frontier has the wrong side")
+    shard_shape = tuple(pm_inputs[0].output_shape)
+    if any(tuple(step.output_shape) != shard_shape for step in pm_inputs):
+        raise RelationCompositionError("sum/AllReduce source PM shard shapes disagree")
+    full_shape = tuple(sm_input.output_shape)
+    if len(full_shape) != len(shard_shape):
+        raise RelationCompositionError("sum/AllReduce full and shard ranks disagree")
+    candidates = [
+        dim for dim in range(len(full_shape))
+        if full_shape[dim] == shard_shape[dim] * k
+        and all(full_shape[i] == shard_shape[i] for i in range(len(full_shape)) if i != dim)
+    ]
+    if len(candidates) != 1:
+        raise RelationCompositionError(
+            f"sum/AllReduce source does not determine one gather dimension: {candidates}"
+        )
+    gather_dim = candidates[0]
+    return KRankSumAllReduceTerminalCertificate(
+        rule_id="sum-allreduce-k-rank",
+        rank_count=k,
+        gather_dim=gather_dim,
+        input_fact=RelationFactSpec(
+            "sharded",
+            (sm_input.step_id, *(step.step_id for step in pm_inputs)),
+            gather_dim=gather_dim,
+        ),
+        sm_sum_step=sm_sum.step_id,
+        pm_sum_steps=tuple(step.step_id for step in pm_sums),
+        pm_allreduce_step=pm_reduce.step_id,
+        lean_theorem="TrainVerify.Denote.fw_sum_allGatherPrimDimN_eq_allReducePrim_fw_sum",
+    )
+
+
+@dataclass(frozen=True)
+class KRankAllToAllRelationCertificate:
+    rule_id: str
+    rank_count: int
+    input_gather_dim: int
+    output_gather_dim: int
+    input_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    pm_step_ids: tuple[str, ...]
+    lean_theorem: str
+
+
+def advance_k_rank_alltoall_relation_frontiers(
+    plan: ProofPlan,
+    frontiers: tuple[tuple[str, ...], ...],
+    layouts: tuple[str, ...],
+) -> tuple[
+    tuple[KRankAllToAllRelationCertificate, ...],
+    tuple[tuple[str, ...], ...],
+    tuple[str, ...],
+]:
+    """Peel one rank-count-polymorphic AllToAll layout transport.
+
+    A sharded full tensor reconstructed along ``idim`` is unchanged globally;
+    the K rank-local AllToAll writers only change its reconstruction dimension
+    to ``odim``.  Rank order and every declared shape are authority.
+    """
+
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("K-rank AllToAll frontier/layout lengths disagree")
+    by_id = _step_map(plan)
+    certificates = []
+    rewritten = []
+    rewritten_layouts = []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "sharded":
+            rewritten.append(frontier)
+            rewritten_layouts.append(layout)
+            continue
+        if len(frontier) < 2:
+            raise RelationCompositionError("K-rank AllToAll frontier has no PM ranks")
+        sm_ref, *pm_output_refs = frontier
+        rank_count = len(pm_output_refs)
+        sm_step = by_id.get(sm_ref)
+        pm_steps = tuple(by_id.get(ref) for ref in pm_output_refs)
+        if sm_step is None or sm_step.side != "sm" or any(step is None for step in pm_steps):
+            raise RelationCompositionError("K-rank AllToAll frontier contains unknown or wrong-side steps")
+        if any(step.side != "pm" or step.op != "AllToAllPrim" for step in pm_steps):
+            rewritten.append(frontier)
+            rewritten_layouts.append(layout)
+            continue
+        if tuple(step.rank for step in pm_steps) != tuple(range(rank_count)):
+            raise RelationCompositionError("K-rank AllToAll writers are not in exact rank order")
+        parameter_sets = {step.parameters for step in pm_steps}
+        if len(parameter_sets) != 1:
+            raise RelationCompositionError("K-rank AllToAll writers disagree on dimensions")
+        params = next(iter(parameter_sets))
+        if len(params) != 2:
+            raise RelationCompositionError("K-rank AllToAll requires exactly input/output dimensions")
+        input_dim, output_dim = params
+        input_bindings = pm_steps[0].input_bindings
+        if len(input_bindings) != rank_count or any(
+            step.input_bindings != input_bindings for step in pm_steps[1:]
+        ):
+            raise RelationCompositionError("K-rank AllToAll writers do not share one ordered input list")
+        input_steps = tuple(by_id.get(ref) for ref in input_bindings)
+        if any(step is None or step.side != "pm" for step in input_steps):
+            raise RelationCompositionError("K-rank AllToAll input list has unknown or wrong-side steps")
+        input_shapes = tuple(step.output_shape for step in input_steps)
+        output_shapes = tuple(step.output_shape for step in pm_steps)
+        if len(set(input_shapes)) != 1 or len(set(output_shapes)) != 1:
+            raise RelationCompositionError("K-rank AllToAll shard shapes disagree across ranks")
+        full_shape = tuple(sm_step.output_shape)
+
+        def gathered_shape(shard_shape: tuple[int, ...], dim: int) -> tuple[int, ...]:
+            if dim < 0 or dim >= len(shard_shape):
+                raise RelationCompositionError(f"K-rank AllToAll dimension is out of bounds: {dim}")
+            result = list(shard_shape)
+            result[dim] *= rank_count
+            return tuple(result)
+
+        if gathered_shape(input_shapes[0], input_dim) != full_shape:
+            raise RelationCompositionError("K-rank AllToAll input shards do not reconstruct the SM tensor")
+        if gathered_shape(output_shapes[0], output_dim) != full_shape:
+            raise RelationCompositionError("K-rank AllToAll outputs do not reconstruct the SM tensor")
+        input_fact = RelationFactSpec("sharded", (sm_ref, *input_bindings), gather_dim=input_dim)
+        output_fact = RelationFactSpec("sharded", frontier, gather_dim=output_dim)
+        certificates.append(KRankAllToAllRelationCertificate(
+            rule_id="alltoall-k-rank-layout-transport",
+            rank_count=rank_count,
+            input_gather_dim=input_dim,
+            output_gather_dim=output_dim,
+            input_fact=input_fact,
+            output_fact=output_fact,
+            pm_step_ids=tuple(pm_output_refs),
+            lean_theorem="TrainVerify.Denote.RelationCompiler.ShardedRel.allToAll",
+        ))
+        rewritten.append(input_fact.step_triple)
+        rewritten_layouts.append("sharded")
+    return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
+
+
 def deduplicate_relation_frontiers(
     frontiers: tuple[tuple[str, str, str], ...],
     layouts: tuple[str, ...],
@@ -2926,17 +3116,17 @@ def _extend_unique_certificates(sink: list[object] | None, items: tuple[object, 
 
 def normalize_relation_frontiers(
     plan: ProofPlan,
-    frontiers: tuple[tuple[str, str, str], ...],
+    frontiers: tuple[tuple[str, ...], ...],
     layouts: tuple[str, ...],
     *,
-    rules: tuple[str, ...] = ("alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
+    rules: tuple[str, ...] = ("alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
     goal_ir: GoalIR | None = None,
     deduplicate_each_round: bool = False,
     certificate_sink: list[object] | None = None,
     side_condition_sink: list[RelationSideCondition] | None = None,
-) -> tuple[tuple[tuple[str, str, str], ...], tuple[str, ...]]:
+) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
-    known = {"alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
+    known = {"alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
     unknown = set(rules) - known
     if unknown:
         raise RelationCompositionError(f"unknown relation normalization rules: {sorted(unknown)}")
@@ -2948,6 +3138,13 @@ def normalize_relation_frontiers(
                 current_frontiers, current_layouts
             )
         prior_state = (current_frontiers, current_layouts)
+        if "alltoall_k" in rules:
+            _certs, current_frontiers, current_layouts = (
+                advance_k_rank_alltoall_relation_frontiers(
+                    plan, current_frontiers, current_layouts
+                )
+            )
+            _extend_unique_certificates(certificate_sink, _certs)
         if "alias" in rules:
             _certs, current_frontiers = peel_multiref_relation_frontiers(
                 plan, current_frontiers, current_layouts
@@ -3064,7 +3261,7 @@ class RelationPlan:
     dependency_plan: TransitionDependencyPlan | None = None
     atomic_schedule: AtomicSchedulePlan | None = None
     dependent_chain_plan: ClosedDependentChainPlan | None = None
-    schema_version: int = 6
+    schema_version: int = 7
     graph_coverage_complete: bool = False
     composer_registered: bool = False
     publication_diagnostics: tuple[str, ...] = ()
@@ -3102,8 +3299,7 @@ class ClosedRelationFactRecord:
     source: RelationFactSpec
     kind: str
     sm_tid: int
-    pm_rank0_tid: int
-    pm_rank1_tid: int
+    pm_tids: tuple[int, ...]
     metadata_tid: int | None
     metadata_region_id: int | None
     full_shape: tuple[int, ...]
@@ -3111,6 +3307,18 @@ class ClosedRelationFactRecord:
     gather_dim: int | None = None
     source_tid_triples: tuple[tuple[int, int, int], ...] = ()
     joined_pm_tid: int | None = None
+
+    @property
+    def pm_rank0_tid(self) -> int:
+        if len(self.pm_tids) < 1:
+            raise RelationCompositionError("closed relation fact has no PM rank 0")
+        return self.pm_tids[0]
+
+    @property
+    def pm_rank1_tid(self) -> int:
+        if len(self.pm_tids) < 2:
+            raise RelationCompositionError("closed relation fact has no PM rank 1")
+        return self.pm_tids[1]
 
 
 def materialize_closed_relation_facts(
@@ -3212,13 +3420,26 @@ def materialize_closed_relation_facts(
     ordered = sorted(specs, key=lambda fact: (fact.layout, fact.step_triple))
     result = []
     for ordinal, fact in enumerate(ordered):
+        if fact.layout == "sharded":
+            if len(fact.step_triple) < 2:
+                raise RelationCompositionError(
+                    "K-rank sharded relation fact requires one SM and at least one PM reference"
+                )
+        elif len(fact.step_triple) != 3:
+            raise RelationCompositionError(
+                f"two-rank relation fact requires one SM and two PM references: {fact.step_triple}"
+            )
         sm_tid, full_shape = resolve(fact.step_triple[0], "sm")
-        pm0_tid, shard0_shape = resolve(fact.step_triple[1], "pm")
-        pm1_tid, shard1_shape = resolve(fact.step_triple[2], "pm")
-        if shard0_shape != shard1_shape:
+        pm_resolved = tuple(resolve(ref, "pm") for ref in fact.step_triple[1:])
+        pm_tids = tuple(item[0] for item in pm_resolved)
+        shard_shapes = tuple(item[1] for item in pm_resolved)
+        shard0_shape = shard_shapes[0]
+        if any(shape != shard0_shape for shape in shard_shapes[1:]):
             raise RelationCompositionError(
                 f"relation fact PM shard shapes disagree: {fact.step_triple}"
             )
+        pm0_tid = pm_tids[0]
+        pm1_tid = pm_tids[1] if len(pm_tids) > 1 else pm_tids[0]
         metadata_tid = None
         metadata_region_id = None
         source_tid_triples = ()
@@ -3272,6 +3493,18 @@ def materialize_closed_relation_facts(
             joined_pm_tid, joined_shape = resolve(fact.joined_pm_step, "pm")
             if joined_shape != full_shape or joined_pm_tid in {pm0_tid, pm1_tid}:
                 raise RelationCompositionError("joined ordinary output is not a distinct full-shape PM tensor")
+        elif fact.layout == "sharded":
+            dim = fact.gather_dim
+            if dim is None or dim < 0 or dim >= len(shard0_shape):
+                raise RelationCompositionError(
+                    f"K-rank sharded relation has invalid gather dimension: {dim}"
+                )
+            expected_full = list(shard0_shape)
+            expected_full[dim] *= len(pm_tids)
+            if tuple(expected_full) != full_shape:
+                raise RelationCompositionError(
+                    "K-rank sharded relation full shape is not the declared equal-shard gather"
+                )
         elif fact.layout not in {"ordinary", "label_chunks"}:
             raise RelationCompositionError(f"unsupported closed relation layout: {fact.layout}")
         else:
@@ -3282,8 +3515,7 @@ def materialize_closed_relation_facts(
             source=fact,
             kind=fact.layout,
             sm_tid=sm_tid,
-            pm_rank0_tid=pm0_tid,
-            pm_rank1_tid=pm1_tid,
+            pm_tids=pm_tids,
             metadata_tid=metadata_tid,
             metadata_region_id=metadata_region_id,
             full_shape=full_shape,
@@ -4042,6 +4274,20 @@ def build_certificate_transition_specs(
                 _fact("label_chunks", post_refs),
             )
             footprint_groups = (tuple(cert.chunk_step_pair),)
+        elif type(cert) is KRankSumAllReduceTerminalCertificate:
+            pre = (cert.input_fact,)
+            post = (RelationFactSpec(
+                "joined_sharded_reduction",
+                (cert.sm_sum_step,),
+                joined_pm_step=cert.pm_allreduce_step,
+            ),)
+            footprint_groups = (
+                (cert.sm_sum_step,), cert.pm_sum_steps, (cert.pm_allreduce_step,)
+            )
+        elif type(cert) is KRankAllToAllRelationCertificate:
+            pre = (cert.input_fact,)
+            post = (cert.output_fact,)
+            footprint_groups = (cert.pm_step_ids,)
         elif type(cert) is HiddenShardedEmbeddingAllToAllCertificate:
             post_refs = (cert.sm_embedding_step, *tuple(cert.alltoall_steps))
             pre = ()
@@ -4275,6 +4521,8 @@ class AtomicSchedulePlan:
 def build_atomic_schedule(
     ir: GoalIR,
     transitions: tuple[CertificateTransitionSpec, ...],
+    *,
+    external_pre_facts: frozenset[RelationFactSpec] = frozenset(),
 ) -> AtomicSchedulePlan:
     """Freeze shared semantic owners and form a deterministic two-axis SCC schedule."""
 
@@ -4383,7 +4631,9 @@ def build_atomic_schedule(
             edges.add((item, owner))
             edges.add((owner, item))
 
-    dependency = build_transition_dependency_plan(transitions)
+    dependency = build_transition_dependency_plan(
+        transitions, external_pre_facts=external_pre_facts
+    )
     for consumer, producers in dependency.dependencies:
         for producer in producers:
             left, right = canonical_group[producer], canonical_group[consumer]
@@ -4659,6 +4909,52 @@ def compile_relation_plan(
     deduplicate_frontiers: bool = True,
 ) -> RelationPlan:
     """Compile registered terminal relation families without hiding backbone gaps."""
+    k_terminal_error = None
+    try:
+        terminal_k = match_sum_allreduce_k_rank(ir, proof)
+    except RelationCompositionError as exc:
+        k_terminal_error = exc
+    else:
+        compiled_certificates: list[object] = [terminal_k]
+        frontiers = (terminal_k.input_fact.step_triple,)
+        layouts = ("sharded",)
+        if peel_aliases:
+            frontiers, layouts = normalize_relation_frontiers(
+                proof,
+                frontiers,
+                layouts,
+                rules=("alltoall_k",),
+                goal_ir=ir,
+                certificate_sink=compiled_certificates,
+                deduplicate_each_round=True,
+            )
+        if deduplicate_frontiers:
+            frontiers, layouts = deduplicate_relation_frontiers(frontiers, layouts)
+        certificate_tuple = tuple(compiled_certificates)
+        transition_specs = build_certificate_transition_specs(proof, certificate_tuple)
+        coverage_plan = build_exact_node_coverage_plan(ir, transition_specs)
+        dependency_plan = build_transition_dependency_plan(
+            transition_specs,
+            external_pre_facts=frozenset({terminal_k.input_fact}),
+        )
+        atomic_schedule = build_atomic_schedule(
+            ir, transition_specs,
+            external_pre_facts=frozenset({terminal_k.input_fact}),
+        )
+        return RelationPlan(
+            family="sum-allreduce-k-rank",
+            terminal_rule_id=terminal_k.rule_id,
+            synchronized_steps=(),
+            certificates=certificate_tuple,
+            unresolved_frontiers=frontiers,
+            unresolved_layouts=layouts,
+            unresolved_side_conditions=(),
+            zigzag_regions=(),
+            transition_specs=transition_specs,
+            coverage_plan=coverage_plan,
+            dependency_plan=dependency_plan,
+            atomic_schedule=atomic_schedule,
+        )
     stack_error = None
     try:
         terminal = match_indexed_stack_gather_two_rank(ir, proof)
@@ -4845,7 +5141,7 @@ def compile_relation_plan(
         terminal_ce = match_inner_chunk_ce_projection_gather_two_rank(ir, proof)
     except RelationCompositionError as ce_error:
         raise RelationCompositionError(
-            f"no registered relation family: stack={stack_error}; ce={ce_error}"
+            f"no registered relation family: ksum={k_terminal_error}; stack={stack_error}; ce={ce_error}"
         ) from ce_error
     by_id = _step_map(proof)
     sm = by_id[terminal_ce.sm_ce_step]
