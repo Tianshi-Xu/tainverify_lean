@@ -3444,7 +3444,7 @@ def advance_k_rank_layernorm_relation_frontiers(plan, frontiers, layouts):
         op="FW_layernorm",
         input_count=3,
         rule_id="layernorm-sharded-k-rank-dim1",
-        lean_theorem="TrainVerify.Denote.fw_layernorm_3d_allGatherPrimDim1_comm",
+        lean_theorem="TrainVerify.Denote.fw_layernorm_distribute_allGatherPrimDimN_dim1_K_3d",
         allowed_gather_dims=(1,),
     )
 
@@ -3643,6 +3643,10 @@ def advance_k_rank_add_relation_frontiers(
             raise RelationCompositionError(
                 f"K-rank FW_add changes sharding dimension: inputs={input_dims}, output={output_dim}"
             )
+        if output_dim != 1:
+            rewritten.append(frontier)
+            rewritten_layouts.append(layout)
+            continue
         output_refs = (sm_step.step_id, *(step.step_id for step in pm_steps))
         input_facts = tuple(
             RelationFactSpec("sharded", refs, gather_dim=output_dim)
@@ -3657,7 +3661,7 @@ def advance_k_rank_add_relation_frontiers(
             output_fact=RelationFactSpec("sharded", output_refs, gather_dim=output_dim),
             sm_step_id=sm_step.step_id,
             pm_step_ids=tuple(step.step_id for step in pm_steps),
-            lean_theorem="TrainVerify.Denote.fw_add_allGatherPrimDimN_comm",
+            lean_theorem="TrainVerify.Denote.fw_add_allGather_dim1_K",
         ))
         rewritten.extend(input_frontiers)
         rewritten_layouts.extend(("sharded", "sharded"))
@@ -3759,7 +3763,7 @@ def advance_k_rank_alltoall_relation_frontiers(
             input_fact=input_fact,
             output_fact=output_fact,
             pm_step_ids=tuple(pm_output_refs),
-            lean_theorem="TrainVerify.Denote.RelationCompiler.ShardedRel.allToAll",
+            lean_theorem="TrainVerify.Denote.allGatherPrimDimN_allToAllPrimWithDims_ofFn",
         ))
         rewritten.append(input_fact.step_triple)
         rewritten_layouts.append("sharded")

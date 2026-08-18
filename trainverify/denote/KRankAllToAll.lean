@@ -291,9 +291,4 @@ theorem allGatherPrimDimN_allToAllPrimWithDims_ofFn
     allGatherPrimDimN_chunks_ofFn odim xs.length
       (allGatherPrimDimN idim xs.length 0 xs) hparts hodim hdiv
 
-#check allGatherPrimDimN_chunks_ofFn
-#print axioms allGatherPrimDimN_chunks_ofFn
-#check allGatherPrimDimN_allToAllPrimWithDims_ofFn
-#print axioms allGatherPrimDimN_allToAllPrimWithDims_ofFn
-
 end TrainVerify.Denote

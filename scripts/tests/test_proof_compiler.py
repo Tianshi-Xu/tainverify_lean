@@ -3597,7 +3597,7 @@ def test_k_rank_layernorm_frontier_uses_generic_local_backend():
     assert len(certs) == 1
     assert certs[0].external_tids == (91, 92)
     assert certs[0].op == "FW_layernorm"
-    assert certs[0].lean_theorem.endswith("fw_layernorm_3d_allGatherPrimDim1_comm")
+    assert certs[0].lean_theorem.endswith("fw_layernorm_distribute_allGatherPrimDimN_dim1_K_3d")
 
 
 def test_k_rank_multiref_projection_preserves_ordered_sharded_frontier():
@@ -3649,7 +3649,11 @@ def test_k_rank_multiref_projection_preserves_ordered_sharded_frontier():
     assert sink == list(certs)
 
 
-def test_k_rank_add_frontier_expands_two_dynamic_sharded_inputs():
+@pytest.mark.parametrize(
+    ("shard_shape", "supported"),
+    [((1, 2, 12), True), ((1, 8, 3), False)],
+)
+def test_k_rank_add_frontier_expands_two_dynamic_sharded_inputs(shard_shape, supported):
     sm_inputs = ("sm:0:0", "sm:1:0")
     pm_inputs = tuple(
         tuple(f"pm:{arg * 4 + rank}:0" for rank in range(4))
@@ -3662,13 +3666,13 @@ def test_k_rank_add_frontier_expands_two_dynamic_sharded_inputs():
                           input_bindings=(), output_shape=(1, 8, 12))
           for ref in sm_inputs),
         *(SimpleNamespace(step_id=pm_inputs[arg][rank], side="pm", op="FW_identity",
-                          rank=rank, input_bindings=(), output_shape=(1, 8, 3))
+                          rank=rank, input_bindings=(), output_shape=shard_shape)
           for arg in range(2) for rank in range(4)),
         SimpleNamespace(step_id=sm_output, side="sm", op="FW_add", rank=0,
                         input_bindings=sm_inputs, output_shape=(1, 8, 12)),
         *(SimpleNamespace(step_id=pm_outputs[rank], side="pm", op="FW_add", rank=rank,
                           input_bindings=(pm_inputs[0][rank], pm_inputs[1][rank]),
-                          output_shape=(1, 8, 3))
+                          output_shape=shard_shape)
           for rank in range(4)),
     ]
     certs, frontiers, layouts = relation_compiler_module.advance_k_rank_add_relation_frontiers(
@@ -3676,17 +3680,6 @@ def test_k_rank_add_frontier_expands_two_dynamic_sharded_inputs():
         ((sm_output, *pm_outputs),),
         ("sharded",),
     )
-    assert frontiers == (
-        (sm_inputs[0], *pm_inputs[0]),
-        (sm_inputs[1], *pm_inputs[1]),
-    )
-    assert layouts == ("sharded", "sharded")
-    assert len(certs) == 1
-    assert certs[0].gather_dim == 2
-    assert len(certs[0].input_facts) == 2
-    assert certs[0].output_fact.gather_dim == 2
-    assert certs[0].lean_theorem.endswith("fw_add_allGatherPrimDimN_comm")
-
     sink = []
     normalized, normalized_layouts = normalize_relation_frontiers(
         SimpleNamespace(steps=tuple(steps)),
@@ -3695,9 +3688,28 @@ def test_k_rank_add_frontier_expands_two_dynamic_sharded_inputs():
         rules=("add_k",),
         certificate_sink=sink,
     )
-    assert normalized == frontiers
-    assert normalized_layouts == layouts
-    assert sink == list(certs)
+    if supported:
+        expected = (
+            (sm_inputs[0], *pm_inputs[0]),
+            (sm_inputs[1], *pm_inputs[1]),
+        )
+        assert len(certs) == 1
+        assert certs[0].gather_dim == 1
+        assert certs[0].lean_theorem == "TrainVerify.Denote.fw_add_allGather_dim1_K"
+        assert frontiers == expected
+        assert layouts == ("sharded", "sharded")
+        assert normalized == expected
+        assert normalized_layouts == ("sharded", "sharded")
+        assert sink == list(certs)
+    else:
+        # A dim2 relation must remain unsupported rather than being mislabeled
+        # with the currently integrated dim1 theorem.
+        assert certs == ()
+        assert frontiers == ((sm_output, *pm_outputs),)
+        assert layouts == ("sharded",)
+        assert normalized == ((sm_output, *pm_outputs),)
+        assert normalized_layouts == ("sharded",)
+        assert sink == []
 
 
 def test_k_rank_alltoall_frontier_transports_gather_dimension():
@@ -3752,6 +3764,7 @@ def test_k_rank_alltoall_frontier_transports_gather_dimension():
     assert certificates[0].rank_count == 4
     assert certificates[0].input_gather_dim == 0
     assert certificates[0].output_gather_dim == 1
+    assert certificates[0].lean_theorem == "TrainVerify.Denote.allGatherPrimDimN_allToAllPrimWithDims_ofFn"
     assert certificates[0].input_fact == RelationFactSpec(
         "sharded", (sm_ref, *input_refs), gather_dim=0
     )

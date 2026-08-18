@@ -1,0 +1,10 @@
+import denote.KRankAllToAll
+
+namespace TrainVerify.Denote
+
+#check allGatherPrimDimN_chunks_ofFn
+#print axioms allGatherPrimDimN_chunks_ofFn
+#check allGatherPrimDimN_allToAllPrimWithDims_ofFn
+#print axioms allGatherPrimDimN_allToAllPrimWithDims_ofFn
+
+end TrainVerify.Denote

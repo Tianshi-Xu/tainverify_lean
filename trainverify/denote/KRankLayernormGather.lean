@@ -269,9 +269,6 @@ theorem fw_layernorm_distribute_allGatherPrimDimN_dim1_K_3d
     rw [layerNormVarAt_allGatherPrimDimN_dim1_3d (x0 :: rest) K b s d q r p _
           hK hs hd hq hr hp hhead]
 
-#check fw_layernorm_distribute_allGatherPrimDimN_dim1_K_3d
-#print axioms fw_layernorm_distribute_allGatherPrimDimN_dim1_K_3d
-
 end
 
 end TrainVerify.Denote

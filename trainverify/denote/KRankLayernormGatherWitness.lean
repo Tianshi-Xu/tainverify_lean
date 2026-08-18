@@ -1,0 +1,8 @@
+import denote.KRankLayernormGather
+
+namespace TrainVerify.Denote
+
+#check fw_layernorm_distribute_allGatherPrimDimN_dim1_K_3d
+#print axioms fw_layernorm_distribute_allGatherPrimDimN_dim1_K_3d
+
+end TrainVerify.Denote
