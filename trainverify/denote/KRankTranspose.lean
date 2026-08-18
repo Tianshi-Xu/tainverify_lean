@@ -552,4 +552,161 @@ theorem transposeAxes_1_2_allGather_dim2_to_dim1_rank4
   congr 2 <;> ring
 
 
+set_option maxHeartbeats 3200000 in
+theorem transposeAxes_1_2_allGather_dim1_to_dim2_rank4
+    (xs : List Tensor) (d0 d1 d2 d3 : Nat)
+    (hne : xs ≠ [])
+    (hshapes : ∀ x ∈ xs, x.shape = [d0,d1,d2,d3]) :
+    transposeAxes 1 2 (allGatherPrimDimN 1 xs.length 0 xs) =
+      allGatherPrimDimN 2 xs.length 0 (xs.map (transposeAxes 1 2)) := by
+  have append_div (u N w d : Nat) (hd : 0 < d) (hw : w < d) :
+      (u*d+w)/(N*d)=u/N := by
+    rw [show N*d=d*N by ring, ← Nat.div_div_eq_div_mul,
+      show u*d=d*u by ring, Nat.mul_add_div hd, Nat.div_eq_of_lt hw, Nat.add_zero]
+  have append_mod (u N w d : Nat) (hN : 0 < N) (hd : 0 < d) (hw : w < d) :
+      (u*d+w)%(N*d)=(u%N)*d+w := by
+    have hur := Nat.mod_lt u hN
+    have hrem : (u%N)*d+w < N*d := by nlinarith
+    have hu : N*(u/N)+u%N=u := Nat.div_add_mod u N
+    calc
+      (u*d+w)%(N*d)=((N*(u/N)+u%N)*d+w)%(N*d) := by rw [hu]
+      _=((N*d)*(u/N)+((u%N)*d+w))%(N*d) := by congr 1 <;> ring
+      _=((u%N)*d+w)%(N*d) := Nat.mul_add_mod_self_left _ _ _
+      _=(u%N)*d+w := Nat.mod_eq_of_lt hrem
+  have append_div_self (u w d : Nat) (hd : 0 < d) (hw : w < d) :
+      (u*d+w)/d=u := by
+    rw [show u*d=d*u by ring, Nat.mul_add_div hd, Nat.div_eq_of_lt hw, Nat.add_zero]
+  have append_mod_self (u w d : Nat) (hw : w < d) :
+      (u*d+w)%d=w := by
+    rw [show u*d=d*u by ring, Nat.mul_add_mod_self_left, Nat.mod_eq_of_lt hw]
+  have transpose_index_canonical
+      (A B C D a b c z : Nat)
+      (hB : 0 < B) (hC : 0 < C) (hD : 0 < D)
+      (hb : b < B) (hc : c < C) (hz : z < D) :
+      let out := (((a*C+c)*B+b)*D+z)
+      out / (C*B*D) * (B*C*D)
+          + out % (C*B*D) % (B*D) / D * (C*D)
+          + out % (C*B*D) / (B*D) * D
+          + out % (C*B*D) % (B*D) % D =
+        (((a*B+b)*C+c)*D+z) := by
+    dsimp
+    have hout_div : (((a*C+c)*B+b)*D+z)/(C*B*D)=a := by
+      rw [show C*B*D=(C*B)*D by ring,
+        append_div _ (C*B) z D hD hz,
+        append_div _ C b B hB hb,
+        append_div_self a c C hC hc]
+    have hout_c : (((a*C+c)*B+b)*D+z)%(C*B*D)/(B*D)=c := by
+      rw [show C*B*D=(C*B)*D by ring,
+        append_mod _ (C*B) z D (Nat.mul_pos hC hB) hD hz,
+        append_div _ B z D hD hz,
+        append_mod _ C b B hC hB hb,
+        append_mod_self a c C hc,
+        append_div_self c b B hB hb]
+    have hinner : (((a*C+c)*B+b)*D+z)%(C*B*D)%(B*D)=b*D+z := by
+      rw [show C*B*D=(C*B)*D by ring,
+        append_mod _ (C*B) z D (Nat.mul_pos hC hB) hD hz,
+        append_mod _ B z D hB hD hz,
+        append_mod _ C b B hC hB hb,
+        append_mod_self a c C hc, append_mod_self c b B hb]
+    have hout_b : (((a*C+c)*B+b)*D+z)%(C*B*D)%(B*D)/D=b := by
+      rw [hinner, append_div_self b z D hD hz]
+    have hout_z : (((a*C+c)*B+b)*D+z)%(C*B*D)%(B*D)%D=z := by
+      rw [hinner, append_mod_self b z D hz]
+    rw [hout_div, hout_b, hout_c, hout_z]
+    ring
+  have transpose_involutive_rank4
+      (x : Tensor) (A B C D : Nat) (hx : x.shape = [A,B,C,D]) :
+      transposeAxes 1 2 (transposeAxes 1 2 x) = x := by
+    have htx : (transposeAxes 1 2 x).shape = [A,C,B,D] := by
+      simp [transposeAxes, Tensor.mkShape, hx, listSwapAt, List.getD, List.set]
+    have httx : (transposeAxes 1 2 (transposeAxes 1 2 x)).shape = [A,B,C,D] := by
+      change listSwapAt (transposeAxes 1 2 x).shape 1 2 = [A,B,C,D]
+      rw [htx]
+      rfl
+    apply Tensor.ext (by rw [httx, hx])
+    intro idx hidx
+    have hbound : idx < A*B*C*D := by
+      simpa [httx, prodShape, Nat.mul_assoc] using hidx
+    by_cases hB0 : B = 0
+    · subst B
+      simp at hbound
+    by_cases hC0 : C = 0
+    · subst C
+      simp at hbound
+    by_cases hD0 : D = 0
+    · subst D
+      simp at hbound
+    have hB : 0 < B := Nat.pos_of_ne_zero hB0
+    have hC : 0 < C := Nat.pos_of_ne_zero hC0
+    have hD : 0 < D := Nat.pos_of_ne_zero hD0
+    let z := idx % D
+    let q0 := idx / D
+    let c := q0 % C
+    let q1 := q0 / C
+    let b := q1 % B
+    let a := q1 / B
+    have hz : z < D := Nat.mod_lt _ hD
+    have hc : c < C := Nat.mod_lt _ hC
+    have hb : b < B := Nat.mod_lt _ hB
+    have hcoords : idx = (((a*B+b)*C+c)*D+z) := by
+      have h0 : q0*D+z=idx := by
+        simpa [q0, z, Nat.mul_comm] using Nat.div_add_mod idx D
+      have h1 : q1*C+c=q0 := by
+        simpa [q1, c, Nat.mul_comm] using Nat.div_add_mod q0 C
+      have h2 : a*B+b=q1 := by
+        simpa [a, b, Nat.mul_comm] using Nat.div_add_mod q1 B
+      rw [← h0, ← h1, ← h2]
+    have hsource :
+        (((a*C+c)*B+b)*D+z) < A*C*B*D := by
+      have ht := transpose12_index_lt A C B D idx hC0 hB0 hD0 hbound
+      rw [hcoords,
+        transpose_index_canonical A C B D a c b z hC hB hD hc hb hz] at ht
+      exact ht
+    rw [hcoords]
+    rw [transposeAxes_1_2_valAt_gen _ A C B D _ htx hC0 hB0 hD0 (by
+      rw [← hcoords]
+      exact hbound)]
+    rw [transpose_index_canonical A C B D a c b z hC hB hD hc hb hz]
+    rw [transposeAxes_1_2_valAt_gen _ A B C D _ hx hB0 hC0 hD0 hsource]
+    rw [transpose_index_canonical A B C D a b c z hB hC hD hb hc hz]
+  have hmapped_ne : xs.map (transposeAxes 1 2) ≠ [] := by
+    simpa using hne
+  have hmapped_shapes : ∀ x ∈ xs.map (transposeAxes 1 2),
+      x.shape = [d0,d2,d1,d3] := by
+    intro y hy
+    obtain ⟨x, hx, rfl⟩ := List.mem_map.mp hy
+    have hs := hshapes x hx
+    simp [transposeAxes, Tensor.mkShape, hs, listSwapAt, List.getD, List.set]
+  have hmap_back :
+      (xs.map (transposeAxes 1 2)).map (transposeAxes 1 2) = xs := by
+    apply List.ext_getElem (by simp)
+    intro n hn₁ hn₂
+    simp only [List.getElem_map]
+    exact transpose_involutive_rank4 xs[n] d0 d1 d2 d3
+      (hshapes xs[n] (List.getElem_mem ..))
+  have hforward := transposeAxes_1_2_allGather_dim2_to_dim1_rank4
+    (xs.map (transposeAxes 1 2)) d0 d2 d1 d3 hmapped_ne hmapped_shapes
+  rw [hmap_back] at hforward
+  have hforward' :
+      transposeAxes 1 2
+          (allGatherPrimDimN 2 xs.length 0 (xs.map (transposeAxes 1 2))) =
+        allGatherPrimDimN 1 xs.length 0 xs := by
+    simpa using hforward
+  have hgshape :
+      (allGatherPrimDimN 2 xs.length 0 (xs.map (transposeAxes 1 2))).shape =
+        [d0,d2,d1*xs.length,d3] := by
+    have hmaphead :
+        ((((xs.map (transposeAxes 1 2)).head?).map (fun t => t.shape)).getD []) =
+          [d0,d2,d1,d3] := by
+      cases hys : xs.map (transposeAxes 1 2) with
+      | nil => simp [hys] at hmapped_ne
+      | cons y ys => simpa [hys] using hmapped_shapes y (by simp [hys])
+    rw [allGatherPrimDimN_shape 2 xs.length _ [d0,d2,d1,d3] hmaphead]
+    simp [List.set, List.getD]
+  rw [← hforward']
+  exact transpose_involutive_rank4
+    (allGatherPrimDimN 2 xs.length 0 (xs.map (transposeAxes 1 2)))
+    d0 d2 (d1*xs.length) d3 hgshape
+
+
 end TrainVerify.Denote
