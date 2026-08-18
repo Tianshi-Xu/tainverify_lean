@@ -2984,6 +2984,116 @@ def match_sum_allreduce_k_rank(
 
 
 @dataclass(frozen=True)
+class KRankOutputShardedLinearCertificate:
+    rule_id: str
+    rank_count: int
+    output_gather_dim: int
+    activation_fact: RelationFactSpec
+    weight_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    sm_step_id: str
+    pm_step_ids: tuple[str, ...]
+    lean_theorem: str
+
+
+def advance_k_rank_output_sharded_linear_frontiers(
+    plan: ProofPlan,
+    ir: GoalIR,
+    frontiers: tuple[tuple[str, ...], ...],
+    layouts: tuple[str, ...],
+) -> tuple[
+    tuple[KRankOutputShardedLinearCertificate, ...],
+    tuple[tuple[str, ...], ...],
+    tuple[str, ...],
+]:
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("K-rank output-linear frontier/layout arity mismatch")
+    by_id = {step.step_id: step for step in plan.steps}
+    certificates: list[KRankOutputShardedLinearCertificate] = []
+    rewritten: list[tuple[str, ...]] = []
+    rewritten_layouts: list[str] = []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "sharded" or len(frontier) < 3:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        try:
+            sm_step = by_id[frontier[0]]
+            pm_steps = tuple(by_id[ref] for ref in frontier[1:])
+        except KeyError:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        if sm_step.op != "FW_linear" or any(step.op != "FW_linear" for step in pm_steps):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        k = len(pm_steps)
+        if tuple(int(step.rank) for step in pm_steps) != tuple(range(k)):
+            raise RelationCompositionError("K-rank output-linear PM writers are not ordered ranks")
+        if len(sm_step.input_bindings) != 2 or any(len(step.input_bindings) != 2 for step in pm_steps):
+            raise RelationCompositionError("K-rank output-linear input arity mismatch")
+        activation_refs = tuple(step.input_bindings[0] for step in pm_steps)
+        if len(set(activation_refs)) != 1:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        sm_weight_ref = sm_step.input_bindings[1]
+        pm_weight_refs = tuple(step.input_bindings[1] for step in pm_steps)
+        if not sm_weight_ref.startswith("init:") or any(
+            not ref.startswith("init:") for ref in pm_weight_refs
+        ):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        try:
+            sm_weight_tid = int(sm_weight_ref.split(":", 1)[1])
+        except ValueError as exc:
+            raise RelationCompositionError("invalid output-linear weight authority") from exc
+        lineage = ir.init_lineages.get(sm_weight_tid)
+        if lineage is None:
+            raise RelationCompositionError("missing output-linear weight authority")
+        weight_fact = init_lineage_relation_fact(lineage)
+        expected_weight_refs = (sm_weight_ref, *pm_weight_refs)
+        if weight_fact.layout != "sharded" or weight_fact.step_triple != expected_weight_refs:
+            raise RelationCompositionError("output-linear weight authority order mismatch")
+        if weight_fact.gather_dim != 0:
+            raise RelationCompositionError("output-linear weight authority must gather dimension 0")
+        sm_activation_ref = sm_step.input_bindings[0]
+        pm_activation_ref = activation_refs[0]
+        try:
+            sm_activation = by_id[sm_activation_ref]
+            pm_activation = by_id[pm_activation_ref]
+        except KeyError as exc:
+            raise RelationCompositionError("output-linear activation producer is unresolved") from exc
+        if tuple(sm_activation.output_shape) != tuple(pm_activation.output_shape):
+            raise RelationCompositionError("output-linear activation shapes disagree")
+        full = tuple(sm_step.output_shape)
+        shards = tuple(tuple(step.output_shape) for step in pm_steps)
+        if not shards or any(shape != shards[0] for shape in shards[1:]) or len(full) != 3:
+            raise RelationCompositionError("output-linear shard shapes disagree")
+        candidates = [dim for dim in range(3) if full[dim] == shards[0][dim] * k and all(
+            full[index] == shards[0][index] for index in range(3) if index != dim
+        )]
+        if len(candidates) != 1:
+            raise RelationCompositionError(
+                f"output-linear does not determine one gather dimension: {candidates}"
+            )
+        output_dim = candidates[0]
+        activation_fact = RelationFactSpec(
+            "joined", (sm_activation_ref, pm_activation_ref)
+        )
+        output_fact = RelationFactSpec("sharded", frontier, gather_dim=output_dim)
+        certificates.append(KRankOutputShardedLinearCertificate(
+            rule_id="linear-output-sharded-k-rank",
+            rank_count=k,
+            output_gather_dim=output_dim,
+            activation_fact=activation_fact,
+            weight_fact=weight_fact,
+            output_fact=output_fact,
+            sm_step_id=sm_step.step_id,
+            pm_step_ids=tuple(step.step_id for step in pm_steps),
+            lean_theorem=(
+                "TrainVerify.Denote."
+                "fw_linear_3d_weight_allGatherPrimDimN_dim0_comm"
+            ),
+        ))
+        rewritten.extend((activation_fact.step_triple, weight_fact.step_triple))
+        rewritten_layouts.extend(("joined", "sharded"))
+    return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
+
+
+@dataclass(frozen=True)
 class KRankLocalRelationCertificate:
     rule_id: str
     op: str

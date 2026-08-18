@@ -3255,6 +3255,74 @@ def test_k_rank_linear_frontier_preserves_ordered_shards_and_external_weight():
     assert sink == list(certificates)
 
 
+def test_k_rank_output_sharded_linear_uses_joined_activation_and_init_weight_authority():
+    sm_activation = SimpleNamespace(step_id="sm:0:0", side="sm", op="FW_gelu", rank=0,
+                                    input_bindings=(), output_shape=(1, 8, 12))
+    pm_activation = SimpleNamespace(step_id="pm:0:0", side="pm", op="AllGatherPrim", rank=0,
+                                    input_bindings=(), output_shape=(1, 8, 12))
+    sm_out = SimpleNamespace(step_id="sm:1:0", side="sm", op="FW_linear", rank=0,
+                             input_bindings=(sm_activation.step_id, "init:50"),
+                             output_shape=(1, 8, 16))
+    pm_out = tuple(
+        SimpleNamespace(step_id=f"pm:{rank + 1}:0", side="pm", op="FW_linear", rank=rank,
+                        input_bindings=(pm_activation.step_id, f"init:{60 + rank}"),
+                        output_shape=(1, 8, 4))
+        for rank in range(4)
+    )
+    lineage = SimpleNamespace(
+        ts=50, tsShape=[16, 12],
+        tps=[(rank, 60 + rank) for rank in range(4)],
+        tpShapes=[[4, 12] for _ in range(4)], gatherDim=0, replicated=False,
+    )
+    frontier = (sm_out.step_id, *(step.step_id for step in pm_out))
+    certs, frontiers, layouts = relation_compiler_module.advance_k_rank_output_sharded_linear_frontiers(
+        SimpleNamespace(steps=(sm_activation, pm_activation, sm_out, *pm_out)),
+        SimpleNamespace(init_lineages={50: lineage}),
+        (frontier,), ("sharded",),
+    )
+    assert len(certs) == 1
+    cert = certs[0]
+    assert cert.rank_count == 4
+    assert cert.activation_fact == RelationFactSpec(
+        "joined", (sm_activation.step_id, pm_activation.step_id)
+    )
+    assert cert.weight_fact == RelationFactSpec(
+        "sharded", ("init:50", "init:60", "init:61", "init:62", "init:63"),
+        gather_dim=0,
+    )
+    assert cert.output_fact == RelationFactSpec("sharded", frontier, gather_dim=2)
+    assert frontiers == (
+        cert.activation_fact.step_triple, cert.weight_fact.step_triple,
+    )
+    assert layouts == ("joined", "sharded")
+    assert cert.lean_theorem.endswith("fw_linear_3d_weight_allGatherPrimDimN_dim0_comm")
+
+
+def test_k_rank_output_sharded_linear_rejects_weight_authority_order_mismatch():
+    sm_activation = SimpleNamespace(step_id="sm:0:0", side="sm", op="FW_gelu", rank=0,
+                                    input_bindings=(), output_shape=(1, 8, 12))
+    pm_activation = SimpleNamespace(step_id="pm:0:0", side="pm", op="AllGatherPrim", rank=0,
+                                    input_bindings=(), output_shape=(1, 8, 12))
+    sm_out = SimpleNamespace(step_id="sm:1:0", side="sm", op="FW_linear", rank=0,
+                             input_bindings=(sm_activation.step_id, "init:50"),
+                             output_shape=(1, 8, 16))
+    pm_out = tuple(
+        SimpleNamespace(step_id=f"pm:{rank + 1}:0", side="pm", op="FW_linear", rank=rank,
+                        input_bindings=(pm_activation.step_id, f"init:{63 - rank}"),
+                        output_shape=(1, 8, 4)) for rank in range(4)
+    )
+    lineage = SimpleNamespace(
+        ts=50, tsShape=[16, 12], tps=[(rank, 60 + rank) for rank in range(4)],
+        tpShapes=[[4, 12] for _ in range(4)], gatherDim=0, replicated=False,
+    )
+    frontier = (sm_out.step_id, *(step.step_id for step in pm_out))
+    with pytest.raises(RelationCompositionError, match="weight authority"):
+        relation_compiler_module.advance_k_rank_output_sharded_linear_frontiers(
+            SimpleNamespace(steps=(sm_activation, pm_activation, sm_out, *pm_out)),
+            SimpleNamespace(init_lineages={50: lineage}), (frontier,), ("sharded",),
+        )
+
+
 def test_k_rank_local_linear_skips_dynamic_weight_variant_without_error():
     sm_out = SimpleNamespace(step_id="sm:2:0", side="sm", op="FW_linear", rank=0,
                              input_bindings=("sm:0:0", "sm:1:0"), output_shape=(1, 8, 6))
