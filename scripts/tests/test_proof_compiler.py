@@ -3212,11 +3212,12 @@ def test_k_rank_linear_frontier_preserves_ordered_shards_and_external_weight():
             for rank, ref in enumerate(pm_inputs)
         ),
         SimpleNamespace(step_id=sm_output, side="sm", op="FW_linear", rank=0,
-                        input_bindings=(sm_input, "init:99"), output_shape=(1, 8, 6)),
+                        input_bindings=(sm_input, "init:99"),
+                        input_shapes=((1, 8, 4), (6, 4)), output_shape=(1, 8, 6)),
         *(
             SimpleNamespace(step_id=ref, side="pm", op="FW_linear", rank=rank,
                             input_bindings=(pm_inputs[rank], "init:99"),
-                            output_shape=(1, 2, 6))
+                            input_shapes=((1, 2, 4), (6, 4)), output_shape=(1, 2, 6))
             for rank, ref in enumerate(pm_outputs)
         ),
     ]
@@ -3234,6 +3235,7 @@ def test_k_rank_linear_frontier_preserves_ordered_shards_and_external_weight():
     assert cert.rank_count == 4
     assert cert.gather_dim == 1
     assert cert.external_weight_tid == 99
+    assert cert.external_weight_shape == (6, 4)
     assert cert.input_fact == RelationFactSpec(
         "sharded", (sm_input, *pm_inputs), gather_dim=1
     )
@@ -3241,6 +3243,17 @@ def test_k_rank_linear_frontier_preserves_ordered_shards_and_external_weight():
         "sharded", (sm_output, *pm_outputs), gather_dim=1
     )
     assert cert.lean_theorem.endswith("fw_linear_3d_allGatherPrimDimN_dim1_comm")
+    transition = relation_compiler_module.build_certificate_transition_specs(
+        SimpleNamespace(), certificates
+    )[0]
+    assert transition.authority_requirements == (
+        relation_compiler_module.TransitionAuthorityRequirement(
+            "tensor_eq", ("sm", "pm"), (99, 99)
+        ),
+        relation_compiler_module.TransitionAuthorityRequirement(
+            "tensor_shape", ("pm",), (99,), (6, 4)
+        ),
+    )
 
     sink = []
     normalized, normalized_layouts = normalize_relation_frontiers(
@@ -3561,13 +3574,14 @@ def test_k_rank_layernorm_frontier_uses_generic_local_backend():
     )
     sm_out = SimpleNamespace(
         step_id="sm:1:0", side="sm", op="FW_layernorm", rank=0,
-        input_bindings=(sm_in.step_id, "init:91", "init:92"), output_shape=(1, 8, 6)
+        input_bindings=(sm_in.step_id, "init:91", "init:92"),
+        input_shapes=((1, 8, 6), (6,), (6,)), output_shape=(1, 8, 6)
     )
     pm_out = tuple(
         SimpleNamespace(
             step_id=f"pm:{rank + 4}:0", side="pm", op="FW_layernorm", rank=rank,
             input_bindings=(pm_in[rank].step_id, "init:91", "init:92"),
-            output_shape=(1, 2, 6),
+            input_shapes=((1, 2, 6), (6,), (6,)), output_shape=(1, 2, 6),
         )
         for rank in range(4)
     )

@@ -3281,6 +3281,7 @@ class KRankLocalRelationCertificate:
     sm_step_id: str
     pm_step_ids: tuple[str, ...]
     external_tids: tuple[int, ...]
+    external_shapes: tuple[tuple[int, ...], ...]
     lean_theorem: str
 
     @property
@@ -3288,6 +3289,12 @@ class KRankLocalRelationCertificate:
         if len(self.external_tids) != 1:
             raise RelationCompositionError("local relation does not have exactly one weight")
         return self.external_tids[0]
+
+    @property
+    def external_weight_shape(self) -> tuple[int, ...]:
+        if len(self.external_shapes) != 1:
+            raise RelationCompositionError("local relation does not have exactly one weight shape")
+        return self.external_shapes[0]
 
 
 def _advance_k_rank_local_relation_frontiers(
@@ -3351,6 +3358,19 @@ def _advance_k_rank_local_relation_frontiers(
             rewritten_layouts.append(layout)
             continue
         external_refs = [refs[0] for refs in external_columns]
+        if len(getattr(sm_step, "input_shapes", ())) != input_count or any(
+            len(getattr(step, "input_shapes", ())) != input_count for step in pm_steps
+        ):
+            raise RelationCompositionError(f"K-rank {op} external input shapes are missing")
+        external_shape_columns = tuple(
+            (tuple(sm_step.input_shapes[index]),
+             *(tuple(step.input_shapes[index]) for step in pm_steps))
+            for index in range(1, input_count)
+        )
+        if any(len(set(shapes)) != 1 for shapes in external_shape_columns):
+            raise RelationCompositionError(f"K-rank {op} external input shapes disagree")
+        external_shapes = tuple(shapes[0] for shapes in external_shape_columns)
+        external_refs = [refs[0] for refs in external_columns]
         try:
             external_tids = tuple(int(ref.split(":", 1)[1]) for ref in external_refs)
             sm_input = by_id[sm_step.input_bindings[0]]
@@ -3399,6 +3419,7 @@ def _advance_k_rank_local_relation_frontiers(
             sm_step_id=sm_step.step_id,
             pm_step_ids=tuple(step.step_id for step in pm_steps),
             external_tids=external_tids,
+            external_shapes=external_shapes,
             lean_theorem=lean_theorem,
         ))
         rewritten.append(input_refs)
@@ -5104,10 +5125,16 @@ def build_certificate_transition_specs(
             post = (cert.output_fact,)
             footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
             authority_requirements = tuple(
-                TransitionAuthorityRequirement(
-                    "tensor_eq", ("sm", "pm"), (tid, tid),
+                requirement
+                for tid, shape in zip(cert.external_tids, cert.external_shapes)
+                for requirement in (
+                    TransitionAuthorityRequirement(
+                        "tensor_eq", ("sm", "pm"), (tid, tid),
+                    ),
+                    TransitionAuthorityRequirement(
+                        "tensor_shape", ("pm",), (tid,), shape,
+                    ),
                 )
-                for tid in cert.external_tids
             )
         elif type(cert) is KRankMultirefRelationCertificate:
             pre = (cert.input_fact,)
