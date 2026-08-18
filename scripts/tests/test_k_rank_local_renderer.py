@@ -210,6 +210,71 @@ def test_closed_k_rank_layernorm_renderer_uses_both_external_equalities_and_shap
     assert source.count("foldl_faithful_middle_writer") == 4
 
 
+@pytest.mark.parametrize("k", (2, 4))
+def test_closed_k_rank_layernorm_owns_one_sm_plus_ordered_dynamic_k_pm_writers(k):
+    ir, relation, _cert, _transition, pre, post = _fixture("FW_layernorm", k=k)
+
+    source = render_closed_segment(ir, relation, "segment_000000")
+
+    assert source.count("foldl_faithful_middle_writer") == 1 + k
+    assert "[" + ", ".join(f"pmStore {tid}" for tid in pre.pm_tids) + "].length" in source
+    assert "[" + ", ".join(f"pmFinal {tid}" for tid in post.pm_tids) + "]" in source
+
+
+def test_closed_k_rank_layernorm_selects_exact_transition_certificate():
+    ir, relation, cert, _transition, _pre, _post = _fixture("FW_layernorm", k=3)
+    expected = render_closed_segment(ir, relation, "segment_000000")
+    unrelated = replace(
+        cert,
+        input_fact=RelationFactSpec(
+            "sharded", ("sm:99:0", "pm:99:0", "pm:100:0"), gather_dim=1,
+        ),
+    )
+    relation = SimpleNamespace(
+        **{**relation.__dict__, "certificates": (unrelated, cert)}
+    )
+
+    assert render_closed_segment(ir, relation, "segment_000000") == expected
+
+
+def test_closed_k_rank_layernorm_rejects_malformed_or_duplicate_exact_certificate():
+    ir, relation, cert, _transition, _pre, _post = _fixture("FW_layernorm", k=3)
+    malformed = replace(
+        cert,
+        input_fact=RelationFactSpec(
+            "sharded", ("sm:99:0", "pm:99:0", "pm:100:0"), gather_dim=1,
+        ),
+    )
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        render_closed_segment(
+            ir,
+            SimpleNamespace(**{**relation.__dict__, "certificates": (malformed,)}),
+            "segment_000000",
+        )
+
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        render_closed_segment(
+            ir,
+            SimpleNamespace(**{**relation.__dict__, "certificates": (cert, cert)}),
+            "segment_000000",
+        )
+
+
+def test_closed_k_rank_layernorm_preserves_data_gamma_beta_input_roles():
+    ir, relation, cert, _transition, _pre, _post = _fixture("FW_layernorm", k=3)
+    swapped = replace(
+        cert,
+        external_tids=tuple(reversed(cert.external_tids)),
+        external_shapes=tuple(reversed(cert.external_shapes)),
+    )
+    relation = SimpleNamespace(
+        **{**relation.__dict__, "certificates": (swapped,)}
+    )
+
+    with pytest.raises(ValueError, match="external tensor bindings disagree"):
+        render_closed_segment(ir, relation, "segment_000000")
+
+
 def test_closed_k_rank_local_renderer_rejects_tampered_theorem_identity():
     ir, relation, cert, transition, _pre, _post = _fixture("FW_linear", k=3)
     bad_cert = replace(cert, lean_theorem="TrainVerify.Denote.fw_gelu_allGatherPrimDimN_eq")

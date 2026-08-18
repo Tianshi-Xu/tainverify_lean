@@ -5760,12 +5760,24 @@ def render_closed_k_rank_local_segment(ir: GoalIR, relation, segment_id: str) ->
     }.get(identity[1])
     if cert_type is None:
         raise ValueError("K-rank local transition has unsupported certificate identity")
-    matches = [
-        cert for cert in relation.certificates
-        if type(cert) is cert_type and cert.rule_id == transition.rule_id
-    ]
-    if len(matches) != 1:
-        raise ValueError("K-rank local transition lacks one exact certificate")
+    if transition.rule_id == "layernorm-sharded-k-rank-dim1":
+        matches = [
+            cert for cert in relation.certificates
+            if type(cert) is cert_type
+            and cert.rule_id == transition.rule_id
+            and cert.lean_theorem == transition.lean_theorem
+            and ((cert.input_fact,), (cert.output_fact,))
+                == (transition.pre_facts, transition.post_facts)
+        ]
+        if len(matches) != 1:
+            raise ValueError("K-rank layernorm transition requires one exact typed certificate")
+    else:
+        matches = [
+            cert for cert in relation.certificates
+            if type(cert) is cert_type and cert.rule_id == transition.rule_id
+        ]
+        if len(matches) != 1:
+            raise ValueError("K-rank local transition lacks one exact certificate")
     cert = matches[0]
     exact_backends = {
         (KRankLocalRelationCertificate, "linear-sharded-k-rank-dim1", "FW_linear", 1):
