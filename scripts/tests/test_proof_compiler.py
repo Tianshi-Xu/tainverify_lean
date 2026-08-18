@@ -3255,6 +3255,49 @@ def test_k_rank_linear_frontier_preserves_ordered_shards_and_external_weight():
     assert sink == list(certificates)
 
 
+def test_k_rank_full_producer_chunks_reconstruct_arbitrary_ordered_k():
+    sm = SimpleNamespace(step_id="sm:1:0", side="sm", op="FW_view", rank=0,
+                         input_bindings=(), parameters=(1, 8, 12), output_shape=(1, 8, 12))
+    producer = SimpleNamespace(step_id="pm:0:0", side="pm", op="FW_view", rank=0,
+                               input_bindings=(), parameters=(1, 8, 12), output_shape=(1, 8, 12))
+    chunks = tuple(
+        SimpleNamespace(step_id=f"pm:{rank + 1}:0", side="pm", op="ChunkPrim", rank=rank,
+                        input_bindings=(producer.step_id,), parameters=(1,), output_shape=(1, 2, 12))
+        for rank in range(4)
+    )
+    frontier = (sm.step_id, *(step.step_id for step in chunks))
+    certs, frontiers, layouts = relation_compiler_module.advance_k_rank_full_producer_chunks(
+        SimpleNamespace(steps=(sm, producer, *chunks)), (frontier,), ("sharded",)
+    )
+    assert len(certs) == 1
+    cert = certs[0]
+    assert cert.rank_count == 4
+    assert cert.chunk_dim == 1
+    assert cert.input_fact == RelationFactSpec("joined", (sm.step_id, producer.step_id))
+    assert cert.output_fact == RelationFactSpec("sharded", frontier, gather_dim=1)
+    assert cert.pm_chunk_steps == tuple(step.step_id for step in chunks)
+    assert cert.lean_theorem.endswith("allGatherPrimDimN_chunks_ofFn")
+    assert frontiers == (cert.input_fact.step_triple,)
+    assert layouts == ("joined",)
+
+
+def test_k_rank_full_producer_chunks_rejects_duplicate_or_reordered_ranks():
+    sm = SimpleNamespace(step_id="sm:1:0", side="sm", op="FW_view", rank=0,
+                         input_bindings=(), parameters=(), output_shape=(1, 8, 12))
+    producer = SimpleNamespace(step_id="pm:0:0", side="pm", op="FW_view", rank=0,
+                               input_bindings=(), parameters=(), output_shape=(1, 8, 12))
+    chunks = tuple(
+        SimpleNamespace(step_id=f"pm:{rank + 1}:0", side="pm", op="ChunkPrim",
+                        rank=(0 if rank == 1 else rank), input_bindings=(producer.step_id,),
+                        parameters=(1,), output_shape=(1, 2, 12)) for rank in range(4)
+    )
+    frontier = (sm.step_id, *(step.step_id for step in chunks))
+    with pytest.raises(RelationCompositionError, match="ordered ranks"):
+        relation_compiler_module.advance_k_rank_full_producer_chunks(
+            SimpleNamespace(steps=(sm, producer, *chunks)), (frontier,), ("sharded",)
+        )
+
+
 def test_k_rank_output_sharded_linear_uses_joined_activation_and_init_weight_authority():
     sm_activation = SimpleNamespace(step_id="sm:0:0", side="sm", op="FW_gelu", rank=0,
                                     input_bindings=(), output_shape=(1, 8, 12))

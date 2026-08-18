@@ -2984,6 +2984,94 @@ def match_sum_allreduce_k_rank(
 
 
 @dataclass(frozen=True)
+class KRankFullProducerChunksCertificate:
+    rule_id: str
+    rank_count: int
+    chunk_dim: int
+    input_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    sm_step_id: str
+    pm_producer_step: str
+    pm_chunk_steps: tuple[str, ...]
+    lean_theorem: str
+
+
+def advance_k_rank_full_producer_chunks(
+    plan: ProofPlan,
+    frontiers: tuple[tuple[str, ...], ...],
+    layouts: tuple[str, ...],
+) -> tuple[
+    tuple[KRankFullProducerChunksCertificate, ...],
+    tuple[tuple[str, ...], ...],
+    tuple[str, ...],
+]:
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("K-rank full-producer frontier/layout arity mismatch")
+    by_id = {step.step_id: step for step in plan.steps}
+    certificates: list[KRankFullProducerChunksCertificate] = []
+    rewritten: list[tuple[str, ...]] = []
+    rewritten_layouts: list[str] = []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "sharded" or len(frontier) < 3:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        try:
+            sm_step = by_id[frontier[0]]
+            chunks = tuple(by_id[ref] for ref in frontier[1:])
+        except KeyError:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        if any(step.side != "pm" or step.op != "ChunkPrim" for step in chunks):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        k = len(chunks)
+        if tuple(int(step.rank) for step in chunks) != tuple(range(k)):
+            raise RelationCompositionError("K-rank full-producer chunks are not ordered ranks")
+        if any(len(step.input_bindings) != 1 for step in chunks):
+            raise RelationCompositionError("K-rank full-producer chunk input arity mismatch")
+        producer_refs = tuple(step.input_bindings[0] for step in chunks)
+        if len(set(producer_refs)) != 1:
+            raise RelationCompositionError("K-rank chunks do not share one full producer")
+        try:
+            producer = by_id[producer_refs[0]]
+        except KeyError as exc:
+            raise RelationCompositionError("K-rank full producer is unresolved") from exc
+        if producer.side != "pm":
+            raise RelationCompositionError("K-rank full producer is not a PM step")
+        if tuple(sm_step.output_shape) != tuple(producer.output_shape):
+            raise RelationCompositionError("K-rank full producer shape differs from SM output")
+        parameter_sets = tuple(tuple(step.parameters) for step in chunks)
+        if any(len(params) != 1 for params in parameter_sets) or len(set(parameter_sets)) != 1:
+            raise RelationCompositionError("K-rank chunks do not share one literal chunk dimension")
+        chunk_dim = int(parameter_sets[0][0])
+        full_shape = tuple(sm_step.output_shape)
+        shard_shapes = tuple(tuple(step.output_shape) for step in chunks)
+        if not shard_shapes or any(shape != shard_shapes[0] for shape in shard_shapes[1:]):
+            raise RelationCompositionError("K-rank chunk output shapes disagree")
+        if chunk_dim < 0 or chunk_dim >= len(full_shape):
+            raise RelationCompositionError("K-rank chunk dimension is invalid")
+        reconstructed = list(shard_shapes[0])
+        reconstructed[chunk_dim] *= k
+        if tuple(reconstructed) != full_shape:
+            raise RelationCompositionError("K-rank chunk reconstruction shape contract fails")
+        input_fact = RelationFactSpec(
+            "joined", (sm_step.step_id, producer.step_id)
+        )
+        output_fact = RelationFactSpec("sharded", frontier, gather_dim=chunk_dim)
+        certificates.append(KRankFullProducerChunksCertificate(
+            rule_id="full-producer-chunks-k-rank",
+            rank_count=k,
+            chunk_dim=chunk_dim,
+            input_fact=input_fact,
+            output_fact=output_fact,
+            sm_step_id=sm_step.step_id,
+            pm_producer_step=producer.step_id,
+            pm_chunk_steps=tuple(step.step_id for step in chunks),
+            lean_theorem="TrainVerify.Denote.allGatherPrimDimN_chunks_ofFn",
+        ))
+        rewritten.append(input_fact.step_triple)
+        rewritten_layouts.append("joined")
+    return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
+
+
+@dataclass(frozen=True)
 class KRankOutputShardedLinearCertificate:
     rule_id: str
     rank_count: int
