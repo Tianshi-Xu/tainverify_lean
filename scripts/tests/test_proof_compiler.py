@@ -3327,6 +3327,16 @@ def test_k_rank_hidden_sharded_embedding_uses_ordered_init_weight_authority():
     assert frontiers == (cert.weight_fact.step_triple,)
     assert layouts == ("sharded",)
     assert cert.lean_theorem.endswith("fw_embedding_hidden_shards_k_rank")
+    transitions = relation_compiler_module.build_certificate_transition_specs(
+        SimpleNamespace(), certs
+    )
+    assert transitions[0].pre_facts == (cert.weight_fact,)
+    assert transitions[0].post_facts == (cert.output_fact,)
+    assert transitions[0].authority_requirements == (
+        relation_compiler_module.TransitionAuthorityRequirement(
+            "tensor_eq", ("sm", "pm"), (40, 40)
+        ),
+    )
 
 
 def test_k_rank_hidden_sharded_embedding_rejects_distinct_ids_authority():
@@ -3373,6 +3383,13 @@ def test_k_rank_full_producer_chunks_reconstruct_arbitrary_ordered_k():
     assert cert.lean_theorem.endswith("allGatherPrimDimN_chunks_ofFn")
     assert frontiers == (cert.input_fact.step_triple,)
     assert layouts == ("joined",)
+    transition = relation_compiler_module.build_certificate_transition_specs(
+        SimpleNamespace(), certs
+    )[0]
+    assert transition.pre_facts == (cert.input_fact,)
+    assert transition.post_facts == (cert.output_fact,)
+    assert transition.sm_node_indices == (1,)
+    assert transition.pm_node_indices == (0, 1, 2, 3, 4)
 
 
 def test_k_rank_full_producer_chunks_rejects_duplicate_or_reordered_ranks():
@@ -3433,6 +3450,11 @@ def test_k_rank_output_sharded_linear_uses_joined_activation_and_init_weight_aut
     )
     assert layouts == ("joined", "sharded")
     assert cert.lean_theorem.endswith("fw_linear_3d_weight_allGatherPrimDimN_dim0_comm")
+    transition = relation_compiler_module.build_certificate_transition_specs(
+        SimpleNamespace(), certs
+    )[0]
+    assert transition.pre_facts == (cert.activation_fact, cert.weight_fact)
+    assert transition.post_facts == (cert.output_fact,)
 
 
 def test_k_rank_output_sharded_linear_rejects_weight_authority_order_mismatch():

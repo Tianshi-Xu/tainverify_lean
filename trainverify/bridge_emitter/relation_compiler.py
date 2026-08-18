@@ -5080,6 +5080,25 @@ def build_certificate_transition_specs(
             footprint_groups = (
                 (cert.sm_sum_step,), cert.pm_sum_steps, (cert.pm_allreduce_step,)
             )
+        elif type(cert) is KRankHiddenShardedEmbeddingCertificate:
+            pre = (cert.weight_fact,)
+            post = (cert.output_fact,)
+            footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
+            authority_requirements = (
+                TransitionAuthorityRequirement(
+                    "tensor_eq", ("sm", "pm"), (cert.ids_tid, cert.ids_tid),
+                ),
+            )
+        elif type(cert) is KRankFullProducerChunksCertificate:
+            pre = (cert.input_fact,)
+            post = (cert.output_fact,)
+            footprint_groups = (
+                (cert.sm_step_id,), (cert.pm_producer_step,), cert.pm_chunk_steps,
+            )
+        elif type(cert) is KRankOutputShardedLinearCertificate:
+            pre = (cert.activation_fact, cert.weight_fact)
+            post = (cert.output_fact,)
+            footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
         elif type(cert) is KRankLocalRelationCertificate:
             pre = (cert.input_fact,)
             post = (cert.output_fact,)
