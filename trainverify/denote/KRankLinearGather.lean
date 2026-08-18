@@ -246,7 +246,5 @@ theorem fw_linear_3d_allGatherPrimDimN_dim1_comm
     simp [List.getD, List.getElem?_eq_getElem hr_len]] at hag
   exact hag
 
-#check fw_linear_3d_allGatherPrimDimN_dim1_comm
-#print axioms fw_linear_3d_allGatherPrimDimN_dim1_comm
 
 end TrainVerify.Denote

@@ -1,0 +1,8 @@
+import denote.KRankLinearGather
+
+namespace TrainVerify.Denote
+
+#check fw_linear_3d_allGatherPrimDimN_dim1_comm
+#print axioms fw_linear_3d_allGatherPrimDimN_dim1_comm
+
+end TrainVerify.Denote

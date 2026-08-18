@@ -1,4 +1,5 @@
 /- Generic relation-composition lemmas used by generated proof certificates. -/
+import denote.KRankLinearGather
 import denote.InnerChunkCELossShard
 import denote.InnerChunkCEShard
 import denote.SlidingWindowReconstruction
