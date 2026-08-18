@@ -2,8 +2,12 @@
 
 
 def render_closed_k_rank_add_segment(ir, relation, segment_id: str) -> str:
-    from .composer import _node_text, _shape_text
-    from .relation_compiler import KRankBinaryRelationCertificate
+    try:
+        from .composer import _node_text, _shape_text
+        from .relation_compiler import KRankBinaryRelationCertificate
+    except ImportError:
+        from composer import _node_text, _shape_text
+        from relation_compiler import KRankBinaryRelationCertificate
 
     rule_id = "add-sharded-k-rank"
     theorem = "TrainVerify.Denote.fw_add_allGather_dim_K"
@@ -14,16 +18,20 @@ def render_closed_k_rank_add_segment(ir, relation, segment_id: str) -> str:
     transition = {item.transition_id: item for item in relation.transition_specs}[
         segment.transition_ids[0]
     ]
-    typed = [item for item in relation.certificates
-             if type(item) is KRankBinaryRelationCertificate
-             and item.rule_id == rule_id]
-    if (transition.rule_id != rule_id or transition.lean_theorem != theorem
-            or len(typed) != 1 or typed[0].lean_theorem != theorem
-            or typed[0].op != "FW_add"):
-        raise ValueError("add-sharded-k-rank requires one exact KRankAdd certificate and theorem")
+    if transition.rule_id != rule_id or transition.lean_theorem != theorem:
+        raise ValueError("add-sharded-k-rank theorem identity mismatch")
+    typed = [
+        item for item in relation.certificates
+        if type(item) is KRankBinaryRelationCertificate
+        and item.rule_id == transition.rule_id
+        and item.lean_theorem == transition.lean_theorem
+        and item.input_facts == transition.pre_facts
+        and transition.post_facts == (item.output_fact,)
+        and item.op == "FW_add"
+    ]
+    if len(typed) != 1:
+        raise ValueError("add-sharded-k-rank requires one exact typed certificate")
     certificate = typed[0]
-    if certificate.input_facts != transition.pre_facts or transition.post_facts != (certificate.output_fact,):
-        raise ValueError("K-rank add certificate facts disagree with transition")
     records = {item.source: item for item in chain.relation_facts}
     try:
         a, b = (records[item] for item in transition.pre_facts)

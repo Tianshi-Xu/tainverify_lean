@@ -8680,7 +8680,10 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     if family and all(item == "multiref-sharded-k-rank" for item in family):
         return render_closed_k_rank_multiref_segment(ir, relation, segment_id)
     if family == ("add-sharded-k-rank",):
-        from .add_renderer import render_closed_k_rank_add_segment
+        try:
+            from .add_renderer import render_closed_k_rank_add_segment
+        except ImportError:
+            from add_renderer import render_closed_k_rank_add_segment
         return render_closed_k_rank_add_segment(ir, relation, segment_id)
     if family == ("contiguous-sharded-k-rank",):
         return render_closed_k_rank_contiguous_segment(ir, relation, segment_id)

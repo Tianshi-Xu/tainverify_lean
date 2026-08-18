@@ -108,6 +108,24 @@ def test_add_renderer_uses_exact_certificate_ordered_inputs_and_one_plus_k_write
     assert "rankCount = 3" not in source
 
 
+def test_add_renderer_selects_one_exact_certificate_and_rejects_duplicates():
+    ir, relation, segment, *_ = _closed_fixture(k=3)
+    exact = relation.certificates[0]
+    expected = composer.render_closed_segment(ir, relation, segment.segment_id)
+
+    unrelated = replace(exact, input_facts=tuple(reversed(exact.input_facts)))
+    with_unrelated = SimpleNamespace(
+        **{**relation.__dict__, "certificates": (unrelated, exact)}
+    )
+    assert composer.render_closed_segment(ir, with_unrelated, segment.segment_id) == expected
+
+    duplicate = SimpleNamespace(
+        **{**relation.__dict__, "certificates": (exact, exact)}
+    )
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        composer.render_closed_segment(ir, duplicate, segment.segment_id)
+
+
 @pytest.mark.parametrize(("mutation", "message"), [
     ({"rank": 9}, "ordered ranks"),
     ({"ins": [211, 201]}, "operand order"),
