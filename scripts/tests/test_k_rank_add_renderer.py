@@ -108,6 +108,20 @@ def test_add_renderer_uses_exact_certificate_ordered_inputs_and_one_plus_k_write
     assert "rankCount = 3" not in source
 
 
+def test_add_renderer_recovers_certificate_roles_when_transition_pre_facts_are_reordered():
+    ir, relation, segment, a, b, *_ = _closed_fixture(k=3)
+    transition = relation.transition_specs[0]
+    reordered = replace(transition, pre_facts=tuple(reversed(transition.pre_facts)))
+    reordered_relation = SimpleNamespace(
+        **{**relation.__dict__, "transition_specs": (reordered,)}
+    )
+
+    source = composer.render_closed_segment(ir, reordered_relation, segment.segment_id)
+
+    assert f"[pmStore {a.pm_tids[0]}, pmStore {a.pm_tids[1]}, pmStore {a.pm_tids[2]}]" in source
+    assert f"[pmStore {b.pm_tids[0]}, pmStore {b.pm_tids[1]}, pmStore {b.pm_tids[2]}]" in source
+
+
 def test_add_renderer_selects_one_exact_certificate_and_rejects_duplicates():
     ir, relation, segment, *_ = _closed_fixture(k=3)
     exact = relation.certificates[0]

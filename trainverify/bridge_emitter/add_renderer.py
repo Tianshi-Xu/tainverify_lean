@@ -20,24 +20,49 @@ def render_closed_k_rank_add_segment(ir, relation, segment_id: str) -> str:
     ]
     if transition.rule_id != rule_id or transition.lean_theorem != theorem:
         raise ValueError("add-sharded-k-rank theorem identity mismatch")
-    typed = [
-        item for item in relation.certificates
-        if type(item) is KRankBinaryRelationCertificate
-        and item.rule_id == transition.rule_id
-        and item.lean_theorem == transition.lean_theorem
-        and item.input_facts == transition.pre_facts
-        and transition.post_facts == (item.output_fact,)
-        and item.op == "FW_add"
-    ]
-    if len(typed) != 1:
-        raise ValueError("add-sharded-k-rank requires one exact typed certificate")
-    certificate = typed[0]
     records = {item.source: item for item in chain.relation_facts}
     try:
-        a, b = (records[item] for item in transition.pre_facts)
         post = records[transition.post_facts[0]]
-    except KeyError as exc:
+    except (IndexError, KeyError) as exc:
         raise ValueError("K-rank add relation fact is not materialized") from exc
+    k = len(post.pm_tids)
+    if len(transition.sm_node_indices) != 1 or len(transition.pm_node_indices) != k:
+        raise ValueError("K-rank add transition footprint is not exact 1+K")
+    try:
+        role_sm_node = ir.sm_nodes[transition.sm_node_indices[0]]
+        role_pm_nodes = tuple(ir.pm_nodes[index] for index in transition.pm_node_indices)
+    except IndexError as exc:
+        raise ValueError("K-rank add transition footprint names a missing writer") from exc
+
+    # Dependency scheduling canonicalizes transition.pre_facts, but a binary
+    # certificate preserves semantic operand roles. Match the same exact fact
+    # set, then recover A/B only from the ordered SM inputs and confirm that
+    # every ordered PM rank uses those same roles. Keeping this strict for add
+    # is deliberate: this adapter must remain sound for noncommutative binaries.
+    transition_pre_set = set(transition.pre_facts)
+    typed = []
+    for item in relation.certificates:
+        if (type(item) is not KRankBinaryRelationCertificate
+                or item.rule_id != transition.rule_id
+                or item.lean_theorem != transition.lean_theorem
+                or transition.post_facts != (item.output_fact,)
+                or item.op != "FW_add"
+                or len(item.input_facts) != 2
+                or len(set(item.input_facts)) != 2
+                or len(transition.pre_facts) != 2
+                or len(transition_pre_set) != 2
+                or set(item.input_facts) != transition_pre_set):
+            continue
+        try:
+            candidate_a, candidate_b = (records[source] for source in item.input_facts)
+        except KeyError:
+            continue
+        if tuple(role_sm_node.ins) != (candidate_a.sm_tid, candidate_b.sm_tid):
+            continue
+        typed.append((item, candidate_a, candidate_b))
+    if len(typed) != 1:
+        raise ValueError("add-sharded-k-rank requires one exact typed certificate")
+    certificate, a, b = typed[0]
     states = {item.state_id: item for item in chain.states}
     before, after = states[segment.pre_state_id], states[segment.post_state_id]
     if not {a.fact_id, b.fact_id} <= set(before.fact_ids) or post.fact_id not in after.fact_ids:
