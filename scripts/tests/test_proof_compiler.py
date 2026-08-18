@@ -4434,10 +4434,10 @@ def test_terminal_ce_consumer_keeps_ordinary_rms_relation_live(monkeypatch):
         transitions[tid] for tid in ce_segment.transition_ids
         if transitions[tid].rule_id == "inner-chunk-ce-projection-gather-two-rank"
     )
-    assert len(ce_transition.pre_facts) == 1
-    input_record = records[ce_transition.pre_facts[0]]
+    input_spec = next(fact for fact in ce_transition.pre_facts if fact.layout == "ordinary")
+    input_record = records[input_spec]
     assert input_record.kind == "ordinary"
-    assert input_record.fact_id in states[ce_segment.pre_state_id]
+    assert all(records[fact].fact_id in states[ce_segment.pre_state_id] for fact in ce_transition.pre_facts)
     rms_segment = chain.segments[chain.segments.index(ce_segment) - 1]
     assert input_record.fact_id in states[rms_segment.post_state_id]
     assert render_closed_rms_norm_segment(ir, relation, rms_segment.segment_id)
@@ -4604,8 +4604,20 @@ def test_closed_segment_dispatch_is_explicit_and_fail_closed(monkeypatch):
         assert segment_id in source
     source = render_closed_segment(ir, relation, "segment_000006")
     assert "Ordinary2Rel.rotary_embedding_1d" in source
-    with pytest.raises(ValueError, match="unsupported closed segment family.*attention-ordinary-qkv-two-rank"):
-        render_closed_segment(ir, relation, "segment_000007")
+    attention = render_closed_segment(ir, relation, "segment_000007")
+    assert "Ordinary2Rel.sliding_attention" in attention
+    segment = next(item for item in relation.dependent_chain_plan.segments if item.segment_id == "segment_000007")
+    target_id = segment.transition_ids[0]
+    broken = replace(
+        relation,
+        transition_specs=tuple(
+            replace(item, rule_id="synthetic-unsupported-k-rank-rule")
+            if item.transition_id == target_id else item
+            for item in relation.transition_specs
+        ),
+    )
+    with pytest.raises(ValueError, match="unsupported closed segment family.*synthetic-unsupported"):
+        render_closed_segment(ir, broken, "segment_000007")
 
 def test_closed_atomic_per_head_zigzag_rms_renderer_is_exact_single_fold(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
@@ -4655,10 +4667,10 @@ def test_goals34_atomic_full_producer_two_local_linear_renderer_is_exact_single_
         assert source.count("foldl_faithful_chunk_writer") == 2
         assert f"Goal_{goal_id}" not in source
 
-        with pytest.raises(ValueError) as exc:
-            compose_closed_dependent_chain(ir, relation, f"ClosedGoal{goal_id}")
-        assert "segment_000005" not in str(exc.value)
-        assert "segment_000017" in str(exc.value)
+        complete_source = compose_closed_dependent_chain(ir, relation, f"ClosedGoal{goal_id}")
+        assert f"noncomputable def ClosedGoal{goal_id}_chain" in complete_source
+        assert "segment_000005" in complete_source
+        assert "segment_000017" in complete_source
 
 
 def test_goal4_zigzag_full_producer_retains_exact_metadata_region_authority(monkeypatch):
@@ -4726,11 +4738,11 @@ def test_goals34_mixed_moe_renderer_accepts_actual_atomic_topologies(monkeypatch
         if goal_id == 4:
             assert "Ordinary2Rel.topk_routing_gate_scores" in source
 
-        with pytest.raises(ValueError) as exc:
-            compose_closed_dependent_chain(
-                ir, relation, f"ClosedGoal{goal_id}AfterMixedMoe"
-            )
-        assert "segment_000017" not in str(exc.value)
+        complete_source = compose_closed_dependent_chain(
+            ir, relation, f"ClosedGoal{goal_id}AfterMixedMoe"
+        )
+        assert f"noncomputable def ClosedGoal{goal_id}AfterMixedMoe_chain" in complete_source
+        assert "segment_000017" in complete_source
 
 
 def test_goals34_zigzag_mixed_moe_renderer_preserves_layout_through_exact_unshuffle(monkeypatch):
@@ -4949,12 +4961,10 @@ def test_closed_chain_composer_advances_past_atomic_per_head_zigzag_rms(monkeypa
     root = Path(__file__).resolve().parents[2]
     ir = load_goal_ir(1, str(root))
     relation = compile_relation_plan(ir, compile_proof_plan(ir, build_default_registry()))
-    with pytest.raises(ValueError) as exc:
-        compose_closed_dependent_chain(ir, relation, "ClosedGoal1")
-    assert "segment_000257" not in str(exc.value)
-    assert "segment_000265" not in str(exc.value)
-    assert "segment_000278" not in str(exc.value)
-    assert "segment_000479" in str(exc.value)
+    source = compose_closed_dependent_chain(ir, relation, "ClosedGoal1")
+    assert "noncomputable def ClosedGoal1_chain" in source
+    for segment_id in ("segment_000257", "segment_000265", "segment_000278", "segment_000479"):
+        assert segment_id in source
 
 def test_goal3_closed_norm_full_producer_segment_is_generic_exact_single_fold(monkeypatch):
     monkeypatch.setattr(parser_module, "DENOTE_DIR", "trainverify/denote/yoco_goals")
@@ -5091,11 +5101,11 @@ def test_closed_chain_composer_assembles_complete_path_independently_of_renderer
     assert "ClosedDepCertificateChain Synthetic.Graphs.smGraph Synthetic.Graphs.pmGraph state_000000 state_000002" in source
     assert "  .cons segment_concrete SyntheticClosedChain_suffix_000001" in source
     assert (
-        "  .cons segment_parameterized Synthetic.Graphs.smGraph Synthetic.Graphs.pmGraph "
+        "  .cons (segment_parameterized Synthetic.Graphs.smGraph Synthetic.Graphs.pmGraph) "
         "SyntheticClosedChain_suffix_000002"
     ) in source
-    assert "theorem SyntheticClosedChain_chain_sm_nodes : SyntheticClosedChain_chain.smNodes = Synthetic.Graphs.smGraph.nodes := by\n  native_decide" in source
-    assert "theorem SyntheticClosedChain_chain_pm_nodes : SyntheticClosedChain_chain.pmNodes = Synthetic.Graphs.pmGraph.nodes := by\n  native_decide" in source
+    assert "theorem SyntheticClosedChain_chain_sm_nodes : SyntheticClosedChain_chain.smNodes = Synthetic.Graphs.smGraph.nodes := by\n  rfl" in source
+    assert "theorem SyntheticClosedChain_chain_pm_nodes : SyntheticClosedChain_chain.pmNodes = Synthetic.Graphs.pmGraph.nodes := by\n  rfl" in source
 
 
 def test_closed_bundle_is_deterministic_bounded_public_and_acyclic(monkeypatch):
