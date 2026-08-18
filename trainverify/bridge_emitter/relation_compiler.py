@@ -4102,6 +4102,42 @@ class ClosedRelationFactRecord:
         return self.pm_tids[1]
 
 
+
+def close_k_rank_init_authority(
+    ir: GoalIR,
+    frontiers: tuple[tuple[str, ...], ...],
+    layouts: tuple[str, ...],
+) -> tuple[tuple[RelationFactSpec, ...], tuple[tuple[str, ...], ...], tuple[str, ...]]:
+    """Discharge only exact ordered public InitGoal relation roots."""
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("K-rank init authority frontier/layout lengths disagree")
+    closed = []
+    remaining = []
+    remaining_layouts = []
+    for frontier, layout in zip(frontiers, layouts):
+        if not frontier or not all(ref.startswith("init:") for ref in frontier):
+            remaining.append(frontier)
+            remaining_layouts.append(layout)
+            continue
+        try:
+            sm_tid = int(frontier[0].split(":", 1)[1])
+        except (IndexError, ValueError):
+            remaining.append(frontier)
+            remaining_layouts.append(layout)
+            continue
+        lineage = ir.init_lineages.get(sm_tid)
+        if lineage is None:
+            remaining.append(frontier)
+            remaining_layouts.append(layout)
+            continue
+        authority = init_lineage_relation_fact(lineage)
+        if authority.layout == layout and authority.step_triple == frontier:
+            closed.append(authority)
+        else:
+            remaining.append(frontier)
+            remaining_layouts.append(layout)
+    return tuple(closed), tuple(remaining), tuple(remaining_layouts)
+
 def materialize_closed_relation_facts(
     ir: GoalIR,
     proof: ProofPlan,
@@ -5817,6 +5853,9 @@ def compile_relation_plan(
                 certificate_sink=compiled_certificates,
                 deduplicate_each_round=True,
             )
+        _closed_init_authority, frontiers, layouts = close_k_rank_init_authority(
+            ir, frontiers, layouts
+        )
         if deduplicate_frontiers:
             frontiers, layouts = deduplicate_relation_frontiers(frontiers, layouts)
         certificate_tuple = tuple(compiled_certificates)

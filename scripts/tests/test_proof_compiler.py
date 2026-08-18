@@ -3902,6 +3902,24 @@ def test_init_lineage_relation_fact_preserves_ordered_k_rank_authority():
         relation_compiler_module.init_lineage_relation_fact(distinct_replicas)
 
 
+def test_close_k_rank_init_authority_requires_exact_ordered_lineage():
+    lineage = SimpleNamespace(
+        ts=50, tsShape=[100, 16],
+        tps=[(rank, 60 + rank) for rank in range(4)],
+        tpShapes=[[100, 4] for _ in range(4)],
+        gatherDim=1, replicated=False,
+    )
+    exact = ("init:50", "init:60", "init:61", "init:62", "init:63")
+    wrong = ("init:50", "init:61", "init:60", "init:62", "init:63")
+    closed, remaining, layouts = relation_compiler_module.close_k_rank_init_authority(
+        SimpleNamespace(init_lineages={50: lineage}),
+        (exact, wrong), ("sharded", "sharded"),
+    )
+    assert closed == (RelationFactSpec("sharded", exact, gather_dim=1),)
+    assert remaining == (wrong,)
+    assert layouts == ("sharded",)
+
+
 def test_init_lineage_relation_fact_rejects_reordered_or_malformed_authority():
     reordered = SimpleNamespace(
         ts=10, tsShape=[8, 6], tps=[(1, 21), (0, 20)],
