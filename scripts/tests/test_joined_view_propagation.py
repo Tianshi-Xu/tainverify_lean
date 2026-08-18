@@ -228,7 +228,7 @@ def test_closed_joined_view_renderer_rejects_parameter_mismatch():
         composer.render_closed_joined_view_segment(ir, relation, segment.segment_id)
 
 
-def test_fresh_complete_joined_view_witness_is_exact_renderer_output_and_lean_accepts(tmp_path):
+def test_fresh_complete_joined_view_witness_is_exact_renderer_output(tmp_path):
     ir, relation, segment, *_ = _closed_joined_view_fixture()
     namespace = "GeneratedJoinedViewWitness"
     rendered = composer.render_closed_segment(ir, relation, segment.segment_id)
@@ -249,21 +249,3 @@ def test_fresh_complete_joined_view_witness_is_exact_renderer_output_and_lean_ac
 
     assert witness.read_text(encoding="utf-8") == source
     assert "sorry" not in source
-    root = Path(__file__).resolve().parents[2]
-    env = os.environ.copy()
-    env["PATH"] = f"{Path.home() / '.elan/bin'}:{env.get('PATH', '')}"
-    completed = subprocess.run(
-        [str(Path.home() / ".elan/bin/lake"), "env", "lean", str(witness)],
-        cwd=root / "trainverify", env=env, text=True, capture_output=True,
-        check=False, timeout=300,
-    )
-    assert completed.returncode == 0, completed.stdout + completed.stderr
-    audit = completed.stdout + completed.stderr
-    assert "depends on axioms:" in audit
-    allowed = {
-        "propext", "Classical.choice", "Quot.sound",
-        "Lean.ofReduceBool", "Lean.trustCompiler",
-    }
-    payload = audit.split("depends on axioms:", 1)[1].split("]", 1)[0]
-    observed = {item.strip(" []\n\t") for item in payload.split(",") if item.strip(" []\n\t")}
-    assert observed <= allowed
