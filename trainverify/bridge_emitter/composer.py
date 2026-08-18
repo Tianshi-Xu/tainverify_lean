@@ -6200,6 +6200,176 @@ def render_closed_k_rank_transpose_segment(ir: GoalIR, relation, segment_id: str
     return "\n".join(lines)
 
 
+def render_closed_k_rank_matmul_head_axis_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Replay exact one-SM plus ordered-K-PM aligned head-axis matmuls."""
+    try:
+        from .relation_compiler import KRankMatmulHeadAxisCertificate
+    except ImportError:
+        from relation_compiler import KRankMatmulHeadAxisCertificate
+    theorem = "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_matmul_head_axis_rank4"
+    chain = relation.dependent_chain_plan
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if segment is None or len(segment.transition_ids) != 1:
+        raise ValueError("K-rank head-axis matmul renderer requires one exact transition")
+    transition = next(item for item in relation.transition_specs
+                      if item.transition_id == segment.transition_ids[0])
+    if (transition.rule_id != "matmul-head-axis-sharded-k-rank-dim1"
+            or transition.lean_theorem != theorem):
+        raise ValueError("K-rank head-axis matmul theorem identity mismatch")
+    certs = [item for item in relation.certificates
+             if type(item) is KRankMatmulHeadAxisCertificate
+             and item.rule_id == transition.rule_id]
+    if len(certs) != 1 or certs[0].lean_theorem != theorem:
+        raise ValueError("K-rank head-axis matmul requires one exact typed certificate")
+    cert = certs[0]
+    expected_pre = tuple(sorted((cert.first_operand_fact, cert.second_operand_fact)))
+    if transition.pre_facts != expected_pre or transition.post_facts != (cert.output_fact,):
+        raise ValueError("K-rank head-axis matmul transition facts disagree with its certificate")
+    records = {item.source: item for item in chain.relation_facts}
+    try:
+        first = records[cert.first_operand_fact]
+        second = records[cert.second_operand_fact]
+        output = records[cert.output_fact]
+    except KeyError as exc:
+        raise ValueError("K-rank head-axis matmul relation fact is not materialized") from exc
+    states = {item.state_id: item for item in chain.states}
+    before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    if first.fact_id not in before.fact_ids or second.fact_id not in before.fact_ids:
+        raise ValueError("K-rank head-axis matmul input facts are not live")
+    if output.fact_id not in after.fact_ids:
+        raise ValueError("K-rank head-axis matmul output fact is not live")
+    if (first.kind != "sharded" or second.kind != "sharded" or output.kind != "sharded"
+            or first.gather_dim != 1 or second.gather_dim != 1 or output.gather_dim != 1):
+        raise ValueError("K-rank head-axis matmul requires exact dim1 ShardedRel facts")
+    k = len(output.pm_tids)
+    if (k < 2 or cert.rank_count != k or len(first.pm_tids) != k
+            or len(second.pm_tids) != k or cert.output_gather_dim != 1):
+        raise ValueError("K-rank head-axis matmul rank count is not derived from ordered PM authority")
+    if (tuple(first.full_shape) != tuple(cert.first_operand_full_shape)
+            or tuple(first.shard_shape) != tuple(cert.first_operand_shard_shape)
+            or tuple(second.full_shape) != tuple(cert.second_operand_full_shape)
+            or tuple(second.shard_shape) != tuple(cert.second_operand_shard_shape)
+            or tuple(output.full_shape) != tuple(cert.output_full_shape)
+            or tuple(output.shard_shape) != tuple(cert.output_shard_shape)):
+        raise ValueError("K-rank head-axis matmul closed rank-4 shapes disagree with its certificate")
+    x_full, x_shard = tuple(first.full_shape), tuple(first.shard_shape)
+    y_full, y_shard = tuple(second.full_shape), tuple(second.shard_shape)
+    out_full, out_shard = tuple(output.full_shape), tuple(output.shard_shape)
+    if any(len(shape) != 4 for shape in (x_full, x_shard, y_full, y_shard, out_full, out_shard)):
+        raise ValueError("K-rank head-axis matmul requires exact rank-4 shapes")
+    b, local_h, q, inner = x_shard
+    m = y_shard[3]
+    if (local_h <= 0 or q <= 0 or inner <= 0 or m <= 0
+            or x_full != (b, local_h * k, q, inner)
+            or y_full != (b, local_h * k, inner, m)
+            or y_shard != (b, local_h, inner, m)
+            or out_full != (b, local_h * k, q, m)
+            or out_shard != (b, local_h, q, m)):
+        raise ValueError("K-rank head-axis matmul exact rank-4 dimensions do not compose")
+    if len(transition.sm_node_indices) != 1 or len(transition.pm_node_indices) != k:
+        raise ValueError("K-rank head-axis matmul transition footprint is not exact 1xK")
+    sm_start, sm_end = segment.sm_range
+    pm_start, pm_end = segment.pm_range
+    if (tuple(transition.sm_node_indices) != tuple(range(sm_start, sm_end))
+            or sm_end - sm_start != 1
+            or tuple(transition.pm_node_indices) != tuple(range(pm_start, pm_end))
+            or pm_end - pm_start != k):
+        raise ValueError("K-rank head-axis matmul segment ranges do not equal its writer footprint")
+    sm_node = ir.sm_nodes[sm_start]
+    pm_nodes = tuple(ir.pm_nodes[index] for index in range(pm_start, pm_end))
+    if sm_node.rank != 0 or sm_node.op != "FW_matmul":
+        raise ValueError("K-rank head-axis matmul SM writer is not exact")
+    if tuple(node.rank for node in pm_nodes) != tuple(range(k)):
+        raise ValueError("K-rank head-axis matmul PM writers are not exact ordered ranks")
+    writers = (sm_node, *pm_nodes)
+    if any(node.params for node in writers):
+        raise ValueError("K-rank head-axis FW_matmul writers require no parameters")
+    if any(len(node.ins) != 2 or len(node.outs) != 1 for node in writers):
+        raise ValueError("K-rank head-axis FW_matmul writers must be binary singleton-output nodes")
+    if sm_node.ins != [first.sm_tid, second.sm_tid] or sm_node.outs[0] != output.sm_tid:
+        raise ValueError("K-rank head-axis matmul SM writer disagrees with operand/output facts")
+    if tuple(node.ins[0] for node in pm_nodes) != tuple(first.pm_tids):
+        raise ValueError("K-rank head-axis matmul PM first operands do not preserve ordered TIDs")
+    if tuple(node.ins[1] for node in pm_nodes) != tuple(second.pm_tids):
+        raise ValueError("K-rank head-axis matmul PM second operands do not preserve ordered TIDs")
+    if tuple(node.outs[0] for node in pm_nodes) != tuple(output.pm_tids):
+        raise ValueError("K-rank head-axis matmul PM outputs do not preserve ordered TIDs")
+
+    sm_node_name = f"{segment_id}_sm_node"
+    pm_node_names = [f"{segment_id}_pm_node_{rank}" for rank in range(k)]
+    sm_nodes_name, pm_nodes_name = f"{segment_id}_sm_nodes", f"{segment_id}_pm_nodes"
+    lines = [f"private def {sm_node_name} : NodeDecl := {_node_text(sm_node)}"]
+    lines += [f"private def {name} : NodeDecl := {_node_text(node)}"
+              for name, node in zip(pm_node_names, pm_nodes)]
+    lines += [
+        f"private def {sm_nodes_name} : List NodeDecl := [{sm_node_name}]",
+        f"private def {pm_nodes_name} : List NodeDecl := [{', '.join(pm_node_names)}]", "",
+        f"private def {segment_id} :",
+        f"    ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
+        f"  smNodes := {sm_nodes_name}", f"  pmNodes := {pm_nodes_name}", "  sound := by",
+        "    intro smStore pmStore hstate",
+        f"    let smNodes : List NodeDecl := {sm_nodes_name}",
+        f"    let pmNodes : List NodeDecl := {pm_nodes_name}",
+        f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore",
+        f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
+        f"    have hFirst : {first.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    change ShardedRel (smStore {first.sm_tid}) [{', '.join(f'pmStore {tid}' for tid in first.pm_tids)}] 1 {_shape_text(list(x_full))} {_shape_text(list(x_shard))} at hFirst",
+        f"    have hSecond : {second.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    change ShardedRel (smStore {second.sm_tid}) [{', '.join(f'pmStore {tid}' for tid in second.pm_tids)}] 1 {_shape_text(list(y_full))} {_shape_text(list(y_shard))} at hSecond",
+    ]
+
+    def writer(name, side, pos, node, node_name):
+        graph = ir.sm_graph_ref if side == "sm" else ir.pm_graph_ref
+        store = "smStore" if side == "sm" else "pmStore"
+        nodes = "smNodes" if side == "sm" else "pmNodes"
+        final = "smFinal" if side == "sm" else "pmFinal"
+        return [
+            f"    have {name} : {final} {node.outs[0]} = fw_matmul ({store} {node.ins[0]}) ({store} {node.ins[1]}) := by",
+            f"      change ({nodes}.foldl (applyNodeDistributedFaithful {graph}) {store}) {node.outs[0]} = _",
+            f"      rw [show {nodes} = {nodes}.take {pos} ++ [{node_name}] ++ {nodes}.drop {pos + 1} by native_decide]",
+            f"      rw [foldl_faithful_middle_writer {graph} {store} ({nodes}.take {pos}) ({nodes}.drop {pos + 1})",
+            f"        {node_name} {node.outs[0]} (fun t => fw_matmul (t {node.ins[0]}) (t {node.ins[1]})) (by",
+            "          intro t",
+            "          rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "            (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]",
+            "          simp [applyNodeDistributed, applyNodeRingAttn]",
+            f"          exact applyNode_fw_matmul_out {graph} t {node.rank} {node.ins[0]} {node.ins[1]} {node.outs[0]}",
+            "        ) (by native_decide) (by native_decide)]",
+            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[0]} (by native_decide) (by native_decide)]",
+            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[1]} (by native_decide) (by native_decide)]",
+        ]
+
+    lines += writer("hSmWriter", "sm", 0, sm_node, sm_node_name)
+    for rank, node in enumerate(pm_nodes):
+        lines += writer(f"hPmWriter{rank}", "pm", rank, node, pm_node_names[rank])
+    pm_xs = "[" + ", ".join(f"pmStore {tid}" for tid in first.pm_tids) + "]"
+    pm_ys = "[" + ", ".join(f"pmStore {tid}" for tid in second.pm_tids) + "]"
+    pm_outputs = "[" + ", ".join(f"pmFinal {tid}" for tid in output.pm_tids) + "]"
+    lines += [
+        "    have htransport := ShardedRel.fw_matmul_head_axis_rank4",
+        f"      hFirst hSecond (K := {pm_xs}.length)",
+        f"      (b := {b}) (h := {local_h}) (q := {q}) (k := {inner}) (m := {m})",
+        "      (by simp) (by native_decide) (by native_decide) (by native_decide) (by native_decide)",
+        "      (by simp) (by simp)",
+        f"    have hout : {output.fact_id}.Holds smFinal pmFinal := by",
+        f"      change ShardedRel (smFinal {output.sm_tid}) {pm_outputs} 1 {_shape_text(list(out_full))} {_shape_text(list(out_shard))}",
+        "      rw [hSmWriter, " + ", ".join(f"hPmWriter{rank}" for rank in range(k)) + "]",
+        "      simpa using htransport",
+        "    intro fact hfact",
+        f"    have covered : fact ∈ [{output.fact_id}] ++ {before.state_id}.facts := by",
+        f"      exact (show {after.state_id}.facts ⊆ [{output.fact_id}] ++ {before.state_id}.facts by native_decide) hfact",
+        "    simp only [List.mem_append] at covered",
+        "    rcases covered with fresh | old",
+        "    · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh",
+        "      rcases fresh with rfl", "      exact hout",
+        "    · exact hframe fact old", "",
+    ]
+    return "\n".join(lines)
+
+
 def render_closed_k_rank_matmul_output_axis_segment(ir: GoalIR, relation, segment_id: str) -> str:
     """Replay exact one-SM plus ordered-K-PM rank-4 output-axis matmuls."""
     try:
@@ -7427,6 +7597,8 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         return render_closed_k_rank_transpose_segment(ir, relation, segment_id)
     if family == ("matmul-output-axis-sharded-k-rank-dim3",):
         return render_closed_k_rank_matmul_output_axis_segment(ir, relation, segment_id)
+    if family == ("matmul-head-axis-sharded-k-rank-dim1",):
+        return render_closed_k_rank_matmul_head_axis_segment(ir, relation, segment_id)
     if family == ("contiguous-sharded-k-rank",):
         return render_closed_k_rank_contiguous_segment(ir, relation, segment_id)
     if family in (
