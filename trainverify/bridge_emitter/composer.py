@@ -6201,6 +6201,169 @@ def render_closed_k_rank_alltoall_segment(ir: GoalIR, relation, segment_id: str)
 
 
 
+def render_closed_k_rank_allgather_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Render one exact ordered K-rank PM AllGather reconstruction writer."""
+    chain = relation.dependent_chain_plan
+    if chain is None or not chain.complete:
+        raise ValueError("K-rank AllGather segment requires a complete closed chain")
+    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
+    if segment is None or len(segment.transition_ids) != 1:
+        raise ValueError("K-rank AllGather segment must own one transition")
+    transitions = {item.transition_id: item for item in relation.transition_specs}
+    transition = transitions[segment.transition_ids[0]]
+    expected_theorem = (
+        "TrainVerify.Denote.RelationCompiler.ShardedRel.to_joined_allGather"
+    )
+    if (transition.rule_id != "allgather-reconstruction-k-rank"
+            or transition.lean_theorem != expected_theorem):
+        raise ValueError("segment is not the registered K-rank AllGather family")
+    if (transition.sm_node_indices != () or len(transition.pm_node_indices) != 1
+            or transition.pm_node_indices != tuple(range(*segment.pm_range))
+            or tuple(range(*segment.sm_range)) != ()):
+        raise ValueError("K-rank reconstruction requires the exact PM AllGather writer footprint")
+    writer_index = transition.pm_node_indices[0]
+    if not 0 <= writer_index < len(ir.pm_nodes):
+        raise ValueError("K-rank AllGather writer is outside PM authority")
+    writer = ir.pm_nodes[writer_index]
+    certificates = [
+        item for item in relation.certificates
+        if getattr(item, "rule_id", None) == transition.rule_id
+    ]
+    if len(certificates) != 1:
+        raise ValueError("K-rank AllGather segment lacks one exact certificate")
+    certificate = certificates[0]
+    if (certificate.input_fact,) != transition.pre_facts or (
+            certificate.output_fact,) != transition.post_facts:
+        raise ValueError("K-rank AllGather certificate facts disagree with transition")
+    rank_count = int(certificate.rank_count)
+    gather_dim = int(certificate.gather_dim)
+    if rank_count < 2 or ir.sm_num_ranks != 1 or ir.pm_num_ranks != rank_count:
+        raise ValueError("K-rank AllGather graph rank authority disagrees with certificate")
+    if (writer.op != "AllGatherPrim" or writer.rank != 0
+            or len(writer.outs) != 1 or tuple(writer.params or ()) != (gather_dim,)
+            or len(writer.ins) != rank_count):
+        raise ValueError("K-rank AllGather actual writer signature mismatch")
+
+    records = {item.source: item for item in chain.relation_facts}
+    if len(transition.pre_facts) != 1 or transition.pre_facts[0] not in records:
+        raise ValueError("K-rank AllGather lacks one closed sharded pre fact")
+    if len(transition.post_facts) != 1 or transition.post_facts[0] not in records:
+        raise ValueError("K-rank AllGather lacks one closed joined post fact")
+    before = records[transition.pre_facts[0]]
+    after = records[transition.post_facts[0]]
+    if (before.kind != "sharded" or before.gather_dim != gather_dim
+            or len(before.pm_tids) != rank_count
+            or tuple(writer.ins) != before.pm_tids):
+        raise ValueError("K-rank AllGather ordered input TIDs disagree with pre relation")
+    if (after.kind != "joined" or after.sm_tid != before.sm_tid
+            or after.joined_pm_tid != writer.outs[0]):
+        raise ValueError("K-rank AllGather output TIDs disagree with joined relation")
+    if (tuple(before.full_shape) != tuple(certificate.full_shape)
+            or tuple(before.shard_shape) != tuple(certificate.shard_shape)
+            or tuple(after.full_shape) != tuple(certificate.full_shape)):
+        raise ValueError("K-rank AllGather materialized shapes disagree with certificate")
+    reconstructed = list(before.shard_shape)
+    if gather_dim < 0 or gather_dim >= len(reconstructed):
+        raise ValueError("K-rank AllGather gather dimension is outside shard shape")
+    reconstructed[gather_dim] *= rank_count
+    if tuple(reconstructed) != tuple(before.full_shape):
+        raise ValueError("K-rank AllGather shape contract is not reconstructed")
+
+    states = {item.state_id: item for item in chain.states}
+    pre_state, post_state = states[segment.pre_state_id], states[segment.post_state_id]
+    if before.fact_id not in pre_state.fact_ids or after.fact_id not in post_state.fact_ids:
+        raise ValueError("K-rank AllGather relation facts are not live")
+    if not set(post_state.fact_ids) <= ({after.fact_id} | set(pre_state.fact_ids)):
+        raise ValueError("K-rank AllGather state introduces an unproved fact")
+
+    sm_graph, pm_graph = ir.sm_graph_ref, ir.pm_graph_ref
+    node_text = _node_text(writer)
+    input_text = "[" + ", ".join(str(tid) for tid in before.pm_tids) + "]"
+    sm_nodes_name = f"{segment_id}_smNodes"
+    pm_nodes_name = f"{segment_id}_pmNodes"
+    sm_final_name = f"{segment_id}_smFinal"
+    pm_final_name = f"{segment_id}_pmFinal"
+    reads_name = f"{segment_id}_ordered_inputs_preserved"
+    writer_name = f"{segment_id}_writer_value"
+    state_name = f"{segment_id}_publish_state"
+    sm_final = f"({sm_final_name} smStore)"
+    pm_final = f"({pm_final_name} pmStore)"
+    full_shape = _shape_text(list(before.full_shape))
+    shard_shape = _shape_text(list(before.shard_shape))
+    read_proofs = []
+    read_names = []
+    for ordinal, tid in enumerate(before.pm_tids):
+        name = f"hRead{ordinal:02d}"
+        read_names.append(name)
+        read_proofs.extend([
+            f"  have {name} : {pm_final} {tid} = pmStore {tid} := by",
+            f"    unfold {pm_final_name}",
+            f"    exact foldl_applyNodeDistributedFaithful_at_not_written {pm_graph} {pm_nodes_name} pmStore {tid}",
+            "      (by native_decide) (by native_decide)",
+        ])
+    lines = [
+        f"private def {sm_nodes_name} : List NodeDecl := []",
+        f"private def {pm_nodes_name} : List NodeDecl := [{node_text}]",
+        f"@[irreducible] private def {sm_final_name} (smStore : Store) : Store :=",
+        f"  {sm_nodes_name}.foldl (applyNodeDistributedFaithful {sm_graph}) smStore",
+        f"@[irreducible] private def {pm_final_name} (pmStore : Store) : Store :=",
+        f"  {pm_nodes_name}.foldl (applyNodeDistributedFaithful {pm_graph}) pmStore", "",
+        f"private theorem {reads_name} (pmStore : Store) :",
+        f"    {input_text}.map ({pm_final_name} pmStore) = {input_text}.map pmStore := by",
+        *read_proofs,
+        "  simp only [List.map]",
+        f"  rw [{', '.join(read_names)}]", "",
+        f"private theorem {writer_name} (pmStore : Store) :",
+        f"    ({pm_final_name} pmStore) {writer.outs[0]} =",
+        f"      allGatherPrimDimN {gather_dim} {rank_count} 0 ({input_text}.map ({pm_final_name} pmStore)) := by",
+        f"  have hWriter : ({pm_final_name} pmStore) {writer.outs[0]} =",
+        f"      allGatherPrimDimN {gather_dim} {rank_count} 0 ({input_text}.map pmStore) := by",
+        f"    unfold {pm_final_name} {pm_nodes_name}",
+        "    simp only [List.foldl]",
+        "    rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+        "      (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]",
+        "    unfold applyNodeDistributed",
+        "    rw [if_neg (by decide)]",
+        "    rw [applyNodeRingAttn_eq_applyNode_of_not_ring]",
+        f"    · exact applyNode_allGatherPrimDimN_out {pm_graph} pmStore 0 {input_text} {writer.outs[0]} {gather_dim}",
+        "    · decide", "    · decide",
+        f"  rw [← {reads_name} pmStore] at hWriter",
+        "  exact hWriter", "",
+        f"private theorem {state_name} (smStore pmStore : Store)",
+        f"    (hstate : {pre_state.state_id}.Holds smStore pmStore) :",
+        f"    {post_state.state_id}.Holds {sm_final} {pm_final} := by",
+        f"  have hframe : {pre_state.state_id}.Holds {sm_final} {pm_final} := by",
+        f"    unfold {sm_final_name} {pm_final_name}",
+        f"    apply RelationState.Holds.fold_frame {sm_nodes_name} {pm_nodes_name} smStore pmStore hstate",
+        "    · native_decide", "    · native_decide", "    · native_decide", "    · native_decide",
+        f"  have hin : {before.fact_id}.Holds {sm_final} {pm_final} :=",
+        f"    hframe {before.fact_id} (by native_decide)",
+        f"  change ShardedRel ({sm_final} {before.sm_tid}) ({input_text}.map {pm_final})",
+        f"    {gather_dim} {full_shape} {shard_shape} at hin",
+        f"  have hWriter := {writer_name} pmStore",
+        f"  have hJoined : {sm_final} {before.sm_tid} = {pm_final} {writer.outs[0]} :=",
+        "    (ShardedRel.to_joined_allGather hin).trans hWriter.symm",
+        f"  have hout : {after.fact_id}.Holds {sm_final} {pm_final} := by",
+        f"    change {sm_final} {before.sm_tid} = {pm_final} {writer.outs[0]} ∧",
+        f"      ({sm_final} {before.sm_tid}).shape = {full_shape} ∧",
+        f"      ({pm_final} {writer.outs[0]}).shape = {full_shape}",
+        "    refine ⟨hJoined, hin.full_shape, ?_⟩",
+        "    rw [← hJoined]",
+        "    exact hin.full_shape",
+        "  exact RelationState.Holds.mono_insert hframe hout (by native_decide)", "",
+        f"private def {segment_id} :",
+        f"    ClosedDepSegmentCertificate {sm_graph} {pm_graph} {pre_state.state_id} {post_state.state_id} where",
+        f"  smNodes := {sm_nodes_name}",
+        f"  pmNodes := {pm_nodes_name}",
+        "  sound := by",
+        "    intro smStore pmStore hstate",
+        f"    simpa [{sm_final_name}, {pm_final_name}] using",
+        f"      ({state_name} smStore pmStore hstate)", "",
+    ]
+    return "\n".join(lines)
+
+
+
 def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     """Render one closed segment through an explicit registered family adapter."""
     chain = relation.dependent_chain_plan
@@ -6221,6 +6384,8 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         return render_closed_k_rank_full_producer_chunks_segment(ir, relation, segment_id)
     if family == ("alltoall-k-rank-layout-transport",):
         return render_closed_k_rank_alltoall_segment(ir, relation, segment_id)
+    if family == ("allgather-reconstruction-k-rank",):
+        return render_closed_k_rank_allgather_segment(ir, relation, segment_id)
     if family == ("embedding-hidden-sharded-k-rank",):
         raise ValueError(
             "K-rank hidden-sharded embedding remains unsupported: checked semantic "

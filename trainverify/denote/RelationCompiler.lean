@@ -787,6 +787,16 @@ structure ShardedRel (full : Tensor) (shards : List Tensor)
     fullShape = shardShape.set gatherDim
       (shardShape.getD gatherDim 0 * shards.length)
 
+/-- The value-level bridge from an ordered sharding relation to the exact
+AllGather expression consumed by a joined writer.  No shape or operator
+semantics are hidden here: this is precisely `ShardedRel.full_value`. -/
+theorem ShardedRel.to_joined_allGather
+    {full : Tensor} {shards : List Tensor} {gatherDim : Nat}
+    {fullShape shardShape : Shape}
+    (h : ShardedRel full shards gatherDim fullShape shardShape) :
+    full = allGatherPrimDimN gatherDim shards.length 0 shards :=
+  h.full_value
+
 /-- Construct the full K-rank relation directly from immutable InitGoal
 value authority plus explicit public shape contracts. -/
 theorem ShardedRel.of_init_goal

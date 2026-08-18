@@ -3085,6 +3085,103 @@ class KRankFullProducerChunksCertificate:
     lean_theorem: str
 
 
+@dataclass(frozen=True)
+class KRankAllGatherReconstructionCertificate:
+    rule_id: str
+    rank_count: int
+    gather_dim: int
+    full_shape: tuple[int, ...]
+    shard_shape: tuple[int, ...]
+    input_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    pm_allgather_step: str
+    lean_theorem: str
+
+
+def advance_k_rank_allgather_reconstruction_frontiers(
+    plan: ProofPlan,
+    frontiers: tuple[tuple[str, ...], ...],
+    layouts: tuple[str, ...],
+) -> tuple[
+    tuple[KRankAllGatherReconstructionCertificate, ...],
+    tuple[tuple[str, ...], ...],
+    tuple[str, ...],
+]:
+    """Replace a joined PM AllGather root by its ordered sharded input fact."""
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("K-rank AllGather frontier/layout arity mismatch")
+    by_id = {step.step_id: step for step in plan.steps}
+    certificates = []
+    rewritten = []
+    rewritten_layouts = []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "joined":
+            rewritten.append(frontier)
+            rewritten_layouts.append(layout)
+            continue
+        if len(frontier) != 2:
+            raise RelationCompositionError("joined K-rank root must contain one SM and one PM ref")
+        sm_ref, pm_ref = frontier
+        sm_step = by_id.get(sm_ref)
+        gather = by_id.get(pm_ref)
+        if sm_step is None or gather is None:
+            raise RelationCompositionError("joined K-rank root contains an unresolved writer")
+        if sm_step.side != "sm" or gather.side != "pm":
+            raise RelationCompositionError("joined K-rank root has wrong-side writers")
+        if gather.op != "AllGatherPrim":
+            rewritten.append(frontier)
+            rewritten_layouts.append(layout)
+            continue
+        if int(gather.rank) != 0:
+            raise RelationCompositionError("K-rank AllGather writer must have rank zero")
+        if len(gather.parameters) != 1:
+            raise RelationCompositionError("K-rank AllGather must declare exactly one gather dimension")
+        gather_dim = int(gather.parameters[0])
+        input_refs = tuple(gather.input_bindings)
+        rank_count = len(input_refs)
+        if rank_count < 2:
+            raise RelationCompositionError("K-rank AllGather must have at least two ordered inputs")
+        input_steps = tuple(by_id.get(ref) for ref in input_refs)
+        if any(step is None or step.side != "pm" for step in input_steps):
+            raise RelationCompositionError("K-rank AllGather input writer is unresolved or wrong-side")
+        if tuple(int(step.rank) for step in input_steps) != tuple(range(rank_count)):
+            raise RelationCompositionError("K-rank AllGather inputs are not in exact rank order")
+        shard_shapes = tuple(tuple(step.output_shape) for step in input_steps)
+        if any(shape != shard_shapes[0] for shape in shard_shapes[1:]):
+            raise RelationCompositionError("K-rank AllGather input shard shapes disagree")
+        declared_inputs = tuple(tuple(shape) for shape in getattr(gather, "input_shapes", ()))
+        if declared_inputs != shard_shapes:
+            raise RelationCompositionError("K-rank AllGather declared input shapes disagree with writers")
+        shard_shape = shard_shapes[0]
+        if gather_dim < 0 or gather_dim >= len(shard_shape):
+            raise RelationCompositionError("K-rank AllGather gather dimension is out of bounds")
+        full_shape = list(shard_shape)
+        full_shape[gather_dim] *= rank_count
+        full_shape = tuple(full_shape)
+        if tuple(gather.output_shape) != full_shape:
+            raise RelationCompositionError("K-rank AllGather declared output shape is not reconstructed")
+        if tuple(sm_step.output_shape) != full_shape:
+            raise RelationCompositionError("K-rank AllGather output shape disagrees with SM writer")
+        input_fact = RelationFactSpec(
+            "sharded", (sm_ref, *input_refs), gather_dim=gather_dim
+        )
+        output_fact = RelationFactSpec("joined", frontier)
+        certificates.append(KRankAllGatherReconstructionCertificate(
+            rule_id="allgather-reconstruction-k-rank",
+            rank_count=rank_count,
+            gather_dim=gather_dim,
+            full_shape=full_shape,
+            shard_shape=shard_shape,
+            input_fact=input_fact,
+            output_fact=output_fact,
+            pm_allgather_step=pm_ref,
+            lean_theorem="TrainVerify.Denote.RelationCompiler.ShardedRel.to_joined_allGather",
+        ))
+        rewritten.append(input_fact.step_triple)
+        rewritten_layouts.append("sharded")
+    return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
+
+
 def advance_k_rank_full_producer_chunks(
     plan: ProofPlan,
     frontiers: tuple[tuple[str, ...], ...],
@@ -3155,7 +3252,7 @@ def advance_k_rank_full_producer_chunks(
             pm_chunk_steps=tuple(step.step_id for step in chunks),
             lean_theorem="TrainVerify.Denote.allGatherPrimDimN_chunks_ofFn",
         ))
-        rewritten.append(input_fact.step_triple)
+        rewritten.append((sm_step.step_id, producer.step_id))
         rewritten_layouts.append("joined")
     return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
 
@@ -3804,14 +3901,14 @@ def normalize_relation_frontiers(
     frontiers: tuple[tuple[str, ...], ...],
     layouts: tuple[str, ...],
     *,
-    rules: tuple[str, ...] = ("full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
+    rules: tuple[str, ...] = ("allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
     goal_ir: GoalIR | None = None,
     deduplicate_each_round: bool = False,
     certificate_sink: list[object] | None = None,
     side_condition_sink: list[RelationSideCondition] | None = None,
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
-    known = {"full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
+    known = {"allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
     unknown = set(rules) - known
     if unknown:
         raise RelationCompositionError(f"unknown relation normalization rules: {sorted(unknown)}")
@@ -3823,6 +3920,13 @@ def normalize_relation_frontiers(
                 current_frontiers, current_layouts
             )
         prior_state = (current_frontiers, current_layouts)
+        if "allgather_reconstruction_k" in rules:
+            _certs, current_frontiers, current_layouts = (
+                advance_k_rank_allgather_reconstruction_frontiers(
+                    plan, current_frontiers, current_layouts
+                )
+            )
+            _extend_unique_certificates(certificate_sink, _certs)
         if "full_producer_k" in rules:
             _certs, current_frontiers, current_layouts = (
                 advance_k_rank_full_producer_chunks(
@@ -5175,6 +5279,10 @@ def build_certificate_transition_specs(
                     "tensor_eq", ("sm", "pm"), (cert.ids_tid, cert.ids_tid),
                 ),
             )
+        elif type(cert) is KRankAllGatherReconstructionCertificate:
+            pre = (cert.input_fact,)
+            post = (cert.output_fact,)
+            footprint_groups = ((cert.pm_allgather_step,),)
         elif type(cert) is KRankFullProducerChunksCertificate:
             pre = (cert.input_fact,)
             post = (cert.output_fact,)
@@ -5849,7 +5957,7 @@ def compile_relation_plan(
                 proof,
                 frontiers,
                 layouts,
-                rules=("full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k"),
+                rules=("allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k"),
                 goal_ir=ir,
                 certificate_sink=compiled_certificates,
                 deduplicate_each_round=True,

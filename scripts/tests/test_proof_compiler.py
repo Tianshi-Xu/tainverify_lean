@@ -3406,7 +3406,7 @@ def test_k_rank_full_producer_chunks_reconstruct_arbitrary_ordered_k():
     assert cert.output_fact == RelationFactSpec("sharded", frontier, gather_dim=1)
     assert cert.pm_chunk_steps == tuple(step.step_id for step in chunks)
     assert cert.lean_theorem.endswith("allGatherPrimDimN_chunks_ofFn")
-    assert frontiers == (cert.input_fact.step_triple,)
+    assert frontiers == ((sm.step_id, producer.step_id),)
     assert layouts == ("joined",)
     transition = relation_compiler_module.build_certificate_transition_specs(
         SimpleNamespace(), certs
@@ -3422,7 +3422,7 @@ def test_k_rank_full_producer_chunks_reconstruct_arbitrary_ordered_k():
         rules=("full_producer_k",), certificate_sink=sink,
     )
     assert (normalized, normalized_layouts, sink) == (
-        (cert.input_fact.step_triple,), ("joined",), [cert]
+        ((sm.step_id, producer.step_id),), ("joined",), [cert]
     )
 
 
