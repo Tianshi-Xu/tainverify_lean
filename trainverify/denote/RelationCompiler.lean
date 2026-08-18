@@ -778,9 +778,20 @@ structure ShardedRel (full : Tensor) (shards : List Tensor)
   shards_nonempty : shards ≠ []
   shard_shapes : ∀ shard ∈ shards, shard.shape = shardShape
 
+/-- Rank-count-polymorphic replication relation. The ordered replica list is
+    authority: every PM value equals the SM value and has the same shape. -/
+structure ReplicatedRel (full : Tensor) (replicas : List Tensor)
+    (shape : Shape) : Prop where
+  replicas_nonempty : replicas ≠ []
+  full_shape : full.shape = shape
+  replica_values : ∀ replica ∈ replicas, replica = full
+  replica_shapes : ∀ replica ∈ replicas, replica.shape = shape
+
 inductive RelationFact where
   | sharded (smTid : Tid) (pmTids : List Tid) (gatherDim : Nat)
       (fullShape shardShape : Shape)
+  | replicated (smTid : Tid) (pmTids : List Tid) (shape : Shape)
+  | joined (smTid pmTid : Tid) (shape : Shape)
   | ordinary (smTid pmRank0Tid pmRank1Tid : Tid) (fullShape shardShape : Shape)
   | zigzag (smTid pmRank0Tid pmRank1Tid metadataTid : Tid) (fullShape shardShape : Shape)
   | gather (smTid pmRank0Tid pmRank1Tid dim : Tid) (fullShape shardShape : Shape)
@@ -804,6 +815,12 @@ def RelationFact.Holds (fact : RelationFact) (sm pm : Store) : Prop :=
   match fact with
   | .sharded smTid pmTids gatherDim fullShape shardShape =>
       ShardedRel (sm smTid) (pmTids.map pm) gatherDim fullShape shardShape
+  | .replicated smTid pmTids shape =>
+      ReplicatedRel (sm smTid) (pmTids.map pm) shape
+  | .joined smTid pmTid shape =>
+      sm smTid = pm pmTid ∧
+      (sm smTid).shape = shape ∧
+      (pm pmTid).shape = shape
   | .ordinary smTid pmRank0Tid pmRank1Tid fullShape shardShape =>
       GeneratedPatterns.Ordinary2Rel (sm smTid) (pm pmRank0Tid) (pm pmRank1Tid) fullShape shardShape
   | .zigzag smTid pmRank0Tid pmRank1Tid metadataTid fullShape shardShape =>
@@ -1040,6 +1057,8 @@ namespace RelationFact
 
 def smTids : RelationFact → List Tid
   | .sharded smTid _ _ _ _ => [smTid]
+  | .replicated smTid _ _ => [smTid]
+  | .joined smTid _ _ => [smTid]
   | .ordinary smTid _ _ _ _ => [smTid]
   | .zigzag smTid _ _ _ _ _ => [smTid]
   | .gather smTid _ _ _ _ _ => [smTid]
@@ -1058,14 +1077,16 @@ def smTids : RelationFact → List Tid
 
 def pmTids : RelationFact → List Tid
   | .sharded _ pmTids _ _ _ => pmTids
+  | .replicated _ pmTids _ => pmTids
+  | .joined _ pmTid _ => [pmTid]
   | .ordinary _ pm0 pm1 _ _ => [pm0, pm1]
   | .zigzag _ pm0 pm1 metadataTid _ _ => [pm0, pm1, metadataTid]
   | .gather _ pm0 pm1 _ _ _ => [pm0, pm1]
-  | .joinedOrdinary _ pm0 pm1 joined _ _ => [pm0, pm1, joined]
+  | .joinedOrdinary _ pm0 pm1 joinedTid _ _ => [pm0, pm1, joinedTid]
   | .indexedStack _ pm0 pm1 sourceTids _ _ _ =>
       pm0 :: pm1 :: sourceTids.flatMap (fun tids => [tids.2.1, tids.2.2])
-  | .joinedIndexedStack _ pm0 pm1 joined sourceTids _ _ _ =>
-      pm0 :: pm1 :: joined :: sourceTids.flatMap (fun tids => [tids.2.1, tids.2.2])
+  | .joinedIndexedStack _ pm0 pm1 joinedTid sourceTids _ _ _ =>
+      pm0 :: pm1 :: joinedTid :: sourceTids.flatMap (fun tids => [tids.2.1, tids.2.2])
   | .tensorEq leftSide leftTid rightSide rightTid =>
       (if leftSide = .pm then [leftTid] else []) ++
       (if rightSide = .pm then [rightTid] else [])
@@ -1089,6 +1110,18 @@ theorem Holds.frame {fact : RelationFact} {sm pm sm' pm' : Store}
         exact hpm
       rw [hmap]
       exact h
+  | replicated smTid replicaTids shape =>
+      simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
+      rw [hsm _ (by simp)]
+      have hmap : replicaTids.map pm' = replicaTids.map pm := by
+        apply List.map_congr_left
+        exact hpm
+      rw [hmap]
+      exact h
+  | joined smTid pmTid shape =>
+      simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
+      rw [hsm _ (by simp), hpm _ (by simp)]
+      exact h
   | ordinary smTid pm0 pm1 fullShape shardShape =>
       simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
       rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
@@ -1101,7 +1134,7 @@ theorem Holds.frame {fact : RelationFact} {sm pm sm' pm' : Store}
       simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
       rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
       exact h
-  | joinedOrdinary smTid pm0 pm1 joined fullShape shardShape =>
+  | joinedOrdinary smTid pm0 pm1 joinedTid fullShape shardShape =>
       simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
       rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
       exact h
@@ -1126,7 +1159,7 @@ theorem Holds.frame {fact : RelationFact} {sm pm sm' pm' : Store}
         rw [hsm _ hsmMem, hpm _ hpm0Mem, hpm _ hpm1Mem]
       rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp), hsources]
       exact h
-  | joinedIndexedStack smTid pm0 pm1 joined sourceTids gatherDim fullShape shardShape =>
+  | joinedIndexedStack smTid pm0 pm1 joinedTid sourceTids gatherDim fullShape shardShape =>
       simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
       have hsources :
           sourceTids.map (fun tids => (sm' tids.1, pm' tids.2.1, pm' tids.2.2)) =
@@ -1137,12 +1170,12 @@ theorem Holds.frame {fact : RelationFact} {sm pm sm' pm' : Store}
           right
           exact List.mem_map.mpr ⟨tids, htids, rfl⟩
         have hpm0Mem : tids.2.1 ∈
-            pm0 :: pm1 :: joined ::
+            pm0 :: pm1 :: joinedTid ::
               sourceTids.flatMap (fun item => [item.2.1, item.2.2]) := by
           simp only [List.mem_cons, List.mem_flatMap]
           exact Or.inr (Or.inr (Or.inr ⟨tids, htids, by simp⟩))
         have hpm1Mem : tids.2.2 ∈
-            pm0 :: pm1 :: joined ::
+            pm0 :: pm1 :: joinedTid ::
               sourceTids.flatMap (fun item => [item.2.1, item.2.2]) := by
           simp only [List.mem_cons, List.mem_flatMap]
           exact Or.inr (Or.inr (Or.inr ⟨tids, htids, by simp⟩))

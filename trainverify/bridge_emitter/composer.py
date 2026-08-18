@@ -494,7 +494,14 @@ def render_closed_relation_declarations(chain, namespace: str) -> str:
         "",
     ]
     for fact in chain.relation_facts:
-        if fact.kind == "sharded":
+        if fact.kind == "joined":
+            if fact.joined_pm_tid is None:
+                raise RelationCompositionError("joined relation fact lacks its PM output")
+            constructor = (
+                f".joined {fact.sm_tid} {fact.joined_pm_tid} "
+                f"{shape_text(fact.full_shape)}"
+            )
+        elif fact.kind == "sharded":
             if fact.gather_dim is None or not fact.pm_tids:
                 raise ValueError(f"K-rank sharded fact is not closed: {fact.fact_id}")
             pm_tids = "[" + ", ".join(str(tid) for tid in fact.pm_tids) + "]"
@@ -502,6 +509,11 @@ def render_closed_relation_declarations(chain, namespace: str) -> str:
                 f".sharded {fact.sm_tid} {pm_tids} {fact.gather_dim} "
                 f"{shape_text(fact.full_shape)} {shape_text(fact.shard_shape)}"
             )
+        elif fact.kind == "replicated":
+            if not fact.pm_tids:
+                raise ValueError(f"K-rank replicated fact is not closed: {fact.fact_id}")
+            pm_tids = "[" + ", ".join(str(tid) for tid in fact.pm_tids) + "]"
+            constructor = f".replicated {fact.sm_tid} {pm_tids} {shape_text(fact.full_shape)}"
         elif fact.kind == "ordinary":
             constructor = (
                 f".ordinary {fact.sm_tid} {fact.pm_rank0_tid} {fact.pm_rank1_tid} "

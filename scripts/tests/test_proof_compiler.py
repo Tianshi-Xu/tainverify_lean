@@ -3180,6 +3180,267 @@ def test_k_rank_sum_allreduce_terminal_is_topology_and_shape_derived():
     )
 
 
+def test_k_rank_linear_frontier_preserves_ordered_shards_and_external_weight():
+    sm_input = "sm:0:0"
+    pm_inputs = tuple(f"pm:{rank}:0" for rank in range(4))
+    sm_output = "sm:1:0"
+    pm_outputs = tuple(f"pm:{rank + 4}:0" for rank in range(4))
+    steps = [
+        SimpleNamespace(step_id=sm_input, side="sm", op="FW_identity", rank=0,
+                        input_bindings=(), output_shape=(1, 8, 4)),
+        *(
+            SimpleNamespace(step_id=ref, side="pm", op="FW_identity", rank=rank,
+                            input_bindings=(), output_shape=(1, 2, 4))
+            for rank, ref in enumerate(pm_inputs)
+        ),
+        SimpleNamespace(step_id=sm_output, side="sm", op="FW_linear", rank=0,
+                        input_bindings=(sm_input, "init:99"), output_shape=(1, 8, 6)),
+        *(
+            SimpleNamespace(step_id=ref, side="pm", op="FW_linear", rank=rank,
+                            input_bindings=(pm_inputs[rank], "init:99"),
+                            output_shape=(1, 2, 6))
+            for rank, ref in enumerate(pm_outputs)
+        ),
+    ]
+    certificates, frontiers, layouts = (
+        relation_compiler_module.advance_k_rank_linear_relation_frontiers(
+            SimpleNamespace(steps=tuple(steps)),
+            ((sm_output, *pm_outputs),),
+            ("sharded",),
+        )
+    )
+    assert frontiers == ((sm_input, *pm_inputs),)
+    assert layouts == ("sharded",)
+    assert len(certificates) == 1
+    cert = certificates[0]
+    assert cert.rank_count == 4
+    assert cert.gather_dim == 1
+    assert cert.external_weight_tid == 99
+    assert cert.input_fact == RelationFactSpec(
+        "sharded", (sm_input, *pm_inputs), gather_dim=1
+    )
+    assert cert.output_fact == RelationFactSpec(
+        "sharded", (sm_output, *pm_outputs), gather_dim=1
+    )
+    assert cert.lean_theorem.endswith("fw_linear_3d_allGatherPrimDimN_dim1_comm")
+
+    sink = []
+    normalized, normalized_layouts = normalize_relation_frontiers(
+        SimpleNamespace(steps=tuple(steps)),
+        ((sm_output, *pm_outputs),),
+        ("sharded",),
+        rules=("linear_k",),
+        certificate_sink=sink,
+    )
+    assert normalized == ((sm_input, *pm_inputs),)
+    assert normalized_layouts == ("sharded",)
+    assert sink == list(certificates)
+
+
+def test_k_rank_local_linear_skips_dynamic_weight_variant_without_error():
+    sm_out = SimpleNamespace(step_id="sm:2:0", side="sm", op="FW_linear", rank=0,
+                             input_bindings=("sm:0:0", "sm:1:0"), output_shape=(1, 8, 6))
+    pm_out = tuple(
+        SimpleNamespace(step_id=f"pm:{rank + 8}:0", side="pm", op="FW_linear", rank=rank,
+                        input_bindings=(f"pm:{rank}:0", f"pm:{rank + 4}:0"),
+                        output_shape=(1, 2, 6))
+        for rank in range(4)
+    )
+    producers = (
+        SimpleNamespace(step_id="sm:0:0", side="sm", rank=0, output_shape=(1, 8, 4)),
+        SimpleNamespace(step_id="sm:1:0", side="sm", rank=0, output_shape=(6, 4)),
+        *(SimpleNamespace(step_id=f"pm:{rank}:0", side="pm", rank=rank,
+                          output_shape=(1, 2, 4)) for rank in range(4)),
+        *(SimpleNamespace(step_id=f"pm:{rank + 4}:0", side="pm", rank=rank,
+                          output_shape=(2, 4)) for rank in range(4)),
+    )
+    frontier = (sm_out.step_id, *(step.step_id for step in pm_out))
+    certs, frontiers, layouts = relation_compiler_module.advance_k_rank_linear_relation_frontiers(
+        SimpleNamespace(steps=(*producers, sm_out, *pm_out)), (frontier,), ("sharded",)
+    )
+    assert certs == ()
+    assert frontiers == (frontier,)
+    assert layouts == ("sharded",)
+
+    sm_out.input_bindings = ("sm:0:0", "init:91")
+    for rank, step in enumerate(pm_out):
+        step.input_bindings = (f"pm:{rank}:0", f"init:{92 + rank}")
+    certs, frontiers, layouts = relation_compiler_module.advance_k_rank_linear_relation_frontiers(
+        SimpleNamespace(steps=(*producers, sm_out, *pm_out)), (frontier,), ("sharded",)
+    )
+    assert certs == ()
+    assert frontiers == (frontier,)
+    assert layouts == ("sharded",)
+
+
+def test_k_rank_gelu_uses_generic_pointwise_theorem_for_dim2():
+    sm_in = SimpleNamespace(step_id="sm:0:0", side="sm", op="FW_identity", rank=0,
+                            input_bindings=(), output_shape=(1, 8, 12))
+    pm_in = tuple(SimpleNamespace(step_id=f"pm:{rank}:0", side="pm", op="FW_identity",
+                                  rank=rank, input_bindings=(), output_shape=(1, 8, 3))
+                  for rank in range(4))
+    sm_out = SimpleNamespace(step_id="sm:1:0", side="sm", op="FW_gelu", rank=0,
+                             input_bindings=(sm_in.step_id,), output_shape=(1, 8, 12))
+    pm_out = tuple(SimpleNamespace(step_id=f"pm:{rank + 4}:0", side="pm", op="FW_gelu",
+                                   rank=rank, input_bindings=(pm_in[rank].step_id,),
+                                   output_shape=(1, 8, 3)) for rank in range(4))
+    certs, frontiers, layouts = relation_compiler_module.advance_k_rank_gelu_relation_frontiers(
+        SimpleNamespace(steps=(sm_in, *pm_in, sm_out, *pm_out)),
+        ((sm_out.step_id, *(step.step_id for step in pm_out)),), ("sharded",)
+    )
+    assert frontiers == ((sm_in.step_id, *(step.step_id for step in pm_in)),)
+    assert layouts == ("sharded",)
+    assert len(certs) == 1
+    assert certs[0].gather_dim == 2
+    assert certs[0].external_tids == ()
+    assert certs[0].lean_theorem.endswith("fw_gelu_allGatherPrimDimN_eq")
+
+    sink = []
+    normalized, normalized_layouts = normalize_relation_frontiers(
+        SimpleNamespace(steps=(sm_in, *pm_in, sm_out, *pm_out)),
+        ((sm_out.step_id, *(step.step_id for step in pm_out)),),
+        ("sharded",), rules=("gelu_k",), certificate_sink=sink,
+    )
+    assert normalized == frontiers
+    assert normalized_layouts == layouts
+    assert sink == list(certs)
+
+
+def test_k_rank_layernorm_frontier_uses_generic_local_backend():
+    sm_in = SimpleNamespace(step_id="sm:0:0", side="sm", op="FW_add", rank=0,
+                            input_bindings=(), output_shape=(1, 8, 6))
+    pm_in = tuple(
+        SimpleNamespace(step_id=f"pm:{rank}:0", side="pm", op="FW_add", rank=rank,
+                        input_bindings=(), output_shape=(1, 2, 6))
+        for rank in range(4)
+    )
+    sm_out = SimpleNamespace(
+        step_id="sm:1:0", side="sm", op="FW_layernorm", rank=0,
+        input_bindings=(sm_in.step_id, "init:91", "init:92"), output_shape=(1, 8, 6)
+    )
+    pm_out = tuple(
+        SimpleNamespace(
+            step_id=f"pm:{rank + 4}:0", side="pm", op="FW_layernorm", rank=rank,
+            input_bindings=(pm_in[rank].step_id, "init:91", "init:92"),
+            output_shape=(1, 2, 6),
+        )
+        for rank in range(4)
+    )
+    certs, frontiers, layouts = (
+        relation_compiler_module.advance_k_rank_layernorm_relation_frontiers(
+            SimpleNamespace(steps=(sm_in, *pm_in, sm_out, *pm_out)),
+            ((sm_out.step_id, *(step.step_id for step in pm_out)),),
+            ("sharded",),
+        )
+    )
+    assert frontiers == ((sm_in.step_id, *(step.step_id for step in pm_in)),)
+    assert layouts == ("sharded",)
+    assert len(certs) == 1
+    assert certs[0].external_tids == (91, 92)
+    assert certs[0].op == "FW_layernorm"
+    assert certs[0].lean_theorem.endswith("fw_layernorm_3d_allGatherPrimDim1_comm")
+
+
+def test_k_rank_multiref_projection_preserves_ordered_sharded_frontier():
+    sm_input = "sm:0:0"
+    pm_inputs = tuple(f"pm:{rank}:0" for rank in range(4))
+    sm_output = "sm:1:1"
+    pm_outputs = tuple(f"pm:{rank + 4}:1" for rank in range(4))
+    steps = [
+        SimpleNamespace(step_id=sm_input, side="sm", op="FW_identity", rank=0,
+                        input_bindings=(), output_shape=(1, 8, 6),
+                        parameters=(), output_index=0),
+        *(SimpleNamespace(step_id=ref, side="pm", op="FW_identity", rank=rank,
+                          input_bindings=(), output_shape=(1, 2, 6),
+                          parameters=(), output_index=0)
+          for rank, ref in enumerate(pm_inputs)),
+        SimpleNamespace(step_id=sm_output, side="sm", op="FW_multiref", rank=0,
+                        input_bindings=(sm_input,), output_shape=(1, 8, 6),
+                        parameters=(2,), output_index=1),
+        *(SimpleNamespace(step_id=ref, side="pm", op="FW_multiref", rank=rank,
+                          input_bindings=(pm_inputs[rank],), output_shape=(1, 2, 6),
+                          parameters=(2,), output_index=1)
+          for rank, ref in enumerate(pm_outputs)),
+    ]
+    certs, frontiers, layouts = relation_compiler_module.advance_k_rank_multiref_relation_frontiers(
+        SimpleNamespace(steps=tuple(steps)),
+        ((sm_output, *pm_outputs),),
+        ("sharded",),
+    )
+    assert frontiers == ((sm_input, *pm_inputs),)
+    assert layouts == ("sharded",)
+    assert len(certs) == 1
+    assert certs[0].rank_count == 4
+    assert certs[0].projection == 1
+    assert certs[0].arity == 2
+    assert certs[0].input_fact.gather_dim == 1
+    assert certs[0].output_fact.gather_dim == 1
+    assert certs[0].lean_theorem.endswith("applyNode_fw_multiref_at")
+
+    sink = []
+    normalized, normalized_layouts = normalize_relation_frontiers(
+        SimpleNamespace(steps=tuple(steps)),
+        ((sm_output, *pm_outputs),),
+        ("sharded",),
+        rules=("multiref_k",),
+        certificate_sink=sink,
+    )
+    assert normalized == frontiers
+    assert normalized_layouts == layouts
+    assert sink == list(certs)
+
+
+def test_k_rank_add_frontier_expands_two_dynamic_sharded_inputs():
+    sm_inputs = ("sm:0:0", "sm:1:0")
+    pm_inputs = tuple(
+        tuple(f"pm:{arg * 4 + rank}:0" for rank in range(4))
+        for arg in range(2)
+    )
+    sm_output = "sm:2:0"
+    pm_outputs = tuple(f"pm:{rank + 8}:0" for rank in range(4))
+    steps = [
+        *(SimpleNamespace(step_id=ref, side="sm", op="FW_identity", rank=0,
+                          input_bindings=(), output_shape=(1, 8, 12))
+          for ref in sm_inputs),
+        *(SimpleNamespace(step_id=pm_inputs[arg][rank], side="pm", op="FW_identity",
+                          rank=rank, input_bindings=(), output_shape=(1, 8, 3))
+          for arg in range(2) for rank in range(4)),
+        SimpleNamespace(step_id=sm_output, side="sm", op="FW_add", rank=0,
+                        input_bindings=sm_inputs, output_shape=(1, 8, 12)),
+        *(SimpleNamespace(step_id=pm_outputs[rank], side="pm", op="FW_add", rank=rank,
+                          input_bindings=(pm_inputs[0][rank], pm_inputs[1][rank]),
+                          output_shape=(1, 8, 3))
+          for rank in range(4)),
+    ]
+    certs, frontiers, layouts = relation_compiler_module.advance_k_rank_add_relation_frontiers(
+        SimpleNamespace(steps=tuple(steps)),
+        ((sm_output, *pm_outputs),),
+        ("sharded",),
+    )
+    assert frontiers == (
+        (sm_inputs[0], *pm_inputs[0]),
+        (sm_inputs[1], *pm_inputs[1]),
+    )
+    assert layouts == ("sharded", "sharded")
+    assert len(certs) == 1
+    assert certs[0].gather_dim == 2
+    assert len(certs[0].input_facts) == 2
+    assert certs[0].output_fact.gather_dim == 2
+    assert certs[0].lean_theorem.endswith("fw_add_allGatherPrimDimN_comm")
+
+    sink = []
+    normalized, normalized_layouts = normalize_relation_frontiers(
+        SimpleNamespace(steps=tuple(steps)),
+        ((sm_output, *pm_outputs),),
+        ("sharded",),
+        rules=("add_k",),
+        certificate_sink=sink,
+    )
+    assert normalized == frontiers
+    assert normalized_layouts == layouts
+    assert sink == list(certs)
+
+
 def test_k_rank_alltoall_frontier_transports_gather_dimension():
     sm_ref = "sm:0:0"
     input_refs = tuple(f"pm:{rank}:0" for rank in range(4))
@@ -3317,6 +3578,87 @@ def test_closed_relation_facts_materialize_list_indexed_k_rank_shards():
     assert facts[0].gather_dim == 1
     assert facts[0].full_shape == (2, 8)
     assert facts[0].shard_shape == (2, 2)
+
+
+def test_closed_relation_facts_materialize_and_render_k_rank_replicated():
+    refs = ("sm:0:0", "pm:0:0", "pm:1:0", "pm:2:0", "pm:3:0")
+    spec = RelationFactSpec("replicated", refs)
+    steps = (
+        SimpleNamespace(step_id=refs[0], side="sm", output_tid=10, output_shape=(1, 8, 6)),
+        *(SimpleNamespace(step_id=ref, side="pm", output_tid=20 + rank,
+                          output_shape=(1, 8, 6)) for rank, ref in enumerate(refs[1:])),
+    )
+    transition = SimpleNamespace(transition_id="replicated", pre_facts=(), post_facts=(spec,))
+    relation = SimpleNamespace(
+        transition_specs=(transition,),
+        dependency_plan=SimpleNamespace(order=("replicated",)),
+        zigzag_regions=(), certificates=(),
+    )
+    facts = materialize_closed_relation_facts(
+        SimpleNamespace(init_lineages={}), SimpleNamespace(steps=steps), relation
+    )
+    assert len(facts) == 1
+    assert facts[0].kind == "replicated"
+    assert facts[0].sm_tid == 10
+    assert facts[0].pm_tids == (20, 21, 22, 23)
+    assert facts[0].full_shape == (1, 8, 6)
+    assert facts[0].shard_shape == (1, 8, 6)
+
+    chain = SimpleNamespace(
+        complete=True, relation_facts=facts, authority_facts=(),
+        anchor_fact=SimpleNamespace(fact_id="anchor", side="sm", tid=99, shape=(1,)),
+        states=(SimpleNamespace(state_id="state_000000", fact_ids=(facts[0].fact_id,)),),
+    )
+    source = render_closed_relation_declarations(chain, "KRankFixture")
+    assert ".replicated 10 [20, 21, 22, 23] [1, 8, 6]" in source
+
+
+def test_closed_relation_facts_materialize_and_render_generic_joined_result():
+    spec = RelationFactSpec(
+        "joined", ("sm:1:0",), joined_pm_step="pm:8:0"
+    )
+    proof = SimpleNamespace(steps=(
+        SimpleNamespace(step_id="sm:1:0", side="sm", output_tid=10, output_shape=(1,)),
+        SimpleNamespace(step_id="pm:8:0", side="pm", output_tid=20, output_shape=(1,)),
+    ))
+    transition = SimpleNamespace(
+        transition_id="terminal",
+        pre_facts=(),
+        post_facts=(spec,),
+    )
+    relation = SimpleNamespace(
+        transition_specs=(transition,),
+        dependency_plan=SimpleNamespace(order=("terminal",)),
+        certificates=(),
+        zigzag_regions=(),
+    )
+    facts = materialize_closed_relation_facts(
+        SimpleNamespace(init_lineages={}), proof, relation
+    )
+    assert len(facts) == 1
+    assert facts[0].kind == "joined"
+    assert facts[0].sm_tid == 10
+    assert facts[0].pm_tids == ()
+    assert facts[0].joined_pm_tid == 20
+    assert facts[0].full_shape == (1,)
+
+    chain = SimpleNamespace(
+        complete=True,
+        relation_facts=facts,
+        authority_facts=(),
+        anchor_fact=SimpleNamespace(
+            fact_id="anchor_fact",
+            side="sm",
+            tid=10,
+            shape=(1,),
+        ),
+        states=(SimpleNamespace(
+            state_id="state:initial",
+            fact_ids=("anchor_fact", facts[0].fact_id),
+        ),),
+    )
+    source = render_closed_relation_declarations(chain, "GeneratedKRank")
+    assert ".joined 10 20 [1]" in source
 
 
 def test_closed_relation_declarations_render_list_indexed_k_rank_fact():
