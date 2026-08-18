@@ -7026,6 +7026,140 @@ def render_closed_k_rank_softmax_segment(ir: GoalIR, relation, segment_id: str) 
     return "\n".join(lines)
 
 
+def render_closed_k_rank_div_segment(ir: GoalIR, relation, segment_id: str) -> str:
+    """Replay exact one-SM plus ordered-K-PM rank-4 scalar divisions."""
+    try:
+        from .relation_compiler import KRankDivCertificate
+    except ImportError:
+        from relation_compiler import KRankDivCertificate
+    typed = [item for item in relation.certificates if type(item) is KRankDivCertificate]
+    if len(typed) != 1 or typed[0].gather_dim not in (1, 2):
+        raise ValueError("K-rank div requires one exact axis-specific certificate")
+    axis = typed[0].gather_dim
+    rule_id = f"div-sharded-k-rank-dim{axis}"
+    theorem = f"TrainVerify.Denote.RelationCompiler.ShardedRel.fw_div_dim{axis}_rank4"
+    (segment, transition, certificate, pre, post, before, after) = _k_rank_segment_context(
+        ir, relation, segment_id, rule_id, theorem, KRankDivCertificate,
+    )
+    if certificate.input_fact != transition.pre_facts[0] or certificate.output_fact != transition.post_facts[0]:
+        raise ValueError("K-rank div certificate facts disagree with transition")
+    if (pre.kind != "sharded" or post.kind != "sharded"
+            or pre.gather_dim != axis or post.gather_dim != axis):
+        raise ValueError("K-rank div requires exact axis-specific ShardedRel facts")
+    k = len(post.pm_tids)
+    if (k < 2 or certificate.rank_count != k or len(pre.pm_tids) != k
+            or tuple(certificate.full_shape) != tuple(pre.full_shape)
+            or tuple(certificate.full_shape) != tuple(post.full_shape)
+            or tuple(certificate.shard_shape) != tuple(pre.shard_shape)
+            or tuple(certificate.shard_shape) != tuple(post.shard_shape)):
+        raise ValueError("K-rank div relation metadata is not exact")
+    full_shape, shard_shape = tuple(pre.full_shape), tuple(pre.shard_shape)
+    if len(full_shape) != 4 or len(shard_shape) != 4:
+        raise ValueError("K-rank div requires exact rank-4 shapes")
+    expected = list(shard_shape); expected[axis] *= k
+    if tuple(expected) != full_shape:
+        raise ValueError("K-rank div exact axis shape contract fails")
+    if len(transition.sm_node_indices) != 1 or len(transition.pm_node_indices) != k:
+        raise ValueError("K-rank div transition footprint is not exact 1+K")
+    sm_start, sm_end = segment.sm_range
+    pm_start, pm_end = segment.pm_range
+    if (tuple(transition.sm_node_indices) != tuple(range(sm_start, sm_end))
+            or sm_end - sm_start != 1
+            or tuple(transition.pm_node_indices) != tuple(range(pm_start, pm_end))
+            or pm_end - pm_start != k):
+        raise ValueError("K-rank div segment ranges do not equal its writer footprint")
+    sm_node = ir.sm_nodes[sm_start]
+    pm_nodes = tuple(ir.pm_nodes[index] for index in range(pm_start, pm_end))
+    if sm_node.rank != 0 or sm_node.op != "FW_div":
+        raise ValueError("K-rank div SM writer is not exact")
+    if tuple(node.rank for node in pm_nodes) != tuple(range(k)):
+        raise ValueError("K-rank div PM writers are not exact ordered ranks")
+    writers = (sm_node, *pm_nodes)
+    if any(len(node.params) != 1 for node in writers):
+        raise ValueError("K-rank FW_div writers require one scalar parameter")
+    if any(node.params[0] != certificate.scalar_param for node in writers):
+        raise ValueError("K-rank FW_div writers require identical scalar parameter")
+    if any(len(node.ins) != 1 or len(node.outs) != 1 for node in writers):
+        raise ValueError("K-rank FW_div writers must be unary singleton-output nodes")
+    if (sm_node.ins[0] != pre.sm_tid or sm_node.outs[0] != post.sm_tid
+            or tuple(node.ins[0] for node in pm_nodes) != tuple(pre.pm_tids)
+            or tuple(node.outs[0] for node in pm_nodes) != tuple(post.pm_tids)):
+        raise ValueError("K-rank div live writers disagree with exact ordered TIDs")
+
+    c = certificate.scalar_param
+    apply_lemma = "applyNode_fw_div_out_g67" if axis == 1 else "applyNode_fw_div_out_g92"
+    sm_name, pm_name = f"{segment_id}_sm_nodes", f"{segment_id}_pm_nodes"
+    sm_node_name = f"{segment_id}_sm_node"
+    pm_node_names = [f"{segment_id}_pm_node_{rank}" for rank in range(k)]
+    in_list = "[" + ", ".join(f"pmStore {tid}" for tid in pre.pm_tids) + "]"
+    out_list = "[" + ", ".join(f"pmFinal {tid}" for tid in post.pm_tids) + "]"
+    d0, d1, d2, d3 = shard_shape
+    symbolic_full = (f"[{d0}, {d1} * {in_list}.length, {d2}, {d3}]" if axis == 1
+                     else f"[{d0}, {d1}, {d2} * {in_list}.length, {d3}]")
+
+    def writer_lines(name, side, pos, node, target_name):
+        graph = ir.sm_graph_ref if side == "sm" else ir.pm_graph_ref
+        store = "smStore" if side == "sm" else "pmStore"
+        nodes = "smNodes" if side == "sm" else "pmNodes"
+        final = "smFinal" if side == "sm" else "pmFinal"
+        return [
+            f"    have {name} : {final} {node.outs[0]} = fw_div ({c} : Scalar) ({store} {node.ins[0]}) := by",
+            f"      change ({nodes}.foldl (applyNodeDistributedFaithful {graph}) {store}) {node.outs[0]} = _",
+            f"      rw [show {nodes} = {nodes}.take {pos} ++ [{target_name}] ++ {nodes}.drop {pos + 1} by native_decide]",
+            f"      rw [foldl_faithful_middle_writer {graph} {store} ({nodes}.take {pos}) ({nodes}.drop {pos + 1})",
+            f"        {target_name} {node.outs[0]} (fun t => fw_div ({c} : Scalar) (t {node.ins[0]})) (by",
+            "          intro t",
+            "          rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+            "            (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]",
+            "          simp [applyNodeDistributed, applyNodeRingAttn]",
+            f"          exact {apply_lemma} {graph} t {node.rank} {c} {node.ins[0]} {node.outs[0]}",
+            "        ) (by native_decide) (by native_decide)]",
+            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[0]} (by native_decide) (by native_decide)]",
+        ]
+
+    lines = [f"private def {sm_node_name} : NodeDecl := {_node_text(sm_node)}"]
+    lines += [f"private def {name} : NodeDecl := {_node_text(node)}"
+              for name, node in zip(pm_node_names, pm_nodes)]
+    lines += [
+        f"private def {sm_name} : List NodeDecl := [{sm_node_name}]",
+        f"private def {pm_name} : List NodeDecl := [{', '.join(pm_node_names)}]", "",
+        f"private def {segment_id} :",
+        f"    ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
+        f"  smNodes := {sm_name}", f"  pmNodes := {pm_name}", "  sound := by",
+        "    intro smStore pmStore hstate",
+        f"    let smNodes : List NodeDecl := {sm_name}",
+        f"    let pmNodes : List NodeDecl := {pm_name}",
+        f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore",
+        f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
+        f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
+        "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
+        "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
+        f"    have hin : {pre.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+        f"    change ShardedRel (smStore {pre.sm_tid}) {in_list} {axis} {_shape_text(list(full_shape))} {_shape_text(list(shard_shape))} at hin",
+        f"    have hinDiv : ShardedRel (smStore {pre.sm_tid}) {in_list} {axis} {symbolic_full} {_shape_text(list(shard_shape))} := by",
+        "      simpa using hin",
+    ]
+    lines += writer_lines("hSmWriter", "sm", 0, sm_node, sm_node_name)
+    for rank, node in enumerate(pm_nodes):
+        lines += writer_lines(f"hPmWriter{rank}", "pm", rank, node, pm_node_names[rank])
+    lines += [
+        f"    have htransport := ShardedRel.fw_div_dim{axis}_rank4 (h := hinDiv) (c := ({c} : Scalar))",
+        f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by",
+        f"      change ShardedRel (smFinal {post.sm_tid}) {out_list} {axis} {_shape_text(list(full_shape))} {_shape_text(list(shard_shape))}",
+        "      rw [hSmWriter, " + ", ".join(f"hPmWriter{rank}" for rank in range(k)) + "]",
+        "      simpa using htransport",
+        "    intro fact hfact",
+        f"    have covered : fact ∈ [{post.fact_id}] ++ {before.state_id}.facts := by",
+        f"      exact (show {after.state_id}.facts ⊆ [{post.fact_id}] ++ {before.state_id}.facts by native_decide) hfact",
+        "    simp only [List.mem_append] at covered",
+        "    rcases covered with fresh | old",
+        "    · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh",
+        "      rcases fresh with rfl", "      exact hout",
+        "    · exact hframe fact old", "",
+    ]
+    return "\n".join(lines)
+
+
 def render_closed_k_rank_contiguous_segment(ir: GoalIR, relation, segment_id: str) -> str:
     """Replay the exact one-SM plus ordered-K-PM FW_contiguous writers."""
     try:
@@ -8090,6 +8224,8 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     if family in (("softmax-sharded-k-rank-dim1",),
                    ("softmax-sharded-k-rank-dim2",)):
         return render_closed_k_rank_softmax_segment(ir, relation, segment_id)
+    if family in (("div-sharded-k-rank-dim1",), ("div-sharded-k-rank-dim2",)):
+        return render_closed_k_rank_div_segment(ir, relation, segment_id)
     if family == ("contiguous-sharded-k-rank",):
         return render_closed_k_rank_contiguous_segment(ir, relation, segment_id)
     if family in (
@@ -8731,6 +8867,8 @@ def _closed_segment_family_imports(family: tuple[str, ...]) -> tuple[str, ...]:
         ("matmul-output-axis-sharded-k-rank-dim3",): ("denote.KRankMatmul",),
         ("matmul-head-axis-sharded-k-rank-dim1",): ("denote.KRankMatmulHeadAxis",),
         ("matmul-query-axis-sharded-k-rank-dim2",): ("denote.KRankMatmulQueryAxis",),
+        ("div-sharded-k-rank-dim1",): ("denote.KRankDivGather",),
+        ("div-sharded-k-rank-dim2",): ("denote.KRankDivGather",),
         ("matmul-contraction-reduction-k-rank",): (
             "denote.KRankMatmulContractionReduction",
         ),

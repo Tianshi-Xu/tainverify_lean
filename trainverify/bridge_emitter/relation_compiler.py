@@ -4415,6 +4415,105 @@ def advance_k_rank_softmax_frontiers(
 
 
 @dataclass(frozen=True)
+class KRankDivCertificate:
+    rule_id: str
+    rank_count: int
+    gather_dim: int
+    scalar_param: int
+    input_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    sm_step_id: str
+    pm_step_ids: tuple[str, ...]
+    full_shape: tuple[int, ...]
+    shard_shape: tuple[int, ...]
+    lean_theorem: str
+
+
+def advance_k_rank_div_frontiers(
+    plan: ProofPlan,
+    frontiers: tuple[tuple[str, ...], ...],
+    layouts: tuple[str, ...],
+) -> tuple[tuple[KRankDivCertificate, ...], tuple[tuple[str, ...], ...], tuple[str, ...]]:
+    """Pull exact dim-1/dim-2 rank-4 FW_div through identical scalar division."""
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("K-rank div frontier/layout arity mismatch")
+    by_id = {step.step_id: step for step in plan.steps}
+    certificates, rewritten, rewritten_layouts = [], [], []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "sharded" or len(frontier) < 3:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        try:
+            sm_step = by_id[frontier[0]]
+            pm_steps = tuple(by_id[ref] for ref in frontier[1:])
+        except KeyError:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        # Atomic family: a mixed FW_div/collective frontier remains unresolved.
+        if sm_step.op != "FW_div" or any(step.op != "FW_div" for step in pm_steps):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        rank_count = len(pm_steps)
+        if sm_step.side != "sm" or int(sm_step.rank) != 0 or any(step.side != "pm" for step in pm_steps):
+            raise RelationCompositionError("K-rank div writers have incompatible side/rank authority")
+        if tuple(int(step.rank) for step in pm_steps) != tuple(range(rank_count)):
+            raise RelationCompositionError("K-rank div PM writers are not exact ordered ranks")
+        writers = (sm_step, *pm_steps)
+        if any(len(tuple(step.parameters)) != 1 for step in writers):
+            raise RelationCompositionError("K-rank FW_div writers require one scalar parameter")
+        params = tuple(int(step.parameters[0]) for step in writers)
+        if len(set(params)) != 1:
+            raise RelationCompositionError("K-rank FW_div writers require identical scalar parameter")
+        if any(len(step.input_bindings) != 1 for step in writers):
+            raise RelationCompositionError("K-rank FW_div writers must be unary")
+        if any(len(step.input_shapes) != 1 for step in writers):
+            raise RelationCompositionError("K-rank FW_div writers require one declared input shape")
+        sm_input = sm_step.input_bindings[0]
+        pm_inputs = tuple(step.input_bindings[0] for step in pm_steps)
+        try:
+            sm_source = by_id[sm_input]
+            pm_sources = tuple(by_id[ref] for ref in pm_inputs)
+        except KeyError as exc:
+            raise RelationCompositionError("K-rank div input authority is unresolved") from exc
+        if sm_source.side != "sm" or any(step.side != "pm" for step in pm_sources):
+            raise RelationCompositionError("K-rank div input has wrong-side authority")
+        if tuple(int(step.rank) for step in pm_sources) != tuple(range(rank_count)):
+            raise RelationCompositionError("K-rank div input shards are not exact ordered ranks")
+        full_shape = tuple(sm_source.output_shape)
+        shard_shapes = tuple(tuple(step.output_shape) for step in pm_sources)
+        output_full = tuple(sm_step.output_shape)
+        output_shards = tuple(tuple(step.output_shape) for step in pm_steps)
+        if (len(full_shape) != 4 or not shard_shapes or not output_shards
+                or any(len(shape) != 4 or shape != shard_shapes[0] for shape in shard_shapes)
+                or len(output_full) != 4
+                or any(len(shape) != 4 or shape != output_shards[0] for shape in output_shards)):
+            raise RelationCompositionError("K-rank div input sharding requires exact equal rank-4 shapes")
+        shard_shape = shard_shapes[0]
+        candidates = []
+        for axis in (1, 2):
+            expected = list(shard_shape); expected[axis] *= rank_count
+            if tuple(expected) == full_shape:
+                candidates.append(axis)
+        if len(candidates) != 1:
+            raise RelationCompositionError("K-rank div input sharding is not exact dim1 or dim2")
+        axis = candidates[0]
+        if output_full != full_shape or any(shape != shard_shape for shape in output_shards):
+            raise RelationCompositionError("K-rank div output shapes/order do not preserve exact sharding")
+        declared_sm = tuple(tuple(shape) for shape in sm_step.input_shapes)
+        declared_pm = tuple(tuple(tuple(shape) for shape in step.input_shapes) for step in pm_steps)
+        if declared_sm != (full_shape,) or declared_pm != tuple((shard_shape,) for _ in range(rank_count)):
+            raise RelationCompositionError("K-rank div declared input shapes disagree with authority")
+        input_fact = RelationFactSpec("sharded", (sm_input, *pm_inputs), gather_dim=axis)
+        output_fact = RelationFactSpec("sharded", frontier, gather_dim=axis)
+        certificates.append(KRankDivCertificate(
+            f"div-sharded-k-rank-dim{axis}", rank_count, axis, params[0],
+            input_fact, output_fact, sm_step.step_id,
+            tuple(step.step_id for step in pm_steps), full_shape, shard_shape,
+            f"TrainVerify.Denote.RelationCompiler.ShardedRel.fw_div_dim{axis}_rank4",
+        ))
+        rewritten.append(input_fact.step_triple)
+        rewritten_layouts.append("sharded")
+    return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
+
+
+@dataclass(frozen=True)
 class KRankLocalRelationCertificate:
     rule_id: str
     op: str
@@ -5320,14 +5419,14 @@ def normalize_relation_frontiers(
     frontiers: tuple[tuple[str, ...], ...],
     layouts: tuple[str, ...],
     *,
-    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "transpose_k", "contiguous_k", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
+    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "div_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "transpose_k", "contiguous_k", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
     goal_ir: GoalIR | None = None,
     deduplicate_each_round: bool = False,
     certificate_sink: list[object] | None = None,
     side_condition_sink: list[RelationSideCondition] | None = None,
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
-    known = {"allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
+    known = {"allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "div_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
     unknown = set(rules) - known
     if unknown:
         raise RelationCompositionError(f"unknown relation normalization rules: {sorted(unknown)}")
@@ -5434,6 +5533,11 @@ def normalize_relation_frontiers(
                 advance_k_rank_softmax_frontiers(
                     plan, current_frontiers, current_layouts
                 )
+            )
+            _extend_unique_certificates(certificate_sink, _certs)
+        if "div_k" in rules:
+            _certs, current_frontiers, current_layouts = (
+                advance_k_rank_div_frontiers(plan, current_frontiers, current_layouts)
             )
             _extend_unique_certificates(certificate_sink, _certs)
         if "embedding_k" in rules:
@@ -6852,6 +6956,12 @@ def build_certificate_transition_specs(
             pre = (cert.first_operand_fact, cert.second_operand_fact)
             post = (cert.output_fact,)
             footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
+        elif type(cert) is KRankDivCertificate:
+            pre = (cert.input_fact,)
+            post = (cert.output_fact,)
+            footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
+            post = (cert.output_fact,)
+            footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
         elif type(cert) is KRankContiguousRelationCertificate:
             pre = (cert.input_fact,)
             post = (cert.output_fact,)
@@ -7528,7 +7638,7 @@ def compile_relation_plan(
                 proof,
                 frontiers,
                 layouts,
-                rules=("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k"),
+                rules=("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "reduction_linear_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "div_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k"),
                 goal_ir=ir,
                 certificate_sink=compiled_certificates,
                 deduplicate_each_round=True,
