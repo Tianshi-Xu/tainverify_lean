@@ -124,24 +124,22 @@ private theorem kr_broadcast_self (t : Tensor) (sh : Shape) (idx : Nat)
   unfold broadcastValAtShape
   rw [ht, kr_multiToFlat_aligned_same sh idx hidx]
 
-/-- Elementwise addition reads equal-shaped 3-D tensors pointwise. -/
-theorem elemwiseAdd_valAt_3d
-    (x y : Tensor) (b s d idx : Nat)
-    (hx : x.shape = [b, s, d]) (hy : y.shape = [b, s, d])
-    (hidx : idx < b * s * d) :
+/-- Elementwise addition reads equal-shaped tensors pointwise. -/
+theorem elemwiseAdd_valAt_of_same_shape
+    (x y : Tensor) (sh : Shape) (idx : Nat)
+    (hx : x.shape = sh) (hy : y.shape = sh)
+    (hidx : idx < prodShape sh) :
     valAt (elemwiseAdd x y) idx = valAt x idx + valAt y idx := by
-  have hout : (elemwiseAdd x y).shape = [b, s, d] :=
-    elemwiseAdd_shape_of_shapes x y [b, s, d] hx hy
-  have hprod : prodShape [b, s, d] = b * s * d := by simp [prodShape]
-  have hidx' : idx < prodShape [b, s, d] := by rwa [hprod]
-  have hos : outShape2 x y = [b, s, d] := by simp [outShape2, hx, hy]
+  have hout : (elemwiseAdd x y).shape = sh :=
+    elemwiseAdd_shape_of_shapes x y sh hx hy
+  have hos : outShape2 x y = sh := by simp [outShape2, hx, hy]
   have hstep : valAt (elemwiseAdd x y) idx =
       broadcastValAtShape (outShape2 x y) x idx +
         broadcastValAtShape (outShape2 x y) y idx := by
-    rw [valAt_of_lt _ _ (by rw [hout]; exact hidx')]
+    rw [valAt_of_lt _ _ (by rw [hout]; exact hidx)]
     rfl
-  rw [hstep, hos, kr_broadcast_self x [b, s, d] idx hx hidx',
-    kr_broadcast_self y [b, s, d] idx hy hidx']
+  rw [hstep, hos, kr_broadcast_self x sh idx hx hidx,
+    kr_broadcast_self y sh idx hy hidx]
 
 private theorem list_getD_of_lt {α : Type*} (l : List α) (i : Nat) (d : α)
     (h : i < l.length) : l.getD i d = l[i] := by
@@ -155,79 +153,93 @@ private theorem list_getD_of_ge {α : Type*} (l : List α) (i : Nat) (d : α)
   rw [List.getElem?_eq_none (by omega)]
   rfl
 
-/-- For arbitrary positive `K` and arbitrary positive 3-D shard shape `[B,S,D]`,
-pointwise addition commutes with dimension-1 all-gather.  `zipWith` preserves the
-ordered pairing of the two equal-length shard lists. -/
-theorem fw_add_allGather_dim1_K
-    (K B S D : Nat) (xs ys : List Tensor)
-    (hK : 0 < K) (hB : 0 < B) (hS : 0 < S) (hD : 0 < D)
-    (hxs_len : xs.length = K) (hys_len : ys.length = K)
-    (hxy_len : xs.length = ys.length)
-    (hxs_shape : ∀ r (hr : r < xs.length), (xs.get ⟨r, hr⟩).shape = [B, S, D])
-    (hys_shape : ∀ r (hr : r < ys.length), (ys.get ⟨r, hr⟩).shape = [B, S, D]) :
-    elemwiseAdd (allGatherPrimDimN 1 K 0 xs) (allGatherPrimDimN 1 K 0 ys) =
-      allGatherPrimDimN 1 K 0 (List.zipWith elemwiseAdd xs ys) := by
-  have hhead_xs : (xs.head?.map (fun t => t.shape)).getD [] = [B, S, D] := by
-    have h0 : 0 < xs.length := by omega
-    rw [List.head?_eq_getElem?, List.getElem?_eq_getElem h0]
+/-- Pointwise addition commutes with all-gather along any legal dimension.
+The number of ranks is derived from each ordered shard list; equal list lengths ensure
+that `List.zipWith` preserves every rank pairing. -/
+theorem fw_add_allGather_dim_K
+    (gatherDim : Nat) (shardShape : Shape) (xs ys : List Tensor)
+    (hxs_ne : xs ≠ []) (hxy_len : xs.length = ys.length)
+    (hdim : gatherDim < shardShape.length)
+    (hxs_shape : ∀ r (hr : r < xs.length), (xs.get ⟨r, hr⟩).shape = shardShape)
+    (hys_shape : ∀ r (hr : r < ys.length), (ys.get ⟨r, hr⟩).shape = shardShape) :
+    elemwiseAdd
+        (allGatherPrimDimN gatherDim xs.length 0 xs)
+        (allGatherPrimDimN gatherDim ys.length 0 ys) =
+      allGatherPrimDimN gatherDim (List.zipWith elemwiseAdd xs ys).length 0
+        (List.zipWith elemwiseAdd xs ys) := by
+  have hxs_pos : 0 < xs.length := by
+    by_contra hn
+    have hz : xs.length = 0 := by omega
+    exact hxs_ne (List.eq_nil_of_length_eq_zero hz)
+  have hys_pos : 0 < ys.length := by omega
+  have hhead_xs : (xs.head?.map (fun t => t.shape)).getD [] = shardShape := by
+    rw [List.head?_eq_getElem?, List.getElem?_eq_getElem hxs_pos]
     simp only [Option.map_some, Option.getD_some]
-    exact hxs_shape 0 h0
-  have hhead_ys : (ys.head?.map (fun t => t.shape)).getD [] = [B, S, D] := by
-    have h0 : 0 < ys.length := by omega
-    rw [List.head?_eq_getElem?, List.getElem?_eq_getElem h0]
+    exact hxs_shape 0 hxs_pos
+  have hhead_ys : (ys.head?.map (fun t => t.shape)).getD [] = shardShape := by
+    rw [List.head?_eq_getElem?, List.getElem?_eq_getElem hys_pos]
     simp only [Option.map_some, Option.getD_some]
-    exact hys_shape 0 h0
-  have hzip_len : (List.zipWith elemwiseAdd xs ys).length = K := by
-    rw [List.length_zipWith, hxs_len, hys_len, Nat.min_self]
+    exact hys_shape 0 hys_pos
+  have hzip_len : (List.zipWith elemwiseAdd xs ys).length = xs.length := by
+    rw [List.length_zipWith, hxy_len, Nat.min_self]
+  have hzip_pos : 0 < (List.zipWith elemwiseAdd xs ys).length := by omega
   have hhead_zip :
       ((List.zipWith elemwiseAdd xs ys).head?.map (fun t => t.shape)).getD [] =
-        [B, S, D] := by
-    have h0z : 0 < (List.zipWith elemwiseAdd xs ys).length := by omega
-    have h0x : 0 < xs.length := by omega
-    have h0y : 0 < ys.length := by omega
-    rw [List.head?_eq_getElem?, List.getElem?_eq_getElem h0z]
+        shardShape := by
+    rw [List.head?_eq_getElem?, List.getElem?_eq_getElem hzip_pos]
     simp only [Option.map_some, Option.getD_some]
-    have hz0 : (List.zipWith elemwiseAdd xs ys)[0]'h0z =
-        elemwiseAdd (xs[0]'h0x) (ys[0]'h0y) := List.getElem_zipWith
+    have hz0 : (List.zipWith elemwiseAdd xs ys)[0]'hzip_pos =
+        elemwiseAdd (xs[0]'hxs_pos) (ys[0]'hys_pos) := List.getElem_zipWith
     rw [hz0]
-    exact elemwiseAdd_shape_of_shapes _ _ _ (hxs_shape 0 h0x) (hys_shape 0 h0y)
-  have hshape_x : (allGatherPrimDimN 1 K 0 xs).shape = [B, S * K, D] := by
-    rw [allGatherPrimDimN_shape 1 K xs [B, S, D] hhead_xs]
-    rfl
-  have hshape_y : (allGatherPrimDimN 1 K 0 ys).shape = [B, S * K, D] := by
-    rw [allGatherPrimDimN_shape 1 K ys [B, S, D] hhead_ys]
-    rfl
+    exact elemwiseAdd_shape_of_shapes _ _ shardShape
+      (hxs_shape 0 hxs_pos) (hys_shape 0 hys_pos)
+  have hdim_get : shardShape.getD gatherDim 0 = shardShape[gatherDim] :=
+    list_getD_of_lt shardShape gatherDim 0 hdim
+  have hshape_x : (allGatherPrimDimN gatherDim xs.length 0 xs).shape =
+      shardShape.set gatherDim (shardShape[gatherDim] * xs.length) := by
+    rw [allGatherPrimDimN_shape gatherDim xs.length xs shardShape hhead_xs,
+      hdim_get]
+  have hshape_y : (allGatherPrimDimN gatherDim ys.length 0 ys).shape =
+      shardShape.set gatherDim (shardShape[gatherDim] * xs.length) := by
+    rw [allGatherPrimDimN_shape gatherDim ys.length ys shardShape hhead_ys,
+      hdim_get, ← hxy_len]
   have hshape_zip :
-      (allGatherPrimDimN 1 K 0 (List.zipWith elemwiseAdd xs ys)).shape =
-        [B, S * K, D] := by
-    rw [allGatherPrimDimN_shape 1 K _ [B, S, D] hhead_zip]
-    rfl
+      (allGatherPrimDimN gatherDim (List.zipWith elemwiseAdd xs ys).length 0
+        (List.zipWith elemwiseAdd xs ys)).shape =
+      shardShape.set gatherDim (shardShape[gatherDim] * xs.length) := by
+    rw [allGatherPrimDimN_shape gatherDim _ _ shardShape hhead_zip,
+      hdim_get, hzip_len]
   have hshape_add :
-      (elemwiseAdd (allGatherPrimDimN 1 K 0 xs)
-        (allGatherPrimDimN 1 K 0 ys)).shape = [B, S * K, D] :=
+      (elemwiseAdd
+        (allGatherPrimDimN gatherDim xs.length 0 xs)
+        (allGatherPrimDimN gatherDim ys.length 0 ys)).shape =
+      shardShape.set gatherDim (shardShape[gatherDim] * xs.length) :=
     elemwiseAdd_shape_of_shapes _ _ _ hshape_x hshape_y
   apply Tensor.ext
   · rw [hshape_add, hshape_zip]
   · intro idx hidx
-    have hidx_out : idx < B * (S * K) * D := by
+    have hidx_out : idx < prodShape
+        (shardShape.set gatherDim (shardShape[gatherDim] * xs.length)) := by
       rw [hshape_add] at hidx
-      simpa [prodShape, Nat.mul_assoc] using hidx
-    rw [elemwiseAdd_valAt_3d _ _ B (S * K) D idx hshape_x hshape_y hidx_out]
-    have hxlt : idx < prodShape (allGatherPrimDimN 1 K 0 xs).shape := by
+      exact hidx
+    rw [elemwiseAdd_valAt_of_same_shape _ _ _ idx hshape_x hshape_y hidx_out]
+    have hxlt : idx < prodShape (allGatherPrimDimN gatherDim xs.length 0 xs).shape := by
       rw [hshape_x]
-      simpa [prodShape, Nat.mul_assoc] using hidx_out
-    have hylt : idx < prodShape (allGatherPrimDimN 1 K 0 ys).shape := by
+      exact hidx_out
+    have hylt : idx < prodShape (allGatherPrimDimN gatherDim ys.length 0 ys).shape := by
       rw [hshape_y]
-      simpa [prodShape, Nat.mul_assoc] using hidx_out
+      exact hidx_out
     have hzlt : idx < prodShape
-        (allGatherPrimDimN 1 K 0 (List.zipWith elemwiseAdd xs ys)).shape := by
+        (allGatherPrimDimN gatherDim (List.zipWith elemwiseAdd xs ys).length 0
+          (List.zipWith elemwiseAdd xs ys)).shape := by
       rw [hshape_zip]
-      simpa [prodShape, Nat.mul_assoc] using hidx_out
+      exact hidx_out
     rw [valAt_of_lt _ _ hxlt, valAt_of_lt _ _ hylt, valAt_of_lt _ _ hzlt]
-    simp only [allGatherPrimDimN, Tensor.mkShape, hhead_xs, hhead_ys, hhead_zip]
-    set ds := List.getD [B, S, D] 1 0
-    set ps := List.foldl (· * ·) 1 (List.drop (1 + 1) [B, S, D])
-    set fds := ds * K * ps
+    simp only [allGatherPrimDimN, Tensor.mkShape, hhead_xs, hhead_ys, hhead_zip,
+      ← hxy_len, hzip_len]
+    set ds := shardShape.getD gatherDim 0
+    set ps := List.foldl (· * ·) 1 (List.drop (gatherDim + 1) shardShape)
+    set fds := ds * xs.length * ps
     generalize hr_def : (if ds = 0 then 0
       else (if ps = 0 then 0
         else (if fds = 0 then 0 else idx % fds) / ps) / ds) = r
@@ -236,8 +248,8 @@ theorem fw_add_allGather_dim1_K
         else (if ps = 0 then 0
           else (if fds = 0 then 0 else idx % fds) / ps) % ds) * ps +
       (if ps = 0 then 0 else (if fds = 0 then 0 else idx % fds) % ps) = loc
-    by_cases hrK : r < K
-    · have hrx : r < xs.length := by omega
+    by_cases hrK : r < xs.length
+    · have hrx : r < xs.length := hrK
       have hry : r < ys.length := by omega
       have hrz : r < (List.zipWith elemwiseAdd xs ys).length := by omega
       rw [list_getD_of_lt _ _ _ hrx, list_getD_of_lt _ _ _ hry,
@@ -247,27 +259,25 @@ theorem fw_add_allGather_dim1_K
       rw [hzelem]
       have hxsh := hxs_shape r hrx
       have hysh := hys_shape r hry
-      by_cases hloc : loc < prodShape [B, S, D]
-      · have hloc' : loc < B * S * D := by
-          simpa [prodShape, Nat.mul_assoc] using hloc
-        exact (elemwiseAdd_valAt_3d _ _ B S D loc hxsh hysh hloc').symm
+      by_cases hloc : loc < prodShape shardShape
+      · exact (elemwiseAdd_valAt_of_same_shape _ _ shardShape loc hxsh hysh hloc).symm
       · have hzsh := elemwiseAdd_shape_of_shapes (xs[r]'hrx) (ys[r]'hry)
-          [B, S, D] hxsh hysh
+          shardShape hxsh hysh
         have hnx : ¬ loc < prodShape (xs[r]'hrx).shape := by
-          rw [show (xs[r]'hrx).shape = [B, S, D] from hxs_shape r hrx]
+          rw [show (xs[r]'hrx).shape = shardShape from hxs_shape r hrx]
           exact hloc
         have hny : ¬ loc < prodShape (ys[r]'hry).shape := by
-          rw [show (ys[r]'hry).shape = [B, S, D] from hys_shape r hry]
+          rw [show (ys[r]'hry).shape = shardShape from hys_shape r hry]
           exact hloc
         have hnz : ¬ loc < prodShape (elemwiseAdd (xs[r]'hrx) (ys[r]'hry)).shape := by
-          rw [hzsh]; exact hloc
+          rw [hzsh]
+          exact hloc
         simp [valAt, hnx, hny, hnz]
-    · have hrx : ¬ r < xs.length := by omega
+    · have hrx : ¬ r < xs.length := hrK
       have hry : ¬ r < ys.length := by omega
       have hrz : ¬ r < (List.zipWith elemwiseAdd xs ys).length := by omega
       rw [list_getD_of_ge _ _ _ hrx, list_getD_of_ge _ _ _ hry,
         list_getD_of_ge _ _ _ hrz]
       simp [zeroTensor, Tensor.mkShape, valAt, prodShape]
-
 
 end TrainVerify.Denote
