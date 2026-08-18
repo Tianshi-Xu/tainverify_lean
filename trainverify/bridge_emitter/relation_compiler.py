@@ -3108,6 +3108,126 @@ def advance_k_rank_sum_producer_frontiers(
 
 
 @dataclass(frozen=True)
+class KRankVocabShardedEmbeddingProducerCertificate:
+    rule_id: str
+    rank_count: int
+    ids_tid: int
+    shard_rows: int
+    hidden_size: int
+    ids_shape: tuple[int, ...]
+    full_weight_shape: tuple[int, ...]
+    shard_weight_shape: tuple[int, ...]
+    weight_fact: RelationFactSpec
+    output_fact: RelationFactSpec
+    sm_step_id: str
+    pm_step_ids: tuple[str, ...]
+    lean_theorem: str
+
+
+def advance_k_rank_vocab_sharded_embedding_producer(
+    plan: ProofPlan,
+    ir: GoalIR,
+    frontiers: tuple[tuple[str, ...], ...],
+    layouts: tuple[str, ...],
+) -> tuple[
+    tuple[KRankVocabShardedEmbeddingProducerCertificate, ...],
+    tuple[tuple[str, ...], ...],
+    tuple[str, ...],
+]:
+    """Decompose exact vocab-offset embedding reductions to InitGoal weight shards."""
+    if len(frontiers) != len(layouts):
+        raise RelationCompositionError("K-rank vocab embedding frontier/layout arity mismatch")
+    by_id = {step.step_id: step for step in plan.steps}
+    certificates: list[KRankVocabShardedEmbeddingProducerCertificate] = []
+    rewritten: list[tuple[str, ...]] = []
+    rewritten_layouts: list[str] = []
+    for frontier, layout in zip(frontiers, layouts):
+        if layout != "reduction" or len(frontier) < 2:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        try:
+            sm_step = by_id[frontier[0]]
+            pm_steps = tuple(by_id[ref] for ref in frontier[1:])
+        except KeyError:
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        if sm_step.side != "sm" or sm_step.op != "FW_embedding" or any(
+            step.side != "pm" or step.op != "FW_embedding" for step in pm_steps
+        ):
+            rewritten.append(frontier); rewritten_layouts.append(layout); continue
+        rank_count = len(pm_steps)
+        if int(sm_step.rank) != 0:
+            raise RelationCompositionError("K-rank vocab embedding SM writer must have rank zero")
+        if tuple(int(step.rank) for step in pm_steps) != tuple(range(rank_count)):
+            raise RelationCompositionError("K-rank vocab embedding PM writers are not exact ordered ranks")
+        if len(sm_step.input_bindings) != 2 or any(len(step.input_bindings) != 2 for step in pm_steps):
+            raise RelationCompositionError("K-rank vocab embedding input arity mismatch")
+        if tuple(getattr(sm_step, "parameters", ())) != ():
+            raise RelationCompositionError("K-rank vocab embedding SM must use exact plain embedding semantics")
+        ids_refs = (sm_step.input_bindings[0], *(step.input_bindings[0] for step in pm_steps))
+        if any(not ref.startswith("init:") for ref in ids_refs) or len(set(ids_refs)) != 1:
+            raise RelationCompositionError("K-rank vocab embedding ids authority mismatch")
+        try:
+            ids_tid = int(ids_refs[0].split(":", 1)[1])
+            sm_weight_tid = int(sm_step.input_bindings[1].split(":", 1)[1])
+        except (IndexError, ValueError) as exc:
+            raise RelationCompositionError("K-rank vocab embedding init authority is malformed") from exc
+        lineage = ir.init_lineages.get(sm_weight_tid)
+        if lineage is None:
+            raise RelationCompositionError("K-rank vocab embedding weight authority is missing")
+        expected_weight_refs = (sm_step.input_bindings[1], *(step.input_bindings[1] for step in pm_steps))
+        actual_weight_refs = (f"init:{int(lineage.ts)}", *(
+            f"init:{int(tid)}" for _rank, tid in lineage.tps
+        ))
+        if tuple((int(rank), int(tid)) for rank, tid in lineage.tps) != tuple(
+            (rank, int(pm_steps[rank].input_bindings[1].split(":", 1)[1]))
+            for rank in range(rank_count)
+        ) or actual_weight_refs != expected_weight_refs:
+            raise RelationCompositionError("K-rank vocab embedding weight authority order mismatch")
+        full_weight_shape = tuple(int(value) for value in lineage.tsShape)
+        shard_weight_shapes = tuple(tuple(int(value) for value in shape) for shape in lineage.tpShapes)
+        if (bool(lineage.replicated) or int(lineage.gatherDim if lineage.gatherDim is not None else 0) != 0
+                or len(full_weight_shape) != 2 or len(shard_weight_shapes) != rank_count
+                or not shard_weight_shapes or any(shape != shard_weight_shapes[0] for shape in shard_weight_shapes)
+                or len(shard_weight_shapes[0]) != 2):
+            raise RelationCompositionError("K-rank vocab embedding vocab/hidden shape authority mismatch")
+        shard_rows, hidden_size = shard_weight_shapes[0]
+        if (shard_rows <= 0 or hidden_size <= 0
+                or full_weight_shape != (rank_count * shard_rows, hidden_size)):
+            raise RelationCompositionError("K-rank vocab embedding vocab/hidden shape contract fails")
+        weight_fact = init_lineage_relation_fact(lineage)
+        if weight_fact.layout != "sharded" or weight_fact.gather_dim != 0 or weight_fact.step_triple != expected_weight_refs:
+            raise RelationCompositionError("K-rank vocab embedding weight authority order mismatch")
+        sm_inputs = tuple(tuple(shape) for shape in getattr(sm_step, "input_shapes", ()))
+        pm_inputs = tuple(tuple(tuple(shape) for shape in getattr(step, "input_shapes", ())) for step in pm_steps)
+        if len(sm_inputs) != 2 or any(len(shapes) != 2 for shapes in pm_inputs):
+            raise RelationCompositionError("K-rank vocab embedding declared input shape arity mismatch")
+        ids_shape = sm_inputs[0]
+        if (sm_inputs[1] != full_weight_shape
+                or any(shapes != (ids_shape, (shard_rows, hidden_size)) for shapes in pm_inputs)):
+            raise RelationCompositionError("K-rank vocab embedding vocab/hidden shape declarations disagree")
+        output_shape = ids_shape + (hidden_size,)
+        if tuple(sm_step.output_shape) != output_shape or any(tuple(step.output_shape) != output_shape for step in pm_steps):
+            raise RelationCompositionError("K-rank vocab embedding output vocab/hidden shape contract fails")
+        expected_offsets = tuple((rank * shard_rows,) for rank in range(rank_count))
+        if tuple(tuple(getattr(step, "parameters", ())) for step in pm_steps) != expected_offsets:
+            raise RelationCompositionError("K-rank vocab embedding offset semantics do not match rank * shardRows")
+        output_fact = RelationFactSpec("reduction", tuple(frontier))
+        certificates.append(KRankVocabShardedEmbeddingProducerCertificate(
+            rule_id="embedding-vocab-sharded-reduction-k-rank",
+            rank_count=rank_count, ids_tid=ids_tid, shard_rows=shard_rows,
+            hidden_size=hidden_size, ids_shape=ids_shape,
+            full_weight_shape=full_weight_shape,
+            shard_weight_shape=(shard_rows, hidden_size),
+            weight_fact=weight_fact, output_fact=output_fact,
+            sm_step_id=sm_step.step_id,
+            pm_step_ids=tuple(step.step_id for step in pm_steps),
+            lean_theorem="TrainVerify.Denote.fw_embedding_eq_allReduce_offset_shards",
+        ))
+        rewritten.append(weight_fact.step_triple)
+        rewritten_layouts.append("sharded")
+    return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
+
+
+@dataclass(frozen=True)
 class KRankHiddenShardedEmbeddingCertificate:
     rule_id: str
     rank_count: int
@@ -4243,14 +4363,14 @@ def normalize_relation_frontiers(
     frontiers: tuple[tuple[str, ...], ...],
     layouts: tuple[str, ...],
     *,
-    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "sum_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
+    rules: tuple[str, ...] = ("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"),
     goal_ir: GoalIR | None = None,
     deduplicate_each_round: bool = False,
     certificate_sink: list[object] | None = None,
     side_condition_sink: list[RelationSideCondition] | None = None,
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
-    known = {"allreduce_reconstruction_k", "sum_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
+    known = {"allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k", "alias", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "full_producer_chunk", "add"}
     unknown = set(rules) - known
     if unknown:
         raise RelationCompositionError(f"unknown relation normalization rules: {sorted(unknown)}")
@@ -4266,6 +4386,15 @@ def normalize_relation_frontiers(
             _certs, current_frontiers, current_layouts = (
                 advance_k_rank_allreduce_reconstruction_frontiers(
                     plan, current_frontiers, current_layouts
+                )
+            )
+            _extend_unique_certificates(certificate_sink, _certs)
+        if "embedding_vocab_reduction_k" in rules:
+            if goal_ir is None:
+                raise RelationCompositionError("embedding_vocab_reduction_k requires GoalIR authority")
+            _certs, current_frontiers, current_layouts = (
+                advance_k_rank_vocab_sharded_embedding_producer(
+                    plan, goal_ir, current_frontiers, current_layouts
                 )
             )
             _extend_unique_certificates(certificate_sink, _certs)
@@ -5640,6 +5769,18 @@ def build_certificate_transition_specs(
             footprint_groups = (
                 (cert.sm_sum_step,), cert.pm_sum_steps, (cert.pm_allreduce_step,)
             )
+        elif type(cert) is KRankVocabShardedEmbeddingProducerCertificate:
+            pre = (cert.weight_fact,)
+            post = (cert.output_fact,)
+            footprint_groups = ((cert.sm_step_id,), cert.pm_step_ids)
+            authority_requirements = (
+                TransitionAuthorityRequirement(
+                    "tensor_eq", ("sm", "pm"), (cert.ids_tid, cert.ids_tid),
+                ),
+                TransitionAuthorityRequirement(
+                    "tensor_shape", ("pm",), (cert.ids_tid,), cert.ids_shape,
+                ),
+            )
         elif type(cert) is KRankSumProducerCertificate:
             pre = (cert.input_fact,)
             post = (cert.output_fact,)
@@ -6344,7 +6485,7 @@ def compile_relation_plan(
                 proof,
                 frontiers,
                 layouts,
-                rules=("allreduce_reconstruction_k", "sum_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k"),
+                rules=("allreduce_reconstruction_k", "embedding_vocab_reduction_k", "sum_producer_k", "joined_view", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "embedding_k", "alltoall_k", "linear_k", "layernorm_k", "gelu_k", "add_k", "multiref_k"),
                 goal_ir=ir,
                 certificate_sink=compiled_certificates,
                 deduplicate_each_round=True,

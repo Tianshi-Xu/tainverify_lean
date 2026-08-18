@@ -3443,6 +3443,95 @@ def test_k_rank_hidden_sharded_embedding_rejects_distinct_ids_authority():
         )
 
 
+@pytest.mark.parametrize("rank_count", (3, 4))
+def test_k_rank_vocab_sharded_embedding_decomposes_reduction_to_external_weights(rank_count):
+    shard_rows, hidden = 7, 12
+    ids_shape = (1, 8)
+    output_shape = (*ids_shape, hidden)
+    sm = SimpleNamespace(
+        step_id="sm:1:0", side="sm", op="FW_embedding", rank=0,
+        input_bindings=("init:40", "init:50"),
+        input_shapes=(ids_shape, (rank_count * shard_rows, hidden)), parameters=(),
+        output_shape=output_shape,
+    )
+    pm = tuple(SimpleNamespace(
+        step_id=f"pm:{rank}:0", side="pm", op="FW_embedding", rank=rank,
+        input_bindings=("init:40", f"init:{60 + rank}"),
+        input_shapes=(ids_shape, (shard_rows, hidden)),
+        parameters=(rank * shard_rows,), output_shape=output_shape,
+    ) for rank in range(rank_count))
+    lineage = SimpleNamespace(
+        ts=50, tsShape=[rank_count * shard_rows, hidden],
+        tps=[(rank, 60 + rank) for rank in range(rank_count)],
+        tpShapes=[[shard_rows, hidden] for _ in range(rank_count)],
+        gatherDim=0, replicated=False,
+    )
+    frontier = (sm.step_id, *(step.step_id for step in pm))
+    reduction = RelationFactSpec("reduction", frontier)
+    certs, frontiers, layouts = relation_compiler_module.advance_k_rank_vocab_sharded_embedding_producer(
+        SimpleNamespace(steps=(sm, *pm)), SimpleNamespace(init_lineages={50: lineage}),
+        (frontier,), ("reduction",),
+    )
+    assert len(certs) == 1
+    cert = certs[0]
+    assert (cert.rank_count, cert.ids_tid, cert.shard_rows, cert.hidden_size) == (rank_count, 40, shard_rows, hidden)
+    assert cert.weight_fact == RelationFactSpec(
+        "sharded", ("init:50", *(f"init:{60 + rank}" for rank in range(rank_count))), gather_dim=0,
+    )
+    assert cert.output_fact == reduction
+    assert (frontiers, layouts) == ((cert.weight_fact.step_triple,), ("sharded",))
+    assert cert.lean_theorem.endswith("fw_embedding_eq_allReduce_offset_shards")
+    transition = build_certificate_transition_specs(SimpleNamespace(), certs)[0]
+    assert (transition.pre_facts, transition.post_facts) == ((cert.weight_fact,), (reduction,))
+    assert transition.authority_requirements == (
+        relation_compiler_module.TransitionAuthorityRequirement("tensor_eq", ("sm", "pm"), (40, 40)),
+        relation_compiler_module.TransitionAuthorityRequirement("tensor_shape", ("pm",), (40,), (1, 8)),
+    )
+    sink = []
+    normalized = normalize_relation_frontiers(
+        SimpleNamespace(steps=(sm, *pm)), (frontier,), ("reduction",),
+        rules=("embedding_vocab_reduction_k",), goal_ir=SimpleNamespace(init_lineages={50: lineage}),
+        certificate_sink=sink,
+    )
+    assert (*normalized, sink) == ((cert.weight_fact.step_triple,), ("sharded",), [cert])
+
+
+@pytest.mark.parametrize(("mutation", "message"), (
+    ("plain_pm", "offset semantics"), ("wrong_offset", "offset semantics"),
+    ("wrong_weight_order", "weight authority order"), ("wrong_weight_shape", "vocab/hidden shape"),
+    ("different_ids", "ids authority"),
+))
+def test_k_rank_vocab_sharded_embedding_rejects_unchecked_authority(mutation, message):
+    rank_count, shard_rows, hidden = 4, 7, 12
+    ids_shape = (1, 8)
+    sm = SimpleNamespace(
+        step_id="sm:1:0", side="sm", op="FW_embedding", rank=0,
+        input_bindings=("init:40", "init:50"), input_shapes=(ids_shape, (28, hidden)),
+        parameters=(), output_shape=(*ids_shape, hidden),
+    )
+    pm = [SimpleNamespace(
+        step_id=f"pm:{rank}:0", side="pm", op="FW_embedding", rank=rank,
+        input_bindings=("init:40", f"init:{60 + rank}"), input_shapes=(ids_shape, (shard_rows, hidden)),
+        parameters=(rank * shard_rows,), output_shape=(*ids_shape, hidden),
+    ) for rank in range(rank_count)]
+    lineage = SimpleNamespace(
+        ts=50, tsShape=[28, hidden], tps=[(rank, 60 + rank) for rank in range(rank_count)],
+        tpShapes=[[shard_rows, hidden] for _ in range(rank_count)], gatherDim=0, replicated=False,
+    )
+    if mutation == "plain_pm": pm[1] = SimpleNamespace(**{**pm[1].__dict__, "parameters": ()})
+    elif mutation == "wrong_offset": pm[2] = SimpleNamespace(**{**pm[2].__dict__, "parameters": (99,)})
+    elif mutation == "wrong_weight_order": lineage.tps[1], lineage.tps[2] = lineage.tps[2], lineage.tps[1]
+    elif mutation == "wrong_weight_shape": lineage.tpShapes[3] = [shard_rows + 1, hidden]
+    elif mutation == "different_ids":
+        pm[3] = SimpleNamespace(**{**pm[3].__dict__, "input_bindings": ("init:41", pm[3].input_bindings[1])})
+    frontier = (sm.step_id, *(step.step_id for step in pm))
+    with pytest.raises(RelationCompositionError, match=message):
+        relation_compiler_module.advance_k_rank_vocab_sharded_embedding_producer(
+            SimpleNamespace(steps=(sm, *pm)), SimpleNamespace(init_lineages={50: lineage}),
+            (frontier,), ("reduction",),
+        )
+
+
 def test_k_rank_full_producer_chunks_reconstruct_arbitrary_ordered_k():
     sm = SimpleNamespace(step_id="sm:1:0", side="sm", op="FW_view", rank=0,
                          input_bindings=(), parameters=(1, 8, 12), output_shape=(1, 8, 12))
@@ -4015,6 +4104,109 @@ def _synthetic_k_rank_segment_relation(*, family: str, rank_count: int = 4):
         sm_graph_ref="SyntheticKRank.smGraph", pm_graph_ref="SyntheticKRank.pmGraph",
     )
     return ir, relation
+
+
+def _synthetic_vocab_embedding_reduction_relation(rank_count=3):
+    shard_rows, hidden = 7, 12
+    weight_spec = RelationFactSpec(
+        "sharded", ("init:50", *(f"init:{60 + rank}" for rank in range(rank_count))), gather_dim=0,
+    )
+    reduction_spec = RelationFactSpec(
+        "reduction", ("sm:0:0", *(f"pm:{rank}:0" for rank in range(rank_count))),
+    )
+    weight = relation_compiler_module.ClosedRelationFactRecord(
+        "fact_weight", weight_spec, "sharded", 50, tuple(60 + r for r in range(rank_count)),
+        None, None, (rank_count * shard_rows, hidden), (shard_rows, hidden), gather_dim=0,
+    )
+    reduction = relation_compiler_module.ClosedRelationFactRecord(
+        "fact_reduction", reduction_spec, "reduction", 100,
+        tuple(200 + r for r in range(rank_count)), None, None, (1, 8, hidden), (1, 8, hidden),
+    )
+    anchor = relation_compiler_module.ClosedTensorShapeFactRecord(
+        "anchor", "sm", 999, (1,), 999,
+    )
+    ids_eq = relation_compiler_module.ClosedTensorEqFactRecord(
+        "authority_ids_eq_40", "sm", 40, "pm", 40,
+    )
+    certificate = relation_compiler_module.KRankVocabShardedEmbeddingProducerCertificate(
+        rule_id="embedding-vocab-sharded-reduction-k-rank", rank_count=rank_count,
+        ids_tid=40, shard_rows=shard_rows, hidden_size=hidden, ids_shape=(1, 8),
+        full_weight_shape=(rank_count * shard_rows, hidden), shard_weight_shape=(shard_rows, hidden),
+        weight_fact=weight_spec, output_fact=reduction_spec, sm_step_id="sm:0:0",
+        pm_step_ids=tuple(f"pm:{rank}:0" for rank in range(rank_count)),
+        lean_theorem="TrainVerify.Denote.fw_embedding_eq_allReduce_offset_shards",
+    )
+    transition = relation_compiler_module.CertificateTransitionSpec(
+        "transition", certificate.rule_id, (weight_spec,), (reduction_spec,), (0,),
+        tuple(range(rank_count)), certificate.lean_theorem,
+        (
+            relation_compiler_module.TransitionAuthorityRequirement(
+                "tensor_eq", ("sm", "pm"), (40, 40)),
+            relation_compiler_module.TransitionAuthorityRequirement(
+                "tensor_shape", ("pm",), (40,), (1, 8)),
+        ),
+    )
+    ids_shape = relation_compiler_module.ClosedTensorShapeFactRecord(
+        "authority_ids_shape_40", "pm", 40, (1, 8), 40,
+    )
+    states = (
+        relation_compiler_module.ClosedRelationStateRecord(
+            "state_pre", ("anchor", "authority_ids_eq_40", "authority_ids_shape_40", "fact_weight")
+        ),
+        relation_compiler_module.ClosedRelationStateRecord(
+            "state_post", ("anchor", "authority_ids_eq_40", "authority_ids_shape_40", "fact_reduction")
+        ),
+    )
+    segment = relation_compiler_module.ClosedDependentSegmentRecord(
+        "segment_000000", "component", "state_pre", "state_post", ("transition",),
+        (0, 1), (0, rank_count),
+    )
+    chain = SimpleNamespace(
+        complete=True, relation_facts=(weight, reduction), authority_facts=(ids_eq, ids_shape),
+        anchor_fact=anchor, states=states, segments=(segment,),
+    )
+    relation = SimpleNamespace(
+        dependent_chain_plan=chain, transition_specs=(transition,), certificates=(certificate,),
+    )
+    ir = SimpleNamespace(
+        sm_nodes=[Node(0, "FW_embedding", [40, 50], [100], [])],
+        pm_nodes=[Node(rank, "FW_embedding", [40, 60 + rank], [200 + rank], [rank * shard_rows])
+                  for rank in range(rank_count)],
+        sm_num_ranks=1, pm_num_ranks=rank_count,
+        sm_graph_ref="SyntheticEmbedding.smGraph", pm_graph_ref="SyntheticEmbedding.pmGraph",
+    )
+    return ir, relation
+
+
+def test_closed_vocab_embedding_reduction_segment_is_dynamic_exact_and_offset_aware(tmp_path):
+    ir, relation = _synthetic_vocab_embedding_reduction_relation(rank_count=3)
+    source = render_closed_segment(ir, relation, "segment_000000")
+    assert "fw_embedding_eq_allReduce_offset_shards" in source
+    assert "applyNode_fw_embedding_out" in source
+    assert source.count("applyNode_fw_embedding_offset_out") == 3
+    assert "applyNode_fw_embedding_offset_out SyntheticEmbedding.pmGraph t 1 7 40 61 201" in source
+    assert "List.ofFn_succ, List.ofFn_zero, List.getD" in source
+    assert "subst contribution" in source
+    assert "let rankCount := pmWeightTids.length" in source
+    assert "pmWeightTids : List Tid := [60, 61, 62]" in source
+    assert "pmOutputTids : List Tid := [200, 201, 202]" in source
+    assert "rankCount = 3" not in source
+    assert "fw_embedding (pmStore 40)" not in source
+    assert "ReductionRel" in source
+    assert "sorry" not in source and "False.elim" not in source
+
+    declarations = render_closed_relation_declarations(relation.dependent_chain_plan, "SyntheticEmbedding")
+    sm_nodes = "[" + ", ".join(composer_module._node_text(node) for node in ir.sm_nodes) + "]"
+    pm_nodes = "[" + ", ".join(composer_module._node_text(node) for node in ir.pm_nodes) + "]"
+    witness_source = "\n".join((
+        declarations, "namespace TrainVerify.Denote.SyntheticEmbedding", "noncomputable section",
+        f"private def smGraph : GraphDecl := {{ numRanks := 1, nodes := {sm_nodes} }}",
+        f"private def pmGraph : GraphDecl := {{ numRanks := 3, nodes := {pm_nodes} }}",
+        source, "#print axioms segment_000000", "end", "end TrainVerify.Denote.SyntheticEmbedding", "",
+    ))
+    witness = tmp_path / "GeneratedVocabEmbeddingReductionWitness.lean"
+    witness.write_text(witness_source)
+    assert witness.read_text() == witness_source
 
 
 def test_closed_k_rank_full_producer_chunks_segment_is_generic_and_exact():
