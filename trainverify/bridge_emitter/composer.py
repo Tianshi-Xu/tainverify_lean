@@ -8445,6 +8445,9 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         return render_closed_k_rank_div_segment(ir, relation, segment_id)
     if family and all(item == "multiref-sharded-k-rank" for item in family):
         return render_closed_k_rank_multiref_segment(ir, relation, segment_id)
+    if family == ("add-sharded-k-rank",):
+        from .add_renderer import render_closed_k_rank_add_segment
+        return render_closed_k_rank_add_segment(ir, relation, segment_id)
     if family == ("contiguous-sharded-k-rank",):
         return render_closed_k_rank_contiguous_segment(ir, relation, segment_id)
     if family in (
@@ -9097,6 +9100,7 @@ def _closed_segment_family_imports(
         ("matmul-output-axis-sharded-k-rank-dim3",): ("denote.KRankMatmul",),
         ("matmul-head-axis-sharded-k-rank-dim1",): ("denote.KRankMatmulHeadAxis",),
         ("matmul-query-axis-sharded-k-rank-dim2",): ("denote.KRankMatmulQueryAxis",),
+        ("add-sharded-k-rank",): ("denote.KRankAddGather",),
         ("div-sharded-k-rank-dim1",): ("denote.KRankDivGather",),
         ("div-sharded-k-rank-dim2",): ("denote.KRankDivGather",),
         ("div-sharded-k-rank-dim3",): ("denote.KRankDivGather",),
