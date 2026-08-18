@@ -6326,8 +6326,9 @@ def render_closed_k_rank_output_sharded_linear_segment(
         raise ValueError("output-sharded linear output fact is not live")
     if not set(after.fact_ids) <= ({output.fact_id} | set(before.fact_ids)):
         raise ValueError("output-sharded linear post-state introduces an unproved fact")
-    if activation.kind != "joined" or len(activation.pm_tids) != 1:
-        raise ValueError("output-sharded linear activation requires joined authority")
+    if (activation.kind != "joined" or activation.pm_tids != ()
+            or activation.joined_pm_tid is None):
+        raise ValueError("output-sharded linear activation requires canonical joined authority")
     if (weight.kind != "sharded" or weight.gather_dim != 0
             or output.kind != "sharded" or output.gather_dim != 2):
         raise ValueError("output-sharded linear requires dim0 weight and dim2 output facts")
@@ -6382,7 +6383,7 @@ def render_closed_k_rank_output_sharded_linear_segment(
         raise ValueError("output-sharded linear SM weight TID disagrees with its fact")
     if sm_node.outs[0] != output.sm_tid:
         raise ValueError("output-sharded linear SM output TID disagrees with its fact")
-    shared_activation = activation.pm_tids[0]
+    shared_activation = activation.joined_pm_tid
     if any(node.ins[0] != shared_activation for node in pm_nodes):
         raise ValueError("output-sharded linear PM activation TIDs are not joined authority")
     if tuple(node.ins[1] for node in pm_nodes) != tuple(weight.pm_tids):

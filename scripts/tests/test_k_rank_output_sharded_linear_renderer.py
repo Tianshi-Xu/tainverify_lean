@@ -46,8 +46,8 @@ def _closed_fixture(k=3):
     )
     transition = rc.build_certificate_transition_specs(SimpleNamespace(), (cert,))[0]
     activation = rc.ClosedRelationFactRecord(
-        "fact_activation", activation_fact, "joined", 100, (200,), None, None,
-        activation_shape, activation_shape,
+        "fact_activation", activation_fact, "joined", 100, (), None, None,
+        activation_shape, activation_shape, joined_pm_tid=200,
     )
     weight = rc.ClosedRelationFactRecord(
         "fact_weight", weight_fact, "sharded", 101,
