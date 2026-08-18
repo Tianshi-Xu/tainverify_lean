@@ -51,11 +51,14 @@ def test_query_axis_matcher_derives_ordered_dim2_x_and_actual_joined_shared_y():
     assert cert.first_operand_fact == rc.RelationFactSpec(
         "sharded", (sm_x.step_id, *(s.step_id for s in pm_xs)), gather_dim=2)
     assert cert.second_operand_fact == rc.RelationFactSpec(
-        "joined", (sm_y.step_id, pm_y.step_id))
+        "joined", (sm_y.step_id,), joined_pm_step=pm_y.step_id)
     assert cert.output_fact == rc.RelationFactSpec("sharded", frontier, gather_dim=2)
     assert cert.sm_step_id == sm_mm.step_id
     assert cert.pm_step_ids == tuple(s.step_id for s in pm_mms)
-    assert roots == (cert.first_operand_fact.step_triple, cert.second_operand_fact.step_triple)
+    assert roots == (
+        cert.first_operand_fact.step_triple,
+        (cert.second_operand_fact.step_triple[0], cert.second_operand_fact.joined_pm_step),
+    )
     assert layouts == ("sharded", "joined")
 
 
@@ -96,7 +99,10 @@ def test_query_axis_fixed_point_and_transition_own_exact_one_plus_k_writers():
     roots, layouts = rc.normalize_relation_frontiers(
         plan, (frontier,), ("sharded",), rules=("matmul_query_axis_k",), certificate_sink=sink)
     cert = sink[0]
-    assert roots == (cert.first_operand_fact.step_triple, cert.second_operand_fact.step_triple)
+    assert roots == (
+        cert.first_operand_fact.step_triple,
+        (cert.second_operand_fact.step_triple[0], cert.second_operand_fact.joined_pm_step),
+    )
     assert layouts == ("sharded", "joined")
     transition = rc.build_certificate_transition_specs(plan, tuple(sink))[0]
     assert transition.pre_facts == tuple(sorted((cert.first_operand_fact, cert.second_operand_fact)))
@@ -112,7 +118,9 @@ def _closed_fixture(k=3):
     x_sm, x_pms, y_sm, y_pm = 100, tuple(201+r for r in range(k)), 101, 250
     out_sm, out_pms = 110, tuple(301+r for r in range(k))
     x_fact = rc.RelationFactSpec("sharded", ("init:100", *(f"init:{t}" for t in x_pms)), gather_dim=2)
-    y_fact = rc.RelationFactSpec("joined", ("init:101", "init:250"))
+    y_fact = rc.RelationFactSpec(
+        "joined", ("init:101",), joined_pm_step="init:250"
+    )
     out_fact = rc.RelationFactSpec("sharded", ("sm:0:0", *(f"pm:{r}:0" for r in range(k))), gather_dim=2)
     cert = replace(cert, first_operand_fact=x_fact, second_operand_fact=y_fact, output_fact=out_fact,
                    sm_step_id="sm:0:0", pm_step_ids=tuple(f"pm:{r}:0" for r in range(k)))

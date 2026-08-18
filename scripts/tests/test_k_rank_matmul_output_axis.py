@@ -70,7 +70,7 @@ def test_output_axis_matmul_matcher_is_dynamic_and_preserves_both_ordered_upstre
     assert cert.rank_count == 3
     assert cert.output_gather_dim == 3
     assert cert.first_operand_fact == rc.RelationFactSpec(
-        "joined", (sm_x.step_id, pm_x.step_id)
+        "joined", (sm_x.step_id,), joined_pm_step=pm_x.step_id
     )
     assert cert.second_operand_fact == rc.RelationFactSpec(
         "sharded", (sm_y.step_id, *(step.step_id for step in pm_ys)), gather_dim=3
@@ -79,7 +79,7 @@ def test_output_axis_matmul_matcher_is_dynamic_and_preserves_both_ordered_upstre
     assert cert.sm_step_id == sm_matmul.step_id
     assert cert.pm_step_ids == tuple(step.step_id for step in pm_matmuls)
     assert frontiers == (
-        cert.first_operand_fact.step_triple,
+        (cert.first_operand_fact.step_triple[0], cert.first_operand_fact.joined_pm_step),
         cert.second_operand_fact.step_triple,
     )
     assert layouts == ("joined", "sharded")
@@ -139,7 +139,10 @@ def test_output_axis_matmul_fixed_point_and_transition_own_exact_one_plus_k_writ
     assert layouts == ("joined", "sharded")
     assert len(sink) == 1
     cert = sink[0]
-    assert frontiers == (cert.first_operand_fact.step_triple, cert.second_operand_fact.step_triple)
+    assert frontiers == (
+        (cert.first_operand_fact.step_triple[0], cert.first_operand_fact.joined_pm_step),
+        cert.second_operand_fact.step_triple,
+    )
     transition = rc.build_certificate_transition_specs(plan, tuple(sink))[0]
     assert transition.pre_facts == tuple(sorted((cert.first_operand_fact, cert.second_operand_fact)))
     assert transition.post_facts == (cert.output_fact,)
@@ -159,7 +162,9 @@ def _closed_fixture(k=3):
     y_pm_tids = tuple(201 + rank for rank in range(k))
     out_sm_tid = 110
     out_pm_tids = tuple(301 + rank for rank in range(k))
-    first_fact = rc.RelationFactSpec("joined", ("init:100", "init:200"))
+    first_fact = rc.RelationFactSpec(
+        "joined", ("init:100",), joined_pm_step="init:200"
+    )
     second_fact = rc.RelationFactSpec(
         "sharded", ("init:101", *(f"init:{tid}" for tid in y_pm_tids)), gather_dim=3
     )

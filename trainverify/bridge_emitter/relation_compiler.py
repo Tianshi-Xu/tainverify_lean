@@ -3652,7 +3652,9 @@ def advance_k_rank_allgather_reconstruction_frontiers(
         input_fact = RelationFactSpec(
             "sharded", (sm_ref, *input_refs), gather_dim=gather_dim
         )
-        output_fact = RelationFactSpec("joined", frontier)
+        output_fact = RelationFactSpec(
+            "joined", (sm_ref,), joined_pm_step=pm_ref
+        )
         certificates.append(KRankAllGatherReconstructionCertificate(
             rule_id="allgather-reconstruction-k-rank",
             rank_count=rank_count,
@@ -3832,7 +3834,7 @@ def advance_k_rank_output_sharded_linear_frontiers(
             )
         output_dim = candidates[0]
         activation_fact = RelationFactSpec(
-            "joined", (sm_activation_ref, pm_activation_ref)
+            "joined", (sm_activation_ref,), joined_pm_step=pm_activation_ref
         )
         output_fact = RelationFactSpec("sharded", frontier, gather_dim=output_dim)
         certificates.append(KRankOutputShardedLinearCertificate(
@@ -3849,7 +3851,7 @@ def advance_k_rank_output_sharded_linear_frontiers(
                 "fw_linear_3d_weight_allGatherPrimDimN_dim0_comm"
             ),
         ))
-        rewritten.extend((activation_fact.step_triple, weight_fact.step_triple))
+        rewritten.extend(((sm_activation_ref, pm_activation_ref), weight_fact.step_triple))
         rewritten_layouts.extend(("joined", "sharded"))
     return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
 
@@ -3964,7 +3966,9 @@ def advance_k_rank_matmul_output_axis_frontiers(
         declared_pm = tuple(tuple(tuple(shape) for shape in step.input_shapes) for step in pm_steps)
         if declared_sm != (x_shape, y_full_shape) or declared_pm != tuple((x_shape, y_shard_shape) for _ in range(rank_count)):
             raise RelationCompositionError("K-rank matmul declared input shapes disagree with authority")
-        first_fact = RelationFactSpec("joined", (sm_x_ref, pm_x_refs[0]))
+        first_fact = RelationFactSpec(
+            "joined", (sm_x_ref,), joined_pm_step=pm_x_refs[0]
+        )
         second_fact = RelationFactSpec("sharded", (sm_y_ref, *pm_y_refs), gather_dim=3)
         output_fact = RelationFactSpec("sharded", frontier, gather_dim=3)
         certificates.append(KRankMatmulOutputAxisCertificate(
@@ -3973,7 +3977,7 @@ def advance_k_rank_matmul_output_axis_frontiers(
             x_shape, y_full_shape, y_shard_shape, out_full_shape, out_shard_shape,
             "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_matmul_output_axis_rank4",
         ))
-        rewritten.extend((first_fact.step_triple, second_fact.step_triple))
+        rewritten.extend(((sm_x_ref, pm_x_refs[0]), second_fact.step_triple))
         rewritten_layouts.extend(("joined", "sharded"))
     return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
 
@@ -4195,7 +4199,9 @@ def advance_k_rank_matmul_query_axis_frontiers(
                 or declared_pm != tuple((x_shard_shape, y_shape) for _ in range(rank_count))):
             raise RelationCompositionError("K-rank query-axis matmul declared input shapes disagree with authority")
         first_fact = RelationFactSpec("sharded", (sm_x_ref, *pm_x_refs), gather_dim=2)
-        second_fact = RelationFactSpec("joined", (sm_y_ref, pm_y_refs[0]))
+        second_fact = RelationFactSpec(
+            "joined", (sm_y_ref,), joined_pm_step=pm_y_refs[0]
+        )
         output_fact = RelationFactSpec("sharded", frontier, gather_dim=2)
         certificates.append(KRankMatmulQueryAxisCertificate(
             "matmul-query-axis-sharded-k-rank-dim2", rank_count, 2,
@@ -4204,7 +4210,7 @@ def advance_k_rank_matmul_query_axis_frontiers(
             y_shape, out_full_shape, out_shard_shape,
             "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_matmul_query_axis_rank4",
         ))
-        rewritten.extend((first_fact.step_triple, second_fact.step_triple))
+        rewritten.extend((first_fact.step_triple, (sm_y_ref, pm_y_refs[0])))
         rewritten_layouts.extend(("sharded", "joined"))
     return tuple(certificates), tuple(rewritten), tuple(rewritten_layouts)
 
@@ -7671,7 +7677,7 @@ def compile_relation_plan(
             ir, transition_specs,
             external_pre_facts=external_pre_facts,
         )
-        return RelationPlan(
+        base_plan = RelationPlan(
             family="ordered-allreduce-writer-k-rank",
             terminal_rule_id=terminal_k.rule_id,
             synchronized_steps=(),
@@ -7684,6 +7690,12 @@ def compile_relation_plan(
             coverage_plan=coverage_plan,
             dependency_plan=dependency_plan,
             atomic_schedule=atomic_schedule,
+        )
+        if frontiers or layouts:
+            return base_plan
+        return replace(
+            base_plan,
+            dependent_chain_plan=build_closed_dependent_chain_plan(ir, proof, base_plan),
         )
     stack_error = None
     try:

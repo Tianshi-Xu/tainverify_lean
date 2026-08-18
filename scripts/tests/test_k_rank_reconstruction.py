@@ -67,7 +67,7 @@ def test_ordered_k_rank_allgather_reconstruction_matches_arbitrary_k():
         "sharded", (sm.step_id, *ordered_inputs), gather_dim=1
     )
     assert certificate.output_fact == relation_compiler.RelationFactSpec(
-        "joined", root
+        "joined", (sm.step_id,), joined_pm_step=gather.step_id
     )
     assert certificate.pm_allgather_step == gather.step_id
     assert frontiers == ((sm.step_id, *ordered_inputs),)
