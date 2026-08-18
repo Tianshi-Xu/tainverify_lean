@@ -1,0 +1,12 @@
+import denote.KRankMatmulHeadAxis
+
+namespace TrainVerify.Denote
+
+#check allGatherPrimDimN_dim1_4d_valAt
+#check fw_matmul_allGatherPrimDimN_dim1_aligned_K_rank4
+#check RelationCompiler.ShardedRel.fw_matmul_head_axis_rank4
+
+#print axioms fw_matmul_allGatherPrimDimN_dim1_aligned_K_rank4
+#print axioms RelationCompiler.ShardedRel.fw_matmul_head_axis_rank4
+
+end TrainVerify.Denote
