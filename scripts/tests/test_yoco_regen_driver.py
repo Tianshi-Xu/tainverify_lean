@@ -2709,15 +2709,18 @@ def test_authority_script_pins_reviewed_llm_revision():
     emitter = (
         Path(__file__).resolve().parents[1] / "yoco_regen" / "emit_yoco_a04b.py"
     ).read_text(encoding="utf-8")
-    assert '"--verifier-cache-dir", str(stage / "verifier-cache")' in emitter
-    assert 'shutil.rmtree(stage / "verifier-cache")' in emitter
-    assert 'str(stage / "yoco_goals")' in emitter
-    assert '(stage / "yoco_goals").mkdir()' in emitter
+    assert '"--verifier-cache-dir", str(generated_root / "verifier-cache")' in emitter
+    assert 'verifier_cache = stage / "verifier-cache"' in emitter
+    assert 'if verifier_cache.exists():' in emitter
+    assert 'shutil.rmtree(verifier_cache)' in emitter
+    assert 'str(generated_root / "yoco_goals")' in emitter
+    assert "promote_generated_authority(stage)" in emitter
+    assert 'materialize_static_goal_modules(ROOT, emitter_revision, stage / "yoco_goals")' in emitter
     assert '"--lean-project", type=Path, required=True' in emitter
     assert "validate_lean_snapshot(" in emitter
     assert 'proof_registry["proof_targets"]' in emitter
     assert "validate_print_axioms_output" in emitter
-    assert "verify_snapshot_stage(stage)" in emitter
+    assert "verify_snapshot_stage(stage, snapshot_goal_modules)" in emitter
     assert "TRAINVERIFY_PRIVATE_MATERIALIZATION" in emitter
     assert "snapshot, expected_manifest_sha256" in emitter
     assert "require_manifest_digest_fd(directory_fd, expected_manifest_sha256)" in emitter
