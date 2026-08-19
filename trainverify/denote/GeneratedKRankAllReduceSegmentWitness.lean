@@ -43,36 +43,67 @@ private def segment_reduce_pmNodes : List NodeDecl := [{ rank := 0, op := "OpNam
 
 private theorem segment_reduce_ordered_inputs_preserved (pmStore : Store) :
     [200, 201, 202].map (segment_reduce_pmFinal pmStore) = [200, 201, 202].map pmStore := by
-  have hRead00 : (segment_reduce_pmFinal pmStore) 200 = pmStore 200 := by
+  have hFinalRead00 : (segment_reduce_pmFinal pmStore) 200 = pmStore 200 := by
     unfold segment_reduce_pmFinal
     exact foldl_applyNodeDistributedFaithful_at_not_written pm_graph segment_reduce_pmNodes pmStore 200
       (by native_decide) (by native_decide)
-  have hRead01 : (segment_reduce_pmFinal pmStore) 201 = pmStore 201 := by
+  have hFinalRead01 : (segment_reduce_pmFinal pmStore) 201 = pmStore 201 := by
     unfold segment_reduce_pmFinal
     exact foldl_applyNodeDistributedFaithful_at_not_written pm_graph segment_reduce_pmNodes pmStore 201
       (by native_decide) (by native_decide)
-  have hRead02 : (segment_reduce_pmFinal pmStore) 202 = pmStore 202 := by
+  have hFinalRead02 : (segment_reduce_pmFinal pmStore) 202 = pmStore 202 := by
     unfold segment_reduce_pmFinal
     exact foldl_applyNodeDistributedFaithful_at_not_written pm_graph segment_reduce_pmNodes pmStore 202
       (by native_decide) (by native_decide)
   simp only [List.map]
-  rw [hRead00, hRead01, hRead02]
+  rw [hFinalRead00, hFinalRead01, hFinalRead02]
+
+private theorem segment_reduce_prefix_inputs_preserved (pmStore : Store) :
+    [200, 201, 202].map ((segment_reduce_pmNodes.take 0).foldl
+      (applyNodeDistributedFaithful pm_graph) pmStore) = [200, 201, 202].map pmStore := by
+  have hPrefixRead00 : ((segment_reduce_pmNodes.take 0).foldl
+      (applyNodeDistributedFaithful pm_graph) pmStore) 200 = pmStore 200 := by
+    exact foldl_applyNodeDistributedFaithful_at_not_written pm_graph
+      (segment_reduce_pmNodes.take 0) pmStore 200
+      (by native_decide) (by native_decide)
+  have hPrefixRead01 : ((segment_reduce_pmNodes.take 0).foldl
+      (applyNodeDistributedFaithful pm_graph) pmStore) 201 = pmStore 201 := by
+    exact foldl_applyNodeDistributedFaithful_at_not_written pm_graph
+      (segment_reduce_pmNodes.take 0) pmStore 201
+      (by native_decide) (by native_decide)
+  have hPrefixRead02 : ((segment_reduce_pmNodes.take 0).foldl
+      (applyNodeDistributedFaithful pm_graph) pmStore) 202 = pmStore 202 := by
+    exact foldl_applyNodeDistributedFaithful_at_not_written pm_graph
+      (segment_reduce_pmNodes.take 0) pmStore 202
+      (by native_decide) (by native_decide)
+  simp only [List.map]
+  rw [hPrefixRead00, hPrefixRead01, hPrefixRead02]
 
 private theorem segment_reduce_writer_value (pmStore : Store) :
     (segment_reduce_pmFinal pmStore) 901 =
       allReducePrim 3 0 ([200, 201, 202].map (segment_reduce_pmFinal pmStore)) := by
+  have hSplit : segment_reduce_pmNodes = (segment_reduce_pmNodes.take 0) ++
+      [{ rank := 0, op := "OpName.AllReducePrim", ins := [200, 201, 202], outs := [901] }] ++ (segment_reduce_pmNodes.drop 1) := by native_decide
   have hWriter : (segment_reduce_pmFinal pmStore) 901 =
-      allReducePrim 3 0 ([200, 201, 202].map pmStore) := by
-    unfold segment_reduce_pmFinal segment_reduce_pmNodes
-    simp only [List.foldl]
-    rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
-      (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]
-    unfold applyNodeDistributed
-    rw [if_neg (by decide)]
-    rw [applyNodeRingAttn_eq_applyNode_of_not_ring]
-    · exact applyNode_allReducePrim_out pm_graph pmStore 0 [200, 201, 202] 901
-    · decide
-    · decide
+      allReducePrim 3 0 ([200, 201, 202].map ((segment_reduce_pmNodes.take 0).foldl
+        (applyNodeDistributedFaithful pm_graph) pmStore)) := by
+    unfold segment_reduce_pmFinal
+    rw [hSplit]
+    apply foldl_faithful_middle_writer pm_graph pmStore (segment_reduce_pmNodes.take 0)
+      (segment_reduce_pmNodes.drop 1) { rank := 0, op := "OpName.AllReducePrim", ins := [200, 201, 202], outs := [901] } 901
+      (fun t => allReducePrim 3 0 ([200, 201, 202].map t))
+    · intro t
+      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective
+        (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]
+      unfold applyNodeDistributed
+      rw [if_neg (by decide)]
+      rw [applyNodeRingAttn_eq_applyNode_of_not_ring]
+      · exact applyNode_allReducePrim_out pm_graph t 0 [200, 201, 202] 901
+      · decide
+      · decide
+    · native_decide
+    · native_decide
+  rw [segment_reduce_prefix_inputs_preserved pmStore] at hWriter
   rw [← segment_reduce_ordered_inputs_preserved pmStore] at hWriter
   exact hWriter
 

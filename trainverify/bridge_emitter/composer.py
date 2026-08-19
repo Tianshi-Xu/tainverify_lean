@@ -8856,7 +8856,7 @@ def render_closed_k_rank_sum_producer_segment(ir: GoalIR, relation, segment_id: 
 
 
 def render_closed_k_rank_allreduce_segment(ir: GoalIR, relation, segment_id: str) -> str:
-    """Render one exact ordered K-rank PM AllReduce reconstruction writer."""
+    """Render one sparse ordered K-rank AllReduce writer in its complete PM frame."""
     chain = relation.dependent_chain_plan
     if chain is None or not chain.complete:
         raise ValueError("K-rank AllReduce segment requires a complete closed chain")
@@ -8878,13 +8878,18 @@ def render_closed_k_rank_allreduce_segment(ir: GoalIR, relation, segment_id: str
             lambda cert: ((cert.input_fact,), (cert.output_fact,)),
         )
     )
+    sm_start, sm_end = segment.sm_range
+    pm_start, pm_end = segment.pm_range
     if (transition.sm_node_indices != () or len(transition.pm_node_indices) != 1
-            or transition.pm_node_indices != tuple(range(*segment.pm_range))
-            or tuple(range(*segment.sm_range)) != ()):
-        raise ValueError("K-rank reconstruction requires the exact PM AllReduce writer footprint")
+            or tuple(range(sm_start, sm_end)) != ()):
+        raise ValueError("K-rank reconstruction requires one exact PM AllReduce writer with sparse frame authority")
+    if not (0 <= pm_start <= pm_end <= len(ir.pm_nodes)):
+        raise ValueError("K-rank AllReduce PM component frame is outside graph authority")
     writer_index = transition.pm_node_indices[0]
-    if not 0 <= writer_index < len(ir.pm_nodes):
-        raise ValueError("K-rank AllReduce writer is outside PM authority")
+    if not pm_start <= writer_index < pm_end:
+        raise ValueError("K-rank AllReduce writer is outside its PM component frame")
+    frame_nodes = tuple(ir.pm_nodes[pm_start:pm_end])
+    writer_position = writer_index - pm_start
     writer = ir.pm_nodes[writer_index]
     rank_count = int(certificate.rank_count)
     if rank_count < 1 or ir.sm_num_ranks != 1 or ir.pm_num_ranks != rank_count:
@@ -8904,6 +8909,15 @@ def render_closed_k_rank_allreduce_segment(ir: GoalIR, relation, segment_id: str
             or tuple(after.full_shape) != tuple(certificate.full_shape)):
         raise ValueError("K-rank AllReduce materialized shapes disagree with certificate")
 
+    # The complete component is folded once.  Its semantic authority is sparse:
+    # every non-writer node must frame every live reduction input and joined output.
+    live_pm_tids = set(before.pm_tids) | {writer.outs[0]}
+    for position, node in enumerate(frame_nodes):
+        if not node.outs:
+            raise ValueError("K-rank AllReduce component frame contains an empty-output node")
+        if position != writer_position and live_pm_tids.intersection(node.outs):
+            raise ValueError("K-rank AllReduce frame node writes a live input/output TID")
+
     sm_graph, pm_graph = ir.sm_graph_ref, ir.pm_graph_ref
     node_text = _node_text(writer)
     input_text = "[" + ", ".join(str(tid) for tid in before.pm_tids) + "]"
@@ -8912,48 +8926,75 @@ def render_closed_k_rank_allreduce_segment(ir: GoalIR, relation, segment_id: str
     sm_final_name = f"{segment_id}_smFinal"
     pm_final_name = f"{segment_id}_pmFinal"
     reads_name = f"{segment_id}_ordered_inputs_preserved"
+    prefix_reads_name = f"{segment_id}_prefix_inputs_preserved"
     writer_name = f"{segment_id}_writer_value"
     state_name = f"{segment_id}_publish_state"
     sm_final = f"({sm_final_name} smStore)"
     pm_final = f"({pm_final_name} pmStore)"
     full_shape = _shape_text(list(before.full_shape))
-    read_proofs = []
-    read_names = []
+    final_read_proofs = []
+    prefix_read_proofs = []
+    final_read_names = []
+    prefix_read_names = []
     for ordinal, tid in enumerate(before.pm_tids):
-        name = f"hRead{ordinal:02d}"
-        read_names.append(name)
-        read_proofs.extend([
-            f"  have {name} : {pm_final} {tid} = pmStore {tid} := by",
+        final_name = f"hFinalRead{ordinal:02d}"
+        prefix_name = f"hPrefixRead{ordinal:02d}"
+        final_read_names.append(final_name)
+        prefix_read_names.append(prefix_name)
+        final_read_proofs.extend([
+            f"  have {final_name} : {pm_final} {tid} = pmStore {tid} := by",
             f"    unfold {pm_final_name}",
             f"    exact foldl_applyNodeDistributedFaithful_at_not_written {pm_graph} {pm_nodes_name} pmStore {tid}",
             "      (by native_decide) (by native_decide)",
         ])
+        prefix_read_proofs.extend([
+            f"  have {prefix_name} : (({pm_nodes_name}.take {writer_position}).foldl",
+            f"      (applyNodeDistributedFaithful {pm_graph}) pmStore) {tid} = pmStore {tid} := by",
+            f"    exact foldl_applyNodeDistributedFaithful_at_not_written {pm_graph}",
+            f"      ({pm_nodes_name}.take {writer_position}) pmStore {tid}",
+            "      (by native_decide) (by native_decide)",
+        ])
     lines = [
         f"private def {sm_nodes_name} : List NodeDecl := []",
-        f"private def {pm_nodes_name} : List NodeDecl := [{node_text}]",
+        f"private def {pm_nodes_name} : List NodeDecl := [{', '.join(_node_text(node) for node in frame_nodes)}]",
         f"@[irreducible] private def {sm_final_name} (smStore : Store) : Store :=",
         f"  {sm_nodes_name}.foldl (applyNodeDistributedFaithful {sm_graph}) smStore",
         f"@[irreducible] private def {pm_final_name} (pmStore : Store) : Store :=",
         f"  {pm_nodes_name}.foldl (applyNodeDistributedFaithful {pm_graph}) pmStore", "",
         f"private theorem {reads_name} (pmStore : Store) :",
         f"    {input_text}.map ({pm_final_name} pmStore) = {input_text}.map pmStore := by",
-        *read_proofs,
+        *final_read_proofs,
         "  simp only [List.map]",
-        f"  rw [{', '.join(read_names)}]", "",
+        f"  rw [{', '.join(final_read_names)}]", "",
+        f"private theorem {prefix_reads_name} (pmStore : Store) :",
+        f"    {input_text}.map (({pm_nodes_name}.take {writer_position}).foldl",
+        f"      (applyNodeDistributedFaithful {pm_graph}) pmStore) = {input_text}.map pmStore := by",
+        *prefix_read_proofs,
+        "  simp only [List.map]",
+        f"  rw [{', '.join(prefix_read_names)}]", "",
         f"private theorem {writer_name} (pmStore : Store) :",
         f"    ({pm_final_name} pmStore) {writer.outs[0]} =",
         f"      allReducePrim {rank_count} 0 ({input_text}.map ({pm_final_name} pmStore)) := by",
+        f"  have hSplit : {pm_nodes_name} = ({pm_nodes_name}.take {writer_position}) ++",
+        f"      [{node_text}] ++ ({pm_nodes_name}.drop {writer_position + 1}) := by native_decide",
         f"  have hWriter : ({pm_final_name} pmStore) {writer.outs[0]} =",
-        f"      allReducePrim {rank_count} 0 ({input_text}.map pmStore) := by",
-        f"    unfold {pm_final_name} {pm_nodes_name}",
-        "    simp only [List.foldl]",
-        "    rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
-        "      (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]",
-        "    unfold applyNodeDistributed",
-        "    rw [if_neg (by decide)]",
-        "    rw [applyNodeRingAttn_eq_applyNode_of_not_ring]",
-        f"    · exact applyNode_allReducePrim_out {pm_graph} pmStore 0 {input_text} {writer.outs[0]}",
-        "    · decide", "    · decide",
+        f"      allReducePrim {rank_count} 0 ({input_text}.map (({pm_nodes_name}.take {writer_position}).foldl",
+        f"        (applyNodeDistributedFaithful {pm_graph}) pmStore)) := by",
+        f"    unfold {pm_final_name}",
+        "    rw [hSplit]",
+        f"    apply foldl_faithful_middle_writer {pm_graph} pmStore ({pm_nodes_name}.take {writer_position})",
+        f"      ({pm_nodes_name}.drop {writer_position + 1}) {node_text} {writer.outs[0]}",
+        f"      (fun t => allReducePrim {rank_count} 0 ({input_text}.map t))",
+        "    · intro t",
+        "      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+        "        (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]",
+        "      unfold applyNodeDistributed",
+        "      rw [if_neg (by decide)]",
+        "      rw [applyNodeRingAttn_eq_applyNode_of_not_ring]",
+        f"      · exact applyNode_allReducePrim_out {pm_graph} t 0 {input_text} {writer.outs[0]}",
+        "      · decide", "      · decide",
+        "    · native_decide", "    · native_decide",
+        f"  rw [{prefix_reads_name} pmStore] at hWriter",
         f"  rw [← {reads_name} pmStore] at hWriter",
         "  exact hWriter", "",
         f"private theorem {state_name} (smStore pmStore : Store)",
@@ -8988,7 +9029,6 @@ def render_closed_k_rank_allreduce_segment(ir: GoalIR, relation, segment_id: str
         f"      ({state_name} smStore pmStore hstate)", "",
     ]
     return "\n".join(lines)
-
 
 
 def render_closed_mixed_k_rank_embedding_segment(ir: GoalIR, relation, segment_id: str) -> str:

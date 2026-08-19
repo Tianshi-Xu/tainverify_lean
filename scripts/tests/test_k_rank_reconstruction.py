@@ -452,6 +452,24 @@ def _closed_k_rank_allreduce_fixture(*, rank_count=3, shape=(2, 5, 7)):
     return ir, relation, segment, before, after, writer
 
 
+def _framed_k_rank_allreduce_fixture(*, rank_count=5):
+    ir, relation, segment, before, after, writer = _closed_k_rank_allreduce_fixture(rank_count=rank_count)
+    prefix = [
+        SimpleNamespace(rank=0, op="FW_identity", ins=[700], outs=[701], params=[]),
+        SimpleNamespace(rank=1, op="FW_identity", ins=[710], outs=[711], params=[]),
+    ]
+    suffix = [
+        SimpleNamespace(rank=2, op="FW_identity", ins=[720], outs=[721], params=[]),
+        SimpleNamespace(rank=3, op="FW_identity", ins=[730], outs=[731], params=[]),
+    ]
+    ir.pm_nodes = prefix + [writer] + suffix
+    transition = replace(relation.transition_specs[0], pm_node_indices=(len(prefix),))
+    relation.transition_specs = (transition,)
+    segment.transition_ids = (transition.transition_id,)
+    segment.pm_range = (0, len(ir.pm_nodes))
+    return ir, relation, segment, before, after, writer
+
+
 def test_closed_k_rank_allreduce_renderer_is_exact_and_writer_only():
     ir, relation, segment, before, after, writer = _closed_k_rank_allreduce_fixture(rank_count=3)
     source = render_closed_k_rank_allreduce_segment(ir, relation, segment.segment_id)
@@ -465,6 +483,28 @@ def test_closed_k_rank_allreduce_renderer_is_exact_and_writer_only():
     assert f"{before.fact_id}.Holds" in source
     assert f"{after.fact_id}.Holds" in source
     assert "smNodes : List NodeDecl := []" in source
+
+
+def test_closed_k_rank_allreduce_renderer_accepts_sparse_writer_in_full_frame():
+    ir, relation, segment, before, after, writer = _framed_k_rank_allreduce_fixture(rank_count=5)
+    source = render_closed_k_rank_allreduce_segment(ir, relation, segment.segment_id)
+    assert source.count(".foldl (applyNodeDistributedFaithful pm_graph) pmStore") == 1
+    assert 'op := "OpName.FW_identity"' in source
+    assert 'op := "OpName.AllReducePrim"' in source
+    assert "pmNodes.take 2" in source
+    assert "pmNodes.drop 3" in source
+    assert "foldl_faithful_middle_writer" in source
+    assert "allReducePrim 5 0" in source
+    assert f"{before.fact_id}.Holds" in source
+    assert f"{after.fact_id}.Holds" in source
+
+
+@pytest.mark.parametrize("live_tid", [200, 901])
+def test_closed_k_rank_allreduce_renderer_rejects_frame_writes_to_live_tids(live_tid):
+    ir, relation, segment, *_ = _framed_k_rank_allreduce_fixture(rank_count=5)
+    ir.pm_nodes[-1].outs = [live_tid]
+    with pytest.raises(ValueError, match="frame.*live|live.*frame"):
+        render_closed_k_rank_allreduce_segment(ir, relation, segment.segment_id)
 
 
 def test_closed_k_rank_allreduce_renderer_rejects_extra_ownership():
