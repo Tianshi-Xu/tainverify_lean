@@ -1308,7 +1308,11 @@ def materialize_registered_proofs(
         elif destination in REGISTERED_LEGACY_CUT_MODULES:
             _create_private_regular(stage / "yoco_goals" / destination, content)
         else:
-            _replace_private_regular(stage / "yoco_goals" / destination, content)
+            proof_path = stage / "yoco_goals" / destination
+            if os.path.lexists(proof_path):
+                _replace_private_regular(proof_path, content)
+            else:
+                _create_private_regular(proof_path, content)
     _refresh_snapshot_ledger(stage)
 
 

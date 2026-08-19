@@ -2456,6 +2456,12 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
             "source": source,
             "sha256": emitter.digest_bytes(blobs[source]),
         }
+    instances_source = "trainverify/denote/yoco_goals/SnapshotInstances.lean"
+    blobs[instances_source] = b"import denote.yoco_goals.Goal_1\n"
+    modules["Instances.lean"] = {
+        "source": instances_source,
+        "sha256": emitter.digest_bytes(blobs[instances_source]),
+    }
     for helper_destination in sorted(emitter.REGISTERED_TOP_LEVEL_MODULES):
         helper_source = f"trainverify/denote/{helper_destination}"
         blobs[helper_source] = (
