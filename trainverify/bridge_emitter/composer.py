@@ -9220,6 +9220,25 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         return render_closed_mixed_k_rank_layernorm_alltoall_segment(
             ir, relation, segment_id
         )
+    if (
+        family[:-1]
+        and all(
+            item == "alltoall-k-rank-layout-transport"
+            for item in family[:-1]
+        )
+        and family[-1] == "allgather-reconstruction-k-rank"
+    ):
+        try:
+            from .mixed_collective_renderer import (
+                render_closed_k_rank_alltoall_allgather_segment,
+            )
+        except ImportError:
+            from mixed_collective_renderer import (
+                render_closed_k_rank_alltoall_allgather_segment,
+            )
+        return render_closed_k_rank_alltoall_allgather_segment(
+            ir, relation, segment_id
+        )
     if family == ("full-producer-chunks-k-rank",):
         return render_closed_k_rank_full_producer_chunks_segment(ir, relation, segment_id)
     if family == ("alltoall-k-rank-layout-transport",):
