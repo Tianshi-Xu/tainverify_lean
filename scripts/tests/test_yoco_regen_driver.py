@@ -2432,6 +2432,9 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
     generated = stage / "GeneratedYOCOMoE.lean"
     generated.write_bytes(b"generated")
     generated.chmod(0o600)
+    generated_nodes = stage / "GeneratedGraphNodes.lean"
+    generated_nodes.write_bytes(b"nodes")
+    generated_nodes.chmod(0o600)
     goal_digests = {}
     for index in range(1, 6):
         path = goals / f"Goal_{index}.lean"
@@ -2509,6 +2512,7 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
         "schema_version": 2,
         "generated_authority_sha256": {
             "GeneratedYOCOMoE.lean": emitter.sha256(generated),
+            "GeneratedGraphNodes.lean": emitter.sha256(generated_nodes),
         },
         "goal_sha256": goal_digests,
         "modules": modules,
@@ -2527,6 +2531,9 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
         helper_paths[helper_destination] = helper_path
         assert helper_path.read_bytes() == blobs[helper_source]
     refreshed = json.loads(manifest_path.read_text())
+    assert refreshed["snapshot_sha256"]["GeneratedGraphNodes.lean"] == emitter.sha256(
+        generated_nodes
+    )
     for name in deprecated_generated_auxiliaries:
         assert not (goals / name).exists()
         assert f"yoco_goals/{name}" not in refreshed["snapshot_sha256"]

@@ -1261,7 +1261,7 @@ def _refresh_snapshot_ledger(stage: Path) -> None:
         raise RuntimeError("snapshot manifest is missing snapshot_sha256")
     goal_names = set(os.listdir(stage / "yoco_goals"))
     final_paths = (
-        {"GeneratedYOCOMoE.lean"}
+        GENERATED_AUTHORITY_MODULES
         | {f"yoco_goals/{name}" for name in goal_names}
         | REGISTERED_TOP_LEVEL_MODULES
     )
