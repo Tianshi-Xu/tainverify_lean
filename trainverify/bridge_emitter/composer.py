@@ -9253,6 +9253,20 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         return render_closed_mixed_k_rank_layernorm_alltoall_segment(
             ir, relation, segment_id
         )
+    if family and all(
+        item == "alltoall-k-rank-layout-transport" for item in family
+    ):
+        try:
+            from .alltoall_tuple_renderer import (
+                render_closed_k_rank_alltoall_tuple_segment,
+            )
+        except ImportError:
+            from alltoall_tuple_renderer import (
+                render_closed_k_rank_alltoall_tuple_segment,
+            )
+        return render_closed_k_rank_alltoall_tuple_segment(
+            ir, relation, segment_id
+        )
     if (
         family[:-1]
         and all(

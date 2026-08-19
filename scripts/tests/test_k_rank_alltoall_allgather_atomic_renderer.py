@@ -255,6 +255,64 @@ def test_generated_atomic_collective_witness_is_exact_renderer_output():
     assert "sorry" not in source and "False.elim" not in source
 
 
+
+def _alltoall_only_fixture(*, k=3, alltoall_count=2):
+    ir, relation, segment = _fixture(k=k, alltoall_count=alltoall_count)
+    gather_index = relation.transition_specs[-1].pm_node_indices[0]
+    ir.pm_nodes.pop(gather_index)
+    relation.certificates = relation.certificates[:-1]
+    relation.transition_specs = relation.transition_specs[:-1]
+    for cert_index, transition in enumerate(relation.transition_specs):
+        transition.pm_node_indices = tuple(
+            index - (index > gather_index) for index in transition.pm_node_indices
+        )
+        cert = relation.certificates[cert_index]
+        new_steps = tuple(f"pm:{index}:0" for index in transition.pm_node_indices)
+        new_post = replace(
+            transition.post_facts[0],
+            step_triple=(transition.post_facts[0].step_triple[0], *new_steps),
+        )
+        new_cert = replace(cert, output_fact=new_post, pm_step_ids=new_steps)
+        relation.certificates = (
+            *relation.certificates[:cert_index], new_cert,
+            *relation.certificates[cert_index + 1:],
+        )
+        transition.post_facts = (new_post,)
+        relation.dependent_chain_plan.relation_facts[2 * cert_index + 1].source = new_post
+    relation.dependent_chain_plan.relation_facts = relation.dependent_chain_plan.relation_facts[:-2]
+    relation.dependent_chain_plan.states[0].fact_ids = tuple(
+        fact for fact in relation.dependent_chain_plan.states[0].fact_ids
+        if fact != "gather_pre"
+    )
+    relation.dependent_chain_plan.states[1].fact_ids = tuple(
+        fact for fact in relation.dependent_chain_plan.states[1].fact_ids
+        if fact != "gather_post"
+    )
+    segment.transition_ids = segment.transition_ids[:-1]
+    segment.pm_range = (0, len(ir.pm_nodes))
+    namespace = "GeneratedKRankAllToAllTupleAtomicWitness"
+    ir.sm_graph_ref = f"TrainVerify.Denote.{namespace}.smGraph"
+    ir.pm_graph_ref = f"TrainVerify.Denote.{namespace}.pmGraph"
+    return ir, relation, segment
+
+
+def test_generic_positive_alltoall_tuple_without_reconstruction_uses_one_pm_fold():
+    ir, relation, segment = _alltoall_only_fixture(k=3, alltoall_count=2)
+    source = render_closed_segment(ir, relation, segment.segment_id)
+    assert source.count("let pmFinal :=") == 1
+    assert source.count("let smFinal :=") == 1
+    assert "smNodes : List NodeDecl := []" in source
+    assert "AllGatherPrim" not in source
+    assert source.count("allGatherPrimDimN_allToAllPrimWithDims_ofFn") == 2
+    assert "post_0.Holds" in source and "post_1.Holds" in source
+
+
+def test_alltoall_tuple_rejects_transition_order_tampering():
+    ir, relation, segment = _alltoall_only_fixture(k=3, alltoall_count=2)
+    segment.transition_ids = tuple(reversed(segment.transition_ids))
+    with pytest.raises(ValueError, match="transition order"):
+        render_closed_segment(ir, relation, segment.segment_id)
+
 def test_mixed_collective_renderer_supports_plan_top_level_import(monkeypatch):
     import importlib
     import sys
@@ -279,3 +337,36 @@ def test_mixed_collective_renderer_supports_plan_top_level_import(monkeypatch):
         ir, relation, segment.segment_id
     )
     assert source.count("let pmFinal :=") == 1
+
+
+def test_generated_alltoall_tuple_witness_is_exact_renderer_output():
+    from trainverify.bridge_emitter.composer import (
+        _node_text, render_closed_relation_declarations,
+    )
+
+    ir, relation, segment = _alltoall_only_fixture(k=3, alltoall_count=2)
+    namespace = "GeneratedKRankAllToAllTupleAtomicWitness"
+    rendered = render_closed_segment(ir, relation, segment.segment_id)
+    declarations = render_closed_relation_declarations(
+        relation.dependent_chain_plan, namespace
+    )
+    pm_nodes = "[" + ", ".join(_node_text(node) for node in ir.pm_nodes) + "]"
+    source = "\n".join((
+        declarations,
+        f"namespace TrainVerify.Denote.{namespace}",
+        "noncomputable section",
+        "private def smGraph : GraphDecl := { numRanks := 1, nodes := [] }",
+        f"private def pmGraph : GraphDecl := {{ numRanks := 3, nodes := {pm_nodes} }}",
+        rendered,
+        f"#print axioms {segment.segment_id}",
+        "end",
+        f"end TrainVerify.Denote.{namespace}",
+        "",
+    ))
+    witness = Path(__file__).resolve().parents[2] / (
+        "trainverify/denote/GeneratedKRankAllToAllTupleAtomicWitness.lean"
+    )
+    witness.unlink(missing_ok=True)
+    witness.write_text(source, encoding="utf-8")
+    assert witness.read_text(encoding="utf-8") == source
+    assert "sorry" not in source and "False.elim" not in source
