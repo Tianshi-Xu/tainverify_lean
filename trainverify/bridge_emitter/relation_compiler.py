@@ -7121,11 +7121,12 @@ def build_certificate_transition_specs(
             raise RelationCompositionError(
                 f"{type(cert).__name__} transition lacks a registered Lean theorem"
             )
+        preserve_operand_roles = type(cert) is KRankMatmulHeadAxisCertificate
         transitions.append(CertificateTransitionSpec(
             transition_id=f"{ordinal:06d}:{type(cert).__name__}:{cert.rule_id}",
             rule_id=cert.rule_id,
-            pre_facts=tuple(sorted(set(pre))),
-            post_facts=tuple(sorted(set(post))),
+            pre_facts=tuple(pre) if preserve_operand_roles else tuple(sorted(set(pre))),
+            post_facts=tuple(post) if preserve_operand_roles else tuple(sorted(set(post))),
             sm_node_indices=sm_nodes,
             pm_node_indices=pm_nodes,
             lean_theorem=lean_theorem,

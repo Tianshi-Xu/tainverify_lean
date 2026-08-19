@@ -6669,24 +6669,25 @@ def render_closed_k_rank_matmul_head_axis_segment(ir: GoalIR, relation, segment_
     except ImportError:
         from relation_compiler import KRankMatmulHeadAxisCertificate
     theorem = "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_matmul_head_axis_rank4"
+    rule_id = "matmul-head-axis-sharded-k-rank-dim1"
     chain = relation.dependent_chain_plan
     segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
     if segment is None or len(segment.transition_ids) != 1:
         raise ValueError("K-rank head-axis matmul renderer requires one exact transition")
-    transition = next(item for item in relation.transition_specs
-                      if item.transition_id == segment.transition_ids[0])
-    if (transition.rule_id != "matmul-head-axis-sharded-k-rank-dim1"
-            or transition.lean_theorem != theorem):
-        raise ValueError("K-rank head-axis matmul theorem identity mismatch")
-    certs = [item for item in relation.certificates
-             if type(item) is KRankMatmulHeadAxisCertificate
-             and item.rule_id == transition.rule_id]
-    if len(certs) != 1 or certs[0].lean_theorem != theorem:
-        raise ValueError("K-rank head-axis matmul requires one exact typed certificate")
-    cert = certs[0]
-    expected_pre = tuple(sorted((cert.first_operand_fact, cert.second_operand_fact)))
-    if transition.pre_facts != expected_pre or transition.post_facts != (cert.output_fact,):
-        raise ValueError("K-rank head-axis matmul transition facts disagree with its certificate")
+    transitions = {
+        item.transition_id: item for item in relation.transition_specs
+    }
+    try:
+        transition = transitions[segment.transition_ids[0]]
+    except KeyError as exc:
+        raise ValueError("K-rank head-axis matmul transition is not materialized") from exc
+    cert = _select_exact_typed_certificate(
+        relation, transition, rule_id, theorem, KRankMatmulHeadAxisCertificate,
+        lambda item: (
+            (item.first_operand_fact, item.second_operand_fact),
+            (item.output_fact,),
+        ),
+    )
     records = {item.source: item for item in chain.relation_facts}
     try:
         first = records[cert.first_operand_fact]

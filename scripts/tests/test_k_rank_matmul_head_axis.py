@@ -138,6 +138,18 @@ def test_head_axis_fixed_point_and_transition_own_exact_one_sm_plus_k_pm_writers
 
 
 
+def test_head_axis_transition_preserves_exact_left_then_right_fact_roles():
+    plan, frontier, _ = _matcher_fixture(k=3)
+    cert = rc.advance_k_rank_matmul_head_axis_frontiers(
+        plan, (frontier,), ("sharded",)
+    )[0][0]
+    left = replace(cert.first_operand_fact, step_triple=("sm:99:0", "pm:99:0"))
+    right = replace(cert.second_operand_fact, step_triple=("sm:1:0", "pm:1:0"))
+    cert = replace(cert, first_operand_fact=left, second_operand_fact=right)
+    transition = rc.build_certificate_transition_specs(SimpleNamespace(), (cert,))[0]
+    assert transition.pre_facts == (left, right)
+
+
 def _closed_fixture(k=3):
     plan, frontier, _ = _matcher_fixture(k)
     cert = rc.advance_k_rank_matmul_head_axis_frontiers(plan, (frontier,), ("sharded",))[0][0]
@@ -185,6 +197,61 @@ def test_closed_head_axis_renderer_replays_exact_ordered_zip_writers_and_theorem
     assert ", ".join(f"pmStore {tid}" for tid in second.pm_tids) in source
     assert ", ".join(f"pmFinal {tid}" for tid in output.pm_tids) in source
     assert "rankCount = 3" not in source
+
+
+def test_closed_head_axis_renderer_selects_exact_transition_certificate_among_unrelated_head_certificates():
+    ir, relation, segment, *_ = _closed_fixture(k=3)
+    exact = relation.certificates[0]
+    unrelated = replace(
+        exact,
+        first_operand_fact=replace(exact.first_operand_fact, step_triple=("sm:99:0", "pm:99:0")),
+        second_operand_fact=replace(exact.second_operand_fact, step_triple=("sm:98:0", "pm:98:0")),
+        output_fact=replace(exact.output_fact, step_triple=("sm:97:0", "pm:97:0")),
+    )
+    relation.certificates = (unrelated, exact)
+    source = composer.render_closed_segment(ir, relation, segment.segment_id)
+    assert "ShardedRel.fw_matmul_head_axis_rank4" in source
+
+
+def test_closed_head_axis_renderer_rejects_duplicate_exact_certificate():
+    ir, relation, segment, *_ = _closed_fixture(k=3)
+    exact = relation.certificates[0]
+    relation.certificates = (exact, exact)
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
+
+
+@pytest.mark.parametrize("tamper", ["class", "rule", "theorem", "left", "right", "post", "roles"])
+def test_closed_head_axis_renderer_fails_closed_on_each_selector_axis(tamper):
+    ir, relation, segment, *_ = _closed_fixture(k=3)
+    exact = relation.certificates[0]
+    if tamper == "class":
+        malformed = SimpleNamespace(**exact.__dict__)
+    elif tamper == "rule":
+        malformed = replace(exact, rule_id="unrelated-rule")
+    elif tamper == "theorem":
+        malformed = replace(exact, lean_theorem="TrainVerify.Denote.unchecked")
+    elif tamper == "left":
+        malformed = replace(exact, first_operand_fact=replace(
+            exact.first_operand_fact, step_triple=("sm:99:0", "pm:99:0")
+        ))
+    elif tamper == "right":
+        malformed = replace(exact, second_operand_fact=replace(
+            exact.second_operand_fact, step_triple=("sm:98:0", "pm:98:0")
+        ))
+    elif tamper == "post":
+        malformed = replace(exact, output_fact=replace(
+            exact.output_fact, step_triple=("sm:97:0", "pm:97:0")
+        ))
+    else:
+        malformed = replace(
+            exact,
+            first_operand_fact=exact.second_operand_fact,
+            second_operand_fact=exact.first_operand_fact,
+        )
+    relation.certificates = (malformed,)
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
 
 
 @pytest.mark.parametrize(("mutation", "message"), [
