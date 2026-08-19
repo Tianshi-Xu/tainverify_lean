@@ -1538,16 +1538,18 @@ def configure_runtime(llm_train: Path, nnscaler_repo: Path):
 
 
 def graph_to_lean_argv(llm_train, nnscaler, files, stage):
+    generated_root = stage / ".generated-authority"
     command = [
         "graph_to_lean",
         "--sm-pkl", str(files["sm_mgener.pkl"]),
         "--pm-pkl", str(files["pm_mgener.pkl"]),
-        "--out", str(stage / "GeneratedYOCOMoE.lean"),
+        "--out", str(generated_root / "GeneratedYOCOMoE.lean"),
         "--module", "denote.GeneratedYOCOMoE",
         "--max-goals", "5", "--split-goals", "--assume-cp-dim0-shuffle",
-        "--goals-out-dir", str(stage / "yoco_goals"),
-        "--manifest-out", str(stage / "GeneratedYOCOMoE.manifest.json"),
-        "--verifier-cache-dir", str(stage / "verifier-cache"),
+        "--goals-out-dir", str(generated_root / "yoco_goals"),
+        "--manifest-out", str(generated_root / "GeneratedYOCOMoE.manifest.json"),
+        "--verifier-cache-dir", str(generated_root / "verifier-cache"),
+        "--atomic-output-root", str(generated_root),
         "--llm-train-repo", str(llm_train),
         "--llm-train-revision", LLM_REVISION,
         "--nnscaler-repo", str(nnscaler),
@@ -1564,6 +1566,34 @@ def graph_to_lean_argv(llm_train, nnscaler, files, stage):
             "--artifact-sha256", f"{name}={sha256(files[name])}",
         ]
     return command
+
+
+def promote_generated_authority(stage: Path) -> None:
+    generated_root = stage / ".generated-authority"
+    if not generated_root.is_dir() or generated_root.is_symlink():
+        raise RuntimeError("generated authority root is missing or is a symlink")
+    required = {
+        "GeneratedYOCOMoE.lean", "GeneratedYOCOMoE.manifest.json",
+        "yoco_goals", "verifier-cache",
+    }
+    names = {entry.name for entry in generated_root.iterdir()}
+    missing = required - names
+    if missing:
+        raise RuntimeError(f"generated authority is missing required entries: {sorted(missing)}")
+    for current, dirs, files in os.walk(generated_root, followlinks=False):
+        for name in [*dirs, *files]:
+            entry = Path(current) / name
+            if entry.is_symlink():
+                raise RuntimeError(f"generated authority contains symlink: {entry}")
+            info = entry.stat(follow_symlinks=False)
+            if not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)):
+                raise RuntimeError(f"generated authority contains special entry: {entry}")
+    for source in sorted(generated_root.iterdir(), key=lambda path: path.name):
+        destination = stage / source.name
+        if os.path.lexists(destination):
+            raise RuntimeError(f"generated authority destination already exists: {destination}")
+        os.replace(source, destination)
+    generated_root.rmdir()
 
 
 def content_addressed_snapshot_path(requested: Path, manifest_sha256: str) -> Path:
@@ -1671,8 +1701,6 @@ def main():
     stage, stage_marker, stage_dev, stage_ino = create_owned_stage(
         snapshot.parent, f".{snapshot.name}.staged-")
     try:
-        (stage / "yoco_goals").mkdir()
-        materialize_static_goal_modules(ROOT, emitter_revision, stage / "yoco_goals")
         llm_train = stage / ".llm-train-source"
         nnscaler = stage / ".nnscaler-source"
         materialize_source(llm_source, LLM_REVISION, llm_train)
@@ -1690,6 +1718,8 @@ def main():
 
         setup_logger("ERROR")
         graph_to_lean.main()
+        promote_generated_authority(stage)
+        materialize_static_goal_modules(ROOT, emitter_revision, stage / "yoco_goals")
         proof_registry = load_proof_registry(ROOT, emitter_revision)
         materialize_registered_proofs(
             ROOT, emitter_revision, stage,

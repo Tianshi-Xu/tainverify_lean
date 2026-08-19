@@ -1929,6 +1929,13 @@ def test_dp_solver_binary_is_hashed_but_not_passed_as_json(tmp_path):
         path.write_bytes(b"\x7fELF" if name == "nnscaler_dp_solver.so" else b"{}")
         files[name] = path
     argv = emitter.graph_to_lean_argv(tmp_path, tmp_path, files, tmp_path)
+    generated_root = tmp_path / ".generated-authority"
+    assert argv[argv.index("--atomic-output-root") + 1] == str(generated_root)
+    assert argv[argv.index("--out") + 1] == str(generated_root / "GeneratedYOCOMoE.lean")
+    assert argv[argv.index("--goals-out-dir") + 1] == str(generated_root / "yoco_goals")
+    assert argv[argv.index("--manifest-out") + 1] == str(
+        generated_root / "GeneratedYOCOMoE.manifest.json"
+    )
     metadata_json_values = [
         argv[index + 1] for index, value in enumerate(argv) if value == "--metadata-json"
     ]
@@ -1937,6 +1944,42 @@ def test_dp_solver_binary_is_hashed_but_not_passed_as_json(tmp_path):
         isinstance(value, str) and value.startswith("nnscaler_dp_solver.so=")
         for value in argv
     )
+
+
+def test_promote_generated_authority_moves_validated_tree_into_sealed_stage(tmp_path):
+    stage = tmp_path / "stage"
+    generated = stage / ".generated-authority"
+    goals = generated / "yoco_goals"
+    cache = generated / "verifier-cache"
+    goals.mkdir(parents=True)
+    cache.mkdir()
+    (generated / "GeneratedYOCOMoE.lean").write_text("def generated := true\n")
+    (generated / "GeneratedYOCOMoE.manifest.json").write_text("{}\n")
+    (goals / "Goal_1.lean").write_text("def goal := true\n")
+    (cache / "cache.bin").write_bytes(b"cache")
+
+    emitter.promote_generated_authority(stage)
+
+    assert not generated.exists()
+    assert (stage / "GeneratedYOCOMoE.lean").is_file()
+    assert (stage / "GeneratedYOCOMoE.manifest.json").is_file()
+    assert (stage / "yoco_goals" / "Goal_1.lean").is_file()
+    assert (stage / "verifier-cache" / "cache.bin").is_file()
+
+
+def test_promote_generated_authority_rejects_symlink(tmp_path):
+    stage = tmp_path / "stage"
+    generated = stage / ".generated-authority"
+    (generated / "yoco_goals").mkdir(parents=True)
+    (generated / "verifier-cache").mkdir()
+    (generated / "GeneratedYOCOMoE.manifest.json").write_text("{}\n")
+    outside = tmp_path / "outside"
+    outside.write_text("keep")
+    (generated / "GeneratedYOCOMoE.lean").symlink_to(outside)
+
+    with pytest.raises(RuntimeError, match="symlink"):
+        emitter.promote_generated_authority(stage)
+    assert outside.read_text() == "keep"
 
 
 def test_authority_graph_gate_accepts_only_full_autodist_graph():
