@@ -9211,6 +9211,22 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         ("layernorm-sharded-k-rank-dim1",),
     ):
         return render_closed_k_rank_local_segment(ir, relation, segment_id)
+    if (
+        family[:-1]
+        and all(item == "linear-sharded-k-rank-dim1" for item in family[:-1])
+        and family[-1] == "allgather-reconstruction-k-rank"
+    ):
+        try:
+            from .mixed_local_linear_allgather_renderer import (
+                render_closed_k_rank_local_linear_allgather_segment,
+            )
+        except ImportError:
+            from mixed_local_linear_allgather_renderer import (
+                render_closed_k_rank_local_linear_allgather_segment,
+            )
+        return render_closed_k_rank_local_linear_allgather_segment(
+            ir, relation, segment_id
+        )
     if family == (
         "linear-sharded-k-rank-dim1",
         "linear-sharded-k-rank-dim1",
