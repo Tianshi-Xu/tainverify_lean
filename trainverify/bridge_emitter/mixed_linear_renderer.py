@@ -69,15 +69,16 @@ def render_closed_mixed_k_rank_linear_segment(ir, relation, segment_id: str) -> 
         raise ValueError("mixed K-rank linear fact is not materialized") from exc
     if output_cert.activation_fact != gather_cert.output_fact:
         raise ValueError("mixed K-rank output activation is not the exact reconstruction result")
-
     states = {s.state_id: s for s in chain.states}
     before, after = states[segment.pre_state_id], states[segment.post_state_id]
     required_pre = {r.fact_id for r in (*local_inputs, gather_input, weight)}
-    required_post = {r.fact_id for r in (*local_outputs, joined, final_output)}
+    required_post = {r.fact_id for r in (*local_outputs, final_output)}
     if not required_pre <= set(before.fact_ids):
         raise ValueError("mixed K-rank linear input authority is not live")
     if not required_post <= set(after.fact_ids):
-        raise ValueError("mixed K-rank linear outputs are not live")
+        raise ValueError("mixed K-rank linear retained outputs are not live")
+    if joined.fact_id in after.fact_ids:
+        raise ValueError("mixed K-rank joined intermediate must be consumed before post-state")
     if not set(after.fact_ids) <= (required_post | set(before.fact_ids)):
         raise ValueError("mixed K-rank linear post-state introduces an unproved fact")
 

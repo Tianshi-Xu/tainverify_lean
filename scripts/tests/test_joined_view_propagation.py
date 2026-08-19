@@ -312,13 +312,43 @@ def test_closed_joined_view_renderer_handles_arbitrary_positive_atomic_tuple(
     assert "Goal_" not in source and "Tid" not in source
 
 
+
+
+def test_closed_joined_view_multi_renderer_orients_homogeneous_transitions_by_writer_authority():
+    ir, relation, segment, *_ = _closed_joined_view_multi_fixture(2, 2)
+    expected = composer.render_closed_segment(ir, relation, segment.segment_id)
+    segment.transition_ids = tuple(reversed(segment.transition_ids))
+    assert composer.render_closed_segment(ir, relation, segment.segment_id) == expected
+
+
+def test_closed_joined_view_multi_renderer_allows_opposite_sm_pm_writer_orders():
+    ir, relation, segment, *_ = _closed_joined_view_multi_fixture(2, 2)
+    pm_start, pm_end = segment.pm_range
+    block = (pm_end - pm_start) // 2
+    first = ir.pm_nodes[pm_start:pm_start + block]
+    second = ir.pm_nodes[pm_start + block:pm_end]
+    ir.pm_nodes[pm_start:pm_end] = second + first
+
+    t0, t1 = relation.transition_specs
+    relation.transition_specs = (
+        replace(t0, pm_node_indices=t1.pm_node_indices),
+        replace(t1, pm_node_indices=t0.pm_node_indices),
+    )
+    c0, c1 = relation.certificates
+    relation.certificates = (
+        replace(c0, pm_step_id=c1.pm_step_id),
+        replace(c1, pm_step_id=c0.pm_step_id),
+    )
+    source = composer.render_closed_segment(ir, relation, segment.segment_id)
+    assert source.count("let smFinal := smNodes.foldl") == 1
+    assert source.count("let pmFinal := pmNodes.foldl") == 1
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
         (lambda ir, relation, segment: setattr(
             segment, "transition_ids", (segment.transition_ids[0],) * 2), "duplicate"),
-        (lambda ir, relation, segment: setattr(
-            segment, "transition_ids", tuple(reversed(segment.transition_ids))), "order"),
         (lambda ir, relation, segment: setattr(
             relation, "transition_specs", (
                 relation.transition_specs[0],

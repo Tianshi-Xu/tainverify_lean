@@ -1840,6 +1840,15 @@ def render_closed_joined_view_segment(ir: GoalIR, relation, segment_id: str) -> 
             or len({item[1] for item in role_ids}) != len(role_ids)):
         raise ValueError("joined view transitions contain duplicate pre/post roles")
 
+    oriented = sorted(
+        zip(transitions, certificates, pres, posts),
+        key=lambda item: tuple(item[0].sm_node_indices),
+    )
+    transitions = tuple(item[0] for item in oriented)
+    certificates = tuple(item[1] for item in oriented)
+    pres = tuple(item[2] for item in oriented)
+    posts = tuple(item[3] for item in oriented)
+
     sm_start, sm_end = segment.sm_range
     pm_start, pm_end = segment.pm_range
     transition_count = len(transitions)
@@ -1855,13 +1864,14 @@ def render_closed_joined_view_segment(ir: GoalIR, relation, segment_id: str) -> 
     actual_sm = tuple(tuple(item.sm_node_indices) for item in transitions)
     actual_pm = tuple(tuple(item.pm_node_indices) for item in transitions)
     if actual_sm != tuple((item,) for item in expected_sm):
-        if set(actual_sm) == set((item,) for item in expected_sm):
-            raise ValueError("joined view transition order disagrees with SM writer order")
         raise ValueError("joined view transition does not name the exact SM writer footprint")
-    if actual_pm != tuple((item,) for item in expected_pm):
-        if set(actual_pm) == set((item,) for item in expected_pm):
-            raise ValueError("joined view transition order disagrees with PM writer order")
+    if any(len(indices) != 1 for indices in actual_pm) or {
+        indices[0] for indices in actual_pm
+    } != set(expected_pm):
         raise ValueError("joined view transition does not name the exact PM writer footprint")
+    pm_block_positions = tuple(expected_pm.index(indices[0]) for indices in actual_pm)
+    if len(set(pm_block_positions)) != transition_count:
+        raise ValueError("joined view transitions duplicate a PM writer block")
     if not (0 <= sm_start < sm_end <= len(ir.sm_nodes)
             and 0 <= pm_start < pm_end <= len(ir.pm_nodes)):
         raise ValueError("joined view writer footprint is outside graph authority")
@@ -1871,6 +1881,7 @@ def render_closed_joined_view_segment(ir: GoalIR, relation, segment_id: str) -> 
     pm_blocks = tuple(
         pm_nodes[offset * k:(offset + 1) * k] for offset in range(transition_count)
     )
+    transition_pm_blocks = tuple(pm_blocks[position] for position in pm_block_positions)
     if any(sm.rank != 0 for sm in sm_nodes) or any(
         tuple(node.rank for node in block) != tuple(range(k)) for block in pm_blocks
     ) or any(certificate.pm_rank != k - 1 for certificate in certificates):
@@ -1880,7 +1891,7 @@ def render_closed_joined_view_segment(ir: GoalIR, relation, segment_id: str) -> 
         raise ValueError("joined view writers violate literal FW_view unary arity")
 
     for offset, (transition, certificate, pre, post, sm, block) in enumerate(
-            zip(transitions, certificates, pres, posts, sm_nodes, pm_blocks)):
+            zip(transitions, certificates, pres, posts, sm_nodes, transition_pm_blocks)):
         params = tuple(sm.params or ())
         if (not params or params != tuple(certificate.parameters)
                 or any(tuple(node.params or ()) != params for node in block)):
@@ -1892,7 +1903,7 @@ def render_closed_joined_view_segment(ir: GoalIR, relation, segment_id: str) -> 
                 node.outs[0] != post.joined_pm_tid for node in block):
             raise ValueError("joined view outputs do not match the exact joined post-fact roles")
         if (certificate.sm_step_id != f"sm:{expected_sm[offset]}:0"
-                or certificate.pm_step_id != f"pm:{expected_pm[offset]}:0"):
+                or certificate.pm_step_id != f"pm:{actual_pm[offset][0]}:0"):
             raise ValueError("joined view certificate does not name the terminal replica writers")
         if (tuple(pre.full_shape) != tuple(pre.shard_shape)
                 or tuple(pre.full_shape) != tuple(certificate.input_shape)):
@@ -1960,7 +1971,7 @@ def render_closed_joined_view_segment(ir: GoalIR, relation, segment_id: str) -> 
         "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
     ]
     for offset, (pre, post, sm, block) in enumerate(
-            zip(pres, posts, sm_nodes, pm_blocks)):
+            zip(pres, posts, sm_nodes, transition_pm_blocks)):
         target_shape = _shape_text(list(post.full_shape))
         input_shape = _shape_text(list(pre.full_shape))
         lines.append(
@@ -1972,7 +1983,7 @@ def render_closed_joined_view_segment(ir: GoalIR, relation, segment_id: str) -> 
         )
         lines += writer(
             f"hpm_{offset}", "pmGraph", "pmStore", "pmFinal", "pmNodes",
-            pm_nodes, offset * k + k - 1, target_shape,
+            pm_nodes, pm_block_positions[offset] * k + k - 1, target_shape,
         )
         lines += [
             f"    have hout_{offset} : {post.fact_id}.Holds smFinal pmFinal := by",

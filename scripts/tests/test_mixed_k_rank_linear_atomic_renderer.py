@@ -70,7 +70,7 @@ def _fixture(k=3):
     shape_b = rc.ClosedTensorShapeFactRecord("shape_b", "pm", 131, (5, 5), 131)
     pre_ids = (input_a.fact_id, input_b.fact_id, gather_in.fact_id, weight.fact_id,
                eq_a.fact_id, shape_a.fact_id, eq_b.fact_id, shape_b.fact_id)
-    post_ids = (out_a.fact_id, out_b.fact_id, joined.fact_id, final.fact_id)
+    post_ids = (out_a.fact_id, out_b.fact_id, final.fact_id)
     before = SimpleNamespace(state_id="state_pre", fact_ids=pre_ids)
     after = SimpleNamespace(state_id="state_post", fact_ids=post_ids)
     segment = SimpleNamespace(
