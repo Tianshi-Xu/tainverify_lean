@@ -11,7 +11,7 @@ import denote.yoco_goals.CanonicalL12ZigzagEntry
 set_option linter.style.longLine false
 set_option linter.style.nativeDecide false
 set_option linter.style.setOption false
-set_option maxHeartbeats 4000000
+set_option maxHeartbeats 500000
 set_option maxRecDepth 1000000
 
 namespace TrainVerify.Denote.GeneratedPatterns

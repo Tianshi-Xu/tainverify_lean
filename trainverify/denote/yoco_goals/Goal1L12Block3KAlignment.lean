@@ -3,7 +3,7 @@ import denote.yoco_goals.Goal1L12Block3KVGraph
 import denote.yoco_goals.Goal1L12Block3KVSemantic
 
 set_option linter.style.nativeDecide false
-set_option maxHeartbeats 4000000
+set_option maxHeartbeats 500000
 
 namespace TrainVerify.Denote.GeneratedPatterns
 open TrainVerify.Denote

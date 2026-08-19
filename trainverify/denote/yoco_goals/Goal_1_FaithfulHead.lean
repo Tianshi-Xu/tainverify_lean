@@ -173,7 +173,7 @@ private theorem canonical_input_eq (initSM initPM : Store)
 
 -- The concrete CE commute is isolated so its elaboration budget does not
 -- accumulate with the final generated-goal reconstruction.
-set_option maxHeartbeats 4000000 in
+set_option maxHeartbeats 500000 in
 set_option maxRecDepth 100000 in
 theorem canonical_goal_1_value_from_norm (initSM initPM : Store)
     (hPM : StoreShapesHold initPM pm_goal_1InitEnv)
@@ -225,7 +225,7 @@ theorem canonical_goal_1_value_from_norm (initSM initPM : Store)
 
 -- The generated graph reduction for the loss tensor is isolated from the final
 -- `InitGoalHolds` record normalization for deterministic elaboration cost.
-set_option maxHeartbeats 4000000 in
+set_option maxHeartbeats 500000 in
 set_option maxRecDepth 100000 in
 theorem canonical_goal_1_shape_from_norm (initSM initPM : Store)
     (hnorm : Gather2Rel
@@ -246,7 +246,7 @@ theorem canonical_goal_1_shape_from_norm (initSM initPM : Store)
       rfl)
 
 -- Final reconstruction normalization expands the concrete generated goal record.
-set_option maxHeartbeats 4000000 in
+set_option maxHeartbeats 500000 in
 set_option maxRecDepth 100000 in
 /-- Canonical ancestry-closed CE head.  The sole upstream obligation is the
 actual two-shard Gather relation at the output of the trailing RMSNorm. -/

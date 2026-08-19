@@ -2068,6 +2068,36 @@ def test_emitter_snapshot_stage_accepts_explicit_registry_goal_set(tmp_path):
     )
 
 
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        (b"set_option maxHeartbeats 500001\n", "heartbeats"),
+        (b"theorem bad : True := by admit\n", "forbidden admit"),
+        (b"theorem bad : False := False.elim (by trivial)\n", "forbidden False.elim"),
+    ],
+)
+def test_emitter_final_snapshot_source_policy_rejects_mutations(
+    tmp_path, payload, message,
+):
+    stage = _write_snapshot_stage(tmp_path)
+    target = stage / "yoco_goals" / "Goal_1.lean"
+    target.chmod(0o600)
+    target.write_bytes(payload)
+    target.chmod(0o400)
+    with pytest.raises(RuntimeError, match=message):
+        emitter.validate_final_snapshot_sources(stage, emitter.EXPECTED_GOAL_MODULES)
+
+
+def test_emitter_final_snapshot_source_policy_enforces_size(tmp_path):
+    stage = _write_snapshot_stage(tmp_path)
+    target = stage / "yoco_goals" / "Goal_1.lean"
+    target.chmod(0o600)
+    target.write_bytes(b"-" * 2_500_000)
+    target.chmod(0o400)
+    with pytest.raises(RuntimeError, match="byte limit"):
+        emitter.validate_final_snapshot_sources(stage, emitter.EXPECTED_GOAL_MODULES)
+
+
 def test_emitter_snapshot_stage_ledger_is_exact_and_fail_closed(tmp_path):
     stage = _write_snapshot_stage(tmp_path / "valid")
     emitter.verify_snapshot_stage(stage)
@@ -2565,7 +2595,7 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
     assert {name: path.read_bytes() for name, path in patterns.items()} == before
 
     proof2_source = modules["Pattern_2.lean"]["source"]
-    for token in (b"sorry", b"sorryAx", b"axiom", b"unsafe"):
+    for token in (b"sorry", b"sorryAx", b"admit", b"axiom", b"unsafe", b"False.elim"):
         blobs[proof2_source] = b"theorem x : True := by exact " + token + b"\n"
         bad = json.loads(json.dumps(registry))
         bad["modules"]["Pattern_2.lean"]["sha256"] = emitter.digest_bytes(

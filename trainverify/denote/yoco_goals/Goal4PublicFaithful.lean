@@ -1,7 +1,7 @@
 /- Public faithful closure for Goal 4 from external inputs only. -/
 import denote.yoco_goals.Goal4PublicFaithfulLateAncestry
 
-set_option maxHeartbeats 4000000
+set_option maxHeartbeats 500000
 
 namespace TrainVerify.Denote.GeneratedPatterns
 

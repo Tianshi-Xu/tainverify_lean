@@ -2,7 +2,7 @@
 import denote.yoco_goals.CanonicalGoal1ExternalL0Composition
 import denote.yoco_goals.Goal1L1L11CacheComposition
 
-set_option maxHeartbeats 4000000
+set_option maxHeartbeats 500000
 namespace TrainVerify.Denote.GeneratedPatterns
 open TrainVerify.Denote
 open TrainVerify.Denote.GeneratedGoals

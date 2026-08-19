@@ -1,7 +1,7 @@
 /- L4 faithful ordinary full-layer composition. -/
 import denote.yoco_goals.CanonicalL4OrdinaryAttention
 import denote.yoco_goals.L4OrdinaryMoEComposition
-set_option maxHeartbeats 4000000
+set_option maxHeartbeats 500000
 namespace TrainVerify.Denote.GeneratedPatterns
 open TrainVerify.Denote
 open TrainVerify.Denote.GeneratedGoals

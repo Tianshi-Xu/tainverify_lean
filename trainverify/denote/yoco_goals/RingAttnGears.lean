@@ -24,7 +24,7 @@ set_option linter.style.longLine false
 set_option linter.style.setOption false
 set_option linter.style.nativeDecide false
 set_option maxRecDepth 100000
-set_option maxHeartbeats 1600000
+set_option maxHeartbeats 500000
 
 namespace TrainVerify.Denote.GeneratedPatterns
 
@@ -66,7 +66,7 @@ theorem fw_view_id_shape (sh : Shape) (x : Tensor) (hx : x.shape = sh) :
       rw [← this] at hidx; exact hidx
     rw [valAt_fw_view_lt sh x idx hlt]
 
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 500000 in
 -- index decomposition + valAt unfolds are heartbeat-heavy
 theorem fw_view_allGather0_reshape_16_64_2_g12
     (a b : Tensor) (ha : a.shape = [2048, 16, 64]) (hb : b.shape = [2048, 16, 64]) :

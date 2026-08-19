@@ -2,7 +2,7 @@
 Graph weight facts and graph-node alignment live in separate modules. -/
 import denote.yoco_goals.GatherOpGears
 
-set_option maxHeartbeats 4000000
+set_option maxHeartbeats 500000
 set_option maxRecDepth 1000000
 
 namespace TrainVerify.Denote.GeneratedPatterns

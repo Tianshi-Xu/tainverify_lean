@@ -97,7 +97,7 @@ private theorem pre_shuffle_pm_fold_eq (init : Store) :
   exact foldl_eq_of_steps _ _ pre init hstep
 
 set_option maxRecDepth 1000000 in
-set_option maxHeartbeats 4000000 in
+set_option maxHeartbeats 500000 in
 /-- General Generated-to-Goal1 value bridge for the audited pre-shuffle TIDs. -/
 theorem generated_pm_to_goal_1_faithful_pre_shuffle (init : Store) (tid : Tid)
     (htid : tid ∈ preShufflePMTids) :

@@ -6,7 +6,7 @@ import denote.yoco_goals.ZigzagAttentionRel
 set_option linter.style.longLine false
 set_option linter.style.nativeDecide false
 set_option linter.style.setOption false
-set_option maxHeartbeats 4000000
+set_option maxHeartbeats 500000
 set_option maxRecDepth 1000000
 
 namespace TrainVerify.Denote.GeneratedPatterns
@@ -141,7 +141,7 @@ private theorem cL22C_chunk1_of_gather (x0 x1 : Tensor)
 -- The canonical Q path is fully composed from the sole computed L21 boundary.
 -- The conclusion exposes the genuine zigzag Q relation immediately before attention;
 -- no Q computed relation is assumed.
-set_option maxHeartbeats 4000000 in
+set_option maxHeartbeats 500000 in
 theorem canonical_l22_q_relation_from_l21
     (initSM initPM : Store)
     (hPM : StoreShapesHold initPM pm_goal_1InitEnv)

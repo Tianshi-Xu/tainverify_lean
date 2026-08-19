@@ -18,7 +18,7 @@ The legacy cut corpus and its witness bookkeeping remain in the standalone
 set_option linter.style.longLine false
 set_option linter.style.nativeDecide false
 set_option maxRecDepth 10000000
-set_option maxHeartbeats 4000000
+set_option maxHeartbeats 500000
 
 open TrainVerify.Denote
 open TrainVerify.Denote.ZigzagCollective

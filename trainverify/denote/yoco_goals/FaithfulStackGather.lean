@@ -18,7 +18,7 @@ structure Ordinary2Rel (full rank0 rank1 : Tensor)
   rank1_shape : rank1.shape = shardShape
 
 -- The extensional proof normalizes both three-dimensional index formulas.
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 500000 in
 /-- **Lemma B (generic)**: stack-gather commute for shard shape `[2048, 64]`. -/
 theorem stack_allGather_commute_generic_2048_64
     (as bs : List Tensor) (hlen : as.length = bs.length) (hne : as ≠ [])

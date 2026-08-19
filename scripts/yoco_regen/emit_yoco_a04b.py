@@ -489,7 +489,20 @@ REGISTERED_SEALED_DEPENDENCY_MODULES = {
     "RingAttnGears.lean", "ZigzagViewRel.lean",
 }
 PROOF_MODULE_KEYS = {"source", "sha256"}
-FORBIDDEN_PROOF_TOKEN = re.compile(rb"\b(?:sorry(?:Ax)?|axiom|unsafe)\b")
+FINAL_LEAN_SOURCE_LIMIT = 2_500_000
+FINAL_LEAN_HEARTBEAT_LIMIT = 500_000
+FORBIDDEN_PROOF_TOKEN = re.compile(
+    rb"\b(?:sorry(?:Ax)?|admit|axiom|unsafe)\b|False\.elim",
+    re.MULTILINE,
+)
+FINAL_FORBIDDEN_PATTERNS = {
+    "sorry": r"\bsorry\b",
+    "sorryAx": r"\bsorryAx\b",
+    "admit": r"\badmit\b",
+    "axiom": r"^\s*axiom\b",
+    "unsafe": r"\bunsafe\b",
+    "False.elim": r"False\.elim",
+}
 PROOF_REGISTRY_PATH = "scripts/yoco_regen/yoco_proof_registry.json"
 LEAN_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_'.]*(?:\.[A-Za-z_][A-Za-z0-9_']*)+$")
 LEAN_TARGETS = (
@@ -722,6 +735,39 @@ def _read_regular_at(directory_fd: int, name: str) -> bytes:
         return b"".join(chunks)
     finally:
         os.close(descriptor)
+
+
+def validate_final_snapshot_sources(
+    stage: Path, expected_goal_modules: set[str],
+) -> None:
+    """Apply the release source policy to every final sealed Lean source."""
+    relative_paths = (
+        GENERATED_AUTHORITY_MODULES
+        | REGISTERED_TOP_LEVEL_MODULES
+        | {f"yoco_goals/{name}" for name in expected_goal_modules}
+    )
+    for relative in sorted(relative_paths):
+        content = _read_owned_regular(stage / relative, f"final Lean source {relative}")
+        if len(content) >= FINAL_LEAN_SOURCE_LIMIT:
+            raise RuntimeError(
+                f"final Lean source exceeds {FINAL_LEAN_SOURCE_LIMIT} byte limit: "
+                f"{relative} ({len(content)} bytes)"
+            )
+        try:
+            text = content.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise RuntimeError(f"final Lean source is not UTF-8: {relative}") from error
+        for raw in re.findall(r"set_option\s+maxHeartbeats\s+([0-9][0-9_]*)", text):
+            value = int(raw.replace("_", ""))
+            if value > FINAL_LEAN_HEARTBEAT_LIMIT:
+                raise RuntimeError(
+                    f"final Lean source exceeds 500000 heartbeats: {relative} ({raw})"
+                )
+        for label, pattern in FINAL_FORBIDDEN_PATTERNS.items():
+            if re.search(pattern, text, re.MULTILINE):
+                raise RuntimeError(
+                    f"final Lean source contains forbidden {label}: {relative}"
+                )
 
 
 def verify_snapshot_fd(
@@ -1778,6 +1824,7 @@ def main():
             raise RuntimeError("emitter TrainVerify revision changed during emission")
         seal_snapshot_files(stage)
         snapshot_goal_modules = expected_snapshot_goal_modules(proof_registry)
+        validate_final_snapshot_sources(stage, snapshot_goal_modules)
         verify_snapshot_stage(stage, snapshot_goal_modules)
         validate_lean_snapshot(
             stage, args.lean_project, emitter_revision,

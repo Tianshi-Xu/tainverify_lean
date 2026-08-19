@@ -17,7 +17,7 @@ all other inputs are zero tensors of their generated shape.  Pinning every
 classes and the full init-goal reconstruction equalities.
 -/
 
-set_option maxHeartbeats 4000000
+set_option maxHeartbeats 500000
 set_option maxRecDepth 100000
 
 open TrainVerify.Denote

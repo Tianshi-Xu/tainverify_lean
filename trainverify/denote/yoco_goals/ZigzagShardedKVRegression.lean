@@ -8,7 +8,7 @@ open TrainVerify.Denote.ZigzagCollective
 namespace TrainVerify.Denote
 namespace ZigzagShardedKVRegression
 noncomputable section
-set_option maxHeartbeats 4000000
+set_option maxHeartbeats 500000
 
 /-- CP1 sharded-K/V attention is the communication-free local call. -/
 theorem sharded_kv_cpSize_one_formula

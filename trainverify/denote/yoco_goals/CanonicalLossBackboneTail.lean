@@ -5,7 +5,7 @@ import denote.yoco_goals.ZigzagLayoutRel
 set_option linter.style.longLine false
 set_option linter.style.nativeDecide false
 set_option linter.style.setOption false
-set_option maxHeartbeats 4000000
+set_option maxHeartbeats 500000
 set_option maxRecDepth 100000
 
 namespace TrainVerify.Denote.GeneratedPatterns
@@ -262,7 +262,7 @@ private theorem canonical_cu_input (initPM : Store) :
     pm_goal_1 pm_goal_1.nodes initPM 6252
       (by native_decide) canonical_cu_not_written
 
-set_option maxHeartbeats 4000000 in
+set_option maxHeartbeats 500000 in
 set_option maxRecDepth 100000 in
 /-- The concrete canonical final faithful unshuffle.  Its input is the zigzag
 relation produced by L23; the decoded packed-sequence fact turns the paired PM
@@ -287,7 +287,7 @@ theorem canonical_final_unshuffle (initSM initPM : Store)
    canonical_final_unshuffle_rank1_shape initSM initPM hpre,
    by decide⟩
 
-set_option maxHeartbeats 4000000 in
+set_option maxHeartbeats 500000 in
 set_option maxRecDepth 100000 in
 /-- Canonical shared loss-backbone tail: graph nodes 922--923 on SM and
 2016--2019 on PM, with concrete tids through the final RMSNorm output. -/

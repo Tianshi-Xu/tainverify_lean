@@ -6,7 +6,7 @@ import denote.yoco_goals.CanonicalL18KVSemantic
 set_option linter.style.longLine false
 set_option linter.style.nativeDecide false
 set_option linter.style.setOption false
-set_option maxHeartbeats 4000000
+set_option maxHeartbeats 500000
 
 namespace TrainVerify.Denote.GeneratedPatterns
 open TrainVerify.Denote

@@ -253,7 +253,7 @@ namespace Zigzag2Rel
 
 -- Faithful CP2 zigzag attention preserves the source-witness relation. K/V and
 -- all attention parameters are arbitrary replicated inputs.
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 500000 in
 -- The extensional chunk/gather and collective normalization needs extra budget.
 theorem attn_zigzag
     (fullQ q0 q1 cuShuffle k v cuAttn cuKV : Tensor)
@@ -336,7 +336,7 @@ theorem attn_zigzag
 -- Faithful CP2 zigzag attention with ordinary rank-local K/V shards preserves
 -- the source-witness relation. Unlike `attn_zigzag`, this theorem gathers K/V in
 -- rank order and never assumes that either input is replicated.
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 500000 in
 theorem attn_zigzag_sharded_kv
     (fullQ q0 q1 cuShuffle fullK k0 k1 fullV v0 v1 cuAttn cuKV : Tensor)
     (lDim qHeads kvHeads qDim vDim : Nat) (causal : Bool) (window : Nat)

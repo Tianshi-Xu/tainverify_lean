@@ -2,7 +2,7 @@
 import denote.yoco_goals.CanonicalL7OrdinaryAttention
 import denote.yoco_goals.L7OrdinaryMoEComposition
 
-set_option maxHeartbeats 4000000
+set_option maxHeartbeats 500000
 
 namespace TrainVerify.Denote.GeneratedPatterns
 

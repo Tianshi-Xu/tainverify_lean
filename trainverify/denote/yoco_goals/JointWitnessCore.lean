@@ -15,7 +15,7 @@ import denote.Denote
 import denote.GeneratedYOCOMoE
 import Mathlib.Data.List.GetD
 
-set_option maxHeartbeats 800000
+set_option maxHeartbeats 500000
 
 open TrainVerify.Denote
 open TrainVerify.Denote.Generated

@@ -549,7 +549,7 @@ theorem Row3LocalShape_moe_gmm (hModel numExp topK : Nat) (w13 w2 : Tensor)
     fw_all2all_moe_gmm_shape' x y z w13 w2 a hModel numExp 0 numExp topK
       swigluLimit hx
 
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 500000 in
 theorem Row3LocalCongr_moe_gmm (hModel numExp topK E_total t_dim d_dim : Nat)
     (w13 w2 : Tensor) (swigluLimit : Scalar)
     (hhModel : 0 < hModel) (ht_even : t_dim = 2 * d_dim)

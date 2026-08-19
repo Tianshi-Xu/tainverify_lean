@@ -141,7 +141,7 @@ private theorem canonical_input_eq2 (initSM initPM : Store)
   exact hi
 
 -- Isolate the z-loss commute from generated-goal normalization.
-set_option maxHeartbeats 4000000 in
+set_option maxHeartbeats 500000 in
 set_option maxRecDepth 100000 in
 theorem canonical_goal_2_value_from_norm (initSM initPM : Store)
     (hPM : StoreShapesHold initPM pm_goal_2InitEnv)
@@ -228,7 +228,7 @@ theorem canonical_goal_2_value_from_norm (initSM initPM : Store)
   exact hval
 
 -- Avoid rewrite search through the 3764-line graph when transporting output shape.
-set_option maxHeartbeats 4000000 in
+set_option maxHeartbeats 500000 in
 set_option maxRecDepth 100000 in
 theorem canonical_goal_2_shape_from_norm (initSM initPM : Store)
     (hnorm : Gather2Rel
@@ -249,7 +249,7 @@ theorem canonical_goal_2_shape_from_norm (initSM initPM : Store)
       rfl)
 
 -- The sole upstream obligation is the actual trailing RMSNorm Gather relation.
-set_option maxHeartbeats 4000000 in
+set_option maxHeartbeats 500000 in
 set_option maxRecDepth 100000 in
 /-- Canonical ancestry-closed z-loss head. -/
 theorem canonical_goal_2_from_norm (initSM initPM : Store)
