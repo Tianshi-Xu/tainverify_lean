@@ -6232,11 +6232,12 @@ def _membership_cases(
 
 
 def render_closed_k_rank_transpose_segment(ir: GoalIR, relation, segment_id: str) -> str:
-    """Replay the exact one-SM plus ordered-K-PM FW_transpose writers."""
+    """Replay any positive ordered tuple of one-SM plus K-PM transposes in one fold pair."""
     try:
         from .relation_compiler import KRankTransposeRelationCertificate
     except ImportError:
         from relation_compiler import KRankTransposeRelationCertificate
+    rule_id = "transpose-sharded-k-rank"
     allowed_theorems = {
         "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim3_rank4",
         "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_1_2_dim2_to_dim1_rank4",
@@ -6246,75 +6247,122 @@ def render_closed_k_rank_transpose_segment(ir: GoalIR, relation, segment_id: str
         "TrainVerify.Denote.RelationCompiler.ShardedRel.fw_transposeAxes_2_3_dim1_rank4",
     }
     chain = relation.dependent_chain_plan
-    segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
-    if segment is None or len(segment.transition_ids) != 1:
-        raise ValueError("transpose-sharded-k-rank requires one atomic transition")
-    transition = {item.transition_id: item for item in relation.transition_specs}[
-        segment.transition_ids[0]
-    ]
-    theorem = transition.lean_theorem
-    if theorem not in allowed_theorems:
+    if chain is None or not chain.complete:
+        raise ValueError("K-rank transpose renderer requires a complete closed chain")
+    matches = [item for item in chain.segments if item.segment_id == segment_id]
+    if len(matches) != 1 or not matches[0].transition_ids:
+        raise ValueError("transpose-sharded-k-rank requires one positive atomic transition tuple")
+    segment = matches[0]
+    if len(segment.transition_ids) != len(set(segment.transition_ids)):
+        raise ValueError("K-rank transpose transition tuple contains duplicate authority")
+    specs_by_id = {}
+    for item in relation.transition_specs:
+        specs_by_id.setdefault(item.transition_id, []).append(item)
+    transition_matches = [specs_by_id.get(item, []) for item in segment.transition_ids]
+    if any(len(items) != 1 for items in transition_matches):
+        raise ValueError("K-rank transpose transition authority is missing or duplicated")
+    transitions = [items[0] for items in transition_matches]
+    if any(item.rule_id != rule_id or item.lean_theorem not in allowed_theorems
+           or len(item.pre_facts) != 1 or len(item.post_facts) != 1
+           for item in transitions):
         raise ValueError("transpose-sharded-k-rank has no checked axis-specific theorem")
-    (segment, transition, certificate, pre, post, before, after) = _k_rank_segment_context(
-        ir, relation, segment_id, "transpose-sharded-k-rank", theorem,
-        KRankTransposeRelationCertificate,
-        lambda cert: ((cert.input_fact,), (cert.output_fact,)),
-    )
-    if certificate.input_fact != transition.pre_facts[0] or certificate.output_fact != transition.post_facts[0]:
-        raise ValueError("K-rank transpose certificate facts disagree with transition")
-    if pre.kind != "sharded" or post.kind != "sharded":
-        raise ValueError("K-rank transpose requires exact ShardedRel facts")
-    k = len(post.pm_tids)
-    if (k < 2 or certificate.rank_count != k or len(pre.pm_tids) != k
-            or certificate.input_gather_dim != pre.gather_dim
-            or certificate.output_gather_dim != post.gather_dim
-            or tuple(certificate.input_full_shape) != tuple(pre.full_shape)
-            or tuple(certificate.output_full_shape) != tuple(post.full_shape)
-            or tuple(certificate.input_shard_shape) != tuple(pre.shard_shape)
-            or tuple(certificate.output_shard_shape) != tuple(post.shard_shape)):
-        raise ValueError("K-rank transpose relation metadata is not exact")
-    if len(transition.sm_node_indices) != 1 or len(transition.pm_node_indices) != k:
-        raise ValueError("K-rank transpose transition footprint is not exact 1xK")
+
+    sources = [item.source for item in chain.relation_facts]
+    if len(sources) != len(set(sources)):
+        raise ValueError("K-rank transpose relation facts contain duplicate authority")
+    records = {item.source: item for item in chain.relation_facts}
+    state_ids = [item.state_id for item in chain.states]
+    if len(state_ids) != len(set(state_ids)):
+        raise ValueError("K-rank transpose states contain duplicate authority")
+    states = {item.state_id: item for item in chain.states}
+    try:
+        before, after = states[segment.pre_state_id], states[segment.post_state_id]
+    except KeyError as exc:
+        raise ValueError("K-rank transpose framing state is not materialized") from exc
+    if (len(before.fact_ids) != len(set(before.fact_ids))
+            or len(after.fact_ids) != len(set(after.fact_ids))):
+        raise ValueError("K-rank transpose state framing contains duplicate facts")
+
+    n = len(transitions)
     sm_start, sm_end = segment.sm_range
     pm_start, pm_end = segment.pm_range
-    if (tuple(transition.sm_node_indices) != tuple(range(sm_start, sm_end))
-            or sm_end - sm_start != 1
-            or tuple(transition.pm_node_indices) != tuple(range(pm_start, pm_end))
-            or pm_end - pm_start != k):
-        raise ValueError("K-rank transpose segment ranges do not equal its writer footprint")
-    sm_node = ir.sm_nodes[sm_start]
+    pm_count = pm_end - pm_start
+    if sm_end - sm_start != n or pm_count <= 0 or pm_count % n != 0:
+        raise ValueError("K-rank transpose segment ranges do not determine positive N and K")
+    k = pm_count // n
+    if not (0 <= sm_start < sm_end <= len(ir.sm_nodes)
+            and 0 <= pm_start < pm_end <= len(ir.pm_nodes)):
+        raise ValueError("K-rank transpose segment footprint is outside graph authority")
+    sm_nodes = tuple(ir.sm_nodes[index] for index in range(sm_start, sm_end))
     pm_nodes = tuple(ir.pm_nodes[index] for index in range(pm_start, pm_end))
-    if sm_node.rank != 0 or sm_node.op != "FW_transpose":
-        raise ValueError("K-rank transpose SM writer is not exact")
-    if tuple(node.rank for node in pm_nodes) != tuple(range(k)):
-        raise ValueError("K-rank transpose PM writers are not ordered ranks 0..K-1")
-    writers = (sm_node, *pm_nodes)
-    if any(len(node.params) != 2 for node in writers):
-        raise ValueError("K-rank transpose writers require exactly two parameters")
-    if any(tuple(node.params) != tuple(certificate.parameters) for node in writers):
-        raise ValueError("K-rank transpose writers require matching parameters")
-    if any(len(node.ins) != 1 or len(node.outs) != 1 for node in writers):
-        raise ValueError("K-rank transpose writers must be unary singleton-output nodes")
-    if (sm_node.ins[0] != pre.sm_tid or sm_node.outs[0] != post.sm_tid
-            or tuple(node.ins[0] for node in pm_nodes) != tuple(pre.pm_tids)
-            or tuple(node.outs[0] for node in pm_nodes) != tuple(post.pm_tids)):
-        raise ValueError("K-rank transpose live writers disagree with ordered relation TIDs")
+
+    selected = []
+    pre_records = []
+    post_records = []
+    for index, transition in enumerate(transitions):
+        certificate = _select_exact_typed_certificate(
+            relation, transition, rule_id, transition.lean_theorem,
+            KRankTransposeRelationCertificate,
+            lambda cert: ((cert.input_fact,), (cert.output_fact,)),
+        )
+        try:
+            pre = records[transition.pre_facts[0]]
+            post = records[transition.post_facts[0]]
+        except KeyError as exc:
+            raise ValueError("K-rank transpose relation fact is not materialized") from exc
+        if pre.kind != "sharded" or post.kind != "sharded":
+            raise ValueError("K-rank transpose requires exact ShardedRel facts")
+        if (certificate.input_fact != transition.pre_facts[0]
+                or certificate.output_fact != transition.post_facts[0]):
+            raise ValueError("K-rank transpose certificate facts disagree with transition")
+        if (certificate.rank_count != k or len(pre.pm_tids) != k or len(post.pm_tids) != k
+                or certificate.input_gather_dim != pre.gather_dim
+                or certificate.output_gather_dim != post.gather_dim
+                or tuple(certificate.input_full_shape) != tuple(pre.full_shape)
+                or tuple(certificate.output_full_shape) != tuple(post.full_shape)
+                or tuple(certificate.input_shard_shape) != tuple(pre.shard_shape)
+                or tuple(certificate.output_shard_shape) != tuple(post.shard_shape)):
+            raise ValueError("K-rank transpose relation metadata is not exact")
+        expected_sm = sm_start + index
+        expected_pm = tuple(range(pm_start + index * k, pm_start + (index + 1) * k))
+        if (tuple(transition.sm_node_indices) != (expected_sm,)
+                or tuple(transition.pm_node_indices) != expected_pm
+                or certificate.sm_step_id != f"sm:{expected_sm}:0"
+                or tuple(certificate.pm_step_ids) != tuple(f"pm:{item}:0" for item in expected_pm)):
+            raise ValueError("K-rank transpose transition footprint or order is not exact")
+        sm = sm_nodes[index]
+        block = pm_nodes[index * k:(index + 1) * k]
+        writers = (sm, *block)
+        if sm.rank != 0 or tuple(node.rank for node in block) != tuple(range(k)):
+            raise ValueError("K-rank transpose writers are not ordered ranks 0..K-1")
+        if any(node.op != "FW_transpose" or len(node.ins) != 1 or len(node.outs) != 1
+               for node in writers):
+            raise ValueError("K-rank transpose writers must be unary singleton-output nodes")
+        if (any(len(node.params) != 2 for node in writers)
+                or any(tuple(node.params) != tuple(certificate.parameters) for node in writers)):
+            raise ValueError("K-rank transpose writers require matching parameters")
+        if (sm.ins[0] != pre.sm_tid or sm.outs[0] != post.sm_tid
+                or tuple(node.ins[0] for node in block) != tuple(pre.pm_tids)
+                or tuple(node.outs[0] for node in block) != tuple(post.pm_tids)):
+            raise ValueError("K-rank transpose live writers disagree with ordered relation TIDs")
+        selected.append(certificate); pre_records.append(pre); post_records.append(post)
+
+    pre_ids = [item.fact_id for item in pre_records]
+    post_ids = [item.fact_id for item in post_records]
+    if len(pre_ids) != len(set(pre_ids)) or len(post_ids) != len(set(post_ids)):
+        raise ValueError("K-rank transpose transitions duplicate pre/post facts")
+    if not set(pre_ids) <= set(before.fact_ids) or not set(post_ids) <= set(after.fact_ids):
+        raise ValueError("K-rank transpose pre/post fact is not live")
+    expected_after = (set(before.fact_ids) - set(pre_ids)) | set(post_ids)
+    if set(after.fact_ids) != expected_after:
+        raise ValueError("K-rank transpose post-state fact set is not exhaustive")
 
     sm_name = f"{segment_id}_sm_nodes"
     pm_name = f"{segment_id}_pm_nodes"
-    sm_node_name = f"{segment_id}_sm_node"
-    pm_node_names = [f"{segment_id}_pm_node_{rank}" for rank in range(k)]
-    sm_text = _node_text(sm_node)
-    pm_texts = [_node_text(node) for node in pm_nodes]
-    in_list = "[" + ", ".join(f"pmStore {tid}" for tid in pre.pm_tids) + "]"
-    out_list = "[" + ", ".join(f"pmFinal {tid}" for tid in post.pm_tids) + "]"
-    symbolic_input_full = [str(extent) for extent in pre.shard_shape]
-    symbolic_input_full[pre.gather_dim] = (
-        f"{pre.shard_shape[pre.gather_dim]} * {in_list}.length"
-    )
-    symbolic_input_full_text = "[" + ", ".join(symbolic_input_full) + "]"
+    sm_node_names = [f"{segment_id}_sm_node_{index}" for index in range(n)]
+    pm_node_names = [f"{segment_id}_pm_node_{index}" for index in range(n * k)]
 
-    def writer_lines(name, side, pos, node, target_name):
+    def writer_lines(name, side, position, node, target_name):
         graph = ir.sm_graph_ref if side == "sm" else ir.pm_graph_ref
         store = "smStore" if side == "sm" else "pmStore"
         nodes = "smNodes" if side == "sm" else "pmNodes"
@@ -6322,8 +6370,8 @@ def render_closed_k_rank_transpose_segment(ir: GoalIR, relation, segment_id: str
         return [
             f"    have {name} : {final} {node.outs[0]} = transposeAxes {node.params[0]} {node.params[1]} ({store} {node.ins[0]}) := by",
             f"      change ({nodes}.foldl (applyNodeDistributedFaithful {graph}) {store}) {node.outs[0]} = _",
-            f"      rw [show {nodes} = {nodes}.take {pos} ++ [{target_name}] ++ {nodes}.drop {pos + 1} by native_decide]",
-            f"      rw [foldl_faithful_middle_writer {graph} {store} ({nodes}.take {pos}) ({nodes}.drop {pos + 1})",
+            f"      rw [show {nodes} = {nodes}.take {position} ++ [{target_name}] ++ {nodes}.drop {position + 1} by native_decide]",
+            f"      rw [foldl_faithful_middle_writer {graph} {store} ({nodes}.take {position}) ({nodes}.drop {position + 1})",
             f"        {target_name} {node.outs[0]} (fun t => transposeAxes {node.params[0]} {node.params[1]} (t {node.ins[0]})) (by",
             "          intro t",
             "          rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
@@ -6331,15 +6379,16 @@ def render_closed_k_rank_transpose_segment(ir: GoalIR, relation, segment_id: str
             "          simp [applyNodeDistributed, applyNodeRingAttn]",
             f"          exact applyNode_fw_transposeAxes_out {graph} t {node.rank} {node.ins[0]} {node.outs[0]} {node.params[0]} {node.params[1]}",
             "        ) (by native_decide) (by native_decide)]",
-            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {pos}) {store} {node.ins[0]} (by native_decide) (by native_decide)]",
+            f"      rw [foldl_applyNodeDistributedFaithful_at_not_written {graph} ({nodes}.take {position}) {store} {node.ins[0]} (by native_decide) (by native_decide)]",
         ]
 
-    lines = ["-- FW_transpose with literal [d0,d1] parameters is interpreted by transposeAxes d0 d1.",
-             f"private def {sm_node_name} : NodeDecl := {sm_text}"]
-    lines += [f"private def {name} : NodeDecl := {text}"
-              for name, text in zip(pm_node_names, pm_texts)]
+    lines = ["-- One ordered SM fold and one ordered PM fold for an atomic tuple of FW_transpose transitions."]
+    lines += [f"private def {name} : NodeDecl := {_node_text(node)}"
+              for name, node in zip(sm_node_names, sm_nodes)]
+    lines += [f"private def {name} : NodeDecl := {_node_text(node)}"
+              for name, node in zip(pm_node_names, pm_nodes)]
     lines += [
-        f"private def {sm_name} : List NodeDecl := [{sm_node_name}]",
+        f"private def {sm_name} : List NodeDecl := [{', '.join(sm_node_names)}]",
         f"private def {pm_name} : List NodeDecl := [{', '.join(pm_node_names)}]", "",
         f"private def {segment_id} :",
         f"    ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
@@ -6352,29 +6401,50 @@ def render_closed_k_rank_transpose_segment(ir: GoalIR, relation, segment_id: str
         f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
         "      apply RelationState.Holds.fold_frame smNodes pmNodes smStore pmStore hstate",
         "      · native_decide", "      · native_decide", "      · native_decide", "      · native_decide",
-        f"    have hin : {pre.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
-        f"    change ShardedRel (smStore {pre.sm_tid}) {in_list} {pre.gather_dim} {symbolic_input_full_text} {_shape_text(list(pre.shard_shape))} at hin",
     ]
-    lines += writer_lines("hSmWriter", "sm", 0, sm_node, sm_node_name)
-    for rank, node in enumerate(pm_nodes):
-        lines += writer_lines(f"hPmWriter{rank}", "pm", rank, node, pm_node_names[rank])
-    lines += [
-        f"    have htransport := {certificate.lean_theorem} hin",
-        f"    have hout : {post.fact_id}.Holds smFinal pmFinal := by",
-        f"      change ShardedRel (smFinal {post.sm_tid}) {out_list} {post.gather_dim} {_shape_text(list(post.full_shape))} {_shape_text(list(post.shard_shape))}",
-        "      rw [hSmWriter, " + ", ".join(f"hPmWriter{rank}" for rank in range(k)) + "]",
-        "      simpa using htransport",
-        "    intro fact hfact",
-        f"    have covered : fact ∈ [{post.fact_id}] ++ {before.state_id}.facts := by",
-        f"      exact (show {after.state_id}.facts ⊆ [{post.fact_id}] ++ {before.state_id}.facts by native_decide) hfact",
-        "    simp only [List.mem_append] at covered",
-        "    rcases covered with fresh | old",
-        "    · simp only [List.mem_cons, List.not_mem_nil, or_false] at fresh",
-        "      rcases fresh with rfl", "      exact hout",
-        "    · exact hframe fact old", "",
-    ]
+    for index, pre in enumerate(pre_records):
+        in_list = "[" + ", ".join(f"pmStore {tid}" for tid in pre.pm_tids) + "]"
+        symbolic = [str(extent) for extent in pre.shard_shape]
+        symbolic[pre.gather_dim] = f"{pre.shard_shape[pre.gather_dim]} * {in_list}.length"
+        lines += [
+            f"    have hin{index} : {pre.fact_id}.Holds smStore pmStore := hstate _ (by native_decide)",
+            f"    change ShardedRel (smStore {pre.sm_tid}) {in_list} {pre.gather_dim} [{', '.join(symbolic)}] {_shape_text(list(pre.shard_shape))} at hin{index}",
+        ]
+    for index, sm in enumerate(sm_nodes):
+        lines += writer_lines(f"hSmWriter{index}", "sm", index, sm, sm_node_names[index])
+        for rank in range(k):
+            position = index * k + rank
+            lines += writer_lines(f"hPmWriter{index}_{rank}", "pm", position,
+                                  pm_nodes[position], pm_node_names[position])
+    for index, (certificate, post) in enumerate(zip(selected, post_records)):
+        out_list = "[" + ", ".join(f"pmFinal {tid}" for tid in post.pm_tids) + "]"
+        rewrites = [f"hSmWriter{index}"] + [f"hPmWriter{index}_{rank}" for rank in range(k)]
+        lines += [
+            f"    have htransport{index} := {certificate.lean_theorem} hin{index}",
+            f"    have hout{index} : {post.fact_id}.Holds smFinal pmFinal := by",
+            f"      change ShardedRel (smFinal {post.sm_tid}) {out_list} {post.gather_dim} {_shape_text(list(post.full_shape))} {_shape_text(list(post.shard_shape))}",
+            f"      rw [{', '.join(rewrites)}]",
+            f"      simpa using htransport{index}",
+        ]
+    if n == 1:
+        lines.append(f"    exact RelationState.Holds.mono_insert hframe hout0 (by native_decide)")
+    else:
+        previous_holds = "hframe"
+        for index, post in enumerate(post_records):
+            if index == n - 1:
+                lines.append(
+                    f"    exact RelationState.Holds.mono_insert {previous_holds} hout{index} (by native_decide)")
+            else:
+                state_name = f"{segment_id}_publish_{index + 1}"
+                facts = " :: ".join(post_ids[:index + 1]) + f" :: {before.state_id}.facts"
+                lines += [
+                    f"    let {state_name} : RelationState := {{ facts := {facts}, nonempty := by simp }}",
+                    f"    have hpublished{index + 1} : {state_name}.Holds smFinal pmFinal := by",
+                    f"      exact RelationState.Holds.mono_insert {previous_holds} hout{index} (by native_decide)",
+                ]
+                previous_holds = f"hpublished{index + 1}"
+    lines.append("")
     return "\n".join(lines)
-
 
 def render_closed_k_rank_output_sharded_linear_segment(
     ir: GoalIR, relation, segment_id: str
@@ -9048,7 +9118,7 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     transitions = {item.transition_id: item for item in relation.transition_specs}
     family = tuple(transitions[item].rule_id for item in segment.transition_ids)
 
-    if family == ("transpose-sharded-k-rank",):
+    if family and all(item == "transpose-sharded-k-rank" for item in family):
         return render_closed_k_rank_transpose_segment(ir, relation, segment_id)
     if family == ("linear-output-sharded-k-rank",):
         return render_closed_k_rank_output_sharded_linear_segment(ir, relation, segment_id)
@@ -9731,15 +9801,20 @@ def _closed_segment_family_imports(
     family: tuple[str, ...], lean_theorems: tuple[str, ...] = ()
 ) -> tuple[str, ...]:
     """Return exact theorem modules required by one closed segment family."""
-    if family == ("transpose-sharded-k-rank",):
-        if len(lean_theorems) != 1:
-            raise ValueError("transpose segment requires exactly one theorem identity")
-        theorem = lean_theorems[0]
-        if ".fw_transposeAxes_1_2_" in theorem:
-            return ("denote.KRankTranspose",)
-        if ".fw_transposeAxes_2_3_" in theorem:
-            return ("denote.KRankTranspose23Extra",)
-        raise ValueError("transpose segment theorem has no closed renderer import")
+    if family and all(item == "transpose-sharded-k-rank" for item in family):
+        if len(lean_theorems) != len(family):
+            raise ValueError("transpose segment requires one theorem identity per transition")
+        modules = []
+        for theorem in lean_theorems:
+            if ".fw_transposeAxes_1_2_" in theorem:
+                module = "denote.KRankTranspose"
+            elif ".fw_transposeAxes_2_3_" in theorem:
+                module = "denote.KRankTranspose23Extra"
+            else:
+                raise ValueError("transpose segment theorem has no closed renderer import")
+            if module not in modules:
+                modules.append(module)
+        return tuple(modules)
     mapping = {
         (
             "linear-sharded-k-rank-dim1",

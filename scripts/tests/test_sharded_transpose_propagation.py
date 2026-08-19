@@ -376,6 +376,130 @@ def test_closed_sharded_transpose_renderer_rejects_tampered_live_writer():
         composer.render_closed_segment(ir, relation, segment.segment_id)
 
 
+def _closed_multi_fixture(specs, *, k=4, segment_id="segment_000069"):
+    certificates, transitions, records = [], [], []
+    sm_nodes, pm_nodes, pre_ids, post_ids = [], [], [], []
+    for index, (output_full, output_shard, params) in enumerate(specs):
+        _, base_relation, _, base_pre, base_post = _closed_fixture(
+            k=k, output_full=output_full, output_shard=output_shard, params=params
+        )
+        base = base_relation.certificates[0]
+        sm_input, sm_output = 1000 + 100 * index, 1010 + 100 * index
+        pm_inputs = tuple(2000 + 100 * index + rank for rank in range(k))
+        pm_outputs = tuple(3000 + 100 * index + rank for rank in range(k))
+        sm_index, pm_start = index, index * k
+        input_fact = replace(base.input_fact, step_triple=(
+            f"init:{sm_input}", *(f"init:{tid}" for tid in pm_inputs)))
+        output_fact = replace(base.output_fact, step_triple=(
+            f"sm:{sm_index}:0", *(f"pm:{pm_start + rank}:0" for rank in range(k))))
+        certificate = replace(
+            base, input_fact=input_fact, output_fact=output_fact,
+            sm_step_id=f"sm:{sm_index}:0",
+            pm_step_ids=tuple(f"pm:{pm_start + rank}:0" for rank in range(k)))
+        transition = replace(
+            rc.build_certificate_transition_specs(SimpleNamespace(), (certificate,))[0],
+            transition_id=f"{index:06d}:KRankTransposeRelationCertificate:transpose-sharded-k-rank",
+        )
+        pre = replace(base_pre, fact_id=f"fact_in_{index}", source=input_fact,
+                      sm_tid=sm_input, pm_tids=pm_inputs)
+        post = replace(base_post, fact_id=f"fact_out_{index}", source=output_fact,
+                       sm_tid=sm_output, pm_tids=pm_outputs)
+        certificates.append(certificate); transitions.append(transition)
+        records.extend((pre, post)); pre_ids.append(pre.fact_id); post_ids.append(post.fact_id)
+        sm_nodes.append(Node(0, "FW_transpose", [sm_input], [sm_output], list(params)))
+        pm_nodes.extend(Node(rank, "FW_transpose", [pm_inputs[rank]], [pm_outputs[rank]], list(params))
+                        for rank in range(k))
+    before = SimpleNamespace(state_id="state_pre", fact_ids=tuple(pre_ids))
+    after = SimpleNamespace(state_id="state_post", fact_ids=tuple(post_ids))
+    segment = SimpleNamespace(
+        segment_id=segment_id, transition_ids=tuple(item.transition_id for item in transitions),
+        sm_range=(0, len(specs)), pm_range=(0, len(specs) * k),
+        pre_state_id=before.state_id, post_state_id=after.state_id)
+    chain = SimpleNamespace(complete=True, relation_facts=tuple(records), authority_facts=(),
+                            states=(before, after), segments=(segment,))
+    ir = SimpleNamespace(sm_nodes=sm_nodes, pm_nodes=pm_nodes, sm_num_ranks=1,
+                         pm_num_ranks=k, sm_graph_ref="SyntheticTransposeMulti.gSM",
+                         pm_graph_ref="SyntheticTransposeMulti.gPM")
+    relation = SimpleNamespace(certificates=tuple(certificates),
+        transition_specs=tuple(transitions), dependent_chain_plan=chain)
+    return ir, relation, segment, tuple(records), before, after
+
+
+REAL_TWO_TRANSPOSES = (
+    ((1, 1024, 12, 64), (1, 1024, 12, 16), (1, 2)),
+    ((1, 1024, 12, 64), (1, 256, 12, 64), (1, 2)),
+)
+REAL_THREE_TRANSPOSES = (
+    ((2, 4, 5, 12), (2, 4, 5, 3), (2, 3)),
+    ((2, 4, 20, 3), (2, 4, 5, 3), (2, 3)),
+    ((2, 16, 5, 7), (2, 4, 5, 7), (2, 3)),
+)
+
+
+@pytest.mark.parametrize(("specs", "segment_id"), [
+    (REAL_TWO_TRANSPOSES, "segment_000069"),
+    (REAL_THREE_TRANSPOSES, "segment_000113"),
+])
+def test_closed_sharded_transpose_renderer_replays_positive_atomic_tuple_once(specs, segment_id):
+    ir, relation, segment, *_ = _closed_multi_fixture(specs, segment_id=segment_id)
+    source = composer.render_closed_segment(ir, relation, segment.segment_id)
+    n, k = len(specs), ir.pm_num_ranks
+    assert source.count("let smFinal :=") == 1
+    assert source.count("let pmFinal :=") == 1
+    assert source.count("foldl_faithful_middle_writer") == n * (k + 1)
+    assert source.count("applyNode_fw_transposeAxes_out") == n * (k + 1)
+    assert source.count("have htransport") == n
+    assert source.count("have hout") == n
+    assert source.count('op := "OpName.FW_transpose"') == n * (k + 1)
+    assert "rankCount = 4" not in source
+
+
+def test_closed_sharded_transpose_dispatch_and_imports_accept_mixed_tuple():
+    ir, relation, segment, *_ = _closed_multi_fixture(REAL_TWO_TRANSPOSES)
+    source = composer.render_closed_segment(ir, relation, segment.segment_id)
+    assert "fw_transposeAxes_1_2_dim3_rank4 hin0" in source
+    assert "fw_transposeAxes_1_2_dim2_to_dim1_rank4 hin1" in source
+    family = tuple(item.rule_id for item in relation.transition_specs)
+    theorems = tuple(item.lean_theorem for item in relation.transition_specs)
+    assert composer._closed_segment_family_imports(family, theorems) == (
+        "denote.KRankTranspose",)
+
+
+@pytest.mark.parametrize("mutation", ["order", "duplicate-transition", "footprint", "tamper"])
+def test_closed_sharded_transpose_multi_rejects_order_duplicate_footprint_and_tamper(mutation):
+    ir, relation, segment, *_ = _closed_multi_fixture(REAL_TWO_TRANSPOSES)
+    if mutation == "order":
+        segment.transition_ids = tuple(reversed(segment.transition_ids))
+    elif mutation == "duplicate-transition":
+        segment.transition_ids = (segment.transition_ids[0],) * 2
+    elif mutation == "footprint":
+        relation.transition_specs = (
+            replace(relation.transition_specs[0], pm_node_indices=(1, 2, 3, 4)),
+            relation.transition_specs[1])
+    else:
+        ir.pm_nodes[5].params = [2, 3]
+    with pytest.raises(ValueError):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
+
+
+def test_closed_sharded_transpose_multi_rejects_duplicate_exact_certificate():
+    ir, relation, segment, *_ = _closed_multi_fixture(REAL_TWO_TRANSPOSES)
+    relation.certificates = (*relation.certificates, relation.certificates[1])
+    with pytest.raises(ValueError, match="requires one exact typed certificate"):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
+
+
+@pytest.mark.parametrize("mutation", ["omitted", "stale", "extra", "duplicate"])
+def test_closed_sharded_transpose_multi_rejects_inexact_post_state(mutation):
+    ir, relation, segment, _, before, after = _closed_multi_fixture(REAL_TWO_TRANSPOSES)
+    if mutation == "omitted": after.fact_ids = after.fact_ids[:-1]
+    elif mutation == "stale": after.fact_ids = (*after.fact_ids, before.fact_ids[0])
+    elif mutation == "extra": after.fact_ids = (*after.fact_ids, "fact_unproved")
+    else: after.fact_ids = (*after.fact_ids, after.fact_ids[0])
+    with pytest.raises(ValueError):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
+
+
 def _witness_namespace(namespace, output_full, output_shard):
     ir, relation, segment, pre, post = _closed_fixture(
         k=3, output_full=output_full, output_shard=output_shard, params=(2, 3)
@@ -406,6 +530,44 @@ end {namespace}
 '''
 
 
+def _multi_witness_namespace(namespace, specs, segment_id):
+    ir, relation, segment, records, before, after = _closed_multi_fixture(
+        specs, k=4, segment_id=segment_id
+    )
+    ir.sm_graph_ref = f"{namespace}.gSM"
+    ir.pm_graph_ref = f"{namespace}.gPM"
+    rendered = composer.render_closed_segment(ir, relation, segment.segment_id)
+    sm_nodes = ", ".join(composer._node_text(node) for node in ir.sm_nodes)
+    pm_nodes = ", ".join(composer._node_text(node) for node in ir.pm_nodes)
+    fact_lines = []
+    for record in records:
+        fact_lines.append(
+            f"def {record.fact_id} : RelationFact := .sharded {record.sm_tid} "
+            f"{list(record.pm_tids)} {record.gather_dim} {list(record.full_shape)} "
+            f"{list(record.shard_shape)}"
+        )
+    return f'''namespace {namespace}
+noncomputable section
+set_option maxHeartbeats 1000000
+
+def gSM : GraphDecl := {{ numRanks := 1, nodes := [{sm_nodes}] }}
+def gPM : GraphDecl := {{ numRanks := 4, nodes := [{pm_nodes}] }}
+
+{chr(10).join(fact_lines)}
+def state_pre : RelationState where
+  facts := [{', '.join(before.fact_ids)}]
+  nonempty := by decide
+def state_post : RelationState where
+  facts := [{', '.join(after.fact_ids)}]
+  nonempty := by decide
+
+{rendered}
+#print axioms {segment_id}
+end
+end {namespace}
+'''
+
+
 def _witness_source():
     families = (
         ("SyntheticTranspose23Dim2To3", (2, 4, 5, 9), (2, 4, 5, 3)),
@@ -413,6 +575,12 @@ def _witness_source():
         ("SyntheticTranspose23Dim1", (2, 12, 5, 7), (2, 4, 5, 7)),
     )
     bodies = "\n".join(_witness_namespace(*family) for family in families)
+    bodies += _multi_witness_namespace(
+        "SyntheticTransposeRealSegment69", REAL_TWO_TRANSPOSES, "segment_000069"
+    )
+    bodies += _multi_witness_namespace(
+        "SyntheticTransposeRealSegment113", REAL_THREE_TRANSPOSES, "segment_000113"
+    )
     return f'''import denote.KRankTranspose23Extra
 
 namespace TrainVerify.Denote
@@ -430,9 +598,13 @@ def test_generated_sharded_transpose_witness_is_exact_renderer_output():
     witness.write_text(source, encoding="utf-8")
     assert witness.read_text(encoding="utf-8") == source
     assert source.count("import denote.KRankTranspose23Extra") == 1
-    assert source.count('op := "OpName.FW_transpose"') == 24
-    assert source.count("applyNode_fw_transposeAxes_out") == 12
+    assert source.count('op := "OpName.FW_transpose"') == 74
+    assert source.count("applyNode_fw_transposeAxes_out") == 37
+    assert source.count("let smFinal :=") == 5
+    assert source.count("let pmFinal :=") == 5
     assert source.count("#print axioms segment_000000") == 3
+    assert source.count("#print axioms segment_000069") == 1
+    assert source.count("#print axioms segment_000113") == 1
     assert "fw_transposeAxes_2_3_dim2_to_dim3_rank4 hin" in source
     assert "fw_transposeAxes_2_3_dim3_to_dim2_rank4 hin" in source
     assert "fw_transposeAxes_2_3_dim1_rank4 hin" in source
