@@ -2050,6 +2050,24 @@ def _write_snapshot_stage(root: Path) -> Path:
     return stage
 
 
+def test_emitter_snapshot_stage_accepts_explicit_registry_goal_set(tmp_path):
+    stage = _write_snapshot_stage(tmp_path)
+    extra = stage / "yoco_goals" / "RegistryOnly.lean"
+    extra.write_bytes(b"theorem registry_only : True := by trivial\n")
+    extra.chmod(0o400)
+    manifest_path = stage / "GeneratedYOCOMoE.manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["snapshot_sha256"]["yoco_goals/RegistryOnly.lean"] = emitter.sha256(extra)
+    manifest_path.chmod(0o600)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    manifest_path.chmod(0o400)
+    with pytest.raises(RuntimeError, match="unexpected yoco_goals paths"):
+        emitter.verify_snapshot_stage(stage)
+    emitter.verify_snapshot_stage(
+        stage, emitter.EXPECTED_GOAL_MODULES | {"RegistryOnly.lean"}
+    )
+
+
 def test_emitter_snapshot_stage_ledger_is_exact_and_fail_closed(tmp_path):
     stage = _write_snapshot_stage(tmp_path / "valid")
     emitter.verify_snapshot_stage(stage)

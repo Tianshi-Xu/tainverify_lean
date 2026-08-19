@@ -722,7 +722,12 @@ def _read_regular_at(directory_fd: int, name: str) -> bytes:
         os.close(descriptor)
 
 
-def verify_snapshot_fd(stage_fd: int) -> None:
+def verify_snapshot_fd(
+    stage_fd: int, expected_goal_modules: set[str] | None = None,
+) -> None:
+    expected_goal_modules = (
+        EXPECTED_GOAL_MODULES if expected_goal_modules is None else expected_goal_modules
+    )
     top_entries = set(os.listdir(stage_fd))
     expected_top = {
         ".trainverify-stage-owner", "GeneratedYOCOMoE.manifest.json", "yoco_goals",
@@ -751,10 +756,10 @@ def verify_snapshot_fd(stage_fd: int) -> None:
     )
     try:
         goal_entries = set(os.listdir(goals_fd))
-        if goal_entries != EXPECTED_GOAL_MODULES:
+        if goal_entries != expected_goal_modules:
             raise RuntimeError(f"unexpected yoco_goals paths: {sorted(goal_entries)}")
         expected_ledger = GENERATED_AUTHORITY_MODULES | {
-            f"yoco_goals/{name}" for name in EXPECTED_GOAL_MODULES
+            f"yoco_goals/{name}" for name in expected_goal_modules
         } | REGISTERED_TOP_LEVEL_MODULES
         if set(ledger) != expected_ledger:
             raise RuntimeError("snapshot manifest path ledger is not exact")
@@ -765,7 +770,7 @@ def verify_snapshot_fd(stage_fd: int) -> None:
         for name in sorted(REGISTERED_TOP_LEVEL_MODULES):
             if ledger.get(name) != digest_bytes(_read_regular_at(stage_fd, name)):
                 raise RuntimeError(f"snapshot top-level Lean digest mismatch: {name}")
-        for name in sorted(EXPECTED_GOAL_MODULES):
+        for name in sorted(expected_goal_modules):
             digest = ledger.get(f"yoco_goals/{name}")
             if not _is_lower_hex(digest, 64):
                 raise RuntimeError(f"invalid snapshot digest: {name}")
@@ -775,10 +780,12 @@ def verify_snapshot_fd(stage_fd: int) -> None:
         os.close(goals_fd)
 
 
-def verify_snapshot_stage(stage: Path) -> None:
+def verify_snapshot_stage(
+    stage: Path, expected_goal_modules: set[str] | None = None,
+) -> None:
     stage_fd = os.open(stage, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
-        verify_snapshot_fd(stage_fd)
+        verify_snapshot_fd(stage_fd, expected_goal_modules)
     finally:
         os.close(stage_fd)
 
@@ -1290,6 +1297,16 @@ def _remove_deprecated_generated_auxiliaries(stage: Path) -> None:
             path.unlink()
 
 
+def expected_snapshot_goal_modules(registry: dict) -> set[str]:
+    modules = registry.get("modules")
+    if not isinstance(modules, dict):
+        raise RuntimeError("proof registry modules are unavailable for snapshot policy")
+    registry_goals = set(modules) - REGISTERED_TOP_LEVEL_MODULES
+    return (
+        EXPECTED_GOAL_MODULES | registry_goals
+    ) - DEPRECATED_GENERATED_AUXILIARY_MODULES
+
+
 def materialize_registered_proofs(
     repo: Path, revision: str, stage: Path, registry: dict,
 ) -> None:
@@ -1754,14 +1771,17 @@ def main():
         if git_head(ROOT) != emitter_revision or not git_clean(ROOT):
             raise RuntimeError("emitter TrainVerify revision changed during emission")
         seal_snapshot_files(stage)
-        verify_snapshot_stage(stage)
+        snapshot_goal_modules = expected_snapshot_goal_modules(proof_registry)
+        verify_snapshot_stage(stage, snapshot_goal_modules)
         validate_lean_snapshot(
             stage, args.lean_project, emitter_revision,
             proof_registry["proof_targets"],
         )
         if git_head(ROOT) != emitter_revision or not git_clean(ROOT):
             raise RuntimeError("emitter TrainVerify revision changed during Lean validation")
-        publication_validator = verify_snapshot_fd
+        publication_validator = lambda directory_fd: verify_snapshot_fd(
+            directory_fd, snapshot_goal_modules
+        )
         if args.content_addressed:
             expected_manifest_sha256 = sha256(
                 stage / "GeneratedYOCOMoE.manifest.json"
@@ -1771,7 +1791,7 @@ def main():
             )
 
             def validate_content_addressed_snapshot(directory_fd: int) -> None:
-                verify_snapshot_fd(directory_fd)
+                verify_snapshot_fd(directory_fd, snapshot_goal_modules)
                 require_manifest_digest_fd(directory_fd, expected_manifest_sha256)
                 require_sealed_regular_modes_fd(directory_fd)
 
