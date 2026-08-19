@@ -9298,12 +9298,25 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         return render_closed_k_rank_vocab_embedding_segment(ir, relation, segment_id)
     if family == ("sum-producer-sharded-k-rank-dim1",):
         return render_closed_k_rank_sum_producer_segment(ir, relation, segment_id)
-    if family == ("linear-reduction-producer-k-rank",):
+    reduction_prefix = (
+        family[:-1]
+        if family and family[-1] == "allgather-reconstruction-k-rank"
+        else family
+    )
+    if reduction_prefix and all(
+        item == "linear-reduction-producer-k-rank" for item in reduction_prefix
+    ):
         try:
-            from .reduction_linear_renderer import render_closed_k_rank_reduction_linear_segment
+            from .reduction_linear_tuple_renderer import (
+                render_closed_k_rank_reduction_linear_tuple_segment,
+            )
         except ImportError:
-            from reduction_linear_renderer import render_closed_k_rank_reduction_linear_segment
-        return render_closed_k_rank_reduction_linear_segment(ir, relation, segment_id)
+            from reduction_linear_tuple_renderer import (
+                render_closed_k_rank_reduction_linear_tuple_segment,
+            )
+        return render_closed_k_rank_reduction_linear_tuple_segment(
+            ir, relation, segment_id
+        )
     if (
         len(family) >= 2
         and all(item == "linear-reduction-producer-k-rank" for item in family[:-1])
