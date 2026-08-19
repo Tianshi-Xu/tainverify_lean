@@ -7852,7 +7852,7 @@ def render_closed_k_rank_multiref_segment(ir: GoalIR, relation, segment_id: str)
         f"    let pmNodes : List NodeDecl := {pm_nodes_name}",
         f"    let pmTids : List Tid := {pm_tids_text}",
         "    let rankCount := pmTids.length",
-        f"    have hRankCount : rankCount = {ir.pm_graph_ref}.numRanks := by native_decide",
+        f"    have hRankCount : rankCount = {ir.pm_graph_ref}.numRanks := by rfl",
         f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore",
         f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
         f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
@@ -8092,7 +8092,7 @@ def render_closed_k_rank_full_producer_chunks_segment(
         f"    let pmNodes : List NodeDecl := {pm_text}",
         f"    let pmTids : List Tid := {tids_text}",
         "    let rankCount := pmTids.length",
-        f"    have hRankCount : rankCount = {ir.pm_graph_ref}.numRanks := by native_decide",
+        f"    have hRankCount : rankCount = {ir.pm_graph_ref}.numRanks := by rfl",
         f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore",
         f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
         f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",
@@ -8216,7 +8216,7 @@ def render_closed_k_rank_alltoall_segment(ir: GoalIR, relation, segment_id: str)
         "    intro smStore pmStore hstate", "    let smNodes : List NodeDecl := []",
         f"    let pmNodes : List NodeDecl := {pm_text}", f"    let inputTids : List Tid := {input_text}",
         f"    let pmTids : List Tid := {output_text}", "    let rankCount := pmTids.length",
-        f"    have hRankCount : rankCount = {ir.pm_graph_ref}.numRanks := by native_decide",
+        f"    have hRankCount : rankCount = {ir.pm_graph_ref}.numRanks := by rfl",
         "    let xs := inputTids.map pmStore",
         "    have hRankCountXs : rankCount = xs.length := by simp [rankCount, pmTids, xs, inputTids]",
         f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore",
@@ -9137,7 +9137,7 @@ def render_closed_mixed_k_rank_embedding_segment(ir: GoalIR, relation, segment_i
     vs_w, vs_o = list_text(vocab_pre.pm_tids), list_text(vocab_post.pm_tids)
     shape = lambda xs: _shape_text(list(xs))
     lines = [
-        "set_option maxHeartbeats 800000 in", f"private def {segment_id} :",
+        "set_option maxHeartbeats 500000 in", f"private def {segment_id} :",
         f"    ClosedDepSegmentCertificate {ir.sm_graph_ref} {ir.pm_graph_ref} {before.state_id} {after.state_id} where",
         f"  smNodes := {sm_text}", f"  pmNodes := {pm_text}", "  sound := by",
         "    intro smStore pmStore hstate", f"    let smNodes : List NodeDecl := {sm_text}",
@@ -9934,7 +9934,32 @@ def render_closed_public_theorem(
         raise ValueError("joined terminal shape does not match public lineage")
 
     external = render_closed_external_initial_state(ir, relation, namespace)
-    _, call_args, contract_names = _external_contract_arguments(ir)
+    argument_decls, call_args, contract_names = _external_contract_arguments(ir)
+    uses_contract_wrapper = bool(ir.public_statement_uses_contract_wrapper)
+    uses_faithful_evaluator = bool(
+        getattr(ir, "public_statement_uses_faithful_evaluator", False)
+    )
+    if not uses_contract_wrapper and (
+        ir.sm_input_value_classes
+        or ir.pm_input_value_classes
+        or ir.packed_cu_contracts
+        or ir.tensor_value_bound_contracts
+    ):
+        raise ValueError(
+            "contract-free public statement cannot discharge nonempty external contracts"
+        )
+    generated_ns = "TrainVerify.Denote.Generated"
+    if uses_contract_wrapper:
+        public_preamble = [
+            "  intro initSM initPM hSM hPM hInit hContract",
+            f"  rcases hContract with ⟨{', '.join(contract_names)}⟩",
+        ]
+    else:
+        public_preamble = [
+            ("  intro initSM initPM hSM hPM hInit hFaithfulContract"
+             if uses_faithful_evaluator
+             else "  intro initSM initPM hSM hPM hInit")
+        ]
     statement = getattr(ir, "public_statement_ref", "")
     if not statement:
         raise ValueError("public theorem requires an exact parsed statement reference")
@@ -9942,40 +9967,112 @@ def render_closed_public_theorem(
     if not goal:
         raise ValueError("public theorem requires an exact parsed lineage reference")
     chain_name = f"{namespace}_chain"
+    sm_store = f"denoteGraphDistributedFaithful {ir.sm_graph_ref} initSM"
     pm_store = f"denoteGraphDistributedFaithful {ir.pm_graph_ref} initPM"
     joined_tid = target.joined_pm_tid
+    target_helper = [
+        (f"@[irreducible] private def {namespace}_target_statement "
+         "(initSM initPM : Store) : Prop :="),
+        f"  {target.fact_id}.Holds ({sm_store}) ({pm_store})",
+        f"private theorem {namespace}_target_from_external_inputs",
+        argument_decls,
+        f"    : {namespace}_target_statement initSM initPM := by",
+        f"  unfold {namespace}_target_statement",
+        f"  have hpre := {namespace}_initial_state {call_args}",
+        "  exact faithful_closed_dep_chain_extract",
+        f"    {ir.sm_graph_ref} {ir.pm_graph_ref} {chain_name}",
+        "    initSM initPM hpre",
+        f"    {chain_name}_sm_nodes {chain_name}_pm_nodes",
+        f"    {target.fact_id} (by native_decide)",
+    ]
+    if target.kind == "joined":
+        target_publication = [
+            "  rcases htarget with ⟨hvalue, hsmShape, hpmShape⟩",
+            "  refine ⟨hsmShape, ?_, ?_⟩",
+            (f"  · change [({pm_store} {joined_tid}).shape] = "
+             f"[{_lean_shape_tuple(target.full_shape)}]"),
+            "    simpa only [hpmShape]",
+            (f"  · rw [reconstructForGoal_of_not_replicated {goal} "
+             f"{ir.pm_graph_ref}.numRanks _ rfl]"),
+            (f"    simpa only [{goal}, List.map, reconstructWithDim_singleton] "
+             "using hvalue"),
+        ]
+    else:
+        target_publication = [
+            "  refine ⟨htarget.full_shape, ?_, ?_⟩",
+            (f"  · change [({pm_store} {joined_tid}).shape] = "
+             f"[{_lean_shape_tuple(target.full_shape)}]"),
+            "    rw [← htarget.public_value, htarget.full_shape]",
+            (f"  · rw [reconstructForGoal_of_not_replicated {goal} "
+             f"{ir.pm_graph_ref}.numRanks _ rfl]"),
+            (f"    simpa only [{goal}, List.map, reconstructWithDim_singleton] "
+             "using htarget.public_value"),
+        ]
+    public_body = [
+        (f"@[irreducible] private def {namespace}_public_body_statement "
+         "(initSM initPM : Store) : Prop :="),
+        f"  let smStore := denoteGraphDistributedFaithful {ir.sm_graph_ref} initSM",
+        f"  let pmStore := denoteGraphDistributedFaithful {ir.pm_graph_ref} initPM",
+        f"  let ts := smStore {goal}.ts",
+        f"  let tps := {goal}.tps.map (fun p => pmStore p.tid)",
+        f"  ts.shape = {goal}.tsShape ∧",
+        f"    (tps.map (fun t => t.shape)) = {goal}.tpShapes ∧",
+        f"    ts = reconstructForGoal {goal} {ir.pm_graph_ref}.numRanks tps",
+        f"private theorem {namespace}_public_body_proof",
+        argument_decls,
+        f"    : {namespace}_public_body_statement initSM initPM := by",
+        f"  unfold {namespace}_public_body_statement",
+        f"  have htarget := {namespace}_target_from_external_inputs {call_args}",
+        f"  unfold {namespace}_target_statement {target.fact_id} RelationFact.Holds at htarget",
+        *target_publication,
+    ]
+    if uses_contract_wrapper:
+        public_contract_helpers = []
+        public_body_call = f"{namespace}_public_body_proof {call_args}"
+    else:
+        public_contract_helpers = [
+            f"private theorem {namespace}_public_from_shapes",
+            "    (initSM initPM : Store)",
+            f"    (hSM : StoreShapesHold initSM {ir.sm_graph_ref}InitEnv)",
+            f"    (hPM : StoreShapesHold initPM {ir.pm_graph_ref}InitEnv)",
+            (f"    (hInit : InitGoalsHold {ir.pm_graph_ref}.numRanks "
+             f"{ir.init_goals_ref} initSM initPM)"),
+            f"    : {namespace}_public_body_statement initSM initPM := by",
+            (f"  have hSMValues : InputValueClassesHold "
+             f"{generated_ns}.smInputValueClasses initSM := by"),
+            f"    simp [{generated_ns}.smInputValueClasses, InputValueClassesHold]",
+            (f"  have hPMValues : InputValueClassesHold "
+             f"{generated_ns}.pmInputValueClasses initPM := by"),
+            f"    simp [{generated_ns}.pmInputValueClasses, InputValueClassesHold]",
+            f"  exact {namespace}_public_body_proof {call_args}",
+        ]
+        public_body_call = (
+            f"{namespace}_public_from_shapes initSM initPM hSM hPM hInit"
+        )
     lines = [
         external.rstrip(),
         "",
-        f"theorem prove_goal_{ir.n}_closed : {statement} := by",
+        *target_helper,
+        "",
+        *public_body,
+        "",
+        *public_contract_helpers,
+        "",
+        f"@[irreducible] private def {namespace}_public_statement : Prop := {statement}",
+        f"private theorem {namespace}_public_proof : {namespace}_public_statement := by",
+        f"  unfold {namespace}_public_statement",
         f"  unfold {statement}",
         *(
             ["  unfold CoarseLineageHoldsWithInitDistributedFaithfulWithContract"]
             if ir.public_statement_uses_contract_wrapper else []
         ),
-        "  intro initSM initPM hSM hPM hInit hContract",
-        f"  rcases hContract with ⟨{', '.join(contract_names)}⟩",
-        f"  have hpre := {namespace}_initial_state {call_args}",
-        "  have htarget := faithful_closed_dep_chain_extract",
-        f"    {ir.sm_graph_ref} {ir.pm_graph_ref} {chain_name}",
-        "    initSM initPM hpre",
-        f"    {chain_name}_sm_nodes {chain_name}_pm_nodes",
-        f"    {target.fact_id} (by native_decide)",
-        f"  unfold {target.fact_id} RelationFact.Holds at htarget",
-        "  refine ⟨htarget.full_shape, ?_, ?_⟩",
-        (
-            f"  · change [({pm_store} {joined_tid}).shape] = "
-            f"[{_lean_shape_tuple(target.full_shape)}]"
-        ),
-        "    rw [← htarget.public_value, htarget.full_shape]",
-        (
-            f"  · rw [reconstructForGoal_of_not_replicated {goal} "
-            f"{ir.pm_graph_ref}.numRanks _ rfl]"
-        ),
-        (
-            f"    simpa only [{goal}, List.map, reconstructWithDim_singleton] "
-            "using htarget.public_value"
-        ),
+        *public_preamble,
+        (f"  simpa only [{namespace}_public_body_statement] using "
+         f"{public_body_call}"),
+        "",
+        f"theorem prove_goal_{ir.n}_closed : {statement} := by",
+        (f"  simpa only [{namespace}_public_statement] using "
+         f"{namespace}_public_proof"),
     ]
     return "\n".join(lines) + "\n"
 

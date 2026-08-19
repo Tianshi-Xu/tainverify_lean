@@ -48,8 +48,9 @@ private def segment_generic :
     intro smStore pmStore hstate
     let smNodes : List NodeDecl := []
     let pmNodes : List NodeDecl := [{ rank := 0, op := "OpName.AllToAllPrim", ins := [1000, 1001, 1002], outs := [2000], params := [1, 2] }, { rank := 0, op := "OpName.AllToAllPrim", ins := [1100, 1101, 1102], outs := [2100], params := [1, 2] }, { rank := 1, op := "OpName.AllToAllPrim", ins := [1000, 1001, 1002], outs := [2001], params := [1, 2] }, { rank := 1, op := "OpName.AllToAllPrim", ins := [1100, 1101, 1102], outs := [2101], params := [1, 2] }, { rank := 2, op := "OpName.AllToAllPrim", ins := [1000, 1001, 1002], outs := [2002], params := [1, 2] }, { rank := 2, op := "OpName.AllToAllPrim", ins := [1100, 1101, 1102], outs := [2102], params := [1, 2] }]
-    let rankCount := [1000, 1001, 1002].length
-    have hRankCount : rankCount = TrainVerify.Denote.GeneratedKRankAllToAllTupleAtomicWitness.pmGraph.numRanks := by native_decide
+    let pmTids : List Tid := [2000, 2001, 2002]
+    let rankCount := pmTids.length
+    have hRankCount : rankCount = TrainVerify.Denote.GeneratedKRankAllToAllTupleAtomicWitness.pmGraph.numRanks := by rfl
     let smFinal := smNodes.foldl (applyNodeDistributedFaithful TrainVerify.Denote.GeneratedKRankAllToAllTupleAtomicWitness.smGraph) smStore
     let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful TrainVerify.Denote.GeneratedKRankAllToAllTupleAtomicWitness.pmGraph) pmStore
     have hframe : state_pre.Holds smFinal pmFinal := by
@@ -61,7 +62,7 @@ private def segment_generic :
     let inputTids0 : List Tid := [1000, 1001, 1002]
     let outputTids0 : List Tid := [2000, 2001, 2002]
     let xs0 := inputTids0.map pmStore
-    have hRankCountXs0 : rankCount = xs0.length := by simp [inputTids0, outputTids0, xs0, rankCount]
+    have hRankCountXs0 : rankCount = xs0.length := by simp [pmTids, inputTids0, outputTids0, xs0, rankCount]
     have hin0 : pre_0.Holds smStore pmStore := hstate pre_0 (by native_decide)
     change ShardedRel (smStore 10) xs0 1 [2, 9, 15] [2, 3, 15] at hin0
     have hHead0 : ((xs0.head?.map (fun t => t.shape)).getD []) = [2, 3, 15] := by
@@ -199,7 +200,7 @@ private def segment_generic :
     let inputTids1 : List Tid := [1100, 1101, 1102]
     let outputTids1 : List Tid := [2100, 2101, 2102]
     let xs1 := inputTids1.map pmStore
-    have hRankCountXs1 : rankCount = xs1.length := by simp [inputTids1, outputTids1, xs1, rankCount]
+    have hRankCountXs1 : rankCount = xs1.length := by simp [pmTids, inputTids1, outputTids1, xs1, rankCount]
     have hin1 : pre_1.Holds smStore pmStore := hstate pre_1 (by native_decide)
     change ShardedRel (smStore 11) xs1 1 [2, 9, 15] [2, 3, 15] at hin1
     have hHead1 : ((xs1.head?.map (fun t => t.shape)).getD []) = [2, 3, 15] := by

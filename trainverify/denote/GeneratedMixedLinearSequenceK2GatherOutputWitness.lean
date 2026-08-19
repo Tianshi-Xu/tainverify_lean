@@ -187,7 +187,7 @@ private theorem segment_synthetic_pm_a2a_writer_0_0 (pmStore : Store) :
   · intro t
     rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
     simp only [applyNodeDistributedFaithful, applyNodeDistributed, applyNodeRingAttn]
-    have hRankCount : rankCount = TrainVerify.Denote.GeneratedMixedLinearSequenceK2GatherOutputWitness.pmGraph.numRanks := by native_decide
+    have hRankCount : rankCount = TrainVerify.Denote.GeneratedMixedLinearSequenceK2GatherOutputWitness.pmGraph.numRanks := by rfl
     rw [hRankCount]
     simpa [inputTids] using applyNode_allToAllPrimWithDims_out TrainVerify.Denote.GeneratedMixedLinearSequenceK2GatherOutputWitness.pmGraph t 0 inputTids 212 1 2
   · native_decide
@@ -222,7 +222,7 @@ private theorem segment_synthetic_pm_a2a_writer_0_1 (pmStore : Store) :
   · intro t
     rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
     simp only [applyNodeDistributedFaithful, applyNodeDistributed, applyNodeRingAttn]
-    have hRankCount : rankCount = TrainVerify.Denote.GeneratedMixedLinearSequenceK2GatherOutputWitness.pmGraph.numRanks := by native_decide
+    have hRankCount : rankCount = TrainVerify.Denote.GeneratedMixedLinearSequenceK2GatherOutputWitness.pmGraph.numRanks := by rfl
     rw [hRankCount]
     simpa [inputTids] using applyNode_allToAllPrimWithDims_out TrainVerify.Denote.GeneratedMixedLinearSequenceK2GatherOutputWitness.pmGraph t 1 inputTids 213 1 2
   · native_decide
@@ -459,7 +459,7 @@ private theorem segment_synthetic_transition_1_a2a (smStore pmStore : Store)
     let inputTids0 : List Tid := [210, 211]
     let outputTids0 : List Tid := [212, 213]
     let rankCount0 := outputTids0.length
-    have hRankCount0 : rankCount0 = TrainVerify.Denote.GeneratedMixedLinearSequenceK2GatherOutputWitness.pmGraph.numRanks := by native_decide
+    have hRankCount0 : rankCount0 = TrainVerify.Denote.GeneratedMixedLinearSequenceK2GatherOutputWitness.pmGraph.numRanks := by rfl
     let xs0 := inputTids0.map pmFinal
     have hHead0 : ((xs0.head?.map (fun t => t.shape)).getD []) = [2, 3, 6] := by
       simp only [xs0, inputTids0, List.map, List.head?, Option.map, Option.getD]

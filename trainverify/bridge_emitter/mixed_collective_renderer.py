@@ -153,7 +153,7 @@ def render_closed_k_rank_alltoall_allgather_segment(ir, relation, segment_id):
         "    intro smStore pmStore hstate", "    let smNodes : List NodeDecl := []",
         f"    let pmNodes : List NodeDecl := {pm_text}",
         f"    let rankCount := {_tid_list_text(list(g_pre.pm_tids))}.length",
-        f"    have hRankCount : rankCount = {ir.pm_graph_ref}.numRanks := by native_decide",
+        f"    have hRankCount : rankCount = {ir.pm_graph_ref}.numRanks := by rfl",
         f"    let smFinal := smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore",
         f"    let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful {ir.pm_graph_ref}) pmStore",
         f"    have hframe : {before.state_id}.Holds smFinal pmFinal := by",

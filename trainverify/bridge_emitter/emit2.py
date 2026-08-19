@@ -321,7 +321,7 @@ def run_probe_all(imports, sm_tids, pm_tids, timeout=900, multi_out=False):
     imports = [m for m in imports if _has_olean(m)]
     header = ("\n".join(f"import {m}" for m in imports) + "\n"
               "set_option maxRecDepth 100000\n"
-              "set_option maxHeartbeats 4000000\n"
+              "set_option maxHeartbeats 500000\n"
               "namespace TrainVerify.Denote.GeneratedGoals\n"
               "open TrainVerify.Denote TrainVerify.Denote.Generated\n")
     # For multi-output nodes (e.g. FW_multiref outs=[t1,t2], FW_inner_chunk_ce

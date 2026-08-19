@@ -182,7 +182,8 @@ def synthetic_closed_reduction_linear(*, rank_count=3, rank3=True):
         lean_theorem=theorem,
     )
     transition = CertificateTransitionSpec(
-        "transition", certificate.rule_id, (activation_spec, weight_spec), (output_spec,),
+        "transition", certificate.rule_id,
+        tuple(sorted((activation_spec, weight_spec))), (output_spec,),
         (0,), tuple(range(rank_count)), theorem,
     )
     anchor = ClosedTensorShapeFactRecord(
@@ -229,9 +230,9 @@ def test_closed_renderer_owns_exact_linear_writers_and_is_dynamic():
     ir, relation = synthetic_closed_reduction_linear(rank_count=3, rank3=True)
     source = render_closed_segment(ir, relation, "segment_000000")
     assert "fw_linear_allGather_eq_allReduce_fw_linear_chunk_3d" in source
-    assert "let rankCount := pmActivationTids.length" in source
-    assert "pmActivationTids : List Tid := [20, 21, 22]" in source
-    assert "pmWeightTids : List Tid := [30, 31, 32]" in source
+    assert "let rankCount0 := pmActivationTids0.length" in source
+    assert "pmActivationTids0 : List Tid := [20, 21, 22]" in source
+    assert "pmWeightTids0 : List Tid := [30, 31, 32]" in source
     assert source.count('op := "OpName.FW_linear"') >= 8
     assert "rankCount = 3" not in source
     assert "ChunkPrim" not in source

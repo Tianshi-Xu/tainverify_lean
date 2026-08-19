@@ -307,7 +307,7 @@ end
 end SyntheticTranspose23Dim1
 namespace SyntheticTransposeRealSegment69
 noncomputable section
-set_option maxHeartbeats 1000000
+set_option maxHeartbeats 500000
 
 def gSM : GraphDecl := { numRanks := 1, nodes := [{ rank := 0, op := "OpName.FW_transpose", ins := [1000], outs := [1010], params := [1, 2] }, { rank := 0, op := "OpName.FW_transpose", ins := [1100], outs := [1110], params := [1, 2] }] }
 def gPM : GraphDecl := { numRanks := 4, nodes := [{ rank := 0, op := "OpName.FW_transpose", ins := [2000], outs := [3000], params := [1, 2] }, { rank := 1, op := "OpName.FW_transpose", ins := [2001], outs := [3001], params := [1, 2] }, { rank := 2, op := "OpName.FW_transpose", ins := [2002], outs := [3002], params := [1, 2] }, { rank := 3, op := "OpName.FW_transpose", ins := [2003], outs := [3003], params := [1, 2] }, { rank := 0, op := "OpName.FW_transpose", ins := [2100], outs := [3100], params := [1, 2] }, { rank := 1, op := "OpName.FW_transpose", ins := [2101], outs := [3101], params := [1, 2] }, { rank := 2, op := "OpName.FW_transpose", ins := [2102], outs := [3102], params := [1, 2] }, { rank := 3, op := "OpName.FW_transpose", ins := [2103], outs := [3103], params := [1, 2] }] }
@@ -497,7 +497,7 @@ end
 end SyntheticTransposeRealSegment69
 namespace SyntheticTransposeRealSegment113
 noncomputable section
-set_option maxHeartbeats 1000000
+set_option maxHeartbeats 500000
 
 def gSM : GraphDecl := { numRanks := 1, nodes := [{ rank := 0, op := "OpName.FW_transpose", ins := [1000], outs := [1010], params := [2, 3] }, { rank := 0, op := "OpName.FW_transpose", ins := [1100], outs := [1110], params := [2, 3] }, { rank := 0, op := "OpName.FW_transpose", ins := [1200], outs := [1210], params := [2, 3] }] }
 def gPM : GraphDecl := { numRanks := 4, nodes := [{ rank := 0, op := "OpName.FW_transpose", ins := [2000], outs := [3000], params := [2, 3] }, { rank := 1, op := "OpName.FW_transpose", ins := [2001], outs := [3001], params := [2, 3] }, { rank := 2, op := "OpName.FW_transpose", ins := [2002], outs := [3002], params := [2, 3] }, { rank := 3, op := "OpName.FW_transpose", ins := [2003], outs := [3003], params := [2, 3] }, { rank := 0, op := "OpName.FW_transpose", ins := [2100], outs := [3100], params := [2, 3] }, { rank := 1, op := "OpName.FW_transpose", ins := [2101], outs := [3101], params := [2, 3] }, { rank := 2, op := "OpName.FW_transpose", ins := [2102], outs := [3102], params := [2, 3] }, { rank := 3, op := "OpName.FW_transpose", ins := [2103], outs := [3103], params := [2, 3] }, { rank := 0, op := "OpName.FW_transpose", ins := [2200], outs := [3200], params := [2, 3] }, { rank := 1, op := "OpName.FW_transpose", ins := [2201], outs := [3201], params := [2, 3] }, { rank := 2, op := "OpName.FW_transpose", ins := [2202], outs := [3202], params := [2, 3] }, { rank := 3, op := "OpName.FW_transpose", ins := [2203], outs := [3203], params := [2, 3] }] }

@@ -6,7 +6,7 @@ namespace TrainVerify.Denote
 open RelationCompiler
 namespace SyntheticMixedLayernormAllToAll
 noncomputable section
-set_option maxHeartbeats 1000000
+set_option maxHeartbeats 500000
 
 def gSM : GraphDecl := { numRanks := 1, nodes := [] }
 def gPM : GraphDecl := { numRanks := 4, nodes := [] }

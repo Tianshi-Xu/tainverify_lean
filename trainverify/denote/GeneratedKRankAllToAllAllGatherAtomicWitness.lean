@@ -55,7 +55,7 @@ private def segment_generic :
     let smNodes : List NodeDecl := []
     let pmNodes : List NodeDecl := [{ rank := 0, op := "OpName.AllToAllPrim", ins := [1000, 1001, 1002], outs := [2000], params := [1, 2] }, { rank := 0, op := "OpName.AllToAllPrim", ins := [1100, 1101, 1102], outs := [2100], params := [1, 2] }, { rank := 0, op := "OpName.AllGatherPrim", ins := [3000, 3001, 3002], outs := [3999], params := [1] }, { rank := 1, op := "OpName.AllToAllPrim", ins := [1000, 1001, 1002], outs := [2001], params := [1, 2] }, { rank := 1, op := "OpName.AllToAllPrim", ins := [1100, 1101, 1102], outs := [2101], params := [1, 2] }, { rank := 2, op := "OpName.AllToAllPrim", ins := [1000, 1001, 1002], outs := [2002], params := [1, 2] }, { rank := 2, op := "OpName.AllToAllPrim", ins := [1100, 1101, 1102], outs := [2102], params := [1, 2] }]
     let rankCount := [3000, 3001, 3002].length
-    have hRankCount : rankCount = TrainVerify.Denote.GeneratedKRankAllToAllAllGatherAtomicWitness.pmGraph.numRanks := by native_decide
+    have hRankCount : rankCount = TrainVerify.Denote.GeneratedKRankAllToAllAllGatherAtomicWitness.pmGraph.numRanks := by rfl
     let smFinal := smNodes.foldl (applyNodeDistributedFaithful TrainVerify.Denote.GeneratedKRankAllToAllAllGatherAtomicWitness.smGraph) smStore
     let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful TrainVerify.Denote.GeneratedKRankAllToAllAllGatherAtomicWitness.pmGraph) pmStore
     have hframe : state_pre.Holds smFinal pmFinal := by

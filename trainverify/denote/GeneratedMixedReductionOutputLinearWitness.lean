@@ -6,7 +6,7 @@ namespace TrainVerify.Denote
 open RelationCompiler
 namespace SyntheticReductionOutput
 noncomputable section
-set_option maxHeartbeats 1000000
+set_option maxHeartbeats 500000
 
 def gSM : GraphDecl := { numRanks := 1, nodes := [] }
 def gPM : GraphDecl := { numRanks := 3, nodes := [] }
@@ -26,11 +26,11 @@ def state_post : RelationState where
   facts := [fact_reduction_output_0,fact_reduction_output_1,fact_final]
   nonempty := by decide
 
-set_option maxHeartbeats 1000000 in
+set_option maxHeartbeats 500000 in
 private def segment_atomic_sm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_linear", ins := [100, 300], outs := [500] }, { rank := 0, op := "OpName.FW_linear", ins := [101, 301], outs := [501] }, { rank := 0, op := "OpName.FW_linear", ins := [700, 702], outs := [703] }]
 private def segment_atomic_pm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_linear", ins := [200, 400], outs := [600] }, { rank := 0, op := "OpName.FW_linear", ins := [210, 410], outs := [610] }, { rank := 0, op := "OpName.FW_linear", ins := [701, 710], outs := [720] }, { rank := 1, op := "OpName.FW_linear", ins := [701, 711], outs := [721] }, { rank := 2, op := "OpName.FW_linear", ins := [701, 712], outs := [722] }, { rank := 1, op := "OpName.FW_linear", ins := [201, 401], outs := [601] }, { rank := 1, op := "OpName.FW_linear", ins := [211, 411], outs := [611] }, { rank := 2, op := "OpName.FW_linear", ins := [202, 402], outs := [602] }, { rank := 2, op := "OpName.FW_linear", ins := [212, 412], outs := [612] }]
 
-set_option maxHeartbeats 1000000 in
+set_option maxHeartbeats 500000 in
 private def segment_atomic : ClosedDepSegmentCertificate SyntheticReductionOutput.gSM SyntheticReductionOutput.gPM state_pre state_post where
   smNodes := segment_atomic_sm_nodes
   pmNodes := segment_atomic_pm_nodes

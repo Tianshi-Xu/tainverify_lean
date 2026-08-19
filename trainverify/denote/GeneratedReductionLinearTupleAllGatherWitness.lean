@@ -5,7 +5,7 @@ namespace TrainVerify.Denote
 open RelationCompiler
 namespace SyntheticReductionTuple
 noncomputable section
-set_option maxHeartbeats 1000000
+set_option maxHeartbeats 500000
 
 def gSM : GraphDecl := { numRanks := 1, nodes := [] }
 def gPM : GraphDecl := { numRanks := 3, nodes := [] }
@@ -24,11 +24,11 @@ def state_post : RelationState where
   facts := [output_0,output_1,gather_post]
   nonempty := by decide
 
-set_option maxHeartbeats 1000000 in
+set_option maxHeartbeats 500000 in
 private def segment_atomic_sm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_linear", ins := [100, 300], outs := [500] }, { rank := 0, op := "OpName.FW_linear", ins := [101, 301], outs := [501] }]
 private def segment_atomic_pm_nodes : List NodeDecl := [{ rank := 0, op := "OpName.FW_linear", ins := [200, 400], outs := [600] }, { rank := 0, op := "OpName.FW_linear", ins := [210, 410], outs := [610] }, { rank := 0, op := "OpName.AllGatherPrim", ins := [810, 811, 812], outs := [899], params := [1] }, { rank := 1, op := "OpName.FW_linear", ins := [211, 411], outs := [611] }, { rank := 1, op := "OpName.FW_linear", ins := [201, 401], outs := [601] }, { rank := 2, op := "OpName.FW_linear", ins := [212, 412], outs := [612] }, { rank := 2, op := "OpName.FW_linear", ins := [202, 402], outs := [602] }]
 
-set_option maxHeartbeats 1000000 in
+set_option maxHeartbeats 500000 in
 private def segment_atomic : ClosedDepSegmentCertificate SyntheticReductionTuple.gSM SyntheticReductionTuple.gPM state_pre state_post where
   smNodes := segment_atomic_sm_nodes
   pmNodes := segment_atomic_pm_nodes
@@ -339,7 +339,7 @@ private def segment_atomic : ClosedDepSegmentCertificate SyntheticReductionTuple
     let gatherInputTids : List Tid := [810, 811, 812]
     let rankCount := gatherInputTids.length
     have hRankCount : rankCount = 3 := by native_decide
-    have hRankGraph : rankCount = SyntheticReductionTuple.gPM.numRanks := by native_decide
+    have hRankGraph : rankCount = SyntheticReductionTuple.gPM.numRanks := by rfl
     have hGatherBefore : gatherInputTids.map (((pmNodes.take 2)).foldl (applyNodeDistributedFaithful SyntheticReductionTuple.gPM) pmStore) = gatherInputTids.map pmStore := by
       apply List.map_congr_left
       intro tid htid

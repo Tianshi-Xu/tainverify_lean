@@ -1,4 +1,5 @@
 import denote.RelationCompiler
+import denote.KRankTranspose
 
 namespace TrainVerify.Denote
 
@@ -523,6 +524,31 @@ theorem RelationCompiler.ShardedRel.fw_transposeAxes_2_3_dim3_to_dim2_rank4
   · rw [h.full_value]
     simpa only [List.length_map] using
       transposeAxes_2_3_allGather_dim3_to_dim2_rank4 shards d0 d1 d2 d3
+        h.shards_nonempty h.shard_shapes
+  · simp [transposeAxes, Tensor.mkShape, h.full_shape, listSwapAt, List.getD, List.set]
+  · intro hnil
+    cases shards with
+    | nil => exact h.shards_nonempty rfl
+    | cons shard rest => simp at hnil
+  · simp
+  · intro shard hmem
+    rcases List.mem_map.mp hmem with ⟨source, hsource, rfl⟩
+    simp [transposeAxes, Tensor.mkShape, h.shard_shapes source hsource,
+      listSwapAt, List.getD, List.set]
+  · simp [List.set, List.getD]
+
+/-- Rank-4 transpose of axes 2 and 3 transports dim-2 sharding to dim 3. -/
+theorem RelationCompiler.ShardedRel.fw_transposeAxes_2_3_dim2_to_dim3_rank4
+    {full : Tensor} {shards : List Tensor} {d0 d1 d2 d3 : Nat}
+    (h : RelationCompiler.ShardedRel full shards 2
+      [d0, d1, d2 * shards.length, d3] [d0, d1, d2, d3]) :
+    RelationCompiler.ShardedRel
+      (transposeAxes 2 3 full) (shards.map (transposeAxes 2 3)) 3
+      [d0, d1, d3, d2 * shards.length] [d0, d1, d3, d2] := by
+  constructor
+  · rw [h.full_value]
+    simpa only [List.length_map] using
+      transposeAxes_2_3_allGather_dim2_to_dim3_rank4 shards d0 d1 d2 d3
         h.shards_nonempty h.shard_shapes
   · simp [transposeAxes, Tensor.mkShape, h.full_shape, listSwapAt, List.getD, List.set]
   · intro hnil

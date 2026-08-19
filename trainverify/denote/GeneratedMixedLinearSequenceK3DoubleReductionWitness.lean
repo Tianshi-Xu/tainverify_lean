@@ -217,7 +217,7 @@ private theorem segment_synthetic_pm_a2a_writer_0_0 (pmStore : Store) :
   · intro t
     rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
     simp only [applyNodeDistributedFaithful, applyNodeDistributed, applyNodeRingAttn]
-    have hRankCount : rankCount = TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph.numRanks := by native_decide
+    have hRankCount : rankCount = TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph.numRanks := by rfl
     rw [hRankCount]
     simpa [inputTids] using applyNode_allToAllPrimWithDims_out TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph t 0 inputTids 213 1 2
   · native_decide
@@ -256,7 +256,7 @@ private theorem segment_synthetic_pm_a2a_writer_0_1 (pmStore : Store) :
   · intro t
     rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
     simp only [applyNodeDistributedFaithful, applyNodeDistributed, applyNodeRingAttn]
-    have hRankCount : rankCount = TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph.numRanks := by native_decide
+    have hRankCount : rankCount = TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph.numRanks := by rfl
     rw [hRankCount]
     simpa [inputTids] using applyNode_allToAllPrimWithDims_out TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph t 1 inputTids 214 1 2
   · native_decide
@@ -295,7 +295,7 @@ private theorem segment_synthetic_pm_a2a_writer_0_2 (pmStore : Store) :
   · intro t
     rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
     simp only [applyNodeDistributedFaithful, applyNodeDistributed, applyNodeRingAttn]
-    have hRankCount : rankCount = TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph.numRanks := by native_decide
+    have hRankCount : rankCount = TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph.numRanks := by rfl
     rw [hRankCount]
     simpa [inputTids] using applyNode_allToAllPrimWithDims_out TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph t 2 inputTids 215 1 2
   · native_decide
@@ -438,7 +438,7 @@ private theorem segment_synthetic_pm_a2a_writer_1_0 (pmStore : Store) :
   · intro t
     rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
     simp only [applyNodeDistributedFaithful, applyNodeDistributed, applyNodeRingAttn]
-    have hRankCount : rankCount = TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph.numRanks := by native_decide
+    have hRankCount : rankCount = TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph.numRanks := by rfl
     rw [hRankCount]
     simpa [inputTids] using applyNode_allToAllPrimWithDims_out TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph t 0 inputTids 253 1 2
   · native_decide
@@ -477,7 +477,7 @@ private theorem segment_synthetic_pm_a2a_writer_1_1 (pmStore : Store) :
   · intro t
     rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
     simp only [applyNodeDistributedFaithful, applyNodeDistributed, applyNodeRingAttn]
-    have hRankCount : rankCount = TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph.numRanks := by native_decide
+    have hRankCount : rankCount = TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph.numRanks := by rfl
     rw [hRankCount]
     simpa [inputTids] using applyNode_allToAllPrimWithDims_out TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph t 1 inputTids 254 1 2
   · native_decide
@@ -516,7 +516,7 @@ private theorem segment_synthetic_pm_a2a_writer_1_2 (pmStore : Store) :
   · intro t
     rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective (hshuffle := by native_decide) (hunshuffle := by native_decide) (hattn := by native_decide)]
     simp only [applyNodeDistributedFaithful, applyNodeDistributed, applyNodeRingAttn]
-    have hRankCount : rankCount = TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph.numRanks := by native_decide
+    have hRankCount : rankCount = TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph.numRanks := by rfl
     rw [hRankCount]
     simpa [inputTids] using applyNode_allToAllPrimWithDims_out TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph t 2 inputTids 255 1 2
   · native_decide
@@ -681,7 +681,7 @@ private theorem segment_synthetic_transition_1_a2a (smStore pmStore : Store)
     let inputTids0 : List Tid := [210, 211, 212]
     let outputTids0 : List Tid := [213, 214, 215]
     let rankCount0 := outputTids0.length
-    have hRankCount0 : rankCount0 = TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph.numRanks := by native_decide
+    have hRankCount0 : rankCount0 = TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph.numRanks := by rfl
     let xs0 := inputTids0.map pmFinal
     have hHead0 : ((xs0.head?.map (fun t => t.shape)).getD []) = [2, 2, 6] := by
       simp only [xs0, inputTids0, List.map, List.head?, Option.map, Option.getD]
@@ -825,7 +825,7 @@ private theorem segment_synthetic_transition_3_a2a (smStore pmStore : Store)
     let inputTids1 : List Tid := [250, 251, 252]
     let outputTids1 : List Tid := [253, 254, 255]
     let rankCount1 := outputTids1.length
-    have hRankCount1 : rankCount1 = TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph.numRanks := by native_decide
+    have hRankCount1 : rankCount1 = TrainVerify.Denote.GeneratedMixedLinearSequenceK3DoubleReductionWitness.pmGraph.numRanks := by rfl
     let xs1 := inputTids1.map pmFinal
     have hHead1 : ((xs1.head?.map (fun t => t.shape)).getD []) = [2, 2, 6] := by
       simp only [xs1, inputTids1, List.map, List.head?, Option.map, Option.getD]

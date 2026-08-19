@@ -186,10 +186,10 @@ def render_closed_k_rank_reduction_linear_tuple_segment(ir, relation, segment_id
     smg, pmg, sid = ir.sm_graph_ref, ir.pm_graph_ref, segment.segment_id
     sm_name, pm_name = f"{sid}_sm_nodes", f"{sid}_pm_nodes"
     lines = [
-        "set_option maxHeartbeats 1000000 in",
+        "set_option maxHeartbeats 500000 in",
         f"private def {sm_name} : List NodeDecl := [{', '.join(_node_text(node) for node in sm_nodes)}]",
         f"private def {pm_name} : List NodeDecl := [{', '.join(_node_text(node) for node in pm_nodes)}]", "",
-        "set_option maxHeartbeats 1000000 in",
+        "set_option maxHeartbeats 500000 in",
         f"private def {sid} : ClosedDepSegmentCertificate {smg} {pmg} {before.state_id} {after.state_id} where",
         f"  smNodes := {sm_name}", f"  pmNodes := {pm_name}", "  sound := by",
         "    intro smStore pmStore hstate",
@@ -324,7 +324,7 @@ def render_closed_k_rank_reduction_linear_tuple_segment(ir, relation, segment_id
             f"    let gatherInputTids : List Tid := {tids}",
             "    let rankCount := gatherInputTids.length",
             f"    have hRankCount : rankCount = {k} := by native_decide",
-            f"    have hRankGraph : rankCount = {pmg}.numRanks := by native_decide",
+            f"    have hRankGraph : rankCount = {pmg}.numRanks := by rfl",
             f"    have hGatherBefore : gatherInputTids.map (({prefix}).foldl (applyNodeDistributedFaithful {pmg}) pmStore) = gatherInputTids.map pmStore := by",
             "      apply List.map_congr_left", "      intro tid htid",
             "      simp only [gatherInputTids, List.mem_cons, List.not_mem_nil, or_false] at htid",

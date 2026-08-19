@@ -149,7 +149,7 @@ f"""-- ========== helper: hInitCut separate lemma (base case, no prereqs) ======
 lemma goal_{n}_hInitCut_helper (Ssm Spm : Store)
     (hinitC : InitGoalsHold pm.numRanks initGoals Ssm Spm) :
     InitGoalsHold pm_goal_{n}.numRanks goal_{n}_cut_initGoals Ssm Spm := by
-  have hnr : pm_goal_{n}.numRanks = pm.numRanks := by native_decide
+  have hnr : pm_goal_{n}.numRanks = pm.numRanks := by rfl
   rw [hnr]; intro g hg
   simp only [goal_{n}_cut_initGoals] at hg
   exact hinitC g hg
@@ -174,7 +174,7 @@ lemma goal_{n}_hInitCut_helper (Ssm Spm : Store)
     (hinitC : InitGoalsHold pm.numRanks initGoals Ssm Spm)
     {args} :
     InitGoalsHold pm_goal_{n}.numRanks goal_{n}_cut_initGoals Ssm Spm := by
-  have hnr : pm_goal_{n}.numRanks = pm.numRanks := by native_decide
+  have hnr : pm_goal_{n}.numRanks = pm.numRanks := by rfl
   rw [hnr]
   simp only [InitGoalsHold] at hinitC ⊢
   simp only [goal_{n}_cut_initGoals, goal_{n}_prereqs, List.forall_mem_append,
@@ -411,7 +411,7 @@ theorem goal_{n}_cut_to_full (h : goal_{n}_stmt_cut) : goal_{n}_stmt := by
   set Spm := denoteGraph pm initPM with hSpm
   {have_intermediates}
   have hinitC := initGoals_preserved initSM initPM hInit
-  have hnr : pm_goal_{n}.numRanks = pm.numRanks := by native_decide
+  have hnr : pm_goal_{n}.numRanks = pm.numRanks := by rfl
 {sh_block}
 {ssh_blocks}
   have hInitCut : InitGoalsHold pm_goal_{n}.numRanks goal_{n}_cut_initGoals Ssm Spm :=

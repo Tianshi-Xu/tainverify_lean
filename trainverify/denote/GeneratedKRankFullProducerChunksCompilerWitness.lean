@@ -44,7 +44,7 @@ private def segment_000000 :
     let pmNodes : List NodeDecl := [{ rank := 0, op := "OpName.ChunkPrim", ins := [20], outs := [30], params := [1] }, { rank := 1, op := "OpName.ChunkPrim", ins := [20], outs := [31], params := [1] }, { rank := 2, op := "OpName.ChunkPrim", ins := [20], outs := [32], params := [1] }, { rank := 3, op := "OpName.ChunkPrim", ins := [20], outs := [33], params := [1] }]
     let pmTids : List Tid := [30, 31, 32, 33]
     let rankCount := pmTids.length
-    have hRankCount : rankCount = SyntheticKRank.pmGraph.numRanks := by native_decide
+    have hRankCount : rankCount = SyntheticKRank.pmGraph.numRanks := by rfl
     let smFinal := smNodes.foldl (applyNodeDistributedFaithful SyntheticKRank.smGraph) smStore
     let pmFinal := pmNodes.foldl (applyNodeDistributedFaithful SyntheticKRank.pmGraph) pmStore
     have hframe : state_pre.Holds smFinal pmFinal := by

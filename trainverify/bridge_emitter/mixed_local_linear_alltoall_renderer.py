@@ -292,7 +292,7 @@ def render_closed_k_rank_local_linear_alltoall_segment(ir, relation, segment_id:
             f"    let inputTids{number} : List Tid := {input_tids}",
             f"    let outputTids{number} : List Tid := {output_tids}",
             f"    let rankCount{number} := outputTids{number}.length",
-            f"    have hRankCount{number} : rankCount{number} = {ir.pm_graph_ref}.numRanks := by native_decide",
+            f"    have hRankCount{number} : rankCount{number} = {ir.pm_graph_ref}.numRanks := by rfl",
             f"    let xs{number} := inputTids{number}.map pmFinal",
             f"    have hHead{number} : ((xs{number}.head?.map (fun t => t.shape)).getD []) = {_shape_text(list(pre.shard_shape))} := by",
             f"      simp only [xs{number}, inputTids{number}, List.map, List.head?, Option.map, Option.getD]",

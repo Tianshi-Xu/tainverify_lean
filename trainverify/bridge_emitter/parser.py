@@ -95,6 +95,7 @@ class GoalIR:
     public_statement_module: str = ""
     public_statement_ref: str = ""
     public_statement_uses_contract_wrapper: bool = True
+    public_statement_uses_faithful_evaluator: bool = False
     lineage_ref: str = ""
     init_goals_ref: str = ""
     sm_num_ranks: int = 1
@@ -359,7 +360,7 @@ def parse_full_init_goal_ids(goal_text: str, gen_text: str, n: int) -> tuple[int
     full_block = extract_def_block(goal_text, f"goal_{n}_full_initGoals")
     statement_block = extract_def_block(goal_text, f"goal_{n}_stmt_full")
     direct_generated = re.search(
-        r"CoarseLineageHoldsWithInit(?:DistributedFaithfulWithContract)?[^\n]*\binitGoals\b",
+        r"CoarseLineageHoldsWithInit(?:DistributedFaithful(?:WithContract)?)?[^\n]*\binitGoals\b",
         statement_block,
     ) or re.search(r"InitGoalsHold[^\n]*\binitGoals\b", statement_block)
     if re.search(r":=\s*initGoals\b", full_block) or direct_generated:
@@ -375,7 +376,7 @@ def parse_full_init_goals_name(statement_text: str, n: int) -> str:
         r"InitGoalsHold\s+\S+\s+([A-Za-z_][A-Za-z0-9_.]*)\b", block
     )
     compact = re.search(
-        r"CoarseLineageHoldsWithInit(?:DistributedFaithfulWithContract)?"
+        r"CoarseLineageHoldsWithInit(?:DistributedFaithful(?:WithContract)?)?"
         r"(?:\s+\S+){5}\s+([A-Za-z_][A-Za-z0-9_.]*)\b",
         block,
     )
@@ -422,7 +423,7 @@ def _public_full_scope(n: int, goal_path: str, goal_text: str, gen_text: str) ->
     statement_block = extract_def_block(statement_text, statement_name)
 
     compact = re.search(
-        r"CoarseLineageHoldsWithInit(?:DistributedFaithfulWithContract)?\s+"
+        r"CoarseLineageHoldsWithInit(?:DistributedFaithful(?:WithContract)?)?\s+"
         r"([A-Za-z0-9_.]+)\s+([A-Za-z0-9_.]+)\s+"
         r"[A-Za-z0-9_.]+\s+([A-Za-z0-9_.]+)\s+([A-Za-z0-9_.]+)",
         statement_block,
@@ -608,12 +609,17 @@ def load_goal_ir(n: int, root: str) -> GoalIR:
         goal_text = handle.read()
     with open(gen_path) as handle:
         gen_text = handle.read()
+    nodes_path = os.path.join(os.path.dirname(gen_path), "GeneratedGraphNodes.lean")
+    nodes_text = ""
+    if os.path.exists(nodes_path):
+        with open(nodes_path) as handle:
+            nodes_text = handle.read()
 
     (
         statement_text, public_statement_module, sm_graph_ref, pm_graph_ref,
         sm_name, pm_name, sm_shapes_name, pm_shapes_name,
     ) = _public_full_scope(n, goal_path, goal_text, gen_text)
-    sources = (goal_text, statement_text, gen_text)
+    sources = (goal_text, statement_text, gen_text, nodes_text)
     sm_block = _definition_from_sources(sm_name, *sources)
     pm_block = _definition_from_sources(pm_name, *sources)
     sm_sh_block = _definition_from_sources(sm_shapes_name, *sources)
@@ -633,8 +639,24 @@ def load_goal_ir(n: int, root: str) -> GoalIR:
         required="pmInputValueClasses" in statement_text,
     )
     full_init_goal_ids = parse_full_init_goal_ids(scope_text, gen_text, n)
+
+    def graph_nodes(block: str):
+        try:
+            return parse_nodes(block)
+        except ValueError as inline_error:
+            reference = re.search(r"\bnodes\s*:=\s*([A-Za-z_][A-Za-z0-9_.]*)", block)
+            if reference is None:
+                raise inline_error
+            definition = _definition_from_sources(reference.group(1), nodes_text)
+            assignment = definition.find(":=")
+            if assignment < 0:
+                raise ValueError(f"node payload {reference.group(1)} has no assignment")
+            return parse_nodes("nodes := " + definition[assignment + 2:])
+
+    sm_nodes_parsed = graph_nodes(sm_block)
+    pm_nodes_parsed = graph_nodes(pm_block)
     needed_init_tids = {
-        int(tid) for node in parse_nodes(sm_block) for tid in node.ins
+        int(tid) for node in sm_nodes_parsed for tid in node.ins
     }
     init_lineages = {
         tid: parse_lineage_block(
@@ -644,8 +666,8 @@ def load_goal_ir(n: int, root: str) -> GoalIR:
     }
     return GoalIR(
         n=n,
-        sm_nodes=parse_nodes(sm_block),
-        pm_nodes=parse_nodes(pm_block),
+        sm_nodes=sm_nodes_parsed,
+        pm_nodes=pm_nodes_parsed,
         sm_shapes=parse_shapes(sm_sh_block),
         pm_shapes=parse_shapes(pm_sh_block),
         lineage=parse_lineage(gen_text, n),
@@ -658,6 +680,10 @@ def load_goal_ir(n: int, root: str) -> GoalIR:
         ),
         public_statement_uses_contract_wrapper=(
             "CoarseLineageHoldsWithInitDistributedFaithfulWithContract"
+            in extract_def_block(statement_text, f"goal_{n}_stmt_full")
+        ),
+        public_statement_uses_faithful_evaluator=(
+            "CoarseLineageHoldsWithInitDistributedFaithful"
             in extract_def_block(statement_text, f"goal_{n}_stmt_full")
         ),
         lineage_ref=_qualified_definition_name(f"goal_{n}", *sources),

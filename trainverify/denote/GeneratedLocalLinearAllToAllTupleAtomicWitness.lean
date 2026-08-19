@@ -252,7 +252,7 @@ private def segment_generic :
     let inputTids0 : List Tid := [410, 411, 412]
     let outputTids0 : List Tid := [810, 811, 812]
     let rankCount0 := outputTids0.length
-    have hRankCount0 : rankCount0 = TrainVerify.Denote.GeneratedLocalLinearAllToAllTupleAtomicWitness.pmGraph.numRanks := by native_decide
+    have hRankCount0 : rankCount0 = TrainVerify.Denote.GeneratedLocalLinearAllToAllTupleAtomicWitness.pmGraph.numRanks := by rfl
     let xs0 := inputTids0.map pmFinal
     have hHead0 : ((xs0.head?.map (fun t => t.shape)).getD []) = [2, 3, 21] := by
       simp only [xs0, inputTids0, List.map, List.head?, Option.map, Option.getD]
@@ -385,7 +385,7 @@ private def segment_generic :
     let inputTids1 : List Tid := [400, 401, 402]
     let outputTids1 : List Tid := [800, 801, 802]
     let rankCount1 := outputTids1.length
-    have hRankCount1 : rankCount1 = TrainVerify.Denote.GeneratedLocalLinearAllToAllTupleAtomicWitness.pmGraph.numRanks := by native_decide
+    have hRankCount1 : rankCount1 = TrainVerify.Denote.GeneratedLocalLinearAllToAllTupleAtomicWitness.pmGraph.numRanks := by rfl
     let xs1 := inputTids1.map pmFinal
     have hHead1 : ((xs1.head?.map (fun t => t.shape)).getD []) = [2, 3, 21] := by
       simp only [xs1, inputTids1, List.map, List.head?, Option.map, Option.getD]

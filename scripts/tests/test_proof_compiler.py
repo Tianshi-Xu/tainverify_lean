@@ -3733,9 +3733,11 @@ def test_k_rank_gelu_uses_generic_pointwise_theorem_for_dim2():
                                   rank=rank, input_bindings=(), output_shape=(1, 8, 3))
                   for rank in range(4))
     sm_out = SimpleNamespace(step_id="sm:1:0", side="sm", op="FW_gelu", rank=0,
-                             input_bindings=(sm_in.step_id,), output_shape=(1, 8, 12))
+                             input_bindings=(sm_in.step_id,),
+                             input_shapes=((1, 8, 12),), output_shape=(1, 8, 12))
     pm_out = tuple(SimpleNamespace(step_id=f"pm:{rank + 4}:0", side="pm", op="FW_gelu",
                                    rank=rank, input_bindings=(pm_in[rank].step_id,),
+                                   input_shapes=((1, 8, 3),),
                                    output_shape=(1, 8, 3)) for rank in range(4))
     certs, frontiers, layouts = relation_compiler_module.advance_k_rank_gelu_relation_frontiers(
         SimpleNamespace(steps=(sm_in, *pm_in, sm_out, *pm_out)),
@@ -6426,7 +6428,11 @@ def test_closed_bundle_is_deterministic_bounded_public_and_acyclic(monkeypatch):
     relation = SimpleNamespace(
         dependent_chain_plan=chain,
         transition_specs=tuple(
-            SimpleNamespace(transition_id=f"transition_{index}", rule_id=f"synthetic-{index}")
+            SimpleNamespace(
+                transition_id=f"transition_{index}",
+                rule_id=f"synthetic-{index}",
+                lean_theorem=f"Synthetic.Theorems.synthetic_{index}",
+            )
             for index in range(2)
         ),
     )
@@ -6846,6 +6852,12 @@ def test_public_theorem_renderer_consumes_kernel_joined_target_for_singleton_pub
 
 def test_public_theorem_renderer_accepts_canonical_joined_target():
     ir = _synthetic_external_ir(tps=((0, 901),))
+    ir.public_statement_uses_contract_wrapper = False
+    ir.public_statement_uses_faithful_evaluator = True
+    ir.sm_input_value_classes = ()
+    ir.pm_input_value_classes = ()
+    ir.packed_cu_contracts = ()
+    ir.tensor_value_bound_contracts = ()
     ir.lineage.tsShape = [1]
     ir.lineage.tpShapes = [[1]]
     target = SimpleNamespace(
@@ -6858,8 +6870,43 @@ def test_public_theorem_renderer_accepts_canonical_joined_target():
     source = render_closed_public_theorem(
         ir, _synthetic_external_chain((anchor,), target), "SyntheticClosed"
     )
-    assert "using htarget.public_value" in source
+    assert "using hvalue" in source
     assert "= [[1]]" in source
+    assert "hContract" not in source
+    assert "hFaithfulContract" in source
+    assert "have hSMValues : InputValueClassesHold" in source
+    assert "have hPMValues : InputValueClassesHold" in source
+    assert "rcases htarget with ⟨hvalue, hsmShape, hpmShape⟩" in source
+    assert "htarget.full_shape" not in source
+    assert "@[irreducible] private def SyntheticClosed_public_statement" in source
+    assert "private theorem SyntheticClosed_target_from_external_inputs" in source
+    assert "@[irreducible] private def SyntheticClosed_public_body_statement" in source
+    assert "private theorem SyntheticClosed_public_body_proof" in source
+    assert "private theorem SyntheticClosed_public_proof" in source
+    assert "have htarget := SyntheticClosed_target_from_external_inputs" in source
+    assert "simpa only [SyntheticClosed_public_statement]" in source
+
+
+def test_public_theorem_renderer_rejects_uncontracted_nonempty_input_classes():
+    ir = _synthetic_external_ir(tps=((0, 901),))
+    ir.public_statement_uses_contract_wrapper = False
+    ir.pm_input_value_classes = ()
+    ir.packed_cu_contracts = ()
+    ir.tensor_value_bound_contracts = ()
+    ir.lineage.tsShape = [1]
+    ir.lineage.tpShapes = [[1]]
+    ir.sm_input_value_classes = (SimpleNamespace(source="x", tids=(1, 2)),)
+    target = SimpleNamespace(
+        fact_id="terminal_relation", kind="joined", sm_tid=900,
+        joined_pm_tid=901, full_shape=(1,),
+    )
+    anchor = SimpleNamespace(
+        fact_id="shape_sm", kind="tensor_shape", side="sm", tid=10, shape=(4,)
+    )
+    with pytest.raises(ValueError, match="contract-free public statement"):
+        render_closed_public_theorem(
+            ir, _synthetic_external_chain((anchor,), target), "SyntheticClosed"
+        )
 
 
 def test_public_theorem_renderer_accepts_joined_indexed_stack_target():

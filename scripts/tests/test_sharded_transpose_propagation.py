@@ -357,6 +357,19 @@ def test_closed_sharded_transpose_renderer_supports_all_2_3_families(
     assert source.count("applyNode_fw_transposeAxes_out") == 4
 
 
+def test_registered_transpose_2_3_theorems_exist_in_imported_module():
+    source = (
+        Path(__file__).parents[2]
+        / "trainverify/denote/KRankTranspose23Extra.lean"
+    ).read_text(encoding="utf-8")
+    for theorem in (
+        "fw_transposeAxes_2_3_dim2_to_dim3_rank4",
+        "fw_transposeAxes_2_3_dim3_to_dim2_rank4",
+        "fw_transposeAxes_2_3_dim1_rank4",
+    ):
+        assert f"theorem RelationCompiler.ShardedRel.{theorem}" in source
+
+
 def test_closed_transpose_bundle_imports_exact_theorem_module():
     family = ("transpose-sharded-k-rank",)
     assert composer._closed_segment_family_imports(
@@ -575,7 +588,7 @@ def _multi_witness_namespace(namespace, specs, segment_id):
         )
     return f'''namespace {namespace}
 noncomputable section
-set_option maxHeartbeats 1000000
+set_option maxHeartbeats 500000
 
 def gSM : GraphDecl := {{ numRanks := 1, nodes := [{sm_nodes}] }}
 def gPM : GraphDecl := {{ numRanks := 4, nodes := [{pm_nodes}] }}

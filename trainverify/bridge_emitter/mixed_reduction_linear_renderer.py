@@ -163,10 +163,10 @@ def render_closed_mixed_reduction_output_linear_segment(ir, relation, segment_id
     sid = segment.segment_id
     sm_name, pm_name = f"{sid}_sm_nodes", f"{sid}_pm_nodes"
     lines = [
-        "set_option maxHeartbeats 1000000 in",
+        "set_option maxHeartbeats 500000 in",
         f"private def {sm_name} : List NodeDecl := [{', '.join(_node_text(node) for node in sm_nodes)}]",
         f"private def {pm_name} : List NodeDecl := [{', '.join(_node_text(node) for node in pm_nodes)}]", "",
-        f"set_option maxHeartbeats 1000000 in",
+        f"set_option maxHeartbeats 500000 in",
         f"private def {sid} : ClosedDepSegmentCertificate {smg} {pmg} {before.state_id} {after.state_id} where",
         f"  smNodes := {sm_name}", f"  pmNodes := {pm_name}", "  sound := by",
         "    intro smStore pmStore hstate",

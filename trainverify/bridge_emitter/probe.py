@@ -15,7 +15,7 @@ from target_config import DENOTE_DIR
 
 PROBE_HEADER = """import {import_mod}
 set_option maxRecDepth 100000
-set_option maxHeartbeats 4000000
+set_option maxHeartbeats 500000
 namespace TrainVerify.Denote.GeneratedGoals
 open TrainVerify.Denote TrainVerify.Denote.Generated
 """

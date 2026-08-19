@@ -691,7 +691,7 @@ def denote_pm_block(n, node, inline_map, bw_idx=None):
                f"  rw [{lemma}]\n")
         if meta["kind"] == "list":
             tac += "  simp only [List.map]\n"
-        tac += "  try (set_option maxHeartbeats 800000 in congr 1)\n"
+        tac += "  try (set_option maxHeartbeats 500000 in congr 1)\n"
     else:
         if is_bw:
             apply = _bw_apply(node, bw_idx)

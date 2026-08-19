@@ -34,8 +34,13 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
+import ctypes
 import hashlib
+import os
+import re
+import shutil
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -125,6 +130,21 @@ def parse_args() -> argparse.Namespace:
 		"--goals-out-dir",
 		default=str(ROOT / "trainverify" / "denote"),
 		help="Output directory for per-goal Lean files when --split-goals is enabled.",
+	)
+	p.add_argument(
+		"--atomic-output-root",
+		help=(
+			"Dedicated directory owning every generated authority output. Required with "
+			"--split-goals; generation occurs in a private sibling and publishes by one "
+			"atomic directory rename/exchange."
+		),
+	)
+	p.add_argument(
+		"--pattern-template-output-root",
+		help=(
+			"Separate non-authoritative output tree for --emit-segment-patterns. "
+			"Templates may contain sorry and are never admitted to the atomic authority tree."
+		),
 	)
 	p.add_argument(
 		"--emit-segment-patterns",
@@ -1592,7 +1612,7 @@ def _emit_cut_to_full(
 	lines.append("")
 	lines.append("set_option linter.style.longLine false")
 	lines.append("set_option maxRecDepth 100000")
-	lines.append("set_option maxHeartbeats 1600000")
+	lines.append("set_option maxHeartbeats 500000")
 	lines.append("")
 	lines.append("namespace TrainVerify.Denote.GeneratedGoals")
 	lines.append("open TrainVerify.Denote TrainVerify.Denote.Generated")
@@ -1903,6 +1923,8 @@ def emit_lean_spec(
 	intermediate_lineages: Optional[Dict[int, SelectedLineage]] = None,
 	goal_slices: Optional[List["GoalSlice"]] = None,
 	goals_out_dir: Optional[Path] = None,
+	logical_goals_out_dir: Optional[Path] = None,
+	logical_goals_module_prefix: Optional[str] = None,
 	use_tid_goal_ids: bool = False,
 	emit_segment_patterns: bool = False,
 	segment_max_goals: int = 8,
@@ -1946,9 +1968,25 @@ def emit_lean_spec(
 	lines.append("")
 	lines.append("open TrainVerify.Denote")
 	lines.append("")
-	lines.append("namespace TrainVerify.Denote.Generated")
-	lines.append("noncomputable section")
+	lines.append("set_option maxHeartbeats 500000")
 	lines.append("")
+	lines.append("namespace TrainVerify.Denote.Generated")
+	lines.append("")
+	nodes_module_name = module_name.rsplit(".", 1)[0] + ".GeneratedGraphNodes"
+	lines.insert(4, f"import {nodes_module_name}")
+	node_lines: List[str] = [
+		"/- Auto-generated graph node payload by Verdict/graph_to_lean.py -/",
+		"import denote.Denote",
+		"",
+		"set_option linter.style.longLine false",
+		"set_option maxRecDepth 100000",
+		"set_option maxHeartbeats 500000",
+		"",
+		"open TrainVerify.Denote",
+		"",
+		"namespace TrainVerify.Denote.Generated",
+		"",
+	]
 
 	def _emit_graph(name: str, nodes: List[Any], G: Any, num_parts: int = 1) -> None:
 		"""Emit a GraphDecl definition.
@@ -1975,19 +2013,14 @@ def emit_lean_spec(
 				all_outs.extend(int(t.tid) for t in G.node_outputs(n))
 			wred_all_outs[ins] = sorted(set(all_outs))
 		
-		lines.append(f"def {name} : GraphDecl := by")
-		# numRanks: SM is 1, PM is inferred from max rank + 1.
 		if name == "sm" or name.startswith("sm_"):
 			num_ranks = 1
 		else:
 			num_ranks = max((_node_rank(n) for n in nodes), default=0) + 1
 		replica_ids = sm_logical_ids if G is sm_graph else pm_logical_ids
 		replica_groups = derive_replica_groups(G, nodes, replica_ids)
-		lines.append(
-			f"  refine {{ numRanks := {num_ranks}, nodes := ?_, "
-			f"replicaGroups := {_lean_replica_groups(replica_groups)} }}"
-		)
-		lines.append("  exact [")
+		nodes_name = f"{name}Nodes"
+		node_lines.append(f"def {nodes_name} : List NodeDecl := [")
 		
 		seen_wred: set[tuple[int, ...]] = set()
 		for n in nodes:
@@ -2023,10 +2056,15 @@ def emit_lean_spec(
 
 			node_params = embedding_params.get(id(n)) or _get_node_params(G, n, num_parts=num_parts)
 			params_str = f", params := {lean_list_nat(node_params)}" if node_params else ""
-			lines.append(
+			node_lines.append(
 				f"    {{ rank := {rank}, op := \"{op}\", ins := {_lean_list_nat_expr(ins)}, outs := {_lean_list_nat_expr(outs)}{params_str} }},"
 			)
-		lines.append("  ]")
+		node_lines.append("]")
+		node_lines.append("")
+		lines.append(
+			f"def {name} : GraphDecl := {{ numRanks := {num_ranks}, nodes := {nodes_name}, "
+			f"replicaGroups := {_lean_replica_groups(replica_groups)} }}"
+		)
 		lines.append("")
 
 	pm_num_ranks = max((_node_rank(n) for n in pm_nodes), default=0) + 1
@@ -2690,7 +2728,7 @@ def emit_lean_spec(
 	# Goal-sliced graphs are emitted into per-goal files (if requested).
 	if goal_slices and goals_out_dir is not None:
 		goals_out_dir.mkdir(parents=True, exist_ok=True)
-		goals_module_prefix = _goals_module_prefix(module_name, goals_out_dir)
+		goals_module_prefix = logical_goals_module_prefix or _goals_module_prefix(module_name, logical_goals_out_dir or goals_out_dir)
 		deps_by_ts: Dict[int, GoalDependency] = {}
 		if goal_deps:
 			for dep in goal_deps:
@@ -2912,6 +2950,30 @@ def emit_lean_spec(
 			goal_lines.append("")
 
 			file_path.write_text("\n".join(goal_lines) + "\n", encoding="utf-8")
+
+			# Emit the full-graph faithful public statement separately from the local
+			# ancestry slice.  Closed certificate bundles prove this authority directly.
+			full_base_module = module_name.rsplit(".", 1)[0]
+			full_namespace = f"{full_base_module}.GeneratedGoals"
+			full_lines = [f"import {module_name}"]
+			if not sl.full_topology:
+				full_lines.extend([
+					"import denote.DenoteDistributedFaithful",
+					"",
+					"open TrainVerify.Denote",
+					"open TrainVerify.Denote.Generated",
+					"",
+					f"namespace {full_namespace}",
+					"",
+					f"def goal_{gid}_stmt_full : Prop :=",
+					(f"  CoarseLineageHoldsWithInitDistributedFaithful sm pm goal_{gid} "
+					 f"smInitEnv pmInitEnv initGoals"),
+					"",
+					f"end {full_namespace}",
+				])
+			(goals_out_dir / f"Goal_{gid}_Full.lean").write_text(
+				"\n".join(full_lines), encoding="utf-8"
+			)
 
 			# ------------------------------------------------------------------
 			# Emit Goal_{gid}_CutToFull.lean — the cut_to_full bridge that uses
@@ -3517,11 +3579,28 @@ def emit_lean_spec(
 		)
 		lines.append("")
 
-	lines.append("end")
 	lines.append("end TrainVerify.Denote.Generated")
 	lines.append("")
 
+	# Pattern_N files are intentionally incomplete proof-obligation templates.
+	# They are never part of the default trusted authority publication.  Keep the
+	# entire skeleton graph behind the explicit pattern-emission opt-in.
+	if goals_out_dir is not None and not emit_segment_patterns:
+		for pattern_path in goals_out_dir.glob("Pattern_[0-9]*.lean"):
+			pattern_path.unlink()
+		for skeleton_name in (
+			"Patterns.lean", "Instances.lean", "ProofObligations.lean", "MainTheorem.lean",
+		):
+			skeleton_path = goals_out_dir / skeleton_name
+			if skeleton_path.exists():
+				skeleton_path.unlink()
+
 	out_path.parent.mkdir(parents=True, exist_ok=True)
+	node_lines.append("end TrainVerify.Denote.Generated")
+	node_lines.append("")
+	out_path.with_name("GeneratedGraphNodes.lean").write_text(
+		"\n".join(node_lines), encoding="utf-8"
+	)
 	out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 	if zigzag_suppressed:
@@ -3599,8 +3678,172 @@ def emit_lean_spec(
 		spec_out_path.write_text("\n".join(spec_lines) + "\n", encoding="utf-8")
 
 
-def main() -> None:
-	args = parse_args()
+GENERATED_LEAN_SOURCE_LIMIT = 2_500_000
+GENERATED_LEAN_HEARTBEAT_LIMIT = 500_000
+
+
+def _validate_generated_authority_tree(root: Path) -> None:
+	"""Fail closed before publication of a freshly staged authority tree."""
+	root = root.resolve()
+	if not root.is_dir():
+		raise ValueError(f"generated authority staging root is not a directory: {root}")
+	lean_files: List[Path] = []
+	full_statement_owners: Dict[str, List[Path]] = {}
+	for current, dirs, files in os.walk(root, followlinks=False):
+		current_path = Path(current)
+		for name in [*dirs, *files]:
+			entry = current_path / name
+			if entry.is_symlink():
+				raise ValueError(f"generated authority contains symlink: {entry.relative_to(root)}")
+		for name in files:
+			path = current_path / name
+			if not path.is_file():
+				raise ValueError(f"generated authority contains non-regular file: {path.relative_to(root)}")
+			if path.suffix != ".lean":
+				continue
+			lean_files.append(path)
+			size = path.stat().st_size
+			if size >= GENERATED_LEAN_SOURCE_LIMIT:
+				raise ValueError(
+					f"generated Lean source exceeds {GENERATED_LEAN_SOURCE_LIMIT} byte limit: "
+					f"{path.relative_to(root)} ({size} bytes)"
+				)
+			text = path.read_text(encoding="utf-8")
+			for raw in re.findall(r"set_option\s+maxHeartbeats\s+(\d+)", text):
+				if int(raw) > GENERATED_LEAN_HEARTBEAT_LIMIT:
+					raise ValueError(
+						f"generated Lean source exceeds 500000 heartbeats: {path.relative_to(root)} ({raw})"
+					)
+			for forbidden, pattern in {
+				"sorry": r"\bsorry\b",
+				"admit": r"\badmit\b",
+				"axiom": r"^\s*axiom\b",
+				"unsafe": r"\bunsafe\b",
+				"False.elim": r"False\.elim",
+			}.items():
+				if re.search(pattern, text, re.MULTILINE):
+					raise ValueError(
+						f"generated Lean source contains forbidden {forbidden}: {path.relative_to(root)}"
+					)
+			for statement in re.findall(r"^def\s+(goal_\d+_stmt_full)\s*:", text, re.MULTILINE):
+				full_statement_owners.setdefault(statement, []).append(path.relative_to(root))
+	if not lean_files:
+		raise ValueError("generated authority tree contains no Lean sources")
+	duplicates = {name: paths for name, paths in full_statement_owners.items() if len(paths) != 1}
+	if duplicates:
+		raise ValueError(f"duplicate generated full public statements: {duplicates}")
+
+
+def _atomic_publish_generated_directory(staged: Path, target: Path) -> None:
+	"""Publish one complete owned directory; stale prior files leave in the exchange."""
+	staged = staged.resolve()
+	# Preserve the final path itself so a symlink cannot disappear through resolve().
+	target = Path(os.path.abspath(target))
+	target.parent.mkdir(parents=True, exist_ok=True)
+	if target.is_symlink():
+		raise ValueError(f"atomic authority target must not be a symlink: {target}")
+	if not target.exists():
+		os.replace(staged, target)
+		return
+	if not target.is_dir():
+		raise ValueError(f"atomic authority target must be a directory: {target}")
+	libc = ctypes.CDLL(None, use_errno=True)
+	renameat2 = getattr(libc, "renameat2", None)
+	if renameat2 is None:
+		raise RuntimeError("atomic directory exchange requires renameat2")
+	renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+	renameat2.restype = ctypes.c_int
+	if renameat2(-100, os.fsencode(staged), -100, os.fsencode(target), 2) != 0:
+		err = ctypes.get_errno()
+		raise OSError(err, os.strerror(err), str(target))
+	# After RENAME_EXCHANGE, staged names the displaced owned tree. Publication is
+	# already complete; deleting this path cannot expose a mixed generation.
+	shutil.rmtree(staged)
+
+
+_PATTERN_TEMPLATE_NAMES = {
+	"Patterns.lean", "Instances.lean", "ProofObligations.lean", "MainTheorem.lean",
+	"SegmentPatterns.lean", "SegmentInstances.lean",
+}
+_PATTERN_TEMPLATE_RE = re.compile(r"(?:Pattern_\d+|SegmentPattern_\d+)\.lean$")
+_UNTRUSTED_TEMPLATE_HEADER = (
+	"/- UNTRUSTED PROOF TEMPLATE. This file may contain sorry and is not part of "
+	"the validated authority tree. -/\n"
+)
+
+
+def _is_pattern_template_path(path: Path) -> bool:
+	return path.name in _PATTERN_TEMPLATE_NAMES or bool(_PATTERN_TEMPLATE_RE.fullmatch(path.name))
+
+
+def _owned_snapshot_key(path: Path, output_parent: Path) -> str:
+	try:
+		return path.resolve().relative_to(output_parent.resolve()).as_posix()
+	except ValueError as exc:
+		raise ValueError(f"snapshot source escapes owned output tree: {path}") from exc
+
+
+def _extract_untrusted_pattern_templates(authority_root: Path, template_root: Path) -> list[str]:
+	"""Move proof skeletons out of the authority stage and label them untrusted."""
+	template_root.mkdir(parents=True, exist_ok=False)
+	moved: list[str] = []
+	for source in sorted(authority_root.rglob("*.lean")):
+		relative = source.relative_to(authority_root)
+		if not _is_pattern_template_path(source):
+			continue
+		target = template_root / relative
+		target.parent.mkdir(parents=True, exist_ok=True)
+		text = source.read_text(encoding="utf-8")
+		target.write_text(_UNTRUSTED_TEMPLATE_HEADER + text, encoding="utf-8")
+		source.unlink()
+		moved.append(relative.as_posix())
+	if not moved:
+		raise RuntimeError("--emit-segment-patterns produced no pattern templates")
+	(template_root / "README.md").write_text(
+		"# UNTRUSTED proof templates\n\n"
+		"These development scaffolds may contain `sorry`. They are not part of the validated authority tree.\n",
+		encoding="utf-8",
+	)
+	return moved
+
+
+def _validate_untrusted_pattern_template_tree(root: Path) -> None:
+	"""Apply structural/size/heartbeat checks without admitting proof placeholders."""
+	lean_files: list[Path] = []
+	for current, dirs, files in os.walk(root, followlinks=False):
+		for name in [*dirs, *files]:
+			entry = Path(current) / name
+			if entry.is_symlink():
+				raise RuntimeError(f"untrusted template tree contains a symlink: {entry}")
+		for name in files:
+			path = Path(current) / name
+			if not path.is_file():
+				raise RuntimeError(f"untrusted template tree contains a special file: {path}")
+			if path.suffix != ".lean":
+				continue
+			lean_files.append(path)
+			if path.stat().st_size >= GENERATED_LEAN_SOURCE_LIMIT:
+				raise RuntimeError(f"untrusted template exceeds source limit: {path}")
+			text = path.read_text(encoding="utf-8")
+			if not text.startswith(_UNTRUSTED_TEMPLATE_HEADER):
+				raise RuntimeError(f"untrusted template lacks warning header: {path}")
+			for heartbeat in re.findall(r"set_option\s+maxHeartbeats\s+(\d+)", text):
+				if int(heartbeat) > GENERATED_LEAN_HEARTBEAT_LIMIT:
+					raise RuntimeError(f"untrusted template exceeds heartbeat limit: {path}")
+	if not lean_files:
+		raise RuntimeError("untrusted template tree contains no Lean templates")
+
+
+def _remap_output_path(path: str, final_root: Path, staged_root: Path) -> str:
+	resolved = Path(path).resolve()
+	try:
+		relative = resolved.relative_to(final_root)
+	except ValueError as exc:
+		raise ValueError(f"generated output escapes --atomic-output-root: {resolved}") from exc
+	return str(staged_root / relative)
+
+
+def _generate(args: argparse.Namespace) -> None:
 	out_path = Path(args.out)
 	spec_out_path = Path(args.spec_out)
 
@@ -4020,6 +4263,11 @@ def main() -> None:
 		intermediate_lineages=intermediate_lineages,
 		goal_slices=goal_slices,
 		goals_out_dir=Path(args.goals_out_dir) if args.split_goals else None,
+		logical_goals_out_dir=(
+			Path(getattr(args, "logical_goals_out_dir", args.goals_out_dir))
+			if args.split_goals else None
+		),
+		logical_goals_module_prefix=getattr(args, "logical_goals_module_prefix", None),
 		use_tid_goal_ids=bool(args.use_tid_goal_ids),
 		emit_segment_patterns=bool(args.emit_segment_patterns),
 		segment_max_goals=int(args.segment_max_goals),
@@ -4074,8 +4322,12 @@ def main() -> None:
 		if args.split_goals:
 			goals_root = Path(args.goals_out_dir)
 			for snapshot_path in sorted(goals_root.iterdir(), key=lambda path: path.name):
-				if snapshot_path.is_file() and snapshot_path.suffix == ".lean":
-					snapshot_files[f"{goals_root.name}/{snapshot_path.name}"] = snapshot_path
+				if (
+					snapshot_path.is_file()
+					and snapshot_path.suffix == ".lean"
+					and not (args.emit_segment_patterns and _is_pattern_template_path(snapshot_path))
+				):
+					snapshot_files[_owned_snapshot_key(snapshot_path, out_path.parent)] = snapshot_path
 		manifest = build_manifest(
 			model=args.model, sm_pkl=args.sm_pkl, pm_pkl=args.pm_pkl,
 			metadata_files=args.metadata_json, llm_train_commit=llm_revision,
@@ -4113,6 +4365,74 @@ def main() -> None:
 			if int(tid) in ins:
 				cons_ops.append(_safe_str_op(GsE.node_opname(n)))
 		print(f"  tid={tid} shape={shp} is_initialized={init_flag} consumers={cons_ops}")
+
+
+def main() -> None:
+	args = parse_args()
+	if not args.split_goals:
+		_generate(args)
+		return
+	if not args.atomic_output_root:
+		raise ValueError("--split-goals requires --atomic-output-root")
+	if args.emit_segment_patterns and not args.pattern_template_output_root:
+		raise ValueError(
+			"--emit-segment-patterns requires --pattern-template-output-root outside the authority tree"
+		)
+	if args.pattern_template_output_root and not args.emit_segment_patterns:
+		raise ValueError("--pattern-template-output-root requires --emit-segment-patterns")
+	final_root = Path(args.atomic_output_root).resolve()
+	template_final: Optional[Path] = None
+	if args.pattern_template_output_root:
+		template_final = Path(args.pattern_template_output_root).resolve()
+		for child, parent in ((template_final, final_root), (final_root, template_final)):
+			try:
+				child.relative_to(parent)
+			except ValueError:
+				continue
+			raise ValueError("pattern-template and authority output roots must not overlap")
+	final_root.parent.mkdir(parents=True, exist_ok=True)
+	staged_root = Path(tempfile.mkdtemp(prefix=f".{final_root.name}.stage-", dir=final_root.parent))
+	template_stage: Optional[Path] = None
+	staged_args = argparse.Namespace(**vars(args))
+	try:
+		staged_args.out = _remap_output_path(args.out, final_root, staged_root)
+		logical_out_parent = Path(args.out).resolve().parent
+		logical_goals_dir = Path(args.goals_out_dir).resolve()
+		try:
+			goals_relative = logical_goals_dir.relative_to(logical_out_parent)
+		except ValueError as exc:
+			raise ValueError("--goals-out-dir must be inside the generated output directory") from exc
+		module_parent = str(args.module).rpartition(".")[0]
+		staged_args.logical_goals_module_prefix = ".".join(
+			part for part in (module_parent, *goals_relative.parts) if part
+		)
+		staged_args.logical_goals_out_dir = args.goals_out_dir
+		staged_args.goals_out_dir = _remap_output_path(args.goals_out_dir, final_root, staged_root)
+		if args.emit_spec_template:
+			staged_args.spec_out = _remap_output_path(args.spec_out, final_root, staged_root)
+		if args.manifest_out:
+			staged_args.manifest_out = _remap_output_path(args.manifest_out, final_root, staged_root)
+		_generate(staged_args)
+		if template_final is not None:
+			template_final.parent.mkdir(parents=True, exist_ok=True)
+			template_stage = Path(tempfile.mkdtemp(
+				prefix=f".{template_final.name}.stage-holder-", dir=template_final.parent
+			))
+			template_stage.rmdir()
+			_extract_untrusted_pattern_templates(staged_root, template_stage)
+			_validate_untrusted_pattern_template_tree(template_stage)
+		_validate_generated_authority_tree(staged_root)
+		for target in (final_root, template_final):
+			if target is not None and os.path.lexists(target) and (target.is_symlink() or not target.is_dir()):
+				raise RuntimeError(f"refusing to replace a non-directory or symlink: {target}")
+		_atomic_publish_generated_directory(staged_root, final_root)
+		if template_stage is not None and template_final is not None:
+			_atomic_publish_generated_directory(template_stage, template_final)
+	except BaseException:
+		for stage in (staged_root, template_stage):
+			if stage is not None and stage.exists():
+				shutil.rmtree(stage)
+		raise
 
 
 if __name__ == "__main__":

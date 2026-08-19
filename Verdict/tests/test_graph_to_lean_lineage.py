@@ -1,14 +1,26 @@
 from dataclasses import dataclass
 
 import pytest
+from pathlib import Path
+from argparse import Namespace
+
+import Verdict.graph_to_lean as graph_to_lean
 
 from Verdict.graph_to_lean import (
     SelectedLineage,
     _computed_boundary_tids,
     _goal_requires_distributed_faithful,
     _goal_slice_is_full_topology,
+    GENERATED_LEAN_SOURCE_LIMIT,
+    _atomic_publish_generated_directory,
+    _extract_untrusted_pattern_templates,
+    _is_pattern_template_path,
+    _owned_snapshot_key,
+    _validate_untrusted_pattern_template_tree,
     _goals_module_prefix,
+    _remap_output_path,
     _uncovered_computed_boundary_tids,
+    _validate_generated_authority_tree,
     canonicalize_init_lineage_multiref,
     close_nodes_to_external_inputs,
     deduplicate_intermediate_lineages,
@@ -207,3 +219,181 @@ def test_getitem_provenance_ignores_malformed_non_tensor_and_singleton_classes()
         Node("OpName.FW_pyfunc", (), (), kwargs={"__consts": [root, "x"]}),
     ])
     assert derive_input_value_classes(graph) == []
+
+
+def test_generated_authority_tree_accepts_import_only_full_compatibility_module(tmp_path):
+    (tmp_path / "Goal_1.lean").write_text(
+        "set_option maxHeartbeats 500000\ndef goal_1_stmt_full : Prop := True\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "Goal_1_Full.lean").write_text("import Goal_1\n", encoding="utf-8")
+    _validate_generated_authority_tree(tmp_path)
+
+
+def test_generated_authority_tree_rejects_duplicate_full_statement(tmp_path):
+    for name in ("Goal_1.lean", "Goal_1_Full.lean"):
+        (tmp_path / name).write_text("def goal_1_stmt_full : Prop := True\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="duplicate generated full public statements"):
+        _validate_generated_authority_tree(tmp_path)
+
+
+def test_generated_authority_tree_rejects_oversize_and_high_heartbeat(tmp_path):
+    oversized = tmp_path / "Oversized.lean"
+    oversized.write_bytes(b"x" * GENERATED_LEAN_SOURCE_LIMIT)
+    with pytest.raises(ValueError, match="exceeds 2500000 byte limit"):
+        _validate_generated_authority_tree(tmp_path)
+    oversized.unlink()
+    (tmp_path / "High.lean").write_text(
+        "set_option maxHeartbeats 500001\ndef x : Prop := True\n", encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="exceeds 500000 heartbeats"):
+        _validate_generated_authority_tree(tmp_path)
+
+
+def test_generated_authority_tree_rejects_forbidden_proof_placeholders(tmp_path):
+    for forbidden in ("sorry", "admit", "axiom forged : False", "unsafe def forged := 0", "False.elim h"):
+        path = tmp_path / "Forbidden.lean"
+        path.write_text(f"def goal_1_stmt_full : Prop := True\n{forbidden}\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="contains forbidden"):
+            _validate_generated_authority_tree(tmp_path)
+
+
+def test_atomic_generated_directory_exchange_removes_stale_owned_files(tmp_path):
+    target = tmp_path / "authority"
+    staged = tmp_path / ".authority.stage"
+    target.mkdir()
+    staged.mkdir()
+    (target / "stale.lean").write_text("stale", encoding="utf-8")
+    (staged / "GeneratedData.lean").write_text("fresh", encoding="utf-8")
+    _atomic_publish_generated_directory(staged, target)
+    assert sorted(path.name for path in target.iterdir()) == ["GeneratedData.lean"]
+    assert (target / "GeneratedData.lean").read_text(encoding="utf-8") == "fresh"
+    assert not staged.exists()
+
+
+def test_owned_snapshot_key_is_stage_name_independent_and_confined(tmp_path: Path) -> None:
+    root = tmp_path / ".random-stage"
+    nested = root / "goals" / "Goal_1.lean"
+    nested.parent.mkdir(parents=True)
+    nested.write_text("def x := 1\n")
+    assert _owned_snapshot_key(nested, root) == "goals/Goal_1.lean"
+    outside = tmp_path / "outside.lean"
+    outside.write_text("def y := 2\n")
+    with pytest.raises(ValueError, match="escapes owned output tree"):
+        _owned_snapshot_key(outside, root)
+
+
+def test_pattern_template_classification_excludes_only_untrusted_scaffolds() -> None:
+    for name in (
+        "Pattern_1.lean", "SegmentPattern_99.lean", "Patterns.lean",
+        "Instances.lean", "ProofObligations.lean", "MainTheorem.lean",
+        "SegmentPatterns.lean", "SegmentInstances.lean",
+    ):
+        assert _is_pattern_template_path(Path(name))
+    for name in ("GeneratedData.lean", "Goal_1.lean", "Goal_1_Full.lean"):
+        assert not _is_pattern_template_path(Path(name))
+
+
+def test_pattern_skeletons_are_extracted_and_labelled_untrusted(tmp_path: Path) -> None:
+    authority = tmp_path / "authority"
+    templates = tmp_path / "templates"
+    authority.mkdir()
+    (authority / "Goal_1.lean").write_text("def goal_1_stmt_full : Prop := True\n")
+    (authority / "Pattern_1.lean").write_text("theorem pattern_1 : True := by sorry\n")
+    (authority / "Patterns.lean").write_text("import X.Pattern_1\n")
+    (authority / "MainTheorem.lean").write_text("theorem main : True := by sorry\n")
+
+    moved = _extract_untrusted_pattern_templates(authority, templates)
+    assert moved == ["MainTheorem.lean", "Pattern_1.lean", "Patterns.lean"]
+    assert sorted(path.name for path in authority.iterdir()) == ["Goal_1.lean"]
+    assert "UNTRUSTED PROOF TEMPLATE" in (templates / "Pattern_1.lean").read_text()
+    assert "sorry" in (templates / "Pattern_1.lean").read_text()
+    _validate_untrusted_pattern_template_tree(templates)
+
+
+def test_untrusted_pattern_validator_keeps_heartbeat_bound(tmp_path: Path) -> None:
+    templates = tmp_path / "templates"
+    templates.mkdir()
+    (templates / "Pattern_1.lean").write_text(
+        "/- UNTRUSTED PROOF TEMPLATE. This file may contain sorry and is not part of "
+        "the validated authority tree. -/\n"
+        "set_option maxHeartbeats 500001\n"
+        "theorem pattern_1 : True := by sorry\n"
+    )
+    with pytest.raises(RuntimeError, match="heartbeat limit"):
+        _validate_untrusted_pattern_template_tree(templates)
+
+
+def test_main_publishes_pattern_opt_in_outside_trusted_authority(tmp_path, monkeypatch) -> None:
+    authority = tmp_path / "authority"
+    templates = tmp_path / "templates"
+    for root in (authority, templates):
+        root.mkdir()
+        (root / "STALE").write_text("stale")
+
+    args = Namespace(
+        split_goals=True,
+        atomic_output_root=str(authority),
+        emit_segment_patterns=True,
+        pattern_template_output_root=str(templates),
+        out=str(authority / "GeneratedData.lean"),
+        goals_out_dir=str(authority),
+        module="TrainVerify.Denote.Fake.GeneratedData",
+        emit_spec_template=False,
+        manifest_out=None,
+    )
+
+    def fake_generate(staged_args) -> None:
+        root = Path(staged_args.goals_out_dir)
+        root.mkdir(parents=True, exist_ok=True)
+        Path(staged_args.out).write_text("def generatedData : Nat := 0\n")
+        (root / "Goal_1.lean").write_text("def goal_1_stmt_full : Prop := True\n")
+        (root / "Pattern_1.lean").write_text("theorem pattern_1 : True := by sorry\n")
+        (root / "Patterns.lean").write_text("import Fake.Pattern_1\n")
+        (root / "Instances.lean").write_text("import Fake.Patterns\n")
+        (root / "ProofObligations.lean").write_text("theorem obligation : True := by sorry\n")
+        (root / "MainTheorem.lean").write_text("theorem main : True := by sorry\n")
+        (root / "SegmentPattern_1.lean").write_text("theorem segment_pattern_1 : True := by sorry\n")
+        (root / "SegmentPatterns.lean").write_text("import Fake.SegmentPattern_1\n")
+        (root / "SegmentInstances.lean").write_text("import Fake.SegmentPatterns\n")
+
+    monkeypatch.setattr(graph_to_lean, "parse_args", lambda: args)
+    monkeypatch.setattr(graph_to_lean, "_generate", fake_generate)
+    graph_to_lean.main()
+
+    assert not (authority / "STALE").exists()
+    assert not (templates / "STALE").exists()
+    assert sorted(path.name for path in authority.glob("*.lean")) == [
+        "GeneratedData.lean", "Goal_1.lean"
+    ]
+    assert all("sorry" not in path.read_text() for path in authority.glob("*.lean"))
+    assert (templates / "Pattern_1.lean").read_text().startswith(
+        "/- UNTRUSTED PROOF TEMPLATE."
+    )
+    assert "sorry" in (templates / "Pattern_1.lean").read_text()
+    assert (templates / "SegmentPattern_1.lean").exists()
+    assert (templates / "SegmentPatterns.lean").exists()
+    assert (templates / "SegmentInstances.lean").exists()
+    assert not (authority / "SegmentPatterns.lean").exists()
+    assert not (authority / "SegmentInstances.lean").exists()
+
+
+def test_atomic_generated_directory_exchange_rejects_symlink_target(tmp_path):
+    staged = tmp_path / ".authority.stage"
+    staged.mkdir()
+    real = tmp_path / "real"
+    real.mkdir()
+    target = tmp_path / "authority"
+    target.symlink_to(real, target_is_directory=True)
+    with pytest.raises(ValueError, match="must not be a symlink"):
+        _atomic_publish_generated_directory(staged, target)
+    assert staged.is_dir()
+    assert target.is_symlink()
+
+
+def test_atomic_output_remap_rejects_escape(tmp_path):
+    root = tmp_path / "authority"
+    stage = tmp_path / ".authority.stage"
+    assert _remap_output_path(str(root / "goals"), root, stage) == str(stage / "goals")
+    with pytest.raises(ValueError, match="escapes --atomic-output-root"):
+        _remap_output_path(str(tmp_path / "other"), root, stage)
