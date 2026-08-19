@@ -2217,6 +2217,8 @@ def test_emitter_lean_gate_uses_private_revision_and_propagates_failure(
         return types.SimpleNamespace(returncode=0, stdout="", stderr="")
 
     def fake_direct_build(project, lake, targets, clean_env):
+        assert (project / "denote" / "GeneratedGraphNodes.lean").is_file()
+        assert "denote.GeneratedGraphNodes" in targets
         direct_build_calls.append((project, lake, targets, clean_env))
         if fail_build["value"]:
             raise subprocess.CalledProcessError(1, [lake, "env", "lean"])
@@ -2230,7 +2232,7 @@ def test_emitter_lean_gate_uses_private_revision_and_propagates_failure(
     assert len(direct_build_calls) == 1
     expected_direct_targets = tuple(sorted(
         set(emitter.LEAN_TARGETS)
-        | {"denote.GeneratedYOCOMoE"}
+        | {f"denote.{Path(name).stem}" for name in emitter.GENERATED_AUTHORITY_MODULES}
         | {
             f"denote.yoco_goals.{path.stem}"
             for path in (stage / "yoco_goals").glob("*.lean")

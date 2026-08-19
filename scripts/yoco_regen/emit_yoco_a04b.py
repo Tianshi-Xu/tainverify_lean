@@ -895,8 +895,11 @@ def final_snapshot_lean_targets(stage: Path) -> tuple[str, ...]:
     top_modules = {
         f"denote.{Path(name).stem}" for name in REGISTERED_TOP_LEVEL_MODULES
     }
+    generated_modules = {
+        f"denote.{Path(name).stem}" for name in GENERATED_AUTHORITY_MODULES
+    }
     return tuple(sorted(
-        set(LEAN_TARGETS) | {"denote.GeneratedYOCOMoE"} | goal_modules | top_modules
+        set(LEAN_TARGETS) | generated_modules | goal_modules | top_modules
     ))
 
 
@@ -949,7 +952,8 @@ def validate_lean_snapshot(
         denote = project / "denote"
         shutil.rmtree(denote / "yoco_goals")
         shutil.copytree(stage / "yoco_goals", denote / "yoco_goals", symlinks=False)
-        shutil.copyfile(stage / "GeneratedYOCOMoE.lean", denote / "GeneratedYOCOMoE.lean")
+        for name in GENERATED_AUTHORITY_MODULES:
+            shutil.copyfile(stage / name, denote / name)
         for name in REGISTERED_TOP_LEVEL_MODULES:
             shutil.copyfile(stage / name, denote / name)
         lake = shutil.which("lake")
