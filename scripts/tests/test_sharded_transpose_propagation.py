@@ -465,12 +465,39 @@ def test_closed_sharded_transpose_dispatch_and_imports_accept_mixed_tuple():
         "denote.KRankTranspose",)
 
 
-@pytest.mark.parametrize("mutation", ["order", "duplicate-transition", "footprint", "tamper"])
+def test_closed_sharded_transpose_multi_orients_homogeneous_transition_enumeration():
+    ir, relation, segment, *_ = _closed_multi_fixture(REAL_TWO_TRANSPOSES)
+    expected = composer.render_closed_segment(ir, relation, segment.segment_id)
+    segment.transition_ids = tuple(reversed(segment.transition_ids))
+    assert composer.render_closed_segment(ir, relation, segment.segment_id) == expected
+
+
+def test_closed_sharded_transpose_multi_allows_opposite_sm_pm_block_orders():
+    ir, relation, segment, *_ = _closed_multi_fixture(REAL_TWO_TRANSPOSES)
+    pm_start, pm_end = segment.pm_range
+    block = (pm_end - pm_start) // 2
+    first = ir.pm_nodes[pm_start:pm_start + block]
+    second = ir.pm_nodes[pm_start + block:pm_end]
+    ir.pm_nodes[pm_start:pm_end] = second + first
+    t0, t1 = relation.transition_specs
+    relation.transition_specs = (
+        replace(t0, pm_node_indices=t1.pm_node_indices),
+        replace(t1, pm_node_indices=t0.pm_node_indices),
+    )
+    c0, c1 = relation.certificates
+    relation.certificates = (
+        replace(c0, pm_step_ids=c1.pm_step_ids),
+        replace(c1, pm_step_ids=c0.pm_step_ids),
+    )
+    source = composer.render_closed_segment(ir, relation, segment.segment_id)
+    assert source.count("let smFinal := smNodes.foldl") == 1
+    assert source.count("let pmFinal := pmNodes.foldl") == 1
+
+
+@pytest.mark.parametrize("mutation", ["duplicate-transition", "footprint", "tamper"])
 def test_closed_sharded_transpose_multi_rejects_order_duplicate_footprint_and_tamper(mutation):
     ir, relation, segment, *_ = _closed_multi_fixture(REAL_TWO_TRANSPOSES)
-    if mutation == "order":
-        segment.transition_ids = tuple(reversed(segment.transition_ids))
-    elif mutation == "duplicate-transition":
+    if mutation == "duplicate-transition":
         segment.transition_ids = (segment.transition_ids[0],) * 2
     elif mutation == "footprint":
         relation.transition_specs = (

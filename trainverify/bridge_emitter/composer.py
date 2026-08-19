@@ -6295,6 +6295,18 @@ def render_closed_k_rank_transpose_segment(ir: GoalIR, relation, segment_id: str
         raise ValueError("K-rank transpose segment footprint is outside graph authority")
     sm_nodes = tuple(ir.sm_nodes[index] for index in range(sm_start, sm_end))
     pm_nodes = tuple(ir.pm_nodes[index] for index in range(pm_start, pm_end))
+    if any(len(transition.sm_node_indices) != 1 for transition in transitions):
+        raise ValueError("K-rank transpose transition must name one SM writer")
+    transitions = tuple(sorted(transitions, key=lambda item: item.sm_node_indices[0]))
+    expected_pm_blocks = tuple(
+        tuple(range(pm_start + index * k, pm_start + (index + 1) * k))
+        for index in range(n)
+    )
+    actual_pm_blocks = tuple(tuple(item.pm_node_indices) for item in transitions)
+    if (len(set(actual_pm_blocks)) != n
+            or set(actual_pm_blocks) != set(expected_pm_blocks)):
+        raise ValueError("K-rank transpose transitions do not partition the exact PM writer blocks")
+    pm_block_positions = tuple(expected_pm_blocks.index(block) for block in actual_pm_blocks)
 
     selected = []
     pre_records = []
@@ -6324,14 +6336,14 @@ def render_closed_k_rank_transpose_segment(ir: GoalIR, relation, segment_id: str
                 or tuple(certificate.output_shard_shape) != tuple(post.shard_shape)):
             raise ValueError("K-rank transpose relation metadata is not exact")
         expected_sm = sm_start + index
-        expected_pm = tuple(range(pm_start + index * k, pm_start + (index + 1) * k))
+        expected_pm = actual_pm_blocks[index]
         if (tuple(transition.sm_node_indices) != (expected_sm,)
-                or tuple(transition.pm_node_indices) != expected_pm
                 or certificate.sm_step_id != f"sm:{expected_sm}:0"
                 or tuple(certificate.pm_step_ids) != tuple(f"pm:{item}:0" for item in expected_pm)):
-            raise ValueError("K-rank transpose transition footprint or order is not exact")
+            raise ValueError("K-rank transpose transition footprint is not exact")
         sm = sm_nodes[index]
-        block = pm_nodes[index * k:(index + 1) * k]
+        pm_position = pm_block_positions[index]
+        block = pm_nodes[pm_position * k:(pm_position + 1) * k]
         writers = (sm, *block)
         if sm.rank != 0 or tuple(node.rank for node in block) != tuple(range(k)):
             raise ValueError("K-rank transpose writers are not ordered ranks 0..K-1")
@@ -6413,7 +6425,7 @@ def render_closed_k_rank_transpose_segment(ir: GoalIR, relation, segment_id: str
     for index, sm in enumerate(sm_nodes):
         lines += writer_lines(f"hSmWriter{index}", "sm", index, sm, sm_node_names[index])
         for rank in range(k):
-            position = index * k + rank
+            position = pm_block_positions[index] * k + rank
             lines += writer_lines(f"hPmWriter{index}_{rank}", "pm", position,
                                   pm_nodes[position], pm_node_names[position])
     for index, (certificate, post) in enumerate(zip(selected, post_records)):
