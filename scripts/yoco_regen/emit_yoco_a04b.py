@@ -468,6 +468,10 @@ REGISTERED_TOP_LEVEL_MODULES = {
 EXPECTED_GOAL_MODULES = {
     Path(relative_path).name for relative_path in STATIC_GOAL_MODULES
 } | set(GENERATED_GOAL_MODULES)
+GENERATED_AUTHORITY_MODULES = {
+    "GeneratedGraphNodes.lean",
+    "GeneratedYOCOMoE.lean",
+}
 PROOF_REGISTRY_KEYS = {
     "schema_version", "generated_authority_sha256", "goal_sha256", "modules",
     "proof_targets",
@@ -721,9 +725,8 @@ def _read_regular_at(directory_fd: int, name: str) -> bytes:
 def verify_snapshot_fd(stage_fd: int) -> None:
     top_entries = set(os.listdir(stage_fd))
     expected_top = {
-        ".trainverify-stage-owner", "GeneratedYOCOMoE.lean",
-        "GeneratedYOCOMoE.manifest.json", "yoco_goals",
-    } | REGISTERED_TOP_LEVEL_MODULES
+        ".trainverify-stage-owner", "GeneratedYOCOMoE.manifest.json", "yoco_goals",
+    } | GENERATED_AUTHORITY_MODULES | REGISTERED_TOP_LEVEL_MODULES
     if top_entries != expected_top:
         raise RuntimeError(f"unexpected snapshot top-level paths: {sorted(top_entries)}")
     if not _read_regular_at(stage_fd, ".trainverify-stage-owner"):
@@ -750,14 +753,15 @@ def verify_snapshot_fd(stage_fd: int) -> None:
         goal_entries = set(os.listdir(goals_fd))
         if goal_entries != EXPECTED_GOAL_MODULES:
             raise RuntimeError(f"unexpected yoco_goals paths: {sorted(goal_entries)}")
-        expected_ledger = {"GeneratedYOCOMoE.lean"} | {
+        expected_ledger = GENERATED_AUTHORITY_MODULES | {
             f"yoco_goals/{name}" for name in EXPECTED_GOAL_MODULES
         } | REGISTERED_TOP_LEVEL_MODULES
         if set(ledger) != expected_ledger:
             raise RuntimeError("snapshot manifest path ledger is not exact")
-        main_content = _read_regular_at(stage_fd, "GeneratedYOCOMoE.lean")
-        if ledger.get("GeneratedYOCOMoE.lean") != digest_bytes(main_content):
-            raise RuntimeError("snapshot main Lean digest mismatch")
+        for name in sorted(GENERATED_AUTHORITY_MODULES):
+            content = _read_regular_at(stage_fd, name)
+            if ledger.get(name) != digest_bytes(content):
+                raise RuntimeError(f"snapshot generated authority digest mismatch: {name}")
         for name in sorted(REGISTERED_TOP_LEVEL_MODULES):
             if ledger.get(name) != digest_bytes(_read_regular_at(stage_fd, name)):
                 raise RuntimeError(f"snapshot top-level Lean digest mismatch: {name}")

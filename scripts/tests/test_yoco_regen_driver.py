@@ -2026,7 +2026,10 @@ def _write_snapshot_stage(root: Path) -> Path:
     marker = stage / ".trainverify-stage-owner"
     marker.write_text("owned", encoding="utf-8")
     marker.chmod(0o400)
-    files = {"GeneratedYOCOMoE.lean": b"def generated : Nat := 1\n"}
+    files = {
+        "GeneratedYOCOMoE.lean": b"def generated : Nat := 1\n",
+        "GeneratedGraphNodes.lean": b"def generatedNodes : List Nat := []\n",
+    }
     for name in sorted(emitter.REGISTERED_TOP_LEVEL_MODULES):
         files[name] = f"-- {name}\n".encode()
     for name in sorted(emitter.EXPECTED_GOAL_MODULES):
