@@ -127,8 +127,8 @@ def _closed_fixture(k=3):
     transition = rc.build_certificate_transition_specs(SimpleNamespace(), (cert,))[0]
     x = rc.ClosedRelationFactRecord("fact_x", x_fact, "sharded", x_sm, x_pms, None, None,
         cert.first_operand_full_shape, cert.first_operand_shard_shape, 2)
-    y = rc.ClosedRelationFactRecord("fact_y", y_fact, "joined", y_sm, (y_pm,), None, None,
-        cert.second_operand_shape, cert.second_operand_shape, None)
+    y = rc.ClosedRelationFactRecord("fact_y", y_fact, "joined", y_sm, (), None, None,
+        cert.second_operand_shape, cert.second_operand_shape, None, joined_pm_tid=y_pm)
     out = rc.ClosedRelationFactRecord("fact_out", out_fact, "sharded", out_sm, out_pms, None, None,
         cert.output_full_shape, cert.output_shard_shape, 2)
     pre = SimpleNamespace(state_id="state_pre", fact_ids=(x.fact_id, y.fact_id))
@@ -160,9 +160,74 @@ def test_query_axis_renderer_replays_exact_writers_shared_y_and_checked_theorem(
     assert source.count("applyNode_fw_matmul_out") == 4
     assert "ShardedRel.fw_matmul_query_axis_rank4" in source
     assert ", ".join(f"pmStore {tid}" for tid in x.pm_tids) in source
-    assert source.count(f"pmStore {y.pm_tids[0]}") >= 4
+    assert source.count(f"pmStore {y.joined_pm_tid}") >= 4
     assert ", ".join(f"pmFinal {tid}" for tid in out.pm_tids) in source
     assert "rankCount = 3" not in source
+
+
+def test_query_axis_renderer_ignores_unrelated_same_family_certificate_byte_exactly():
+    ir, relation, segment, *_ = _closed_fixture(3)
+    expected = composer.render_closed_segment(ir, relation, segment.segment_id)
+    exact = relation.certificates[0]
+    unrelated = replace(
+        exact,
+        first_operand_fact=rc.RelationFactSpec(
+            "sharded", ("init:999", "init:991", "init:992", "init:993"), gather_dim=2
+        ),
+    )
+    relation.certificates = (unrelated, exact)
+
+    assert composer.render_closed_segment(ir, relation, segment.segment_id) == expected
+
+
+@pytest.mark.parametrize("tamper", ["class", "rule", "theorem", "left", "right", "post", "roles", "duplicate"])
+def test_query_axis_renderer_fails_closed_on_every_exact_selector_axis(tamper):
+    ir, relation, segment, *_ = _closed_fixture(3)
+    exact = relation.certificates[0]
+    if tamper == "class":
+        malformed = SimpleNamespace(**exact.__dict__)
+    elif tamper == "rule":
+        malformed = replace(exact, rule_id="unrelated-rule")
+    elif tamper == "theorem":
+        malformed = replace(exact, lean_theorem="TrainVerify.Denote.unchecked")
+    elif tamper == "left":
+        malformed = replace(exact, first_operand_fact=replace(
+            exact.first_operand_fact, step_triple=("sm:99:0", "pm:99:0")
+        ))
+    elif tamper == "right":
+        malformed = replace(exact, second_operand_fact=replace(
+            exact.second_operand_fact, step_triple=("sm:98:0",), joined_pm_step="pm:98:0"
+        ))
+    elif tamper == "post":
+        malformed = replace(exact, output_fact=replace(
+            exact.output_fact, step_triple=("sm:97:0", "pm:97:0")
+        ))
+    elif tamper == "roles":
+        malformed = replace(
+            exact,
+            first_operand_fact=exact.second_operand_fact,
+            second_operand_fact=exact.first_operand_fact,
+        )
+    else:
+        relation.certificates = (exact, exact)
+        malformed = None
+    if malformed is not None:
+        relation.certificates = (malformed,)
+
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
+
+
+@pytest.mark.parametrize("k", [2, 4])
+def test_query_axis_renderer_derives_dynamic_ordered_k_and_exact_shared_tid(k):
+    ir, relation, segment, first, second, output = _closed_fixture(k)
+    source = composer.render_closed_segment(ir, relation, segment.segment_id)
+
+    assert source.count('op := "OpName.FW_matmul"') == 1 + k
+    assert source.count("foldl_faithful_middle_writer") == 1 + k
+    assert ", ".join(f"pmStore {tid}" for tid in first.pm_tids) in source
+    assert source.count(f"pmStore {second.joined_pm_tid}") >= 1 + k
+    assert ", ".join(f"pmFinal {tid}" for tid in output.pm_tids) in source
 
 
 @pytest.mark.parametrize(("mutation", "message"), [

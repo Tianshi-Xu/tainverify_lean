@@ -7038,20 +7038,36 @@ def render_closed_k_rank_matmul_query_axis_segment(ir: GoalIR, relation, segment
     segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
     if segment is None or len(segment.transition_ids) != 1:
         raise ValueError("K-rank matmul renderer requires one exact transition")
-    transition = next(item for item in relation.transition_specs
-                      if item.transition_id == segment.transition_ids[0])
-    if (transition.rule_id != "matmul-query-axis-sharded-k-rank-dim2"
-            or transition.lean_theorem != theorem):
+    transitions = {item.transition_id: item for item in relation.transition_specs}
+    try:
+        transition = transitions[segment.transition_ids[0]]
+    except KeyError as exc:
+        raise ValueError("K-rank query-axis matmul transition is not materialized") from exc
+    rule_id = "matmul-query-axis-sharded-k-rank-dim2"
+    if transition.rule_id != rule_id or transition.lean_theorem != theorem:
         raise ValueError("K-rank matmul theorem identity mismatch")
-    certs = [item for item in relation.certificates
-             if type(item) is KRankMatmulQueryAxisCertificate
-             and item.rule_id == transition.rule_id]
-    if len(certs) != 1 or certs[0].lean_theorem != theorem:
+    sharded_pre = tuple(
+        fact for fact in transition.pre_facts
+        if fact.layout == "sharded" and fact.gather_dim == 2
+    )
+    joined_pre = tuple(fact for fact in transition.pre_facts if fact.layout == "joined")
+    if (len(sharded_pre) != 1 or len(joined_pre) != 1
+            or len(transition.pre_facts) != 2 or len(transition.post_facts) != 1):
+        raise ValueError("K-rank matmul requires one exact typed certificate")
+    ordered_pre = (sharded_pre[0], joined_pre[0])
+    if transition.pre_facts != tuple(sorted(ordered_pre)):
+        raise ValueError("K-rank matmul requires one exact typed certificate")
+    certs = [
+        item for item in relation.certificates
+        if type(item) is KRankMatmulQueryAxisCertificate
+        and item.rule_id == transition.rule_id
+        and item.lean_theorem == transition.lean_theorem
+        and (item.first_operand_fact, item.second_operand_fact) == ordered_pre
+        and (item.output_fact,) == transition.post_facts
+    ]
+    if len(certs) != 1:
         raise ValueError("K-rank matmul requires one exact typed certificate")
     cert = certs[0]
-    expected_pre = tuple(sorted((cert.first_operand_fact, cert.second_operand_fact)))
-    if transition.pre_facts != expected_pre or transition.post_facts != (cert.output_fact,):
-        raise ValueError("K-rank matmul transition facts disagree with its certificate")
     records = {item.source: item for item in chain.relation_facts}
     try:
         first = records[cert.first_operand_fact]
@@ -7068,7 +7084,8 @@ def render_closed_k_rank_matmul_query_axis_segment(ir: GoalIR, relation, segment
     if (first.kind != "sharded" or output.kind != "sharded"
             or first.gather_dim != 2 or output.gather_dim != 2):
         raise ValueError("K-rank query-axis matmul requires exact dim2 ShardedRel facts")
-    if second.kind != "joined" or len(second.pm_tids) != 1:
+    if (second.kind != "joined" or second.pm_tids
+            or second.joined_pm_tid is None):
         raise ValueError("K-rank query-axis matmul second operand requires actual joined/shared authority")
     k = len(output.pm_tids)
     if (k < 2 or cert.rank_count != k or len(first.pm_tids) != k or cert.output_gather_dim != 2):
@@ -7118,7 +7135,7 @@ def render_closed_k_rank_matmul_query_axis_segment(ir: GoalIR, relation, segment
         raise ValueError("K-rank matmul SM writer disagrees with operand/output facts")
     if tuple(node.ins[0] for node in pm_nodes) != tuple(first.pm_tids):
         raise ValueError("K-rank query-axis matmul PM first operands do not preserve ordered TIDs")
-    shared_y = second.pm_tids[0]
+    shared_y = second.joined_pm_tid
     if any(node.ins[1] != shared_y for node in pm_nodes):
         raise ValueError("K-rank query-axis matmul PM shared second operand is not exact authority")
     if tuple(node.outs[0] for node in pm_nodes) != tuple(output.pm_tids):
