@@ -7202,15 +7202,31 @@ def render_closed_k_rank_matmul_contraction_segment(ir: GoalIR, relation, segmen
     if (transition.rule_id != "matmul-contraction-reduction-k-rank"
             or transition.lean_theorem != theorem):
         raise ValueError("K-rank contraction theorem identity mismatch")
-    certificates = [item for item in relation.certificates
-                    if type(item) is KRankMatmulContractionCertificate
-                    and item.rule_id == transition.rule_id]
-    if len(certificates) != 1 or certificates[0].lean_theorem != theorem:
+    first_pre = tuple(
+        fact for fact in transition.pre_facts
+        if fact.layout == "sharded" and fact.gather_dim == 3
+    )
+    second_pre = tuple(
+        fact for fact in transition.pre_facts
+        if fact.layout == "sharded" and fact.gather_dim == 2
+    )
+    if (len(first_pre) != 1 or len(second_pre) != 1
+            or transition.pre_facts != tuple(sorted((first_pre[0], second_pre[0])))
+            or len(transition.post_facts) != 1
+            or transition.post_facts[0].layout != "reduction"):
+        raise ValueError("K-rank contraction requires exact ordered pre/post facts")
+    certificates = [
+        item for item in relation.certificates
+        if type(item) is KRankMatmulContractionCertificate
+        and item.rule_id == transition.rule_id
+        and item.lean_theorem == transition.lean_theorem
+        and (item.first_operand_fact, item.second_operand_fact)
+            == (first_pre[0], second_pre[0])
+        and (item.output_fact,) == transition.post_facts
+    ]
+    if len(certificates) != 1:
         raise ValueError("K-rank contraction requires one exact typed certificate")
     certificate = certificates[0]
-    if (transition.pre_facts != tuple(sorted((certificate.first_operand_fact, certificate.second_operand_fact)))
-            or transition.post_facts != (certificate.output_fact,)):
-        raise ValueError("K-rank contraction transition facts disagree with certificate")
     records = {item.source: item for item in chain.relation_facts}
     try:
         x_fact = records[certificate.first_operand_fact]

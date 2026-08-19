@@ -192,6 +192,40 @@ def test_closed_contraction_renderer_replays_exact_ordered_zip_and_import_bounda
     assert composer._closed_segment_family_imports(family) == ("denote.KRankMatmulContractionReduction",)
 
 
+def test_closed_contraction_renderer_ignores_unrelated_same_family_certificate():
+    ir, relation, segment, *_ = _closed_fixture(k=3)
+    certificate = relation.certificates[0]
+    unrelated = replace(
+        certificate,
+        output_fact=rc.RelationFactSpec(
+            "reduction", ("sm:99:0", "pm:99:0", "pm:100:0", "pm:101:0")
+        ),
+    )
+    relation.certificates = (unrelated, certificate)
+    source = composer.render_closed_segment(ir, relation, segment.segment_id)
+    assert "ShardedRel.fw_matmul_contraction_axis_rank4" in source
+
+
+@pytest.mark.parametrize(
+    "certificates",
+    [
+        lambda cert: (cert, cert),
+        lambda cert: (replace(cert, lean_theorem="Tampered.theorem"),),
+        lambda cert: (replace(
+            cert,
+            first_operand_fact=cert.second_operand_fact,
+            second_operand_fact=cert.first_operand_fact,
+        ),),
+    ],
+    ids=("duplicate", "tampered-theorem", "swapped-operand-roles"),
+)
+def test_closed_contraction_renderer_rejects_non_unique_or_tampered_exact_certificate(certificates):
+    ir, relation, segment, *_ = _closed_fixture(k=3)
+    relation.certificates = certificates(relation.certificates[0])
+    with pytest.raises(ValueError, match="one exact typed certificate"):
+        composer.render_closed_segment(ir, relation, segment.segment_id)
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
