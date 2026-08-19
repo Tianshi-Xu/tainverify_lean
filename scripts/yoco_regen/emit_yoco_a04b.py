@@ -1573,8 +1573,7 @@ def promote_generated_authority(stage: Path) -> None:
     if not generated_root.is_dir() or generated_root.is_symlink():
         raise RuntimeError("generated authority root is missing or is a symlink")
     required = {
-        "GeneratedYOCOMoE.lean", "GeneratedYOCOMoE.manifest.json",
-        "yoco_goals", "verifier-cache",
+        "GeneratedYOCOMoE.lean", "GeneratedYOCOMoE.manifest.json", "yoco_goals",
     }
     names = {entry.name for entry in generated_root.iterdir()}
     missing = required - names
@@ -1725,7 +1724,9 @@ def main():
             ROOT, emitter_revision, stage,
             proof_registry,
         )
-        shutil.rmtree(stage / "verifier-cache")
+        verifier_cache = stage / "verifier-cache"
+        if verifier_cache.exists():
+            shutil.rmtree(verifier_cache)
         shutil.rmtree(llm_train)
         shutil.rmtree(nnscaler)
         shutil.rmtree(authority)

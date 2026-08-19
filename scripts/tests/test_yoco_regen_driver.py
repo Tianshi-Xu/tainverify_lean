@@ -1967,6 +1967,19 @@ def test_promote_generated_authority_moves_validated_tree_into_sealed_stage(tmp_
     assert (stage / "verifier-cache" / "cache.bin").is_file()
 
 
+def test_promote_generated_authority_accepts_absent_optional_cache(tmp_path):
+    stage = tmp_path / "stage"
+    generated = stage / ".generated-authority"
+    (generated / "yoco_goals").mkdir(parents=True)
+    (generated / "GeneratedYOCOMoE.lean").write_text("def generated := true\n")
+    (generated / "GeneratedYOCOMoE.manifest.json").write_text("{}\n")
+
+    emitter.promote_generated_authority(stage)
+
+    assert not generated.exists()
+    assert not (stage / "verifier-cache").exists()
+
+
 def test_promote_generated_authority_rejects_symlink(tmp_path):
     stage = tmp_path / "stage"
     generated = stage / ".generated-authority"
