@@ -469,7 +469,7 @@ EXPECTED_GOAL_MODULES = {
     Path(relative_path).name for relative_path in STATIC_GOAL_MODULES
 } | set(GENERATED_GOAL_MODULES)
 PROOF_REGISTRY_KEYS = {
-    "schema_version", "generated_lean_sha256", "goal_sha256", "modules",
+    "schema_version", "generated_authority_sha256", "goal_sha256", "modules",
     "proof_targets",
 }
 PROOF_REGISTRY_GOALS = {f"Goal_{index}.lean" for index in range(1, 6)}
@@ -1104,16 +1104,29 @@ def validate_proof_registry(registry: dict, stage: Path) -> dict[str, dict[str, 
     validates all generated digests before any proof skeleton is replaced.
     """
     _require_exact_keys(registry, PROOF_REGISTRY_KEYS, "proof registry")
-    if registry["schema_version"] != 1:
+    if registry["schema_version"] != 2:
         raise RuntimeError("proof registry schema version mismatch")
-    generated_digest = registry["generated_lean_sha256"]
-    if not _is_lower_hex(generated_digest, 64):
-        raise RuntimeError("proof registry generated digest is invalid")
-    if not hmac.compare_digest(
-        _regular_owned_digest(stage / "GeneratedYOCOMoE.lean", "generated Lean"),
-        generated_digest,
+    generated_ledger = registry["generated_authority_sha256"]
+    actual_generated = {
+        path.name for path in stage.glob("Generated*.lean") if path.is_file()
+    }
+    if (
+        not isinstance(generated_ledger, dict)
+        or set(generated_ledger) != actual_generated
+        or "GeneratedYOCOMoE.lean" not in generated_ledger
     ):
-        raise RuntimeError("proof registry generated Lean digest mismatch")
+        raise RuntimeError("proof registry generated authority ledger mismatch")
+    for name, expected_digest in generated_ledger.items():
+        if (
+            Path(name).name != name
+            or not name.startswith("Generated")
+            or not name.endswith(".lean")
+            or not _is_lower_hex(expected_digest, 64)
+        ):
+            raise RuntimeError("proof registry generated authority entry is invalid")
+        actual_digest = _regular_owned_digest(stage / name, f"generated authority {name}")
+        if not hmac.compare_digest(actual_digest, expected_digest):
+            raise RuntimeError(f"proof registry generated authority digest mismatch: {name}")
 
     goal_digests = registry["goal_sha256"]
     if not isinstance(goal_digests, dict) or set(goal_digests) != PROOF_REGISTRY_GOALS:

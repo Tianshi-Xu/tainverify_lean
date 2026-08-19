@@ -2307,10 +2307,14 @@ def test_emitter_proof_registry_binds_exact_generated_statements_and_blobs(
     stage = tmp_path / "stage"
     goals = stage / "yoco_goals"
     goals.mkdir(parents=True)
-    generated = b"generated"
-    generated_path = stage / "GeneratedYOCOMoE.lean"
-    generated_path.write_bytes(generated)
-    generated_path.chmod(0o600)
+    generated_authority = {
+        "GeneratedYOCOMoE.lean": b"generated",
+        "GeneratedGraphNodes.lean": b"nodes",
+    }
+    for name, content in generated_authority.items():
+        generated_path = stage / name
+        generated_path.write_bytes(content)
+        generated_path.chmod(0o600)
     goal_bytes = {}
     for index in range(1, 6):
         content = f"goal-{index}".encode()
@@ -2320,8 +2324,11 @@ def test_emitter_proof_registry_binds_exact_generated_statements_and_blobs(
         goal_path.chmod(0o600)
     proof = b"proof without placeholders"
     registry = {
-        "schema_version": 1,
-        "generated_lean_sha256": emitter.digest_bytes(generated),
+        "schema_version": 2,
+        "generated_authority_sha256": {
+            name: emitter.digest_bytes(content)
+            for name, content in generated_authority.items()
+        },
         "goal_sha256": {
             name: emitter.digest_bytes(content) for name, content in goal_bytes.items()
         },
@@ -2472,8 +2479,10 @@ def test_emitter_materializes_registered_proofs_atomically_and_refreshes_ledger(
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     manifest_path.chmod(0o600)
     registry = {
-        "schema_version": 1,
-        "generated_lean_sha256": emitter.sha256(generated),
+        "schema_version": 2,
+        "generated_authority_sha256": {
+            "GeneratedYOCOMoE.lean": emitter.sha256(generated),
+        },
         "goal_sha256": goal_digests,
         "modules": modules,
         "proof_targets": PROOF_TARGETS,
