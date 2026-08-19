@@ -2,15 +2,25 @@
 
 
 def render_closed_k_rank_alltoall_allgather_segment(ir, relation, segment_id):
-    from .composer import (
-        _membership_cases, _node_text, _select_exact_typed_certificate,
-        _shape_text,
-    )
+    try:
+        from .composer import (
+            _membership_cases, _node_text, _select_exact_typed_certificate,
+            _shape_text,
+        )
+        from .relation_compiler import (
+            KRankAllGatherReconstructionCertificate,
+            KRankAllToAllRelationCertificate,
+        )
+    except ImportError:
+        from composer import (
+            _membership_cases, _node_text, _select_exact_typed_certificate,
+            _shape_text,
+        )
+        from relation_compiler import (
+            KRankAllGatherReconstructionCertificate,
+            KRankAllToAllRelationCertificate,
+        )
     _tid_list_text = lambda tids: "[" + ", ".join(str(tid) for tid in tids) + "]"
-    from .relation_compiler import (
-        KRankAllGatherReconstructionCertificate,
-        KRankAllToAllRelationCertificate,
-    )
 
     chain = relation.dependent_chain_plan
     segments = [] if chain is None else [s for s in chain.segments if s.segment_id == segment_id]

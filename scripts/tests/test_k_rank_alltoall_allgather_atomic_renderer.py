@@ -253,3 +253,29 @@ def test_generated_atomic_collective_witness_is_exact_renderer_output():
     witness.write_text(source, encoding="utf-8")
     assert witness.read_text(encoding="utf-8") == source
     assert "sorry" not in source and "False.elim" not in source
+
+
+def test_mixed_collective_renderer_supports_plan_top_level_import(monkeypatch):
+    import importlib
+    import sys
+
+    bridge = Path(__file__).resolve().parents[2] / "trainverify/bridge_emitter"
+    monkeypatch.syspath_prepend(str(bridge))
+    sys.modules.pop("mixed_collective_renderer", None)
+    module = importlib.import_module("mixed_collective_renderer")
+    top_relation_compiler = importlib.import_module("relation_compiler")
+    monkeypatch.setattr(
+        top_relation_compiler,
+        "KRankAllGatherReconstructionCertificate",
+        KRankAllGatherReconstructionCertificate,
+    )
+    monkeypatch.setattr(
+        top_relation_compiler,
+        "KRankAllToAllRelationCertificate",
+        KRankAllToAllRelationCertificate,
+    )
+    ir, relation, segment = _fixture()
+    source = module.render_closed_k_rank_alltoall_allgather_segment(
+        ir, relation, segment.segment_id
+    )
+    assert source.count("let pmFinal :=") == 1
