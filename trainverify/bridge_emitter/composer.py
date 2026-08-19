@@ -8499,7 +8499,7 @@ def render_closed_k_rank_vocab_embedding_segment(ir: GoalIR, relation, segment_i
         raise ValueError("K-rank vocab embedding lacks exact IDs value/shape authority")
     ids_eq, ids_shape_fact = eq_facts[0], shape_facts[0]
 
-    sm_text = "[" + _node_text(sm_node) + "]"
+    sm_text = "[" + ", ".join(_node_text(node) for node in sm_nodes) + "]"
     pm_text = "[" + ", ".join(_node_text(node) for node in pm_nodes) + "]"
     weight_tids = "[" + ", ".join(str(tid) for tid in pre.pm_tids) + "]"
     output_tids = "[" + ", ".join(str(tid) for tid in post.pm_tids) + "]"
@@ -8677,25 +8677,78 @@ def render_closed_k_rank_sum_producer_segment(ir: GoalIR, relation, segment_id: 
     pm_nodes = ir.pm_nodes[slice(*segment.pm_range)]
     sm_indices = tuple(range(*segment.sm_range))
     pm_indices = tuple(range(*segment.pm_range))
-    if (len(sm_nodes) != 1 or len(pm_nodes) != k
-            or transition.sm_node_indices != sm_indices
-            or transition.pm_node_indices != pm_indices):
-        raise ValueError("K-rank FW_sum producer must own exact SM+K PM writers")
-    sm_node = sm_nodes[0]
-    if (certificate.sm_sum_step != f"sm:{sm_indices[0]}:0"
-            or tuple(certificate.pm_sum_steps) != tuple(f"pm:{index}:0" for index in pm_indices)):
+    sm_writer_indices = tuple(transition.sm_node_indices)
+    pm_writer_indices = tuple(transition.pm_node_indices)
+    if (len(sm_writer_indices) != 1 or len(pm_writer_indices) != k
+            or len(set(sm_writer_indices)) != len(sm_writer_indices)
+            or len(set(pm_writer_indices)) != len(pm_writer_indices)
+            or not set(sm_writer_indices) <= set(sm_indices)
+            or not set(pm_writer_indices) <= set(pm_indices)):
+        raise ValueError("K-rank FW_sum producer lacks an exact semantic-writer/frame partition")
+    sm_frame_indices = tuple(index for index in sm_indices if index not in set(sm_writer_indices))
+    pm_frame_indices = tuple(index for index in pm_indices if index not in set(pm_writer_indices))
+    if (set(sm_writer_indices) | set(sm_frame_indices) != set(sm_indices)
+            or set(pm_writer_indices) | set(pm_frame_indices) != set(pm_indices)
+            or set(sm_writer_indices) & set(sm_frame_indices)
+            or set(pm_writer_indices) & set(pm_frame_indices)):
+        raise ValueError("K-rank FW_sum producer lacks an exact semantic-writer/frame partition")
+    sm_writer_index = sm_writer_indices[0]
+    sm_node = ir.sm_nodes[sm_writer_index]
+    pm_writer_nodes = tuple(ir.pm_nodes[index] for index in pm_writer_indices)
+    if (certificate.sm_sum_step != f"sm:{sm_writer_index}:0"
+            or tuple(certificate.pm_sum_steps) != tuple(f"pm:{index}:0" for index in pm_writer_indices)):
         raise ValueError("K-rank FW_sum producer certificate footprint is not exact")
+
+    chain = relation.dependent_chain_plan
+    live_fact_ids = set(before.fact_ids) | set(after.fact_ids)
+    fact_records = {
+        item.fact_id: item
+        for item in (*chain.relation_facts, *chain.authority_facts, chain.anchor_fact)
+    }
+    missing_live = live_fact_ids - set(fact_records)
+    if missing_live:
+        raise ValueError(f"K-rank FW_sum producer live facts are missing: {sorted(missing_live)}")
+    live_sm_tids, live_pm_tids = set(), set()
+    for fact_id in live_fact_ids:
+        fact = fact_records[fact_id]
+        if hasattr(fact, "sm_tid"):
+            live_sm_tids.add(fact.sm_tid)
+        if hasattr(fact, "pm_tids"):
+            live_pm_tids.update(fact.pm_tids)
+        if hasattr(fact, "pm_rank0_tid"):
+            live_pm_tids.add(fact.pm_rank0_tid)
+        if hasattr(fact, "pm_rank1_tid"):
+            live_pm_tids.add(fact.pm_rank1_tid)
+        if hasattr(fact, "joined_pm_tid") and fact.joined_pm_tid is not None:
+            live_pm_tids.add(fact.joined_pm_tid)
+        if hasattr(fact, "metadata_tid") and fact.metadata_tid is not None:
+            live_pm_tids.add(fact.metadata_tid)
+        if hasattr(fact, "side") and hasattr(fact, "tid"):
+            (live_sm_tids if fact.side == "sm" else live_pm_tids).add(fact.tid)
+        if hasattr(fact, "left_side"):
+            (live_sm_tids if fact.left_side == "sm" else live_pm_tids).add(fact.left_tid)
+            (live_sm_tids if fact.right_side == "sm" else live_pm_tids).add(fact.right_tid)
+    for side, indices, live in (("SM", sm_frame_indices, live_sm_tids), ("PM", pm_frame_indices, live_pm_tids)):
+        for index in indices:
+            node = ir.sm_nodes[index] if side == "SM" else ir.pm_nodes[index]
+            overlap = set(node.outs) & live
+            if overlap:
+                raise ValueError(
+                    f"K-rank FW_sum producer {side} frame node writes a live relation/authority TID: "
+                    f"index={index}, tids={sorted(overlap)}"
+                )
     if (sm_node.rank != 0 or sm_node.op != "FW_sum" or sm_node.ins != [pre.sm_tid]
             or sm_node.outs != [post.sm_tid] or sm_node.params):
         raise ValueError("K-rank FW_sum producer SM writer binding mismatch")
-    if tuple(node.rank for node in pm_nodes) != tuple(range(k)) or any(
+    if tuple(node.rank for node in pm_writer_nodes) != tuple(range(k)) or any(
         node.op != "FW_sum" or node.ins != [pre.pm_tids[rank]]
         or node.outs != [post.pm_tids[rank]] or node.params
-        for rank, node in enumerate(pm_nodes)
+        for rank, node in enumerate(pm_writer_nodes)
     ):
         raise ValueError("K-rank FW_sum producer PM writer binding/rank/order mismatch")
 
-    sm_text = "[" + _node_text(sm_node) + "]"
+    sm_pos = sm_writer_index - segment.sm_range[0]
+    sm_text = "[" + ", ".join(_node_text(node) for node in sm_nodes) + "]"
     pm_text = "[" + ", ".join(_node_text(node) for node in pm_nodes) + "]"
     input_tids = "[" + ", ".join(str(tid) for tid in pre.pm_tids) + "]"
     output_tids = "[" + ", ".join(str(tid) for tid in post.pm_tids) + "]"
@@ -8719,24 +8772,35 @@ def render_closed_k_rank_sum_producer_segment(ir: GoalIR, relation, segment_id: 
         f"    have hin : {pre.fact_id}.Holds smStore pmStore := hstate {pre.fact_id} (by native_decide)",
         f"    change ShardedRel (smStore {pre.sm_tid}) (pmInputTids.map pmStore) 1 {full_shape} {shard_shape} at hin",
         f"    have hSmWriter : smFinal {post.sm_tid} = fw_sum (smStore {pre.sm_tid}) := by",
-        "      unfold smFinal smNodes",
-        "      simp only [List.foldl]",
-        "      rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
-        "        (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]",
-        "      unfold applyNodeDistributed",
-        "      rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]",
-        f"      · exact applyNode_fw_sum_out {ir.sm_graph_ref} smStore 0 {pre.sm_tid} {post.sm_tid}",
-        "      · decide", "      · decide",
+        "      calc",
+        f"        smFinal {post.sm_tid} = fw_sum (((smNodes.take {sm_pos}).foldl",
+        f"            (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore) {pre.sm_tid}) := by",
+        f"          change (smNodes.foldl (applyNodeDistributedFaithful {ir.sm_graph_ref}) smStore) {post.sm_tid} = _",
+        f"          rw [show smNodes = (smNodes.take {sm_pos}) ++ [{_node_text(sm_node)}] ++ (smNodes.drop {sm_pos + 1}) by native_decide]",
+        f"          apply foldl_faithful_middle_writer {ir.sm_graph_ref} smStore (smNodes.take {sm_pos}) (smNodes.drop {sm_pos + 1})",
+        f"            {_node_text(sm_node)} {post.sm_tid} (fun t => fw_sum (t {pre.sm_tid}))",
+        "          · intro t",
+        "            rw [applyNodeDistributedFaithful_eq_applyNodeDistributed_of_not_collective",
+        "              (hshuffle := by decide) (hunshuffle := by decide) (hattn := by decide)]",
+        "            unfold applyNodeDistributed",
+        "            rw [if_neg (by decide), applyNodeRingAttn_eq_applyNode_of_not_ring]",
+        f"            · exact applyNode_fw_sum_out {ir.sm_graph_ref} t 0 {pre.sm_tid} {post.sm_tid}",
+        "            · decide", "            · decide",
+        "          · native_decide", "          · native_decide",
+        f"        _ = fw_sum (smStore {pre.sm_tid}) := by",
+        f"          rw [foldl_applyNodeDistributedFaithful_at_not_written {ir.sm_graph_ref}",
+        f"            (smNodes.take {sm_pos}) smStore {pre.sm_tid} (by native_decide) (by native_decide)]",
     ]
     writer_names = []
     shape_names = []
-    for rank, node in enumerate(pm_nodes):
+    for rank, (absolute_index, node) in enumerate(zip(pm_writer_indices, pm_writer_nodes)):
         writer_name = f"hPmWriter{rank}"
         shape_name = f"hPmShape{rank}"
         writer_names.append(writer_name)
         shape_names.append(shape_name)
-        before_nodes = f"(pmNodes.take {rank})"
-        after_nodes = f"(pmNodes.drop {rank + 1})"
+        writer_position = absolute_index - segment.pm_range[0]
+        before_nodes = f"(pmNodes.take {writer_position})"
+        after_nodes = f"(pmNodes.drop {writer_position + 1})"
         lines += [
             f"    have {writer_name} : pmFinal {node.outs[0]} = fw_sum (pmStore {node.ins[0]}) := by",
             "      calc",

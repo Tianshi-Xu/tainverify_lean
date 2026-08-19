@@ -3981,7 +3981,7 @@ def test_k_rank_alltoall_frontier_transports_gather_dimension():
     assert sink == list(certificates)
 
 
-def _synthetic_k_rank_segment_relation(*, family: str, rank_count: int = 4):
+def _synthetic_k_rank_segment_relation(*, family: str, rank_count: int = 4, framed: bool = False):
     assert rank_count > 0
     anchor = relation_compiler_module.ClosedTensorShapeFactRecord(
         fact_id="anchor", side="sm", tid=999, shape=(1,), init_goal_id=999,
@@ -4020,12 +4020,17 @@ def _synthetic_k_rank_segment_relation(*, family: str, rank_count: int = 4):
         ]
         sm_range, pm_range = (1, 1), (1, rank_count + 1)
     elif family == "sum":
+        sm_writer_index = 2 if framed else 1
+        pm_writer_indices = (
+            tuple(rank_count + 2 * rank for rank in range(rank_count))
+            if framed else tuple(rank + rank_count for rank in range(rank_count))
+        )
         pre_spec = RelationFactSpec(
             "sharded", ("sm:0:0", *(f"pm:{rank}:0" for rank in range(rank_count))),
             gather_dim=1,
         )
         post_spec = RelationFactSpec(
-            "reduction", ("sm:1:0", *(f"pm:{rank + rank_count}:0" for rank in range(rank_count))),
+            "reduction", (f"sm:{sm_writer_index}:0", *(f"pm:{index}:0" for index in pm_writer_indices)),
         )
         pre = relation_compiler_module.ClosedRelationFactRecord(
             "fact_pre", pre_spec, "sharded", 10,
@@ -4041,25 +4046,34 @@ def _synthetic_k_rank_segment_relation(*, family: str, rank_count: int = 4):
             rule_id="sum-producer-sharded-k-rank-dim1", rank_count=rank_count,
             gather_dim=1, full_shape=(1, 2 * rank_count, 3), shard_shape=(1, 2, 3),
             input_fact=pre_spec, output_fact=post_spec,
-            sm_sum_step="sm:1:0",
-            pm_sum_steps=tuple(f"pm:{rank + rank_count}:0" for rank in range(rank_count)),
+            sm_sum_step=f"sm:{sm_writer_index}:0",
+            pm_sum_steps=tuple(f"pm:{index}:0" for index in pm_writer_indices),
             lean_theorem="TrainVerify.Denote.fw_sum_allGatherPrimDimN_eq_allReducePrim_fw_sum",
         )
         transition = relation_compiler_module.CertificateTransitionSpec(
-            "transition", certificate.rule_id, (pre_spec,), (post_spec,), (1,),
-            tuple(range(rank_count, 2 * rank_count)), certificate.lean_theorem,
+            "transition", certificate.rule_id, (pre_spec,), (post_spec,), (sm_writer_index,),
+            pm_writer_indices, certificate.lean_theorem,
         )
-        sm_nodes = [
-            Node(0, "FW_identity", [1], [10], []),
-            Node(0, "FW_sum", [10], [11], []),
-        ]
-        pm_nodes = [
-            *(Node(rank, "FW_identity", [2 + rank], [20 + rank], [])
-              for rank in range(rank_count)),
-            *(Node(rank, "FW_sum", [20 + rank], [30 + rank], [])
-              for rank in range(rank_count)),
-        ]
-        sm_range, pm_range = (1, 2), (rank_count, 2 * rank_count)
+        sm_nodes = [Node(0, "FW_identity", [1], [10], [])]
+        pm_nodes = [Node(rank, "FW_identity", [2 + rank], [20 + rank], [])
+                    for rank in range(rank_count)]
+        if framed:
+            sm_nodes += [
+                Node(0, "FW_identity", [700], [701], []),
+                Node(0, "FW_sum", [10], [11], []),
+                Node(0, "FW_identity", [702], [703], []),
+                Node(0, "FW_identity", [704], [705], []),
+            ]
+            for rank in range(rank_count):
+                pm_nodes.append(Node(rank, "FW_sum", [20 + rank], [30 + rank], []))
+                if rank + 1 < rank_count:
+                    pm_nodes.append(Node(rank, "FW_identity", [800 + rank], [900 + rank], []))
+            sm_range, pm_range = (1, 5), (rank_count, 3 * rank_count - 1)
+        else:
+            sm_nodes.append(Node(0, "FW_sum", [10], [11], []))
+            pm_nodes += [Node(rank, "FW_sum", [20 + rank], [30 + rank], [])
+                         for rank in range(rank_count)]
+            sm_range, pm_range = (1, 2), (rank_count, 2 * rank_count)
     elif family == "alltoall":
         pre_spec = RelationFactSpec(
             "sharded", ("sm:0:0", *(f"init:{20 + rank}" for rank in range(rank_count))),
@@ -4531,8 +4545,46 @@ def test_closed_k_rank_sum_producer_segment_is_generic_and_exact():
     assert "AllReducePrim" not in source
 
 
-def test_fresh_k_rank_sum_segment_witness_is_renderer_output(tmp_path):
-    ir, relation = _synthetic_k_rank_segment_relation(family="sum")
+def test_closed_k_rank_sum_producer_accepts_sparse_writers_and_full_frame_ranges():
+    ir, relation = _synthetic_k_rank_segment_relation(family="sum", rank_count=4, framed=True)
+    source = render_closed_segment(ir, relation, "segment_000000")
+    assert source.count("foldl (applyNodeDistributedFaithful SyntheticKRank.smGraph)") >= 1
+    assert source.count("foldl (applyNodeDistributedFaithful SyntheticKRank.pmGraph)") >= 1
+    assert source.count('op := "OpName.FW_sum"') >= 10
+    assert source.count('op := "OpName.FW_identity"') >= 12
+    assert "pmNodes.take 0" in source
+    assert "pmNodes.take 2" in source
+    assert "pmNodes.take 4" in source
+    assert "pmNodes.take 6" in source
+    assert "smNodes.take 1" in source
+    assert "rankCount = 4" not in source
+    assert "sorry" not in source and "False.elim" not in source
+
+
+@pytest.mark.parametrize("side, mutation", [
+    ("sm", "live-input"), ("sm", "semantic-output"),
+    ("pm", "live-input"), ("pm", "semantic-output"),
+])
+def test_closed_k_rank_sum_producer_rejects_frame_writes_to_live_tids(side, mutation):
+    ir, relation = _synthetic_k_rank_segment_relation(family="sum", rank_count=4, framed=True)
+    if side == "sm":
+        ir.sm_nodes[1].outs = [10 if mutation == "live-input" else 11]
+    else:
+        ir.pm_nodes[5].outs = [20 if mutation == "live-input" else 30]
+    with pytest.raises(ValueError, match="frame node writes a live relation/authority TID"):
+        render_closed_segment(ir, relation, "segment_000000")
+
+
+def test_closed_k_rank_sum_producer_rejects_nonpartitioned_sparse_footprint():
+    ir, relation = _synthetic_k_rank_segment_relation(family="sum", rank_count=4, framed=True)
+    transition = replace(relation.transition_specs[0], pm_node_indices=(4, 6, 8, 8))
+    relation = SimpleNamespace(**{**relation.__dict__, "transition_specs": (transition,)})
+    with pytest.raises(ValueError, match="exact semantic-writer/frame partition"):
+        render_closed_segment(ir, relation, "segment_000000")
+
+
+def test_fresh_k_rank_sum_frame_segment_witness_is_renderer_output():
+    ir, relation = _synthetic_k_rank_segment_relation(family="sum", rank_count=4, framed=True)
     namespace = "SyntheticKRank"
     declarations = render_closed_relation_declarations(
         relation.dependent_chain_plan, namespace
@@ -4556,8 +4608,10 @@ def test_fresh_k_rank_sum_segment_witness_is_renderer_output(tmp_path):
         f"end TrainVerify.Denote.{namespace}",
         "",
     ))
-    witness = tmp_path / "GeneratedKRankSumProducerWitness.lean"
-    witness.write_text(source)
+    witness = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/denote/GeneratedKRankSumProducerFrameWitness.lean"
+    )
     assert witness.read_text() == source
     assert rendered == render_closed_segment(ir, relation, "segment_000000")
     assert "sorry" not in source
