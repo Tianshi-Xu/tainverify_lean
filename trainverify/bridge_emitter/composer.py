@@ -9193,6 +9193,21 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         except ImportError:
             from mixed_linear_renderer import render_closed_mixed_k_rank_linear_segment
         return render_closed_mixed_k_rank_linear_segment(ir, relation, segment_id)
+    if family == (
+        "layernorm-sharded-k-rank-dim1",
+        "alltoall-k-rank-layout-transport",
+    ):
+        try:
+            from .mixed_layernorm_alltoall_renderer import (
+                render_closed_mixed_k_rank_layernorm_alltoall_segment,
+            )
+        except ImportError:
+            from mixed_layernorm_alltoall_renderer import (
+                render_closed_mixed_k_rank_layernorm_alltoall_segment,
+            )
+        return render_closed_mixed_k_rank_layernorm_alltoall_segment(
+            ir, relation, segment_id
+        )
     if family == ("full-producer-chunks-k-rank",):
         return render_closed_k_rank_full_producer_chunks_segment(ir, relation, segment_id)
     if family == ("alltoall-k-rank-layout-transport",):
