@@ -9280,6 +9280,32 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
     transitions = {item.transition_id: item for item in relation.transition_specs}
     family = tuple(transitions[item].rule_id for item in segment.transition_ids)
 
+    mixed_linear_rules = {
+        "linear-sharded-k-rank-dim1",
+        "alltoall-k-rank-layout-transport",
+        "linear-reduction-producer-k-rank",
+        "allgather-reconstruction-k-rank",
+        "linear-output-sharded-k-rank",
+    }
+    if (
+        family
+        and set(family) <= mixed_linear_rules
+        and {
+            "linear-sharded-k-rank-dim1",
+            "alltoall-k-rank-layout-transport",
+            "linear-reduction-producer-k-rank",
+        } <= set(family)
+    ):
+        try:
+            from .mixed_linear_sequence_renderer import (
+                render_closed_mixed_linear_sequence_segment,
+            )
+        except ImportError:
+            from mixed_linear_sequence_renderer import (
+                render_closed_mixed_linear_sequence_segment,
+            )
+        return render_closed_mixed_linear_sequence_segment(ir, relation, segment_id)
+
     if family and all(item == "transpose-sharded-k-rank" for item in family):
         return render_closed_k_rank_transpose_segment(ir, relation, segment_id)
     if family == ("linear-output-sharded-k-rank",):
