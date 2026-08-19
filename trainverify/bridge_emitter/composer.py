@@ -9257,6 +9257,22 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         except ImportError:
             from reduction_linear_renderer import render_closed_k_rank_reduction_linear_segment
         return render_closed_k_rank_reduction_linear_segment(ir, relation, segment_id)
+    if (
+        len(family) >= 2
+        and all(item == "linear-reduction-producer-k-rank" for item in family[:-1])
+        and family[-1] == "linear-output-sharded-k-rank"
+    ):
+        try:
+            from .mixed_reduction_linear_renderer import (
+                render_closed_mixed_reduction_output_linear_segment,
+            )
+        except ImportError:
+            from mixed_reduction_linear_renderer import (
+                render_closed_mixed_reduction_output_linear_segment,
+            )
+        return render_closed_mixed_reduction_output_linear_segment(
+            ir, relation, segment_id
+        )
     if family == ("allreduce-reconstruction-k-rank",):
         return render_closed_k_rank_allreduce_segment(ir, relation, segment_id)
     if family == ("embedding-hidden-sharded-k-rank",):
@@ -9911,6 +9927,12 @@ def _closed_segment_family_imports(
         ("softmax-sharded-k-rank-dim1",): ("denote.KRankSoftmaxGather",),
         ("softmax-sharded-k-rank-dim2",): ("denote.KRankSoftmaxGather",),
     }
+    if (
+        len(family) >= 2
+        and all(item == "linear-reduction-producer-k-rank" for item in family[:-1])
+        and family[-1] == "linear-output-sharded-k-rank"
+    ):
+        return ("denote.KRankLinearReduction", "denote.KRankLinearGather")
     return mapping.get(family, ())
 
 
