@@ -991,6 +991,26 @@ def git_clean(path: Path) -> bool:
     ).strip()
 
 
+def require_authority_emitter_ancestry(
+    repo: Path, authority_revision: str, emitter_revision: str,
+) -> None:
+    for revision in (authority_revision, emitter_revision):
+        if not isinstance(revision, str) or re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+            raise RuntimeError("invalid TrainVerify revision in authority migration")
+    if authority_revision == emitter_revision:
+        return
+    relation = subprocess.run(
+        ["git", "-C", str(repo), "merge-base", "--is-ancestor",
+         authority_revision, emitter_revision],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if relation.returncode != 0:
+        raise RuntimeError(
+            "authority TrainVerify revision is not an ancestor of the emitter revision"
+        )
+
+
 def git_blob(path: Path, revision: str, relative_path: str) -> bytes:
     return subprocess.check_output(
         ["git", "-C", str(path), "show", f"{revision}:{relative_path}"]
@@ -1366,8 +1386,9 @@ def validate_authority(
         raise RuntimeError("gen_args llm-train revision mismatch")
     if meta.get("nnscaler_commit") != NNSCALER_REVISION:
         raise RuntimeError("gen_args nnScaler revision mismatch")
-    if meta.get("trainverify_regen_commit") != emitter_revision:
-        raise RuntimeError("authority/emitter TrainVerify revision mismatch")
+    require_authority_emitter_ancestry(
+        ROOT, meta.get("trainverify_regen_commit"), emitter_revision,
+    )
     if meta.get("llm_hardware_patch") != "cc12_generic_triton_fallback_v1":
         raise RuntimeError("gen_args llm hardware patch mismatch")
 

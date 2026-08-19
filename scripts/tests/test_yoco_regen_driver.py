@@ -59,6 +59,45 @@ from scripts.yoco_regen.write_authority_metadata import (
 )
 
 
+def _commit_test_repo(repo: Path, name: str) -> str:
+    (repo / name).write_text(name)
+    subprocess.run(["git", "add", name], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+         "commit", "-m", name],
+        cwd=repo, check=True, stdout=subprocess.DEVNULL,
+    )
+    return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+
+
+def test_authority_emitter_ancestor_is_accepted_for_forward_migration(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    authority_revision = _commit_test_repo(repo, "authority")
+    current_revision = _commit_test_repo(repo, "current")
+
+    emitter.require_authority_emitter_ancestry(repo, authority_revision, current_revision)
+
+
+def test_authority_emitter_divergence_is_rejected(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    authority_revision = _commit_test_repo(repo, "authority")
+    subprocess.run(["git", "checkout", "-q", "--orphan", "diverged"], cwd=repo, check=True)
+    subprocess.run(["git", "rm", "-q", "-rf", "."], cwd=repo, check=True)
+    current_revision = _commit_test_repo(repo, "current")
+
+    with pytest.raises(RuntimeError, match="not an ancestor"):
+        emitter.require_authority_emitter_ancestry(repo, authority_revision, current_revision)
+
+
+def test_authority_emitter_revision_must_be_a_commit_hash(tmp_path):
+    with pytest.raises(RuntimeError, match="invalid TrainVerify revision"):
+        emitter.require_authority_emitter_ancestry(tmp_path, "main", "f" * 40)
+
+
 PROOF_TARGETS = [
     f"TrainVerify.Denote.GeneratedPatterns.prove_pattern_{index}"
     for index in range(1, 6)
