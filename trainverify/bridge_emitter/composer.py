@@ -9238,6 +9238,25 @@ def render_closed_segment(ir: GoalIR, relation, segment_id: str) -> str:
         except ImportError:
             from mixed_linear_renderer import render_closed_mixed_k_rank_linear_segment
         return render_closed_mixed_k_rank_linear_segment(ir, relation, segment_id)
+    local_prefix = 0
+    while local_prefix < len(family) and family[local_prefix] == "linear-sharded-k-rank-dim1":
+        local_prefix += 1
+    if (
+        local_prefix > 0
+        and local_prefix < len(family)
+        and all(item == "alltoall-k-rank-layout-transport" for item in family[local_prefix:])
+    ):
+        try:
+            from .mixed_local_linear_alltoall_renderer import (
+                render_closed_k_rank_local_linear_alltoall_segment,
+            )
+        except ImportError:
+            from mixed_local_linear_alltoall_renderer import (
+                render_closed_k_rank_local_linear_alltoall_segment,
+            )
+        return render_closed_k_rank_local_linear_alltoall_segment(
+            ir, relation, segment_id
+        )
     if family == (
         "layernorm-sharded-k-rank-dim1",
         "alltoall-k-rank-layout-transport",
