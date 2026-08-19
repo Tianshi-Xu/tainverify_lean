@@ -5904,7 +5904,19 @@ def render_closed_k_rank_local_segment(ir: GoalIR, relation, segment_id: str) ->
     }.get(identity[1])
     if cert_type is None:
         raise ValueError("K-rank local transition has unsupported certificate identity")
-    if transition.rule_id == "layernorm-sharded-k-rank-dim1":
+    if transition.rule_id == "linear-sharded-k-rank-dim1":
+        linear_theorem = "TrainVerify.Denote.fw_linear_3d_allGatherPrimDimN_dim1_comm"
+        if transition.lean_theorem != linear_theorem:
+            raise ValueError("K-rank local exact theorem identity mismatch")
+        matches = [_select_exact_typed_certificate(
+            relation,
+            transition,
+            "linear-sharded-k-rank-dim1",
+            linear_theorem,
+            KRankLocalRelationCertificate,
+            lambda cert: ((cert.input_fact,), (cert.output_fact,)),
+        )]
+    elif transition.rule_id == "layernorm-sharded-k-rank-dim1":
         matches = [
             cert for cert in relation.certificates
             if type(cert) is cert_type
