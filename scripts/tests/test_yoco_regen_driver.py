@@ -2189,7 +2189,7 @@ def test_emitter_lean_gate_uses_private_revision_and_propagates_failure(
     assert replace_cleanup["preserved"].is_dir()
 
 
-def test_direct_lean_build_respects_import_dag_and_four_worker_limit(
+def test_direct_lean_build_respects_import_dag_and_single_worker_limit(
     tmp_path, monkeypatch,
 ):
     import threading
@@ -2231,7 +2231,7 @@ def test_direct_lean_build_respects_import_dag_and_four_worker_limit(
         project, "/trusted/lake", ("Target",),
         {"HOME": os.environ["HOME"], "PATH": os.environ.get("PATH", "")},
     )
-    assert peak == 4
+    assert peak == 1
     assert set(calls[:-1]) == {f"{module}.lean" for module in dependencies}
     assert calls[-1] == "Target.lean"
 

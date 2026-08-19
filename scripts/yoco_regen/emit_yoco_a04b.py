@@ -865,7 +865,7 @@ def direct_lean_build(
             f"({len(compiled)}/{len(closure)} complete)",
             flush=True,
         )
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             futures = [executor.submit(compile_module, module) for module in ready]
             for future in futures:
                 future.result()
