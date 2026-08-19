@@ -6844,6 +6844,24 @@ def test_public_theorem_renderer_consumes_kernel_joined_target_for_singleton_pub
     assert "Pattern_17" not in source and "Goal_17" not in source
 
 
+def test_public_theorem_renderer_accepts_canonical_joined_target():
+    ir = _synthetic_external_ir(tps=((0, 901),))
+    ir.lineage.tsShape = [1]
+    ir.lineage.tpShapes = [[1]]
+    target = SimpleNamespace(
+        fact_id="terminal_relation", kind="joined", sm_tid=900,
+        joined_pm_tid=901, full_shape=(1,),
+    )
+    anchor = SimpleNamespace(
+        fact_id="shape_sm", kind="tensor_shape", side="sm", tid=10, shape=(4,)
+    )
+    source = render_closed_public_theorem(
+        ir, _synthetic_external_chain((anchor,), target), "SyntheticClosed"
+    )
+    assert "using htarget.public_value" in source
+    assert "= [[1]]" in source
+
+
 def test_public_theorem_renderer_accepts_joined_indexed_stack_target():
     ir = _synthetic_external_ir(tps=((0, 901),))
     ir.lineage.tsShape = [24, 4, 4]

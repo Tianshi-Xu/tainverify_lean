@@ -1947,6 +1947,7 @@ def emit_lean_spec(
 	lines.append("open TrainVerify.Denote")
 	lines.append("")
 	lines.append("namespace TrainVerify.Denote.Generated")
+	lines.append("noncomputable section")
 	lines.append("")
 
 	def _emit_graph(name: str, nodes: List[Any], G: Any, num_parts: int = 1) -> None:
@@ -3516,6 +3517,7 @@ def emit_lean_spec(
 		)
 		lines.append("")
 
+	lines.append("end")
 	lines.append("end TrainVerify.Denote.Generated")
 	lines.append("")
 

@@ -9695,7 +9695,10 @@ def render_closed_external_initial_state(ir: GoalIR, relation, namespace: str) -
             f"  unfold {fact_id} RelationFact.Holds StoreSide.read",
         ]
         if fact.kind == "sharded":
-            from .relation_compiler import init_lineage_relation_fact
+            try:
+                from .relation_compiler import init_lineage_relation_fact
+            except ImportError:
+                from relation_compiler import init_lineage_relation_fact
             lineage = ir.init_lineages.get(int(fact.sm_tid))
             if (
                 lineage is None
@@ -9916,7 +9919,7 @@ def render_closed_public_theorem(
         if fact.fact_id == chain.terminal_target_fact_id
     ]
     if len(targets) != 1 or targets[0].kind not in {
-        "joined_ordinary", "joined_indexed_stack_dim1",
+        "joined", "joined_ordinary", "joined_indexed_stack_dim1",
     }:
         raise ValueError("public theorem requires one joined terminal fact")
     target = targets[0]
