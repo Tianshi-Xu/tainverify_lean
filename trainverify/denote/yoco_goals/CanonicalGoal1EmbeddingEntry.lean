@@ -233,10 +233,34 @@ theorem canonical_goal_1_embedding_entry (initSM initPM : Store)
     (denoteGraphDistributedFaithful pm_goal_1 initPM 7747)
     (by decide) (by decide) (by decide) hpIds hpW0 hpW1
   refine ⟨?_, ?_, ?_, ?_, by decide⟩
-  · rw [g1e_red_sm4934, g1e_red_sm4933, g1e_red_pm7754, g1e_red_pm7755,
-      g1e_red_pm7744, g1e_red_pm7745, g1e_red_pm7748, g1e_red_pm7749,
-      hsm4930, hpm4930, hIds, hsm4932, hWeight', hpm7746, hpm7747]
-    exact hAlg
+  · calc
+      denoteGraphDistributedFaithful sm_goal_1 initSM 4934 =
+          fw_embedding
+            (denoteGraphDistributedFaithful sm_goal_1 initSM 4930)
+            (denoteGraphDistributedFaithful sm_goal_1 initSM 4932) := by
+        rw [g1e_red_sm4934, g1e_red_sm4933]
+      _ = fw_embedding
+            (denoteGraphDistributedFaithful pm_goal_1 initPM 4930)
+            (allGatherPrimDimN 1 2 0
+              [denoteGraphDistributedFaithful pm_goal_1 initPM 7746,
+               denoteGraphDistributedFaithful pm_goal_1 initPM 7747]) := by
+        rw [hsm4930, hpm4930, hIds, hsm4932, hWeight', hpm7746, hpm7747]
+      _ = allGatherPrimDimN 0 2 0
+            [allToAllPrimWithDims 2 0
+                [fw_embedding (denoteGraphDistributedFaithful pm_goal_1 initPM 4930)
+                    (denoteGraphDistributedFaithful pm_goal_1 initPM 7746),
+                 fw_embedding (denoteGraphDistributedFaithful pm_goal_1 initPM 4930)
+                    (denoteGraphDistributedFaithful pm_goal_1 initPM 7747)] 1 0,
+             allToAllPrimWithDims 2 1
+                [fw_embedding (denoteGraphDistributedFaithful pm_goal_1 initPM 4930)
+                    (denoteGraphDistributedFaithful pm_goal_1 initPM 7746),
+                 fw_embedding (denoteGraphDistributedFaithful pm_goal_1 initPM 4930)
+                    (denoteGraphDistributedFaithful pm_goal_1 initPM 7747)] 1 0] := hAlg
+      _ = allGatherPrimDimN 0 2 0
+            [denoteGraphDistributedFaithful pm_goal_1 initPM 7754,
+             denoteGraphDistributedFaithful pm_goal_1 initPM 7755] := by
+        rw [g1e_red_pm7754, g1e_red_pm7755, g1e_red_pm7744, g1e_red_pm7745,
+          g1e_red_pm7748, g1e_red_pm7749]
   · rw [g1e_red_sm4934, g1e_red_sm4933, fw_embedding_shape, hsIds]
     have hsW : (denoteGraphDistributedFaithful sm_goal_1 initSM 4932).shape =
         [154880, 1024] := by

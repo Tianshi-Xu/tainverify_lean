@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import concurrent.futures
 import hashlib
 import hmac
 import json
@@ -925,10 +924,8 @@ def direct_lean_build(
             f"({len(compiled)}/{len(closure)} complete)",
             flush=True,
         )
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            futures = [executor.submit(compile_module, module) for module in ready]
-            for future in futures:
-                future.result()
+        for module in ready:
+            compile_module(module)
         compiled.update(ready)
         pending.difference_update(ready)
 

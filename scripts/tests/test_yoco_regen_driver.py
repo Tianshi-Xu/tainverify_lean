@@ -2355,6 +2355,35 @@ def test_direct_lean_build_respects_import_dag_and_single_worker_limit(
         )
 
 
+def test_direct_lean_build_stops_at_first_failed_module(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    for module in ("Dep0", "Dep1", "Dep2"):
+        (project / f"{module}.lean").write_text("import Mathlib\n", encoding="utf-8")
+    (project / "Target.lean").write_text(
+        "import Dep0 Dep1 Dep2\n", encoding="utf-8",
+    )
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command[-1])
+        if len(calls) == 1:
+            raise subprocess.CalledProcessError(1, command)
+        output = Path(kwargs["cwd"]) / command[command.index("-o") + 1]
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"olean")
+        output.chmod(0o600)
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(emitter.subprocess, "run", fake_run)
+    with pytest.raises(subprocess.CalledProcessError):
+        emitter.direct_lean_build(
+            project, "/trusted/lake", ("Target",),
+            {"HOME": os.environ["HOME"], "PATH": os.environ.get("PATH", "")},
+        )
+    assert calls == ["Dep0.lean"]
+
+
 def test_emitter_proof_registry_binds_exact_generated_statements_and_blobs(
     tmp_path, monkeypatch,
 ):
