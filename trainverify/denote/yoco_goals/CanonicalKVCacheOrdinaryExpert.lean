@@ -321,8 +321,8 @@ theorem canonical_kv_cache_ordinary_expert_from_branch_inputs (initSM initPM : S
     (L := 2048) (hM := 1024) (E := 32) (topK := 8)
     (tDim := 1024) (dDim := 512) (swigluLimit := (((10 : Nat) : Scalar)))
     (by decide) (by decide) (by decide) (by decide) (by decide) rfl
-    hX hRP hRM (hPM 9652 _ (by native_decide)) (hPM 9653 _ (by native_decide))
-    (hPM 9654 _ (by native_decide)) (hPM 9655 _ (by native_decide)) hfullNode
+    hX hRP hRM hW13.shard0_shape hW13.shard1_shape
+    hW2.shard0_shape hW2.shard1_shape hfullNode
     (cKVCOe_red_pm9656 initPM) (cKVCOe_red_pm9657 initPM)
     houtShape hout0Shape hout1Shape
 

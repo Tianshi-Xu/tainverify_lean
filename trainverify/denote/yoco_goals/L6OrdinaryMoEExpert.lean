@@ -327,8 +327,8 @@ theorem l6_ordinary_moe_expert_from_branch_inputs (initSM initPM : Store)
     (L := 2048) (hM := 1024) (E := 32) (topK := 8)
     (tDim := 1024) (dDim := 512) (swigluLimit := (((10 : Nat) : Scalar)))
     (by decide) (by decide) (by decide) (by decide) (by decide) rfl
-    hX hRP hRM (hPM 8832 _ (by native_decide)) (hPM 8833 _ (by native_decide))
-    (hPM 8834 _ (by native_decide)) (hPM 8835 _ (by native_decide)) hfullNode
+    hX hRP hRM hW13.shard0_shape hW13.shard1_shape
+    hW2.shard0_shape hW2.shard1_shape hfullNode
     (l6OMOe_red_pm8836 initPM) (l6OMOe_red_pm8837 initPM)
     houtShape hout0Shape hout1Shape
 
