@@ -39,20 +39,59 @@ theorem l6_ordinary_moe_norm_from_attention_output (initSM initPM : Store)
     rw [l6OMon_red_sm8077 initSM, l6OMon_red_pm15646 initPM, l6OMon_red_pm15654 initPM]
     exact hAttention
   have hw := l6OMon_weight_bridge initSM initPM hInit
+  have hFullShape : (denoteGraphDistributedFaithful sm_goal_1 initSM 8077).shape =
+      [4096, 1024] := hRef.full_shape
+  have hShard0Shape : (denoteGraphDistributedFaithful pm_goal_1 initPM 15646).shape =
+      [2048, 1024] := hRef.shard0_shape
+  have hShard1Shape : (denoteGraphDistributedFaithful pm_goal_1 initPM 15654).shape =
+      [2048, 1024] := hRef.shard1_shape
   refine ⟨?_, ?_, ?_, ?_, by decide⟩
-  · rw [l6OMon_red_sm5289 initSM, l6OMon_red_pm8816 initPM,
-      l6OMon_red_pm8817 initPM, hRef.value, hw,
-      ordinary_fw_rms_norm_allGather0_commute_2 _ _ _ 2048 1024
-        (by omega) (by omega) hRef.shard0_shape hRef.shard1_shape]
-  · rw [l6OMon_red_sm5289 initSM]
-    exact ordinary_fw_rms_norm_shape2 _ _ 4096 1024
-      (by rw [l6OMon_red_sm8077 initSM]; exact hRef.full_shape)
-  · rw [l6OMon_red_pm8816 initPM]
-    exact ordinary_fw_rms_norm_shape2 _ _ 2048 1024
-      (by rw [l6OMon_red_pm15646 initPM]; exact hRef.shard0_shape)
-  · rw [l6OMon_red_pm8817 initPM]
-    exact ordinary_fw_rms_norm_shape2 _ _ 2048 1024
-      (by rw [l6OMon_red_pm15654 initPM]; exact hRef.shard1_shape)
+  · calc
+      denoteGraphDistributedFaithful sm_goal_1 initSM 5289 =
+          fw_rms_norm (denoteGraphDistributedFaithful sm_goal_1 initSM 8077)
+            (denoteGraphDistributedFaithful sm_goal_1 initSM 5288) :=
+        l6OMon_red_sm5289 initSM
+      _ = fw_rms_norm
+            (allGatherPrimDimN 0 2 0
+              [denoteGraphDistributedFaithful pm_goal_1 initPM 15646,
+               denoteGraphDistributedFaithful pm_goal_1 initPM 15654])
+            (denoteGraphDistributedFaithful sm_goal_1 initSM 5288) := by
+        rw [hRef.value]
+      _ = fw_rms_norm
+            (allGatherPrimDimN 0 2 0
+              [denoteGraphDistributedFaithful pm_goal_1 initPM 15646,
+               denoteGraphDistributedFaithful pm_goal_1 initPM 15654])
+            (denoteGraphDistributedFaithful pm_goal_1 initPM 5288) := by
+        rw [hw]
+      _ = allGatherPrimDimN 0 2 0
+            [fw_rms_norm (denoteGraphDistributedFaithful pm_goal_1 initPM 15646)
+                (denoteGraphDistributedFaithful pm_goal_1 initPM 5288),
+             fw_rms_norm (denoteGraphDistributedFaithful pm_goal_1 initPM 15654)
+                (denoteGraphDistributedFaithful pm_goal_1 initPM 5288)] :=
+        ordinary_fw_rms_norm_allGather0_commute_2 _ _ _ 2048 1024
+          (by omega) (by omega) hShard0Shape hShard1Shape
+      _ = allGatherPrimDimN 0 2 0
+            [denoteGraphDistributedFaithful pm_goal_1 initPM 8816,
+             denoteGraphDistributedFaithful pm_goal_1 initPM 8817] := by
+        rw [l6OMon_red_pm8816 initPM, l6OMon_red_pm8817 initPM]
+  · calc
+      (denoteGraphDistributedFaithful sm_goal_1 initSM 5289).shape =
+          (fw_rms_norm (denoteGraphDistributedFaithful sm_goal_1 initSM 8077)
+            (denoteGraphDistributedFaithful sm_goal_1 initSM 5288)).shape :=
+        congrArg Tensor.shape (l6OMon_red_sm5289 initSM)
+      _ = [4096, 1024] := ordinary_fw_rms_norm_shape2 _ _ 4096 1024 hFullShape
+  · calc
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 8816).shape =
+          (fw_rms_norm (denoteGraphDistributedFaithful pm_goal_1 initPM 15646)
+            (denoteGraphDistributedFaithful pm_goal_1 initPM 5288)).shape :=
+        congrArg Tensor.shape (l6OMon_red_pm8816 initPM)
+      _ = [2048, 1024] := ordinary_fw_rms_norm_shape2 _ _ 2048 1024 hShard0Shape
+  · calc
+      (denoteGraphDistributedFaithful pm_goal_1 initPM 8817).shape =
+          (fw_rms_norm (denoteGraphDistributedFaithful pm_goal_1 initPM 15654)
+            (denoteGraphDistributedFaithful pm_goal_1 initPM 5288)).shape :=
+        congrArg Tensor.shape (l6OMon_red_pm8817 initPM)
+      _ = [2048, 1024] := ordinary_fw_rms_norm_shape2 _ _ 2048 1024 hShard1Shape
 
 /-- The real activation input aliases preserve the ordinary dim-0 relation. -/
 theorem l6_ordinary_moe_activation_from_attention_output (initSM initPM : Store)
