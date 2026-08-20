@@ -1,5 +1,6 @@
 import denote.yoco_goals.Goal_2
 import denote.InnerChunkCEShard
+import denote.RelationCompiler
 import denote.Gather2Rel
 
 set_option linter.style.longLine false
@@ -170,22 +171,18 @@ theorem canonical_goal_2_value_from_norm (initSM initPM : Store)
     rw [red_sm4927, red_pm4927, red_pm11718, red_pm11719, hnorm.value,
       hweight, hlabel, hvocab]
     -- `.snd` is independent of labels, so use the same arbitrary tensor on all ranks.
-    rw [show (fw_inner_chunk_ce (denoteGraphDistributedFaithful pm_goal_2 initPM 11712)
+    rw [RelationCompiler.inner_chunk_ce_snd_labels_independent
+          (denoteGraphDistributedFaithful pm_goal_2 initPM 11712)
           (denoteGraphDistributedFaithful pm_goal_2 initPM 6256)
           (denoteGraphDistributedFaithful pm_goal_2 initPM 11714)
-          154880 ((0 : Nat) : Scalar)).snd =
-        (fw_inner_chunk_ce (denoteGraphDistributedFaithful pm_goal_2 initPM 11712)
-          (denoteGraphDistributedFaithful pm_goal_2 initPM 6256)
           (denoteGraphDistributedFaithful pm_goal_2 initPM 4931)
-          154880 ((0 : Nat) : Scalar)).snd from by rfl,
-      show (fw_inner_chunk_ce (denoteGraphDistributedFaithful pm_goal_2 initPM 11713)
+          154880 ((0 : Nat) : Scalar),
+        RelationCompiler.inner_chunk_ce_snd_labels_independent
+          (denoteGraphDistributedFaithful pm_goal_2 initPM 11713)
           (denoteGraphDistributedFaithful pm_goal_2 initPM 6256)
           (denoteGraphDistributedFaithful pm_goal_2 initPM 11715)
-          154880 ((0 : Nat) : Scalar)).snd =
-        (fw_inner_chunk_ce (denoteGraphDistributedFaithful pm_goal_2 initPM 11713)
-          (denoteGraphDistributedFaithful pm_goal_2 initPM 6256)
           (denoteGraphDistributedFaithful pm_goal_2 initPM 4931)
-          154880 ((0 : Nat) : Scalar)).snd from by rfl]
+          154880 ((0 : Nat) : Scalar)]
     have hhead : (([denoteGraphDistributedFaithful pm_goal_2 initPM 11712,
         denoteGraphDistributedFaithful pm_goal_2 initPM 11713] : List Tensor).head?.map
         (fun t => t.shape)).getD [] = [2048, 1024] := by
