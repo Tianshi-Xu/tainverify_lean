@@ -246,7 +246,12 @@ def test_generated_authority_tree_rejects_oversize_and_high_heartbeat(tmp_path):
     (tmp_path / "High.lean").write_text(
         "set_option maxHeartbeats 500001\ndef x : Prop := True\n", encoding="utf-8"
     )
-    with pytest.raises(ValueError, match="exceeds 500000 heartbeats"):
+    with pytest.raises(ValueError, match="heartbeat limit"):
+        _validate_generated_authority_tree(tmp_path)
+    (tmp_path / "High.lean").write_text(
+        "set_option maxHeartbeats 0\ndef x : Prop := True\n", encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="heartbeat limit"):
         _validate_generated_authority_tree(tmp_path)
 
 
@@ -318,6 +323,14 @@ def test_untrusted_pattern_validator_keeps_heartbeat_bound(tmp_path: Path) -> No
         "/- UNTRUSTED PROOF TEMPLATE. This file may contain sorry and is not part of "
         "the validated authority tree. -/\n"
         "set_option maxHeartbeats 500001\n"
+        "theorem pattern_1 : True := by sorry\n"
+    )
+    with pytest.raises(RuntimeError, match="heartbeat limit"):
+        _validate_untrusted_pattern_template_tree(templates)
+    (templates / "Pattern_1.lean").write_text(
+        "/- UNTRUSTED PROOF TEMPLATE. This file may contain sorry and is not part of "
+        "the validated authority tree. -/\n"
+        "set_option maxHeartbeats 0\n"
         "theorem pattern_1 : True := by sorry\n"
     )
     with pytest.raises(RuntimeError, match="heartbeat limit"):

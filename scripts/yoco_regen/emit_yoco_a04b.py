@@ -759,9 +759,10 @@ def validate_final_snapshot_sources(
             raise RuntimeError(f"final Lean source is not UTF-8: {relative}") from error
         for raw in re.findall(r"set_option\s+maxHeartbeats\s+([0-9][0-9_]*)", text):
             value = int(raw.replace("_", ""))
-            if value > FINAL_LEAN_HEARTBEAT_LIMIT:
+            if value == 0 or value > FINAL_LEAN_HEARTBEAT_LIMIT:
                 raise RuntimeError(
-                    f"final Lean source exceeds 500000 heartbeats: {relative} ({raw})"
+                    f"final Lean source violates heartbeat limit 1..500000: "
+                    f"{relative} ({raw})"
                 )
         for label, pattern in FINAL_FORBIDDEN_PATTERNS.items():
             if re.search(pattern, text, re.MULTILINE):

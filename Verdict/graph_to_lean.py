@@ -3710,9 +3710,9 @@ def _validate_generated_authority_tree(root: Path) -> None:
 				)
 			text = path.read_text(encoding="utf-8")
 			for raw in re.findall(r"set_option\s+maxHeartbeats\s+(\d+)", text):
-				if int(raw) > GENERATED_LEAN_HEARTBEAT_LIMIT:
+				if int(raw) == 0 or int(raw) > GENERATED_LEAN_HEARTBEAT_LIMIT:
 					raise ValueError(
-						f"generated Lean source exceeds 500000 heartbeats: {path.relative_to(root)} ({raw})"
+						f"generated Lean source violates heartbeat limit 1..500000: {path.relative_to(root)} ({raw})"
 					)
 			for forbidden, pattern in {
 				"sorry": r"\bsorry\b",
@@ -3828,7 +3828,7 @@ def _validate_untrusted_pattern_template_tree(root: Path) -> None:
 			if not text.startswith(_UNTRUSTED_TEMPLATE_HEADER):
 				raise RuntimeError(f"untrusted template lacks warning header: {path}")
 			for heartbeat in re.findall(r"set_option\s+maxHeartbeats\s+(\d+)", text):
-				if int(heartbeat) > GENERATED_LEAN_HEARTBEAT_LIMIT:
+				if int(heartbeat) == 0 or int(heartbeat) > GENERATED_LEAN_HEARTBEAT_LIMIT:
 					raise RuntimeError(f"untrusted template exceeds heartbeat limit: {path}")
 	if not lean_files:
 		raise RuntimeError("untrusted template tree contains no Lean templates")

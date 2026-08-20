@@ -2071,7 +2071,8 @@ def test_emitter_snapshot_stage_accepts_explicit_registry_goal_set(tmp_path):
 @pytest.mark.parametrize(
     ("payload", "message"),
     [
-        (b"set_option maxHeartbeats 500001\n", "heartbeats"),
+        (b"set_option maxHeartbeats 0\n", "heartbeat limit"),
+        (b"set_option maxHeartbeats 500001\n", "heartbeat limit"),
         (b"theorem bad : True := by admit\n", "forbidden admit"),
         (b"theorem bad : False := False.elim (by trivial)\n", "forbidden False.elim"),
     ],
