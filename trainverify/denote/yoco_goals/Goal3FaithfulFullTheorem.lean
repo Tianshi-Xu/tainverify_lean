@@ -233,9 +233,10 @@ private theorem goal3_routing_stack_of_certificates (initSM initPM : Store)
       late.l18.full_value, late.l19.full_value, late.l20.full_value,
       late.l21.full_value, late.l22.full_value, late.l23.full_value]
   · intro t ht
-    unfold goal3SmRoutingTids at ht
-    simp only [List.map, List.mem_cons, List.not_mem_nil, or_false] at ht
-    rcases ht with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
+    rcases List.mem_map.mp ht with ⟨tid, htid, rfl⟩
+    unfold goal3SmRoutingTids at htid
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at htid
+    rcases htid with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
       rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
       rfl | rfl
     next => exact early.l0.full_shape
@@ -263,9 +264,10 @@ private theorem goal3_routing_stack_of_certificates (initSM initPM : Store)
     next => exact late.l22.full_shape
     next => exact late.l23.full_shape
   · intro t ht
-    unfold goal3PmRouting0Tids at ht
-    simp only [List.map, List.mem_cons, List.not_mem_nil, or_false] at ht
-    rcases ht with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
+    rcases List.mem_map.mp ht with ⟨tid, htid, rfl⟩
+    unfold goal3PmRouting0Tids at htid
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at htid
+    rcases htid with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
       rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
       rfl | rfl
     next => exact early.l0.rank0_shape
@@ -293,9 +295,10 @@ private theorem goal3_routing_stack_of_certificates (initSM initPM : Store)
     next => exact late.l22.rank0_shape
     next => exact late.l23.rank0_shape
   · intro t ht
-    unfold goal3PmRouting1Tids at ht
-    simp only [List.map, List.mem_cons, List.not_mem_nil, or_false] at ht
-    rcases ht with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
+    rcases List.mem_map.mp ht with ⟨tid, htid, rfl⟩
+    unfold goal3PmRouting1Tids at htid
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at htid
+    rcases htid with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
       rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
       rfl | rfl
     next => exact early.l0.rank1_shape

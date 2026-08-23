@@ -228,15 +228,15 @@ private theorem cL12E_sources_wf (initSM initPM : Store)
       (decodeCuSeqlens (denoteGraphDistributedFaithful pm_goal_1 initPM 6252))
       [denoteGraphDistributedFaithful pm_goal_1 initPM 15826,
        denoteGraphDistributedFaithful pm_goal_1 initPM 15834] 2 := by
-  refine ⟨hPacked.cp_pos, rfl, ?_, hPacked.has_endpoint,
-    hPacked.monotone, hPacked.divisible, ?_, ?_, ?_⟩
-  · rw [cL12E_final_pm initPM 6252 (by decide)]
-    exact hPacked.starts_zero
+  rw [cL12E_final_pm initPM 6252 (by decide)]
+  apply hPacked.toZigzagCuWF
+  · rfl
   · exact cL12E_sources_nonempty initSM initPM hCache
   · simpa only [List.getD_cons_zero] using
       cL12E_sources_same_shape initSM initPM hCache
-  · simpa only [List.getD_cons_zero] using
-      cL12E_sources_endpoint initSM initPM hPacked hCache
+  · simp only [List.getD_cons_zero]
+    rw [cL12E_source0_shape initSM initPM hCache]
+    decide
 
 private theorem cL12E_full_value (initSM initPM : Store)
     (hCache : Gather2Rel
