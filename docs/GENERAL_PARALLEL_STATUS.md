@@ -22,6 +22,28 @@ not a new real-model backward authority or publication-completeness claim.
 The frozen final focused gate passes 73 tests. All three whole-model canonical
 bundles regenerate byte-identically; no publication artifacts were updated.
 
+## Ordered-K shared relation foundation
+
+`RelationCompiler.ZigzagKRel` and `RelationFact.zigzagK` retain the canonical
+full tensor, an ordered list of actual collective outputs, and the metadata
+tensor. The existential ordinary sources satisfy `ShardedRel` on dimension 0;
+the same K binds their count, the output count, and `ZigzagCuWF`.
+`ZigzagKRel.of_sharded` establishes the exact list of shuffle values, not an
+ordinary gather equality of zigzag outputs. Frame transport includes every PM
+rank TID and the metadata TID.
+
+`ZigzagKRelationWitness.lean` supplies an inhabited CP3 boundary with full shape
+`[12,2]`, shard shape `[4,2]`, and packed metadata `[0,12]`. It proves the token
+positions `[[0,1,10,11],[2,3,8,9],[4,5,6,7]]`, distinct actual values across all
+ranks, and the complete frame dependencies. Parent integration builds both
+modules; the audited declarations use at most kernel3. Focused downstream
+K-rank modules and the four existing CP2 entry proofs also compile against the
+new relation module. Independent exact-commit semantic review passed.
+
+This is a shared semantic boundary, not arbitrary-K compiler acceptance. The
+K-entry certificate, matcher, materializer and singleton renderer remain the
+next slice; existing CP2 interfaces and compiler acceptance are unchanged.
+
 ## CP frontier: arbitrary-K single-sequence inverse
 
 `KRankZigzagSingle.lean` proves the value-level left inverse

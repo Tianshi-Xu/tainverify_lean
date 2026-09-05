@@ -911,6 +911,38 @@ structure ShardedRel (full : Tensor) (shards : List Tensor)
     fullShape = shardShape.set gatherDim
       (shardShape.getD gatherDim 0 * shards.length)
 
+/-- Arbitrary-rank zigzag values, retaining the actual metadata tensor and the
+ordered ordinary sources. The output count is the collective rank count. -/
+def ZigzagKRel (full : Tensor) (outputs : List Tensor) (cu : Tensor)
+    (fullShape shardShape : Shape) : Prop :=
+  ∃ sources : List Tensor,
+    ShardedRel full sources 0 fullShape shardShape ∧
+    sources.length = outputs.length ∧
+    ZigzagCollective.ZigzagCuWF (decodeCuSeqlens cu) sources outputs.length ∧
+    outputs = (List.range outputs.length).map (fun rank =>
+      ZigzagCollective.fw_maybe_shuffle_collective sources
+        (decodeCuSeqlens cu) outputs.length rank)
+
+namespace ZigzagKRel
+
+/-- Value-level list entry: shuffle every ordinary source rank in authority order.
+No gather of the zigzag outputs is asserted to equal the canonical full tensor. -/
+theorem of_sharded {full cu : Tensor} {sources : List Tensor}
+    {fullShape shardShape : Shape}
+    (hsource : ShardedRel full sources 0 fullShape shardShape)
+    (hcu : ZigzagCollective.ZigzagCuWF
+      (decodeCuSeqlens cu) sources sources.length) :
+    ZigzagKRel full
+      ((List.range sources.length).map (fun rank =>
+        ZigzagCollective.fw_maybe_shuffle_collective sources
+          (decodeCuSeqlens cu) sources.length rank)) cu fullShape shardShape := by
+  refine ⟨sources, hsource, ?_, ?_, ?_⟩
+  · rw [List.length_map, List.length_range]
+  · simpa only [List.length_map, List.length_range] using hcu
+  · rw [List.length_map, List.length_range]
+
+end ZigzagKRel
+
 /-- Canonical row order and physical zigzag row order coexist with an
 independent feature-axis tensor-parallel decomposition.  The existential row
 shards are semantic witnesses; `featureShards` are the ordered graph values. -/
@@ -1998,6 +2030,8 @@ inductive RelationFact where
   | joined (smTid pmTid : Tid) (shape : Shape)
   | ordinary (smTid pmRank0Tid pmRank1Tid : Tid) (fullShape shardShape : Shape)
   | zigzag (smTid pmRank0Tid pmRank1Tid metadataTid : Tid) (fullShape shardShape : Shape)
+  | zigzagK (smTid : Tid) (pmTids : List Tid) (metadataTid : Tid)
+      (fullShape shardShape : Shape)
   | zigzagFeature (smTid : Tid) (pmTids : List Tid) (metadataTid : Tid)
       (fullShape rowShardShape featureShardShape : Shape)
   | joinedZigzag (smTid joinedPmTid metadataTid : Tid)
@@ -2039,6 +2073,8 @@ def RelationFact.Holds (fact : RelationFact) (sm pm : Store) : Prop :=
       GeneratedPatterns.Zigzag2Rel
         (sm smTid) (pm pmRank0Tid) (pm pmRank1Tid) (pm metadataTid)
         fullShape shardShape
+  | .zigzagK smTid pmTids metadataTid fullShape shardShape =>
+      ZigzagKRel (sm smTid) (pmTids.map pm) (pm metadataTid) fullShape shardShape
   | .zigzagFeature smTid pmTids metadataTid fullShape rowShardShape featureShardShape =>
       ZigzagFeatureRel (sm smTid) (pmTids.map pm) (pm metadataTid)
         fullShape rowShardShape featureShardShape
@@ -2444,6 +2480,7 @@ def smTids : RelationFact → List Tid
   | .joined smTid _ _ => [smTid]
   | .ordinary smTid _ _ _ _ => [smTid]
   | .zigzag smTid _ _ _ _ _ => [smTid]
+  | .zigzagK smTid _ _ _ _ => [smTid]
   | .zigzagFeature smTid _ _ _ _ _ => [smTid]
   | .joinedZigzag smTid _ _ _ _ => [smTid]
   | .gather smTid _ _ _ _ _ => [smTid]
@@ -2468,6 +2505,7 @@ def pmTids : RelationFact → List Tid
   | .joined _ pmTid _ => [pmTid]
   | .ordinary _ pm0 pm1 _ _ => [pm0, pm1]
   | .zigzag _ pm0 pm1 metadataTid _ _ => [pm0, pm1, metadataTid]
+  | .zigzagK _ rankTids metadataTid _ _ => rankTids ++ [metadataTid]
   | .zigzagFeature _ rankTids metadataTid _ _ _ => rankTids ++ [metadataTid]
   | .joinedZigzag _ joinedTid metadataTid _ _ => [joinedTid, metadataTid]
   | .gather _ pm0 pm1 _ _ _ => [pm0, pm1]
@@ -2534,6 +2572,16 @@ theorem Holds.frame {fact : RelationFact} {sm pm sm' pm' : Store}
   | zigzag smTid pm0 pm1 metadataTid fullShape shardShape =>
       simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
       rw [hsm _ (by simp), hpm _ (by simp), hpm _ (by simp), hpm _ (by simp)]
+      exact h
+  | zigzagK smTid rankTids metadataTid fullShape shardShape =>
+      simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
+      rw [hsm _ (List.mem_singleton_self _)]
+      have hmap : rankTids.map pm' = rankTids.map pm := by
+        apply List.map_congr_left
+        intro tid htid
+        exact hpm tid (List.mem_append_left _ htid)
+      rw [hmap, hpm metadataTid
+        (List.mem_append_right _ (List.mem_singleton_self _))]
       exact h
   | zigzagFeature smTid rankTids metadataTid fullShape rowShardShape featureShardShape =>
       simp only [Holds, smTids, pmTids] at h hsm hpm ⊢
