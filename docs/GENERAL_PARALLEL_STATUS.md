@@ -77,9 +77,26 @@ canonical renderer outputs and all four earlier entry/prefix fixtures remain
 byte-identical; independent exact-commit review passed.
 
 K1 prefix remains outside the existing contiguous backend (K1 singleton entry is
-unchanged). A K-exit bridge back to ordinary sharding, packed multi-sequence
-closure, and ring/attention are separate remaining obligations; the current
-entry/prefix results do not imply them.
+unchanged). The K-exit mathematical bridge is proved below; its compiler wiring,
+packed multi-sequence closure, and ring/attention remain separate obligations.
+The entry/prefix results do not imply them.
+
+## Ordered-K single-sequence exit foundation
+
+`ZigzagKExit.lean` recovers the complete ordered list of original sources through
+actual unshuffle collectives, then transports their existing `ShardedRel` intact:
+full shape, every shard shape, and reconstruction value. The relation theorem
+requires positive half-shard width and explicit single-sequence decoded metadata;
+positive K follows from the input `ZigzagKRel`. The backward exit uses the actual
+`bw_maybe_shuffle_collective` alias. Zero-volume tails remain allowed.
+
+`ZigzagKExitWitness.lean` proves complete tensor-list recovery and full ordinary
+relations for both exits on the existing asymmetric inhabited CP3 entry. K1/K5
+and zero-volume-tail callers are conditional. Parent integration builds both
+new leaf modules and audits all eleven new theorems: only `propext`,
+`Classical.choice`, and `Quot.sound`. Core relation definitions and compiler
+acceptance are unchanged; graph-level exit and public roundtrip need the next
+compiler slice.
 
 ## Ordered-K shared relation foundation
 
