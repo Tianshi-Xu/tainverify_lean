@@ -2782,6 +2782,14 @@ def resolve_zigzag_metadata_regions(
     authority_by_frontier = {}
     for frontier in zigzag_unresolved:
         authority_by_frontier[frontier] = region_for_root[find(frontier)]
+    for cert in certificates:
+        if isinstance(cert, KRankUnshuffleExitCertificate):
+            matches = [r for r in regions if cert.input_step_triple in r.frontier_triples]
+            if (len(matches) != 1 or cert.node_metadata_tid not in matches[0].alias_tids
+                    or (cert.metadata_source, cert.contract_metadata_tid, cert.total_tokens, cert.num_ranks)
+                    != (matches[0].metadata_source, matches[0].contract_metadata_tid,
+                        matches[0].total_tokens, matches[0].num_ranks)):
+                raise RelationCompositionError("K exit has no matching entry-derived metadata region")
     return tuple(regions), authority_by_frontier
 
 
@@ -2814,8 +2822,45 @@ class KRankShuffleEntryCertificate:
         return RelationFactSpec("zigzag_k", self.output_step_triple)
 
 
+@dataclass(frozen=True)
+class KRankUnshuffleExitCertificate:
+    rule_id: str
+    op: str
+    output_step_triple: tuple[str, ...]
+    input_step_triple: tuple[str, ...]
+    node_metadata_tid: int
+    contract_metadata_tid: int
+    metadata_source: str
+    metadata_init_lineage_rank_tids: tuple[tuple[int, int], ...]
+    total_tokens: int
+    num_ranks: int
+    sm_replica_members: tuple[tuple[int, int], ...]
+    pm_replica_members: tuple[tuple[int, int], ...]
+    full_shape: tuple[int, ...]
+    shard_shape: tuple[int, ...]
+    lean_theorem: str = "TrainVerify.Denote.RelationCompiler.ZigzagKRel.to_sharded_unshuffle_single"
+    pre_layout: str = "zigzag_k"
+    post_layout: str = "sharded"
+
+    @property
+    def input_fact(self):
+        return RelationFactSpec("zigzag_k", self.input_step_triple)
+
+    @property
+    def output_fact(self):
+        return RelationFactSpec("sharded", self.output_step_triple, gather_dim=0)
+
+
 def advance_k_rank_shuffle_entry_frontiers(ir, plan, frontiers, layouts):
-    """Exact homogeneous entry only; semantic rank order is never node-index sorted."""
+    return _advance_k_rank_shuffle_boundary(ir, plan, frontiers, layouts, exit=False)
+
+
+def advance_k_rank_unshuffle_exit_frontiers(ir, plan, frontiers, layouts):
+    return _advance_k_rank_shuffle_boundary(ir, plan, frontiers, layouts, exit=True)
+
+
+def _advance_k_rank_shuffle_boundary(ir, plan, frontiers, layouts, *, exit):
+    """Exact homogeneous boundary; semantic rank order is never node-index sorted."""
     from .ordered_buddy_authority_policy import OrderedBuddyRow, check_ordered_cp_buddy_authority
     if len(frontiers) != len(layouts):
         raise RelationCompositionError("K shuffle frontier/layout arity mismatch")
@@ -2825,7 +2870,10 @@ def advance_k_rank_shuffle_entry_frontiers(ir, plan, frontiers, layouts):
         if not ok:
             raise RelationCompositionError("K shuffle " + message)
     for frontier, layout in zip(frontiers, layouts):
-        if layout != "zigzag_k":
+        if layout != ("sharded" if exit else "zigzag_k"):
+            remaining.append(frontier); kinds.append(layout); continue
+        if exit and (ir.pm_num_ranks == 2 or not frontier or frontier[0] not in by_id
+                     or by_id[frontier[0]].op not in {"FW_maybe_unshuffle", "BW_maybe_shuffle"}):
             remaining.append(frontier); kinds.append(layout); continue
         require(plan.supported, "requires supported graph authority")
         require(len(frontier) == ir.pm_num_ranks + 1 and ir.pm_num_ranks > 0
@@ -2835,8 +2883,8 @@ def advance_k_rank_shuffle_entry_frontiers(ir, plan, frontiers, layouts):
         steps = tuple(by_id[ref] for ref in frontier)
         k = ir.pm_num_ranks
         op = steps[0].op
-        require(op in {"FW_maybe_shuffle", "BW_maybe_unshuffle"}
-                and all(s.op == op for s in steps), "requires homogeneous entry writers")
+        expected_ops = {"FW_maybe_unshuffle", "BW_maybe_shuffle"} if exit else {"FW_maybe_shuffle", "BW_maybe_unshuffle"}
+        require(op in expected_ops and all(s.op == op for s in steps), "requires homogeneous boundary writers")
         require(tuple((s.side, s.rank) for s in steps) == (("sm", 0),) + tuple(("pm", r) for r in range(k)), "rank order mismatch")
         require(tuple(s.parameters for s in steps) == ((1, 0),) + tuple((k,r) for r in range(k)), "parameters mismatch")
         require(all(len(s.input_tids) == len(s.input_bindings) == len(s.input_shapes) == 2 for s in steps), "signature mismatch")
@@ -2880,11 +2928,28 @@ def advance_k_rank_shuffle_entry_frontiers(ir, plan, frontiers, layouts):
         authentic = compile_proof_plan(ir, build_default_registry())
         authentic_steps = _step_map(authentic)
         require(authentic.supported and all(authentic_steps.get(s.step_id) == s for s in steps), "input producer authority mismatch")
-        certificates.append(KRankShuffleEntryCertificate(
-            "fw-shuffle-sharded-to-zigzag-k" if op == "FW_maybe_shuffle" else "bw-unshuffle-sharded-to-zigzag-k",
-            op, frontier, inputs, tid, contract.tid, classes[1].source, ((0,tid),),
+        if exit:
+            for side in ("sm", "pm"):
+                written = [s.output_tid for s in steps if s.side == side]
+                external = {t for t, _ in (ir.sm_shapes if side == "sm" else ir.pm_shapes)}
+                reads = {t for s in steps if s.side == side for t in s.input_tids}
+                require(len(written) == len(set(written)) and not set(written) & (external | reads),
+                        "exit writer clobbers source or metadata authority")
+            require(shard[0] > 0 and shard[0] % 2 == 0, "exit requires positive even local tokens")
+            entries, _, _ = advance_k_rank_shuffle_entry_frontiers(ir, plan, (inputs,), ("zigzag_k",))
+            require(len(entries) == 1 and entries[0].node_metadata_tid == tid
+                    and entries[0].metadata_source == classes[1].source
+                    and entries[0].contract_metadata_tid == contract.tid,
+                    "exit must consume the same entry-derived metadata")
+            certificate_type = KRankUnshuffleExitCertificate
+            rule_id = "fw-unshuffle-zigzag-k-to-sharded" if op == "FW_maybe_unshuffle" else "bw-shuffle-zigzag-k-to-sharded"
+        else:
+            certificate_type = KRankShuffleEntryCertificate
+            rule_id = "fw-shuffle-sharded-to-zigzag-k" if op == "FW_maybe_shuffle" else "bw-unshuffle-sharded-to-zigzag-k"
+        certificates.append(certificate_type(
+            rule_id, op, frontier, inputs, tid, contract.tid, classes[1].source, ((0,tid),),
             full[0], k, ((0,steps[0].output_tid),), tuple((s.rank,s.output_tid) for s in steps[1:]), full, shard))
-        remaining.append(inputs); kinds.append("sharded")
+        remaining.append(inputs); kinds.append("zigzag_k" if exit else "sharded")
     return tuple(certificates), tuple(remaining), tuple(kinds)
 
 
@@ -8519,7 +8584,7 @@ def normalize_relation_frontiers(
 ) -> tuple[tuple[tuple[str, ...], ...], tuple[str, ...]]:
     """Apply registered relation rules to a deterministic fixed point."""
     known = {"allreduce_reconstruction_k", "bw_embedding_vocab_k", "bw_embedding_sequence_reduction_k", "bw_sum_k", "bw_softmax_k", "bw_gelu_k", "bw_matmul_k", "bw_linear_dw_column_k", "bw_linear_dw_sharded_k", "bw_linear_dw_reduction_k", "bw_linear_dx_k", "bw_layernorm_param_reduction_k", "bw_layernorm_dx_k", "bw_add_identity_k", "bw_multiref_sum_k", "embedding_vocab_reduction_k", "embedding_sharded_ids_k", "sum_producer_k", "reduction_linear_producer_k", "joined_bw_view", "joined_init_multiref", "zigzag_feature_output_linear", "zigzag_feature_binary", "zigzag_feature_view", "joined_view", "joined_zigzag", "reduce_scatter_reconstruction_k", "allgather_reconstruction_k", "full_producer_k", "output_linear_k", "mix_linear_k", "matmul_output_axis_k", "matmul_head_axis_k", "matmul_query_axis_k", "matmul_contraction_k", "softmax_k", "div_k", "embedding_k", "alltoall_k", "rms_norm_k", "linear_k", "layernorm_k", "gelu_k", "transpose_k", "contiguous_k", "add_k", "multiref_k", "alias", "rms_norm_k", "rms_norm", "float", "identity_view", "linear", "flatten_3d", "embedding_cp2_adapter", "attention_cp2_adapter", "attention", "rotary", "to", "per_head_linear", "mul", "pointwise", "ordinary_moe", "shuffle", "unshuffle", "topk", "zigzag_feature_reduction", "reduction_chunk_boundary", "full_producer_chunk", "add"}
-    known.add("shuffle_k_entry")
+    known.update(("shuffle_k_entry", "unshuffle_k_exit"))
     unknown = set(rules) - known
     if unknown:
         raise RelationCompositionError(f"unknown relation normalization rules: {sorted(unknown)}")
@@ -8531,6 +8596,12 @@ def normalize_relation_frontiers(
                 current_frontiers, current_layouts
             )
         prior_state = (current_frontiers, current_layouts)
+        if "unshuffle_k_exit" in rules:
+            if goal_ir is None:
+                raise RelationCompositionError("K exit requires GoalIR authority")
+            _certs, current_frontiers, current_layouts = advance_k_rank_unshuffle_exit_frontiers(
+                goal_ir, plan, current_frontiers, current_layouts)
+            _extend_unique_certificates(certificate_sink, _certs)
         if "shuffle_k_entry" in rules:
             if goal_ir is None:
                 raise RelationCompositionError("K shuffle requires GoalIR authority")
@@ -10317,6 +10388,16 @@ _register_closed_rule_specs(
         "FW_float", "composer:render_closed_float_segment", (),
     ),
     ClosedRuleSpec(
+        "fw-unshuffle-zigzag-k-to-sharded", KRankUnshuffleExitCertificate,
+        ("TrainVerify.Denote.RelationCompiler.ZigzagKRel.to_sharded_unshuffle_single",),
+        "FW_maybe_unshuffle", "k_unshuffle_exit_renderer:render_closed_k_unshuffle_exit_segment", ("denote.ZigzagKExit",),
+    ),
+    ClosedRuleSpec(
+        "bw-shuffle-zigzag-k-to-sharded", KRankUnshuffleExitCertificate,
+        ("TrainVerify.Denote.RelationCompiler.ZigzagKRel.to_sharded_unshuffle_single",),
+        "BW_maybe_shuffle", "k_unshuffle_exit_renderer:render_closed_k_unshuffle_exit_segment", ("denote.ZigzagKExit",),
+    ),
+    ClosedRuleSpec(
         "fw-shuffle-sharded-to-zigzag-k", KRankShuffleEntryCertificate,
         ("TrainVerify.Denote.RelationCompiler.ZigzagKRel.of_sharded",),
         "FW_maybe_shuffle", "k_shuffle_entry_renderer:render_closed_k_shuffle_entry_segment", (),
@@ -10673,7 +10754,7 @@ def build_certificate_transition_specs(
             pre = tuple(_fact(cert.relation_kind, refs) for refs in cert.input_relation_step_triples)
             post = tuple(_fact(cert.relation_kind, refs) for refs in cert.output_step_triples)
             footprint_groups = tuple(cert.output_step_triples)
-        elif type(cert) is KRankShuffleEntryCertificate:
+        elif type(cert) in (KRankShuffleEntryCertificate, KRankUnshuffleExitCertificate):
             pre, post = (cert.input_fact,), (cert.output_fact,)
             footprint_groups = (cert.output_step_triple,)
         elif type(cert) is FrontierUnshuffleCertificate or type(cert) is FaithfulShuffleCertificate:
@@ -11687,6 +11768,8 @@ def compile_relation_plan(
         by_step = _step_map(proof)
         joined_target = (
             len(proof.target_steps) == 2
+            and not (ir.pm_num_ranks != 2 and by_step[proof.target_steps[0]].op in
+                     {"FW_maybe_unshuffle", "BW_maybe_shuffle"})
             and len(proof.relation.pm_pieces) == 1
             and by_step[proof.target_steps[0]].side == "sm"
             and by_step[proof.target_steps[1]].side == "pm"
@@ -11717,7 +11800,7 @@ def compile_relation_plan(
                    "matmul_contraction_k", "softmax_k", "div_k",
                    "embedding_k", "alltoall_k", "rms_norm_k", "linear_k", "layernorm_k",
                    "gelu_k", "transpose_k", "contiguous_k", "add_k",
-                   "multiref_k"),
+                   "multiref_k", "unshuffle_k_exit", "shuffle_k_entry"),
             goal_ir=ir, certificate_sink=compiled_certificates,
             deduplicate_each_round=True,
         )
@@ -11746,7 +11829,8 @@ def compile_relation_plan(
             family="direct-gather-k-rank", terminal_rule_id="direct-gather-k-rank",
             synchronized_steps=(), certificates=certificate_tuple,
             unresolved_frontiers=frontiers, unresolved_layouts=layouts,
-            unresolved_side_conditions=(), zigzag_regions=(),
+            unresolved_side_conditions=(),
+            zigzag_regions=resolve_zigzag_metadata_regions(ir, certificate_tuple, (), ())[0],
             transition_specs=transition_specs, coverage_plan=coverage_plan,
             dependency_plan=dependency_plan, atomic_schedule=atomic_schedule,
         )

@@ -77,9 +77,9 @@ canonical renderer outputs and all four earlier entry/prefix fixtures remain
 byte-identical; independent exact-commit review passed.
 
 K1 prefix remains outside the existing contiguous backend (K1 singleton entry is
-unchanged). The K-exit mathematical bridge is proved below; its compiler wiring,
-packed multi-sequence closure, and ring/attention remain separate obligations.
-The entry/prefix results do not imply them.
+unchanged). The K-exit mathematical bridge and two-segment compiler/public
+roundtrip are proved below. Packed multi-sequence closure and ring/attention
+remain separate obligations; entry/exit inversion does not imply them.
 
 ## Ordered-K single-sequence exit foundation
 
@@ -94,9 +94,44 @@ positive K follows from the input `ZigzagKRel`. The backward exit uses the actua
 relations for both exits on the existing asymmetric inhabited CP3 entry. K1/K5
 and zero-volume-tail callers are conditional. Parent integration builds both
 new leaf modules and audits all eleven new theorems: only `propext`,
-`Classical.choice`, and `Quot.sound`. Core relation definitions and compiler
-acceptance are unchanged; graph-level exit and public roundtrip need the next
-compiler slice.
+`Classical.choice`, and `Quot.sound`. That mathematical slice did not change
+core relation definitions or compiler acceptance.
+
+## Ordered-K entry → exit compiler/public roundtrip
+
+Typed K-exit certificates now connect actual FW shuffle→unshuffle and BW
+unshuffle→shuffle writers through the shared dependency DAG. Exit consumes the
+entry-produced `zigzag_k` fact and the same metadata region; intermediate tensors
+are not reseeded as external InitGoals. Retained entry/exit projections reuse
+one entry certificate. Semantic rank order is independent of exit graph order
+`[2,0,1]`. Actual producer identities, ordered groups, writer parameters, shapes,
+packed/value-class authority and no-clobber obligations are checked.
+
+The dedicated renderer calls the actual distributed FW/BW writers and the
+single-sequence exit theorem. Public gather uses the recovered ordinary-sharded
+fact, not the zigzag entry. The committed CP3 FW/BW fixtures invoke the existing
+public renderer for `prove_goal_0_closed : CPEntry.exitStatement`, including full
+source shape, complete shard-shape list and reconstruction equality. Concrete
+`publicInputs` prove that all public assumptions hold for the same asymmetric
+initial stores; `inhabitedPublicOutput` applies that public theorem to them.
+
+Compiler admission requires positive dimensions and even local tokens; the
+mathematical zero-tail domain is deliberately broader. K1/K5 internal composition
+has Python coverage; public K1 remains outside the existing at-least-two-shard
+public renderer. These graph witnesses prove ordinary exit/public reconstruction,
+not a separately stated final-store tensor-list equality to original sources.
+Packed multi-sequence and ring/attention computation are not closed by this slice.
+
+Parent verification: 175 entry/exit/prefix tests and 75 selected CP2/import/compound
+regressions pass. Disabling the even-token, region-alias and pre-state-alias
+liveness checks independently makes the targeted tests fail. Both exact committed
+CP3 FW/BW graph/public witnesses compile and materialize `.olean` files; each
+reports four axiom groups, with only kernel3 plus the existing generated
+`native_decide` axioms (no `sorryAx` or unexpected positive axiom). Six corrupt
+exact-graph variants—wrong CP rank parameter, wrong metadata TID and source
+clobber, each FW/BW—fail in Lean and produce no `.olean`. Independent immutable
+compiler review and focused parent-delta review pass. All three canonical model
+bundles and all six earlier entry/prefix fixtures remain byte-identical.
 
 ## Ordered-K shared relation foundation
 
