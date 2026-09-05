@@ -16,7 +16,10 @@ def render_closed_k_rank_bw_linear_dx_segment(ir, relation, segment_id: str) -> 
         )
         from relation_compiler import get_closed_rule_spec
 
-    rule_spec = get_closed_rule_spec("bw-linear-dx-row-reduction-rank4")
+    row_rules = {
+        "bw-linear-dx-row-reduction-k-rank",
+        "bw-linear-dx-row-reduction-rank4",
+    }
     view_rule_spec = get_closed_rule_spec("bw-view-joined")
     chain = relation.dependent_chain_plan
     segment = next((item for item in chain.segments if item.segment_id == segment_id), None)
@@ -25,21 +28,14 @@ def render_closed_k_rank_bw_linear_dx_segment(ir, relation, segment_id: str) -> 
     transition_map = {item.transition_id: item for item in relation.transition_specs}
     segment_transitions = tuple(transition_map[item] for item in segment.transition_ids)
     transition = next((item for item in segment_transitions
-                       if item.rule_id == rule_spec.rule_id), None)
+                       if item.rule_id in row_rules), None)
     view_transition = next((item for item in segment_transitions
                             if item.rule_id == view_rule_spec.rule_id), None)
     if transition is None or (len(segment_transitions) == 2 and view_transition is None):
         raise ValueError("BW_linear dX transition authority is missing")
+    rule_spec = get_closed_rule_spec(transition.rule_id)
     rule = rule_spec.rule_id
-    theorem_table = {
-        ((1, 8, 32), (1, 8, 8), (1, 8, 32), (32, 32), (8, 32), (1, 8, 32)):
-            rule_spec.lean_theorems[0],
-        ((1, 8, 128), (1, 8, 32), (1, 8, 32), (128, 32), (32, 32), (1, 8, 32)):
-            rule_spec.lean_theorems[1],
-        ((1, 8, 32), (1, 8, 8), (1, 8, 128), (32, 128), (8, 128), (1, 8, 128)):
-            rule_spec.lean_theorems[2],
-    }
-    if transition.rule_id != rule or transition.lean_theorem not in theorem_table.values():
+    if transition.lean_theorem not in rule_spec.lean_theorems:
         raise ValueError("BW_linear dX row-reduction theorem identity mismatch")
     certificate = _select_exact_typed_certificate(
         relation, transition, rule, transition.lean_theorem,
@@ -78,11 +74,7 @@ def render_closed_k_rank_bw_linear_dx_segment(ir, relation, segment_id: str) -> 
         raise ValueError("BW_linear dX post-state introduces an unproved fact")
 
     k = len(gradient.pm_tids)
-    shape_key = (
-        gradient.full_shape, gradient.shard_shape, activation.full_shape,
-        weight.full_shape, weight.shard_shape, output.full_shape,
-    )
-    if (k != 4 or certificate.rank_count != k
+    if (k == 0 or certificate.rank_count != k
             or certificate.output_layout != "reduction" or certificate.gather_dim is not None
             or gradient.kind != "sharded" or gradient.gather_dim != 2
             or activation.kind != "joined" or activation.pm_tids != ()
@@ -91,13 +83,26 @@ def render_closed_k_rank_bw_linear_dx_segment(ir, relation, segment_id: str) -> 
             or output.kind != "reduction" or len(output.pm_tids) != k
             or activation.shard_shape != activation.full_shape
             or output.shard_shape != output.full_shape
+            or len(gradient.full_shape) != 3 or len(gradient.shard_shape) != 3
+            or len(activation.full_shape) != 3
+            or len(weight.full_shape) != 2 or len(weight.shard_shape) != 2
             or gradient.full_shape[:2] != activation.full_shape[:2]
+            or gradient.shard_shape[:2] != activation.full_shape[:2]
             or output.full_shape != activation.full_shape
+            or gradient.full_shape[2] != gradient.shard_shape[2] * k
             or weight.full_shape != (gradient.full_shape[2], activation.full_shape[2])
             or weight.shard_shape != (gradient.shard_shape[2], activation.full_shape[2])
             or len(weight.pm_tids) != k
-            or theorem_table.get(shape_key) != transition.lean_theorem):
+            or any(x <= 0 for x in (*activation.full_shape, gradient.shard_shape[2]))):
         raise ValueError("BW_linear dX row-reduction metadata is not exact")
+    if (rule == "bw-linear-dx-row-reduction-k-rank"
+            and (gradient.full_shape != (1, 8, 32 * k)
+                 or gradient.shard_shape != (1, 8, 32)
+                 or activation.full_shape != (1, 8, 32)
+                 or weight.full_shape != (32 * k, 32)
+                 or weight.shard_shape != (32, 32)
+                 or output.full_shape != (1, 8, 32))):
+        raise ValueError("BW_linear dX dynamic theorem shape contract mismatch")
 
     if len(transition.sm_node_indices) != 1 or len(transition.pm_node_indices) != k:
         raise ValueError("BW_linear dX footprint is not exact 1+K")
@@ -217,6 +222,10 @@ def render_closed_k_rank_bw_linear_dx_segment(ir, relation, segment_id: str) -> 
     glist = "[" + ", ".join(f"pmFinal {tid}" for tid in gradient.pm_tids) + "]"
     wlist = "[" + ", ".join(f"pmFinal {tid}" for tid in weight.pm_tids) + "]"
     olist = "[" + ", ".join(f"pmFinal {tid}" for tid in output.pm_tids) + "]"
+    contribution_list = "[" + ", ".join(
+        f"(bw_linear (pmFinal {g}) (pmFinal {activation.joined_pm_tid}) (pmFinal {w})).1"
+        for g, w in zip(gradient.pm_tids, weight.pm_tids)
+    ) + "]"
     gfull, gshard = (_shape_text(list(x)) for x in (gradient.full_shape, gradient.shard_shape))
     wfull, wshard = (_shape_text(list(x)) for x in (weight.full_shape, weight.shard_shape))
     oshape = _shape_text(list(output.full_shape))
@@ -238,9 +247,9 @@ def render_closed_k_rank_bw_linear_dx_segment(ir, relation, segment_id: str) -> 
         f"      (pmFinal {activation.joined_pm_tid}).shape = {_shape_text(list(activation.full_shape))} at hx",
         f"    have hw : {weight.fact_id}.Holds smFinal pmFinal := hframe _ (by native_decide)",
         f"    change ShardedRel (smFinal {weight.sm_tid}) {wlist} 0 {wfull} {wshard} at hw",
-        f"    have hgValue : smFinal {gradient.sm_tid} = allGatherPrimDimN 2 4 0 {glist} := by",
+        f"    have hgValue : smFinal {gradient.sm_tid} = allGatherPrimDimN 2 {k} 0 {glist} := by",
         "      simpa only [List.length_cons, List.length_nil] using hg.full_value",
-        f"    have hwValue : smFinal {weight.sm_tid} = allGatherPrimDimN 0 4 0 {wlist} := by",
+        f"    have hwValue : smFinal {weight.sm_tid} = allGatherPrimDimN 0 {k} 0 {wlist} := by",
         "      simpa only [List.length_cons, List.length_nil] using hw.full_value",
         f"    have hSmWriter : smFinal {sm_node.outs[0]} =",
         f"        (bw_linear (smFinal {sm_node.ins[0]}) (smFinal {sm_node.ins[1]}) (smFinal {sm_node.ins[2]})).1 :=",
@@ -261,16 +270,37 @@ def render_closed_k_rank_bw_linear_dx_segment(ir, relation, segment_id: str) -> 
             f"      exact bw_linear_3d_fst_shape {gradient.shard_shape[0]} {gradient.shard_shape[1]} {gradient.shard_shape[2]} {activation.full_shape[2]} _ _ _",
             f"        hgShape{rank} hx.2.2 hwShape{rank}",
         ])
+    if rule == "bw-linear-dx-row-reduction-k-rank":
+        hcomm_lines = [
+            f"    have hcomm := {transition.lean_theorem}",
+            f"      {glist} {wlist} (pmFinal {activation.joined_pm_tid})",
+            "      (by simp)",
+            "      (by simp)",
+            "      (by simp [" + ", ".join(f"hgShape{rank}" for rank in range(k)) + "])",
+            "      (by simp [" + ", ".join(f"hwShape{rank}" for rank in range(k)) + "])",
+            "      hx.2.2",
+            f"    have hcommExplicit :",
+            f"        (bw_linear (allGatherPrimDimN 2 {k} 0 {glist})",
+            f"          (pmFinal {activation.joined_pm_tid}) (allGatherPrimDimN 0 {k} 0 {wlist})).1 =",
+            f"        allReducePrim {k} 0 {contribution_list} := by",
+            "      simpa only [List.length_cons, List.length_nil, List.zipWith] using hcomm",
+        ]
+        commute_name = "hcommExplicit"
+    else:
+        hcomm_lines = [
+            f"    have hcomm := {transition.lean_theorem}",
+            *(f"      (pmFinal {tid})" for tid in gradient.pm_tids),
+            f"      (pmFinal {activation.joined_pm_tid})",
+            *(f"      (pmFinal {tid})" for tid in weight.pm_tids),
+            *(f"      hgShape{rank}" for rank in range(k)),
+            "      hx.2.2",
+            *(f"      hwShape{rank}" for rank in range(k)),
+        ]
+        commute_name = "hcomm"
     lines.extend([
-        f"    have hcomm := {transition.lean_theorem}",
-        *(f"      (pmFinal {tid})" for tid in gradient.pm_tids),
-        f"      (pmFinal {activation.joined_pm_tid})",
-        *(f"      (pmFinal {tid})" for tid in weight.pm_tids),
-        *(f"      hgShape{rank}" for rank in range(k)),
-        "      hx.2.2",
-        *(f"      hwShape{rank}" for rank in range(k)),
-        f"    have hOutValue : smFinal {output.sm_tid} = allReducePrim 4 0 {olist} := by",
-        "      rw [hSmWriter, hgValue, hx.1, hwValue, hcomm]",
+        *hcomm_lines,
+        f"    have hOutValue : smFinal {output.sm_tid} = allReducePrim {k} 0 {olist} := by",
+        f"      rw [hSmWriter, hgValue, hx.1, hwValue, {commute_name}]",
         "      rw [" + ", ".join(f"← hPmWriter{rank}" for rank in range(k)) + "]",
         f"    have hOutValueList : smFinal {output.sm_tid} =",
         f"        allReducePrim {olist}.length 0 {olist} := by",

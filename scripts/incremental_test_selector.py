@@ -82,6 +82,23 @@ BW_SUM_PATHS = frozenset((
     "scripts/tests/test_model_authority.py",
     "scripts/tests/test_proof_compiler.py",
 ))
+BW_LINEAR_DX_TESTS = (
+    "scripts/tests/test_k_rank_bw_sum.py",
+    "scripts/tests/test_proof_compiler.py::test_real_goals_compile_fail_closed_relation_plans",
+    "scripts/tests/test_mixed_linear_transition_sequence_renderer.py",
+    "scripts/tests/test_closed_segment_import_policy.py",
+    "scripts/tests/test_incremental_test_selector.py",
+)
+BW_LINEAR_DX_PATHS = frozenset((
+    "trainverify/bridge_emitter/relation_compiler.py",
+    "trainverify/bridge_emitter/bw_linear_dx_renderer.py",
+    "trainverify/denote/KRankBWLinearDx.lean",
+    "trainverify/denote/GeneratedKRankBWLinearDxWitness.lean",
+    "scripts/tests/test_k_rank_bw_sum.py",
+    "scripts/tests/test_proof_compiler.py",
+    "scripts/incremental_test_selector.py",
+    "scripts/tests/test_incremental_test_selector.py",
+))
 
 
 @dataclass(frozen=True)
@@ -144,6 +161,28 @@ def select_gates(
         return _full_plan("release mode requires the complete Python and formal transaction")
 
     if family is not None:
+        if family == "k-rank-bw-linear-dx-row":
+            outside = tuple(path for path in paths if path not in BW_LINEAR_DX_PATHS)
+            if outside:
+                return _full_plan(
+                    "paths outside k-rank-bw-linear-dx-row family scope: "
+                    + ", ".join(outside)
+                )
+            return GatePlan(
+                pytest_nodes=BW_LINEAR_DX_TESTS,
+                exact_models=("gpt2",),
+                lean_modules=(
+                    "denote.KRankBWLinearDx",
+                    "denote.GeneratedKRankBWLinearDxWitness",
+                ),
+                staged_lean=True,
+                axiom_audit=True,
+                formal_publication=True,
+                explanations=(
+                    "K-rank BW_linear dX row reduction changes affect GPT Goal 107",
+                    "proof bytes may change, so staged Lean, axiom, and publication gates remain required",
+                ),
+            )
         if family != "k-rank-bw-sum":
             return _full_plan(f"unknown semantic family {family!r}")
         outside = tuple(path for path in paths if path not in BW_SUM_PATHS)

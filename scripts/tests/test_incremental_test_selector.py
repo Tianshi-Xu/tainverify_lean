@@ -15,6 +15,17 @@ BW_SUM_PATHS = (
     "scripts/tests/test_k_rank_bw_sum.py",
 )
 
+BW_LINEAR_DX_PATHS = (
+    "trainverify/bridge_emitter/relation_compiler.py",
+    "trainverify/bridge_emitter/bw_linear_dx_renderer.py",
+    "trainverify/denote/KRankBWLinearDx.lean",
+    "trainverify/denote/GeneratedKRankBWLinearDxWitness.lean",
+    "scripts/tests/test_k_rank_bw_sum.py",
+    "scripts/tests/test_proof_compiler.py",
+    "scripts/incremental_test_selector.py",
+    "scripts/tests/test_incremental_test_selector.py",
+)
+
 
 def test_full_python_inventory_covers_every_repository_test_module():
     root = Path(__file__).resolve().parents[2]
@@ -47,6 +58,24 @@ def test_bw_sum_family_selects_gpt_exact_and_formal_semantic_gates():
     assert plan.formal_publication is True
     assert "scripts/tests/test_k_rank_bw_sum.py" in plan.pytest_nodes
     assert any("Goal107" in reason or "Goal 107" in reason for reason in plan.explanations)
+
+
+def test_bw_linear_dx_family_selects_goal107_dynamic_k_gates():
+    plan = selector.select_gates(
+        BW_LINEAR_DX_PATHS, family="k-rank-bw-linear-dx-row"
+    )
+
+    assert plan.full_python is False
+    assert plan.exact_models == ("gpt2",)
+    assert plan.lean_modules == (
+        "denote.KRankBWLinearDx",
+        "denote.GeneratedKRankBWLinearDxWitness",
+    )
+    assert plan.staged_lean is True
+    assert plan.axiom_audit is True
+    assert plan.formal_publication is True
+    assert "scripts/tests/test_k_rank_bw_sum.py" in plan.pytest_nodes
+    assert any("Goal 107" in reason for reason in plan.explanations)
 
 
 def test_shared_relation_compiler_without_family_fails_closed():

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -6,6 +7,8 @@ import pytest
 from trainverify.bridge_emitter import relation_compiler as rc
 from trainverify.bridge_emitter.parser import LineageGoal, Node
 from trainverify.bridge_emitter.bw_sum_renderer import render_closed_k_rank_bw_sum_segment
+from trainverify.bridge_emitter.bw_linear_dx_renderer import render_closed_k_rank_bw_linear_dx_segment
+from trainverify.bridge_emitter.composer import _typed_certificate_digest
 from trainverify.bridge_emitter.compound_rule_dispatch import select_bw_compound_renderer
 from trainverify.bridge_emitter.sum_bw_sum_atomic_renderer import render_closed_sum_bw_sum_atomic_segment
 from trainverify.bridge_emitter.relation_compiler import (
@@ -14,9 +17,11 @@ from trainverify.bridge_emitter.relation_compiler import (
     ClosedRelationFactRecord,
     ClosedRelationStateRecord,
     KRankBWSumCertificate,
+    KRankBWLinearDxCertificate,
     KRankSumProducerCertificate,
     RelationCompositionError,
     RelationFactSpec,
+    advance_k_rank_bw_linear_dx_frontiers,
     advance_k_rank_bw_sum_frontiers,
 )
 
@@ -44,6 +49,209 @@ def _fixture(k: int):
     })
     frontier = (sm.step_id, *(step.step_id for step in pms))
     return plan, ir, frontier, full, shard
+
+
+def _bw_linear_dx_matcher_fixture(k: int):
+    shard_width = 32
+    full_gradient = (1, 8, shard_width * k)
+    shard_gradient = (1, 8, shard_width)
+    activation = (1, 8, 32)
+    full_weight = (shard_width * k, 32)
+    shard_weight = (shard_width, 32)
+    output = activation
+    sm = SimpleNamespace(
+        step_id="sm:0:0", op="BW_linear", side="sm", rank=0,
+        output_projection=".1",
+        input_bindings=("sm:g:0", "sm:x:0", "init:700"),
+        input_shapes=(full_gradient, activation, full_weight),
+        output_shape=output, parameters=(),
+    )
+    pms = tuple(
+        SimpleNamespace(
+            step_id=f"pm:{rank}:0", op="BW_linear", side="pm", rank=rank,
+            output_projection=".1",
+            input_bindings=(f"pm:g:{rank}", "pm:x:shared", f"init:{701 + rank}"),
+            input_shapes=(shard_gradient, activation, shard_weight),
+            output_shape=output, parameters=(),
+        )
+        for rank in range(k)
+    )
+    plan = SimpleNamespace(steps=(sm, *pms))
+    ir = SimpleNamespace(init_lineages={
+        700: LineageGoal(
+            700, list(full_weight),
+            [(rank, 701 + rank) for rank in range(k)],
+            [list(shard_weight) for _ in range(k)],
+            gatherDim=0,
+        )
+    })
+    frontier = (sm.step_id, *(step.step_id for step in pms))
+    return plan, ir, frontier
+
+
+@pytest.mark.parametrize("k", (3, 4))
+def test_bw_linear_dx_row_reduction_matcher_derives_dynamic_rank_count(k):
+    plan, ir, frontier = _bw_linear_dx_matcher_fixture(k)
+    certs, _rewritten, _layouts = advance_k_rank_bw_linear_dx_frontiers(
+        plan, ir, (frontier,), ("reduction",)
+    )
+
+    assert len(certs) == 1
+    cert = certs[0]
+    assert cert.rule_id == "bw-linear-dx-row-reduction-k-rank"
+    assert cert.family == "row-reduction"
+    assert cert.rank_count == k
+    assert cert.lean_theorem == (
+        "TrainVerify.Denote.bw_linear_dx_allGatherPrimDimN_dim2_rank3"
+    )
+
+
+def _bw_linear_dx_renderer_fixture(k: int):
+    theorem = "TrainVerify.Denote.bw_linear_dx_allGatherPrimDimN_dim2_rank3"
+    rule = "bw-linear-dx-row-reduction-k-rank"
+    gradient = RelationFactSpec(
+        "sharded", ("sm:g", *(f"pm:g:{rank}" for rank in range(k))), gather_dim=2
+    )
+    activation = RelationFactSpec("joined", ("sm:x",), joined_pm_step="pm:x")
+    weight = RelationFactSpec(
+        "sharded", ("init:300", *(f"init:{301 + rank}" for rank in range(k))),
+        gather_dim=0,
+    )
+    output = RelationFactSpec(
+        "reduction", ("sm:0:0", *(f"pm:{rank}:0" for rank in range(k)))
+    )
+    full_gradient, shard_gradient = (1, 8, 32 * k), (1, 8, 32)
+    full_weight, shard_weight = (32 * k, 32), (32, 32)
+    records = (
+        ClosedRelationFactRecord("fact_g", gradient, "sharded", 100,
+            tuple(1000 + rank for rank in range(k)), None, None,
+            full_gradient, shard_gradient, gather_dim=2),
+        ClosedRelationFactRecord("fact_x", activation, "joined", 200, (), None, None,
+            (1, 8, 32), (1, 8, 32), joined_pm_tid=2000),
+        ClosedRelationFactRecord("fact_w", weight, "sharded", 300,
+            tuple(3000 + rank for rank in range(k)), None, None,
+            full_weight, shard_weight, gather_dim=0),
+        ClosedRelationFactRecord("fact_out", output, "reduction", 400,
+            tuple(4000 + rank for rank in range(k)), None, None,
+            (1, 8, 32), (1, 8, 32)),
+    )
+    states = (
+        ClosedRelationStateRecord("state_before", ("fact_g", "fact_x", "fact_w")),
+        ClosedRelationStateRecord(
+            "state_after", ("fact_g", "fact_x", "fact_w", "fact_out")
+        ),
+    )
+    segment = ClosedDependentSegmentRecord(
+        "segment_000000", "component_000000", "state_before", "state_after",
+        ("transition_000000",), (0, 1), (0, k),
+    )
+    certificate = KRankBWLinearDxCertificate(
+        rule, "row-reduction", k, "reduction", None,
+        (gradient, activation, weight), output,
+        "sm:0:0", tuple(f"pm:{rank}:0" for rank in range(k)), theorem,
+    )
+    transition = replace(
+        CertificateTransitionSpec(
+            "transition_000000", rule, tuple(sorted((gradient, activation, weight))), (output,),
+            (0,), tuple(range(k)), theorem,
+        ),
+        certificate_digest=_typed_certificate_digest(certificate),
+    )
+    chain = SimpleNamespace(relation_facts=records, states=states, segments=(segment,))
+    relation = SimpleNamespace(
+        dependent_chain_plan=chain, transition_specs=(transition,),
+        certificates=(certificate,),
+    )
+    ir = SimpleNamespace(
+        sm_nodes=[Node(0, "BW_linear", [100, 200, 300], [400, 401], [])],
+        pm_nodes=[
+            Node(rank, "BW_linear", [1000 + rank, 2000, 3000 + rank],
+                 [4000 + rank, 5000 + rank], [])
+            for rank in range(k)
+        ],
+        sm_graph_ref="SyntheticBWLinearDx.smGraph",
+        pm_graph_ref="SyntheticBWLinearDx.pmGraph",
+    )
+    return ir, relation
+
+
+def _bw_linear_dx_witness_source(rendered: str) -> str:
+    return f'''import denote.RelationCompiler
+import denote.KRankBWLinearDx
+
+open TrainVerify.Denote
+open TrainVerify.Denote.RelationCompiler
+
+namespace SyntheticBWLinearDx
+
+noncomputable section
+
+def smGraph : GraphDecl := {{ numRanks := 1, nodes := [
+  {{ rank := 0, op := "OpName.BW_linear", ins := [100, 200, 300], outs := [400, 401] }}
+] }}
+def pmGraph : GraphDecl := {{ numRanks := 3, nodes := [
+  {{ rank := 0, op := "OpName.BW_linear", ins := [1000, 2000, 3000], outs := [4000, 5000] }},
+  {{ rank := 1, op := "OpName.BW_linear", ins := [1001, 2000, 3001], outs := [4001, 5001] }},
+  {{ rank := 2, op := "OpName.BW_linear", ins := [1002, 2000, 3002], outs := [4002, 5002] }}
+] }}
+
+def fact_g : RelationFact := .sharded 100 [1000, 1001, 1002] 2 [1, 8, 96] [1, 8, 32]
+def fact_x : RelationFact := .joined 200 2000 [1, 8, 32]
+def fact_w : RelationFact := .sharded 300 [3000, 3001, 3002] 0 [96, 32] [32, 32]
+def fact_out : RelationFact := .reduction 400 [4000, 4001, 4002] [1, 8, 32]
+def state_before : RelationState where
+  facts := [fact_g, fact_x, fact_w]
+  nonempty := by decide
+def state_after : RelationState where
+  facts := [fact_g, fact_x, fact_w, fact_out]
+  nonempty := by decide
+
+{rendered}
+
+#print axioms segment_000000
+
+end
+end SyntheticBWLinearDx
+'''
+
+
+def test_bw_linear_dx_row_reduction_renderer_emits_exact_k3_writer_frame():
+    ir, relation = _bw_linear_dx_renderer_fixture(3)
+    source = render_closed_k_rank_bw_linear_dx_segment(
+        ir, relation, "segment_000000"
+    )
+
+    assert source.count("private theorem segment_000000_hPmWriter") == 3
+    assert "segment_000000_hPmWriter2" in source
+    assert "segment_000000_hPmWriter3" not in source
+    assert "allGatherPrimDimN 2 3 0" in source
+    assert "allGatherPrimDimN 0 3 0" in source
+    assert "allReducePrim 3 0" in source
+    assert "bw_linear_dx_allGatherPrimDimN_dim2_rank3" in source
+    assert "bw_linear_dx_tp_split_dim2_4_g175" not in source
+    witness = (
+        Path(__file__).resolve().parents[2]
+        / "trainverify/denote/GeneratedKRankBWLinearDxWitness.lean"
+    )
+    assert witness.read_text(encoding="utf-8") == _bw_linear_dx_witness_source(source)
+
+
+def test_bw_linear_dx_dynamic_renderer_rejects_shape_outside_theorem_contract():
+    ir, relation = _bw_linear_dx_renderer_fixture(3)
+    records = list(relation.dependent_chain_plan.relation_facts)
+    records[0] = replace(
+        records[0], full_shape=(2, 4, 96), shard_shape=(2, 4, 32)
+    )
+    records[1] = replace(
+        records[1], full_shape=(2, 4, 32), shard_shape=(2, 4, 32)
+    )
+    records[3] = replace(
+        records[3], full_shape=(2, 4, 32), shard_shape=(2, 4, 32)
+    )
+    relation.dependent_chain_plan.relation_facts = tuple(records)
+
+    with pytest.raises(ValueError, match="theorem shape contract"):
+        render_closed_k_rank_bw_linear_dx_segment(ir, relation, "segment_000000")
 
 
 @pytest.mark.parametrize("k", (2, 3, 4))

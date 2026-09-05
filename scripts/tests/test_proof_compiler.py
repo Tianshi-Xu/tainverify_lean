@@ -1521,13 +1521,13 @@ def test_gpt_goal107_mixed_linear_collective_tuple_is_atomic(monkeypatch):
     bw_linear_dx = next(s for s in relation.dependent_chain_plan.segments
                         if s.segment_id == "segment_000189")
     assert tuple(transitions[item].rule_id for item in bw_linear_dx.transition_ids) == (
-        "bw-linear-dx-row-reduction-rank4",
+        "bw-linear-dx-row-reduction-k-rank",
     )
     assert bw_linear_dx.sm_range == (119, 120)
     assert bw_linear_dx.pm_range == (779, 784)
     bw_linear_dx_source = render_closed_segment(ir, relation, bw_linear_dx.segment_id)
     assert "private def segment_000189" in bw_linear_dx_source
-    assert "bw_linear_dx_tp_split_dim2_4_g175" in bw_linear_dx_source
+    assert "bw_linear_dx_allGatherPrimDimN_dim2_rank3" in bw_linear_dx_source
     assert "bw_linear_dx_tp_split_dim2_4_g134" not in bw_linear_dx_source
 
     bw_layernorm_dx = next(s for s in relation.dependent_chain_plan.segments
